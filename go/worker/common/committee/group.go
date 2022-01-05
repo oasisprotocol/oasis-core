@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -17,18 +16,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
 const (
-	// peerMessageProcessTimeout is the maximum time that peer message processing can take.
-	peerMessageProcessTimeout = 10 * time.Second
-
-	// tagStorage is the committee node descriptor tag to use for storage nodes.
-	tagStorage = "storage"
 	// tagExecutor is the committee node descriptor tag to use for executor nodes.
 	tagExecutor = "executor"
 )
@@ -38,21 +28,9 @@ func TagForCommittee(kind scheduler.CommitteeKind) string {
 	switch kind {
 	case scheduler.KindComputeExecutor:
 		return tagExecutor
-	case scheduler.KindStorage:
-		return tagStorage
 	default:
 		return ""
 	}
-}
-
-// MessageHandler handles messages from other nodes.
-type MessageHandler interface {
-	// HandlePeerMessage handles a message that has already been authenticated to come from a
-	// registered node.
-	//
-	// The provided context is short-lived so if the handler needs to perform additional work, that
-	// should be dispatched to a separate goroutine and not block delivery.
-	HandlePeerMessage(ctx context.Context, msg *p2p.Message, isOwn bool) error
 }
 
 // CommitteeInfo contains information about a committee of nodes.
@@ -60,6 +38,7 @@ type CommitteeInfo struct { // nolint: golint
 	Roles      []scheduler.Role
 	Committee  *scheduler.Committee
 	PublicKeys map[signature.PublicKey]bool
+	Peers      map[signature.PublicKey]bool
 }
 
 // HasRole checks whether the node has the given role.
@@ -78,41 +57,34 @@ type epoch struct {
 	roundCtx       context.Context
 	cancelRoundCtx context.CancelFunc
 
-	// groupVersion is the consensus backend block height of the last processed
-	// committee election.
-	groupVersion int64
-
 	// epochNumber is the sequential number of the epoch.
 	epochNumber beacon.EpochTime
+	// epochHeight is the height at which the epoch transition happened.
+	epochHeight int64
 
 	// executorCommittee is the executor committee we are a member of.
 	executorCommittee *CommitteeInfo
-
-	// storageCommittee is the storage committee we are a member of.
-	storageCommittee *CommitteeInfo
 
 	runtime *registry.Runtime
 }
 
 // EpochSnapshot is an immutable snapshot of epoch state.
 type EpochSnapshot struct {
-	identity     *identity.Identity
-	groupVersion int64
+	identity *identity.Identity
 
 	epochNumber beacon.EpochTime
+	epochHeight int64
 
 	runtime *registry.Runtime
 
 	executorCommittee *CommitteeInfo
-	storageCommittee  *CommitteeInfo
 
 	nodes nodes.VersionedNodeDescriptorWatcher
 }
 
-// GetGroupVersion returns the consensus backend block height of the last
-// processed committee election.
-func (e *EpochSnapshot) GetGroupVersion() int64 {
-	return e.groupVersion
+// IsValid checks whether the given epoch snapshot is valid (represents an actual epoch).
+func (e *EpochSnapshot) IsValid() bool {
+	return e.identity != nil
 }
 
 // GetRuntime returns the current runtime descriptor.
@@ -128,6 +100,11 @@ func (e *EpochSnapshot) GetExecutorCommittee() *CommitteeInfo {
 // GetEpochNumber returns the sequential number of the epoch.
 func (e *EpochSnapshot) GetEpochNumber() beacon.EpochTime {
 	return e.epochNumber
+}
+
+// GetEpochHeight returns the consensus height corresponding to the epoch transition.
+func (e *EpochSnapshot) GetEpochHeight() int64 {
+	return e.epochHeight
 }
 
 // IsExecutorMember checks if the current node is a member of the executor committee
@@ -170,11 +147,6 @@ func (e *EpochSnapshot) IsTransactionScheduler(round uint64) bool {
 	return scheduler.PublicKey.Equal(e.identity.NodeSigner.Public())
 }
 
-// GetStorageCommittee returns the current storage committee.
-func (e *EpochSnapshot) GetStorageCommittee() *CommitteeInfo {
-	return e.storageCommittee
-}
-
 // Nodes returns a node descriptor lookup interface.
 func (e *EpochSnapshot) Nodes() nodes.NodeDescriptorLookup {
 	return e.nodes
@@ -191,32 +163,9 @@ func (e *EpochSnapshot) Node(ctx context.Context, id signature.PublicKey) (*node
 	return n, nil
 }
 
-// VerifyCommitteeSignatures verifies that the given signatures come from
-// the current committee members of the given kind.
-//
-// Implements commitment.SignatureVerifier.
-func (e *EpochSnapshot) VerifyCommitteeSignatures(kind scheduler.CommitteeKind, sigs []signature.Signature) error {
-	var committee *CommitteeInfo
-	switch kind {
-	case scheduler.KindStorage:
-		committee = e.storageCommittee
-	default:
-		return fmt.Errorf("epoch: unsupported committee kind: %s", kind)
-	}
-
-	for _, sig := range sigs {
-		if !committee.PublicKeys[sig.PublicKey] {
-			return fmt.Errorf("epoch: signature is not from a valid committee member")
-		}
-	}
-	return nil
-}
-
 // VerifyTxnSchedulerSigner verifies that the given signature comes from
 // the transaction scheduler at provided round.
-//
-// Implements commitment.SignatureVerifier.
-func (e *EpochSnapshot) VerifyTxnSchedulerSigner(sig signature.Signature, round uint64) error {
+func (e *EpochSnapshot) VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error {
 	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
 		return fmt.Errorf("epoch: no active transaction scheduler")
 	}
@@ -224,7 +173,7 @@ func (e *EpochSnapshot) VerifyTxnSchedulerSigner(sig signature.Signature, round 
 	if err != nil {
 		return fmt.Errorf("epoch: error getting transaction scheduler: %w", err)
 	}
-	if !scheduler.PublicKey.Equal(sig.PublicKey) {
+	if !scheduler.PublicKey.Equal(id) {
 		return fmt.Errorf("epoch: signature is not from the transaction scheduler at round: %d", round)
 	}
 	return nil
@@ -240,17 +189,10 @@ type Group struct {
 
 	consensus consensus.Backend
 
-	handler MessageHandler
-
 	activeEpoch *epoch
-	// p2p may be nil.
-	p2p *p2p.P2P
 	// nodes is a node descriptor watcher for all nodes that are part of any of our committees.
+	// TODO: Consider removing nodes.
 	nodes nodes.VersionedNodeDescriptorWatcher
-	// storage is the storage backend that tracks the current committee.
-	storage       storage.Backend
-	storageClient storage.ClientBackend
-	storageLocal  storage.LocalBackend
 
 	logger *logging.Logger
 }
@@ -321,11 +263,12 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Find the current committees.
-	var executorCommittee, storageCommittee *CommitteeInfo
+	var executorCommittee *CommitteeInfo
 	publicIdentity := g.identity.NodeSigner.Public()
 	for _, cm := range committees {
 		var roles []scheduler.Role
 		publicKeys := make(map[signature.PublicKey]bool)
+		peers := make(map[signature.PublicKey]bool)
 		for _, member := range cm.Members {
 			publicKeys[member.PublicKey] = true
 			if member.PublicKey.Equal(publicIdentity) {
@@ -333,29 +276,28 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			}
 
 			// Start watching the member's node descriptor.
-			if _, err = g.nodes.WatchNodeWithTag(ctx, member.PublicKey, TagForCommittee(cm.Kind)); err != nil {
+			var n *node.Node
+			if n, err = g.nodes.WatchNodeWithTag(ctx, member.PublicKey, TagForCommittee(cm.Kind)); err != nil {
 				return fmt.Errorf("group: failed to fetch node info: %w", err)
 			}
+
+			peers[n.P2P.ID] = true
 		}
 
 		ci := &CommitteeInfo{
 			Roles:      roles,
 			Committee:  cm,
 			PublicKeys: publicKeys,
+			Peers:      peers,
 		}
 
 		switch cm.Kind {
 		case scheduler.KindComputeExecutor:
 			executorCommittee = ci
-		case scheduler.KindStorage:
-			storageCommittee = ci
 		}
 	}
 	if executorCommittee == nil {
 		return fmt.Errorf("group: no executor committee")
-	}
-	if storageCommittee == nil {
-		return fmt.Errorf("group: no storage committee")
 	}
 
 	// Fetch the new epoch.
@@ -363,12 +305,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	if err != nil {
 		return err
 	}
-
-	// Fetch the epoch block, which is also the group version.
-	// Note: when node is restarted, `EpochTransition` is called on the first
-	// received block, which is not necessary the actual epoch transition block.
-	// Therefore we cannot use current height as the group version.
-	groupVersion, err := g.consensus.Beacon().GetEpochBlock(ctx, epochNumber)
+	epochHeight, err := g.consensus.Beacon().GetEpochBlock(ctx, epochNumber)
 	if err != nil {
 		return err
 	}
@@ -379,14 +316,8 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		return err
 	}
 
-	// Freeze the committee and make sure the storage client has been updated.
+	// Freeze the committee.
 	g.nodes.Freeze(height)
-	if g.storageClient == nil {
-		return fmt.Errorf("group: storage not yet initialized")
-	}
-	if err = g.storageClient.EnsureCommitteeVersion(ctx, height); err != nil {
-		return fmt.Errorf("group: failed to ensure committee version: %w", err)
-	}
 
 	// Create a new epoch and round contexts.
 	epochCtx, cancelEpochCtx := context.WithCancel(ctx)
@@ -395,28 +326,21 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
 		epochNumber:       epochNumber,
+		epochHeight:       epochHeight,
 		epochCtx:          epochCtx,
 		cancelEpochCtx:    cancelEpochCtx,
 		roundCtx:          roundCtx,
 		cancelRoundCtx:    cancelRoundCtx,
-		groupVersion:      groupVersion,
 		executorCommittee: executorCommittee,
-		storageCommittee:  storageCommittee,
 		runtime:           runtime,
 	}
 
 	g.logger.Info("epoch transition complete",
-		"group_version", groupVersion,
+		"epoch", epochNumber,
 		"executor_roles", executorCommittee.Roles,
-		"storage_roles", storageCommittee.Roles,
 	)
 
 	return nil
-}
-
-// Nodes returns a node descriptor lookup interface that watches all nodes in our committees.
-func (g *Group) Nodes() nodes.NodeDescriptorLookup {
-	return g.nodes
 }
 
 // GetEpochSnapshot returns a snapshot of the currently active epoch.
@@ -431,168 +355,17 @@ func (g *Group) GetEpochSnapshot() *EpochSnapshot {
 	s := &EpochSnapshot{
 		identity:          g.identity,
 		epochNumber:       g.activeEpoch.epochNumber,
-		groupVersion:      g.activeEpoch.groupVersion,
+		epochHeight:       g.activeEpoch.epochHeight,
 		runtime:           g.activeEpoch.runtime,
 		executorCommittee: g.activeEpoch.executorCommittee,
-		storageCommittee:  g.activeEpoch.storageCommittee,
 		nodes:             g.nodes,
 	}
 
 	return s
 }
 
-// AuthenticatePeer handles authenticating a peer that send an incoming message.
-func (g *Group) AuthenticatePeer(peerID signature.PublicKey, msg *p2p.Message) error {
-	g.RLock()
-	defer g.RUnlock()
-
-	if g.activeEpoch == nil {
-		return fmt.Errorf("group: no active epoch")
-	}
-
-	if msg.GroupVersion < g.activeEpoch.groupVersion {
-		return p2pError.Permanent(fmt.Errorf("group version in the past"))
-	}
-
-	// If we are in the executor committee, we accept messages from all nodes.
-	// Otherwise reject and relay the message.
-	authorized := len(g.activeEpoch.executorCommittee.Roles) > 0
-	if !authorized {
-		err := fmt.Errorf("group: peer is not authorized")
-
-		// In case the message is for current epoch and not authorized,
-		// make the error permanent to avoid retrying. The message should
-		// still be relayed.
-		if msg.GroupVersion == g.activeEpoch.groupVersion {
-			err = p2pError.Permanent(p2pError.Relayable(err))
-		}
-
-		return err
-	}
-
-	return nil
-}
-
-// HandlePeerMessage handles an incoming message from a peer.
-func (g *Group) HandlePeerMessage(unusedPeerID signature.PublicKey, msg *p2p.Message, isOwn bool) error {
-	// Perform some checks on the incoming message. We make sure to release the
-	// lock before running the handler.
-	err := func() error {
-		g.RLock()
-		defer g.RUnlock()
-
-		if g.activeEpoch == nil {
-			return fmt.Errorf("group: no active epoch")
-		}
-
-		// Ensure that both peers have the same view of the current group. If this
-		// is not the case, this means that one of the nodes processed an epoch
-		// transition and the other one didn't.
-		switch {
-		case msg.GroupVersion < g.activeEpoch.groupVersion:
-			// Stale messages will never become valid.
-			return p2pError.Permanent(fmt.Errorf("group version in the past"))
-		case msg.GroupVersion > g.activeEpoch.groupVersion:
-			// Messages from the future may eventually become valid.
-			return fmt.Errorf("group version from the future")
-		}
-
-		return nil
-	}()
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), peerMessageProcessTimeout)
-	defer cancel()
-
-	return g.handler.HandlePeerMessage(ctx, msg, isOwn)
-}
-
-// Publish publishes a message to the P2P network.
-func (g *Group) Publish(msg *p2p.Message) error {
-	g.RLock()
-	defer g.RUnlock()
-
-	if g.p2p == nil {
-		return fmt.Errorf("group: p2p transport is not enabled")
-	}
-	if g.activeEpoch == nil {
-		return fmt.Errorf("group: no active epoch")
-	}
-
-	pubCtx := g.activeEpoch.roundCtx
-
-	// Populate message fields.
-	msg.GroupVersion = g.activeEpoch.groupVersion
-
-	// Publish message to the P2P network.
-	g.p2p.Publish(pubCtx, g.runtime.ID(), msg)
-
-	return nil
-}
-
-// Peers returns a list of connected P2P peers.
-func (g *Group) Peers() []string {
-	if g.p2p == nil {
-		return nil
-	}
-	return g.p2p.Peers(g.runtime.ID())
-}
-
-// Storage returns the storage client backend that talks to the runtime group.
-func (g *Group) Storage() storage.Backend {
-	return g.storage
-}
-
-// StorageLocal returns the local storage backend if the local node is also a storage node.
-// Otherwise it returns nil.
-func (g *Group) StorageLocal() storage.LocalBackend {
-	return g.storageLocal
-}
-
 // Start starts the group services.
 func (g *Group) Start() error {
-	g.Lock()
-	defer g.Unlock()
-
-	// Check if we have the local storage backend available (e.g., this node is also a storage node
-	// for this runtime). In this case we override the storage client's backend so that any updates
-	// don't go via gRPC but are redirected directly to the local backend instead.
-	var scOpts []storageClient.Option
-	if lsb, ok := g.runtime.Storage().(storage.LocalBackend); ok && g.runtime.HasRoles(node.RoleStorageWorker) {
-		// Make sure to unwrap the local backend as we need the raw local backend here.
-		if wrapped, ok := lsb.(storage.WrappedLocalBackend); ok {
-			lsb = wrapped.Unwrap()
-		}
-
-		g.storageLocal = lsb
-		scOpts = append(scOpts, storageClient.WithBackendOverride(g.identity.NodeSigner.Public(), lsb))
-	}
-
-	// Create the storage client.
-	sc, err := storageClient.NewForNodes(
-		g.ctx,
-		g.identity,
-		nodes.NewFilteredNodeLookup(g.nodes, nodes.TagFilter(TagForCommittee(scheduler.KindStorage))),
-		g.runtime,
-		scOpts...,
-	)
-	if err != nil {
-		return fmt.Errorf("group: failed to create storage client: %w", err)
-	}
-	g.storageClient = sc.(storage.ClientBackend)
-
-	// Create the storage multiplexer if we have a local storage backend.
-	if g.storageLocal != nil {
-		g.storage = storage.NewStorageMux(
-			storage.MuxReadOpFinishEarly(storage.MuxIterateIgnoringLocalErrors()),
-			g.storageLocal,
-			g.storageClient,
-		)
-	} else {
-		g.storage = g.storageClient
-	}
 	return nil
 }
 
@@ -601,29 +374,19 @@ func NewGroup(
 	ctx context.Context,
 	identity *identity.Identity,
 	runtime runtimeRegistry.Runtime,
-	handler MessageHandler,
 	consensus consensus.Backend,
-	p2p *p2p.P2P,
 ) (*Group, error) {
 	nw, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, consensus)
 	if err != nil {
 		return nil, fmt.Errorf("group: failed to create node watcher: %w", err)
 	}
 
-	g := &Group{
+	return &Group{
 		ctx:       ctx,
 		identity:  identity,
 		runtime:   runtime,
 		consensus: consensus,
-		handler:   handler,
-		p2p:       p2p,
 		nodes:     nw,
 		logger:    logging.GetLogger("worker/common/committee/group").With("runtime_id", runtime.ID()),
-	}
-
-	if p2p != nil {
-		p2p.RegisterHandler(runtime.ID(), g)
-	}
-
-	return g, nil
+	}, nil
 }

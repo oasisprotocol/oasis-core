@@ -344,11 +344,12 @@ func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height
 	// In epoch 1 the key-manager will register, but not yet compute/storage
 	// workers, since those will wait for key-manager committee to be available.
 	// This means that compute/storage nodes will register during epoch 2 and
-	// the committee should be elected from epoch 3 onward.
-	if epoch > 2 {
+	// the committee should be elected from epoch 4 onward.
+	if epoch > 3 {
 		if committees == nil {
 			q.logger.Error("missing committee for simple-keyvalue runtime",
 				"height", height,
+				"epoch", epoch,
 				"runtime_id", q.runtimeID,
 			)
 			return fmt.Errorf("missing commiteess")
@@ -491,7 +492,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		return fmt.Errorf("staking.GovernanceDeposits: %w", err)
 	}
 
-	thKind := staking.ThresholdKind(rng.Intn(int(staking.KindMax)))
+	thKind := staking.ThresholdKinds[rng.Intn(len(staking.ThresholdKinds))]
 	threshold, err := q.staking.Threshold(ctx, &staking.ThresholdQuery{
 		Height: height,
 		Kind:   thKind,
@@ -827,16 +828,18 @@ func (q *queries) Run(
 		)
 		return fmt.Errorf("runtime unmarshal: %w", err)
 	}
-	resp, err := q.runtime.GetGenesisBlock(ctx, q.runtimeID)
-	if err != nil {
-		return fmt.Errorf("error querying runtime genesis block: %w", err)
-	}
-	q.runtimeGenesisRound = resp.Header.Round
 
 	if viper.GetBool(CfgQueriesRuntimeEnabled) {
-		// Wait for 2nd epoch, so that runtimes are up and running.
-		q.logger.Info("waiting for 2nd epoch")
-		if err := q.beacon.WaitEpoch(ctx, 2); err != nil {
+		// Only query genesis block info if runtime queries are enabled.
+		resp, err := q.runtime.GetGenesisBlock(ctx, q.runtimeID)
+		if err != nil {
+			return fmt.Errorf("error querying runtime genesis block: %w", err)
+		}
+		q.runtimeGenesisRound = resp.Header.Round
+
+		// Wait for 3rd epoch, so that runtimes are up and running.
+		q.logger.Info("waiting for 3rd epoch")
+		if err := q.beacon.WaitEpoch(ctx, 3); err != nil {
 			return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
 		}
 	}

@@ -15,10 +15,22 @@ type Scheduler interface {
 	QueueTx(tx *transaction.CheckedTransaction) error
 
 	// RemoveTxBatch removes a transaction batch.
-	RemoveTxBatch(tx []hash.Hash) error
+	RemoveTxBatch(tx []hash.Hash)
 
 	// GetBatch returns a batch of scheduled transactions (if any is available).
 	GetBatch(force bool) []*transaction.CheckedTransaction
+
+	// GetKnownBatch gets a set of known transactions from the transaction pool.
+	//
+	// For any missing transactions nil will be returned in their place and the map of missing
+	// transactions will be populated accoordingly.
+	GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int)
+
+	// GetTransactions returns the given number of transactions from the transaction pool without
+	// taking any batch limits or priorities into account.
+	//
+	// Specifying a zero limit will return all transactions.
+	GetTransactions(limit int) []*transaction.CheckedTransaction
 
 	// UnscheduledSize returns number of unscheduled items.
 	UnscheduledSize() uint64
@@ -27,7 +39,7 @@ type Scheduler interface {
 	IsQueued(hash.Hash) bool
 
 	// UpdateParameters updates the scheduling parameters.
-	UpdateParameters(algo string, weightLimits map[transaction.Weight]uint64) error
+	UpdateParameters(weightLimits map[transaction.Weight]uint64)
 
 	// Clear clears the transaction queue.
 	Clear()

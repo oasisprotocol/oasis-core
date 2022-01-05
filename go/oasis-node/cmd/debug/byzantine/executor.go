@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -20,17 +21,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 type computeBatchContext struct {
 	runtimeID common.Namespace
 
-	bd    commitment.ProposedBatch
-	bdSig signature.Signature
+	proposal *commitment.Proposal
 
-	ioTree    *transaction.Tree
 	txs       []*transaction.Transaction
+	ioTree    *transaction.Tree
 	stateTree mkvs.Tree
 
 	stateWriteLog writelog.WriteLog
@@ -38,8 +37,7 @@ type computeBatchContext struct {
 	ioWriteLog    writelog.WriteLog
 	newIORoot     hash.Hash
 
-	storageReceipts []*storage.Receipt
-	commit          *commitment.ExecutorCommitment
+	commit *commitment.ExecutorCommitment
 }
 
 func newComputeBatchContext(runtimeID common.Namespace) *computeBatchContext {
@@ -48,25 +46,25 @@ func newComputeBatchContext(runtimeID common.Namespace) *computeBatchContext {
 	}
 }
 
-func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) []*api.Tx {
-	var req p2pReqRes
-	txs := []*api.Tx{}
+func (cbc *computeBatchContext) receiveTransactions(ph *p2pHandle, timeout time.Duration) [][]byte {
+	var txs [][]byte
 	existing := make(map[hash.Hash]bool)
 
 ReceiveTransactions:
 	for {
 		select {
-		case req = <-ph.requests:
+		case req := <-ph.requests:
 			req.responseCh <- nil
-			if req.msg.Tx == nil {
+			tx, ok := req.msg.([]byte)
+			if !ok {
 				continue
 			}
-			txHash := hash.NewFromBytes(req.msg.Tx.Data)
+			txHash := hash.NewFromBytes(tx)
 			if existing[txHash] {
 				continue
 			}
 
-			txs = append(txs, req.msg.Tx)
+			txs = append(txs, tx)
 			existing[txHash] = true
 		case <-time.After(timeout):
 			break ReceiveTransactions
@@ -76,30 +74,31 @@ ReceiveTransactions:
 	return txs
 }
 
-func (cbc *computeBatchContext) publishTransactionBatch(
+func (cbc *computeBatchContext) publishProposal(
 	ctx context.Context,
 	p2pH *p2pHandle,
-	groupVersion int64,
-	batch *commitment.SignedProposedBatch,
+	epoch beacon.EpochTime,
 ) {
-	p2pH.service.Publish(
+	if cbc.proposal == nil {
+		panic("no prepared proposal")
+	}
+
+	p2pH.service.PublishCommittee(
 		ctx,
 		cbc.runtimeID,
-		&p2p.Message{
-			GroupVersion:  groupVersion,
-			ProposedBatch: batch,
+		&p2p.CommitteeMessage{
+			Epoch:    epoch,
+			Proposal: cbc.proposal,
 		},
 	)
 }
 
-func (cbc *computeBatchContext) prepareTransactionBatch(
+func (cbc *computeBatchContext) prepareProposal(
 	ctx context.Context,
-	clients []*storageClient,
 	currentBlock *block.Block,
-	batch []*api.Tx,
+	batch [][]byte,
 	identity *identity.Identity,
-	corrupt bool,
-) (*commitment.SignedProposedBatch, error) {
+) error {
 	// Generate the initial I/O root containing only the inputs (outputs and
 	// tags will be added later by the executor nodes).
 	lastHeader := currentBlock.Header
@@ -113,96 +112,136 @@ func (cbc *computeBatchContext) prepareTransactionBatch(
 	ioTree := transaction.NewTree(nil, emptyRoot)
 	defer ioTree.Close()
 
-	for idx, tx := range batch {
-		if err := ioTree.AddTransaction(ctx, transaction.Transaction{Input: tx.Data, BatchOrder: uint32(idx)}, nil); err != nil {
-			return nil, err
+	var (
+		txs      []*transaction.Transaction
+		txHashes []hash.Hash
+	)
+	for idx, rawTx := range batch {
+		tx := transaction.Transaction{
+			Input:      rawTx,
+			BatchOrder: uint32(idx),
 		}
-	}
-
-	ioWriteLog, ioRoot, err := ioTree.Commit(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ioReceipts, err := storageBroadcastApply(ctx, clients, &storage.ApplyRequest{
-		Namespace: lastHeader.Namespace,
-		RootType:  storage.RootTypeIO,
-		SrcRound:  lastHeader.Round + 1,
-		SrcRoot:   emptyRoot.Hash,
-		DstRound:  lastHeader.Round + 1,
-		DstRoot:   ioRoot,
-		WriteLog:  ioWriteLog,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	ioReceiptSignatures := []signature.Signature{}
-	for _, receipt := range ioReceipts {
-		ioReceiptSignatures = append(ioReceiptSignatures, receipt.Signature)
-	}
-
-	dispatchMsg := &commitment.ProposedBatch{
-		IORoot:            ioRoot,
-		StorageSignatures: ioReceiptSignatures,
-		Header:            currentBlock.Header,
-	}
-	// Corrupt the proposed batch it in a way that receipts are also invalidated
-	// and as such the signature verification will fail.
-	if corrupt {
-		dispatchMsg.IORoot = emptyRoot.Hash
-	}
-
-	signedDispatchMsg, err := commitment.SignProposedBatch(identity.NodeSigner, lastHeader.Namespace, dispatchMsg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign txn scheduler batch: %w", err)
-	}
-
-	cbc.bd = *dispatchMsg
-	cbc.bdSig = signedDispatchMsg.Signature
-
-	return signedDispatchMsg, nil
-}
-
-func (cbc *computeBatchContext) receiveBatch(ph *p2pHandle) error {
-	var req p2pReqRes
-	for {
-		req = <-ph.requests
-		req.responseCh <- nil
-
-		if req.msg.ProposedBatch == nil {
-			continue
+		if err := ioTree.AddTransaction(ctx, tx, nil); err != nil {
+			return err
 		}
-
-		break
+		txHashes = append(txHashes, hash.NewFromBytes(rawTx))
+		txs = append(txs, &tx)
 	}
 
-	if err := req.msg.ProposedBatch.Open(&cbc.bd, cbc.runtimeID); err != nil {
-		return fmt.Errorf("request message SignedProposedBatchDispatch Open: %w", err)
+	_, ioRoot, err := ioTree.Commit(ctx)
+	if err != nil {
+		return err
 	}
 
-	cbc.bdSig = req.msg.ProposedBatch.Signature
+	// NOTE: The Byzantine node does not apply to local storage.
+
+	proposal := &commitment.Proposal{
+		NodeID: identity.NodeSigner.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        lastHeader.Round + 1,
+			PreviousHash: lastHeader.EncodedHash(),
+			BatchHash:    ioRoot,
+		},
+		Batch: txHashes,
+	}
+	if err = proposal.Sign(identity.NodeSigner, lastHeader.Namespace); err != nil {
+		return fmt.Errorf("failed to sign proposal header: %w", err)
+	}
+
+	cbc.proposal = proposal
+	cbc.txs = txs
+
 	return nil
 }
 
-func (cbc *computeBatchContext) openTrees(ctx context.Context, rs syncer.ReadSyncer) error {
-	var err error
-	cbc.ioTree = transaction.NewTree(rs, storage.Root{
-		Namespace: cbc.bd.Header.Namespace,
-		Version:   cbc.bd.Header.Round + 1,
-		Type:      storage.RootTypeIO,
-		Hash:      cbc.bd.IORoot,
-	})
+func (cbc *computeBatchContext) receiveProposal(ph *p2pHandle) error {
+	var proposal *commitment.Proposal
+	existing := make(map[hash.Hash][]byte)
+	missing := make(map[hash.Hash]bool)
 
-	cbc.txs, err = cbc.ioTree.GetTransactions(ctx)
-	if err != nil {
-		return fmt.Errorf("IO tree GetTransactions: %w", err)
+ReceiveProposal:
+	for {
+		req := <-ph.requests
+		req.responseCh <- nil
+
+		switch msg := req.msg.(type) {
+		case []byte:
+			// Transaction.
+			txHash := hash.NewFromBytes(msg)
+			if existing[txHash] != nil {
+				continue
+			}
+			existing[txHash] = msg
+			delete(missing, txHash)
+
+			// If we have the proposal and all transactions, stop.
+			if proposal != nil && len(missing) == 0 {
+				break ReceiveProposal
+			}
+		case *p2p.CommitteeMessage:
+			// Proposal.
+			if msg.Proposal == nil {
+				continue
+			}
+			if proposal != nil {
+				return fmt.Errorf("received multiple proposals while only expecting one")
+			}
+			proposal = msg.Proposal
+
+			// Check if any transactions are missing.
+			for _, txHash := range proposal.Batch {
+				if existing[txHash] != nil {
+					continue
+				}
+				missing[txHash] = true
+			}
+
+			// If we have all transactions, continue.
+			if len(missing) == 0 {
+				break ReceiveProposal
+			}
+		}
 	}
 
+	if err := proposal.Verify(cbc.runtimeID); err != nil {
+		return fmt.Errorf("failed to verify received proposal header signature: %w", err)
+	}
+
+	cbc.proposal = proposal
+
+	cbc.txs = nil
+	for idx, txHash := range proposal.Batch {
+		cbc.txs = append(cbc.txs, &transaction.Transaction{
+			Input:      existing[txHash],
+			BatchOrder: uint32(idx),
+		})
+	}
+
+	return nil
+}
+
+func (cbc *computeBatchContext) openTrees(ctx context.Context, blk *block.Block, rs syncer.ReadSyncer) error {
+	cbc.ioTree = transaction.NewTree(nil, storage.Root{
+		Namespace: cbc.runtimeID,
+		Version:   cbc.proposal.Header.Round,
+		Type:      storage.RootTypeIO,
+		Hash:      cbc.proposal.Header.BatchHash,
+	})
+
+	// Add all transactions to the I/O tree.
+	for _, tx := range cbc.txs {
+		if err := cbc.ioTree.AddTransaction(ctx, *tx, nil); err != nil {
+			return fmt.Errorf("failed to add transaction to I/O tree: %w", err)
+		}
+	}
+
+	// NOTE: We use a remote state tree so the Byzantine node doesn't need to maintain state. This
+	//       requires storage nodes with the public storage RPC exposed.
 	cbc.stateTree = mkvs.NewWithRoot(rs, nil, storage.Root{
-		Namespace: cbc.bd.Header.Namespace,
-		Version:   cbc.bd.Header.Round,
+		Namespace: blk.Header.Namespace,
+		Version:   blk.Header.Round,
 		Type:      storage.RootTypeState,
-		Hash:      cbc.bd.Header.StateRoot,
+		Hash:      blk.Header.StateRoot,
 	})
 
 	return nil
@@ -245,7 +284,7 @@ func (cbc *computeBatchContext) addResultError(ctx context.Context, tx *transact
 
 func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 	var err error
-	cbc.stateWriteLog, cbc.newStateRoot, err = cbc.stateTree.Commit(ctx, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1)
+	cbc.stateWriteLog, cbc.newStateRoot, err = cbc.stateTree.Commit(ctx, cbc.runtimeID, cbc.proposal.Header.Round)
 	if err != nil {
 		return fmt.Errorf("state tree Commit: %w", err)
 	}
@@ -258,56 +297,25 @@ func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 	return nil
 }
 
-func (cbc *computeBatchContext) uploadBatch(ctx context.Context, clients []*storageClient) error {
-	var err error
-	cbc.storageReceipts, err = storageBroadcastApplyBatch(ctx, clients, cbc.bd.Header.Namespace, cbc.bd.Header.Round+1, []storage.ApplyOp{
-		{
-			RootType: storage.RootTypeIO,
-			SrcRound: cbc.bd.Header.Round + 1,
-			SrcRoot:  cbc.bd.IORoot,
-			DstRoot:  cbc.newIORoot,
-			WriteLog: cbc.ioWriteLog,
-		},
-		{
-			RootType: storage.RootTypeState,
-			SrcRound: cbc.bd.Header.Round,
-			SrcRoot:  cbc.bd.Header.StateRoot,
-			DstRoot:  cbc.newStateRoot,
-			WriteLog: cbc.stateWriteLog,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("storage broadcast apply batch: %w", err)
-	}
-
-	return nil
-}
-
 func (cbc *computeBatchContext) createCommitment(
 	id *identity.Identity,
 	rak signature.Signer,
-	committeeID hash.Hash,
 	failure commitment.ExecutorCommitmentFailure,
 ) error {
-	var storageSigs []signature.Signature
-	for _, receipt := range cbc.storageReceipts {
-		storageSigs = append(storageSigs, receipt.Signature)
-	}
 	// TODO: allow script to set roothash messages?
 	msgsHash := message.MessagesHash(nil)
 	header := commitment.ComputeResultsHeader{
-		Round:        cbc.bd.Header.Round + 1,
-		PreviousHash: cbc.bd.Header.EncodedHash(),
+		Round:        cbc.proposal.Header.Round,
+		PreviousHash: cbc.proposal.Header.PreviousHash,
 		IORoot:       &cbc.newIORoot,
 		StateRoot:    &cbc.newStateRoot,
 		MessagesHash: &msgsHash,
 	}
-	computeBody := &commitment.ComputeBody{
-		Header:            header,
-		StorageSignatures: storageSigs,
-		TxnSchedSig:       cbc.bdSig,
-		InputRoot:         cbc.bd.IORoot,
-		InputStorageSigs:  cbc.bd.StorageSignatures,
+	ec := &commitment.ExecutorCommitment{
+		NodeID: id.NodeSigner.Public(),
+		Header: commitment.ExecutorCommitmentHeader{
+			ComputeResultsHeader: header,
+		},
 	}
 	if rak != nil {
 		rakSig, err := signature.Sign(rak, commitment.ComputeResultsHeaderSignatureContext, cbor.Marshal(header))
@@ -315,18 +323,18 @@ func (cbc *computeBatchContext) createCommitment(
 			return fmt.Errorf("signature Sign RAK: %w", err)
 		}
 
-		computeBody.RakSig = &rakSig.Signature
+		ec.Header.RAKSignature = &rakSig.Signature
 	}
 
 	if failure != commitment.FailureNone {
-		computeBody.SetFailure(failure)
+		ec.Header.SetFailure(failure)
 	}
 
-	var err error
-	cbc.commit, err = commitment.SignExecutorCommitment(id.NodeSigner, cbc.runtimeID, computeBody)
+	err := ec.Sign(id.NodeSigner, cbc.runtimeID)
 	if err != nil {
 		return fmt.Errorf("commitment sign executor commitment: %w", err)
 	}
+	cbc.commit = ec
 
 	return nil
 }

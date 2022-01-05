@@ -162,43 +162,21 @@ func (w *Worker) GetRuntime(id common.Namespace) *committee.Node {
 	return w.runtimes[id]
 }
 
-// NewUnmanagedCommitteeNode creates a new common committee node that is not
-// managed by this worker.
-//
-// Since the node is unmanaged the caller needs to ensure that the node will
-// be properly terminated once started.
-//
-// Note that this does not instruct the storage backend to watch the given
-// runtime.
-func (w *Worker) NewUnmanagedCommitteeNode(runtime runtimeRegistry.Runtime, enableP2P bool) (*committee.Node, error) {
-	var p2p *p2p.P2P
-	if enableP2P {
-		// Make sure that there is no other (managed) runtime already registered
-		// with the same identifier as registering another will overwrite the
-		// P2P handler.
-		if w.runtimes[runtime.ID()] != nil {
-			return nil, fmt.Errorf("worker/common: managed runtime with id %s already exists", runtime.ID())
-		}
-		p2p = w.P2P
-	}
-
-	return committee.NewNode(
-		w.HostNode,
-		runtime,
-		w.Identity,
-		w.KeyManager,
-		w.Consensus,
-		p2p,
-	)
-}
-
 func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 	id := runtime.ID()
 	w.logger.Info("registering new runtime",
 		"runtime_id", id,
 	)
 
-	node, err := w.NewUnmanagedCommitteeNode(runtime, true)
+	node, err := committee.NewNode(
+		w.HostNode,
+		runtime,
+		w.Identity,
+		w.KeyManager,
+		w.Consensus,
+		w.P2P,
+		&w.cfg.TxPool,
+	)
 	if err != nil {
 		return err
 	}
@@ -216,7 +194,6 @@ func newWorker(
 	cancelCtx context.CancelFunc,
 	hostNode control.ControlledNode,
 	dataDir string,
-	enabled bool,
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	grpc *grpc.Server,
@@ -224,10 +201,19 @@ func newWorker(
 	p2p *p2p.P2P,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
-	runtimeRegistry runtimeRegistry.Registry,
+	rtRegistry runtimeRegistry.Registry,
 	cfg Config,
 	genesisDoc *genesis.Document,
 ) (*Worker, error) {
+	var enabled bool
+	switch rtRegistry.Mode() {
+	case runtimeRegistry.RuntimeModeNone:
+		enabled = false
+	default:
+		// When configured in runtime mode, enable the common worker.
+		enabled = true
+	}
+
 	w := &Worker{
 		enabled:           enabled,
 		cfg:               cfg,
@@ -240,7 +226,7 @@ func newWorker(
 		P2P:               p2p,
 		IAS:               ias,
 		KeyManager:        keyManager,
-		RuntimeRegistry:   runtimeRegistry,
+		RuntimeRegistry:   rtRegistry,
 		GenesisDoc:        genesisDoc,
 		runtimes:          make(map[common.Namespace]*committee.Node),
 		ctx:               ctx,
@@ -250,12 +236,14 @@ func newWorker(
 		logger:            logging.GetLogger("worker/common"),
 	}
 
-	if enabled {
-		for _, rt := range runtimeRegistry.Runtimes() {
-			// Register all configured runtimes.
-			if err := w.registerRuntime(rt); err != nil {
-				return nil, err
-			}
+	if !enabled {
+		return w, nil
+	}
+
+	for _, rt := range rtRegistry.Runtimes() {
+		// Register all configured runtimes.
+		if err := w.registerRuntime(rt); err != nil {
+			return nil, err
 		}
 	}
 
@@ -266,7 +254,6 @@ func newWorker(
 func New(
 	hostNode control.ControlledNode,
 	dataDir string,
-	enabled bool,
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	p2p *p2p.P2P,
@@ -299,7 +286,6 @@ func New(
 		cancelCtx,
 		hostNode,
 		dataDir,
-		enabled,
 		identity,
 		consensus,
 		grpc,

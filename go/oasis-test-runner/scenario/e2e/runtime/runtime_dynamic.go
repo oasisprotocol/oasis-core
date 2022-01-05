@@ -20,16 +20,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // RuntimeDynamic is the dynamic runtime registration scenario.
 var RuntimeDynamic scenario.Scenario = newRuntimeDynamicImpl()
-
-const (
-	runtimeDynamicTestKey   = "genesis state"
-	runtimeDynamicTestValue = "hello world"
-)
 
 type runtimeDynamicImpl struct {
 	runtimeImpl
@@ -63,7 +57,6 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 				staking.KindEntity:            *quantity.NewFromUint64(0),
 				staking.KindNodeValidator:     *quantity.NewFromUint64(0),
 				staking.KindNodeCompute:       *quantity.NewFromUint64(0),
-				staking.KindNodeStorage:       *quantity.NewFromUint64(0),
 				staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
 				staking.KindRuntimeCompute:    *quantity.NewFromUint64(1000),
 				staking.KindRuntimeKeyManager: *quantity.NewFromUint64(1000),
@@ -76,14 +69,8 @@ func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.Runtimes {
 		f.Runtimes[i].ExcludeFromGenesis = true
 	}
-	// Test storage genesis state for compute runtimes. Also test with a non-zero round.
+	// Test with a non-zero round.
 	f.Runtimes[1].GenesisRound = 42
-	f.Runtimes[1].GenesisState = storage.WriteLog{
-		{
-			Key:   []byte(runtimeDynamicTestKey),
-			Value: []byte(runtimeDynamicTestValue),
-		},
-	}
 
 	return f, nil
 }
@@ -229,15 +216,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 
-	// Wait for storage workers and compute workers to become ready.
-	sc.Logger.Info("waiting for storage workers to initialize",
-		"num_storage_workers", len(sc.Net.StorageWorkers()),
-	)
-	for _, n := range sc.Net.StorageWorkers() {
-		if err := n.WaitReady(ctx); err != nil {
-			return fmt.Errorf("failed to wait for a storage worker: %w", err)
-		}
-	}
+	// Wait for compute workers to become ready.
 	sc.Logger.Info("waiting for compute workers to initialize",
 		"num_compute_workers", len(sc.Net.ComputeWorkers()),
 	)
@@ -262,23 +241,6 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		// Wait a bit after epoch transitions.
 		time.Sleep(1 * time.Second)
 
-		if i == 0 {
-			sc.Logger.Info("checking if genesis state has been initialized")
-			rsp, err := sc.submitKeyValueRuntimeGetTx(
-				ctx,
-				runtimeID,
-				runtimeDynamicTestKey,
-				rtNonce,
-			)
-			if err != nil {
-				return err
-			}
-			rtNonce++
-			if rsp != runtimeDynamicTestValue {
-				return fmt.Errorf("incorrect value returned by runtime: %s", rsp)
-			}
-		}
-
 		// Submit a runtime transaction.
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
@@ -290,12 +252,6 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	// Stop all runtime nodes, so they will not re-register, causing the nodes to expire.
-	sc.Logger.Info("stopping storage nodes")
-	for _, n := range sc.Net.StorageWorkers() {
-		if err := n.Stop(); err != nil {
-			return fmt.Errorf("failed to stop node: %w", err)
-		}
-	}
 	sc.Logger.Info("stopping compute nodes")
 	for _, n := range sc.Net.ComputeWorkers() {
 		if err := n.Stop(); err != nil {
@@ -330,12 +286,6 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	// Start runtime nodes, make sure they register.
-	sc.Logger.Info("starting storage nodes")
-	for _, n := range sc.Net.StorageWorkers() {
-		if err = n.Start(); err != nil {
-			return fmt.Errorf("failed to start node: %w", err)
-		}
-	}
 	sc.Logger.Info("starting compute nodes")
 	for _, n := range sc.Net.ComputeWorkers() {
 		if err = n.Start(); err != nil {
@@ -343,14 +293,6 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		}
 	}
 
-	sc.Logger.Info("waiting for storage workers to initialize",
-		"num_storage_workers", len(sc.Net.StorageWorkers()),
-	)
-	for _, n := range sc.Net.StorageWorkers() {
-		if err = n.WaitReady(ctx); err != nil {
-			return fmt.Errorf("failed to wait for a storage worker: %w", err)
-		}
-	}
 	sc.Logger.Info("waiting for compute workers to initialize",
 		"num_compute_workers", len(sc.Net.ComputeWorkers()),
 	)
@@ -462,14 +404,6 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Restart nodes to test that the nodes will re-register although
 	// the runtime is suspended.
-	sc.Logger.Info("Restarting storage node to ensure it re-registers")
-	if err = sc.Net.StorageWorkers()[0].Stop(); err != nil {
-		return fmt.Errorf("failed to stop node: %w", err)
-	}
-	if err = sc.Net.StorageWorkers()[0].Start(); err != nil {
-		return fmt.Errorf("failed to start node: %w", err)
-	}
-
 	sc.Logger.Info("Restarting compute node to ensure it re-registers")
 	if err = sc.Net.ComputeWorkers()[0].Stop(); err != nil {
 		return fmt.Errorf("failed to stop node: %w", err)

@@ -41,12 +41,20 @@ func (s *scheduler) QueueTx(tx *transaction.CheckedTransaction) error {
 	}
 }
 
-func (s *scheduler) RemoveTxBatch(tx []hash.Hash) error {
-	return s.txPool.RemoveBatch(tx)
+func (s *scheduler) RemoveTxBatch(tx []hash.Hash) {
+	s.txPool.RemoveBatch(tx)
 }
 
 func (s *scheduler) GetBatch(force bool) []*transaction.CheckedTransaction {
 	return s.txPool.GetBatch(force)
+}
+
+func (s *scheduler) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {
+	return s.txPool.GetKnownBatch(batch)
+}
+
+func (s *scheduler) GetTransactions(limit int) []*transaction.CheckedTransaction {
+	return s.txPool.GetTransactions(limit)
 }
 
 func (s *scheduler) UnscheduledSize() uint64 {
@@ -61,18 +69,11 @@ func (s *scheduler) Clear() {
 	s.txPool.Clear()
 }
 
-func (s *scheduler) UpdateParameters(algo string, weightLimits map[transaction.Weight]uint64) error {
-	if algo != Name {
-		return fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
-	}
-
-	if err := s.txPool.UpdateConfig(txpool.Config{
+func (s *scheduler) UpdateParameters(weightLimits map[transaction.Weight]uint64) {
+	s.txPool.UpdateConfig(txpool.Config{
 		MaxPoolSize:  s.maxTxPoolSize,
 		WeightLimits: weightLimits,
-	}); err != nil {
-		return fmt.Errorf("error updating parameters: %w", err)
-	}
-	return nil
+	})
 }
 
 func (s *scheduler) Name() string {
@@ -80,11 +81,7 @@ func (s *scheduler) Name() string {
 }
 
 // New creates a new simple scheduler.
-func New(txPoolImpl string, maxTxPoolSize uint64, algo string, weightLimits map[transaction.Weight]uint64) (api.Scheduler, error) {
-	if algo != Name {
-		return nil, fmt.Errorf("unexpected transaction scheduling algorithm: %s", algo)
-	}
-
+func New(txPoolImpl string, maxTxPoolSize uint64, weightLimits map[transaction.Weight]uint64) (api.Scheduler, error) {
 	poolCfg := txpool.Config{
 		MaxPoolSize:  maxTxPoolSize,
 		WeightLimits: weightLimits,

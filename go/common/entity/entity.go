@@ -119,6 +119,16 @@ func (e *Entity) ValidateBasic(strictVersion bool) error {
 	return nil
 }
 
+// HasNode checks if the given node is in this entity's node whitelist.
+func (e *Entity) HasNode(id signature.PublicKey) bool {
+	for _, pk := range e.Nodes {
+		if pk.Equal(id) {
+			return true
+		}
+	}
+	return false
+}
+
 // String returns a string representation of itself.
 func (e Entity) String() string {
 	return "<Entity id=" + e.ID.String() + ">"

@@ -14,6 +14,9 @@ replace (
 
 	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.9-oasis2
 
+	// Required because of https://github.com/libp2p/go-libp2p-pubsub/issues/467.
+	github.com/whyrusleeping/timecache => github.com/oasisprotocol/timecache v0.0.0-20220102191729-558b1c931038
+
 	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/curve25519-voi/primitives/x25519 v0.0.0-20210505121811-294cf0fbfb43
 	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/curve25519-voi/primitives/ed25519 v0.0.0-20210505121811-294cf0fbfb43
 )

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -100,12 +99,6 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MaxBatchSizeBytes: 1024,
 				BatchFlushTimeout: 1 * time.Second,
 				ProposerTimeout:   10,
-			},
-			Storage: registry.StorageParameters{
-				GroupSize:               1,
-				MinWriteReplication:     1,
-				MaxApplyWriteLogEntries: 100_000,
-				MaxApplyOps:             2,
 			},
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
@@ -242,8 +235,7 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for all nodes to start.
-	var epoch beacon.EpochTime
-	if epoch, err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
@@ -260,9 +252,15 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Submit transactions.
-	epoch++
+	c := sc.Net.ClientController().RuntimeClient
 
 	rt := crt[0]
+
+	blkCh, sub, err := c.WatchBlocks(ctx, rt.ID)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
 
 	sc.Logger.Info("submitting update transaction to runtime",
 		"runtime_id", rt.ID,
@@ -273,26 +271,35 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	newRT.Executor.MaxMessages = 64
 	newRT.Genesis.StateRoot.Empty()
 
-	if _, err = sc.submitRuntimeTx(ctx, rt.ID, "update_runtime", struct {
+	meta, err := sc.submitRuntimeTxMeta(ctx, rt.ID, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
 		Nonce         uint64           `json:"nonce"`
 	}{
 		UpdateRuntime: newRT,
 		Nonce:         rtNonce,
-	}); err != nil {
+	})
+	if err != nil {
+		return err
+	}
+	if _, err = unpackRawTxResp(meta.Output); err != nil {
 		return err
 	}
 	rtNonce++
 
-	// Epoch transition.
-	sc.Logger.Info("triggering epoch transition",
-		"epoch", epoch,
-	)
-	if err = sc.Net.Controller().SetEpoch(ctx, epoch); err != nil {
-		return fmt.Errorf("failed to set epoch: %w", err)
+	// Wait for next round.
+	for {
+		select {
+		case blk := <-blkCh:
+			sc.Logger.Debug("round transition", "round", blk.Block.Header.Round)
+			if blk.Block.Header.Round <= meta.Round {
+				continue
+			}
+		case <-time.After(waitTimeout):
+			return fmt.Errorf("timed out waiting for runtime rounds")
+		}
+
+		break
 	}
-	sc.Logger.Info("epoch transition done")
-	epoch++
 
 	// Verify that the descriptor was updated.
 	sc.Logger.Info("checking that the runtime descriptor was updated")
@@ -317,6 +324,7 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	// Updating another runtime should fail.
 	otherRT := crt[1]
 	newRT = *rt
+	newRT.ID = otherRT.ID
 	newRT.Executor.MaxMessages = 32
 	newRT.Genesis.StateRoot.Empty()
 
@@ -324,24 +332,34 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 		"src_runtime", rt.ID,
 		"target_runtime", otherRT.ID,
 	)
-	if _, err = sc.submitRuntimeTx(ctx, otherRT.ID, "update_runtime", struct {
+	meta, err = sc.submitRuntimeTxMeta(ctx, rt.ID, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
 		Nonce         uint64           `json:"nonce"`
 	}{
 		UpdateRuntime: newRT,
 		Nonce:         rtNonce,
-	}); err != nil {
+	})
+	if err != nil {
+		return err
+	}
+	if _, err = unpackRawTxResp(meta.Output); err != nil {
 		return err
 	}
 
-	sc.Logger.Info("triggering epoch transition",
-		"epoch", epoch,
-	)
-	if err = sc.Net.Controller().SetEpoch(ctx, epoch); err != nil {
-		return fmt.Errorf("failed to set epoch: %w", err)
+	// Wait for next round.
+	for {
+		select {
+		case blk := <-blkCh:
+			sc.Logger.Debug("round transition", "round", blk.Block.Header.Round)
+			if blk.Block.Header.Round <= meta.Round {
+				continue
+			}
+		case <-time.After(waitTimeout):
+			return fmt.Errorf("timed out waiting for runtime rounds")
+		}
+
+		break
 	}
-	sc.Logger.Info("epoch transition done")
-	epoch++ // nolint: ineffassign
 
 	sc.Logger.Info("checking that the update didn't succeed")
 	// Check target runtime.

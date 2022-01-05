@@ -50,6 +50,7 @@ type applicationState struct { // nolint: maligned
 	statePruner    StatePruner
 	prunerClosedCh chan struct{}
 	prunerNotifyCh *channels.RingChannel
+	pruneInterval  time.Duration
 
 	checkpointer checkpoint.Checkpointer
 	upgrader     upgrade.Backend
@@ -408,20 +409,39 @@ func (s *applicationState) metricsWorker() {
 	}
 }
 
+func (s *applicationState) startPruner() error {
+	go s.pruneWorker()
+	return nil
+}
+
 func (s *applicationState) pruneWorker() {
 	defer close(s.prunerClosedCh)
+
+	s.logger.Debug("state pruner is starting")
+
+	ticker := time.NewTicker(s.pruneInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-s.ctx.Done():
+			s.logger.Debug("state pruner is terminating")
 			return
-		case r := <-s.prunerNotifyCh.Out():
-			round := r.(uint64)
+		case <-ticker.C:
+			var v interface{}
+			select {
+			case v = <-s.prunerNotifyCh.Out():
+			case <-s.ctx.Done():
+				s.logger.Debug("state pruner is terminating")
+				return
+			}
 
-			if err := s.statePruner.Prune(s.ctx, round); err != nil {
+			version := v.(uint64)
+
+			if err := s.statePruner.Prune(s.ctx, version); err != nil {
 				s.logger.Warn("failed to prune state",
 					"err", err,
-					"block_height", round,
+					"block_height", version,
 				)
 			}
 		}
@@ -467,8 +487,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ldb := db.(storage.LocalBackend)
-	ndb := ldb.NodeDB()
+	ndb := db.NodeDB()
 
 	// Make sure to close the database in case we fail.
 	var ok bool
@@ -508,7 +527,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 
 	ok = true
 
-	return ldb, ndb, stateRoot, nil
+	return db, ndb, stateRoot, nil
 }
 
 func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*applicationState, error) {
@@ -528,7 +547,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 	checkTxTree := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
 
 	// Initialize the state pruner.
-	statePruner, err := newStatePruner(&cfg.Pruning, ndb, latestVersion)
+	statePruner, err := newStatePruner(&cfg.Pruning, ndb)
 	if err != nil {
 		return nil, fmt.Errorf("state: failed to create pruner: %w", err)
 	}
@@ -552,6 +571,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 		statePruner:        statePruner,
 		prunerClosedCh:     make(chan struct{}),
 		prunerNotifyCh:     channels.NewRingChannel(1),
+		pruneInterval:      cfg.Pruning.PruneInterval,
 		upgrader:           upgrader,
 		haltEpochHeight:    cfg.HaltEpochHeight,
 		minGasPrice:        minGasPrice,
@@ -590,7 +610,6 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 	}
 
 	go s.metricsWorker()
-	go s.pruneWorker()
 
 	return s, nil
 }

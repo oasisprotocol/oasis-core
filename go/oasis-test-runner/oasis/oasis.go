@@ -186,6 +186,10 @@ func (n *Node) LoadIdentity() (*identity.Identity, error) {
 func (n *Node) Start() error {
 	args := newArgBuilder()
 	var customStart CustomStartFeature
+
+	// Reset hosted runtimes as various AddArgs will be populating them.
+	n.hostedRuntimes = make(map[common.Namespace]*hostedRuntime)
+
 	for _, f := range n.features {
 		if err := f.AddArgs(args); err != nil {
 			return fmt.Errorf("oasis/node: failed to add arguments for feature on node %s: %w", n.Name, err)

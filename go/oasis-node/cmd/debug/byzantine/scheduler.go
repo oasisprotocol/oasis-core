@@ -13,10 +13,10 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-func schedulerNextElectionHeight(svc consensus.Backend, epoch beacon.EpochTime) (int64, error) {
+func schedulerNextElectionHeight(svc consensus.Backend, epoch beacon.EpochTime) (int64, beacon.EpochTime, error) {
 	ch, sub, err := svc.Scheduler().WatchCommittees(context.Background())
 	if err != nil {
-		return -1, fmt.Errorf("failed to watch committees: %w", err)
+		return -1, beacon.EpochInvalid, fmt.Errorf("failed to watch committees: %w", err)
 	}
 	defer sub.Close()
 
@@ -24,9 +24,9 @@ func schedulerNextElectionHeight(svc consensus.Backend, epoch beacon.EpochTime) 
 		if committee := <-ch; committee.ValidFor >= epoch {
 			height, err := svc.Beacon().GetEpochBlock(context.Background(), committee.ValidFor)
 			if err != nil {
-				return -1, fmt.Errorf("failed to get epoch block: %w", err)
+				return -1, beacon.EpochInvalid, fmt.Errorf("failed to get epoch block: %w", err)
 			}
-			return height, nil
+			return height, committee.ValidFor, nil
 		}
 	}
 }

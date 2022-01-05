@@ -33,17 +33,16 @@ func (impl *backendVRF) OnInitChain(
 	params *beacon.ConsensusParameters,
 	doc *genesis.Document,
 ) error {
-	// If the backend is configured to use explicitly set epochs, there
-	// is nothing further to do.  And yes, this ignores the base epoch,
-	// but that's how certain tests are written.
-	if params.DebugMockBackend {
-		return nil
-	}
-
 	// Set the initial epoch.
 	baseEpoch := doc.Beacon.Base
 	if err := state.SetEpoch(ctx, baseEpoch, ctx.InitialHeight()); err != nil {
 		return fmt.Errorf("beacon: failed to set initial epoch: %w", err)
+	}
+
+	// If the backend is configured to use explicitly set epochs, there
+	// is nothing further to do.
+	if params.DebugMockBackend {
+		return nil
 	}
 
 	impl.app.doEmitEpochEvent(ctx, baseEpoch)

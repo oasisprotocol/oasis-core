@@ -4,72 +4,100 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
-// ProposedBatchSignatureContext is the context used for signing propose batch
-// dispatch messages.
-var ProposedBatchSignatureContext = signature.NewContext(
-	"oasis-core/roothash: proposed batch",
+// ProposalSignatureContext is the context used for signing propose batch dispatch messages.
+var ProposalSignatureContext = signature.NewContext(
+	"oasis-core/roothash: proposal",
 	signature.WithChainSeparation(),
 	signature.WithDynamicSuffix(" for runtime ", common.NamespaceHexSize),
 )
 
-// ProposedBatch is the message sent from the transaction scheduler
-// to executor workers after a batch is ready to be executed.
-//
-// Don't forget to bump CommitteeProtocol version in go/common/version
-// if you change anything in this struct.
-type ProposedBatch struct {
-	// IORoot is the I/O root containing the inputs (transactions) that
-	// the executor node should use.
-	IORoot hash.Hash `json:"io_root"`
+// ProposalHeader is the header of the batch proposal.
+type ProposalHeader struct {
+	// Round is the proposed round number.
+	Round uint64 `json:"round"`
 
-	// StorageSignatures are the storage receipt signatures for the I/O root.
-	StorageSignatures []signature.Signature `json:"storage_signatures"`
+	// PreviousHash is the hash of the block header on which the batch should be based.
+	PreviousHash hash.Hash `json:"previous_hash"`
 
-	// Header is the block header on which the batch should be based.
-	Header block.Header `json:"header"`
+	// BatchHash is the hash of the content of the batch.
+	BatchHash hash.Hash `json:"batch_hash"`
 }
 
-// SignedProposedBatch is a ProposedBatch, signed by
-// the transaction scheduler.
-type SignedProposedBatch struct {
-	signature.Signed
-}
-
-// Equal compares vs another SignedProposedBatch for equality.
-func (s *SignedProposedBatch) Equal(cmp *SignedProposedBatch) bool {
-	return s.Signed.Equal(&cmp.Signed)
-}
-
-// Open first verifies the blob signature and then unmarshals the blob.
-func (s *SignedProposedBatch) Open(tsbd *ProposedBatch, runtimeID common.Namespace) error {
-	sigCtx, err := ProposedBatchSignatureContext.WithSuffix(runtimeID.String())
-	if err != nil {
-		return fmt.Errorf("signature context error: %w", err)
-	}
-	return s.Signed.Open(sigCtx, tsbd)
-}
-
-// SignProposedBatch signs a ProposedBatch struct using the
-// given signer.
-func SignProposedBatch(signer signature.Signer, runtimeID common.Namespace, tsbd *ProposedBatch) (*SignedProposedBatch, error) {
-	sigCtx, err := ProposedBatchSignatureContext.WithSuffix(runtimeID.String())
+// Sign signs the proposal header.
+func (ph *ProposalHeader) Sign(signer signature.Signer, runtimeID common.Namespace) (*signature.RawSignature, error) {
+	sigCtx, err := ProposalSignatureContext.WithSuffix(runtimeID.String())
 	if err != nil {
 		return nil, fmt.Errorf("signature context error: %w", err)
 	}
-	signed, err := signature.SignSigned(signer, sigCtx, tsbd)
+
+	signature, err := signature.Sign(signer, sigCtx, cbor.Marshal(ph))
 	if err != nil {
 		return nil, err
 	}
+	return &signature.Signature, nil
+}
 
-	return &SignedProposedBatch{
-		Signed: *signed,
-	}, nil
+// Equal compares against another proposal header for equality.
+func (ph *ProposalHeader) Equal(other *ProposalHeader) bool {
+	if ph.Round != other.Round {
+		return false
+	}
+	if !ph.PreviousHash.Equal(&other.PreviousHash) {
+		return false
+	}
+	if !ph.BatchHash.Equal(&other.BatchHash) {
+		return false
+	}
+	return true
+}
+
+// Proposal is a batch proposal.
+type Proposal struct {
+	// NodeID is the public key of the node that generated this proposal.
+	NodeID signature.PublicKey `json:"node_id"`
+
+	// Header is the proposal header.
+	Header ProposalHeader `json:"header"`
+
+	// Signature is the proposal header signature.
+	Signature signature.RawSignature `json:"sig"`
+
+	// Batch is an ordered list of all transaction hashes that should be in a batch. In case of
+	// the proposal being submitted as equivocation evidence, this field should be omitted.
+	Batch []hash.Hash `json:"batch,omitempty"`
+}
+
+// Sign signs the proposal header and sets the signature on the proposal.
+func (p *Proposal) Sign(signer signature.Signer, runtimeID common.Namespace) error {
+	if !p.NodeID.Equal(signer.Public()) {
+		return fmt.Errorf("node ID does not match signer (ID: %s signer: %s)", p.NodeID, signer.Public())
+	}
+
+	sig, err := p.Header.Sign(signer, runtimeID)
+	if err != nil {
+		return err
+	}
+	p.Signature = *sig
+	return nil
+}
+
+// Verify verifies that the header signature is valid.
+func (p *Proposal) Verify(runtimeID common.Namespace) error {
+	sigCtx, err := ProposalSignatureContext.WithSuffix(runtimeID.String())
+	if err != nil {
+		return fmt.Errorf("roothash/commitment: signature context error: %w", err)
+	}
+
+	if !p.NodeID.Verify(sigCtx, cbor.Marshal(p.Header), p.Signature[:]) {
+		return fmt.Errorf("roothash/commitment: signature verification failed")
+	}
+	return nil
 }
 
 // GetTransactionScheduler returns the transaction scheduler of the provided

@@ -13,7 +13,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -25,16 +24,15 @@ import (
 	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
@@ -202,9 +200,8 @@ type Node struct { // nolint: maligned
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	quitCh          chan struct{}
-	rtWatcherQuitCh chan struct{}
-	workerQuitCh    chan struct{}
+	quitCh       chan struct{}
+	workerQuitCh chan struct{}
 
 	initCh chan struct{}
 }
@@ -244,10 +241,9 @@ func NewNode(
 		diffCh:     make(chan *fetchedDiff),
 		finalizeCh: make(chan finalizeResult),
 
-		quitCh:          make(chan struct{}),
-		rtWatcherQuitCh: make(chan struct{}),
-		workerQuitCh:    make(chan struct{}),
-		initCh:          make(chan struct{}),
+		quitCh:       make(chan struct{}),
+		workerQuitCh: make(chan struct{}),
+		initCh:       make(chan struct{}),
 	}
 
 	n.syncedState.LastBlock.Round = defaultUndefinedRound
@@ -271,8 +267,8 @@ func NewNode(
 		nodes.WithAllFilters(
 			// Ignore self.
 			nodes.IgnoreNodeFilter(n.commonNode.Identity.NodeSigner.Public()),
-			// Only storage nodes.
-			nodes.TagFilter(nodes.TagsForRoleMask(node.RoleStorageWorker)[0]),
+			// Only compute nodes.
+			nodes.TagFilter(nodes.TagsForRoleMask(node.RoleComputeWorker)[0]),
 		),
 	)
 	storageNodesGrpc, err := grpc.NewNodesClient(
@@ -348,6 +344,9 @@ func NewNode(
 		logger: n.logger,
 		node:   n,
 	})
+
+	// Update service policy.
+	n.updateExternalServicePolicy()
 
 	prometheusOnce.Do(func() {
 		prometheus.MustRegister(storageWorkerCollectors...)
@@ -458,9 +457,9 @@ func (n *Node) GetLocalStorage() storageApi.LocalBackend {
 
 // NodeHooks implementation.
 
-func (n *Node) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
+func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
 	// Nothing to do here.
-	return false, nil
+	return nil
 }
 
 // Guarded by CrossNode.
@@ -484,10 +483,8 @@ func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 	// Nothing to do here.
 }
 
-// Guarded by CrossNode.
-func (n *Node) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *committee.EpochSnapshot) {
+func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 	// Nothing to do here.
-	// Storage worker uses a separate watcher.
 }
 
 // Watcher implementation.
@@ -545,7 +542,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 			ctx = storageApi.WithNodeSelectionCallback(ctx, func(n *node.Node) {
 				selectedNode = n
 			})
-			if committee := n.commonNode.Group.GetEpochSnapshot().GetStorageCommittee(); committee != nil {
+			if committee := n.commonNode.Group.GetEpochSnapshot().GetExecutorCommittee(); committee != nil {
 				ctx = storageApi.WithNodePriorityHintFromMap(ctx, committee.PublicKeys)
 			}
 			it, err := n.storageClient.GetDiff(ctx, &storageApi.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
@@ -634,7 +631,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 				"latest_version", latestVersion,
 			)
 			for v := latestVersion; v < stateRoot.Version; v++ {
-				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: rt.ID,
 					RootType:  storageApi.RootTypeState,
 					SrcRound:  v,
@@ -666,8 +663,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 	}
 
 	// If we are incompatible and the database is not empty, we cannot do anything. If the database
-	// is empty we can either apply genesis state from the runtime descriptor (if relevant) or we
-	// assume the node will sync from a different node.
+	// is empty we assume the node will sync from a different node.
 	if !compatible && latestVersion > 0 {
 		n.logger.Error("existing state is incompatible with runtime genesis state",
 			"genesis_state_root", genesisBlock.Header.StateRoot,
@@ -677,35 +673,9 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 		return fmt.Errorf("existing state is incompatible with runtime genesis state")
 	}
 
-	// Check if the genesis round in the descriptor matches the current genesis round and if so,
-	// whether genesis state exists in the descriptor. Note that the rounds may not match in case a
-	// dump/restore of consensus layer state has been performed.
-	if genesisBlock.Header.Round == rt.Genesis.Round && rt.Genesis.State != nil {
-		var emptyRoot hash.Hash
-		emptyRoot.Empty()
-
-		n.logger.Info("applying genesis state",
-			"state_root", rt.Genesis.StateRoot,
-		)
-
-		_, err := n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
-			Namespace: rt.ID,
-			RootType:  storageApi.RootTypeState,
-			SrcRound:  rt.Genesis.Round,
-			SrcRoot:   emptyRoot,
-			DstRound:  rt.Genesis.Round,
-			DstRoot:   rt.Genesis.StateRoot,
-			WriteLog:  rt.Genesis.State,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to apply genesis state: %w", err)
-		}
-		compatible = true
-	}
-
 	if !compatible {
 		// Database is empty, so assume the state will be replicated from another node.
-		n.logger.Warn("non-empty state root but no state specified, assuming replication",
+		n.logger.Warn("non-empty state root but no state available, assuming replication",
 			"state_root", genesisBlock.Header.StateRoot,
 		)
 		n.checkpointSyncForced = true
@@ -738,7 +708,7 @@ func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
 	return n.syncedState.LastBlock.Round
 }
 
-func (n *Node) updateExternalServicePolicy(rtComputeNodes nodes.NodeDescriptorLookup) {
+func (n *Node) updateExternalServicePolicy() {
 	// Create new storage gRPC access policy for the current runtime.
 	policy := accessctl.NewPolicy()
 
@@ -747,33 +717,11 @@ func (n *Node) updateExternalServicePolicy(rtComputeNodes nodes.NodeDescriptorLo
 		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
 	}
 
-	executorCommitteePolicy.AddRulesForNodeRoles(&policy, rtComputeNodes.GetNodes(), node.RoleComputeWorker)
-
-	switch {
-	// If public storage RPC was enabled in the config, then the normally gated methods need to be allowed
-	// for everyone.
-	case n.rpcRoleProvider != nil:
-		for _, act := range storageNodesPolicy.Actions {
+	// If public storage RPC was enabled in the config, then the normally gated methods need to be
+	// allowed for everyone.
+	if n.rpcRoleProvider != nil {
+		for _, act := range storageRpcNodesPolicy.Actions {
 			policy.AllowAll(act)
-		}
-
-	// If not configured otherwise, state access should be restricted to storage committee members.
-	default:
-		// TODO: Query registry only for storage nodes after
-		// https://github.com/oasisprotocol/oasis-core/issues/1923 is implemented.
-		nodes, err := n.commonNode.Consensus.Registry().GetNodes(n.ctx, consensus.HeightLatest)
-		if err != nil {
-			n.logger.Error("couldn't get nodes from registry", "err", err)
-		}
-		if len(nodes) > 0 {
-			// Only include storage nodes for our runtime.
-			var storageNodes []*node.Node
-			for _, nd := range nodes {
-				if nd.GetRuntime(n.commonNode.Runtime.ID()) != nil && nd.HasRoles(node.RoleStorageWorker) {
-					storageNodes = append(storageNodes, nd)
-				}
-			}
-			storageNodesPolicy.AddRulesForNodeRoles(&policy, storageNodes, node.RoleStorageWorker)
 		}
 	}
 
@@ -782,66 +730,9 @@ func (n *Node) updateExternalServicePolicy(rtComputeNodes nodes.NodeDescriptorLo
 	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
 }
 
-func (n *Node) runtimeNodesWatcher() {
-	defer close(n.rtWatcherQuitCh)
-
-	// Watch registry for runtime node updates and update external gRPC policies.
-	// Policy updates are made on:
-	// * any updates to the runtime executor committee nodes
-	// * any updates to the registered storage nodes for the runtime
-	//   (this includes nodes not in committee)
-
-	n.logger.Info("starting runtime nodes watcher")
-
-	committeeNodes := nodes.NewFilteredNodeLookup(
-		n.commonNode.Group.Nodes(),
-		nodes.TagFilter(committee.TagForCommittee(scheduler.KindComputeExecutor)),
-	)
-	// Start watching compute node updates for the current committee.
-	committeeNodeUps, committeeNodeUpsSub, err := committeeNodes.WatchNodeUpdates()
-	if err != nil {
-		n.logger.Error("failed to subscribe to node updates",
-			"err", err,
-		)
-		return
-	}
-	defer committeeNodeUpsSub.Close()
-
-	// Watch registered storage node updates for the runtime.
-	storageNodeUps, storageNodeUpsSub, err := n.storageNodes.WatchNodeUpdates()
-	if err != nil {
-		n.logger.Error("failed to subscribe to node storage node updates",
-			"err", err,
-		)
-		return
-	}
-	defer storageNodeUpsSub.Close()
-
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		case u := <-committeeNodeUps:
-			if u.Update == nil {
-				continue
-			}
-			// Update policy (handled bellow).
-		case u := <-storageNodeUps:
-			if u.Update == nil {
-				continue
-			}
-			// Update policy (handled bellow).
-		}
-		n.updateExternalServicePolicy(committeeNodes)
-	}
-}
-
 func (n *Node) watchQuit() {
 	// Close quit channel on any worker quitting.
-	select {
-	case <-n.workerQuitCh:
-	case <-n.rtWatcherQuitCh:
-	}
+	<-n.workerQuitCh
 	close(n.quitCh)
 }
 
@@ -1020,9 +911,6 @@ func (n *Node) worker() { // nolint: gocyclo
 		return
 	}
 
-	// Start runtime node watcher.
-	go n.runtimeNodesWatcher()
-
 	n.logger.Info("starting committee node")
 
 	genesisBlock, err := n.commonNode.Consensus.RootHash().GetGenesisBlock(n.ctx, &roothashApi.RuntimeRequest{
@@ -1107,7 +995,7 @@ func (n *Node) worker() { // nolint: gocyclo
 					"earliest_round", earlyBlk.Header.Round,
 				)
 				for v := genesisBlock.Header.Round; v < earlyBlk.Header.Round; v++ {
-					_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+					err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 						Namespace: n.commonNode.Runtime.ID(),
 						RootType:  storageApi.RootTypeState,
 						SrcRound:  v,
@@ -1319,7 +1207,7 @@ mainLoop:
 			// Apply the write log if one exists.
 			err = nil
 			if lastDiff.fetched {
-				_, err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: lastDiff.thisRoot.Namespace,
 					RootType:  lastDiff.thisRoot.Type,
 					SrcRound:  lastDiff.prevRoot.Version,

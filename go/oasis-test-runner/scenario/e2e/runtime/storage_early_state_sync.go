@@ -15,11 +15,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 // StorageEarlyStateSync is the scenario where a runtime is registered first and is not yet
-// operational, then a while later a storage node uses consensus layer state sync to catch up but
+// operational, then a while later an executor node uses consensus layer state sync to catch up but
 // the runtime has already advanced some epoch transition rounds and is no longer at genesis.
 var StorageEarlyStateSync scenario.Scenario = newStorageEarlyStateSyncImpl()
 
@@ -55,7 +54,6 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 				staking.KindEntity:            *quantity.NewFromUint64(0),
 				staking.KindNodeValidator:     *quantity.NewFromUint64(0),
 				staking.KindNodeCompute:       *quantity.NewFromUint64(0),
-				staking.KindNodeStorage:       *quantity.NewFromUint64(0),
 				staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
 				staking.KindRuntimeCompute:    *quantity.NewFromUint64(1000),
 				staking.KindRuntimeKeyManager: *quantity.NewFromUint64(1000),
@@ -77,23 +75,22 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Runtimes[0].Keymanager = -1
 	f.Keymanagers = nil
 	f.KeymanagerPolicies = nil
-	// No need for compute workers or clients (the runtime will not actually fully work as we just
-	// want to make sure initialization works correctly).
-	f.ComputeWorkers = nil
+	// No need for clients (the runtime will not actually fully work as we just want to make sure
+	// initialization works correctly).
 	f.Clients = nil
 	// Exclude runtime from genesis as we will register those dynamically.
 	f.Runtimes[0].ExcludeFromGenesis = true
-	// Only one storage worker that will use state sync after the runtime is registered.
-	f.StorageWorkers = []oasis.StorageWorkerFixture{{
+	// Only one compute worker that will use state sync after the runtime is registered.
+	f.ComputeWorkers = []oasis.ComputeWorkerFixture{{
 		NodeFixture: oasis.NodeFixture{
 			NoAutoStart: true,
 		},
-		Backend:               database.BackendNameBadgerDB,
 		Entity:                1,
 		CheckpointSyncEnabled: true,
 		LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 			oasis.LogEventABCIStateSyncComplete(),
 		},
+		Runtimes: []int{0},
 	}}
 
 	return f, nil
@@ -196,9 +193,9 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 		trustHash = status.Consensus.LatestHash.Hex()
 	}
 
-	// Configure state sync for the storage node.
-	sc.Logger.Info("starting storage node with state sync")
-	worker := sc.Net.StorageWorkers()[0]
+	// Configure state sync for the compute node.
+	sc.Logger.Info("starting compute node with state sync")
+	worker := sc.Net.ComputeWorkers()[0]
 	worker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
 		ConsensusNodes: consensusNodes,
 		TrustHeight:    trustHeight,
@@ -206,12 +203,12 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 	})
 
 	if err := worker.Start(); err != nil {
-		return fmt.Errorf("can't start storage worker: %w", err)
+		return fmt.Errorf("can't start compute worker: %w", err)
 	}
 	readyCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	if err := worker.WaitReady(readyCtx); err != nil {
-		return fmt.Errorf("error waiting for storage worker to become ready: %w", err)
+		return fmt.Errorf("error waiting for compute worker to become ready: %w", err)
 	}
 
 	// Wait a bit to give the logger in the node time to sync; the message has already been

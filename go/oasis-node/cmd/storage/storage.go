@@ -32,19 +32,22 @@ var (
 	}
 
 	storageMigrateCmd = &cobra.Command{
-		Use:   "migrate",
+		Use:   "migrate <runtime...>",
+		Args:  cobra.MinimumNArgs(1),
 		Short: "perform node database migration",
 		RunE:  doMigrate,
 	}
 
 	storageCheckCmd = &cobra.Command{
-		Use:   "check",
+		Use:   "check <runtime...>",
+		Args:  cobra.MinimumNArgs(1),
 		Short: "check node databases for consistency",
 		RunE:  doCheck,
 	}
 
 	storageRenameNsCmd = &cobra.Command{
 		Use:   "rename-ns <src-ns> <dst-ns>",
+		Args:  cobra.ExactArgs(2),
 		Short: "change the namespace of a runtime database",
 		RunE:  doRenameNs,
 	}
@@ -135,17 +138,26 @@ func (mh *migrateHelper) GetRootForHash(root hash.Hash, version uint64) ([]node.
 	return roots, nil
 }
 
+func parseRuntimes(args []string) ([]common.Namespace, error) {
+	var runtimes []common.Namespace
+	for _, arg := range args {
+		var runtimeID common.Namespace
+		if err := runtimeID.UnmarshalHex(arg); err != nil {
+			return nil, fmt.Errorf("malformed runtime identifier '%s': %w", arg, err)
+		}
+		runtimes = append(runtimes, runtimeID)
+	}
+	return runtimes, nil
+}
+
 func doMigrate(cmd *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
 	ctx := context.Background()
 
-	runtimes, err := registry.ParseRuntimeMap(viper.GetStringSlice(registry.CfgSupported))
-	if err != nil {
-		logger.Error("unable to enumerate configured runtimes", "err", err)
-		return fmt.Errorf("unable to enumerate configured runtimes: %w", err)
-	}
+	runtimes, err := parseRuntimes(args)
+	cobra.CheckErr(err)
 
-	for rt := range runtimes {
+	for _, rt := range runtimes {
 		if pretty {
 			fmt.Printf(" ** Upgrading storage database for runtime %v...\n", rt)
 		}
@@ -191,13 +203,10 @@ func doCheck(cmd *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
 	ctx := context.Background()
 
-	runtimes, err := registry.ParseRuntimeMap(viper.GetStringSlice(registry.CfgSupported))
-	if err != nil {
-		logger.Error("unable to enumerate configured runtimes", "err", err)
-		return fmt.Errorf("unable to enumerate configured runtimes: %w", err)
-	}
+	runtimes, err := parseRuntimes(args)
+	cobra.CheckErr(err)
 
-	for rt := range runtimes {
+	for _, rt := range runtimes {
 		if pretty {
 			fmt.Printf("Checking storage database for runtime %v...\n", rt)
 		}

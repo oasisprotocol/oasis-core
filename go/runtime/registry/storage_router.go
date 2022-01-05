@@ -44,22 +44,6 @@ func (sr *storageRouter) SyncIterate(ctx context.Context, request *api.IterateRe
 	return storage.SyncIterate(ctx, request)
 }
 
-func (sr *storageRouter) Apply(ctx context.Context, request *api.ApplyRequest) ([]*api.Receipt, error) {
-	storage, err := sr.getRuntime(request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	return storage.Apply(ctx, request)
-}
-
-func (sr *storageRouter) ApplyBatch(ctx context.Context, request *api.ApplyBatchRequest) ([]*api.Receipt, error) {
-	storage, err := sr.getRuntime(request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	return storage.ApplyBatch(ctx, request)
-}
-
 func (sr *storageRouter) GetDiff(ctx context.Context, request *api.GetDiffRequest) (api.WriteLogIterator, error) {
 	storage, err := sr.getRuntime(request.StartRoot.Namespace)
 	if err != nil {

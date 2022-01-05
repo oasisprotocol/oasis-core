@@ -65,24 +65,11 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			MaxBatchSizeBytes: 1024,
 			ProposerTimeout:   5,
 		},
-		Storage: registry.StorageParameters{
-			GroupSize:               1,
-			MinWriteReplication:     1,
-			MaxApplyWriteLogEntries: 100_000,
-			MaxApplyOps:             2,
-		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 		},
 		Constraints: map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints{
 			scheduler.KindComputeExecutor: {
-				scheduler.RoleWorker: {
-					MinPoolSize: &registry.MinPoolSizeConstraint{
-						Limit: 1,
-					},
-				},
-			},
-			scheduler.KindStorage: {
 				scheduler.RoleWorker: {
 					MinPoolSize: &registry.MinPoolSizeConstraint{
 						Limit: 1,
@@ -109,9 +96,7 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 	// consensus stopping as the registered validators wouldn't actually
 	// exist.
 	availableRoles := []node.RolesMask{
-		node.RoleStorageWorker,
 		node.RoleComputeWorker,
-		node.RoleStorageWorker | node.RoleComputeWorker,
 	}
 
 	nodeDesc := node.Node{

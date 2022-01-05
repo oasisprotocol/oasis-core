@@ -166,11 +166,11 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Completely reset state for one of the storage nodes so we can test initial sync.
-	sc.Logger.Info("completely resetting state for one of the storage nodes")
+	// Completely reset state for one of the compute nodes so we can test initial sync.
+	sc.Logger.Info("completely resetting state for one of the compute nodes")
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
-	if err = cli.UnsafeReset(sc.Net.StorageWorkers()[1].DataDir(), false, false); err != nil {
-		return fmt.Errorf("failed to reset state for storage worker: %w", err)
+	if err = cli.UnsafeReset(sc.Net.ComputeWorkers()[1].DataDir(), false, false); err != nil {
+		return fmt.Errorf("failed to reset state for compute worker: %w", err)
 	}
 
 	if err = sc.DumpRestoreNetwork(childEnv, fixture, true, sc.mapGenesisDocumentFn); err != nil {
@@ -180,13 +180,8 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("failed to start restored network: %w", err)
 	}
 
-	// Wait for all storage and compute nodes to be ready.
-	sc.Logger.Info("waiting for all storage and compute nodes to be ready")
-	for _, n := range sc.Net.StorageWorkers() {
-		if err = n.WaitReady(ctx); err != nil {
-			return fmt.Errorf("failed to wait for a storage worker: %w", err)
-		}
-	}
+	// Wait for all compute nodes to be ready.
+	sc.Logger.Info("waiting for all compute nodes to be ready")
 	for _, n := range sc.Net.ComputeWorkers() {
 		if err = n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a compute worker: %w", err)

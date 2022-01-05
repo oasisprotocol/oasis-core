@@ -49,8 +49,6 @@ pub enum ThresholdKind {
     KindNodeValidator = 1,
     /// Compute node staking threshold.
     KindNodeCompute = 2,
-    /// Storage node staking threshold.
-    KindNodeStorage = 3,
     /// Keymanager node staking threshold.
     KindNodeKeyManager = 4,
     /// Compute runtime staking threshold.

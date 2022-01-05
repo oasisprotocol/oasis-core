@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
 )
 
@@ -23,7 +24,11 @@ var (
 	// connect to.
 	CfgSentryAddresses = "worker.sentry.address"
 
-	cfgStorageCommitTimeout = "worker.storage_commit_timeout"
+	cfgMaxTxPoolSize       = "worker.tx_pool.schedule_max_tx_pool_size"
+	cfgScheduleTxCacheSize = "worker.tx_pool.schedule_tx_cache_size"
+	cfgStaleTxCacheSize    = "worker.tx_pool.stale_tx_cache_size"
+	cfgCheckTxMaxBatchSize = "worker.tx_pool.check_tx_max_batch_size"
+	cfgRecheckInterval     = "worker.tx_pool.recheck_interval"
 
 	// Flags has the configuration flags.
 	Flags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -35,7 +40,7 @@ type Config struct { // nolint: maligned
 	ClientAddresses []node.Address
 	SentryAddresses []node.TLSAddress
 
-	StorageCommitTimeout time.Duration
+	TxPool txpool.Config
 
 	logger *logging.Logger
 }
@@ -84,11 +89,21 @@ func NewConfig() (*Config, error) {
 	}
 
 	cfg := Config{
-		ClientPort:           uint16(viper.GetInt(CfgClientPort)),
-		ClientAddresses:      clientAddresses,
-		SentryAddresses:      sentryAddresses,
-		StorageCommitTimeout: viper.GetDuration(cfgStorageCommitTimeout),
-		logger:               logging.GetLogger("worker/config"),
+		ClientPort:      uint16(viper.GetInt(CfgClientPort)),
+		ClientAddresses: clientAddresses,
+		SentryAddresses: sentryAddresses,
+		TxPool: txpool.Config{
+			MaxPoolSize:          viper.GetUint64(cfgMaxTxPoolSize),
+			MaxCheckTxBatchSize:  viper.GetUint64(cfgCheckTxMaxBatchSize),
+			MaxLastSeenCacheSize: viper.GetUint64(cfgScheduleTxCacheSize),
+			MaxStaleCacheSize:    viper.GetUint64(cfgStaleTxCacheSize),
+
+			// TODO: Make these configurable.
+			RepublishInterval: 60 * time.Second,
+
+			RecheckInterval: viper.GetUint64(cfgRecheckInterval),
+		},
+		logger: logging.GetLogger("worker/config"),
 	}
 
 	return &cfg, nil
@@ -99,7 +114,11 @@ func init() {
 	Flags.StringSlice(cfgClientAddresses, []string{}, "Address/port(s) to use for client connections when registering this node (if not set, all non-loopback local interfaces will be used)")
 	Flags.StringSlice(CfgSentryAddresses, []string{}, "Address(es) of sentry node(s) to connect to of the form [PubKey@]ip:port (where PubKey@ part represents base64 encoded node TLS public key)")
 
-	Flags.Duration(cfgStorageCommitTimeout, 10*time.Second, "Storage commit timeout")
+	Flags.Uint64(cfgMaxTxPoolSize, 10_000, "Maximum size of the scheduling transaction pool")
+	Flags.Uint64(cfgScheduleTxCacheSize, 10_000, "Maximum cache size of recently scheduled transactions to prevent re-scheduling")
+	Flags.Uint64(cfgStaleTxCacheSize, 64, "Maximum cache size of recently cleared transactions")
+	Flags.Uint64(cfgCheckTxMaxBatchSize, 10_000, "Maximum check tx batch size")
+	Flags.Uint64(cfgRecheckInterval, 32, "Transaction recheck interval (in rounds)")
 
 	_ = viper.BindPFlags(Flags)
 }

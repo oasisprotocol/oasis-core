@@ -19,8 +19,6 @@ import (
 )
 
 const (
-	// CfgWorkerEnabled enables the storage worker.
-	CfgWorkerEnabled      = "worker.storage.enabled"
 	cfgWorkerFetcherCount = "worker.storage.fetcher_count"
 
 	// CfgWorkerPublicRPCEnabled enables storage state access for all nodes instead of just
@@ -35,23 +33,13 @@ const (
 	// CfgCheckpointSyncDisabled disables syncing from checkpoints on worker startup.
 	CfgWorkerCheckpointSyncDisabled = "worker.storage.checkpoint_sync.disabled"
 
-	// CfgWorkerDebugIgnoreApply is a debug option that makes the worker ignore
-	// all apply operations.
-	CfgWorkerDebugIgnoreApply = "worker.debug.storage.ignore_apply"
-
 	// CfgBackend configures the storage backend flag.
 	CfgBackend = "worker.storage.backend"
-
-	// CfgLRUSlots configures the LRU apply lock slots.
-	CfgLRUSlots = "worker.storage.root_cache.apply_lock_lru_slots"
 
 	// CfgMaxCacheSize configures the maximum in-memory cache size.
 	CfgMaxCacheSize = "worker.storage.max_cache_size"
 
 	cfgCrashEnabled = "worker.storage.crash.enabled"
-
-	// CfgInsecureSkipChecks disables known root checks.
-	CfgInsecureSkipChecks = "worker.storage.debug.insecure_skip_checks"
 )
 
 // Flags has the configuration flags.
@@ -69,18 +57,15 @@ func NewLocalBackend(
 	identity *identity.Identity,
 ) (api.LocalBackend, error) {
 	cfg := &api.Config{
-		Backend:            strings.ToLower(viper.GetString(CfgBackend)),
-		DB:                 dataDir,
-		Signer:             identity.NodeSigner,
-		ApplyLockLRUSlots:  uint64(viper.GetInt(CfgLRUSlots)),
-		InsecureSkipChecks: viper.GetBool(CfgInsecureSkipChecks) && cmdFlags.DebugDontBlameOasis(),
-		Namespace:          namespace,
-		MaxCacheSize:       int64(viper.GetSizeInBytes(CfgMaxCacheSize)),
+		Backend:      strings.ToLower(viper.GetString(CfgBackend)),
+		DB:           dataDir,
+		Namespace:    namespace,
+		MaxCacheSize: int64(viper.GetSizeInBytes(CfgMaxCacheSize)),
 	}
 
 	var (
 		err  error
-		impl api.Backend
+		impl api.LocalBackend
 	)
 	switch cfg.Backend {
 	case database.BackendNameBadgerDB:
@@ -102,24 +87,16 @@ func NewLocalBackend(
 }
 
 func init() {
-	Flags.Bool(CfgWorkerEnabled, false, "Enable storage worker")
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
 	Flags.Bool(CfgWorkerPublicRPCEnabled, false, "Enable storage RPC access for all nodes")
 	Flags.Bool(CfgWorkerCheckpointerDisabled, false, "Disable the storage checkpointer")
 	Flags.Duration(CfgWorkerCheckpointCheckInterval, 1*time.Minute, "Storage checkpointer check interval")
 	Flags.Bool(CfgWorkerCheckpointSyncDisabled, false, "Disable initial storage sync from checkpoints")
 
-	Flags.Bool(CfgWorkerDebugIgnoreApply, false, "Ignore Apply operations (for debugging purposes)")
-	_ = Flags.MarkHidden(CfgWorkerDebugIgnoreApply)
-
 	Flags.String(CfgBackend, database.BackendNameBadgerDB, "Storage backend")
-	Flags.Bool(cfgCrashEnabled, false, "Enable the crashing storage wrapper")
-	Flags.Int(CfgLRUSlots, 1000, "How many LRU slots to use for Apply call locks in the MKVS tree root cache")
 	Flags.String(CfgMaxCacheSize, "64mb", "Maximum in-memory cache size")
 
-	Flags.Bool(CfgInsecureSkipChecks, false, "INSECURE: Skip known root checks")
-
-	_ = Flags.MarkHidden(CfgInsecureSkipChecks)
+	Flags.Bool(cfgCrashEnabled, false, "UNSAFE: Enable the crashing storage wrapper")
 	_ = Flags.MarkHidden(cfgCrashEnabled)
 
 	_ = viper.BindPFlags(Flags)

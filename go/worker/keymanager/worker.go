@@ -22,15 +22,12 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -67,8 +64,7 @@ type Worker struct { // nolint: maligned
 	runtime            runtimeRegistry.Runtime
 	runtimeHostHandler protocol.Handler
 
-	clientRuntimes       map[common.Namespace]*clientRuntimeWatcher
-	clientRuntimesQuitCh chan *clientRuntimeWatcher
+	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
 
 	commonWorker  *workerCommon.Worker
 	roleProvider  registration.RoleProvider
@@ -361,6 +357,7 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 	if w.clientRuntimes[rt.ID] != nil {
 		return nil
 	}
+
 	w.logger.Info("seen new runtime using us as a key manager",
 		"runtime_id", rt.ID,
 	)
@@ -388,43 +385,20 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 		return nil
 	}
 
-	runtimeUnmg, err := w.commonWorker.RuntimeRegistry.NewUnmanagedRuntime(w.ctx, rt.ID)
+	nodes, err := nodes.NewVersionedNodeDescriptorWatcher(w.ctx, w.commonWorker.Consensus)
 	if err != nil {
-		w.logger.Error("unable to create new unmanaged runtime",
+		w.logger.Error("unable to create new client runtime node watcher",
 			"err", err,
-		)
-		return err
-	}
-	node, err := w.commonWorker.NewUnmanagedCommitteeNode(runtimeUnmg, false)
-	if err != nil {
-		w.logger.Error("unable to create new committee node",
 			"runtime_id", rt.ID,
-			"err", err,
 		)
 		return err
 	}
-
 	crw := &clientRuntimeWatcher{
-		w:    w,
-		node: node,
+		w:         w,
+		runtimeID: rt.ID,
+		nodes:     nodes,
 	}
-	node.AddHooks(crw)
-
-	if err := node.Start(); err != nil {
-		w.logger.Error("unable to start new committee node",
-			"runtime_id", rt.ID,
-			"err", err,
-		)
-		return err
-	}
-
-	go func() {
-		select {
-		case <-node.Quit():
-			w.clientRuntimesQuitCh <- crw
-		case <-w.stopCh:
-		}
-	}()
+	go crw.worker()
 
 	w.clientRuntimes[rt.ID] = crw
 
@@ -476,16 +450,20 @@ func (w *Worker) worker() { // nolint: gocyclo
 	statusCh, statusSub := w.backend.WatchStatuses()
 	defer statusSub.Close()
 
+	// Subscribe to epoch transitions in order to know when we need to refresh
+	// the access control policy.
+	epoCh, epoSub, err := w.commonWorker.Consensus.Beacon().WatchLatestEpoch(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to watch epochs",
+			"err", err,
+		)
+		return
+	}
+	defer epoSub.Close()
+
 	// Subscribe to runtime registrations in order to know which runtimes
 	// are using us as a key manager.
 	w.clientRuntimes = make(map[common.Namespace]*clientRuntimeWatcher)
-	w.clientRuntimesQuitCh = make(chan *clientRuntimeWatcher)
-	defer func() {
-		for _, crw := range w.clientRuntimes {
-			crw.node.Stop()
-			<-crw.node.Quit()
-		}
-	}()
 
 	rtCh, rtSub, err := w.commonWorker.Consensus.Registry().WatchRuntimes(w.ctx)
 	if err != nil {
@@ -633,11 +611,10 @@ func (w *Worker) worker() { // nolint: gocyclo
 				)
 				continue
 			}
-		case crw := <-w.clientRuntimesQuitCh:
-			w.logger.Error("client runtime watcher quit unexpectedly, terminating",
-				"runtme_id", crw.node.Runtime.ID(),
-			)
-			return
+		case <-epoCh:
+			for _, crw := range w.clientRuntimes {
+				crw.epochTransition()
+			}
 		case <-w.stopCh:
 			w.logger.Info("termination requested")
 			return
@@ -646,60 +623,77 @@ func (w *Worker) worker() { // nolint: gocyclo
 }
 
 type clientRuntimeWatcher struct {
-	w    *Worker
-	node *committeeCommon.Node
+	w         *Worker
+	runtimeID common.Namespace
+	nodes     nodes.VersionedNodeDescriptorWatcher
 }
 
-func (crw *clientRuntimeWatcher) HandlePeerMessage(context.Context, *p2p.Message, bool) (bool, error) {
-	// This should never be called as P2P is disabled.
-	panic("keymanager/worker: must never be called")
+func (crw *clientRuntimeWatcher) worker() {
+	ch, sub, err := crw.nodes.WatchNodeUpdates()
+	if err != nil {
+		crw.w.logger.Error("failed to subscribe to client runtime node updates",
+			"err", err,
+			"runtime_id", crw.runtimeID,
+		)
+		return
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case <-crw.w.ctx.Done():
+			return
+		case <-ch:
+			crw.updateExternalServicePolicy()
+		}
+	}
 }
 
-func (crw *clientRuntimeWatcher) updateExternalServicePolicyLocked(snapshot *committeeCommon.EpochSnapshot) {
-	// Update key manager access control policy on epoch transitions.
+func (crw *clientRuntimeWatcher) epochTransition() {
+	crw.nodes.Reset()
+
+	cms, err := crw.w.commonWorker.Consensus.Scheduler().GetCommittees(crw.w.ctx, &scheduler.GetCommitteesRequest{
+		Height:    consensus.HeightLatest,
+		RuntimeID: crw.runtimeID,
+	})
+	if err != nil {
+		crw.w.logger.Error("failed to fetch client runtime committee",
+			"err", err,
+			"runtime_id", crw.runtimeID,
+		)
+		return
+	}
+
+	for _, cm := range cms {
+		if cm.Kind != scheduler.KindComputeExecutor {
+			continue
+		}
+
+		for _, member := range cm.Members {
+			_, _ = crw.nodes.WatchNode(crw.w.ctx, member.PublicKey)
+		}
+	}
+
+	crw.nodes.Freeze(0)
+
+	crw.updateExternalServicePolicy()
+}
+
+func (crw *clientRuntimeWatcher) updateExternalServicePolicy() {
+	// Update key manager access control policy.
 	policy := accessctl.NewPolicy()
 
 	// Apply rules to current executor committee members.
-	if xc := snapshot.GetExecutorCommittee(); xc != nil {
-		executorCommitteePolicy.AddRulesForCommittee(&policy, xc, snapshot.Nodes())
-	}
+	executorCommitteePolicy.AddRulesForNodes(&policy, crw.nodes.GetNodes())
 
 	// Apply rules for configured sentry nodes.
 	for _, addr := range crw.w.commonWorker.GetConfig().SentryAddresses {
 		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
 	}
 
-	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.node.Runtime.ID())
-	crw.w.logger.Debug("worker/keymanager: new normal runtime access policy in effect", "policy", policy)
-}
-
-// Guarded by CrossNode.
-func (crw *clientRuntimeWatcher) HandleEpochTransitionLocked(snapshot *committeeCommon.EpochSnapshot) {
-	crw.updateExternalServicePolicyLocked(snapshot)
-}
-
-// Guarded by CrossNode.
-func (crw *clientRuntimeWatcher) HandleNewBlockEarlyLocked(*block.Block) {
-	// Nothing to do here.
-}
-
-// Guarded by CrossNode.
-func (crw *clientRuntimeWatcher) HandleNewBlockLocked(*block.Block) {
-	// Nothing to do here.
-}
-
-// Guarded by CrossNode.
-func (crw *clientRuntimeWatcher) HandleNewEventLocked(*roothash.Event) {
-	// Nothing to do here.
-}
-
-// Guarded by CrossNode.
-func (crw *clientRuntimeWatcher) HandleNodeUpdateLocked(update *nodes.NodeUpdate, snapshot *committeeCommon.EpochSnapshot) {
-	crw.updateExternalServicePolicyLocked(snapshot)
-}
-
-func (crw *clientRuntimeWatcher) Initialized() <-chan struct{} {
-	ch := make(chan struct{})
-	close(ch)
-	return ch
+	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.runtimeID)
+	crw.w.logger.Debug("new client runtime access policy in effect",
+		"policy", policy,
+		"runtime_id", crw.runtimeID,
+	)
 }

@@ -125,7 +125,7 @@ var (
 	// checked in Oasis Core.
 	// It is converted to TendermintAppVersion whose compatibility is checked
 	// via Tendermint's version checks.
-	ConsensusProtocol = Version{Major: 4, Minor: 0, Patch: 0}
+	ConsensusProtocol = Version{Major: 5, Minor: 0, Patch: 0}
 
 	// RuntimeHostProtocol versions the protocol between the Oasis node(s) and
 	// the runtime.
@@ -135,7 +135,7 @@ var (
 
 	// RuntimeCommitteeProtocol versions the P2P protocol used by the runtime
 	// committee members.
-	RuntimeCommitteeProtocol = Version{Major: 3, Minor: 0, Patch: 0}
+	RuntimeCommitteeProtocol = Version{Major: 4, Minor: 0, Patch: 0}
 
 	// TendermintAppVersion is Tendermint ABCI application's version computed by
 	// masking non-major consensus protocol version segments to 0 to be

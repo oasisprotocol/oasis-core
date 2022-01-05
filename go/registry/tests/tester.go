@@ -123,7 +123,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	for i, te := range entities {
 		// Stagger the expirations so that it's possible to test it.
 		var entityNodes []*TestNode
-		entityNodes, err = te.NewTestNodes(i+1, 1, nil, nodeRuntimes, epoch+beacon.EpochTime(i)+1, consensus)
+		entityNodes, err = te.NewTestNodes(i+1, nil, nodeRuntimes, epoch+beacon.EpochTime(i)+1, consensus)
 		require.NoError(t, err, "NewTestNodes")
 
 		// Append nodes to entity's list of nodes & update registration.
@@ -138,15 +138,15 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	}
 
 	nodeRuntimesEW := []*node.Runtime{{ID: runtimeEWID}}
-	whitelistedNodes, err := entities[1].NewTestNodes(1, 1, []byte("whitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
+	whitelistedNodes, err := entities[1].NewTestNodes(1, []byte("whitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
 	require.NoError(t, err, "NewTestNodes whitelisted")
-	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, 1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
+	nonWhitelistedNodes, err := entities[0].NewTestNodes(1, []byte("nonWhitelistedNodes"), nodeRuntimesEW, epoch+2, consensus)
 	require.NoError(t, err, "NewTestNodes non-whitelisted")
 
 	// Append nodes used for testing the MaxNodes whitelist.
 	// Entity 3 is allowed to have only one compute node.  This is set-up in
 	// "EntityWhitelist" test in testRegistryRuntime() below.
-	ent3nodes, err := entities[3].NewTestNodes(2, 1, []byte("ent3nodes"), nodeRuntimesEW, epoch+2, consensus)
+	ent3nodes, err := entities[3].NewTestNodes(2, []byte("ent3nodes"), nodeRuntimesEW, epoch+2, consensus)
 	require.NoError(t, err, "NewTestNodes for entity 3")
 
 	// Update entity node lists for the whitelist test nodes as well.
@@ -168,7 +168,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	require.NoError(t, err, "SignEntity3")
 
 	whitelistedNodes = append(whitelistedNodes, ent3nodes[0])
-	nonWhitelistedNodes = append(nonWhitelistedNodes, ent3nodes[1], ent3nodes[2])
+	nonWhitelistedNodes = append(nonWhitelistedNodes, ent3nodes[1])
 
 	t.Run("EntityRegistration", func(t *testing.T) {
 		require := require.New(t)
@@ -328,7 +328,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 		}
 
 		for _, tn := range whitelistedNodes {
-			require.NoError(tn.Register(consensus, tn.SignedRegistration), "register node from whitelisted entity")
+			require.NoError(tn.Register(consensus, tn.SignedRegistration), "register node from whitelisted entity (%s)", tn.Node.ID)
 
 			select {
 			case ev := <-nodeCh:
@@ -669,13 +669,13 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 							nodeEntities[1].Entity.ID: {
 								MaxNodes: map[node.RolesMask]uint16{
 									node.RoleComputeWorker: 2,
-									node.RoleStorageWorker: 2,
 									node.RoleStorageRPC:    2,
 								},
 							},
 							nodeEntities[3].Entity.ID: {
 								MaxNodes: map[node.RolesMask]uint16{
 									node.RoleComputeWorker: 1,
+									node.RoleStorageRPC:    1,
 								},
 							},
 						},
@@ -704,7 +704,6 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				rt.Staking = api.RuntimeStakingParameters{
 					Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 						staking.KindNodeCompute: q,
-						staking.KindNodeStorage: q,
 					},
 				}
 			},
@@ -721,7 +720,6 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				rt.Staking = api.RuntimeStakingParameters{
 					Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 						staking.KindNodeCompute:   q,
-						staking.KindNodeStorage:   q,
 						staking.KindNodeValidator: q,
 					},
 				}
@@ -839,33 +837,6 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			},
 			false,
 			false,
-		},
-		// Runtime with zero minimum storage write replication.
-		{
-			"WithZeroStorageMinWriteReplication",
-			func(rt *api.Runtime) {
-				rt.Storage.MinWriteReplication = 0
-			},
-			false,
-			false,
-		},
-		// Runtime with too high storage write replication.
-		{
-			"WithTooHighStorageMinWriteReplication",
-			func(rt *api.Runtime) {
-				rt.Storage.MinWriteReplication = rt.Storage.GroupSize + 1
-			},
-			false,
-			false,
-		},
-		// Runtime with valid, but not equal to group size storage write replication.
-		{
-			"WithValidStorageMinWriteReplication",
-			func(rt *api.Runtime) {
-				rt.Storage.MinWriteReplication = rt.Storage.GroupSize - 1
-			},
-			false,
-			true,
 		},
 		// Runtime with too large MaxMessages parameter.
 		{
@@ -1054,11 +1025,11 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 
 // NewTestNodes returns the specified number of TestNodes, generated
 // deterministically using the entity's public key as the seed.
-func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runtimes []*node.Runtime, expiration beacon.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
-	if nCompute <= 0 || nStorage <= 0 || nCompute > 254 || nStorage > 254 {
+func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*node.Runtime, expiration beacon.EpochTime, consensus consensusAPI.Backend) ([]*TestNode, error) { // nolint: gocyclo
+	if nCompute <= 0 || nCompute > 254 {
 		return nil, errors.New("registry/tests: test node count out of bounds")
 	}
-	n := nCompute + nStorage
+	n := nCompute
 
 	rng, err := drbg.New(crypto.SHA512, hashForDrbg(ent.Entity.ID[:]), idNonce, []byte("TestNodes"))
 	if err != nil {
@@ -1083,9 +1054,7 @@ func (ent *TestEntity) NewTestNodes(nCompute, nStorage int, idNonce []byte, runt
 
 		var role node.RolesMask
 		if i < nCompute {
-			role = node.RoleComputeWorker
-		} else {
-			role = node.RoleStorageWorker | node.RoleStorageRPC
+			role = node.RoleComputeWorker | node.RoleStorageRPC
 		}
 
 		nod.Node = &node.Node{
@@ -1622,8 +1591,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	require.NoError(err, "GetEpoch")
 
 	numCompute := int(runtimes[0].Runtime.Executor.GroupSize + runtimes[0].Runtime.Executor.GroupBackupSize)
-	numStorage := int(runtimes[0].Runtime.Storage.GroupSize)
-	nodes, err := ent.NewTestNodes(numCompute, numStorage, nil, rts, epoch+testRuntimeNodeExpiration, consensus)
+	nodes, err := ent.NewTestNodes(numCompute, nil, rts, epoch+testRuntimeNodeExpiration, consensus)
 	require.NoError(err, "NewTestNodes")
 
 	for _, n := range nodes {
@@ -1665,7 +1633,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	require.NoError(err, "WatchNodes")
 	defer nodeSub.Close()
 
-	ret := make([]*node.Node, 0, numCompute+numStorage)
+	ret := make([]*node.Node, 0, numCompute)
 	for _, node := range nodes {
 		err = node.Register(consensus, node.SignedRegistration)
 		require.NoError(err, "RegisterNode")
@@ -1696,7 +1664,7 @@ func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Back
 	}
 
 	for _, v := range runtimes {
-		numNodes := v.Runtime.Executor.GroupSize + v.Runtime.Executor.GroupBackupSize + v.Runtime.Storage.GroupSize
+		numNodes := v.Runtime.Executor.GroupSize + v.Runtime.Executor.GroupBackupSize
 		require.EqualValues(len(nodes), numNodes, "runtime wants the expected number of nodes")
 		v.entity = ent
 		v.nodes = nodes
@@ -1802,12 +1770,6 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			MaxBatchSizeBytes: 1024,
 			ProposerTimeout:   5,
 		},
-		Storage: api.StorageParameters{
-			GroupSize:               3,
-			MinWriteReplication:     3,
-			MaxApplyWriteLogEntries: 100_000,
-			MaxApplyOps:             2,
-		},
 		AdmissionPolicy: api.RuntimeAdmissionPolicy{
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},
 		},
@@ -1824,13 +1786,6 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 					},
 				},
 			},
-			scheduler.KindStorage: {
-				scheduler.RoleWorker: {
-					MinPoolSize: &api.MinPoolSizeConstraint{
-						Limit: 3,
-					},
-				},
-			},
 		},
 		GovernanceModel: api.GovernanceEntity,
 		Staking: api.RuntimeStakingParameters{
@@ -1842,7 +1797,6 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			RewardSlashEquvocationRuntimePercent: 100,
 		},
 	}
-	// TODO: Test with non-empty state root when enabled.
 	rt.Runtime.Genesis.StateRoot.Empty()
 
 	return &rt, nil

@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 var (
@@ -158,20 +157,6 @@ func (t *TxnSchedulerParameters) ValidateBasic() error {
 
 // StorageParameters are parameters for the storage committee.
 type StorageParameters struct {
-	// GroupSize is the size of the storage group.
-	GroupSize uint16 `json:"group_size"`
-
-	// MinWriteReplication is the number of nodes to which any writes must be replicated before
-	// being assumed to be committed. It must be less than or equal to the GroupSize.
-	MinWriteReplication uint16 `json:"min_write_replication"`
-
-	// MaxApplyWriteLogEntries is the maximum number of write log entries when performing an Apply
-	// operation.
-	MaxApplyWriteLogEntries uint64 `json:"max_apply_write_log_entries"`
-
-	// MaxApplyOps is the maximum number of apply operations in a batch.
-	MaxApplyOps uint64 `json:"max_apply_ops"`
-
 	// CheckpointInterval is the expected runtime state checkpoint interval (in rounds).
 	CheckpointInterval uint64 `json:"checkpoint_interval"`
 
@@ -184,25 +169,6 @@ type StorageParameters struct {
 
 // ValidateBasic performs basic storage parameter validity checks.
 func (s *StorageParameters) ValidateBasic() error {
-	// Ensure there is at least one member of the storage group.
-	if s.GroupSize == 0 {
-		return fmt.Errorf("storage group too small")
-	}
-	if s.MinWriteReplication == 0 {
-		return fmt.Errorf("storage write replication factor must be non-zero")
-	}
-	if s.MinWriteReplication > s.GroupSize {
-		return fmt.Errorf("storage write replication factor must be less than or equal to group size")
-	}
-
-	// Ensure limit parameters have sensible values.
-	if s.MaxApplyWriteLogEntries < 10 {
-		return fmt.Errorf("storage MaxApplyWriteLogEntries parameter too small")
-	}
-	if s.MaxApplyOps < 2 {
-		return fmt.Errorf("storage MaxApplyOps parameter too small")
-	}
-
 	// Verify storage checkpointing configuration if enabled.
 	if s.CheckpointInterval > 0 && !flags.DebugDontBlameOasis() {
 		if s.CheckpointInterval < 10 {
@@ -296,7 +262,7 @@ func (s *RuntimeStakingParameters) ValidateBasic(runtimeKind RuntimeKind) error 
 	}
 	for kind, q := range s.Thresholds {
 		switch kind {
-		case staking.KindNodeCompute, staking.KindNodeStorage:
+		case staking.KindNodeCompute:
 			if runtimeKind != KindCompute {
 				return fmt.Errorf("unsupported staking threshold kind for runtime: %s", kind)
 			}
@@ -318,10 +284,10 @@ func (s *RuntimeStakingParameters) ValidateBasic(runtimeKind RuntimeKind) error 
 const (
 	// LatestRuntimeDescriptorVersion is the latest entity descriptor version that should be used
 	// for all new descriptors. Using earlier versions may be rejected.
-	LatestRuntimeDescriptorVersion = 2
+	LatestRuntimeDescriptorVersion = 3
 
 	// Minimum and maximum descriptor versions that are allowed.
-	minRuntimeDescriptorVersion = 2
+	minRuntimeDescriptorVersion = 3
 	maxRuntimeDescriptorVersion = LatestRuntimeDescriptorVersion
 )
 
@@ -455,7 +421,7 @@ func (r *Runtime) ValidateBasic(strictVersion bool) error {
 
 	switch r.Kind {
 	case KindCompute:
-		// Compute runtime
+		// Compute runtime.
 		if r.ID.IsKeyManager() {
 			return fmt.Errorf("compute runtime ID has the key manager flag set")
 		}
@@ -545,17 +511,6 @@ type RuntimeGenesis struct {
 	// empty hash.
 	StateRoot hash.Hash `json:"state_root"`
 
-	// State is the state identified by the StateRoot. It may be empty iff
-	// all StorageReceipts are valid or StateRoot is an empty hash or if used
-	// in network genesis (e.g. during consensus chain init).
-	State storage.WriteLog `json:"state"`
-
-	// StorageReceipts are the storage receipts for the state root. The list
-	// may be empty or a signature in the list invalid iff the State is non-
-	// empty or StateRoot is an empty hash or if used in network genesis
-	// (e.g. during consensus chain init).
-	StorageReceipts []signature.Signature `json:"storage_receipts"`
-
 	// Round is the runtime round in the genesis.
 	Round uint64 `json:"round"`
 }
@@ -568,45 +523,12 @@ func (rtg *RuntimeGenesis) Equal(cmp *RuntimeGenesis) bool {
 	if rtg.Round != cmp.Round {
 		return false
 	}
-	if !rtg.State.Equal(cmp.State) {
-		return false
-	}
-	if len(rtg.StorageReceipts) != len(cmp.StorageReceipts) {
-		return false
-	}
-	for k, v := range rtg.StorageReceipts {
-		if !v.Equal(&cmp.StorageReceipts[k]) {
-			return false
-		}
-	}
 	return true
 }
 
 // SanityCheck does basic sanity checking of RuntimeGenesis.
 // isGenesis is true, if it is called during consensus chain init.
 func (rtg *RuntimeGenesis) SanityCheck(isGenesis bool) error {
-	if isGenesis {
-		return nil
-	}
-
-	// Require that either State is non-empty or Storage receipt being valid or StateRoot being non-empty.
-	if len(rtg.State) == 0 && !rtg.StateRoot.IsEmpty() {
-		// If State is empty and StateRoot is not, then all StorageReceipts must correctly verify StorageRoot.
-		if len(rtg.StorageReceipts) == 0 {
-			return fmt.Errorf("runtimegenesis: sanity check failed: when State is empty either StorageReceipts must be populated or StateRoot must be empty")
-		}
-		for _, sr := range rtg.StorageReceipts {
-			if !sr.PublicKey.IsValid() {
-				return fmt.Errorf("runtimegenesis: sanity check failed: when State is empty either all StorageReceipts must be valid or StateRoot must be empty (public_key %s)", sr.PublicKey)
-			}
-
-			// TODO: Even if Verify below succeeds, runtime registration should still be rejected until oasis-core#1686 is solved!
-			if !sr.Verify(storage.ReceiptSignatureContext, rtg.StateRoot[:]) {
-				return fmt.Errorf("runtimegenesis: sanity check failed: StorageReceipt verification on StateRoot failed (public_key %s)", sr.PublicKey)
-			}
-		}
-	}
-
 	return nil
 }
 

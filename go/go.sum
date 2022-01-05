@@ -937,6 +937,8 @@ github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661 h1:MB73kGMt
 github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661/go.mod h1:SwBxaVibf6Sr2IZ6M3WnUue0yp8dPLAo1riQRNQ60+g=
 github.com/oasisprotocol/tendermint v0.34.9-oasis2 h1:wVFJjLnmen7QXpIAznbiGHOeVrX5oNtJMUk0rrpSmG8=
 github.com/oasisprotocol/tendermint v0.34.9-oasis2/go.mod h1:agEnj5cjmg55z8CtL/Nva9LqxR4402T1TFPC4kuNBMc=
+github.com/oasisprotocol/timecache v0.0.0-20220102191729-558b1c931038 h1:dUvx7TPhw0mlKJf1CW5ioVWZcyLQE2lyBMAxJuvcOQg=
+github.com/oasisprotocol/timecache v0.0.0-20220102191729-558b1c931038/go.mod h1:pKvqk/kWuVj8Zza4aKZquhCsu27GOGFCM2lXLugGapg=
 github.com/oklog/oklog v0.3.2/go.mod h1:FCV+B7mhrz4o+ueLpx+KqkyXRGMWOYEvfiXtdGtbWGs=
 github.com/oklog/run v1.0.0 h1:Ru7dDtJNOyC66gQ5dQmaCa0qIsAUFY3sFpK1Xk8igrw=
 github.com/oklog/run v1.0.0/go.mod h1:dlhp/R75TPv97u0XWUtDeV/lRKWPKSdTuV0TZvrmrQA=
@@ -1168,8 +1170,6 @@ github.com/whyrusleeping/mafmt v1.2.8/go.mod h1:faQJFPbLSxzD9xpA02ttW/tS9vZykNvX
 github.com/whyrusleeping/mdns v0.0.0-20190826153040-b9b60ed33aa9/go.mod h1:j4l84WPFclQPj320J9gp0XwNKBb3U0zt5CBqjPp22G4=
 github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 h1:E9S12nwJwEOXe2d6gT6qxdvqMnNq+VnSsKPgm2ZZNds=
 github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7/go.mod h1:X2c0RVCI1eSUFI8eLcY3c0423ykwiUdxLJtkDvruhjI=
-github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee h1:lYbXeSvJi5zk5GLKVuid9TVjS9a0OmLIDKTfoZBL6Ow=
-github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee/go.mod h1:m2aV4LZI4Aez7dP5PMyVKEHhUyEJ/RjmPEDOpDvudHg=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2/go.mod h1:2duySbKsL6M18s5GU7VPsoEPHyzalCE06qoARUCeBBE=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=

@@ -48,10 +48,10 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	epoch := beaconTests.MustAdvanceEpoch(t, timeSource)
 
-	ensureValidCommittees := func(expectedExecutor, expectedStorage int) {
-		var executor, storage *api.Committee
+	ensureValidCommittees := func(expectedExecutor int) {
+		var executor *api.Committee
 		var seen int
-		for seen < 2 {
+		for seen < 1 {
 			select {
 			case committee := <-ch:
 				if committee.ValidFor < epoch {
@@ -66,10 +66,6 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 					require.Nil(executor, "haven't seen an executor committee yet")
 					executor = committee
 					require.Len(committee.Members, expectedExecutor, "committee has all executor nodes")
-				case api.KindStorage:
-					require.Nil(storage, "haven't seen a storage committee yet")
-					require.Len(committee.Members, expectedStorage, "committee has all storage nodes")
-					storage = committee
 				}
 
 				requireValidCommitteeMembers(t, committee, rt.Runtime, nodes)
@@ -93,28 +89,20 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 			case api.KindComputeExecutor:
 				require.EqualValues(executor, committee, "fetched executor committee is identical")
 				executor = nil
-			case api.KindStorage:
-				require.EqualValues(storage, committee, "fetched storage committee is identical")
-				storage = nil
 			}
 		}
 
 		require.Nil(executor, "fetched an executor committee")
-		require.Nil(storage, "fetched a storage committee")
 	}
 
-	var nExecutor, nStorage int
+	var nExecutor int
 	for _, n := range nodes {
 		if n.HasRoles(node.RoleComputeWorker) {
 			nExecutor++
 		}
-		if n.HasRoles(node.RoleStorageWorker) {
-			nStorage++
-		}
 	}
 	ensureValidCommittees(
 		nExecutor,
-		nStorage,
 	)
 
 	// Re-register the runtime with less nodes.
@@ -122,16 +110,12 @@ func SchedulerImplementationTests(t *testing.T, name string, identity *identity.
 	rt.Runtime.Executor.GroupBackupSize = 1
 	rt.Runtime.Constraints[api.KindComputeExecutor][api.RoleWorker].MinPoolSize.Limit = 2
 	rt.Runtime.Constraints[api.KindComputeExecutor][api.RoleBackupWorker].MinPoolSize.Limit = 1
-	rt.Runtime.Storage.GroupSize = 1
-	rt.Runtime.Constraints[api.KindStorage][api.RoleWorker].MinPoolSize.Limit = 1
-	rt.Runtime.Storage.MinWriteReplication = 1
 	rt.MustRegister(t, consensus.Registry(), consensus)
 
 	epoch = beaconTests.MustAdvanceEpoch(t, timeSource)
 
 	ensureValidCommittees(
 		3,
-		1,
 	)
 
 	// Cleanup the registry.
@@ -170,9 +154,6 @@ func requireValidCommitteeMembers(t *testing.T, committee *api.Committee, runtim
 	case api.KindComputeExecutor:
 		require.EqualValues(runtime.Executor.GroupSize, workers, "executor committee should have the correct number of workers")
 		require.EqualValues(runtime.Executor.GroupBackupSize, backups, "executor committee should have the correct number of backup workers")
-	case api.KindStorage:
-		require.EqualValues(runtime.Storage.GroupSize, workers, "storage committee should have the correct number of workers")
-		require.EqualValues(0, backups, "storage committee shouldn't have a backup workers")
 	default:
 		require.FailNow(fmt.Sprintf("unknown committee kind: %s", committee.Kind))
 	}

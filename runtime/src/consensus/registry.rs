@@ -8,16 +8,12 @@ use std::collections::BTreeMap;
 
 use crate::{
     common::{
-        crypto::{
-            hash::Hash,
-            signature::{PublicKey, SignatureBundle},
-        },
+        crypto::{hash::Hash, signature::PublicKey},
         namespace::Namespace,
         quantity,
         version::Version,
     },
     consensus::{scheduler, staking},
-    storage::mkvs::WriteLog,
 };
 
 /// Runtime kind.
@@ -70,18 +66,9 @@ pub struct TxnSchedulerParameters {
     pub propose_batch_timeout: i64,
 }
 
-/// Parameters for the storage committee.
+/// Storage parameters.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct StorageParameters {
-    /// Size of the storage group.
-    pub group_size: u16,
-    /// Number of nodes to which any writes must be replicated before being
-    /// assumed to be committed. It must be less than or equal to group_size.
-    pub min_write_replication: u16,
-    /// Maximum number of write log entries when performing an Apply operation.
-    pub max_apply_write_log_entries: u64,
-    /// Maximum number of Apply operations in a batch.
-    pub max_apply_ops: u64,
     /// Expected runtime state checkpoint interval (in rounds).
     pub checkpoint_interval: u64,
     /// Expected minimum number of checkpoints to keep.
@@ -140,8 +127,6 @@ pub struct RuntimeStakingParameters {
 pub enum RolesMask {
     /// Compute worker role.
     RoleComputeWorker = 1 << 0,
-    /// Storage worker role.
-    RoleStorageWorker = 1 << 1,
     /// Key manager role.
     RoleKeyManager = 1 << 2,
     /// Validator role.
@@ -235,6 +220,10 @@ impl Default for TEEHardware {
     }
 }
 
+/// The latest entity descriptor version that should be used for all new descriptors. Using earlier
+/// versions may be rejected.
+pub const LATEST_RUNTIME_DESCRIPTOR_VERSION: u16 = 3;
+
 /// Runtime.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Runtime {
@@ -256,16 +245,13 @@ pub struct Runtime {
     #[cbor(optional)]
     pub key_manager: Option<Namespace>,
     /// Parameters of the executor committee.
-    #[cbor(optional)]
-    #[cbor(default)]
+    #[cbor(optional, default)]
     pub executor: ExecutorParameters,
     /// Transaction scheduling parameters of the executor committee.
-    #[cbor(optional)]
-    #[cbor(default)]
+    #[cbor(optional, default)]
     pub txn_scheduler: TxnSchedulerParameters,
     /// Parameters of the storage committee.
-    #[cbor(optional)]
-    #[cbor(default)]
+    #[cbor(optional, default)]
     pub storage: StorageParameters,
     /// Which nodes are allowed to register for this runtime.
     pub admission_policy: RuntimeAdmissionPolicy,
@@ -275,9 +261,7 @@ pub struct Runtime {
         BTreeMap<scheduler::CommitteeKind, BTreeMap<scheduler::Role, SchedulingConstraints>>,
     >,
     /// Runtime's staking-related parameters.
-    #[cbor(optional)]
-    #[cbor(default)]
-    #[cbor(skip_serializing_if = "staking_params_are_empty")]
+    #[cbor(optional, default, skip_serializing_if = "staking_params_are_empty")]
     pub staking: RuntimeStakingParameters,
     /// Runtime governance model.
     pub governance_model: RuntimeGovernanceModel,
@@ -293,15 +277,6 @@ pub struct RuntimeGenesis {
     /// State root that should be used at genesis time. If the runtime should start with empty state,
     /// this must be set to the empty hash.
     pub state_root: Hash,
-
-    /// State identified by the state_root. It may be empty iff all storage_receipts are valid or
-    /// state_root is an empty hash or if used in network genesis (e.g. during consensus chain init).
-    pub state: Option<WriteLog>,
-
-    /// Storage receipts for the state root. The list may be empty or a signature in the list
-    /// invalid iff the state is non-empty or state_root is an empty hash or if used in network
-    /// genesis (e.g. during consensus chain init).
-    pub storage_receipts: Option<Vec<SignatureBundle>>,
 
     /// Runtime round in the genesis.
     pub round: u64,

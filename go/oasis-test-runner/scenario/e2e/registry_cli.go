@@ -632,12 +632,6 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			MaxBatchSizeBytes: 1024,
 			ProposerTimeout:   5,
 		},
-		Storage: registry.StorageParameters{
-			GroupSize:               9,
-			MinWriteReplication:     9,
-			MaxApplyWriteLogEntries: 10,
-			MaxApplyOps:             11,
-		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
 				Entities: map[signature.PublicKey]registry.EntityWhitelistConfig{
@@ -659,21 +653,10 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 					},
 				},
 			},
-			scheduler.KindStorage: {
-				scheduler.RoleWorker: {
-					MinPoolSize: &registry.MinPoolSizeConstraint{
-						Limit: 9,
-					},
-					MaxNodes: &registry.MaxNodesConstraint{
-						Limit: 1,
-					},
-				},
-			},
 		},
 		Staking: registry.RuntimeStakingParameters{
 			Thresholds: map[staking.ThresholdKind]quantity.Quantity{
 				staking.KindNodeCompute: q,
-				staking.KindNodeStorage: q,
 			},
 		},
 		GovernanceModel: registry.GovernanceEntity,

@@ -14,7 +14,6 @@ type Client struct {
 	runtimes           []int
 	runtimeProvisioner string
 	runtimeConfig      map[int]map[string]interface{}
-	maxTransactionAge  int64
 
 	consensusPort uint16
 	p2pPort       uint16
@@ -27,7 +26,6 @@ type ClientCfg struct {
 	Runtimes           []int
 	RuntimeProvisioner string
 	RuntimeConfig      map[int]map[string]interface{}
-	MaxTransactionAge  int64
 }
 
 func (client *Client) AddArgs(args *argBuilder) error {
@@ -36,17 +34,16 @@ func (client *Client) AddArgs(args *argBuilder) error {
 		debugSetRlimit().
 		debugEnableProfiling(client.Node.pprofPort).
 		runtimeProvisioner(client.runtimeProvisioner).
-		tendermintPrune(client.consensus.PruneNumKept).
+		tendermintPrune(client.consensus.PruneNumKept, client.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
 		tendermintCoreAddress(client.consensusPort).
 		appendNetwork(client.net).
 		appendSeedNodes(client.net.seeds).
 		workerP2pPort(client.p2pPort).
-		workerP2pEnabled().
 		tendermintSupplementarySanity(client.supplementarySanityInterval)
 
-	if client.maxTransactionAge != 0 {
-		args.runtimeClientMaxTransactionAge(client.maxTransactionAge)
+	if len(client.runtimes) > 0 {
+		args.runtimeMode(runtimeRegistry.RuntimeModeClientStateless)
 	}
 
 	for _, idx := range client.runtimes {
@@ -78,7 +75,6 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 		runtimes:           cfg.Runtimes,
 		runtimeProvisioner: cfg.RuntimeProvisioner,
 		runtimeConfig:      cfg.RuntimeConfig,
-		maxTransactionAge:  cfg.MaxTransactionAge,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 	}

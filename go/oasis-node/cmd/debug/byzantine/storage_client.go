@@ -1,7 +1,6 @@
 package byzantine
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 
@@ -10,7 +9,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -91,6 +89,11 @@ func (sc *storageClient) Initialized() <-chan struct{} {
 func storageConnectToCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, id *identity.Identity) ([]*storageClient, error) {
 	var clients []*storageClient
 	if err := schedulerForRoleInCommittee(ht, height, committee, role, func(n *node.Node) error {
+		// Skip any node sthat don't expose public storage RPC.
+		if !n.HasRoles(node.RoleStorageRPC) {
+			return nil
+		}
+
 		client, err := newHonestNodeStorage(id, n)
 		if err != nil {
 			return fmt.Errorf("new honest node storage %s: %w", n.ID, err)
@@ -110,42 +113,4 @@ func storageBroadcastCleanup(clients []*storageClient) {
 	for _, sc := range clients {
 		sc.Cleanup()
 	}
-}
-
-func storageBroadcastApplyBatch(
-	ctx context.Context,
-	clients []*storageClient,
-	ns common.Namespace,
-	dstRound uint64,
-	ops []storage.ApplyOp,
-) ([]*storage.Receipt, error) {
-	var receipts []*storage.Receipt
-	for _, sc := range clients {
-		r, err := sc.ApplyBatch(ctx, &storage.ApplyBatchRequest{Namespace: ns, DstRound: dstRound, Ops: ops})
-		if err != nil {
-			return receipts, fmt.Errorf("honest node storage ApplyBatch %s: %w", sc.nodeID, err)
-		}
-
-		receipts = append(receipts, r...)
-	}
-
-	return receipts, nil
-}
-
-func storageBroadcastApply(
-	ctx context.Context,
-	clients []*storageClient,
-	req *storage.ApplyRequest,
-) ([]*storage.Receipt, error) {
-	var receipts []*storage.Receipt
-	for _, sc := range clients {
-		r, err := sc.Apply(ctx, req)
-		if err != nil {
-			return receipts, fmt.Errorf("honest node storage Apply %s: %w", sc.nodeID, err)
-		}
-
-		receipts = append(receipts, r...)
-	}
-
-	return receipts, nil
 }

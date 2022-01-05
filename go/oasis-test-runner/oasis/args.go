@@ -29,11 +29,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -196,11 +194,12 @@ func (args *argBuilder) tendermintSubmissionGasPrice(price uint64) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) tendermintPrune(numKept uint64) *argBuilder {
+func (args *argBuilder) tendermintPrune(numKept uint64, interval time.Duration) *argBuilder {
 	if numKept > 0 {
 		args.vec = append(args.vec, []Argument{
 			{tendermintFull.CfgABCIPruneStrategy, []string{abci.PruneKeepN.String()}, false},
 			{tendermintFull.CfgABCIPruneNumKept, []string{strconv.FormatUint(numKept, 10)}, false},
+			{tendermintFull.CfgABCIPruneInterval, []string{interval.String()}, false},
 		}...)
 	} else {
 		args.vec = append(args.vec, Argument{
@@ -299,15 +298,6 @@ func (args *argBuilder) storageBackend(backend string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) runtimeSupported(id common.Namespace) *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:        runtimeRegistry.CfgSupported,
-		Values:      []string{id.String()},
-		MultiValued: true,
-	})
-	return args
-}
-
 func (args *argBuilder) tendermintSupplementarySanity(interval uint64) *argBuilder {
 	if interval > 0 {
 		args.vec = append(args.vec, Argument{Name: tendermintFull.CfgSupplementarySanityEnabled})
@@ -316,14 +306,6 @@ func (args *argBuilder) tendermintSupplementarySanity(interval uint64) *argBuild
 			Values: []string{strconv.Itoa(int(interval))},
 		})
 	}
-	return args
-}
-
-func (args *argBuilder) runtimeClientMaxTransactionAge(maxTxAge int64) *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:   runtimeClient.CfgMaxTransactionAge,
-		Values: []string{strconv.Itoa(int(maxTxAge))},
-	})
 	return args
 }
 
@@ -373,8 +355,11 @@ func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerP2pEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: p2p.CfgP2PEnabled})
+func (args *argBuilder) runtimeMode(mode runtimeRegistry.RuntimeMode) *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name:   runtimeRegistry.CfgRuntimeMode,
+		Values: []string{string(mode)},
+	})
 	return args
 }
 
@@ -400,16 +385,6 @@ func (args *argBuilder) runtimePath(id common.Namespace, fn string) *argBuilder 
 		Values:      []string{id.String() + "=" + fn},
 		MultiValued: true,
 	})
-	return args
-}
-
-func (args *argBuilder) workerComputeEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: compute.CfgWorkerEnabled})
-	return args
-}
-
-func (args *argBuilder) workerKeymanagerEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: keymanager.CfgEnabled})
 	return args
 }
 
@@ -477,21 +452,9 @@ func (args *argBuilder) workerSentryUpstreamTLSKeys(keys []string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) workerStorageEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: workerStorage.CfgWorkerEnabled})
-	return args
-}
-
 func (args *argBuilder) workerStoragePublicRPCEnabled(enabled bool) *argBuilder {
 	if enabled {
 		args.vec = append(args.vec, Argument{Name: workerStorage.CfgWorkerPublicRPCEnabled})
-	}
-	return args
-}
-
-func (args *argBuilder) workerStorageDebugIgnoreApplies(ignore bool) *argBuilder {
-	if ignore {
-		args.vec = append(args.vec, Argument{Name: workerStorage.CfgWorkerDebugIgnoreApply})
 	}
 	return args
 }
@@ -561,13 +524,13 @@ func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) 
 	return args.tendermintSentryUpstreamAddress(addrs).workerSentryUpstreamTLSKeys(sentryPubKeys)
 }
 
-func (args *argBuilder) addSentryStorageWorkers(storageWorkers []*Storage) *argBuilder {
+func (args *argBuilder) addSentryComputeWorkers(computeWorkers []*Compute) *argBuilder {
 	var addrs, ids, tmAddrs, sentryPubKeys []string
-	for _, storageWorker := range storageWorkers {
-		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", storageWorker.clientPort))
-		ids = append(ids, storageWorker.NodeID.String())
-		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", storageWorker.tmAddress, storageWorker.consensusPort))
-		key, _ := storageWorker.sentryPubKey.MarshalText()
+	for _, computeWorker := range computeWorkers {
+		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", computeWorker.clientPort))
+		ids = append(ids, computeWorker.NodeID.String())
+		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", computeWorker.tmAddress, computeWorker.consensusPort))
+		key, _ := computeWorker.sentryPubKey.MarshalText()
 		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
 	return args.grpcSentryUpstreamAddresses(addrs).
@@ -652,8 +615,7 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 }
 
 func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, binaryIdx int, localConfig map[string]interface{}) *argBuilder {
-	args = args.runtimeSupported(rt.id).
-		runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
+	args = args.runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
 		appendRuntimePruner(&rt.pruner)
 
 	// When local runtime config is set, we need to generate a config file.

@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -43,6 +41,9 @@ var ErrRuntimeHostNotConfigured = errors.New("runtime/registry: runtime host not
 
 // Registry is the running node's runtime registry interface.
 type Registry interface {
+	// Mode returns the configured behavior of runtime workers on this node.
+	Mode() RuntimeMode
+
 	// GetRuntime returns the per-runtime interface if the runtime is supported.
 	GetRuntime(runtimeID common.Namespace) (Runtime, error)
 
@@ -404,6 +405,10 @@ type runtimeRegistry struct {
 	runtimes map[common.Namespace]*runtime
 }
 
+func (r *runtimeRegistry) Mode() RuntimeMode {
+	return r.cfg.Mode
+}
+
 func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {
 	r.RLock()
 	defer r.RUnlock()
@@ -594,11 +599,14 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 		runtimes:  make(map[common.Namespace]*runtime),
 	}
 
-	runtimes, err := ParseRuntimeMap(viper.GetStringSlice(CfgSupported))
-	if err != nil {
-		return nil, err
+	switch cfg.Mode {
+	case RuntimeModeNone:
+		r.logger.Info("runtime support is disabled")
+	default:
+		r.logger.Info("runtime support is enabled")
 	}
-	for id := range runtimes {
+
+	for _, id := range cfg.Runtimes() {
 		r.logger.Info("adding supported runtime",
 			"id", id,
 		)
@@ -610,10 +618,6 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 			)
 			return nil, fmt.Errorf("failed to add runtime %s: %w", id, err)
 		}
-	}
-
-	if len(runtimes) == 0 {
-		r.logger.Info("no supported runtimes configured")
 	}
 
 	return r, nil

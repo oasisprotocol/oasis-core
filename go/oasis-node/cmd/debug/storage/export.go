@@ -160,11 +160,10 @@ func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storag
 	// The right thing to do will be to use storage.New, but the backend config
 	// assumes that identity is valid, and we don't have one.
 	cfg := &storageAPI.Config{
-		Backend:           strings.ToLower(viper.GetString(storage.CfgBackend)),
-		DB:                dataDir,
-		ApplyLockLRUSlots: uint64(viper.GetInt(storage.CfgLRUSlots)),
-		Namespace:         namespace,
-		MaxCacheSize:      int64(viper.GetSizeInBytes(storage.CfgMaxCacheSize)),
+		Backend:      strings.ToLower(viper.GetString(storage.CfgBackend)),
+		DB:           dataDir,
+		Namespace:    namespace,
+		MaxCacheSize: int64(viper.GetSizeInBytes(storage.CfgMaxCacheSize)),
 	}
 
 	b := strings.ToLower(viper.GetString(storage.CfgBackend))

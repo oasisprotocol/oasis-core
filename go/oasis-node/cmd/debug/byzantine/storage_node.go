@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -19,16 +18,10 @@ import (
 )
 
 const (
-	// CfgNumStorageFailApply configures how many apply requests the storage
-	// node should fail.
-	CfgNumStorageFailApply = "num_storage_fail_apply"
-	// CfgNumStorageFailApplyBatch configures how many apply-batch requests
-	// the storage node should fail.
-	CfgNumStorageFailApplyBatch = "num_storage_fail_apply_batch"
 	// CfgFailReadRequests configures whether the storage node should fail read requests.
-	CfgFailReadRequests = "fail_read_requests"
+	CfgFailReadRequests = "storage.fail_read_requests"
 	// CfgCorruptGetDiff configures whether the storage node should corrupt GetDiff responses.
-	CfgCorruptGetDiff = "corrupt_get_diff"
+	CfgCorruptGetDiff = "storage.corrupt_get_diff"
 )
 
 var (
@@ -42,27 +35,22 @@ var (
 type storageWorker struct {
 	sync.Mutex
 
-	id      *identity.Identity
 	backend storage.Backend
 	initCh  chan struct{}
 
-	numFailApply      uint64
-	numFailApplyBatch uint64
-	failReadRequests  bool
-	corruptGetDiff    bool
+	failReadRequests bool
+	corruptGetDiff   bool
 }
 
-func newStorageNode(id *identity.Identity, namespace common.Namespace, datadir string) (*storageWorker, error) {
+func newStorageNode(namespace common.Namespace, datadir string) (*storageWorker, error) {
 	initCh := make(chan struct{})
 	defer close(initCh)
 
 	cfg := &storage.Config{
-		Backend:           database.BackendNameBadgerDB,
-		DB:                filepath.Join(datadir, database.DefaultFileName(database.BackendNameBadgerDB)),
-		Signer:            id.NodeSigner,
-		ApplyLockLRUSlots: uint64(1000),
-		Namespace:         namespace,
-		MaxCacheSize:      64 * 1024 * 1024,
+		Backend:      database.BackendNameBadgerDB,
+		DB:           filepath.Join(datadir, database.DefaultFileName(database.BackendNameBadgerDB)),
+		Namespace:    namespace,
+		MaxCacheSize: 64 * 1024 * 1024,
 	}
 	impl, err := database.New(cfg)
 	if err != nil {
@@ -70,13 +58,10 @@ func newStorageNode(id *identity.Identity, namespace common.Namespace, datadir s
 	}
 
 	return &storageWorker{
-		id:                id,
-		backend:           impl,
-		initCh:            initCh,
-		numFailApply:      viper.GetUint64(CfgNumStorageFailApply),
-		numFailApplyBatch: viper.GetUint64(CfgNumStorageFailApplyBatch),
-		failReadRequests:  viper.GetBool(CfgFailReadRequests),
-		corruptGetDiff:    viper.GetBool(CfgCorruptGetDiff),
+		backend:          impl,
+		initCh:           initCh,
+		failReadRequests: viper.GetBool(CfgFailReadRequests),
+		corruptGetDiff:   viper.GetBool(CfgCorruptGetDiff),
 	}, nil
 }
 
@@ -102,30 +87,6 @@ func (w *storageWorker) SyncIterate(ctx context.Context, request *syncer.Iterate
 	}
 
 	return w.backend.SyncIterate(ctx, request)
-}
-
-func (w *storageWorker) Apply(ctx context.Context, request *storage.ApplyRequest) ([]*storage.Receipt, error) {
-	w.Lock()
-	defer w.Unlock()
-
-	if w.numFailApply > 0 {
-		w.numFailApply--
-		return nil, errByzantine
-	}
-
-	return w.backend.Apply(ctx, request)
-}
-
-func (w *storageWorker) ApplyBatch(ctx context.Context, request *storage.ApplyBatchRequest) ([]*storage.Receipt, error) {
-	w.Lock()
-	defer w.Unlock()
-
-	if w.numFailApplyBatch > 0 {
-		w.numFailApplyBatch--
-		return nil, errByzantine
-	}
-
-	return w.backend.ApplyBatch(ctx, request)
 }
 
 type corruptIterator struct {

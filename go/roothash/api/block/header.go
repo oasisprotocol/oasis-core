@@ -1,14 +1,11 @@
 package block
 
 import (
-	"bytes"
 	"errors"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
@@ -96,10 +93,6 @@ type Header struct { // nolint: maligned
 
 	// MessagesHash is the hash of emitted runtime messages.
 	MessagesHash hash.Hash `json:"messages_hash"`
-
-	// StorageSignatures are the storage receipt signatures for the merkle
-	// roots.
-	StorageSignatures []signature.Signature `json:"storage_signatures"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
@@ -113,9 +106,7 @@ func (h *Header) IsParentOf(child *Header) bool {
 //
 // Locations where this matter should do the comparison manually.
 func (h *Header) MostlyEqual(cmp *Header) bool {
-	a, b := *h, *cmp
-	a.StorageSignatures, b.StorageSignatures = []signature.Signature{}, []signature.Signature{}
-	aHash, bHash := a.EncodedHash(), b.EncodedHash()
+	aHash, bHash := h.EncodedHash(), cmp.EncodedHash()
 	return aHash.Equal(&bHash)
 }
 
@@ -140,76 +131,4 @@ func (h *Header) StorageRoots() []storage.Root {
 			Hash:      h.StateRoot,
 		},
 	}
-}
-
-// RootsForStorageReceipt gets the merkle roots that must be part of
-// a storage receipt.
-func (h *Header) RootsForStorageReceipt() []hash.Hash {
-	return []hash.Hash{
-		h.IORoot,
-		h.StateRoot,
-	}
-}
-
-// RootTypesForStorageReceipt gets the storage root type sequence for the roots
-// returned by RootsForStorageReceipt.
-func (h *Header) RootTypesForStorageReceipt() []storage.RootType {
-	// NOTE: Keep these in the same order as in RootsForStorageReceipt above!
-	return []storage.RootType{
-		storage.RootTypeIO,
-		storage.RootTypeState,
-	}
-}
-
-// VerifyStorageReceiptSignatures validates that the storage receipt signatures
-// match the signatures for the current merkle roots.
-//
-// Note: Ensuring that the signatures are signed by keypair(s) that are
-// expected is the responsibility of the caller.
-func (h *Header) VerifyStorageReceiptSignatures() error {
-	receiptBody := storage.ReceiptBody{
-		Version:   1,
-		Namespace: h.Namespace,
-		Round:     h.Round,
-		RootTypes: h.RootTypesForStorageReceipt(),
-		Roots:     h.RootsForStorageReceipt(),
-	}
-
-	if !signature.VerifyManyToOne(storage.ReceiptSignatureContext, cbor.Marshal(receiptBody), h.StorageSignatures) {
-		return signature.ErrVerifyFailed
-	}
-
-	return nil
-}
-
-// VerifyStorageReceipt validates that the provided storage receipt
-// matches the header.
-func (h *Header) VerifyStorageReceipt(receipt *storage.ReceiptBody) error {
-	if !receipt.Namespace.Equal(&h.Namespace) {
-		return errors.New("roothash: receipt has unexpected namespace")
-	}
-
-	if receipt.Round != h.Round {
-		return errors.New("roothash: receipt has unexpected round")
-	}
-
-	roots := h.RootsForStorageReceipt()
-	types := h.RootTypesForStorageReceipt()
-	if len(receipt.Roots) != len(roots) {
-		return errors.New("roothash: receipt has unexpected number of roots")
-	}
-	if len(receipt.RootTypes) != len(types) {
-		return errors.New("roothash: receipt has unexpected number of root types")
-	}
-
-	for idx, v := range roots {
-		if types[idx] != receipt.RootTypes[idx] {
-			return errors.New("roothash: receipt has unexpected root types")
-		}
-		if !bytes.Equal(v[:], receipt.Roots[idx][:]) {
-			return errors.New("roothash: receipt has unexpected roots")
-		}
-	}
-
-	return nil
 }

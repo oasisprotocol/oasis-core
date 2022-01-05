@@ -470,7 +470,10 @@ func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 			syncState.Roots = nil
 		}
 
-		status, err := n.handleCheckpoint(check, n.storageNodesGrpc, descriptor.Storage.GroupSize)
+		// Compute how many nodes we will be asking for checkpoints.
+		groupSize := descriptor.Executor.GroupSize + descriptor.Executor.GroupBackupSize
+
+		status, err := n.handleCheckpoint(check, n.storageNodesGrpc, groupSize)
 		switch status {
 		case checkpointStatusDone:
 			n.logger.Info("successfully restored from checkpoint", "root", check.Root, "mask", mask)

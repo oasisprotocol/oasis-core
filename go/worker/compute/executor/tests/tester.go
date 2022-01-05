@@ -16,9 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
-	executorAPI "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 )
 
@@ -104,17 +102,8 @@ func testQueueTx(
 	// Include a timestamp so each test invocation uses a unique transaction.
 	testTx := []byte("hello world at: " + time.Now().String())
 	// Submit a test transaction.
-	handled, err := rtNode.HandlePeerMessage(
-		ctx,
-		&p2p.Message{
-			Tx: &executorAPI.Tx{
-				Data: testTx,
-			},
-		},
-		false,
-	)
+	err = rtNode.HandlePeerTx(ctx, testTx)
 	require.NoError(t, err, "tx message should be handled")
-	require.True(t, handled, "tx message should be handled")
 
 	// Node should transition to ProcessingBatch state.
 	waitForNodeTransition(t, stateCh, committee.ProcessingBatch)
@@ -133,8 +122,8 @@ blockLoop:
 			blk := annBlk.Block
 			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
 
-			if blk.Header.Round <= 2 {
-				// Round <= 2 - genesis round.
+			if blk.Header.IORoot.IsEmpty() {
+				// Skip blocks without transactions.
 				continue
 			}
 
@@ -166,17 +155,8 @@ blockLoop:
 	}
 
 	// Submitting the same transaction should not result in a new block.
-	handled, err = rtNode.HandlePeerMessage(
-		ctx,
-		&p2p.Message{
-			Tx: &executorAPI.Tx{
-				Data: testTx,
-			},
-		},
-		false,
-	)
+	err = rtNode.HandlePeerTx(ctx, testTx)
 	require.NoError(t, err, "tx message should be handled")
-	require.True(t, handled, "tx message should be handled")
 
 blockLoop2:
 	for {

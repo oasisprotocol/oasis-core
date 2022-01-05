@@ -201,9 +201,6 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 		isSuitableFn = app.isSuitableExecutorWorker
 		groupSizes[scheduler.RoleWorker] = int(rt.Executor.GroupSize)
 		groupSizes[scheduler.RoleBackupWorker] = int(rt.Executor.GroupBackupSize)
-	case scheduler.KindStorage:
-		isSuitableFn = app.isSuitableStorageWorker
-		groupSizes[scheduler.RoleWorker] = int(rt.Storage.GroupSize)
 	default:
 		return fmt.Errorf("tendermint/scheduler: invalid committee type: %v", kind)
 	}
@@ -340,8 +337,6 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 			switch kind {
 			case scheduler.KindComputeExecutor:
 				rngCtx = RNGContextExecutor
-			case scheduler.KindStorage:
-				rngCtx = RNGContextStorage
 			}
 			switch role {
 			case scheduler.RoleWorker:

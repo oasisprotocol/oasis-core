@@ -192,6 +192,11 @@ func (a *ApplicationServer) State() api.ApplicationQueryState {
 	return a.mux.state
 }
 
+// Pruner returns the state pruner.
+func (a *ApplicationServer) Pruner() api.StatePruner {
+	return a.mux.state.statePruner
+}
+
 // NewApplicationServer returns a new ApplicationServer, using the provided
 // directory to persist state.
 func NewApplicationServer(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationConfig) (*ApplicationServer, error) {
@@ -1162,6 +1167,13 @@ func (mux *abciMux) finishInitialization() error {
 			)
 			return err
 		}
+	}
+
+	// Start the state pruner. This is done here instead of on creation of the state to allow for
+	// any consensus services and runtimes to be registered first as they can register prune
+	// handlers that can prevent pruning of certain versions.
+	if err := mux.state.startPruner(); err != nil {
+		return fmt.Errorf("failed to start pruner: %w", err)
 	}
 
 	return nil

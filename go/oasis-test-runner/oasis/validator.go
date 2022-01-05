@@ -83,7 +83,7 @@ func (val *Validator) AddArgs(args *argBuilder) error {
 		tendermintCoreAddress(val.consensusPort).
 		tendermintMinGasPrice(val.consensus.MinGasPrice).
 		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
-		tendermintPrune(val.consensus.PruneNumKept).
+		tendermintPrune(val.consensus.PruneNumKept, val.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL).
 		configureDebugCrashPoints(val.crashPointsProbability).
 		tendermintSupplementarySanity(val.supplementarySanityInterval).

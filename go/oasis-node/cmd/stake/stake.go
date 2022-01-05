@@ -239,7 +239,6 @@ func doInfo(cmd *cobra.Command, args []string) {
 		api.KindEntity,
 		api.KindNodeValidator,
 		api.KindNodeCompute,
-		api.KindNodeStorage,
 		api.KindNodeKeyManager,
 		api.KindRuntimeCompute,
 		api.KindRuntimeKeyManager,

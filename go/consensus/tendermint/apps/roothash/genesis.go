@@ -7,14 +7,12 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 func (app *rootHashApplication) InitChain(ctx *abciAPI.Context, request types.RequestInitChain, doc *genesisAPI.Document) error {
@@ -67,10 +65,7 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, e
 		rtState := roothashAPI.GenesisRuntimeState{
 			RuntimeGenesis: registryAPI.RuntimeGenesis{
 				StateRoot: rt.CurrentBlock.Header.StateRoot,
-				// State is always empty in Genesis regardless of StateRoot.
-				State:           storageAPI.WriteLog{},
-				StorageReceipts: []signature.Signature{},
-				Round:           rt.CurrentBlock.Header.Round,
+				Round:     rt.CurrentBlock.Header.Round,
 			},
 		}
 

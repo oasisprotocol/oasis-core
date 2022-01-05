@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
@@ -64,10 +66,15 @@ type PruneConfig struct {
 
 	// NumKept is the number of versions retained when applicable.
 	NumKept uint64
+
+	// PruneInterval configures the pruning interval.
+	PruneInterval time.Duration
 }
 
 // StatePruner is a concrete ABCI mux state pruner implementation.
 type StatePruner interface {
+	api.StatePruner
+
 	// Prune purges unneeded versions from the ABCI mux node database,
 	// given the latest version, based on the underlying strategy.
 	//
@@ -83,7 +90,7 @@ type StatePruner interface {
 }
 
 type statePrunerInitializer interface {
-	Initialize(latestVersion uint64) error
+	Initialize() error
 }
 
 type nonePruner struct{}
@@ -91,6 +98,9 @@ type nonePruner struct{}
 func (p *nonePruner) Prune(ctx context.Context, latestVersion uint64) error {
 	// Nothing to prune.
 	return nil
+}
+
+func (p *nonePruner) RegisterHandler(handler api.StatePruneHandler) {
 }
 
 func (p *nonePruner) GetLastRetainedVersion() uint64 {
@@ -106,9 +116,11 @@ type genericPruner struct {
 	earliestVersion     uint64
 	keepN               uint64
 	lastRetainedVersion uint64
+
+	handlers []api.StatePruneHandler
 }
 
-func (p *genericPruner) Initialize(latestVersion uint64) error {
+func (p *genericPruner) Initialize() error {
 	// Figure out the eldest version currently present in the tree.
 	var err error
 	if p.earliestVersion, err = p.ndb.GetEarliestVersion(context.Background()); err != nil {
@@ -118,7 +130,7 @@ func (p *genericPruner) Initialize(latestVersion uint64) error {
 	// Initially, the earliest version is the last retained version.
 	p.lastRetainedVersion = p.earliestVersion
 
-	return p.doPrune(context.Background(), latestVersion)
+	return nil
 }
 
 func (p *genericPruner) GetLastRetainedVersion() uint64 {
@@ -148,10 +160,25 @@ func (p *genericPruner) doPrune(ctx context.Context, latestVersion uint64) error
 	)
 
 	preserveFrom := latestVersion - p.keepN
+PruneLoop:
 	for i := p.earliestVersion; i <= latestVersion; i++ {
 		if i >= preserveFrom {
 			p.earliestVersion = i
 			break
+		}
+
+		// Before pruning anything, run all prune handlers. If any of them
+		// fails we abort the prune.
+		for _, ph := range p.handlers {
+			if err := ph.Prune(ctx, i); err != nil {
+				p.logger.Debug("prune handler blocked pruning version",
+					"err", err,
+					"latest_version", latestVersion,
+					"version", i,
+				)
+				p.earliestVersion = i
+				break PruneLoop
+			}
 		}
 
 		p.logger.Debug("Prune: Delete",
@@ -192,7 +219,14 @@ func (p *genericPruner) doPrune(ctx context.Context, latestVersion uint64) error
 	return nil
 }
 
-func newStatePruner(cfg *PruneConfig, ndb nodedb.NodeDB, latestVersion uint64) (StatePruner, error) {
+func (p *genericPruner) RegisterHandler(handler api.StatePruneHandler) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.handlers = append(p.handlers, handler)
+}
+
+func newStatePruner(cfg *PruneConfig, ndb nodedb.NodeDB) (StatePruner, error) {
 	// The roothash checkCommittees call requires at least 1 previous block
 	// for timekeeping purposes.
 	const minKept = 1
@@ -218,7 +252,7 @@ func newStatePruner(cfg *PruneConfig, ndb nodedb.NodeDB, latestVersion uint64) (
 	}
 
 	if initializer, ok := statePruner.(statePrunerInitializer); ok {
-		if err := initializer.Initialize(latestVersion); err != nil {
+		if err := initializer.Initialize(); err != nil {
 			return nil, err
 		}
 	}

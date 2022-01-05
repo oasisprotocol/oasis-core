@@ -102,9 +102,6 @@ func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.Keymanagers {
 		f.Keymanagers[i].Consensus.SubmissionGasPrice = gasPrice
 	}
-	for i := range f.StorageWorkers {
-		f.StorageWorkers[i].Consensus.SubmissionGasPrice = gasPrice
-	}
 	for i := range f.ComputeWorkers {
 		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = gasPrice
 	}

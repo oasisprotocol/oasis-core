@@ -405,13 +405,11 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	// Fill the Header fields with Genesis runtime states, if this was called during InitChain().
 	genesisBlock.Header.Round = runtime.Genesis.Round
 	genesisBlock.Header.StateRoot = runtime.Genesis.StateRoot
-	genesisBlock.Header.StorageSignatures = runtime.Genesis.StorageReceipts
 	if ctx.IsInitChain() {
 		// NOTE: Outside InitChain the genesis argument will be nil.
 		if genesisRts := genesis.RuntimeStates[runtime.ID]; genesisRts != nil {
 			genesisBlock.Header.Round = genesisRts.Round
 			genesisBlock.Header.StateRoot = genesisRts.StateRoot
-			genesisBlock.Header.StorageSignatures = runtime.Genesis.StorageReceipts
 			if suspended {
 				genesisBlock.Header.HeaderType = block.Suspended
 			}
@@ -570,11 +568,10 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 			"round", round,
 		)
 
-		body := commit.ToDDResult().(*commitment.ComputeBody)
-		hdr := &body.Header
+		ec := commit.ToDDResult().(*commitment.ExecutorCommitment)
 
 		// Process any runtime messages.
-		if err = app.processRuntimeMessages(ctx, rtState, body.Messages); err != nil {
+		if err = app.processRuntimeMessages(ctx, rtState, ec.Messages); err != nil {
 			return fmt.Errorf("failed to process runtime messages: %w", err)
 		}
 
@@ -623,9 +620,9 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 
 		// Generate the final block.
 		blk := block.NewEmptyBlock(rtState.CurrentBlock, uint64(ctx.Now().Unix()), block.Normal)
-		blk.Header.IORoot = *hdr.IORoot
-		blk.Header.StateRoot = *hdr.StateRoot
-		blk.Header.MessagesHash = *hdr.MessagesHash
+		blk.Header.IORoot = *ec.Header.IORoot
+		blk.Header.StateRoot = *ec.Header.StateRoot
+		blk.Header.MessagesHash = *ec.Header.MessagesHash
 
 		// Timeout will be cleared by caller.
 		pool.ResetCommitments(blk.Header.Round)

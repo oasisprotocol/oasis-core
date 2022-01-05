@@ -42,8 +42,6 @@ import (
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client"
-	runtimeClientAPI "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/sentry"
@@ -53,9 +51,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	workerBeacon "github.com/oasisprotocol/oasis-core/go/worker/beacon"
+	workerClient "github.com/oasisprotocol/oasis-core/go/worker/client"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	"github.com/oasisprotocol/oasis-core/go/worker/compute"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
@@ -111,11 +109,11 @@ type Node struct {
 	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
-	RuntimeClient   runtimeClientAPI.RuntimeClientService
 
 	CommonWorker       *workerCommon.Worker
 	ExecutorWorker     *executor.Worker
 	StorageWorker      *workerStorage.Worker
+	ClientWorker       *workerClient.Worker
 	SentryWorker       *workerSentry.Worker
 	P2P                *p2p.P2P
 	RegistrationWorker *registration.Worker
@@ -160,6 +158,11 @@ func (n *Node) waitReady() {
 	if err := n.NodeController.WaitSync(context.Background()); err != nil {
 		n.logger.Error("failed while waiting for node consensus sync", "err", err)
 		return
+	}
+
+	// Wait for client worker.
+	if n.ClientWorker.Enabled() {
+		<-n.ClientWorker.Initialized()
 	}
 
 	// Wait for storage worker.
@@ -229,20 +232,6 @@ func (n *Node) startRuntimeServices() error {
 		return err
 	}
 
-	// Initialize the runtime client.
-	n.RuntimeClient, err = runtimeClient.New(
-		n.svcMgr.Ctx,
-		cmdCommon.DataDir(),
-		n.Consensus,
-		n.RuntimeRegistry,
-		n.P2P,
-	)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.Register(n.RuntimeClient)
-	runtimeClientAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeClient)
-
 	// Start workers (requires NodeController for checking, if nodes are synced).
 	if err = n.startRuntimeWorkers(); err != nil {
 		n.logger.Error("failed to start workers",
@@ -266,24 +255,6 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 
-	// Initialize the P2P worker if it's enabled or if compute worker is enabled.
-	// Since the P2P layer does not have a separate Start method and starts
-	// listening immediately when created, make sure that we don't start it if
-	// it is not needed.
-	//
-	// Currently, only executor and runtime client need P2P transport.
-	if p2p.Enabled() || compute.Enabled() {
-		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
-		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
-			p2p.DebugForceAllowUnroutableAddresses()
-		}
-		n.P2P, err = p2p.New(p2pCtx, n.Identity, n.Consensus)
-		if err != nil {
-			return err
-		}
-		n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
-	}
-
 	// Initialize the IAS proxy client.
 	n.IAS, err = ias.New(n.Identity)
 	if err != nil {
@@ -301,11 +272,26 @@ func (n *Node) initRuntimeWorkers() error {
 	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
 	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
 
+	// Initialize the P2P worker if any runtime mode is configured.
+	// Since the P2P layer does not have a separate Start method and starts
+	// listening immediately when created, make sure that we don't start it if
+	// it is not needed.
+	if n.RuntimeRegistry.Mode() != runtimeRegistry.RuntimeModeNone {
+		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
+		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
+			p2p.DebugForceAllowUnroutableAddresses()
+		}
+		n.P2P, err = p2p.New(p2pCtx, n.Identity, n.Consensus)
+		if err != nil {
+			return err
+		}
+		n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
+	}
+
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		n,
 		dataDir,
-		compute.Enabled() || workerStorage.Enabled() || workerKeymanager.Enabled(),
 		n.Identity,
 		n.Consensus,
 		n.P2P,
@@ -315,7 +301,7 @@ func (n *Node) initRuntimeWorkers() error {
 		genesisDoc,
 	)
 	if err != nil {
-		n.logger.Error("failed to start common worker",
+		n.logger.Error("failed to initialize common worker",
 			"err", err,
 		)
 		return err
@@ -394,7 +380,6 @@ func (n *Node) initRuntimeWorkers() error {
 
 	// Initialize the executor worker.
 	n.ExecutorWorker, err = executor.New(
-		dataDir,
 		n.CommonWorker,
 		n.RegistrationWorker,
 	)
@@ -402,6 +387,13 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 	n.svcMgr.Register(n.ExecutorWorker)
+
+	// Initialize the client worker.
+	n.ClientWorker, err = workerClient.New(n.grpcInternal, n.CommonWorker)
+	if err != nil {
+		return err
+	}
+	n.svcMgr.Register(n.ClientWorker)
 
 	// Initialize the sentry worker.
 	n.SentryWorker, err = workerSentry.New(
@@ -429,9 +421,9 @@ func (n *Node) startRuntimeWorkers() error {
 		return err
 	}
 
-	// Start the runtime client service.
-	if err := n.RuntimeClient.Start(); err != nil {
-		return fmt.Errorf("failed to start runtime client service: %w", err)
+	// Start the runtime client worker.
+	if err := n.ClientWorker.Start(); err != nil {
+		return err
 	}
 
 	// Start the storage worker.
@@ -756,11 +748,8 @@ func init() {
 		ias.Flags,
 		workerKeymanager.Flags,
 		runtimeRegistry.Flags,
-		compute.Flags,
 		p2p.Flags,
 		registration.Flags,
-		runtimeClient.Flags,
-		executor.Flags,
 		workerCommon.Flags,
 		workerStorage.Flags,
 		workerSentry.Flags,

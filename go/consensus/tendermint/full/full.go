@@ -81,6 +81,8 @@ const (
 	CfgABCIPruneStrategy = "consensus.tendermint.abci.prune.strategy"
 	// CfgABCIPruneNumKept configures the amount of kept heights if pruning is enabled.
 	CfgABCIPruneNumKept = "consensus.tendermint.abci.prune.num_kept"
+	// CfgABCIPruneInterval configures the ABCI state pruning interval.
+	CfgABCIPruneInterval = "consensus.tendermint.abci.prune.interval"
 
 	// CfgCheckpointerDisabled disables the ABCI state checkpointer.
 	CfgCheckpointerDisabled = "consensus.tendermint.checkpointer.disabled"
@@ -1125,6 +1127,10 @@ func (t *fullService) ConsensusKey() signature.PublicKey {
 	return t.identity.ConsensusSigner.Public()
 }
 
+func (t *fullService) Pruner() api.StatePruner {
+	return t.mux.Pruner()
+}
+
 func (t *fullService) lazyInit() error {
 	if t.isInitialized {
 		return nil
@@ -1139,6 +1145,11 @@ func (t *fullService) lazyInit() error {
 		return err
 	}
 	pruneCfg.NumKept = viper.GetUint64(CfgABCIPruneNumKept)
+	pruneCfg.PruneInterval = viper.GetDuration(CfgABCIPruneInterval)
+	const minPruneInterval = 1 * time.Second
+	if pruneCfg.PruneInterval < minPruneInterval {
+		pruneCfg.PruneInterval = minPruneInterval
+	}
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
@@ -1569,6 +1580,7 @@ func New(
 func init() {
 	Flags.String(CfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
 	Flags.Uint64(CfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
+	Flags.Duration(CfgABCIPruneInterval, 2*time.Minute, "ABCI state pruning interval")
 	Flags.Bool(CfgCheckpointerDisabled, false, "Disable the ABCI state checkpointer")
 	Flags.Duration(CfgCheckpointerCheckInterval, 1*time.Minute, "ABCI state checkpointer check interval")
 	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form ID@ip:port")

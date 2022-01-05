@@ -52,7 +52,7 @@ var (
 const (
 	// LatestNodeDescriptorVersion is the latest node descriptor version that should be used for all
 	// new descriptors. Using earlier versions may be rejected.
-	LatestNodeDescriptorVersion = 1
+	LatestNodeDescriptorVersion = 2
 
 	// Minimum and maximum descriptor versions that are allowed.
 	minNodeDescriptorVersion = 1
@@ -107,8 +107,8 @@ type RolesMask uint32
 const (
 	// RoleComputeWorker is the compute worker role.
 	RoleComputeWorker RolesMask = 1 << 0
-	// RoleStorageWorker is the storage worker role.
-	RoleStorageWorker RolesMask = 1 << 1
+	// roleReserved2 is the reserved role (storage role in v1 descriptors).
+	roleReserved2 RolesMask = 1 << 1
 	// RoleKeyManager is the the key manager role.
 	RoleKeyManager RolesMask = 1 << 2
 	// RoleValidator is the validator role.
@@ -120,11 +120,10 @@ const (
 
 	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
-	RoleReserved RolesMask = ((1 << 32) - 1) & ^((RoleStorageRPC << 1) - 1)
+	RoleReserved RolesMask = ((1<<32)-1) & ^((RoleStorageRPC<<1)-1) | roleReserved2
 
 	// Human friendly role names.
 	RoleComputeWorkerName = "compute"
-	RoleStorageWorkerName = "storage"
 	RoleKeyManagerName    = "key-manager"
 	RoleValidatorName     = "validator"
 	RoleConsensusRPCName  = "consensus-rpc"
@@ -137,7 +136,6 @@ const (
 func Roles() (roles []RolesMask) {
 	return []RolesMask{
 		RoleComputeWorker,
-		RoleStorageWorker,
 		RoleKeyManager,
 		RoleValidator,
 		RoleConsensusRPC,
@@ -159,9 +157,6 @@ func (m RolesMask) String() string {
 	var ret []string
 	if m&RoleComputeWorker != 0 {
 		ret = append(ret, RoleComputeWorkerName)
-	}
-	if m&RoleStorageWorker != 0 {
-		ret = append(ret, RoleStorageWorkerName)
 	}
 	if m&RoleKeyManager != 0 {
 		ret = append(ret, RoleKeyManagerName)
@@ -202,11 +197,6 @@ func (m *RolesMask) UnmarshalText(text []byte) error {
 				return err
 			}
 			*m |= RoleComputeWorker
-		case RoleStorageWorkerName:
-			if err := checkDuplicateRole(RoleStorageWorker, *m); err != nil {
-				return err
-			}
-			*m |= RoleStorageWorker
 		case RoleKeyManagerName:
 			if err := checkDuplicateRole(RoleKeyManager, *m); err != nil {
 				return err
@@ -234,6 +224,34 @@ func (m *RolesMask) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// UnmarshalCBOR is a custom deserializer that handles both v1 and v2 Node structures.
+func (n *Node) UnmarshalCBOR(data []byte) error {
+	// Determine Entity structure version.
+	v, err := cbor.GetVersion(data)
+	if err != nil {
+		return err
+	}
+	switch v {
+	case 1:
+		// Old version had an extra supported role (the storage role).
+		type nv2 Node
+		if err := cbor.Unmarshal(data, (*nv2)(n)); err != nil {
+			return err
+		}
+
+		// Convert into new format.
+		n.Versioned = cbor.NewVersioned(2)
+		n.Roles = n.Roles & ^roleReserved2 // Clear old storage role.
+		return nil
+	case 2:
+		// New version, call the default unmarshaler.
+		type nv2 Node
+		return cbor.Unmarshal(data, (*nv2)(n))
+	default:
+		return fmt.Errorf("invalid node descriptor version: %d", v)
+	}
+}
+
 // ValidateBasic performs basic descriptor validity checks.
 func (n *Node) ValidateBasic(strictVersion bool) error {
 	v := n.Versioned.V
@@ -255,6 +273,15 @@ func (n *Node) ValidateBasic(strictVersion bool) error {
 			)
 		}
 	}
+
+	// Make sure that a node has at least one valid role.
+	switch {
+	case n.Roles == 0:
+		return fmt.Errorf("no roles specified")
+	case n.HasRoles(RoleReserved):
+		return fmt.Errorf("invalid role specified")
+	}
+
 	return nil
 }
 

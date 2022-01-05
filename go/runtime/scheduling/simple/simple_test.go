@@ -16,7 +16,7 @@ func TestSimpleSchedulerPriorityQueue(t *testing.T) {
 		transaction.WeightSizeBytes: 16 * 1024 * 1024,
 	}
 
-	algo, err := New(priorityqueue.Name, 100, Name, weightLimits)
+	algo, err := New(priorityqueue.Name, 100, weightLimits)
 	require.NoError(t, err, "New()")
 	tests.SchedulerImplementationTests(t, algo)
 }
@@ -27,7 +27,7 @@ func BenchmarkSimpleSchedulerPriorityQueue(b *testing.B) {
 		transaction.WeightSizeBytes: 16 * 1024 * 1024,
 	}
 
-	algo, err := New(priorityqueue.Name, 1000000, Name, weightLimits)
+	algo, err := New(priorityqueue.Name, 1000000, weightLimits)
 	require.NoError(b, err, "New()")
 	tests.SchedulerImplementationBenchmarks(b, algo)
 }
