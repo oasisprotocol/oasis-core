@@ -62,11 +62,18 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, e
 	// Get per-runtime states.
 	rtStates := make(map[common.Namespace]*roothashAPI.GenesisRuntimeState)
 	for _, rt := range runtimes {
+		var lastRoundResults *roothashAPI.RoundResults
+		lastRoundResults, err = rq.LastRoundResults(ctx, rt.Runtime.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch last round results for runtime '%s': %w", rt.Runtime.ID, err)
+		}
+
 		rtState := roothashAPI.GenesisRuntimeState{
 			RuntimeGenesis: registryAPI.RuntimeGenesis{
 				StateRoot: rt.CurrentBlock.Header.StateRoot,
 				Round:     rt.CurrentBlock.Header.Round,
 			},
+			MessageResults: lastRoundResults.Messages,
 		}
 
 		rtStates[rt.Runtime.ID] = &rtState

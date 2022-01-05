@@ -9,7 +9,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -104,6 +103,9 @@ type Backend interface {
 
 	// GetRuntimeState returns the given runtime's state.
 	GetRuntimeState(ctx context.Context, request *RuntimeRequest) (*RuntimeState, error)
+
+	// GetLastRoundResults returns the given runtime's last normal round results.
+	GetLastRoundResults(ctx context.Context, request *RuntimeRequest) (*RoundResults, error)
 
 	// WatchBlocks returns a channel that produces a stream of
 	// annotated blocks.
@@ -362,14 +364,6 @@ type ExecutionDiscrepancyDetectedEvent struct {
 type FinalizedEvent struct {
 	// Round is the round that was finalized.
 	Round uint64 `json:"round"`
-
-	// GoodComputeNodes are the public keys of compute nodes that positively contributed to the
-	// round by replicating the computation correctly.
-	GoodComputeNodes []signature.PublicKey `json:"good_compute_nodes,omitempty"`
-
-	// BadComputeNodes are the public keys of compute nodes that negatively contributed to the round
-	// by causing discrepancies.
-	BadComputeNodes []signature.PublicKey `json:"bad_compute_nodes,omitempty"`
 }
 
 // MessageEvent is a runtime message processed event.

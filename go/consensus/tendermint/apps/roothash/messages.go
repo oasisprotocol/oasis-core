@@ -1,7 +1,6 @@
 package roothash
 
 import (
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
@@ -14,7 +13,7 @@ func (app *rootHashApplication) processRuntimeMessages(
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
 	msgs []message.Message,
-) error {
+) ([]*roothash.MessageEvent, error) {
 	ctx = ctx.WithMessageExecution()
 	defer ctx.Close()
 	ctx = ctx.WithCallerAddress(staking.NewRuntimeAddress(rtState.Runtime.ID))
@@ -31,6 +30,7 @@ func (app *rootHashApplication) processRuntimeMessages(
 		defer cp.Close()
 	}
 
+	var results []*roothash.MessageEvent
 	for i, msg := range msgs {
 		ctx.Logger().Debug("dispatching runtime message",
 			"index", i,
@@ -61,19 +61,11 @@ func (app *rootHashApplication) processRuntimeMessages(
 		}
 
 		module, code := errors.Code(err)
-		evV := ValueMessage{
-			ID: rtState.Runtime.ID,
-			Event: roothash.MessageEvent{
-				Index:  uint32(i),
-				Module: module,
-				Code:   code,
-			},
-		}
-		ctx.EmitEvent(
-			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyMessage, cbor.Marshal(evV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(evV.ID)),
-		)
+		results = append(results, &roothash.MessageEvent{
+			Index:  uint32(i),
+			Module: module,
+			Code:   code,
+		})
 	}
-	return nil
+	return results, nil
 }

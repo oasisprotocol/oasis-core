@@ -145,7 +145,8 @@ func (app *rootHashApplication) executorCommit(
 		msgCtx := ctx.WithSimulation()
 		defer msgCtx.Close()
 
-		return app.processRuntimeMessages(msgCtx, rtState, msgs)
+		_, msgErr := app.processRuntimeMessages(msgCtx, rtState, msgs)
+		return msgErr
 	}
 
 	for _, commit := range cc.Commits {

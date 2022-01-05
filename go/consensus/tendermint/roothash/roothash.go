@@ -19,12 +19,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -136,6 +134,16 @@ func (sc *serviceClient) GetRuntimeState(ctx context.Context, request *api.Runti
 }
 
 // Implements api.Backend.
+func (sc *serviceClient) GetLastRoundResults(ctx context.Context, request *api.RuntimeRequest) (*api.RoundResults, error) {
+	q, err := sc.querier.QueryAt(ctx, request.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.LastRoundResults(ctx, request.RuntimeID)
+}
+
+// Implements api.Backend.
 func (sc *serviceClient) WatchBlocks(ctx context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 
@@ -235,31 +243,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 		return nil, err
 	}
 
-	g, err := q.Genesis(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add any last emitted events for the given runtime.
-	//
-	// NOTE: This requires historic lookups.
-	for runtimeID, rt := range g.RuntimeStates {
-		state, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
-			RuntimeID: runtimeID,
-			Height:    height,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		rr, err := sc.getRoundResults(ctx, runtimeID, state.LastNormalHeight)
-		if err != nil {
-			return nil, fmt.Errorf("roothash: failed to get last message results for runtime %s: %w", runtimeID, err)
-		}
-		rt.MessageResults = rr.Messages
-	}
-
-	return g, nil
+	return q.Genesis(ctx)
 }
 
 func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
@@ -269,58 +253,6 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 	}
 
 	return q.ConsensusParameters(ctx)
-}
-
-func (sc *serviceClient) getNodeEntities(ctx context.Context, height int64, nodes []signature.PublicKey) ([]signature.PublicKey, error) {
-	var entities []signature.PublicKey
-	seen := make(map[signature.PublicKey]bool)
-	for _, id := range nodes {
-		node, err := sc.backend.Registry().GetNode(ctx, &registry.IDQuery{
-			Height: height,
-			ID:     id,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch node %s: %w", id, err)
-		}
-
-		if seen[node.EntityID] {
-			continue
-		}
-		seen[node.EntityID] = true
-		entities = append(entities, node.EntityID)
-	}
-	return entities, nil
-}
-
-func (sc *serviceClient) getRoundResults(ctx context.Context, runtimeID common.Namespace, height int64) (*api.RoundResults, error) {
-	evs, err := sc.getEvents(ctx, height, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	results := new(api.RoundResults)
-	for _, ev := range evs {
-		switch {
-		case !ev.RuntimeID.Equal(&runtimeID):
-			continue
-		case ev.Message != nil:
-			// Runtime message processed event.
-			results.Messages = append(results.Messages, ev.Message)
-		case ev.Finalized != nil:
-			// Round finalized event.
-			results.GoodComputeEntities, err = sc.getNodeEntities(ctx, height, ev.Finalized.GoodComputeNodes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve good compute entities: %w", err)
-			}
-
-			results.BadComputeEntities, err = sc.getNodeEntities(ctx, height, ev.Finalized.BadComputeNodes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve bad compute entities: %w", err)
-			}
-		default:
-		}
-	}
-	return results, nil
 }
 
 func (sc *serviceClient) getEvents(ctx context.Context, height int64, txns [][]byte) ([]*api.Event, error) {
@@ -638,7 +570,10 @@ func (sc *serviceClient) processFinalizedEvent(
 		return fmt.Errorf("roothash: finalized event/query round mismatch")
 	}
 
-	roundResults, err := sc.getRoundResults(ctx, runtimeID, height)
+	roundResults, err := sc.GetLastRoundResults(ctx, &api.RuntimeRequest{
+		RuntimeID: runtimeID,
+		Height:    height,
+	})
 	if err != nil {
 		sc.logger.Error("failed to fetch round results",
 			"err", err,
@@ -770,16 +705,6 @@ func EventsFromTendermint(
 				}
 
 				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutorCommitted: &value.Event}
-				events = append(events, ev)
-			case bytes.Equal(key, app.KeyMessage):
-				// Runtime message has been processed.
-				var value app.ValueMessage
-				if err := cbor.Unmarshal(val, &value); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt message event: %w", err))
-					continue
-				}
-
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Message: &value.Event}
 				events = append(events, ev)
 			case bytes.Equal(key, app.KeyRuntimeID):
 				// Runtime ID attribute (Base64-encoded to allow queries).

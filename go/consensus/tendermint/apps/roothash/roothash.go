@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/api"
@@ -414,22 +415,11 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 				genesisBlock.Header.HeaderType = block.Suspended
 			}
 
-			// Emit any message results now (will be deferred to the first block).
-			ctx.Logger().Debug("emitting message results",
-				"runtime_id", runtime.ID,
-				"num_results", len(genesisRts.MessageResults),
-			)
-
-			for _, msg := range genesisRts.MessageResults {
-				evV := ValueMessage{
-					ID:    runtime.ID,
-					Event: *msg,
-				}
-				ctx.EmitEvent(
-					tmapi.NewEventBuilder(app.Name()).
-						Attribute(KeyMessage, cbor.Marshal(evV)).
-						Attribute(KeyRuntimeID, ValueRuntimeID(evV.ID)),
-				)
+			err = state.SetLastRoundResults(ctx, runtime.ID, &roothash.RoundResults{
+				Messages: genesisRts.MessageResults,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to set last round results: %w", err)
 			}
 		}
 	}
@@ -571,16 +561,18 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		ec := commit.ToDDResult().(*commitment.ExecutorCommitment)
 
 		// Process any runtime messages.
-		if err = app.processRuntimeMessages(ctx, rtState, ec.Messages); err != nil {
+		var messageResults []*roothash.MessageEvent
+		if messageResults, err = app.processRuntimeMessages(ctx, rtState, ec.Messages); err != nil {
 			return fmt.Errorf("failed to process runtime messages: %w", err)
 		}
 
 		var (
-			goodComputeNodes []signature.PublicKey
-			badComputeNodes  []signature.PublicKey
+			goodComputeEntities []signature.PublicKey
+			badComputeEntities  []signature.PublicKey
 		)
 		commitments := pool.ExecuteCommitments
 		seen := make(map[signature.PublicKey]bool)
+		regState := registryState.NewMutableState(ctx.State())
 		for _, n := range pool.Committee.Members {
 			c, ok := commitments[n.PublicKey]
 			if !ok || c.IsIndicatingFailure() || seen[n.PublicKey] {
@@ -589,17 +581,36 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 			// Make sure to not include nodes in multiple roles multiple times.
 			seen[n.PublicKey] = true
 
+			// Resolve the entity owning the node.
+			var node *node.Node
+			node, err = regState.Node(ctx, n.PublicKey)
+			switch err {
+			case nil:
+			case registry.ErrNoSuchNode:
+				// This should never happen as nodes cannot disappear mid-epoch.
+				ctx.Logger().Error("runtime node not found by commitment signature public key",
+					"public_key", n.PublicKey,
+				)
+				continue
+			default:
+				ctx.Logger().Error("failed to get runtime node by commitment signature public key",
+					"public_key", n.PublicKey,
+					"err", err,
+				)
+				return fmt.Errorf("tendermint/roothash: getting node %s: %w", n.PublicKey, err)
+			}
+
 			switch commit.MostlyEqual(c) {
 			case true:
 				// Correct commit.
-				goodComputeNodes = append(goodComputeNodes, n.PublicKey)
+				goodComputeEntities = append(goodComputeEntities, node.EntityID)
 			case false:
 				// Incorrect commit.
-				badComputeNodes = append(badComputeNodes, n.PublicKey)
+				badComputeEntities = append(badComputeEntities, node.EntityID)
 			}
 		}
 
-		// If there was a discrepancy, slash nodes for incorrect results if configured.
+		// If there was a discrepancy, slash entities for incorrect results if configured.
 		if pool.Discrepancy {
 			ctx.Logger().Debug("executor pool discrepancy",
 				"slashing", runtime.Staking.Slashing,
@@ -608,8 +619,8 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 				// Slash for incorrect results.
 				if err = onRuntimeIncorrectResults(
 					ctx,
-					badComputeNodes,
-					goodComputeNodes,
+					badComputeEntities,
+					goodComputeEntities,
 					runtime,
 					&penalty.Amount,
 				); err != nil {
@@ -633,12 +644,21 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		rtState.LastNormalRound = blk.Header.Round
 		rtState.LastNormalHeight = ctx.BlockHeight() + 1
 
+		// Set last normal round results.
+		state := roothashState.NewMutableState(ctx.State())
+		err = state.SetLastRoundResults(ctx, rtState.Runtime.ID, &roothash.RoundResults{
+			Messages:            messageResults,
+			GoodComputeEntities: goodComputeEntities,
+			BadComputeEntities:  badComputeEntities,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to set last round results: %w", err)
+		}
+
 		tagV := ValueFinalized{
 			ID: rtState.Runtime.ID,
 			Event: roothash.FinalizedEvent{
-				Round:            blk.Header.Round,
-				GoodComputeNodes: goodComputeNodes,
-				BadComputeNodes:  badComputeNodes,
+				Round: blk.Header.Round,
 			},
 		}
 		ctx.EmitEvent(

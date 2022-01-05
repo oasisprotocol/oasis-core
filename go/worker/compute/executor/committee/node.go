@@ -579,10 +579,11 @@ func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
 }
 
 func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*roothash.RuntimeState, *roothash.RoundResults, error) {
-	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+	rq := &roothash.RuntimeRequest{
 		RuntimeID: n.commonNode.Runtime.ID(),
 		Height:    height,
-	})
+	}
+	state, err := n.commonNode.Consensus.RootHash().GetRuntimeState(ctx, rq)
 	if err != nil {
 		n.logger.Error("failed to query runtime state",
 			"err", err,
@@ -590,21 +591,8 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 		)
 		return nil, nil, err
 	}
-	roundResults, err := n.commonNode.Runtime.History().GetRoundResults(ctx, state.LastNormalRound)
-	switch err {
-	case nil:
-	case roothash.ErrNotFound:
-		// It could be that we don't have the block because the node used state sync to skip past
-		// the consensus block that contained the last normal round. We can still continue in case
-		// the last normal round is actually the genesis round (as then we know that there were no
-		// actual round results).
-		if state.LastNormalRound == state.GenesisBlock.Header.Round {
-			roundResults = &roothash.RoundResults{}
-			break
-		}
-
-		fallthrough
-	default:
+	roundResults, err := n.commonNode.Consensus.RootHash().GetLastRoundResults(ctx, rq)
+	if err != nil {
 		n.logger.Error("failed to query round last normal round results",
 			"err", err,
 			"height", height,
