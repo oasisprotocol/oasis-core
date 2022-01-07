@@ -62,6 +62,9 @@ pub struct TxnSchedulerParameters {
     pub max_batch_size: u64,
     /// Maximum size of a scheduled batch in bytes.
     pub max_batch_size_bytes: u64,
+    /// Maximum size of the incoming message queue.
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub max_in_messages: u32,
     /// Timeout (in consensus blocks) for the scheduler to propose a batch.
     pub propose_batch_timeout: i64,
 }
@@ -119,6 +122,25 @@ pub struct RuntimeStakingParameters {
     /// satisfy the maximum threshold of all the runtimes.
     #[cbor(optional)]
     pub thresholds: Option<BTreeMap<staking::ThresholdKind, quantity::Quantity>>,
+
+    /// Per-runtime misbehavior slashing parameters.
+    #[cbor(optional)]
+    pub slashing: Option<BTreeMap<staking::SlashReason, staking::Slash>>,
+
+    /// The percentage of the reward obtained when slashing for equivocation that is transferred to
+    /// the runtime's account.
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub reward_equivocation: u8,
+
+    /// The percentage of the reward obtained when slashing for incorrect results that is
+    /// transferred to the runtime's account.
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub reward_bad_results: u8,
+
+    /// Specifies the minimum fee that the incoming message must include for the
+    /// message to be queued.
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub min_in_message_fee: quantity::Quantity,
 }
 
 /// Oasis node roles bitmask.

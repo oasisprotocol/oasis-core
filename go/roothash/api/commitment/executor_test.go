@@ -22,14 +22,15 @@ func TestConsistentHash(t *testing.T) {
 	emptyRoot.Empty()
 
 	var populatedHeaderHash hash.Hash
-	_ = populatedHeaderHash.UnmarshalHex("430ff02fafc53fc0e5eb432ad3e8b09167842a3948e09a7ee4bdd88e83e01d5a")
+	_ = populatedHeaderHash.UnmarshalHex("8459a9e6e3341cd2df5ada5737469a505baf92397aaa88b7100915324506d843")
 
 	populated := ComputeResultsHeader{
-		Round:        42,
-		PreviousHash: emptyHeaderHash,
-		IORoot:       &emptyRoot,
-		StateRoot:    &emptyRoot,
-		MessagesHash: &emptyRoot,
+		Round:          42,
+		PreviousHash:   emptyHeaderHash,
+		IORoot:         &emptyRoot,
+		StateRoot:      &emptyRoot,
+		MessagesHash:   &emptyRoot,
+		InMessagesHash: &emptyRoot,
 	}
 	require.EqualValues(t, populatedHeaderHash.String(), populated.EncodedHash().String())
 }
@@ -44,11 +45,12 @@ func TestValidateBasic(t *testing.T) {
 	body := ExecutorCommitment{
 		Header: ExecutorCommitmentHeader{
 			ComputeResultsHeader: ComputeResultsHeader{
-				Round:        42,
-				PreviousHash: emptyHeaderHash,
-				IORoot:       &emptyRoot,
-				StateRoot:    &emptyRoot,
-				MessagesHash: &emptyRoot,
+				Round:          42,
+				PreviousHash:   emptyHeaderHash,
+				IORoot:         &emptyRoot,
+				StateRoot:      &emptyRoot,
+				MessagesHash:   &emptyRoot,
+				InMessagesHash: &emptyRoot,
 			},
 			RAKSignature: &signature.RawSignature{},
 		},
@@ -114,6 +116,7 @@ func TestValidateBasic(t *testing.T) {
 				// ec.Header.IORoot is set.
 				ec.Header.StateRoot = nil
 				ec.Header.MessagesHash = nil
+				ec.Header.InMessagesHash = nil
 				return ec
 			},
 			true,
@@ -125,6 +128,7 @@ func TestValidateBasic(t *testing.T) {
 				ec.Header.IORoot = nil
 				// ec.Header.StateRoot is set.
 				ec.Header.MessagesHash = nil
+				ec.Header.InMessagesHash = nil
 				return ec
 			},
 			true,
@@ -136,6 +140,19 @@ func TestValidateBasic(t *testing.T) {
 				ec.Header.IORoot = nil
 				ec.Header.StateRoot = nil
 				// ec.Header.MessagesHash is set.
+				ec.Header.InMessagesHash = nil
+				return ec
+			},
+			true,
+		},
+		{
+			"Bad Failure (existing InMessagesHash)",
+			func(ec ExecutorCommitment) ExecutorCommitment {
+				ec.Header.Failure = FailureUnknown
+				ec.Header.IORoot = nil
+				ec.Header.StateRoot = nil
+				ec.Header.MessagesHash = nil
+				// ec.Header.InMessagesHash is set.
 				return ec
 			},
 			true,

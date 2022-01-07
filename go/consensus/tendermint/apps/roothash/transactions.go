@@ -10,6 +10,7 @@ import (
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -178,11 +179,6 @@ func (app *rootHashApplication) executorCommit(
 		return err
 	}
 
-	// Update runtime state.
-	if err = state.SetRuntimeState(ctx, rtState); err != nil {
-		return fmt.Errorf("failed to set runtime state: %w", err)
-	}
-
 	// Emit events for all accepted commits.
 	for _, commit := range cc.Commits {
 		evV := ValueExecutorCommitted{
@@ -316,6 +312,99 @@ func (app *rootHashApplication) submitEvidence(
 	); err != nil {
 		return fmt.Errorf("error slashing runtime node: %w", err)
 	}
+
+	return nil
+}
+
+func (app *rootHashApplication) submitMsg(
+	ctx *abciAPI.Context,
+	state *roothashState.MutableState,
+	msg *roothash.SubmitMsg,
+) error {
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Charge gas for this transaction.
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, roothash.GasOpSubmitMsg, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early for simulation as we only need gas accounting.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
+	rtState, _, err := app.getRuntimeState(ctx, state, msg.ID)
+	if err != nil {
+		return err
+	}
+
+	// If the maximum size of the queue is set to zero, bail early.
+	if rtState.Runtime.TxnScheduler.MaxInMessages == 0 {
+		return roothash.ErrIncomingMessageQueueFull
+	}
+
+	// If the submitted fee is smaller than the minimum fee, bail early.
+	if msg.Fee.Cmp(&rtState.Runtime.Staking.MinInMessageFee) < 0 {
+		return roothash.ErrIncomingMessageInsufficientFee
+	}
+
+	// Create a new transaction context and rollback in case we fail.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
+	// Transfer the given amount (fee + tokens) into the runtime account.
+	totalAmount := msg.Fee.Clone()
+	if err = totalAmount.Add(&msg.Tokens); err != nil {
+		return err
+	}
+
+	st := stakingState.NewMutableState(ctx.State())
+	rtAddress := staking.NewRuntimeAddress(rtState.Runtime.ID)
+	if err = st.Transfer(ctx, ctx.CallerAddress(), rtAddress, totalAmount); err != nil {
+		return err
+	}
+
+	// Fetch current incoming queue metadata.
+	meta, err := state.IncomingMessageQueueMeta(ctx, rtState.Runtime.ID)
+	if err != nil {
+		return err
+	}
+
+	// Check if the queue is already full.
+	if meta.Size >= rtState.Runtime.TxnScheduler.MaxInMessages {
+		return roothash.ErrIncomingMessageQueueFull
+	}
+
+	// Queue message.
+	inMsg := &message.IncomingMessage{
+		ID:     meta.NextSequenceNumber,
+		Caller: ctx.CallerAddress(),
+		Tag:    msg.Tag,
+		Fee:    msg.Fee,
+		Tokens: msg.Tokens,
+		Data:   msg.Data,
+	}
+	if err = state.SetIncomingMessageInQueue(ctx, rtState.Runtime.ID, inMsg); err != nil {
+		return err
+	}
+
+	// Update next sequence number.
+	meta.Size++
+	meta.NextSequenceNumber++
+	if err = state.SetIncomingMessageQueueMeta(ctx, rtState.Runtime.ID, meta); err != nil {
+		return err
+	}
+
+	ctx.Commit()
 
 	return nil
 }

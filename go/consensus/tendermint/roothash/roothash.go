@@ -25,6 +25,7 @@ import (
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
@@ -141,6 +142,26 @@ func (sc *serviceClient) GetLastRoundResults(ctx context.Context, request *api.R
 	}
 
 	return q.LastRoundResults(ctx, request.RuntimeID)
+}
+
+// Implements api.Backend.
+func (sc *serviceClient) GetIncomingMessageQueueMeta(ctx context.Context, request *api.RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
+	q, err := sc.querier.QueryAt(ctx, request.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.IncomingMessageQueueMeta(ctx, request.RuntimeID)
+}
+
+// Implements api.Backend.
+func (sc *serviceClient) GetIncomingMessageQueue(ctx context.Context, request *api.InMessageQueueRequest) ([]*message.IncomingMessage, error) {
+	q, err := sc.querier.QueryAt(ctx, request.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.IncomingMessageQueue(ctx, request.RuntimeID, request.Offset, request.Limit)
 }
 
 // Implements api.Backend.
@@ -665,12 +686,17 @@ func EventsFromTendermint(
 
 	var events []*api.Event
 	var errs error
+EventLoop:
 	for _, tmEv := range tmEvents {
 		// Ignore events that don't relate to the roothash app.
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
 
+		var (
+			runtimeID *common.Namespace
+			ev        *api.Event
+		)
 		for _, pair := range tmEv.GetAttributes() {
 			key := pair.GetKey()
 			val := pair.GetValue()
@@ -681,36 +707,62 @@ func EventsFromTendermint(
 				var value app.ValueFinalized
 				if err := cbor.Unmarshal(val, &value); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
-					continue
+					continue EventLoop
 				}
 
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, Finalized: &value.Event}
-				events = append(events, ev)
+				ev = &api.Event{Finalized: &value.Event}
 			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
 				// An execution discrepancy has been detected.
 				var value app.ValueExecutionDiscrepancyDetected
 				if err := cbor.Unmarshal(val, &value); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueExectutionDiscrepancy event: %w", err))
-					continue
+					continue EventLoop
 				}
 
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutionDiscrepancyDetected: &value.Event}
-				events = append(events, ev)
+				ev = &api.Event{ExecutionDiscrepancyDetected: &value.Event}
 			case bytes.Equal(key, app.KeyExecutorCommitted):
 				// An executor commit has been processed.
 				var value app.ValueExecutorCommitted
 				if err := cbor.Unmarshal(val, &value); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueExecutorCommitted event: %w", err))
-					continue
+					continue EventLoop
 				}
 
-				ev := &api.Event{RuntimeID: value.ID, Height: height, TxHash: txHash, ExecutorCommitted: &value.Event}
-				events = append(events, ev)
+				ev = &api.Event{ExecutorCommitted: &value.Event}
+			case tmapi.IsAttributeKind(key, &api.InMsgProcessedEvent{}):
+				// Incoming message processed event.
+				var e api.InMsgProcessedEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt InMsgProcessed event: %w", err))
+					continue EventLoop
+				}
+
+				ev = &api.Event{InMsgProcessed: &e}
 			case bytes.Equal(key, app.KeyRuntimeID):
 				// Runtime ID attribute (Base64-encoded to allow queries).
+				if runtimeID != nil {
+					errs = multierror.Append(errs, fmt.Errorf("roothash: duplicate runtime ID attribute"))
+					continue EventLoop
+				}
+				runtimeID = &common.Namespace{}
+				if err := runtimeID.UnmarshalBase64(val); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt runtime ID: %w", err))
+					continue EventLoop
+				}
 			default:
 				errs = multierror.Append(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
 			}
+		}
+
+		if runtimeID == nil {
+			errs = multierror.Append(errs, fmt.Errorf("roothash: missing runtime ID attribute"))
+			continue
+		}
+		if ev != nil {
+			ev.RuntimeID = *runtimeID
+			ev.Height = height
+			ev.TxHash = txHash
+			events = append(events, ev)
 		}
 	}
 	return events, errs

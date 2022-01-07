@@ -43,6 +43,11 @@ type ComputeResultsHeader struct {
 	IORoot       *hash.Hash `json:"io_root,omitempty"`
 	StateRoot    *hash.Hash `json:"state_root,omitempty"`
 	MessagesHash *hash.Hash `json:"messages_hash,omitempty"`
+
+	// InMessagesHash is the hash of processed incoming messages.
+	InMessagesHash *hash.Hash `json:"in_msgs_hash,omitempty"`
+	// InMessagesCount is the number of processed incoming messages.
+	InMessagesCount uint32 `json:"in_msgs_count,omitempty"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.
@@ -90,6 +95,8 @@ func (eh *ExecutorCommitmentHeader) SetFailure(failure ExecutorCommitmentFailure
 	eh.ComputeResultsHeader.IORoot = nil
 	eh.ComputeResultsHeader.StateRoot = nil
 	eh.ComputeResultsHeader.MessagesHash = nil
+	eh.ComputeResultsHeader.InMessagesHash = nil
+	eh.ComputeResultsHeader.InMessagesCount = 0
 	eh.RAKSignature = nil
 	eh.Failure = failure
 }
@@ -191,6 +198,9 @@ func (c *ExecutorCommitment) ValidateBasic() error {
 		if header.MessagesHash == nil {
 			return fmt.Errorf("missing messages hash")
 		}
+		if header.InMessagesHash == nil {
+			return fmt.Errorf("missing incoming messages hash")
+		}
 
 		// Validate any included runtime messages.
 		for i, msg := range c.Messages {
@@ -208,6 +218,9 @@ func (c *ExecutorCommitment) ValidateBasic() error {
 		}
 		if header.MessagesHash != nil {
 			return fmt.Errorf("failure indicating commitment includes MessagesHash")
+		}
+		if header.InMessagesHash != nil || header.InMessagesCount != 0 {
+			return fmt.Errorf("failure indicating commitment includes InMessagesHash/Count")
 		}
 		// In case of failure indicating commitment make sure RAK signature is empty.
 		if c.Header.RAKSignature != nil {

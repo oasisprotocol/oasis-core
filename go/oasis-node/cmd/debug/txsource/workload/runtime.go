@@ -14,9 +14,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -54,6 +56,7 @@ const (
 	runtimeRequestTransfer      runtimeRequest = 4
 	runtimeRequestAddEscrow     runtimeRequest = 5
 	runtimeRequestReclaimEscrow runtimeRequest = 6
+	runtimeRequestInMsg         runtimeRequest = 7
 )
 
 // Weights to select between requests types.
@@ -65,6 +68,7 @@ var runtimeRequestWeights = map[runtimeRequest]int{
 	runtimeRequestTransfer:      1,
 	runtimeRequestAddEscrow:     1,
 	runtimeRequestReclaimEscrow: 1,
+	runtimeRequestInMsg:         1,
 }
 
 // RuntimeFlags are the runtime workload flags.
@@ -374,6 +378,86 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	return nil
 }
 
+func (r *runtime) doInMsgRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
+	key := r.generateVal(rng, false)
+	value := r.generateVal(rng, false)
+
+	tx := roothash.NewSubmitMsgTx(0, nil, &roothash.SubmitMsg{
+		ID:  r.runtimeID,
+		Tag: 42,
+		Data: cbor.Marshal(&TxnCall{
+			Method: "insert",
+			Args: struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+				Nonce uint64 `json:"nonce"`
+			}{
+				Key:   key,
+				Value: value,
+				Nonce: rng.Uint64(),
+			},
+		}),
+	})
+
+	// Start watching roothash events.
+	ch, sub, err := r.Consensus().RootHash().WatchEvents(ctx, r.runtimeID)
+	if err != nil {
+		return fmt.Errorf("failed to watch events: %w", err)
+	}
+	defer sub.Close()
+
+	r.Logger.Debug("submitting incoming message",
+		"tx", tx,
+	)
+
+	submitCtx, cancel := context.WithTimeout(ctx, runtimeRequestTimeout)
+	defer cancel()
+
+	signer := memorySigner.NewTestSigner("oasis in msg test signer: " + time.Now().String())
+	err = r.FundSignAndSubmitTx(submitCtx, signer, tx)
+	if err != nil {
+		r.Logger.Error("failed to submit incoming message",
+			"err", err,
+			"tx", tx,
+		)
+		return fmt.Errorf("failed to submit incoming message: %w", err)
+	}
+
+	// Wait for processed event.
+	r.Logger.Debug("waiting for incoming message processed event")
+	callerAddr := staking.NewAddress(signer.Public())
+	for {
+		select {
+		case ev := <-ch:
+			if ev.InMsgProcessed == nil {
+				continue
+			}
+
+			if !ev.InMsgProcessed.Caller.Equal(callerAddr) {
+				continue
+			}
+			if ev.InMsgProcessed.Tag != 42 {
+				continue
+			}
+		case <-submitCtx.Done():
+			r.Logger.Error("timed out waiting for incoming message to be processed")
+			return ctx.Err()
+		}
+
+		break
+	}
+
+	r.Logger.Debug("insert via incoming message success",
+		"key", key,
+		"value", value,
+	)
+
+	// Update local state.
+	r.reckonedKeyValueState[key] = value
+
+	return nil
+}
+
 func (r *runtime) balanceIsZero(ctx context.Context, address staking.Address) (bool, error) {
 	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
 		Height: consensus.HeightLatest,
@@ -660,23 +744,28 @@ func (r *runtime) NeedsFunds() bool {
 }
 
 func (r *runtime) initAccounts(ctx context.Context, fundingAccount signature.Signer) error {
-	// Allow the runtime to withdraw some funds from the funding account.
+	// Create a new account for withdrawals/deposits.
+	const amount = 100_000
+	signer := memorySigner.NewTestSigner("oasis runtime msg tests: " + time.Now().String())
+	r.testAddress = staking.NewAddress(signer.Public())
+	if err := r.TransferFunds(ctx, fundingAccount, r.testAddress, amount); err != nil {
+		return fmt.Errorf("failed to transfer funds: %w", err)
+	}
+
+	// Allow the runtime to withdraw some funds.
 	rtAddress := staking.NewRuntimeAddress(r.runtimeID)
 
 	tx := staking.NewAllowTx(0, nil, &staking.Allow{
 		Beneficiary:  rtAddress,
-		AmountChange: *quantity.NewFromUint64(100000),
+		AmountChange: *quantity.NewFromUint64(amount),
 	})
-	if err := r.FundSignAndSubmitTx(ctx, fundingAccount, tx); err != nil {
+	if err := r.FundSignAndSubmitTx(ctx, signer, tx); err != nil {
 		r.Logger.Error("failed to sign and submit allow transaction",
 			"tx", tx,
 			"signer", fundingAccount.Public(),
 		)
 		return fmt.Errorf("failed to sign and submit allow tx: %w", err)
 	}
-
-	// Configure the address used for runtime tests.
-	r.testAddress = staking.NewAddress(fundingAccount.Public())
 
 	// Query initial account balance.
 	acct, err := r.Consensus().Staking().Account(ctx, &staking.OwnerQuery{
@@ -779,6 +868,10 @@ func (r *runtime) Run(
 		case runtimeRequestReclaimEscrow:
 			if err := r.doReclaimEscrowRequest(ctx, rng, rtc); err != nil {
 				return fmt.Errorf("doReclaimEscrowRequest failure: %w", err)
+			}
+		case runtimeRequestInMsg:
+			if err := r.doInMsgRequest(ctx, rng, rtc); err != nil {
+				return fmt.Errorf("doInMsgRequest failure: %w", err)
 			}
 		default:
 			return fmt.Errorf("unimplemented")

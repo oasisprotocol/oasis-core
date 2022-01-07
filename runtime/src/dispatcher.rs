@@ -324,6 +324,7 @@ impl Dispatcher {
                 round_results,
                 io_root,
                 inputs,
+                in_msgs,
                 block,
                 epoch,
                 max_messages,
@@ -336,6 +337,7 @@ impl Dispatcher {
                     &state.protocol,
                     io_root,
                     inputs.unwrap_or_default(),
+                    in_msgs,
                     TxDispatchState {
                         consensus_block,
                         consensus_verifier: state.consensus_verifier,
@@ -363,6 +365,7 @@ impl Dispatcher {
                     &state.protocol,
                     Hash::default(),
                     inputs,
+                    vec![],
                     TxDispatchState {
                         consensus_block,
                         consensus_verifier: state.consensus_verifier,
@@ -534,6 +537,7 @@ impl Dispatcher {
         cache_set: cache::CacheSet,
         txn_dispatcher: &dyn TxnDispatcher,
         mut inputs: TxnBatch,
+        in_msgs: Vec<roothash::IncomingMessage>,
         io_root: Hash,
         state: TxDispatchState,
     ) -> Result<Body, Error> {
@@ -563,7 +567,7 @@ impl Dispatcher {
             state.max_messages,
             state.check_only,
         );
-        let mut results = txn_dispatcher.execute_batch(txn_ctx, &inputs)?;
+        let mut results = txn_dispatcher.execute_batch(txn_ctx, &inputs, &in_msgs)?;
 
         // Finalize state.
         let (state_write_log, new_state_root) = overlay
@@ -636,6 +640,10 @@ impl Dispatcher {
             io_root: Some(io_root),
             state_root: Some(new_state_root),
             messages_hash: Some(roothash::Message::messages_hash(&results.messages)),
+            in_msgs_hash: Some(roothash::IncomingMessage::in_messages_hash(
+                &in_msgs[..results.in_msgs_count],
+            )),
+            in_msgs_count: results.in_msgs_count.try_into().unwrap(),
         };
 
         // Since we've computed the batch, we can trust it.
@@ -649,6 +657,7 @@ impl Dispatcher {
             "io_root" => ?header.io_root,
             "state_root" => ?header.state_root,
             "messages_hash" => ?header.messages_hash,
+            "in_msgs_hash" => ?header.in_msgs_hash,
         );
 
         let rak_sig = if self.rak.public_key().is_some() {
@@ -682,6 +691,7 @@ impl Dispatcher {
         protocol: &Arc<Protocol>,
         io_root: Hash,
         inputs: TxnBatch,
+        in_msgs: Vec<roothash::IncomingMessage>,
         state: TxDispatchState,
     ) -> Result<Body, Error> {
         // Make sure to abort the process on panic during transaction processing as that indicates
@@ -692,6 +702,8 @@ impl Dispatcher {
             "state_root" => ?state.header.state_root,
             "round" => state.header.round + 1,
             "round_results" => ?state.round_results,
+            "tx_count" => inputs.len(),
+            "in_msg_count" => in_msgs.len(),
             "check_only" => state.check_only,
         );
 
@@ -720,6 +732,7 @@ impl Dispatcher {
                     cache_set,
                     &txn_dispatcher,
                     inputs,
+                    in_msgs,
                     io_root,
                     state,
                 )

@@ -9,6 +9,7 @@ import (
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 )
 
 var (
@@ -23,6 +24,10 @@ var (
 	methodGetRuntimeState = serviceName.NewMethod("GetRuntimeState", RuntimeRequest{})
 	// methodGetLastRoundResults is the GetLastRoundResults method.
 	methodGetLastRoundResults = serviceName.NewMethod("GetLastRoundResults", RuntimeRequest{})
+	// methodGetIncomingMessageQueueMeta is the GetIncomingMessageQueueMeta method.
+	methodGetIncomingMessageQueueMeta = serviceName.NewMethod("GetIncomingMessageQueueMeta", RuntimeRequest{})
+	// methodGetIncomingMessageQueue is the GetIncomingMessageQueue method.
+	methodGetIncomingMessageQueue = serviceName.NewMethod("GetIncomingMessageQueue", InMessageQueueRequest{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodConsensusParameters is the ConsensusParameters method.
@@ -55,6 +60,14 @@ var (
 			{
 				MethodName: methodGetLastRoundResults.ShortName(),
 				Handler:    handlerGetLastRoundResults,
+			},
+			{
+				MethodName: methodGetIncomingMessageQueueMeta.ShortName(),
+				Handler:    handlerGetIncomingMessageQueueMeta,
+			},
+			{
+				MethodName: methodGetIncomingMessageQueue.ShortName(),
+				Handler:    handlerGetIncomingMessageQueue,
 			},
 			{
 				MethodName: methodStateToGenesis.ShortName(),
@@ -172,6 +185,52 @@ func handlerGetLastRoundResults( // nolint: golint
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetLastRoundResults(ctx, req.(*RuntimeRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerGetIncomingMessageQueueMeta( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq RuntimeRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetIncomingMessageQueueMeta(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetIncomingMessageQueueMeta.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetIncomingMessageQueueMeta(ctx, req.(*RuntimeRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerGetIncomingMessageQueue( // nolint: golint
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq InMessageQueueRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetIncomingMessageQueue(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetIncomingMessageQueue.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetIncomingMessageQueue(ctx, req.(*InMessageQueueRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
@@ -342,6 +401,22 @@ func (c *roothashClient) GetLastRoundResults(ctx context.Context, request *Runti
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *roothashClient) GetIncomingMessageQueueMeta(ctx context.Context, request *RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
+	var rsp message.IncomingMessageQueueMeta
+	if err := c.conn.Invoke(ctx, methodGetIncomingMessageQueueMeta.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *roothashClient) GetIncomingMessageQueue(ctx context.Context, request *InMessageQueueRequest) ([]*message.IncomingMessage, error) {
+	var rsp []*message.IncomingMessage
+	if err := c.conn.Invoke(ctx, methodGetIncomingMessageQueue.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
 }
 
 func (c *roothashClient) TrackRuntime(ctx context.Context, history BlockHistory) error {

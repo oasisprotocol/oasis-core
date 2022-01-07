@@ -77,18 +77,20 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 			return nil, fmt.Errorf("(mock) failed to create I/O tree: %w", err)
 		}
 
-		var stateRoot, msgsHash hash.Hash
+		var stateRoot, msgsHash, inMsgsHash hash.Hash
 		stateRoot.Empty()
 		msgsHash.Empty()
+		inMsgsHash.Empty()
 
 		return &protocol.Body{RuntimeExecuteTxBatchResponse: &protocol.RuntimeExecuteTxBatchResponse{
 			Batch: protocol.ComputedBatch{
 				Header: commitment.ComputeResultsHeader{
-					Round:        rq.Block.Header.Round + 1,
-					PreviousHash: rq.Block.Header.EncodedHash(),
-					IORoot:       &ioRoot,
-					StateRoot:    &stateRoot,
-					MessagesHash: &msgsHash,
+					Round:          rq.Block.Header.Round + 1,
+					PreviousHash:   rq.Block.Header.EncodedHash(),
+					IORoot:         &ioRoot,
+					StateRoot:      &stateRoot,
+					MessagesHash:   &msgsHash,
+					InMessagesHash: &inMsgsHash,
 				},
 				IOWriteLog: ioWriteLog,
 			},

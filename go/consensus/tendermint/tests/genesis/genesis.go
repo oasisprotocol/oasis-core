@@ -97,6 +97,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 			Parameters: roothash.ConsensusParameters{
 				DebugDoNotSuspendRuntimes: true,
 				MaxRuntimeMessages:        32,
+				MaxInRuntimeMessages:      32,
 			},
 		},
 		Consensus: consensus.Genesis{

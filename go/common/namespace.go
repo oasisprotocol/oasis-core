@@ -74,11 +74,7 @@ func (n *Namespace) UnmarshalText(text []byte) error {
 		// For backwards compatibility (e.g. to be able to load the
 		// Cobalt Upgrade genesis file), fallback to accepting
 		// Base64-encoded namespace identifiers.
-		b, err := base64.StdEncoding.DecodeString(string(text))
-		if err != nil {
-			return err
-		}
-		return n.UnmarshalBinary(b)
+		return n.UnmarshalBase64(text)
 	}
 	return nil
 }
@@ -95,6 +91,15 @@ func (n *Namespace) UnmarshalHex(text string) error {
 		return err
 	}
 
+	return n.UnmarshalBinary(b)
+}
+
+// UnmarshalBase64 deserializes a Base64 text string into the given type.
+func (n *Namespace) UnmarshalBase64(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
 	return n.UnmarshalBinary(b)
 }
 

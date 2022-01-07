@@ -2,6 +2,7 @@
 
 ## Changelog
 
+- 2022-01-07: Update based on insights from implementation
 - 2021-12-09: Introduce an explicit fee field, clarify token transfers
 - 2021-10-26: Initial draft
 
@@ -58,6 +59,10 @@ type IncomingMessage struct {
     // Caller is the address of the caller authenticated by the consensus layer.
     Caller staking.Address `json:"caller"`
 
+    // Tag is an optional tag provided by the caller which is ignored and can be used to match
+    // processed incoming message events later.
+    Tag uint64 `json:"tag,omitempty"`
+
     // Fee is the fee sent into the runtime as part of the message being sent.
     // The fee is transferred before the message is processed by the runtime.
     Fee quantity.Quantity `json:"fee,omitempty"`
@@ -81,8 +86,10 @@ specify the number and hash of incoming messages included in a batch as follows:
 type ComputeResultsHeader struct {
     // ... existing fields omitted ...
 
-    InMessagesCount uint64    `json:"in_msgs_count,omitempty"`
+    // InMessagesHash is the hash of processed incoming messages.
     InMessagesHash *hash.Hash `json:"in_msgs_hash,omitempty"`
+    // InMessagesCount is the number of processed incoming messages.
+    InMessagesCount uint32 `json:"in_msgs_count,omitempty"`
 }
 ```
 
@@ -150,12 +157,12 @@ type RuntimeStakingParameters struct {
 This proposal introduces/updates the following consensus state in the roothash
 module:
 
-- **Incoming message queue metadata (`0x27`)**
+- **Incoming message queue metadata (`0x28`)**
 
   Metadata for the incoming message queue.
 
   ```
-  0x27 <H(runtime-id) (hash.Hash)>
+  0x28 <H(runtime-id) (hash.Hash)>
   ```
 
   The value is the following CBOR-serialized structure:
@@ -171,13 +178,13 @@ module:
   }
   ```
 
-- **Incoming message queue item (`0x28`)**
+- **Incoming message queue item (`0x29`)**
 
   A queue of incoming messages pending to be delivered to the runtime in the
   next round.
 
   ```
-  0x28 <H(runtime-id) (hash.Hash)> <sequence-no (uint64)>
+  0x29 <H(runtime-id) (hash.Hash)> <sequence-no (uint64)>
   ```
 
   The value is a CBOR-serialized `IncomingMessage` structure.
@@ -259,28 +266,38 @@ submit message method the following actions are performed:
 This proposal adds the following new query methods in the roothash module by
 updating the `roothash.Backend` interface as follows:
 
+<!-- markdownlint-disable line-length -->
 ```golang
 type Backend interface {
     // ... existing methods omitted ...
 
-    // HasIncomingMessages checks whether the given runtime has any incoming
-    // messages queued.
-    HasIncomingMessages(ctx context.Context, query *RuntimeQuery) (bool, error)
+    // GetIncomingMessageQueueMeta returns the given runtime's incoming message queue metadata.
+    GetIncomingMessageQueueMeta(ctx context.Context, request *RuntimeRequest) (*message.IncomingMessageQueueMeta, error)
 
-    // IncomingMessages returns a list of queued incoming messages for the given
-    // runtime.
-    IncomingMessages(ctx context.Context, query *IncomingMessagesQuery) ([]*IncomingMessage, error)
+    // GetIncomingMessageQueue returns the given runtime's queued incoming messages.
+    GetIncomingMessageQueue(ctx context.Context, request *InMessageQueueRequest) ([]*message.IncomingMessage, error)
 }
 
-type IncomingMessagesQuery struct {
+// IncomingMessageQueueMeta is the incoming message queue metadata.
+type IncomingMessageQueueMeta struct {
+    // Size contains the current size of the queue.
+    Size uint32 `json:"size,omitempty"`
+
+    // NextSequenceNumber contains the sequence number that should be used for the next queued
+    // message.
+    NextSequenceNumber uint64 `json:"next_sequence_number,omitempty"`
+}
+
+// InMessageQueueRequest is a request for queued incoming messages.
+type InMessageQueueRequest struct {
     RuntimeID common.Namespace `json:"runtime_id"`
     Height    int64            `json:"height"`
 
-    // Offset specifies the lowest message sequence number that should be
-    // considered in the returned list of messages.
     Offset uint64 `json:"offset,omitempty"`
+    Limit  uint32 `json:"limit,omitempty"`
 }
 ```
+<!-- markdownlint-enable line-length -->
 
 ### Runtime Host Protocol
 

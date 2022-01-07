@@ -128,6 +128,9 @@ type TxnSchedulerParameters struct {
 	// MaxBatchSizeBytes denote what is the max size of a scheduled batch in bytes.
 	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
 
+	// MaxInMessages specifies the maximum size of the incoming message queue.
+	MaxInMessages uint32 `json:"max_in_messages,omitempty"`
+
 	// ProposerTimeout denotes the timeout (in consensus blocks) for scheduler
 	// to propose a batch.
 	ProposerTimeout int64 `json:"propose_batch_timeout"`
@@ -250,6 +253,10 @@ type RuntimeStakingParameters struct {
 	// RewardSlashBadResultsRuntimePercent is the percentage of the reward obtained when slashing
 	// for incorrect results that is transferred to the runtime's account.
 	RewardSlashBadResultsRuntimePercent uint8 `json:"reward_bad_results,omitempty"`
+
+	// MinInMessageFee specifies the minimum fee that the incoming message must include for the
+	// message to be queued.
+	MinInMessageFee quantity.Quantity `json:"min_in_message_fee,omitempty"`
 }
 
 // ValidateBasic performs basic descriptor validity checks.

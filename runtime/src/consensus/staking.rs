@@ -185,6 +185,24 @@ pub struct DebondingDelegation {
     pub debond_end_time: EpochTime,
 }
 
+/// Reason for slashing an entity.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
+#[repr(u8)]
+pub enum SlashReason {
+    /// Slashing due to submission of incorrect results in runtime executor commitments.
+    RuntimeIncorrectResults = 0x80,
+    /// Slashing due to signing two different executor commits or proposed batches for the same
+    /// round.
+    RuntimeEquivocation = 0x81,
+}
+
+/// Per-reason slashing configuration.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct Slash {
+    pub amount: Quantity,
+    pub freeze_interval: EpochTime,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

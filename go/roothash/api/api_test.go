@@ -147,11 +147,12 @@ func TestEvidenceValidateBasic(t *testing.T) {
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        rtBlk.Header.Round + 1,
-				PreviousHash: rtBlk.Header.EncodedHash(),
-				IORoot:       &rtBlk.Header.IORoot,
-				StateRoot:    &rtBlk.Header.StateRoot,
-				MessagesHash: &hash.Hash{},
+				Round:          rtBlk.Header.Round + 1,
+				PreviousHash:   rtBlk.Header.EncodedHash(),
+				IORoot:         &rtBlk.Header.IORoot,
+				StateRoot:      &rtBlk.Header.StateRoot,
+				MessagesHash:   &hash.Hash{},
+				InMessagesHash: &hash.Hash{},
 			},
 		},
 	}
@@ -444,11 +445,12 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        rt1Blk2.Header.Round,
-				PreviousHash: rt1Blk2.Header.PreviousHash,
-				IORoot:       &rt1Blk2.Header.IORoot,
-				StateRoot:    &rt1Blk2.Header.StateRoot,
-				MessagesHash: &hash.Hash{},
+				Round:          rt1Blk2.Header.Round,
+				PreviousHash:   rt1Blk2.Header.PreviousHash,
+				IORoot:         &rt1Blk2.Header.IORoot,
+				StateRoot:      &rt1Blk2.Header.StateRoot,
+				MessagesHash:   &hash.Hash{},
+				InMessagesHash: &hash.Hash{},
 			},
 		},
 	}
@@ -463,11 +465,12 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        rt1Blk2.Header.Round,
-				PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
-				IORoot:       &rt1Blk2.Header.IORoot,
-				StateRoot:    &rt1Blk2.Header.StateRoot,
-				MessagesHash: &hash.Hash{},
+				Round:          rt1Blk2.Header.Round,
+				PreviousHash:   hash.NewFromBytes([]byte("invalid hash")),
+				IORoot:         &rt1Blk2.Header.IORoot,
+				StateRoot:      &rt1Blk2.Header.StateRoot,
+				MessagesHash:   &hash.Hash{},
+				InMessagesHash: &hash.Hash{},
 			},
 		},
 	}
@@ -479,11 +482,12 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        rt1Blk2.Header.Round + 1,
-				PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
-				IORoot:       &rt1Blk2.Header.IORoot,
-				StateRoot:    &rt1Blk2.Header.StateRoot,
-				MessagesHash: &hash.Hash{},
+				Round:          rt1Blk2.Header.Round + 1,
+				PreviousHash:   hash.NewFromBytes([]byte("invalid hash")),
+				IORoot:         &rt1Blk2.Header.IORoot,
+				StateRoot:      &rt1Blk2.Header.StateRoot,
+				MessagesHash:   &hash.Hash{},
+				InMessagesHash: &hash.Hash{},
 			},
 		},
 	}
@@ -495,11 +499,12 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        rt1Blk2.Header.Round,
-				PreviousHash: hash.NewFromBytes([]byte("invalid hash")),
-				IORoot:       nil,
-				StateRoot:    &rt1Blk2.Header.StateRoot,
-				MessagesHash: nil,
+				Round:          rt1Blk2.Header.Round,
+				PreviousHash:   hash.NewFromBytes([]byte("invalid hash")),
+				IORoot:         nil,
+				StateRoot:      &rt1Blk2.Header.StateRoot,
+				MessagesHash:   nil,
+				InMessagesHash: nil,
 			},
 		},
 	}

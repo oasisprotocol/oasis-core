@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
@@ -42,6 +43,14 @@ var (
 	//
 	// Value is CBOR-serialized roothash.RoundResults.
 	lastRoundResultsKeyFmt = keyformat.New(0x27, keyformat.H(&common.Namespace{}))
+	// inMsgQueueMetaKeyFmt is the key format used for incoming message queue metadata.
+	//
+	// Value is CBOR-serialized message.IncomingMessageQueueMeta.
+	inMsgQueueMetaKeyFmt = keyformat.New(0x28, keyformat.H(&common.Namespace{}))
+	// inMsgQueueKeyFmt is the key format used for the incoming message queue.
+	//
+	// Value is CBOR-serialized message.IncomingMessage.
+	inMsgQueueKeyFmt = keyformat.New(0x29, keyformat.H(&common.Namespace{}), uint64(0))
 )
 
 // ImmutableState is the immutable roothash state wrapper.
@@ -210,6 +219,57 @@ func (s *ImmutableState) EvidenceHashExists(ctx context.Context, runtimeID commo
 	return data != nil, api.UnavailableStateError(err)
 }
 
+// IncomingMessageQueueMeta returns the incoming message queue metadata for the given runtime.
+func (s *ImmutableState) IncomingMessageQueueMeta(ctx context.Context, runtimeID common.Namespace) (*message.IncomingMessageQueueMeta, error) {
+	raw, err := s.is.Get(ctx, inMsgQueueMetaKeyFmt.Encode(&runtimeID))
+	if err != nil {
+		return nil, api.UnavailableStateError(err)
+	}
+	if raw == nil {
+		return &message.IncomingMessageQueueMeta{}, nil
+	}
+
+	var meta message.IncomingMessageQueueMeta
+	if err = cbor.Unmarshal(raw, &meta); err != nil {
+		return nil, api.UnavailableStateError(err)
+	}
+	return &meta, nil
+}
+
+// IncomingMessageQueue returns a list of queued messages, starting with the passed offset.
+func (s *ImmutableState) IncomingMessageQueue(ctx context.Context, runtimeID common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	var msgs []*message.IncomingMessage
+	for it.Seek(inMsgQueueKeyFmt.Encode(&runtimeID, offset)); it.Valid(); it.Next() {
+		var (
+			decRuntimeID keyformat.PreHashed
+			decID        uint64
+		)
+		if !inMsgQueueKeyFmt.Decode(it.Key(), &decRuntimeID, &decID) {
+			break
+		}
+		if decID < offset {
+			continue
+		}
+
+		var msg message.IncomingMessage
+		if err := cbor.Unmarshal(it.Value(), &msg); err != nil {
+			return nil, api.UnavailableStateError(err)
+		}
+
+		msgs = append(msgs, &msg)
+		if limit > 0 && uint32(len(msgs)) >= limit {
+			break
+		}
+	}
+	if it.Err() != nil {
+		return nil, api.UnavailableStateError(it.Err())
+	}
+	return msgs, nil
+}
+
 // MutableState is the mutable roothash state wrapper.
 type MutableState struct {
 	*ImmutableState
@@ -308,4 +368,22 @@ func (s *MutableState) RemoveExpiredEvidence(ctx context.Context, runtimeID comm
 	}
 
 	return nil
+}
+
+// SetIncomingMessageQueueMeta sets the incoming message queue metadata.
+func (s *MutableState) SetIncomingMessageQueueMeta(ctx context.Context, runtimeID common.Namespace, meta *message.IncomingMessageQueueMeta) error {
+	err := s.ms.Insert(ctx, inMsgQueueMetaKeyFmt.Encode(&runtimeID), cbor.Marshal(meta))
+	return api.UnavailableStateError(err)
+}
+
+// SetIncomingMessageQueue sets an entry in the incoming message queue.
+func (s *MutableState) SetIncomingMessageInQueue(ctx context.Context, runtimeID common.Namespace, msg *message.IncomingMessage) error {
+	err := s.ms.Insert(ctx, inMsgQueueKeyFmt.Encode(&runtimeID, msg.ID), cbor.Marshal(msg))
+	return api.UnavailableStateError(err)
+}
+
+// RemoveIncomingMessageFromQueue removes an entry from the incoming message queue.
+func (s *MutableState) RemoveIncomingMessageFromQueue(ctx context.Context, runtimeID common.Namespace, id uint64) error {
+	err := s.ms.Remove(ctx, inMsgQueueKeyFmt.Encode(&runtimeID, id))
+	return api.UnavailableStateError(err)
 }

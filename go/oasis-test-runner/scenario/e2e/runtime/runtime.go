@@ -10,8 +10,10 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -19,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -201,6 +204,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					MaxBatchSizeBytes: 1024,
 					BatchFlushTimeout: 1 * time.Second,
 					ProposerTimeout:   20,
+					MaxInMessages:     128,
 				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
@@ -432,6 +436,68 @@ func (sc *runtimeImpl) submitConsensusXferTxMeta(
 		Transfer: xfer,
 		Nonce:    nonce,
 	})
+}
+
+func (sc *runtimeImpl) submitRuntimeInMsg(ctx context.Context, id common.Namespace, method string, args interface{}) error {
+	ctrl := sc.Net.ClientController()
+	if ctrl == nil {
+		return fmt.Errorf("client controller not available")
+	}
+
+	// Queue a runtime message and wait for it to be processed.
+	tx := roothash.NewSubmitMsgTx(0, &transaction.Fee{Gas: 10_000}, &roothash.SubmitMsg{
+		ID:  id,
+		Tag: 42,
+		Data: cbor.Marshal(&TxnCall{
+			Method: method,
+			Args:   args,
+		}),
+	})
+	signer := memorySigner.NewTestSigner("oasis in msg test signer: " + time.Now().String())
+	sigTx, err := transaction.Sign(signer, tx)
+	if err != nil {
+		return fmt.Errorf("failed to sign SubmitMsg transaction: %w", err)
+	}
+
+	// Start watching roothash events.
+	ch, sub, err := ctrl.Roothash.WatchEvents(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to watch events: %w", err)
+	}
+	defer sub.Close()
+
+	err = ctrl.Consensus.SubmitTx(ctx, sigTx)
+	if err != nil {
+		return fmt.Errorf("failed to submit SubmitMsg transaction: %w", err)
+	}
+
+	// Wait for processed event.
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	sc.Logger.Info("waiting for incoming message processed event")
+	callerAddr := staking.NewAddress(signer.Public())
+	for {
+		select {
+		case ev := <-ch:
+			if ev.InMsgProcessed == nil {
+				continue
+			}
+
+			if !ev.InMsgProcessed.Caller.Equal(callerAddr) {
+				return fmt.Errorf("unexpected caller address (got: %s expected: %s)", ev.InMsgProcessed.Caller, callerAddr)
+			}
+			if ev.InMsgProcessed.Tag != 42 {
+				return fmt.Errorf("unexpected tag (got: %d expected: %d)", ev.InMsgProcessed.Tag, 42)
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		break
+	}
+
+	return nil
 }
 
 func (sc *runtimeImpl) waitForClientSync(ctx context.Context) error {

@@ -130,6 +130,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 		{"MissingIORootHash", func(ec *ExecutorCommitment) { ec.Header.IORoot = nil }, ErrBadExecutorCommitment},
 		{"MissingStateRootHash", func(ec *ExecutorCommitment) { ec.Header.StateRoot = nil }, ErrBadExecutorCommitment},
 		{"MissingMessagesHash", func(ec *ExecutorCommitment) { ec.Header.MessagesHash = nil }, ErrBadExecutorCommitment},
+		{"MissingInMessagesHash", func(ec *ExecutorCommitment) { ec.Header.InMessagesHash = nil }, ErrBadExecutorCommitment},
 		{"BadFailureIndicating", func(ec *ExecutorCommitment) { ec.Header.Failure = FailureUnknown }, ErrBadExecutorCommitment},
 	} {
 		_, _, invalidEc := generateExecutorCommitment(t, pool.Round)
@@ -1033,15 +1034,18 @@ func generateExecutorCommitment(t *testing.T, round uint64) (*block.Block, *bloc
 
 	// TODO: Add tests with some emitted messages.
 	msgsHash := message.MessagesHash(nil)
+	// TODO: Add tests with some incoming messages.
+	inMsgsHash := message.InMessagesHash(nil)
 
 	ec := ExecutorCommitment{
 		Header: ExecutorCommitmentHeader{
 			ComputeResultsHeader: ComputeResultsHeader{
-				Round:        parentBlk.Header.Round,
-				PreviousHash: parentBlk.Header.PreviousHash,
-				IORoot:       &parentBlk.Header.IORoot,
-				StateRoot:    &parentBlk.Header.StateRoot,
-				MessagesHash: &msgsHash,
+				Round:          parentBlk.Header.Round,
+				PreviousHash:   parentBlk.Header.PreviousHash,
+				IORoot:         &parentBlk.Header.IORoot,
+				StateRoot:      &parentBlk.Header.StateRoot,
+				MessagesHash:   &msgsHash,
+				InMessagesHash: &inMsgsHash,
 			},
 		},
 	}
