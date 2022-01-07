@@ -70,7 +70,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, api.Backend) {
 	return conn, client
 }
 
-func getTokenSymbol(ctx context.Context, cmd *cobra.Command, client api.Backend) string {
+func getTokenSymbol(ctx context.Context, client api.Backend) string {
 	symbol, err := client.TokenSymbol(ctx)
 	if err != nil {
 		logger.Error("failed to query token's symbol",
@@ -81,7 +81,7 @@ func getTokenSymbol(ctx context.Context, cmd *cobra.Command, client api.Backend)
 	return symbol
 }
 
-func getTokenValueExponent(ctx context.Context, cmd *cobra.Command, client api.Backend) uint8 {
+func getTokenValueExponent(ctx context.Context, client api.Backend) uint8 {
 	exp, err := client.TokenValueExponent(ctx)
 	if err != nil {
 		logger.Error("failed to query token's value exponent",
@@ -92,7 +92,7 @@ func getTokenValueExponent(ctx context.Context, cmd *cobra.Command, client api.B
 	return exp
 }
 
-func getAccount(ctx context.Context, cmd *cobra.Command, addr api.Address, client api.Backend) *api.Account {
+func getAccount(ctx context.Context, addr api.Address, client api.Backend) *api.Account {
 	acct, err := client.Account(ctx, &api.OwnerQuery{Owner: addr, Height: consensus.HeightLatest})
 	if err != nil {
 		logger.Error("failed to query account",
@@ -106,7 +106,6 @@ func getAccount(ctx context.Context, cmd *cobra.Command, addr api.Address, clien
 
 func getDelegationInfosFor(
 	ctx context.Context,
-	cmd *cobra.Command,
 	addr api.Address,
 	client api.Backend,
 ) map[api.Address]*api.DelegationInfo {
@@ -123,7 +122,6 @@ func getDelegationInfosFor(
 
 func getDelegationsTo(
 	ctx context.Context,
-	cmd *cobra.Command,
 	addr api.Address,
 	client api.Backend,
 ) map[api.Address]*api.Delegation {
@@ -140,7 +138,6 @@ func getDelegationsTo(
 
 func getDebondingDelegationInfosFor(
 	ctx context.Context,
-	cmd *cobra.Command,
 	addr api.Address,
 	client api.Backend,
 ) map[api.Address][]*api.DebondingDelegationInfo {
@@ -157,7 +154,6 @@ func getDebondingDelegationInfosFor(
 
 func getDebondingDelegationsTo(
 	ctx context.Context,
-	cmd *cobra.Command,
 	addr api.Address,
 	client api.Backend,
 ) map[api.Address][]*api.DebondingDelegation {
@@ -182,10 +178,10 @@ func doInfo(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	symbol := getTokenSymbol(ctx, cmd, client)
+	symbol := getTokenSymbol(ctx, client)
 	fmt.Printf("Token's ticker symbol: %s\n", symbol)
 
-	exp := getTokenValueExponent(ctx, cmd, client)
+	exp := getTokenValueExponent(ctx, client)
 	fmt.Printf("Token's value base-10 exponent: %d\n", exp)
 
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
@@ -286,7 +282,7 @@ func doList(cmd *cobra.Command, args []string) {
 			// NOTE: getAccount()'s output doesn't contain an account's address,
 			// so we need to add it manually.
 			acctWithAddr := make(map[api.Address]*api.Account)
-			acctWithAddr[addr] = getAccount(ctx, cmd, addr, client)
+			acctWithAddr[addr] = getAccount(ctx, addr, client)
 			prettyAcct, err := cmdCommon.PrettyJSONMarshal(acctWithAddr)
 			if err != nil {
 				logger.Error("failed to get pretty JSON of account",
