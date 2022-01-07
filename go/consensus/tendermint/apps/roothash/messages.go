@@ -26,8 +26,8 @@ func (app *rootHashApplication) processRuntimeMessages(
 	case true:
 		// Gas estimation -- use parent gas accountant, discard state updates (there shouldn't be
 		// any as we are using simulation mode, but make sure).
-		cp := ctx.StartCheckpoint()
-		defer cp.Close()
+		ctx = ctx.NewTransaction()
+		defer ctx.Close()
 	}
 
 	var results []*roothash.MessageEvent

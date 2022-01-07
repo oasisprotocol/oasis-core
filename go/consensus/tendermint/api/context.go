@@ -62,9 +62,11 @@ type Context struct { // nolint: maligned
 
 	parent *Context
 
-	mode               ContextMode
-	currentTime        time.Time
+	mode        ContextMode
+	currentTime time.Time
+
 	isMessageExecution bool
+	isTransaction      bool
 
 	data          interface{}
 	events        []types.Event
@@ -74,12 +76,10 @@ type Context struct { // nolint: maligned
 	callerAddress staking.Address
 
 	appState      ApplicationState
-	state         mkvs.Tree
+	state         mkvs.KeyValueTree
 	blockHeight   int64
 	blockCtx      *BlockContext
 	initialHeight int64
-
-	stateCheckpoint *StateCheckpoint
 
 	logger *logging.Logger
 }
@@ -130,17 +130,21 @@ func (c *Context) Close() {
 				tree.Close()
 			}
 		}
-
-		if c.stateCheckpoint != nil {
-			panic("context: open checkpoint was never committed or discarded")
-		}
 	default:
 		// This is a child context.
-		if !c.IsSimulation() {
-			c.parent.events = append(c.parent.events, c.events...)
+		switch c.isTransaction {
+		case true:
+			// Transaction mode requires explicit commit, just make sure to cleanup the checkpoint.
+			c.state.(mkvs.OverlayTree).Close()
+		case false:
+			// Non-transaction mode, propagate events.
+			if !c.IsSimulation() {
+				c.parent.events = append(c.parent.events, c.events...)
+			}
 		}
 	}
 
+	c.parent = nil
 	c.events = nil
 	c.appState = nil
 	c.state = nil
@@ -198,7 +202,9 @@ func (c *Context) CallerAddress() staking.Address {
 	return c.callerAddress
 }
 
-// NewChild creates a new child context.
+// NewChild creates a new child context that shares state with the current context.
+//
+// If you want isolated state and events use NewTransaction instad.
 func (c *Context) NewChild() *Context {
 	cc := &Context{
 		parent:             c,
@@ -213,11 +219,47 @@ func (c *Context) NewChild() *Context {
 		blockHeight:        c.blockHeight,
 		blockCtx:           c.blockCtx,
 		initialHeight:      c.initialHeight,
-		stateCheckpoint:    c.stateCheckpoint,
 		logger:             c.logger,
 	}
 	cc.Context = context.WithValue(c.Context, contextKey{}, cc)
 	return cc
+}
+
+// NewTransaction creates a new transaction child context.
+//
+// This automatically starts a new state checkpoint and the context must be explicitly committed by
+// calling Commit otherwise both state and events will be reverted.
+//
+// NOTE: This does NOT isolate anything other than state and events.
+func (c *Context) NewTransaction() *Context {
+	cc := c.NewChild()
+	cc.isTransaction = true
+	// Create isolated state.
+	cc.state = mkvs.NewOverlay(c.state)
+	return cc
+}
+
+// Commit commits state updates and emitted events in this transaction child context previously
+// created via NewTransaction. Returns the parent context.
+//
+// If this is not a transaction child context, the method has no effect.
+func (c *Context) Commit() *Context {
+	if !c.isTransaction {
+		return c.parent
+	}
+
+	// Commit state.
+	// NOTE: Since isTransaction is true, we know that c.state is a mkvs.OverlayTree.
+	if err := c.state.(mkvs.OverlayTree).Commit(c); err != nil {
+		panic(fmt.Errorf("failed to commit overlay: %w", err))
+	}
+
+	// Commit events.
+	// NOTE: Since isTransaction is true, we know c.parent is non-nil.
+	c.parent.events = append(c.parent.events, c.events...)
+	c.events = nil
+
+	return c.parent
 }
 
 // WithCallerAddress creates a child context and sets a specific tx address.
@@ -326,9 +368,6 @@ func (c *Context) Now() time.Time {
 
 // State returns the state tree associated with this context.
 func (c *Context) State() mkvs.KeyValueTree {
-	if c.stateCheckpoint != nil {
-		return c.stateCheckpoint.overlay
-	}
 	return c.state
 }
 
@@ -358,53 +397,6 @@ func (c *Context) BlockHeight() int64 {
 // an execution context), this will return nil.
 func (c *Context) BlockContext() *BlockContext {
 	return c.blockCtx
-}
-
-// StartCheckpoint starts a new state checkpoint. Any further updates to the context's state will
-// be performed against the checkpoint and will only be committed in case of an explicit Commit.
-//
-// Any existing references to State() returned prior to calling this method should not be mutated
-// while the checkpoint is open. Doing so may cause updates to leak to into the checkpoint as
-// isolation is only one-way.
-//
-// The caller must make sure to call either Close or Commit on the checkpoint, otherwise this will
-// leak resources.
-func (c *Context) StartCheckpoint() *StateCheckpoint {
-	if c.stateCheckpoint != nil {
-		panic("context: nested checkpoints are not allowed")
-	}
-	c.stateCheckpoint = &StateCheckpoint{
-		ctx:     c,
-		overlay: mkvs.NewOverlay(c.state),
-	}
-	return c.stateCheckpoint
-}
-
-// StateCheckpoint is a state checkpoint that can be used to rollback state.
-type StateCheckpoint struct {
-	ctx     *Context
-	overlay mkvs.OverlayTree
-}
-
-// Close releases resources associated with the checkpoint without committing it.
-func (sc *StateCheckpoint) Close() {
-	if sc.ctx == nil {
-		return
-	}
-	sc.overlay.Close()
-	sc.ctx.stateCheckpoint = nil
-	sc.ctx = nil
-}
-
-// Commit commits any changes performed since the checkpoint was created.
-func (sc *StateCheckpoint) Commit() {
-	if sc.ctx == nil {
-		return
-	}
-	if err := sc.overlay.Commit(sc.ctx); err != nil {
-		panic(fmt.Errorf("context: failed to commit checkpoint: %w", err))
-	}
-	sc.Close()
 }
 
 // BlockContextKey is an interface for a block context key.
