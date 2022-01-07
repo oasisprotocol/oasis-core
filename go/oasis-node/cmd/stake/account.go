@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdContext "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/context"
@@ -144,12 +145,14 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
+	height := consensus.HeightLatest
+
 	ctx := context.Background()
-	acct := getAccount(ctx, addr, client)
-	outgoingDelegationInfos := getDelegationInfosFor(ctx, addr, client)
-	incomingDelegations := getDelegationsTo(ctx, addr, client)
-	outgoingDebondingDelegationInfos := getDebondingDelegationInfosFor(ctx, addr, client)
-	incomingDebondingDelegations := getDebondingDelegationsTo(ctx, addr, client)
+	acct := getAccount(ctx, addr, height, client)
+	outgoingDelegationInfos := getDelegationInfosFor(ctx, addr, height, client)
+	incomingDelegations := getDelegationsTo(ctx, addr, height, client)
+	outgoingDebondingDelegationInfos := getDebondingDelegationInfosFor(ctx, addr, height, client)
+	incomingDebondingDelegations := getDebondingDelegationsTo(ctx, addr, height, client)
 	symbol := getTokenSymbol(ctx, client)
 	exp := getTokenValueExponent(ctx, client)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
@@ -210,8 +213,10 @@ func doAccountNonce(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
+	height := consensus.HeightLatest
+
 	ctx := context.Background()
-	acct := getAccount(ctx, addr, client)
+	acct := getAccount(ctx, addr, height, client)
 	fmt.Println(acct.General.Nonce)
 }
 
