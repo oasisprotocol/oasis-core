@@ -145,13 +145,13 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	acct := getAccount(ctx, cmd, addr, client)
-	outgoingDelegationInfos := getDelegationInfosFor(ctx, cmd, addr, client)
-	incomingDelegations := getDelegationsTo(ctx, cmd, addr, client)
-	outgoingDebondingDelegationInfos := getDebondingDelegationInfosFor(ctx, cmd, addr, client)
-	incomingDebondingDelegations := getDebondingDelegationsTo(ctx, cmd, addr, client)
-	symbol := getTokenSymbol(ctx, cmd, client)
-	exp := getTokenValueExponent(ctx, cmd, client)
+	acct := getAccount(ctx, addr, client)
+	outgoingDelegationInfos := getDelegationInfosFor(ctx, addr, client)
+	incomingDelegations := getDelegationsTo(ctx, addr, client)
+	outgoingDebondingDelegationInfos := getDebondingDelegationInfosFor(ctx, addr, client)
+	incomingDebondingDelegations := getDebondingDelegationsTo(ctx, addr, client)
+	symbol := getTokenSymbol(ctx, client)
+	exp := getTokenValueExponent(ctx, client)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, exp)
 
@@ -211,7 +211,7 @@ func doAccountNonce(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	acct := getAccount(ctx, cmd, addr, client)
+	acct := getAccount(ctx, addr, client)
 	fmt.Println(acct.General.Nonce)
 }
 
