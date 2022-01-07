@@ -8,6 +8,7 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -329,8 +330,8 @@ func (c *Context) GetEvents() []types.Event {
 }
 
 // HasEvent checks if a specific event has been emitted.
-func (c *Context) HasEvent(evType string, key []byte) bool {
-	evType = EventTypeForApp(evType)
+func (c *Context) HasEvent(app string, key []byte) bool {
+	evType := EventTypeForApp(app)
 
 	for _, ev := range c.events {
 		if ev.Type != evType {
@@ -347,8 +348,19 @@ func (c *Context) HasEvent(evType string, key []byte) bool {
 }
 
 // HasTypedEvent checks if a specific typed event has been emitted.
-func (c *Context) HasTypedEvent(evType string, kind TypedAttribute) bool {
-	return c.HasEvent(evType, []byte(kind.EventKind()))
+func (c *Context) HasTypedEvent(app string, kind TypedAttribute) bool {
+	return c.HasEvent(app, []byte(kind.EventKind()))
+}
+
+// DecodeTypedEvent decodes the given raw event as a specific typed event.
+func (c *Context) DecodeTypedEvent(index int, ev TypedAttribute) error {
+	raw := c.events[index]
+	for _, pair := range raw.Attributes {
+		if bytes.Equal(pair.GetKey(), []byte(ev.EventKind())) {
+			return cbor.Unmarshal(pair.GetValue(), ev)
+		}
+	}
+	return fmt.Errorf("incompatible event")
 }
 
 // SetGasAccountant configures the gas accountant on the context.
