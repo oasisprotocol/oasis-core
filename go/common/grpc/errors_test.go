@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -183,7 +184,7 @@ func TestErrorMapping(t *testing.T) {
 	err = grpcServer.Start()
 	require.NoErrorf(err, "Failed to start the gRPC server")
 
-	conn, err := Dial("unix:"+f.Name(), grpc.WithInsecure())
+	conn, err := Dial("unix:"+f.Name(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(err, "Dial")
 	defer conn.Close()
 	client := &errorTestClient{conn}

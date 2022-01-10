@@ -12,6 +12,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -96,7 +97,7 @@ func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 		addr = "unix:" + addr
 	}
 
-	opts := []grpc.DialOption{grpc.WithInsecure()}
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	if viper.GetBool(CfgWait) {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 	}

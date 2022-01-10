@@ -2,6 +2,7 @@ package oasis
 
 import (
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -48,7 +49,7 @@ func (c *Controller) Close() {
 func NewController(socketPath string) (*Controller, error) {
 	conn, err := cmnGrpc.Dial(
 		"unix:"+socketPath,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 	)
 	if err != nil {

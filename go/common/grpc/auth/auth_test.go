@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -92,7 +93,7 @@ func testAuth(t *testing.T, testCase *testCase) {
 	conn, err := grpc.DialContext(
 		ctx,
 		fmt.Sprintf("%s:%d", testCase.serverConfig.Name, testCase.serverConfig.Port),
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(&commonGrpc.CBORCodec{})),
 	)
 
