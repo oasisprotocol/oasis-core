@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const numMultiPings uint32 = 10
@@ -231,7 +232,7 @@ func TestGrpcWrapper(t *testing.T) {
 	conn, err := grpc.DialContext(
 		ctx,
 		fmt.Sprintf("%s:%d", host, port),
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.ForceCodec(&CBORCodec{})),
 	)
 	require.NoErrorf(err, "Failed to connect to gRPC server: %v", err)
