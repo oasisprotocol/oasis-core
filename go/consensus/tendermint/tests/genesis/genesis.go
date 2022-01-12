@@ -86,8 +86,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 		},
 		Governance: governance.Genesis{
 			Parameters: governance.ConsensusParameters{
-				Quorum:                    90,
-				Threshold:                 90,
+				StakeThreshold:            90,
 				UpgradeCancelMinEpochDiff: 20,
 				UpgradeMinEpochDiff:       20,
 				VotingPeriod:              10,

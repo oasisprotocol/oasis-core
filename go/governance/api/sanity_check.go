@@ -14,17 +14,13 @@ func (p *ConsensusParameters) SanityCheck() error {
 	if !p.MinProposalDeposit.IsValid() {
 		return fmt.Errorf("min_proposal_deposit has invalid value")
 	}
-	// Quorum must be less or equal to 100.
-	if int64(p.Quorum) > 100 {
-		return fmt.Errorf("quorum should be less or equal to 100")
+	// StakeThreshold must be less than or equal to 100.
+	if int64(p.StakeThreshold) > 100 {
+		return fmt.Errorf("stake threshold must be less than or equal to 100")
 	}
-	// Threshold must be less or equal to 100.
-	if int64(p.Threshold) > 100 {
-		return fmt.Errorf("threshold should be less or equal to 100")
-	}
-	// Quorum * threshold should be > 2/3
-	if (uint64(p.Quorum) * uint64(p.Threshold)) <= 6666 {
-		return fmt.Errorf("product of quorum and threshold should be at least 2/3")
+	// StakeThreshold must be greater than 66.
+	if int64(p.StakeThreshold) <= 66 {
+		return fmt.Errorf("stake threshold must be greater than 66")
 	}
 	// Voting_period must be less than upgrade_min_epoch_diff.
 	if p.VotingPeriod >= p.UpgradeMinEpochDiff {

@@ -735,8 +735,7 @@ func (net *Network) MakeGenesis() error {
 	if cfg := net.cfg.GovernanceParameters; cfg != nil {
 		args = append(args, []string{
 			"--" + genesis.CfgGovernanceMinProposalDeposit, strconv.FormatUint(cfg.MinProposalDeposit.ToBigInt().Uint64(), 10),
-			"--" + genesis.CfgGovernanceQuorum, strconv.FormatUint(uint64(cfg.Quorum), 10),
-			"--" + genesis.CfgGovernanceThreshold, strconv.FormatUint(uint64(cfg.Threshold), 10),
+			"--" + genesis.CfgGovernanceStakeThreshold, strconv.FormatUint(uint64(cfg.StakeThreshold), 10),
 			"--" + genesis.CfgGovernanceUpgradeCancelMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeCancelMinEpochDiff), 10),
 			"--" + genesis.CfgGovernanceUpgradeMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeMinEpochDiff), 10),
 			"--" + genesis.CfgGovernanceVotingPeriod, strconv.FormatUint(uint64(cfg.VotingPeriod), 10),

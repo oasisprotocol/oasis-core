@@ -80,8 +80,7 @@ func (sc *dumpRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.GovernanceParameters = &governance.ConsensusParameters{
 		MinProposalDeposit:        *quantity.NewFromUint64(100),
 		VotingPeriod:              20,
-		Quorum:                    100,
-		Threshold:                 100,
+		StakeThreshold:            100,
 		UpgradeMinEpochDiff:       50,
 		UpgradeCancelMinEpochDiff: 40,
 	}

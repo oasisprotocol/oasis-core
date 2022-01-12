@@ -116,11 +116,10 @@ func (p *Proposal) VotedSum() (*quantity.Quantity, error) {
 // CloseProposal closes an active proposal based on the vote results and
 // specified voting parameters.
 //
-// The proposal is accepted if:
-//  - percentage of votes relative to total voting power is at least `quorum`
-//  - and percentage of yes votes relative to all votes is at least `threshold`
-// Otherwise the proposal is rejected.
-func (p *Proposal) CloseProposal(totalVotingStake quantity.Quantity, quorum, threshold uint8) error {
+// The proposal is accepted iff the percentage of yes votes relative to
+// total voting power is at least `stakeThreshold`.  Otherwise the proposal
+// is rejected.
+func (p *Proposal) CloseProposal(totalVotingStake quantity.Quantity, stakeThreshold uint8) error {
 	if p.State != StateActive {
 		return fmt.Errorf("%w: expected: %v, got: %v", errInvalidProposalState, StateActive, p.State)
 	}
@@ -147,35 +146,18 @@ func (p *Proposal) CloseProposal(totalVotingStake quantity.Quantity, quorum, thr
 		return nil
 	}
 
-	// Calculate percentage of voted stake vs the sum of validator stake.
-	voteStakePercentage := votedStake.Clone()
-	if err := voteStakePercentage.Mul(quantity.NewFromUint64(100)); err != nil {
-		return fmt.Errorf("failed to multiply voteStakePercentage: %w", err)
-	}
-	if err := voteStakePercentage.Quo(&totalVotingStake); err != nil {
-		return fmt.Errorf("failed to divide voteStakePercentage: %w", err)
-	}
-
-	// In case the percentage of votes relative to the total voting power is
-	// less than quorum, the proposal is rejected.
-	if voteStakePercentage.Cmp(quantity.NewFromUint64(uint64(quorum))) < 0 {
-		// Reject proposal.
-		p.State = StateRejected
-		return nil
-	}
-
-	// Calculate percentage of yes votes vs the sum of all votes.
+	// Calculate percentage of yes votes vs the sum of validator stake.
 	votedYesPercentage := votedYesStake.Clone()
 	if err := votedYesPercentage.Mul(quantity.NewFromUint64(100)); err != nil {
 		return fmt.Errorf("failed to multiply votedYesPercentage: %w", err)
 	}
-	if err := votedYesPercentage.Quo(votedStake); err != nil {
+	if err := votedYesPercentage.Quo(&totalVotingStake); err != nil {
 		return fmt.Errorf("failed to divide multiply votedYesPercentage: %w", err)
 	}
 
-	// In case the percentage of yes votes relative to all votes is less than
-	// threshold, the proposal is rejected.
-	if votedYesPercentage.Cmp(quantity.NewFromUint64(uint64(threshold))) < 0 {
+	// In case the percentage of yes votes (by stake) relative to the total
+	// voting power is less than the stake threshold, the proposal is rejected.
+	if votedYesPercentage.Cmp(quantity.NewFromUint64(uint64(stakeThreshold))) < 0 {
 		// Reject proposal.
 		p.State = StateRejected
 		return nil

@@ -362,10 +362,9 @@ func (app *governanceApplication) closeProposal(
 		"total_voting_state", totalVotingStake,
 		"results", proposal.Results,
 		"invalid_votes", proposal.InvalidVotes,
-		"quorum", params.Quorum,
-		"threshold", params.Threshold,
+		"stake_threshold", params.StakeThreshold,
 	)
-	if err := proposal.CloseProposal(totalVotingStake, params.Quorum, params.Threshold); err != nil {
+	if err := proposal.CloseProposal(totalVotingStake, params.StakeThreshold); err != nil {
 		return err
 	}
 

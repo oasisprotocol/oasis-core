@@ -182,8 +182,7 @@ func TestCloseProposal(t *testing.T) {
 	baseConsParams := &governance.ConsensusParameters{
 		GasCosts:                  governance.DefaultGasCosts,
 		MinProposalDeposit:        *minProposalDeposit,
-		Quorum:                    90,
-		Threshold:                 90,
+		StakeThreshold:            90,
 		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
 		UpgradeMinEpochDiff:       beacon.EpochTime(100),
 		VotingPeriod:              beacon.EpochTime(50),
@@ -350,8 +349,7 @@ func TestExecuteProposal(t *testing.T) {
 	// Consensus parameters.
 	err = state.SetConsensusParameters(ctx, &governance.ConsensusParameters{
 		MinProposalDeposit:        *quantity.NewFromUint64(100),
-		Quorum:                    90,
-		Threshold:                 90,
+		StakeThreshold:            90,
 		UpgradeMinEpochDiff:       10,
 		UpgradeCancelMinEpochDiff: 10,
 	})
@@ -703,8 +701,7 @@ func TestEndBlock(t *testing.T) {
 
 	err = state.SetConsensusParameters(ctx, &governance.ConsensusParameters{
 		MinProposalDeposit:        *quantity.NewFromUint64(100),
-		Quorum:                    90,
-		Threshold:                 90,
+		StakeThreshold:            90,
 		UpgradeMinEpochDiff:       10,
 		UpgradeCancelMinEpochDiff: 10,
 	})

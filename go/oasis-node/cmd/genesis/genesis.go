@@ -74,8 +74,7 @@ const (
 
 	// Governance config flags.
 	CfgGovernanceMinProposalDeposit        = "governance.min_proposal_deposit"
-	CfgGovernanceQuorum                    = "governance.quorum"
-	CfgGovernanceThreshold                 = "governance.threshold"
+	CfgGovernanceStakeThreshold            = "governance.stake_threshold"
 	CfgGovernanceUpgradeCancelMinEpochDiff = "governance.upgrade_cancel_min_epoch_diff"
 	CfgGovernanceUpgradeMinEpochDiff       = "governance.upgrade_min_epoch_diff"
 	CfgGovernanceVotingPeriod              = "governance.voting_period"
@@ -296,8 +295,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		Parameters: governance.ConsensusParameters{
 			GasCosts:                  governance.DefaultGasCosts, // TODO: configurable.
 			MinProposalDeposit:        *quantity.NewFromUint64(viper.GetUint64(CfgGovernanceMinProposalDeposit)),
-			Quorum:                    uint8(viper.GetInt(CfgGovernanceQuorum)),
-			Threshold:                 uint8(viper.GetInt(CfgGovernanceThreshold)),
+			StakeThreshold:            uint8(viper.GetInt(CfgGovernanceStakeThreshold)),
 			UpgradeCancelMinEpochDiff: beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeCancelMinEpochDiff)),
 			UpgradeMinEpochDiff:       beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeMinEpochDiff)),
 			VotingPeriod:              beacon.EpochTime(viper.GetUint64(CfgGovernanceVotingPeriod)),
@@ -832,8 +830,7 @@ func init() {
 
 	// Governance config flags.
 	initGenesisFlags.Uint64(CfgGovernanceMinProposalDeposit, 100, "proposal deposit for governance proposals")
-	initGenesisFlags.Uint8(CfgGovernanceQuorum, 90, "required quorum for governance proposals to be accepted")
-	initGenesisFlags.Uint8(CfgGovernanceThreshold, 90, "required threshold for governance proposals to be accepted")
+	initGenesisFlags.Uint8(CfgGovernanceStakeThreshold, 90, "required stake threshold for governance proposals to be accepted")
 	initGenesisFlags.Uint64(CfgGovernanceUpgradeCancelMinEpochDiff, 300, "minimum number of epochs in advance for canceling proposals")
 	initGenesisFlags.Uint64(CfgGovernanceUpgradeMinEpochDiff, 300, "minimum number of epochs the upgrade needs to be scheduled in advance")
 	initGenesisFlags.Uint64(CfgGovernanceVotingPeriod, 100, "voting period (in epochs)")

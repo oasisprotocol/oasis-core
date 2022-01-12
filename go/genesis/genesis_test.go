@@ -66,8 +66,7 @@ func testDoc() genesis.Document {
 		},
 		Governance: governance.Genesis{
 			Parameters: governance.ConsensusParameters{
-				Quorum:                    90,
-				Threshold:                 90,
+				StakeThreshold:            90,
 				VotingPeriod:              100,
 				UpgradeCancelMinEpochDiff: 200,
 				UpgradeMinEpochDiff:       200,
@@ -138,7 +137,7 @@ func TestGenesisChainContext(t *testing.T) {
 
 	// Having to update this every single time the genesis structure
 	// changes isn't annoying at all.
-	require.Equal(t, "7b6c3cd2cfb52d3bfa7a68ca0dfeb3cf43d4c5b4b3fcc0026436c110db125eba", stableDoc.ChainContext())
+	require.Equal(t, "0847c60a14845166c38d1b46ed275708c5ef07aba45aa0ecace4715505ad146f", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -734,25 +733,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// Test governance sanity checks.
 	d = testDoc()
-	d.Governance.Parameters.Quorum = 1
-	require.Error(d.SanityCheck(), "quorum to low should be rejected")
+	d.Governance.Parameters.StakeThreshold = 1
+	require.Error(d.SanityCheck(), "stake threshold too low should be rejected")
 
 	d = testDoc()
-	d.Governance.Parameters.Threshold = 1
-	require.Error(d.SanityCheck(), "threshold to low should be rejected")
-
-	d = testDoc()
-	d.Governance.Parameters.Quorum = 110
-	require.Error(d.SanityCheck(), "quorum to high should be rejected")
-
-	d = testDoc()
-	d.Governance.Parameters.Threshold = 110
-	require.Error(d.SanityCheck(), "threshold to high should be rejected")
-
-	d = testDoc()
-	d.Governance.Parameters.Quorum = 80
-	d.Governance.Parameters.Threshold = 80
-	require.Error(d.SanityCheck(), "quorum*threshold to low should be rejected")
+	d.Governance.Parameters.StakeThreshold = 110
+	require.Error(d.SanityCheck(), "threshold too high should be rejected")
 
 	d = testDoc()
 	d.Governance.Parameters.UpgradeCancelMinEpochDiff = 50

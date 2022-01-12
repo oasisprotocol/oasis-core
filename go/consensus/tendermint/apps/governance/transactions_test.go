@@ -54,8 +54,7 @@ func TestSubmitProposal(t *testing.T) {
 	baseConsParams := &governance.ConsensusParameters{
 		GasCosts:                  governance.DefaultGasCosts,
 		MinProposalDeposit:        *minProposalDeposit,
-		Quorum:                    90,
-		Threshold:                 90,
+		StakeThreshold:            90,
 		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
 		UpgradeMinEpochDiff:       beacon.EpochTime(100),
 		VotingPeriod:              beacon.EpochTime(50),
@@ -282,8 +281,7 @@ func TestCastVote(t *testing.T) {
 	params := &governance.ConsensusParameters{
 		GasCosts:                  governance.DefaultGasCosts,
 		MinProposalDeposit:        *quantity.NewFromUint64(100),
-		Quorum:                    90,
-		Threshold:                 90,
+		StakeThreshold:            90,
 		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
 		UpgradeMinEpochDiff:       beacon.EpochTime(100),
 		VotingPeriod:              beacon.EpochTime(50),
