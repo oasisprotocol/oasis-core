@@ -11,7 +11,7 @@ import (
 var _ OverlayTree = (*treeOverlay)(nil)
 
 type treeOverlay struct {
-	inner   Tree
+	inner   KeyValueTree
 	overlay Tree
 
 	dirty map[string]bool
@@ -24,10 +24,10 @@ type treeOverlay struct {
 // as the inner tree has its own cache and double caching makes less sense.
 //
 // The overlay is not safe for concurrent use.
-func NewOverlay(inner Tree) OverlayTree {
+func NewOverlay(inner KeyValueTree) OverlayTree {
 	return &treeOverlay{
 		inner:   inner,
-		overlay: New(nil, nil, inner.RootType(), WithoutWriteLog()),
+		overlay: New(nil, nil, node.RootTypeState, WithoutWriteLog()),
 		dirty:   make(map[string]bool),
 	}
 }

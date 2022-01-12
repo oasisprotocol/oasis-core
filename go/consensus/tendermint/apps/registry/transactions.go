@@ -362,9 +362,9 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		return err
 	}
 
-	// Create a new state checkpoint and rollback in case we fail.
-	sc := ctx.StartCheckpoint()
-	defer sc.Close()
+	// Start a new transaction and rollback in case we fail.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
 
 	// Check that the entity has enough stake for this node registration.
 	var stakeAcc *stakingState.StakeAccumulatorCache
@@ -526,14 +526,14 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 	}
 
-	sc.Commit()
-
 	ctx.Logger().Debug("RegisterNode: registered",
 		"node", newNode,
 		"roles", newNode.Roles,
 	)
 
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
+
+	ctx.Commit()
 
 	return nil
 }

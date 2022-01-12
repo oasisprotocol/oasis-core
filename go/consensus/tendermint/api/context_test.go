@@ -10,73 +10,6 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func TestContext(t *testing.T) {
-	require := require.New(t)
-
-	now := time.Unix(1580461674, 0)
-	appState := NewMockApplicationState(&MockApplicationStateConfig{})
-	ctx := appState.NewContext(ContextBeginBlock, now)
-	defer ctx.Close()
-
-	// Add some state.
-	tree := ctx.State()
-	err := tree.Insert(ctx, []byte("key"), []byte("value"))
-	require.NoError(err, "Insert")
-
-	// Test checkpoints.
-	cp := ctx.StartCheckpoint()
-	// Should panic on nested checkpoints.
-	require.Panics(func() { ctx.StartCheckpoint() })
-	overlay := ctx.State()
-	require.NotEqual(&tree, &overlay, "new State() should return the overlay")
-
-	// Existing state should be there.
-	value, err := overlay.Get(ctx, []byte("key"))
-	require.NoError(err, "Get")
-	require.EqualValues([]byte("value"), value)
-
-	// Add some state to the overlay.
-	err = overlay.Insert(ctx, []byte("blah"), []byte("value2"))
-	require.NoError(err, "Insert")
-	err = overlay.Remove(ctx, []byte("key"))
-	require.NoError(err, "Remove")
-
-	// Make sure updates didn't leak.
-	value, err = tree.Get(ctx, []byte("key"))
-	require.NoError(err, "Get")
-	require.EqualValues([]byte("value"), value, "updates should not leak outside checkpoint")
-	value, err = tree.Get(ctx, []byte("blah"))
-	require.NoError(err, "Get")
-	require.Nil(value, "updates should not leak outside checkpoint")
-
-	// Commit checkpoint.
-	cp.Commit()
-	newTree := ctx.State()
-	require.Equal(&tree, &newTree, "new State() should return the original tree")
-
-	// Make sure updates were applied.
-	value, err = tree.Get(ctx, []byte("key"))
-	require.NoError(err, "Get")
-	require.Nil(value, "updates should have been applied")
-	value, err = tree.Get(ctx, []byte("blah"))
-	require.NoError(err, "Get")
-	require.EqualValues([]byte("value2"), value, "updates should have been applied")
-
-	// Create another checkpoint to test rollback.
-	cp = ctx.StartCheckpoint()
-	overlay = ctx.State()
-	err = overlay.Insert(ctx, []byte("blah"), []byte("rollback"))
-	require.NoError(err, "Insert")
-	cp.Close()
-
-	// Make sure updates didn't leak.
-	value, err = tree.Get(ctx, []byte("blah"))
-	require.NoError(err, "Get")
-	require.EqualValues([]byte("value2"), value, "updates should have been discarded")
-
-	ctx.Close()
-}
-
 type testBlockContextKey struct{}
 
 func (k testBlockContextKey) NewDefault() interface{} {
@@ -145,4 +78,168 @@ func TestChildContext(t *testing.T) {
 	require.True(child.IsMessageExecution(), "child should have message execution enabled")
 	require.False(ctx.IsMessageExecution(), "parent should not have message execution enabled")
 	child.Close()
+}
+
+func TestTransactionContext(t *testing.T) {
+	require := require.New(t)
+
+	now := time.Unix(1580461674, 0)
+	appState := NewMockApplicationState(&MockApplicationStateConfig{})
+	ctx := appState.NewContext(ContextDeliverTx, now)
+	defer ctx.Close()
+
+	child := ctx.NewTransaction()
+
+	// Emitted events and state updates should not propagate to the parent unless committed.
+	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
+	require.Len(child.GetEvents(), 1, "child event should be stored")
+	require.Len(ctx.GetEvents(), 0, "child event should not immediately propagate")
+
+	tree := child.State()
+	err := tree.Insert(ctx, []byte("key"), []byte("value"))
+	require.NoError(err, "Insert")
+
+	child.Close()
+	require.Len(ctx.GetEvents(), 0, "child event should not propagate unless committed")
+
+	tree = ctx.State()
+	value, err := tree.Get(ctx, []byte("key"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte(nil), value, "state updates should not propagate unless committed")
+
+	// Emitted events and state updates should propagate if committed.
+	ctx = appState.NewContext(ContextDeliverTx, now)
+	defer ctx.Close()
+
+	child = ctx.NewTransaction()
+
+	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
+	require.Len(child.GetEvents(), 1, "child event should be stored")
+	require.Len(ctx.GetEvents(), 0, "child event should not immediately propagate")
+	events := child.GetEvents()
+
+	tree = child.State()
+	err = tree.Insert(ctx, []byte("key"), []byte("value"))
+	require.NoError(err, "Insert")
+
+	child.Commit()
+	child.Close()
+	require.EqualValues(events, ctx.GetEvents(), "child events should propagate after Commit")
+
+	tree = ctx.State()
+	value, err = tree.Get(ctx, []byte("key"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte("value"), value, "state updates should propagate after Commit")
+}
+
+func TestNestedTransactionContext(t *testing.T) {
+	require := require.New(t)
+
+	doChild2 := func(ctx *Context) {
+		tree := ctx.State()
+
+		err := tree.Insert(ctx, []byte("child2"), []byte("value2"))
+		require.NoError(err, "Insert")
+
+		value, err := tree.Get(ctx, []byte("top-level"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value"), value, "top-level state should be visible in child2 context")
+
+		value, err = tree.Get(ctx, []byte("child1"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value1"), value, "child1 state should be visible in child2 context")
+
+		value, err = tree.Get(ctx, []byte("child2"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value2"), value, "child2 state should be visible in child2 context")
+	}
+
+	doChild1 := func(ctx *Context) {
+		tree := ctx.State()
+
+		err := tree.Insert(ctx, []byte("child1"), []byte("value1"))
+		require.NoError(err, "Insert")
+
+		value, err := tree.Get(ctx, []byte("top-level"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value"), value, "top-level state should be visible in child1 context")
+
+		// Start a new child transaction and rollback.
+		child := ctx.NewTransaction()
+		doChild2(child)
+		child.Close()
+
+		value, err = tree.Get(ctx, []byte("top-level"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value"), value, "top-level state should be visible in child1 context")
+
+		value, err = tree.Get(ctx, []byte("child1"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value1"), value, "child1 state should be visible in child1 context")
+
+		value, err = tree.Get(ctx, []byte("child2"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte(nil), value, "child2 state should be rolled back")
+
+		// Start a new child transaction and commit.
+		child = ctx.NewTransaction()
+		doChild2(child)
+		child.Commit()
+
+		value, err = tree.Get(ctx, []byte("top-level"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value"), value, "top-level state should be visible in child1 context")
+
+		value, err = tree.Get(ctx, []byte("child1"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value1"), value, "child1 state should be visible in child1 context")
+
+		value, err = tree.Get(ctx, []byte("child2"))
+		require.NoError(err, "Get")
+		require.EqualValues([]byte("value2"), value, "child2 state should be committed")
+	}
+
+	now := time.Unix(1580461674, 0)
+	appState := NewMockApplicationState(&MockApplicationStateConfig{})
+	ctx := appState.NewContext(ContextDeliverTx, now)
+	defer ctx.Close()
+
+	// Insert some top-level state.
+	tree := ctx.State()
+	err := tree.Insert(ctx, []byte("top-level"), []byte("value"))
+	require.NoError(err, "Insert")
+
+	// Start a new child transaction and rollback.
+	child := ctx.NewTransaction()
+	doChild1(child)
+	child.Close()
+
+	value, err := tree.Get(ctx, []byte("top-level"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte("value"), value, "top-level state should be visible in top-level context")
+
+	value, err = tree.Get(ctx, []byte("child1"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte(nil), value, "child1 state should be rolled back")
+
+	value, err = tree.Get(ctx, []byte("child2"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte(nil), value, "child2 state should be rolled back")
+
+	// Start a new child transaction and commit.
+	child = ctx.NewTransaction()
+	doChild1(child)
+	child.Commit()
+
+	value, err = tree.Get(ctx, []byte("top-level"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte("value"), value, "top-level state should be visible in top-level context")
+
+	value, err = tree.Get(ctx, []byte("child1"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte("value1"), value, "child1 state should be committed")
+
+	value, err = tree.Get(ctx, []byte("child2"))
+	require.NoError(err, "Get")
+	require.EqualValues([]byte("value2"), value, "child2 state should be committed")
 }
