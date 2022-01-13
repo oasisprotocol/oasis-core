@@ -243,13 +243,10 @@ type ConsensusParameters struct {
 	// is closed and the votes are tallied.
 	VotingPeriod beacon.EpochTime `json:"voting_period,omitempty"`
 
-	// Quorum is he minimum percentage of voting power that needs to be cast on
-	// a proposal for the result to be valid.
-	Quorum uint8 `json:"quorum,omitempty"`
-
-	// Threshold is the minimum percentage of VoteYes votes in order for a
-	// proposal to be accepted.
-	Threshold uint8 `json:"threshold,omitempty"`
+	// StakeThreshold is the minimum percentage of VoteYes votes in terms
+	// of total voting power when the proposal expires in order for a
+	// proposal to be accepted.  This value has a lower bound of 67.
+	StakeThreshold uint8 `json:"stake_threshold,omitempty"`
 
 	// UpgradeMinEpochDiff is the minimum number of epochs between the current
 	// epoch and the proposed upgrade epoch for the upgrade proposal to be valid.

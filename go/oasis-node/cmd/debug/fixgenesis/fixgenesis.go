@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"time"
 
@@ -73,7 +74,7 @@ type v4Document struct {
 	// Beacon is the beacon genesis state.
 	Beacon v4BeaconGenesis `json:"beacon"`
 	// Governance is the governance genesis state.
-	Governance governance.Genesis `json:"governance"`
+	Governance v4GovernanceGenesis `json:"governance"`
 	// Consensus is the consensus genesis state.
 	Consensus consensus.Genesis `json:"consensus"`
 	// HaltEpoch is the epoch height at which the network will stop processing
@@ -301,6 +302,47 @@ func (k *v4StakingThresholdKind) UnmarshalText(text []byte) error {
 	return nil
 }
 
+type v4GovernanceGenesis struct {
+	// Parameters are the genesis consensus parameters.
+	Parameters v4GovernanceConsensusParameters `json:"params"`
+
+	// Proposals are the governance proposals.
+	Proposals []*governance.Proposal `json:"proposals,omitempty"`
+
+	// VoteEntries are the governance proposal vote entries.
+	VoteEntries map[uint64][]*governance.VoteEntry `json:"vote_entries,omitempty"`
+}
+
+type v4GovernanceConsensusParameters struct {
+	// GasCosts are the governance transaction gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// MinProposalDeposit is the number of base units that are deposited when
+	// creating a new proposal.
+	MinProposalDeposit quantity.Quantity `json:"min_proposal_deposit,omitempty"`
+
+	// VotingPeriod is the number of epochs after which the voting for a proposal
+	// is closed and the votes are tallied.
+	VotingPeriod beacon.EpochTime `json:"voting_period,omitempty"`
+
+	// Quorum is he minimum percentage of voting power that needs to be cast on
+	// a proposal for the result to be valid.
+	Quorum uint8 `json:"quorum,omitempty"`
+
+	// Threshold is the minimum percentage of VoteYes votes in order for a
+	// proposal to be accepted.
+	Threshold uint8 `json:"threshold,omitempty"`
+
+	// UpgradeMinEpochDiff is the minimum number of epochs between the current
+	// epoch and the proposed upgrade epoch for the upgrade proposal to be valid.
+	// This is also the minimum number of epochs between two pending upgrades.
+	UpgradeMinEpochDiff beacon.EpochTime `json:"upgrade_min_epoch_diff,omitempty"`
+
+	// UpgradeCancelMinEpochDiff is the minimum number of epochs between the current
+	// epoch and the proposed upgrade epoch for the upgrade cancellation proposal to be valid.
+	UpgradeCancelMinEpochDiff beacon.EpochTime `json:"upgrade_cancel_min_epoch_diff,omitempty"`
+}
+
 func doFixGenesis(cmd *cobra.Command, args []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
@@ -465,6 +507,34 @@ func updateRegistryRuntime(old *v4Runtime) (registry.Runtime, error) {
 	return new, nil
 }
 
+func updateGovernanceGenesis(old *v4GovernanceGenesis) (governance.Genesis, error) {
+	// Use `ceil(quorum * threshold / 100)` to work out the new voting power
+	// threshold, as it should be close to what we want.  With the 75% quorum
+	// and 90% threshold in the current genesis document this formula gives
+	// a stake threshold of 68 (`ceil(75 * 90 / 100) = ceil(67.50) = 68`).
+	stakeThreshold := math.Ceil(float64(old.Parameters.Quorum) * float64(old.Parameters.Threshold) / 100)
+
+	new := governance.Genesis{
+		Parameters: governance.ConsensusParameters{
+			StakeThreshold: uint8(stakeThreshold),
+
+			// Everything else below is just copied over unchanged.
+
+			GasCosts:                  old.Parameters.GasCosts,
+			MinProposalDeposit:        old.Parameters.MinProposalDeposit,
+			VotingPeriod:              old.Parameters.VotingPeriod,
+			UpgradeMinEpochDiff:       old.Parameters.UpgradeMinEpochDiff,
+			UpgradeCancelMinEpochDiff: old.Parameters.UpgradeCancelMinEpochDiff,
+		},
+
+		// Everything else below is just copied over unchanged.
+
+		Proposals:   old.Proposals,
+		VoteEntries: old.VoteEntries,
+	}
+	return new, nil
+}
+
 func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 	// Create the new genesis document template.
 	newDoc := &genesis.Document{
@@ -474,7 +544,6 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 		RootHash:   oldDoc.RootHash,
 		KeyManager: oldDoc.KeyManager,
 		Scheduler:  oldDoc.Scheduler,
-		Governance: oldDoc.Governance,
 		Consensus:  oldDoc.Consensus,
 		HaltEpoch:  oldDoc.HaltEpoch,
 		ExtraData:  oldDoc.ExtraData,
@@ -490,6 +559,11 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 
 	// Update staking genesis.
 	if newDoc.Staking, err = updateStakingGenesis(&oldDoc.Staking); err != nil {
+		return nil, err
+	}
+
+	// Update governance genesis.
+	if newDoc.Governance, err = updateGovernanceGenesis(&oldDoc.Governance); err != nil {
 		return nil, err
 	}
 
@@ -599,7 +673,6 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 			continue
 		}
 		newDoc.Registry.Nodes = append(newDoc.Registry.Nodes, sigNode)
-
 	}
 
 	return newDoc, nil

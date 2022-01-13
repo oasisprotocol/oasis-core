@@ -98,8 +98,7 @@ func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, erro
 	f.Network.GovernanceParameters = &api.ConsensusParameters{
 		MinProposalDeposit:        *quantity.NewFromUint64(100),
 		VotingPeriod:              5,
-		Quorum:                    100,
-		Threshold:                 100,
+		StakeThreshold:            100,
 		UpgradeMinEpochDiff:       20,
 		UpgradeCancelMinEpochDiff: 8,
 	}

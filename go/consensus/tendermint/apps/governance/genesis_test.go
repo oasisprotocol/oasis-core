@@ -302,8 +302,7 @@ func TestGenesis(t *testing.T) {
 	consensusParams := &governance.ConsensusParameters{
 		GasCosts:                  governance.DefaultGasCosts,
 		MinProposalDeposit:        *quantity.NewFromUint64(42),
-		Quorum:                    90,
-		Threshold:                 90,
+		StakeThreshold:            90,
 		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
 		UpgradeMinEpochDiff:       beacon.EpochTime(100),
 		VotingPeriod:              beacon.EpochTime(50),

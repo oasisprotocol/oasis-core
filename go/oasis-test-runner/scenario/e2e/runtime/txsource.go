@@ -229,8 +229,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.GovernanceParameters = &governance.ConsensusParameters{
 		VotingPeriod:              10,
 		MinProposalDeposit:        *quantity.NewFromUint64(300),
-		Quorum:                    75,
-		Threshold:                 90,
+		StakeThreshold:            68,
 		UpgradeMinEpochDiff:       40,
 		UpgradeCancelMinEpochDiff: 20,
 	}

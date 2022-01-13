@@ -111,8 +111,7 @@ func TestCloseProposal(t *testing.T) {
 
 		p                *Proposal
 		totalVotingStake *quantity.Quantity
-		quorum           uint8
-		threshold        uint8
+		stakeThreshold   uint8
 
 		expectedState ProposalState
 		expectedErr   error
@@ -151,24 +150,10 @@ func TestCloseProposal(t *testing.T) {
 			expectedState:    StateRejected,
 		},
 		{
-			msg: "proposal quotum not reached",
-			p: &Proposal{
-				State: StateActive,
-				Results: map[Vote]quantity.Quantity{
-					// 100% of votes Yes, but quorum is only 80%.
-					VoteYes: *quantity.NewFromUint64(80),
-				},
-			},
-			totalVotingStake: totalVotingStake,
-			quorum:           90,
-			threshold:        90,
-			expectedState:    StateRejected,
-		},
-		{
 			msg: "proposal threshold not reached",
 			p: &Proposal{
 				State: StateActive,
-				// Quorum reached, but threshold not reached.
+				// Threshold clearly not reached.
 				Results: map[Vote]quantity.Quantity{
 					VoteYes:     *quantity.NewFromUint64(55),
 					VoteNo:      *quantity.NewFromUint64(40),
@@ -176,8 +161,7 @@ func TestCloseProposal(t *testing.T) {
 				},
 			},
 			totalVotingStake: totalVotingStake,
-			quorum:           90,
-			threshold:        90,
+			stakeThreshold:   90,
 			expectedState:    StateRejected,
 		},
 		{
@@ -200,30 +184,41 @@ func TestCloseProposal(t *testing.T) {
 				},
 			},
 			totalVotingStake: totalVotingStake,
-			quorum:           100,
-			threshold:        100,
+			stakeThreshold:   100,
 			expectedState:    StatePassed,
+		},
+		{
+			msg: "proposal threshold barely not reached",
+			p: &Proposal{
+				State: StateActive,
+				// Threshold barely not reached (89/100: 89%).
+				Results: map[Vote]quantity.Quantity{
+					VoteYes:     *quantity.NewFromUint64(89),
+					VoteNo:      *quantity.NewFromUint64(2),
+					VoteAbstain: *quantity.NewFromUint64(3),
+				},
+			},
+			totalVotingStake: totalVotingStake,
+			stakeThreshold:   90,
+			expectedState:    StateRejected,
 		},
 		{
 			msg: "proposal should pass",
 			p: &Proposal{
 				State: StateActive,
-				// Quorum and threshold reached.
-				// Quorum: 91/100: 91%
-				// Threshold: 85/91: ~93%
+				// Threshold reached (91/100: 91%)
 				Results: map[Vote]quantity.Quantity{
-					VoteYes:     *quantity.NewFromUint64(85),
+					VoteYes:     *quantity.NewFromUint64(91),
 					VoteNo:      *quantity.NewFromUint64(3),
 					VoteAbstain: *quantity.NewFromUint64(3),
 				},
 			},
 			totalVotingStake: totalVotingStake,
-			quorum:           90,
-			threshold:        90,
+			stakeThreshold:   90,
 			expectedState:    StatePassed,
 		},
 	} {
-		err := tc.p.CloseProposal(*tc.totalVotingStake, tc.quorum, tc.threshold)
+		err := tc.p.CloseProposal(*tc.totalVotingStake, tc.stakeThreshold)
 		if tc.expectedErr != nil {
 			require.True(t, errors.Is(err, tc.expectedErr),
 				fmt.Sprintf("expected error: %v, got: %v: for case: %s", tc.expectedErr, err, tc.msg))
