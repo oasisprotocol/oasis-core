@@ -406,8 +406,7 @@ func (t *Tree) GetInputBatch(ctx context.Context, maxBatchSize, maxBatchSizeByte
 	return bo.batch, nil
 }
 
-// GetTransactions returns a list of all transaction artifacts in the tree
-// in a stable order (transactions are ordered by their hash).
+// GetTransactions returns a list of all transaction artifacts in batch order.
 func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 	it := t.tree.NewIterator(ctx, mkvs.IteratorPrefetch(prefetchArtifactCount))
 	defer it.Close()
@@ -454,6 +453,11 @@ func (t *Tree) GetTransactions(ctx context.Context) ([]*Transaction, error) {
 	if it.Err() != nil {
 		return nil, fmt.Errorf("transaction: get transactions failed: %w", it.Err())
 	}
+
+	// Reorder transactions so they are in batch order (how they were executed).
+	sort.SliceStable(txs, func(i, j int) bool {
+		return txs[i].BatchOrder < txs[j].BatchOrder
+	})
 
 	return txs, nil
 }
