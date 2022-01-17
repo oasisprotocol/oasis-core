@@ -72,9 +72,14 @@ func TestTransaction(t *testing.T) {
 
 	var txHashes []hash.Hash
 	txnsByHash := make(map[hash.Hash]*Transaction)
-	for _, tx := range txns {
+	for i, tx := range txns {
 		txnsByHash[tx.Hash()] = tx
 		txHashes = append(txHashes, tx.Hash())
+
+		// Make sure the transactions are returned in batch order.
+		if i > 0 {
+			require.EqualValues(t, testTxns[i-1], *tx, "transactions must be returned in batch order")
+		}
 	}
 
 	for _, checkTx := range testTxns {
