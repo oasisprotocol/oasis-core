@@ -41,6 +41,8 @@ type priorityQueue struct {
 
 	poolWeights  map[transaction.Weight]uint64
 	weightLimits map[transaction.Weight]uint64
+
+	lowestPriority uint64
 }
 
 // Implements api.TxPool.
@@ -54,12 +56,25 @@ func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 	defer q.Unlock()
 
 	// Check if there is room in the queue.
+	var needsPop bool
 	if q.poolWeights[transaction.WeightCount] >= q.maxTxPoolSize {
-		return api.ErrFull
+		needsPop = true
+
+		if tx.Priority() <= q.lowestPriority {
+			return api.ErrFull
+		}
 	}
 
 	if err := q.checkTxLocked(tx); err != nil {
 		return err
+	}
+
+	// Remove the lowest priority transaction when queue is full.
+	if needsPop {
+		lpi := q.priorityIndex.Max()
+		if lpi != nil {
+			q.removeTxsLocked([]*item{lpi.(*item)})
+		}
 	}
 
 	item := &item{tx: tx}
@@ -67,6 +82,9 @@ func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 	q.transactions[tx.Hash()] = item
 	for k, v := range tx.Weights() {
 		q.poolWeights[k] += v
+	}
+	if tx.Priority() < q.lowestPriority {
+		q.lowestPriority = tx.Priority()
 	}
 
 	if mlen, qlen := len(q.transactions), q.priorityIndex.Len(); mlen != qlen {
@@ -138,7 +156,13 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 	// Remove transactions discovered to be too big to even fit the batch.
 	// This can happen if weight limits changed after the transaction was
 	// already set to be scheduled.
-	for _, item := range toRemove {
+	q.removeTxsLocked(toRemove)
+
+	return batch
+}
+
+func (q *priorityQueue) removeTxsLocked(items []*item) {
+	for _, item := range items {
 		delete(q.transactions, item.tx.Hash())
 		q.priorityIndex.Delete(item)
 		for k, v := range item.tx.Weights() {
@@ -146,7 +170,21 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 		}
 	}
 
-	return batch
+	// Update lowest priority.
+	if len(items) > 0 {
+		if lpi := q.priorityIndex.Max(); lpi != nil {
+			q.lowestPriority = lpi.(*item).tx.Priority()
+		} else {
+			q.lowestPriority = 0
+		}
+	}
+
+	if mlen, qlen := len(q.transactions), q.priorityIndex.Len(); mlen != qlen {
+		panic(fmt.Errorf("inconsistent sizes of the underlying index (%v) and map (%v) after removal", mlen, qlen))
+	}
+	if mlen, plen := uint64(len(q.transactions)), q.poolWeights[transaction.WeightCount]; mlen != plen {
+		panic(fmt.Errorf("inconsistent sizes of the map (%v) and pool weight count (%v) after removal", mlen, plen))
+	}
 }
 
 // Implements api.TxPool.
@@ -192,21 +230,13 @@ func (q *priorityQueue) RemoveBatch(batch []hash.Hash) {
 	q.Lock()
 	defer q.Unlock()
 
+	items := make([]*item, 0, len(batch))
 	for _, txHash := range batch {
 		if item, ok := q.transactions[txHash]; ok {
-			q.priorityIndex.Delete(item)
-			delete(q.transactions, txHash)
-			for k, v := range item.tx.Weights() {
-				q.poolWeights[k] -= v
-			}
+			items = append(items, item)
 		}
 	}
-	if mlen, qlen := len(q.transactions), q.priorityIndex.Len(); mlen != qlen {
-		panic(fmt.Errorf("inconsistent sizes of the underlying index (%v) and map (%v) after RemoveBatch", mlen, qlen))
-	}
-	if mlen, plen := uint64(len(q.transactions)), q.poolWeights[transaction.WeightCount]; mlen != plen {
-		panic(fmt.Errorf("inconsistent sizes of the map (%v) and pool weight count (%v) after RemoveBatch", mlen, plen))
-	}
+	q.removeTxsLocked(items)
 }
 
 // Implements api.TxPool.
@@ -244,6 +274,7 @@ func (q *priorityQueue) Clear() {
 	q.priorityIndex.Clear(true)
 	q.transactions = make(map[hash.Hash]*item)
 	q.poolWeights = make(map[transaction.Weight]uint64)
+	q.lowestPriority = 0
 }
 
 // NOTE: Assumes lock is held.
