@@ -319,9 +319,9 @@ func testPriority(t *testing.T, pool api.TxPool) {
 	pool.Clear()
 
 	err := pool.UpdateConfig(api.Config{
-		MaxPoolSize: 50,
+		MaxPoolSize: 3,
 		WeightLimits: map[transaction.Weight]uint64{
-			transaction.WeightCount:     10,
+			transaction.WeightCount:     3,
 			transaction.WeightSizeBytes: 100,
 		},
 	})
@@ -360,6 +360,38 @@ func testPriority(t *testing.T, pool api.TxPool) {
 		batch,
 		"elements should be returned by priority",
 	)
+
+	// When the pool is full, a higher priority transaction should still get queued.
+	highTx := transaction.NewCheckedTransaction(
+		[]byte("hello world 6"),
+		6,
+		nil,
+	)
+	err = pool.Add(highTx)
+	require.NoError(t, err, "higher priority transaction should still get queued")
+
+	batch = pool.GetBatch(true)
+	require.Len(t, batch, 3, "three transactions should be returned")
+	require.EqualValues(
+		t,
+		[]*transaction.CheckedTransaction{
+			txs[2], // 20
+			txs[0], // 10
+			highTx, // 6
+		},
+		batch,
+		"elements should be returned by priority",
+	)
+
+	// A lower priority transaction should not get queued.
+	lowTx := transaction.NewCheckedTransaction(
+		[]byte("hello world 3"),
+		3,
+		nil,
+	)
+	err = pool.Add(lowTx)
+	require.Error(t, err, "lower priority transaction should not get queued")
+	require.ErrorIs(t, err, api.ErrFull)
 }
 
 // TxPoolImplementationBenchmarks runs the tx pool implementation benchmarks.
