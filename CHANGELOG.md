@@ -12,6 +12,37 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.8 (2022-01-18)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- go/runtime/scheduling: Allow a higher priority tx even if queue full
+  ([#4431](https://github.com/oasisprotocol/oasis-core/issues/4431))
+
+### Bug Fixes
+
+- go/storage/api: Make metrics wrapper return proper types
+  ([#4411](https://github.com/oasisprotocol/oasis-core/issues/4411))
+
+  Previously the metrics wrapper tried to support all of the different backend
+  interfaces, causing problems with places that perform type checks to
+  determine which backend type is in use.
+
+  The metrics wrapper is now changed to return a type matching the wrapped
+  backend type.
+
+- go/runtime/transaction: Return transactions in batch order when queried
+  ([#4429](https://github.com/oasisprotocol/oasis-core/issues/4429))
+
+  Previously when runtime transactions were queried via a GetTransactions call,
+  they were returned ordered by transaction hash instead of in execution order.
+
 ## 21.3.7 (2021-12-17)
 
 | Protocol          | Version   |
