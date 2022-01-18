@@ -23,7 +23,7 @@ type item struct {
 func (i item) Less(other btree.Item) bool {
 	i2 := other.(*item)
 	if p1, p2 := i.tx.Priority(), i2.tx.Priority(); p1 != p2 {
-		return p1 > p2
+		return p1 < p2
 	}
 	// If transactions have same priority, sort arbitrary.
 	h1 := i.tx.Hash()
@@ -71,7 +71,7 @@ func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 
 	// Remove the lowest priority transaction when queue is full.
 	if needsPop {
-		lpi := q.priorityIndex.Max()
+		lpi := q.priorityIndex.Min()
 		if lpi != nil {
 			q.removeTxsLocked([]*item{lpi.(*item)})
 		}
@@ -120,7 +120,7 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 		batchWeights[w] = 0
 	}
 	toRemove := []*item{}
-	q.priorityIndex.Ascend(func(i btree.Item) bool {
+	q.priorityIndex.Descend(func(i btree.Item) bool {
 		item := i.(*item)
 
 		// Check if the call fits into the batch.
@@ -172,7 +172,7 @@ func (q *priorityQueue) removeTxsLocked(items []*item) {
 
 	// Update lowest priority.
 	if len(items) > 0 {
-		if lpi := q.priorityIndex.Max(); lpi != nil {
+		if lpi := q.priorityIndex.Min(); lpi != nil {
 			q.lowestPriority = lpi.(*item).tx.Priority()
 		} else {
 			q.lowestPriority = 0
