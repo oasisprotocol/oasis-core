@@ -647,6 +647,9 @@ func testEscrowHelper( // nolint: gocyclo
 ) {
 	require := require.New(t)
 
+	params, err := backend.ConsensusParameters(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(err, "stkaing.ConsensusParameters")
+
 	srcAcc, err := backend.Account(context.Background(), &api.OwnerQuery{Owner: srcAccData.Address, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "src: Account - before")
 	require.False(srcAcc.General.Balance.IsZero(), "src: general balance != 0")
@@ -837,6 +840,9 @@ func testEscrowHelper( // nolint: gocyclo
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, srcAccData.Signer, tx)
 	require.NoError(err, "ReclaimEscrow")
 
+	epoch, err := consensus.Beacon().GetEpoch(context.Background(), consensusAPI.HeightLatest)
+	require.NoError(err, "GetEpoch")
+
 	// Wait for debonding start event.
 	select {
 	case rawEv := <-ch:
@@ -851,6 +857,7 @@ func testEscrowHelper( // nolint: gocyclo
 		require.Equal(totalEscrowed, &ev.Amount, "Event: amount")
 		require.Equal(reclaim.Shares, ev.ActiveShares, "Event: active shares")
 		require.Equal(totalEscrowed, &ev.DebondingShares, "Event: debonding shares") // Nothing else is debonding, so ratio is 1:1.
+		require.Equal(epoch+params.DebondingInterval, ev.DebondEndTime, "Event: debond end time")
 
 		// Make sure that GetEvents also returns the debonding start event.
 		evts, grr := backend.GetEvents(context.Background(), rawEv.Height)
