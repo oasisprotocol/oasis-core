@@ -407,6 +407,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		"base_units", stakeAmount,
 		"active_shares", reclaim.Shares,
 		"debonding_shares", debondingShares,
+		"debond_end_time", deb.DebondEndTime,
 	)
 
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.DebondingStartEscrowEvent{
@@ -415,6 +416,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		Amount:          *stakeAmount,
 		ActiveShares:    reclaim.Shares,
 		DebondingShares: *debondingShares,
+		DebondEndTime:   deb.DebondEndTime,
 	}))
 
 	return nil

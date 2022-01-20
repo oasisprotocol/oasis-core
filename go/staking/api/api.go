@@ -293,6 +293,7 @@ type DebondingStartEscrowEvent struct {
 	Amount          quantity.Quantity `json:"amount"`
 	ActiveShares    quantity.Quantity `json:"active_shares"`
 	DebondingShares quantity.Quantity `json:"debonding_shares"`
+	DebondEndTime   beacon.EpochTime  `json:"debond_end_time"`
 }
 
 // EventKind returns a string representation of this event's kind.
