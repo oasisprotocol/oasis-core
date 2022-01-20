@@ -12,6 +12,19 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.9 (2022-01-20)
+
+| Protocol          | Version |
+|:------------------|:-------:|
+| Consensus         |  4.0.0  |
+| Runtime Host      |  4.0.0  |
+| Runtime Committee |  3.0.0  |
+
+### Bug Fixes
+
+- deps: Switch to the upstream jsonrpc import
+  ([#4439](https://github.com/oasisprotocol/oasis-core/issues/4439))
+
 ## 21.3.8 (2022-01-18)
 
 | Protocol          | Version   |
