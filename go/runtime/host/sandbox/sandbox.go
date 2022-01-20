@@ -107,6 +107,25 @@ func (r *sandboxedRuntime) ID() common.Namespace {
 }
 
 // Implements host.Runtime.
+func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoResponse, err error) {
+	callFn := func() error {
+		r.RLock()
+		conn := r.conn
+		r.RUnlock()
+
+		if conn == nil {
+			return fmt.Errorf("runtime is not ready")
+		}
+		rsp, err = r.conn.GetInfo(ctx)
+		return err
+	}
+
+	// Retry call in case the runtime is not yet ready.
+	err = backoff.Retry(callFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
+	return
+}
+
+// Implements host.Runtime.
 func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
 	callFn := func() error {
 		r.RLock()

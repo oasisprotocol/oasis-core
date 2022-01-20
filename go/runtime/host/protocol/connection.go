@@ -91,6 +91,9 @@ type Connection interface {
 	// Close closes the connection.
 	Close()
 
+	// GetInfo retrieves the runtime information.
+	GetInfo(ctx context.Context) (*RuntimeInfoResponse, error)
+
 	// Call sends a request to the other side and returns the response or error.
 	Call(ctx context.Context, body *Body) (*Body, error)
 
@@ -200,6 +203,8 @@ type connection struct { // nolint: maligned
 	pendingRequests map[uint64]chan *Body
 	nextRequestID   uint64
 
+	info *RuntimeInfoResponse
+
 	outCh   chan *Message
 	closeCh chan struct{}
 	quitWg  sync.WaitGroup
@@ -252,6 +257,18 @@ func (c *connection) Close() {
 
 	// Wait for all the connection-handling goroutines to terminate.
 	c.quitWg.Wait()
+}
+
+// Implements Connection.
+func (c *connection) GetInfo(ctx context.Context) (*RuntimeInfoResponse, error) {
+	c.Lock()
+	info := c.info
+	c.Unlock()
+
+	if info == nil {
+		return nil, ErrNotReady
+	}
+	return info, nil
 }
 
 // Implements Connection.
@@ -551,6 +568,7 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) 
 	// Transition the protocol state to Ready.
 	c.Lock()
 	c.setStateLocked(stateReady)
+	c.info = info
 	c.Unlock()
 
 	return &rtVersion, nil

@@ -45,6 +45,9 @@ type Runtime interface {
 	// ID is the runtime identifier.
 	ID() common.Namespace
 
+	// GetInfo retrieves the runtime information.
+	GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error)
+
 	// Call sends a request message to the runtime over the Runtime Host Protocol and waits for the
 	// response (which may be a failure).
 	Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error)
