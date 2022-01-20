@@ -63,8 +63,7 @@ features = ["full"]
 
 [dev-dependencies]
 # For storage interoperability tests only.
-# Temporary import till https://github.com/apoelstra/rust-jsonrpc/pull/42 is merged.
-jsonrpc = { git = "https://github.com/darosior/rust-jsonrpc", branch = "moar_transports", features = ["simple_uds"] }
+jsonrpc = { version = "0.12.1", features = ["simple_uds"]}
 tempfile = "3.2.0"
 
 [[bin]]
