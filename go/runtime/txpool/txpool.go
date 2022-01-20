@@ -75,6 +75,14 @@ type TransactionPool interface {
 	// GetScheduledBatch returns a batch of transactions ready for scheduling.
 	GetScheduledBatch(force bool) []*transaction.CheckedTransaction
 
+	// GetPrioritizedBatch returns a batch of transactions ordered by priority but without taking
+	// any weight limits into account.
+	//
+	// Offset specifies the transaction hash that should serve as an offset when returning
+	// transactions from the pool. Transactions will be skipped until the given hash is encountered
+	// and only following transactions will be returned.
+	GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction
+
 	// GetKnownBatch gets a set of known transactions from the transaction pool.
 	//
 	// For any missing transactions nil will be returned in their place and the map of missing
@@ -272,6 +280,13 @@ func (t *txPool) GetScheduledBatch(force bool) []*transaction.CheckedTransaction
 	defer t.schedulerLock.Unlock()
 
 	return t.scheduler.GetBatch(force)
+}
+
+func (t *txPool) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction {
+	t.schedulerLock.Lock()
+	defer t.schedulerLock.Unlock()
+
+	return t.scheduler.GetPrioritizedBatch(offset, limit)
 }
 
 func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {

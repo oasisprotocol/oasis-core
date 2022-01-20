@@ -110,10 +110,9 @@ func (r *sandboxedRuntime) ID() common.Namespace {
 func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoResponse, err error) {
 	callFn := func() error {
 		r.RLock()
-		conn := r.conn
-		r.RUnlock()
+		defer r.RUnlock()
 
-		if conn == nil {
+		if r.conn == nil {
 			return fmt.Errorf("runtime is not ready")
 		}
 		rsp, err = r.conn.GetInfo(ctx)
@@ -129,10 +128,9 @@ func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeIn
 func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
 	callFn := func() error {
 		r.RLock()
-		conn := r.conn
-		r.RUnlock()
+		defer r.RUnlock()
 
-		if conn == nil {
+		if r.conn == nil {
 			return fmt.Errorf("runtime is not ready")
 		}
 		rsp, err = r.conn.Call(ctx, body)

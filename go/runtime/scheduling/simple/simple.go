@@ -49,6 +49,10 @@ func (s *scheduler) GetBatch(force bool) []*transaction.CheckedTransaction {
 	return s.txPool.GetBatch(force)
 }
 
+func (s *scheduler) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction {
+	return s.txPool.GetPrioritizedBatch(offset, limit)
+}
+
 func (s *scheduler) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {
 	return s.txPool.GetKnownBatch(batch)
 }

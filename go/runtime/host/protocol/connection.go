@@ -262,13 +262,12 @@ func (c *connection) Close() {
 // Implements Connection.
 func (c *connection) GetInfo(ctx context.Context) (*RuntimeInfoResponse, error) {
 	c.Lock()
-	info := c.info
-	c.Unlock()
+	defer c.Unlock()
 
-	if info == nil {
+	if c.info == nil {
 		return nil, ErrNotReady
 	}
-	return info, nil
+	return c.info, nil
 }
 
 // Implements Connection.

@@ -374,7 +374,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 					"header_io_root", header.IORoot,
 					"proposed_io_root", state.proposedIORoot,
 					"header_type", header.HeaderType,
-					"batch_size", len(state.raw),
+					"batch_size", len(state.txHashes),
 				)
 				return
 			}
@@ -383,16 +383,11 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
 
 			n.logger.Debug("removing processed batch from queue",
-				"batch_size", len(state.raw),
+				"batch_size", len(state.txHashes),
 				"io_root", header.IORoot,
 			)
-			// Removed processed transactions from queue.
-			if err := n.removeTxBatch(state.raw); err != nil {
-				n.logger.Warn("failed removing processed batch from queue",
-					"err", err,
-					"batch_size", len(state.raw),
-				)
-			}
+			// Remove processed transactions from queue.
+			n.commonNode.TxPool.RemoveTxBatch(state.txHashes)
 		}()
 	}
 
@@ -435,19 +430,6 @@ func (n *Node) handleNewCheckedTransactions(txs []*transaction.CheckedTransactio
 		n.logger.Info("received all transactions needed for batch processing")
 		n.startProcessingBatchLocked(state.batch)
 	}
-}
-
-// removeTxBatch removes a batch from scheduling queue.
-func (n *Node) removeTxBatch(batch transaction.RawBatch) error {
-	hashes := make([]hash.Hash, len(batch))
-	for i, b := range batch {
-		hashes[i] = hash.NewFromBytes(b)
-	}
-
-	// Remove transactions from the transaction pool.
-	n.commonNode.TxPool.RemoveTxBatch(hashes)
-
-	return nil
 }
 
 func (n *Node) updateBatchWeightLimits(ctx context.Context, blk *block.Block, lb *consensus.LightBlock, epoch beacon.EpochTime) error {
@@ -603,7 +585,7 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 	return state, roundResults, nil
 }
 
-func (n *Node) handleScheduleBatch(force bool) {
+func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 	roundCtx, epoch, rtState, roundResults, blk, lb, err := func() (
 		context.Context,
 		*committee.EpochSnapshot,
@@ -675,9 +657,32 @@ func (n *Node) handleScheduleBatch(force bool) {
 		return
 	}
 
+	// Check what the runtime supports.
+	rt := n.commonNode.GetHostedRuntime()
+	if rt == nil {
+		n.logger.Debug("not scheduling a batch as the runtime is not yet ready")
+		return
+	}
+	rtInfo, err := rt.GetInfo(roundCtx)
+	if err != nil {
+		n.logger.Warn("not scheduling a batch as the runtime is broken",
+			"err", err,
+		)
+		return
+	}
+
+	var batch []*transaction.CheckedTransaction
+	switch {
+	case epoch.IsTransactionScheduler(blk.Header.Round) && rtInfo.Features.HasScheduleControl():
+		// The runtime supports schedule control and we are the scheduler in this round.
+		batch = n.commonNode.TxPool.GetPrioritizedBatch(nil, rtInfo.Features.ScheduleControl.InitialBatchSize)
+	default:
+		// Just ask the scheduler for a batch of transactions.
+		batch = n.commonNode.TxPool.GetScheduledBatch(force)
+	}
+
 	// Ask the scheduler to get a batch of transactions for us and see if we should be proposing
 	// a new batch to other nodes.
-	batch := n.commonNode.TxPool.GetScheduledBatch(force)
 	switch {
 	case len(batch) > 0:
 		// We have some transactions, schedule batch.
@@ -734,7 +739,16 @@ func (n *Node) handleScheduleBatch(force bool) {
 		return
 	}
 
-	n.logger.Debug("scheduling a batch",
+	// If the runtime supports schedule control we ask the runtime to schedule the batch and then
+	// propose that.
+	if rtInfo.Features.HasScheduleControl() {
+		n.startRuntimeBatchSchedulingLocked(rtState, roundResults, rt, batch)
+		return
+	}
+
+	// Runtime does not support scheduling control, do our own scheduling.
+
+	n.logger.Debug("runtime does not support scheduling control, scheduling batch",
 		"batch_size", len(batch),
 		"round_results", roundResults,
 	)
@@ -775,35 +789,8 @@ func (n *Node) handleScheduleBatch(force bool) {
 	}
 
 	// Commit I/O tree to local storage.
-
-	err = n.storage.Apply(roundCtx, &storage.ApplyRequest{
-		Namespace: blk.Header.Namespace,
-		RootType:  storage.RootTypeIO,
-		SrcRound:  blk.Header.Round + 1,
-		SrcRoot:   emptyRoot.Hash,
-		DstRound:  blk.Header.Round + 1,
-		DstRoot:   ioRoot,
-		WriteLog:  ioWriteLog,
-	})
-	if err != nil {
+	if err = n.schedulerStoreTransactions(roundCtx, blk, ioWriteLog, ioRoot); err != nil {
 		n.logger.Error("failed to commit I/O tree to storage",
-			"err", err,
-		)
-		return
-	}
-
-	// Create new proposal.
-	proposal := &commitment.Proposal{
-		NodeID: n.commonNode.Identity.NodeSigner.Public(),
-		Header: commitment.ProposalHeader{
-			Round:        blk.Header.Round + 1,
-			PreviousHash: blk.Header.EncodedHash(),
-			BatchHash:    ioRoot,
-		},
-		Batch: txHashes,
-	}
-	if err = proposal.Sign(n.commonNode.Identity.NodeSigner, blk.Header.Namespace); err != nil {
-		n.logger.Error("failed to sign proposal header",
 			"err", err,
 		)
 		return
@@ -822,22 +809,128 @@ func (n *Node) handleScheduleBatch(force bool) {
 		return
 	}
 
-	n.logger.Debug("dispatching a new batch proposal",
-		"io_root", ioRoot,
-		"batch_size", len(batch),
-	)
-
-	n.commonNode.P2P.PublishCommittee(roundCtx, n.commonNode.Runtime.ID(), &p2p.CommitteeMessage{
-		Epoch:    n.commonNode.CurrentEpoch,
-		Proposal: proposal,
-	})
-	crash.Here(crashPointBatchPublishAfter)
+	proposal, err := n.schedulerCreateProposalLocked(roundCtx, ioRoot, txHashes)
+	if err != nil {
+		n.logger.Error("failed to create proposal",
+			"err", err,
+		)
+		return
+	}
 
 	// Also process the batch locally.
 	n.maybeStartProcessingBatchLocked(&unresolvedBatch{
 		proposal: proposal,
 		batch:    rawBatch,
 	})
+}
+
+func (n *Node) schedulerStoreTransactions(ctx context.Context, blk *block.Block, inputWriteLog storage.WriteLog, inputRoot hash.Hash) error {
+	var emptyRoot hash.Hash
+	emptyRoot.Empty()
+
+	return n.storage.Apply(ctx, &storage.ApplyRequest{
+		Namespace: blk.Header.Namespace,
+		RootType:  storage.RootTypeIO,
+		SrcRound:  blk.Header.Round + 1,
+		SrcRoot:   emptyRoot,
+		DstRound:  blk.Header.Round + 1,
+		DstRoot:   inputRoot,
+		WriteLog:  inputWriteLog,
+	})
+}
+
+func (n *Node) schedulerCreateProposalLocked(ctx context.Context, inputRoot hash.Hash, txHashes []hash.Hash) (*commitment.Proposal, error) {
+	blk := n.commonNode.CurrentBlock
+
+	// Create new proposal.
+	proposal := &commitment.Proposal{
+		NodeID: n.commonNode.Identity.NodeSigner.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        blk.Header.Round + 1,
+			PreviousHash: blk.Header.EncodedHash(),
+			BatchHash:    inputRoot,
+		},
+		Batch: txHashes,
+	}
+	if err := proposal.Sign(n.commonNode.Identity.NodeSigner, blk.Header.Namespace); err != nil {
+		return nil, fmt.Errorf("failed to sign proposal header: %w", err)
+	}
+
+	n.logger.Debug("dispatching a new batch proposal",
+		"input_root", inputRoot,
+		"batch_size", len(txHashes),
+	)
+
+	n.commonNode.P2P.PublishCommittee(ctx, n.commonNode.Runtime.ID(), &p2p.CommitteeMessage{
+		Epoch:    n.commonNode.CurrentEpoch,
+		Proposal: proposal,
+	})
+	crash.Here(crashPointBatchPublishAfter)
+	return proposal, nil
+}
+
+func (n *Node) startRuntimeBatchSchedulingLocked(
+	rtState *roothash.RuntimeState,
+	roundResults *roothash.RoundResults,
+	rt host.RichRuntime,
+	batch []*transaction.CheckedTransaction,
+) {
+	n.logger.Debug("asking runtime to schedule batch",
+		"initial_batch_size", len(batch),
+	)
+
+	// Create batch processing context and channel for receiving the response.
+	ctx, cancel := context.WithCancel(n.roundCtx)
+	done := make(chan *processedBatch, 1)
+
+	batchStartTime := time.Now()
+	n.transitionLocked(StateProcessingBatch{&unresolvedBatch{}, batchStartTime, cancel, done, protocol.ExecutionModeSchedule})
+
+	// Request the worker host to process a batch. This is done in a separate
+	// goroutine so that the committee node can continue processing blocks.
+	blk := n.commonNode.CurrentBlock
+	consensusBlk := n.commonNode.CurrentConsensusBlock
+	epoch := n.commonNode.CurrentEpoch
+
+	go func() {
+		defer close(done)
+
+		initialBatch := make([][]byte, 0, len(batch))
+		for _, tx := range batch {
+			initialBatch = append(initialBatch, tx.Raw())
+		}
+
+		// Ask the runtime to execute the batch.
+		rsp, err := n.runtimeExecuteTxBatch(
+			ctx,
+			rt,
+			protocol.ExecutionModeSchedule,
+			epoch,
+			consensusBlk,
+			blk,
+			rtState,
+			roundResults,
+			hash.Hash{}, // IORoot is ignored as it is yet to be determined.
+			initialBatch,
+		)
+		if err != nil {
+			n.logger.Error("runtime batch execution failed",
+				"err", err,
+			)
+			return
+		}
+
+		// Remove any rejected transactions.
+		n.commonNode.TxPool.RemoveTxBatch(rsp.TxRejectHashes)
+
+		// Submit response to the executor worker.
+		done <- &processedBatch{
+			computed:        &rsp.Batch,
+			txHashes:        rsp.TxHashes,
+			txInputRoot:     rsp.TxInputRoot,
+			txInputWriteLog: rsp.TxInputWriteLog,
+		}
+	}()
 }
 
 // Guarded by n.commonNode.CrossNode.
@@ -974,6 +1067,95 @@ func (n *Node) startLocalStorageReplication(
 	return ch
 }
 
+func (n *Node) runtimeExecuteTxBatch(
+	ctx context.Context,
+	rt host.RichRuntime,
+	mode protocol.ExecutionMode,
+	epoch beacon.EpochTime,
+	consensusBlk *consensus.LightBlock,
+	blk *block.Block,
+	state *roothash.RuntimeState,
+	roundResults *roothash.RoundResults,
+	inputRoot hash.Hash,
+	inputs transaction.RawBatch,
+) (*protocol.RuntimeExecuteTxBatchResponse, error) {
+	// Fetch any incoming messages.
+	inMsgs, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueue(ctx, &roothash.InMessageQueueRequest{
+		RuntimeID: n.commonNode.Runtime.ID(),
+		Height:    consensusBlk.Height,
+	})
+	if err != nil {
+		n.logger.Error("failed to fetch incoming runtime message queue metadata",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	rq := &protocol.Body{
+		RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
+			Mode:           mode,
+			ConsensusBlock: *consensusBlk,
+			RoundResults:   roundResults,
+			IORoot:         inputRoot,
+			Inputs:         inputs,
+			InMessages:     inMsgs,
+			Block:          *blk,
+			Epoch:          epoch,
+			MaxMessages:    state.Runtime.Executor.MaxMessages,
+		},
+	}
+	batchSize.With(n.getMetricLabels()).Observe(float64(len(inputs)))
+
+	rtStartTime := time.Now()
+	defer func() {
+		batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
+	}()
+
+	rsp, err := rt.Call(ctx, rq)
+	switch {
+	case err == nil:
+	case errors.Is(err, context.Canceled):
+		// Context was canceled while the runtime was processing a request.
+		n.logger.Error("batch processing aborted by context, restarting runtime")
+
+		// Abort the runtime, so we can start processing the next batch.
+		abortCtx, cancel := context.WithTimeout(n.ctx, abortTimeout)
+		defer cancel()
+
+		if err = rt.Abort(abortCtx, false); err != nil {
+			n.logger.Error("failed to abort the runtime",
+				"err", err,
+			)
+		}
+		return nil, fmt.Errorf("batch processing aborted by context")
+	default:
+		n.logger.Error("error while sending batch processing request to runtime",
+			"err", err,
+		)
+		return nil, err
+	}
+	crash.Here(crashPointBatchProcessStartAfter)
+
+	if rsp.RuntimeExecuteTxBatchResponse == nil {
+		n.logger.Error("malformed response from runtime",
+			"response", rsp,
+		)
+		return nil, fmt.Errorf("malformed response from runtime")
+	}
+
+	// Update round batch weight limits.
+	n.limitsLastUpdateLock.Lock()
+	if err = n.commonNode.TxPool.UpdateWeightLimits(rsp.RuntimeExecuteTxBatchResponse.BatchWeightLimits); err != nil {
+		n.logger.Error("failed updating batch weight limits",
+			"err", err,
+		)
+	}
+	n.limitsLastUpdate = blk.Header.Round + 1
+	n.limitsLastUpdateLock.Unlock()
+
+	return rsp.RuntimeExecuteTxBatchResponse, nil
+}
+
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	if n.commonNode.CurrentBlock == nil {
@@ -1007,7 +1189,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	done := make(chan *processedBatch, 1)
 
 	batchStartTime := time.Now()
-	n.transitionLocked(StateProcessingBatch{batch, batchStartTime, cancel, done})
+	n.transitionLocked(StateProcessingBatch{batch, batchStartTime, cancel, done, protocol.ExecutionModeExecute})
 
 	rt := n.commonNode.GetHostedRuntime()
 	if rt == nil {
@@ -1041,78 +1223,25 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		// Optionally start local storage replication in parallel to batch dispatch.
 		replicateCh := n.startLocalStorageReplication(ctx, blk, batch.hash(), resolvedBatch)
 
-		// Fetch any incoming messages.
-		inMsgs, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueue(ctx, &roothash.InMessageQueueRequest{
-			RuntimeID: n.commonNode.Runtime.ID(),
-			Height:    height,
-		})
+		// Ask the runtime to execute the batch.
+		rsp, err := n.runtimeExecuteTxBatch(
+			ctx,
+			rt,
+			protocol.ExecutionModeExecute,
+			epoch,
+			consensusBlk,
+			blk,
+			state,
+			roundResults,
+			batch.hash(),
+			resolvedBatch,
+		)
 		if err != nil {
-			n.logger.Error("failed to fetch incoming runtime message queue metadata",
+			n.logger.Error("runtime batch execution failed",
 				"err", err,
 			)
 			return
 		}
-
-		rq := &protocol.Body{
-			RuntimeExecuteTxBatchRequest: &protocol.RuntimeExecuteTxBatchRequest{
-				ConsensusBlock: *consensusBlk,
-				RoundResults:   roundResults,
-				IORoot:         batch.hash(),
-				Inputs:         resolvedBatch,
-				InMessages:     inMsgs,
-				Block:          *blk,
-				Epoch:          epoch,
-				MaxMessages:    state.Runtime.Executor.MaxMessages,
-			},
-		}
-		batchSize.With(n.getMetricLabels()).Observe(float64(len(resolvedBatch)))
-
-		rtStartTime := time.Now()
-		defer func() {
-			batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
-		}()
-
-		rsp, err := rt.Call(ctx, rq)
-		switch {
-		case err == nil:
-		case errors.Is(err, context.Canceled):
-			// Context was canceled while the runtime was processing a request.
-			n.logger.Error("batch processing aborted by context, restarting runtime")
-
-			// Abort the runtime, so we can start processing the next batch.
-			abortCtx, cancel := context.WithTimeout(n.ctx, abortTimeout)
-			defer cancel()
-
-			if err = rt.Abort(abortCtx, false); err != nil {
-				n.logger.Error("failed to abort the runtime",
-					"err", err,
-				)
-			}
-			return
-		default:
-			n.logger.Error("error while sending batch processing request to runtime",
-				"err", err,
-			)
-			return
-		}
-		crash.Here(crashPointBatchProcessStartAfter)
-
-		if rsp.RuntimeExecuteTxBatchResponse == nil {
-			n.logger.Error("malformed response from runtime",
-				"response", rsp,
-			)
-			return
-		}
-
-		// Update round batch weight limits.
-		n.limitsLastUpdateLock.Lock()
-		if err = n.commonNode.TxPool.UpdateWeightLimits(rsp.RuntimeExecuteTxBatchResponse.BatchWeightLimits); err != nil {
-			n.logger.Error("failed updating batch weight limits",
-				"err", err,
-			)
-		}
-		n.limitsLastUpdate = blk.Header.Round + 1
-		n.limitsLastUpdateLock.Unlock()
 
 		// Wait for replication to complete before proposing a batch to ensure that we can cleanly
 		// apply any updates.
@@ -1130,8 +1259,9 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 
 		// Submit response to the executor worker.
 		done <- &processedBatch{
-			computed: &rsp.RuntimeExecuteTxBatchResponse.Batch,
+			computed: &rsp.Batch,
 			raw:      resolvedBatch,
+			txHashes: rsp.TxHashes,
 		}
 	}()
 }
@@ -1195,6 +1325,14 @@ func (n *Node) proposeBatch(
 		ec.Messages = batch.Messages
 	}
 
+	var inputRoot hash.Hash
+	switch {
+	case unresolved.proposal == nil:
+		inputRoot = processed.txInputRoot
+	default:
+		inputRoot = unresolved.hash()
+	}
+
 	// Commit I/O and state write logs to storage.
 	storageErr := func() error {
 		start := time.Now()
@@ -1208,7 +1346,7 @@ func (n *Node) proposeBatch(
 			Namespace: lastHeader.Namespace,
 			RootType:  storage.RootTypeIO,
 			SrcRound:  lastHeader.Round + 1,
-			SrcRoot:   unresolved.hash(),
+			SrcRoot:   inputRoot,
 			DstRound:  lastHeader.Round + 1,
 			DstRoot:   *batch.Header.IORoot,
 			WriteLog:  batch.IOWriteLog,
@@ -1263,12 +1401,21 @@ func (n *Node) proposeBatch(
 		return
 	}
 
+	// Due to backwards compatibility with runtimes that don't provide transaction hashes as output
+	// we need to manually compute them here.
+	if len(processed.raw) > 0 && len(processed.txHashes) == 0 {
+		processed.txHashes = make([]hash.Hash, 0, len(processed.raw))
+		for _, tx := range processed.raw {
+			processed.txHashes = append(processed.txHashes, hash.NewFromBytes(tx))
+		}
+	}
+
 	switch storageErr {
 	case nil:
 		n.transitionLocked(StateWaitingForFinalize{
 			batchStartTime: state.batchStartTime,
-			raw:            processed.raw,
 			proposedIORoot: *ec.Header.IORoot,
+			txHashes:       processed.txHashes,
 		})
 	default:
 		n.abortBatchLocked(storageErr)
@@ -1456,8 +1603,34 @@ func (n *Node) handleProcessedBatch(batch *processedBatch, processingCh chan *pr
 	roundCtx := n.roundCtx
 	lastHeader := n.commonNode.CurrentBlock.Header
 
-	// Successfully processed a batch.
-	if batch != nil && batch.computed != nil {
+	switch {
+	case batch == nil || batch.computed == nil:
+		// There was an issue during batch processing.
+	case state.mode == protocol.ExecutionModeSchedule:
+		// Scheduling was processed successfully.
+		n.logger.Info("runtime has finished scheduling a batch",
+			"input_root", batch.txInputRoot,
+			"tx_hashes", batch.txHashes,
+		)
+		err := n.schedulerStoreTransactions(roundCtx, n.commonNode.CurrentBlock, batch.txInputWriteLog, batch.txInputRoot)
+		if err != nil {
+			n.logger.Error("failed to store transaction",
+				"err", err,
+			)
+			break
+		}
+
+		// Create and submit a proposal.
+		_, err = n.schedulerCreateProposalLocked(roundCtx, batch.txInputRoot, batch.txHashes)
+		if err != nil {
+			n.logger.Error("failed to create proposal",
+				"err", err,
+			)
+			break
+		}
+		fallthrough
+	default:
+		// Batch was processed successfully.
 		stateBatch := state.batch
 		n.commonNode.CrossNode.Unlock()
 		n.logger.Info("worker has finished processing a batch")
