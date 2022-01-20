@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	scheduling "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 )
 
 type clientHost struct {
@@ -92,6 +93,10 @@ func (h *clientHost) GetKeyManagerClient(ctx context.Context) (keymanagerClientA
 		return nil, fmt.Errorf("failed to create key manager client: %w", err)
 	}
 	return h.keyManagerClient, nil
+}
+
+func (h *clientHost) GetTxPool(ctx context.Context) (scheduling.Scheduler, error) {
+	return nil, fmt.Errorf("not available")
 }
 
 func (h *clientHost) worker() {

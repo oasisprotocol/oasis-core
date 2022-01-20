@@ -49,6 +49,7 @@ func (r *runtime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoRespons
 	return &protocol.RuntimeInfoResponse{
 		ProtocolVersion: version.RuntimeHostProtocol,
 		RuntimeVersion:  version.MustFromString("0.0.0"),
+		Features:        nil,
 	}, nil
 }
 

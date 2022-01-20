@@ -103,6 +103,8 @@ type Body struct {
 	HostLocalStorageSetResponse     *Empty                           `json:",omitempty"`
 	HostFetchConsensusBlockRequest  *HostFetchConsensusBlockRequest  `json:",omitempty"`
 	HostFetchConsensusBlockResponse *HostFetchConsensusBlockResponse `json:",omitempty"`
+	HostFetchTxBatchRequest         *HostFetchTxBatchRequest         `json:",omitempty"`
+	HostFetchTxBatchResponse        *HostFetchTxBatchResponse        `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -151,13 +153,35 @@ type RuntimeInfoRequest struct {
 	LocalConfig map[string]interface{} `json:"local_config,omitempty"`
 }
 
-// RuntimeInfoResponse is a worker info response message body.
+// Features is a set of supported runtime features.
+type Features struct {
+	// ScheduleControl is the schedule control feature.
+	ScheduleControl *FeatureScheduleControl `json:"schedule_control,omitempty"`
+}
+
+// HasScheduleControl returns true when the runtime supports the schedule control feature.
+func (f *Features) HasScheduleControl() bool {
+	return f != nil && f.ScheduleControl != nil
+}
+
+// FeatureScheduleControl is a feature specifying that the runtime supports controlling the
+// scheduling of batches. This means that the scheduler should only take priority into account and
+// ignore weights, leaving it up to the runtime to decide which transactions to include.
+type FeatureScheduleControl struct {
+	// InitialBatchSize is the size of the initial batch of transactions.
+	InitialBatchSize uint32 `json:"initial_batch_size"`
+}
+
+// RuntimeInfoResponse is a runtime info response message body.
 type RuntimeInfoResponse struct {
-	// ProtocolVersion is the runtime protocol version supported by the worker.
+	// ProtocolVersion is the runtime protocol version supported by the runtime.
 	ProtocolVersion version.Version `json:"protocol_version"`
 
 	// RuntimeVersion is the version of the runtime.
 	RuntimeVersion version.Version `json:"runtime_version"`
+
+	// Features describe the features supported by the runtime.
+	Features *Features `json:"features,omitempty"`
 }
 
 // RuntimeCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE
@@ -281,8 +305,27 @@ func (b *ComputedBatch) String() string {
 	return "<ComputedBatch>"
 }
 
+// ExecutionMode is the batch execution mode.
+type ExecutionMode uint8
+
+const (
+	// ExecutionModeExecute is the execution mode where the batch of transactions is executed as-is
+	// without the ability to perform any modifications to the batch.
+	ExecutionModeExecute = 0
+	// ExecutionModeSchedule is the execution mode where the runtime is in control of scheduling and
+	// may arbitrarily modify the batch during execution.
+	//
+	// This execution mode will only be used in case the runtime advertises to support the schedule
+	// control feature. In this case the call will only contain up to InitialBatchSize transactions
+	// and the runtime will need to request more if it needs more.
+	ExecutionModeSchedule = 1
+)
+
 // RuntimeExecuteTxBatchRequest is a worker execute tx batch request message body.
 type RuntimeExecuteTxBatchRequest struct {
+	// Mode is the execution mode.
+	Mode ExecutionMode `json:"mode,omitempty"`
+
 	// ConsensusBlock is the consensus light block at the last finalized round
 	// height (e.g., corresponding to .Block.Header.Round).
 	ConsensusBlock consensus.LightBlock `json:"consensus_block"`
@@ -309,6 +352,16 @@ type RuntimeExecuteTxBatchRequest struct {
 type RuntimeExecuteTxBatchResponse struct {
 	Batch             ComputedBatch                 `json:"batch"`
 	BatchWeightLimits map[transaction.Weight]uint64 `json:"batch_weight_limits"`
+
+	// TxHashes are the transaction hashes of the included batch.
+	TxHashes []hash.Hash `json:"tx_hashes,omitempty"`
+	// TxRejectHashes are the transaction hashes of transactions that should be immediately removed
+	// from the scheduling queue as they are invalid.
+	TxRejectHashes []hash.Hash `json:"tx_reject_hashes,omitempty"`
+	// TxInputRoot is the root hash of all transaction inputs.
+	TxInputRoot hash.Hash `json:"tx_input_root,omitempty"`
+	// TxInputWriteLog is the write log for generating transaction inputs.
+	TxInputWriteLog storage.WriteLog `json:"tx_input_write_log,omitempty"`
 }
 
 // RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request
@@ -406,4 +459,20 @@ type HostFetchConsensusBlockRequest struct {
 // HostFetchConsensusBlockResponse is a response from host fetching the given consensus light block.
 type HostFetchConsensusBlockResponse struct {
 	Block consensus.LightBlock `json:"block"`
+}
+
+// HostFetchTxBatchRequest is a request to host to fetch a further batch of transactions.
+type HostFetchTxBatchRequest struct {
+	// Offset specifies the transaction hash that should serve as an offset when returning
+	// transactions from the pool. Transactions will be skipped until the given hash is encountered
+	// and only following transactions will be returned.
+	Offset *hash.Hash `json:"offset,omitempty"`
+	// Limit specifies the maximum size of the batch to request.
+	Limit uint32 `json:"limit"`
+}
+
+// HostFetchTxBatchResponse is a response from host fetching the given transaction batch.
+type HostFetchTxBatchResponse struct {
+	// Batch is a batch of transactions.
+	Batch [][]byte `json:"batch,omitempty"`
 }
