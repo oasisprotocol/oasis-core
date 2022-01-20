@@ -304,13 +304,13 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 	return nil
 }
 
-func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) error {
+func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) (interface{}, error) {
 	switch kind {
 	case registryApi.MessageNewRuntimeRegistered:
 		// A new runtime has been registered.
 		if ctx.IsInitChain() {
 			// Ignore messages emitted during InitChain as we handle these separately.
-			return nil
+			return nil, nil
 		}
 		rt := msg.(*registry.Runtime)
 
@@ -318,22 +318,22 @@ func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg int
 			"runtime", rt.ID,
 		)
 
-		return app.onNewRuntime(ctx, rt, nil, false)
+		return nil, app.onNewRuntime(ctx, rt, nil, false)
 	case registryApi.MessageRuntimeUpdated:
 		// A runtime registration has been updated or a new runtime has been registered.
 		if ctx.IsInitChain() {
 			// Ignore messages emitted during InitChain as we handle these separately.
-			return nil
+			return nil, nil
 		}
-		return app.verifyRuntimeUpdate(ctx, msg.(*registry.Runtime))
+		return nil, app.verifyRuntimeUpdate(ctx, msg.(*registry.Runtime))
 	case registryApi.MessageRuntimeResumed:
 		// A previously suspended runtime has been resumed.
-		return nil
+		return nil, nil
 	case roothashApi.RuntimeMessageNoop:
 		// Noop message always succeeds.
-		return nil
+		return nil, nil
 	default:
-		return roothash.ErrInvalidArgument
+		return nil, roothash.ErrInvalidArgument
 	}
 }
 

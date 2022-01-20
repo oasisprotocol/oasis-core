@@ -3,8 +3,8 @@
 ## Changelog
 
 - 2021-12-04: Initial version
-
 - 2021-12-10: Extend the implementation section
+- 2022-01-27: Update the concrete result types
 
 ## Status
 
@@ -78,27 +78,27 @@ type MessageSubscriber interface {
 // MessageDispatcher is a message dispatcher interface.
 type MessageDispatcher interface {
         // Publish publishes a message of a given kind by dispatching to all subscribers.
+        // Subscribers can return a result, but at most one subscriber should return a
+        // non-nil result to any published message. Panics in case more than one subscriber
+        // returns a non-nil result.
         //
         // In case there are no subscribers ErrNoSubscribers is returned.
-        Publish(ctx *Context, kind, msg interface{}) ([]interface{}, error)
+        Publish(ctx *Context, kind, msg interface{}) (interface{}, error)
 }
 ```
 
-In case the `Publish` `error` is `nil` the Roothash backend propagates the first
+In case the `Publish` `error` is `nil` the Roothash backend propagates the
 result to the emitted `MessageEvent`.
 
 With these changes the runtime is able to obtain message execution results via
 `MessageEvents` in `RoundResults`.
 
-### Escrow events
+### Message Execution Results
 
-Already existing staking consensus events are leveraged and used as result types
-to runtime message execution messages.
-
-- `AddEscrow` message execution result is the `AddEscrowEvent`:
+- `AddEscrow` message execution result is the `AddEscrowResult`:
 
 ```golang
-type AddEscrowEvent struct {
+type AddEscrowResult struct {
         Owner     Address           `json:"owner"`
         Escrow    Address           `json:"escrow"`
         Amount    quantity.Quantity `json:"amount"`
@@ -106,48 +106,42 @@ type AddEscrowEvent struct {
 }
 ```
 
-- `ReclaimEscrow` message execution result is the (updated)
-  `DebondingStartEscrowEvent`:
+- `ReclaimEscrow` message execution result is the
+  `ReclaimEscrowResult`:
 
 ```golang
-type DebondingStartEscrowEvent struct {
+type ReclaimEscrowResult struct {
         Owner           Address           `json:"owner"`
         Escrow          Address           `json:"escrow"`
         Amount          quantity.Quantity `json:"amount"`
-        ActiveShares    quantity.Quantity `json:"active_shares"`
         DebondingShares quantity.Quantity `json:"debonding_shares"`
-
-        // Added.
-        DebondEndTime   beacon.EpochTime `json:"debond_end_time"`
+        RemainingShares quantity.Quantity `json:"remaining_shares"`
+        DebondEndTime   beacon.EpochTime  `json:"debond_end_time"`
 }
 ```
 
-`DebondEndTime` field is added to the `DebondingStartEscrowEvent`.
-
-For completeness, other staking messages also return corresponding events in
-message results:
-
-- `Transfer` message execution result is the `TransferEvent`:
+- `Transfer` message execution result is the `TransferResult`:
 
 ```golang
-type TransferEvent struct {
+type TransferResult struct {
         From   Address           `json:"from"`
         To     Address           `json:"to"`
         Amount quantity.Quantity `json:"amount"`
 }
 ```
 
-- `Withdraw` message execution results in `AllowanceChangeEvent`:
+- `Withdraw` message execution result is the `WithdrawResult`:
 
 ```golang
-type AllowanceChangeEvent struct {
+type WithdrawResult struct {
         Owner        Address           `json:"owner"`
         Beneficiary  Address           `json:"beneficiary"`
         Allowance    quantity.Quantity `json:"allowance"`
-        Negative     bool              `json:"negative,omitempty"`
         AmountChange quantity.Quantity `json:"amount_change"`
 }
 ```
+
+- `UpdateRuntime` message execution result is the registry `Runtime` descriptor.
 
 ## Consequences
 

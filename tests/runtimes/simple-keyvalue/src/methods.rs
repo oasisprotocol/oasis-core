@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use io_context::Context as IoContext;
 
+use super::{crypto::EncryptionContext, types::*, Context, TxContext};
 use oasis_core_keymanager_client::KeyPairId;
 use oasis_core_runtime::{
     common::{
@@ -13,15 +14,17 @@ use oasis_core_runtime::{
     },
     consensus::{
         address::Address,
+        registry::Runtime,
         roothash::{Message, RegistryMessage, StakingMessage},
-        staking::{Account, Delegation},
+        staking::{
+            Account, AddEscrowResult, Delegation, ReclaimEscrowResult, TransferResult,
+            WithdrawResult,
+        },
         state::staking::ImmutableState as StakingImmutableState,
     },
     storage::MKVS,
     types::Error as RuntimeError,
 };
-
-use super::{crypto::EncryptionContext, types::*, Context, TxContext};
 
 /// Implementation of the transaction methods supported by the test runtime.
 pub struct Methods;
@@ -381,23 +384,40 @@ impl BlockHandler {
             // Make sure metadata is as expected.
             match meta.as_ref().map(|v| v.as_slice()) {
                 Some(b"withdraw") => {
-                    // Withdraw.
+                    let _: WithdrawResult =
+                        cbor::from_value(ev.result.clone().expect("withdraw result should exist"))
+                            .expect("withdraw result should deserialize correctly");
                 }
 
                 Some(b"transfer") => {
-                    // Transfer.
+                    let _: TransferResult =
+                        cbor::from_value(ev.result.clone().expect("transfer result should exist"))
+                            .expect("transfer result should deserialize correctly");
                 }
 
                 Some(b"add_escrow") => {
-                    // AddEscrow.
+                    let _: AddEscrowResult = cbor::from_value(
+                        ev.result.clone().expect("add escrow result should exist"),
+                    )
+                    .expect("add escrow result should deserialize correctly");
                 }
 
                 Some(b"reclaim_escrow") => {
-                    // ReclaimEscrow.
+                    let _: ReclaimEscrowResult = cbor::from_value(
+                        ev.result
+                            .clone()
+                            .expect("reclaim escrow result should exist"),
+                    )
+                    .expect("reclaim escrow result should deserialize correctly");
                 }
 
                 Some(b"update_runtime") => {
-                    // UpdateRuntime.
+                    let _: Runtime = cbor::from_value(
+                        ev.result
+                            .clone()
+                            .expect("update runtime result should exist"),
+                    )
+                    .expect("update runtime result should deserialize correctly");
                 }
 
                 meta => panic!("unexpected message metadata: {:?}", meta),

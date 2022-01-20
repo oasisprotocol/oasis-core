@@ -1076,7 +1076,7 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 		ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
 		defer ctx.Close()
 
-		if err = mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {
+		if _, err = mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {
 			mux.logger.Error("failed to dispatch state sync completed message",
 				"err", err,
 			)
@@ -1161,7 +1161,7 @@ func (mux *abciMux) finishInitialization() error {
 		ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
 		defer ctx.Close()
 
-		if err := mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {
+		if _, err := mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {
 			mux.logger.Error("failed to dispatch state sync completed message",
 				"err", err,
 			)

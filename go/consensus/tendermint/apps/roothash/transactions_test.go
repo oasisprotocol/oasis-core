@@ -39,7 +39,7 @@ func (nd *testMsgDispatcher) Subscribe(interface{}, abciAPI.MessageSubscriber) {
 }
 
 // Implements MessageDispatcher.
-func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}) error {
+func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}) (interface{}, error) {
 	// Either we need to be in simulation mode or the gas accountant must be a no-op one.
 	if !ctx.IsSimulation() && ctx.Gas() != abciAPI.NewNopGasAccountant() {
 		panic("gas estimation should always use simulation mode")
@@ -59,40 +59,40 @@ func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}
 		switch {
 		case m.Transfer != nil:
 			if err := ctx.Gas().UseGas(1, staking.GasOpTransfer, gasCosts); err != nil {
-				return err
+				return nil, err
 			}
-			return nil
+			return nil, nil
 		case m.Withdraw != nil:
 			if err := ctx.Gas().UseGas(1, staking.GasOpWithdraw, gasCosts); err != nil {
-				return err
+				return nil, err
 			}
-			return nil
+			return nil, nil
 		case m.AddEscrow != nil:
 			if err := ctx.Gas().UseGas(1, staking.GasOpAddEscrow, gasCosts); err != nil {
-				return err
+				return nil, err
 			}
-			return nil
+			return nil, nil
 		case m.ReclaimEscrow != nil:
 			if err := ctx.Gas().UseGas(1, staking.GasOpReclaimEscrow, gasCosts); err != nil {
-				return err
+				return nil, err
 			}
-			return nil
+			return nil, nil
 		default:
-			return staking.ErrInvalidArgument
+			return nil, staking.ErrInvalidArgument
 		}
 	case roothashApi.RuntimeMessageRegistry:
 		m := msg.(*message.RegistryMessage)
 		switch {
 		case m.UpdateRuntime != nil:
 			if err := ctx.Gas().UseGas(1, registry.GasOpRegisterRuntime, gasCosts); err != nil {
-				return err
+				return nil, err
 			}
-			return nil
+			return nil, nil
 		default:
-			return registry.ErrInvalidArgument
+			return nil, registry.ErrInvalidArgument
 		}
 	default:
-		return staking.ErrInvalidArgument
+		return nil, staking.ErrInvalidArgument
 	}
 }
 

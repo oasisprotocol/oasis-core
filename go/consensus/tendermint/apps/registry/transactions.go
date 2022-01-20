@@ -507,7 +507,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			)
 
 			// Notify other interested applications about the resumed runtime.
-			if err = app.md.Publish(ctx, registryApi.MessageRuntimeResumed, rt); err != nil {
+			if _, err = app.md.Publish(ctx, registryApi.MessageRuntimeResumed, rt); err != nil {
 				ctx.Logger().Error("RegisterNode: failed to dispatch runtime resumption message",
 					"err", err,
 				)
@@ -612,40 +612,40 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	ctx *api.Context,
 	state *registryState.MutableState,
 	rt *registry.Runtime,
-) error {
+) (*registry.Runtime, error) {
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("RegisterRuntime: failed to fetch consensus parameters",
 			"err", err,
 		)
-		return err
+		return nil, err
 	}
 
 	if params.DisableRuntimeRegistration {
-		return registry.ErrForbidden
+		return nil, registry.ErrForbidden
 	}
 
 	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false); err != nil {
-		return err
+		return nil, err
 	}
 
 	if rt.Kind == registry.KindKeyManager && params.DisableKeyManagerRuntimeRegistration {
-		return registry.ErrForbidden
+		return nil, registry.ErrForbidden
 	}
 
 	if rt.Kind == registry.KindCompute {
 		if err = registry.VerifyRegisterComputeRuntimeArgs(ctx, ctx.Logger(), rt, state); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	if ctx.IsCheckOnly() {
-		return nil
+		return nil, nil
 	}
 
 	// Charge gas for this transaction.
 	if err = ctx.Gas().UseGas(1, registry.GasOpRegisterRuntime, params.GasCosts); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Make sure the runtime doesn't exist yet.
@@ -661,16 +661,16 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			suspended = true
 		case registry.ErrNoSuchRuntime:
 		default:
-			return fmt.Errorf("failed to fetch suspended runtime: %w", err)
+			return nil, fmt.Errorf("failed to fetch suspended runtime: %w", err)
 		}
 	default:
-		return fmt.Errorf("failed to fetch runtime: %w", err)
+		return nil, fmt.Errorf("failed to fetch runtime: %w", err)
 	}
 	// If there is an existing runtime, verify update.
 	if existingRt != nil {
 		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -694,21 +694,21 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		expectedAddr := rtToCheck.StakingAddress()
 		if expectedAddr == nil {
 			ctx.Logger().Error("RegisterRuntime: runtimes with consensus-layer governance can only be registered at genesis")
-			return registry.ErrForbidden
+			return nil, registry.ErrForbidden
 		}
 
 		if !ctx.CallerAddress().Equal(*expectedAddr) {
 			switch rtToCheck.GovernanceModel {
 			case registry.GovernanceEntity:
 				ctx.Logger().Error("RegisterRuntime: transaction must be signed by controlling entity")
-				return registry.ErrIncorrectTxSigner
+				return nil, registry.ErrIncorrectTxSigner
 			case registry.GovernanceRuntime:
 				ctx.Logger().Error("RegisterRuntime: caller must be the runtime itself")
-				return registry.ErrForbidden
+				return nil, registry.ErrForbidden
 			default:
 				// Basic validation should have caught this, but just in case...
 				ctx.Logger().Error("RegisterRuntime: invalid governance model")
-				return registry.ErrInvalidArgument
+				return nil, registry.ErrInvalidArgument
 			}
 		}
 	}
@@ -727,7 +727,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		default:
 			// Basic validation should have caught this, but just in case...
 			ctx.Logger().Error("RegisterRuntime: invalid governance model")
-			return registry.ErrInvalidArgument
+			return nil, registry.ErrInvalidArgument
 		}
 
 		if err = stakingState.AddStakeClaim(ctx, acctAddr, claim, thresholds); err != nil {
@@ -737,25 +737,25 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 				"runtime", rt.ID,
 				"account", acctAddr,
 			)
-			return err
+			return nil, err
 		}
 	}
 
 	// Notify other interested applications about the new runtime.
 	if existingRt == nil {
-		if err = app.md.Publish(ctx, registryApi.MessageNewRuntimeRegistered, rt); err != nil {
+		if _, err = app.md.Publish(ctx, registryApi.MessageNewRuntimeRegistered, rt); err != nil {
 			ctx.Logger().Error("RegisterRuntime: failed to dispatch message",
 				"err", err,
 			)
-			return err
+			return nil, err
 		}
 	}
 
-	if err = app.md.Publish(ctx, registryApi.MessageRuntimeUpdated, rt); err != nil {
+	if _, err = app.md.Publish(ctx, registryApi.MessageRuntimeUpdated, rt); err != nil {
 		ctx.Logger().Error("RegisterRuntime: failed to dispatch message",
 			"err", err,
 		)
-		return err
+		return nil, err
 	}
 
 	if err = state.SetRuntime(ctx, rt, suspended); err != nil {
@@ -764,7 +764,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			"runtime", rt,
 			"entity", rt.EntityID,
 		)
-		return fmt.Errorf("failed to set runtime: %w", err)
+		return nil, fmt.Errorf("failed to set runtime: %w", err)
 	}
 
 	if !suspended {
@@ -775,5 +775,5 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
 	}
 
-	return nil
+	return rt, nil
 }

@@ -115,7 +115,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	return nil
 }
 
-func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
 	state := stakingState.NewMutableState(ctx.State())
 
 	switch kind {
@@ -131,10 +131,10 @@ func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interf
 		case m.ReclaimEscrow != nil:
 			return app.reclaimEscrow(ctx, state, m.ReclaimEscrow)
 		default:
-			return staking.ErrInvalidArgument
+			return nil, staking.ErrInvalidArgument
 		}
 	default:
-		return staking.ErrInvalidArgument
+		return nil, staking.ErrInvalidArgument
 	}
 }
 
@@ -148,7 +148,8 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 			return err
 		}
 
-		return app.transfer(ctx, state, &xfer)
+		_, err := app.transfer(ctx, state, &xfer)
+		return err
 	case staking.MethodBurn:
 		var burn staking.Burn
 		if err := cbor.Unmarshal(tx.Body, &burn); err != nil {
@@ -162,14 +163,16 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 			return err
 		}
 
-		return app.addEscrow(ctx, state, &escrow)
+		_, err := app.addEscrow(ctx, state, &escrow)
+		return err
 	case staking.MethodReclaimEscrow:
 		var reclaim staking.ReclaimEscrow
 		if err := cbor.Unmarshal(tx.Body, &reclaim); err != nil {
 			return err
 		}
 
-		return app.reclaimEscrow(ctx, state, &reclaim)
+		_, err := app.reclaimEscrow(ctx, state, &reclaim)
+		return err
 	case staking.MethodAmendCommissionSchedule:
 		var amend staking.AmendCommissionSchedule
 		if err := cbor.Unmarshal(tx.Body, &amend); err != nil {
@@ -190,7 +193,8 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 			return err
 		}
 
-		return app.withdraw(ctx, state, &withdraw)
+		_, err := app.withdraw(ctx, state, &withdraw)
+		return err
 	default:
 		return staking.ErrInvalidArgument
 	}

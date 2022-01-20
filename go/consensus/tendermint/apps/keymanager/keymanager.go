@@ -60,8 +60,8 @@ func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context, request types.R
 	return nil
 }
 
-func (app *keymanagerApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) error {
-	return fmt.Errorf("keymanager: unexpected message")
+func (app *keymanagerApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg interface{}) (interface{}, error) {
+	return nil, fmt.Errorf("keymanager: unexpected message")
 }
 
 func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {

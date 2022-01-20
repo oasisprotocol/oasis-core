@@ -62,8 +62,8 @@ func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState
 func (app *supplementarySanityApplication) OnCleanup() {
 }
 
-func (app *supplementarySanityApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
-	return fmt.Errorf("supplementarysanity: unexpected message")
+func (app *supplementarySanityApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+	return nil, fmt.Errorf("supplementarysanity: unexpected message")
 }
 
 func (app *supplementarySanityApplication) ExecuteTx(*api.Context, *transaction.Transaction) error {

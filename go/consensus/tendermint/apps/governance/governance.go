@@ -83,7 +83,7 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 	}
 }
 
-func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
 	state := governanceState.NewMutableState(ctx.State())
 
 	switch kind {
@@ -92,7 +92,7 @@ func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg int
 		// sure we don't miss them after the sync.
 		pendingUpgrades, err := state.PendingUpgrades(ctx)
 		if err != nil {
-			return fmt.Errorf("tendermint/governance: couldn't get pending upgrades: %w", err)
+			return nil, fmt.Errorf("tendermint/governance: couldn't get pending upgrades: %w", err)
 		}
 
 		// Apply all pending upgrades locally.
@@ -108,9 +108,10 @@ func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg int
 				}
 			}
 		}
-		return nil
+		// No execute message results at this time.
+		return nil, nil
 	default:
-		return governance.ErrInvalidArgument
+		return nil, governance.ErrInvalidArgument
 	}
 }
 
