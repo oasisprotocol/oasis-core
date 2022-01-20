@@ -24,6 +24,23 @@ pub trait Dispatcher: Send + Sync {
         in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError>;
 
+    /// Schedule and execute transactions in the given batch.
+    ///
+    /// The passed batch is an initial batch. In case the runtime needs additional items it should
+    /// request them from the host.
+    fn schedule_and_execute_batch(
+        &self,
+        _ctx: Context,
+        _initial_batch: &mut TxnBatch,
+        _in_msgs: &[roothash::IncomingMessage],
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
+        Err(RuntimeError::new(
+            "rhp/dispatcher",
+            3,
+            "scheduling not supported",
+        ))
+    }
+
     /// Check the transactions in the given batch for validity.
     fn check_batch(
         &self,
@@ -62,6 +79,15 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
         T::execute_batch(&*self, ctx, batch, in_msgs)
     }
 
+    fn schedule_and_execute_batch(
+        &self,
+        ctx: Context,
+        initial_batch: &mut TxnBatch,
+        in_msgs: &[roothash::IncomingMessage],
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
+        T::schedule_and_execute_batch(&*self, ctx, initial_batch, in_msgs)
+    }
+
     fn check_batch(
         &self,
         ctx: Context,
@@ -91,6 +117,15 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
         in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
         T::execute_batch(&*self, ctx, batch, in_msgs)
+    }
+
+    fn schedule_and_execute_batch(
+        &self,
+        ctx: Context,
+        initial_batch: &mut TxnBatch,
+        in_msgs: &[roothash::IncomingMessage],
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
+        T::schedule_and_execute_batch(&*self, ctx, initial_batch, in_msgs)
     }
 
     fn check_batch(
@@ -135,6 +170,10 @@ pub struct ExecuteBatchResult {
     /// Batch weight limits valid for next round. This is used as a fast-path,
     /// to avoid having the transaction scheduler query these on every round.
     pub batch_weight_limits: Option<BTreeMap<TransactionWeight, u64>>,
+    /// Hashes of transactions to reject.
+    ///
+    /// Note that these are only taken into account in schedule execution mode.
+    pub tx_reject_hashes: Vec<Hash>,
 }
 
 /// No-op dispatcher.
@@ -162,6 +201,23 @@ impl Dispatcher for NoopDispatcher {
             block_tags: Tags::new(),
             batch_weight_limits: None,
             in_msgs_count: in_msgs.len(),
+            tx_reject_hashes: Vec::new(),
+        })
+    }
+
+    fn schedule_and_execute_batch(
+        &self,
+        _ctx: Context,
+        _initial_batch: &mut TxnBatch,
+        in_msgs: &[roothash::IncomingMessage],
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
+        Ok(ExecuteBatchResult {
+            results: Vec::new(),
+            messages: Vec::new(),
+            block_tags: Tags::new(),
+            batch_weight_limits: None,
+            in_msgs_count: in_msgs.len(),
+            tx_reject_hashes: Vec::new(),
         })
     }
 
