@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -41,6 +42,14 @@ type runtime struct {
 // Implements host.Runtime.
 func (r *runtime) ID() common.Namespace {
 	return r.runtimeID
+}
+
+// Implements host.Runtime.
+func (r *runtime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoResponse, err error) {
+	return &protocol.RuntimeInfoResponse{
+		ProtocolVersion: version.RuntimeHostProtocol,
+		RuntimeVersion:  version.MustFromString("0.0.0"),
+	}, nil
 }
 
 // Implements host.Runtime.

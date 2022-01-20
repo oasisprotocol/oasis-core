@@ -94,6 +94,12 @@ func TestEchoRequestResponse(t *testing.T) {
 	require.Panics(func() { _ = protoA.InitGuest(context.Background(), connA) }, "connection reinit should panic")
 	require.Panics(func() { _, _ = protoB.InitHost(context.Background(), connB, &HostInfo{}) }, "connection reinit should panic")
 	require.Panics(func() { _ = protoB.InitGuest(context.Background(), connB) }, "connection reinit should panic")
+
+	info, err := protoA.GetInfo(context.Background())
+	require.Error(err, "GetInfo should fail for guest connections")
+	info, err = protoB.GetInfo(context.Background())
+	require.NoError(err, "GetInfo should succeed for host connections")
+	require.EqualValues(version.RuntimeHostProtocol, info.ProtocolVersion)
 }
 
 func TestBigMessage(t *testing.T) {
