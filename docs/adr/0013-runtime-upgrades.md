@@ -26,52 +26,12 @@ Runtime descriptor related changes:
 ```golang
 // Runtime represents a runtime.
 type Runtime struct { // nolint: maligned
-	cbor.Versioned
-
-	// ID is a globally unique long term identifier of the runtime.
-	ID common.Namespace `json:"id"`
-
-	// EntityID is the public key identifying the Entity controlling
-	// the runtime.
-	EntityID signature.PublicKey `json:"entity_id"`
-
-	// Genesis is the runtime genesis information.
-	Genesis RuntimeGenesis `json:"genesis"`
-
-	// Kind is the type of runtime.
-	Kind RuntimeKind `json:"kind"`
-
-	// TEEHardware specifies the runtime's TEE hardware requirements.
-	TEEHardware node.TEEHardware `json:"tee_hardware"`
-
-	// KeyManager is the key manager runtime ID for this runtime.
-	KeyManager *common.Namespace `json:"key_manager,omitempty"`
-
-	// Executor stores parameters of the executor committee.
-	Executor ExecutorParameters `json:"executor,omitempty"`
-
-	// TxnScheduler stores transaction scheduling parameters of the executor
-	// committee.
-	TxnScheduler TxnSchedulerParameters `json:"txn_scheduler,omitempty"`
-
-	// Storage stores parameters of the storage committee.
-	Storage StorageParameters `json:"storage,omitempty"`
-
-	// AdmissionPolicy sets which nodes are allowed to register for this runtime.
-	// This policy applies to all roles.
-	AdmissionPolicy RuntimeAdmissionPolicy `json:"admission_policy"`
-
-	// Constraints are the node scheduling constraints.
-	Constraints map[scheduler.CommitteeKind]map[scheduler.Role]SchedulingConstraints `json:"constraints,omitempty"`
-
-	// Staking stores the runtime's staking-related parameters.
-	Staking RuntimeStakingParameters `json:"staking,omitempty"`
-
-	// GovernanceModel specifies the runtime governance model.
-	GovernanceModel RuntimeGovernanceModel `json:"governance_model"`
-
 	// Deployments specifies the runtime deployments (versions).
 	Deployments []*VersionInfo `json:"deployments"`
+
+	// Version field isrelocated to inside the VersionInfo structure.
+
+	// Other unchanged fields omitted for brevity.
 }
 
 // VersionInfo is the per-runtime version information.
@@ -96,15 +56,22 @@ The intended workflow here is to:
 - Deploy runtimes with the initial Deployment populated.
 
 - Update the runtime version via the deployment of a new version
-  of the descriptor with an additional version info entry.  Nodes
-  must upgrade their runtime binary and configuration by the
-  `ValidFrom` epoch or the runtime will halt.
+  of the descriptor with an additional version info entry.
+  Sufficient nodes must upgrade their runtime binary and
+  configuration by the `ValidFrom` epoch or the runtime will fail
+  to be scheduled (no special handling is done, this is the existing
+  "insufficient nodes" condition).
 
 - Aborting or altering pending updates via the deployment of a new version
   of the descriptor with the removed/ammended not-yet-valid `Deployments`
   is possible in this design, but perhaps should be forbidden.
 
-- Altering exisiting `Deployments` entries is strictly forbidden.
+- Altering exisiting `Deployments` entries is strictly forbidden,
+  except the removal of superceded descriptors.
+
+- Deploying descriptors with `Deployments` that will never be valid
+  (as in one that is superceded by a newer version) is strictly
+  forbidden.
 
 The `RuntimeHash` digest is to be used on each exeuctor node to catch
 misconfiguration.  It will be enforced on a per-node basis, with an
@@ -114,6 +81,9 @@ builds, there is no reason in the common case why a mismatch should occur.
 The existing node descriptor is a flat vector of `Runtime` entries
 containing the runtime ID, version, and TEE information, so no changes
 are required.
+
+On transition to an epoch where a new version takes effect, the consensus
+layer MAY prune the descriptor's `Deployments` field of superceded versions.
 
 The only scheduler and worker side changes are to incorporate the runtime
 version into scheduling, and to pick the correct deployed version of the
