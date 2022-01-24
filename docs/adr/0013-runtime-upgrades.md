@@ -86,12 +86,8 @@ type VersionInfo struct {
 	// format if any.
 	TEE []byte `json:"tee,omitempty"`
 
-	// TODO: Figure out if there should be a digest of the enclave binary
-	// to catch misconfigurations.  It is the author's opinion that such
-	// a thing should exist, and that it is compatible with people's desires
-	// to build their own runtime binaries, and any mismatches are a failure
-	// of our build process to be deterministic, a documetnation failure,
-	// or user error.
+	// RuntimeHash is the cryptographic digest of the runtime binary.
+	RuntimeHash hash.Hash `json:"runtime_hash"`
 }
 ```
 
@@ -109,6 +105,11 @@ The intended workflow here is to:
   is possible in this design, but perhaps should be forbidden.
 
 - Altering exisiting `Deployments` entries is strictly forbidden.
+
+The `RuntimeHash` digest is to be used on each exeuctor node to catch
+misconfiguration.  It will be enforced on a per-node basis, with an
+optional (unsafe) way to disable verification, though with deterministic
+builds, there is no reason in the common case why a mismatch should occur.
 
 The existing node descriptor is a flat vector of `Runtime` entries
 containing the runtime ID, version, and TEE information, so no changes
