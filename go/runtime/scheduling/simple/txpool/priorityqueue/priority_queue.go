@@ -163,6 +163,11 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 
 func (q *priorityQueue) removeTxsLocked(items []*item) {
 	for _, item := range items {
+		// Skip already removed items to avoid corrupting the list in case of duplicates.
+		if _, exists := q.transactions[item.tx.Hash()]; !exists {
+			continue
+		}
+
 		delete(q.transactions, item.tx.Hash())
 		q.priorityIndex.Delete(item)
 		for k, v := range item.tx.Weights() {
