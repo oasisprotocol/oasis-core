@@ -87,9 +87,10 @@ func testBasic(t *testing.T, pool api.TxPool) {
 	require.EqualValues(t, 10, len(batch), "Batch size")
 	require.EqualValues(t, 51, pool.Size(), "Size")
 
-	hashes := make([]hash.Hash, len(batch))
-	for i, tx := range batch {
-		hashes[i] = tx.Hash()
+	hashes := make([]hash.Hash, 0, len(batch))
+	for _, tx := range batch {
+		hashes = append(hashes, tx.Hash())
+		hashes = append(hashes, tx.Hash()) // Duplicate to ensure this is handled correctly.
 	}
 	pool.RemoveBatch(hashes)
 	require.EqualValues(t, 41, pool.Size(), "Size")
