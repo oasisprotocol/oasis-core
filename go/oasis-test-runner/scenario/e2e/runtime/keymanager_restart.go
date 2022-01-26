@@ -24,6 +24,18 @@ func newKmRestartImpl() scenario.Scenario {
 	}
 }
 
+func (sc *kmRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.runtimeImpl.Fixture()
+	if err != nil {
+		return nil, err
+	}
+
+	// The round is allowed to fail until the keymanager becomes available after restart.
+	f.Network.DefaultLogWatcherHandlerFactories = nil
+
+	return f, nil
+}
+
 func (sc *kmRestartImpl) Clone() scenario.Scenario {
 	return &kmRestartImpl{
 		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
