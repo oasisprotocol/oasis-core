@@ -12,7 +12,7 @@ replace (
 	// https://github.com/google/flatbuffers/issues/6466
 	github.com/google/flatbuffers => github.com/google/flatbuffers v1.12.1
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.9-oasis2
+	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.9-oasis4
 
 	golang.org/x/crypto/curve25519 => github.com/oasisprotocol/curve25519-voi/primitives/x25519 v0.0.0-20210505121811-294cf0fbfb43
 	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/curve25519-voi/primitives/ed25519 v0.0.0-20210505121811-294cf0fbfb43
@@ -40,7 +40,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.9.0
 	github.com/libp2p/go-libp2p-pubsub v0.5.4
 	github.com/multiformats/go-multiaddr v0.4.1
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20210505121811-294cf0fbfb43
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20211219162838-e9a669f65da9
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.11.0
