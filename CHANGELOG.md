@@ -12,6 +12,34 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.9 (2022-01-27)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- Add support for runtime schedule control
+  ([#4438](https://github.com/oasisprotocol/oasis-core/issues/4438))
+
+  This feature gives runtimes control over scheduling transactions inside a
+  block, so the runtimes may implement their own more advanced policies.
+
+### Bug Fixes
+
+- runtime: Propagate panics during transaction/local RPC/policy dispatch
+  ([#4386](https://github.com/oasisprotocol/oasis-core/issues/4386))
+
+  A panic during transaction/local RPC/policy dispatch signals a serious
+  problem so it should be propagated and the runtime should crash to force
+  state reset.
+
+- deps: Switch to the upstream jsonrpc import
+  ([#4439](https://github.com/oasisprotocol/oasis-core/issues/4439))
+
 ## 21.3.8 (2022-01-18)
 
 | Protocol          | Version   |
