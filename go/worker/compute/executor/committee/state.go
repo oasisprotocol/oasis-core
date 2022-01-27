@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
 
 // StateName is a symbolic state without the attached values.
@@ -76,6 +77,8 @@ var validStateTransitions = map[StateName][]StateName{
 
 	// Transitions from ProcessingBatch state.
 	ProcessingBatch: {
+		// Runtime batch scheduling has finished, but batch proposal has been aborted.
+		WaitingForBatch,
 		// Batch has been successfully processed or has been aborted.
 		WaitingForFinalize,
 	},
@@ -169,11 +172,17 @@ type StateProcessingBatch struct {
 	cancelFn context.CancelFunc
 	// Channel which will provide the result.
 	done chan *processedBatch
+	// Execution mode.
+	mode protocol.ExecutionMode
 }
 
 type processedBatch struct {
 	computed *protocol.ComputedBatch
 	raw      transaction.RawBatch
+
+	txHashes        []hash.Hash
+	txInputRoot     hash.Hash
+	txInputWriteLog storage.WriteLog
 }
 
 // Name returns the name of the state.
@@ -196,8 +205,8 @@ func (s *StateProcessingBatch) cancel() {
 // StateWaitingForFinalize is the waiting for finalize state.
 type StateWaitingForFinalize struct {
 	batchStartTime time.Time
-	raw            transaction.RawBatch
 	proposedIORoot hash.Hash
+	txHashes       []hash.Hash
 }
 
 // Name returns the name of the state.

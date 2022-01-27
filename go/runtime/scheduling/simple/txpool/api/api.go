@@ -33,6 +33,14 @@ type TxPool interface {
 	// GetBatch gets a transaction batch from the transaction pool.
 	GetBatch(force bool) []*transaction.CheckedTransaction
 
+	// GetPrioritizedBatch returns a batch of transactions ordered by priority but without taking
+	// any weight limits into account.
+	//
+	// Offset specifies the transaction hash that should serve as an offset when returning
+	// transactions from the pool. Transactions will be skipped until the given hash is encountered
+	// and only following transactions will be returned.
+	GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction
+
 	// RemoveBatch removes a batch from the transaction pool.
 	RemoveBatch(batch []hash.Hash) error
 

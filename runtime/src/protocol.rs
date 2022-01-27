@@ -464,6 +464,7 @@ impl Protocol {
         Ok(RuntimeInfoResponse {
             protocol_version: BUILD_INFO.protocol_version,
             runtime_version: self.config.version,
+            features: self.config.features.clone(),
         })
     }
 

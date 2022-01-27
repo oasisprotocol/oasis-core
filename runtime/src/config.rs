@@ -1,5 +1,5 @@
 //! Runtime configuration.
-use crate::{common::version::Version, consensus::verifier::TrustRoot};
+use crate::{common::version::Version, consensus::verifier::TrustRoot, types::Features};
 
 /// Global runtime configuration.
 #[derive(Clone, Debug, Default)]
@@ -10,6 +10,8 @@ pub struct Config {
     pub trust_root: Option<TrustRoot>,
     /// Storage configuration.
     pub storage: Storage,
+    /// Advertised runtime features.
+    pub features: Option<Features>,
 }
 
 /// Storage-related configuration.
