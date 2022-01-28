@@ -36,7 +36,7 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
     pub fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
         // For dirty values, check the overlay.
         if self.dirty.contains(key) {
-            return Ok(self.overlay.get(key).map(|v| v.clone()));
+            return Ok(self.overlay.get(key).cloned());
         }
 
         // Otherwise fetch from inner tree.
@@ -58,7 +58,7 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
     pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
         // For dirty values, remove from the overlay.
         if self.dirty.contains(key) {
-            return Ok(self.overlay.remove(key).map(|v| v.clone()));
+            return Ok(self.overlay.remove(key));
         }
 
         let value = self.inner.get(ctx, key)?;
@@ -82,8 +82,7 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
 
         // Insert all items present in the overlay.
         for (key, value) in &self.overlay {
-            self.inner
-                .insert(Context::create_child(&ctx), &key, &value)?;
+            self.inner.insert(Context::create_child(&ctx), key, value)?;
             self.dirty.remove(key);
 
             log.push(mkvs::LogEntry {
@@ -282,7 +281,7 @@ impl<T: mkvs::FallibleMKVS> mkvs::MKVS for OverlayTree<T> {
         self.remove(ctx, key).unwrap()
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<mkvs::Prefix>, limit: u16) {
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[mkvs::Prefix], limit: u16) {
         self.inner.prefetch_prefixes(ctx, prefixes, limit).unwrap()
     }
 
@@ -307,9 +306,9 @@ mod test {
 
     #[test]
     fn test_overlay() {
-        let mut tree = Tree::make()
+        let mut tree = Tree::builder()
             .with_root_type(RootType::State)
-            .new(Box::new(NoopReadSyncer));
+            .build(Box::new(NoopReadSyncer));
 
         // Generate some items.
         let items = vec![

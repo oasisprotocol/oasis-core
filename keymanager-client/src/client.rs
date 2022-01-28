@@ -21,7 +21,7 @@ use oasis_core_runtime::{
 use super::KeyManagerClient;
 
 /// Key manager RPC endpoint.
-const KEY_MANAGER_ENDPOINT: &'static str = "key-manager";
+const KEY_MANAGER_ENDPOINT: &str = "key-manager";
 
 struct Inner {
     /// Runtime identifier for which we are going to request keys.
@@ -63,7 +63,7 @@ impl RemoteClient {
         Self::new(
             runtime_id,
             RpcClient::new_runtime(
-                session::Builder::new()
+                session::Builder::default()
                     .remote_enclaves(enclaves)
                     .local_rak(rak),
                 protocol,

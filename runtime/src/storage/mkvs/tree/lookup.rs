@@ -65,7 +65,7 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        Ok(self._get(&ctx, pending_root, 0, &boxed_key, 0, check_only)?)
+        self._get(&ctx, pending_root, 0, &boxed_key, 0, check_only)
     }
 
     fn _get(
@@ -90,7 +90,7 @@ impl Tree {
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
                 // Reached a nil node, there is nothing here.
-                return Ok(None);
+                Ok(None)
             }
             NodeKind::Internal => {
                 let node_ref = node_ref.unwrap();
@@ -141,11 +141,11 @@ impl Tree {
                 // Reached a leaf node, check if key matches.
                 let node_ref = node_ref.unwrap();
                 if noderef_as!(node_ref, Leaf).key == *key {
-                    return Ok(Some(noderef_as!(node_ref, Leaf).value.clone()));
+                    Ok(Some(noderef_as!(node_ref, Leaf).value.clone()))
                 } else {
-                    return Ok(None);
+                    Ok(None)
                 }
             }
-        };
+        }
     }
 }

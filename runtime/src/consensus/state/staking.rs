@@ -233,10 +233,10 @@ mod test {
             hash: Hash::from("8bc9288a3394dae816cec993cfd9762d1fbf4b1136a32653ff8ff46c7322a33a"),
             ..Default::default()
         };
-        let mkvs = Tree::make()
+        let mkvs = Tree::builder()
             .with_capacity(100_000, 10_000_000)
             .with_root(mock_consensus_root)
-            .new(server.read_sync());
+            .build(server.read_sync());
         let staking_state = ImmutableState::new(&mkvs);
 
         let ctx = Arc::new(Context::background());

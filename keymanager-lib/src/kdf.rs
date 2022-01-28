@@ -74,9 +74,9 @@ lazy_static! {
 #[cfg(not(target_env = "sgx"))]
 const INSECURE_SIGNING_KEY_SEED: &str = "ekiden test key manager RAK seed";
 
-const MASTER_SECRET_STORAGE_KEY: &'static [u8] = b"keymanager_master_secret";
+const MASTER_SECRET_STORAGE_KEY: &[u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
-const MASTER_SECRET_SEAL_CONTEXT: &'static [u8] = b"Ekiden Keymanager Seal master secret v0";
+const MASTER_SECRET_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal master secret v0";
 
 /// Kdf, which derives key manager keys from a master secret.
 pub struct Kdf {
@@ -106,7 +106,7 @@ impl Inner {
         let mut contract_secret = self.derive_contract_secret(req)?;
 
         // Note: The `name` parameter for cSHAKE is reserved for use by NIST.
-        let mut xof = CShake::new_cshake256(&vec![], &RUNTIME_XOF_CUSTOM);
+        let mut xof = CShake::new_cshake256(&[], &RUNTIME_XOF_CUSTOM);
         xof.update(&contract_secret);
         contract_secret.zeroize();
         let mut xof = xof.xof();
@@ -207,13 +207,13 @@ impl Kdf {
             // at least once.
 
             let checksum = inner.get_checksum()?;
-            if req.checksum.len() > 0 && req.checksum != checksum {
+            if !req.checksum.is_empty() && req.checksum != checksum {
                 // The init request provided a checksum and there was a mismatch.
                 // The global key manager state disagrees with the enclave state.
                 inner.reset();
                 return Err(KeyManagerError::StateCorrupted.into());
             }
-        } else if req.checksum.len() > 0 {
+        } else if !req.checksum.is_empty() {
             // A master secret is not set, and there is a checksum in the
             // request.  An enclave somewhere, has initialized at least
             // once.
@@ -323,7 +323,7 @@ impl Kdf {
             .signer
             .as_ref()
             .unwrap()
-            .sign(&INIT_RESPONSE_CONTEXT, &body)?;
+            .sign(INIT_RESPONSE_CONTEXT, &body)?;
 
         Ok(SignedInitResponse {
             init_response,
@@ -337,9 +337,8 @@ impl Kdf {
 
         // Check to see if the cached value exists.
         let mut inner = self.inner.write().unwrap();
-        match inner.cache.get(&cache_key) {
-            Some(keys) => return Ok(keys.clone()),
-            None => {}
+        if let Some(keys) = inner.cache.get(&cache_key) {
+            return Ok(keys.clone());
         };
 
         let contract_key = inner.derive_contract_key(req)?;
@@ -469,7 +468,7 @@ impl Kdf {
     }
 
     fn new_d2() -> DeoxysII {
-        let mut seal_key = egetkey(Keypolicy::MRENCLAVE, &MASTER_SECRET_SEAL_CONTEXT);
+        let mut seal_key = egetkey(Keypolicy::MRENCLAVE, MASTER_SECRET_SEAL_CONTEXT);
         let d2 = DeoxysII::new(&seal_key);
         seal_key.zeroize();
 

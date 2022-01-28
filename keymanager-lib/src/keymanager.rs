@@ -18,7 +18,7 @@ use crate::{context, kdf::Kdf, methods, policy::Policy};
 /// Initialize the Kdf.
 fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Result<SignedInitResponse> {
     let policy_checksum = Policy::global().init(ctx, &req.policy)?;
-    Kdf::global().init(&req, ctx, policy_checksum)
+    Kdf::global().init(req, ctx, policy_checksum)
 }
 
 /// Initialize a keymanager with trusted policy signers.

@@ -50,7 +50,7 @@ fn egetkey_impl(key_policy: Keypolicy, context: &[u8]) -> [u8; 16] {
         Keypolicy::MRSIGNER => KMac::new_kmac256(MOCK_MRSIGNER_KEY, MOCK_KDF_CUSTOM),
         _ => panic!("Invalid key_policy"),
     };
-    kdf.update(&context);
+    kdf.update(context);
     kdf.finalize(&mut k);
 
     k
@@ -72,7 +72,7 @@ pub fn egetkey(key_policy: Keypolicy, context: &[u8]) -> [u8; 32] {
     // Expand the 128 bit EGETKEY result into a 256 bit key, suitable
     // for use with our MRAE primitives.
     let mut kdf = KMac::new_kmac256(&master_secret, SEAL_KDF_CUSTOM);
-    kdf.update(&context);
+    kdf.update(context);
     kdf.finalize(&mut k);
 
     k

@@ -12,6 +12,7 @@ use oasis_core_runtime::common::crypto::signature::Signature;
 use super::KeyManagerClient;
 
 /// Mock key manager client which stores everything locally.
+#[derive(Default)]
 pub struct MockClient {
     keys: Mutex<HashMap<KeyPairId, KeyPair>>,
 }

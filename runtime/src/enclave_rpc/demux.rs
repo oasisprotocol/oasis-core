@@ -48,7 +48,7 @@ impl Demux {
     /// Create new session demultiplexer.
     pub fn new(rak: Arc<RAK>) -> Self {
         Self {
-            rak: rak,
+            rak,
             sessions: HashMap::new(),
             max_concurrent_sessions: DEFAULT_MAX_CONCURRENT_SESSIONS,
             stale_session_timeout: DEFAULT_STALE_SESSION_TIMEOUT_SECS,
@@ -90,10 +90,10 @@ impl Demux {
         writer: W,
     ) -> Result<Option<SessionMessage>> {
         let frame: Frame = cbor::from_slice(&data)?;
-        let id = frame.session.clone();
+        let id = frame.session;
         let untrusted_plaintext = frame.untrusted_plaintext.clone();
 
-        if let Some(enriched_session) = self.sessions.get_mut(&id.into()) {
+        if let Some(enriched_session) = self.sessions.get_mut(&id) {
             match enriched_session
                 .session
                 .process_data(frame.payload, writer)
@@ -134,7 +134,9 @@ impl Demux {
 
             // Create a new session.
             if self.sessions.len() < self.max_concurrent_sessions {
-                let mut session = Builder::new().local_rak(self.rak.clone()).build_responder();
+                let mut session = Builder::default()
+                    .local_rak(self.rak.clone())
+                    .build_responder();
                 let result = match session.process_data(frame.payload, writer).map(|m| {
                     m.map(|msg| (id, session.session_info(), msg, untrusted_plaintext.clone()))
                 }) {
@@ -145,7 +147,7 @@ impl Demux {
                 self.sessions.insert(
                     id,
                     EnrichedSession {
-                        session: session,
+                        session,
                         last_process_frame_time: insecure_posix_system_time(),
                     },
                 );

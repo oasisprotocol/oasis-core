@@ -38,6 +38,7 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     /// Construct new transaction context.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         io_ctx: Arc<IoContext>,
         protocol: Arc<Protocol>,

@@ -29,6 +29,7 @@ impl HostService {
     }
 }
 
+#[allow(clippy::type_complexity)]
 impl UsercallExtension for HostService {
     fn connect_stream<'future>(
         &'future self,
@@ -78,6 +79,6 @@ impl Loader for SgxsLoader {
         enclave_builder.usercall_extension(HostService::new(host_socket));
         let enclave = enclave_builder.build(&mut device)?;
 
-        Ok(enclave.run()?)
+        enclave.run()
     }
 }

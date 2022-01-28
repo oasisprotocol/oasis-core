@@ -23,7 +23,7 @@ use crate::{
 };
 
 /// Name of the batch weight limit runtime query method.
-pub const BATCH_WEIGHT_LIMIT_QUERY_METHOD: &'static str = "internal.BatchWeightLimits";
+pub const BATCH_WEIGHT_LIMIT_QUERY_METHOD: &str = "internal.BatchWeightLimits";
 
 /// Computed batch.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]

@@ -37,6 +37,7 @@ impl Methods {
 
     /// Queries all consensus accounts.
     /// Note: this is a transaction but could be a query in a non-test runtime.
+    #[allow(clippy::type_complexity)]
     pub fn consensus_accounts(
         ctx: &mut TxContext,
         _args: (),
@@ -73,7 +74,7 @@ impl Methods {
     }
 
     fn check_nonce(ctx: &mut TxContext, nonce: u64) -> Result<(), String> {
-        let nonce_key = NonceKeyFormat { nonce: nonce }.encode();
+        let nonce_key = NonceKeyFormat { nonce }.encode();
         match ctx
             .parent
             .core
@@ -112,7 +113,7 @@ impl Methods {
 
         let index = ctx.emit_message(Message::Staking(Versioned::new(
             0,
-            StakingMessage::Withdraw(args.withdraw.clone()),
+            StakingMessage::Withdraw(args.withdraw),
         )));
 
         ctx.parent.core.runtime_state.insert(
@@ -135,7 +136,7 @@ impl Methods {
 
         let index = ctx.emit_message(Message::Staking(Versioned::new(
             0,
-            StakingMessage::Transfer(args.transfer.clone()),
+            StakingMessage::Transfer(args.transfer),
         )));
 
         ctx.parent.core.runtime_state.insert(
@@ -158,7 +159,7 @@ impl Methods {
 
         let index = ctx.emit_message(Message::Staking(Versioned::new(
             0,
-            StakingMessage::AddEscrow(args.escrow.clone()),
+            StakingMessage::AddEscrow(args.escrow),
         )));
 
         ctx.parent.core.runtime_state.insert(
@@ -184,7 +185,7 @@ impl Methods {
 
         let index = ctx.emit_message(Message::Staking(Versioned::new(
             0,
-            StakingMessage::ReclaimEscrow(args.reclaim_escrow.clone()),
+            StakingMessage::ReclaimEscrow(args.reclaim_escrow),
         )));
 
         ctx.parent.core.runtime_state.insert(
@@ -207,7 +208,7 @@ impl Methods {
 
         let index = ctx.emit_message(Message::Registry(Versioned::new(
             0,
-            RegistryMessage::UpdateRuntime(args.update_runtime.clone()),
+            RegistryMessage::UpdateRuntime(args.update_runtime),
         )));
 
         ctx.parent.core.runtime_state.insert(
@@ -237,10 +238,10 @@ impl Methods {
             args.key.as_bytes(),
             args.value.as_bytes(),
         );
-        Ok(existing
-            .map(|v| String::from_utf8(v))
+        existing
+            .map(String::from_utf8)
             .transpose()
-            .map_err(|err| err.to_string())?)
+            .map_err(|err| err.to_string())
     }
 
     /// Retrieve a key/value pair.
@@ -257,10 +258,10 @@ impl Methods {
             IoContext::create_child(&ctx.parent.core.io_ctx),
             args.key.as_bytes(),
         );
-        Ok(existing
-            .map(|v| String::from_utf8(v))
+        existing
+            .map(String::from_utf8)
             .transpose()
-            .map_err(|err| err.to_string())?)
+            .map_err(|err| err.to_string())
     }
 
     /// Remove a key/value pair.
@@ -277,10 +278,10 @@ impl Methods {
             IoContext::create_child(&ctx.parent.core.io_ctx),
             args.key.as_bytes(),
         );
-        Ok(existing
-            .map(|v| String::from_utf8(v))
+        existing
+            .map(String::from_utf8)
             .transpose()
-            .map_err(|err| err.to_string())?)
+            .map_err(|err| err.to_string())
     }
 
     /// Helper for doing encrypted MKVS operations.
@@ -323,10 +324,10 @@ impl Methods {
             args.value.as_bytes(),
             &nonce,
         );
-        Ok(existing
-            .map(|v| String::from_utf8(v))
+        existing
+            .map(String::from_utf8)
             .transpose()
-            .map_err(|err| err.to_string())?)
+            .map_err(|err| err.to_string())
     }
 
     /// (encrypted) Retrieve a key/value pair.
@@ -342,10 +343,10 @@ impl Methods {
             IoContext::create_child(&ctx.parent.core.io_ctx),
             args.key.as_bytes(),
         );
-        Ok(existing
-            .map(|v| String::from_utf8(v))
+        existing
+            .map(String::from_utf8)
             .transpose()
-            .map_err(|err| err.to_string())?)
+            .map_err(|err| err.to_string())
     }
 
     /// (encrypted) Remove a key/value pair.
@@ -361,10 +362,10 @@ impl Methods {
             IoContext::create_child(&ctx.parent.core.io_ctx),
             args.key.as_bytes(),
         );
-        Ok(existing
-            .map(|v| String::from_utf8(v))
+        existing
+            .map(String::from_utf8)
             .transpose()
-            .map_err(|err| err.to_string())?)
+            .map_err(|err| err.to_string())
     }
 }
 
@@ -382,7 +383,7 @@ impl BlockHandler {
             );
 
             // Make sure metadata is as expected.
-            match meta.as_ref().map(|v| v.as_slice()) {
+            match meta.as_deref() {
                 Some(b"withdraw") => {
                     let _: WithdrawResult =
                         cbor::from_value(ev.result.clone().expect("withdraw result should exist"))
@@ -431,15 +432,14 @@ impl BlockHandler {
             .iter(IoContext::create_child(&ctx.core.io_ctx));
         it.seek(&PendingMessagesKeyFormat { index: 0 }.encode_partial(0));
         // Either there should be no next key...
-        it.next().and_then(|(key, _value)| {
+        if let Some((key, _value)) = it.next() {
             assert!(
                 // ...or the next key should be something else.
                 PendingMessagesKeyFormat::decode(&key).is_none(),
                 "leftover message metadata (some messages not processed?): key={:?}",
                 key
             );
-            Some(())
-        });
+        };
         drop(it);
 
         // Store current epoch to test consistency.

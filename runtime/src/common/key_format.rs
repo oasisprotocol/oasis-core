@@ -1,6 +1,9 @@
-use std::convert::TryInto;
+use std::{convert::TryInto, mem::size_of};
 
 use impl_trait_for_tuples::impl_for_tuples;
+
+/// Size of the KeyFormat prefix.
+const KEY_FORMAT_PREFIX_SIZE: usize = size_of::<u8>();
 
 /// A key formatting helper trait to be used together with key-value
 /// backends for constructing keys.
@@ -30,7 +33,7 @@ pub trait KeyFormat {
     where
         Self: Sized,
     {
-        let mut v = Vec::with_capacity(1 + Self::size());
+        let mut v = Vec::with_capacity(KEY_FORMAT_PREFIX_SIZE + Self::size());
         v.push(Self::prefix());
 
         if count == 0 {
@@ -38,14 +41,12 @@ pub trait KeyFormat {
         }
 
         let mut atoms = Vec::new();
-        let mut included = 0;
         self.encode_atoms(&mut atoms);
-        for mut atom in atoms {
+        for (included, mut atom) in atoms.into_iter().enumerate() {
             if included >= count {
                 break;
             }
             v.append(&mut atom);
-            included += 1;
         }
 
         v
@@ -67,12 +68,14 @@ pub trait KeyFormat {
     where
         Self: Sized,
     {
+        assert!(!data.is_empty(), "key format: malformed input (empty data)");
         if data[0] != Self::prefix() {
             return None;
         }
-        if data.len() < 1 + Self::size() {
-            panic!("key format: malformed input");
-        }
+        assert!(
+            data.len() >= Self::size() + KEY_FORMAT_PREFIX_SIZE,
+            "key format: malformed input"
+        );
 
         Some(Self::decode_atoms(&data[1..]))
     }
@@ -119,6 +122,7 @@ impl KeyFormatAtom for u8 {
     where
         Self: Sized,
     {
+        assert!(!data.is_empty(), "key_format: malformed: u8 input");
         data[0]
     }
 }
@@ -132,9 +136,7 @@ impl KeyFormatAtom for () {
         Vec::new()
     }
 
-    fn decode_atom(_: &[u8]) -> () {
-        ()
-    }
+    fn decode_atom(_: &[u8]) {}
 }
 
 #[impl_for_tuples(2, 10)]
@@ -150,9 +152,10 @@ impl KeyFormatAtom for Tuple {
     }
 
     fn decode_atom(data: &[u8]) -> for_tuples!( ( #( Tuple ),* ) ) {
-        if data.len() < Self::size() {
-            panic!("key format atom: malformed input");
-        }
+        assert!(
+            data.len() >= Self::size(),
+            "key format atom: malformed input"
+        );
 
         let mut sizes: Vec<usize> = [for_tuples!( #( Tuple::size() ),* )].to_vec();
         sizes.reverse();
@@ -232,7 +235,7 @@ mod test {
 
     impl KeyFormat for Test1KeyFormat {
         fn prefix() -> u8 {
-            'T' as u8
+            b'T'
         }
 
         fn size() -> usize {

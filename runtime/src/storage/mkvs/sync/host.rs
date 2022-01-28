@@ -21,10 +21,7 @@ pub struct HostReadSyncer {
 impl HostReadSyncer {
     /// Construct a new host proxy instance.
     pub fn new(protocol: Arc<Protocol>, endpoint: HostStorageEndpoint) -> HostReadSyncer {
-        HostReadSyncer {
-            protocol: protocol,
-            endpoint: endpoint,
-        }
+        HostReadSyncer { protocol, endpoint }
     }
 
     fn call_host_with_proof(

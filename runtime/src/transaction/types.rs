@@ -41,15 +41,15 @@ impl From<VecDeque<Vec<u8>>> for TxnBatch {
     }
 }
 
-impl Into<Vec<Vec<u8>>> for TxnBatch {
-    fn into(self) -> Vec<Vec<u8>> {
-        self.0.into()
+impl From<TxnBatch> for Vec<Vec<u8>> {
+    fn from(val: TxnBatch) -> Self {
+        val.0
     }
 }
 
-impl Into<VecDeque<Vec<u8>>> for TxnBatch {
-    fn into(self) -> VecDeque<Vec<u8>> {
-        self.0.into()
+impl From<TxnBatch> for VecDeque<Vec<u8>> {
+    fn from(val: TxnBatch) -> Self {
+        val.0.into()
     }
 }
 

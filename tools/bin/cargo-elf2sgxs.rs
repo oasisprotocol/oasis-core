@@ -16,7 +16,7 @@ use oasis_core_tools::cargo;
 use thiserror::Error;
 
 /// Target tripe for SGX platform.
-const TARGET_TRIPLE: &'static str = "x86_64-fortanix-unknown-sgx";
+const TARGET_TRIPLE: &str = "x86_64-fortanix-unknown-sgx";
 /// Default heap size.
 const DEFAULT_HEAP_SIZE: u64 = 0x2000000;
 /// Default SSA frame size.

@@ -11,7 +11,7 @@ impl Hash {
     /// Compute a digest of the passed slice of bytes.
     pub fn digest_bytes(data: &[u8]) -> Hash {
         let mut result = [0u8; 32];
-        result[..].copy_from_slice(Sha512Trunc256::digest(&data).as_ref());
+        result[..].copy_from_slice(Sha512Trunc256::digest(data).as_ref());
 
         Hash(result)
     }
@@ -31,7 +31,7 @@ impl Hash {
 
     /// Returns true if the hash is of an empty string.
     pub fn is_empty(&self) -> bool {
-        return self == &Hash::empty_hash();
+        self == &Hash::empty_hash()
     }
 
     /// Hash of an empty string.

@@ -32,7 +32,7 @@ pub fn set_trusted_policy_signers(signers: TrustedPolicySigners) -> bool {
     true
 }
 
-const POLICY_SIGN_CONTEXT: &'static [u8] = b"oasis-core/keymanager: policy";
+const POLICY_SIGN_CONTEXT: &[u8] = b"oasis-core/keymanager: policy";
 
 impl SignedPolicySGX {
     /// Verify the signatures and return the PolicySGX, if the signatures are correct.
@@ -46,13 +46,10 @@ impl SignedPolicySGX {
                 None => return Err(KeyManagerError::PolicyInvalid),
             };
 
-            if !sig
-                .signature
-                .verify(&public_key, &POLICY_SIGN_CONTEXT, &untrusted_policy_raw)
-                .is_ok()
-            {
-                return Err(KeyManagerError::PolicyInvalidSignature);
-            }
+            sig.signature
+                .verify(&public_key, POLICY_SIGN_CONTEXT, &untrusted_policy_raw)
+                .map_err(|_| KeyManagerError::PolicyInvalidSignature)?;
+
             signers.insert(public_key);
         }
 

@@ -19,7 +19,7 @@ impl Marshal for NodeBox {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {
-        if data.len() < 1 {
+        if data.is_empty() {
             Err(TreeError::MalformedNode.into())
         } else {
             let mut kind = NodeKind::None;
@@ -53,7 +53,7 @@ impl Marshal for NodeKind {
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {
-        if data.len() < 1 {
+        if data.is_empty() {
             Err(TreeError::MalformedNode.into())
         } else {
             if data[0] == NodeKind::None as u8 {

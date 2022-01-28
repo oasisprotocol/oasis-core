@@ -41,7 +41,7 @@ where
         LRUList {
             list: LinkedList::new(CacheItemAdapter::new()),
             size: 0,
-            capacity: capacity,
+            capacity,
             mark: None,
         }
     }
@@ -165,14 +165,14 @@ impl LRUCache {
         root_type: RootType,
     ) -> Box<LRUCache> {
         Box::new(LRUCache {
-            read_syncer: read_syncer,
+            read_syncer,
 
             pending_root: Rc::new(RefCell::new(NodePointer {
                 node: None,
                 ..Default::default()
             })),
             sync_root: Root {
-                root_type: root_type,
+                root_type,
                 ..Default::default()
             },
 
@@ -183,14 +183,14 @@ impl LRUCache {
 
     fn new_internal_node_ptr(&mut self, node: Option<NodeRef>) -> NodePtrRef {
         Rc::new(RefCell::new(NodePointer {
-            node: node,
+            node,
             ..Default::default()
         }))
     }
 
     fn new_leaf_node_ptr(&mut self, node: Option<NodeRef>) -> NodePtrRef {
         Rc::new(RefCell::new(NodePointer {
-            node: node,
+            node,
             ..Default::default()
         }))
     }
@@ -200,9 +200,7 @@ impl LRUCache {
         ptr: NodePtrRef,
         locked_ptr: Option<&NodePtrRef>,
     ) -> Result<(), RemoveLockedError> {
-        if !ptr.borrow().clean {
-            panic!("mkvs: commit_node called on dirty node");
-        }
+        assert!(ptr.borrow().clean, "mkvs: commit_node called on dirty node");
         if ptr.borrow().node.is_none() {
             return Ok(());
         }
@@ -212,22 +210,18 @@ impl LRUCache {
 
         match classify_noderef!(? ptr.borrow().node) {
             NodeKind::Internal => {
-                let evicted = self
-                    .lru_internal
-                    .evict_for_val(ptr.clone(), locked_ptr.clone())?;
+                let evicted = self.lru_internal.evict_for_val(ptr.clone(), locked_ptr)?;
                 for node in evicted {
-                    self.try_remove_node(node.clone(), locked_ptr.clone())?;
+                    self.try_remove_node(node.clone(), locked_ptr)?;
                 }
-                self.lru_internal.add(ptr.clone());
+                self.lru_internal.add(ptr);
             }
             NodeKind::Leaf => {
-                let evicted = self
-                    .lru_leaf
-                    .evict_for_val(ptr.clone(), locked_ptr.clone())?;
+                let evicted = self.lru_leaf.evict_for_val(ptr.clone(), locked_ptr)?;
                 for node in evicted {
-                    self.try_remove_node(node.clone(), locked_ptr.clone())?;
+                    self.try_remove_node(node.clone(), locked_ptr)?;
                 }
-                self.lru_leaf.add(ptr.clone());
+                self.lru_leaf.add(ptr);
             }
             NodeKind::None => return Ok(()),
         };
@@ -250,8 +244,7 @@ impl LRUCache {
         #[derive(Clone)]
         struct PendingNode(NodePtrRef, VisitState);
 
-        let mut stack: Vec<PendingNode> = Vec::new();
-        stack.push(PendingNode(ptr, VisitState::Unvisited));
+        let mut stack: Vec<PendingNode> = vec![PendingNode(ptr, VisitState::Unvisited)];
         'stack: while !stack.is_empty() {
             let top_idx = stack.len() - 1;
             let top = stack[top_idx].clone();
@@ -324,11 +317,8 @@ impl LRUCache {
         match classify_noderef!(? ptr.borrow().node) {
             NodeKind::Internal => {
                 let node_ref = ptr.borrow().get_node();
-                self.commit_merged_node(noderef_as!(node_ref, Internal).left.clone(), &locked_ptr)?;
-                self.commit_merged_node(
-                    noderef_as!(node_ref, Internal).right.clone(),
-                    &locked_ptr,
-                )?;
+                self.commit_merged_node(noderef_as!(node_ref, Internal).left.clone(), locked_ptr)?;
+                self.commit_merged_node(noderef_as!(node_ref, Internal).right.clone(), locked_ptr)?;
             }
             NodeKind::Leaf => {}
             NodeKind::None => {}
@@ -355,11 +345,11 @@ impl Cache for LRUCache {
     }
 
     fn set_pending_root(&mut self, new_root: NodePtrRef) {
-        self.pending_root = new_root.clone();
+        self.pending_root = new_root;
     }
 
     fn get_sync_root(&self) -> Root {
-        self.sync_root.clone()
+        self.sync_root
     }
 
     fn set_sync_root(&mut self, root: Root) {
@@ -380,10 +370,10 @@ impl Cache for LRUCache {
     ) -> NodePtrRef {
         let node = Rc::new(RefCell::new(NodeBox::Internal(InternalNode {
             label: label.clone(),
-            label_bit_length: label_bit_length,
-            leaf_node: leaf_node,
-            left: left,
-            right: right,
+            label_bit_length,
+            leaf_node,
+            left,
+            right,
             ..Default::default()
         })));
         self.new_internal_node_ptr(Some(node))
@@ -463,7 +453,7 @@ impl Cache for LRUCache {
         fetcher: F,
     ) -> Result<()> {
         let proof = fetcher.fetch(
-            Context::create_child(&ctx),
+            Context::create_child(ctx),
             self.sync_root,
             ptr.clone(),
             &mut self.read_syncer,
@@ -486,7 +476,7 @@ impl Cache for LRUCache {
 
         // Verify proof.
         let pv = ProofVerifier;
-        let subtree = pv.verify_proof(Context::create_child(&ctx), expected_root, &proof)?;
+        let subtree = pv.verify_proof(Context::create_child(ctx), expected_root, &proof)?;
 
         // Merge resulting nodes.
         let mut merged_nodes: Vec<NodePtrRef> = Vec::new();

@@ -81,20 +81,20 @@ impl Cache {
     fn new(protocol: &Arc<Protocol>) -> Self {
         Self {
             root: Default::default(),
-            tree: Self::new_tree(protocol, Default::default()),
+            tree: Self::build(protocol, Default::default()),
         }
     }
 
-    fn new_tree(protocol: &Arc<Protocol>, root: Root) -> Tree {
+    fn build(protocol: &Arc<Protocol>, root: Root) -> Tree {
         let config = protocol.get_config();
         let read_syncer = HostReadSyncer::new(protocol.clone(), HostStorageEndpoint::Runtime);
-        Tree::make()
+        Tree::builder()
             .with_capacity(
                 config.storage.cache_node_capacity,
                 config.storage.cache_value_capacity,
             )
             .with_root(root)
-            .new(Box::new(read_syncer))
+            .build(Box::new(read_syncer))
     }
 
     fn maybe_replace(&mut self, protocol: &Arc<Protocol>, root: Root) {
@@ -102,7 +102,7 @@ impl Cache {
             return;
         }
 
-        self.tree = Self::new_tree(protocol, root);
+        self.tree = Self::build(protocol, root);
         self.root = root;
     }
 

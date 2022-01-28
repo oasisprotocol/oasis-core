@@ -82,7 +82,7 @@ impl PackageRoot {
         let mut current_dir: &Path = &env::current_dir()?;
         loop {
             if current_dir.join("Cargo.toml").exists() {
-                return Ok(PackageRoot::new(current_dir.to_owned())?);
+                return PackageRoot::new(current_dir.to_owned());
             }
 
             if let Some(parent) = current_dir.parent() {
@@ -116,42 +116,39 @@ impl PackageRoot {
                 let manifest_path = current_dir.join("Cargo.toml");
                 if manifest_path.exists() {
                     let workspace_manifest = Self::parse_manifest(&manifest_path)?;
-                    match workspace_manifest.workspace {
-                        Some(ref workspace) => {
-                            // Contains a workspace. Check if the package root is excluded.
-                            if workspace
-                                .exclude
-                                .iter()
-                                .any(|m| path.starts_with(current_dir.join(m)))
-                            {
-                                // Package root is excluded, so the package is its own workspace.
-                                break path.clone();
-                            }
+                    if let Some(ref workspace) = workspace_manifest.workspace {
+                        // Contains a workspace. Check if the package root is excluded.
+                        if workspace
+                            .exclude
+                            .iter()
+                            .any(|m| path.starts_with(current_dir.join(m)))
+                        {
+                            // Package root is excluded, so the package is its own workspace.
+                            break path.clone();
+                        }
 
-                            // If not excluded, ensure that this workspace also contains
-                            // the package root.
-                            if !workspace
-                                .members
-                                .iter()
-                                .any(|m| path.starts_with(current_dir.join(m)))
-                            {
-                                return Err(anyhow!(
-                                    "current package believes it's in a workspace when it's not: \n\
+                        // If not excluded, ensure that this workspace also contains
+                        // the package root.
+                        if !workspace
+                            .members
+                            .iter()
+                            .any(|m| path.starts_with(current_dir.join(m)))
+                        {
+                            return Err(anyhow!(
+                                "current package believes it's in a workspace when it's not: \n\
                                     current:   {}\n\
                                     workspace: {}\n\
                                     \n\
                                     this may be fixable by adding `{}` to the \
                                     `workspace.members` array of the manifest located at: {}",
-                                    path.join("Cargo.toml").to_str().unwrap(),
-                                    current_dir.to_str().unwrap(),
-                                    path.strip_prefix(current_dir).unwrap().to_str().unwrap(),
-                                    manifest_path.to_str().unwrap()
-                                ));
-                            }
-
-                            break current_dir.to_owned();
+                                path.join("Cargo.toml").to_str().unwrap(),
+                                current_dir.to_str().unwrap(),
+                                path.strip_prefix(current_dir).unwrap().to_str().unwrap(),
+                                manifest_path.to_str().unwrap()
+                            ));
                         }
-                        None => {}
+
+                        break current_dir.to_owned();
                     }
                 }
 
@@ -227,10 +224,8 @@ impl PackageRoot {
             for bin in bin {
                 targets.push(String::from(&bin.name));
             }
-        } else {
-            if let Some(package) = self.package() {
-                targets.push(String::from(&package.name));
-            }
+        } else if let Some(package) = self.package() {
+            targets.push(String::from(&package.name));
         }
         targets
     }

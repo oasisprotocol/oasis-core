@@ -24,7 +24,7 @@ impl StatsCollector {
             sync_get_count: 0,
             sync_get_prefixes_count: 0,
             sync_iterate_count: 0,
-            rs: rs,
+            rs,
         }
     }
 }

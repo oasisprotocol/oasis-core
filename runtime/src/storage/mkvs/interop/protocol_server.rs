@@ -53,7 +53,7 @@ impl fmt::Display for Fixture {
 impl ProtocolServer {
     /// Create a new protocol server for testing.
     pub fn new(fixture: Option<Fixture>) -> Self {
-        let datadir = tempfile::Builder::new()
+        let datadir = tempfile::Builder::default()
             .prefix("oasis-test-storage-protocol-server")
             .tempdir()
             .expect("failed to create temporary data directory");

@@ -43,9 +43,11 @@ fn main() {
 
     // Check if passed runtime exists.
     let filename = matches.value_of("runtime").unwrap().to_owned();
-    if !Path::new(&filename).exists() {
-        panic!("Could not find runtime: {}", filename);
-    }
+    assert!(
+        Path::new(&filename).exists(),
+        "Could not find runtime: {}",
+        filename
+    );
 
     // Decode arguments.
     let host_socket = value_t!(matches, "host-socket", String).unwrap_or_else(|e| e.exit());

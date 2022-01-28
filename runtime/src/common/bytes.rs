@@ -63,9 +63,9 @@ macro_rules! impl_bytes {
             }
         }
 
-        impl Into<[u8; $size]> for $name {
-            fn into(self) -> [u8; $size] {
-                self.0
+        impl From<$name> for [u8; $size] {
+            fn from(b: $name) -> Self {
+                b.0
             }
         }
 
@@ -79,7 +79,7 @@ macro_rules! impl_bytes {
 
         impl From<&'static str> for $name {
             fn from(s: &'static str) -> $name {
-                let s = if s.starts_with("0x") { &s[2..] } else { s };
+                let s = s.strip_prefix("0x").unwrap_or(s);
 
                 if s.len() % 2 == 1 {
                     ("0".to_owned() + s).parse().unwrap()

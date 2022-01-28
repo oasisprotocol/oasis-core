@@ -13,9 +13,11 @@ pub struct EncryptionContext {
 impl EncryptionContext {
     /// Initialize a new EncryptionContext with the given MRAE key.
     pub fn new(key: &[u8]) -> Self {
-        if key.len() != KEY_SIZE {
-            panic!("mkvs: invalid encryption key size {}", key.len());
-        }
+        assert!(
+            key.len() == KEY_SIZE,
+            "mkvs: invalid encryption key size {}",
+            key.len()
+        );
         let mut raw_key = [0u8; KEY_SIZE];
         raw_key.copy_from_slice(&key[..KEY_SIZE]);
 
@@ -45,7 +47,7 @@ impl EncryptionContext {
         value: &[u8],
         nonce: &[u8],
     ) -> Option<Vec<u8>> {
-        let nonce = Self::derive_nonce(&nonce);
+        let nonce = Self::derive_nonce(nonce);
         let mut ciphertext = self.d2.seal(&nonce, value.to_vec(), vec![]);
         ciphertext.extend_from_slice(&nonce);
 
@@ -99,9 +101,12 @@ impl EncryptionContext {
     fn derive_nonce(nonce: &[u8]) -> [u8; NONCE_SIZE] {
         // Just a copy for type safety.
         let mut n = [0u8; NONCE_SIZE];
-        if nonce.len() != NONCE_SIZE {
-            panic!("invalid nonce size: {}", nonce.len());
-        }
+        assert!(
+            nonce.len() == NONCE_SIZE,
+            "invalid nonce size: {}",
+            nonce.len()
+        );
+
         n.copy_from_slice(nonce);
 
         n

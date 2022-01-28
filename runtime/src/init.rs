@@ -23,7 +23,7 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     info!(logger, "Runtime is starting");
 
     // Initialize runtime attestation key.
-    let rak = Arc::new(RAK::new());
+    let rak = Arc::new(RAK::default());
 
     // Initialize the dispatcher.
     let dispatcher = Dispatcher::new(initializer, rak.clone());
@@ -49,12 +49,7 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     };
 
     // Initialize the protocol handler loop.
-    let protocol = Arc::new(Protocol::new(
-        stream,
-        rak.clone(),
-        dispatcher.clone(),
-        config,
-    ));
+    let protocol = Arc::new(Protocol::new(stream, rak, dispatcher, config));
 
     // Start handling protocol messages. This blocks the main thread forever
     // (or until we get a shutdown request).

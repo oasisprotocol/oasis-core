@@ -35,10 +35,10 @@ impl ConsensusState {
     pub fn from_protocol(protocol: Arc<Protocol>, root: Root) -> Self {
         let read_syncer = HostReadSyncer::new(protocol, HostStorageEndpoint::Consensus);
         Self {
-            mkvs: Tree::make()
+            mkvs: Tree::builder()
                 .with_capacity(100_000, 10_000_000)
                 .with_root(root)
-                .new(Box::new(read_syncer)),
+                .build(Box::new(read_syncer)),
         }
     }
 }
@@ -51,7 +51,7 @@ impl ImmutableMKVS for ConsensusState {
     fn prefetch_prefixes(
         &self,
         ctx: Context,
-        prefixes: &Vec<crate::storage::mkvs::Prefix>,
+        prefixes: &[crate::storage::mkvs::Prefix],
         limit: u16,
     ) -> Result<()> {
         self.mkvs.prefetch_prefixes(ctx, prefixes, limit)

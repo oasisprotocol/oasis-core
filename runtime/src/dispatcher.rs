@@ -244,13 +244,13 @@ impl Dispatcher {
         // Create actual dispatchers for RPCs and transactions.
         info!(self.logger, "Starting the runtime dispatcher");
         let mut rpc_demux = RpcDemux::new(self.rak.clone());
-        let mut rpc_dispatcher = RpcDispatcher::new();
+        let mut rpc_dispatcher = RpcDispatcher::default();
         let mut txn_dispatcher: Box<dyn TxnDispatcher> = if let Some(txn) =
             initializer.init(&protocol, &self.rak, &mut rpc_demux, &mut rpc_dispatcher)
         {
             txn
         } else {
-            Box::new(TxnNoopDispatcher::new())
+            Box::new(TxnNoopDispatcher::default())
         };
         txn_dispatcher.set_abort_batch_flag(self.abort_batch.clone());
 
@@ -427,6 +427,7 @@ impl Dispatcher {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn dispatch_query(
         &self,
         ctx: Context,
@@ -518,7 +519,7 @@ impl Dispatcher {
         let mut overlay = OverlayTree::new(cache.tree_mut());
 
         let txn_ctx = TxnContext::new(
-            ctx.clone(),
+            ctx,
             protocol,
             consensus_state,
             &mut overlay,
@@ -535,6 +536,7 @@ impl Dispatcher {
         results.map(|results| Body::RuntimeCheckTxBatchResponse { results })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn txn_execute_batch(
         &self,
         ctx: Arc<Context>,
@@ -624,12 +626,13 @@ impl Dispatcher {
         let (input_write_log, input_io_root) = txn_tree
             .commit(Context::create_child(&ctx))
             .expect("io commit must succeed");
-        if state.mode == ExecutionMode::Execute && input_io_root != io_root {
-            panic!(
-                "dispatcher: I/O root inconsistent with inputs (expected: {:?} got: {:?})",
-                io_root, input_io_root
-            );
-        }
+
+        assert!(
+            state.mode != ExecutionMode::Execute || input_io_root == io_root,
+            "dispatcher: I/O root inconsistent with inputs (expected: {:?} got: {:?})",
+            io_root,
+            input_io_root
+        );
 
         for (tx_hash, result) in hashes.iter().zip(results.results.drain(..)) {
             txn_tree
@@ -679,7 +682,7 @@ impl Dispatcher {
         let rak_sig = if self.rak.public_key().is_some() {
             self.rak
                 .sign(
-                    &COMPUTE_RESULTS_HEADER_CONTEXT,
+                    COMPUTE_RESULTS_HEADER_CONTEXT,
                     &cbor::to_vec(header.clone()),
                 )
                 .unwrap()
@@ -703,6 +706,7 @@ impl Dispatcher {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn dispatch_txn(
         self: &Arc<Self>,
         ctx: Context,
@@ -729,13 +733,12 @@ impl Dispatcher {
 
         // Verify that the runtime ID matches the block's namespace. This is a protocol violation
         // as the compute node should never change the runtime ID.
-        if state.header.namespace != protocol.get_runtime_id() {
-            panic!(
-                "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
-                state.header.namespace,
-                protocol.get_runtime_id(),
-            );
-        }
+        assert!(
+            state.header.namespace == protocol.get_runtime_id(),
+            "block namespace does not match runtime id (namespace: {:?} runtime ID: {:?})",
+            state.header.namespace,
+            protocol.get_runtime_id(),
+        );
 
         let ctx = ctx.freeze();
         let protocol = protocol.clone();

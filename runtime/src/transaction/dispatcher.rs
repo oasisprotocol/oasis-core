@@ -180,13 +180,8 @@ pub struct ExecuteBatchResult {
 ///
 /// This is mainly used by the runtime dispatcher as a fallback in case
 /// the runtime's initializer doesn't produce its own dispatcher object.
+#[derive(Default)]
 pub struct NoopDispatcher;
-
-impl NoopDispatcher {
-    pub fn new() -> Self {
-        NoopDispatcher
-    }
-}
 
 impl Dispatcher for NoopDispatcher {
     fn execute_batch(

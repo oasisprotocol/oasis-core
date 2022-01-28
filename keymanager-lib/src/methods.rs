@@ -14,7 +14,7 @@ pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Result<KeyP
         let si = si.ok_or(KeyManagerError::NotAuthenticated)?;
         let their_id = &si.authenticated_avr.identity;
 
-        Policy::global().may_get_or_create_keys(their_id, &req)?;
+        Policy::global().may_get_or_create_keys(their_id, req)?;
     }
 
     Kdf::global().get_or_create_keys(req)

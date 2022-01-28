@@ -1,5 +1,5 @@
 //! Signature types.
-use std::io::Cursor;
+use std::{cmp::Ordering, io::Cursor};
 
 use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -25,18 +25,18 @@ impl_bytes!(
 #[derive(Error, Debug)]
 enum SignatureError {
     #[error("point decompression failed")]
-    PointDecompressionError,
+    PointDecompression,
     #[error("small order A")]
-    SmallOrderAError,
+    SmallOrderA,
     #[error("small order R")]
-    SmallOrderRError,
+    SmallOrderR,
     #[error("signature malleability check failed")]
-    MalleabilityError,
+    Malleability,
     #[error("invalid signature")]
-    InvalidSignatureError,
+    InvalidSignature,
 }
 
-static CURVE_ORDER: &'static [u64] = &[
+static CURVE_ORDER: &[u64] = &[
     0x1000000000000000,
     0,
     0x14def9dea2f79cd6,
@@ -127,10 +127,10 @@ impl Signature {
         let A = CompressedEdwardsY::from_slice(pk.as_ref());
         let A = match A.decompress() {
             Some(point) => point,
-            None => return Err(SignatureError::PointDecompressionError.into()),
+            None => return Err(SignatureError::PointDecompression.into()),
         };
         if A.is_small_order() {
-            return Err(SignatureError::SmallOrderAError.into());
+            return Err(SignatureError::SmallOrderA.into());
         }
 
         // Decompress R (signature point), S (signature scalar).
@@ -142,20 +142,20 @@ impl Signature {
         let R_bits = &sig_slice[..32];
         let S_bits = &sig_slice[32..];
 
-        let R = CompressedEdwardsY::from_slice(&R_bits);
+        let R = CompressedEdwardsY::from_slice(R_bits);
         let R = match R.decompress() {
             Some(point) => point,
-            None => return Err(SignatureError::PointDecompressionError.into()),
+            None => return Err(SignatureError::PointDecompression.into()),
         };
         if R.is_small_order() {
-            return Err(SignatureError::SmallOrderRError.into());
+            return Err(SignatureError::SmallOrderR.into());
         }
 
-        if !sc_minimal(&S_bits) {
-            return Err(SignatureError::MalleabilityError.into());
+        if !sc_minimal(S_bits) {
+            return Err(SignatureError::Malleability.into());
         }
         let mut S: [u8; 32] = [0u8; 32];
-        S.copy_from_slice(&S_bits);
+        S.copy_from_slice(S_bits);
         let S = Scalar::from_bits(S);
 
         // k = H(R,A,m)
@@ -171,7 +171,7 @@ impl Signature {
             EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &neg_A, &S) - R;
         match should_be_small_order.is_small_order() {
             true => Ok(()),
-            false => Err(SignatureError::InvalidSignatureError.into()),
+            false => Err(SignatureError::InvalidSignature.into()),
         }
     }
 }
@@ -204,10 +204,10 @@ fn sc_minimal(raw_s: &[u8]) -> bool {
 
     // Compare each limb, from most significant to least.
     for i in 0..4 {
-        if s[i] > CURVE_ORDER[i] {
-            return false;
-        } else if s[i] < CURVE_ORDER[i] {
-            return true;
+        match s[i].cmp(&CURVE_ORDER[i]) {
+            Ordering::Greater => return false,
+            Ordering::Less => return true,
+            Ordering::Equal => {}
         }
     }
 

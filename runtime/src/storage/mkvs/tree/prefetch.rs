@@ -4,12 +4,12 @@ use io_context::Context;
 use crate::storage::mkvs::{cache::*, sync::*, tree::*, Prefix};
 
 pub(super) struct FetcherSyncGetPrefixes<'a> {
-    prefixes: &'a Vec<Prefix>,
+    prefixes: &'a [Prefix],
     limit: u16,
 }
 
 impl<'a> FetcherSyncGetPrefixes<'a> {
-    pub(super) fn new(prefixes: &'a Vec<Prefix>, limit: u16) -> Self {
+    pub(super) fn new(prefixes: &'a [Prefix], limit: u16) -> Self {
         Self { prefixes, limit }
     }
 }
@@ -29,7 +29,7 @@ impl<'a> ReadSyncFetcher for FetcherSyncGetPrefixes<'a> {
                     root,
                     position: ptr.borrow().hash,
                 },
-                prefixes: self.prefixes.clone(),
+                prefixes: self.prefixes.to_vec(),
                 limit: self.limit,
             },
         )?;
@@ -39,12 +39,7 @@ impl<'a> ReadSyncFetcher for FetcherSyncGetPrefixes<'a> {
 
 impl Tree {
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
-    pub fn prefetch_prefixes(
-        &self,
-        ctx: Context,
-        prefixes: &Vec<Prefix>,
-        limit: u16,
-    ) -> Result<()> {
+    pub fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()> {
         let ctx = ctx.freeze();
         let pending_root = self.cache.borrow().get_pending_root();
         self.cache.borrow_mut().remote_sync(

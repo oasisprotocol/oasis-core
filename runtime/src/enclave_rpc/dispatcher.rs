@@ -51,7 +51,7 @@ where
     F: Fn(&Rq, &mut Context) -> Result<Rsp> + 'static,
 {
     fn handle(&self, request: &Rq, ctx: &mut Context) -> Result<Rsp> {
-        (*self)(&request, ctx)
+        (*self)(request, ctx)
     }
 }
 
@@ -124,9 +124,10 @@ impl Method {
 }
 
 /// Key manager policy update handler callback.
-pub type KeyManagerPolicyHandler = dyn Fn(Vec<u8>) -> () + Send + Sync;
+pub type KeyManagerPolicyHandler = dyn Fn(Vec<u8>) + Send + Sync;
 
 /// RPC call dispatcher.
+#[derive(Default)]
 pub struct Dispatcher {
     /// Registered RPC methods.
     methods: HashMap<String, Method>,
@@ -139,16 +140,6 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    /// Create a new RPC method dispatcher.
-    pub fn new() -> Self {
-        Self {
-            methods: HashMap::new(),
-            local_methods: HashMap::new(),
-            km_policy_handler: None,
-            ctx_initializer: None,
-        }
-    }
-
     /// Register a new method in the dispatcher.
     pub fn add_method(&mut self, method: Method, is_local: bool) {
         match is_local {
@@ -219,9 +210,9 @@ impl Dispatcher {
 
     /// Handle key manager policy update.
     pub fn handle_km_policy_update(&self, signed_policy_raw: Vec<u8>) {
-        self.km_policy_handler
-            .as_ref()
-            .map(|handler| handler(signed_policy_raw));
+        if let Some(handler) = self.km_policy_handler.as_ref() {
+            handler(signed_policy_raw)
+        }
     }
 
     /// Update key manager policy update handler.

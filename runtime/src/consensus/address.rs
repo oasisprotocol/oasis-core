@@ -27,14 +27,14 @@ const ADDRESS_DATA_SIZE: usize = 20;
 const ADDRESS_SIZE: usize = ADDRESS_VERSION_SIZE + ADDRESS_DATA_SIZE;
 
 // V0 staking addres.
-const ADDRESS_V0_CONTEXT: &'static [u8] = b"oasis-core/address: staking";
+const ADDRESS_V0_CONTEXT: &[u8] = b"oasis-core/address: staking";
 const ADDRESS_V0_VERSION: u8 = 0;
 
 // V0 runtime address.
-const ADDRESS_RUNTIME_V0_CONTEXT: &'static [u8] = b"oasis-core/address: runtime";
+const ADDRESS_RUNTIME_V0_CONTEXT: &[u8] = b"oasis-core/address: runtime";
 const ADDRESS_RUNTIME_V0_VERSION: u8 = 0;
 
-const ADDRESS_BECH32_HRP: &'static str = "oasis";
+const ADDRESS_BECH32_HRP: &str = "oasis";
 
 /// A staking account address.
 #[derive(Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -109,9 +109,9 @@ impl AsRef<[u8]> for Address {
     }
 }
 
-impl Into<[u8; ADDRESS_SIZE]> for Address {
-    fn into(self) -> [u8; ADDRESS_SIZE] {
-        self.0
+impl From<Address> for [u8; ADDRESS_SIZE] {
+    fn from(val: Address) -> Self {
+        val.0
     }
 }
 
