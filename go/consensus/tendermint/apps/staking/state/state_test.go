@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -647,4 +648,88 @@ func TestTransferFromCommon(t *testing.T) {
 	require.NoError(err, "Account")
 	require.EqualValues(*quantity.NewFromUint64(100), acc1.General.Balance, "amount should be unchanged")
 	require.EqualValues(*quantity.NewFromUint64(0), acc1.Escrow.Active.Balance, "escrow amount should be unchanged")
+}
+
+func TestTransfer(t *testing.T) {
+	require := require.New(t)
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer ctx.Close()
+
+	// Prepare state.
+	s := NewMutableState(ctx.State())
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := staking.NewAddress(pk2)
+
+	initialBalance := *quantity.NewFromUint64(200)
+
+	err := s.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: initialBalance,
+		},
+	})
+	require.NoError(err, "SetAccount")
+	err = s.SetAccount(ctx, addr2, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: initialBalance,
+		},
+	})
+	require.NoError(err, "SetAccount")
+
+	// Transfer with insufficient balance.
+	err = s.Transfer(ctx, addr1, addr2, quantity.NewFromUint64(300))
+	require.Error(err, "Transfer with insufficient balance")
+	require.True(errors.Is(err, staking.ErrInsufficientBalance))
+
+	a1, err := s.Account(ctx, addr1)
+	require.NoError(err, "Account(addr1)")
+	a2, err := s.Account(ctx, addr2)
+	require.NoError(err, "Account(addr2)")
+	require.EqualValues(initialBalance, a1.General.Balance, "amount in source account should not change")
+	require.EqualValues(initialBalance, a2.General.Balance, "amount in destination account should not change")
+	require.Empty(ctx.GetEvents(), "no events should be emitted")
+
+	// Transfer to same address.
+	err = s.Transfer(ctx, addr1, addr1, quantity.NewFromUint64(50))
+	require.NoError(err, "Transfer to same address")
+
+	a1, err = s.Account(ctx, addr1)
+	require.NoError(err, "Account(addr1)")
+	require.EqualValues(initialBalance, a1.General.Balance, "amount in account should not change")
+	require.Empty(ctx.GetEvents(), "no events should be emitted")
+
+	// Transfer of zero amount.
+	err = s.Transfer(ctx, addr1, addr2, quantity.NewFromUint64(0))
+	require.NoError(err, "Transfer")
+
+	a1, err = s.Account(ctx, addr1)
+	require.NoError(err, "Account(addr1)")
+	a2, err = s.Account(ctx, addr2)
+	require.NoError(err, "Account(addr2)")
+	require.EqualValues(initialBalance, a1.General.Balance, "amount in source account should not change")
+	require.EqualValues(initialBalance, a2.General.Balance, "amount in destination account should not change")
+	require.Empty(ctx.GetEvents(), "no events should be emitted")
+
+	// Transfer.
+	err = s.Transfer(ctx, addr1, addr2, quantity.NewFromUint64(50))
+	require.NoError(err, "Transfer")
+
+	a1, err = s.Account(ctx, addr1)
+	require.NoError(err, "Account(addr1)")
+	a2, err = s.Account(ctx, addr2)
+	require.NoError(err, "Account(addr2)")
+	require.EqualValues(*quantity.NewFromUint64(150), a1.General.Balance, "amount in source account should be correct")
+	require.EqualValues(*quantity.NewFromUint64(250), a2.General.Balance, "amount in destination account should be correct")
+	require.Len(ctx.GetEvents(), 1, "one event should be emitted")
+
+	var ev staking.TransferEvent
+	err = ctx.DecodeTypedEvent(0, &ev)
+	require.NoError(err, "DecodeTypedEvent")
+	require.EqualValues(addr1, ev.From, "event should have the correct source address")
+	require.EqualValues(addr2, ev.To, "event should have the correct destination address")
+	require.EqualValues(*quantity.NewFromUint64(50), ev.Amount, "event should have the correct amount")
 }

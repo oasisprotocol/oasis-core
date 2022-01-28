@@ -847,6 +847,15 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			false,
 			false,
 		},
+		// Runtime with too large MaxInMessages parameter.
+		{
+			"TooBigMaxMessages",
+			func(rt *api.Runtime) {
+				rt.TxnScheduler.MaxInMessages = 64 // MaxInRuntimeMessages in these tests is 32.
+			},
+			false,
+			false,
+		},
 		// Runtime with consensus governance after genesis time.
 		{
 			"ConsensusGovernanceAfterGenesis",

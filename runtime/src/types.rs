@@ -160,6 +160,8 @@ pub enum Body {
         io_root: Hash,
         #[cbor(optional)]
         inputs: Option<TxnBatch>,
+        #[cbor(optional, default)]
+        in_msgs: Vec<roothash::IncomingMessage>,
         block: Block,
         epoch: EpochTime,
         max_messages: u32,

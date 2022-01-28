@@ -211,6 +211,33 @@ func (cli *KeyValueTestClient) workload(ctx context.Context) error {
 		}
 	}
 
+	// Test submission and processing of incoming messages.
+	cli.sc.Logger.Info("testing incoming runtime messages")
+	const (
+		inMsgKey   = "in_msg"
+		inMsgValue = "hello world from inmsg"
+	)
+	err = cli.sc.submitRuntimeInMsg(ctx, runtimeID, "insert", struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+		Nonce uint64 `json:"nonce"`
+	}{
+		Key:   inMsgKey,
+		Value: inMsgValue,
+		Nonce: rng.Uint64(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to submit 'insert' incoming runtime message: %w", err)
+	}
+
+	resp, err := cli.sc.submitKeyValueRuntimeGetTx(ctx, runtimeID, inMsgKey, rng.Uint64())
+	if err != nil {
+		return err
+	}
+	if resp != inMsgValue {
+		return fmt.Errorf("key does not have expected value (got: '%s', expected: '%s')", resp, inMsgValue)
+	}
+
 	cli.sc.Logger.Info("testing consensus queries")
 	if _, err = cli.sc.submitRuntimeTx(ctx, runtimeID, "consensus_accounts", nil); err != nil {
 		return fmt.Errorf("failed to submit consensus_accounts query: %w", err)

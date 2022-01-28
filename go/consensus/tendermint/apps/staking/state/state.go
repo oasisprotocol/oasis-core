@@ -776,6 +776,43 @@ func (s *MutableState) SlashEscrow(
 	return totalSlashed, nil
 }
 
+// Transfer performs a transfer between two general account balances.
+func (s *MutableState) Transfer(ctx *abciAPI.Context, fromAddr, toAddr staking.Address, amount *quantity.Quantity) error {
+	if fromAddr.Equal(toAddr) || amount.IsZero() {
+		return nil
+	}
+
+	from, err := s.Account(ctx, fromAddr)
+	if err != nil {
+		return err
+	}
+	to, err := s.Account(ctx, toAddr)
+	if err != nil {
+		return err
+	}
+
+	if err = quantity.Move(&to.General.Balance, &from.General.Balance, amount); err != nil {
+		return staking.ErrInsufficientBalance
+	}
+
+	if err = s.SetAccount(ctx, fromAddr, from); err != nil {
+		return err
+	}
+	if err = s.SetAccount(ctx, toAddr, to); err != nil {
+		return err
+	}
+
+	if !ctx.IsCheckOnly() {
+		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TransferEvent{
+			From:   fromAddr,
+			To:     toAddr,
+			Amount: *amount,
+		}))
+	}
+
+	return nil
+}
+
 // TransferFromCommon transfers up to the amount from the global common pool
 // to the general balance of the account, returning true iff the
 // amount transferred is > 0.

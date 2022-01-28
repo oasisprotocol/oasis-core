@@ -93,6 +93,9 @@ type Header struct { // nolint: maligned
 
 	// MessagesHash is the hash of emitted runtime messages.
 	MessagesHash hash.Hash `json:"messages_hash"`
+
+	// InMessagesHash is the hash of processed incoming messages.
+	InMessagesHash hash.Hash `json:"in_msgs_hash"`
 }
 
 // IsParentOf returns true iff the header is the parent of a child header.

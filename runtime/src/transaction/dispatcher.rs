@@ -21,6 +21,7 @@ pub trait Dispatcher: Send + Sync {
         &self,
         ctx: Context,
         batch: &TxnBatch,
+        in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError>;
 
     /// Check the transactions in the given batch for validity.
@@ -56,8 +57,9 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
         &self,
         ctx: Context,
         batch: &TxnBatch,
+        in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
-        T::execute_batch(&*self, ctx, batch)
+        T::execute_batch(&*self, ctx, batch, in_msgs)
     }
 
     fn check_batch(
@@ -86,8 +88,9 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
         &self,
         ctx: Context,
         batch: &TxnBatch,
+        in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
-        T::execute_batch(&*self, ctx, batch)
+        T::execute_batch(&*self, ctx, batch, in_msgs)
     }
 
     fn check_batch(
@@ -125,6 +128,8 @@ pub struct ExecuteBatchResult {
     pub results: Vec<ExecuteTxResult>,
     /// Emitted runtime messages.
     pub messages: Vec<roothash::Message>,
+    /// Number of processed incoming messages.
+    pub in_msgs_count: usize,
     /// Block emitted tags (not emitted by a specific transaction).
     pub block_tags: Tags,
     /// Batch weight limits valid for next round. This is used as a fast-path,
@@ -149,12 +154,14 @@ impl Dispatcher for NoopDispatcher {
         &self,
         _ctx: Context,
         _batch: &TxnBatch,
+        in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
         Ok(ExecuteBatchResult {
             results: Vec::new(),
             messages: Vec::new(),
             block_tags: Tags::new(),
             batch_weight_limits: None,
+            in_msgs_count: in_msgs.len(),
         })
     }
 

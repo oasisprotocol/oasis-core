@@ -119,8 +119,6 @@ func TestMessagesGasEstimation(t *testing.T) {
 	require.NoError(err, "NewSigner")
 
 	// Initialize registry state.
-	registryState := registryState.NewMutableState(ctx.State())
-	_ = registryState
 	runtime := registry.Runtime{
 		Executor: registry.ExecutorParameters{
 			MaxMessages: 32,
@@ -183,15 +181,19 @@ func TestMessagesGasEstimation(t *testing.T) {
 	}
 	msgsHash := message.MessagesHash(msgs)
 
+	var emptyHash hash.Hash
+	emptyHash.Empty()
+
 	ec := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        newBlk.Header.Round,
-				PreviousHash: newBlk.Header.PreviousHash,
-				IORoot:       &newBlk.Header.IORoot,
-				StateRoot:    &newBlk.Header.StateRoot,
-				MessagesHash: &msgsHash,
+				Round:          newBlk.Header.Round,
+				PreviousHash:   newBlk.Header.PreviousHash,
+				IORoot:         &newBlk.Header.IORoot,
+				StateRoot:      &newBlk.Header.StateRoot,
+				MessagesHash:   &msgsHash,
+				InMessagesHash: &emptyHash,
 			},
 		},
 		Messages: msgs,
@@ -409,16 +411,20 @@ func TestEvidence(t *testing.T) {
 	err = uninitializedRtB2.Sign(sk, uninitializedRtID)
 	require.NoError(err, "ProposalHeader.Sign")
 
+	var emptyHash hash.Hash
+	emptyHash.Empty()
+
 	// Executor commit.
 	signedCommitment1 := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        blk.Header.Round,
-				PreviousHash: blk.Header.PreviousHash,
-				IORoot:       &blk.Header.IORoot,
-				StateRoot:    &blk.Header.StateRoot,
-				MessagesHash: &hash.Hash{},
+				Round:          blk.Header.Round,
+				PreviousHash:   blk.Header.PreviousHash,
+				IORoot:         &blk.Header.IORoot,
+				StateRoot:      &blk.Header.StateRoot,
+				MessagesHash:   &emptyHash,
+				InMessagesHash: &emptyHash,
 			},
 		},
 	}
@@ -456,11 +462,12 @@ func TestEvidence(t *testing.T) {
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
 			ComputeResultsHeader: commitment.ComputeResultsHeader{
-				Round:        blk2.Header.Round,
-				PreviousHash: blk2.Header.PreviousHash,
-				IORoot:       &blk2.Header.IORoot,
-				StateRoot:    &blk2.Header.StateRoot,
-				MessagesHash: &hash.Hash{},
+				Round:          blk2.Header.Round,
+				PreviousHash:   blk2.Header.PreviousHash,
+				IORoot:         &blk2.Header.IORoot,
+				StateRoot:      &blk2.Header.StateRoot,
+				MessagesHash:   &emptyHash,
+				InMessagesHash: &emptyHash,
 			},
 		},
 	}
@@ -609,4 +616,182 @@ func TestEvidence(t *testing.T) {
 	entAcc, err := stakingState.Account(ctx, staking.NewAddress(nod.EntityID))
 	require.NoError(err, "Account()")
 	require.EqualValues(entityEscrow, &entAcc.Escrow.Active.Balance, "entity was slashed expected amount")
+}
+
+func TestSubmitMsg(t *testing.T) {
+	require := require.New(t)
+	var err error
+
+	genesisTestHelpers.SetTestChainContext()
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	var md testMsgDispatcher
+	app := rootHashApplication{appState, &md}
+
+	// Generate a private key for the caller.
+	skCaller, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(err, "NewSigner")
+	callerAddress := staking.NewAddress(skCaller.Public())
+	ctx = ctx.WithCallerAddress(callerAddress)
+
+	// Generate a private key for the single node in this test.
+	sk, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(err, "NewSigner")
+
+	// Initialize registry state.
+	runtime := registry.Runtime{
+		Executor: registry.ExecutorParameters{
+			MaxMessages: 32,
+		},
+	}
+
+	// Initialize scheduler state.
+	schedulerState := schedulerState.NewMutableState(ctx.State())
+	executorCommittee := scheduler.Committee{
+		RuntimeID: runtime.ID,
+		Kind:      scheduler.KindComputeExecutor,
+		Members: []*scheduler.CommitteeNode{
+			{
+				Role:      scheduler.RoleWorker,
+				PublicKey: sk.Public(),
+			},
+		},
+	}
+	err = schedulerState.PutCommittee(ctx, &executorCommittee)
+	require.NoError(err, "PutCommittee")
+
+	// Initialize roothash state.
+	roothashState := roothashState.NewMutableState(ctx.State())
+	err = roothashState.SetConsensusParameters(ctx, &roothash.ConsensusParameters{
+		MaxRuntimeMessages: 32,
+	})
+	require.NoError(err, "SetConsensusParameters")
+	blk := block.NewGenesisBlock(runtime.ID, 0)
+	rtState := roothash.RuntimeState{
+		Runtime:            &runtime,
+		GenesisBlock:       blk,
+		CurrentBlock:       blk,
+		CurrentBlockHeight: 1,
+		LastNormalRound:    0,
+		LastNormalHeight:   1,
+		ExecutorPool: &commitment.Pool{
+			Runtime:   &runtime,
+			Committee: &executorCommittee,
+			Round:     0,
+		},
+	}
+	err = roothashState.SetRuntimeState(ctx, &rtState)
+	require.NoError(err, "SetRuntimeState")
+
+	// Attempt to queue a message for an invalid runtime.
+	var invalidRuntimeID common.Namespace
+	_ = invalidRuntimeID.UnmarshalHex("000000000000000000000000000000000000000000000000000000000000DEAD")
+	err = app.submitMsg(ctx, roothashState, &roothash.SubmitMsg{
+		ID:   invalidRuntimeID,
+		Data: []byte("hello world"),
+	})
+	require.Error(err, "SubmitMsg should fail for invalid runtime")
+	require.ErrorIs(err, roothash.ErrInvalidRuntime)
+
+	// Attempt to queue a message.
+	err = app.submitMsg(ctx, roothashState, &roothash.SubmitMsg{
+		ID:   runtime.ID,
+		Data: []byte("hello world"),
+	})
+	require.Error(err, "SubmitMsg should fail when no messages allowed")
+	require.ErrorIs(err, roothash.ErrIncomingMessageQueueFull)
+
+	// Update runtime configuration to allow some incoming messages.
+	rtState.Runtime.TxnScheduler.MaxInMessages = 1
+	rtState.Runtime.Staking.MinInMessageFee = *quantity.NewFromUint64(100)
+	err = roothashState.SetRuntimeState(ctx, &rtState)
+	require.NoError(err, "SetRuntimeState")
+
+	// Attempt to queue a message again.
+	err = app.submitMsg(ctx, roothashState, &roothash.SubmitMsg{
+		ID:   runtime.ID,
+		Data: []byte("hello world"),
+	})
+	require.Error(err, "SubmitMsg should fail when fee is too low")
+	require.ErrorIs(err, roothash.ErrIncomingMessageInsufficientFee)
+
+	// Attempt to queue a message with fee specified (but insufficient funds for fee).
+	err = app.submitMsg(ctx, roothashState, &roothash.SubmitMsg{
+		ID:   runtime.ID,
+		Fee:  *quantity.NewFromUint64(100),
+		Data: []byte("hello world"),
+	})
+	require.Error(err, "SubmitMsg should fail when there is not enough balance to pay fees")
+	require.ErrorIs(err, staking.ErrInsufficientBalance)
+
+	// Allocate some funds to the caller.
+	stakingState := stakingState.NewMutableState(ctx.State())
+	err = stakingState.SetAccount(ctx, callerAddress, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(300),
+		},
+	})
+	require.NoError(err, "SetAccount")
+
+	// Attempt to queue a message with fee specified (but insufficient funds for sent tokens).
+	err = app.submitMsg(ctx, roothashState, &roothash.SubmitMsg{
+		ID:     runtime.ID,
+		Fee:    *quantity.NewFromUint64(100),
+		Tokens: *quantity.NewFromUint64(1000),
+		Data:   []byte("hello world"),
+	})
+	require.Error(err, "SubmitMsg should fail when there is not enough balance to pay for sent tokens")
+	require.ErrorIs(err, staking.ErrInsufficientBalance)
+
+	// Attempt to queue a message.
+	msg := roothash.SubmitMsg{
+		ID:     runtime.ID,
+		Fee:    *quantity.NewFromUint64(100),
+		Tokens: *quantity.NewFromUint64(50),
+		Data:   []byte("hello world 1"),
+	}
+	err = app.submitMsg(ctx, roothashState, &msg)
+	require.NoError(err, "SubmitMsg should succeed")
+
+	// Make sure the runtime received the funds.
+	rtAcc, err := stakingState.Account(ctx, staking.NewRuntimeAddress(runtime.ID))
+	require.NoError(err, "Account")
+	require.EqualValues(quantity.NewFromUint64(150), &rtAcc.General.Balance, "tokens must have been transferred to runtime")
+
+	// Attempt to queue a message (after queue is full).
+	err = app.submitMsg(ctx, roothashState, &roothash.SubmitMsg{
+		ID:     runtime.ID,
+		Fee:    *quantity.NewFromUint64(100),
+		Tokens: *quantity.NewFromUint64(50),
+		Data:   []byte("hello world 2"),
+	})
+	require.Error(err, "SubmitMsg should fail when the queue is full")
+	require.ErrorIs(err, roothash.ErrIncomingMessageQueueFull)
+
+	// Check that metadata is correct.
+	meta, err := roothashState.IncomingMessageQueueMeta(ctx, runtime.ID)
+	require.NoError(err, "IncomingMessageQueueMeta")
+	require.EqualValues(1, meta.NextSequenceNumber)
+	require.EqualValues(1, meta.Size)
+
+	// Check that message has been queued.
+	msgs, err := roothashState.IncomingMessageQueue(ctx, runtime.ID, 0, 0)
+	require.NoError(err, "IncomingMessageQueue")
+	require.Len(msgs, 1, "one incoming message should be queued")
+	require.EqualValues(0, msgs[0].ID)
+	require.EqualValues(callerAddress, msgs[0].Caller)
+	require.EqualValues(msg.Fee, msgs[0].Fee)
+	require.EqualValues(msg.Tokens, msgs[0].Tokens)
+	require.EqualValues(msg.Data, msgs[0].Data)
+
+	// Pop message from queue.
+	err = roothashState.RemoveIncomingMessageFromQueue(ctx, runtime.ID, 0)
+	require.NoError(err, "RemoveIncomingMessageFromQueue")
+	msgs, err = roothashState.IncomingMessageQueue(ctx, runtime.ID, 0, 0)
+	require.NoError(err, "IncomingMessageQueue")
+	require.Empty(msgs, "queue should be empty")
 }

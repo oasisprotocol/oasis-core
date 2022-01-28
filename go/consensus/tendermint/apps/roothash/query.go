@@ -8,6 +8,7 @@ import (
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 )
 
 // Query is the roothash query interface.
@@ -16,6 +17,8 @@ type Query interface {
 	GenesisBlock(context.Context, common.Namespace) (*block.Block, error)
 	RuntimeState(context.Context, common.Namespace) (*roothash.RuntimeState, error)
 	LastRoundResults(context.Context, common.Namespace) (*roothash.RoundResults, error)
+	IncomingMessageQueueMeta(context.Context, common.Namespace) (*message.IncomingMessageQueueMeta, error)
+	IncomingMessageQueue(ctx context.Context, id common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error)
 	Genesis(context.Context) (*roothash.Genesis, error)
 	ConsensusParameters(context.Context) (*roothash.ConsensusParameters, error)
 }
@@ -60,6 +63,14 @@ func (rq *rootHashQuerier) RuntimeState(ctx context.Context, id common.Namespace
 
 func (rq *rootHashQuerier) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
 	return rq.state.LastRoundResults(ctx, id)
+}
+
+func (rq *rootHashQuerier) IncomingMessageQueueMeta(ctx context.Context, id common.Namespace) (*message.IncomingMessageQueueMeta, error) {
+	return rq.state.IncomingMessageQueueMeta(ctx, id)
+}
+
+func (rq *rootHashQuerier) IncomingMessageQueue(ctx context.Context, id common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error) {
+	return rq.state.IncomingMessageQueue(ctx, id, offset, limit)
 }
 
 func (rq *rootHashQuerier) ConsensusParameters(ctx context.Context) (*roothash.ConsensusParameters, error) {

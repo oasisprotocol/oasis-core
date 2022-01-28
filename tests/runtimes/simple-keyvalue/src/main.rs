@@ -10,7 +10,10 @@ use oasis_core_keymanager_client::KeyManagerClient;
 use oasis_core_runtime::{
     common::version::Version,
     config::Config,
-    consensus::{roothash::Message, verifier::TrustRoot},
+    consensus::{
+        roothash::{IncomingMessage, Message},
+        verifier::TrustRoot,
+    },
     protocol::HostInfo,
     rak::RAK,
     transaction::{
@@ -159,6 +162,11 @@ impl Dispatcher {
         }
     }
 
+    fn execute_in_msg(ctx: &mut Context<'_, '_>, msg: &IncomingMessage) {
+        // Process incoming messages as transactions and ignore results.
+        let _ = Self::execute_tx(ctx, &msg.data);
+    }
+
     fn check_tx(ctx: &mut Context<'_, '_>, tx: &[u8]) -> Result<CheckTxResult, RuntimeError> {
         let mut tx_ctx = TxContext::new(ctx);
 
@@ -205,6 +213,7 @@ impl TxnDispatcher for Dispatcher {
         &self,
         mut ctx: TxnContext,
         batch: &TxnBatch,
+        in_msgs: &[IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
         let mut ctx = Context {
             core: &mut ctx,
@@ -215,6 +224,13 @@ impl TxnDispatcher for Dispatcher {
 
         Self::begin_block(&mut ctx)?;
 
+        // Execute incoming messages. A real implementation should allocate resources for incoming
+        // messages and only execute as many messages as fits.
+        for in_msg in in_msgs {
+            Self::execute_in_msg(&mut ctx, in_msg);
+        }
+
+        // Execute transactions.
         let mut results = vec![];
         for tx in batch.iter() {
             results.push(Self::execute_tx(&mut ctx, tx)?);
@@ -223,6 +239,7 @@ impl TxnDispatcher for Dispatcher {
         Ok(ExecuteBatchResult {
             results,
             messages: ctx.messages,
+            in_msgs_count: in_msgs.len(),
             block_tags: vec![],
             batch_weight_limits: None,
         })

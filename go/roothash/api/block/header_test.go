@@ -16,13 +16,13 @@ import (
 func TestConsistentHash(t *testing.T) {
 	// NOTE: These hashes MUST be synced with runtime/src/common/roothash.rs.
 	var emptyHeaderHash hash.Hash
-	_ = emptyHeaderHash.UnmarshalHex("4a7526c9ce073f69f9bbc3f88170aaee91c63c4cf929b2ef2f758fc26d23d78b")
+	_ = emptyHeaderHash.UnmarshalHex("677ad1a6b9f5e99ed94e5d598b6f92a4641a5f952f2d753b2a6122b6dceeb792")
 
 	var empty Header
 	require.EqualValues(t, emptyHeaderHash.String(), empty.EncodedHash().String())
 
 	var populatedHeaderHash hash.Hash
-	_ = populatedHeaderHash.UnmarshalHex("cf1971df10ea8202fbdfaf567179ace4dea9987199ff3e6ccef1be1ab43e757a")
+	_ = populatedHeaderHash.UnmarshalHex("b17374d9b36796752a787d0726ef44826bfdb3ece52545e126c8e7592663544d")
 
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
@@ -37,15 +37,16 @@ func TestConsistentHash(t *testing.T) {
 	require.NoError(t, amount.FromBigInt(big.NewInt(69376)), "Quantity FromBigInt")
 
 	populated := Header{
-		Version:      42,
-		Namespace:    ns,
-		Round:        1000,
-		Timestamp:    1560257841,
-		HeaderType:   RoundFailed,
-		PreviousHash: emptyHeaderHash,
-		IORoot:       emptyRoot,
-		StateRoot:    emptyRoot,
-		MessagesHash: emptyRoot,
+		Version:        42,
+		Namespace:      ns,
+		Round:          1000,
+		Timestamp:      1560257841,
+		HeaderType:     RoundFailed,
+		PreviousHash:   emptyHeaderHash,
+		IORoot:         emptyRoot,
+		StateRoot:      emptyRoot,
+		MessagesHash:   emptyRoot,
+		InMessagesHash: emptyRoot,
 	}
 	require.EqualValues(t, populatedHeaderHash.String(), populated.EncodedHash().String())
 }

@@ -26,6 +26,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -372,6 +373,13 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 		}
 
 		return app.submitEvidence(ctx, state, &ev)
+	case roothash.MethodSubmitMsg:
+		var msg roothash.SubmitMsg
+		if err := cbor.Unmarshal(tx.Body, &msg); err != nil {
+			return err
+		}
+
+		return app.submitMsg(ctx, state, &msg)
 	default:
 		return roothash.ErrInvalidArgument
 	}
@@ -508,9 +516,6 @@ func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, state *r
 		return fmt.Errorf("failed to finalize block: %w", err)
 	}
 
-	if err = state.SetRuntimeState(ctx, rtState); err != nil {
-		return fmt.Errorf("failed to set runtime state: %w", err)
-	}
 	return nil
 }
 
@@ -559,6 +564,59 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		)
 
 		ec := commit.ToDDResult().(*commitment.ExecutorCommitment)
+
+		// Update the incoming message queue by removing processed messages. Do one final check to
+		// make sure that the processed messages actually correspond to the provided hash.
+		state := roothashState.NewMutableState(ctx.State())
+		if ec.Header.InMessagesCount > 0 {
+			var meta *message.IncomingMessageQueueMeta
+			meta, err = state.IncomingMessageQueueMeta(ctx, rtState.Runtime.ID)
+			if err != nil {
+				return fmt.Errorf("failed to fetch incoming message queue metadata: %w", err)
+			}
+			var msgs []*message.IncomingMessage
+			msgs, err = state.IncomingMessageQueue(ctx, rtState.Runtime.ID, 0, ec.Header.InMessagesCount)
+			if err != nil {
+				return fmt.Errorf("failed to fetch incoming message queue: %w", err)
+			}
+			if inMsgsHash := message.InMessagesHash(msgs); !ec.Header.InMessagesHash.Equal(&inMsgsHash) {
+				ctx.Logger().Debug("finalized round contained invalid incoming message hash, failing instead",
+					"in_msgs_hash", inMsgsHash,
+					"ec_in_msgs_hash", *ec.Header.InMessagesHash,
+				)
+				// Make the round fail.
+				err = fmt.Errorf("finalized round contained invalid incoming message hash")
+				// TODO: All nodes contributing to this round should be penalized.
+				break
+			}
+			for _, msg := range msgs {
+				err = state.RemoveIncomingMessageFromQueue(ctx, rtState.Runtime.ID, msg.ID)
+				if err != nil {
+					return fmt.Errorf("failed to remove processed incoming message from queue: %w", err)
+				}
+
+				if meta.Size == 0 {
+					// This should NEVER happen.
+					return tmapi.UnavailableStateError(fmt.Errorf("inconsistent queue size (state corruption?)"))
+				}
+				meta.Size--
+
+				ctx.EmitEvent(
+					tmapi.NewEventBuilder(app.Name()).
+						TypedAttribute(&roothash.InMsgProcessedEvent{
+							ID:     msg.ID,
+							Round:  round,
+							Caller: msg.Caller,
+							Tag:    msg.Tag,
+						}).
+						Attribute(KeyRuntimeID, ValueRuntimeID(rtState.Runtime.ID)),
+				)
+			}
+			err = state.SetIncomingMessageQueueMeta(ctx, rtState.Runtime.ID, meta)
+			if err != nil {
+				return fmt.Errorf("failed to set incoming message queue metadata: %w", err)
+			}
+		}
 
 		// Process any runtime messages.
 		var messageResults []*roothash.MessageEvent
@@ -634,6 +692,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		blk.Header.IORoot = *ec.Header.IORoot
 		blk.Header.StateRoot = *ec.Header.StateRoot
 		blk.Header.MessagesHash = *ec.Header.MessagesHash
+		blk.Header.InMessagesHash = *ec.Header.InMessagesHash
 
 		// Timeout will be cleared by caller.
 		pool.ResetCommitments(blk.Header.Round)
@@ -645,7 +704,6 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		rtState.LastNormalHeight = ctx.BlockHeight() + 1
 
 		// Set last normal round results.
-		state := roothashState.NewMutableState(ctx.State())
 		err = state.SetLastRoundResults(ctx, rtState.Runtime.ID, &roothash.RoundResults{
 			Messages:            messageResults,
 			GoodComputeEntities: goodComputeEntities,
@@ -699,23 +757,22 @@ func (app *rootHashApplication) tryFinalizeBlock(
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
 	forced bool,
-) (err error) {
-	defer func(previousTimeout int64) {
-		if err != nil {
-			return
-		}
+) error {
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
 
-		// Do not re-arm the round timeout if the timeout has not changed.
-		nextTimeout := rtState.ExecutorPool.NextTimeout
-		if previousTimeout == nextTimeout {
-			return
-		}
+	state := roothashState.NewMutableState(ctx.State())
+	previousTimeout := rtState.ExecutorPool.NextTimeout
 
-		state := roothashState.NewMutableState(ctx.State())
+	if err := app.tryFinalizeExecutorCommits(ctx, rtState, forced); err != nil {
+		return err
+	}
+
+	// Do not re-arm the round timeout if the timeout has not changed.
+	if nextTimeout := rtState.ExecutorPool.NextTimeout; previousTimeout != nextTimeout {
 		if previousTimeout != commitment.TimeoutNever {
-			if err = state.ClearRoundTimeout(ctx, rtState.Runtime.ID, previousTimeout); err != nil {
-				err = fmt.Errorf("failed to clear round timeout: %w", err)
-				return
+			if err := state.ClearRoundTimeout(ctx, rtState.Runtime.ID, previousTimeout); err != nil {
+				return fmt.Errorf("failed to clear round timeout: %w", err)
 			}
 		}
 
@@ -729,14 +786,20 @@ func (app *rootHashApplication) tryFinalizeBlock(
 				"height", ctx.BlockHeight(),
 				"next_timeout", nextTimeout,
 			)
-			if err = state.ScheduleRoundTimeout(ctx, rtState.Runtime.ID, nextTimeout); err != nil {
-				err = fmt.Errorf("failed to schedule round timeout: %w", err)
-				return
+			if err := state.ScheduleRoundTimeout(ctx, rtState.Runtime.ID, nextTimeout); err != nil {
+				return fmt.Errorf("failed to schedule round timeout: %w", err)
 			}
 		}
-	}(rtState.ExecutorPool.NextTimeout)
+	}
 
-	return app.tryFinalizeExecutorCommits(ctx, rtState, forced)
+	// Update runtime state.
+	if err := state.SetRuntimeState(ctx, rtState); err != nil {
+		return fmt.Errorf("failed to set runtime state: %w", err)
+	}
+
+	ctx.Commit()
+
+	return nil
 }
 
 // New constructs a new roothash application instance.

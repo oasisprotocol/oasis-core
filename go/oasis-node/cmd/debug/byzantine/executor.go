@@ -304,12 +304,15 @@ func (cbc *computeBatchContext) createCommitment(
 ) error {
 	// TODO: allow script to set roothash messages?
 	msgsHash := message.MessagesHash(nil)
+	inMsgsHash := message.InMessagesHash(nil)
 	header := commitment.ComputeResultsHeader{
-		Round:        cbc.proposal.Header.Round,
-		PreviousHash: cbc.proposal.Header.PreviousHash,
-		IORoot:       &cbc.newIORoot,
-		StateRoot:    &cbc.newStateRoot,
-		MessagesHash: &msgsHash,
+		Round:           cbc.proposal.Header.Round,
+		PreviousHash:    cbc.proposal.Header.PreviousHash,
+		IORoot:          &cbc.newIORoot,
+		StateRoot:       &cbc.newStateRoot,
+		MessagesHash:    &msgsHash,
+		InMessagesHash:  &inMsgsHash,
+		InMessagesCount: 0,
 	}
 	ec := &commitment.ExecutorCommitment{
 		NodeID: id.NodeSigner.Public(),

@@ -320,8 +320,9 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	}
 	require.True(parent.Header.IsParentOf(&child.Header), "parent is parent of child")
 
-	var msgsHash hash.Hash
+	var msgsHash, inMsgsHash hash.Hash
 	msgsHash.Empty()
+	inMsgsHash.Empty()
 
 	// Generate all the executor commitments.
 	executorNodes = append([]*registryTests.TestNode{}, executorCommittee.workers...)
@@ -330,11 +331,13 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 			NodeID: node.Signer.Public(),
 			Header: commitment.ExecutorCommitmentHeader{
 				ComputeResultsHeader: commitment.ComputeResultsHeader{
-					Round:        parent.Header.Round,
-					PreviousHash: parent.Header.PreviousHash,
-					IORoot:       &parent.Header.IORoot,
-					StateRoot:    &parent.Header.StateRoot,
-					MessagesHash: &msgsHash,
+					Round:           parent.Header.Round,
+					PreviousHash:    parent.Header.PreviousHash,
+					IORoot:          &parent.Header.IORoot,
+					StateRoot:       &parent.Header.StateRoot,
+					MessagesHash:    &msgsHash,
+					InMessagesHash:  &inMsgsHash,
+					InMessagesCount: 0,
 				},
 			},
 		}

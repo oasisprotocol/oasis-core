@@ -567,6 +567,9 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 		return nil, err
 	}
 
+	// Update roothash genesis.
+	newDoc.RootHash.Parameters.MaxInRuntimeMessages = 128
+
 	// Update registry genesis.
 	newDoc.Registry = registry.Genesis{
 		Parameters:   oldDoc.Registry.Parameters,

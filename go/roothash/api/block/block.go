@@ -24,6 +24,7 @@ func NewGenesisBlock(id common.Namespace, timestamp uint64) *Block {
 	blk.Header.IORoot.Empty()
 	blk.Header.StateRoot.Empty()
 	blk.Header.MessagesHash.Empty()
+	blk.Header.InMessagesHash.Empty()
 
 	return &blk
 }
@@ -42,6 +43,7 @@ func NewEmptyBlock(child *Block, timestamp uint64, htype HeaderType) *Block {
 	// State root is unchanged.
 	blk.Header.StateRoot = child.Header.StateRoot
 	blk.Header.MessagesHash.Empty()
+	blk.Header.InMessagesHash.Empty()
 
 	return &blk
 }

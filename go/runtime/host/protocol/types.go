@@ -295,6 +295,8 @@ type RuntimeExecuteTxBatchRequest struct {
 	IORoot hash.Hash `json:"io_root"`
 	// Batch of inputs (transactions).
 	Inputs transaction.RawBatch `json:"inputs"`
+	// InMessages are the incoming messages emitted by the consensus layer.
+	InMessages []*message.IncomingMessage `json:"in_msgs,omitempty"`
 	// Block on which the batch computation should be based.
 	Block block.Block `json:"block"`
 	// Epoch is the current epoch number.
