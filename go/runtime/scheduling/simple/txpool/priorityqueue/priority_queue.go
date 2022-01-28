@@ -114,6 +114,12 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 		return nil
 	}
 
+	minWeights := map[transaction.Weight]uint64{
+		transaction.WeightCount:             1,
+		transaction.WeightSizeBytes:         10,
+		transaction.WeightConsensusMessages: 0,
+	}
+
 	var batch []*transaction.CheckedTransaction
 	batchWeights := make(map[transaction.Weight]uint64)
 	for w := range q.weightLimits {
@@ -124,8 +130,6 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 		item := i.(*item)
 
 		// Check if the call fits into the batch.
-		// XXX: potentially there could be smaller transactions that would
-		// fit, which this will miss. Could do some lookahead.
 		for w, limit := range q.weightLimits {
 			batchWeight := batchWeights[w]
 
@@ -136,9 +140,14 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 				return true
 			}
 
-			// Batch full, schedule the batch.
-			if batchWeight+txW > limit {
+			// Stop if we can't actually fit anything in the batch.
+			if limit-batchWeight < minWeights[w] {
 				return false
+			}
+
+			// This transaction would overflow the batch.
+			if batchWeight+txW > limit {
+				return true
 			}
 		}
 
