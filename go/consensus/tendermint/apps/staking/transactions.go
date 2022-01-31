@@ -39,6 +39,11 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		return nil, nil
 	}
 
+	// Check if sender provided at least a minimum amount.
+	if xfer.Amount.Cmp(&params.MinTransferAmount) < 0 {
+		return nil, staking.ErrUnderMinTransferAmount
+	}
+
 	fromAddr := ctx.CallerAddress()
 	if fromAddr.IsReserved() || !isTransferPermitted(params, fromAddr) {
 		return nil, staking.ErrForbidden

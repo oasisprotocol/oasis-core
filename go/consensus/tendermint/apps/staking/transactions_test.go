@@ -91,7 +91,7 @@ func TestReservedAddresses(t *testing.T) {
 	_ = staking.NewReservedAddress(testPK)
 
 	// Make sure all transaction types fail for the reserved address.
-	transferResult, err := app.transfer(txCtx, stakeState, nil)
+	transferResult, err := app.transfer(txCtx, stakeState, &staking.Transfer{})
 	require.EqualError(err, "staking: forbidden by policy", "transfer for reserved address should error")
 	require.Nil(transferResult, "transfer result should be nil on error")
 
