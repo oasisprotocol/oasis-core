@@ -44,7 +44,7 @@ use crate::{
         types::TxnBatch,
         Context as TxnContext,
     },
-    types::{Body, ComputedBatch, Error},
+    types::{Body, ComputedBatch, Error, ExecutionMode},
 };
 
 /// Maximum amount of requests that can be in the dispatcher queue.
@@ -111,6 +111,7 @@ impl From<tokio::task::JoinError> for Error {
 
 /// State related to dispatching a runtime transaction.
 struct TxDispatchState {
+    mode: ExecutionMode,
     consensus_block: LightBlock,
     consensus_verifier: Arc<dyn Verifier>,
     header: Header,
@@ -320,6 +321,7 @@ impl Dispatcher {
                     .await
             }
             Body::RuntimeExecuteTxBatchRequest {
+                mode,
                 consensus_block,
                 round_results,
                 io_root,
@@ -339,6 +341,7 @@ impl Dispatcher {
                     inputs.unwrap_or_default(),
                     in_msgs,
                     TxDispatchState {
+                        mode,
                         consensus_block,
                         consensus_verifier: state.consensus_verifier,
                         header: block.header,
@@ -367,6 +370,7 @@ impl Dispatcher {
                     inputs,
                     vec![],
                     TxDispatchState {
+                        mode: ExecutionMode::Execute,
                         consensus_block,
                         consensus_verifier: state.consensus_verifier,
                         header: block.header,
@@ -395,6 +399,7 @@ impl Dispatcher {
                     method,
                     args,
                     TxDispatchState {
+                        mode: ExecutionMode::Execute,
                         consensus_block,
                         consensus_verifier: state.consensus_verifier,
                         header,
@@ -567,7 +572,18 @@ impl Dispatcher {
             state.max_messages,
             state.check_only,
         );
-        let mut results = txn_dispatcher.execute_batch(txn_ctx, &inputs, &in_msgs)?;
+
+        // Perform execution based on the passed mode.
+        let mut results = match state.mode {
+            ExecutionMode::Execute => {
+                // Just execute the batch.
+                txn_dispatcher.execute_batch(txn_ctx, &inputs, &in_msgs)?
+            }
+            ExecutionMode::Schedule => {
+                // Allow the runtime to arbitrarily update the batch.
+                txn_dispatcher.schedule_and_execute_batch(txn_ctx, &mut inputs, &in_msgs)?
+            }
+        };
 
         // Finalize state.
         let (state_write_log, new_state_root) = overlay
@@ -605,21 +621,21 @@ impl Dispatcher {
                 .expect("add transaction must succeed");
         }
 
-        let (_, old_io_root) = txn_tree
+        let (input_write_log, input_io_root) = txn_tree
             .commit(Context::create_child(&ctx))
             .expect("io commit must succeed");
-        if old_io_root != io_root {
+        if state.mode == ExecutionMode::Execute && input_io_root != io_root {
             panic!(
                 "dispatcher: I/O root inconsistent with inputs (expected: {:?} got: {:?})",
-                io_root, old_io_root
+                io_root, input_io_root
             );
         }
 
-        for (tx_hash, result) in hashes.drain(..).zip(results.results.drain(..)) {
+        for (tx_hash, result) in hashes.iter().zip(results.results.drain(..)) {
             txn_tree
                 .add_output(
                     Context::create_child(&ctx),
-                    tx_hash,
+                    *tx_hash,
                     result.output,
                     result.tags,
                 )
@@ -680,6 +696,10 @@ impl Dispatcher {
                 messages: results.messages,
             },
             batch_weight_limits: results.batch_weight_limits,
+            tx_hashes: hashes,
+            tx_reject_hashes: results.tx_reject_hashes,
+            tx_input_root: input_io_root,
+            tx_input_write_log: input_write_log,
         })
     }
 

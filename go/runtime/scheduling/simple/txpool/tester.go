@@ -87,9 +87,10 @@ func testBasic(t *testing.T, pool api.TxPool) {
 	require.EqualValues(t, 10, len(batch), "Batch size")
 	require.EqualValues(t, 51, pool.Size(), "Size")
 
-	hashes := make([]hash.Hash, len(batch))
-	for i, tx := range batch {
-		hashes[i] = tx.Hash()
+	hashes := make([]hash.Hash, 0, len(batch))
+	for _, tx := range batch {
+		hashes = append(hashes, tx.Hash())
+		hashes = append(hashes, tx.Hash()) // Duplicate to ensure this is handled correctly.
 	}
 	pool.RemoveBatch(hashes)
 	require.EqualValues(t, 41, pool.Size(), "Size")
@@ -112,6 +113,10 @@ func testGetBatch(t *testing.T, pool api.TxPool) {
 	require.Empty(t, batch, "GetBatch empty if no batch available")
 
 	batch = pool.GetBatch(true)
+	require.EqualValues(t, 1, len(batch), "Batch size")
+	require.EqualValues(t, 1, pool.Size(), "Size")
+
+	batch = pool.GetPrioritizedBatch(nil, 10)
 	require.EqualValues(t, 1, len(batch), "Batch size")
 	require.EqualValues(t, 1, pool.Size(), "Size")
 
@@ -343,6 +348,35 @@ func testPriority(t *testing.T, pool api.TxPool) {
 		batch,
 		"elements should be returned by priority",
 	)
+
+	batch = pool.GetPrioritizedBatch(nil, 2)
+	require.Len(t, batch, 2, "two transactions should be returned")
+	require.EqualValues(
+		t,
+		[]*transaction.CheckedTransaction{
+			txs[2], // 20
+			txs[0], // 10
+		},
+		batch,
+		"elements should be returned by priority",
+	)
+
+	offsetTx := txs[2].Hash()
+	batch = pool.GetPrioritizedBatch(&offsetTx, 2)
+	require.Len(t, batch, 2, "two transactions should be returned")
+	require.EqualValues(
+		t,
+		[]*transaction.CheckedTransaction{
+			txs[0], // 10
+			txs[1], // 5
+		},
+		batch,
+		"elements should be returned by priority",
+	)
+
+	offsetTx.Empty()
+	batch = pool.GetPrioritizedBatch(&offsetTx, 2)
+	require.Len(t, batch, 0, "no transactions should be returned on invalid hash")
 
 	// When the pool is full, a higher priority transaction should still get queued.
 	highTx := transaction.NewCheckedTransaction(

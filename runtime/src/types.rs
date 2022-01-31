@@ -155,6 +155,8 @@ pub enum Body {
         results: Vec<CheckTxResult>,
     },
     RuntimeExecuteTxBatchRequest {
+        #[cbor(optional, default)]
+        mode: ExecutionMode,
         consensus_block: LightBlock,
         round_results: roothash::RoundResults,
         io_root: Hash,
@@ -170,6 +172,11 @@ pub enum Body {
         batch: ComputedBatch,
         #[cbor(optional)]
         batch_weight_limits: Option<BTreeMap<TransactionWeight, u64>>,
+
+        tx_hashes: Vec<Hash>,
+        tx_reject_hashes: Vec<Hash>,
+        tx_input_root: Hash,
+        tx_input_write_log: WriteLog,
     },
     RuntimeKeyManagerPolicyUpdateRequest {
         signed_policy_raw: Vec<u8>,
@@ -219,6 +226,15 @@ pub enum Body {
     },
     HostFetchConsensusBlockResponse {
         block: LightBlock,
+    },
+    HostFetchTxBatchRequest {
+        #[cbor(optional)]
+        offset: Option<Hash>,
+        limit: u32,
+    },
+    HostFetchTxBatchResponse {
+        #[cbor(optional)]
+        batch: Option<TxnBatch>,
     },
 }
 
@@ -274,11 +290,56 @@ pub struct RuntimeInfoRequest {
     pub local_config: BTreeMap<String, cbor::Value>,
 }
 
+/// Set of supported runtime features.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct Features {
+    /// Schedule control feature.
+    #[cbor(optional, default)]
+    pub schedule_control: Option<FeatureScheduleControl>,
+}
+
+/// A feature specifying that the runtime supports controlling the scheduling of batches. This means
+/// that the scheduler should only take priority into account and ignore weights, leaving it up to
+/// the runtime to decide which transactions to include.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+pub struct FeatureScheduleControl {
+    /// Size of the initial batch of transactions.
+    pub initial_batch_size: u32,
+}
+
 /// Runtime information response.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct RuntimeInfoResponse {
+    /// The runtime protocol version supported by the runtime.
     pub protocol_version: Version,
+
+    /// The version of the runtime.
     pub runtime_version: Version,
+
+    /// Describes the features supported by the runtime.
+    #[cbor(optional, default)]
+    pub features: Option<Features>,
+}
+
+/// Batch execution mode.
+#[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub enum ExecutionMode {
+    /// Execution mode where the batch of transactions is executed as-is without the ability to
+    /// perform and modifications to the batch.
+    Execute = 0,
+    /// Execution mode where the runtime is in control of scheduling and may arbitrarily modify the
+    /// batch during execution.
+    ///
+    /// This execution mode will only be used in case the runtime advertises to support the schedule
+    /// control feature. In this case the call will only contain up to InitialBatchSize transactions
+    /// and the runtime will need to request more if it needs more.
+    Schedule = 1,
+}
+
+impl Default for ExecutionMode {
+    fn default() -> Self {
+        Self::Execute
+    }
 }
 
 /// Result of a CheckTx operation.

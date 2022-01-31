@@ -22,7 +22,7 @@ use oasis_core_runtime::{
         types::TxnBatch,
         Context as TxnContext,
     },
-    types::{CheckTxResult, Error as RuntimeError},
+    types::{CheckTxResult, Error as RuntimeError, FeatureScheduleControl, Features},
     version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
@@ -242,6 +242,45 @@ impl TxnDispatcher for Dispatcher {
             in_msgs_count: in_msgs.len(),
             block_tags: vec![],
             batch_weight_limits: None,
+            tx_reject_hashes: vec![],
+        })
+    }
+
+    fn schedule_and_execute_batch(
+        &self,
+        mut ctx: TxnContext,
+        batch: &mut TxnBatch,
+        in_msgs: &[IncomingMessage],
+    ) -> Result<ExecuteBatchResult, RuntimeError> {
+        let mut ctx = Context {
+            core: &mut ctx,
+            host_info: &self.host_info,
+            key_manager: &self.key_manager,
+            messages: vec![],
+        };
+
+        Self::begin_block(&mut ctx)?;
+
+        // Execute incoming messages. A real implementation should allocate resources for incoming
+        // messages and only execute as many messages as fits.
+        for in_msg in in_msgs {
+            Self::execute_in_msg(&mut ctx, in_msg);
+        }
+
+        // Execute transactions.
+        // TODO: Actually do some batch reordering.
+        let mut results = vec![];
+        for tx in batch.iter() {
+            results.push(Self::execute_tx(&mut ctx, tx)?);
+        }
+
+        Ok(ExecuteBatchResult {
+            results,
+            messages: ctx.messages,
+            in_msgs_count: in_msgs.len(),
+            block_tags: vec![],
+            batch_weight_limits: None,
+            tx_reject_hashes: vec![],
         })
     }
 
@@ -298,6 +337,12 @@ pub fn main() {
         Config {
             version: version_from_cargo!(),
             trust_root,
+            features: Some(Features {
+                // Enable the schedule control feature.
+                schedule_control: Some(FeatureScheduleControl {
+                    initial_batch_size: 10,
+                }),
+            }),
             ..Default::default()
         },
     );

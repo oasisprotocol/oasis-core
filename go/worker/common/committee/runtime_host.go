@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 )
 
 // Implements RuntimeHostHandlerFactory.
@@ -36,6 +37,11 @@ func (env *nodeEnvironment) GetCurrentBlock(ctx context.Context) (*block.Block, 
 // Implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetKeyManagerClient(ctx context.Context) (keymanagerClientApi.Client, error) {
 	return env.n.KeyManagerClient, nil
+}
+
+// Implements RuntimeHostHandlerEnvironment.
+func (env *nodeEnvironment) GetTxPool(ctx context.Context) (txpool.TransactionPool, error) {
+	return env.n.TxPool, nil
 }
 
 // Implements RuntimeHostHandlerFactory.

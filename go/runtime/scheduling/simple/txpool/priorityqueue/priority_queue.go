@@ -172,6 +172,11 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 
 func (q *priorityQueue) removeTxsLocked(items []*item) {
 	for _, item := range items {
+		// Skip already removed items to avoid corrupting the list in case of duplicates.
+		if _, exists := q.transactions[item.tx.Hash()]; !exists {
+			continue
+		}
+
 		delete(q.transactions, item.tx.Hash())
 		q.priorityIndex.Delete(item)
 		for k, v := range item.tx.Weights() {
@@ -194,6 +199,57 @@ func (q *priorityQueue) removeTxsLocked(items []*item) {
 	if mlen, plen := uint64(len(q.transactions)), q.poolWeights[transaction.WeightCount]; mlen != plen {
 		panic(fmt.Errorf("inconsistent sizes of the map (%v) and pool weight count (%v) after removal", mlen, plen))
 	}
+}
+
+// Implements api.TxPool.
+func (q *priorityQueue) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction {
+	q.Lock()
+	defer q.Unlock()
+
+	var (
+		batch      []*transaction.CheckedTransaction
+		toRemove   []*item
+		offsetItem btree.Item
+	)
+	if offset != nil {
+		var exists bool
+		offsetItem, exists = q.transactions[*offset]
+		if !exists {
+			// Offset does not exist so no items will be matched anyway.
+			return nil
+		}
+	}
+	q.priorityIndex.DescendLessOrEqual(offsetItem, func(i btree.Item) bool {
+		item := i.(*item)
+
+		for w, l := range q.weightLimits {
+			txW := item.tx.Weight(w)
+			// Transaction weight greater than the limit. Drop the tx from the pool.
+			if txW > l {
+				toRemove = append(toRemove, item)
+				return true
+			}
+		}
+
+		// Skip the offset item itself (if specified).
+		if txHash := item.tx.Hash(); txHash.Equal(offset) {
+			return true
+		}
+
+		// Add the tx to the batch.
+		batch = append(batch, item.tx)
+		if uint32(len(batch)) >= limit { //nolint: gosimple
+			return false
+		}
+		return true
+	})
+
+	// Remove transactions discovered to be too big to even fit the batch.
+	// This can happen if weight limits changed after the transaction was
+	// already set to be scheduled.
+	q.removeTxsLocked(toRemove)
+
+	return batch
 }
 
 // Implements api.TxPool.

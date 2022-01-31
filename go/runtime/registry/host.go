@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
@@ -117,6 +118,9 @@ type RuntimeHostHandlerEnvironment interface {
 
 	// GetKeyManagerClient returns the key manager client for this runtime.
 	GetKeyManagerClient(ctx context.Context) (keymanagerClientApi.Client, error)
+
+	// GetTxPool returns the transaction pool for this runtime.
+	GetTxPool(ctx context.Context) (txpool.TransactionPool, error)
 }
 
 // RuntimeHostHandler is a runtime host handler suitable for compute runtimes. It provides the
@@ -207,6 +211,23 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 			Block: *lb,
 		}}, nil
 	}
+	// Transaction pool.
+	if rq := body.HostFetchTxBatchRequest; rq != nil {
+		txPool, err := h.env.GetTxPool(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		batch := txPool.GetPrioritizedBatch(rq.Offset, rq.Limit)
+		raw := make([][]byte, 0, len(batch))
+		for _, tx := range batch {
+			raw = append(raw, tx.Raw())
+		}
+
+		return &protocol.Body{HostFetchTxBatchResponse: &protocol.HostFetchTxBatchResponse{
+			Batch: raw,
+		}}, nil
+	}
 
 	return nil, errMethodNotSupported
 }
@@ -262,7 +283,6 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 				n.logger.Debug("no key manager needed for this runtime")
 				continue
 			}
-			// GetStatus(context.Context, *registry.NamespaceQuery) (*Status, error)
 
 			var err error
 			st, err = n.consensus.KeyManager().GetStatus(n.ctx, &registry.NamespaceQuery{

@@ -20,16 +20,27 @@ type unresolvedBatch struct {
 }
 
 func (ub *unresolvedBatch) String() string {
-	return fmt.Sprintf("UnresolvedBatch{hash: %s}", ub.proposal.Header.BatchHash)
+	switch {
+	case ub.proposal != nil:
+		return fmt.Sprintf("UnresolvedBatch{hash: %s}", ub.proposal.Header.BatchHash)
+	default:
+		return "UnresolvedBatch{?}"
+	}
 }
 
 func (ub *unresolvedBatch) hash() hash.Hash {
+	if ub.proposal == nil {
+		return hash.Hash{}
+	}
 	return ub.proposal.Header.BatchHash
 }
 
 func (ub *unresolvedBatch) resolve(txPool txpool.TransactionPool) (transaction.RawBatch, error) {
 	if ub.batch != nil {
 		return ub.batch, nil
+	}
+	if ub.proposal == nil {
+		return nil, fmt.Errorf("resolve called on unresolvable batch")
 	}
 	if len(ub.proposal.Batch) == 0 {
 		return transaction.RawBatch{}, nil
