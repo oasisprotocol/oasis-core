@@ -607,6 +607,11 @@ func (app *stakingApplication) withdraw(
 		return nil, nil
 	}
 
+	// Check if sender provided at least a minimum amount.
+	if withdraw.Amount.Cmp(&params.MinTransferAmount) < 0 {
+		return nil, staking.ErrUnderMinTransferAmount
+	}
+
 	// Allowances are disabled in case either max allowances is zero or if transfers are disabled.
 	if params.DisableTransfers || params.MaxAllowances == 0 {
 		return nil, staking.ErrForbidden
