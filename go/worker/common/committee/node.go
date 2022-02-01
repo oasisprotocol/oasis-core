@@ -223,6 +223,12 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 	}
 
 	epoch := n.Group.GetEpochSnapshot()
+
+	// Mark all executor nodes in the current committee as important.
+	if ec := epoch.GetExecutorCommittee(); ec != nil {
+		n.P2P.SetNodeImportance(p2p.ImportantNodeCompute, ec.Peers)
+	}
+
 	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
 	for _, hooks := range n.hooks {
 		hooks.HandleEpochTransitionLocked(epoch)
