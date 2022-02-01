@@ -100,10 +100,12 @@ func New(
 		},
 	)
 	s.grpcPolicy = policy.NewDynamicRuntimePolicyChecker(api.ServiceName, s.commonWorker.GrpcPolicyWatcher)
-	api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
-		w:       s,
-		storage: localRouter,
-	})
+	if viper.GetBool(CfgWorkerPublicRPCEnabled) {
+		api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
+			w:       s,
+			storage: localRouter,
+		})
+	}
 
 	var checkpointerCfg *checkpoint.CheckpointerConfig
 	if !viper.GetBool(CfgWorkerCheckpointerDisabled) {
@@ -163,7 +165,10 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		w.commonWorker.GetConfig(),
 		localStorage,
 		checkpointerCfg,
-		viper.GetBool(CfgWorkerCheckpointSyncDisabled),
+		&committee.CheckpointSyncConfig{
+			Disabled:          viper.GetBool(CfgWorkerCheckpointSyncDisabled),
+			ChunkFetcherCount: viper.GetUint(cfgWorkerFetcherCount),
+		},
 	)
 	if err != nil {
 		return err

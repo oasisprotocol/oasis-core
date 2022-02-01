@@ -153,9 +153,9 @@ var (
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
 	// TLSAddressRequiredRoles are the Node roles that require TLS Address.
-	TLSAddressRequiredRoles = node.RoleComputeWorker |
-		node.RoleKeyManager |
-		node.RoleConsensusRPC
+	TLSAddressRequiredRoles = node.RoleKeyManager |
+		node.RoleConsensusRPC |
+		node.RoleStorageRPC
 
 	// P2PAddressRequiredRoles are the Node roles that require P2P Address.
 	P2PAddressRequiredRoles = node.RoleComputeWorker

@@ -6,29 +6,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
-
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
-	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p"
 )
 
 const (
-	// cpListTimeout is the timeout for fetching a list of checkpoints from a node.
-	cpListTimeout = 5 * time.Second
 	// cpListsTimeout is the timeout for fetching checkpoints from all nodes.
 	cpListsTimeout = 30 * time.Second
 	// cpRestoreTimeout is the timeout for restoring a checkpoint chunk from a node.
 	cpRestoreTimeout = 60 * time.Second
-
-	retryInterval = 1 * time.Second
-	maxRetries    = 30
 
 	checkpointStatusDone = 0
 	checkpointStatusNext = 1
@@ -41,9 +32,22 @@ const (
 // ErrNoUsableCheckpoints is the error returned when none of the checkpoints could be synced.
 var ErrNoUsableCheckpoints = errors.New("storage: no checkpoint could be synced")
 
-type restoreResult struct {
-	done bool
-	err  error
+// CheckpointSyncConfig is the checkpoint sync configuration.
+type CheckpointSyncConfig struct {
+	// Disabled specifies whether checkpoint sync should be disabled. In this case the node will
+	// only sync by applying all diffs from genesis.
+	Disabled bool
+
+	// ChunkFetcherCount specifies the number of parallel checkpoint chunk fetchers.
+	ChunkFetcherCount uint
+}
+
+// Validate performs configuration checks.
+func (cfg *CheckpointSyncConfig) Validate() error {
+	if !cfg.Disabled && cfg.ChunkFetcherCount == 0 {
+		return fmt.Errorf("number of checkpoint chunk fetchers must be greater than zero")
+	}
+	return nil
 }
 
 type chunkHeap struct {
@@ -67,140 +71,80 @@ func (h *chunkHeap) Pop() interface{} {
 	return ret
 }
 
-// goWithNodes runs the given operation with all the connections in the provided nodesClient.
-func (n *Node) goWithNodes(
-	nodesClient grpc.NodesClient,
-	fn func(context.Context, *grpc.ConnWithNodeMeta) error,
-) (
-	context.CancelFunc,
-	chan interface{},
-	error,
-) {
-	connCh := make(chan []*grpc.ConnWithNodeMeta)
-	connGetter := func() error {
-		conns := nodesClient.GetConnectionsWithMeta()
-		if len(conns) == 0 {
-			return storageClient.ErrStorageNotAvailable
-		}
-		connCh <- conns
-		return nil
-	}
-	go func() {
-		sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
-		_ = backoff.Retry(connGetter, backoff.WithContext(sched, n.ctx))
-		close(connCh)
-	}()
-	conns, ok := <-connCh
-	if !ok || len(conns) == 0 {
-		return nil, nil, storageClient.ErrStorageNotAvailable
-	}
-
-	workerCtx, workerCancel := context.WithCancel(n.ctx)
-	var workerGroup sync.WaitGroup
-	doneCh := make(chan interface{})
-
-	for _, conn := range conns {
-		workerGroup.Add(1)
-		go func(conn *grpc.ConnWithNodeMeta) {
-			defer workerGroup.Done()
-			op := func() error {
-				return fn(workerCtx, conn)
-			}
-			sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
-			_ = backoff.Retry(op, backoff.WithContext(sched, workerCtx))
-		}(conn)
-	}
-	go func() {
-		defer close(doneCh)
-		workerGroup.Wait()
-	}()
-
-	return workerCancel, doneCh, nil
-}
-
-func (n *Node) nodeWorker(
+func (n *Node) checkpointChunkFetcher(
 	ctx context.Context,
-	conn *grpc.ConnWithNodeMeta,
 	chunkDispatchCh chan *checkpoint.ChunkMetadata,
 	chunkReturnCh chan *checkpoint.ChunkMetadata,
 	errorCh chan int,
-) error {
-	api := storageApi.NewStorageClient(conn.ClientConn)
+) {
 	for {
 		var chunk *checkpoint.ChunkMetadata
 		var ok bool
 		select {
 		case <-ctx.Done():
-			return backoff.Permanent(ctx.Err())
+			return
 		case chunk, ok = <-chunkDispatchCh:
 			if !ok {
-				return nil
+				return
 			}
 		}
 
 		chunkCtx, cancel := context.WithTimeout(ctx, cpRestoreTimeout)
 		defer cancel()
 
-		restoreCh := make(chan *restoreResult)
-		rd, wr := io.Pipe()
-		go func() {
-			done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, rd)
-			restoreCh <- &restoreResult{
-				done: done,
-				err:  err,
-			}
-		}()
-		err := api.GetCheckpointChunk(chunkCtx, chunk, wr)
-		wr.Close()
-		result := <-restoreCh
-		cancel()
-
-		// GetCheckpointChunk errors.
-		// The chunk probably always needs to be returned here
-		// (otherwise there's a deadlock risk with one worker's backoff just aborting
-		// and another worker then blocking on its chunk).
-		switch {
-		case err == nil:
-			// Fall out of the switch.
-		case err != nil:
-			n.logger.Error("can't fetch chunk from storage node", "node", conn.Node.ID, "chunk", chunk.Index, "err", err)
+		// Fetch chunk from peers.
+		rsp, pf, err := n.storageSync.GetCheckpointChunk(chunkCtx, &p2p.GetCheckpointChunkRequest{
+			Version: chunk.Version,
+			Root:    chunk.Root,
+			Index:   chunk.Index,
+			Digest:  chunk.Digest,
+		})
+		if err != nil {
+			n.logger.Error("failed to fetch chunk from peers",
+				"err", err,
+				"chunk", chunk.Index,
+			)
 			chunkReturnCh <- chunk
-			fallthrough
-		case errors.Is(err, checkpoint.ErrChunkNotFound):
-			return backoff.Permanent(err)
-		default:
-			return err
+			continue
 		}
 
-		// RestoreChunk errors.
+		// Restore fetched chunk.
+		done, err := n.localStorage.Checkpointer().RestoreChunk(chunkCtx, chunk.Index, bytes.NewBuffer(rsp.Chunk))
+		cancel()
+
 		switch {
-		case result.done:
+		case done:
+			pf.RecordSuccess()
 			// Signal to the toplevel handler that we're done.
 			chunkReturnCh <- nil
-			return nil
-		case result.err != nil:
+			return
+		case err != nil:
 			n.logger.Error("chunk restoration failed",
-				"node", conn.Node.ID,
 				"chunk", chunk.Index,
 				"root", chunk.Root,
-				"err", result.err,
+				"err", err,
 			)
+
 			switch {
-			case errors.Is(result.err, checkpoint.ErrChunkCorrupted):
+			case errors.Is(err, checkpoint.ErrChunkCorrupted):
+				pf.RecordFailure()
 				chunkReturnCh <- chunk
-				return result.err
-			case errors.Is(result.err, checkpoint.ErrChunkProofVerificationFailed):
+			case errors.Is(err, checkpoint.ErrChunkProofVerificationFailed):
+				// TODO: Also punish peer that gave us this checkpoint.
+				pf.RecordBadPeer()
 				errorCh <- checkpointStatusNext
-				return backoff.Permanent(result.err)
+				return
 			default:
 				errorCh <- checkpointStatusBail
-				return backoff.Permanent(result.err)
+				return
 			}
+		default:
+			pf.RecordSuccess()
 		}
 	}
 }
 
-func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.NodesClient, groupSize uint16) (cpStatus int, rerr error) {
+func (n *Node) handleCheckpoint(check *checkpoint.Metadata, maxParallelRequests uint) (cpStatus int, rerr error) {
 	if err := n.localStorage.Checkpointer().StartRestore(n.ctx, check); err != nil {
 		// Any previous restores were already aborted by the driver up the call stack, so
 		// things should have been going smoothly here; bail.
@@ -225,17 +169,26 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.Nod
 	chunkDispatchCh := make(chan *checkpoint.ChunkMetadata)
 	defer close(chunkDispatchCh)
 
-	chunkReturnCh := make(chan *checkpoint.ChunkMetadata, groupSize)
-	errorCh := make(chan int, groupSize)
+	chunkReturnCh := make(chan *checkpoint.ChunkMetadata, maxParallelRequests)
+	errorCh := make(chan int, maxParallelRequests)
 
-	worker := func(ctx context.Context, conn *grpc.ConnWithNodeMeta) error {
-		return n.nodeWorker(ctx, conn, chunkDispatchCh, chunkReturnCh, errorCh)
-	}
+	ctx, cancel := context.WithCancel(n.ctx)
 
-	cancel, doneCh, err := n.goWithNodes(nodesClient, worker)
-	if err != nil {
-		return checkpointStatusBail, fmt.Errorf("can't fetch chunks from committee nodes: %w", err)
+	// Spawn the worker group to fetch and restore checkpoint chunks.
+	var workerGroup sync.WaitGroup
+	doneCh := make(chan interface{})
+	for i := uint(0); i < maxParallelRequests; i++ {
+		workerGroup.Add(1)
+		go func() {
+			defer workerGroup.Done()
+			n.checkpointChunkFetcher(ctx, chunkDispatchCh, chunkReturnCh, errorCh)
+		}()
 	}
+	go func() {
+		defer close(doneCh)
+		workerGroup.Wait()
+	}()
+
 	// Cancel on exit and wait for the worker pool to drain so that the abort
 	// above can proceed safely.
 	defer func() {
@@ -285,6 +238,7 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.Nod
 				// Restoration completed, no more chunks.
 				return checkpointStatusDone, nil
 			}
+			// TODO: Per-chunk backoff?
 			heap.Push(chunks, returned)
 
 		case status := <-errorCh:
@@ -296,8 +250,8 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.Nod
 			next = nil
 
 		case <-doneCh:
-			// No usable committee connections left, move on to the next checkpoint.
-			return checkpointStatusNext, storageClient.ErrStorageNotAvailable
+			// No usable workers left, move on to the next checkpoint.
+			return checkpointStatusNext, fmt.Errorf("no usable workers")
 		}
 
 		if next != nil {
@@ -306,60 +260,22 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, nodesClient grpc.Nod
 	}
 }
 
-func (n *Node) getCheckpointList(nodesClient grpc.NodesClient) ([]*checkpoint.Metadata, error) {
-	// Get checkpoint list from all current committee members.
-	listCh := make(chan []*checkpoint.Metadata)
-	req := &checkpoint.GetCheckpointsRequest{
-		Version:   1,
-		Namespace: n.commonNode.Runtime.ID(),
-	}
-	getter := func(opCtx context.Context, conn *grpc.ConnWithNodeMeta) error {
-		ctx, cancel := context.WithTimeout(opCtx, cpListTimeout)
-		defer cancel()
-
-		api := storageApi.NewStorageClient(conn.ClientConn)
-		meta, err := api.GetCheckpoints(ctx, req)
-		if err != nil {
-			n.logger.Error("error calling GetCheckpoints",
-				"err", err,
-				"node", conn.Node.ID,
-				"this_node", n.commonNode.Identity.NodeSigner.Public,
-			)
-			return err
-		}
-		n.logger.Debug("got checkpoint list from a node",
-			"length", len(meta),
-			"node", conn.Node.ID,
-		)
-		listCh <- meta
-		return nil
-	}
-
-	cancel, doneCh, err := n.goWithNodes(nodesClient, getter)
-	if err != nil {
-		return nil, err
-	}
+func (n *Node) getCheckpointList() ([]*checkpoint.Metadata, error) {
+	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
 	defer cancel()
-	// Wait at most cpListsTimeout for results.
-	go func() {
-		<-time.After(cpListsTimeout)
-		cancel()
-	}()
 
-	var list []*checkpoint.Metadata
-resultLoop:
-	for {
-		select {
-		case <-doneCh:
-			break resultLoop
-		case <-n.ctx.Done():
-			return nil, n.ctx.Err()
-		case meta := <-listCh:
-			list = append(list, meta...)
-		}
+	cps, err := n.storageSync.GetCheckpoints(ctx, &p2p.GetCheckpointsRequest{
+		Version: 1,
+	})
+	if err != nil {
+		n.logger.Error("failed to retrieve any checkpoints",
+			"err", err,
+		)
+		return nil, err
 	}
 
 	// Prepare the list: sort and deduplicate.
+	list := cps.Checkpoints
 	sort.Slice(list, func(i, j int) bool {
 		// Descending!
 		if list[j].Root.Version == list[i].Root.Version {
@@ -417,16 +333,10 @@ func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 	// for errors, driven by remainingRoots.
 	var syncState blockSummary
 
-	// Try getting the active descriptor first.
-	descriptor, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
-	if err != nil {
-		return nil, fmt.Errorf("can't get runtime descriptor: %w", err)
-	}
-
 	// Fetch metadata from the current committee.
-	metadata, err := n.getCheckpointList(n.storageNodesGrpc)
+	metadata, err := n.getCheckpointList()
 	if err != nil {
-		return nil, fmt.Errorf("can't get checkpoint list from storage committee: %w", err)
+		return nil, fmt.Errorf("can't get checkpoint list from peers: %w", err)
 	}
 
 	// Try all the checkpoints now, from most recent backwards.
@@ -470,10 +380,7 @@ func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 			syncState.Roots = nil
 		}
 
-		// Compute how many nodes we will be asking for checkpoints.
-		groupSize := descriptor.Executor.GroupSize + descriptor.Executor.GroupBackupSize
-
-		status, err := n.handleCheckpoint(check, n.storageNodesGrpc, groupSize)
+		status, err := n.handleCheckpoint(check, n.checkpointSyncCfg.ChunkFetcherCount)
 		switch status {
 		case checkpointStatusDone:
 			n.logger.Info("successfully restored from checkpoint", "root", check.Root, "mask", mask)

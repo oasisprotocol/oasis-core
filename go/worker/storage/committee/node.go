@@ -25,16 +25,15 @@ import (
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes/grpc"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/client"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsDB "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p"
 )
 
 var (
@@ -99,9 +98,6 @@ const (
 	// maxInFlightRounds is the maximum number of rounds that should be fetched before waiting
 	// for them to be applied.
 	maxInFlightRounds = 100
-
-	// getDiffTimeout is the timeout for fetching a diff from a node.
-	getDiffTimeout = 15 * time.Second
 )
 
 type roundItem interface {
@@ -133,7 +129,7 @@ func (q *outOfOrderRoundQueue) Pop() interface{} {
 // fetchedDiff has all the context needed for a single GetDiff operation.
 type fetchedDiff struct {
 	fetched  bool
-	srcNode  *node.Node
+	pf       rpc.PeerFeedback
 	err      error
 	round    uint64
 	prevRoot storageApi.Root
@@ -172,9 +168,7 @@ type Node struct { // nolint: maligned
 
 	localStorage storageApi.LocalBackend
 
-	storageNodes     nodes.NodeDescriptorLookup
-	storageNodesGrpc grpc.NodesClient
-	storageClient    storageApi.ClientBackend
+	storageSync p2p.Client
 
 	grpcPolicy     *policy.DynamicRuntimePolicyChecker
 	undefinedRound uint64
@@ -185,9 +179,9 @@ type Node struct { // nolint: maligned
 
 	workerCommonCfg workerCommon.Config
 
-	checkpointer           checkpoint.Checkpointer
-	checkpointSyncDisabled bool
-	checkpointSyncForced   bool
+	checkpointer         checkpoint.Checkpointer
+	checkpointSyncCfg    *CheckpointSyncConfig
+	checkpointSyncForced bool
 
 	syncedLock   sync.RWMutex
 	syncedState  watcherState
@@ -216,7 +210,7 @@ func NewNode(
 	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
 	checkpointerCfg *checkpoint.CheckpointerConfig,
-	checkpointSyncDisabled bool,
+	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Node, error) {
 	n := &Node{
 		commonNode: commonNode,
@@ -235,7 +229,7 @@ func NewNode(
 
 		stateStore: store,
 
-		checkpointSyncDisabled: checkpointSyncDisabled,
+		checkpointSyncCfg: checkpointSyncCfg,
 
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
@@ -244,6 +238,11 @@ func NewNode(
 		quitCh:       make(chan struct{}),
 		workerQuitCh: make(chan struct{}),
 		initCh:       make(chan struct{}),
+	}
+
+	// Validate checkpoint sync configuration.
+	if err := checkpointSyncCfg.Validate(); err != nil {
+		return nil, fmt.Errorf("bad checkpoint sync configuration: %w", err)
 	}
 
 	n.syncedState.LastBlock.Round = defaultUndefinedRound
@@ -255,41 +254,6 @@ func NewNode(
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 	n.ctx = storageApi.WithNodeBlacklist(n.ctx)
-
-	// Create a new storage client that will be used for remote sync.
-	// This storage client connects to all registered storage nodes for the runtime.
-	nl, err := nodes.NewRuntimeNodeLookup(n.ctx, n.commonNode.Consensus, rtID)
-	if err != nil {
-		return nil, fmt.Errorf("group: failed to create runtime node watcher: %w", err)
-	}
-
-	n.storageNodes = nodes.NewFilteredNodeLookup(nl,
-		nodes.WithAllFilters(
-			// Ignore self.
-			nodes.IgnoreNodeFilter(n.commonNode.Identity.NodeSigner.Public()),
-			// Only compute nodes.
-			nodes.TagFilter(nodes.TagsForRoleMask(node.RoleComputeWorker)[0]),
-		),
-	)
-	storageNodesGrpc, err := grpc.NewNodesClient(
-		n.ctx,
-		n.storageNodes,
-		grpc.WithClientAuthentication(n.commonNode.Identity),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("storage/client: failed to create nodes gRPC client: %w", err)
-	}
-	n.storageNodesGrpc = storageNodesGrpc
-
-	scl, err := client.NewForNodesClient(
-		n.ctx,
-		n.storageNodesGrpc,
-		n.commonNode.Runtime,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("storage worker: failed to create client: %w", err)
-	}
-	n.storageClient = scl.(storageApi.ClientBackend)
 
 	// Create a new checkpointer if enabled.
 	if checkpointerCfg != nil {
@@ -344,6 +308,10 @@ func NewNode(
 		logger: n.logger,
 		node:   n,
 	})
+
+	// Register storage sync service.
+	commonNode.P2P.RegisterProtocolServer(p2p.NewServer(commonNode.Runtime.ID(), localStorage))
+	n.storageSync = p2p.NewClient(commonNode.P2P, commonNode.Runtime.ID())
 
 	// Update service policy.
 	n.updateExternalServicePolicy()
@@ -510,6 +478,7 @@ func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 	result := &fetchedDiff{
 		fetched:  false,
+		pf:       rpc.NewNopPeerFeedback(),
 		round:    round,
 		prevRoot: prevRoot,
 		thisRoot: thisRoot,
@@ -534,40 +503,16 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 				"new_root", thisRoot,
 			)
 
-			ctx, cancel := context.WithTimeout(n.ctx, getDiffTimeout)
+			ctx, cancel := context.WithCancel(n.ctx)
 			defer cancel()
 
-			// Prioritize committee nodes.
-			var selectedNode *node.Node
-			ctx = storageApi.WithNodeSelectionCallback(ctx, func(n *node.Node) {
-				selectedNode = n
-			})
-			if committee := n.commonNode.Group.GetEpochSnapshot().GetExecutorCommittee(); committee != nil {
-				ctx = storageApi.WithNodePriorityHintFromMap(ctx, committee.PublicKeys)
-			}
-			it, err := n.storageClient.GetDiff(ctx, &storageApi.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
-			result.srcNode = selectedNode
+			rsp, pf, err := n.storageSync.GetDiff(ctx, &p2p.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 			if err != nil {
 				result.err = err
 				return
 			}
-			for {
-				more, err := it.Next()
-				if err != nil {
-					result.err = err
-					return
-				}
-				if !more {
-					break
-				}
-
-				chunk, err := it.Value()
-				if err != nil {
-					result.err = err
-					return
-				}
-				result.writeLog = append(result.writeLog, chunk)
-			}
+			result.pf = pf
+			result.writeLog = rsp.WriteLog
 		}
 	}
 }
@@ -1070,7 +1015,7 @@ func (n *Node) worker() { // nolint: gocyclo
 	heap.Init(outOfOrderDoneDiffs)
 
 	// Try to perform initial sync from state and io checkpoints.
-	if !n.checkpointSyncDisabled || n.checkpointSyncForced {
+	if !n.checkpointSyncCfg.Disabled || n.checkpointSyncForced {
 		var (
 			summary *blockSummary
 			attempt int
@@ -1216,18 +1161,18 @@ mainLoop:
 					DstRoot:   lastDiff.thisRoot.Hash,
 					WriteLog:  lastDiff.writeLog,
 				})
-				if err != nil {
+				switch {
+				case err == nil:
+					lastDiff.pf.RecordSuccess()
+				case errors.Is(err, storageApi.ErrExpectedRootMismatch):
+					lastDiff.pf.RecordBadPeer()
+				default:
 					n.logger.Error("can't apply write log",
 						"err", err,
 						"old_root", lastDiff.prevRoot,
 						"new_root", lastDiff.thisRoot,
 					)
-					if errors.Is(err, storageApi.ErrExpectedRootMismatch) && lastDiff.srcNode != nil {
-						storageApi.BlacklistAddNode(n.ctx, lastDiff.srcNode)
-						n.logger.Warn("node blacklisted due to bogus diff",
-							"node", lastDiff.srcNode,
-						)
-					}
+					lastDiff.pf.RecordSuccess()
 				}
 			}
 
