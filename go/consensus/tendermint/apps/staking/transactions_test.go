@@ -858,3 +858,77 @@ func TestTransfer(t *testing.T) {
 		require.Equal(tc.err, err, tc.msg)
 	}
 }
+
+func TestBurn(t *testing.T) {
+	require := require.New(t)
+	var err error
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	stakeState := stakingState.NewMutableState(ctx.State())
+
+	app := &stakingApplication{
+		state: appState,
+	}
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+
+	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount1")
+
+	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount2")
+
+	for _, tc := range []struct {
+		msg      string
+		params   *staking.ConsensusParameters
+		txSigner signature.PublicKey
+		burn     *staking.Burn
+		err      error
+	}{
+		{
+			"should fail when under min transfer amount",
+			&staking.ConsensusParameters{
+				MinTransferAmount: *quantity.NewFromUint64(1000),
+			},
+			pk1,
+			&staking.Burn{
+				Amount: *quantity.NewFromUint64(999),
+			},
+			staking.ErrUnderMinTransferAmount,
+		},
+		{
+			"should succeed when at least min transfer amount",
+			&staking.ConsensusParameters{
+				MinTransferAmount: *quantity.NewFromUint64(1000),
+			},
+			pk1,
+			&staking.Burn{
+				Amount: *quantity.NewFromUint64(1000),
+			},
+			nil,
+		},
+	} {
+		err = stakeState.SetConsensusParameters(ctx, tc.params)
+		require.NoError(err, "setting staking consensus parameters should not error")
+
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
+
+		err = app.burn(txCtx, stakeState, tc.burn)
+		require.Equal(tc.err, err, tc.msg)
+	}
+}
