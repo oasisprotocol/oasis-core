@@ -131,6 +131,11 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		return nil
 	}
 
+	// Check if sender provided at least a minimum amount.
+	if burn.Amount.Cmp(&params.MinTransferAmount) < 0 {
+		return staking.ErrUnderMinTransferAmount
+	}
+
 	fromAddr := ctx.CallerAddress()
 	if fromAddr.IsReserved() {
 		return staking.ErrForbidden

@@ -95,7 +95,7 @@ func TestReservedAddresses(t *testing.T) {
 	require.EqualError(err, "staking: forbidden by policy", "transfer for reserved address should error")
 	require.Nil(transferResult, "transfer result should be nil on error")
 
-	err = app.burn(txCtx, stakeState, nil)
+	err = app.burn(txCtx, stakeState, &staking.Burn{})
 	require.EqualError(err, "staking: forbidden by policy", "burn for reserved address should error")
 
 	var q quantity.Quantity

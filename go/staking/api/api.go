@@ -78,7 +78,7 @@ var (
 	ErrUnderMinDelegationAmount = errors.New(ModuleName, 8, "staking: amount is lower than the minimum delegation amount")
 
 	// ErrUnderMinTransferAmount is the error returned when the given transfer
-	// or withdrawal amount is lower than the minimum transfer amount
+	// or burn or withdrawal amount is lower than the minimum transfer amount
 	// specified in the consensus parameters.
 	ErrUnderMinTransferAmount = errors.New(ModuleName, 9, "staking: amount is lower than the minimum transfer amount")
 
