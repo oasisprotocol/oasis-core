@@ -129,6 +129,7 @@ func TestVerifyNodeUpdate(t *testing.T) {
 			err:   ErrNodeUpdateNotAllowed,
 			msg:   "expired node consensus ID update should not be allowed",
 		},
+		// TODO: Add checks for runtime versions.
 	} {
 		err := VerifyNodeUpdate(logger, &existingNode, tc.nodeFn(), tc.epoch)
 		require.Equal(t, tc.err, err, tc.msg)

@@ -11,7 +11,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -19,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -543,16 +543,22 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			return nil, nil, fmt.Errorf("%w: missing runtimes", ErrInvalidArgument)
 		}
 	default:
-		rtMap := make(map[common.Namespace]bool)
+		rtMap := make(map[common.Namespace]*Runtime)
+		rtVersionMap := make(map[common.Namespace]map[version.Version]bool)
 
 		for _, rt := range n.Runtimes {
-			if rtMap[rt.ID] {
-				logger.Error("RegisterNode: duplicate runtime IDs",
-					"runtime_id", rt.ID,
-				)
-				return nil, nil, fmt.Errorf("%w: duplicate runtime IDs", ErrInvalidArgument)
+			if rtVersionMap[rt.ID] == nil {
+				rtVersionMap[rt.ID] = make(map[version.Version]bool)
 			}
-			rtMap[rt.ID] = true
+			if rtVersionMap[rt.ID][rt.Version] {
+				logger.Error("RegisterNode: duplicate version for runtime",
+					"runtime_id", rt.ID,
+					"runtime_version", rt.Version,
+				)
+				return nil, nil, fmt.Errorf("%w: duplicate version for runtime", ErrInvalidArgument)
+
+			}
+			rtVersionMap[rt.ID][rt.Version] = true
 
 			// Make sure that the claimed runtime actually exists.
 			regRt, err := runtimeLookup.AnyRuntime(ctx, rt.ID)
@@ -578,7 +584,11 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 				return nil, nil, fmt.Errorf("%w: compute runtime not allowed", ErrInvalidArgument)
 			}
 
-			runtimes = append(runtimes, regRt)
+			// Append to the list of runtimes once and only once.
+			if rtMap[rt.ID] == nil {
+				rtMap[rt.ID] = regRt
+				runtimes = append(runtimes, regRt)
+			}
 		}
 	}
 
@@ -762,16 +772,31 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRt
 		return ErrTEEHardwareMismatch
 	}
 
-	if err := rt.Capabilities.TEE.Verify(ts, regRt.Version.TEE); err != nil {
-		logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
-			"runtime_id", rt.ID,
-			"ts", ts,
-			"err", err,
-		)
-		return err
+	// Find the runtime in the descriptor corresponding to the version
+	// that is to be validated.
+	for _, rtVersionInfo := range regRt.Deployments {
+		if rtVersionInfo.Version != rt.Version {
+			continue
+		}
+
+		if err := rt.Capabilities.TEE.Verify(ts, rtVersionInfo.TEE); err != nil {
+			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
+				"runtime_id", rt.ID,
+				"ts", ts,
+				"err", err,
+			)
+			return err
+		}
+
+		return nil
 	}
 
-	return nil
+	logger.Error("VerifyNodeRuntimeEnclaveIDs: node running unknown enclave version",
+		"runtime_id", rt.ID,
+		"version", rt.Version,
+		"ts", ts,
+	)
+	return fmt.Errorf("%w: node running unknown runtime enclave version", ErrInvalidArgument)
 }
 
 // VerifyAddress verifies a node address.
@@ -833,37 +858,82 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 
 // verifyNodeRuntimeChanges verifies node runtime changes.
 func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes, newRuntimes []*node.Runtime) bool {
-	if len(newRuntimes) < len(currentRuntimes) {
-		logger.Error("RegisterNode: trying to update runtimes, cannot remove existing runtimes",
+	// Note: VerifyNodeRuntimeEnclaveIDs ensures that nothing outrageous
+	// is in newRuntimes, this routine only needs to validate changes.
+
+	toMap := func(vec []*node.Runtime) (map[common.Namespace]map[version.Version]*node.Runtime, error) {
+		m := make(map[common.Namespace]map[version.Version]*node.Runtime)
+		for i := range vec {
+			rt := vec[i]
+			if m[rt.ID] == nil {
+				m[rt.ID] = make(map[version.Version]*node.Runtime)
+			}
+			if m[rt.ID][rt.Version] != nil {
+				return nil, fmt.Errorf("registry: redundant versions for runtime: %s", rt.ID)
+			}
+			m[rt.ID][rt.Version] = rt
+		}
+		return m, nil
+	}
+
+	currentMap, err := toMap(currentRuntimes)
+	if err != nil {
+		// Invariant violation, corrupt state.
+		logger.Error("RegisterNode: trying to update runtimes, current runtime state corrupt",
+			"err", err,
 			"current_runtimes", currentRuntimes,
+		)
+		panic(fmt.Sprintf("RegisterNode: malformed node runtimes present in state: %v", err))
+	}
+
+	newMap, err := toMap(newRuntimes)
+	if err != nil {
+		logger.Error("RegisterNode: trying to update runtimes, new runtime state invalid",
+			"err", err,
 			"new_runtimes", newRuntimes,
 		)
 		return false
 	}
 
-	// Make an index that maps runtime ID -> runtime, so we can do checks
-	// faster.
-	nrtMap := make(map[common.Namespace]*node.Runtime)
-	for _, nrt := range newRuntimes {
-		nrtMap[nrt.ID] = nrt
-	}
-
-	for _, currentRuntime := range currentRuntimes {
-		newRuntime, exists := nrtMap[currentRuntime.ID]
-		if !exists {
+	for id, currentVersions := range currentMap {
+		// All runtimes in currentMap need to be present in newMap.
+		newVersions, ok := newMap[id]
+		if !ok {
 			logger.Error("RegisterNode: trying to update runtimes, current runtime is missing in new set",
-				"runtime_id", currentRuntime.ID,
+				"runtime_id", id,
 			)
 			return false
 		}
-		if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) {
-			curRtJSON, _ := json.Marshal(currentRuntime)
-			newRtJSON, _ := json.Marshal(newRuntime)
-			logger.Error("RegisterNode: trying to update runtimes, runtime Capabilities changed",
-				"current_runtime", curRtJSON,
-				"new_runtime", newRtJSON,
-			)
-			return false
+
+		// All versions present in currentMap for a runtime, that are
+		// also present in newMap, need to report identical capabilities.
+		//
+		// XXX: Should nodes be allowed to remove old versions?  Previous
+		// behavior is "no".
+		for version, currentRuntime := range currentVersions {
+			// XXX: The alternative thing to do is to just assume that
+			// the node knows what it is doing, and ignore old runtimes
+			// that are not in the new set, which seems reasonable...
+			newRuntime, ok := newVersions[version]
+			if !ok {
+				logger.Error("RegisterNode: trying to update runtimes, current version is misssing in new set",
+					"runtime_id", id,
+					"version", version,
+				)
+				return false
+			}
+
+			if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) {
+				curRtJSON, _ := json.Marshal(currentRuntime)
+				newRtJSON, _ := json.Marshal(newRuntime)
+				logger.Error("RegisterNode: trying to update runtimes, runtime Capabilities changed",
+					"runtime_id", id,
+					"version", version,
+					"current_runtime", curRtJSON,
+					"new_runtime", newRtJSON,
+				)
+				return false
+			}
 		}
 	}
 	return true
@@ -966,6 +1036,7 @@ func VerifyRuntime( // nolint: gocyclo
 	rt *Runtime,
 	isGenesis bool,
 	isSanityCheck bool,
+	now beacon.EpochTime,
 ) error {
 	if rt == nil {
 		return fmt.Errorf("%w: no runtime given", ErrInvalidArgument)
@@ -1008,20 +1079,23 @@ func VerifyRuntime( // nolint: gocyclo
 		return fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
 	}
 
-	// If TEE is required, check if runtime provided at least one enclave ID.
-	if rt.TEEHardware != node.TEEHardwareInvalid {
-		switch rt.TEEHardware {
-		case node.TEEHardwareIntelSGX:
-			var cs node.SGXConstraints
-			if err := cbor.Unmarshal(rt.Version.TEE, &cs); err != nil {
-				logger.Error("RegisterRuntime: invalid SGX TEE constraints",
-					"err", err,
-				)
-				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
-			}
-			if len(cs.Enclaves) == 0 {
-				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrNoEnclaveForRuntime)
-			}
+	// Validate the deployments.  This also handles validating that the
+	// appropriate TEE configuration is present in each deployment.
+	//
+	if err := rt.ValidateDeployments(now); err != nil {
+		logger.Error("RegisterRuntime: invalid deployments",
+			"runtime_id", rt.ID,
+			"err", err,
+		)
+		return err // ValidateDeployments handles wrapping, yay.
+	}
+	if !isGenesis {
+		// Unless isGenesis, forbid immediate deployment.
+		if rt.ActiveDeployment(now) != nil {
+			logger.Error("RegisterRuntime: trying to deploy immediately",
+				"runtime_id", rt.ID,
+			)
+			return ErrRuntimeUpdateNotAllowed
 		}
 	}
 
@@ -1105,7 +1179,7 @@ func VerifyRegisterComputeRuntimeArgs(ctx context.Context, logger *logging.Logge
 }
 
 // VerifyRuntimeUpdate verifies changes while updating the runtime.
-func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime) error {
+func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime, now beacon.EpochTime) error {
 	if !currentRt.EntityID.Equal(newRt.EntityID) {
 		logger.Error("RegisterRuntime: trying to change runtime owner",
 			"current_owner", currentRt.EntityID,
@@ -1164,6 +1238,83 @@ func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime) erro
 		logger.Error("RegisterRuntime: runtime governance can only be used with compute runtimes")
 		return ErrRuntimeUpdateNotAllowed
 	}
+
+	// Validate the deployments.
+	activeDeployment := currentRt.ActiveDeployment(now)
+	if err := currentRt.ValidateDeployments(now); err != nil {
+		// Invariant violation, this should NEVER happen.
+		logger.Error("RegisterRuntime: malformed deployments present in state",
+			"runtime_id", currentRt.ID,
+			"err", err,
+		)
+		panic(fmt.Sprintf("RegisterRuntime: malformed deployments present in state: %s: %v", currentRt.ID, err))
+	}
+	existingDeployments := make(map[version.Version]*VersionInfo)
+	for i, deployment := range currentRt.Deployments {
+		existingDeployments[deployment.Version] = currentRt.Deployments[i]
+	}
+
+	newActiveDeployment := newRt.ActiveDeployment(now)
+	if err := newRt.ValidateDeployments(now); err != nil {
+		logger.Error("RegisterRuntime: malformed deployments",
+			"runtime_id", currentRt.ID,
+			"err", err,
+		)
+		return ErrRuntimeUpdateNotAllowed
+	}
+	newDeployments := make(map[version.Version]*VersionInfo)
+	for i, deployment := range newRt.Deployments {
+		newDeployments[deployment.Version] = newRt.Deployments[i]
+	}
+
+	for newVersion, newInfo := range newDeployments {
+		oldInfo := existingDeployments[newVersion]
+
+		// If this is a version that is present in the old descriptor...
+		if oldInfo != nil {
+			// If nothing has changed just continue.
+			if newInfo.Equal(oldInfo) {
+				continue
+			}
+
+			// This is valid if it is altering an existing future deployment.
+		}
+
+		// This prevents altering existing deployments and updates that
+		// attempt to deploy retroactively (new deployments must have
+		// the validity window start at some point in the future).
+		if newInfo.ValidFrom <= now {
+			logger.Error("RegisterRuntime: trying to change an existing deployment",
+				"runtime_id", currentRt.ID,
+				"version", newVersion,
+			)
+			return ErrRuntimeUpdateNotAllowed
+		}
+	}
+
+	if activeDeployment != nil {
+		if newActiveDeployment == nil {
+			logger.Error("RegisterRuntime: trying to remove an existing deployment",
+				"runtime_id", currentRt.ID,
+			)
+			return ErrRuntimeUpdateNotAllowed
+		}
+
+		// Double check this just to be sure.
+		if !activeDeployment.Equal(newActiveDeployment) {
+			logger.Error("RegisterRuntime: trying to change the active deployment",
+				"runtime_id", currentRt.ID,
+			)
+			return ErrRuntimeUpdateNotAllowed
+		}
+	} else if newActiveDeployment != nil {
+		// Fail.  Immediate deployment not allowed.
+		logger.Error("RegisterRuntime: trying to deploy immediately",
+			"runtime_id", currentRt.ID,
+		)
+		return ErrRuntimeUpdateNotAllowed
+	}
+
 	return nil
 }
 

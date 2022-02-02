@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -160,6 +161,9 @@ func TestElectCommittee(t *testing.T) {
 					GroupSize:       1,
 					GroupBackupSize: 0,
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			true,
 		},
@@ -181,6 +185,9 @@ func TestElectCommittee(t *testing.T) {
 				Executor: registry.ExecutorParameters{
 					GroupSize:       1,
 					GroupBackupSize: 0,
+				},
+				Deployments: []*registry.VersionInfo{
+					{},
 				},
 			},
 			false,
@@ -218,6 +225,9 @@ func TestElectCommittee(t *testing.T) {
 					GroupSize:       2,
 					GroupBackupSize: 0,
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			false,
 		},
@@ -253,6 +263,9 @@ func TestElectCommittee(t *testing.T) {
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 0,
+				},
+				Deployments: []*registry.VersionInfo{
+					{},
 				},
 			},
 			true,
@@ -299,6 +312,9 @@ func TestElectCommittee(t *testing.T) {
 						},
 					},
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			true,
 		},
@@ -344,6 +360,9 @@ func TestElectCommittee(t *testing.T) {
 						},
 					},
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			false,
 		},
@@ -386,6 +405,9 @@ func TestElectCommittee(t *testing.T) {
 							ValidatorSet: &registry.ValidatorSetConstraint{},
 						},
 					},
+				},
+				Deployments: []*registry.VersionInfo{
+					{},
 				},
 			},
 			false,
@@ -436,6 +458,9 @@ func TestElectCommittee(t *testing.T) {
 						},
 					},
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			true,
 		},
@@ -483,6 +508,9 @@ func TestElectCommittee(t *testing.T) {
 							},
 						},
 					},
+				},
+				Deployments: []*registry.VersionInfo{
+					{},
 				},
 			},
 			false,
@@ -532,6 +560,9 @@ func TestElectCommittee(t *testing.T) {
 						},
 					},
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			true,
 		},
@@ -574,6 +605,9 @@ func TestElectCommittee(t *testing.T) {
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 0,
+				},
+				Deployments: []*registry.VersionInfo{
+					{},
 				},
 			},
 			false,
@@ -622,6 +656,9 @@ func TestElectCommittee(t *testing.T) {
 					GroupSize:       2,
 					GroupBackupSize: 0,
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			false,
 		},
@@ -669,8 +706,70 @@ func TestElectCommittee(t *testing.T) {
 					GroupSize:       2,
 					GroupBackupSize: 0,
 				},
+				Deployments: []*registry.VersionInfo{
+					{},
+				},
 			},
 			true,
+		},
+		{
+			"executor: not enough eligible nodes, incorrect version",
+			scheduler.KindComputeExecutor,
+			[]*node.Node{
+				{
+					ID: nodeID1,
+					Runtimes: []*node.Runtime{
+						{
+							ID:      rtID1, // Matching runtime ID.
+							Version: version.Version{
+								Major: 1,
+								Minor: 0,
+								Patch: 1,
+							},
+						},
+					},
+					Roles: node.RoleComputeWorker,
+				},
+				{
+					ID:       nodeID2,
+					Runtimes: []*node.Runtime{},  // No runtimes.
+					Roles:    node.RoleValidator, // Validator.
+				},
+				{
+					ID: nodeID3,
+					Runtimes: []*node.Runtime{
+						{
+							ID:      rtID1, // Matching runtime ID.
+							Version: version.Version{
+								Major: 1,
+								Minor: 0,
+								Patch: 0,
+							},
+						},
+					},
+					Roles: node.RoleComputeWorker,
+				},
+			},
+			map[signature.PublicKey]*registry.NodeStatus{},
+			map[staking.Address]bool{},
+			registry.Runtime{
+				ID:   rtID1,
+				Kind: registry.KindCompute,
+				Executor: registry.ExecutorParameters{
+					GroupSize:       2,
+					GroupBackupSize: 0,
+				},
+				Deployments: []*registry.VersionInfo{
+					{
+						Version: version.Version{
+							Major: 1,
+							Minor: 0,
+							Patch: 0,
+						},
+					},
+				},
+			},
+			false,
 		},
 	} {
 		var nodes []*nodeWithStatus

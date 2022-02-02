@@ -1,12 +1,15 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -326,9 +329,6 @@ type Runtime struct { // nolint: maligned
 	// TEEHardware specifies the runtime's TEE hardware requirements.
 	TEEHardware node.TEEHardware `json:"tee_hardware"`
 
-	// Version is the runtime version information.
-	Version VersionInfo `json:"versions"`
-
 	// KeyManager is the key manager runtime ID for this runtime.
 	KeyManager *common.Namespace `json:"key_manager,omitempty"`
 
@@ -354,6 +354,9 @@ type Runtime struct { // nolint: maligned
 
 	// GovernanceModel specifies the runtime governance model.
 	GovernanceModel RuntimeGovernanceModel `json:"governance_model"`
+
+	// Deployments specifies the runtime deployments (versions).
+	Deployments []*VersionInfo `json:"deployments,omitempty"`
 }
 
 // RuntimeGovernanceModel specifies the runtime governance model.
@@ -479,6 +482,107 @@ func (r *Runtime) ValidateBasic(strictVersion bool) error {
 		return fmt.Errorf("%w: out of range", ErrUnsupportedRuntimeGovernanceModel)
 	}
 
+	if len(r.Deployments) == 0 {
+		return fmt.Errorf("no deployment information specified")
+	}
+
+	return nil
+}
+
+func (r *Runtime) ActiveDeployment(now beacon.EpochTime) *VersionInfo {
+	var activeDeployment *VersionInfo
+	for i, deployment := range r.Deployments {
+		// Ignore versions that are not valid yet.
+		if deployment.ValidFrom > now {
+			continue
+		}
+		switch activeDeployment {
+		case nil:
+			activeDeployment = r.Deployments[i]
+		default:
+			if activeDeployment.ValidFrom < deployment.ValidFrom {
+				activeDeployment = r.Deployments[i]
+			}
+		}
+	}
+	return activeDeployment
+}
+
+func (r *Runtime) ValidateDeployments(now beacon.EpochTime) error {
+	// The runtime descriptor's deployments field is considered valid
+	// if:
+	//  * There is at least one entry present.
+	//  * All of the entries are well-formed.
+	//  * There is at most 2 entries:
+	//     * One expired, one active
+	//     * One active
+	//     * One active, one future
+	//    While it is possible to express expired/active/future
+	//    this is disallowed, and the expired descriptor must
+	//    be pruned to deploy an upgrade.
+	//  * The versions field increases as versions are deployed.
+
+	if len(r.Deployments) == 0 {
+		return fmt.Errorf("%w: no deployments", ErrInvalidArgument)
+	}
+	if len(r.Deployments) > 2 {
+		return fmt.Errorf("%w: too many deployments", ErrInvalidArgument)
+	}
+
+	deployments := make([]*VersionInfo, len(r.Deployments))
+	copy(deployments, r.Deployments)
+	sort.SliceStable(deployments, func(i, j int) bool {
+		return deployments[i].Version.ToU64() < deployments[j].Version.ToU64()
+	})
+
+	versionMap := make(map[version.Version]bool)
+
+	var (
+		numFuture      int
+		prevDeployment *VersionInfo
+	)
+	for i, deployment := range deployments {
+		if versionMap[deployment.Version] {
+			return fmt.Errorf("%w: duplicate version", ErrInvalidArgument)
+		}
+		versionMap[deployment.Version] = true
+
+		// Validate that versions increase.  As we are traversing a slice
+		// sorted by increasing version, and we explicitly disallow duplicate
+		// versions, we only need to validate that the validity windows
+		// are strictly increasing here to satisfy the invariants.
+		if prevDeployment != nil {
+			if prevDeployment.ValidFrom >= deployment.ValidFrom {
+				return fmt.Errorf("%w: versions must increase over time", ErrInvalidArgument)
+			}
+		}
+		prevDeployment = deployments[i]
+
+		if deployment.ValidFrom > now {
+			numFuture++
+		}
+
+		switch r.TEEHardware {
+		case node.TEEHardwareInvalid:
+			if deployment.TEE != nil {
+				return fmt.Errorf("%w: TEE constraints when no TEE specified", ErrInvalidArgument)
+			}
+		case node.TEEHardwareIntelSGX:
+			var cs node.SGXConstraints
+			if err := cbor.Unmarshal(deployment.TEE, &cs); err != nil {
+				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
+			}
+			if len(cs.Enclaves) == 0 {
+				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrNoEnclaveForRuntime)
+			}
+		default:
+			return fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
+		}
+	}
+	if numFuture > 1 {
+		return fmt.Errorf("%w: more than one future deployment", ErrInvalidArgument)
+	}
+
 	return nil
 }
 
@@ -513,9 +617,26 @@ type VersionInfo struct {
 	// Version of the runtime.
 	Version version.Version `json:"version"`
 
+	// ValidFrom stores the epoch at which, this version is valid.
+	ValidFrom beacon.EpochTime `json:"valid_from"`
+
 	// TEE is the enclave version information, in an enclave provider specific
 	// format if any.
 	TEE []byte `json:"tee,omitempty"`
+}
+
+// Equal compares vs another VersionInfo for equality.
+func (vi *VersionInfo) Equal(cmp *VersionInfo) bool {
+	if vi.Version.ToU64() != cmp.Version.ToU64() {
+		return false
+	}
+	if vi.ValidFrom != cmp.ValidFrom {
+		return false
+	}
+	if !bytes.Equal(vi.TEE, cmp.TEE) {
+		return false
+	}
+	return true
 }
 
 // RuntimeGenesis is the runtime genesis information that is used to

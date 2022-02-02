@@ -622,7 +622,12 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		return nil, registry.ErrForbidden
 	}
 
-	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false); err != nil {
+	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false, epoch); err != nil {
 		return nil, err
 	}
 
@@ -665,7 +670,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	}
 	// If there is an existing runtime, verify update.
 	if existingRt != nil {
-		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt)
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch)
 		if err != nil {
 			return nil, err
 		}
