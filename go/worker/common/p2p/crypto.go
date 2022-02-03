@@ -28,6 +28,12 @@ func (s *p2pSigner) Equals(other libp2pCrypto.Key) bool {
 }
 
 func (s *p2pSigner) Raw() ([]byte, error) {
+	if sep, ok := s.signer.(signature.StaticEntropyProvider); ok {
+		// Instead of exposing the private key material, we return persistent static entropy
+		// independent from the private key. Since this is only used in the QUIC transport to
+		// derive the reset key, this seems like a sensible thing to do.
+		return sep.StaticEntropy()
+	}
 	return nil, errCryptoNotSupported
 }
 

@@ -10,8 +10,6 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	core "github.com/libp2p/go-libp2p-core"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/transport"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/multiformats/go-multiaddr"
@@ -230,16 +228,6 @@ func (p *P2P) RegisterHandler(runtimeID common.Namespace, kind TopicKind, handle
 	)
 }
 
-func (p *P2P) handleConnection(conn core.Conn) {
-	if conn.Stat().Direction != network.DirInbound {
-		return
-	}
-
-	p.logger.Debug("new connection from peer",
-		"peer_id", conn.RemotePeer(),
-	)
-}
-
 func (p *P2P) topicIDForRuntime(runtimeID common.Namespace, kind TopicKind) string {
 	return fmt.Sprintf("%s/%d/%s/%s",
 		p.chainContext,
@@ -292,13 +280,16 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 	// mountain of terrible uPNP/NAT-PMP implementations out there,
 	// they can.
 	host, err := libp2p.New(
-		ctx,
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(signerToPrivKey(identity.P2PSigner)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p host: %w", err)
 	}
+	go func() {
+		<-ctx.Done()
+		_ = host.Close()
+	}()
 
 	// Initialize the gossipsub router.
 	pubsub, err := pubsub.NewGossipSub(
@@ -331,16 +322,10 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		topics:            make(map[common.Namespace]map[TopicKind]*topicHandler),
 		logger:            logging.GetLogger("worker/common/p2p"),
 	}
-	p.host.Network().SetConnHandler(p.handleConnection)
 
 	p.logger.Info("p2p host initialized",
 		"address", fmt.Sprintf("%+v", host.Addrs()),
 	)
 
 	return p, nil
-}
-
-func init() {
-	// Make sure to decrease (global!) transport timeouts.
-	transport.AcceptTimeout = 5 * time.Second
 }
