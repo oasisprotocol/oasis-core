@@ -82,6 +82,10 @@ var (
 	// specified in the consensus parameters.
 	ErrUnderMinTransferAmount = errors.New(ModuleName, 9, "staking: amount is lower than the minimum transfer amount")
 
+	// ErrBalanceTooLow is the error returned when an account's balance is
+	// below the minimum allowed amount.
+	ErrBalanceTooLow = errors.New(ModuleName, 10, "staking: balance too low")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.
@@ -1104,6 +1108,7 @@ type ConsensusParameters struct { // nolint: maligned
 	GasCosts                          transaction.Costs                   `json:"gas_costs,omitempty"`
 	MinDelegationAmount               quantity.Quantity                   `json:"min_delegation"`
 	MinTransferAmount                 quantity.Quantity                   `json:"min_transfer"`
+	MinTransactBalance                quantity.Quantity                   `json:"min_transact_balance"`
 
 	DisableTransfers       bool             `json:"disable_transfers,omitempty"`
 	DisableDelegation      bool             `json:"disable_delegation,omitempty"`

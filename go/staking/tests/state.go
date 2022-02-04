@@ -45,8 +45,9 @@ func GenesisState() api.Genesis {
 					FreezeInterval: 1,
 				},
 			},
-			MinDelegationAmount:     *quantity.NewFromUint64(10),
-			MinTransferAmount:       *quantity.NewFromUint64(10),
+			MinDelegationAmount: *quantity.NewFromUint64(10),
+			MinTransferAmount:   *quantity.NewFromUint64(10),
+			// Zero MinTransactBalance is normal.
 			MaxAllowances:           32,
 			FeeSplitWeightVote:      *quantity.NewFromUint64(1),
 			RewardFactorEpochSigned: *quantity.NewFromUint64(1),

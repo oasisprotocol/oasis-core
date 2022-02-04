@@ -69,15 +69,30 @@ func AuthenticateAndPayFees(
 		fee = &transaction.Fee{}
 	}
 
+	// Account must have enough to pay fee and maintain minimum balance.
+	needed := fee.Amount.Clone()
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch staking consensus parameters: %w", err)
+	}
+	if err = needed.Add(&params.MinTransactBalance); err != nil {
+		return fmt.Errorf("adding MinTransactBalance to fee: %w", err)
+	}
+
+	// Check against minimum balance plus fee.
+	if account.General.Balance.Cmp(needed) < 0 {
+		logger.Error("account balance too low",
+			"account_addr", addr,
+			"account_balance", account.General.Balance,
+			"min_transact_balance", params.MinTransactBalance,
+			"fee_amount", fee.Amount,
+		)
+		return staking.ErrBalanceTooLow
+	}
+
 	if ctx.IsCheckOnly() {
 		// Configure gas accountant on the context so that we can report gas wanted.
 		ctx.SetGasAccountant(abciAPI.NewGasAccountant(fee.Gas))
-
-		// Check that there is enough balance to pay fees. For the non-CheckTx case
-		// this happens during Move below.
-		if account.General.Balance.Cmp(&fee.Amount) < 0 {
-			return transaction.ErrInsufficientFeeBalance
-		}
 
 		// Check fee against minimum gas price if in CheckTx. Always accept own transactions.
 		// NOTE: This is non-deterministic as it is derived from the local validator
