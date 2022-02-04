@@ -39,9 +39,9 @@ impl DerefMut for RawProofEntry {
     }
 }
 
-impl Into<Vec<u8>> for RawProofEntry {
-    fn into(self) -> Vec<u8> {
-        self.0
+impl From<RawProofEntry> for Vec<u8> {
+    fn from(val: RawProofEntry) -> Self {
+        val.0
     }
 }
 
@@ -117,11 +117,11 @@ impl ProofVerifier {
                 let mut pos = idx + 1;
                 if let NodeBox::Internal(ref mut nd) = node {
                     // Left.
-                    let result = self._verify_proof(&proof, pos)?;
+                    let result = self._verify_proof(proof, pos)?;
                     pos = result.0;
                     nd.left = result.1;
                     // Right.
-                    let result = self._verify_proof(&proof, pos)?;
+                    let result = self._verify_proof(proof, pos)?;
                     pos = result.0;
                     nd.right = result.1;
 

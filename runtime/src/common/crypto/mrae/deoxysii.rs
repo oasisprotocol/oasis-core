@@ -16,8 +16,8 @@ type Kdf = Hmac<Sha512Trunc256>;
 /// Derives a MRAE AEAD symmetric key suitable for use with the asymmetric
 /// box primitives from the provided X25519 public and private keys.
 fn derive_symmetric_key(public: &[u8; 32], private: &[u8; 32]) -> [u8; KEY_SIZE] {
-    let public = x25519_dalek::PublicKey::from(public.clone());
-    let private = x25519_dalek::StaticSecret::from(private.clone());
+    let public = x25519_dalek::PublicKey::from(*public);
+    let private = x25519_dalek::StaticSecret::from(*private);
 
     let pmk = private.diffie_hellman(&public);
 
@@ -40,7 +40,7 @@ pub fn generate_key_pair() -> ([u8; 32], [u8; 32]) {
     let sk = x25519_dalek::StaticSecret::new(&mut rng);
     let pk = x25519_dalek::PublicKey::from(&sk);
 
-    (pk.as_bytes().clone(), sk.to_bytes())
+    (*pk.as_bytes(), sk.to_bytes())
 }
 
 /// Boxes ("seals") the provided additional data and plaintext via

@@ -1,5 +1,6 @@
 //! Policy support.
 use std::{
+    cmp::Ordering,
     collections::{HashMap, HashSet},
     sync::RwLock,
 };
@@ -28,8 +29,8 @@ use crate::context::Context as KmContext;
 lazy_static! {
     static ref POLICY: Policy = Policy::new();
 }
-const POLICY_STORAGE_KEY: &'static [u8] = b"keymanager_policy";
-const POLICY_SEAL_CONTEXT: &'static [u8] = b"Ekiden Keymanager Seal policy v0";
+const POLICY_STORAGE_KEY: &[u8] = b"keymanager_policy";
+const POLICY_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal policy v0";
 
 /// Policy, which manages the key manager policy.
 pub struct Policy {
@@ -57,7 +58,7 @@ impl Policy {
     }
 
     /// Initialize (or update) the policy state.
-    pub fn init(&self, ctx: &mut RpcContext, raw_policy: &Vec<u8>) -> Result<Vec<u8>> {
+    pub fn init(&self, ctx: &mut RpcContext, raw_policy: &[u8]) -> Result<Vec<u8>> {
         // If this is an insecure build, don't bother trying to apply any policy.
         if Self::unsafe_skip() {
             return Ok(vec![]);
@@ -85,25 +86,26 @@ impl Policy {
 
         // Compare the new serial number with the old serial number, ensure
         // it is greater.
-        if old_policy.serial > new_policy.serial {
-            return Err(KeyManagerError::PolicyRollback.into());
-        } else if old_policy.serial == new_policy.serial {
-            // Policy should be identical, ensure nothing has changed
-            // and just return.
-            if old_policy.checksum != new_policy.checksum {
-                return Err(KeyManagerError::PolicyChanged.into());
+        match old_policy.serial.cmp(&new_policy.serial) {
+            Ordering::Greater => Err(KeyManagerError::PolicyRollback.into()),
+            Ordering::Equal if old_policy.checksum != new_policy.checksum => {
+                // Policy should be identical.
+                Err(KeyManagerError::PolicyChanged.into())
             }
-            inner.policy = Some(old_policy.clone());
-            return Ok(old_policy.checksum.clone());
+            Ordering::Equal => {
+                inner.policy = Some(old_policy.clone());
+                Ok(old_policy.checksum)
+            }
+            Ordering::Less => {
+                // Persist then apply the new policy.
+                Self::save_raw_policy(ctx.untrusted_local_storage, raw_policy);
+                let new_checksum = new_policy.checksum.clone();
+                inner.policy = Some(new_policy);
+
+                // Return the checksum of the newly applied policy.
+                Ok(new_checksum)
+            }
         }
-
-        // Persist then apply the new policy.
-        Self::save_raw_policy(ctx.untrusted_local_storage, raw_policy);
-        let new_checksum = new_policy.checksum.clone();
-        inner.policy = Some(new_policy);
-
-        // Return the checksum of the newly applied policy.
-        Ok(new_checksum)
     }
 
     /// Check if the MRSIGNER/MRENCLAVE may query keys for the given
@@ -155,11 +157,8 @@ impl Policy {
             None => HashSet::new(),
         };
 
-        match EnclaveIdentity::current() {
-            Some(id) => {
-                src_set.insert(id);
-            }
-            None => {}
+        if let Some(id) = EnclaveIdentity::current() {
+            src_set.insert(id);
         };
 
         match src_set.is_empty() {
@@ -171,14 +170,14 @@ impl Policy {
     fn load_policy(untrusted_local: &dyn KeyValue) -> Option<CachedPolicy> {
         let ciphertext = untrusted_local.get(POLICY_STORAGE_KEY.to_vec()).unwrap();
 
-        unseal(Keypolicy::MRENCLAVE, &POLICY_SEAL_CONTEXT, &ciphertext).map(|plaintext| {
+        unseal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, &ciphertext).map(|plaintext| {
             // Deserialization failures are fatal, because it is state corruption.
             CachedPolicy::parse(&plaintext).expect("failed to deserialize persisted policy")
         })
     }
 
-    fn save_raw_policy(untrusted_local: &dyn KeyValue, raw_policy: &Vec<u8>) {
-        let ciphertext = seal(Keypolicy::MRENCLAVE, &POLICY_SEAL_CONTEXT, &raw_policy);
+    fn save_raw_policy(untrusted_local: &dyn KeyValue, raw_policy: &[u8]) {
+        let ciphertext = seal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, raw_policy);
 
         // Persist the encrypted master secret.
         untrusted_local
@@ -198,9 +197,9 @@ struct CachedPolicy {
 }
 
 impl CachedPolicy {
-    fn parse(raw: &Vec<u8>) -> Result<Self> {
+    fn parse(raw: &[u8]) -> Result<Self> {
         // Parse out the signed policy.
-        let untrusted_policy: SignedPolicySGX = cbor::from_slice(&raw)?;
+        let untrusted_policy: SignedPolicySGX = cbor::from_slice(raw)?;
         let policy = untrusted_policy.verify()?;
 
         let mut cached_policy = Self::default();
@@ -208,7 +207,7 @@ impl CachedPolicy {
         cached_policy.runtime_id = policy.id;
 
         let mut sha3 = Sha3::v256();
-        sha3.update(&raw);
+        sha3.update(raw);
         let mut k = [0; 32];
         sha3.finalize(&mut k);
         cached_policy.checksum = k.to_vec();

@@ -33,7 +33,7 @@ struct TxnKeyFormat {
 
 impl KeyFormat for TxnKeyFormat {
     fn prefix() -> u8 {
-        'T' as u8
+        b'T'
     }
 
     fn size() -> usize {
@@ -77,7 +77,7 @@ pub const TAG_BLOCK_TX_HASH: Hash = Hash([0u8; 32]);
 
 impl KeyFormat for TagKeyFormat {
     fn prefix() -> u8 {
-        'E' as u8
+        b'E'
     }
 
     fn size() -> usize {
@@ -135,7 +135,9 @@ impl Tree {
     pub fn new(read_syncer: Box<dyn ReadSync>, io_root: Root) -> Self {
         Self {
             io_root,
-            tree: mkvs::OverlayTree::new(mkvs::Tree::make().with_root(io_root).new(read_syncer)),
+            tree: mkvs::OverlayTree::new(
+                mkvs::Tree::builder().with_root(io_root).build(read_syncer),
+            ),
         }
     }
 

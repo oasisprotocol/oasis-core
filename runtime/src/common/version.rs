@@ -35,9 +35,9 @@ impl Version {
     /// Creates a new version with given major, minor, and patch segments.
     pub const fn new(major: u16, minor: u16, patch: u16) -> Version {
         Version {
-            major: major,
-            minor: minor,
-            patch: patch,
+            major,
+            minor,
+            patch,
         }
     }
 
@@ -48,9 +48,9 @@ impl Version {
 }
 
 // Returns the version as a platform-dependent u64.
-impl Into<u64> for Version {
-    fn into(self) -> u64 {
-        ((self.major as u64) << 32) | ((self.minor as u64) << 16) | (self.patch as u64)
+impl From<Version> for u64 {
+    fn from(val: Version) -> Self {
+        ((val.major as u64) << 32) | ((val.minor as u64) << 16) | (val.patch as u64)
     }
 }
 

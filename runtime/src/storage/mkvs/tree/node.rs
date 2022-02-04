@@ -136,7 +136,7 @@ impl NodePointer {
         Rc::new(RefCell::new(NodePointer {
             node: None,
             clean: true,
-            hash: hash,
+            hash,
             ..Default::default()
         }))
     }
@@ -158,7 +158,7 @@ impl NodePointer {
 
     /// Check if the pointer has a resolved reference to a concrete node.
     pub fn has_node(&self) -> bool {
-        !self.is_null() && !self.node.is_none()
+        !self.is_null() && self.node.is_some()
     }
 
     /// Get a reference to the node the pointer is pointing to.
@@ -171,9 +171,8 @@ impl NodePointer {
 
     /// Return a copy of this pointer containing only hash references.
     pub fn extract(&self) -> NodePtrRef {
-        if !self.clean {
-            panic!("mkvs: extract called on dirty pointer");
-        }
+        assert!(self.clean, "mkvs: extract called on dirty pointer");
+
         Rc::new(RefCell::new(NodePointer {
             clean: true,
             hash: self.hash,
@@ -189,9 +188,8 @@ impl NodePointer {
             return NodePointer::null_ptr();
         }
 
-        if !self.clean {
-            panic!("mkvs: copy_leaf_ptr called on dirty pointer");
-        }
+        assert!(self.clean, "mkvs: copy_leaf_ptr called on dirty pointer");
+
         if let Some(ref some_node) = self.node {
             let nyoo = noderef_as!(some_node, Leaf).copy();
             Rc::new(RefCell::new(NodePointer {
@@ -269,9 +267,8 @@ impl Node for InternalNode {
     }
 
     fn extract(&self) -> NodeRef {
-        if !self.clean {
-            panic!("mkvs: extract called on dirty node");
-        }
+        assert!(self.clean, "mkvs: extract called on dirty node");
+
         Rc::new(RefCell::new(NodeBox::Internal(InternalNode {
             clean: true,
             hash: self.hash,
@@ -309,14 +306,12 @@ pub struct LeafNode {
 
 impl LeafNode {
     pub fn copy(&self) -> LeafNode {
-        let node = LeafNode {
+        LeafNode {
             clean: self.clean,
-            hash: self.hash.clone(),
+            hash: self.hash,
             key: self.key.to_owned(),
             value: self.value.clone(),
-        };
-
-        return node;
+        }
     }
 }
 
@@ -340,9 +335,7 @@ impl Node for LeafNode {
     }
 
     fn extract(&self) -> NodeRef {
-        if !self.clean {
-            panic!("mkvs: extract called on dirty node");
-        }
+        assert!(self.clean, "mkvs: extract called on dirty node");
         Rc::new(RefCell::new(NodeBox::Leaf(LeafNode {
             clean: true,
             hash: self.hash,
@@ -414,7 +407,7 @@ impl KeyTrait for Key {
         let mut k: Key;
         if bit as usize >= self.len() * 8 {
             k = vec![0; bit as usize / 8 + 1];
-            k[0..self.len()].clone_from_slice(&self);
+            k[0..self.len()].clone_from_slice(self);
         } else {
             k = self.clone();
         }
@@ -433,12 +426,12 @@ impl KeyTrait for Key {
     }
 
     fn split(&self, split_point: Depth, key_len: Depth) -> (Key, Key) {
-        if split_point > key_len {
-            panic!(
-                "mkvs: split_point {} greater than key_len {}",
-                split_point, key_len
-            );
-        }
+        assert!(
+            split_point <= key_len,
+            "mkvs: split_point {} greater than key_len {}",
+            split_point,
+            key_len
+        );
 
         let prefix_len = split_point.to_bytes();
         let suffix_len = (key_len - split_point).to_bytes();

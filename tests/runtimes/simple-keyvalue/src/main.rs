@@ -131,7 +131,7 @@ impl Dispatcher {
             "enc_insert" => Self::dispatch_call(ctx, tx.args, Methods::enc_insert),
             "enc_get" => Self::dispatch_call(ctx, tx.args, Methods::enc_get),
             "enc_remove" => Self::dispatch_call(ctx, tx.args, Methods::enc_remove),
-            _ => return Err("method not found".to_string()),
+            _ => Err("method not found".to_string()),
         }
     }
 
@@ -176,7 +176,7 @@ impl Dispatcher {
                 error: RuntimeError {
                     module: "test".to_string(),
                     code: 1,
-                    message: err.to_string(),
+                    message: err,
                 },
                 meta: None,
             }),
@@ -304,18 +304,19 @@ pub fn main() {
             1024,
             trusted_policy_signers(),
         ));
-        let key_manager = km_client.clone();
 
         #[cfg(not(target_env = "sgx"))]
         let _ = rpc;
         #[cfg(target_env = "sgx")]
+        let key_manager = km_client.clone();
+        #[cfg(target_env = "sgx")]
         rpc.set_keymanager_policy_update_handler(Some(Box::new(move |raw_signed_policy| {
-            km_client
+            key_manager
                 .set_policy(raw_signed_policy)
                 .expect("failed to update km client policy");
         })));
 
-        let dispatcher = Dispatcher::new(hi, key_manager);
+        let dispatcher = Dispatcher::new(hi, km_client);
         Some(Box::new(dispatcher))
     };
 
@@ -325,7 +326,7 @@ pub fn main() {
         let runtime_id = option_env!("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID").unwrap();
 
         TrustRoot {
-            height: u64::from_str_radix(height, 10).unwrap(),
+            height: height.parse::<u64>().unwrap(),
             hash: hash.to_string(),
             runtime_id: runtime_id.into(),
         }

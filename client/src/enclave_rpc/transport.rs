@@ -18,7 +18,7 @@ pub trait Transport: Send + Sync {
         // Frame message.
         let frame = types::Frame {
             session: session_id,
-            untrusted_plaintext: untrusted_plaintext,
+            untrusted_plaintext,
             payload: data,
         };
 

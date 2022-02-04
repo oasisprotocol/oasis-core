@@ -36,9 +36,11 @@ pub fn unseal(key_policy: Keypolicy, context: &[u8], ciphertext: &[u8]) -> Optio
     let ct_len = ciphertext.len();
     if ct_len == 0 {
         return None;
-    } else if ct_len < TAG_SIZE + NONCE_SIZE {
-        panic!("ciphertext is corrupted, invalid size");
     }
+    assert!(
+        ct_len >= TAG_SIZE + NONCE_SIZE,
+        "ciphertext is corrupted, invalid size"
+    );
     let ct_len = ct_len - NONCE_SIZE;
 
     // Split the ciphertext || tag || nonce.

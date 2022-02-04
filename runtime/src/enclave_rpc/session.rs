@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Noise protocol pattern.
-const NOISE_PATTERN: &'static str = "Noise_XX_25519_ChaChaPoly_SHA256";
+const NOISE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 /// RAK signature session binding context.
 const RAK_SESSION_BINDING_CONTEXT: [u8; 8] = *b"EkRakRpc";
 
@@ -177,8 +177,8 @@ impl Session {
                     return vec![];
                 }
 
-                let rak_pub = rak.public_key().expect("rak is configured").clone();
-                let avr = rak.avr().expect("avr is configured").clone();
+                let rak_pub = rak.public_key().expect("rak is configured");
+                let avr = rak.avr().expect("avr is configured");
                 let rak_binding = RAKBinding {
                     avr: (*avr).clone(),
                     rak_pub,
@@ -241,20 +241,12 @@ impl Session {
     /// Whether the session handshake has completed and the session
     /// is in transport mode.
     pub fn is_connected(&self) -> bool {
-        if let State::Transport(_) = self.state {
-            true
-        } else {
-            false
-        }
+        matches!(self.state, State::Transport(_))
     }
 
     /// Whether the session is in closed state.
     pub fn is_closed(&self) -> bool {
-        if let State::Closed = self.state {
-            true
-        } else {
-            false
-        }
+        matches!(self.state, State::Closed)
     }
 }
 
@@ -276,21 +268,13 @@ pub struct RAKBinding {
 }
 
 /// Session builder.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Builder {
     rak: Option<Arc<RAK>>,
     remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
 }
 
 impl Builder {
-    /// Create new session builder.
-    pub fn new() -> Self {
-        Self {
-            rak: None,
-            remote_enclaves: None,
-        }
-    }
-
     /// Return remote enclave identities if configured in the builder.
     pub fn get_remote_enclaves(&self) -> &Option<HashSet<avr::EnclaveIdentity>> {
         &self.remote_enclaves

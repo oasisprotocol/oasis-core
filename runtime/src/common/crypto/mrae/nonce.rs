@@ -36,12 +36,12 @@ impl Nonce {
     /// and all subsequent calls to this method will return an Error.
     pub fn increment(&mut self) -> Result<()> {
         // Extract the current counter out of the nonce.
-        let mut counter_array = &self.current_value.clone()[TAG_SIZE..];
+        let mut counter_array = &self.current_value[TAG_SIZE..];
         // Increment the count and wrap to 0 if necessary.
         let new_counter: u32 = {
             let mut counter = counter_array.read_u32::<BigEndian>().unwrap();
             // If about to overflow wrap around to 0.
-            if counter == !(0 as u32) {
+            if counter == !0u32 {
                 counter = 0;
             } else {
                 counter += 1;

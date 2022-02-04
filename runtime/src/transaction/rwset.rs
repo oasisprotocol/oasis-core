@@ -12,9 +12,9 @@ impl AsRef<[u8]> for CoarsenedKey {
     }
 }
 
-impl Into<Vec<u8>> for CoarsenedKey {
-    fn into(self) -> Vec<u8> {
-        self.0
+impl From<CoarsenedKey> for Vec<u8> {
+    fn from(val: CoarsenedKey) -> Self {
+        val.0
     }
 }
 

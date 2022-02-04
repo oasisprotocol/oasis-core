@@ -100,12 +100,12 @@ lazy_static! {
     static ref IAS_TRUST_ANCHOR: Vec<u8> = {
         let pem = match parse_x509_pem(IAS_TRUST_ANCHOR_PEM.as_bytes()) {
             Ok((rem, pem)) => {
-                if !rem.is_empty() {
-                    panic!("anchor PEM has trailing garbage");
-                }
-                if pem.label != PEM_CERTIFICATE_LABEL {
-                    panic!("PEM does not contain a certificate: '{:?}'", pem.label);
-                }
+                assert!(rem.is_empty(), "anchor PEM has trailing garbage");
+                assert!(
+                    pem.label == PEM_CERTIFICATE_LABEL,
+                    "PEM does not contain a certificate: '{:?}'",
+                    pem.label
+                );
                 pem
             }
             err => panic!("failed to decode anchor PEM: {:?}", err),
@@ -127,9 +127,10 @@ struct QuoteBody {
     report_body: Report,
 }
 
+#[allow(clippy::unused_io_amount)]
 impl QuoteBody {
     /// Decode quote body.
-    fn decode(quote_body: &Vec<u8>) -> Result<QuoteBody> {
+    fn decode(quote_body: &[u8]) -> Result<QuoteBody> {
         let mut reader = Cursor::new(quote_body);
         let mut quote_body: QuoteBody = QuoteBody::default();
 
@@ -210,7 +211,7 @@ impl ParsedAVR {
                 return Err(AVRError::MissingTimestamp.into());
             }
         };
-        parse_avr_timestamp(&timestamp)
+        parse_avr_timestamp(timestamp)
     }
 
     pub(crate) fn nonce(&self) -> Result<String> {
@@ -240,7 +241,7 @@ pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
     }
 
     // Parse AV report body.
-    let avr_body = ParsedAVR::new(&avr)?;
+    let avr_body = ParsedAVR::new(avr)?;
 
     // Check timestamp, reject if report is too old.
     let timestamp = avr_body.timestamp()?;
@@ -306,12 +307,12 @@ pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
             mr_signer: MrSigner::from(quote_body.report_body.mrsigner.to_vec()),
         },
         timestamp,
-        nonce: nonce.to_string(),
+        nonce,
     })
 }
 
 fn parse_avr_timestamp(timestamp: &str) -> Result<i64> {
-    let timestamp_unix = match Utc.datetime_from_str(&timestamp, IAS_TS_FMT) {
+    let timestamp_unix = match Utc.datetime_from_str(timestamp, IAS_TS_FMT) {
         Ok(timestamp) => timestamp.timestamp(),
         _ => return Err(AVRError::MalformedTimestamp.into()),
     };
@@ -352,7 +353,7 @@ fn validate_avr_signature(
     // Decode the certificate chain from percent encoded PEM to DER.
     let raw_pem = percent_encoding::percent_decode(cert_chain).decode_utf8()?;
     let mut cert_ders = Vec::new();
-    for pem in pem::Pem::iter_from_buffer(&raw_pem.as_bytes()) {
+    for pem in pem::Pem::iter_from_buffer(raw_pem.as_bytes()) {
         let pem = match pem {
             Ok(p) => p,
             Err(_) => return Err(AVRError::MalformedCertificatePEM.into()),
@@ -444,10 +445,10 @@ fn validate_avr_signature(
     let padding = PaddingScheme::new_pkcs1v15_sign(Some(Hash::SHA2_256));
     let digest = Sha256::new().chain(message).finalize();
     let signature = base64::decode(signature)?;
-    match leaf_pk.verify(padding, &digest, &signature) {
-        Ok(_) => Ok(()),
-        Err(_) => return Err(AVRError::InvalidSignature.into()),
-    }
+    leaf_pk
+        .verify(padding, &digest, &signature)
+        .map_err(|_| AVRError::InvalidSignature)?;
+    Ok(())
 }
 
 fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<RsaPublicKey> {
@@ -472,7 +473,7 @@ fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RsaPubli
         .finalize();
 
     public_key
-        .verify(padding, &digest, &cert.signature_value.data)
+        .verify(padding, &digest, cert.signature_value.data)
         .is_ok()
 }
 
@@ -515,7 +516,7 @@ impl EnclaveIdentity {
 
     pub fn fortanix_test(mr_enclave: MrEnclave) -> Self {
         Self {
-            mr_enclave: mr_enclave,
+            mr_enclave,
             mr_signer: MrSigner::from(
                 "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a",
             ),

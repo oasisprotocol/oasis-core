@@ -290,7 +290,7 @@ pub struct Runtime {
 }
 
 fn staking_params_are_empty(p: &RuntimeStakingParameters) -> bool {
-    return Option::is_none(&p.thresholds);
+    p.thresholds.is_none()
 }
 
 /// Runtime genesis information that is used to initialize runtime state in the first block.

@@ -73,7 +73,7 @@ pub struct InitResponse {
 }
 
 /// Context used for the init response signature.
-pub const INIT_RESPONSE_CONTEXT: &'static [u8] = b"oasis-core/keymanager: init response";
+pub const INIT_RESPONSE_CONTEXT: &[u8] = b"oasis-core/keymanager: init response";
 
 /// Signed InitResponse.
 #[derive(Clone, cbor::Encode, cbor::Decode)]

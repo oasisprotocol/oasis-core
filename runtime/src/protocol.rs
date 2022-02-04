@@ -411,7 +411,7 @@ impl Protocol {
             "local_config" => ?host_info.local_config,
         );
 
-        if tendermint::BACKEND_NAME != &host_info.consensus_backend {
+        if tendermint::BACKEND_NAME != host_info.consensus_backend {
             return Err(ProtocolError::IncompatibleConsensusBackend.into());
         }
         if !BUILD_INFO

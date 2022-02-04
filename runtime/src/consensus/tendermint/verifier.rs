@@ -196,7 +196,7 @@ impl Verifier {
         let untrusted_header = untrusted_block
             .signed_header
             .as_ref()
-            .ok_or(Error::VerificationFailed(anyhow!("missing signed header")))?;
+            .ok_or_else(|| Error::VerificationFailed(anyhow!("missing signed header")))?;
 
         // Verify up to the block at current height.
         let verified_block = instance
@@ -429,8 +429,10 @@ impl Verifier {
         );
 
         let mut last_saved_trust_root_height = trust_root.height;
-        let mut cache = Cache::default();
-        cache.last_trust_root = trust_root;
+        let mut cache = Cache {
+            last_trust_root: trust_root,
+            ..Default::default()
+        };
 
         // Start the command processing loop.
         loop {
@@ -574,9 +576,9 @@ impl components::io::Io for Io {
         let next_block = Io::fetch_light_block(self, height + 1)?;
 
         Ok(TMLightBlock {
-            signed_header: block.signed_header.ok_or(IoError::rpc(RpcError::server(
-                "missing signed header".to_string(),
-            )))?,
+            signed_header: block.signed_header.ok_or_else(|| {
+                IoError::rpc(RpcError::server("missing signed header".to_string()))
+            })?,
             validators: block.validators,
             next_validators: next_block.validators,
             provider: PeerId::new([0; 20]),
@@ -640,20 +642,20 @@ impl VotingPowerCalculator for DomSepVotingPowerCalculator {
             let sign_bytes = signed_vote.sign_bytes();
             // Use Oasis Core domain separation scheme.
             let sign_bytes = Hash::digest_bytes_list(&[TENDERMINT_CONTEXT, &sign_bytes]);
-            if validator
+            let power = validator.power();
+            validator
                 .verify_signature(sign_bytes.as_ref(), signed_vote.signature())
-                .is_err()
-            {
-                return Err(VerificationError::invalid_signature(
-                    signed_vote.signature().as_bytes().to_vec(),
-                    Box::new(validator),
-                    sign_bytes.as_ref().into(),
-                ));
-            }
+                .map_err(|_| {
+                    VerificationError::invalid_signature(
+                        signed_vote.signature().as_bytes().to_vec(),
+                        Box::new(validator),
+                        sign_bytes.as_ref().into(),
+                    )
+                })?;
 
             // If the vote is neither absent nor nil, tally its power
             if signature.is_commit() {
-                tallied_voting_power += validator.power();
+                tallied_voting_power += power;
             } else {
                 // It's OK. We include stray signatures (~votes for nil)
                 // to measure validator availability.

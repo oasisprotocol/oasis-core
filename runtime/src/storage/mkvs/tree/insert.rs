@@ -18,9 +18,8 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        let (new_root, old_val) =
-            self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val.clone(), 0)?;
-        self.cache.borrow_mut().set_pending_root(new_root.clone());
+        let (new_root, old_val) = self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val, 0)?;
+        self.cache.borrow_mut().set_pending_root(new_root);
 
         Ok(old_val)
     }
@@ -116,7 +115,7 @@ impl Tree {
                     let label_split = n.label.split(cp_len, n.label_bit_length);
                     label_prefix = label_split.0;
                     n.label = label_split.1;
-                    n.label_bit_length = n.label_bit_length - cp_len;
+                    n.label_bit_length -= cp_len;
                     n.clean = false;
                     ptr.borrow_mut().clean = false;
                     // No longer eligible for eviction as it is dirty.
@@ -174,7 +173,7 @@ impl Tree {
                     if n.key == *key {
                         // If the key matches, we can just update the value.
                         if n.value == val {
-                            return Ok((ptr.clone(), Some(val)));
+                            return Ok((ptr, Some(val)));
                         }
                         let old_val = mem::replace(&mut n.value, val);
                         n.clean = false;
@@ -183,7 +182,7 @@ impl Tree {
                         self.cache
                             .borrow_mut()
                             .rollback_node(ptr.clone(), NodeKind::Leaf);
-                        return Ok((ptr.clone(), Some(old_val)));
+                        return Ok((ptr, Some(old_val)));
                     }
 
                     let (_, leaf_key_remainder) = n.key.split(bit_depth, n.key.bit_length());
@@ -240,7 +239,7 @@ impl Tree {
                     left,
                     right,
                 );
-                return Ok((new_internal, None));
+                Ok((new_internal, None))
             }
         }
     }

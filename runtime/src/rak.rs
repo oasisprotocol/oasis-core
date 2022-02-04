@@ -22,7 +22,7 @@ use sgx_isa::Report;
 
 /// Context used for computing the RAK digest.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-const RAK_HASH_CONTEXT: &'static [u8] = b"oasis-core/node: TEE RAK binding";
+const RAK_HASH_CONTEXT: &[u8] = b"oasis-core/node: TEE RAK binding";
 
 /// RAK-related error.
 #[derive(Error, Debug)]
@@ -72,9 +72,9 @@ pub struct RAK {
     inner: RwLock<Inner>,
 }
 
-impl RAK {
+impl Default for RAK {
     /// Create an uninitialized runtime attestation key instance.
-    pub fn new() -> Self {
+    fn default() -> Self {
         Self {
             inner: RwLock::new(Inner {
                 private_key: None,
@@ -86,11 +86,13 @@ impl RAK {
             }),
         }
     }
+}
 
+impl RAK {
     /// Generate report body = H(RAK_HASH_CONTEXT || RAK_pub).
     fn report_body_for_rak(rak: &PublicKey) -> Hash {
         let mut message = [0; 64];
-        message[0..32].copy_from_slice(&RAK_HASH_CONTEXT);
+        message[0..32].copy_from_slice(RAK_HASH_CONTEXT);
         message[32..64].copy_from_slice(rak.as_ref());
         Hash::digest_bytes(&message)
     }

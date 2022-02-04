@@ -62,7 +62,16 @@ fmt-go:
 fmt: $(fmt-targets)
 
 # Lint code, commits and documentation.
-lint-targets := lint-go lint-git lint-md lint-changelog lint-docs lint-go-mod-tidy
+lint-targets := lint-rust lint-go lint-git lint-md lint-changelog lint-docs lint-go-mod-tidy
+
+lint-rust:
+	@$(ECHO) "$(CYAN)*** Running cargo clippy linters...$(OFF)"
+	@cargo clippy --all-features -- -D warnings \
+		-A clippy::upper-case-acronyms \
+		-A clippy::borrowed-box \
+		-A clippy::ptr-arg  \
+		-A clippy::large_enum_variant \
+		-A clippy::field-reassign-with-default
 
 lint-go:
 	@$(MAKE) -C go lint

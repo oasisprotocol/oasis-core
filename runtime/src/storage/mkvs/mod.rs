@@ -84,9 +84,9 @@ impl DerefMut for Prefix {
     }
 }
 
-impl Into<Vec<u8>> for Prefix {
-    fn into(self) -> Vec<u8> {
-        self.0
+impl From<Prefix> for Vec<u8> {
+    fn from(val: Prefix) -> Self {
+        val.0
     }
 }
 
@@ -123,7 +123,7 @@ pub trait MKVS {
     fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16);
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16);
 
     /// Returns an iterator over the tree.
     fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
@@ -164,7 +164,7 @@ pub trait FallibleMKVS {
     fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()>;
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()>;
 
     /// Returns an iterator over the tree.
     fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
@@ -179,7 +179,7 @@ pub trait ImmutableMKVS {
     fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()>;
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()>;
 
     /// Returns an iterator over the tree.
     fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
@@ -193,7 +193,7 @@ where
         T::get(self, ctx, key)
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()> {
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()> {
         T::prefetch_prefixes(self, ctx, prefixes, limit)
     }
 
@@ -246,7 +246,7 @@ impl<T: MKVS + ?Sized> MKVS for &mut T {
         T::remove(self, ctx, key)
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) {
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) {
         T::prefetch_prefixes(self, ctx, prefixes, limit)
     }
 
@@ -281,7 +281,7 @@ impl<T: FallibleMKVS + ?Sized> FallibleMKVS for &mut T {
         T::remove(self, ctx, key)
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &Vec<Prefix>, limit: u16) -> Result<()> {
+    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()> {
         T::prefetch_prefixes(self, ctx, prefixes, limit)
     }
 

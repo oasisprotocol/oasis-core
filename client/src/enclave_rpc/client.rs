@@ -377,7 +377,7 @@ mod test {
 
     impl MockTransport {
         fn new() -> Self {
-            let rak = Arc::new(RAK::new());
+            let rak = Arc::new(RAK::default());
 
             Self {
                 rak: rak.clone(),
@@ -446,7 +446,7 @@ mod test {
             .build()
             .unwrap();
         let transport = MockTransport::new();
-        let builder = session::Builder::new();
+        let builder = session::Builder::default();
         let client = RpcClient::new(Box::new(transport.clone()), builder);
 
         // Basic call.

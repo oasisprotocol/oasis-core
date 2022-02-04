@@ -3,7 +3,6 @@ use io_context::Context;
 use crate::storage::mkvs::{
     interop::{Driver, ProtocolServer},
     sync::*,
-    tree::*,
     LogEntry,
 };
 
@@ -11,9 +10,9 @@ use crate::storage::mkvs::{
 fn test_nil_pointers() {
     let server = ProtocolServer::new(None);
 
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     // Arbitrary sequence of operations. The point is to produce a tree with
     // an internal node where at least one of the children is a null pointer.
@@ -43,13 +42,13 @@ fn test_nil_pointers() {
 
     server.apply(&write_log, root, Default::default(), 0);
 
-    let mut remote = Tree::make()
+    let mut remote = Tree::builder()
         .with_root(Root {
             root_type: RootType::State,
             hash: root,
             ..Default::default()
         })
-        .new(server.read_sync());
+        .build(server.read_sync());
 
     // Now try inserting a k-v pair that will force the tree to traverse through the nil node
     // and dereference it.

@@ -5,9 +5,7 @@ use std::{collections::HashSet, fs::File, io::BufReader, iter, iter::FromIterato
 use crate::{
     common::crypto::hash::Hash,
     storage::mkvs::{
-        cache::*,
         interop::{Driver, ProtocolServer},
-        sync::*,
         tests,
         tree::*,
         Iterator, LogEntry, LogEntryKind, WriteLog, MKVS,
@@ -52,9 +50,9 @@ fn generate_long_key_value_pairs() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
 #[test]
 fn test_basic() {
     let mut tree = OverlayTree::new(
-        Tree::make()
+        Tree::builder()
             .with_root_type(RootType::State)
-            .new(Box::new(NoopReadSyncer)),
+            .build(Box::new(NoopReadSyncer)),
     );
 
     let key_zero = b"foo";
@@ -300,9 +298,9 @@ fn test_basic() {
 
 #[test]
 fn test_long_keys() {
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     // First insert keys 0..n and remove them in order n..0.
     let mut roots: Vec<Hash> = Vec::new();
@@ -363,9 +361,9 @@ fn test_long_keys() {
 
 #[test]
 fn test_empty_keys() {
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     fn test_empty_key(tree: &mut Tree) {
         let empty_key = b"";
@@ -491,9 +489,9 @@ fn test_empty_keys() {
 
 #[test]
 fn test_insert_commit_batch() {
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -518,10 +516,10 @@ fn test_insert_commit_batch() {
 
 #[test]
 fn test_insert_commit_each() {
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_capacity(0, 0)
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -548,10 +546,10 @@ fn test_insert_commit_each() {
 
 #[test]
 fn test_remove() {
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_capacity(0, 0)
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     // First insert keys 0..n and remove them in order n..0.
     let mut roots: Vec<Hash> = Vec::new();
@@ -673,10 +671,10 @@ fn test_syncer_basic() {
     let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
-        Tree::make()
+        Tree::builder()
             .with_capacity(0, 0)
             .with_root_type(RootType::State)
-            .new(Box::new(NoopReadSyncer)),
+            .build(Box::new(NoopReadSyncer)),
     );
 
     let (keys, values) = generate_key_value_pairs();
@@ -700,14 +698,14 @@ fn test_syncer_basic() {
     // syncer interface.
 
     let stats = StatsCollector::new(server.read_sync());
-    let remote_tree = Tree::make()
+    let remote_tree = Tree::builder()
         .with_capacity(0, 0)
         .with_root(Root {
             root_type: RootType::State,
             hash,
             ..Default::default()
         })
-        .new(Box::new(stats));
+        .build(Box::new(stats));
 
     for i in 0..keys.len() {
         let value = remote_tree
@@ -733,10 +731,10 @@ fn test_syncer_remove() {
     let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
-        Tree::make()
+        Tree::builder()
             .with_capacity(0, 0)
             .with_root_type(RootType::State)
-            .new(Box::new(NoopReadSyncer)),
+            .build(Box::new(NoopReadSyncer)),
     );
     let mut roots: Vec<Hash> = Vec::new();
 
@@ -761,14 +759,14 @@ fn test_syncer_remove() {
     server.apply(&write_log, roots[roots.len() - 1], Default::default(), 0);
 
     let stats = StatsCollector::new(server.read_sync());
-    let mut remote_tree = Tree::make()
+    let mut remote_tree = Tree::builder()
         .with_capacity(0, 0)
         .with_root(Root {
             root_type: RootType::State,
             hash: roots[roots.len() - 1],
             ..Default::default()
         })
-        .new(Box::new(stats));
+        .build(Box::new(stats));
 
     for i in (0..keys.len()).rev() {
         remote_tree
@@ -801,10 +799,10 @@ fn test_syncer_insert() {
     let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
-        Tree::make()
+        Tree::builder()
             .with_capacity(0, 0)
             .with_root_type(RootType::State)
-            .new(Box::new(NoopReadSyncer)),
+            .build(Box::new(NoopReadSyncer)),
     );
 
     let (keys, values) = generate_key_value_pairs();
@@ -823,14 +821,14 @@ fn test_syncer_insert() {
     server.apply(&write_log, hash, Default::default(), 0);
 
     let stats = StatsCollector::new(server.read_sync());
-    let mut remote_tree = Tree::make()
+    let mut remote_tree = Tree::builder()
         .with_capacity(0, 0)
         .with_root(Root {
             root_type: RootType::State,
             hash,
             ..Default::default()
         })
-        .new(Box::new(stats));
+        .build(Box::new(stats));
 
     for i in 0..keys.len() {
         remote_tree
@@ -858,10 +856,10 @@ fn test_syncer_writelog_remove() {
     let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
-        Tree::make()
+        Tree::builder()
             .with_capacity(0, 0)
             .with_root_type(RootType::State)
-            .new(Box::new(NoopReadSyncer)),
+            .build(Box::new(NoopReadSyncer)),
     );
 
     let (keys, values) = generate_key_value_pairs();
@@ -896,10 +894,10 @@ fn test_syncer_prefetch_prefixes() {
     let server = ProtocolServer::new(None);
 
     let mut tree = OverlayTree::new(
-        Tree::make()
+        Tree::builder()
             .with_capacity(0, 0)
             .with_root_type(RootType::State)
-            .new(Box::new(NoopReadSyncer)),
+            .build(Box::new(NoopReadSyncer)),
     );
 
     let (keys, values) = generate_key_value_pairs();
@@ -918,14 +916,14 @@ fn test_syncer_prefetch_prefixes() {
     server.apply(&write_log, hash, Default::default(), 0);
 
     let stats = StatsCollector::new(server.read_sync());
-    let remote_tree = Tree::make()
+    let remote_tree = Tree::builder()
         .with_capacity(0, 0)
         .with_root(Root {
             root_type: RootType::State,
             hash,
             ..Default::default()
         })
-        .new(Box::new(stats));
+        .build(Box::new(stats));
 
     // Prefetch keys starting with prefix "key".
     remote_tree
@@ -953,10 +951,10 @@ fn test_syncer_prefetch_prefixes() {
 
 #[test]
 fn test_value_eviction() {
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_capacity(0, 512)
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs();
     for i in 0..keys.len() {
@@ -984,10 +982,10 @@ fn test_value_eviction() {
 
 #[test]
 fn test_node_eviction() {
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_capacity(128, 0)
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
 
     let (keys, values) = generate_key_value_pairs_ex("foo".to_string(), 150);
     for i in 0..keys.len() {
@@ -1025,7 +1023,7 @@ fn test_node_eviction() {
 }
 
 /// Location of the test vectors directory (from Go).
-const TEST_VECTORS_DIR: &'static str = "../go/storage/mkvs/testdata";
+const TEST_VECTORS_DIR: &str = "../go/storage/mkvs/testdata";
 
 fn test_special_case_from_json(fixture: &'static str) {
     let server = ProtocolServer::new(None);
@@ -1036,10 +1034,10 @@ fn test_special_case_from_json(fixture: &'static str) {
 
     let ops: tests::TestVector = serde_json::from_reader(reader).expect("failed to parse fixture");
 
-    let mut tree = Tree::make()
+    let mut tree = Tree::builder()
         .with_capacity(0, 0)
         .with_root_type(RootType::State)
-        .new(Box::new(NoopReadSyncer));
+        .build(Box::new(NoopReadSyncer));
     let mut overlay = OverlayTree::new(&mut tree);
     let mut remote_tree: Option<Tree> = None;
     let mut root = Hash::empty_hash();
@@ -1051,14 +1049,14 @@ fn test_special_case_from_json(fixture: &'static str) {
         server.apply_existing(&write_log, root, hash, Default::default(), 0);
 
         remote_tree.replace(
-            Tree::make()
+            Tree::builder()
                 .with_capacity(0, 0)
                 .with_root(Root {
                     root_type: RootType::State,
                     hash,
                     ..Default::default()
                 })
-                .new(server.read_sync()),
+                .build(server.read_sync()),
         );
         root = hash;
     };
