@@ -1141,3 +1141,36 @@ const (
 	// GasOpWithdraw is the gas operation identifier for withdraw.
 	GasOpWithdraw transaction.Op = "withdraw"
 )
+
+// TransferResult is the result of staking transfer.
+type TransferResult struct {
+	From   Address           `json:"from"`
+	To     Address           `json:"to"`
+	Amount quantity.Quantity `json:"amount"`
+}
+
+// WithdrawResult is the result of withdraw.
+type WithdrawResult struct {
+	Owner        Address           `json:"owner"`
+	Beneficiary  Address           `json:"beneficiary"`
+	Allowance    quantity.Quantity `json:"allowance"`
+	AmountChange quantity.Quantity `json:"amount_change"`
+}
+
+// AddEscrowResult is the result of add escrow.
+type AddEscrowResult struct {
+	Owner     Address           `json:"owner"`
+	Escrow    Address           `json:"escrow"`
+	Amount    quantity.Quantity `json:"amount"`
+	NewShares quantity.Quantity `json:"new_shares"`
+}
+
+// ReclaimEscrowResult is the result of reclaim escrow.
+type ReclaimEscrowResult struct {
+	Owner           Address           `json:"owner"`
+	Escrow          Address           `json:"escrow"`
+	Amount          quantity.Quantity `json:"amount"`
+	DebondingShares quantity.Quantity `json:"debonding_shares"`
+	RemainingShares quantity.Quantity `json:"remaining_shares"`
+	DebondEndTime   beacon.EpochTime  `json:"debond_end_time"`
+}

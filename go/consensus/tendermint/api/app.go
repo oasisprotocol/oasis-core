@@ -15,7 +15,7 @@ var ErrNoSubscribers = errors.New("no subscribers to given message kind")
 // MessageSubscriber is a message subscriber interface.
 type MessageSubscriber interface {
 	// ExecuteMessage executes a given message.
-	ExecuteMessage(ctx *Context, kind, msg interface{}) error
+	ExecuteMessage(ctx *Context, kind, msg interface{}) (interface{}, error)
 }
 
 // MessageDispatcher is a message dispatcher interface.
@@ -24,9 +24,12 @@ type MessageDispatcher interface {
 	Subscribe(kind interface{}, ms MessageSubscriber)
 
 	// Publish publishes a message of a given kind by dispatching to all subscribers.
+	// Subscribers can return a result, but at most one subscriber should return a
+	// non-nil result to any published message. Panics in case more than one subscriber
+	// returns a non-nil result.
 	//
 	// In case there are no subscribers ErrNoSubscribers is returned.
-	Publish(ctx *Context, kind, msg interface{}) error
+	Publish(ctx *Context, kind, msg interface{}) (interface{}, error)
 }
 
 // NoopMessageDispatcher is a no-op message dispatcher that performs no dispatch.
@@ -37,8 +40,8 @@ func (nd *NoopMessageDispatcher) Subscribe(interface{}, MessageSubscriber) {
 }
 
 // Implements MessageDispatcher.
-func (nd *NoopMessageDispatcher) Publish(*Context, interface{}, interface{}) error {
-	return nil
+func (nd *NoopMessageDispatcher) Publish(*Context, interface{}, interface{}) (interface{}, error) {
+	return nil, nil
 }
 
 // Application is the interface implemented by multiplexed Oasis-specific

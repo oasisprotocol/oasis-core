@@ -27,21 +27,25 @@ type errorMessage struct{}
 var errTest = fmt.Errorf("error")
 
 type testSubscriber struct {
-	msgs []int32
-	fail bool
+	msgs     []int32
+	fail     bool
+	noResult bool
 }
 
 // Implements api.MessageSubscriber.
-func (s *testSubscriber) ExecuteMessage(ctx *api.Context, kind, msg interface{}) error {
+func (s *testSubscriber) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
 	switch m := msg.(type) {
 	case *testMessage:
 		s.msgs = append(s.msgs, m.foo)
 		if s.fail {
-			return errTest
+			return nil, errTest
 		}
-		return nil
+		if s.noResult {
+			return nil, nil
+		}
+		return m.foo, nil
 	case *errorMessage:
-		return errTest
+		return nil, errTest
 	default:
 		panic("unexpected message was delivered")
 	}
@@ -58,45 +62,50 @@ func TestMessageDispatcher(t *testing.T) {
 	var md messageDispatcher
 
 	// Publish without subscribers should work.
-	err := md.Publish(ctx, testMessageA, &testMessage{foo: 42})
+	res, err := md.Publish(ctx, testMessageA, &testMessage{foo: 42})
 	require.Error(err, "Publish")
 	require.Equal(api.ErrNoSubscribers, err)
+	require.Nil(res, "Publish results should be empty")
 
 	// With a subscriber.
 	var ms testSubscriber
 	md.Subscribe(testMessageA, &ms)
-	err = md.Publish(ctx, testMessageA, &testMessage{foo: 42})
+	res, err = md.Publish(ctx, testMessageA, &testMessage{foo: 42})
 	require.NoError(err, "Publish")
+	require.EqualValues(int32(42), res, "correct publish message result")
 	require.EqualValues([]int32{42}, ms.msgs, "correct messages should be delivered")
 
-	err = md.Publish(ctx, testMessageA, &testMessage{foo: 43})
+	res, err = md.Publish(ctx, testMessageA, &testMessage{foo: 43})
 	require.NoError(err, "Publish")
+	require.EqualValues(int32(43), res, "correct publish message result")
 	require.EqualValues([]int32{42, 43}, ms.msgs, "correct messages should be delivered")
 
-	err = md.Publish(ctx, testMessageB, &testMessage{foo: 44})
+	res, err = md.Publish(ctx, testMessageB, &testMessage{foo: 44})
 	require.Error(err, "Publish")
 	require.Equal(api.ErrNoSubscribers, err)
+	require.Nil(res, "publish message results should be empty")
 	require.EqualValues([]int32{42, 43}, ms.msgs, "correct messages should be delivered")
 
 	// Returning an error.
-	err = md.Publish(ctx, testMessageA, &errorMessage{})
+	res, err = md.Publish(ctx, testMessageA, &errorMessage{})
 	require.Error(err, "Publish")
+	require.Nil(nil, res, "publish message results should be empty")
 	require.True(errors.Is(err, errTest), "returned error should be the correct one")
 
-	// Multiple subscribers.
-	var ms2 testSubscriber
+	// Multiple subscribers. Multiple subscribers returning results on the same message is an invariant violation.
+	ms2 := testSubscriber{
+		noResult: true,
+	}
 	md.Subscribe(testMessageA, &ms2)
-	err = md.Publish(ctx, testMessageA, &testMessage{foo: 44})
+	res, err = md.Publish(ctx, testMessageA, &testMessage{foo: 44})
 	require.NoError(err, "Publish")
+	require.EqualValues(int32(44), res, "correct publish message result")
 	require.EqualValues([]int32{42, 43, 44}, ms.msgs, "correct messages should be delivered")
 	require.EqualValues([]int32{44}, ms2.msgs, "correct messages should be delivered")
 
-	// Multiple subscribers, some succeed some fail.
-	ms2.fail = true
-
-	err = md.Publish(ctx, testMessageA, &testMessage{foo: 45})
-	require.Error(err, "Publish")
-	require.True(errors.Is(err, errTest), "returned error should be the correct one")
-	require.EqualValues([]int32{42, 43, 44, 45}, ms.msgs, "correct messages should be delivered")
-	require.EqualValues([]int32{44, 45}, ms2.msgs, "correct messages should be delivered")
+	// Multiple subscribers returning results.
+	ms2.noResult = false
+	require.Panics(func() {
+		_, _ = md.Publish(ctx, testMessageA, &testMessage{foo: 44})
+	}, "multiple subscribers returning results should panic")
 }

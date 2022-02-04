@@ -60,7 +60,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 			ctx.Logger().Debug("InitChain: Registering genesis runtime",
 				"runtime_id", rt.ID,
 			)
-			if err := app.registerRuntime(ctx, state, rt); err != nil {
+			if _, err := app.registerRuntime(ctx, state, rt); err != nil {
 				ctx.Logger().Error("InitChain: failed to register runtime",
 					"err", err,
 					"runtime_id", rt.ID,
@@ -76,7 +76,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 		ctx.Logger().Debug("InitChain: Registering genesis suspended runtime",
 			"runtime_id", rt.ID,
 		)
-		if err := app.registerRuntime(ctx, state, rt); err != nil {
+		if _, err := app.registerRuntime(ctx, state, rt); err != nil {
 			ctx.Logger().Error("InitChain: failed to register runtime",
 				"err", err,
 				"runtime_id", rt.ID,

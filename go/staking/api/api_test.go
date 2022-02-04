@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
 
@@ -366,5 +367,142 @@ func TestDebondingDelegationSerialization(t *testing.T) {
 		err := cbor.Unmarshal(enc, &dec)
 		require.NoError(err, "Unmarshal")
 		require.EqualValues(tc.rr, dec, "DebondingDelegation serialization should round-trip")
+	}
+}
+
+func TestTransferResultsSerialization(t *testing.T) {
+	require := require.New(t)
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := NewAddress(pk2)
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		rr             interface{}
+		expectedBase64 string
+	}{
+		{TransferResult{}, "o2J0b1UAAAAAAAAAAAAAAAAAAAAAAAAAAABkZnJvbVUAAAAAAAAAAAAAAAAAAAAAAAAAAABmYW1vdW50QA=="},
+		{
+			TransferResult{
+				From:   addr1,
+				To:     addr2,
+				Amount: mustInitQuantity(t, 100),
+			},
+			"o2J0b1UAuRI5eJXmRwxR+r7MndyD9wrthqFkZnJvbVUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNmYW1vdW50QWQ=",
+		},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec TransferResult
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "TransferResult serialization should round-trip")
+	}
+}
+
+func TestWithdrawResultsSerialization(t *testing.T) {
+	require := require.New(t)
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := NewAddress(pk2)
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		rr             interface{}
+		expectedBase64 string
+	}{
+		{WithdrawResult{}, "pGVvd25lclUAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWxsb3dhbmNlQGtiZW5lZmljaWFyeVUAAAAAAAAAAAAAAAAAAAAAAAAAAABtYW1vdW50X2NoYW5nZUA="},
+		{
+			WithdrawResult{
+				Owner:        addr1,
+				Beneficiary:  addr2,
+				Allowance:    mustInitQuantity(t, 10),
+				AmountChange: mustInitQuantity(t, 5),
+			},
+			"pGVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNpYWxsb3dhbmNlQQprYmVuZWZpY2lhcnlVALkSOXiV5kcMUfq+zJ3cg/cK7YahbWFtb3VudF9jaGFuZ2VBBQ==",
+		},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec WithdrawResult
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "WithdrawResult serialization should round-trip")
+	}
+}
+
+func TestAddEscrowResultsSerialization(t *testing.T) {
+	require := require.New(t)
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := NewAddress(pk2)
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		rr             interface{}
+		expectedBase64 string
+	}{
+		{AddEscrowResult{}, "pGVvd25lclUAAAAAAAAAAAAAAAAAAAAAAAAAAABmYW1vdW50QGZlc2Nyb3dVAAAAAAAAAAAAAAAAAAAAAAAAAAAAam5ld19zaGFyZXNA"},
+		{
+			AddEscrowResult{
+				Owner:     addr1,
+				Escrow:    addr2,
+				Amount:    mustInitQuantity(t, 100),
+				NewShares: mustInitQuantity(t, 5),
+			},
+			"pGVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNmYW1vdW50QWRmZXNjcm93VQC5Ejl4leZHDFH6vsyd3IP3Cu2GoWpuZXdfc2hhcmVzQQU=",
+		},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec AddEscrowResult
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "AddEscrow serialization should round-trip")
+	}
+}
+
+func TestReclaimEscrowResultsSerialization(t *testing.T) {
+	require := require.New(t)
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := NewAddress(pk2)
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		rr             interface{}
+		expectedBase64 string
+	}{
+		{ReclaimEscrowResult{}, "pmVvd25lclUAAAAAAAAAAAAAAAAAAAAAAAAAAABmYW1vdW50QGZlc2Nyb3dVAAAAAAAAAAAAAAAAAAAAAAAAAAAAb2RlYm9uZF9lbmRfdGltZQBwZGVib25kaW5nX3NoYXJlc0BwcmVtYWluaW5nX3NoYXJlc0A="},
+		{
+			ReclaimEscrowResult{
+				Owner:           addr1,
+				Escrow:          addr2,
+				Amount:          mustInitQuantity(t, 100),
+				RemainingShares: mustInitQuantity(t, 50),
+				DebondingShares: mustInitQuantity(t, 25),
+				DebondEndTime:   api.EpochTime(42),
+			},
+			"pmVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNmYW1vdW50QWRmZXNjcm93VQC5Ejl4leZHDFH6vsyd3IP3Cu2GoW9kZWJvbmRfZW5kX3RpbWUYKnBkZWJvbmRpbmdfc2hhcmVzQRlwcmVtYWluaW5nX3NoYXJlc0Ey",
+		},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec ReclaimEscrowResult
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "ReclaimEscrow serialization should round-trip")
 	}
 }
