@@ -281,6 +281,11 @@ type EntityEvent struct {
 	IsRegistration bool           `json:"is_registration"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *EntityEvent) EventKind() string {
+	return "entity-event"
+}
+
 // NodeEvent is the event that is returned via WatchNodes to signify node
 // registration changes and updates.
 type NodeEvent struct {
@@ -288,14 +293,43 @@ type NodeEvent struct {
 	IsRegistration bool       `json:"is_registration"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *NodeEvent) EventKind() string {
+	return "node-event"
+}
+
 // RuntimeEvent signifies new runtime registration.
 type RuntimeEvent struct {
 	Runtime *Runtime `json:"runtime"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *RuntimeEvent) EventKind() string {
+	return "runtime-event"
+}
+
 // NodeUnfrozenEvent signifies when node becomes unfrozen.
 type NodeUnfrozenEvent struct {
 	NodeID signature.PublicKey `json:"node_id"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (e *NodeUnfrozenEvent) EventKind() string {
+	return "node-unfrozen-event"
+}
+
+// NodeListEpochEvent is the per epoch node list event.
+type NodeListEpochEvent struct{}
+
+// EventKind returns a string representation of this event's kind.
+func (e *NodeListEpochEvent) EventKind() string {
+	return "node-list-epoch-event"
+}
+
+// EventValue returns a string representation of this event's kind.
+func (e *NodeListEpochEvent) EventValue() []byte {
+	// Dummy value, should be ignored.
+	return []byte("1")
 }
 
 // Event is a registry event returned via GetEvents.

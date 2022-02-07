@@ -26,55 +26,11 @@ var (
 	// QueryApp is a query for filtering transactions processed by the
 	// roothash application.
 	QueryApp = api.QueryForApp(AppName)
-
-	// KeyRuntimeID is an ABCI event attribute key for specifying event
-	// runtime (value is Base64-encoded runtime ID).
-	KeyRuntimeID = []byte("runtime-id")
-	// KeyExecutorCommitted is an ABCI event attribute key for executor
-	// commit events (value is CBOR-serialized ValueExecutorCommitted).
-	KeyExecutorCommitted = []byte("executor-commit")
-	// KeyMergeCommitted is an ABCI event attribute key for merge
-	// commit events (value is CBOR-serialized ValueMergeCommitted).
-	KeyMergeCommitted = []byte("merge-commit")
-	// KeyMergeDiscrepancyDetected is an ABCI event attribute key for
-	// merge discrepancy detected events (value is a CBOR serialized
-	// ValueMergeDiscrepancyDetected).
-	KeyMergeDiscrepancyDetected = []byte("merge-discrepancy")
-	// KeyExecutionDiscrepancyDetected is an ABCI event attribute key for
-	// merge discrepancy detected events (value is a CBOR serialized
-	// ValueExecutionDiscrepancyDetected).
-	KeyExecutionDiscrepancyDetected = []byte("execution-discrepancy")
-	// KeyFinalized is an ABCI event attribute key for finalized blocks
-	// (value is a CBOR serialized ValueFinalized).
-	KeyFinalized = []byte("finalized")
 )
 
 // QueryForRuntime returns a query for filtering transactions processed by the roothash application
 // limited to a specific runtime.
 func QueryForRuntime(runtimeID common.Namespace) tmpubsub.Query {
-	return tmquery.MustParse(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, KeyRuntimeID, ValueRuntimeID(runtimeID)))
-}
-
-// ValueRuntimeID returns the value that should be stored under KeyRuntimeID.
-func ValueRuntimeID(runtimeID common.Namespace) []byte {
-	// This needs to be a text field as Tendermint does not support non-text queries.
-	return []byte(runtimeID.Base64())
-}
-
-// ValueExecutorCommitted is the value component of a KeyExecutorCommitted.
-type ValueExecutorCommitted struct {
-	ID    common.Namespace                `json:"id"`
-	Event roothash.ExecutorCommittedEvent `json:"event"`
-}
-
-// ValueFinalized is the value component of a TagFinalized.
-type ValueFinalized struct {
-	ID    common.Namespace        `json:"id"`
-	Event roothash.FinalizedEvent `json:"event"`
-}
-
-// ValueExecutionDiscrepancyDetected is the value component of a KeyMergeDiscrepancyDetected.
-type ValueExecutionDiscrepancyDetected struct {
-	ID    common.Namespace                           `json:"id"`
-	Event roothash.ExecutionDiscrepancyDetectedEvent `json:"event"`
+	ev := roothash.RuntimeIDAttribute(runtimeID)
+	return tmquery.MustParse(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, ev.EventKind(), ev.EventValue()))
 }

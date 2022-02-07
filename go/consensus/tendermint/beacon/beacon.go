@@ -3,7 +3,6 @@
 package beacon
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -284,17 +283,17 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
 
 func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
-		if bytes.Equal(pair.GetKey(), app.KeyEpoch) {
-			var epoch beaconAPI.EpochTime
-			if err := cbor.Unmarshal(pair.GetValue(), &epoch); err != nil {
+		if tmAPI.IsAttributeKind(pair.GetKey(), &beaconAPI.EpochEvent{}) {
+			var event beaconAPI.EpochEvent
+			if err := cbor.Unmarshal(pair.GetValue(), &event); err != nil {
 				sc.logger.Error("epochtime: malformed epoch",
 					"err", err,
 				)
 				continue
 			}
 
-			if sc.updateCachedEpoch(height, epoch) {
-				sc.epochNotifier.Broadcast(epoch)
+			if sc.updateCachedEpoch(height, event.Epoch) {
+				sc.epochNotifier.Broadcast(event.Epoch)
 			}
 		}
 		if tmAPI.IsAttributeKind(pair.GetKey(), &beaconAPI.VRFEvent{}) {

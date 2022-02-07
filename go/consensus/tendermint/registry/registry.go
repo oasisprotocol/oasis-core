@@ -2,7 +2,6 @@
 package registry
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -15,7 +14,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -289,93 +287,44 @@ func EventsFromTendermint(
 			val := pair.GetValue()
 
 			switch {
-			case bytes.Equal(key, app.KeyRegistryNodeListEpoch):
+			case tmapi.IsAttributeKind(key, &api.NodeListEpochEvent{}):
 				// Node list epoch event.
 				nodeListEvents = append(nodeListEvents, &NodeListEpochInternalEvent{Height: height})
-			case bytes.Equal(key, app.KeyNodesExpired):
-				// Nodes expired event.
-				var nodes []*node.Node
-				if err := cbor.Unmarshal(val, &nodes); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodesExpired event: %w", err))
-					continue
-				}
-
-				// Generate node deregistration events.
-				for _, node := range nodes {
-					ne := &api.NodeEvent{
-						Node:           node,
-						IsRegistration: false,
-					}
-					events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: ne})
-				}
-			case bytes.Equal(key, app.KeyRuntimeRegistered):
+			case tmapi.IsAttributeKind(key, &api.RuntimeEvent{}):
 				// Runtime registered event.
-				var rt api.Runtime
-				if err := cbor.Unmarshal(val, &rt); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeRegistered event: %w", err))
+				var e api.RuntimeEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Runtime event: %w", err))
 					continue
 				}
 
-				evt := &api.Event{
-					Height:       height,
-					TxHash:       txHash,
-					RuntimeEvent: &api.RuntimeEvent{Runtime: &rt},
-				}
-				events = append(events, evt)
-			case bytes.Equal(key, app.KeyEntityRegistered):
-				// Entity registered event.
-				var ent entity.Entity
-				if err := cbor.Unmarshal(val, &ent); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt EntityRegistered event: %w", err))
+				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeEvent: &e})
+			case tmapi.IsAttributeKind(key, &api.EntityEvent{}):
+				// Entity event.
+				var e api.EntityEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Entity event: %w", err))
 					continue
 				}
 
-				eev := &api.EntityEvent{
-					Entity:         &ent,
-					IsRegistration: true,
-				}
-				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
-			case bytes.Equal(key, app.KeyEntityDeregistered):
-				// Entity deregistered event.
-				var dereg app.EntityDeregistration
-				if err := cbor.Unmarshal(val, &dereg); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt EntityDeregistered event: %w", err))
+				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: &e})
+			case tmapi.IsAttributeKind(key, &api.NodeEvent{}):
+				// Node event.
+				var e api.NodeEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Node event: %w", err))
 					continue
 				}
 
-				eev := &api.EntityEvent{
-					Entity:         &dereg.Entity,
-					IsRegistration: false,
-				}
-				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: eev})
-			case bytes.Equal(key, app.KeyNodeRegistered):
-				// Node registered event.
-				var n node.Node
-				if err := cbor.Unmarshal(val, &n); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeRegistered event: %w", err))
-					continue
-				}
-
-				nev := &api.NodeEvent{
-					Node:           &n,
-					IsRegistration: true,
-				}
-				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: nev})
-			case bytes.Equal(key, app.KeyNodeUnfrozen):
+				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: &e})
+			case tmapi.IsAttributeKind(key, &api.NodeUnfrozenEvent{}):
 				// Node unfrozen event.
-				var nid signature.PublicKey
-				if err := cbor.Unmarshal(val, &nid); err != nil {
+				var e api.NodeUnfrozenEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
 					continue
 				}
-				evt := &api.Event{
-					Height: height,
-					TxHash: txHash,
-					NodeUnfrozenEvent: &api.NodeUnfrozenEvent{
-						NodeID: nid,
-					},
-				}
-				events = append(events, evt)
+				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeUnfrozenEvent: &e})
 			}
 		}
 	}

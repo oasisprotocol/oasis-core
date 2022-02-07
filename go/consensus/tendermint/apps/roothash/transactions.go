@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -181,16 +180,10 @@ func (app *rootHashApplication) executorCommit(
 
 	// Emit events for all accepted commits.
 	for _, commit := range cc.Commits {
-		evV := ValueExecutorCommitted{
-			ID: cc.ID,
-			Event: roothash.ExecutorCommittedEvent{
-				Commit: commit,
-			},
-		}
 		ctx.EmitEvent(
 			abciAPI.NewEventBuilder(app.Name()).
-				Attribute(KeyExecutorCommitted, cbor.Marshal(evV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(cc.ID)),
+				TypedAttribute(&roothash.ExecutorCommittedEvent{Commit: commit}).
+				CustomTypedAttribute(roothash.RuntimeIDAttribute(cc.ID)),
 		)
 	}
 

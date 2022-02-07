@@ -2,7 +2,6 @@
 package roothash
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -428,27 +427,47 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 				continue
 			}
 
+			var evRtID *common.Namespace
+			var ev *api.FinalizedEvent
 			for _, pair := range tmEv.GetAttributes() {
-				if bytes.Equal(pair.GetKey(), app.KeyFinalized) {
-					var value app.ValueFinalized
-					if err = cbor.Unmarshal(pair.GetValue(), &value); err != nil {
+				key := pair.GetKey()
+				val := pair.GetValue()
+
+				switch {
+				case tmapi.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
+					// Runtime ID attribute (Base64-encoded to allow queries).
+					if evRtID != nil {
+						return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
+					}
+					evRtID = &common.Namespace{}
+					if err = evRtID.UnmarshalBase64(val); err != nil {
+						return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
+					}
+
+				case tmapi.IsAttributeKind(key, &api.FinalizedEvent{}):
+					if err = cbor.Unmarshal(val, &ev); err != nil {
 						logger.Error("failed to unmarshal finalized event",
 							"err", err,
 							"height", height,
 						)
 						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
 					}
-
-					// Only process finalized events for the given runtime.
-					if !value.ID.Equal(&runtimeID) {
-						continue
-					}
-					if err = sc.processFinalizedEvent(sc.ctx, height, value.ID, &value.Event.Round, false); err != nil {
-						return 0, fmt.Errorf("failed to process finalized event: %w", err)
-					}
-					lastRound = value.Event.Round
+				default:
 				}
 			}
+
+			// Only process finalized events.
+			if ev == nil {
+				continue
+			}
+			// Only process events for the given runtime.
+			if !evRtID.Equal(&runtimeID) {
+				continue
+			}
+			if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, false); err != nil {
+				return 0, fmt.Errorf("failed to process finalized event: %w", err)
+			}
+			lastRound = ev.Round
 		}
 	}
 
@@ -702,33 +721,33 @@ EventLoop:
 			val := pair.GetValue()
 
 			switch {
-			case bytes.Equal(key, app.KeyFinalized):
+			case tmapi.IsAttributeKind(key, &api.FinalizedEvent{}):
 				// Finalized event.
-				var value app.ValueFinalized
-				if err := cbor.Unmarshal(val, &value); err != nil {
+				var e api.FinalizedEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
 					continue EventLoop
 				}
 
-				ev = &api.Event{Finalized: &value.Event}
-			case bytes.Equal(key, app.KeyExecutionDiscrepancyDetected):
+				ev = &api.Event{Finalized: &e}
+			case tmapi.IsAttributeKind(key, &api.ExecutionDiscrepancyDetectedEvent{}):
 				// An execution discrepancy has been detected.
-				var value app.ValueExecutionDiscrepancyDetected
-				if err := cbor.Unmarshal(val, &value); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueExectutionDiscrepancy event: %w", err))
+				var e api.ExecutionDiscrepancyDetectedEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err))
 					continue EventLoop
 				}
 
-				ev = &api.Event{ExecutionDiscrepancyDetected: &value.Event}
-			case bytes.Equal(key, app.KeyExecutorCommitted):
+				ev = &api.Event{ExecutionDiscrepancyDetected: &e}
+			case tmapi.IsAttributeKind(key, &api.ExecutorCommittedEvent{}):
 				// An executor commit has been processed.
-				var value app.ValueExecutorCommitted
-				if err := cbor.Unmarshal(val, &value); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ValueExecutorCommitted event: %w", err))
+				var e api.ExecutorCommittedEvent
+				if err := cbor.Unmarshal(val, &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutorComitted event: %w", err))
 					continue EventLoop
 				}
 
-				ev = &api.Event{ExecutorCommitted: &value.Event}
+				ev = &api.Event{ExecutorCommitted: &e}
 			case tmapi.IsAttributeKind(key, &api.InMsgProcessedEvent{}):
 				// Incoming message processed event.
 				var e api.InMsgProcessedEvent
@@ -738,7 +757,7 @@ EventLoop:
 				}
 
 				ev = &api.Event{InMsgProcessed: &e}
-			case bytes.Equal(key, app.KeyRuntimeID):
+			case tmapi.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
 				// Runtime ID attribute (Base64-encoded to allow queries).
 				if runtimeID != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: duplicate runtime ID attribute"))

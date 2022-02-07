@@ -329,8 +329,8 @@ func (c *Context) GetEvents() []types.Event {
 	return c.events
 }
 
-// HasEvent checks if a specific event has been emitted.
-func (c *Context) HasEvent(app string, key []byte) bool {
+// hasEvent checks if a specific event has been emitted.
+func (c *Context) hasEvent(app string, key []byte) bool {
 	evType := EventTypeForApp(app)
 
 	for _, ev := range c.events {
@@ -349,7 +349,7 @@ func (c *Context) HasEvent(app string, key []byte) bool {
 
 // HasTypedEvent checks if a specific typed event has been emitted.
 func (c *Context) HasTypedEvent(app string, kind TypedAttribute) bool {
-	return c.HasEvent(app, []byte(kind.EventKind()))
+	return c.hasEvent(app, []byte(kind.EventKind()))
 }
 
 // DecodeTypedEvent decodes the given raw event as a specific typed event.

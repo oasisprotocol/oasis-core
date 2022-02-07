@@ -2,7 +2,6 @@
 package scheduler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -109,10 +108,10 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 // Implements api.ServiceClient.
 func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
-		if bytes.Equal(pair.GetKey(), app.KeyElected) {
-			var kinds []api.CommitteeKind
-			if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
-				sc.logger.Error("worker: malformed elected committee types list",
+		if tmapi.IsAttributeKind(pair.GetKey(), &api.ElectedEvent{}) {
+			var e api.ElectedEvent
+			if err := cbor.Unmarshal(pair.GetValue(), &e); err != nil {
+				sc.logger.Error("worker: malformed elected committee types event",
 					"err", err,
 				)
 				continue
@@ -126,7 +125,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 				continue
 			}
 
-			committees, err := q.KindsCommittees(ctx, kinds)
+			committees, err := q.KindsCommittees(ctx, e.Kinds)
 			if err != nil {
 				sc.logger.Error("worker: couldn't query elected committees",
 					"err", err,

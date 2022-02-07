@@ -27,12 +27,6 @@ var (
 	// beacon application.
 	QueryApp = api.QueryForApp(AppName)
 
-	// KeyEpoch is the ABCI event attribute for specifying the set epoch.
-	KeyEpoch = []byte("epoch")
-
-	// KeyBeacon is the ABCI event attribute key for the new beacons.
-	KeyBeacon = []byte("beacon")
-
 	// MethodSetEpoch is the method name for setting epochs.
 	MethodSetEpoch = transaction.NewMethodName(AppName, "SetEpoch", beacon.EpochTime(0))
 

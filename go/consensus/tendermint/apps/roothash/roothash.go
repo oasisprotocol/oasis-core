@@ -74,7 +74,7 @@ func (app *rootHashApplication) OnCleanup() {
 
 func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context, request types.RequestBeginBlock) error {
 	// Check if rescheduling has taken place.
-	rescheduled := ctx.HasEvent(schedulerapp.AppName, schedulerapp.KeyElected)
+	rescheduled := ctx.HasTypedEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
 	// Check if there was an epoch transition.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 
@@ -290,16 +290,10 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 		runtime.ExecutorPool.ResetCommitments(blk.Header.Round)
 	}
 
-	tagV := ValueFinalized{
-		ID: runtime.Runtime.ID,
-		Event: roothash.FinalizedEvent{
-			Round: blk.Header.Round,
-		},
-	}
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
-			Attribute(KeyFinalized, cbor.Marshal(tagV)).
-			Attribute(KeyRuntimeID, ValueRuntimeID(runtime.Runtime.ID)),
+			TypedAttribute(&roothash.FinalizedEvent{Round: blk.Header.Round}).
+			CustomTypedAttribute(roothash.RuntimeIDAttribute(runtime.Runtime.ID)),
 	)
 	return nil
 }
@@ -449,17 +443,10 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 		"runtime", runtime,
 	)
 
-	// This transaction now also includes a new block for the given runtime.
-	tagV := ValueFinalized{
-		ID: runtime.ID,
-		Event: roothash.FinalizedEvent{
-			Round: genesisBlock.Header.Round,
-		},
-	}
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
-			Attribute(KeyFinalized, cbor.Marshal(tagV)).
-			Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
+			TypedAttribute(&roothash.FinalizedEvent{Round: genesisBlock.Header.Round}).
+			CustomTypedAttribute(roothash.RuntimeIDAttribute(runtime.ID)),
 	)
 	return nil
 }
@@ -537,16 +524,10 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
 		)
 
-		tagV := ValueExecutionDiscrepancyDetected{
-			ID: runtime.ID,
-			Event: roothash.ExecutionDiscrepancyDetectedEvent{
-				Timeout: forced,
-			},
-		}
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyExecutionDiscrepancyDetected, cbor.Marshal(tagV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(runtime.ID)),
+				TypedAttribute(&roothash.ExecutionDiscrepancyDetectedEvent{Timeout: forced}).
+				CustomTypedAttribute(roothash.RuntimeIDAttribute(runtime.ID)),
 		)
 
 		// We may also be able to already perform discrepancy resolution, check if this is possible
@@ -609,7 +590,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 							Caller: msg.Caller,
 							Tag:    msg.Tag,
 						}).
-						Attribute(KeyRuntimeID, ValueRuntimeID(rtState.Runtime.ID)),
+						CustomTypedAttribute(roothash.RuntimeIDAttribute(rtState.Runtime.ID)),
 				)
 			}
 			err = state.SetIncomingMessageQueueMeta(ctx, rtState.Runtime.ID, meta)
@@ -713,16 +694,10 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 			return fmt.Errorf("failed to set last round results: %w", err)
 		}
 
-		tagV := ValueFinalized{
-			ID: rtState.Runtime.ID,
-			Event: roothash.FinalizedEvent{
-				Round: blk.Header.Round,
-			},
-		}
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
-				Attribute(KeyFinalized, cbor.Marshal(tagV)).
-				Attribute(KeyRuntimeID, ValueRuntimeID(rtState.Runtime.ID)),
+				TypedAttribute(&roothash.FinalizedEvent{Round: blk.Header.Round}).
+				CustomTypedAttribute(roothash.RuntimeIDAttribute(rtState.Runtime.ID)),
 		)
 
 		return nil

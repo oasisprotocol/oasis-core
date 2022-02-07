@@ -222,18 +222,12 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 		}
 	}
 
-	// Emit the RegistryNodeListEpoch notification event.
-	evb := api.NewEventBuilder(app.Name())
-	// (Dummy value, should be ignored.)
-	evb = evb.Attribute(KeyRegistryNodeListEpoch, []byte("1"))
-
-	if len(expiredNodes) > 0 {
-		// Iff any nodes have expired, force-emit the NodesExpired event
-		// so the change is picked up.
-		evb = evb.Attribute(KeyNodesExpired, cbor.Marshal(expiredNodes))
+	// Emit the expired node event for all expired nodes.
+	for _, expiredNode := range expiredNodes {
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.NodeEvent{Node: expiredNode, IsRegistration: false}))
 	}
-
-	ctx.EmitEvent(evb)
+	// Emit the node list epoch event.
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.NodeListEpochEvent{}))
 
 	return nil
 }

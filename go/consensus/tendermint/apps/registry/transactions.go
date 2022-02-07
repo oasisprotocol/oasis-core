@@ -77,7 +77,7 @@ func (app *registryApplication) registerEntity(
 		"entity", ent,
 	)
 
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityRegistered, cbor.Marshal(ent)))
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.EntityEvent{Entity: ent, IsRegistration: true}))
 
 	return nil
 }
@@ -150,10 +150,7 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 		"entity_id", id,
 	)
 
-	tagV := &EntityDeregistration{
-		Entity: *removedEntity,
-	}
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEntityDeregistered, cbor.Marshal(tagV)))
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.EntityEvent{Entity: removedEntity, IsRegistration: false}))
 
 	return nil
 }
@@ -514,7 +511,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 				return err
 			}
 
-			ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
+			ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.RuntimeEvent{Runtime: rt}))
 		case registry.ErrNoSuchRuntime:
 			// Runtime was not suspended.
 		default:
@@ -531,7 +528,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		"roles", newNode.Roles,
 	)
 
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeRegistered, cbor.Marshal(newNode)))
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.NodeEvent{Node: newNode, IsRegistration: true}))
 
 	ctx.Commit()
 
@@ -603,7 +600,7 @@ func (app *registryApplication) unfreezeNode(
 		"node_id", node.ID,
 	)
 
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyNodeUnfrozen, cbor.Marshal(node.ID)))
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.NodeUnfrozenEvent{NodeID: node.ID}))
 
 	return nil
 }
@@ -772,7 +769,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			"runtime", rt,
 		)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyRuntimeRegistered, cbor.Marshal(rt)))
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.RuntimeEvent{Runtime: rt}))
 	}
 
 	return rt, nil

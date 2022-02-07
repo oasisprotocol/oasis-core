@@ -18,8 +18,4 @@ var (
 	// QueryApp is a query for filtering transactions processed by the
 	// key manager application.
 	QueryApp = api.QueryForApp(AppName)
-
-	// KeyStatusUpdate is an ABCI event attribute key for a key manager
-	// status update (value is a CBOR serialized key manager status).
-	KeyStatusUpdate = []byte("status")
 )

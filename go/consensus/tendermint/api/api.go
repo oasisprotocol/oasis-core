@@ -85,10 +85,19 @@ func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 }
 
 // TypedAttribute is an interface implemented by types which can be transparently used as event
-// attributes.
+// attributes with CBOR-marshalled value.
 type TypedAttribute interface {
 	// EventKind returns a string representation of this event's kind.
 	EventKind() string
+}
+
+// CustomTypedAttribute is an interface implemented by types which can be transparently used as event
+// attributes with custom value encoding.
+type CustomTypedAttribute interface {
+	TypedAttribute
+
+	// EventValue returns a byte representation of this events value.
+	EventValue() []byte
 }
 
 // IsAttributeKind checks whether the given attribute key corresponds to the passed typed attribute.
@@ -102,8 +111,8 @@ type EventBuilder struct {
 	ev  types.Event
 }
 
-// Attribute appends a key/value pair to the event.
-func (bld *EventBuilder) Attribute(key, value []byte) *EventBuilder {
+// attribute appends a key/value pair to the event.
+func (bld *EventBuilder) attribute(key, value []byte) *EventBuilder {
 	bld.ev.Attributes = append(bld.ev.Attributes, types.EventAttribute{
 		Key:   key,
 		Value: value,
@@ -117,7 +126,12 @@ func (bld *EventBuilder) Attribute(key, value []byte) *EventBuilder {
 // The typed attribute is automatically converted to a key/value pair where its EventKind is used
 // as the key and a CBOR-marshalled value is used as value.
 func (bld *EventBuilder) TypedAttribute(value TypedAttribute) *EventBuilder {
-	return bld.Attribute([]byte(value.EventKind()), cbor.Marshal(value))
+	return bld.attribute([]byte(value.EventKind()), cbor.Marshal(value))
+}
+
+// CustomTypedAttribute appends a typed attribute to the event.
+func (bld *EventBuilder) CustomTypedAttribute(value CustomTypedAttribute) *EventBuilder {
+	return bld.attribute([]byte(value.EventKind()), value.EventValue())
 }
 
 // Dirty returns true iff the EventBuilder has attributes.

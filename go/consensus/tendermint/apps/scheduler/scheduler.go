@@ -11,7 +11,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -205,7 +204,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 				return fmt.Errorf("tendermint/scheduler: couldn't elect %s committees: %w", kind, err)
 			}
 		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyElected, cbor.Marshal(kinds)))
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&scheduler.ElectedEvent{Kinds: kinds}))
 
 		var kindNames []string
 		for _, kind := range kinds {

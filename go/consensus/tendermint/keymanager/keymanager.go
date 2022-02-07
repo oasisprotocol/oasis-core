@@ -3,7 +3,6 @@
 package keymanager
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -80,16 +79,16 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 // Implements api.ServiceClient.
 func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
-		if bytes.Equal(pair.GetKey(), app.KeyStatusUpdate) {
-			var statuses []*api.Status
-			if err := cbor.Unmarshal(pair.GetValue(), &statuses); err != nil {
+		if tmapi.IsAttributeKind(pair.GetKey(), &api.StatusUpdateEvent{}) {
+			var event api.StatusUpdateEvent
+			if err := cbor.Unmarshal(pair.GetValue(), &event); err != nil {
 				sc.logger.Error("worker: failed to get statuses from tag",
 					"err", err,
 				)
 				continue
 			}
 
-			for _, status := range statuses {
+			for _, status := range event.Statuses {
 				sc.notifier.Broadcast(status)
 			}
 		}

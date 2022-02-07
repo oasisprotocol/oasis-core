@@ -16,6 +16,17 @@ func (k testBlockContextKey) NewDefault() interface{} {
 	return 42
 }
 
+// FooEvent is a test event.
+type FooEvent struct {
+	// Bar is the test event value.
+	Bar []byte
+}
+
+// EventKind returns a string representation of this event's kind.
+func (ev *FooEvent) EventKind() string {
+	return "foo"
+}
+
 func TestBlockContext(t *testing.T) {
 	require := require.New(t)
 
@@ -57,7 +68,7 @@ func TestChildContext(t *testing.T) {
 	require.EqualValues(ctx.BlockContext(), child.BlockContext(), "child.BlockContext should correspond to parent.BlockContext")
 
 	// Emitting an event should not propagate to the parent immediately.
-	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
+	child.EmitEvent(NewEventBuilder("test").TypedAttribute(&FooEvent{Bar: []byte("bar")}))
 	require.Len(child.GetEvents(), 1, "child event should be stored")
 	require.Len(ctx.GetEvents(), 0, "child event should not immediately propagate")
 	events := child.GetEvents()
@@ -70,7 +81,7 @@ func TestChildContext(t *testing.T) {
 	defer ctx.Close()
 
 	child = ctx.WithSimulation()
-	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
+	child.EmitEvent(NewEventBuilder("test").TypedAttribute(&FooEvent{Bar: []byte("bar")}))
 	child.Close()
 	require.Empty(ctx.GetEvents(), "events should not propagate in simulation mode")
 
@@ -91,7 +102,7 @@ func TestTransactionContext(t *testing.T) {
 	child := ctx.NewTransaction()
 
 	// Emitted events and state updates should not propagate to the parent unless committed.
-	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
+	child.EmitEvent(NewEventBuilder("test").TypedAttribute(&FooEvent{Bar: []byte("bar")}))
 	require.Len(child.GetEvents(), 1, "child event should be stored")
 	require.Len(ctx.GetEvents(), 0, "child event should not immediately propagate")
 
@@ -113,7 +124,7 @@ func TestTransactionContext(t *testing.T) {
 
 	child = ctx.NewTransaction()
 
-	child.EmitEvent(NewEventBuilder("test").Attribute([]byte("foo"), []byte("bar")))
+	child.EmitEvent(NewEventBuilder("test").TypedAttribute(&FooEvent{Bar: []byte("bar")}))
 	require.Len(child.GetEvents(), 1, "child event should be stored")
 	require.Len(ctx.GetEvents(), 0, "child event should not immediately propagate")
 	events := child.GetEvents()
