@@ -314,26 +314,14 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return nil, staking.ErrForbidden
 	}
 
-	to, err := state.Account(ctx, toAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch account: %w", err)
+	if !toAddr.Equal(reclaim.Account) && params.DisableDelegation {
+		return nil, staking.ErrForbidden
 	}
 
 	// Fetch escrow account.
-	//
-	// NOTE: Could be the same account, so make sure to not have two duplicate
-	//       copies of it and overwrite it later.
-	var from *staking.Account
-	if toAddr.Equal(reclaim.Account) {
-		from = to
-	} else {
-		if params.DisableDelegation {
-			return nil, staking.ErrForbidden
-		}
-		from, err = state.Account(ctx, reclaim.Account)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch account: %w", err)
-		}
+	from, err := state.Account(ctx, reclaim.Account)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch account: %w", err)
 	}
 
 	// Fetch delegation.
@@ -400,13 +388,8 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	if err = state.SetDelegation(ctx, toAddr, reclaim.Account, delegation); err != nil {
 		return nil, fmt.Errorf("failed to set delegation: %w", err)
 	}
-	if err = state.SetAccount(ctx, toAddr, to); err != nil {
+	if err = state.SetAccount(ctx, reclaim.Account, from); err != nil {
 		return nil, fmt.Errorf("failed to set account: %w", err)
-	}
-	if !toAddr.Equal(reclaim.Account) {
-		if err = state.SetAccount(ctx, reclaim.Account, from); err != nil {
-			return nil, fmt.Errorf("failed to set account: %w", err)
-		}
 	}
 
 	ctx.Logger().Debug("ReclaimEscrow: started debonding stake",
