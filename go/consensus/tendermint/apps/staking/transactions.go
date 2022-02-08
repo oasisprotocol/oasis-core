@@ -49,6 +49,10 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		return nil, fmt.Errorf("failed to fetch account: %w", err)
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	if fromAddr.Equal(xfer.To) {
 		// Handle transfer to self as just a balance check.
 		if from.General.Balance.Cmp(&xfer.Amount) < 0 {
@@ -87,17 +91,19 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		}
 	}
 
-	ctx.Logger().Debug("Transfer: executed transfer",
-		"from", fromAddr,
-		"to", xfer.To,
-		"amount", xfer.Amount,
-	)
-
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.TransferEvent{
 		From:   fromAddr,
 		To:     xfer.To,
 		Amount: xfer.Amount,
 	}))
+
+	ctx.Commit()
+
+	ctx.Logger().Debug("Transfer: executed transfer",
+		"from", fromAddr,
+		"to", xfer.To,
+		"amount", xfer.Amount,
+	)
 
 	return &staking.TransferResult{
 		From:   fromAddr,
@@ -151,6 +157,10 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 
 	_ = totalSupply.Sub(&burn.Amount)
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
@@ -158,15 +168,17 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 		return fmt.Errorf("failed to set total supply: %w", err)
 	}
 
-	ctx.Logger().Debug("Burn: burnt stake",
-		"from", fromAddr,
-		"amount", burn.Amount,
-	)
-
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.BurnEvent{
 		Owner:  fromAddr,
 		Amount: burn.Amount,
 	}))
+
+	ctx.Commit()
+
+	ctx.Logger().Debug("Burn: burnt stake",
+		"from", fromAddr,
+		"amount", burn.Amount,
+	)
 
 	return nil
 }
@@ -244,6 +256,10 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return nil, err
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	// Commit accounts.
 	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return nil, fmt.Errorf("failed to set account: %w", err)
@@ -258,19 +274,21 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 		return nil, fmt.Errorf("failed to set delegation: %w", err)
 	}
 
-	ctx.Logger().Debug("AddEscrow: escrowed stake",
-		"from", fromAddr,
-		"to", escrow.Account,
-		"amount", escrow.Amount,
-		"obtained_shares", obtainedShares,
-	)
-
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.AddEscrowEvent{
 		Owner:     fromAddr,
 		Escrow:    escrow.Account,
 		Amount:    escrow.Amount,
 		NewShares: *obtainedShares,
 	}))
+
+	ctx.Commit()
+
+	ctx.Logger().Debug("AddEscrow: escrowed stake",
+		"from", fromAddr,
+		"to", escrow.Account,
+		"amount", escrow.Amount,
+		"obtained_shares", obtainedShares,
+	)
 
 	return &staking.AddEscrowResult{
 		Owner:     fromAddr,
@@ -379,6 +397,10 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return nil, staking.ErrInvalidArgument
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	// Include the end time epoch as the disambiguator. If a debonding delegation for the same account
 	// and end time already exists, the delegations will be merged.
 	if err = state.SetDebondingDelegation(ctx, toAddr, reclaim.Account, deb.DebondEndTime, &deb); err != nil {
@@ -392,15 +414,6 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		return nil, fmt.Errorf("failed to set account: %w", err)
 	}
 
-	ctx.Logger().Debug("ReclaimEscrow: started debonding stake",
-		"from", reclaim.Account,
-		"to", toAddr,
-		"base_units", stakeAmount,
-		"active_shares", reclaim.Shares,
-		"debonding_shares", debondingShares,
-		"debond_end_time", deb.DebondEndTime,
-	)
-
 	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&staking.DebondingStartEscrowEvent{
 		Owner:           toAddr,
 		Escrow:          reclaim.Account,
@@ -409,6 +422,17 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 		DebondingShares: *debondingShares,
 		DebondEndTime:   deb.DebondEndTime,
 	}))
+
+	ctx.Commit()
+
+	ctx.Logger().Debug("ReclaimEscrow: started debonding stake",
+		"from", reclaim.Account,
+		"to", toAddr,
+		"base_units", stakeAmount,
+		"active_shares", reclaim.Shares,
+		"debonding_shares", debondingShares,
+		"debond_end_time", deb.DebondEndTime,
+	)
 
 	return &staking.ReclaimEscrowResult{
 		Owner:           toAddr,
@@ -466,9 +490,17 @@ func (app *stakingApplication) amendCommissionSchedule(
 		return err
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
+	// This is currently a single Set* call, but it's more valuable to be consistent and make the code ready for
+	// expanding this to use multiple Set* calls than to optimize and remove the transaction commit.
 	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
+
+	ctx.Commit()
 
 	return nil
 }
@@ -546,6 +578,10 @@ func (app *stakingApplication) allow(
 		return staking.ErrTooManyAllowances
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	if err = state.SetAccount(ctx, addr, acct); err != nil {
 		return fmt.Errorf("failed to set account: %w", err)
 	}
@@ -557,6 +593,8 @@ func (app *stakingApplication) allow(
 		Negative:     allow.Negative,
 		AmountChange: *amountChange,
 	}))
+
+	ctx.Commit()
 
 	return nil
 }
@@ -631,6 +669,10 @@ func (app *stakingApplication) withdraw(
 		return nil, staking.ErrInsufficientBalance
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	if err = state.SetAccount(ctx, toAddr, to); err != nil {
 		return nil, fmt.Errorf("failed to set account: %w", err)
 	}
@@ -651,6 +693,8 @@ func (app *stakingApplication) withdraw(
 		Negative:     true,
 		AmountChange: withdraw.Amount,
 	}))
+
+	ctx.Commit()
 
 	return &staking.WithdrawResult{
 		Owner:        withdraw.From,
