@@ -82,10 +82,9 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		if err = state.SetAccount(ctx, xfer.To, to); err != nil {
 			return nil, fmt.Errorf("failed to set account: %w", err)
 		}
-	}
-
-	if err = state.SetAccount(ctx, fromAddr, from); err != nil {
-		return nil, fmt.Errorf("failed to fetch account: %w", err)
+		if err = state.SetAccount(ctx, fromAddr, from); err != nil {
+			return nil, fmt.Errorf("failed to fetch account: %w", err)
+		}
 	}
 
 	ctx.Logger().Debug("Transfer: executed transfer",
