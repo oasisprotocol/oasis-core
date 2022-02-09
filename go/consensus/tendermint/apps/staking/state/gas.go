@@ -109,7 +109,7 @@ func AuthenticateAndPayFees(
 
 	// Transfer fee to per-block fee accumulator.
 	feeAcc := ctx.BlockContext().Get(feeAccumulatorKey{}).(*feeAccumulator)
-	if err := quantity.Move(&feeAcc.balance, &account.General.Balance, &fee.Amount); err != nil {
+	if err = quantity.Move(&feeAcc.balance, &account.General.Balance, &fee.Amount); err != nil {
 		return fmt.Errorf("staking: failed to pay fees: %w", err)
 	}
 
