@@ -1466,6 +1466,8 @@ mainLoop:
 				heap.Push(outOfOrderDoneDiffs, item)
 			}
 
+			triggerRoundFetches()
+
 		case finalized := <-n.finalizeCh:
 			// If finalization failed, things start falling apart.
 			// There's no point redoing it, since it's probably not a transient
