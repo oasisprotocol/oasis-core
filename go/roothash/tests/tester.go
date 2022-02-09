@@ -415,6 +415,27 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 				}
 			}
 
+			// Check that the liveness statistics were computed correctly.
+			state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
+				RuntimeID: header.Namespace,
+				Height:    blk.Height,
+			})
+			require.NoError(err, "GetRuntimeState")
+			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
+			require.EqualValues(1, state.LivenessStatistics.TotalRounds)
+			require.Len(state.LivenessStatistics.LiveRounds, len(s.executorCommittee.workers)+len(s.executorCommittee.backupWorkers))
+
+			goodRoundsPerNode := make(map[signature.PublicKey]uint64)
+			for i, member := range state.ExecutorPool.Committee.Members {
+				goodRoundsPerNode[member.PublicKey] += state.LivenessStatistics.LiveRounds[i]
+			}
+
+			for nodeID, v := range goodRoundsPerNode {
+				// Workers and backup workers should be considered live as everyone submitted
+				// commitments and there were no discrepancies.
+				require.EqualValues(1, v, "LiveRounds(%s)", nodeID)
+			}
+
 			// Nothing more to do after the block was received.
 			return
 		case <-time.After(recvTimeout):
@@ -491,6 +512,15 @@ WaitForRoundTimeoutBlocks:
 			// Next round must be a failure.
 			require.EqualValues(child.Header.Round+1, header.Round, "block round")
 			require.EqualValues(block.RoundFailed, header.HeaderType, "block header type must be RoundFailed")
+
+			// Check that the liveness statistics were computed correctly.
+			state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
+				RuntimeID: header.Namespace,
+				Height:    blk.Height,
+			})
+			require.NoError(err, "GetRuntimeState")
+			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
+			require.EqualValues(1, state.LivenessStatistics.TotalRounds, "timed out round should not count for liveness")
 
 			// Nothing more to do after the block was received.
 			return

@@ -19,6 +19,7 @@ import (
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/state"
 	schedulerapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
+	schedulerApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/api"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -67,6 +68,7 @@ func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmap
 	md.Subscribe(registryApi.MessageRuntimeUpdated, app)
 	md.Subscribe(registryApi.MessageRuntimeResumed, app)
 	md.Subscribe(roothashApi.RuntimeMessageNoop, app)
+	md.Subscribe(schedulerApi.MessageBeforeSchedule, app)
 }
 
 func (app *rootHashApplication) OnCleanup() {
@@ -200,6 +202,8 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 			rtState.ExecutorPool.Round = rtState.CurrentBlock.Header.Round
 		}
 
+		// Clear liveness statistics.
+		rtState.LivenessStatistics = nil
 		// Update the runtime descriptor to the latest per-epoch value.
 		rtState.Runtime = rt
 
@@ -325,6 +329,33 @@ func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg int
 		return nil, nil
 	case roothashApi.RuntimeMessageNoop:
 		// Noop message always succeeds.
+		return nil, nil
+	case schedulerApi.MessageBeforeSchedule:
+		// Scheduler is about to perform scheduling. Process liveness statistics to make sure they
+		// get taken into account for the next election.
+		epoch := msg.(beacon.EpochTime)
+
+		ctx.Logger().Debug("processing liveness statistics before scheduling",
+			"epoch", epoch,
+		)
+
+		state := roothashState.NewMutableState(ctx.State())
+		regState := registryState.NewMutableState(ctx.State())
+		runtimes, _ := regState.Runtimes(ctx)
+
+		for _, rt := range runtimes {
+			if !rt.IsCompute() {
+				continue
+			}
+
+			rtState, err := state.RuntimeState(ctx, rt.ID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch runtime state: %w", err)
+			}
+			if err = processLivenessStatistics(ctx, epoch, rtState); err != nil {
+				return nil, fmt.Errorf("failed to process liveness statistics for %s: %w", rt.ID, err)
+			}
+		}
 		return nil, nil
 	default:
 		return nil, roothash.ErrInvalidArgument
@@ -508,7 +539,7 @@ func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, state *r
 
 // tryFinalizeExecutorCommits tries to finalize the executor commitments into a new runtime block.
 // The caller must take care of clearing and scheduling the round timeouts.
-func (app *rootHashApplication) tryFinalizeExecutorCommits(
+func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 	ctx *tmapi.Context,
 	rtState *roothash.RuntimeState,
 	forced bool,
@@ -516,6 +547,12 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 	runtime := rtState.Runtime
 	round := rtState.CurrentBlock.Header.Round + 1
 	pool := rtState.ExecutorPool
+
+	// Initialize per-epoch liveness statistics.
+	if rtState.LivenessStatistics == nil {
+		rtState.LivenessStatistics = roothash.NewLivenessStatistics(len(pool.Committee.Members))
+	}
+	livenessStats := rtState.LivenessStatistics
 
 	commit, err := pool.TryFinalize(ctx.BlockHeight(), runtime.Executor.RoundTimeout, forced, true)
 	if err == commitment.ErrDiscrepancyDetected {
@@ -543,6 +580,8 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		ctx.Logger().Debug("finalized round",
 			"round", round,
 		)
+
+		livenessStats.TotalRounds++
 
 		ec := commit.ToDDResult().(*commitment.ExecutorCommitment)
 
@@ -612,10 +651,17 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		commitments := pool.ExecuteCommitments
 		seen := make(map[signature.PublicKey]bool)
 		regState := registryState.NewMutableState(ctx.State())
-		for _, n := range pool.Committee.Members {
+		for i, n := range pool.Committee.Members {
 			c, ok := commitments[n.PublicKey]
-			if !ok || c.IsIndicatingFailure() || seen[n.PublicKey] {
+			switch {
+			case !ok && n.Role == scheduler.RoleBackupWorker && !pool.Discrepancy:
+				// This is a backup worker that did not submit a commitment and there was no
+				// discrepancy. Count the worker as live.
+				livenessStats.LiveRounds[i]++
 				continue
+			case !ok || c.IsIndicatingFailure() || seen[n.PublicKey]:
+				continue
+			default:
 			}
 			// Make sure to not include nodes in multiple roles multiple times.
 			seen[n.PublicKey] = true
@@ -643,6 +689,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 			case true:
 				// Correct commit.
 				goodComputeEntities = append(goodComputeEntities, node.EntityID)
+				livenessStats.LiveRounds[i]++
 			case false:
 				// Incorrect commit.
 				badComputeEntities = append(badComputeEntities, node.EntityID)

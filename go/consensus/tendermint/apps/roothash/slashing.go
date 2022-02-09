@@ -14,12 +14,40 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
+func onRuntimeLivenessFailure(ctx *abciAPI.Context, nodeID signature.PublicKey, penaltyAmount *quantity.Quantity) error {
+	if penaltyAmount.IsZero() {
+		return nil
+	}
+
+	regState := registryState.NewMutableState(ctx.State())
+	stakeState := stakingState.NewMutableState(ctx.State())
+
+	node, err := regState.Node(ctx, nodeID)
+	if err != nil {
+		// Node should not be able to disappear on an epoch boundary.
+		return fmt.Errorf("failed to fetch node %s: %w", nodeID, err)
+	}
+
+	// Slash runtime node entity.
+	entityAddr := staking.NewAddress(node.EntityID)
+	_, err = stakeState.SlashEscrow(ctx, entityAddr, penaltyAmount)
+	if err != nil {
+		return fmt.Errorf("error slashing account %s: %w", entityAddr, err)
+	}
+
+	return nil
+}
+
 func onEvidenceRuntimeEquivocation(
 	ctx *abciAPI.Context,
 	pk signature.PublicKey,
 	runtime *registry.Runtime,
 	penaltyAmount *quantity.Quantity,
 ) error {
+	if penaltyAmount.IsZero() {
+		return nil
+	}
+
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
@@ -75,6 +103,10 @@ func onRuntimeIncorrectResults(
 	runtime *registry.Runtime,
 	penaltyAmount *quantity.Quantity,
 ) error {
+	if penaltyAmount.IsZero() {
+		return nil
+	}
+
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	var totalSlashed quantity.Quantity

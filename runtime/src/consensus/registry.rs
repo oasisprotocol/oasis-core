@@ -43,11 +43,23 @@ pub struct ExecutorParameters {
     pub group_backup_size: u16,
     /// Number of allowed stragglers.
     pub allowed_stragglers: u16,
-    /// rRound timeout in consensus blocks.
+    /// Round timeout in consensus blocks.
     pub round_timeout: i64,
     /// Maximum number of messages that can be emitted by the runtime
     /// in a single round.
     pub max_messages: u32,
+    /// Minimum percentage of rounds in an epoch that a node must participate in positively in order
+    /// to be considered live. Nodes not satisfying this may be penalized.
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub min_live_rounds_percent: u8,
+    /// Minimum number of live rounds in an epoch for the liveness calculations to be considered for
+    /// evaluation.
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub min_live_rounds_eval: u64,
+    /// Maximum number of liveness failures that are tolerated before suspending and/or slashing the
+    /// node. Zero means unlimited.
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub max_liveness_fails: u8,
 }
 
 /// Parameters for the runtime transaction scheduler.

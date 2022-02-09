@@ -393,7 +393,11 @@ type RuntimeState struct {
 	// LastNormalHeight is the consensus block height corresponding to LastNormalRound.
 	LastNormalHeight int64 `json:"last_normal_height"`
 
+	// ExecutorPool contains the executor commitment pool.
 	ExecutorPool *commitment.Pool `json:"executor_pool"`
+
+	// LivenessStatistics contains the liveness statistics for the current epoch.
+	LivenessStatistics *LivenessStatistics `json:"liveness_stats"`
 }
 
 // AnnotatedBlock is an annotated roothash block.

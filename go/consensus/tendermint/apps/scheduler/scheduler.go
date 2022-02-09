@@ -23,6 +23,7 @@ import (
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	schedulerApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/api"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -44,6 +45,7 @@ var (
 
 type schedulerApplication struct {
 	state api.ApplicationState
+	md    api.MessageDispatcher
 }
 
 func (app *schedulerApplication) Name() string {
@@ -68,6 +70,7 @@ func (app *schedulerApplication) Dependencies() []string {
 
 func (app *schedulerApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
+	app.md = md
 }
 
 func (app *schedulerApplication) OnCleanup() {}
@@ -82,11 +85,17 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 
 	if epochChanged || slashed {
+		// Notify applications that we are going to schedule committees.
+		_, err := app.md.Publish(ctx, schedulerApi.MessageBeforeSchedule, epoch)
+		if err != nil {
+			return fmt.Errorf("tendermint/scheduler: before schedule notification failed: %w", err)
+		}
+
 		// The 0th epoch will not have suitable entropy for elections, nor
 		// will it have useful node registrations.
 		baseEpoch, err := app.state.GetBaseEpoch()
 		if err != nil {
-			return fmt.Errorf("tendermint/scheduler: cound't get base epoch: %w", err)
+			return fmt.Errorf("tendermint/scheduler: couldn't get base epoch: %w", err)
 		}
 
 		if epoch == baseEpoch {
@@ -127,7 +136,10 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		}
 
 		// Filter nodes.
-		var nodes, committeeNodes []*node.Node
+		var (
+			nodes          []*node.Node
+			committeeNodes []*nodeWithStatus
+		)
 		for _, node := range allNodes {
 			var status *registry.NodeStatus
 			status, err = regState.NodeStatus(ctx, node.ID)
@@ -146,7 +158,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 
 			nodes = append(nodes, node)
 			if !filterCommitteeNodes || (status.ElectionEligibleAfter != beacon.EpochInvalid && epoch > status.ElectionEligibleAfter) {
-				committeeNodes = append(committeeNodes, node)
+				committeeNodes = append(committeeNodes, &nodeWithStatus{node, status})
 			}
 		}
 
@@ -307,15 +319,18 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	return resp, nil
 }
 
-func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *node.Node, rt *registry.Runtime) bool {
-	if !n.HasRoles(node.RoleComputeWorker) {
+func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *nodeWithStatus, rt *registry.Runtime, epoch beacon.EpochTime) bool {
+	if !n.node.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
-	for _, nrt := range n.Runtimes {
+	for _, nrt := range n.node.Runtimes {
 		if !nrt.ID.Equal(&rt.ID) {
 			continue
 		}
 		if nrt.Version.MaskNonMajor() != rt.Version.Version.MaskNonMajor() {
+			return false
+		}
+		if n.status.IsSuspended(rt.ID, epoch) {
 			return false
 		}
 		switch rt.TEEHardware {
@@ -334,8 +349,8 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *n
 			if err := nrt.Capabilities.TEE.Verify(ctx.Now(), rt.Version.TEE); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestaion",
 					"err", err,
-					"node", n,
-					"time_stamp", ctx.Now(),
+					"node_id", n.node.ID,
+					"timestamp", ctx.Now(),
 					"runtime", rt.ID,
 				)
 				return false
@@ -367,7 +382,7 @@ func (app *schedulerApplication) electAllCommittees(
 	entitiesEligibleForReward map[staking.Address]bool,
 	validatorEntities map[staking.Address]bool,
 	runtimes []*registry.Runtime,
-	nodeList []*node.Node,
+	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
 ) error {
 	for _, runtime := range runtimes {

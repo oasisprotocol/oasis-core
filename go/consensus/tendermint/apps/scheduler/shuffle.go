@@ -26,6 +26,11 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
+type nodeWithStatus struct {
+	node   *node.Node
+	status *registry.NodeStatus
+}
+
 func getPrevVRFState(
 	ctx *api.Context,
 	beaconState *beaconState.MutableState,
@@ -151,7 +156,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 	entitiesEligibleForReward map[staking.Address]bool,
 	validatorEntities map[staking.Address]bool,
 	rt *registry.Runtime,
-	nodeList []*node.Node,
+	nodeList []*nodeWithStatus,
 	kind scheduler.CommitteeKind,
 ) error {
 	// Only generic compute runtimes need to elect all the committees.
@@ -194,7 +199,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 	// Determine the committee size, and pre-filter the node-list based
 	// on eligibility, entity stake and other criteria.
 
-	var isSuitableFn func(*api.Context, *node.Node, *registry.Runtime) bool
+	var isSuitableFn func(*api.Context, *nodeWithStatus, *registry.Runtime, beacon.EpochTime) bool
 	groupSizes := make(map[scheduler.Role]int)
 	switch kind {
 	case scheduler.KindComputeExecutor:
@@ -224,26 +229,26 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 	nodeLists := make(map[scheduler.Role][]*node.Node)
 	for _, n := range nodeList {
 		// Check if an entity has enough stake.
-		entAddr := staking.NewAddress(n.EntityID)
+		entAddr := staking.NewAddress(n.node.EntityID)
 		if stakeAcc != nil {
 			if err = stakeAcc.CheckStakeClaims(entAddr); err != nil {
 				continue
 			}
 		}
 		// Check general node compatibility.
-		if !isSuitableFn(ctx, n, rt) {
+		if !isSuitableFn(ctx, n, rt, epoch) {
 			continue
 		}
 
 		// If the election uses VRFs, make sure that the node bothered to submit
 		// a VRF proof for this election.
-		if useVRF && prevState.Pi[n.ID] == nil {
+		if useVRF && prevState.Pi[n.node.ID] == nil {
 			// ... as long as we aren't testing with mandatory committee
 			// members.
 			isForceElect := false
 			if flags.DebugDontBlameOasis() && schedulerParameters.DebugForceElect != nil {
 				if rtNodeMap := schedulerParameters.DebugForceElect[rt.ID]; rtNodeMap != nil {
-					if ri := rtNodeMap[n.ID]; ri != nil {
+					if ri := rtNodeMap[n.node.ID]; ri != nil {
 						isForceElect = kind == ri.Kind
 					}
 				}
@@ -252,7 +257,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 				ctx.Logger().Warn("marking node as ineligible for elections, no pi",
 					"kind", kind,
 					"runtime_id", rt.ID,
-					"id", n.ID,
+					"id", n.node.ID,
 				)
 				continue
 			}
@@ -273,7 +278,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 				}
 			}
 
-			nodeLists[role] = append(nodeLists[role], n)
+			nodeLists[role] = append(nodeLists[role], n.node)
 			eligible = true
 		}
 		if !eligible {
