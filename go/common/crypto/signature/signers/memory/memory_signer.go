@@ -19,12 +19,16 @@ const (
 
 	// SeedSize is the size of an RFC 8032 seed in bytes.
 	SeedSize = ed25519.SeedSize
+
+	// StaticEntropySize is the size of the provided static entropy.
+	StaticEntropySize = 32
 )
 
 var (
-	_ signature.SignerFactory = (*Factory)(nil)
-	_ signature.Signer        = (*Signer)(nil)
-	_ signature.UnsafeSigner  = (*Signer)(nil)
+	_ signature.SignerFactory         = (*Factory)(nil)
+	_ signature.Signer                = (*Signer)(nil)
+	_ signature.UnsafeSigner          = (*Signer)(nil)
+	_ signature.StaticEntropyProvider = (*Signer)(nil)
 )
 
 // Factory is a memory backed SignerFactory.
@@ -49,9 +53,16 @@ func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signatur
 		return nil, err
 	}
 
+	// Generate new static entropy.
+	var staticEntropy [StaticEntropySize]byte
+	if _, err = rng.Read(staticEntropy[:]); err != nil {
+		return nil, err
+	}
+
 	return &Signer{
-		privateKey: privateKey,
-		role:       role,
+		privateKey:    privateKey,
+		role:          role,
+		staticEntropy: staticEntropy,
 	}, nil
 }
 
@@ -62,8 +73,9 @@ func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
 
 // Signer is a memory backed Signer.
 type Signer struct {
-	privateKey ed25519.PrivateKey
-	role       signature.SignerRole
+	privateKey    ed25519.PrivateKey
+	role          signature.SignerRole
+	staticEntropy [StaticEntropySize]byte
 }
 
 // Public returns the PublicKey corresponding to the signer.
@@ -113,6 +125,16 @@ func (s *Signer) Prove(alphaString []byte) ([]byte, error) {
 		return nil, signature.ErrInvalidRole
 	}
 	return ecvrf.Prove(s.privateKey, alphaString), nil
+}
+
+// StaticEntropy returns PrivateKeySize bytes of cryptographic entropy that
+// is independent from the Signer's private key.  The value of this entropy
+// is constant for the lifespan of the signer's underlying key pair.
+func (s *Signer) StaticEntropy() ([]byte, error) {
+	if s.role != signature.SignerP2P {
+		return nil, signature.ErrInvalidRole
+	}
+	return s.staticEntropy[:], nil
 }
 
 // NewSigner creates a new signer.

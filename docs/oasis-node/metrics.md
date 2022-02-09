@@ -90,9 +90,10 @@ oasis_worker_node_registered | Gauge | Is oasis node registered (binary). |  | [
 oasis_worker_processed_block_count | Counter | Number of processed roothash blocks. | runtime | [worker/common/committee](../../go/worker/common/committee/node.go)
 oasis_worker_processed_event_count | Counter | Number of processed roothash events. | runtime | [worker/common/committee](../../go/worker/common/committee/node.go)
 oasis_worker_storage_commit_latency | Summary | Latency of storage commit calls (state + outputs) (seconds). | runtime | [worker/compute/executor/committee](../../go/worker/compute/executor/committee/node.go)
-oasis_worker_storage_full_round | Gauge | The last round that was fully synced and finalized. | runtime | [worker/storage/committee](../../go/worker/storage/committee/node.go)
-oasis_worker_storage_pending_round | Gauge | The last round that is in-flight for syncing. | runtime | [worker/storage/committee](../../go/worker/storage/committee/node.go)
-oasis_worker_storage_synced_round | Gauge | The last round that was synced but not yet finalized. | runtime | [worker/storage/committee](../../go/worker/storage/committee/node.go)
+oasis_worker_storage_full_round | Gauge | The last round that was fully synced and finalized. | runtime | [worker/storage/committee](../../go/worker/storage/committee/metrics.go)
+oasis_worker_storage_pending_round | Gauge | The last round that is in-flight for syncing. | runtime | [worker/storage/committee](../../go/worker/storage/committee/metrics.go)
+oasis_worker_storage_round_sync_latency | Summary | Storage round sync latency (seconds). | runtime | [worker/storage/committee](../../go/worker/storage/committee/metrics.go)
+oasis_worker_storage_synced_round | Gauge | The last round that was synced but not yet finalized. | runtime | [worker/storage/committee](../../go/worker/storage/committee/metrics.go)
 
 <!-- markdownlint-enable line-length -->
 

@@ -12,6 +12,7 @@ import (
 	core "github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/p2p/net/conngater"
 	manet "github.com/multiformats/go-multiaddr/net"
 
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
@@ -24,19 +25,49 @@ import (
 
 const connectionRefreshInterval = 5 * time.Second
 
+const peerTagImportancePrefix = "oasis-core/importance"
+
+// ImportanceKind is the node importance kind.
+type ImportanceKind uint8
+
+const (
+	ImportantNodeCompute    = 1
+	ImportantNodeKeyManager = 2
+)
+
+// Tag returns the connection manager tag associated with the given importance kind.
+func (ik ImportanceKind) Tag() string {
+	switch ik {
+	case ImportantNodeCompute:
+		return peerTagImportancePrefix + "/compute"
+	case ImportantNodeKeyManager:
+		return peerTagImportancePrefix + "/keymanager"
+	default:
+		panic(fmt.Errorf("unsupported tag: %d", ik))
+	}
+}
+
+// TagValue returns the connection manager tag value associated with the given importance kind.
+func (ik ImportanceKind) TagValue() int {
+	switch ik {
+	case ImportantNodeCompute, ImportantNodeKeyManager:
+		return 1000
+	default:
+		panic(fmt.Errorf("unsupported tag: %d", ik))
+	}
+}
+
 // PeerManager handles managing peers in the gossipsub network.
-//
-// XXX: we accept connections from all peers, however known peers
-// from registry are considered trustworthier and we maintain persistent
-// connections with them. Once libp2p layer supports "peer reputation" configure
-// better reputation for registry peers.
 type PeerManager struct {
 	sync.RWMutex
 
 	ctx context.Context
 
-	host  core.Host
-	peers map[core.PeerID]*p2pPeer
+	host core.Host
+	cg   *conngater.BasicConnectionGater
+
+	peers          map[core.PeerID]*p2pPeer
+	importantPeers map[ImportanceKind]map[core.PeerID]bool
 
 	initCh   chan struct{}
 	initOnce sync.Once
@@ -139,6 +170,42 @@ func (mgr *PeerManager) UpdateNode(node *node.Node) error {
 	return nil
 }
 
+func (mgr *PeerManager) blockPeer(peerID core.PeerID) {
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	_ = mgr.cg.BlockPeer(peerID)
+	mgr.removePeerLocked(peerID)
+	_ = mgr.host.Network().ClosePeer(peerID)
+}
+
+// SetNodeImportance configures node importance for the given set of nodes.
+//
+// This makes it less likely for those nodes to be pruned.
+func (mgr *PeerManager) SetNodeImportance(kind ImportanceKind, p2pIDs map[signature.PublicKey]bool) {
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	cm := mgr.host.ConnManager()
+	previousPeers := mgr.importantPeers[kind]
+	mgr.importantPeers[kind] = make(map[core.PeerID]bool)
+	for p2pID := range p2pIDs {
+		peerID, err := publicKeyToPeerID(p2pID)
+		if err != nil {
+			return
+		}
+
+		cm.TagPeer(peerID, kind.Tag(), kind.TagValue())
+		mgr.importantPeers[kind][peerID] = true
+		delete(previousPeers, peerID)
+	}
+
+	// Clear importance for any previous nodes that are no longer considered important.
+	for peerID := range previousPeers {
+		cm.UntagPeer(peerID, kind.Tag())
+	}
+}
+
 func (mgr *PeerManager) removePeerLocked(peerID core.PeerID) {
 	if existing := mgr.peers[peerID]; existing != nil {
 		existing.cancelFn()
@@ -149,6 +216,11 @@ func (mgr *PeerManager) removePeerLocked(peerID core.PeerID) {
 }
 
 func (mgr *PeerManager) updateNodeLocked(node *node.Node, peerID core.PeerID) {
+	// Skip blocked peers before even trying to dial.
+	if !mgr.cg.InterceptPeerDial(peerID) {
+		return
+	}
+
 	var addrHash hash.Hash
 	addrHash.From(node.P2P.Addresses)
 	changedAddrs := true
@@ -207,6 +279,13 @@ func (mgr *PeerManager) updateNodeLocked(node *node.Node, peerID core.PeerID) {
 func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
 	// Watch the registry for node changes, and attempt to keep the
 	// gossipsub peer list up to date.
+
+	// Wait for consensus sync before proceeding.
+	select {
+	case <-mgr.ctx.Done():
+		return
+	case <-consensus.Synced():
+	}
 
 	nodeListCh, nlSub, err := consensus.Registry().WatchNodeList(mgr.ctx)
 	if err != nil {
@@ -276,17 +355,17 @@ func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
 	}
 }
 
-func newPeerManager(ctx context.Context, host core.Host, consensus consensus.Backend) *PeerManager {
+func newPeerManager(ctx context.Context, host core.Host, cg *conngater.BasicConnectionGater, consensus consensus.Backend) *PeerManager {
 	mgr := &PeerManager{
-		ctx:    ctx,
-		host:   host,
-		peers:  make(map[core.PeerID]*p2pPeer),
-		initCh: make(chan struct{}),
-		logger: logging.GetLogger("worker/common/p2p/peermgr"),
+		ctx:            ctx,
+		host:           host,
+		cg:             cg,
+		peers:          make(map[core.PeerID]*p2pPeer),
+		importantPeers: make(map[ImportanceKind]map[core.PeerID]bool),
+		initCh:         make(chan struct{}),
+		logger:         logging.GetLogger("worker/common/p2p/peermgr"),
 	}
-	if consensus != nil {
-		go mgr.watchRegistryNodes(consensus)
-	}
+	go mgr.watchRegistryNodes(consensus)
 	return mgr
 }
 

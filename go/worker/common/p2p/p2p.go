@@ -10,10 +10,10 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	core "github.com/libp2p/go-libp2p-core"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/transport"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/p2p/net/conngater"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/spf13/viper"
@@ -28,7 +28,12 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 )
+
+// peersHighWatermarkDelta specifies how many peers after the maximum peer count is reached we ask
+// the connection manager to start pruning peers.
+const peersHighWatermarkDelta = 30
 
 // messageIdContext is the domain separation context for computing message identifier hashes.
 var messageIdContext = []byte("oasis-core/p2p: message id")
@@ -230,22 +235,36 @@ func (p *P2P) RegisterHandler(runtimeID common.Namespace, kind TopicKind, handle
 	)
 }
 
-func (p *P2P) handleConnection(conn core.Conn) {
-	if conn.Stat().Direction != network.DirInbound {
-		return
-	}
-
-	p.logger.Debug("new connection from peer",
-		"peer_id", conn.RemotePeer(),
-	)
-}
-
 func (p *P2P) topicIDForRuntime(runtimeID common.Namespace, kind TopicKind) string {
 	return fmt.Sprintf("%s/%d/%s/%s",
 		p.chainContext,
 		version.RuntimeCommitteeProtocol.Major,
 		runtimeID.String(),
 		kind,
+	)
+}
+
+// BlockPeer blocks a specific peer from being used by the local node.
+func (p *P2P) BlockPeer(peerID core.PeerID) {
+	p.logger.Warn("blocking peer",
+		"peer_id", peerID,
+	)
+
+	p.pubsub.BlacklistPeer(peerID)
+	p.PeerManager.blockPeer(peerID)
+}
+
+// GetHost returns the P2P host.
+func (p *P2P) GetHost() core.Host {
+	return p.host
+}
+
+// RegisterProtocolServer registers a protocol server for the given protocol.
+func (p *P2P) RegisterProtocolServer(srv rpc.Server) {
+	p.host.SetStreamHandler(srv.Protocol(), srv.HandleStream)
+
+	p.logger.Info("registered protocol server",
+		"protocol_id", srv.Protocol(),
 	)
 }
 
@@ -287,18 +306,38 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port),
 	)
 
-	// Oh hey, they finally got around to fixing the NAT traversal code,
-	// so if people feel brave enough to want to interact with the
-	// mountain of terrible uPNP/NAT-PMP implementations out there,
-	// they can.
+	// Set up a connection manager so we can limit the number of connections.
+	low := int(viper.GetUint32(CfgP2PMaxNumPeers))
+	cm, err := connmgr.NewConnManager(
+		low,
+		low+peersHighWatermarkDelta,
+		connmgr.WithGracePeriod(viper.GetDuration(CfgP2PPeerGracePeriod)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("worker/common/p2p: failed to create connection manager: %w", err)
+	}
+
+	// Set up a connection gater.
+	cg, err := conngater.NewBasicConnectionGater(nil)
+	if err != nil {
+		return nil, fmt.Errorf("worker/common/p2p: failed to create connection gater: %w", err)
+	}
+
+	// Create the P2P host.
 	host, err := libp2p.New(
-		ctx,
+		libp2p.UserAgent(fmt.Sprintf("oasis-core/%s", version.SoftwareVersion)),
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(signerToPrivKey(identity.P2PSigner)),
+		libp2p.ConnectionManager(cm),
+		libp2p.ConnectionGater(cg),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p host: %w", err)
 	}
+	go func() {
+		<-ctx.Done()
+		_ = host.Close()
+	}()
 
 	// Initialize the gossipsub router.
 	pubsub, err := pubsub.NewGossipSub(
@@ -307,6 +346,7 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		pubsub.WithMessageSigning(true),
 		pubsub.WithStrictSignatureVerification(true),
 		pubsub.WithFloodPublish(true),
+		pubsub.WithPeerExchange(true),
 		pubsub.WithPeerOutboundQueueSize(viper.GetInt(CfgP2PPeerOutboundQueueSize)),
 		pubsub.WithValidateQueueSize(viper.GetInt(CfgP2PValidateQueueSize)),
 		pubsub.WithValidateThrottle(viper.GetInt(CfgP2PValidateThrottle)),
@@ -322,7 +362,7 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 	}
 
 	p := &P2P{
-		PeerManager:       newPeerManager(ctx, host, consensus),
+		PeerManager:       newPeerManager(ctx, host, cg, consensus),
 		ctx:               ctx,
 		chainContext:      chainContext,
 		host:              host,
@@ -331,16 +371,10 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		topics:            make(map[common.Namespace]map[TopicKind]*topicHandler),
 		logger:            logging.GetLogger("worker/common/p2p"),
 	}
-	p.host.Network().SetConnHandler(p.handleConnection)
 
 	p.logger.Info("p2p host initialized",
 		"address", fmt.Sprintf("%+v", host.Addrs()),
 	)
 
 	return p, nil
-}
-
-func init() {
-	// Make sure to decrease (global!) transport timeouts.
-	transport.AcceptTimeout = 5 * time.Second
 }

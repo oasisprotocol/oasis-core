@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"time"
+
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -24,6 +26,10 @@ const (
 	// CfgP2PConnectednessLowWater sets the ratio of connected to unconnected peers at which
 	// the peer manager will try to reconnect to disconnected nodes.
 	CfgP2PConnectednessLowWater = "worker.p2p.connectedness_low_water"
+	// CfgP2PMaxNumPeers is the maximum number of peers.
+	CfgP2PMaxNumPeers = "worker.p2p.max_num_peers"
+	// CfgP2PPeerGracePeriod is the peer grace period.
+	CfgP2PPeerGracePeriod = "worker.p2p.peer_grace_period"
 )
 
 // Flags has the configuration flags.
@@ -37,6 +43,8 @@ func init() {
 	Flags.Int64(CfgP2PValidateConcurrency, 1024, "Set libp2p gossipsub per topic validator concurrency limit")
 	Flags.Int64(CfgP2PValidateThrottle, 8192, "Set libp2p gossipsub validator concurrency limit")
 	Flags.Float64(CfgP2PConnectednessLowWater, 0.2, "Set the low water mark at which the peer manager will try to reconnect to peers")
+	Flags.Uint32(CfgP2PMaxNumPeers, 100, "Set maximum number of P2P peers")
+	Flags.Duration(CfgP2PPeerGracePeriod, 20*time.Second, "Time duration for new peer connections to be immune from pruning")
 
 	_ = viper.BindPFlags(Flags)
 }
