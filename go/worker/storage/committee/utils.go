@@ -54,6 +54,7 @@ func (o outstandingMask) hasAll() bool {
 }
 
 type inFlight struct {
+	startedAt     time.Time
 	outstanding   outstandingMask
 	awaitingRetry outstandingMask
 }

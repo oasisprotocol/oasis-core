@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/eapache/channels"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
@@ -41,38 +40,6 @@ var (
 
 	// ErrNonLocalBackend is the error returned when the storage backend doesn't implement the LocalBackend interface.
 	ErrNonLocalBackend = errors.New("storage: storage backend doesn't support local storage")
-
-	storageWorkerLastFullRound = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "oasis_worker_storage_full_round",
-			Help: "The last round that was fully synced and finalized.",
-		},
-		[]string{"runtime"},
-	)
-
-	storageWorkerLastSyncedRound = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "oasis_worker_storage_synced_round",
-			Help: "The last round that was synced but not yet finalized.",
-		},
-		[]string{"runtime"},
-	)
-
-	storageWorkerLastPendingRound = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "oasis_worker_storage_pending_round",
-			Help: "The last round that is in-flight for syncing.",
-		},
-		[]string{"runtime"},
-	)
-
-	storageWorkerCollectors = []prometheus.Collector{
-		storageWorkerLastFullRound,
-		storageWorkerLastSyncedRound,
-		storageWorkerLastPendingRound,
-	}
-
-	prometheusOnce sync.Once
 )
 
 const (
@@ -212,6 +179,8 @@ func NewNode(
 	checkpointerCfg *checkpoint.CheckpointerConfig,
 	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Node, error) {
+	initMetrics()
+
 	n := &Node{
 		commonNode: commonNode,
 
@@ -316,10 +285,6 @@ func NewNode(
 	// Update service policy.
 	n.updateExternalServicePolicy()
 
-	prometheusOnce.Do(func() {
-		prometheus.MustRegister(storageWorkerCollectors...)
-	})
-
 	return n, nil
 }
 
@@ -368,12 +333,6 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	return &api.Status{
 		LastFinalizedRound: n.syncedState.LastBlock.Round,
 	}, nil
-}
-
-func (n *Node) getMetricLabels() prometheus.Labels {
-	return prometheus.Labels{
-		"runtime": n.commonNode.Runtime.ID().String(),
-	}
 }
 
 func (n *Node) WaitForRound(round uint64, root *storageApi.Root) (<-chan uint64, error) {
@@ -1085,6 +1044,7 @@ func (n *Node) worker() { // nolint: gocyclo
 				}
 
 				syncing = &inFlight{
+					startedAt:     time.Now(),
 					awaitingRetry: outstandingMaskFull,
 				}
 				syncingRounds[i] = syncing
@@ -1190,6 +1150,7 @@ mainLoop:
 					delete(hashCache, lastDiff.round-1)
 
 					storageWorkerLastSyncedRound.With(n.getMetricLabels()).Set(float64(lastDiff.round))
+					storageWorkerRoundSyncLatency.With(n.getMetricLabels()).Observe(time.Since(syncing.startedAt).Seconds())
 
 					// Finalize storage for this round. This happens asynchronously
 					// with respect to Apply operations for subsequent rounds.
@@ -1298,6 +1259,8 @@ mainLoop:
 			} else {
 				heap.Push(outOfOrderDoneDiffs, item)
 			}
+
+			triggerRoundFetches()
 
 		case finalized := <-n.finalizeCh:
 			// If finalization failed, things start falling apart.
