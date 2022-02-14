@@ -31,6 +31,6 @@ var (
 // QueryForRuntime returns a query for filtering transactions processed by the roothash application
 // limited to a specific runtime.
 func QueryForRuntime(runtimeID common.Namespace) tmpubsub.Query {
-	ev := roothash.RuntimeIDAttribute(runtimeID)
+	ev := roothash.RuntimeIDAttribute{ID: runtimeID}
 	return tmquery.MustParse(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, ev.EventKind(), ev.EventValue()))
 }

@@ -12,13 +12,13 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -287,40 +287,40 @@ func EventsFromTendermint(
 			val := pair.GetValue()
 
 			switch {
-			case tmapi.IsAttributeKind(key, &api.NodeListEpochEvent{}):
-				// Node list epoch event.
+			case eventsAPI.IsAttributeKind(key, &api.NodeListEpochEvent{}):
+				// Node list epoch event (value is ignored).
 				nodeListEvents = append(nodeListEvents, &NodeListEpochInternalEvent{Height: height})
-			case tmapi.IsAttributeKind(key, &api.RuntimeEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.RuntimeEvent{}):
 				// Runtime registered event.
 				var e api.RuntimeEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Runtime event: %w", err))
 					continue
 				}
 
 				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeEvent: &e})
-			case tmapi.IsAttributeKind(key, &api.EntityEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.EntityEvent{}):
 				// Entity event.
 				var e api.EntityEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Entity event: %w", err))
 					continue
 				}
 
 				events = append(events, &api.Event{Height: height, TxHash: txHash, EntityEvent: &e})
-			case tmapi.IsAttributeKind(key, &api.NodeEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.NodeEvent{}):
 				// Node event.
 				var e api.NodeEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Node event: %w", err))
 					continue
 				}
 
 				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeEvent: &e})
-			case tmapi.IsAttributeKind(key, &api.NodeUnfrozenEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.NodeUnfrozenEvent{}):
 				// Node unfrozen event.
 				var e api.NodeUnfrozenEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
 					continue
 				}

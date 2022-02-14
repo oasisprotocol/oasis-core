@@ -183,7 +183,7 @@ func (app *rootHashApplication) executorCommit(
 		ctx.EmitEvent(
 			abciAPI.NewEventBuilder(app.Name()).
 				TypedAttribute(&roothash.ExecutorCommittedEvent{Commit: commit}).
-				CustomTypedAttribute(roothash.RuntimeIDAttribute(cc.ID)),
+				TypedAttribute(&roothash.RuntimeIDAttribute{ID: cc.ID}),
 		)
 	}
 

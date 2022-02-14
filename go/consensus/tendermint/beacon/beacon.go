@@ -14,12 +14,12 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
@@ -283,10 +283,10 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
 
 func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
-		if tmAPI.IsAttributeKind(pair.GetKey(), &beaconAPI.EpochEvent{}) {
+		if events.IsAttributeKind(pair.GetKey(), &beaconAPI.EpochEvent{}) {
 			var event beaconAPI.EpochEvent
-			if err := cbor.Unmarshal(pair.GetValue(), &event); err != nil {
-				sc.logger.Error("epochtime: malformed epoch",
+			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+				sc.logger.Error("epochtime: malformed epoch event value",
 					"err", err,
 				)
 				continue
@@ -296,9 +296,9 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 				sc.epochNotifier.Broadcast(event.Epoch)
 			}
 		}
-		if tmAPI.IsAttributeKind(pair.GetKey(), &beaconAPI.VRFEvent{}) {
+		if events.IsAttributeKind(pair.GetKey(), &beaconAPI.VRFEvent{}) {
 			var event beaconAPI.VRFEvent
-			if err := cbor.Unmarshal(pair.GetValue(), &event); err != nil {
+			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
 				sc.logger.Error("beacon: malformed VRF event",
 					"err", err,
 				)

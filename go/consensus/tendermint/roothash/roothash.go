@@ -15,11 +15,11 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -434,24 +434,27 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 				val := pair.GetValue()
 
 				switch {
-				case tmapi.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
-					// Runtime ID attribute (Base64-encoded to allow queries).
+				case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
 					if evRtID != nil {
 						return 0, fmt.Errorf("roothash: duplicate runtime ID attribute")
 					}
-					evRtID = &common.Namespace{}
-					if err = evRtID.UnmarshalBase64(val); err != nil {
+
+					var rtAttribute api.RuntimeIDAttribute
+					if err = eventsAPI.DecodeValue(string(val), &rtAttribute); err != nil {
 						return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
 					}
+					evRtID = &rtAttribute.ID
 
-				case tmapi.IsAttributeKind(key, &api.FinalizedEvent{}):
-					if err = cbor.Unmarshal(val, &ev); err != nil {
+				case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
+					var e api.FinalizedEvent
+					if err = eventsAPI.DecodeValue(string(val), &e); err != nil {
 						logger.Error("failed to unmarshal finalized event",
 							"err", err,
 							"height", height,
 						)
 						return 0, fmt.Errorf("failed to unmarshal finalized event: %w", err)
 					}
+					ev = &e
 				default:
 				}
 			}
@@ -721,53 +724,53 @@ EventLoop:
 			val := pair.GetValue()
 
 			switch {
-			case tmapi.IsAttributeKind(key, &api.FinalizedEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
 				// Finalized event.
 				var e api.FinalizedEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
 					continue EventLoop
 				}
 
 				ev = &api.Event{Finalized: &e}
-			case tmapi.IsAttributeKind(key, &api.ExecutionDiscrepancyDetectedEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.ExecutionDiscrepancyDetectedEvent{}):
 				// An execution discrepancy has been detected.
 				var e api.ExecutionDiscrepancyDetectedEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err))
 					continue EventLoop
 				}
 
 				ev = &api.Event{ExecutionDiscrepancyDetected: &e}
-			case tmapi.IsAttributeKind(key, &api.ExecutorCommittedEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.ExecutorCommittedEvent{}):
 				// An executor commit has been processed.
 				var e api.ExecutorCommittedEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutorComitted event: %w", err))
 					continue EventLoop
 				}
 
 				ev = &api.Event{ExecutorCommitted: &e}
-			case tmapi.IsAttributeKind(key, &api.InMsgProcessedEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.InMsgProcessedEvent{}):
 				// Incoming message processed event.
 				var e api.InMsgProcessedEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt InMsgProcessed event: %w", err))
 					continue EventLoop
 				}
 
 				ev = &api.Event{InMsgProcessed: &e}
-			case tmapi.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
-				// Runtime ID attribute (Base64-encoded to allow queries).
+			case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
 				if runtimeID != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: duplicate runtime ID attribute"))
 					continue EventLoop
 				}
-				runtimeID = &common.Namespace{}
-				if err := runtimeID.UnmarshalBase64(val); err != nil {
+				rtAttribute := api.RuntimeIDAttribute{}
+				if err := eventsAPI.DecodeValue(string(val), &rtAttribute); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt runtime ID: %w", err))
 					continue EventLoop
 				}
+				runtimeID = &rtAttribute.ID
 			default:
 				errs = multierror.Append(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
 			}

@@ -11,11 +11,11 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -328,70 +328,70 @@ func EventsFromTendermint(
 			val := pair.GetValue()
 
 			switch {
-			case tmapi.IsAttributeKind(key, &api.TakeEscrowEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.TakeEscrowEvent{}):
 				// Take escrow event.
 				var e api.TakeEscrowEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Take: &e}}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.TransferEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.TransferEvent{}):
 				// Transfer event.
 				var e api.TransferEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Transfer event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Transfer: &e}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.ReclaimEscrowEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.ReclaimEscrowEvent{}):
 				// Reclaim escrow event.
 				var e api.ReclaimEscrowEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Reclaim: &e}}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.AddEscrowEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.AddEscrowEvent{}):
 				// Add escrow event.
 				var e api.AddEscrowEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AddEscrow event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{Add: &e}}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.DebondingStartEscrowEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.DebondingStartEscrowEvent{}):
 				// Debonding start escrow event.
 				var e api.DebondingStartEscrowEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt DebondingStart escrow event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Escrow: &api.EscrowEvent{DebondingStart: &e}}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.BurnEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.BurnEvent{}):
 				// Burn event.
 				var e api.BurnEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Burn event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Burn: &e}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.AllowanceChangeEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.AllowanceChangeEvent{}):
 				// Allowance change event.
 				var e api.AllowanceChangeEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AllowanceChange event: %w", err))
 					continue
 				}

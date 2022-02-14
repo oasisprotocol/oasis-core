@@ -11,10 +11,10 @@ import (
 	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance"
 	"github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -210,40 +210,40 @@ func EventsFromTendermint(
 			val := pair.GetValue()
 
 			switch {
-			case tmapi.IsAttributeKind(key, &api.ProposalSubmittedEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.ProposalSubmittedEvent{}):
 				// Proposal submitted event.
 				var e api.ProposalSubmittedEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalSubmitted event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, ProposalSubmitted: &e}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.ProposalExecutedEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.ProposalExecutedEvent{}):
 				//  Proposal executed event.
 				var e api.ProposalExecutedEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalExecuted event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, ProposalExecuted: &e}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.ProposalFinalizedEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.ProposalFinalizedEvent{}):
 				// Proposal finalized event.
 				var e api.ProposalFinalizedEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalFinalized event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, ProposalFinalized: &e}
 				events = append(events, evt)
-			case tmapi.IsAttributeKind(key, &api.VoteEvent{}):
+			case eventsAPI.IsAttributeKind(key, &api.VoteEvent{}):
 				// Vote event.
 				var e api.VoteEvent
-				if err := cbor.Unmarshal(val, &e); err != nil {
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt Vote event: %w", err))
 					continue
 				}

@@ -74,7 +74,7 @@ func (app *rootHashApplication) OnCleanup() {
 
 func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context, request types.RequestBeginBlock) error {
 	// Check if rescheduling has taken place.
-	rescheduled := ctx.HasTypedEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
+	rescheduled := ctx.HasEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
 	// Check if there was an epoch transition.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 
@@ -293,7 +293,7 @@ func (app *rootHashApplication) emitEmptyBlock(ctx *tmapi.Context, runtime *root
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
 			TypedAttribute(&roothash.FinalizedEvent{Round: blk.Header.Round}).
-			CustomTypedAttribute(roothash.RuntimeIDAttribute(runtime.Runtime.ID)),
+			TypedAttribute(&roothash.RuntimeIDAttribute{ID: runtime.Runtime.ID}),
 	)
 	return nil
 }
@@ -446,7 +446,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	ctx.EmitEvent(
 		tmapi.NewEventBuilder(app.Name()).
 			TypedAttribute(&roothash.FinalizedEvent{Round: genesisBlock.Header.Round}).
-			CustomTypedAttribute(roothash.RuntimeIDAttribute(runtime.ID)),
+			TypedAttribute(&roothash.RuntimeIDAttribute{ID: runtime.ID}),
 	)
 	return nil
 }
@@ -527,7 +527,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
 				TypedAttribute(&roothash.ExecutionDiscrepancyDetectedEvent{Timeout: forced}).
-				CustomTypedAttribute(roothash.RuntimeIDAttribute(runtime.ID)),
+				TypedAttribute(&roothash.RuntimeIDAttribute{ID: runtime.ID}),
 		)
 
 		// We may also be able to already perform discrepancy resolution, check if this is possible
@@ -590,7 +590,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 							Caller: msg.Caller,
 							Tag:    msg.Tag,
 						}).
-						CustomTypedAttribute(roothash.RuntimeIDAttribute(rtState.Runtime.ID)),
+						TypedAttribute(&roothash.RuntimeIDAttribute{ID: rtState.Runtime.ID}),
 				)
 			}
 			err = state.SetIncomingMessageQueueMeta(ctx, rtState.Runtime.ID, meta)
@@ -697,7 +697,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits(
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
 				TypedAttribute(&roothash.FinalizedEvent{Round: blk.Header.Round}).
-				CustomTypedAttribute(roothash.RuntimeIDAttribute(rtState.Runtime.ID)),
+				TypedAttribute(&roothash.RuntimeIDAttribute{ID: rtState.Runtime.ID}),
 		)
 
 		return nil

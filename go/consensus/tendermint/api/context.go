@@ -8,9 +8,9 @@ import (
 
 	"github.com/tendermint/tendermint/abci/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
@@ -347,17 +347,17 @@ func (c *Context) hasEvent(app string, key []byte) bool {
 	return false
 }
 
-// HasTypedEvent checks if a specific typed event has been emitted.
-func (c *Context) HasTypedEvent(app string, kind TypedAttribute) bool {
+// HasEvent checks if a specific event has been emitted.
+func (c *Context) HasEvent(app string, kind events.TypedAttribute) bool {
 	return c.hasEvent(app, []byte(kind.EventKind()))
 }
 
-// DecodeTypedEvent decodes the given raw event as a specific typed event.
-func (c *Context) DecodeTypedEvent(index int, ev TypedAttribute) error {
+// DecodeEvent decodes the given raw event as a specific typed event.
+func (c *Context) DecodeEvent(index int, ev events.TypedAttribute) error {
 	raw := c.events[index]
 	for _, pair := range raw.Attributes {
-		if bytes.Equal(pair.GetKey(), []byte(ev.EventKind())) {
-			return cbor.Unmarshal(pair.GetValue(), ev)
+		if events.IsAttributeKind(pair.GetKey(), ev) {
+			return events.DecodeValue(string(pair.GetValue()), ev)
 		}
 	}
 	return fmt.Errorf("incompatible event")

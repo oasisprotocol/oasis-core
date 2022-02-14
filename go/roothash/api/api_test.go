@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -649,4 +650,21 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 			require.NoError(err, ev.msg)
 		}
 	}
+}
+
+func TestRuntimeIDAttribute(t *testing.T) {
+	var runtimeID common.Namespace
+	require.NoError(t, runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000"), "runtime id")
+
+	attribute := RuntimeIDAttribute{ID: runtimeID}
+	val := attribute.EventValue()
+	require.EqualValues(t, val, "gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+
+	var attribute2 RuntimeIDAttribute
+	require.NoError(t, attribute2.DecodeValue(val), "decode value")
+
+	require.EqualValues(t, attribute, attribute2, "value should round trip")
+
+	val2 := events.EncodeValue(&attribute)
+	require.EqualValues(t, val, val2, "events.EncodeValue should encode correctly")
 }
