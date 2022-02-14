@@ -279,7 +279,7 @@ type ProposalSubmittedEvent struct {
 
 // EventKind returns a string representation of this event's kind.
 func (e *ProposalSubmittedEvent) EventKind() string {
-	return "proposal-submitted"
+	return "proposal_submitted"
 }
 
 // ProposalExecutedEvent is emitted when a proposal is executed.
@@ -290,7 +290,7 @@ type ProposalExecutedEvent struct {
 
 // EventKind returns a string representation of this event's kind.
 func (e *ProposalExecutedEvent) EventKind() string {
-	return "proposal-executed"
+	return "proposal_executed"
 }
 
 // ProposalFinalizedEvent is the event emitted when a proposal is finalized.
@@ -303,7 +303,7 @@ type ProposalFinalizedEvent struct {
 
 // EventKind returns a string representation of this event's kind.
 func (e *ProposalFinalizedEvent) EventKind() string {
-	return "proposal-finalized"
+	return "proposal_finalized"
 }
 
 // VoteEvent is the event emitted when a vote is cast.

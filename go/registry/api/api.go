@@ -284,7 +284,7 @@ type EntityEvent struct {
 
 // EventKind returns a string representation of this event's kind.
 func (e *EntityEvent) EventKind() string {
-	return "entity-event"
+	return "entity"
 }
 
 // NodeEvent is the event that is returned via WatchNodes to signify node
@@ -296,7 +296,7 @@ type NodeEvent struct {
 
 // EventKind returns a string representation of this event's kind.
 func (e *NodeEvent) EventKind() string {
-	return "node-event"
+	return "node"
 }
 
 // RuntimeEvent signifies new runtime registration.
@@ -306,7 +306,7 @@ type RuntimeEvent struct {
 
 // EventKind returns a string representation of this event's kind.
 func (e *RuntimeEvent) EventKind() string {
-	return "runtime-event"
+	return "runtime"
 }
 
 // NodeUnfrozenEvent signifies when node becomes unfrozen.
@@ -316,7 +316,7 @@ type NodeUnfrozenEvent struct {
 
 // EventKind returns a string representation of this event's kind.
 func (e *NodeUnfrozenEvent) EventKind() string {
-	return "node-unfrozen-event"
+	return "node_unfrozen"
 }
 
 var _ events.CustomTypedAttribute = (*NodeListEpochEvent)(nil)
@@ -326,7 +326,7 @@ type NodeListEpochEvent struct{}
 
 // EventKind returns a string representation of this event's kind.
 func (e *NodeListEpochEvent) EventKind() string {
-	return "node-list-epoch-event"
+	return "node_list_epoch"
 }
 
 // EventValue returns a string representation of this event's kind.
