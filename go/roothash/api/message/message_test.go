@@ -38,8 +38,8 @@ func TestMessageHash(t *testing.T) {
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
-		}}}}, "24f5e1502f9cfaa64404cc4fea4a4b6f799baefad6f18c9c805b82b727e15d25"},
-		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "ba161c59194e6991af9ba2ae2efe77e3dd245956185bcb82ff2db226fed63cdb"},
+		}}}}, "b5a085557952197dbda113702e86b1c749aec44b71a8c8264bf2d4cae08e05bb"},
+		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "f13ffad395a426fb234c2bc99406d78fac17ef42b546eaf9ff6ca8b515a4cb2f"},
 	} {
 		var h hash.Hash
 		err := h.UnmarshalHex(tc.expectedHash)
@@ -97,7 +97,6 @@ func newTestRuntime() *registry.Runtime {
 			MaxMessages:       32,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			Algorithm:         registry.TxnSchedulerSimple,
 			BatchFlushTimeout: 20 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,

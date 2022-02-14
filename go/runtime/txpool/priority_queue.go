@@ -1,5 +1,4 @@
-// Package priorityqueue implements a tx pool backed by a priority queue.
-package priorityqueue
+package txpool
 
 import (
 	"bytes"
@@ -9,12 +8,9 @@ import (
 	"github.com/google/btree"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
-
-// Name is the name of the tx pool implementation.
-const Name = "priority-queue"
 
 type item struct {
 	tx *transaction.CheckedTransaction
@@ -45,12 +41,6 @@ type priorityQueue struct {
 	lowestPriority uint64
 }
 
-// Implements api.TxPool.
-func (q *priorityQueue) Name() string {
-	return Name
-}
-
-// Implements api.TxPool.
 func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 	q.Lock()
 	defer q.Unlock()
@@ -61,7 +51,7 @@ func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 		needsPop = true
 
 		if tx.Priority() <= q.lowestPriority {
-			return api.ErrFull
+			return fmt.Errorf("tx pool is full")
 		}
 	}
 
@@ -97,7 +87,6 @@ func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 	return nil
 }
 
-// Implements api.TxPool.
 func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 	q.Lock()
 	defer q.Unlock()
@@ -201,7 +190,6 @@ func (q *priorityQueue) removeTxsLocked(items []*item) {
 	}
 }
 
-// Implements api.TxPool.
 func (q *priorityQueue) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction {
 	q.Lock()
 	defer q.Unlock()
@@ -252,7 +240,6 @@ func (q *priorityQueue) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*
 	return batch
 }
 
-// Implements api.TxPool.
 func (q *priorityQueue) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {
 	q.Lock()
 	defer q.Unlock()
@@ -270,7 +257,6 @@ func (q *priorityQueue) GetKnownBatch(batch []hash.Hash) ([]*transaction.Checked
 	return result, missing
 }
 
-// Implements api.TxPool.
 func (q *priorityQueue) GetTransactions(limit int) []*transaction.CheckedTransaction {
 	q.Lock()
 	defer q.Unlock()
@@ -290,8 +276,7 @@ func (q *priorityQueue) GetTransactions(limit int) []*transaction.CheckedTransac
 	return result
 }
 
-// Implements api.TxPool.
-func (q *priorityQueue) RemoveBatch(batch []hash.Hash) {
+func (q *priorityQueue) RemoveTxBatch(batch []hash.Hash) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -304,7 +289,6 @@ func (q *priorityQueue) RemoveBatch(batch []hash.Hash) {
 	q.removeTxsLocked(items)
 }
 
-// Implements api.TxPool.
 func (q *priorityQueue) IsQueued(txHash hash.Hash) bool {
 	q.Lock()
 	defer q.Unlock()
@@ -312,7 +296,6 @@ func (q *priorityQueue) IsQueued(txHash hash.Hash) bool {
 	return q.isQueuedLocked(txHash)
 }
 
-// Implements api.TxPool.
 func (q *priorityQueue) Size() uint64 {
 	q.Lock()
 	defer q.Unlock()
@@ -320,18 +303,22 @@ func (q *priorityQueue) Size() uint64 {
 	return q.poolWeights[transaction.WeightCount]
 }
 
-// Implements api.TxPool.
-func (q *priorityQueue) UpdateConfig(cfg api.Config) {
+func (q *priorityQueue) UpdateMaxPoolSize(maxPoolSize uint64) {
 	q.Lock()
 	defer q.Unlock()
 
-	q.maxTxPoolSize = cfg.MaxPoolSize
-	q.weightLimits = cfg.WeightLimits
-
+	q.maxTxPoolSize = maxPoolSize
 	// Any transaction not within the new limits will get removed during GetBatch iteration.
 }
 
-// Implements api.TxPool.
+func (q *priorityQueue) UpdateWeightLimits(limits map[transaction.Weight]uint64) {
+	q.Lock()
+	defer q.Unlock()
+
+	q.weightLimits = limits
+	// Any transaction not within the new limits will get removed during GetBatch iteration.
+}
+
 func (q *priorityQueue) Clear() {
 	q.Lock()
 	defer q.Unlock()
@@ -348,12 +335,12 @@ func (q *priorityQueue) checkTxLocked(tx *transaction.CheckedTransaction) error 
 	for w, l := range q.weightLimits {
 		txW := tx.Weight(w)
 		if txW > l {
-			return fmt.Errorf("transaction doesn't fit batch weight limit: %w", api.ErrCallTooLarge)
+			return p2pError.Permanent(fmt.Errorf("call too large"))
 		}
 	}
 
 	if q.isQueuedLocked(tx.Hash()) {
-		return api.ErrCallAlreadyExists
+		return fmt.Errorf("tx already exists in pool")
 	}
 
 	return nil
@@ -365,13 +352,12 @@ func (q *priorityQueue) isQueuedLocked(txHash hash.Hash) bool {
 	return ok
 }
 
-// New returns a new TxPool.
-func New(cfg api.Config) api.TxPool {
+func newPriorityQueue(maxPoolSize uint64, weightLimits map[transaction.Weight]uint64) *priorityQueue {
 	return &priorityQueue{
 		transactions:  make(map[hash.Hash]*item),
 		poolWeights:   make(map[transaction.Weight]uint64),
 		priorityIndex: btree.New(2),
-		maxTxPoolSize: cfg.MaxPoolSize,
-		weightLimits:  cfg.WeightLimits,
+		maxTxPoolSize: maxPoolSize,
+		weightLimits:  weightLimits,
 	}
 }

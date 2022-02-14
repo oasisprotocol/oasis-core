@@ -7,7 +7,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling/simple/txpool/api"
 )
 
 type pendingTx struct {
@@ -37,7 +36,7 @@ func (q *checkTxQueue) Add(tx *pendingTx) error {
 
 	// Check if there is room in the queue.
 	if uint64(q.queue.Len()) >= q.maxTxPoolSize {
-		return api.ErrFull
+		return fmt.Errorf("tx pool is full")
 	}
 
 	if err := q.checkTxLocked(tx.Tx, tx.TxHash); err != nil {
@@ -123,7 +122,7 @@ func (q *checkTxQueue) isQueuedLocked(txHash hash.Hash) bool {
 // NOTE: Assumes lock is held.
 func (q *checkTxQueue) checkTxLocked(tx []byte, txHash hash.Hash) error {
 	if q.isQueuedLocked(txHash) {
-		return api.ErrCallAlreadyExists
+		return fmt.Errorf("tx already exists in pool")
 	}
 
 	return nil

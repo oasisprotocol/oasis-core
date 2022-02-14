@@ -94,7 +94,6 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MaxMessages:     128,
 			},
 			TxnScheduler: registry.TxnSchedulerParameters{
-				Algorithm:         registry.TxnSchedulerSimple,
 				MaxBatchSize:      1,
 				MaxBatchSizeBytes: 1024,
 				BatchFlushTimeout: 1 * time.Second,

@@ -1773,7 +1773,6 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			MaxMessages:       32,
 		},
 		TxnScheduler: api.TxnSchedulerParameters{
-			Algorithm:         api.TxnSchedulerSimple,
 			BatchFlushTimeout: 20 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,

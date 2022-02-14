@@ -45,9 +45,6 @@ const (
 	kindInvalid    = "invalid"
 	kindCompute    = "compute"
 	kindKeyManager = "keymanager"
-
-	// TxnSchedulerSimple is the name of the simple batching algorithm.
-	TxnSchedulerSimple = "simple"
 )
 
 // String returns a string representation of a runtime kind.
@@ -115,9 +112,6 @@ func (e *ExecutorParameters) ValidateBasic() error {
 
 // TxnSchedulerParameters are parameters for the runtime transaction scheduler.
 type TxnSchedulerParameters struct {
-	// Algorithm is the transaction scheduling algorithm.
-	Algorithm string `json:"algorithm"`
-
 	// BatchFlushTimeout denotes, if using the "simple" algorithm, how long to
 	// wait for a scheduled batch.
 	BatchFlushTimeout time.Duration `json:"batch_flush_timeout"`
@@ -139,9 +133,6 @@ type TxnSchedulerParameters struct {
 // ValidateBasic performs basic transaction scheduler parameter validity checks.
 func (t *TxnSchedulerParameters) ValidateBasic() error {
 	// Ensure txnscheduler parameters have sensible values.
-	if t.Algorithm != TxnSchedulerSimple {
-		return fmt.Errorf("invalid transaction scheduler algorithm")
-	}
 	if t.BatchFlushTimeout < 50*time.Millisecond {
 		return fmt.Errorf("transaction scheduler batch flush timeout parameter too small")
 	}
