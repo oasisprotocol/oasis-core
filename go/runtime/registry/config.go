@@ -15,6 +15,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	hostMock "github.com/oasisprotocol/oasis-core/go/runtime/host/mock"
@@ -30,8 +31,7 @@ const (
 	CfgRuntimeProvisioner = "runtime.provisioner"
 	// CfgRuntimePaths confgures the paths for supported runtimes.
 	//
-	// The value should be a map of runtime IDs to corresponding resource paths (type of the
-	// resource depends on the provisioner).
+	// The value should be a vector of slices to the runtime bundles.
 	CfgRuntimePaths = "runtime.paths"
 	// CfgSandboxBinary configures the runtime sandbox binary location.
 	CfgSandboxBinary = "runtime.sandbox.binary"
@@ -39,10 +39,6 @@ const (
 	//
 	// The same loader is used for all runtimes.
 	CfgRuntimeSGXLoader = "runtime.sgx.loader"
-	// CfgRuntimeSGXSignatures configures signatures for supported runtimes.
-	//
-	// The value should be a map of runtime IDs to corresponding resource paths.
-	CfgRuntimeSGXSignatures = "runtime.sgx.signatures"
 
 	// CfgRuntimeConfig configures node-local runtime configuration.
 	CfgRuntimeConfig = "runtime.config"
@@ -57,6 +53,13 @@ const (
 
 	// CfgRuntimeMode configures how the runtime workers should behave on this node.
 	CfgRuntimeMode = "runtime.mode"
+
+	// CfgDebugMockIDs configures mock runtime IDs for the purpose
+	// of testing.
+	CfgDebugMockIDs = "runtime.debug.mock_ids"
+	// CfgDebugForceELF forces the selection of the ELF image in runtime
+	// bundles even if a SGX image is present.
+	CfgDebugForceELF = "runtime.debug.force_elf"
 )
 
 // Flags has the configuration flags.
@@ -117,6 +120,16 @@ func (m *RuntimeMode) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// IsClientOnly returns true iff the mode is one that has the node running
+// as a client for all configured runtimes.
+func (m RuntimeMode) IsClientOnly() bool {
+	switch m {
+	case RuntimeModeClient, RuntimeModeClientStateless:
+		return true
+	}
+	return false
+}
+
 // RuntimeConfig is the node runtime configuration.
 type RuntimeConfig struct {
 	// Mode is the runtime mode for this node.
@@ -152,7 +165,7 @@ type RuntimeHostConfig struct {
 	Runtimes map[common.Namespace]*runtimeHost.Config
 }
 
-func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, error) {
+func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
 	var cfg RuntimeConfig
 
 	// Parse configured runtime mode.
@@ -175,7 +188,7 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 	}
 
 	// Check if any runtimes are configured to be hosted.
-	if viper.IsSet(CfgRuntimePaths) {
+	if viper.IsSet(CfgRuntimePaths) || (cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs)) {
 		var rh RuntimeHostConfig
 
 		// Configure host environment information.
@@ -260,36 +273,55 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 		}
 
 		// Configure runtimes.
-		runtimeSGXSignatures := viper.GetStringMapString(CfgRuntimeSGXSignatures)
+		forceNoSGX := cfg.Mode.IsClientOnly() || (cmdFlags.DebugDontBlameOasis() && viper.GetBool(CfgDebugForceELF))
 		rh.Runtimes = make(map[common.Namespace]*runtimeHost.Config)
-		for runtimeID, path := range viper.GetStringMapString(CfgRuntimePaths) {
-			var id common.Namespace
-			if err := id.UnmarshalHex(runtimeID); err != nil {
-				return nil, fmt.Errorf("bad runtime identifier '%s': %w", runtimeID, err)
+		for _, path := range viper.GetStringSlice(CfgRuntimePaths) {
+			// Open and explode the bundle.  This will call Validate().
+			var bnd *bundle.Bundle
+			if bnd, err = bundle.Open(path); err != nil {
+				return nil, fmt.Errorf("failed to load runtime bundle '%s': %w", path, err)
+			}
+			if err = bnd.WriteExploded(dataDir); err != nil {
+				return nil, fmt.Errorf("failed to explode runtime bundle '%s': %w", path, err)
+			}
+
+			id := bnd.Manifest.ID
+			if rh.Runtimes[id] != nil {
+				// TODO: Support multiple versions of the same runtime.  The
+				// old version of this used a map, but the new version uses
+				// a vector so we need to de-duplicate for now.
+				return nil, fmt.Errorf("runtime '%s' already configured", id)
 			}
 
 			// Unmarshal any local runtime configuration.
 			var localConfig map[string]interface{}
 			if sub := viper.Sub(CfgRuntimeConfig); sub != nil {
-				if err := sub.UnmarshalKey(runtimeID, &localConfig); err != nil {
+				if err = sub.UnmarshalKey(id.String(), &localConfig); err != nil {
 					return nil, fmt.Errorf("bad runtime configuration: %w", err)
 				}
 			}
 
 			runtimeHostCfg := &runtimeHost.Config{
-				RuntimeID:   id,
-				Path:        path,
+				Bundle: &runtimeHost.RuntimeBundle{
+					Bundle: bnd,
+					Path:   bnd.ExplodedPath(dataDir, bnd.Manifest.Executable),
+				},
 				LocalConfig: localConfig,
 			}
 
-			// This config is SGX specific, but that's all that's supported
-			// right now that needs this anyway, the non-SGX provisioner
-			// currently ignores this.
-			if sigPath := runtimeSGXSignatures[runtimeID]; sigPath != "" {
-				runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
-					SignaturePath: sigPath,
+			var haveSGXSignature bool
+			if !forceNoSGX && bnd.Manifest.SGX != nil {
+				// If this is a TEE enclave, override the executable to point
+				// at the enclave binary instead.
+				runtimeHostCfg.Bundle.Path = bnd.ExplodedPath(dataDir, bnd.Manifest.SGX.Executable)
+				if bnd.Manifest.SGX.Signature != "" {
+					haveSGXSignature = true
+					runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
+						SignaturePath: bnd.ExplodedPath(dataDir, bnd.Manifest.SGX.Signature),
+					}
 				}
-			} else {
+			}
+			if !haveSGXSignature {
 				// HACK HACK HACK: Allow dummy SIGSTRUCT generation.
 				runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
 					UnsafeDebugGenerateSigstruct: true,
@@ -297,6 +329,28 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 			}
 
 			rh.Runtimes[id] = runtimeHostCfg
+		}
+		if cmdFlags.DebugDontBlameOasis() {
+			// This is to allow the mock provisioner to function, as it does
+			// not use an actual runtime, thus is missing a bundle.  This is
+			// only used for the basic node tests.
+			for _, idStr := range viper.GetStringSlice(CfgDebugMockIDs) {
+				var id common.Namespace
+				if err = id.UnmarshalText([]byte(idStr)); err != nil {
+					return nil, fmt.Errorf("failed to deserialize runtime ID: %w", err)
+				}
+
+				runtimeHostCfg := &runtimeHost.Config{
+					Bundle: &runtimeHost.RuntimeBundle{
+						Bundle: &bundle.Bundle{
+							Manifest: &bundle.Manifest{
+								ID: id,
+							},
+						},
+					},
+				}
+				rh.Runtimes[id] = runtimeHostCfg
+			}
 		}
 		if len(rh.Runtimes) == 0 {
 			return nil, fmt.Errorf("no runtimes configured")
@@ -327,16 +381,20 @@ func newConfig(consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, e
 
 func init() {
 	Flags.String(CfgRuntimeProvisioner, RuntimeProvisionerSandboxed, "Runtime provisioner to use")
-	Flags.StringToString(CfgRuntimePaths, nil, "Paths to runtime resources (format: <rt1-ID>=<path>,<rt2-ID>=<path>)")
+	Flags.StringSlice(CfgRuntimePaths, nil, "Paths to runtime resources (format: <path>,<path>,...)")
 	Flags.String(CfgSandboxBinary, "/usr/bin/bwrap", "Path to the sandbox binary (bubblewrap)")
 	Flags.String(CfgRuntimeSGXLoader, "", "(for SGX runtimes) Path to SGXS runtime loader binary")
-	Flags.StringToString(CfgRuntimeSGXSignatures, nil, "(for SGX runtimes) Paths to signatures (format: <rt1-ID>=<path>,<rt2-ID>=<path>")
 
 	Flags.String(CfgHistoryPrunerStrategy, history.PrunerStrategyNone, "History pruner strategy")
 	Flags.Duration(CfgHistoryPrunerInterval, 2*time.Minute, "History pruning interval")
 	Flags.Uint64(CfgHistoryPrunerKeepLastNum, 600, "Keep last history pruner: number of last rounds to keep")
 
 	Flags.String(CfgRuntimeMode, string(RuntimeModeNone), "Runtime mode (none, compute, keymanager, client, client-stateless)")
+
+	Flags.StringSlice(CfgDebugMockIDs, nil, "Mock runtime IDs (format: <path>,<path>,...)")
+	Flags.Bool(CfgDebugForceELF, false, "Force the use of the ELF image over any TEE images")
+	_ = Flags.MarkHidden(CfgDebugMockIDs)
+	_ = Flags.MarkHidden(CfgDebugForceELF)
 
 	_ = viper.BindPFlags(Flags)
 }

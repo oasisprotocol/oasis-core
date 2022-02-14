@@ -25,6 +25,7 @@ func (bnd *Bundle) Validate() error {
 	// Ensure all the files in the manifest are present.
 	type bundleFile struct {
 		descr, fn string
+		optional  bool
 	}
 	needFiles := []bundleFile{
 		{
@@ -40,14 +41,18 @@ func (bnd *Bundle) Validate() error {
 					fn:    sgx.Executable,
 				},
 				{
-					descr: "SGX signature",
-					fn:    sgx.Signature,
+					descr:    "SGX signature",
+					fn:       sgx.Signature,
+					optional: true,
 				},
 			}...,
 		)
 	}
 	for _, v := range needFiles {
 		if v.fn == "" {
+			if v.optional {
+				continue
+			}
 			return fmt.Errorf("runtime/bundle: missing %s in manifest", v.descr)
 		}
 		if len(bnd.Data[v.fn]) == 0 {
