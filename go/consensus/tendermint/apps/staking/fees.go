@@ -60,6 +60,10 @@ func (app *stakingApplication) disburseFeesP(
 		return fmt.Errorf("failed to set last block fees: %w", err)
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	// Pay the proposer.
 	feeProposerAmt := totalFees.Clone()
 	if proposerEntity != nil && !feeProposerAmt.IsZero() {
@@ -104,6 +108,8 @@ func (app *stakingApplication) disburseFeesP(
 			Amount: *remaining,
 		}))
 	}
+
+	ctx.Commit()
 
 	return nil
 }
@@ -175,6 +181,10 @@ func (app *stakingApplication) disburseFeesVQ(
 		return fmt.Errorf("multiply nextProposerTotal: %w", err)
 	}
 
+	// Start a new transaction to save changes atomically.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	// Pay the next proposer.
 	if !nextProposerTotal.IsZero() && proposerEntity != nil {
 		proposerAddr := staking.NewAddress(*proposerEntity)
@@ -242,6 +252,8 @@ func (app *stakingApplication) disburseFeesVQ(
 			Amount: *remaining,
 		}))
 	}
+
+	ctx.Commit()
 
 	return nil
 }
