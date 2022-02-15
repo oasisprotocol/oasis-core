@@ -72,9 +72,11 @@ var (
 		},
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
-		// Byzantine node entity should be slashed once for submitting incorrect commitment.
+		// Byzantine node entity should be slashed once for submitting incorrect commitment and
+		// again for not being live enough.
 		map[staking.SlashReason]uint64{
 			staking.SlashRuntimeIncorrectResults: 1,
+			staking.SlashRuntimeLiveness:         1,
 		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
@@ -97,7 +99,11 @@ var (
 		},
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
-		nil,
+		// Byzantine node entity should be slashed once for liveness (not participating in second
+		// round).
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
@@ -121,7 +127,11 @@ var (
 		},
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
-		nil,
+		// Byzantine node entity should be slashed once for liveness (not participating in second
+		// round).
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorProposeBogusTx},
@@ -144,7 +154,10 @@ var (
 		},
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
-		nil,
+		// Byzantine node entity should be slashed once for liveness.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
@@ -166,7 +179,11 @@ var (
 		},
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
-		nil,
+		// Byzantine node entity should be slashed once for liveness (not participating in second
+		// round).
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
@@ -190,7 +207,10 @@ var (
 		},
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
-		nil,
+		// Byzantine node entity should be slashed once for liveness.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
 		},
@@ -212,7 +232,11 @@ var (
 		},
 		oasis.ByzantineSlot1IdentitySeed,
 		false,
-		nil,
+		// Byzantine node entity should be slashed once for liveness (not participating in second
+		// round).
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
@@ -313,13 +337,18 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Add another entity (DeterministicEntity2) that will get slashed.
 	f.Entities = append(f.Entities, oasis.EntityCfg{})
 
+	f.Runtimes[1].Executor.MinLiveRoundsPercent = 100 // To test slashing.
+	f.Runtimes[1].Executor.MaxLivenessFailures = 1
 	f.Runtimes[1].Staking = registry.RuntimeStakingParameters{
 		Slashing: map[staking.SlashReason]staking.Slash{
 			staking.SlashRuntimeIncorrectResults: {
 				Amount: *quantity.NewFromUint64(50),
 			},
 			staking.SlashRuntimeEquivocation: {
-				Amount: *quantity.NewFromUint64(50),
+				Amount: *quantity.NewFromUint64(40),
+			},
+			staking.SlashRuntimeLiveness: {
+				Amount: *quantity.NewFromUint64(30),
 			},
 		},
 	}
@@ -392,7 +421,8 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 	}
 	defer blkSub.Close()
 
-	if _, err = sc.initialEpochTransitions(fixture); err != nil {
+	epoch, err := sc.initialEpochTransitions(fixture)
+	if err != nil {
 		return err
 	}
 
@@ -427,6 +457,16 @@ WatchBlocksLoop:
 		return err
 	}
 
+	// Advance epoch to trigger any liveness slashing/suspension.
+	sc.Logger.Info("triggering epoch transition")
+	if err = sc.Net.Controller().SetEpoch(ctx, epoch+1); err != nil {
+		return fmt.Errorf("failed to set epoch: %w", err)
+	}
+	sc.Logger.Info("triggering epoch transition")
+	if err = sc.Net.Controller().SetEpoch(ctx, epoch+2); err != nil {
+		return fmt.Errorf("failed to set epoch: %w", err)
+	}
+
 	// Ensure entity has expected stake.
 	sc.Logger.Info("ensuring entity has sufficient stake")
 	acc, err := sc.Net.ClientController().Staking.Account(ctx, &staking.OwnerQuery{
@@ -448,7 +488,7 @@ WatchBlocksLoop:
 		}
 	}
 	if expectedStake.Cmp(&acc.Escrow.Active.Balance) != 0 {
-		return fmt.Errorf("expected entity stake: %v got: %v", expectedStake, acc.General.Balance)
+		return fmt.Errorf("expected entity stake: %v got: %v", expectedStake, acc.Escrow.Active.Balance)
 	}
 
 	if sc.skipStorageSyncWait {

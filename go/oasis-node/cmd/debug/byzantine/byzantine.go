@@ -274,6 +274,11 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 		panic(fmt.Sprintf("compute publish to chain failed: %+v", err))
 	}
 	logger.Debug("executor: commitment sent")
+
+	// If this is supposed to be a storage node, keep it running forever.
+	if viper.GetBool(CfgCorruptGetDiff) {
+		select {}
+	}
 }
 
 // Register registers the byzantine sub-command and all of its children.

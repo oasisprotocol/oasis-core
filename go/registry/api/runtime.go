@@ -92,6 +92,19 @@ type ExecutorParameters struct {
 	// MaxMessages is the maximum number of messages that can be emitted by the runtime in a
 	// single round.
 	MaxMessages uint32 `json:"max_messages"`
+
+	// MinLiveRoundsPercent is the minimum percentage of rounds in an epoch that a node must
+	// participate in positively in order to be considered live. Nodes not satisfying this may be
+	// penalized.
+	MinLiveRoundsPercent uint8 `json:"min_live_rounds_percent,omitempty"`
+
+	// MinLiveRoundsForEvaluation is the minimum number of live rounds in an epoch for the liveness
+	// calculations to be considered for evaluation.
+	MinLiveRoundsForEvaluation uint64 `json:"min_live_rounds_eval,omitempty"`
+
+	// MaxLivenessFailures is the maximum number of liveness failures that are tolerated before
+	// suspending and/or slashing the node. Zero means unlimited.
+	MaxLivenessFailures uint8 `json:"max_liveness_fails,omitempty"`
 }
 
 // ValidateBasic performs basic executor parameter validity checks.
@@ -105,6 +118,10 @@ func (e *ExecutorParameters) ValidateBasic() error {
 
 	if e.RoundTimeout <= 0 {
 		return fmt.Errorf("round timeout too small")
+	}
+
+	if e.MinLiveRoundsPercent > 100 {
+		return fmt.Errorf("minimum live rounds percentage cannot be greater than 100")
 	}
 
 	return nil

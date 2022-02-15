@@ -113,6 +113,7 @@ func TestElectCommittee(t *testing.T) {
 		msg               string
 		kind              scheduler.CommitteeKind
 		nodes             []*node.Node
+		nodeStatuses      map[signature.PublicKey]*registry.NodeStatus
 		validatorEntities map[staking.Address]bool
 		rt                registry.Runtime
 		shouldElect       bool
@@ -121,6 +122,7 @@ func TestElectCommittee(t *testing.T) {
 			"executor: should not elect when everything is empty",
 			scheduler.KindComputeExecutor,
 			[]*node.Node{},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{},
 			false,
@@ -149,6 +151,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -170,6 +173,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles:    node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -205,6 +209,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -240,6 +245,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -275,6 +281,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -319,6 +326,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -363,6 +371,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -408,6 +417,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{
 				staking.NewAddress(entityID1): true,
 				staking.NewAddress(entityID2): true,
@@ -456,6 +466,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -503,6 +514,7 @@ func TestElectCommittee(t *testing.T) {
 					Roles: node.RoleComputeWorker,
 				},
 			},
+			map[signature.PublicKey]*registry.NodeStatus{},
 			map[staking.Address]bool{},
 			registry.Runtime{
 				ID:   rtID1,
@@ -523,7 +535,154 @@ func TestElectCommittee(t *testing.T) {
 			},
 			true,
 		},
+		{
+			"executor: frozen nodes are ineligible",
+			scheduler.KindComputeExecutor,
+			[]*node.Node{
+				{
+					ID:       nodeID1,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{
+						{ID: rtID1}, // Matching runtime ID.
+					},
+					Roles: node.RoleComputeWorker,
+				},
+				{
+					ID:       nodeID2,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{},  // No runtimes.
+					Roles:    node.RoleValidator, // Validator.
+				},
+				{
+					ID:       nodeID3,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{
+						{ID: rtID1}, // Matching runtime ID.
+					},
+					Roles: node.RoleComputeWorker,
+				},
+			},
+			map[signature.PublicKey]*registry.NodeStatus{
+				nodeID1: {
+					FreezeEndTime: 42, // Frozen.
+				},
+			},
+			map[staking.Address]bool{},
+			registry.Runtime{
+				ID:   rtID1,
+				Kind: registry.KindCompute,
+				Executor: registry.ExecutorParameters{
+					GroupSize:       2,
+					GroupBackupSize: 0,
+				},
+			},
+			false,
+		},
+		{
+			"executor: suspended nodes are ineligible",
+			scheduler.KindComputeExecutor,
+			[]*node.Node{
+				{
+					ID:       nodeID1,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{
+						{ID: rtID1}, // Matching runtime ID.
+					},
+					Roles: node.RoleComputeWorker,
+				},
+				{
+					ID:       nodeID2,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{},  // No runtimes.
+					Roles:    node.RoleValidator, // Validator.
+				},
+				{
+					ID:       nodeID3,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{
+						{ID: rtID1}, // Matching runtime ID.
+					},
+					Roles: node.RoleComputeWorker,
+				},
+			},
+			map[signature.PublicKey]*registry.NodeStatus{
+				nodeID1: {
+					Faults: map[common.Namespace]*registry.Fault{
+						rtID1: {
+							SuspendedUntil: 5, // Suspended (current epoch is 1).
+						},
+					},
+				},
+			},
+			map[staking.Address]bool{},
+			registry.Runtime{
+				ID:   rtID1,
+				Kind: registry.KindCompute,
+				Executor: registry.ExecutorParameters{
+					GroupSize:       2,
+					GroupBackupSize: 0,
+				},
+			},
+			false,
+		},
+		{
+			"executor: unsuspended nodes are eligible again",
+			scheduler.KindComputeExecutor,
+			[]*node.Node{
+				{
+					ID:       nodeID1,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{
+						{ID: rtID1}, // Matching runtime ID.
+					},
+					Roles: node.RoleComputeWorker,
+				},
+				{
+					ID:       nodeID2,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{},  // No runtimes.
+					Roles:    node.RoleValidator, // Validator.
+				},
+				{
+					ID:       nodeID3,
+					EntityID: entityID1,
+					Runtimes: []*node.Runtime{
+						{ID: rtID1}, // Matching runtime ID.
+					},
+					Roles: node.RoleComputeWorker,
+				},
+			},
+			map[signature.PublicKey]*registry.NodeStatus{
+				nodeID1: {
+					Faults: map[common.Namespace]*registry.Fault{
+						rtID1: {
+							SuspendedUntil: 1, // Not suspended (current epoch is 1).
+						},
+					},
+				},
+			},
+			map[staking.Address]bool{},
+			registry.Runtime{
+				ID:   rtID1,
+				Kind: registry.KindCompute,
+				Executor: registry.ExecutorParameters{
+					GroupSize:       2,
+					GroupBackupSize: 0,
+				},
+			},
+			true,
+		},
 	} {
+		var nodes []*nodeWithStatus
+		for _, node := range tc.nodes {
+			status, ok := tc.nodeStatuses[node.ID]
+			if !ok {
+				status = &registry.NodeStatus{}
+			}
+
+			nodes = append(nodes, &nodeWithStatus{node, status})
+		}
+
 		err := app.electCommittee(
 			ctx,
 			app.state,
@@ -534,7 +693,7 @@ func TestElectCommittee(t *testing.T) {
 			nil,
 			tc.validatorEntities,
 			&tc.rt,
-			tc.nodes,
+			nodes,
 			tc.kind,
 		)
 		require.NoError(err, "committee election should not fail")

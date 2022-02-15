@@ -18,7 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
+	storageP2P "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p"
 )
 
 type byzantine struct {
@@ -30,7 +30,6 @@ type byzantine struct {
 	p2p            *p2pHandle
 	storage        *storageWorker
 	storageClients []*storageClient
-	gRPC           *externalGrpc
 
 	runtimeID    common.Namespace
 	capabilities *node.Capabilities
@@ -49,8 +48,6 @@ func (b *byzantine) stop() error {
 	if err := b.p2p.stop(); err != nil {
 		return fmt.Errorf("p2p stop failed: %w", err)
 	}
-
-	b.gRPC.stop()
 
 	storageBroadcastCleanup(b.storageClients)
 
@@ -139,21 +136,12 @@ func initializeAndRegisterByzantineNode(
 		return nil, fmt.Errorf("P2P start failed: %w", err)
 	}
 
-	// Setup gRPC.
-	b.gRPC, err = newExternalGrpc(b.identity)
-	if err != nil {
-		return nil, fmt.Errorf("initializing grpc server failed: %w", err)
-	}
-
 	// Setup storage.
 	storage, err := newStorageNode(b.runtimeID, cmdCommon.DataDir())
 	if err != nil {
 		return nil, fmt.Errorf("initializing storage node failed: %w", err)
 	}
-	storageAPI.RegisterService(b.gRPC.grpc.Server(), storage)
-	if err = b.gRPC.start(); err != nil {
-		return nil, fmt.Errorf("starting grpc server failed: %w", err)
-	}
+	b.p2p.service.RegisterProtocolServer(storageP2P.NewServer(b.runtimeID, storage))
 	b.storage = storage
 
 	// Wait for activation epoch.

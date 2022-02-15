@@ -356,6 +356,7 @@ mod tests {
                 allowed_stragglers: 1,
                 round_timeout: 10,
                 max_messages: 32,
+                ..Default::default()
             },
             txn_scheduler: registry::TxnSchedulerParameters {
                 batch_flush_timeout: 20000000000, // 20 seconds.

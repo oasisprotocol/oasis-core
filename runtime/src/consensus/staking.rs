@@ -194,6 +194,8 @@ pub enum SlashReason {
     /// Slashing due to signing two different executor commits or proposed batches for the same
     /// round.
     RuntimeEquivocation = 0x81,
+    /// Slashing due to not doing the required work.
+    RuntimeLiveness = 0x82,
 }
 
 /// Per-reason slashing configuration.

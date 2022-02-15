@@ -28,6 +28,8 @@ const (
 	// SlashRuntimeEquivocation is slashing due to signing two different
 	// executor commits or proposed batches for the same round.
 	SlashRuntimeEquivocation SlashReason = 0x81
+	// SlashRuntimeLiveness is slashing due to not doing the required work.
+	SlashRuntimeLiveness SlashReason = 0x82
 
 	// SlashConsensusEquivocationName is the string representation of SlashConsensusEquivocation.
 	SlashConsensusEquivocationName = "consensus-equivocation"
@@ -37,6 +39,8 @@ const (
 	SlashRuntimeIncorrectResultsName = "runtime-incorrect-results"
 	// SlashRuntimeEquivocationName is the string representation of SlashRuntimeEquivocation.
 	SlashRuntimeEquivocationName = "runtime-equivocation"
+	// SlashRuntimeLivenessName is the string representation of SlashRuntimeLiveness.
+	SlashRuntimeLivenessName = "runtime-liveness"
 )
 
 // String returns a string representation of a SlashReason.
@@ -55,6 +59,8 @@ func (s SlashReason) checkedString() (string, error) {
 		return SlashRuntimeIncorrectResultsName, nil
 	case SlashRuntimeEquivocation:
 		return SlashRuntimeEquivocationName, nil
+	case SlashRuntimeLiveness:
+		return SlashRuntimeLivenessName, nil
 	default:
 		return "[unknown slash reason]", fmt.Errorf("unknown slash reason: %d", s)
 	}
@@ -81,6 +87,8 @@ func (s *SlashReason) UnmarshalText(text []byte) error {
 		*s = SlashRuntimeIncorrectResults
 	case SlashRuntimeEquivocationName:
 		*s = SlashRuntimeEquivocation
+	case SlashRuntimeLivenessName:
+		*s = SlashRuntimeLiveness
 	default:
 		return fmt.Errorf("invalid slash reason: %s", string(text))
 	}
