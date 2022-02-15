@@ -92,7 +92,6 @@ var (
 			RoundTimeout:    20,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			Algorithm:         registry.TxnSchedulerSimple,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
 			BatchFlushTimeout: 20 * time.Second,

@@ -19,8 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/scheduling"
-	schedulingAPI "github.com/oasisprotocol/oasis-core/go/runtime/scheduling/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
@@ -173,7 +171,7 @@ type txPool struct {
 	recheckTxCh     *channels.RingChannel
 
 	schedulerLock     sync.Mutex
-	scheduler         schedulingAPI.Scheduler
+	schedulerQueue    *priorityQueue
 	schedulerTicker   *time.Ticker
 	schedulerNotifier *pubsub.Broker
 
@@ -267,26 +265,26 @@ func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	t.scheduler.RemoveTxBatch(txs)
+	t.schedulerQueue.RemoveTxBatch(txs)
 	for _, txHash := range txs {
 		_ = t.staleCache.Remove(txHash)
 	}
 
-	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.scheduler.UnscheduledSize()))
+	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.Size()))
 }
 
 func (t *txPool) GetScheduledBatch(force bool) []*transaction.CheckedTransaction {
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	return t.scheduler.GetBatch(force)
+	return t.schedulerQueue.GetBatch(force)
 }
 
 func (t *txPool) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction {
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	return t.scheduler.GetPrioritizedBatch(offset, limit)
+	return t.schedulerQueue.GetPrioritizedBatch(offset, limit)
 }
 
 func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {
@@ -294,7 +292,7 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransac
 	defer t.schedulerLock.Unlock()
 
 	// First consult the scheduler.
-	txs, missing := t.scheduler.GetKnownBatch(batch)
+	txs, missing := t.schedulerQueue.GetKnownBatch(batch)
 
 	// Check the stale cache for any missing transactions.
 	for txHash, idx := range missing {
@@ -344,34 +342,16 @@ func (t *txPool) updateScheduler(bi *BlockInfo) error {
 	t.roundWeightLimits[transaction.WeightSizeBytes] = bi.ActiveDescriptor.TxnScheduler.MaxBatchSizeBytes
 	t.roundWeightLimits[transaction.WeightCount] = bi.ActiveDescriptor.TxnScheduler.MaxBatchSize
 
-	switch t.scheduler {
+	switch t.schedulerQueue {
 	case nil:
-		// We still need to initialize the scheduler.
-		t.logger.Debug("initializing transaction scheduler",
-			"algorithm", bi.ActiveDescriptor.TxnScheduler.Algorithm,
-		)
+		// We still need to initialize the scheduler queue.
+		t.logger.Debug("initializing transaction scheduler queue")
 
-		sched, err := scheduling.New(t.cfg.MaxPoolSize, bi.ActiveDescriptor.TxnScheduler.Algorithm, t.roundWeightLimits)
-		if err != nil {
-			return fmt.Errorf("failed to create transaction scheduler: %w", err)
-		}
-
-		t.scheduler = sched
+		t.schedulerQueue = newPriorityQueue(t.cfg.MaxPoolSize, t.roundWeightLimits)
 		close(t.initCh)
 	default:
-		// Scheduler already initialized.
-
-		// NOTE: Once there are multiple scheduling algorithms, this should handle the case of the
-		//       algorithm itself being updated (and the scheduler being recreated).
-		if bi.ActiveDescriptor.TxnScheduler.Algorithm != t.scheduler.Name() {
-			t.logger.Error("attempted to update transaction scheduler algorithm",
-				"current", t.scheduler.Name(),
-				"new", bi.ActiveDescriptor.TxnScheduler.Algorithm,
-			)
-		}
-
-		// Update parameters.
-		t.scheduler.UpdateParameters(t.roundWeightLimits)
+		// Scheduler already initialized, update weight limits.
+		t.schedulerQueue.UpdateWeightLimits(t.roundWeightLimits)
 	}
 
 	// Reset ticker to the new interval.
@@ -384,7 +364,7 @@ func (t *txPool) UpdateWeightLimits(limits map[transaction.Weight]uint64) error 
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	if t.scheduler == nil {
+	if t.schedulerQueue == nil {
 		return nil
 	}
 
@@ -404,7 +384,7 @@ func (t *txPool) UpdateWeightLimits(limits map[transaction.Weight]uint64) error 
 		t.roundWeightLimits[w] = l
 	}
 
-	t.scheduler.UpdateParameters(t.roundWeightLimits)
+	t.schedulerQueue.UpdateWeightLimits(t.roundWeightLimits)
 
 	t.logger.Debug("updated round batch weight limits",
 		"weight_limits", t.roundWeightLimits,
@@ -421,14 +401,14 @@ func (t *txPool) Clear() {
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	if t.scheduler != nil {
+	if t.schedulerQueue != nil {
 		// Before clearing, move some transactions to the stale cache.
-		txs := t.scheduler.GetTransactions(int(t.cfg.MaxStaleCacheSize))
+		txs := t.schedulerQueue.GetTransactions(int(t.cfg.MaxStaleCacheSize))
 		for _, tx := range txs {
 			_ = t.staleCache.Put(tx.Hash(), tx)
 		}
 
-		t.scheduler.Clear()
+		t.schedulerQueue.Clear()
 	}
 	t.seenCache.Clear()
 
@@ -457,10 +437,10 @@ func (t *txPool) PendingScheduleSize() uint64 {
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	if t.scheduler == nil {
+	if t.schedulerQueue == nil {
 		return 0
 	}
-	return t.scheduler.UnscheduledSize()
+	return t.schedulerQueue.Size()
 }
 
 func (t *txPool) getCurrentBlockInfo() (*BlockInfo, error) {
@@ -553,7 +533,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	for i, tx := range txs {
 		t.schedulerLock.Lock()
 		// NOTE: Scheduler exists as otherwise there would be no current block info above.
-		if err := t.scheduler.QueueTx(tx); err != nil {
+		if err := t.schedulerQueue.Add(tx); err != nil {
 			t.schedulerLock.Unlock()
 			t.logger.Error("unable to schedule transaction", "tx", tx)
 			continue
@@ -703,7 +683,7 @@ func (t *txPool) republishWorker() {
 
 		// Get scheduled transactions.
 		t.schedulerLock.Lock()
-		txs := t.scheduler.GetTransactions(0)
+		txs := t.schedulerQueue.GetTransactions(0)
 		t.schedulerLock.Unlock()
 
 		// Filter transactions based on whether they can already be republished.
@@ -767,7 +747,7 @@ func (t *txPool) recheckWorker() {
 
 		// Get a batch of scheduled transactions.
 		t.schedulerLock.Lock()
-		txs := t.scheduler.GetTransactions(0)
+		txs := t.schedulerQueue.GetTransactions(0)
 		t.schedulerLock.Unlock()
 
 		if len(txs) == 0 {

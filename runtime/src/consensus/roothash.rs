@@ -358,7 +358,6 @@ mod tests {
                 max_messages: 32,
             },
             txn_scheduler: registry::TxnSchedulerParameters {
-                algorithm: "simple".to_string(),
                 batch_flush_timeout: 20000000000, // 20 seconds.
                 max_batch_size: 1,
                 max_batch_size_bytes: 1024,
@@ -443,14 +442,14 @@ mod tests {
                     0,
                     RegistryMessage::UpdateRuntime(registry::Runtime::default()),
                 ))],
-                "24f5e1502f9cfaa64404cc4fea4a4b6f799baefad6f18c9c805b82b727e15d25",
+                "b5a085557952197dbda113702e86b1c749aec44b71a8c8264bf2d4cae08e05bb",
             ),
             (
                 vec![Message::Registry(Versioned::new(
                     0,
                     RegistryMessage::UpdateRuntime(rt),
                 ))],
-                "ba161c59194e6991af9ba2ae2efe77e3dd245956185bcb82ff2db226fed63cdb",
+                "f13ffad395a426fb234c2bc99406d78fac17ef42b546eaf9ff6ca8b515a4cb2f",
             ),
         ];
         for (msgs, expected_hash) in tcs {

@@ -207,7 +207,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 			RoundTimeout: 20,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			Algorithm:         "simple",
 			BatchFlushTimeout: 1 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,

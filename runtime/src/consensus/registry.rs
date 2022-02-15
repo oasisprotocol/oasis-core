@@ -53,8 +53,6 @@ pub struct ExecutorParameters {
 /// Parameters for the runtime transaction scheduler.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct TxnSchedulerParameters {
-    /// Transaction scheduling algorithm.
-    pub algorithm: String,
     /// How long to wait for a scheduled batch in nanoseconds (when using the
     /// "simple" scheduling algorithm).
     pub batch_flush_timeout: i64,

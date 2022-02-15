@@ -59,7 +59,6 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			MaxMessages:  32,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			Algorithm:         "simple",
 			BatchFlushTimeout: 1 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
