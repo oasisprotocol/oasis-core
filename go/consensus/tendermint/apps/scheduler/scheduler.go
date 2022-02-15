@@ -11,7 +11,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -77,7 +76,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of
 	//       any transactions being submitted to the chain.
-	slashed := ctx.HasTypedEvent(stakingapp.AppName, &staking.TakeEscrowEvent{})
+	slashed := ctx.HasEvent(stakingapp.AppName, &staking.TakeEscrowEvent{})
 	// Check if epoch has changed.
 	// TODO: We'll later have this for each type of committee.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
@@ -205,7 +204,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 				return fmt.Errorf("tendermint/scheduler: couldn't elect %s committees: %w", kind, err)
 			}
 		}
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyElected, cbor.Marshal(kinds)))
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&scheduler.ElectedEvent{Kinds: kinds}))
 
 		var kindNames []string
 		for _, kind := range kinds {

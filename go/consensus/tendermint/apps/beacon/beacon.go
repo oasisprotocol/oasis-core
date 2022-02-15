@@ -10,7 +10,6 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
@@ -90,7 +89,7 @@ func (app *beaconApplication) EndBlock(ctx *api.Context, req types.RequestEndBlo
 }
 
 func (app *beaconApplication) doEmitEpochEvent(ctx *api.Context, epoch beacon.EpochTime) {
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyEpoch, cbor.Marshal(epoch)))
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&beacon.EpochEvent{Epoch: epoch}))
 }
 
 func (app *beaconApplication) scheduleEpochTransitionBlock(
@@ -111,17 +110,17 @@ func (app *beaconApplication) scheduleEpochTransitionBlock(
 	return nil
 }
 
-func (app *beaconApplication) onNewBeacon(ctx *api.Context, beacon []byte) error {
+func (app *beaconApplication) onNewBeacon(ctx *api.Context, value []byte) error {
 	state := beaconState.NewMutableState(ctx.State())
 
-	if err := state.SetBeacon(ctx, beacon); err != nil {
+	if err := state.SetBeacon(ctx, value); err != nil {
 		ctx.Logger().Error("onNewBeacon: failed to set beacon",
 			"err", err,
 		)
 		return fmt.Errorf("beacon: failed to set beacon: %w", err)
 	}
 
-	ctx.EmitEvent(api.NewEventBuilder(app.Name()).Attribute(KeyBeacon, beacon))
+	ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&beacon.BeaconEvent{Beacon: value}))
 
 	return nil
 }

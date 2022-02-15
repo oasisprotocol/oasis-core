@@ -2,7 +2,6 @@
 package scheduler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -11,10 +10,10 @@ import (
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -109,10 +108,10 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 // Implements api.ServiceClient.
 func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
-		if bytes.Equal(pair.GetKey(), app.KeyElected) {
-			var kinds []api.CommitteeKind
-			if err := cbor.Unmarshal(pair.GetValue(), &kinds); err != nil {
-				sc.logger.Error("worker: malformed elected committee types list",
+		if events.IsAttributeKind(pair.GetKey(), &api.ElectedEvent{}) {
+			var e api.ElectedEvent
+			if err := events.DecodeValue(string(pair.GetValue()), &e); err != nil {
+				sc.logger.Error("worker: malformed elected committee types event",
 					"err", err,
 				)
 				continue
@@ -126,7 +125,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 				continue
 			}
 
-			committees, err := q.KindsCommittees(ctx, kinds)
+			committees, err := q.KindsCommittees(ctx, e.Kinds)
 			if err != nil {
 				sc.logger.Error("worker: couldn't query elected committees",
 					"err", err,

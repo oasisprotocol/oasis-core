@@ -14,9 +14,9 @@ func TestServiceDescriptor(t *testing.T) {
 
 	q1 := tmquery.MustParse("a='b'")
 
-	sd := NewStaticServiceDescriptor("test", "test-type", []tmpubsub.Query{q1})
+	sd := NewStaticServiceDescriptor("test", "test_type", []tmpubsub.Query{q1})
 	require.Equal("test", sd.Name())
-	require.Equal("test-type", sd.EventType())
+	require.Equal("test_type", sd.EventType())
 	recvQ1 := <-sd.Queries()
 	require.EqualValues(q1, recvQ1, "received query should be correct")
 	_, ok := <-sd.Queries()

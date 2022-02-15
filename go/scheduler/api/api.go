@@ -322,6 +322,17 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 	return nil
 }
 
+// ElectedEvent is the elected committee kind event.
+type ElectedEvent struct {
+	// Kinds are the elected committee kinds.
+	Kinds []CommitteeKind `json:"kinds,omitempty"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (ev *ElectedEvent) EventKind() string {
+	return "elected"
+}
+
 func init() {
 	// 16 allows for up to 1.8e19 base units to be staked.
 	if err := BaseUnitsPerVotingPower.FromUint64(16); err != nil {

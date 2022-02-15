@@ -186,3 +186,25 @@ func (g *Genesis) SanityCheck() error {
 
 	return nil
 }
+
+// EpochEvent is the epoch event.
+type EpochEvent struct {
+	// Epoch is the new epoch.
+	Epoch EpochTime `json:"epoch,omitempty"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (ev *EpochEvent) EventKind() string {
+	return "epoch"
+}
+
+// BeaconEvent is the beacon event.
+type BeaconEvent struct {
+	// Beacon is the new beacon value.
+	Beacon []byte `json:"beacon,omitempty"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (ev *BeaconEvent) EventKind() string {
+	return "beacon"
+}

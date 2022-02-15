@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -410,16 +412,59 @@ type ExecutorCommittedEvent struct {
 	Commit commitment.ExecutorCommitment `json:"commit"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *ExecutorCommittedEvent) EventKind() string {
+	return "executor_commit"
+}
+
 // ExecutionDiscrepancyDetectedEvent is an execute discrepancy detected event.
 type ExecutionDiscrepancyDetectedEvent struct {
 	// Timeout signals whether the discrepancy was due to a timeout.
 	Timeout bool `json:"timeout"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *ExecutionDiscrepancyDetectedEvent) EventKind() string {
+	return "execution_discrepancy"
+}
+
+var _ events.CustomTypedAttribute = (*RuntimeIDAttribute)(nil)
+
+// RuntimeIDAttribute is the event attribute for specifying runtime ID.
+// ID is base64 encoded runtime ID.
+type RuntimeIDAttribute struct {
+	ID common.Namespace
+}
+
+// EventKind returns a string representation of this event's kind.
+func (e *RuntimeIDAttribute) EventKind() string {
+	return "runtime_id"
+}
+
+// EventValue returns a string representation of this event's kind.
+func (e *RuntimeIDAttribute) EventValue() string {
+	return base64.StdEncoding.EncodeToString(e.ID[:])
+}
+
+// DecodeValue decodes the attribute event value.
+func (e *RuntimeIDAttribute) DecodeValue(value string) error {
+	rtId := common.Namespace{}
+	if err := rtId.UnmarshalBase64([]byte(value)); err != nil {
+		return err
+	}
+	copy(e.ID[:], rtId[:])
+	return nil
+}
+
 // FinalizedEvent is a finalized event.
 type FinalizedEvent struct {
 	// Round is the round that was finalized.
 	Round uint64 `json:"round"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (e *FinalizedEvent) EventKind() string {
+	return "finalized"
 }
 
 // InMsgProcessedEvent is an event of a specific incoming message being processed.

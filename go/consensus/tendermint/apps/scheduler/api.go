@@ -19,8 +19,4 @@ var (
 	// QueryApp is a query for filtering events processed by the
 	// scheduler application.
 	QueryApp = api.QueryForApp(AppName)
-
-	// KeyElected is the ABCI event attribute key for the elected
-	// committee types.
-	KeyElected = []byte("elected")
 )

@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -281,6 +282,11 @@ type EntityEvent struct {
 	IsRegistration bool           `json:"is_registration"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *EntityEvent) EventKind() string {
+	return "entity"
+}
+
 // NodeEvent is the event that is returned via WatchNodes to signify node
 // registration changes and updates.
 type NodeEvent struct {
@@ -288,14 +294,50 @@ type NodeEvent struct {
 	IsRegistration bool       `json:"is_registration"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *NodeEvent) EventKind() string {
+	return "node"
+}
+
 // RuntimeEvent signifies new runtime registration.
 type RuntimeEvent struct {
 	Runtime *Runtime `json:"runtime"`
 }
 
+// EventKind returns a string representation of this event's kind.
+func (e *RuntimeEvent) EventKind() string {
+	return "runtime"
+}
+
 // NodeUnfrozenEvent signifies when node becomes unfrozen.
 type NodeUnfrozenEvent struct {
 	NodeID signature.PublicKey `json:"node_id"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (e *NodeUnfrozenEvent) EventKind() string {
+	return "node_unfrozen"
+}
+
+var _ events.CustomTypedAttribute = (*NodeListEpochEvent)(nil)
+
+// NodeListEpochEvent is the per epoch node list event.
+type NodeListEpochEvent struct{}
+
+// EventKind returns a string representation of this event's kind.
+func (e *NodeListEpochEvent) EventKind() string {
+	return "node_list_epoch"
+}
+
+// EventValue returns a string representation of this event's kind.
+func (e *NodeListEpochEvent) EventValue() string {
+	// Dummy value, should be ignored.
+	return "1"
+}
+
+// DecodeValue decodes the attribute event value.
+func (e *NodeListEpochEvent) DecodeValue(value string) error {
+	return nil
 }
 
 // Event is a registry event returned via GetEvents.

@@ -193,6 +193,16 @@ func (g *Genesis) SanityCheck() error {
 	return nil
 }
 
+// StatusUpdateEvent is the keymanager status update event.
+type StatusUpdateEvent struct {
+	Statuses []*Status
+}
+
+// EventKind returns a string representation of this event's kind.
+func (ev *StatusUpdateEvent) EventKind() string {
+	return "status"
+}
+
 func init() {
 	// Old `INSECURE_SIGNING_KEY_PKCS8`.
 	var oldTestKey signature.PublicKey

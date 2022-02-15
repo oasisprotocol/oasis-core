@@ -9,7 +9,6 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -78,7 +77,9 @@ func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, request types.Re
 	}
 
 	if len(toEmit) > 0 {
-		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyStatusUpdate, cbor.Marshal(toEmit)))
+		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&keymanager.StatusUpdateEvent{
+			Statuses: toEmit,
+		}))
 	}
 
 	return nil

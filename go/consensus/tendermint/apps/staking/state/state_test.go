@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -288,12 +288,12 @@ func TestRewardAndSlash(t *testing.T) {
 		switch string(ev.Attributes[0].Key) {
 		case "add_escrow":
 			var v staking.AddEscrowEvent
-			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
+			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
 			require.NoError(err, "malformed add escrow event")
 		case "transfer":
 			var v staking.TransferEvent
-			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
-			require.NoError(err, "malformed add escrow event")
+			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+			require.NoError(err, "malformed transfer event")
 		default:
 			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
 		}
@@ -374,12 +374,12 @@ func TestRewardAndSlash(t *testing.T) {
 		switch string(ev.Attributes[0].Key) {
 		case "add_escrow":
 			var v staking.AddEscrowEvent
-			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
+			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
 			require.NoError(err, "malformed add escrow event")
 		case "transfer":
 			var v staking.TransferEvent
-			err = cbor.Unmarshal(ev.Attributes[0].Value, &v)
-			require.NoError(err, "malformed add escrow event")
+			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+			require.NoError(err, "malformed transfer event")
 		default:
 			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
 		}
@@ -727,8 +727,8 @@ func TestTransfer(t *testing.T) {
 	require.Len(ctx.GetEvents(), 1, "one event should be emitted")
 
 	var ev staking.TransferEvent
-	err = ctx.DecodeTypedEvent(0, &ev)
-	require.NoError(err, "DecodeTypedEvent")
+	err = ctx.DecodeEvent(0, &ev)
+	require.NoError(err, "DecodeEvent")
 	require.EqualValues(addr1, ev.From, "event should have the correct source address")
 	require.EqualValues(addr2, ev.To, "event should have the correct destination address")
 	require.EqualValues(*quantity.NewFromUint64(50), ev.Amount, "event should have the correct amount")

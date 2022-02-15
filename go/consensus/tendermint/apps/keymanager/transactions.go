@@ -3,7 +3,6 @@ package keymanager
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -81,7 +80,9 @@ func (app *keymanagerApplication) updatePolicy(
 		panic(fmt.Errorf("failed to set keymanager status: %w", err))
 	}
 
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).Attribute(KeyStatusUpdate, cbor.Marshal([]*api.Status{newStatus})))
+	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&api.StatusUpdateEvent{
+		Statuses: []*api.Status{newStatus},
+	}))
 
 	return nil
 }
