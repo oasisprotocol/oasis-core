@@ -44,15 +44,26 @@ var (
 		ExtraReturnErrors: cbor.ExtraDecErrorUnknownField,
 	}
 
+	// decOptionsHi are decoding options for UNTRUSTED inputs with higher limits.
+	decOptionsHi = cbor.DecOptions{
+		DupMapKey:         cbor.DupMapKeyEnforcedAPF,
+		IndefLength:       cbor.IndefLengthForbidden,
+		TagsMd:            cbor.TagsForbidden,
+		ExtraReturnErrors: cbor.ExtraDecErrorUnknownField,
+		MaxArrayElements:  10_000_000, // Usually limited by blob size limits anyway.
+		MaxMapPairs:       10_000_000, // Usually limited by blob size limits anyway.
+	}
+
 	// decOptionsTrusted are decoding options for TRUSTED inputs. They are only used when explicitly
 	// requested by using the UnmarshalTrusted method.
 	decOptionsTrusted = cbor.DecOptions{
-		MaxArrayElements: 134217728, // Maximum allowed.
-		MaxMapPairs:      134217728, // Maximum allowed.
+		MaxArrayElements: 2147483647, // Maximum allowed.
+		MaxMapPairs:      2147483647, // Maximum allowed.
 	}
 
 	encMode        cbor.EncMode
 	decMode        cbor.DecMode
+	decModeHi      cbor.DecMode
 	decModeTrusted cbor.DecMode
 )
 
@@ -62,6 +73,9 @@ func init() {
 		panic(err)
 	}
 	if decMode, err = decOptions.DecMode(); err != nil {
+		panic(err)
+	}
+	if decModeHi, err = decOptionsHi.DecMode(); err != nil {
 		panic(err)
 	}
 	if decModeTrusted, err = decOptionsTrusted.DecMode(); err != nil {
@@ -94,6 +108,17 @@ func Unmarshal(data []byte, dst interface{}) error {
 	}
 
 	return decMode.Unmarshal(data, dst)
+}
+
+// UnmarshalHigherLimits deserializes a CBOR byte vector into a given type.
+//
+// This method uses higher decoding limits.
+func UnmarshalHigherLimits(data []byte, dst interface{}) error {
+	if data == nil {
+		return nil
+	}
+
+	return decModeHi.Unmarshal(data, dst)
 }
 
 // UnmarshalTrusted deserializes a CBOR byte vector into a given type.
