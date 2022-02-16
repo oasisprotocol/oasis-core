@@ -12,7 +12,7 @@ replace (
 	// https://github.com/google/flatbuffers/issues/6466
 	github.com/google/flatbuffers => github.com/google/flatbuffers v1.12.1
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.9-oasis4
+	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.15-oasis // TODO: create 0.34.15-oasis1 tag.
 
 	// Required because of https://github.com/libp2p/go-libp2p-pubsub/issues/467.
 	github.com/whyrusleeping/timecache => github.com/oasisprotocol/timecache v0.0.0-20220102191729-558b1c931038
@@ -52,14 +52,14 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.0
-	github.com/tendermint/tendermint v0.34.9
-	github.com/tendermint/tm-db v0.6.4
+	github.com/tendermint/tendermint v0.34.15
+	github.com/tendermint/tm-db v0.6.6
 	github.com/thepudds/fzgo v0.2.2
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/whyrusleeping/go-logging v0.0.1
 	gitlab.com/yawning/dynlib.git v0.0.0-20210614104444-f6a90d03b144
-	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
-	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
+	golang.org/x/crypto v0.0.0-20210915214749-c084706c2272
+	golang.org/x/net v0.0.0-20211005001312-d4b1ae081e3b
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa
 	google.golang.org/grpc v1.44.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
@@ -68,7 +68,7 @@ require (
 
 require (
 	github.com/DataDog/zstd v1.4.1 // indirect
-	github.com/Workiva/go-datastructures v1.0.52 // indirect
+	github.com/Workiva/go-datastructures v1.0.53 // indirect
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
@@ -91,7 +91,7 @@ require (
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/go-kit/kit v0.10.0 // indirect
+	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
@@ -124,6 +124,7 @@ require (
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/koron/go-ssdp v0.0.2 // indirect
+	github.com/lib/pq v1.10.4 // indirect
 	github.com/libp2p/go-buffer-pool v0.0.2 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
 	github.com/libp2p/go-conn-security-multistream v0.3.0 // indirect
@@ -168,7 +169,7 @@ require (
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20181016162300-f8f6d4d2b643 // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
-	github.com/minio/highwayhash v1.0.1 // indirect
+	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
@@ -187,7 +188,7 @@ require (
 	github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
-	github.com/opencontainers/runtime-spec v1.0.2 // indirect
+	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
@@ -198,7 +199,7 @@ require (
 	github.com/raulk/clock v1.1.0 // indirect
 	github.com/raulk/go-watchdog v1.2.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0 // indirect
-	github.com/rs/cors v1.7.0 // indirect
+	github.com/rs/cors v1.8.0 // indirect
 	github.com/sasha-s/go-deadlock v0.2.1-0.20190427202633-1595213edefa // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
@@ -212,7 +213,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	gitlab.com/yawning/slice.git v0.0.0-20190714152416-bc4ae2510529 // indirect
-	go.etcd.io/bbolt v1.3.5 // indirect
+	go.etcd.io/bbolt v1.3.6 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
