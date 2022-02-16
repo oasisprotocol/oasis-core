@@ -42,13 +42,15 @@ var (
 		IndefLength:       cbor.IndefLengthForbidden,
 		TagsMd:            cbor.TagsForbidden,
 		ExtraReturnErrors: cbor.ExtraDecErrorUnknownField,
+		MaxArrayElements:  10_000_000, // Usually limited by blob size limits anyway.
+		MaxMapPairs:       10_000_000, // Usually limited by blob size limits anyway.
 	}
 
 	// decOptionsTrusted are decoding options for TRUSTED inputs. They are only used when explicitly
 	// requested by using the UnmarshalTrusted method.
 	decOptionsTrusted = cbor.DecOptions{
-		MaxArrayElements: 134217728, // Maximum allowed.
-		MaxMapPairs:      134217728, // Maximum allowed.
+		MaxArrayElements: 2147483647, // Maximum allowed.
+		MaxMapPairs:      2147483647, // Maximum allowed.
 	}
 
 	encMode        cbor.EncMode
