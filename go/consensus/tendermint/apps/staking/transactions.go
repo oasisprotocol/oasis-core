@@ -39,6 +39,11 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		return nil, nil
 	}
 
+	// Check if sender provided at least a minimum amount.
+	if xfer.Amount.Cmp(&params.MinTransferAmount) < 0 {
+		return nil, staking.ErrUnderMinTransferAmount
+	}
+
 	fromAddr := ctx.CallerAddress()
 	if fromAddr.IsReserved() || !isTransferPermitted(params, fromAddr) {
 		return nil, staking.ErrForbidden
@@ -124,6 +129,11 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 	// Return early for simulation as we only need gas accounting.
 	if ctx.IsSimulation() {
 		return nil
+	}
+
+	// Check if sender provided at least a minimum amount.
+	if burn.Amount.Cmp(&params.MinTransferAmount) < 0 {
+		return staking.ErrUnderMinTransferAmount
 	}
 
 	fromAddr := ctx.CallerAddress()
@@ -600,6 +610,11 @@ func (app *stakingApplication) withdraw(
 	// Return early for simulation as we only need gas accounting.
 	if ctx.IsSimulation() {
 		return nil, nil
+	}
+
+	// Check if sender provided at least a minimum amount.
+	if withdraw.Amount.Cmp(&params.MinTransferAmount) < 0 {
+		return nil, staking.ErrUnderMinTransferAmount
 	}
 
 	// Allowances are disabled in case either max allowances is zero or if transfers are disabled.

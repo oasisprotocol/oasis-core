@@ -437,6 +437,7 @@ func updateStakingGenesis(old *v4StakingGenesis) (staking.Genesis, error) {
 		CommissionScheduleRules:           old.Parameters.CommissionScheduleRules,
 		GasCosts:                          old.Parameters.GasCosts,
 		MinDelegationAmount:               old.Parameters.MinDelegationAmount,
+		MinTransferAmount:                 *quantity.NewFromUint64(10_000_000),
 
 		DisableTransfers:       old.Parameters.DisableTransfers,
 		DisableDelegation:      old.Parameters.DisableDelegation,

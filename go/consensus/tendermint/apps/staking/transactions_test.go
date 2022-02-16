@@ -91,11 +91,11 @@ func TestReservedAddresses(t *testing.T) {
 	_ = staking.NewReservedAddress(testPK)
 
 	// Make sure all transaction types fail for the reserved address.
-	transferResult, err := app.transfer(txCtx, stakeState, nil)
+	transferResult, err := app.transfer(txCtx, stakeState, &staking.Transfer{})
 	require.EqualError(err, "staking: forbidden by policy", "transfer for reserved address should error")
 	require.Nil(transferResult, "transfer result should be nil on error")
 
-	err = app.burn(txCtx, stakeState, nil)
+	err = app.burn(txCtx, stakeState, &staking.Burn{})
 	require.EqualError(err, "staking: forbidden by policy", "burn for reserved address should error")
 
 	var q quantity.Quantity
@@ -459,9 +459,24 @@ func TestWithdraw(t *testing.T) {
 			staking.ErrInsufficientBalance,
 		},
 		{
+			"should fail if amount is below minimum transfer amount",
+			&staking.ConsensusParameters{
+				MinTransferAmount: *quantity.NewFromUint64(25),
+				MaxAllowances:     1,
+			},
+			pk2,
+			&staking.Withdraw{
+				From:   addr1,
+				Amount: *quantity.NewFromUint64(24),
+			},
+			nil,
+			staking.ErrUnderMinTransferAmount,
+		},
+		{
 			"should succeed",
 			&staking.ConsensusParameters{
-				MaxAllowances: 1,
+				MinTransferAmount: *quantity.NewFromUint64(25),
+				MaxAllowances:     1,
 			},
 			pk2,
 			&staking.Withdraw{
@@ -479,7 +494,8 @@ func TestWithdraw(t *testing.T) {
 		{
 			"should succeed",
 			&staking.ConsensusParameters{
-				MaxAllowances: 1,
+				MinTransferAmount: *quantity.NewFromUint64(25),
+				MaxAllowances:     1,
 			},
 			pk3,
 			&staking.Withdraw{
@@ -763,4 +779,156 @@ func TestAllowEscrowMessages(t *testing.T) {
 		RemainingShares: *quantity.NewFromUint64(17),
 		DebondEndTime:   beacon.EpochTime(0),
 	}, reclaimResult, "reclaim escrow result should be correct")
+}
+
+func TestTransfer(t *testing.T) {
+	require := require.New(t)
+	var err error
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	stakeState := stakingState.NewMutableState(ctx.State())
+
+	app := &stakingApplication{
+		state: appState,
+	}
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := staking.NewAddress(pk2)
+
+	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount1")
+
+	err = stakeState.SetAccount(ctx, addr2, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount2")
+
+	for _, tc := range []struct {
+		msg      string
+		params   *staking.ConsensusParameters
+		txSigner signature.PublicKey
+		transfer *staking.Transfer
+		err      error
+	}{
+		{
+			"should fail when under min transfer amount",
+			&staking.ConsensusParameters{
+				MinTransferAmount: *quantity.NewFromUint64(1000),
+			},
+			pk2,
+			&staking.Transfer{
+				To:     addr1,
+				Amount: *quantity.NewFromUint64(999),
+			},
+			staking.ErrUnderMinTransferAmount,
+		},
+		{
+			"should succeed when at least min transfer amount",
+			&staking.ConsensusParameters{
+				MinTransferAmount: *quantity.NewFromUint64(1000),
+			},
+			pk2,
+			&staking.Transfer{
+				To:     addr1,
+				Amount: *quantity.NewFromUint64(1000),
+			},
+			nil,
+		},
+	} {
+		err = stakeState.SetConsensusParameters(ctx, tc.params)
+		require.NoError(err, "setting staking consensus parameters should not error")
+
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
+
+		_, err = app.transfer(txCtx, stakeState, tc.transfer)
+		require.Equal(tc.err, err, tc.msg)
+	}
+}
+
+func TestBurn(t *testing.T) {
+	require := require.New(t)
+	var err error
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	stakeState := stakingState.NewMutableState(ctx.State())
+
+	app := &stakingApplication{
+		state: appState,
+	}
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := staking.NewAddress(pk1)
+
+	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount1")
+
+	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount2")
+
+	for _, tc := range []struct {
+		msg      string
+		params   *staking.ConsensusParameters
+		txSigner signature.PublicKey
+		burn     *staking.Burn
+		err      error
+	}{
+		{
+			"should fail when under min transfer amount",
+			&staking.ConsensusParameters{
+				MinTransferAmount: *quantity.NewFromUint64(1000),
+			},
+			pk1,
+			&staking.Burn{
+				Amount: *quantity.NewFromUint64(999),
+			},
+			staking.ErrUnderMinTransferAmount,
+		},
+		{
+			"should succeed when at least min transfer amount",
+			&staking.ConsensusParameters{
+				MinTransferAmount: *quantity.NewFromUint64(1000),
+			},
+			pk1,
+			&staking.Burn{
+				Amount: *quantity.NewFromUint64(1000),
+			},
+			nil,
+		},
+	} {
+		err = stakeState.SetConsensusParameters(ctx, tc.params)
+		require.NoError(err, "setting staking consensus parameters should not error")
+
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		defer txCtx.Close()
+		txCtx.SetTxSigner(tc.txSigner)
+
+		err = app.burn(txCtx, stakeState, tc.burn)
+		require.Equal(tc.err, err, tc.msg)
+	}
 }

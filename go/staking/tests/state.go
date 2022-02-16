@@ -46,6 +46,7 @@ func GenesisState() api.Genesis {
 				},
 			},
 			MinDelegationAmount:     *quantity.NewFromUint64(10),
+			MinTransferAmount:       *quantity.NewFromUint64(10),
 			MaxAllowances:           32,
 			FeeSplitWeightVote:      *quantity.NewFromUint64(1),
 			RewardFactorEpochSigned: *quantity.NewFromUint64(1),
