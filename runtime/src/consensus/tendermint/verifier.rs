@@ -21,12 +21,12 @@ use tendermint_light_client::{
     components::{self, verifier::PredicateVerifier},
     light_client,
     operations::{ProdCommitValidator, ProdHasher, VotingPowerCalculator, VotingPowerTally},
-    predicates::{errors::VerificationError, ProdPredicates},
     supervisor::Instance,
     types::{
         Commit, Hash as TMHash, LightBlock as TMLightBlock, PeerId, SignedHeader, Time,
         TrustThreshold, ValidatorSet,
     },
+    verifier::{errors::VerificationError, predicates::ProdPredicates},
 };
 use tendermint_rpc::error::Error as RpcError;
 
@@ -590,7 +590,7 @@ struct InsecureClock;
 
 impl components::clock::Clock for InsecureClock {
     fn now(&self) -> Time {
-        Time(time::insecure_posix_system_time().into())
+        Time::from_unix_timestamp(time::insecure_posix_time(), 0).unwrap()
     }
 }
 
