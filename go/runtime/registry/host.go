@@ -12,12 +12,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	keymanagerClientApi "github.com/oasisprotocol/oasis-core/go/keymanager/client/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
@@ -117,7 +117,7 @@ type RuntimeHostHandlerEnvironment interface {
 	GetCurrentBlock(ctx context.Context) (*block.Block, error)
 
 	// GetKeyManagerClient returns the key manager client for this runtime.
-	GetKeyManagerClient(ctx context.Context) (keymanagerClientApi.Client, error)
+	GetKeyManagerClient(ctx context.Context) (runtimeKeymanager.Client, error)
 
 	// GetTxPool returns the transaction pool for this runtime.
 	GetTxPool(ctx context.Context) (txpool.TransactionPool, error)
@@ -136,13 +136,13 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 	// RPC.
 	if body.HostRPCCallRequest != nil {
 		switch body.HostRPCCallRequest.Endpoint {
-		case keymanagerApi.EnclaveRPCEndpoint:
+		case runtimeKeymanager.EnclaveRPCEndpoint:
 			// Call into the remote key manager.
 			kmCli, err := h.env.GetKeyManagerClient(ctx)
 			if err != nil {
 				return nil, err
 			}
-			res, err := kmCli.CallRemote(ctx, body.HostRPCCallRequest.Request)
+			res, err := kmCli.CallEnclave(ctx, body.HostRPCCallRequest.Request)
 			if err != nil {
 				return nil, err
 			}
@@ -267,7 +267,7 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 
 	var rtDsc *registry.Runtime
 	for {
-		var st *keymanagerApi.Status
+		var st *keymanager.Status
 		select {
 		case <-n.ctx.Done():
 			n.logger.Debug("context canceled")

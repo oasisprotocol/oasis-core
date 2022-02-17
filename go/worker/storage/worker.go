@@ -194,6 +194,11 @@ func (w *Worker) Enabled() bool {
 	return w.enabled
 }
 
+// PublicRPCEnabled returns whether public storage RPC is enabled.
+func (w *Worker) PublicRPCEnabled() bool {
+	return viper.GetBool(CfgWorkerPublicRPCEnabled)
+}
+
 // Initialized returns a channel that will be closed when the storage worker
 // is initialized and ready to service requests.
 func (w *Worker) Initialized() <-chan struct{} {

@@ -163,6 +163,7 @@ type Keymanager struct { // nolint: maligned
 	tmAddress        string
 	consensusPort    uint16
 	workerClientPort uint16
+	p2pPort          uint16
 
 	mayGenerate bool
 }
@@ -271,6 +272,7 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		tendermintPrune(km.consensus.PruneNumKept, km.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(km.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(km.workerClientPort).
+		workerP2pPort(km.p2pPort).
 		runtimeMode(runtimeRegistry.RuntimeModeKeymanager).
 		runtimeProvisioner(km.runtimeProvisioner).
 		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
@@ -341,6 +343,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		sentryPubKey:       sentryPubKey,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		workerClientPort:   host.getProvisionedPort(nodePortClient),
+		p2pPort:            host.getProvisionedPort(nodePortP2P),
 		mayGenerate:        len(net.keymanagers) == 0,
 	}
 

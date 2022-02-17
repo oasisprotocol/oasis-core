@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	core "github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -19,7 +20,12 @@ import (
 )
 
 const (
+	// RequestWriteDeadline is the maximum amount of time that can be spent on writing a request.
 	RequestWriteDeadline = 5 * time.Second
+	// DefaultCallRetryInterval is the default call retry interval for calls which explicitly enable
+	// retries by setting the WithMaxRetries option to a non-zero value. It can be overridden by
+	// using the WithRetryInterval call option.
+	DefaultCallRetryInterval = 1 * time.Second
 )
 
 // PeerFeedback is an interface for providing deferred peer feedback after an outcome is known.
@@ -104,6 +110,29 @@ func WithPeerFilter(filter PeerFilter) ClientOption {
 	}
 }
 
+// CallOptions are per-call options.
+type CallOptions struct {
+	retryInterval time.Duration
+	maxRetries    uint64
+}
+
+// CallOption is a per-call option setter.
+type CallOption func(opts *CallOptions)
+
+// WithMaxRetries configures the maximum number of retries to use for the call.
+func WithMaxRetries(maxRetries uint64) CallOption {
+	return func(opts *CallOptions) {
+		opts.maxRetries = maxRetries
+	}
+}
+
+// WithRetryInterval configures the retry interval to use for the call.
+func WithRetryInterval(retryInterval time.Duration) CallOption {
+	return func(opts *CallOptions) {
+		opts.retryInterval = retryInterval
+	}
+}
+
 // Client is an RPC client for a given protocol.
 type Client interface {
 	PeerManager
@@ -119,6 +148,7 @@ type Client interface {
 		method string,
 		body, rsp interface{},
 		maxPeerResponseTime time.Duration,
+		opts ...CallOption,
 	) (PeerFeedback, error)
 
 	// CallMulti routes the given RPC method call to multiple peers that support the protocol based
@@ -159,8 +189,16 @@ func (c *client) Call(
 	method string,
 	body, rsp interface{},
 	maxPeerResponseTime time.Duration,
+	opts ...CallOption,
 ) (PeerFeedback, error) {
 	c.logger.Debug("call", "method", method)
+
+	co := CallOptions{
+		retryInterval: DefaultCallRetryInterval,
+	}
+	for _, opt := range opts {
+		opt(&co)
+	}
 
 	// Prepare the request.
 	request := Request{
@@ -168,30 +206,44 @@ func (c *client) Call(
 		Body:   cbor.Marshal(body),
 	}
 
-	// Iterate through the prioritized list of peers and attempt to execute the request.
-	for _, peer := range c.GetBestPeers() {
-		if !c.isPeerAcceptable(peer) {
-			continue
+	var pf PeerFeedback
+	tryPeers := func() error {
+		// Iterate through the prioritized list of peers and attempt to execute the request.
+		for _, peer := range c.GetBestPeers() {
+			if !c.isPeerAcceptable(peer) {
+				continue
+			}
+
+			c.logger.Debug("trying peer",
+				"method", method,
+				"peer_id", peer,
+			)
+
+			var err error
+			pf, err = c.call(ctx, peer, &request, rsp, maxPeerResponseTime)
+			if err != nil {
+				continue
+			}
+			return nil
 		}
 
-		c.logger.Debug("trying peer",
+		// No peers could be reached to service this request.
+		c.logger.Debug("no peers could be reached to service request",
 			"method", method,
-			"peer_id", peer,
 		)
 
-		pf, err := c.call(ctx, peer, &request, rsp, maxPeerResponseTime)
-		if err != nil {
-			continue
-		}
-		return pf, nil
+		return fmt.Errorf("call failed on all peers")
 	}
 
-	// No peers could be reached to service this request.
-	c.logger.Debug("no peers could be reached to service request",
-		"method", method,
-	)
+	var err error
+	if co.maxRetries > 0 {
+		retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(co.retryInterval), co.maxRetries)
+		err = backoff.Retry(tryPeers, backoff.WithContext(retry, ctx))
+	} else {
+		err = tryPeers()
+	}
 
-	return nil, fmt.Errorf("call failed on all peers")
+	return pf, err
 }
 
 func (c *client) CallMulti(

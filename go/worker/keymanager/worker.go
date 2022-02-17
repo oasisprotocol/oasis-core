@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	core "github.com/libp2p/go-libp2p-core"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -22,17 +21,24 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 const (
-	rpcCallTimeout = 5 * time.Second
+	rpcCallTimeout = 2 * time.Second
+
+	// Make sure this always matches the appropriate method in
+	// `keymanager-runtime/src/methods.rs`.
+	getPublicKeyRequestMethod = "get_public_key"
 )
 
 var (
@@ -66,12 +72,13 @@ type Worker struct { // nolint: maligned
 
 	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
 
+	accessList          map[core.PeerID]map[common.Namespace]struct{}
+	accessListByRuntime map[common.Namespace][]core.PeerID
+
 	commonWorker  *workerCommon.Worker
 	roleProvider  registration.RoleProvider
 	enclaveStatus *api.SignedInitResponse
 	backend       api.Backend
-
-	grpcPolicy *policy.DynamicRuntimePolicyChecker
 
 	enabled     bool
 	mayGenerate bool
@@ -140,7 +147,36 @@ func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
 	return w.runtimeHostHandler
 }
 
-func (w *Worker) callLocal(ctx context.Context, data []byte) ([]byte, error) {
+func (w *Worker) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
+	// Handle access control as only peers on the access list can call this method.
+	peerID, ok := rpc.PeerIDFromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("not authorized")
+	}
+
+	// Peek into the frame data to extract the method.
+	var frame enclaverpc.Frame
+	if err := cbor.Unmarshal(data, &frame); err != nil {
+		return nil, fmt.Errorf("malformed request")
+	}
+
+	// Note that the untrusted plaintext is also checked in the enclave, so if the node lied about
+	// what method it's using, we will know and the request will get rejected.
+	switch frame.UntrustedPlaintext {
+	case "":
+		// Anyone can connect.
+	case getPublicKeyRequestMethod:
+		// Anyone can get public keys.
+	default:
+		// Defer to access control to check the policy.
+		w.RLock()
+		_, allowed := w.accessList[peerID]
+		w.RUnlock()
+		if !allowed {
+			return nil, fmt.Errorf("not authorized")
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, rpcCallTimeout)
 	defer cancel()
 
@@ -398,6 +434,7 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 		runtimeID: rt.ID,
 		nodes:     nodes,
 	}
+	crw.epochTransition()
 	go crw.worker()
 
 	w.clientRuntimes[rt.ID] = crw
@@ -428,6 +465,48 @@ func (w *Worker) recheckAllRuntimes(status *api.Status) error {
 	}
 
 	return nil
+}
+
+func (w *Worker) setAccessList(runtimeID common.Namespace, nodes []*node.Node) {
+	w.Lock()
+	defer w.Unlock()
+
+	// Clear any old nodes from the access list.
+	for _, peerID := range w.accessListByRuntime[runtimeID] {
+		entry := w.accessList[peerID]
+		delete(entry, runtimeID)
+		if len(entry) == 0 {
+			delete(w.accessList, peerID)
+		}
+	}
+
+	// Update the access list.
+	var peers []core.PeerID
+	for _, node := range nodes {
+		peerID, err := p2p.PublicKeyToPeerID(node.P2P.ID)
+		if err != nil {
+			w.logger.Warn("invalid node P2P ID",
+				"err", err,
+				"node_id", node.ID,
+			)
+			continue
+		}
+
+		entry := w.accessList[peerID]
+		if entry == nil {
+			entry = make(map[common.Namespace]struct{})
+			w.accessList[peerID] = entry
+		}
+
+		entry[runtimeID] = struct{}{}
+		peers = append(peers, peerID)
+	}
+	w.accessListByRuntime[runtimeID] = peers
+
+	w.logger.Debug("new client runtime access policy in effect",
+		"runtime_id", runtimeID,
+		"peers", peers,
+	)
 }
 
 func (w *Worker) worker() { // nolint: gocyclo
@@ -644,7 +723,7 @@ func (crw *clientRuntimeWatcher) worker() {
 		case <-crw.w.ctx.Done():
 			return
 		case <-ch:
-			crw.updateExternalServicePolicy()
+			crw.w.setAccessList(crw.runtimeID, crw.nodes.GetNodes())
 		}
 	}
 }
@@ -676,24 +755,5 @@ func (crw *clientRuntimeWatcher) epochTransition() {
 
 	crw.nodes.Freeze(0)
 
-	crw.updateExternalServicePolicy()
-}
-
-func (crw *clientRuntimeWatcher) updateExternalServicePolicy() {
-	// Update key manager access control policy.
-	policy := accessctl.NewPolicy()
-
-	// Apply rules to current executor committee members.
-	executorCommitteePolicy.AddRulesForNodes(&policy, crw.nodes.GetNodes())
-
-	// Apply rules for configured sentry nodes.
-	for _, addr := range crw.w.commonWorker.GetConfig().SentryAddresses {
-		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
-	}
-
-	crw.w.grpcPolicy.SetAccessPolicy(policy, crw.runtimeID)
-	crw.w.logger.Debug("new client runtime access policy in effect",
-		"policy", policy,
-		"runtime_id", crw.runtimeID,
-	)
+	crw.w.setAccessList(crw.runtimeID, crw.nodes.GetNodes())
 }

@@ -461,10 +461,8 @@ func (n *Node) startRuntimeWorkers() error {
 		return fmt.Errorf("consensus worker: %w", err)
 	}
 
-	// Only start the external gRPC server if any workers are enabled.
-	if n.StorageWorker.Enabled() ||
-		n.KeymanagerWorker.Enabled() ||
-		n.ConsensusWorker.Enabled() {
+	// Only start the external gRPC server if needed.
+	if n.StorageWorker.PublicRPCEnabled() || n.ConsensusWorker.Enabled() {
 		if err := n.CommonWorker.Grpc.Start(); err != nil {
 			n.logger.Error("failed to start external gRPC server",
 				"err", err,

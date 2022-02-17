@@ -1,11 +1,11 @@
 package keymanager
 
 import (
-	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 )
 
 type kmNodeWatcher struct {
@@ -72,26 +72,19 @@ func (knw *kmNodeWatcher) watchNodes() {
 		}
 
 		// Rebuild the access policy, something has changed.
-		policy := accessctl.NewPolicy()
-
-		for _, addr := range knw.w.commonWorker.GetConfig().SentryAddresses {
-			sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
-		}
-
 		var nodes []*node.Node
+		peers := make(map[signature.PublicKey]bool)
 		for id := range activeNodes {
 			n := watcher.Lookup(id)
 			if n == nil {
 				continue
 			}
 			nodes = append(nodes, n)
+			peers[n.P2P.ID] = true
 		}
 
-		kmNodesPolicy.AddRulesForNodeRoles(&policy, nodes, node.RoleKeyManager)
-		knw.w.grpcPolicy.SetAccessPolicy(policy, knw.w.runtime.ID())
-		knw.w.logger.Debug("worker/keymanager: new km runtime access policy in effect",
-			"policy", policy,
-		)
+		knw.w.setAccessList(knw.w.runtime.ID(), nodes)
+		knw.w.commonWorker.P2P.SetNodeImportance(p2p.ImportantNodeKeyManager, knw.w.runtime.ID(), peers)
 	}
 }
 

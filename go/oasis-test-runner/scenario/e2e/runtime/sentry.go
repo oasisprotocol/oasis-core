@@ -30,8 +30,6 @@ import (
 var (
 	// Sentry is the Sentry node basic scenario.
 	Sentry scenario.Scenario = newSentryImpl("sentry", BasicKVTestClient)
-	// SentryEncryption is the Sentry node basic encryption scenario.
-	SentryEncryption scenario.Scenario = newSentryImpl("sentry-encryption", BasicKVEncTestClient)
 
 	validatorExtraLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertPeerExchangeDisabled(),
@@ -95,11 +93,6 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// +-----------+            +----------+
 	// | Compute 1 +<---------->+ Sentry 4 |
 	// +-----------+            +----------+
-	//
-	// +------------+           +----------+
-	// | Keymanager |<--------->| Sentry 5 |
-	// +------------+           +----------+
-	//
 	f.Sentries = []oasis.SentryFixture{
 		{
 			Validators: []int{0},
@@ -115,9 +108,6 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		{
 			ComputeWorkers: []int{1},
-		},
-		{
-			KeymanagerWorkers: []int{0},
 		},
 	}
 
@@ -155,14 +145,6 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Entity:   1,
 			Sentries: []int{4},
 			Runtimes: []int{1},
-		},
-	}
-
-	f.Keymanagers = []oasis.KeymanagerFixture{
-		{
-			Runtime:  0,
-			Entity:   1,
-			Sentries: []int{5},
 		},
 	}
 

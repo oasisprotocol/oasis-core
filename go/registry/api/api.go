@@ -154,12 +154,12 @@ var (
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
 	// TLSAddressRequiredRoles are the Node roles that require TLS Address.
-	TLSAddressRequiredRoles = node.RoleKeyManager |
-		node.RoleConsensusRPC |
+	TLSAddressRequiredRoles = node.RoleConsensusRPC |
 		node.RoleStorageRPC
 
 	// P2PAddressRequiredRoles are the Node roles that require P2P Address.
-	P2PAddressRequiredRoles = node.RoleComputeWorker
+	P2PAddressRequiredRoles = node.RoleComputeWorker |
+		node.RoleKeyManager
 )
 
 // Backend is a registry implementation.
