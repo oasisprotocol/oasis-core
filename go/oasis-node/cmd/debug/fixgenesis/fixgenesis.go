@@ -438,6 +438,7 @@ func updateStakingGenesis(old *v4StakingGenesis) (staking.Genesis, error) {
 		GasCosts:                          old.Parameters.GasCosts,
 		MinDelegationAmount:               old.Parameters.MinDelegationAmount,
 		MinTransferAmount:                 *quantity.NewFromUint64(10_000_000),
+		// MinTransactBalance initialized to zero.
 
 		DisableTransfers:       old.Parameters.DisableTransfers,
 		DisableDelegation:      old.Parameters.DisableDelegation,
