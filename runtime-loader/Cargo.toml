@@ -18,4 +18,4 @@ sgxs-loaders = "0.3.1"
 
 [[bin]]
 name = "oasis-core-runtime-loader"
-path ="bin/main.rs"
+path = "bin/main.rs"
