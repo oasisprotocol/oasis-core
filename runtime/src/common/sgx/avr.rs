@@ -253,11 +253,8 @@ pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
 
     let quote_status = avr_body.isv_enclave_quote_status()?;
     match quote_status.as_str() {
-        "OK" => {}
-        "GROUP_OUT_OF_DATE"
-        | "CONFIGURATION_NEEDED"
-        | "SW_HARDENING_NEEDED"
-        | "CONFIGURATION_AND_SW_HARDENING_NEEDED" => {
+        "OK" | "SW_HARDENING_NEEDED" => {}
+        "GROUP_OUT_OF_DATE" | "CONFIGURATION_NEEDED" | "CONFIGURATION_AND_SW_HARDENING_NEEDED" => {
             if !unsafe_lax_avr_verification {
                 return Err(AVRError::QuoteStatusInvalid {
                     status: quote_status.to_owned(),
