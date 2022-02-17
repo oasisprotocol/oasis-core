@@ -478,15 +478,15 @@ type SGXConstraints struct {
 	// AllowedQuoteStatuses are the allowed quote statuses for the node
 	// to be scheduled as a compute worker.
 	//
-	// Note: QuoteOK is ALWAYS allowed, and does not need to be specified.
+	// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be specified.
 	AllowedQuoteStatuses []ias.ISVEnclaveQuoteStatus `json:"allowed_quote_statuses,omitempty"`
 }
 
 func (constraints *SGXConstraints) quoteStatusAllowed(avr *ias.AttestationVerificationReport) bool {
 	status := avr.ISVEnclaveQuoteStatus
 
-	// Always allow "OK".
-	if status == ias.QuoteOK {
+	// Always allow "OK" and "SW_HARDENING_NEEDED".
+	if status == ias.QuoteOK || status == ias.QuoteSwHardeningNeeded {
 		return true
 	}
 
