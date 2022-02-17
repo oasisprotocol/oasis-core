@@ -226,7 +226,7 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 
 	// Mark all executor nodes in the current committee as important.
 	if ec := epoch.GetExecutorCommittee(); ec != nil {
-		n.P2P.SetNodeImportance(p2p.ImportantNodeCompute, ec.Peers)
+		n.P2P.SetNodeImportance(p2p.ImportantNodeCompute, n.Runtime.ID(), ec.Peers)
 	}
 
 	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
