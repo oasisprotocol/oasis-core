@@ -115,7 +115,7 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 
 	newNodes := make(map[core.PeerID]*node.Node)
 	for _, node := range nodes {
-		peerID, err := publicKeyToPeerID(node.P2P.ID)
+		peerID, err := PublicKeyToPeerID(node.P2P.ID)
 		if err != nil {
 			mgr.logger.Warn("error while getting peer ID from public key, skipping",
 				"err", err,
@@ -151,7 +151,7 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 
 // UpdateNode upserts a node into the gossipsub network.
 func (mgr *PeerManager) UpdateNode(node *node.Node) error {
-	peerID, err := publicKeyToPeerID(node.P2P.ID)
+	peerID, err := PublicKeyToPeerID(node.P2P.ID)
 	if err != nil {
 		return fmt.Errorf("worker/common/p2p/peermgr: failed to get peer ID from public key: %w", err)
 	}
@@ -190,7 +190,7 @@ func (mgr *PeerManager) SetNodeImportance(kind ImportanceKind, p2pIDs map[signat
 	previousPeers := mgr.importantPeers[kind]
 	mgr.importantPeers[kind] = make(map[core.PeerID]bool)
 	for p2pID := range p2pIDs {
-		peerID, err := publicKeyToPeerID(p2pID)
+		peerID, err := PublicKeyToPeerID(p2pID)
 		if err != nil {
 			return
 		}
@@ -415,7 +415,8 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 	}
 }
 
-func publicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
+// PublicKeyToPeerID converts a public key to a peer identifier.
+func PublicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
 	pubKey, err := publicKeyToPubKey(pk)
 	if err != nil {
 		return "", err
@@ -434,7 +435,7 @@ func nodeToAddrInfo(node *node.Node) (*peer.AddrInfo, error) {
 		ai  peer.AddrInfo
 		err error
 	)
-	if ai.ID, err = publicKeyToPeerID(node.P2P.ID); err != nil {
+	if ai.ID, err = PublicKeyToPeerID(node.P2P.ID); err != nil {
 		return nil, fmt.Errorf("failed to extract public key from node P2P ID: %w", err)
 	}
 	for _, nodeAddr := range node.P2P.Addresses {

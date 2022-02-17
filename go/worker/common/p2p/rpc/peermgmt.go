@@ -96,6 +96,9 @@ type peerManager struct {
 	peers        map[core.PeerID]*peerStats
 	ignoredPeers map[core.PeerID]bool
 
+	stickyPeers bool
+	stickyPeer  core.PeerID
+
 	avgRequestLatency time.Duration
 
 	logger *logging.Logger
@@ -156,6 +159,10 @@ func (mgr *peerManager) RecordSuccess(peerID core.PeerID, latency time.Duration)
 	}
 
 	mgr.host.ConnManager().TagPeer(peerID, string(mgr.protocolID), SuccessConnManagerPeerTagValue)
+
+	if mgr.stickyPeers {
+		mgr.stickyPeer = peerID
+	}
 }
 
 func (mgr *peerManager) RecordFailure(peerID core.PeerID, latency time.Duration) {
@@ -168,6 +175,7 @@ func (mgr *peerManager) RecordFailure(peerID core.PeerID, latency time.Duration)
 	}
 	ps.failures++
 	ps.recordLatency(latency)
+	mgr.unstickPeerLocked(peerID)
 }
 
 func (mgr *peerManager) RecordBadPeer(peerID core.PeerID) {
@@ -177,6 +185,17 @@ func (mgr *peerManager) RecordBadPeer(peerID core.PeerID) {
 	mgr.p2p.BlockPeer(peerID)
 	mgr.ignoredPeers[peerID] = true
 	delete(mgr.peers, peerID)
+	mgr.unstickPeerLocked(peerID)
+}
+
+func (mgr *peerManager) unstickPeerLocked(peerID core.PeerID) {
+	if !mgr.stickyPeers {
+		return
+	}
+
+	if mgr.stickyPeer == peerID {
+		mgr.stickyPeer = ""
+	}
 }
 
 func (mgr *peerManager) GetBestPeers() []core.PeerID {
@@ -184,8 +203,14 @@ func (mgr *peerManager) GetBestPeers() []core.PeerID {
 	defer mgr.Unlock()
 
 	// Start by including all peers.
+	var haveStickyPeer bool
 	peers := make([]core.PeerID, 0, len(mgr.peers))
 	for peer := range mgr.peers {
+		if mgr.stickyPeer == peer {
+			// Do not include the sticky peer so we can prepend it later.
+			haveStickyPeer = true
+			continue
+		}
 		peers = append(peers, peer)
 	}
 
@@ -211,6 +236,11 @@ func (mgr *peerManager) GetBestPeers() []core.PeerID {
 	rng.Shuffle(len(bestPeers), func(i, j int) {
 		bestPeers[i], bestPeers[j] = bestPeers[j], bestPeers[i]
 	})
+
+	// If we have a stuck peer that is still available, prepend it so we always try it first.
+	if haveStickyPeer {
+		peers = append([]core.PeerID{mgr.stickyPeer}, peers...)
+	}
 
 	return peers
 }
@@ -275,13 +305,14 @@ func (mgr *peerManager) peerProtocolWatcher() {
 }
 
 // NewPeerManager creates a new peer manager for the given protocol.
-func NewPeerManager(p2p P2P, protocolID protocol.ID) PeerManager {
+func NewPeerManager(p2p P2P, protocolID protocol.ID, stickyPeers bool) PeerManager {
 	mgr := &peerManager{
 		p2p:          p2p,
 		host:         p2p.GetHost(),
 		protocolID:   protocolID,
 		peers:        make(map[core.PeerID]*peerStats),
 		ignoredPeers: make(map[core.PeerID]bool),
+		stickyPeers:  stickyPeers,
 		logger: logging.GetLogger("worker/common/p2p/rpc/peermgr").With(
 			"protocol_id", protocolID,
 		),

@@ -70,6 +70,40 @@ func NewNopPeerFeedback() PeerFeedback {
 	return &nopPeerFeedback{}
 }
 
+// ClientOptions are client options.
+type ClientOptions struct {
+	stickyPeers bool
+	peerFilter  PeerFilter
+}
+
+// ClientOption is a client option setter.
+type ClientOption func(opts *ClientOptions)
+
+// WithStickyPeers configures the sticky peers feature.
+//
+// When enabled, the last successful peer will be stuck and will be reused on subsequent calls until
+// the peer is deemed bad by the received peer feedback.
+func WithStickyPeers(enabled bool) ClientOption {
+	return func(opts *ClientOptions) {
+		opts.stickyPeers = enabled
+	}
+}
+
+// PeerFilter is a peer filtering interface.
+type PeerFilter interface {
+	// IsPeerAcceptable checks whether the given peer should be used.
+	IsPeerAcceptable(peerID core.PeerID) bool
+}
+
+// WithPeerFilter configures peer filtering.
+//
+// When set, only peers accepted by the filter will be used for calls.
+func WithPeerFilter(filter PeerFilter) ClientOption {
+	return func(opts *ClientOptions) {
+		opts.peerFilter = filter
+	}
+}
+
 // Client is an RPC client for a given protocol.
 type Client interface {
 	PeerManager
@@ -107,7 +141,17 @@ type client struct {
 	protocolID protocol.ID
 	runtimeID  common.Namespace
 
+	opts *ClientOptions
+
 	logger *logging.Logger
+}
+
+func (c *client) isPeerAcceptable(peerID core.PeerID) bool {
+	if c.opts.peerFilter == nil {
+		return true
+	}
+
+	return c.opts.peerFilter.IsPeerAcceptable(peerID)
 }
 
 func (c *client) Call(
@@ -126,6 +170,10 @@ func (c *client) Call(
 
 	// Iterate through the prioritized list of peers and attempt to execute the request.
 	for _, peer := range c.GetBestPeers() {
+		if !c.isPeerAcceptable(peer) {
+			continue
+		}
+
 		c.logger.Debug("trying peer",
 			"method", method,
 			"peer_id", peer,
@@ -174,6 +222,10 @@ func (c *client) CallMulti(
 	}
 	var resultCh []chan *result
 	for _, peer := range c.GetBestPeers() {
+		if !c.isPeerAcceptable(peer) {
+			continue
+		}
+
 		ch := make(chan *result, 1)
 		resultCh = append(resultCh, ch)
 
@@ -298,14 +350,20 @@ func (c *client) sendRequestAndDecodeResponse(
 }
 
 // NewClient creates a new RPC client for the given protocol.
-func NewClient(p2p P2P, runtimeID common.Namespace, protocolID string, version version.Version) Client {
+func NewClient(p2p P2P, runtimeID common.Namespace, protocolID string, version version.Version, opts ...ClientOption) Client {
 	pid := NewRuntimeProtocolID(runtimeID, protocolID, version)
 
+	var co ClientOptions
+	for _, opt := range opts {
+		opt(&co)
+	}
+
 	return &client{
-		PeerManager: NewPeerManager(p2p, pid),
+		PeerManager: NewPeerManager(p2p, pid, co.stickyPeers),
 		host:        p2p.GetHost(),
 		protocolID:  pid,
 		runtimeID:   runtimeID,
+		opts:        &co,
 		logger: logging.GetLogger("worker/common/p2p/rpc/client").With(
 			"protocol", protocolID,
 			"runtime_id", runtimeID,
