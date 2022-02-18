@@ -392,6 +392,7 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 	mgr.logger.Debug("updating libp2p gossipsub peer",
 		"node_id", p.node.ID,
 		"peer_id", peerID,
+		"addrs", ai.Addrs,
 	)
 
 	bctx := backoff.WithContext(cmnBackoff.NewExponentialBackOff(), p.ctx)
@@ -407,9 +408,20 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 				// `net.Error`, but continuing to retry as long
 				// as the host claims that it is available
 				// at that address, is probably ok?
+				mgr.logger.Debug("failed to connect to peer",
+					"err", err,
+					"node_id", p.node.ID,
+					"peer_id", peerID,
+					"addrs", ai.Addrs,
+				)
 			}
 			return perr
 		}
+
+		mgr.logger.Debug("connected to peer",
+			"node_id", p.node.ID,
+			"peer_id", peerID,
+		)
 
 		return nil
 	}, bctx)

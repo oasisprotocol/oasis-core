@@ -270,6 +270,24 @@ func (mgr *peerManager) peerProtocolWatcher() {
 		},
 	})
 
+	// Now that we have subscribed, make sure to process any peers that are already there.
+	for _, peerID := range mgr.host.Network().Peers() {
+		protocols, err := mgr.host.Peerstore().GetProtocols(peerID)
+		if err != nil {
+			mgr.logger.Error("failed to get peer's protocols",
+				"err", err,
+				"peer_id", peerID,
+			)
+			continue
+		}
+
+		for _, p := range protocols {
+			if protocol.ID(p) == mgr.protocolID {
+				mgr.AddPeer(peerID)
+			}
+		}
+	}
+
 	for ev := range sub.Out() {
 		switch evt := ev.(type) {
 		case event.EvtPeerIdentificationCompleted:
@@ -278,6 +296,7 @@ func (mgr *peerManager) peerProtocolWatcher() {
 			if err != nil {
 				mgr.logger.Error("failed to get peer's protocols",
 					"err", err,
+					"peer_id", evt.Peer,
 				)
 				continue
 			}
