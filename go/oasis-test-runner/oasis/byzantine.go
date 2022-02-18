@@ -54,7 +54,7 @@ func (worker *Byzantine) AddArgs(args *argBuilder) error {
 		byzantineActivationEpoch(worker.activationEpoch)
 
 	if worker.runtime > 0 {
-		args.byzantineRuntimeID(worker.net.runtimes[worker.runtime].id)
+		args.byzantineRuntimeID(worker.net.runtimes[worker.runtime].ID())
 	}
 	for _, v := range worker.net.Runtimes() {
 		if v.kind == registry.KindCompute && v.teeHardware == node.TEEHardwareIntelSGX {
@@ -117,7 +117,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	host.features = append(host.features, worker)
 
 	if cfg.Runtime >= 0 {
-		rt := net.runtimes[cfg.Runtime].id
+		rt := net.runtimes[cfg.Runtime].ID()
 		pk := host.nodeSigner
 
 		if net.cfg.SchedulerForceElect == nil {

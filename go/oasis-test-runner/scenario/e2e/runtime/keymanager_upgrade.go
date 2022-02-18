@@ -8,8 +8,8 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -43,16 +43,14 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Load the upgraded keymanager binary.
-	newKmBinaries := sc.resolveRuntimeBinaries([]string{"simple-keymanager-upgrade"})
+	newKmBinaries := sc.resolveRuntimeBinaries("simple-keymanager-upgrade")
 	// Setup the upgraded runtime.
 	kmRuntimeFix := f.Runtimes[0]
 	if kmRuntimeFix.Kind != registry.KindKeyManager {
 		return nil, fmt.Errorf("expected first runtime in fixture to be keymanager runtime, got: %s", kmRuntimeFix.Kind)
 	}
-	for _, tee := range []node.TEEHardware{node.TEEHardwareInvalid, node.TEEHardwareIntelSGX} {
-		newKmBinaries[tee] = append(newKmBinaries[tee], kmRuntimeFix.Binaries[tee]...)
-	}
 	kmRuntimeFix.Binaries = newKmBinaries
+	kmRuntimeFix.Version = version.Version{Major: 0, Minor: 1, Patch: 0}
 	// The upgraded runtime will be registered later.
 	kmRuntimeFix.ExcludeFromGenesis = true
 	f.Runtimes = append(f.Runtimes, kmRuntimeFix)

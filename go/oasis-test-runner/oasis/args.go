@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
@@ -379,10 +378,10 @@ func (args *argBuilder) runtimeSGXLoader(fn string) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) runtimePath(id common.Namespace, fn string) *argBuilder {
+func (args *argBuilder) runtimePath(rt *Runtime) *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:        runtimeRegistry.CfgRuntimePaths,
-		Values:      []string{id.String() + "=" + fn},
+		Values:      []string{rt.BundlePath()},
 		MultiValued: true,
 	})
 	return args
@@ -614,8 +613,8 @@ func (args *argBuilder) appendRuntimePruner(p *RuntimePrunerCfg) *argBuilder {
 	return args
 }
 
-func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, binaryIdx int, localConfig map[string]interface{}) *argBuilder {
-	args = args.runtimePath(rt.id, rt.binaries[tee][binaryIdx]).
+func (args *argBuilder) appendHostedRuntime(rt *Runtime, localConfig map[string]interface{}) *argBuilder {
+	args = args.runtimePath(rt).
 		appendRuntimePruner(&rt.pruner)
 
 	// When local runtime config is set, we need to generate a config file.
@@ -623,7 +622,7 @@ func (args *argBuilder) appendHostedRuntime(rt *Runtime, tee node.TEEHardware, b
 		args.mergeConfigMap(map[string]interface{}{
 			"runtime": map[string]interface{}{
 				"config": map[string]interface{}{
-					rt.id.String(): localConfig,
+					rt.ID().String(): localConfig,
 				},
 			},
 		})
@@ -665,7 +664,7 @@ func (args *argBuilder) byzantineFakeSGX() *argBuilder {
 
 func (args *argBuilder) byzantineVersionFakeEnclaveID(rt *Runtime) *argBuilder {
 	eid := sgx.EnclaveIdentity{
-		MrEnclave: *rt.mrEnclaves[0],
+		MrEnclave: *rt.mrEnclave,
 		MrSigner:  *rt.mrSigner,
 	}
 	args.vec = append(args.vec, Argument{

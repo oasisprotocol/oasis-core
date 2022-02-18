@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -53,13 +53,11 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Load the upgraded runtime binary.
-	newRuntimeBinaries := sc.resolveRuntimeBinaries([]string{"simple-keyvalue-upgrade"})
+	newRuntimeBinaries := sc.resolveRuntimeBinaries("simple-keyvalue-upgrade")
 
 	// Setup the upgraded runtime (first is keymanager, others should be generic compute).
 	runtimeFix := f.Runtimes[computeIndex]
-	for _, tee := range []node.TEEHardware{node.TEEHardwareInvalid, node.TEEHardwareIntelSGX} {
-		newRuntimeBinaries[tee] = append(newRuntimeBinaries[tee], runtimeFix.Binaries[tee]...)
-	}
+	runtimeFix.Version = version.Version{Major: 0, Minor: 1, Patch: 0}
 	runtimeFix.Binaries = newRuntimeBinaries
 
 	// The upgraded runtime will be registered later.

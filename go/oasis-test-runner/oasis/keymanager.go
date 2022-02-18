@@ -56,24 +56,20 @@ func (pol *KeymanagerPolicy) provision() error {
 			"keymanager", "init_policy",
 			"--" + flags.CfgDebugDontBlameOasis,
 			"--" + kmCmd.CfgPolicyFile, policyPath,
-			"--" + kmCmd.CfgPolicyID, pol.runtime.id.String(),
+			"--" + kmCmd.CfgPolicyID, pol.runtime.ID().String(),
 			"--" + kmCmd.CfgPolicySerial, strconv.Itoa(pol.serial),
 		}
-		for _, mrEnclave := range pol.runtime.mrEnclaves {
-			policyArgs = append(policyArgs, []string{
-				"--" + kmCmd.CfgPolicyEnclaveID, mrEnclave.String() + pol.runtime.mrSigner.String(),
-			}...)
-		}
+		policyArgs = append(policyArgs, []string{
+			"--" + kmCmd.CfgPolicyEnclaveID, pol.runtime.mrEnclave.String() + pol.runtime.mrSigner.String(),
+		}...)
 
 		for _, rt := range pol.net.runtimes {
 			if rt.teeHardware == node.TEEHardwareInvalid || rt.kind != registry.KindCompute {
 				continue
 			}
 
-			for _, mrEnclave := range rt.mrEnclaves {
-				arg := fmt.Sprintf("%s=%s%s", rt.id, mrEnclave, rt.mrSigner)
-				policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
-			}
+			arg := fmt.Sprintf("%s=%s%s", rt.ID(), rt.mrEnclave, rt.mrSigner)
+			policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
 		}
 
 		w, err := pol.dir.NewLogWriter("provision-policy.log")
@@ -220,7 +216,7 @@ func (km *Keymanager) provisionGenesis() error {
 		"keymanager", "init_status",
 		"--" + common.CfgDebugAllowTestKeys,
 		"--" + flags.CfgDebugDontBlameOasis,
-		"--" + kmCmd.CfgStatusID, km.runtime.id.String(),
+		"--" + kmCmd.CfgStatusID, km.runtime.ID().String(),
 		"--" + kmCmd.CfgStatusFile, filepath.Join(km.dir.String(), kmStatusFile),
 	}
 	statusArgs = append(statusArgs, km.policy.provisionStatusArgs()...)
@@ -257,11 +253,6 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		return err
 	}
 
-	runtimeBinaries := km.runtime.binaries[km.runtime.teeHardware]
-	if len(runtimeBinaries) < 1 {
-		return fmt.Errorf("oasis/keymanager: no runtime binaries configured")
-	}
-
 	args.debugDontBlameOasis().
 		debugAllowTestKeys().
 		debugSetRlimit().
@@ -276,9 +267,8 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		runtimeMode(runtimeRegistry.RuntimeModeKeymanager).
 		runtimeProvisioner(km.runtimeProvisioner).
 		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
-		// XXX: could support configurable binary idx if ever needed.
-		runtimePath(km.runtime.id, runtimeBinaries[0]).
-		workerKeymanagerRuntimeID(km.runtime.id).
+		runtimePath(km.runtime).
+		workerKeymanagerRuntimeID(km.runtime.ID()).
 		configureDebugCrashPoints(km.crashPointsProbability).
 		tendermintSupplementarySanity(km.supplementarySanityInterval).
 		appendNetwork(km.net).

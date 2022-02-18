@@ -3,7 +3,6 @@ package oasis
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
@@ -49,7 +48,7 @@ func (client *Client) AddArgs(args *argBuilder) error {
 	for _, idx := range client.runtimes {
 		v := client.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
-		client.addHostedRuntime(v, node.TEEHardwareInvalid, 0, client.runtimeConfig[idx])
+		client.addHostedRuntime(v, client.runtimeConfig[idx])
 	}
 
 	return nil

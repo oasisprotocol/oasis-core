@@ -151,8 +151,8 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 
 	// Register a new compute runtime.
 	compRt := sc.Net.Runtimes()[1]
-	if err := compRt.RefreshEnclaveIdentity(); err != nil {
-		return fmt.Errorf("failed to refresh enclave identity: %w", err)
+	if err := compRt.RefreshRuntimeBundle(); err != nil {
+		return fmt.Errorf("failed to refresh runtime bundle: %w", err)
 	}
 	compRtDesc := compRt.ToRuntimeDescriptor()
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")

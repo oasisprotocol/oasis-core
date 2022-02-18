@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -70,8 +69,6 @@ type CustomStartFeature interface {
 
 type hostedRuntime struct {
 	runtime     *Runtime
-	tee         commonNode.TEEHardware
-	binaryIdx   int
 	localConfig map[string]interface{}
 }
 
@@ -128,24 +125,16 @@ func (n *Node) getProvisionedPort(portName string) uint16 {
 	return port
 }
 
-func (n *Node) addHostedRuntime(rt *Runtime, tee commonNode.TEEHardware, binaryIdx int, localConfig map[string]interface{}) {
-	hosted, ok := n.hostedRuntimes[rt.id]
-	if !ok {
-		n.hostedRuntimes[rt.id] = &hostedRuntime{
+func (n *Node) addHostedRuntime(rt *Runtime, localConfig map[string]interface{}) {
+	if _, ok := n.hostedRuntimes[rt.ID()]; !ok {
+		n.hostedRuntimes[rt.ID()] = &hostedRuntime{
 			runtime:     rt,
-			tee:         tee,
-			binaryIdx:   binaryIdx,
 			localConfig: localConfig,
 		}
 		return
 	}
 
-	if tee > hosted.tee {
-		hosted.tee = tee
-	}
-	if binaryIdx != hosted.binaryIdx {
-		panic(fmt.Sprintf("oasis/node: conflicting runtime binary index (%d vs. %d)", binaryIdx, hosted.binaryIdx))
-	}
+	panic("oasis/node: refusing to re-define runtime binary: " + rt.ID().String())
 }
 
 // Exit returns a channel that will close once the node shuts down.
@@ -203,7 +192,7 @@ func (n *Node) Start() error {
 		}
 	}
 	for _, hosted := range n.hostedRuntimes {
-		args.appendHostedRuntime(hosted.runtime, hosted.tee, hosted.binaryIdx, hosted.localConfig)
+		args.appendHostedRuntime(hosted.runtime, hosted.localConfig)
 	}
 
 	args.extraArgs(n.extraArgs)

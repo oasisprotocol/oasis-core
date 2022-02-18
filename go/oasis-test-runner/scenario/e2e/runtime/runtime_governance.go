@@ -60,7 +60,7 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Remove existing compute runtimes from fixture, remember RuntimeID and
 	// binary from the first one.
 	var id common.Namespace
-	var runtimeBinaries map[node.TEEHardware][]string
+	var runtimeBinaries map[node.TEEHardware]string
 	var rts []oasis.RuntimeFixture
 	for _, rt := range f.Runtimes {
 		if rt.Kind == registry.KindCompute {

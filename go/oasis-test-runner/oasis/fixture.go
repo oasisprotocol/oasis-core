@@ -221,8 +221,8 @@ type RuntimeFixture struct { // nolint: maligned
 	Keymanager int                  `json:"keymanager"`
 	Version    version.Version      `json:"version"`
 
-	Binaries     map[node.TEEHardware][]string `json:"binaries"`
-	GenesisRound uint64                        `json:"genesis_round,omitempty"`
+	Binaries     map[node.TEEHardware]string `json:"binaries"`
+	GenesisRound uint64                      `json:"genesis_round,omitempty"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`

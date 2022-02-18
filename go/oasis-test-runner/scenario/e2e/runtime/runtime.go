@@ -182,7 +182,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
-				Binaries:        sc.resolveRuntimeBinaries([]string{keyManagerBinary}),
+				Binaries:        sc.resolveRuntimeBinaries(keyManagerBinary),
 				GovernanceModel: registry.GovernanceEntity,
 			},
 			// Compute runtime.
@@ -191,7 +191,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindCompute,
 				Entity:     0,
 				Keymanager: 0,
-				Binaries:   sc.resolveRuntimeBinaries([]string{runtimeBinary}),
+				Binaries:   sc.resolveRuntimeBinaries(runtimeBinary),
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
@@ -278,15 +278,13 @@ func (sc *runtimeImpl) getTEEHardware() (node.TEEHardware, error) {
 	return tee, nil
 }
 
-func (sc *runtimeImpl) resolveRuntimeBinaries(runtimeBinaries []string) map[node.TEEHardware][]string {
-	binaries := make(map[node.TEEHardware][]string)
+func (sc *runtimeImpl) resolveRuntimeBinaries(baseRuntimeBinary string) map[node.TEEHardware]string {
+	binaries := make(map[node.TEEHardware]string)
 	for _, tee := range []node.TEEHardware{
 		node.TEEHardwareInvalid,
 		node.TEEHardwareIntelSGX,
 	} {
-		for _, binary := range runtimeBinaries {
-			binaries[tee] = append(binaries[tee], sc.resolveRuntimeBinary(binary, tee))
-		}
+		binaries[tee] = sc.resolveRuntimeBinary(baseRuntimeBinary, tee)
 	}
 	return binaries
 }

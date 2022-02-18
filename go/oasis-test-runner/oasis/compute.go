@@ -174,7 +174,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 	for _, idx := range worker.runtimes {
 		v := worker.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
-		worker.addHostedRuntime(v, v.teeHardware, 0, worker.runtimeConfig[idx])
+		worker.addHostedRuntime(v, worker.runtimeConfig[idx])
 	}
 
 	// Sentry configuration.
