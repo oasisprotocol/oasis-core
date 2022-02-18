@@ -11,7 +11,7 @@ use std::{
 
 use ansi_term::Color::{Green, Red, White};
 use anyhow::{anyhow, Context as AnyContext, Result};
-use clap::{App, Arg, SubCommand};
+use clap::Arg;
 use oasis_core_tools::cargo;
 use thiserror::Error;
 
@@ -45,10 +45,10 @@ fn run_command(mut cmd: Command) -> Result<(), CommandFail> {
 }
 
 fn real_main() -> Result<()> {
-    let matches = App::new("cargo")
+    let matches = clap::Command::new("cargo")
         .subcommand(
-            SubCommand::with_name("elf2sgxs").arg(
-                Arg::with_name("release")
+            clap::Command::new("elf2sgxs").arg(
+                Arg::new("release")
                     .long("release")
                     .help("Use release build artifacts"),
             ),

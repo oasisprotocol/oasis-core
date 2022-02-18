@@ -1,40 +1,36 @@
-#[macro_use]
-extern crate clap;
-
 use std::path::Path;
 
-use clap::{App, Arg};
+use clap::{Arg, Command};
 
 #[cfg(target_os = "linux")]
 use oasis_core_runtime_loader::SgxsLoader;
 use oasis_core_runtime_loader::{ElfLoader, Loader};
 
 fn main() {
-    let matches = App::new("Oasis runtime loader")
+    let matches = Command::new("Oasis runtime loader")
         .arg(
-            Arg::with_name("type")
+            Arg::new("type")
                 .long("type")
                 .help("Runtime type")
                 .possible_values(&["sgxs", "elf"])
                 .takes_value(true)
-                .required(true)
                 .default_value("sgxs"),
         )
         .arg(
-            Arg::with_name("runtime")
+            Arg::new("runtime")
                 .value_name("RUNTIME")
                 .help("Runtime filename")
                 .takes_value(true)
                 .required(true),
         )
         .arg(
-            Arg::with_name("signature")
+            Arg::new("signature")
                 .long("signature")
                 .help("Signature filename")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("host-socket")
+            Arg::new("host-socket")
                 .long("host-socket")
                 .takes_value(true)
                 .required(true),
@@ -50,7 +46,9 @@ fn main() {
     );
 
     // Decode arguments.
-    let host_socket = value_t!(matches, "host-socket", String).unwrap_or_else(|e| e.exit());
+    let host_socket = matches
+        .value_of_t::<String>("host-socket")
+        .unwrap_or_else(|e| e.exit());
     let mode = matches.value_of("type").unwrap();
     let signature = matches.value_of("signature");
 
