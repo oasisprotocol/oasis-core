@@ -189,12 +189,11 @@ func testBasic(t *testing.T, localBackend api.LocalBackend, backend api.Backend,
 
 		cps, err := backend.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: namespace})
 		require.NoError(t, err, "GetCheckpoints")
-		require.Len(t, cps, 1, "GetCheckpoints should return one checkpoint")
-		require.Equal(t, cp, cps[0], "GetCheckpoints should return correct checkpoint metadata")
-		require.Len(t, cps[0].Chunks, 1, "checkpoint should have a single chunk")
+		require.Contains(t, cps, cp, "GetCheckpoints should return correct checkpoint metadata")
+		require.Len(t, cp.Chunks, 1, "checkpoint should have a single chunk")
 
 		var buf bytes.Buffer
-		chunk, err := cps[0].GetChunkMetadata(0)
+		chunk, err := cp.GetChunkMetadata(0)
 		require.NoError(t, err, "GetChunkMetadata")
 		err = backend.GetCheckpointChunk(ctx, chunk, &buf)
 		require.NoError(t, err, "GetCheckpointChunk")

@@ -566,9 +566,10 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 		compatible = n.localStorage.NodeDB().HasRoot(stateRoot)
 	}
 
-	// If we are incompatible and the database is not empty, we cannot do anything. If the database
-	// is empty we assume the node will sync from a different node.
-	if !compatible && latestVersion > 0 {
+	// If we are incompatible and the local version is greater or the same as the genesis version,
+	// we cannot do anything. If the local version is lower we assume the node will sync from a
+	// different node.
+	if !compatible && latestVersion >= stateRoot.Version {
 		n.logger.Error("existing state is incompatible with runtime genesis state",
 			"genesis_state_root", genesisBlock.Header.StateRoot,
 			"genesis_round", genesisBlock.Header.Round,
@@ -856,7 +857,7 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	// Notify the checkpointer of the genesis round so it can be checkpointed.
 	if n.checkpointer != nil {
-		n.checkpointer.NotifyNewVersion(genesisBlock.Header.Round)
+		n.checkpointer.ForceCheckpoint(genesisBlock.Header.Round)
 		n.checkpointer.Flush()
 	}
 
