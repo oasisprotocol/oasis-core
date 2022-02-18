@@ -592,7 +592,7 @@ func TestWithdraw(t *testing.T) {
 		}
 
 		result, err := app.withdraw(txCtx, stakeState, tc.withdraw)
-		require.Equal(tc.err, err, tc.msg)
+		require.ErrorIs(err, tc.err, tc.msg)
 		require.EqualValues(tc.result, result, tc.msg)
 
 		if tc.withdraw.From.IsReserved() {
@@ -748,7 +748,7 @@ func TestAddEscrow(t *testing.T) {
 		txCtx.SetTxSigner(tc.txSigner)
 
 		result, err := app.addEscrow(txCtx, stakeState, tc.escrow)
-		require.Equal(tc.err, err, tc.msg)
+		require.ErrorIs(err, tc.err, tc.msg)
 		require.EqualValues(tc.result, result, tc.msg)
 	}
 }
@@ -954,7 +954,7 @@ func TestTransfer(t *testing.T) {
 		txCtx.SetTxSigner(tc.txSigner)
 
 		_, err = app.transfer(txCtx, stakeState, tc.transfer)
-		require.Equal(tc.err, err, tc.msg)
+		require.ErrorIs(err, tc.err, tc.msg)
 	}
 }
 
@@ -1041,6 +1041,6 @@ func TestBurn(t *testing.T) {
 		txCtx.SetTxSigner(tc.txSigner)
 
 		err = app.burn(txCtx, stakeState, tc.burn)
-		require.Equal(tc.err, err, tc.msg)
+		require.ErrorIs(err, tc.err, tc.msg)
 	}
 }
