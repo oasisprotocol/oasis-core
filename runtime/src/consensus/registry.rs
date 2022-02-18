@@ -6,6 +6,8 @@
 //!
 use std::collections::BTreeMap;
 
+use num_traits::Zero;
+
 use crate::{
     common::{
         crypto::{hash::Hash, signature::PublicKey},
@@ -301,6 +303,10 @@ pub struct Runtime {
 
 fn staking_params_are_empty(p: &RuntimeStakingParameters) -> bool {
     p.thresholds.is_none()
+        && p.slashing.is_none()
+        && p.reward_equivocation == 0
+        && p.reward_bad_results == 0
+        && p.min_in_message_fee.is_zero()
 }
 
 /// Runtime genesis information that is used to initialize runtime state in the first block.
@@ -312,4 +318,140 @@ pub struct RuntimeGenesis {
 
     /// Runtime round in the genesis.
     pub round: u64,
+}
+#[cfg(test)]
+mod tests {
+    use crate::common::quantity::Quantity;
+
+    use super::*;
+
+    /// Constructs a BTreeMap using a `btreemap! { key => value, ... }` syntax.
+    macro_rules! btreemap {
+    // allow trailing comma
+    ( $($key:expr => $value:expr,)+ ) => (btreemap!($($key => $value),+));
+    ( $($key:expr => $value:expr),* ) => {
+        {
+            let mut m = BTreeMap::new();
+            $( m.insert($key.into(), $value); )*
+            m
+        }
+    };
+}
+
+    #[test]
+    fn test_consistent_runtime() {
+        // NOTE: These tests MUST be synced with go/registry/api/runtime.go.
+        let tcs = vec![
+            ("rGF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBodmVyc2lvbnOhZ3ZlcnNpb26gaWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABsdGVlX2hhcmR3YXJlAG10eG5fc2NoZWR1bGVypG5tYXhfYmF0Y2hfc2l6ZQBzYmF0Y2hfZmx1c2hfdGltZW91dAB0bWF4X2JhdGNoX3NpemVfYnl0ZXMAdXByb3Bvc2VfYmF0Y2hfdGltZW91dABwYWRtaXNzaW9uX3BvbGljeaFoYW55X25vZGWgcGdvdmVybmFuY2VfbW9kZWwA", Runtime::default()),
+            ("rGF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBodmVyc2lvbnOhZ3ZlcnNpb26gaWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABsdGVlX2hhcmR3YXJlAG10eG5fc2NoZWR1bGVypG5tYXhfYmF0Y2hfc2l6ZQBzYmF0Y2hfZmx1c2hfdGltZW91dAB0bWF4X2JhdGNoX3NpemVfYnl0ZXMAdXByb3Bvc2VfYmF0Y2hfdGltZW91dABwYWRtaXNzaW9uX3BvbGljeaFoYW55X25vZGWgcGdvdmVybmFuY2VfbW9kZWwA",
+                Runtime {
+                    staking: RuntimeStakingParameters {
+                        thresholds:          None,
+                        slashing:            None,
+                        reward_equivocation: 0,
+                        reward_bad_results:  0,
+                        min_in_message_fee:  Quantity::from(0u32),
+                    },
+                    ..Default::default()
+                }),
+            ("rWF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0YWtpbmehcnJld2FyZF9iYWRfcmVzdWx0cwpnc3RvcmFnZaNzY2hlY2twb2ludF9pbnRlcnZhbABzY2hlY2twb2ludF9udW1fa2VwdAB1Y2hlY2twb2ludF9jaHVua19zaXplAGhleGVjdXRvcqVqZ3JvdXBfc2l6ZQBsbWF4X21lc3NhZ2VzAG1yb3VuZF90aW1lb3V0AHFncm91cF9iYWNrdXBfc2l6ZQByYWxsb3dlZF9zdHJhZ2dsZXJzAGh2ZXJzaW9uc6FndmVyc2lvbqBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAbXR4bl9zY2hlZHVsZXKkbm1heF9iYXRjaF9zaXplAHNiYXRjaF9mbHVzaF90aW1lb3V0AHRtYXhfYmF0Y2hfc2l6ZV9ieXRlcwB1cHJvcG9zZV9iYXRjaF90aW1lb3V0AHBhZG1pc3Npb25fcG9saWN5oWhhbnlfbm9kZaBwZ292ZXJuYW5jZV9tb2RlbAA=",
+                Runtime {
+                    staking: RuntimeStakingParameters {
+                        thresholds:          None,
+                        slashing:            None,
+                        reward_equivocation: 0,
+                        reward_bad_results:  10,
+                        min_in_message_fee:  Quantity::from(0u32),
+                    },
+                    ..Default::default()
+                }),
+		    ("r2F2GCpiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZGtpbmQCZ2dlbmVzaXOiZXJvdW5kGCtqc3RhdGVfcm9vdFggseUhAZ+3vd413IH+55BlYQy937jvXCXihJg2aBkqbQ1nc3Rha2luZ6FycmV3YXJkX2JhZF9yZXN1bHRzCmdzdG9yYWdlo3NjaGVja3BvaW50X2ludGVydmFsGCFzY2hlY2twb2ludF9udW1fa2VwdAZ1Y2hlY2twb2ludF9jaHVua19zaXplGGVoZXhlY3V0b3Koamdyb3VwX3NpemUJbG1heF9tZXNzYWdlcwVtcm91bmRfdGltZW91dAZxZ3JvdXBfYmFja3VwX3NpemUIcmFsbG93ZWRfc3RyYWdnbGVycwdybWF4X2xpdmVuZXNzX2ZhaWxzAnRtaW5fbGl2ZV9yb3VuZHNfZXZhbAN3bWluX2xpdmVfcm91bmRzX3BlcmNlbnQEaHZlcnNpb25zomN0ZWVLdmVyc2lvbiB0ZWVndmVyc2lvbqJlbWFqb3IYLGVwYXRjaAFpZW50aXR5X2lkWCASNFZ4kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGtjb25zdHJhaW50c6EBoQGjaW1heF9ub2Rlc6FlbGltaXQKbW1pbl9wb29sX3NpemWhZWxpbWl0BW12YWxpZGF0b3Jfc2V0oGtrZXlfbWFuYWdlclgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFsdGVlX2hhcmR3YXJlAW10eG5fc2NoZWR1bGVypW5tYXhfYmF0Y2hfc2l6ZRknEG9tYXhfaW5fbWVzc2FnZXMYIHNiYXRjaF9mbHVzaF90aW1lb3V0GjuaygB0bWF4X2JhdGNoX3NpemVfYnl0ZXMaAJiWgHVwcm9wb3NlX2JhdGNoX3RpbWVvdXQBcGFkbWlzc2lvbl9wb2xpY3mhcGVudGl0eV93aGl0ZWxpc3ShaGVudGl0aWVzoVggEjRWeJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChaW1heF9ub2Rlc6IBAwQBcGdvdmVybmFuY2VfbW9kZWwD",
+                Runtime {
+                    v: 42,
+                    id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000000"),
+                    entity_id: PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000"),
+                    genesis: RuntimeGenesis{
+                        round: 43,
+                        state_root: Hash::digest_bytes(b"stateroot hash"),
+                    },
+                    kind: RuntimeKind::KindKeyManager,
+                    tee_hardware: TEEHardware::TEEHardwareIntelSGX,
+                    versions: VersionInfo{
+                        version: Version { major: 44, minor: 0, patch: 1 },
+                        tee: Some(b"version tee".to_vec()),
+                    },
+                    key_manager: Some(
+                        Namespace::from("8000000000000000000000000000000000000000000000000000000000000001")
+                    ),
+                    executor: ExecutorParameters{
+                        group_size: 9,
+                        group_backup_size: 8,
+                        allowed_stragglers: 7,
+                        round_timeout: 6,
+                        max_messages: 5,
+                        min_live_rounds_percent: 4,
+                        min_live_rounds_eval: 3,
+                        max_liveness_fails: 2,
+                    },
+                    txn_scheduler: TxnSchedulerParameters{
+                        batch_flush_timeout: 1_000_000_000,
+                        max_batch_size: 10_000,
+                        max_batch_size_bytes: 10_000_000,
+                        max_in_messages: 32,
+                        propose_batch_timeout: 1,
+                    },
+                    storage: StorageParameters {
+                        checkpoint_interval: 33,
+                        checkpoint_num_kept: 6,
+                        checkpoint_chunk_size: 101,
+                    },
+                    admission_policy: RuntimeAdmissionPolicy::EntityWhitelist(EntityWhitelistRuntimeAdmissionPolicy{
+                        entities: Some(
+                            btreemap! {
+                                PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000") => EntityWhitelistConfig {
+                                     max_nodes: Some(btreemap! {
+                                         RolesMask::RoleComputeWorker => 3,
+                                         RolesMask::RoleKeyManager => 1,
+                                    })
+                                }
+                            }
+                        )
+                    }),
+                    constraints: Some(
+                        btreemap! {
+                            scheduler::CommitteeKind::ComputeExecutor => btreemap! {
+                                scheduler::Role::Worker => SchedulingConstraints{
+                                    max_nodes: Some(
+                                        MaxNodesConstraint{
+                                            limit: 10,
+                                        }
+                                    ),
+                                    min_pool_size: Some(
+                                        MinPoolSizeConstraint {
+                                            limit: 5,
+                                        }
+                                    ),
+                                    validator_set: Some(ValidatorSetConstraint{}),
+                                },
+                            }
+                        }
+                    ),
+                    staking: RuntimeStakingParameters {
+                        thresholds:          None,
+                        slashing:            None,
+                        reward_equivocation: 0,
+                        reward_bad_results:  10,
+                        min_in_message_fee:  Quantity::from(0u32),
+                    },
+                    governance_model: RuntimeGovernanceModel::GovernanceConsensus,
+                }),
+        ];
+        for (encoded_base64, rr) in tcs {
+            let dec: Runtime = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("runtime should deserialize correctly");
+            assert_eq!(dec, rr, "decoded runtime should match the expected value");
+            let ser = base64::encode(cbor::to_vec(dec));
+            assert_eq!(ser, encoded_base64, "runtime should serialize correctly");
+        }
+    }
 }
