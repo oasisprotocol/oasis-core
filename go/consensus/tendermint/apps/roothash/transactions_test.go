@@ -649,6 +649,11 @@ func TestSubmitMsg(t *testing.T) {
 		},
 	}
 
+	// Initialize staking state.
+	stakingState := stakingState.NewMutableState(ctx.State())
+	err = stakingState.SetConsensusParameters(ctx, &staking.ConsensusParameters{})
+	require.NoError(err, "staking SetConsensusParameters")
+
 	// Initialize scheduler state.
 	schedulerState := schedulerState.NewMutableState(ctx.State())
 	executorCommittee := scheduler.Committee{
@@ -729,7 +734,6 @@ func TestSubmitMsg(t *testing.T) {
 	require.ErrorIs(err, staking.ErrInsufficientBalance)
 
 	// Allocate some funds to the caller.
-	stakingState := stakingState.NewMutableState(ctx.State())
 	err = stakingState.SetAccount(ctx, callerAddress, &staking.Account{
 		General: staking.GeneralAccount{
 			Balance: *quantity.NewFromUint64(300),

@@ -664,6 +664,8 @@ func TestTransfer(t *testing.T) {
 	addr1 := staking.NewAddress(pk1)
 	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr2 := staking.NewAddress(pk2)
+	pk3 := signature.NewPublicKey("cccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr3 := staking.NewAddress(pk3)
 
 	initialBalance := *quantity.NewFromUint64(200)
 
@@ -715,6 +717,12 @@ func TestTransfer(t *testing.T) {
 	require.Empty(ctx.GetEvents(), "no events should be emitted")
 
 	// Transfer.
+	ctxEB := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctxEB.Close()
+	err = s.SetConsensusParameters(ctxEB, &staking.ConsensusParameters{
+		MinTransactBalance: *quantity.NewFromUint64(50),
+	})
+	require.NoError(err, "SetConsensusParameters")
 	err = s.Transfer(ctx, addr1, addr2, quantity.NewFromUint64(50))
 	require.NoError(err, "Transfer")
 
@@ -732,4 +740,10 @@ func TestTransfer(t *testing.T) {
 	require.EqualValues(addr1, ev.From, "event should have the correct source address")
 	require.EqualValues(addr2, ev.To, "event should have the correct destination address")
 	require.EqualValues(*quantity.NewFromUint64(50), ev.Amount, "event should have the correct amount")
+
+	// Test min transact balance checks.
+	err = s.Transfer(ctx, addr1, addr2, quantity.NewFromUint64(101))
+	require.ErrorIs(err, staking.ErrBalanceTooLow, "Transfer leaving below min transact balance in source")
+	err = s.Transfer(ctx, addr1, addr3, quantity.NewFromUint64(49))
+	require.ErrorIs(err, staking.ErrBalanceTooLow, "Transfer giving below min transact balance to dest")
 }
