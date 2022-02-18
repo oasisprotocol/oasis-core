@@ -321,6 +321,10 @@ func TestWithdraw(t *testing.T) {
 	addr2 := staking.NewAddress(pk2)
 	pk3 := signature.NewPublicKey("cccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr3 := staking.NewAddress(pk3)
+	pk4 := signature.NewPublicKey("dddfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr4 := staking.NewAddress(pk4)
+	pk5 := signature.NewPublicKey("eeefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr5 := staking.NewAddress(pk5)
 
 	reservedPK := signature.NewPublicKey("badaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	reservedAddr := staking.NewReservedAddress(reservedPK)
@@ -337,7 +341,17 @@ func TestWithdraw(t *testing.T) {
 			},
 		},
 	})
-	require.NoError(err, "SetAccount")
+	require.NoError(err, "SetAccount1")
+
+	err = stakeState.SetAccount(ctx, addr4, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+			Allowances: map[staking.Address]quantity.Quantity{
+				addr5: *quantity.NewFromUint64(100_000),
+			},
+		},
+	})
+	require.NoError(err, "SetAccount4")
 
 	// Create a zero quantity by subtracting to match the expected output in WitdrawResult.
 	// If using quantity.NewFromUint64(0) the EqualValues below fails with:
@@ -536,6 +550,34 @@ func TestWithdraw(t *testing.T) {
 			nil,
 			staking.ErrForbidden,
 		},
+		{
+			"should fail if from would go below min transact balance",
+			&staking.ConsensusParameters{
+				MaxAllowances:      1,
+				MinTransactBalance: *quantity.NewFromUint64(1000),
+			},
+			pk5,
+			&staking.Withdraw{
+				From:   addr4,
+				Amount: *quantity.NewFromUint64(99_001),
+			},
+			nil,
+			staking.ErrBalanceTooLow,
+		},
+		{
+			"should fail if withdrawer would go below min transact balance",
+			&staking.ConsensusParameters{
+				MaxAllowances:      1,
+				MinTransactBalance: *quantity.NewFromUint64(1000),
+			},
+			pk5,
+			&staking.Withdraw{
+				From:   addr4,
+				Amount: *quantity.NewFromUint64(999),
+			},
+			nil,
+			staking.ErrBalanceTooLow,
+		},
 	} {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
@@ -596,6 +638,8 @@ func TestAddEscrow(t *testing.T) {
 	addr2 := staking.NewAddress(pk2)
 	pk3 := signature.NewPublicKey("cccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr3 := staking.NewAddress(pk3)
+	pk4 := signature.NewPublicKey("dddfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr4 := staking.NewAddress(pk4)
 
 	reservedPK := signature.NewPublicKey("badaaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	_ = staking.NewReservedAddress(reservedPK)
@@ -613,6 +657,13 @@ func TestAddEscrow(t *testing.T) {
 		},
 	})
 	require.NoError(err, "SetAccount2")
+
+	err = stakeState.SetAccount(ctx, addr4, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount4")
 
 	for _, tc := range []struct {
 		msg      string
@@ -674,6 +725,19 @@ func TestAddEscrow(t *testing.T) {
 			},
 			nil,
 			staking.ErrForbidden,
+		},
+		{
+			"should fail when going below min transact balance",
+			&staking.ConsensusParameters{
+				MinTransactBalance: *quantity.NewFromUint64(1000),
+			},
+			pk4,
+			&staking.Escrow{
+				Account: addr2,
+				Amount:  *quantity.NewFromUint64(99_001),
+			},
+			nil,
+			staking.ErrBalanceTooLow,
 		},
 	} {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
@@ -800,6 +864,10 @@ func TestTransfer(t *testing.T) {
 	addr1 := staking.NewAddress(pk1)
 	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr2 := staking.NewAddress(pk2)
+	pk3 := signature.NewPublicKey("cccfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr3 := staking.NewAddress(pk3)
+	pk4 := signature.NewPublicKey("dddfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr4 := staking.NewAddress(pk4)
 
 	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
 		General: staking.GeneralAccount{
@@ -814,6 +882,13 @@ func TestTransfer(t *testing.T) {
 		},
 	})
 	require.NoError(err, "SetAccount2")
+
+	err = stakeState.SetAccount(ctx, addr3, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount3")
 
 	for _, tc := range []struct {
 		msg      string
@@ -846,6 +921,30 @@ func TestTransfer(t *testing.T) {
 			},
 			nil,
 		},
+		{
+			"should fail if sender goes below min transact balance",
+			&staking.ConsensusParameters{
+				MinTransactBalance: *quantity.NewFromUint64(1000),
+			},
+			pk3,
+			&staking.Transfer{
+				To:     addr4,
+				Amount: *quantity.NewFromUint64(99_001),
+			},
+			staking.ErrBalanceTooLow,
+		},
+		{
+			"should fail if receiver goes below min transact balance",
+			&staking.ConsensusParameters{
+				MinTransactBalance: *quantity.NewFromUint64(1000),
+			},
+			pk3,
+			&staking.Transfer{
+				To:     addr4,
+				Amount: *quantity.NewFromUint64(999),
+			},
+			staking.ErrBalanceTooLow,
+		},
 	} {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
@@ -876,6 +975,8 @@ func TestBurn(t *testing.T) {
 
 	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr1 := staking.NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := staking.NewAddress(pk2)
 
 	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
 		General: staking.GeneralAccount{
@@ -883,6 +984,13 @@ func TestBurn(t *testing.T) {
 		},
 	})
 	require.NoError(err, "SetAccount1")
+
+	err = stakeState.SetAccount(ctx, addr2, &staking.Account{
+		General: staking.GeneralAccount{
+			Balance: *quantity.NewFromUint64(100_000),
+		},
+	})
+	require.NoError(err, "SetAccount2")
 
 	for _, tc := range []struct {
 		msg      string
@@ -912,6 +1020,17 @@ func TestBurn(t *testing.T) {
 				Amount: *quantity.NewFromUint64(1000),
 			},
 			nil,
+		},
+		{
+			"should fail when going below min transact balance",
+			&staking.ConsensusParameters{
+				MinTransactBalance: *quantity.NewFromUint64(1000),
+			},
+			pk2,
+			&staking.Burn{
+				Amount: *quantity.NewFromUint64(99_001),
+			},
+			staking.ErrBalanceTooLow,
 		},
 	} {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
