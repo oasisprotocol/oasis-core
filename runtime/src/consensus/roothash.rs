@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_consistent_messages_hash() {
-        // NOTE: This runtime structure must be synced with go/roothash/api/block/messages_test.go.
+        // NOTE: This runtime structure must be synced with go/roothash/api/messages_test.go.
         let test_ent_id =
             PublicKey::from("4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35");
 
