@@ -884,13 +884,6 @@ func TestBurn(t *testing.T) {
 	})
 	require.NoError(err, "SetAccount1")
 
-	err = stakeState.SetAccount(ctx, addr1, &staking.Account{
-		General: staking.GeneralAccount{
-			Balance: *quantity.NewFromUint64(100_000),
-		},
-	})
-	require.NoError(err, "SetAccount2")
-
 	for _, tc := range []struct {
 		msg      string
 		params   *staking.ConsensusParameters
