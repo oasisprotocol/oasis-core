@@ -252,11 +252,7 @@ impl Verifier {
                 return Ok(state);
             }
 
-            // Header is for the same round but it doesn't match. Looks like something funny is
-            // going on -- abort.
-            return Err(Error::VerificationFailed(anyhow!(
-                "header does not match previously seen header for the same round"
-            )));
+            // Force full verification in case of cache mismatch.
         }
 
         // Verify that the state root matches.

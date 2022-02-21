@@ -8,18 +8,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
 // Config contains common configuration for the provisioned runtime.
 type Config struct {
-	// RuntimeID is the unique runtime identifier.
-	RuntimeID common.Namespace
-
-	// Path is the path to the resource required for provisioning a runtime. This can be an ELF
-	// binary, an SGXS binary or even a VM image. The semantics of this field are entirely up to the
-	// used provisioner.
-	Path string
+	// Bundle is the runtime bundle.
+	Bundle *RuntimeBundle
 
 	// Extra is an optional provisioner-specific configuration.
 	Extra interface{}
@@ -29,6 +25,14 @@ type Config struct {
 
 	// LocalConfig is the node-local runtime configuration.
 	LocalConfig map[string]interface{}
+}
+
+// RuntimeBundle is a exploded runtime bundle ready for execution.
+type RuntimeBundle struct {
+	*bundle.Bundle
+
+	// Exeuctable is the path to the extracted ELF or TEE executable.
+	Path string
 }
 
 // Provisioner is the runtime provisioner interface.

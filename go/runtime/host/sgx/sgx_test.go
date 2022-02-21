@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	iasHttp "github.com/oasisprotocol/oasis-core/go/ias/http"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/tests"
@@ -23,14 +24,14 @@ import (
 const recvTimeout = 120 * time.Second
 
 var (
-	envRuntimePath       = os.Getenv("OASIS_TEST_RUNTIME_HOST_SGX_RUNTIME_PATH")
+	envRuntimePath       = os.Getenv("OASIS_TEST_RUNTIME_HOST_BUNDLE_PATH")
 	envRuntimeLoaderPath = os.Getenv("OASIS_TEST_RUNTIME_HOST_SGX_LOADER_PATH")
 )
 
 func skipIfMissingDeps(t *testing.T) {
 	// Skip test if there is no runtime configured.
 	if envRuntimePath == "" {
-		t.Skip("skipping as OASIS_TEST_RUNTIME_HOST_SGX_RUNTIME_PATH is not set")
+		t.Skip("skipping as OASIS_TEST_RUNTIME_HOST_BUNDLE_PATH is not set")
 	}
 
 	// Skip test if there is no runtime loader configured.
@@ -46,8 +47,14 @@ func TestProvisionerSGX(t *testing.T) {
 
 	require := require.New(t)
 
+	bnd, err := bundle.Open(envRuntimePath)
+	require.NoError(err, "bundle.Open")
+
 	cfg := host.Config{
-		Path: envRuntimePath,
+		Bundle: &host.RuntimeBundle{
+			Bundle: bnd,
+			Path:   envRuntimePath,
+		},
 	}
 
 	ias, err := iasHttp.New(&iasHttp.Config{

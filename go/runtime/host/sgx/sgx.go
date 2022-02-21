@@ -106,7 +106,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte,
 		err         error
 	)
 
-	if sgxs, err = ioutil.ReadFile(rtCfg.Path); err != nil {
+	if sgxs, err = ioutil.ReadFile(rtCfg.Bundle.Path); err != nil {
 		return nil, nil, fmt.Errorf("failed to load enclave: %w", err)
 	}
 	if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {

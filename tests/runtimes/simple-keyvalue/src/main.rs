@@ -23,7 +23,7 @@ use oasis_core_runtime::{
         Context as TxnContext,
     },
     types::{CheckTxResult, Error as RuntimeError, FeatureScheduleControl, Features},
-    version_from_cargo, Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
 
@@ -287,7 +287,7 @@ impl TxnDispatcher for Dispatcher {
     fn set_abort_batch_flag(&mut self, _abort_batch: Arc<AtomicBool>) {}
 }
 
-pub fn main() {
+pub fn main_with_version(version: Version) {
     // Initializer.
     let init = |protocol: &Arc<Protocol>,
                 rak: &Arc<RAK>,
@@ -336,7 +336,7 @@ pub fn main() {
     oasis_core_runtime::start_runtime(
         Box::new(init),
         Config {
-            version: version_from_cargo!(),
+            version,
             trust_root,
             features: Some(Features {
                 // Enable the schedule control feature.
@@ -347,4 +347,13 @@ pub fn main() {
             ..Default::default()
         },
     );
+}
+
+#[allow(dead_code)]
+pub fn main() {
+    main_with_version(Version {
+        major: 0,
+        minor: 0,
+        patch: 0,
+    })
 }

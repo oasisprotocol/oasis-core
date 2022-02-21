@@ -585,7 +585,7 @@ func newRuntime(
 
 // New creates a new runtime registry.
 func New(ctx context.Context, dataDir string, consensus consensus.Backend, identity *identity.Identity, ias ias.Endpoint) (Registry, error) {
-	cfg, err := newConfig(consensus, ias)
+	cfg, err := newConfig(dataDir, consensus, ias)
 	if err != nil {
 		return nil, err
 	}

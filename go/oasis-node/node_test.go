@@ -162,8 +162,8 @@ func newTestNode(t *testing.T) *testNode {
 
 	viper.Set("datadir", dataDir)
 	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
-	viper.Set(runtimeRegistry.CfgRuntimePaths, map[string]string{
-		testRuntimeID.String(): "mock-runtime",
+	viper.Set(runtimeRegistry.CfgDebugMockIDs, []string{
+		testRuntimeID.String(),
 	})
 	viper.Set("worker.registration.entity", filepath.Join(dataDir, "entity.json"))
 	for _, kv := range testNodeStaticConfig {

@@ -64,14 +64,17 @@ type provisioner struct {
 
 // Implements host.Provisioner.
 func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Runtime, error) {
+	id := cfg.Bundle.Manifest.ID
+
 	r := &sandboxedRuntime{
 		cfg:      p.cfg,
 		rtCfg:    cfg,
+		id:       id,
 		stopCh:   make(chan struct{}),
 		quitCh:   make(chan struct{}),
 		ctrlCh:   make(chan interface{}, ctrlChannelBufferSize),
 		notifier: pubsub.NewBroker(false),
-		logger:   p.cfg.Logger.With("runtime_id", cfg.RuntimeID),
+		logger:   p.cfg.Logger.With("runtime_id", id),
 	}
 	return r, nil
 }
@@ -88,6 +91,7 @@ type sandboxedRuntime struct {
 
 	cfg   Config
 	rtCfg host.Config
+	id    common.Namespace
 
 	stopCh chan struct{}
 	quitCh chan struct{}
@@ -103,7 +107,7 @@ type sandboxedRuntime struct {
 
 // Implements host.Runtime.
 func (r *sandboxedRuntime) ID() common.Namespace {
-	return r.rtCfg.RuntimeID
+	return r.id
 }
 
 // Implements host.Runtime.
@@ -312,7 +316,7 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		"pid", p.GetPID(),
 	)
 
-	pc, err := protocol.NewConnection(r.logger, r.rtCfg.RuntimeID, r.rtCfg.MessageHandler)
+	pc, err := protocol.NewConnection(r.logger, r.id, r.rtCfg.MessageHandler)
 	if err != nil {
 		return fmt.Errorf("failed to create connection: %w", err)
 	}
@@ -524,7 +528,7 @@ func New(cfg Config) (host.Provisioner, error) {
 	if cfg.GetSandboxConfig == nil {
 		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
 			return process.Config{
-				Path: hostCfg.Path,
+				Path: hostCfg.Bundle.Path,
 				Env: map[string]string{
 					"OASIS_WORKER_HOST": socketPath,
 				},
