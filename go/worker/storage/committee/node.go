@@ -11,8 +11,6 @@ import (
 
 	"github.com/eapache/channels"
 
-	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
@@ -32,6 +30,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
+	storagePub "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/pub"
 	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
 )
 
@@ -137,7 +136,6 @@ type Node struct { // nolint: maligned
 
 	storageSync storageSync.Client
 
-	grpcPolicy     *policy.DynamicRuntimePolicyChecker
 	undefinedRound uint64
 
 	fetchPool *workerpool.Pool
@@ -169,7 +167,6 @@ type Node struct { // nolint: maligned
 
 func NewNode(
 	commonNode *committee.Node,
-	grpcPolicy *policy.DynamicRuntimePolicyChecker,
 	fetchPool *workerpool.Pool,
 	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
@@ -192,7 +189,6 @@ func NewNode(
 		workerCommonCfg: workerCommonCfg,
 
 		localStorage: localStorage,
-		grpcPolicy:   grpcPolicy,
 
 		fetchPool: fetchPool,
 
@@ -282,8 +278,10 @@ func NewNode(
 	commonNode.P2P.RegisterProtocolServer(storageSync.NewServer(commonNode.Runtime.ID(), localStorage))
 	n.storageSync = storageSync.NewClient(commonNode.P2P, commonNode.Runtime.ID())
 
-	// Update service policy.
-	n.updateExternalServicePolicy()
+	// Register storage pub service if configured.
+	if rpcRoleProvider != nil {
+		commonNode.P2P.RegisterProtocolServer(storagePub.NewServer(commonNode.Runtime.ID(), localStorage))
+	}
 
 	return n, nil
 }
@@ -611,28 +609,6 @@ func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
 	n.roundWaiters = filtered
 
 	return n.syncedState.LastBlock.Round
-}
-
-func (n *Node) updateExternalServicePolicy() {
-	// Create new storage gRPC access policy for the current runtime.
-	policy := accessctl.NewPolicy()
-
-	// Add policy for configured sentry nodes.
-	for _, addr := range n.workerCommonCfg.SentryAddresses {
-		sentryNodesPolicy.AddPublicKeyPolicy(&policy, addr.PubKey)
-	}
-
-	// If public storage RPC was enabled in the config, then the normally gated methods need to be
-	// allowed for everyone.
-	if n.rpcRoleProvider != nil {
-		for _, act := range storageRpcNodesPolicy.Actions {
-			policy.AllowAll(act)
-		}
-	}
-
-	// Update storage gRPC access policy for the current runtime.
-	n.grpcPolicy.SetAccessPolicy(policy, n.commonNode.Runtime.ID())
-	n.logger.Debug("set new storage gRPC access policy", "policy", policy)
 }
 
 func (n *Node) watchQuit() {

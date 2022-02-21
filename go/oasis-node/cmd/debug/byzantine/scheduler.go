@@ -7,7 +7,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -83,24 +82,4 @@ func schedulerCheckTxScheduler(committee *scheduler.Committee, nodeID signature.
 		panic(err)
 	}
 	return scheduler.PublicKey.Equal(nodeID)
-}
-
-func schedulerForRoleInCommittee(ht *honestTendermint, height int64, committee *scheduler.Committee, role scheduler.Role, fn func(*node.Node) error) error {
-	for _, member := range committee.Members {
-		if member.Role != role {
-			continue
-		}
-
-		n, err := registryGetNode(ht, height, member.PublicKey)
-		if err != nil {
-			return fmt.Errorf("registry get node %s error: %w", member.PublicKey, err)
-		}
-
-		if err = fn(n); err != nil {
-			// Forward callback error to caller verbatim.
-			return err
-		}
-	}
-
-	return nil
 }

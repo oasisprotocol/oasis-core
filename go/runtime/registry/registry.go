@@ -11,7 +11,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -23,7 +22,6 @@ import (
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/storage/client"
 )
 
 const (
@@ -58,16 +56,10 @@ type Registry interface {
 	// to set the role for all runtimes.
 	AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error
 
-	// StorageRouter returns a storage backend which routes requests to the
-	// correct per-runtime storage backend based on the namespace contained
-	// in the request.
-	StorageRouter() storageAPI.Backend
-
 	// Cleanup performs post-termination cleanup.
 	Cleanup()
 
-	// FinishInitialization finalizes setup for all runtimes and starts their
-	// tag indexers.
+	// FinishInitialization finalizes setup for all runtimes.
 	FinishInitialization(ctx context.Context) error
 }
 
@@ -376,16 +368,12 @@ func (r *runtime) watchUpdates(ctx context.Context) {
 	}
 }
 
-func (r *runtime) finishInitialization(ctx context.Context, ident *identity.Identity) error {
+func (r *runtime) finishInitialization(ctx context.Context) error {
 	r.Lock()
 	defer r.Unlock()
 
 	if r.storage == nil {
-		storageBackend, err := client.NewForPublicStorage(ctx, r.id, ident, r.consensus, r)
-		if err != nil {
-			return fmt.Errorf("runtime/registry: cannot create storage for runtime %s: %w", r.id, err)
-		}
-		r.storage = storageBackend
+		return fmt.Errorf("runtime/registry: nobody provided a storage backend for runtime %s", r.id)
 	}
 
 	return nil
@@ -400,7 +388,6 @@ type runtimeRegistry struct {
 	cfg     *RuntimeConfig
 
 	consensus consensus.Backend
-	identity  *identity.Identity
 
 	runtimes map[common.Namespace]*runtime
 }
@@ -454,23 +441,6 @@ func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Names
 	return nil
 }
 
-func (r *runtimeRegistry) StorageRouter() storageAPI.Backend {
-	return NewStorageRouter(
-		func(ns common.Namespace) (storageAPI.Backend, error) {
-			rt, err := r.GetRuntime(ns)
-			if err != nil {
-				return nil, err
-			}
-			return rt.Storage(), nil
-		},
-		func() {
-			for _, rt := range r.Runtimes() {
-				<-rt.Storage().Initialized()
-			}
-		},
-	)
-}
-
 func (r *runtimeRegistry) Cleanup() {
 	r.Lock()
 	defer r.Unlock()
@@ -485,7 +455,7 @@ func (r *runtimeRegistry) FinishInitialization(ctx context.Context) error {
 	defer r.RUnlock()
 
 	for _, rt := range r.runtimes {
-		if err := rt.finishInitialization(ctx, r.identity); err != nil {
+		if err := rt.finishInitialization(ctx); err != nil {
 			return err
 		}
 	}
@@ -584,7 +554,7 @@ func newRuntime(
 }
 
 // New creates a new runtime registry.
-func New(ctx context.Context, dataDir string, consensus consensus.Backend, identity *identity.Identity, ias ias.Endpoint) (Registry, error) {
+func New(ctx context.Context, dataDir string, consensus consensus.Backend, ias ias.Endpoint) (Registry, error) {
 	cfg, err := newConfig(dataDir, consensus, ias)
 	if err != nil {
 		return nil, err
@@ -595,7 +565,6 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 		dataDir:   dataDir,
 		cfg:       cfg,
 		consensus: consensus,
-		identity:  identity,
 		runtimes:  make(map[common.Namespace]*runtime),
 	}
 
@@ -603,7 +572,9 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ident
 	case RuntimeModeNone:
 		r.logger.Info("runtime support is disabled")
 	default:
-		r.logger.Info("runtime support is enabled")
+		r.logger.Info("runtime support is enabled",
+			"mode", cfg.Mode,
+		)
 	}
 
 	for _, id := range cfg.Runtimes() {

@@ -19,7 +19,6 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
-	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
 	storageDatabase "github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage"
@@ -171,8 +170,6 @@ func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storag
 	case storageDatabase.BackendNameBadgerDB:
 		cfg.DB = filepath.Join(cfg.DB, storageDatabase.DefaultFileName(cfg.Backend))
 		return storageDatabase.New(cfg)
-	case storageClient.BackendName:
-		return storageClient.NewForPublicStorage(context.Background(), namespace, nil, nil, nil)
 	default:
 		return nil, fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}

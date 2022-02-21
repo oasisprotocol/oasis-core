@@ -265,12 +265,11 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 
 	// Initialize the node's runtime registry.
-	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.Identity, n.IAS)
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.IAS)
 	if err != nil {
 		return err
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
-	storageAPI.RegisterService(n.grpcInternal.Server(), n.RuntimeRegistry.StorageRouter())
 
 	// Initialize the P2P worker if any runtime mode is configured.
 	// Since the P2P layer does not have a separate Start method and starts
@@ -359,12 +358,6 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.Register(n.StorageWorker)
 
-	// Commit storage settings to the registered runtimes.
-	err = n.RuntimeRegistry.FinishInitialization(n.svcMgr.Ctx)
-	if err != nil {
-		return err
-	}
-
 	// Initialize the key manager worker.
 	n.KeymanagerWorker, err = workerKeymanager.New(
 		dataDir,
@@ -394,6 +387,12 @@ func (n *Node) initRuntimeWorkers() error {
 		return err
 	}
 	n.svcMgr.Register(n.ClientWorker)
+
+	// Commit storage settings to the registered runtimes.
+	err = n.RuntimeRegistry.FinishInitialization(n.svcMgr.Ctx)
+	if err != nil {
+		return err
+	}
 
 	// Initialize the sentry worker.
 	n.SentryWorker, err = workerSentry.New(
@@ -462,7 +461,7 @@ func (n *Node) startRuntimeWorkers() error {
 	}
 
 	// Only start the external gRPC server if needed.
-	if n.StorageWorker.PublicRPCEnabled() || n.ConsensusWorker.Enabled() {
+	if n.ConsensusWorker.Enabled() {
 		if err := n.CommonWorker.Grpc.Start(); err != nil {
 			n.logger.Error("failed to start external gRPC server",
 				"err", err,
@@ -696,6 +695,9 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 			// Initialize and start the debug controller if we are in debug mode.
 			node.DebugController = control.NewDebug(node.Consensus)
 			controlAPI.RegisterDebugService(node.grpcInternal.Server(), node.DebugController)
+
+			// Enable direct storage access if we are in debug mode.
+			storageAPI.RegisterService(node.grpcInternal.Server(), &debugStorage{node})
 		}
 	}
 

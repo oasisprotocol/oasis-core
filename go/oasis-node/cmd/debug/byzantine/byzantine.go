@@ -185,7 +185,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 		panic(fmt.Errorf("failed getting latest roothash block: %w", err))
 	}
 
-	if err = cbc.openTrees(ctx, blk, b.storageClients[0]); err != nil {
+	if err = cbc.openTrees(ctx, blk, b.storageClient); err != nil {
 		panic(fmt.Sprintf("compute open trees failed: %+v", err))
 	}
 	defer cbc.closeTrees()
