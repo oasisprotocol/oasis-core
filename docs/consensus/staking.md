@@ -66,10 +66,12 @@ account signer's public key (e.g. entity id).
 
 For more details, see the [`NewAddress` function].
 
-{% hint style="info" %}
+:::info
+
 When generating an account's private/public key pair, follow [ADR 0008:
 Standard Account Key Generation][ADR 0008].
-{% endhint %}
+
+:::
 
 ### Runtime Accounts
 

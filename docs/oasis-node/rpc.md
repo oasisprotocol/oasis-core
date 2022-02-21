@@ -12,10 +12,12 @@ In order to support remote clients and different protocols (e.g. REST), a
 gateway that handles things like authentication and rate limiting should be
 used.
 
-{% hint style="info" %}
+:::info
+
 An example of such a gateway is the [Oasis Core Rosetta Gateway] which exposes
 a subset of the consensus layer via the [Rosetta API].
-{% endhint %}
+
+:::
 
 <!-- markdownlint-disable line-length -->
 [consensus]: ../consensus/index.md

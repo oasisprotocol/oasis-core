@@ -27,10 +27,12 @@ where:
   [Serialization] documentation, and
 - `<genesis-document>` represents a given genesis document.
 
-{% hint style="info" %}
+:::info
+
 This should not be confused with a SHA-1 or a SHA-256 checksum of a
 [genesis file] that is used to check if the downloaded genesis file is correct.
-{% endhint %}
+
+:::
 
 This hash is also used for [chain domain separation][crypto-chain] as the last
 part of the [domain separation] context.
@@ -45,11 +47,13 @@ part of the [domain separation] context.
 
 A genesis file is a JSON file corresponding to a serialized genesis document.
 
-{% hint style="info" %}
+:::info
+
 For a high-level overview of the genesis file, its sections, parameters and
 the parameter values that are used for the Oasis Network, see:
 [Genesis File Overview].
-{% endhint %}
+
+:::
 
 [Genesis File Overview]:
   https://docs.oasis.dev/general/mainnet/genesis-file
@@ -72,11 +76,13 @@ The *canonical* form of a genesis file is the pretty-printed JSON file with
   This is Go's default behavior. For more details, see
   [`encoding/json.Marshal()`]'s documentation.
 
-{% hint style="info" %}
+:::info
+
 This should not be confused with the *canonical* CBOR encoding of the genesis
 document that is used to derive the domain separation context as described
 in the [Genesis Document's Hash] section.
-{% endhint %}
+
+:::
 
 This form is used to enable simple diffing/patching with the standard Unix tools
 (i.e. `diff`/`patch`).

@@ -8,13 +8,13 @@ an Oasis Core environment followed by [build instructions] for the respective
 environment (non-SGX or SGX). The following sections assume that you have
 successfully completed the required build steps.
 
-{% hint style="danger" %}
-**WARNING**
+:::danger
 
 These instructions are for a development-only instance, do not use them
 for setting up any kind of production instances as they are unsafe and will
 result in insecure configurations leading to node compromise.
-{% endhint %}
+
+:::
 
 [prerequisites]: prerequisites.md
 [build instructions]: building.md
@@ -80,12 +80,12 @@ oasis-node genesis init \
   --staking.token_symbol TEST
 ```
 
-{% hint style="danger" %}
-**WARNING**
+:::danger
 
 This enables unsafe debug-only flags which must never be used in a
 production setting as they may result in node compromise.
-{% endhint %}
+
+:::
 
 ## Running the Node
 
@@ -102,12 +102,12 @@ oasis-node \
   --log.level debug
 ```
 
-{% hint style="danger" %}
-**WARNING**
+:::danger
 
 This enables unsafe debug-only flags which must never be used in a
 production setting as they may result in node compromise.
-{% endhint %}
+
+:::
 
 ## Using the Node CLI
 
