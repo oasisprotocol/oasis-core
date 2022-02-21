@@ -18,7 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	storageP2P "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p"
+	storageP2P "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
 )
 
 type byzantine struct {

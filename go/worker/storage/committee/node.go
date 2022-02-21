@@ -32,7 +32,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p"
+	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
 )
 
 var (
@@ -135,7 +135,7 @@ type Node struct { // nolint: maligned
 
 	localStorage storageApi.LocalBackend
 
-	storageSync p2p.Client
+	storageSync storageSync.Client
 
 	grpcPolicy     *policy.DynamicRuntimePolicyChecker
 	undefinedRound uint64
@@ -279,8 +279,8 @@ func NewNode(
 	})
 
 	// Register storage sync service.
-	commonNode.P2P.RegisterProtocolServer(p2p.NewServer(commonNode.Runtime.ID(), localStorage))
-	n.storageSync = p2p.NewClient(commonNode.P2P, commonNode.Runtime.ID())
+	commonNode.P2P.RegisterProtocolServer(storageSync.NewServer(commonNode.Runtime.ID(), localStorage))
+	n.storageSync = storageSync.NewClient(commonNode.P2P, commonNode.Runtime.ID())
 
 	// Update service policy.
 	n.updateExternalServicePolicy()
@@ -465,7 +465,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 			ctx, cancel := context.WithCancel(n.ctx)
 			defer cancel()
 
-			rsp, pf, err := n.storageSync.GetDiff(ctx, &p2p.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
+			rsp, pf, err := n.storageSync.GetDiff(ctx, &storageSync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
 			if err != nil {
 				result.err = err
 				return
