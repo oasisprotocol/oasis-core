@@ -3,12 +3,13 @@ package committee
 import (
 	"context"
 
-	keymanagerClientApi "github.com/oasisprotocol/oasis-core/go/keymanager/client/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
+	keymanagerP2P "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
 
 // Implements RuntimeHostHandlerFactory.
@@ -34,9 +35,25 @@ func (env *nodeEnvironment) GetCurrentBlock(ctx context.Context) (*block.Block, 
 	return blk, nil
 }
 
+type keymanagerClientWrapper struct {
+	cli keymanagerP2P.Client
+}
+
+func (km *keymanagerClientWrapper) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
+	rsp, pf, err := km.cli.CallEnclave(ctx, &keymanagerP2P.CallEnclaveRequest{
+		Data: data,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// TODO: Support reporting peer feedback from the enclave.
+	pf.RecordSuccess()
+	return rsp.Data, nil
+}
+
 // Implements RuntimeHostHandlerEnvironment.
-func (env *nodeEnvironment) GetKeyManagerClient(ctx context.Context) (keymanagerClientApi.Client, error) {
-	return env.n.KeyManagerClient, nil
+func (env *nodeEnvironment) GetKeyManagerClient(ctx context.Context) (runtimeKeymanager.Client, error) {
+	return &keymanagerClientWrapper{cli: env.n.KeyManagerClient}, nil
 }
 
 // Implements RuntimeHostHandlerEnvironment.

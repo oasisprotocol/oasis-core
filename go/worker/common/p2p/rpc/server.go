@@ -71,6 +71,7 @@ func (s *server) HandleStream(stream network.Stream) {
 
 	// Handle request.
 	ctx, cancel := context.WithTimeout(context.Background(), RequestHandleTimeout)
+	ctx = WithPeerID(ctx, stream.Conn().RemotePeer())
 	rsp, err := s.HandleRequest(ctx, request.Method, request.Body)
 	cancel()
 

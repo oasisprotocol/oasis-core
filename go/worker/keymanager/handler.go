@@ -6,11 +6,11 @@ import (
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/client"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
 
 var (
@@ -24,40 +24,8 @@ type hostHandler struct {
 	sync.Mutex
 
 	w            *Worker
-	remoteClient *client.Client
+	remoteClient p2p.Client
 	localStorage localstorage.LocalStorage
-}
-
-func (h *hostHandler) initRemoteClient(commonWorker *workerCommon.Worker) {
-	remoteClient, err := client.New(h.w.ctx, h.w.runtime, commonWorker.Consensus, commonWorker.Identity)
-	if err != nil {
-		h.w.logger.Error("failed to create remote client",
-			"err", err,
-		)
-		return
-	}
-
-	select {
-	case <-h.w.ctx.Done():
-		h.w.logger.Error("failed to wait for key manager",
-			"err", h.w.ctx.Err(),
-		)
-	case <-remoteClient.Initialized():
-		h.Lock()
-		defer h.Unlock()
-		h.remoteClient = remoteClient
-	}
-}
-
-func (h *hostHandler) getRemoteClient() (*client.Client, error) {
-	h.Lock()
-	defer h.Unlock()
-
-	if h.remoteClient != nil {
-		return h.remoteClient, nil
-	}
-
-	return nil, errEndpointNotSupported
 }
 
 func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
@@ -78,19 +46,18 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 	// RPC.
 	if body.HostRPCCallRequest != nil {
 		switch body.HostRPCCallRequest.Endpoint {
-		case api.EnclaveRPCEndpoint:
-			remoteClient, err := h.getRemoteClient()
-			if err != nil {
-				return nil, err
-			}
-
+		case runtimeKeymanager.EnclaveRPCEndpoint:
 			// Call into the remote key manager.
-			res, err := remoteClient.CallRemote(ctx, body.HostRPCCallRequest.Request)
+			rsp, pf, err := h.remoteClient.CallEnclave(ctx, &p2p.CallEnclaveRequest{
+				Data: body.HostRPCCallRequest.Request,
+			})
 			if err != nil {
 				return nil, err
 			}
+			// TODO: Support reporting peer feedback from the enclave.
+			pf.RecordSuccess()
 			return &protocol.Body{HostRPCCallResponse: &protocol.HostRPCCallResponse{
-				Response: cbor.FixSliceForSerde(res),
+				Response: cbor.FixSliceForSerde(rsp.Data),
 			}}, nil
 		default:
 			return nil, errEndpointNotSupported
@@ -101,12 +68,9 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 }
 
 func newHostHandler(w *Worker, commonWorker *workerCommon.Worker, localStorage localstorage.LocalStorage) protocol.Handler {
-	h := &hostHandler{
+	return &hostHandler{
 		w:            w,
+		remoteClient: p2p.NewClient(commonWorker.P2P, commonWorker.Consensus, w.runtime.ID()),
 		localStorage: localStorage,
 	}
-
-	go h.initRemoteClient(commonWorker)
-
-	return h
 }

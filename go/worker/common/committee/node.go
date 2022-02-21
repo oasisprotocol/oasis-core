@@ -13,8 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
-	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	keymanagerClient "github.com/oasisprotocol/oasis-core/go/keymanager/client"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -23,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	keymanagerP2P "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
 
 var (
@@ -103,8 +103,8 @@ type Node struct {
 	HostNode control.ControlledNode
 
 	Identity         *identity.Identity
-	KeyManager       keymanagerApi.Backend
-	KeyManagerClient *keymanagerClient.Client
+	KeyManager       keymanager.Backend
+	KeyManagerClient keymanagerP2P.Client
 	Consensus        consensus.Backend
 	Group            *Group
 	P2P              *p2p.P2P
@@ -157,6 +157,10 @@ func (n *Node) Stop() {
 	n.stopOnce.Do(func() {
 		close(n.stopCh)
 		n.TxPool.Stop()
+
+		if n.KeyManagerClient != nil {
+			n.KeyManagerClient.Stop()
+		}
 	})
 }
 
@@ -226,7 +230,7 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 
 	// Mark all executor nodes in the current committee as important.
 	if ec := epoch.GetExecutorCommittee(); ec != nil {
-		n.P2P.SetNodeImportance(p2p.ImportantNodeCompute, ec.Peers)
+		n.P2P.SetNodeImportance(p2p.ImportantNodeCompute, n.Runtime.ID(), ec.Peers)
 	}
 
 	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
@@ -407,16 +411,11 @@ func (n *Node) worker() {
 	// If the runtime requires a key manager, wait for the key manager to actually become available
 	// before processing any requests.
 	if rt.KeyManager != nil {
-		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready")
+		n.logger.Info("runtime indicates a key manager is required, waiting for it to be ready",
+			"keymanager_runtime_id", *rt.KeyManager,
+		)
 
-		n.KeyManagerClient, err = keymanagerClient.New(n.ctx, n.Runtime, n.Consensus, n.Identity)
-		if err != nil {
-			n.logger.Error("failed to create key manager client",
-				"err", err,
-			)
-			return
-		}
-
+		n.KeyManagerClient = keymanagerP2P.NewClient(n.P2P, n.Consensus, *rt.KeyManager)
 		select {
 		case <-n.ctx.Done():
 			n.logger.Error("failed to wait for key manager",
@@ -554,7 +553,7 @@ func NewNode(
 	hostNode control.ControlledNode,
 	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
-	keymanager keymanagerApi.Backend,
+	keymanager keymanager.Backend,
 	consensus consensus.Backend,
 	p2pHost *p2p.P2P,
 	txPoolCfg *txpool.Config,

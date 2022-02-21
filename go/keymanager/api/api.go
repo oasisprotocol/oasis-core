@@ -24,9 +24,6 @@ const (
 
 	// ChecksumSize is the length of checksum in bytes.
 	ChecksumSize = 32
-
-	// EnclaveRPCEndpoint is the name of the key manager EnclaveRPC endpoint.
-	EnclaveRPCEndpoint = "key-manager"
 )
 
 var (

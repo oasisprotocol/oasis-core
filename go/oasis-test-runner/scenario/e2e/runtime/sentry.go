@@ -30,8 +30,6 @@ import (
 var (
 	// Sentry is the Sentry node basic scenario.
 	Sentry scenario.Scenario = newSentryImpl("sentry", BasicKVTestClient)
-	// SentryEncryption is the Sentry node basic encryption scenario.
-	SentryEncryption scenario.Scenario = newSentryImpl("sentry-encryption", BasicKVEncTestClient)
 
 	validatorExtraLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertPeerExchangeDisabled(),
@@ -95,11 +93,6 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// +-----------+            +----------+
 	// | Compute 1 +<---------->+ Sentry 4 |
 	// +-----------+            +----------+
-	//
-	// +------------+           +----------+
-	// | Keymanager |<--------->| Sentry 5 |
-	// +------------+           +----------+
-	//
 	f.Sentries = []oasis.SentryFixture{
 		{
 			Validators: []int{0},
@@ -115,9 +108,6 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		{
 			ComputeWorkers: []int{1},
-		},
-		{
-			KeymanagerWorkers: []int{0},
 		},
 	}
 
@@ -158,14 +148,6 @@ func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 	}
 
-	f.Keymanagers = []oasis.KeymanagerFixture{
-		{
-			Runtime:  0,
-			Entity:   1,
-			Sentries: []int{5},
-		},
-	}
-
 	return f, nil
 }
 
@@ -195,7 +177,6 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	sentry0, _, sentry0CtrlAddress, sentry0P2PPubkey := loadSentryNodeInfo(s.Net.Sentries()[0])
 	_, _, _, sentry1P2PPubkey := loadSentryNodeInfo(s.Net.Sentries()[1])
 	_, _, _, sentry2P2PPubkey := loadSentryNodeInfo(s.Net.Sentries()[2])
-	sentry3, sentry3Address, _, _ := loadSentryNodeInfo(s.Net.Sentries()[3])
 	sentry4, sentry4Address, _, _ := loadSentryNodeInfo(s.Net.Sentries()[4])
 
 	compute0 := s.Net.ComputeWorkers()[0]
@@ -209,10 +190,6 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	compute1 := s.Net.ComputeWorkers()[1]
-	compute1Identity, err := compute0.LoadIdentity()
-	if err != nil {
-		return fmt.Errorf("sentry: error loading compute node identity: %w", err)
-	}
 	compute1Address := compute1.GetClientAddress()
 	// Query for compute 1 TLS public keys.
 	compute1Ctrl, err := oasis.NewController(compute1.SocketPath())
@@ -358,63 +335,8 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return errors.New("compute1 checkpoints endpoint should allow connection with compute0 certificate")
 	}
 
-	// Sanity check Sentry-3 storage endpoint. All nodes are allowed to access
-	// storage sentry read only endpoints. Only active executor committee nodes
-	// are allowed to access state access endpoints.
-
-	// Check Sentry-3 storage endpoint with Validator-0 client certificates.
-	opts = &cmnGrpc.ClientOptions{
-		CommonName: identity.CommonName,
-		ServerPubKeys: map[signature.PublicKey]bool{
-			sentry3.GetTLSPubKey(): true,
-		},
-		Certificates: []tls.Certificate{*validator0Identity.TLSSentryClientCertificate},
-	}
-	conn, err = s.dial(sentry3Address, opts)
-	if err != nil {
-		return fmt.Errorf("sentry: dial error: %w", err)
-	}
-	defer conn.Close()
-	sentry3Client := storage.NewStorageClient(conn)
-	_, err = sentry3Client.SyncGet(ctx, emptySyncGetReq)
-	s.Logger.Debug("sentry3.SyncGet with validator0 sentry cert", "err", err)
-	if status.Code(err) != codes.PermissionDenied {
-		return errors.New("sentry3 storage read-only endpoint should deny connections with validator0 certificate")
-	}
-	_, err = sentry3Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
-	s.Logger.Debug("sentry3.GetCheckpoints with validator0 sentry cert", "err", err)
-	if status.Code(err) == codes.PermissionDenied {
-		return errors.New("sentry3 storage checkpoint endpoint should allow connection with validator0 sentry certificate")
-	}
-
-	// Check Sentry-3 storage endpoint with Compute-0 client certificates.
-	opts = &cmnGrpc.ClientOptions{
-		CommonName: identity.CommonName,
-		ServerPubKeys: map[signature.PublicKey]bool{
-			sentry4.GetTLSPubKey(): true,
-		},
-		Certificates: []tls.Certificate{*compute1Identity.GetTLSCertificate()},
-	}
-	conn, err = s.dial(sentry3Address, opts)
-	if err != nil {
-		return fmt.Errorf("sentry: dial error: %w", err)
-	}
-	defer conn.Close()
-	sentry3Client = storage.NewStorageClient(conn)
-	_, err = sentry3Client.SyncGet(ctx, emptySyncGetReq)
-	s.Logger.Debug("sentry3.SyncGet with compute1 cert", "err", err)
-	if status.Code(err) == codes.PermissionDenied {
-		return errors.New("sentry3 storage read-only endpoint should allow connections with compute1 certificate")
-	}
-	_, err = sentry3Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
-	s.Logger.Debug("sentry3.GetCheckpoints with compute1 cert", "err", err)
-	if status.Code(err) == codes.PermissionDenied {
-		return errors.New("sentry3 storage checkpoints endpoint should allow connection with compute1 certificate")
-	}
-
 	// Sanity check Sentry-4 storage endpoint. All nodes are allowed to access
-	// storage sentry read only endpoints. Only active executor committee nodes
-	// are allowed to access state access endpoints.
+	// storage sentry public RPC endpoints.
 
 	// Check Sentry-4 storage endpoint with Validator-0 client certificates.
 	opts = &cmnGrpc.ClientOptions{
@@ -439,31 +361,6 @@ func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	s.Logger.Debug("sentry4.GetCheckpoints with validator0 sentry cert", "err", err)
 	if status.Code(err) == codes.PermissionDenied {
 		return errors.New("sentry4 storage checkpoint endpoint should allow connection with validator0 sentry certificate")
-	}
-
-	// Check Sentry-4 storage endpoint with Compute-0 client certificates.
-	opts = &cmnGrpc.ClientOptions{
-		CommonName: identity.CommonName,
-		ServerPubKeys: map[signature.PublicKey]bool{
-			sentry4.GetTLSPubKey(): true,
-		},
-		Certificates: []tls.Certificate{*compute0Identity.GetTLSCertificate()},
-	}
-	conn, err = s.dial(sentry4Address, opts)
-	if err != nil {
-		return fmt.Errorf("sentry: dial error: %w", err)
-	}
-	defer conn.Close()
-	sentry4Client = storage.NewStorageClient(conn)
-	_, err = sentry4Client.SyncGet(ctx, emptySyncGetReq)
-	s.Logger.Debug("sentry4.SyncGet with compute0 cert", "err", err)
-	if status.Code(err) == codes.PermissionDenied {
-		return errors.New("sentry4 storage read-only endpoint should allow connections with compute0 certificate")
-	}
-	_, err = sentry4Client.GetCheckpoints(ctx, emptyGetCheckpointsReq)
-	s.Logger.Debug("sentry4.GetCheckpoints with compute0 cert", "err", err)
-	if err != nil {
-		return errors.New("sentry4 storage checkpoints endpoint should allow connection with compute0 certificate")
 	}
 
 	// Sanity check validator peers - only sentry nodes should be present.

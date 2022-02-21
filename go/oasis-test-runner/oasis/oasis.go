@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"math"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -218,7 +219,7 @@ func (n *Node) Start() error {
 	return nil
 }
 
-func (n *Node) stopNode() error {
+func (n *Node) stopNode(graceful bool) error {
 	if n.cmd == nil {
 		return nil
 	}
@@ -229,7 +230,12 @@ func (n *Node) stopNode() error {
 	n.Unlock()
 
 	// Stop the node and wait for it to stop.
-	_ = n.cmd.Process.Kill()
+	switch graceful {
+	case false:
+		_ = n.cmd.Process.Kill()
+	case true:
+		_ = n.cmd.Process.Signal(os.Interrupt)
+	}
 	_ = n.cmd.Wait()
 	<-n.Exit()
 	n.cmd = nil
@@ -237,9 +243,15 @@ func (n *Node) stopNode() error {
 	return nil
 }
 
-// Stop stops the node.
+// Stop stops the node by killing it.
 func (n *Node) Stop() error {
-	return n.stopNode()
+	return n.stopNode(false)
+}
+
+// StopGracefully stops the node by sending it an interrupt signal which gives it time to perform
+// a graceful shutdown and cleanup.
+func (n *Node) StopGracefully() error {
+	return n.stopNode(true)
 }
 
 // Restart kills the node, waits for it to stop, and starts it again.
@@ -249,7 +261,7 @@ func (n *Node) Restart(ctx context.Context) error {
 
 // RestartAfter kills the node, waits for it to stop, and starts it again after delay.
 func (n *Node) RestartAfter(ctx context.Context, startDelay time.Duration) error {
-	if err := n.stopNode(); err != nil {
+	if err := n.stopNode(false); err != nil {
 		return err
 	}
 	select {

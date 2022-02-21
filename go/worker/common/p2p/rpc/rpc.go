@@ -2,6 +2,7 @@
 package rpc
 
 import (
+	"context"
 	"fmt"
 
 	core "github.com/libp2p/go-libp2p-core"
@@ -27,4 +28,18 @@ type P2P interface {
 // the given protocol for the given runtime.
 func NewRuntimeProtocolID(runtimeID common.Namespace, protocolID string, version version.Version) protocol.ID {
 	return protocol.ID(fmt.Sprintf("/oasis/%s/%s/%s", protocolID, runtimeID.Hex(), version.MaskNonMajor()))
+}
+
+// contextKeyPeerID is the context key used for storing the peer ID.
+type contextKeyPeerID struct{}
+
+// WithPeerID creates a new context with the peer ID value set.
+func WithPeerID(parent context.Context, peerID core.PeerID) context.Context {
+	return context.WithValue(parent, contextKeyPeerID{}, peerID)
+}
+
+// PeerIDFromContext looks up the peer ID value in the given context.
+func PeerIDFromContext(ctx context.Context) (core.PeerID, bool) {
+	peerID, ok := ctx.Value(contextKeyPeerID{}).(core.PeerID)
+	return peerID, ok
 }

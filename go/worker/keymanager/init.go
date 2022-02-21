@@ -5,19 +5,19 @@ import (
 	"context"
 	"fmt"
 
+	core "github.com/libp2p/go-libp2p-core"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -51,18 +51,19 @@ func New(
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	w := &Worker{
-		logger:       logging.GetLogger("worker/keymanager"),
-		ctx:          ctx,
-		cancelCtx:    cancelFn,
-		stopCh:       make(chan struct{}),
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		initTickerCh: nil,
-		commonWorker: commonWorker,
-		backend:      backend,
-		grpcPolicy:   policy.NewDynamicRuntimePolicyChecker(enclaverpc.ServiceName, commonWorker.GrpcPolicyWatcher),
-		enabled:      enabled,
-		mayGenerate:  viper.GetBool(CfgMayGenerate),
+		logger:              logging.GetLogger("worker/keymanager"),
+		ctx:                 ctx,
+		cancelCtx:           cancelFn,
+		stopCh:              make(chan struct{}),
+		quitCh:              make(chan struct{}),
+		initCh:              make(chan struct{}),
+		initTickerCh:        nil,
+		accessList:          make(map[core.PeerID]map[common.Namespace]struct{}),
+		accessListByRuntime: make(map[common.Namespace][]core.PeerID),
+		commonWorker:        commonWorker,
+		backend:             backend,
+		enabled:             enabled,
+		mayGenerate:         viper.GetBool(CfgMayGenerate),
 	}
 
 	if !w.enabled {
@@ -102,8 +103,8 @@ func New(
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}
 
-	// Register the Keymanager EnclaveRPC transport gRPC service.
-	enclaverpc.RegisterService(w.commonWorker.Grpc.Server(), w)
+	// Register keymanager service.
+	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(runtimeID, w))
 
 	return w, nil
 }

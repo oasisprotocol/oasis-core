@@ -720,7 +720,6 @@ func RegisterScenarios() error {
 		StorageEarlyStateSync,
 		// Sentry test.
 		Sentry,
-		SentryEncryption,
 		// Keymanager restart test.
 		KeymanagerRestart,
 		// Keymanager replicate test.

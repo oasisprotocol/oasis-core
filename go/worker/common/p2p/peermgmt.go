@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
 	manet "github.com/multiformats/go-multiaddr/net"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -36,12 +37,12 @@ const (
 )
 
 // Tag returns the connection manager tag associated with the given importance kind.
-func (ik ImportanceKind) Tag() string {
+func (ik ImportanceKind) Tag(runtimeID common.Namespace) string {
 	switch ik {
 	case ImportantNodeCompute:
-		return peerTagImportancePrefix + "/compute"
+		return peerTagImportancePrefix + "/compute/" + runtimeID.String()
 	case ImportantNodeKeyManager:
-		return peerTagImportancePrefix + "/keymanager"
+		return peerTagImportancePrefix + "/keymanager/" + runtimeID.String()
 	default:
 		panic(fmt.Errorf("unsupported tag: %d", ik))
 	}
@@ -67,7 +68,7 @@ type PeerManager struct {
 	cg   *conngater.BasicConnectionGater
 
 	peers          map[core.PeerID]*p2pPeer
-	importantPeers map[ImportanceKind]map[core.PeerID]bool
+	importantPeers map[ImportanceKind]map[common.Namespace]map[core.PeerID]bool
 
 	initCh   chan struct{}
 	initOnce sync.Once
@@ -115,7 +116,7 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 
 	newNodes := make(map[core.PeerID]*node.Node)
 	for _, node := range nodes {
-		peerID, err := publicKeyToPeerID(node.P2P.ID)
+		peerID, err := PublicKeyToPeerID(node.P2P.ID)
 		if err != nil {
 			mgr.logger.Warn("error while getting peer ID from public key, skipping",
 				"err", err,
@@ -151,7 +152,7 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 
 // UpdateNode upserts a node into the gossipsub network.
 func (mgr *PeerManager) UpdateNode(node *node.Node) error {
-	peerID, err := publicKeyToPeerID(node.P2P.ID)
+	peerID, err := PublicKeyToPeerID(node.P2P.ID)
 	if err != nil {
 		return fmt.Errorf("worker/common/p2p/peermgr: failed to get peer ID from public key: %w", err)
 	}
@@ -182,27 +183,32 @@ func (mgr *PeerManager) blockPeer(peerID core.PeerID) {
 // SetNodeImportance configures node importance for the given set of nodes.
 //
 // This makes it less likely for those nodes to be pruned.
-func (mgr *PeerManager) SetNodeImportance(kind ImportanceKind, p2pIDs map[signature.PublicKey]bool) {
+func (mgr *PeerManager) SetNodeImportance(kind ImportanceKind, runtimeID common.Namespace, p2pIDs map[signature.PublicKey]bool) {
 	mgr.Lock()
 	defer mgr.Unlock()
 
 	cm := mgr.host.ConnManager()
-	previousPeers := mgr.importantPeers[kind]
-	mgr.importantPeers[kind] = make(map[core.PeerID]bool)
+
+	if mgr.importantPeers[kind] == nil {
+		mgr.importantPeers[kind] = make(map[common.Namespace]map[core.PeerID]bool)
+	}
+	previousPeers := mgr.importantPeers[kind][runtimeID]
+	mgr.importantPeers[kind][runtimeID] = make(map[core.PeerID]bool)
+
 	for p2pID := range p2pIDs {
-		peerID, err := publicKeyToPeerID(p2pID)
+		peerID, err := PublicKeyToPeerID(p2pID)
 		if err != nil {
 			return
 		}
 
-		cm.TagPeer(peerID, kind.Tag(), kind.TagValue())
-		mgr.importantPeers[kind][peerID] = true
+		cm.TagPeer(peerID, kind.Tag(runtimeID), kind.TagValue())
+		mgr.importantPeers[kind][runtimeID][peerID] = true
 		delete(previousPeers, peerID)
 	}
 
 	// Clear importance for any previous nodes that are no longer considered important.
 	for peerID := range previousPeers {
-		cm.UntagPeer(peerID, kind.Tag())
+		cm.UntagPeer(peerID, kind.Tag(runtimeID))
 	}
 }
 
@@ -361,7 +367,7 @@ func newPeerManager(ctx context.Context, host core.Host, cg *conngater.BasicConn
 		host:           host,
 		cg:             cg,
 		peers:          make(map[core.PeerID]*p2pPeer),
-		importantPeers: make(map[ImportanceKind]map[core.PeerID]bool),
+		importantPeers: make(map[ImportanceKind]map[common.Namespace]map[core.PeerID]bool),
 		initCh:         make(chan struct{}),
 		logger:         logging.GetLogger("worker/common/p2p/peermgr"),
 	}
@@ -385,6 +391,8 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 
 	mgr.logger.Debug("updating libp2p gossipsub peer",
 		"node_id", p.node.ID,
+		"peer_id", peerID,
+		"addrs", ai.Addrs,
 	)
 
 	bctx := backoff.WithContext(cmnBackoff.NewExponentialBackOff(), p.ctx)
@@ -400,9 +408,20 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 				// `net.Error`, but continuing to retry as long
 				// as the host claims that it is available
 				// at that address, is probably ok?
+				mgr.logger.Debug("failed to connect to peer",
+					"err", err,
+					"node_id", p.node.ID,
+					"peer_id", peerID,
+					"addrs", ai.Addrs,
+				)
 			}
 			return perr
 		}
+
+		mgr.logger.Debug("connected to peer",
+			"node_id", p.node.ID,
+			"peer_id", peerID,
+		)
 
 		return nil
 	}, bctx)
@@ -415,7 +434,8 @@ func (p *p2pPeer) connectWorker(mgr *PeerManager, peerID core.PeerID) {
 	}
 }
 
-func publicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
+// PublicKeyToPeerID converts a public key to a peer identifier.
+func PublicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
 	pubKey, err := publicKeyToPubKey(pk)
 	if err != nil {
 		return "", err
@@ -434,7 +454,7 @@ func nodeToAddrInfo(node *node.Node) (*peer.AddrInfo, error) {
 		ai  peer.AddrInfo
 		err error
 	)
-	if ai.ID, err = publicKeyToPeerID(node.P2P.ID); err != nil {
+	if ai.ID, err = PublicKeyToPeerID(node.P2P.ID); err != nil {
 		return nil, fmt.Errorf("failed to extract public key from node P2P ID: %w", err)
 	}
 	for _, nodeAddr := range node.P2P.Addresses {
