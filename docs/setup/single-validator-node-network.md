@@ -30,7 +30,7 @@ cd /path/to/entity
 oasis-node registry entity init --signer.backend file --signer.dir .
 ```
 
-[entity]: ../consensus/registry.md#entities-and-nodes
+[entity]: ../consensus/services/registry.md#entities-and-nodes
 
 ## Provisioning a Node
 
@@ -58,8 +58,8 @@ oasis-node registry entity update \
   --entity.node.descriptor /path/to/node/node_genesis.json
 ```
 
-[node]: ../consensus/registry.md#entities-and-nodes
-[entity whitelist]: ../consensus/registry.md#register-node
+[node]: ../consensus/services/registry.md#entities-and-nodes
+[entity whitelist]: ../consensus/services/registry.md#register-node
 
 ## Creating a Test Genesis Document
 

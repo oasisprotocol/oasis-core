@@ -39,9 +39,9 @@ type StakingMessage struct {
 Exactly one of the supported method fields needs to be non-nil, otherwise the
 message is considered malformed.
 
-[staking service methods]: ../consensus/staking.md#methods
-[`staking.Transfer` method]: ../consensus/staking.md#transfer
-[`staking.Withdraw` method]: ../consensus/staking.md#withdraw
+[staking service methods]: ../consensus/services/staking.md#methods
+[`staking.Transfer` method]: ../consensus/services/staking.md#transfer
+[`staking.Withdraw` method]: ../consensus/services/staking.md#withdraw
 
 ## Limits
 
@@ -50,5 +50,5 @@ limited by the `executor.max_messages` option in the runtime descriptor. Its
 upper bound is the [`max_messages` consensus parameter] of the roothash service.
 
 <!-- markdownlint-disable line-length -->
-[`max_messages` consensus parameter]: ../consensus/roothash.md#consensus-parameters
+[`max_messages` consensus parameter]: ../consensus/services/roothash.md#consensus-parameters
 <!-- markdownlint-enable line-length -->

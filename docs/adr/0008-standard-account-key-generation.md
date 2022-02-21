@@ -507,7 +507,7 @@ the [Ledger] and [Trezor] hardware wallets.
 [diff-bip32-ed25519]: #difficulties-in-adapting-bip-0032-to-edwards25519-curve
 [key-derivation-paths]: #key-derivation-paths
 [Oasis Network]: https://docs.oasis.dev/general/oasis-network/overview
-[Account]: ../consensus/staking.md#accounts
+[Account]: ../consensus/services/staking.md#accounts
 [BIP-0032]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 [BIP-0032-use-cases]:
   https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#use-cases

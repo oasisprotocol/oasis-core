@@ -114,7 +114,7 @@ messages. In case the runtime is running in a trusted execution environment
 [`oasis-core-runtime` crate]: ../../runtime
 [`RuntimeInfoRequest`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#RuntimeInfoRequest
 [designated identifier]: identifiers.md
-[registry service]: ../consensus/registry.md#runtimes
+[registry service]: ../consensus/services/registry.md#runtimes
 [`RuntimeInfoResponse`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#RuntimeInfoResponse
 <!-- markdownlint-enable line-length -->
 

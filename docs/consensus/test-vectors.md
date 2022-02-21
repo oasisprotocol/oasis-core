@@ -7,9 +7,9 @@ of test vectors. They can be generated for the following consensus services:
 * [Registry]
 * [Governance]
 
-[Staking]: staking.md#test-vectors
-[Registry]: registry.md#test-vectors
-[Governance]: governance.md#test-vectors
+[Staking]: services/staking.md#test-vectors
+[Registry]: services/registry.md#test-vectors
+[Governance]: services/governance.md#test-vectors
 
 ## Structure
 
@@ -57,6 +57,6 @@ objects (test vectors). Each test vector has the following fields:
   `signer_private_key`.
 
 [domain separation context]: ../crypto.md#domain-separation
-[address]: staking.md#address
+[address]: services/staking.md#address
 [encoded]: ../encoding.md
 [signature envelope]: ../crypto.md#envelopes

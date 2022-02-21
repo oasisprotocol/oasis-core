@@ -10,9 +10,9 @@ supported queries and transactions. For more information you can also check out
 the [consensus service API documentation] and the [beacon ADR specification].
 
 <!-- markdownlint-disable line-length -->
-[`go/beacon/api`]: ../../go/beacon/api
+[`go/beacon/api`]: ../../../go/beacon/api
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/beacon/api?tab=doc
-[beacon ADR specification]: ../adr/0007-improved-random-beacon.md
+[beacon ADR specification]: ../../adr/0007-improved-random-beacon.md
 <!-- markdownlint-enable line-length -->
 
 ## Operation

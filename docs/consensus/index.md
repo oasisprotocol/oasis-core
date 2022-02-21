@@ -41,14 +41,14 @@ consensus backend agnostic).
 [`go/consensus/api`]: ../../go/consensus/api
 [consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc
 [Tendermint]: https://tendermint.com/
-[Epoch Time]: epochtime.md
-[Random Beacon]: beacon.md
-[Staking]: staking.md
-[Registry]: registry.md
-[Committee Scheduler]: scheduler.md
-[Governance]: governance.md
-[Root Hash]: roothash.md
-[Key Manager]: keymanager.md
+[Epoch Time]: services/epochtime.md
+[Random Beacon]: services/beacon.md
+[Staking]: services/staking.md
+[Registry]: services/registry.md
+[Committee Scheduler]: services/scheduler.md
+[Governance]: services/governance.md
+[Root Hash]: services/roothash.md
+[Key Manager]: services/keymanager.md
 [consensus transaction]: transactions.md
 <!-- markdownlint-enable line-length -->
 

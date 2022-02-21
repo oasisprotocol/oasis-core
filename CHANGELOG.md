@@ -1249,7 +1249,7 @@ node's data directory.*
   details.
 
   [ADR 0006]: docs/adr/0006-consensus-governance.md
-  [Governance backend documentation]: docs/consensus/governance.md
+  [Governance backend documentation]: docs/consensus/services/governance.md
 
 - runtime: Move consensus layer structures to its own module
   ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
@@ -3360,7 +3360,7 @@ node's data directory.*
   For more details, see [Staking Developer Docs].
 
   [Staking Developer Docs]:
-    docs/consensus/staking.md#tokens-and-base-units
+    docs/consensus/services/staking.md#tokens-and-base-units
 
 - go/control: List all valid TLS public keys in identity status
   ([#3062](https://github.com/oasisprotocol/oasis-core/issues/3062))
@@ -3580,7 +3580,7 @@ node's data directory.*
 - docs: Add the [Accounts section] of the Staking docs
   ([#3005](https://github.com/oasisprotocol/oasis-core/issues/3005))
 
-  [Accounts section]: docs/consensus/staking.md#accounts
+  [Accounts section]: docs/consensus/services/staking.md#accounts
 
 - go/staking/api: Document commission-related public types
   ([#3042](https://github.com/oasisprotocol/oasis-core/issues/3042))

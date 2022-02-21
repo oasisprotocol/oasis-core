@@ -8,7 +8,7 @@ supported queries and transactions. For more information you can also check out
 the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
-[`go/roothash/api`]: ../../go/roothash/api/api.go
+[`go/roothash/api`]: ../../../go/roothash/api/api.go
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
@@ -42,7 +42,7 @@ type ExecutorCommit struct {
 
 <!-- markdownlint-disable line-length -->
 [`NewExecutorCommitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api?tab=doc#NewExecutorCommitTx
-[runtime identifier]: ../runtime/identifiers.md
+[runtime identifier]: ../../runtime/identifiers.md
 [executor commitments]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/roothash/api/commitment?tab=doc#ExecutorCommitment
 <!-- markdownlint-enable line-length -->
 
@@ -54,4 +54,4 @@ type ExecutorCommit struct {
   [messages] that can be emitted in each round by the runtime. The default value
   of `0` disables the use of runtime messages.
 
-[messages]: ../runtime/messages.md
+[messages]: ../../runtime/messages.md

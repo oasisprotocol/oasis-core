@@ -279,7 +279,7 @@ oasis-node genesis init --help
 [genesis file]: ../consensus/genesis.md#genesis-file
 [canonical form]: ../consensus/genesis.md#canonical-form
 [consensus layer services]: ../consensus/index.md
-[staking token symbol]: ../consensus/staking.md#tokens-and-base-units
+[staking token symbol]: ../consensus/services/staking.md#tokens-and-base-units
 
 ## `stake`
 
