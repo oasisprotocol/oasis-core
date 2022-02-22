@@ -293,6 +293,11 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		return nil, err
 	}
 
+	// Remove any dynamically generated bundles on cleanup.
+	net.env.AddOnCleanup(func() {
+		_ = os.Remove(rt.BundlePath())
+	})
+
 	// Save runtime descriptor into file.
 	rtDescStr, _ := json.Marshal(rt.descriptor)
 	path := filepath.Join(rtDir.String(), rtDescriptorFile)

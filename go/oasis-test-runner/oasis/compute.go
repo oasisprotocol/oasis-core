@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
@@ -244,6 +246,11 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		runtimes:                cfg.Runtimes,
 		runtimeConfig:           cfg.RuntimeConfig,
 	}
+
+	// Remove any exploded bundles on cleanup.
+	net.env.AddOnCleanup(func() {
+		_ = os.RemoveAll(bundle.ExplodedPath(worker.dir.String()))
+	})
 
 	net.computeWorkers = append(net.computeWorkers, worker)
 	host.features = append(host.features, worker)
