@@ -12,7 +12,7 @@ import (
 
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage/p2p"
+	storageSync "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
 )
 
 const (
@@ -93,7 +93,7 @@ func (n *Node) checkpointChunkFetcher(
 		defer cancel()
 
 		// Fetch chunk from peers.
-		rsp, pf, err := n.storageSync.GetCheckpointChunk(chunkCtx, &p2p.GetCheckpointChunkRequest{
+		rsp, pf, err := n.storageSync.GetCheckpointChunk(chunkCtx, &storageSync.GetCheckpointChunkRequest{
 			Version: chunk.Version,
 			Root:    chunk.Root,
 			Index:   chunk.Index,
@@ -264,7 +264,7 @@ func (n *Node) getCheckpointList() ([]*checkpoint.Metadata, error) {
 	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
 	defer cancel()
 
-	cps, err := n.storageSync.GetCheckpoints(ctx, &p2p.GetCheckpointsRequest{
+	cps, err := n.storageSync.GetCheckpoints(ctx, &storageSync.GetCheckpointsRequest{
 		Version: 1,
 	})
 	if err != nil {

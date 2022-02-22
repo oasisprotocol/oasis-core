@@ -18,7 +18,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	storageP2P "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/client"
+	storageP2P "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/sync"
 )
 
 type byzantine struct {
@@ -26,10 +28,10 @@ type byzantine struct {
 
 	identity *identity.Identity
 
-	tendermint     *honestTendermint
-	p2p            *p2pHandle
-	storage        *storageWorker
-	storageClients []*storageClient
+	tendermint    *honestTendermint
+	p2p           *p2pHandle
+	storage       *storageWorker
+	storageClient storage.Backend
 
 	runtimeID    common.Namespace
 	capabilities *node.Capabilities
@@ -48,8 +50,6 @@ func (b *byzantine) stop() error {
 	if err := b.p2p.stop(); err != nil {
 		return fmt.Errorf("p2p stop failed: %w", err)
 	}
-
-	storageBroadcastCleanup(b.storageClients)
 
 	return nil
 }
@@ -213,12 +213,8 @@ func initializeAndRegisterByzantineNode(
 	}
 	b.logger.Debug("executor tx scheduler role ok")
 
-	// Connect storage clients to executor committee as we don't store anything locally.
-	b.logger.Debug("connecting to storage committee")
-	b.storageClients, err = storageConnectToCommittee(b.tendermint, b.electionHeight, b.executorCommittee, scheduler.RoleWorker, b.identity)
-	if err != nil {
-		return nil, fmt.Errorf("storage connect to committee failed: %w", err)
-	}
+	// Create a stateless storage client.
+	b.storageClient = client.NewStatelessStorage(b.p2p.service, b.runtimeID)
 
 	return b, nil
 }

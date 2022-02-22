@@ -44,9 +44,6 @@ import (
 	schedulerTests "github.com/oasisprotocol/oasis-core/go/scheduler/tests"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
-	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
-	storageClient "github.com/oasisprotocol/oasis-core/go/storage/client"
-	storageClientTests "github.com/oasisprotocol/oasis-core/go/storage/client/tests"
 	storageTests "github.com/oasisprotocol/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	executorCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
@@ -258,10 +255,6 @@ func TestNode(t *testing.T) {
 		{"Staking", testStaking},
 		{"StakingClient", testStakingClient},
 
-		// TestStorageClientWithNode runs storage tests against a storage client
-		// connected to this node.
-		{"TestStorageClientWithNode", testStorageClientWithNode},
-
 		{"Consensus", testConsensus},
 		{"ConsensusClient", testConsensusClient},
 
@@ -271,10 +264,6 @@ func TestNode(t *testing.T) {
 		{"Scheduler", testScheduler},
 		{"SchedulerClient", testSchedulerClient},
 		{"RootHash", testRootHash},
-
-		// TestStorageClientWithoutNode runs client tests that use a mock storage
-		// node and mock committees.
-		{"TestStorageClientWithoutNode", testStorageClientWithoutNode},
 	}
 
 	for _, tc := range testCases {
@@ -419,6 +408,9 @@ func testGovernance(t *testing.T, node *testNode) {
 func testExecutorWorker(t *testing.T, node *testNode) {
 	timeSource := (node.Consensus.Beacon()).(beacon.SetableBackend)
 
+	rt, err := node.RuntimeRegistry.GetRuntime(node.runtimeID)
+	require.NoError(t, err, "runtimeRegistry.GetRuntime")
+
 	require.NotNil(t, node.executorCommitteeNode)
 	executorWorkerTests.WorkerImplementationTests(
 		t,
@@ -427,7 +419,7 @@ func testExecutorWorker(t *testing.T, node *testNode) {
 		node.executorCommitteeNode,
 		timeSource,
 		node.Consensus.RootHash(),
-		node.RuntimeRegistry.StorageRouter(),
+		rt.Storage(),
 	)
 }
 
@@ -447,33 +439,6 @@ func testRuntimeClient(t *testing.T, node *testNode) {
 		cli := runtimeClient.NewRuntimeClient(conn)
 		clientTests.ClientImplementationTests(t, cli, node.runtimeID)
 	})
-}
-
-func testStorageClientWithNode(t *testing.T, node *testNode) {
-	ctx := context.Background()
-
-	// Get the local storage backend (the one that the client is connecting to).
-	rt, err := node.RuntimeRegistry.GetRuntime(testRuntimeID)
-	require.NoError(t, err, "GetRuntime")
-	localBackend := rt.Storage().(storageAPI.LocalBackend)
-
-	client, err := storageClient.NewStatic(ctx, node.Identity, node.Consensus, node.Identity.NodeSigner.Public())
-	require.NoError(t, err, "NewStatic")
-
-	// Determine the current round. This is required so that we can commit into
-	// storage at some higher (non-finalized) round.
-	blk, err := node.Consensus.RootHash().GetLatestBlock(ctx, &roothash.RuntimeRequest{
-		RuntimeID: testRuntimeID,
-		Height:    consensusAPI.HeightLatest,
-	})
-	require.NoError(t, err, "GetLatestBlock")
-
-	storageTests.StorageImplementationTests(t, localBackend, client, testRuntimeID, blk.Header.Round+1000)
-}
-
-func testStorageClientWithoutNode(t *testing.T, node *testNode) {
-	// Storage client tests without node.
-	storageClientTests.ClientWorkerTests(t, node.Identity, node.Consensus)
 }
 
 func init() {

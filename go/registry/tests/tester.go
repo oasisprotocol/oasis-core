@@ -670,12 +670,14 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 								MaxNodes: map[node.RolesMask]uint16{
 									node.RoleComputeWorker: 2,
 									node.RoleStorageRPC:    2,
+									node.RoleConsensusRPC:  2,
 								},
 							},
 							nodeEntities[3].Entity.ID: {
 								MaxNodes: map[node.RolesMask]uint16{
 									node.RoleComputeWorker: 1,
 									node.RoleStorageRPC:    1,
+									node.RoleConsensusRPC:  1,
 								},
 							},
 						},
@@ -1063,7 +1065,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 
 		var role node.RolesMask
 		if i < nCompute {
-			role = node.RoleComputeWorker | node.RoleStorageRPC
+			role = node.RoleComputeWorker | node.RoleStorageRPC | node.RoleConsensusRPC
 		}
 
 		nod.Node = &node.Node{

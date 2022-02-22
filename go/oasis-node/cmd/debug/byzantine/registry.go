@@ -92,7 +92,3 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 	}
 	return nil
 }
-
-func registryGetNode(ht *honestTendermint, height int64, nodeID signature.PublicKey) (*node.Node, error) {
-	return ht.service.Registry().GetNode(context.Background(), &registry.IDQuery{ID: nodeID, Height: height})
-}

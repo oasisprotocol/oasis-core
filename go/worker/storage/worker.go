@@ -7,14 +7,12 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc/policy"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -39,8 +37,6 @@ type Worker struct {
 	runtimes   map[common.Namespace]*committee.Node
 	watchState *persistent.ServiceStore
 	fetchPool  *workerpool.Pool
-
-	grpcPolicy *policy.DynamicRuntimePolicyChecker
 }
 
 // New constructs a new storage worker.
@@ -82,29 +78,6 @@ func New(
 	s.watchState, err = commonStore.GetServiceStore(workerStorageDBBucketName)
 	if err != nil {
 		return nil, err
-	}
-
-	// Attach storage interface to gRPC server.
-	localRouter := runtimeRegistry.NewStorageRouter(
-		func(ns common.Namespace) (api.Backend, error) {
-			node := s.GetRuntime(ns)
-			if node == nil {
-				return nil, fmt.Errorf("worker/storage: runtime %s is not supported", ns)
-			}
-			return node.GetLocalStorage(), nil
-		},
-		func() {
-			for _, node := range s.runtimes {
-				<-node.Initialized()
-			}
-		},
-	)
-	s.grpcPolicy = policy.NewDynamicRuntimePolicyChecker(api.ServiceName, s.commonWorker.GrpcPolicyWatcher)
-	if viper.GetBool(CfgWorkerPublicRPCEnabled) {
-		api.RegisterService(s.commonWorker.Grpc.Server(), &storageService{
-			w:       s,
-			storage: localRouter,
-		})
 	}
 
 	var checkpointerCfg *checkpoint.CheckpointerConfig
@@ -157,7 +130,6 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 
 	node, err := committee.NewNode(
 		commonNode,
-		w.grpcPolicy,
 		w.fetchPool,
 		w.watchState,
 		rp,
@@ -192,11 +164,6 @@ func (w *Worker) Name() string {
 // Enabled returns if worker is enabled.
 func (w *Worker) Enabled() bool {
 	return w.enabled
-}
-
-// PublicRPCEnabled returns whether public storage RPC is enabled.
-func (w *Worker) PublicRPCEnabled() bool {
-	return viper.GetBool(CfgWorkerPublicRPCEnabled)
 }
 
 // Initialized returns a channel that will be closed when the storage worker

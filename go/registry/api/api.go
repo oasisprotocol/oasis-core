@@ -142,7 +142,8 @@ var (
 
 	// RuntimesRequiredRoles are the Node roles that require runtimes.
 	RuntimesRequiredRoles = node.RoleComputeWorker |
-		node.RoleKeyManager
+		node.RoleKeyManager |
+		node.RoleStorageRPC
 
 	// ComputeRuntimeAllowedRoles are the Node roles that allow compute runtimes.
 	ComputeRuntimeAllowedRoles = node.RoleComputeWorker
@@ -154,12 +155,12 @@ var (
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
 	// TLSAddressRequiredRoles are the Node roles that require TLS Address.
-	TLSAddressRequiredRoles = node.RoleConsensusRPC |
-		node.RoleStorageRPC
+	TLSAddressRequiredRoles = node.RoleConsensusRPC
 
 	// P2PAddressRequiredRoles are the Node roles that require P2P Address.
 	P2PAddressRequiredRoles = node.RoleComputeWorker |
-		node.RoleKeyManager
+		node.RoleKeyManager |
+		node.RoleStorageRPC
 )
 
 // Backend is a registry implementation.
