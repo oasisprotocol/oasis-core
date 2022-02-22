@@ -565,7 +565,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 			// If the node indicates TEE support for any of it's runtimes,
 			// validate the attestation evidence.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRt, now); err != nil {
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRt, now); err != nil && !isSanityCheck {
 				return nil, nil, err
 			}
 
