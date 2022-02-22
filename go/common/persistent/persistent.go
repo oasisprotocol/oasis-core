@@ -57,7 +57,7 @@ func NewCommonStore(dataDir string) (*CommonStore, error) {
 	opts = opts.WithSyncWrites(true)
 	opts = opts.WithCompression(options.None)
 
-	db, err := cmnBadger.Open(opts)
+	db, err := badger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open persistence database: %w", err)
 	}
