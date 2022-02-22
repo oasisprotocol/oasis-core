@@ -163,6 +163,15 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 				if mrEnclave, err = bnd.MrEnclave(); err != nil {
 					return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 				}
+
+				rt.descriptor.Version.TEE = cbor.Marshal(node.SGXConstraints{
+					Enclaves: []sgx.EnclaveIdentity{
+						{
+							MrEnclave: *mrEnclave,
+							MrSigner:  *rt.mrSigner,
+						},
+					},
+				})
 			}
 			rt.bundle = bnd
 			rt.mrEnclave = mrEnclave
