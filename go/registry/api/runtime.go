@@ -489,6 +489,8 @@ func (r *Runtime) ValidateBasic(strictVersion bool) error {
 	return nil
 }
 
+// ActiveDeployment returns the currently active deployment for the specified
+// epoch if it exists.
 func (r *Runtime) ActiveDeployment(now beacon.EpochTime) *VersionInfo {
 	var activeDeployment *VersionInfo
 	for i, deployment := range r.Deployments {
@@ -508,6 +510,8 @@ func (r *Runtime) ActiveDeployment(now beacon.EpochTime) *VersionInfo {
 	return activeDeployment
 }
 
+// ValidateDeployments validates a runtime descriptor's Deployments field
+// at the specified epoch.
 func (r *Runtime) ValidateDeployments(now beacon.EpochTime) error {
 	// The runtime descriptor's deployments field is considered valid
 	// if:

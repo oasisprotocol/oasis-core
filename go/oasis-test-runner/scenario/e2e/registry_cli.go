@@ -659,6 +659,11 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 			},
 		},
 		GovernanceModel: registry.GovernanceEntity,
+		Deployments: []*registry.VersionInfo{
+			{
+				ValidFrom: 1,
+			},
+		},
 	}
 	// Runtime ID 0x0 is for simple-keyvalue, 0xf... is for the keymanager. Let's use 0x1.
 	_ = testRuntime.ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000001")

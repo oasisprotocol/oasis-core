@@ -1081,22 +1081,12 @@ func VerifyRuntime( // nolint: gocyclo
 
 	// Validate the deployments.  This also handles validating that the
 	// appropriate TEE configuration is present in each deployment.
-	//
 	if err := rt.ValidateDeployments(now); err != nil {
 		logger.Error("RegisterRuntime: invalid deployments",
 			"runtime_id", rt.ID,
 			"err", err,
 		)
 		return err // ValidateDeployments handles wrapping, yay.
-	}
-	if !isGenesis {
-		// Unless isGenesis, forbid immediate deployment.
-		if rt.ActiveDeployment(now) != nil {
-			logger.Error("RegisterRuntime: trying to deploy immediately",
-				"runtime_id", rt.ID,
-			)
-			return ErrRuntimeUpdateNotAllowed
-		}
 	}
 
 	// Ensure there's a valid admission policy.
@@ -1175,6 +1165,20 @@ func VerifyRegisterComputeRuntimeArgs(ctx context.Context, logger *logging.Logge
 		}
 	}
 
+	return nil
+}
+
+// VerifyRuntimeNew verifies a new runtime.
+func VerifyRuntimeNew(logger *logging.Logger, rt *Runtime, now beacon.EpochTime, params *ConsensusParameters, isGenesis bool) error {
+	if !(isGenesis || params.DebugDeployImmediately) {
+		// Unless isGenesis or debug option set, forbid immediate deployment.
+		if rt.ActiveDeployment(now) != nil {
+			logger.Error("RegisterRuntime: trying to deploy immediately",
+				"runtime_id", rt.ID,
+			)
+			return ErrRuntimeUpdateNotAllowed
+		}
+	}
 	return nil
 }
 
@@ -1358,6 +1362,10 @@ type ConsensusParameters struct {
 	// DebugBypassStake is true iff the registry should bypass all of the staking
 	// related checks and operations.
 	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
+
+	// DebugDeployImmediately is true iff runtime registrations should
+	// allow immediate deployment.
+	DebugDeployImmediately bool `json:"debug_deploy_immediately,omitempty"`
 
 	// DisableRuntimeRegistration is true iff runtime registration should be
 	// disabled outside of the genesis block.

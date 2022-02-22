@@ -66,7 +66,7 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		if rt.Kind == registry.KindCompute {
 			if runtimeBinaries == nil {
 				copy(id[:], rt.ID[:])
-				runtimeBinaries = rt.Binaries
+				runtimeBinaries = rt.Deployments[0].Binaries
 			}
 		} else {
 			rts = append(rts, rt)
@@ -86,7 +86,6 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			Kind:       registry.KindCompute,
 			Entity:     0,
 			Keymanager: 0,
-			Binaries:   runtimeBinaries,
 			Executor: registry.ExecutorParameters{
 				GroupSize:       2,
 				GroupBackupSize: 0,
@@ -103,6 +102,11 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
 			GovernanceModel: registry.GovernanceRuntime,
+			Deployments: []oasis.DeploymentCfg{
+				{
+					Binaries: runtimeBinaries,
+				},
+			},
 		}
 
 		f.Runtimes = append(f.Runtimes, newRtFixture)

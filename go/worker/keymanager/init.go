@@ -94,6 +94,9 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime registry entry: %w", err)
 	}
+	if numVers := len(w.runtime.HostVersions()); numVers != 1 {
+		return nil, fmt.Errorf("worker/keymanager: expected a single runtime version (got %d)", numVers)
+	}
 
 	w.runtimeHostHandler = newHostHandler(w, commonWorker, localStorage)
 

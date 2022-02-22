@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -130,13 +131,21 @@ func (sc *historyReindexImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Fetch current epoch.
+	epoch, err := sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
 	// Register runtime.
 	compRt := sc.Net.Runtimes()[rtIdx]
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRt.ToRuntimeDescriptor(), 0, txPath); err != nil {
+	rtDsc := compRt.ToRuntimeDescriptor()
+	rtDsc.Deployments[0].ValidFrom = epoch + 1
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRt.ToRuntimeDescriptor(), 0, txPath); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
-	if err := cli.Consensus.SubmitTx(txPath); err != nil {
+	if err = cli.Consensus.SubmitTx(txPath); err != nil {
 		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 

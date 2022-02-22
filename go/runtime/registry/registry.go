@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -104,7 +105,10 @@ type Runtime interface {
 	HasHost() bool
 
 	// Host returns the runtime host configuration and provisioner if configured.
-	Host(ctx context.Context) (runtimeHost.Config, runtimeHost.Provisioner, error)
+	Host(ctx context.Context) (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error)
+
+	// HostVersions returns a list of supported runtime versions.
+	HostVersions() []version.Version
 }
 
 type runtime struct { // nolint: maligned
@@ -130,7 +134,7 @@ type runtime struct { // nolint: maligned
 	activeDescriptorNotifier   *pubsub.Broker
 
 	hostProvisioners map[node.TEEHardware]runtimeHost.Provisioner
-	hostConfig       *runtimeHost.Config
+	hostConfig       map[version.Version]*runtimeHost.Config
 
 	logger *logging.Logger
 }
@@ -229,22 +233,30 @@ func (r *runtime) HasHost() bool {
 	return r.hostProvisioners != nil && r.hostConfig != nil
 }
 
-func (r *runtime) Host(ctx context.Context) (runtimeHost.Config, runtimeHost.Provisioner, error) {
+func (r *runtime) Host(ctx context.Context) (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error) {
 	if r.hostProvisioners == nil || r.hostConfig == nil {
-		return runtimeHost.Config{}, nil, ErrRuntimeHostNotConfigured
+		return nil, nil, ErrRuntimeHostNotConfigured
 	}
 
 	rt, err := r.RegistryDescriptor(ctx)
 	if err != nil {
-		return runtimeHost.Config{}, nil, fmt.Errorf("failed to get runtime registry descriptor: %w", err)
+		return nil, nil, fmt.Errorf("failed to get runtime registry descriptor: %w", err)
 	}
 
 	provisioner, ok := r.hostProvisioners[rt.TEEHardware]
 	if !ok {
-		return runtimeHost.Config{}, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", rt.TEEHardware)
+		return nil, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", rt.TEEHardware)
 	}
 
-	return *r.hostConfig, provisioner, nil
+	return r.hostConfig, provisioner, nil
+}
+
+func (r *runtime) HostVersions() []version.Version {
+	var versions []version.Version
+	for v := range r.hostConfig {
+		versions = append(versions, v)
+	}
+	return versions
 }
 
 func (r *runtime) stop() {

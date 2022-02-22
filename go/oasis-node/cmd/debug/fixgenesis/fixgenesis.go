@@ -485,9 +485,9 @@ func updateRegistryRuntime(old *v4Runtime) (registry.Runtime, error) {
 		Constraints: make(map[scheduler.CommitteeKind]map[scheduler.Role]registry.SchedulingConstraints),
 		Deployments: []*registry.VersionInfo{
 			{
-				Version:    old.Version.Version,
-				ValidFrom:  0, // Fix manually if you want something more specific.
-				TEE:        old.Version.TEE,
+				Version:   old.Version.Version,
+				ValidFrom: 0, // Fix manually if you want something more specific.
+				TEE:       old.Version.TEE,
 			},
 		},
 

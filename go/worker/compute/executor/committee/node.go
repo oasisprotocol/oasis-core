@@ -1549,9 +1549,12 @@ func (n *Node) nudgeAvailability(force bool) {
 		}
 
 		n.roleProvider.SetAvailable(func(nd *node.Node) error {
-			rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID())
-			rt.Version = n.runtimeVersion
-			rt.Capabilities.TEE = n.runtimeCapabilityTEE
+			for _, version := range n.commonNode.Runtime.HostVersions() {
+				rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID(), version)
+				if rt.Version == n.runtimeVersion {
+					rt.Capabilities.TEE = n.runtimeCapabilityTEE
+				}
+			}
 			return nil
 		})
 	default:

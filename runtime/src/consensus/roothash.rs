@@ -348,7 +348,7 @@ mod tests {
             },
             kind: registry::RuntimeKind::KindCompute,
             tee_hardware: registry::TEEHardware::TEEHardwareInvalid,
-            versions: registry::VersionInfo::default(),
+            deployments: vec![registry::VersionInfo::default()],
             key_manager: None,
             executor: registry::ExecutorParameters {
                 group_size: 3,
@@ -443,14 +443,14 @@ mod tests {
                     0,
                     RegistryMessage::UpdateRuntime(registry::Runtime::default()),
                 ))],
-                "b5a085557952197dbda113702e86b1c749aec44b71a8c8264bf2d4cae08e05bb",
+                "ac8ff938607f234f0db60dc2e81897f50c3918cc51998c633a0f3f2b98374db1",
             ),
             (
                 vec![Message::Registry(Versioned::new(
                     0,
                     RegistryMessage::UpdateRuntime(rt),
                 ))],
-                "f13ffad395a426fb234c2bc99406d78fac17ef42b546eaf9ff6ca8b515a4cb2f",
+                "67da1da17b12c398d4dec165480df73c244740f8fb876f59a76cd29e30056b6d",
             ),
         ];
         for (msgs, expected_hash) in tcs {

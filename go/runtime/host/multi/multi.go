@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cenkalti/backoff/v4"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -86,14 +89,25 @@ func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoRespons
 }
 
 // Implements host.Runtime.
-func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	agg.l.RLock()
-	defer agg.l.RUnlock()
+func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
+	callFn := func() error {
+		agg.l.RLock()
+		defer agg.l.RUnlock()
 
-	if agg.active == nil {
-		return nil, ErrNoActiveVersion
+		if agg.active == nil {
+			return ErrNoActiveVersion
+		}
+		rsp, err = agg.active.host.Call(ctx, body)
+		if err != nil {
+			// All protocol-level errors are permanent.
+			return backoff.Permanent(err)
+		}
+		return nil
 	}
-	return agg.active.host.Call(ctx, body)
+
+	// Retry call in case the runtime is not yet ready.
+	err = backoff.Retry(callFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
+	return
 }
 
 // Implements host.Runtime.

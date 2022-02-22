@@ -122,13 +122,17 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindKeyManager,
 				Entity:     0,
 				Keymanager: -1,
-				Binaries: map[node.TEEHardware]string{
-					tee: viper.GetString(cfgKeymanagerBinary),
-				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
 				GovernanceModel: registry.GovernanceEntity,
+				Deployments: []oasis.DeploymentCfg{
+					{
+						Binaries: map[node.TEEHardware]string{
+							tee: viper.GetString(cfgKeymanagerBinary),
+						},
+					},
+				},
 			},
 		}
 		if usingKeymanager {
@@ -171,9 +175,6 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindCompute,
 				Entity:     0,
 				Keymanager: keymanagerIdx,
-				Binaries: map[node.TEEHardware]string{
-					tee: rt,
-				},
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
@@ -191,6 +192,13 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				},
 				GenesisRound:    0,
 				GovernanceModel: registry.GovernanceEntity,
+				Deployments: []oasis.DeploymentCfg{
+					{
+						Binaries: map[node.TEEHardware]string{
+							tee: rt,
+						},
+					},
+				},
 			})
 
 			for j := range fixture.ComputeWorkers {

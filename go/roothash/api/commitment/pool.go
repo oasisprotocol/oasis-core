@@ -248,7 +248,18 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 				return ErrNotInCommittee
 			}
 
-			rt := n.GetRuntime(p.Runtime.ID)
+			ad := p.Runtime.ActiveDeployment(p.Committee.ValidFor)
+			if ad == nil {
+				// This should never happen as we prevent this elsewhere.
+				logger.Error("no active deployment",
+					"runtime_id", p.Runtime.ID,
+					"node_id", commit.NodeID,
+					"deployments", p.Runtime.Deployments,
+				)
+				return ErrNoRuntime
+			}
+
+			rt := n.GetRuntime(p.Runtime.ID, ad.Version)
 			if rt == nil {
 				// We currently prevent this case throughout the rest of the system.
 				// Still, it's prudent to check.
@@ -257,6 +268,15 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 					"node_id", commit.NodeID,
 				)
 				return ErrNotInCommittee
+			}
+
+			if rt.Capabilities.TEE == nil {
+				// This should never happen as we prevent this elsewhere.
+				logger.Error("node doesn't have TEE capability",
+					"runtime_id", p.Runtime.ID,
+					"node_id", commit.NodeID,
+				)
+				return ErrRakSigInvalid
 			}
 
 			if err = commit.Header.VerifyRAK(rt.Capabilities.TEE.RAK); err != nil {

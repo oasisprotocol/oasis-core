@@ -8,6 +8,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -132,10 +133,17 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 		return err
 	}
 
+	// Fetch current epoch.
+	epoch, err := sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
 	// Register a new compute runtime.
 	sc.Logger.Info("registering a new compute runtime")
 	compRt := sc.Net.Runtimes()[0]
 	compRtDesc := compRt.ToRuntimeDescriptor()
+	compRtDesc.Deployments[0].ValidFrom = epoch + 1
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
 	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, 0, txPath); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)

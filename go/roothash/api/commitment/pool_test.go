@@ -206,6 +206,9 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 		Kind:            registry.KindCompute,
 		TEEHardware:     node.TEEHardwareIntelSGX,
 		GovernanceModel: registry.GovernanceEntity,
+		Deployments: []*registry.VersionInfo{
+			{},
+		},
 	}
 
 	// Generate a commitment signing key.

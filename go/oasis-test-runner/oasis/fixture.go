@@ -8,7 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -219,10 +218,9 @@ type RuntimeFixture struct { // nolint: maligned
 	Kind       registry.RuntimeKind `json:"kind"`
 	Entity     int                  `json:"entity"`
 	Keymanager int                  `json:"keymanager"`
-	Version    version.Version      `json:"version"`
 
-	Binaries     map[node.TEEHardware]string `json:"binaries"`
-	GenesisRound uint64                      `json:"genesis_round,omitempty"`
+	Deployments  []DeploymentCfg `json:"deployments"`
+	GenesisRound uint64          `json:"genesis_round,omitempty"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
@@ -265,17 +263,16 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		Keymanager:         km,
 		TEEHardware:        netFixture.TEE.Hardware,
 		MrSigner:           netFixture.TEE.MrSigner,
-		Version:            f.Version,
 		Executor:           f.Executor,
 		TxnScheduler:       f.TxnScheduler,
 		Storage:            f.Storage,
 		AdmissionPolicy:    f.AdmissionPolicy,
 		Staking:            f.Staking,
-		Binaries:           f.Binaries,
 		GenesisRound:       f.GenesisRound,
 		Pruner:             f.Pruner,
 		ExcludeFromGenesis: f.ExcludeFromGenesis,
 		GovernanceModel:    f.GovernanceModel,
+		Deployments:        f.Deployments,
 	})
 }
 

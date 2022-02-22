@@ -720,7 +720,7 @@ func TestElectCommittee(t *testing.T) {
 					ID: nodeID1,
 					Runtimes: []*node.Runtime{
 						{
-							ID:      rtID1, // Matching runtime ID.
+							ID: rtID1, // Matching runtime ID.
 							Version: version.Version{
 								Major: 1,
 								Minor: 0,
@@ -739,7 +739,7 @@ func TestElectCommittee(t *testing.T) {
 					ID: nodeID3,
 					Runtimes: []*node.Runtime{
 						{
-							ID:      rtID1, // Matching runtime ID.
+							ID: rtID1, // Matching runtime ID.
 							Version: version.Version{
 								Major: 1,
 								Minor: 0,

@@ -107,6 +107,7 @@ var (
 			},
 		},
 		GovernanceModel: registry.GovernanceEntity,
+		Deployments:     []*registry.VersionInfo{{}},
 	}
 
 	testRuntimeID common.Namespace

@@ -47,7 +47,7 @@ type registration struct {
 	ns common.Namespace
 }
 
-func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Runtime {
+func getRuntime(entityID signature.PublicKey, id common.Namespace, epoch beacon.EpochTime) *registry.Runtime {
 	rt := &registry.Runtime{
 		Versioned: cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
 		ID:        id,
@@ -77,6 +77,11 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace) *registry.Run
 			},
 		},
 		GovernanceModel: registry.GovernanceEntity,
+		Deployments: []*registry.VersionInfo{
+			{
+				ValidFrom: epoch + 1,
+			},
+		},
 	}
 	rt.Genesis.StateRoot.Empty()
 	return rt
@@ -274,7 +279,13 @@ func (r *registration) Run( // nolint: gocyclo
 		// XXX: currently only a single runtime is registered at start. Could
 		// also periodically register new runtimes.
 		if i == 0 {
-			runtimeDesc := getRuntime(entityAccs[i].signer.Public(), r.ns)
+			// Current epoch.
+			epoch, err := beacon.GetEpoch(ctx, consensus.HeightLatest)
+			if err != nil {
+				return fmt.Errorf("failed to get current epoch: %w", err)
+			}
+
+			runtimeDesc := getRuntime(entityAccs[i].signer.Public(), r.ns, epoch)
 			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, nil, runtimeDesc)
 			entityAccs[i].reckonedNonce++
 			if err := r.FundSignAndSubmitTx(ctx, entityAccs[i].signer, tx); err != nil {

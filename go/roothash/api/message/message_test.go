@@ -38,8 +38,8 @@ func TestMessageHash(t *testing.T) {
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
-		}}}}, "b5a085557952197dbda113702e86b1c749aec44b71a8c8264bf2d4cae08e05bb"},
-		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "f13ffad395a426fb234c2bc99406d78fac17ef42b546eaf9ff6ca8b515a4cb2f"},
+		}}}}, "ac8ff938607f234f0db60dc2e81897f50c3918cc51998c633a0f3f2b98374db1"},
+		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "67da1da17b12c398d4dec165480df73c244740f8fb876f59a76cd29e30056b6d"},
 	} {
 		var h hash.Hash
 		err := h.UnmarshalHex(tc.expectedHash)
@@ -134,6 +134,7 @@ func newTestRuntime() *registry.Runtime {
 			},
 		},
 		GovernanceModel: registry.GovernanceEntity,
+		Deployments:     []*registry.VersionInfo{{}},
 	}
 	rt.Genesis.StateRoot.Empty()
 

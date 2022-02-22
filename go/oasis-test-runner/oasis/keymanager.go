@@ -60,7 +60,7 @@ func (pol *KeymanagerPolicy) provision() error {
 			"--" + kmCmd.CfgPolicySerial, strconv.Itoa(pol.serial),
 		}
 		policyArgs = append(policyArgs, []string{
-			"--" + kmCmd.CfgPolicyEnclaveID, pol.runtime.mrEnclave.String() + pol.runtime.mrSigner.String(),
+			"--" + kmCmd.CfgPolicyEnclaveID, pol.runtime.GetEnclaveIdentity(0).String(),
 		}...)
 
 		for _, rt := range pol.net.runtimes {
@@ -68,7 +68,7 @@ func (pol *KeymanagerPolicy) provision() error {
 				continue
 			}
 
-			arg := fmt.Sprintf("%s=%s%s", rt.ID(), rt.mrEnclave, rt.mrSigner)
+			arg := fmt.Sprintf("%s=%s", rt.ID(), rt.GetEnclaveIdentity(0))
 			policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
 		}
 

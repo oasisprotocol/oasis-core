@@ -324,7 +324,7 @@ func (w *Worker) updateStatus(status *api.Status, startedEvent *host.StartedEven
 	// Register as we are now ready to handle requests.
 	initOk = true
 	w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
-		rt := n.AddOrUpdateRuntime(w.runtime.ID())
+		rt := n.AddOrUpdateRuntime(w.runtime.ID(), startedEvent.Version)
 		rt.Version = startedEvent.Version
 		rt.ExtraInfo = cbor.Marshal(signedInitResp)
 		rt.Capabilities.TEE = startedEvent.CapabilityTEE
@@ -575,7 +575,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 				// control.
 				if w.enclaveStatus == nil {
 					w.roleProvider.SetAvailable(func(n *node.Node) error {
-						rt := n.AddOrUpdateRuntime(w.runtime.ID())
+						rt := n.AddOrUpdateRuntime(w.runtime.ID(), currentStartedEvent.Version)
 						rt.Version = currentStartedEvent.Version
 						rt.ExtraInfo = nil
 						rt.Capabilities.TEE = currentStartedEvent.CapabilityTEE
@@ -647,6 +647,17 @@ func (w *Worker) worker() { // nolint: gocyclo
 					return
 				}
 				defer hrtNotifier.Stop()
+
+				// Key managers always need to use the enclave version given to them in the bundle
+				// as they need to make sure that replication is possible during upgrades.
+				activeVersion := w.runtime.HostVersions()[0] // Init made sure we have exactly one.
+				if err = w.SetHostedRuntimeVersion(w.ctx, activeVersion); err != nil {
+					w.logger.Error("failed to activate runtime version",
+						"err", err,
+						"version", activeVersion,
+					)
+					return
+				}
 			}
 
 			currentStatus = status

@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
 func TestRolesMask(t *testing.T) {
@@ -100,9 +101,9 @@ func TestNodeDescriptor(t *testing.T) {
 	require.True(n.IsExpired(43))
 
 	ns1 := common.NewTestNamespaceFromSeed([]byte("node descriptor test"), 0)
-	rt1 := n.AddOrUpdateRuntime(ns1)
+	rt1 := n.AddOrUpdateRuntime(ns1, version.Version{Major: 1, Minor: 2, Patch: 3})
 	require.Equal(rt1.ID, ns1, "created runtime id must be correct")
-	rt2 := n.AddOrUpdateRuntime(ns1)
+	rt2 := n.AddOrUpdateRuntime(ns1, version.Version{Major: 1, Minor: 2, Patch: 3})
 	require.Equal(&rt1, &rt2, "AddOrUpdateRuntime should return the same reference for same id")
 	require.Len(n.Runtimes, 1)
 

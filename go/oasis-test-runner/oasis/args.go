@@ -15,7 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
@@ -379,11 +378,13 @@ func (args *argBuilder) runtimeSGXLoader(fn string) *argBuilder {
 }
 
 func (args *argBuilder) runtimePath(rt *Runtime) *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:        runtimeRegistry.CfgRuntimePaths,
-		Values:      []string{rt.BundlePath()},
-		MultiValued: true,
-	})
+	for _, path := range rt.BundlePaths() {
+		args.vec = append(args.vec, Argument{
+			Name:        runtimeRegistry.CfgRuntimePaths,
+			Values:      []string{path},
+			MultiValued: true,
+		})
+	}
 	return args
 }
 
@@ -663,10 +664,7 @@ func (args *argBuilder) byzantineFakeSGX() *argBuilder {
 }
 
 func (args *argBuilder) byzantineVersionFakeEnclaveID(rt *Runtime) *argBuilder {
-	eid := sgx.EnclaveIdentity{
-		MrEnclave: *rt.mrEnclave,
-		MrSigner:  *rt.mrSigner,
-	}
+	eid := rt.GetEnclaveIdentity(0)
 	args.vec = append(args.vec, Argument{
 		Name:   byzantine.CfgVersionFakeEnclaveID,
 		Values: []string{eid.String()},

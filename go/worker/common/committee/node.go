@@ -2,7 +2,6 @@ package committee
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -11,6 +10,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -282,22 +282,18 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 
 	// Update active descriptor on epoch transitions.
 	if firstBlockReceived || header.HeaderType == block.EpochTransition {
-		var ad *registry.Runtime
-		ad, err = n.Consensus.Registry().GetRuntime(n.ctx, &registry.NamespaceQuery{
-			ID:     n.Runtime.ID(),
-			Height: height,
+		var rs *roothash.RuntimeState
+		rs, err = n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
+			RuntimeID: n.Runtime.ID(),
+			Height:    height,
 		})
-		switch {
-		case err == nil:
-			n.CurrentDescriptor = ad
-		case errors.Is(err, registry.ErrNoSuchRuntime):
-			// Runtime was probably suspended, just keep the current descriptor as is.
-		default:
-			n.logger.Error("failed to query runtime descriptor",
+		if err != nil {
+			n.logger.Error("failed to query runtime state",
 				"err", err,
 			)
 			return
 		}
+		n.CurrentDescriptor = rs.Runtime
 
 		n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, height)
 		if err != nil {
@@ -305,6 +301,23 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 				"err", err,
 			)
 			return
+		}
+
+		// Update the runtime version based on the currently active deployment.
+		activeDeploy := rs.Runtime.ActiveDeployment(n.CurrentEpoch)
+		// NOTE: If there is no active deployment this will activate the all-zero version which may
+		//       result in the runtime stopping.
+		var activeVersion version.Version
+		if activeDeploy != nil {
+			activeVersion = activeDeploy.Version
+		}
+
+		if err = n.SetHostedRuntimeVersion(n.ctx, activeVersion); err != nil {
+			n.logger.Error("failed to activate runtime version",
+				"err", err,
+				"version", activeVersion,
+			)
+			// This is not fatal and it should result in the node declaring itself unavailable.
 		}
 	}
 

@@ -27,7 +27,7 @@ func (g *Genesis) SanityCheck(
 	logger := logging.GetLogger("genesis/sanity-check")
 
 	if !flags.DebugDontBlameOasis() {
-		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake {
+		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake || g.Parameters.DebugDeployImmediately {
 			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
 		}
 		if g.Parameters.MaxNodeExpiration == 0 {
@@ -274,7 +274,13 @@ func SanityCheckStake(
 
 	for _, node := range nodes {
 		var nodeRts []*Runtime
+		rtMap := make(map[common.Namespace]bool)
 		for _, rt := range node.Runtimes {
+			if rtMap[rt.ID] {
+				continue
+			}
+			rtMap[rt.ID] = true
+
 			nodeRts = append(nodeRts, runtimeMap[rt.ID])
 		}
 		// Add node stake claims.
