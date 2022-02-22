@@ -135,6 +135,20 @@ Core:
   rustup target add x86_64-fortanix-unknown-sgx
   ```
 
+* (**OPTIONAL**) [oasis-core-tools].
+
+  Required to use the `cargo` subcommand `elf2sgxs` when building for SGX, to
+  convert ELF binaries to SGXS format.
+
+  Download and install it with:
+
+  ```
+  cargo install oasis-core-tools \
+    --git https://github.com/oasisprotocol/oasis-core \
+    --force \
+    --locked
+  ```
+
 * (**OPTIONAL**) [gofumpt] and [goimports].
 
   Required if you plan to change any of the Go code in order for automated code
@@ -247,6 +261,7 @@ where the code has been checked out.
 [jemalloc-hardcode-path]:
   https://github.com/dgraph-io/ristretto/blob/221ca9b2091d12e5d24aa5d7d56e49745fc175d8/z/calloc_jemalloc.go#L9-L13
 <!-- markdownlint-enable line-length -->
+[oasis-core-tools]: https://github.com/oasisprotocol/oasis-core/tree/master/tools
 
 ## Using the Development Docker Image
 
