@@ -22,6 +22,7 @@ pushd go
   make generate
   if [ -n "$(git status --porcelain)" ]; then
     echo -e "${RED}ERROR: go/ directory is dirty after 'go generate'${OFF}"
+    git diff
     exit 1
   fi
 
