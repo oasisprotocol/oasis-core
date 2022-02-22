@@ -56,10 +56,7 @@ impl SignedPolicySGX {
         // Ensure that enough valid signatures from trusted signers are present.
         let trusted_signers = TRUSTED_SIGNERS.lock().unwrap();
         let signers: HashSet<_> = trusted_signers.signers.intersection(&signers).collect();
-        let multisig_threshold = match option_env!("OASIS_UNSAFE_KM_POLICY_KEYS") {
-            Some(_) => 2,
-            None => trusted_signers.threshold,
-        };
+        let multisig_threshold = trusted_signers.threshold;
         if signers.len() < multisig_threshold as usize {
             return Err(KeyManagerError::PolicyInsufficientSignatures);
         }

@@ -163,6 +163,15 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 				if mrEnclave, err = bnd.MrEnclave(); err != nil {
 					return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 				}
+
+				rt.descriptor.Version.TEE = cbor.Marshal(node.SGXConstraints{
+					Enclaves: []sgx.EnclaveIdentity{
+						{
+							MrEnclave: *mrEnclave,
+							MrSigner:  *rt.mrSigner,
+						},
+					},
+				})
 			}
 			rt.bundle = bnd
 			rt.mrEnclave = mrEnclave
@@ -251,7 +260,8 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	}
 	descriptor.Genesis.StateRoot.Empty()
 
-	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())
+	rtIndex := len(net.runtimes)
+	rtDir, err := net.baseDir.NewSubDir(fmt.Sprintf("runtime-%s-%d", cfg.ID, rtIndex))
 	if err != nil {
 		net.logger.Error("failed to create runtime subdir",
 			"err", err,
@@ -282,6 +292,11 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	if _, err := rt.ToRuntimeBundle(); err != nil {
 		return nil, err
 	}
+
+	// Remove any dynamically generated bundles on cleanup.
+	net.env.AddOnCleanup(func() {
+		_ = os.Remove(rt.BundlePath())
+	})
 
 	// Save runtime descriptor into file.
 	rtDescStr, _ := json.Marshal(rt.descriptor)

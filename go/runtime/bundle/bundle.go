@@ -178,11 +178,17 @@ func (bnd *Bundle) Write(fn string) error {
 	return nil
 }
 
+// ExplodedPath returns the path under the data directory that contains
+// all of the exploded bundles.
+func ExplodedPath(dataDir string) string {
+	return filepath.Join(dataDir, "runtimes", "bundles")
+}
+
 // ExplodedPath returns the path that the corresponding asset will be
 // written to via WriteExploded.
 func (bnd *Bundle) ExplodedPath(dataDir, fn string) string {
 	// DATADIR/runtimes/bundles/runtimeID-version
-	subDir := filepath.Join(dataDir, "runtimes", "bundles",
+	subDir := filepath.Join(ExplodedPath(dataDir),
 		fmt.Sprintf("%s-%s", bnd.Manifest.ID, bnd.Manifest.Version),
 	)
 
