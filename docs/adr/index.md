@@ -62,9 +62,9 @@ There is a lightweight process for proposing, discussing and deciding on ADRs:
 After the ADR is merged an implementation may be undertaken by following the
 [contribution process].
 
-[your branch]: ../../CONTRIBUTING.md#contributing-code
-[changelog fragment]: ../../.changelog/README.md
-[contribution process]: ../../CONTRIBUTING.md
+[your branch]: https://github.com/oasisprotocol/oasis-core/tree/master/CONTRIBUTING.md#contributing-code
+[changelog fragment]: https://github.com/oasisprotocol/oasis-core/tree/master/.changelog/README.md
+[contribution process]: https://github.com/oasisprotocol/oasis-core/tree/master/CONTRIBUTING.md
 
 ## Current Records
 

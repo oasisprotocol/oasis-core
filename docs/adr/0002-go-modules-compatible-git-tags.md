@@ -44,8 +44,7 @@ thus compatible with [Go Modules versioning requirements][go-mod-ver].
   https://semver.org/spec/v2.0.0.html
 [go-mod-ver]:
   https://golang.org/ref/mod#versions
-[Oasis Core's CalVer (calendar versioning) scheme]:
-  ../versioning.md
+[Oasis Core's CalVer (calendar versioning) scheme]: ../versioning.md
 
 ## Decision
 

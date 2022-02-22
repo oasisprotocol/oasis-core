@@ -41,7 +41,7 @@ must be used.
 <!-- markdownlint-disable line-length -->
 [message]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#Message
 [Go]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#Body
-[Rust]: ../../runtime/src/types.rs
+[Rust]: https://github.com/oasisprotocol/oasis-core/tree/master/runtime/src/types.rs
 [`Error`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#Error
 <!-- markdownlint-enable line-length -->
 
@@ -83,8 +83,8 @@ terminate the connection (and/or the runtime process).
 
 <!-- markdownlint-disable line-length -->
 [messages]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#Body
-[Rust implementation]: ../../runtime
-[Go implementation]: ../../go/runtime/host/protocol
+[Rust implementation]: https://github.com/oasisprotocol/oasis-core/tree/master/runtime
+[Go implementation]: https://github.com/oasisprotocol/oasis-core/tree/master/go/runtime/host/protocol
 [`InitHost` or `InitGuest`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#Connection
 <!-- markdownlint-enable line-length -->
 
@@ -111,7 +111,7 @@ messages. In case the runtime is running in a trusted execution environment
 (TEE) like Intel SGX, the next required step is to perform remote attestation.
 
 <!-- markdownlint-disable line-length -->
-[`oasis-core-runtime` crate]: ../../runtime
+[`oasis-core-runtime` crate]: https://github.com/oasisprotocol/oasis-core/tree/master/runtime
 [`RuntimeInfoRequest`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/host/protocol?tab=doc#RuntimeInfoRequest
 [designated identifier]: identifiers.md
 [registry service]: ../consensus/services/registry.md#runtimes

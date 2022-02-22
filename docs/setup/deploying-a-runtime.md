@@ -64,7 +64,7 @@ Should give output similar to:
 In following steps we will register and run the [simple-keyvalue] runtime on the
 network.
 
-[simple-keyvalue]: ../../tests/runtimes/simple-keyvalue
+[simple-keyvalue]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/runtimes/simple-keyvalue
 
 ## Initializing a Runtime
 
@@ -468,4 +468,4 @@ Simple key/value client finished.
 
 <!-- markdownlint-enable line-length -->
 
-[simple-keyvalue-client]: ../../tests/clients/simple-keyvalue
+[simple-keyvalue-client]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/clients/simple-keyvalue

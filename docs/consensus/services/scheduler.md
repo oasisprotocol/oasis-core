@@ -11,7 +11,7 @@ the [consensus service API documentation].
 <!-- markdownlint-disable line-length -->
 [epoch-based time]: epochtime.md
 [random beacon]: beacon.md
-[`go/scheduler/api`]: ../../../go/scheduler/api
+[`go/scheduler/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/scheduler/api
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/scheduler/api?tab=doc
 <!-- markdownlint-enable line-length -->
 

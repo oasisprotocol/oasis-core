@@ -8,7 +8,7 @@ supported queries and transactions. For more information you can also check out
 the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
-[`go/registry/api`]: ../../../go/registry/api
+[`go/registry/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/registry/api
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc
 <!-- markdownlint-enable line-length -->
 

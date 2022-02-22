@@ -56,7 +56,7 @@ the gRPC helpers see the [API documentation].
 <!-- markdownlint-disable line-length -->
 [gRPC protocol]: https://grpc.io
 [CBOR codec (instead of Protocol Buffers)]: ../authenticated-grpc.md#cbor-codec
-[`client/src/transaction/api/client.rs`]: ../../client/src/transaction/api/client.rs
+[`client/src/transaction/api/client.rs`]: https://github.com/oasisprotocol/oasis-core/tree/master/client/src/transaction/api/client.rs
 [API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/grpc?tab=doc
 <!-- markdownlint-enable line-length -->
 

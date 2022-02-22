@@ -9,7 +9,7 @@ the [consensus service API documentation] and the [governance ADR
 specification].
 
 <!-- markdownlint-disable line-length -->
-[`go/governance/api`]: ../../../go/governance/api
+[`go/governance/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/governance/api
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/governance/api?tab=doc
 [governance ADR specification]: ../../adr/0006-consensus-governance.md
 <!-- markdownlint-enable line-length -->

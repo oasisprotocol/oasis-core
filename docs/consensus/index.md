@@ -37,8 +37,8 @@ transaction format for mutating state together with any query methods (both are
 consensus backend agnostic).
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus`]: ../../go/consensus
-[`go/consensus/api`]: ../../go/consensus/api
+[`go/consensus`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus
+[`go/consensus/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/api
 [consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc
 [Tendermint]: https://tendermint.com/
 [Epoch Time]: services/epochtime.md
@@ -74,7 +74,7 @@ The Tendermint consensus backend is split into two major parts:
    it easy to interact with the ABCI application, presenting everything via the
    Oasis Core Consensus interface.
 
-[`go/consensus/tendermint`]: ../../go/consensus/tendermint
+[`go/consensus/tendermint`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
 [the Tendermint Core developer documentation]: https://docs.tendermint.com/
 
 ### ABCI Application Multiplexer
@@ -91,8 +91,8 @@ _consensus layer_ interface living in [`go/consensus/tendermint/apps/<app>`].
 
 <!-- markdownlint-disable line-length -->
 [ABCI protocol]: https://docs.tendermint.com/master/spec/abci/
-[`go/consensus/tendermint/abci/mux.go`]: ../../go/consensus/tendermint/abci/mux.go
-[`go/consensus/tendermint/apps/<app>`]: ../../go/consensus/tendermint/apps
+[`go/consensus/tendermint/abci/mux.go`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/abci/mux.go
+[`go/consensus/tendermint/apps/<app>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/apps
 <!-- markdownlint-enable line-length -->
 
 ### State Storage
@@ -154,7 +154,7 @@ func (s *staking) TotalSupply(ctx context.Context, height int64) (*quantity.Quan
 ```
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus/tendermint/<service>`]: ../../go/consensus/tendermint
+[`go/consensus/tendermint/<service>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
 [ABCI query functionality]: https://docs.tendermint.com/master/spec/abci/apps.html#query
 <!-- markdownlint-enable line-length -->
 

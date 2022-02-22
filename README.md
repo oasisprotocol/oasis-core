@@ -48,7 +48,7 @@ See our [Contributing Guidelines](CONTRIBUTING.md).
 
 ## Security
 
-Read our [Security](SECURITY.md) document.
+Read our [Security](docs/SECURITY.md) document.
 
 ## Developer Documentation
 

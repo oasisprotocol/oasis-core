@@ -233,7 +233,7 @@ where the code has been checked out.
 [download `rustup-init` executable for your platform]:
   https://github.com/rust-lang/rustup#other-installation-methods
 [Rust]: https://www.rust-lang.org/
-[rust-toolchain]: rust-toolchain
+[rust-toolchain]: https://github.com/oasisprotocol/oasis-core/tree/master/rust-toolchain
 [rust-toolchain-precedence]:
   https://github.com/rust-lang/rustup/blob/master/README.md#override-precedence
 [Fortanix Rust EDP]: https://edp.fortanix.com
