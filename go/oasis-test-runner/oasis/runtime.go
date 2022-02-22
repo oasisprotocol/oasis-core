@@ -251,7 +251,8 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	}
 	descriptor.Genesis.StateRoot.Empty()
 
-	rtDir, err := net.baseDir.NewSubDir("runtime-" + cfg.ID.String())
+	rtIndex := len(net.runtimes)
+	rtDir, err := net.baseDir.NewSubDir(fmt.Sprintf("runtime-%s-%d", cfg.ID, rtIndex))
 	if err != nil {
 		net.logger.Error("failed to create runtime subdir",
 			"err", err,
