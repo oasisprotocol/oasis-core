@@ -242,7 +242,7 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     branches: "!master !stable/*"
-    timeout_in_minutes: 40
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.
@@ -275,8 +275,8 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     branches: master stable/*
-    parallelism: 10
-    timeout_in_minutes: 30
+    parallelism: 20
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.
