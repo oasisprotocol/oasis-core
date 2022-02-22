@@ -69,7 +69,7 @@ func New(fn string, noSuffix bool) (dbm.DB, error) {
 	opts = opts.WithCompression(options.Snappy)
 	opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
 
-	db, err := cmnBadger.Open(opts)
+	db, err := badger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint/db/badger: failed to open database: %w", err)
 	}

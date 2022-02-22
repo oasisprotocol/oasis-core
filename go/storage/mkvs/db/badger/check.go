@@ -7,7 +7,6 @@ import (
 
 	"github.com/dgraph-io/badger/v3"
 
-	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -219,7 +218,7 @@ func CheckSanity(ctx context.Context, cfg *api.Config, display DisplayHelper) er
 	opts := commonConfigToBadgerOptions(&roCfg, db)
 
 	var err error
-	if db.db, err = cmnBadger.OpenManaged(opts); err != nil {
+	if db.db, err = badger.OpenManaged(opts); err != nil {
 		return fmt.Errorf("mkvs/badger/check: failed to open database: %w", err)
 	}
 	defer db.Close()
