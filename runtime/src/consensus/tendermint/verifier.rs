@@ -18,15 +18,15 @@ use tendermint::{
 };
 use tendermint_light_client::{
     builder::LightClientBuilder,
-    components::{self, verifier::ProdVerifier},
+    components::{self, verifier::PredicateVerifier},
     light_client,
     operations::{ProdCommitValidator, ProdHasher, VotingPowerCalculator, VotingPowerTally},
-    predicates::{errors::VerificationError, ProdPredicates},
     supervisor::Instance,
     types::{
         Commit, Hash as TMHash, LightBlock as TMLightBlock, PeerId, SignedHeader, Time,
         TrustThreshold, ValidatorSet,
     },
+    verifier::{errors::VerificationError, predicates::ProdPredicates},
 };
 use tendermint_rpc::error::Error as RpcError;
 
@@ -404,7 +404,7 @@ impl Verifier {
             Box::new(Io::new(&self.protocol)),
             Box::new(ProdHasher),
             Box::new(InsecureClock),
-            Box::new(ProdVerifier::new(
+            Box::new(PredicateVerifier::new(
                 ProdPredicates::default(),
                 DomSepVotingPowerCalculator,
                 ProdCommitValidator::default(),
@@ -539,21 +539,17 @@ impl Io {
                 Context::background(),
                 Body::HostFetchConsensusBlockRequest { height },
             )
-            .map_err(|err| IoError::RpcError(RpcError::server_error(err.to_string())))?;
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
 
         // Extract generic light block from response.
         let block = match result {
             Body::HostFetchConsensusBlockResponse { block } => block,
-            _ => {
-                return Err(IoError::RpcError(RpcError::server_error(
-                    "bad response".to_string(),
-                )))
-            }
+            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
         };
 
         // Decode block as a Tendermint light block.
         let block = decode_light_block(block)
-            .map_err(|err| IoError::RpcError(RpcError::server_error(err.to_string())))?;
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
 
         Ok(block)
     }
@@ -578,11 +574,9 @@ impl components::io::Io for Io {
         let next_block = Io::fetch_light_block(self, height + 1)?;
 
         Ok(TMLightBlock {
-            signed_header: block
-                .signed_header
-                .ok_or(IoError::RpcError(RpcError::server_error(
-                    "missing signed header".to_string(),
-                )))?,
+            signed_header: block.signed_header.ok_or(IoError::rpc(RpcError::server(
+                "missing signed header".to_string(),
+            )))?,
             validators: block.validators,
             next_validators: next_block.validators,
             provider: PeerId::new([0; 20]),
@@ -594,7 +588,7 @@ struct InsecureClock;
 
 impl components::clock::Clock for InsecureClock {
     fn now(&self) -> Time {
-        time::insecure_posix_system_time().into()
+        Time::from_unix_timestamp(time::insecure_posix_time(), 0).unwrap()
     }
 }
 
@@ -626,7 +620,7 @@ impl VotingPowerCalculator for DomSepVotingPowerCalculator {
         for (signature, vote) in non_absent_votes {
             // Ensure we only count a validator's power once
             if seen_validators.contains(&vote.validator_address) {
-                return Err(VerificationError::DuplicateValidator(
+                return Err(VerificationError::duplicate_validator(
                     vote.validator_address,
                 ));
             } else {
@@ -638,12 +632,9 @@ impl VotingPowerCalculator for DomSepVotingPowerCalculator {
                 None => continue, // Cannot find matching validator, so we skip the vote
             };
 
-            let signed_vote = SignedVote::new(
-                vote.clone(),
-                signed_header.header.chain_id.clone(),
-                vote.validator_address,
-                vote.signature,
-            );
+            let signed_vote =
+                SignedVote::from_vote(vote.clone(), signed_header.header.chain_id.clone())
+                    .ok_or_else(VerificationError::missing_signature)?;
 
             // Check vote is valid
             let sign_bytes = signed_vote.sign_bytes();
@@ -653,11 +644,11 @@ impl VotingPowerCalculator for DomSepVotingPowerCalculator {
                 .verify_signature(sign_bytes.as_ref(), signed_vote.signature())
                 .is_err()
             {
-                return Err(VerificationError::InvalidSignature {
-                    signature: signed_vote.signature().as_bytes().to_vec(),
-                    validator: Box::new(validator),
-                    sign_bytes: sign_bytes.as_ref().into(),
-                });
+                return Err(VerificationError::invalid_signature(
+                    signed_vote.signature().as_bytes().to_vec(),
+                    Box::new(validator),
+                    sign_bytes.as_ref().into(),
+                ));
             }
 
             // If the vote is neither absent nor nil, tally its power

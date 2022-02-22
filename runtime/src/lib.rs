@@ -13,7 +13,6 @@
 #![feature(test)]
 #![feature(box_into_pin)]
 #![feature(arbitrary_self_types)]
-#![feature(iter_map_while)]
 
 use lazy_static::lazy_static;
 #[cfg(target_env = "sgx")]

@@ -35,7 +35,7 @@ Core:
   ```
   <!-- markdownlint-enable line-length -->
 
-* [Go] (at least version 1.16.3).
+* [Go] (at least version 1.17.7).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -44,18 +44,18 @@ Core:
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.16.3, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.17.7, with:
 
     ```
-    go get golang.org/dl/go1.16.3
-    go1.16.3 download
+    go install golang.org/dl/go1.17.7@latest
+    go1.17.7 download
     ```
 
   * instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.16.3
+    export OASIS_GO=go1.17.7
     ```
 
 * [Rust].
@@ -124,8 +124,8 @@ Core:
   active toolchain
   ----------------
 
-  nightly-2021-08-17-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain')
-  rustc 1.56.0-nightly (0035d9dce 2021-08-16)
+  nightly-2021-11-04-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain')
+  rustc 1.58.0-nightly (baba6687d 2021-11-03)
   ```
 
   Then add the Fortanix SGX Rust target to this version of the Rust toolchain by
@@ -143,8 +143,8 @@ Core:
   Download and install it with:
 
   ```
-  GO111MODULE=on ${OASIS_GO:-go} get mvdan.cc/gofumpt@v0.1.1
-  GO111MODULE=on ${OASIS_GO:-go} get golang.org/x/tools/cmd/goimports
+  ${OASIS_GO:-go} install mvdan.cc/gofumpt@v0.2.0
+  ${OASIS_GO:-go} install golang.org/x/tools/cmd/goimports@v0.1.7
   ```
 
 * (**OPTIONAL**) [golangci-lint].
@@ -165,7 +165,7 @@ Core:
   Download and install it with:
 
   ```
-  GO111MODULE=on ${OASIS_GO:-go} get google.golang.org/protobuf/cmd/protoc-gen-go@v1.21.0
+  ${OASIS_GO:-go} install google.golang.org/protobuf/cmd/protoc-gen-go@v1.21.0
   ```
 
   _NOTE: If you didn't/can't add `$GOPATH/bin` to your `PATH`, you can install
@@ -173,7 +173,7 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo GOBIN=/usr/local/bin GO111MODULE=on ${OASIS_GO:-go} install google.golang.org/protobuf/cmd/protoc-gen-go@v1.21.0
+  sudo GOBIN=/usr/local/bin ${OASIS_GO:-go} install google.golang.org/protobuf/cmd/protoc-gen-go@v1.21.0
   ```
   <!-- markdownlint-enable line-length -->
 
