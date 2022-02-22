@@ -3,6 +3,7 @@ package staking
 import (
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -84,6 +85,24 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 			return nil, err
 		}
 
+		// Check against minimum balance.
+		if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+			ctx.Logger().Error("after transfer source account balance too low",
+				"account_addr", fromAddr,
+				"account_balance", from.General.Balance,
+				"min_transact_balance", params.MinTransactBalance,
+			)
+			return nil, errors.WithContext(staking.ErrBalanceTooLow, "source account")
+		}
+		if to.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+			ctx.Logger().Error("after transfer dest account balance too low",
+				"account_addr", xfer.To,
+				"account_balance", to.General.Balance,
+				"min_transact_balance", params.MinTransactBalance,
+			)
+			return nil, errors.WithContext(staking.ErrBalanceTooLow, "dest account")
+		}
+
 		if err = state.SetAccount(ctx, xfer.To, to); err != nil {
 			return nil, fmt.Errorf("failed to set account: %w", err)
 		}
@@ -153,6 +172,16 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 			"amount", burn.Amount,
 		)
 		return err
+	}
+
+	// Check against minimum balance.
+	if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+		ctx.Logger().Error("after burn account balance too low",
+			"account_addr", fromAddr,
+			"account_balance", from.General.Balance,
+			"min_transact_balance", params.MinTransactBalance,
+		)
+		return staking.ErrBalanceTooLow
 	}
 
 	totalSupply, err := state.TotalSupply(ctx)
@@ -253,6 +282,16 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 			"amount", escrow.Amount,
 		)
 		return nil, err
+	}
+
+	// Check against minimum balance.
+	if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+		ctx.Logger().Error("after add escrow account balance too low",
+			"account_addr", fromAddr,
+			"account_balance", from.General.Balance,
+			"min_transact_balance", params.MinTransactBalance,
+		)
+		return nil, staking.ErrBalanceTooLow
 	}
 
 	// Commit accounts.
@@ -662,6 +701,24 @@ func (app *stakingApplication) withdraw(
 
 	if err = quantity.Move(&to.General.Balance, &from.General.Balance, &withdraw.Amount); err != nil {
 		return nil, staking.ErrInsufficientBalance
+	}
+
+	// Check against minimum balance.
+	if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+		ctx.Logger().Error("after withdraw source account balance too low",
+			"account_addr", withdraw.From,
+			"account_balance", from.General.Balance,
+			"min_transact_balance", params.MinTransactBalance,
+		)
+		return nil, errors.WithContext(staking.ErrBalanceTooLow, "source account")
+	}
+	if to.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+		ctx.Logger().Error("after withdraw dest account balance too low",
+			"account_addr", toAddr,
+			"account_balance", to.General.Balance,
+			"min_transact_balance", params.MinTransactBalance,
+		)
+		return nil, errors.WithContext(staking.ErrBalanceTooLow, "dest account")
 	}
 
 	if err = state.SetAccount(ctx, toAddr, to); err != nil {

@@ -10,6 +10,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -793,6 +794,28 @@ func (s *MutableState) Transfer(ctx *abciAPI.Context, fromAddr, toAddr staking.A
 
 	if err = quantity.Move(&to.General.Balance, &from.General.Balance, amount); err != nil {
 		return staking.ErrInsufficientBalance
+	}
+
+	// Check against minimum balance.
+	params, err := s.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
+	if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+		ctx.Logger().Error("source account balance too low",
+			"account_addr", fromAddr,
+			"account_balance", from.General.Balance,
+			"min_transact_balance", params.MinTransactBalance,
+		)
+		return errors.WithContext(staking.ErrBalanceTooLow, "source account")
+	}
+	if to.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
+		ctx.Logger().Error("after transfer dest account balance too low",
+			"account_addr", toAddr,
+			"account_balance", to.General.Balance,
+			"min_transact_balance", params.MinTransactBalance,
+		)
+		return errors.WithContext(staking.ErrBalanceTooLow, "dest account")
 	}
 
 	if err = s.SetAccount(ctx, fromAddr, from); err != nil {

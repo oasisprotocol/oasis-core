@@ -137,7 +137,7 @@ func TestGenesisChainContext(t *testing.T) {
 
 	// Having to update this every single time the genesis structure
 	// changes isn't annoying at all.
-	require.Equal(t, "a4413f191eb9769737dc23d53dbc75f67c47dd5a71b5920026f01d1d3826c763", stableDoc.ChainContext())
+	require.Equal(t, "23a47504743c62dc9c524b56413156f4b2d6ff08021179fb7a982d03be7d8808", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {

@@ -430,6 +430,8 @@ func RegisterScenarios() error {
 		ByzantineVRFBeaconHonest,
 		ByzantineVRFBeaconEarly,
 		ByzantineVRFBeaconMissing,
+		// Minimum transact balance test.
+		MinTransactBalance,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

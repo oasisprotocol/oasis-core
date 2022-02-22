@@ -25,7 +25,7 @@ import (
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
 )
 
-var testSigner = memorySigner.NewTestSigner("oasis-core epochtime mock key seed")
+var TestSigner = memorySigner.NewTestSigner("oasis-core epochtime mock key seed")
 
 // ServiceClient is the beacon service client interface.
 type ServiceClient interface {
@@ -218,7 +218,7 @@ func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime
 	defer sub.Close()
 
 	tx := transaction.NewTransaction(0, nil, app.MethodSetEpoch, epoch)
-	if err := consensus.SignAndSubmitTx(ctx, sc.backend, testSigner, tx); err != nil {
+	if err := consensus.SignAndSubmitTx(ctx, sc.backend, TestSigner, tx); err != nil {
 		return fmt.Errorf("epochtime: set epoch failed: %w", err)
 	}
 
