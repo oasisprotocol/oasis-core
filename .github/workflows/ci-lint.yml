@@ -15,6 +15,11 @@ on:
       - master
       - stable/*
 
+# Cancel in progress jobs on new pushes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     # NOTE: This name appears in GitHub's Checks API.
