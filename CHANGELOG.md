@@ -12,6 +12,32 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.10 (2022-02-23)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- go/common/cbor: Bump decoding limits for RPC
+  ([#4478](https://github.com/oasisprotocol/oasis-core/issues/4478))
+
+### Bug Fixes
+
+- go/runtime/scheduling: Attempt to continue scheduling
+  ([#4453](https://github.com/oasisprotocol/oasis-core/issues/4453))
+
+### Internal Changes
+
+- runtime: Bump tendermint-rs to 0.23.5
+  ([#4365](https://github.com/oasisprotocol/oasis-core/issues/4365))
+
+- Bump Go to 1.17.3 and Rust to nightly-2021-11-04
+  ([#4375](https://github.com/oasisprotocol/oasis-core/issues/4375))
+
 ## 21.3.9 (2022-01-27)
 
 | Protocol          | Version   |
