@@ -225,7 +225,7 @@ func (s *sgxProvisioner) hostInitializer(
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 
-	go s.attestationWorker(ts, p, conn)
+	go s.attestationWorker(ts, p, conn, version)
 
 	return &host.StartedEvent{
 		Version:       version,
@@ -344,7 +344,7 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 	return capabilityTEE, nil
 }
 
-func (s *sgxProvisioner) attestationWorker(ts *teeState, p process.Process, conn protocol.Connection) {
+func (s *sgxProvisioner) attestationWorker(ts *teeState, p process.Process, conn protocol.Connection, version version.Version) {
 	t := time.NewTicker(s.cfg.RuntimeAttestInterval)
 	defer t.Stop()
 
@@ -369,6 +369,7 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, p process.Process, conn
 
 			// Emit event about the updated CapabilityTEE.
 			ts.eventEmitter.EmitEvent(&host.Event{Updated: &host.UpdatedEvent{
+				Version:       version,
 				CapabilityTEE: capabilityTEE,
 			}})
 		}

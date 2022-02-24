@@ -27,7 +27,7 @@ func (g *Genesis) SanityCheck(
 	logger := logging.GetLogger("genesis/sanity-check")
 
 	if !flags.DebugDontBlameOasis() {
-		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake {
+		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake || g.Parameters.DebugDeployImmediately {
 			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
 		}
 		if g.Parameters.MaxNodeExpiration == 0 {
@@ -42,7 +42,7 @@ func (g *Genesis) SanityCheck(
 	}
 
 	// Check runtimes.
-	runtimesLookup, err := SanityCheckRuntimes(logger, &g.Parameters, g.Runtimes, g.SuspendedRuntimes, true)
+	runtimesLookup, err := SanityCheckRuntimes(logger, &g.Parameters, g.Runtimes, g.SuspendedRuntimes, true, baseEpoch)
 	if err != nil {
 		return err
 	}
@@ -110,11 +110,12 @@ func SanityCheckRuntimes(
 	runtimes []*Runtime,
 	suspendedRuntimes []*Runtime,
 	isGenesis bool,
+	now beacon.EpochTime,
 ) (RuntimeLookup, error) {
 	// First go through all runtimes and perform general sanity checks.
 	seenRuntimes := []*Runtime{}
 	for _, rt := range runtimes {
-		if err := VerifyRuntime(params, logger, rt, isGenesis, true); err != nil {
+		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenRuntimes = append(seenRuntimes, rt)
@@ -122,7 +123,7 @@ func SanityCheckRuntimes(
 
 	seenSuspendedRuntimes := []*Runtime{}
 	for _, rt := range suspendedRuntimes {
-		if err := VerifyRuntime(params, logger, rt, isGenesis, true); err != nil {
+		if err := VerifyRuntime(params, logger, rt, isGenesis, true, now); err != nil {
 			return nil, fmt.Errorf("runtime sanity check failed: %w", err)
 		}
 		seenSuspendedRuntimes = append(seenSuspendedRuntimes, rt)
@@ -273,7 +274,13 @@ func SanityCheckStake(
 
 	for _, node := range nodes {
 		var nodeRts []*Runtime
+		rtMap := make(map[common.Namespace]bool)
 		for _, rt := range node.Runtimes {
+			if rtMap[rt.ID] {
+				continue
+			}
+			rtMap[rt.ID] = true
+
 			nodeRts = append(nodeRts, runtimeMap[rt.ID])
 		}
 		// Add node stake claims.

@@ -778,7 +778,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				cs := node.SGXConstraints{
 					Enclaves: []sgx.EnclaveIdentity{{}},
 				}
-				rt.Version.TEE = cbor.Marshal(cs)
+				rt.Deployments[0].TEE = cbor.Marshal(cs)
 				// Set non-test runtime.
 				rt.ID = newNamespaceFromSeed([]byte("SGXKeyManager"), common.NamespaceKeyManager)
 			},
@@ -815,7 +815,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 				cs := node.SGXConstraints{
 					Enclaves: []sgx.EnclaveIdentity{{}},
 				}
-				rt.Version.TEE = cbor.Marshal(cs)
+				rt.Deployments[0].TEE = cbor.Marshal(cs)
 				// Set non-test runtime.
 				rt.ID = newNamespaceFromSeed([]byte("SGXWithKM"), 0)
 			},
@@ -1805,6 +1805,9 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 				},
 			},
 			RewardSlashEquvocationRuntimePercent: 100,
+		},
+		Deployments: []*api.VersionInfo{
+			{},
 		},
 	}
 	rt.Runtime.Genesis.StateRoot.Empty()

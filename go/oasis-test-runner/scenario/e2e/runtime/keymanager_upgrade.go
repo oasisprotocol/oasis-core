@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -49,8 +50,12 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if kmRuntimeFix.Kind != registry.KindKeyManager {
 		return nil, fmt.Errorf("expected first runtime in fixture to be keymanager runtime, got: %s", kmRuntimeFix.Kind)
 	}
-	kmRuntimeFix.Binaries = newKmBinaries
-	kmRuntimeFix.Version = version.Version{Major: 0, Minor: 1, Patch: 0}
+	kmRuntimeFix.Deployments = []oasis.DeploymentCfg{
+		{
+			Binaries: newKmBinaries,
+			Version:  version.Version{Major: 0, Minor: 1, Patch: 0},
+		},
+	}
 	// The upgraded runtime will be registered later.
 	kmRuntimeFix.ExcludeFromGenesis = true
 	f.Runtimes = append(f.Runtimes, kmRuntimeFix)
@@ -103,8 +108,8 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 		return fmt.Errorf("keymanager runtimes fixture sanity check: %w", err)
 	}
 
-	oldKMEncID := oldKMRuntime.GetEnclaveIdentity()
-	newKMEncID := newKMRuntime.GetEnclaveIdentity()
+	oldKMEncID := oldKMRuntime.GetEnclaveIdentity(0)
+	newKMEncID := newKMRuntime.GetEnclaveIdentity(0)
 
 	if oldKMEncID == nil && newKMEncID == nil {
 		sc.Logger.Info("No SGX runtimes, skipping policy update")
@@ -135,7 +140,7 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 		if rt.Kind() != registry.KindCompute {
 			continue
 		}
-		if eid := rt.GetEnclaveIdentity(); eid != nil {
+		if eid := rt.GetEnclaveIdentity(0); eid != nil {
 			enclavePolicies[*newKMEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
 		}
 	}
@@ -181,7 +186,7 @@ func (sc *kmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.
 	if err != nil {
 		return err
 	}
-	nodeRt := node.GetRuntime(rt.ID())
+	nodeRt := node.GetRuntime(rt.ID(), version.Version{Major: 0, Minor: 1, Patch: 0})
 	if nodeRt == nil {
 		return fmt.Errorf("node is missing keymanager runtime from descriptor")
 	}
@@ -243,11 +248,21 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("starting new key-manager: %w", err)
 	}
 
+	// Fetch current epoch.
+	epoch, err := sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating keymanager runtime descriptor")
+	oldRtDsc := sc.Net.Runtimes()[0].ToRuntimeDescriptor()
 	newRt := sc.Net.Runtimes()[2]
+	rtDsc := newRt.ToRuntimeDescriptor()
+	rtDsc.Deployments[0].ValidFrom = epoch + 1
+	rtDsc.Deployments = append(oldRtDsc.Deployments, rtDsc.Deployments...) // Add old deployment.
 	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRt.ToRuntimeDescriptor(), sc.nonce, kmTxPath); err != nil {
+	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rtDsc, sc.nonce, kmTxPath); err != nil {
 		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
 	}
 	sc.nonce++

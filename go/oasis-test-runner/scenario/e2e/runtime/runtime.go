@@ -182,8 +182,12 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
-				Binaries:        sc.resolveRuntimeBinaries(keyManagerBinary),
 				GovernanceModel: registry.GovernanceEntity,
+				Deployments: []oasis.DeploymentCfg{
+					{
+						Binaries: sc.resolveRuntimeBinaries(keyManagerBinary),
+					},
+				},
 			},
 			// Compute runtime.
 			{
@@ -191,7 +195,6 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 				Kind:       registry.KindCompute,
 				Entity:     0,
 				Keymanager: 0,
-				Binaries:   sc.resolveRuntimeBinaries(runtimeBinary),
 				Executor: registry.ExecutorParameters{
 					GroupSize:       2,
 					GroupBackupSize: 1,
@@ -223,6 +226,11 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					},
 				},
 				GovernanceModel: registry.GovernanceEntity,
+				Deployments: []oasis.DeploymentCfg{
+					{
+						Binaries: sc.resolveRuntimeBinaries(runtimeBinary),
+					},
+				},
 			},
 		},
 		Validators: []oasis.ValidatorFixture{

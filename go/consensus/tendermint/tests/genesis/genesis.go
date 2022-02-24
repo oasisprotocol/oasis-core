@@ -70,6 +70,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 				DebugAllowUnroutableAddresses: true,
 				DebugAllowTestRuntimes:        true,
 				DebugBypassStake:              true,
+				DebugDeployImmediately:        true,
 				EnableRuntimeGovernanceModels: map[registry.RuntimeGovernanceModel]bool{
 					registry.GovernanceEntity:  true,
 					registry.GovernanceRuntime: true,

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,6 +13,29 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 )
 
+type mockRuntimeLookup struct {
+	runtimes map[common.Namespace]*Runtime
+}
+
+func (rl *mockRuntimeLookup) Runtime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+	panic("not implemented")
+}
+
+func (rl *mockRuntimeLookup) SuspendedRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+	panic("not implemented")
+}
+
+func (rl *mockRuntimeLookup) AnyRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+	if rl.runtimes[id] != nil {
+		return rl.runtimes[id], nil
+	}
+	return nil, ErrNoSuchRuntime
+}
+
+func (rl *mockRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime, error) {
+	panic("not implemented")
+}
+
 func TestVerifyNodeUpdate(t *testing.T) {
 	logger := logging.GetLogger("registry/api/tests")
 
@@ -22,6 +46,14 @@ func TestVerifyNodeUpdate(t *testing.T) {
 	consensusID2 := signature.NewPublicKey("0100000000000000000000000000000000000000000000000000000000000002")
 	entityID1 := signature.NewPublicKey("1000000000000000000000000000000000000000000000000000000000000001")
 	entityID2 := signature.NewPublicKey("1000000000000000000000000000000000000000000000000000000000000002")
+
+	lookup := &mockRuntimeLookup{
+		runtimes: map[common.Namespace]*Runtime{
+			rtID1: {
+				Deployments: []*VersionInfo{{}},
+			},
+		},
+	}
 
 	existingNode := node.Node{
 		ID:       nodeID1,
@@ -129,8 +161,9 @@ func TestVerifyNodeUpdate(t *testing.T) {
 			err:   ErrNodeUpdateNotAllowed,
 			msg:   "expired node consensus ID update should not be allowed",
 		},
+		// TODO: Add checks for runtime versions.
 	} {
-		err := VerifyNodeUpdate(logger, &existingNode, tc.nodeFn(), tc.epoch)
+		err := VerifyNodeUpdate(context.Background(), logger, &existingNode, tc.nodeFn(), lookup, tc.epoch)
 		require.Equal(t, tc.err, err, tc.msg)
 	}
 }

@@ -57,7 +57,7 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 		return fmt.Errorf("SuspendedRuntimes: %w", err)
 	}
 
-	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false)
+	runtimeLookup, err := registry.SanityCheckRuntimes(logger, params, runtimes, suspendedRuntimes, false, now)
 	if err != nil {
 		return fmt.Errorf("SanityCheckRuntimes: %w", err)
 	}

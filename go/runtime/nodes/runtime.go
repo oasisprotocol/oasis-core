@@ -158,7 +158,7 @@ func (rw *runtimeNodesWatcher) watchRuntimeNodeUpdates(ctx context.Context) {
 		return
 	}
 	for _, n := range nodes {
-		if n.GetRuntime(rw.runtimeID) == nil {
+		if !n.HasRuntime(rw.runtimeID) {
 			continue
 		}
 
@@ -173,7 +173,7 @@ func (rw *runtimeNodesWatcher) watchRuntimeNodeUpdates(ctx context.Context) {
 			return
 		case ev := <-ch:
 
-			if ev.Node.GetRuntime(rw.runtimeID) == nil {
+			if !ev.Node.HasRuntime(rw.runtimeID) {
 				continue
 			}
 

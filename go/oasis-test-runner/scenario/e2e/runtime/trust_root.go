@@ -98,7 +98,7 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 	kmUpdateTxPath := filepath.Join(childEnv.Dir(), "km_gen_update.json")
 	sc.Logger.Info("building KM SGX policy enclave policies map")
 	enclavePolicies := make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
-	kmRtEncID := kmRt.GetEnclaveIdentity()
+	kmRtEncID := kmRt.GetEnclaveIdentity(0)
 	var havePolicy bool
 	if kmRtEncID != nil {
 		enclavePolicies[*kmRtEncID] = &keymanager.EnclavePolicySGX{}
@@ -108,7 +108,7 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 			if rt.Kind() != registry.KindCompute {
 				continue
 			}
-			if eid := rt.GetEnclaveIdentity(); eid != nil {
+			if eid := rt.GetEnclaveIdentity(0); eid != nil {
 				enclavePolicies[*kmRtEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
 				// This is set only in SGX mode.
 				havePolicy = true
@@ -151,8 +151,8 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 
 	// Register a new compute runtime.
 	compRt := sc.Net.Runtimes()[1]
-	if err := compRt.RefreshRuntimeBundle(); err != nil {
-		return fmt.Errorf("failed to refresh runtime bundle: %w", err)
+	if err := compRt.RefreshRuntimeBundles(); err != nil {
+		return fmt.Errorf("failed to refresh runtime bundles: %w", err)
 	}
 	compRtDesc := compRt.ToRuntimeDescriptor()
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")

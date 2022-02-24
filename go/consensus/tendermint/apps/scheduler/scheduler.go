@@ -323,12 +323,19 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *n
 	if !n.node.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
+
+	activeDeployment := rt.ActiveDeployment(epoch)
+	if activeDeployment == nil {
+		return false
+	}
+
 	for _, nrt := range n.node.Runtimes {
 		if !nrt.ID.Equal(&rt.ID) {
 			continue
 		}
-		if nrt.Version.MaskNonMajor() != rt.Version.Version.MaskNonMajor() {
-			return false
+
+		if nrt.Version.ToU64() != activeDeployment.Version.ToU64() {
+			continue
 		}
 		if n.status.IsSuspended(rt.ID, epoch) {
 			return false
@@ -346,7 +353,7 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *n
 			if nrt.Capabilities.TEE.Hardware != rt.TEEHardware {
 				return false
 			}
-			if err := nrt.Capabilities.TEE.Verify(ctx.Now(), rt.Version.TEE); err != nil {
+			if err := nrt.Capabilities.TEE.Verify(ctx.Now(), activeDeployment.TEE); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestaion",
 					"err", err,
 					"node_id", n.node.ID,

@@ -232,8 +232,9 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		wcfg, entIsWhitelisted := rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityID]
 		if !entIsWhitelisted {
 			ctx.Logger().Error("RegisterNode: node's entity not in a runtime's whitelist",
-				"entity", newNode.EntityID,
-				"runtime", rt.ID,
+				"entity_id", newNode.EntityID,
+				"runtime_id", rt.ID,
+				"node_id", newNode.ID,
 			)
 			return registry.ErrForbidden
 		}
@@ -257,7 +258,8 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 				// No such role found in whitelist.
 				ctx.Logger().Error("RegisterNode: runtime's whitelist does not allow nodes with given role",
 					"role", role.String(),
-					"runtime", rt.ID,
+					"runtime_id", rt.ID,
+					"node_id", newNode.ID,
 				)
 				return registry.ErrForbidden
 			}
@@ -265,7 +267,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 				// No nodes of this type are allowed.
 				ctx.Logger().Error("RegisterNode: runtime's whitelist does not allow nodes with given role",
 					"role", role.String(),
-					"runtime", rt.ID,
+					"runtime_id", rt.ID,
 				)
 				return registry.ErrForbidden
 			}
@@ -275,13 +277,13 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			if grr != nil {
 				ctx.Logger().Error("RegisterNode: failed to query entity nodes",
 					"err", grr,
-					"entity", newNode.EntityID,
+					"entity_id", newNode.EntityID,
 				)
 				return grr
 			}
 			var curNodes uint16
 			for _, n := range nodes {
-				if n.ID.Equal(newNode.ID) || n.IsExpired(uint64(epoch)) || n.GetRuntime(rt.ID) == nil {
+				if n.ID.Equal(newNode.ID) || n.IsExpired(uint64(epoch)) || !n.HasRuntime(rt.ID) {
 					// Skip existing node when re-registering.  Also skip
 					// expired nodes and nodes that haven't registered
 					// for the same runtime.
@@ -298,7 +300,8 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 					// Too many nodes with given role already registered.
 					ctx.Logger().Error("RegisterNode: too many nodes with given role already registered for runtime",
 						"role", role.String(),
-						"runtime", rt.ID,
+						"runtime_id", rt.ID,
+						"node_id", newNode.ID,
 						"num_registered_nodes", curNodes,
 					)
 					return registry.ErrForbidden
@@ -390,7 +393,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	// If the node already exists make sure to verify the node update.
 	if existingNode != nil {
-		if err = registry.VerifyNodeUpdate(ctx.Logger(), existingNode, newNode, epoch); err != nil {
+		if err = registry.VerifyNodeUpdate(ctx, ctx.Logger(), existingNode, newNode, state, epoch); err != nil {
 			ctx.Logger().Error("RegisterNode: failed to verify node update",
 				"err", err,
 				"new_node", newNode,
@@ -622,7 +625,12 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		return nil, registry.ErrForbidden
 	}
 
-	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false); err != nil {
+	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = registry.VerifyRuntime(params, ctx.Logger(), rt, ctx.IsInitChain(), false, epoch); err != nil {
 		return nil, err
 	}
 
@@ -663,12 +671,17 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	default:
 		return nil, fmt.Errorf("failed to fetch runtime: %w", err)
 	}
-	// If there is an existing runtime, verify update.
-	if existingRt != nil {
-		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt)
-		if err != nil {
-			return nil, err
-		}
+	// Invoke the right verification logic.
+	switch {
+	case existingRt != nil:
+		// Existing runtime, verify update.
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch)
+	default:
+		// New runtime, verify new descriptor.
+		err = registry.VerifyRuntimeNew(ctx.Logger(), rt, epoch, params, ctx.IsInitChain())
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if !ctx.IsInitChain() {

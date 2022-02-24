@@ -180,10 +180,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 		EntityID:    testEntity.ID,
 		Kind:        registry.KindKeyManager,
 		TEEHardware: node.TEEHardwareIntelSGX,
-		Version: registry.VersionInfo{
-			TEE: cbor.Marshal(node.SGXConstraints{
-				Enclaves: []sgx.EnclaveIdentity{{}},
-			}),
+		Deployments: []*registry.VersionInfo{
+			{
+				TEE: cbor.Marshal(node.SGXConstraints{
+					Enclaves: []sgx.EnclaveIdentity{{}},
+				}),
+			},
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
@@ -225,10 +227,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 			},
 		},
 		TEEHardware: node.TEEHardwareIntelSGX,
-		Version: registry.VersionInfo{
-			TEE: cbor.Marshal(node.SGXConstraints{
-				Enclaves: []sgx.EnclaveIdentity{{}},
-			}),
+		Deployments: []*registry.VersionInfo{
+			{
+				TEE: cbor.Marshal(node.SGXConstraints{
+					Enclaves: []sgx.EnclaveIdentity{{}},
+				}),
+			},
 		},
 		GovernanceModel: registry.GovernanceEntity,
 	}

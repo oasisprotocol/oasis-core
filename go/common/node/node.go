@@ -306,27 +306,45 @@ func (n *Node) IsExpired(epoch uint64) bool {
 	return n.Expiration < epoch
 }
 
-// GetRuntime searches for an existing supported runtime descriptor in Runtimes and returns it.
-func (n *Node) GetRuntime(id common.Namespace) *Runtime {
+// HasRuntime returns true iff the node supports a runtime (ignoring version).
+func (n *Node) HasRuntime(id common.Namespace) bool {
+	for _, rt := range n.Runtimes {
+		if rt.ID.Equal(&id) {
+			return true
+		}
+	}
+	return false
+}
+
+// GetRuntime searches for an existing supported runtime descriptor
+// in Runtimes with the specified version and returns it.
+func (n *Node) GetRuntime(id common.Namespace, version version.Version) *Runtime {
 	for _, rt := range n.Runtimes {
 		if !rt.ID.Equal(&id) {
 			continue
 		}
-
+		if rt.Version != version {
+			continue
+		}
 		return rt
 	}
 	return nil
 }
 
-// AddOrUpdateRuntime searches for an existing supported runtime descriptor in Runtimes and returns
-// it. In case a runtime descriptor for the given runtime doesn't exist yet, a new one is created
-// appended to the list of supported runtimes and returned.
-func (n *Node) AddOrUpdateRuntime(id common.Namespace) *Runtime {
-	if rt := n.GetRuntime(id); rt != nil {
+// AddOrUpdateRuntime searches for an existing supported runtime descriptor
+// in Runtimes with the specified version and returns it. In case a
+// runtime descriptor for the given runtime and version doesn't exist yet,
+// a new one is created appended to the list of supported runtimes and
+// returned.
+func (n *Node) AddOrUpdateRuntime(id common.Namespace, version version.Version) *Runtime {
+	if rt := n.GetRuntime(id, version); rt != nil {
 		return rt
 	}
 
-	rt := &Runtime{ID: id}
+	rt := &Runtime{
+		ID:      id,
+		Version: version,
+	}
 	n.Runtimes = append(n.Runtimes, rt)
 	return rt
 }

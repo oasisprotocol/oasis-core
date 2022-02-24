@@ -76,6 +76,7 @@ func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Run
 		notifier: pubsub.NewBroker(false),
 		logger:   p.cfg.Logger.With("runtime_id", id),
 	}
+
 	return r, nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -23,17 +24,22 @@ import (
 const rtDescriptorFile = "runtime_genesis.json"
 
 type runtimeCfgSave struct {
-	id       common.Namespace
-	version  version.Version
-	binaries map[node.TEEHardware]string
+	id          common.Namespace
+	deployments []*deploymentCfg
+}
+
+type deploymentCfg struct {
+	version   version.Version
+	binaries  map[node.TEEHardware]string
+	mrEnclave *sgx.MrEnclave
+	bundle    *bundle.Bundle
 }
 
 // Runtime is an Oasis runtime.
 type Runtime struct { // nolint: maligned
 	dir *env.Dir
 
-	bundle *bundle.Bundle
-	kind   registry.RuntimeKind
+	kind registry.RuntimeKind
 
 	// This refers to things that ostensibly are canonically held
 	// in the runtime bundle manifest.  Accessing this field outside
@@ -41,7 +47,6 @@ type Runtime struct { // nolint: maligned
 	cfgSave runtimeCfgSave
 
 	teeHardware node.TEEHardware
-	mrEnclave   *sgx.MrEnclave
 	mrSigner    *sgx.MrSigner
 
 	pruner RuntimePrunerCfg
@@ -58,9 +63,8 @@ type RuntimeCfg struct { // nolint: maligned
 	Keymanager  *Runtime
 	TEEHardware node.TEEHardware
 	MrSigner    *sgx.MrSigner
-	Version     version.Version
 
-	Binaries     map[node.TEEHardware]string
+	Deployments  []DeploymentCfg
 	GenesisRound uint64
 
 	Executor     registry.ExecutorParameters
@@ -76,6 +80,13 @@ type RuntimeCfg struct { // nolint: maligned
 	Pruner RuntimePrunerCfg
 
 	ExcludeFromGenesis bool
+}
+
+// DeploymentCfg is a deployment configuration.
+type DeploymentCfg struct {
+	Version   version.Version             `json:"version"`
+	ValidFrom beacon.EpochTime            `json:"valid_from"`
+	Binaries  map[node.TEEHardware]string `json:"binaries"`
 }
 
 // RuntimePrunerCfg is the pruner configuration for an Oasis runtime.
@@ -96,11 +107,12 @@ func (rt *Runtime) Kind() registry.RuntimeKind {
 	return rt.kind
 }
 
-// GetEnclaveIdentity returns the runtime's enclave ID.
-func (rt *Runtime) GetEnclaveIdentity() *sgx.EnclaveIdentity {
-	if rt.mrEnclave != nil && rt.mrSigner != nil {
+// GetEnclaveIdentity returns the runtime's enclave ID for the given deployment.
+func (rt *Runtime) GetEnclaveIdentity(deploymentIndex int) *sgx.EnclaveIdentity {
+	deployCfg := rt.cfgSave.deployments[deploymentIndex]
+	if deployCfg.mrEnclave != nil && rt.mrSigner != nil {
 		return &sgx.EnclaveIdentity{
-			MrEnclave: *rt.mrEnclave,
+			MrEnclave: *deployCfg.mrEnclave,
 			MrSigner:  *rt.mrSigner,
 		}
 	}
@@ -122,36 +134,60 @@ func (rt *Runtime) ToRuntimeDescriptor() registry.Runtime {
 	return rt.descriptor
 }
 
-// BundlePath returns the path to the dynamically generated bundle.
-func (rt *Runtime) BundlePath() string {
-	return filepath.Join(rt.dir.String(), "bundle.orc")
+func (rt *Runtime) bundlePath(index int) string {
+	return filepath.Join(rt.dir.String(), fmt.Sprintf("bundle-%d.orc", index))
 }
 
-// RefreshRuntimeBundle makes sure the generated runtime bundle is refreshed.
-func (rt *Runtime) RefreshRuntimeBundle() error {
-	fn := rt.BundlePath()
+// BundlePaths returns the paths to the dynamically generated bundles.
+func (rt *Runtime) BundlePaths() []string {
+	var paths []string
+	for i := range rt.cfgSave.deployments {
+		paths = append(paths, rt.bundlePath(i))
+	}
+	return paths
+}
 
-	// Remove the generated bundle (if any).
-	if err := os.Remove(fn); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+// RefreshRuntimeBundles makes sure the generated runtime bundles are refreshed.
+func (rt *Runtime) RefreshRuntimeBundles() error {
+	for i, deployCfg := range rt.cfgSave.deployments {
+		fn := rt.bundlePath(i)
+
+		// Remove the generated bundle (if any).
+		if err := os.Remove(fn); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+
+		deployCfg.bundle = nil
+		deployCfg.mrEnclave = nil
 	}
 
-	rt.bundle = nil
-	rt.mrEnclave = nil
-
 	// Generate a fresh bundle.
-	_, err := rt.ToRuntimeBundle()
+	_, err := rt.ToRuntimeBundles()
 	return err
 }
 
 // ToRuntimeBundle serializes the runtime to disk and returns the bundle.
-func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
-	fn := rt.BundlePath()
+func (rt *Runtime) ToRuntimeBundles() ([]*bundle.Bundle, error) {
+	var bundles []*bundle.Bundle
+	for i := range rt.cfgSave.deployments {
+		bd, err := rt.toRuntimeBundle(i)
+		if err != nil {
+			return nil, err
+		}
+
+		bundles = append(bundles, bd)
+	}
+	return bundles, nil
+}
+
+func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) {
+	deployCfg := rt.cfgSave.deployments[deploymentIndex]
+	fn := rt.bundlePath(deploymentIndex)
 	switch _, err := os.Stat(fn); err {
 	case nil:
 		// Skip re-serializing the bundle, and just open it.
 		// This will happen on tests where the network gets restarted.
-		if rt.bundle == nil {
+		if deployCfg.bundle == nil {
 			var (
 				bnd       *bundle.Bundle
 				mrEnclave *sgx.MrEnclave
@@ -164,7 +200,7 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 					return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 				}
 
-				rt.descriptor.Version.TEE = cbor.Marshal(node.SGXConstraints{
+				rt.descriptor.Deployments[deploymentIndex].TEE = cbor.Marshal(node.SGXConstraints{
 					Enclaves: []sgx.EnclaveIdentity{
 						{
 							MrEnclave: *mrEnclave,
@@ -173,11 +209,11 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 					},
 				})
 			}
-			rt.bundle = bnd
-			rt.mrEnclave = mrEnclave
+			deployCfg.bundle = bnd
+			deployCfg.mrEnclave = mrEnclave
 		}
 
-		return rt.bundle, nil
+		return deployCfg.bundle, nil
 	default:
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("oasis/runtime: failed to stat bundle: %w", err)
@@ -193,13 +229,13 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 		Manifest: &bundle.Manifest{
 			Name:       "test-runtime",
 			ID:         rt.cfgSave.id,
-			Version:    rt.cfgSave.version,
+			Version:    deployCfg.version,
 			Executable: elfBin,
 		},
 	}
 
 	// XXX: Figure out what to do with the binary index at some point.
-	binBuf, err := os.ReadFile(rt.cfgSave.binaries[node.TEEHardwareInvalid])
+	binBuf, err := os.ReadFile(deployCfg.binaries[node.TEEHardwareInvalid])
 	if err != nil {
 		return nil, fmt.Errorf("oasis/runtime: failed to read ELF binary: %w", err)
 	}
@@ -207,7 +243,7 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 
 	var mrEnclave *sgx.MrEnclave
 	if rt.teeHardware != node.TEEHardwareInvalid {
-		binBuf, err = os.ReadFile(rt.cfgSave.binaries[node.TEEHardwareIntelSGX])
+		binBuf, err = os.ReadFile(deployCfg.binaries[node.TEEHardwareIntelSGX])
 		if err != nil {
 			return nil, fmt.Errorf("oasis/runtime: failed to read SGX binary: %w", err)
 		}
@@ -221,7 +257,7 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 			return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 		}
 
-		rt.descriptor.Version.TEE = cbor.Marshal(node.SGXConstraints{
+		rt.descriptor.Deployments[deploymentIndex].TEE = cbor.Marshal(node.SGXConstraints{
 			Enclaves: []sgx.EnclaveIdentity{
 				{
 					MrEnclave: *mrEnclave,
@@ -235,8 +271,8 @@ func (rt *Runtime) ToRuntimeBundle() (*bundle.Bundle, error) {
 		return nil, fmt.Errorf("oasis/runtime: failed to write bundle: %w", err)
 	}
 
-	rt.bundle = bnd
-	rt.mrEnclave = mrEnclave
+	deployCfg.bundle = bnd
+	deployCfg.mrEnclave = mrEnclave
 
 	return bnd, nil
 }
@@ -249,7 +285,6 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		EntityID:        cfg.Entity.entity.ID,
 		Kind:            cfg.Kind,
 		TEEHardware:     cfg.TEEHardware,
-		Version:         registry.VersionInfo{Version: cfg.Version},
 		Executor:        cfg.Executor,
 		TxnScheduler:    cfg.TxnScheduler,
 		Storage:         cfg.Storage,
@@ -277,9 +312,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	rt := &Runtime{
 		dir: rtDir,
 		cfgSave: runtimeCfgSave{
-			id:       cfg.ID,
-			version:  cfg.Version,
-			binaries: cfg.Binaries,
+			id: cfg.ID,
 		},
 		kind:               cfg.Kind,
 		teeHardware:        cfg.TEEHardware,
@@ -289,13 +322,26 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		descriptor:         descriptor,
 	}
 
-	if _, err := rt.ToRuntimeBundle(); err != nil {
+	for _, deployCfg := range cfg.Deployments {
+		rt.cfgSave.deployments = append(rt.cfgSave.deployments, &deploymentCfg{
+			version:  deployCfg.Version,
+			binaries: deployCfg.Binaries,
+		})
+		rt.descriptor.Deployments = append(rt.descriptor.Deployments, &registry.VersionInfo{
+			Version:   deployCfg.Version,
+			ValidFrom: deployCfg.ValidFrom,
+		})
+	}
+
+	if _, err := rt.ToRuntimeBundles(); err != nil {
 		return nil, err
 	}
 
 	// Remove any dynamically generated bundles on cleanup.
 	net.env.AddOnCleanup(func() {
-		_ = os.Remove(rt.BundlePath())
+		for _, path := range rt.BundlePaths() {
+			_ = os.Remove(path)
+		}
 	})
 
 	// Save runtime descriptor into file.

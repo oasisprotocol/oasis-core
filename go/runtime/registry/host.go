@@ -11,11 +11,13 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
@@ -33,6 +35,7 @@ type RuntimeHostNode struct {
 	factory  RuntimeHostHandlerFactory
 	notifier protocol.Notifier
 
+	agg           *multi.Aggregate
 	runtime       host.RichRuntime
 	runtimeNotify chan struct{}
 }
@@ -42,21 +45,36 @@ type RuntimeHostNode struct {
 // This method may return before the runtime is fully provisioned. The returned runtime will not be
 // started automatically, you must call Start explicitly.
 func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.RichRuntime, protocol.Notifier, error) {
-	cfg, provisioner, err := n.factory.GetRuntime().Host(ctx)
+	runtime := n.factory.GetRuntime()
+	cfgs, provisioner, err := runtime.Host(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get runtime host: %w", err)
 	}
-	cfg.MessageHandler = n.factory.NewRuntimeHostHandler()
 
-	// Provision the runtime.
-	prt, err := provisioner.NewRuntime(ctx, cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to provision runtime: %w", err)
+	// Provision the handler that implements the host RHP methods.
+	msgHandler := n.factory.NewRuntimeHostHandler()
+
+	rts := make(map[version.Version]host.Runtime)
+	for version, cfg := range cfgs {
+		rtCfg := *cfg
+		rtCfg.MessageHandler = msgHandler
+
+		// Provision the runtime.
+		if rts[version], err = provisioner.NewRuntime(ctx, rtCfg); err != nil {
+			return nil, nil, fmt.Errorf("failed to provision runtime version %s: %w", version, err)
+		}
 	}
-	notifier := n.factory.NewRuntimeHostNotifier(ctx, prt)
-	rr := host.NewRichRuntime(prt)
+
+	agg, err := multi.New(ctx, runtime.ID(), rts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to provision aggregate runtime: %w", err)
+	}
+
+	notifier := n.factory.NewRuntimeHostNotifier(ctx, agg)
+	rr := host.NewRichRuntime(agg)
 
 	n.Lock()
+	n.agg = agg.(*multi.Aggregate)
 	n.runtime = rr
 	n.notifier = notifier
 	n.Unlock()
@@ -69,9 +87,9 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 // GetHostedRuntime returns the provisioned hosted runtime (if any).
 func (n *RuntimeHostNode) GetHostedRuntime() host.RichRuntime {
 	n.Lock()
-	rt := n.runtime
-	n.Unlock()
-	return rt
+	defer n.Unlock()
+
+	return n.runtime
 }
 
 // WaitHostedRuntime waits for the hosted runtime to be provisioned and returns it.
@@ -83,6 +101,19 @@ func (n *RuntimeHostNode) WaitHostedRuntime(ctx context.Context) (host.RichRunti
 	}
 
 	return n.GetHostedRuntime(), nil
+}
+
+// SetHostedRuntimeVersion sets the currently active version for the hosted runtime.
+func (n *RuntimeHostNode) SetHostedRuntimeVersion(ctx context.Context, version version.Version) error {
+	n.Lock()
+	agg := n.agg
+	n.Unlock()
+
+	if agg == nil {
+		return fmt.Errorf("runtime not available")
+	}
+
+	return agg.SetVersion(ctx, version)
 }
 
 // RuntimeHostHandlerFactory is an interface that can be used to create new runtime handlers and

@@ -24,6 +24,11 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 		"state", string(b),
 	)
 
+	epoch, err := app.state.GetCurrentEpoch(ctx)
+	if err != nil {
+		return fmt.Errorf("tendermint/registry: couldn't get current epoch: %w", err)
+	}
+
 	state := registryState.NewMutableState(ctx.State())
 	if err := state.SetConsensusParameters(ctx, &st.Parameters); err != nil {
 		return fmt.Errorf("failed to set consensus parameters: %w", err)
@@ -50,7 +55,7 @@ func (app *registryApplication) InitChain(ctx *abciAPI.Context, request types.Re
 			if rt == nil {
 				return fmt.Errorf("registry: genesis runtime index %d is nil", i)
 			}
-			err := registry.VerifyRuntime(&st.Parameters, ctx.Logger(), rt, ctx.IsInitChain(), false)
+			err := registry.VerifyRuntime(&st.Parameters, ctx.Logger(), rt, ctx.IsInitChain(), false, epoch)
 			if err != nil {
 				return err
 			}

@@ -105,6 +105,9 @@ type StoppedEvent struct{}
 
 // UpdatedEvent is a runtime metadata updated event.
 type UpdatedEvent struct {
+	// Version is the runtime version.
+	Version version.Version
+
 	// CapabilityTEE is the updated runtime's CapabilityTEE. It may be nil in case the runtime is
 	// not running inside a TEE.
 	CapabilityTEE *node.CapabilityTEE

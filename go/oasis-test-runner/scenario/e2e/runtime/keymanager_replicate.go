@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -79,7 +80,7 @@ func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	rt := node.GetRuntime(keymanagerID)
+	rt := node.GetRuntime(keymanagerID, version.Version{})
 	if rt == nil {
 		return fmt.Errorf("replica is missing keymanager runtime from descriptor")
 	}

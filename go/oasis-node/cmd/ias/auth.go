@@ -55,12 +55,18 @@ func (st *enclaveStore) addRuntime(runtime *registry.Runtime) (int, error) {
 		return len(st.enclaves), nil
 	}
 
-	var cs node.SGXConstraints
-	if err := cbor.Unmarshal(runtime.Version.TEE, &cs); err != nil {
-		return len(st.enclaves), err
+	// Regenerate the enclave ID list by iterating over all of the deployments.
+	var enclaveIDs []sgx.EnclaveIdentity
+	for _, deployment := range runtime.Deployments {
+		var cs node.SGXConstraints
+		if err := cbor.Unmarshal(deployment.TEE, &cs); err != nil {
+			return len(st.enclaves), err
+		}
+
+		enclaveIDs = append(enclaveIDs, cs.Enclaves...)
 	}
 
-	st.enclaves[runtime.ID] = cs.Enclaves
+	st.enclaves[runtime.ID] = enclaveIDs
 
 	return len(st.enclaves), nil
 }

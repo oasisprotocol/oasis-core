@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -57,13 +58,19 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Setup the upgraded runtime (first is keymanager, others should be generic compute).
 	runtimeFix := f.Runtimes[computeIndex]
-	runtimeFix.Version = version.Version{Major: 0, Minor: 1, Patch: 0}
-	runtimeFix.Binaries = newRuntimeBinaries
+	runtimeFix.Deployments = append([]oasis.DeploymentCfg{}, runtimeFix.Deployments...)
+	runtimeFix.Deployments = append(runtimeFix.Deployments, oasis.DeploymentCfg{
+		Version:  version.Version{Major: 0, Minor: 1, Patch: 0},
+		Binaries: newRuntimeBinaries,
+	})
 
 	// The upgraded runtime will be registered later.
 	runtimeFix.ExcludeFromGenesis = true
 	sc.upgradedRuntimeIndex = len(f.Runtimes)
 	f.Runtimes = append(f.Runtimes, runtimeFix)
+
+	// The client node should include the upgraded runtime version.
+	f.Clients[0].Runtimes = []int{sc.upgradedRuntimeIndex}
 
 	return f, nil
 }
@@ -105,9 +112,9 @@ func (sc *runtimeUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 		return fmt.Errorf("runtimes fixture sanity check: %w", err)
 	}
 
-	kmRuntimeEncID := kmRuntime.GetEnclaveIdentity()
-	oldRuntimeEncID := oldRuntime.GetEnclaveIdentity()
-	newRuntimeEncID := newRuntime.GetEnclaveIdentity()
+	kmRuntimeEncID := kmRuntime.GetEnclaveIdentity(0)
+	oldRuntimeEncID := oldRuntime.GetEnclaveIdentity(0)
+	newRuntimeEncID := newRuntime.GetEnclaveIdentity(0)
 
 	if oldRuntimeEncID == nil && newRuntimeEncID == nil {
 		sc.Logger.Info("No SGX runtimes, skipping policy update")
@@ -133,7 +140,7 @@ func (sc *runtimeUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 		if rt.Kind() != registry.KindCompute {
 			continue
 		}
-		if eid := rt.GetEnclaveIdentity(); eid != nil {
+		if eid := rt.GetEnclaveIdentity(0); eid != nil {
 			enclavePolicies[*kmRuntimeEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
 		}
 	}
@@ -183,10 +190,17 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("updating policies: %w", err)
 	}
 
+	// Fetch current epoch.
+	epoch, err := sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating runtime descriptor")
 	newRt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
 	newRtDsc := newRt.ToRuntimeDescriptor()
+	newRtDsc.Deployments[1].ValidFrom = epoch + 1
 
 	newTxPath := filepath.Join(childEnv.Dir(), "register_update_compute_runtime.json")
 	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRtDsc, sc.nonce, newTxPath); err != nil {
@@ -224,6 +238,14 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 		if err := worker.WaitReady(ctx); err != nil {
 			return fmt.Errorf("error waiting for compute node '%s' to become ready: %w", worker.Name, err)
 		}
+	}
+
+	// Wait for activation epoch.
+	sc.Logger.Info("waiting for runtime upgrade epoch",
+		"epoch", epoch+1,
+	)
+	if err := sc.Net.Controller().Beacon.WaitEpoch(ctx, epoch+1); err != nil {
+		return fmt.Errorf("failed to wait for epoch: %w", err)
 	}
 
 	// Run client again.

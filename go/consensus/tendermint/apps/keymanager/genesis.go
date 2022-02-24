@@ -24,13 +24,18 @@ func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, request types.Re
 		"state", string(b),
 	)
 
+	epoch, err := app.state.GetCurrentEpoch(ctx)
+	if err != nil {
+		return fmt.Errorf("tendermint/keymanager: couldn't get current epoch: %w", err)
+	}
+
 	// TODO: The better thing to do would be to move the registry init
 	// before the keymanager, and just query the registry for the runtime
 	// list.
 	regSt := doc.Registry
 	rtMap := make(map[common.Namespace]*registry.Runtime)
 	for _, rt := range regSt.Runtimes {
-		err := registry.VerifyRuntime(&regSt.Parameters, ctx.Logger(), rt, true, false)
+		err := registry.VerifyRuntime(&regSt.Parameters, ctx.Logger(), rt, true, false, epoch)
 		if err != nil {
 			ctx.Logger().Error("InitChain: Invalid runtime",
 				"err", err,

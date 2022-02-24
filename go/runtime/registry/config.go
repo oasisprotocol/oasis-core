@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -162,7 +163,7 @@ type RuntimeHostConfig struct {
 
 	// Runtimes contains per-runtime provisioning configuration. Some fields may be omitted as they
 	// are provided when the runtime is provisioned.
-	Runtimes map[common.Namespace]*runtimeHost.Config
+	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
 }
 
 func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
@@ -274,7 +275,7 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 		// Configure runtimes.
 		forceNoSGX := cfg.Mode.IsClientOnly() || (cmdFlags.DebugDontBlameOasis() && viper.GetBool(CfgDebugForceELF))
-		rh.Runtimes = make(map[common.Namespace]*runtimeHost.Config)
+		rh.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
 		for _, path := range viper.GetStringSlice(CfgRuntimePaths) {
 			// Open and explode the bundle.  This will call Validate().
 			var bnd *bundle.Bundle
@@ -286,11 +287,8 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 			}
 
 			id := bnd.Manifest.ID
-			if rh.Runtimes[id] != nil {
-				// TODO: Support multiple versions of the same runtime.  The
-				// old version of this used a map, but the new version uses
-				// a vector so we need to de-duplicate for now.
-				return nil, fmt.Errorf("runtime '%s' already configured", id)
+			if rh.Runtimes[id] == nil {
+				rh.Runtimes[id] = make(map[version.Version]*runtimeHost.Config)
 			}
 
 			// Unmarshal any local runtime configuration.
@@ -328,7 +326,7 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 				}
 			}
 
-			rh.Runtimes[id] = runtimeHostCfg
+			rh.Runtimes[id][bnd.Manifest.Version] = runtimeHostCfg
 		}
 		if cmdFlags.DebugDontBlameOasis() {
 			// This is to allow the mock provisioner to function, as it does
@@ -349,7 +347,9 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 						},
 					},
 				}
-				rh.Runtimes[id] = runtimeHostCfg
+				rh.Runtimes[id] = map[version.Version]*runtimeHost.Config{
+					{}: runtimeHostCfg,
+				}
 			}
 		}
 		if len(rh.Runtimes) == 0 {
