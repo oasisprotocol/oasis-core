@@ -857,7 +857,13 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 }
 
 // verifyNodeRuntimeChanges verifies node runtime changes.
-func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes, newRuntimes []*node.Runtime) bool {
+func verifyNodeRuntimeChanges(
+	ctx context.Context,
+	logger *logging.Logger,
+	currentRuntimes, newRuntimes []*node.Runtime,
+	runtimeLookup RuntimeLookup,
+	epoch beacon.EpochTime,
+) bool {
 	// Note: VerifyNodeRuntimeEnclaveIDs ensures that nothing outrageous
 	// is in newRuntimes, this routine only needs to validate changes.
 
@@ -905,17 +911,32 @@ func verifyNodeRuntimeChanges(logger *logging.Logger, currentRuntimes, newRuntim
 			return false
 		}
 
+		rtDesc, err := runtimeLookup.AnyRuntime(ctx, id)
+		if err != nil {
+			logger.Error("RegisterNode: trying to update runtimes, unknown runtime",
+				"runtime_id", id,
+			)
+			return false
+		}
+		activeDeployment := rtDesc.ActiveDeployment(epoch)
+
 		// All versions present in currentMap for a runtime, that are
 		// also present in newMap, need to report identical capabilities.
-		//
-		// XXX: Should nodes be allowed to remove old versions?  Previous
-		// behavior is "no".
 		for version, currentRuntime := range currentVersions {
-			// XXX: The alternative thing to do is to just assume that
-			// the node knows what it is doing, and ignore old runtimes
-			// that are not in the new set, which seems reasonable...
 			newRuntime, ok := newVersions[version]
 			if !ok {
+				if activeDeployment == nil {
+					// If there is no active deployment, it is fine if the node
+					// does whatever they want.
+					continue
+				}
+				if version.ToU64() < activeDeployment.Version.ToU64() {
+					// If the missing runtime is NOT the active deployment
+					// and will not become active in the future, the node
+					// can chose not to include it in the registration.
+					continue
+				}
+
 				logger.Error("RegisterNode: trying to update runtimes, current version is misssing in new set",
 					"runtime_id", id,
 					"version", version,
@@ -965,7 +986,13 @@ func verifyRuntimeCapabilities(logger *logging.Logger, currentCaps, newCaps *nod
 }
 
 // VerifyNodeUpdate verifies changes while updating the node.
-func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node, epoch beacon.EpochTime) error {
+func VerifyNodeUpdate(
+	ctx context.Context,
+	logger *logging.Logger,
+	currentNode, newNode *node.Node,
+	runtimeLookup RuntimeLookup,
+	epoch beacon.EpochTime,
+) error {
 	// XXX: In future we might want to allow updating some of these fields as well. But these updates
 	//      should only happen after the epoch transition.
 	//      For now, node should un-register and re-register to update any of these fields.
@@ -997,7 +1024,7 @@ func VerifyNodeUpdate(logger *logging.Logger, currentNode, newNode *node.Node, e
 		return nil
 	}
 
-	if !verifyNodeRuntimeChanges(logger, currentNode.Runtimes, newNode.Runtimes) {
+	if !verifyNodeRuntimeChanges(ctx, logger, currentNode.Runtimes, newNode.Runtimes, runtimeLookup, epoch) {
 		curNodeRuntimes, _ := json.Marshal(currentNode.Runtimes)
 		newNodeRuntimes, _ := json.Marshal(newNode.Runtimes)
 		logger.Error("RegisterNode: trying to update node runtimes",
