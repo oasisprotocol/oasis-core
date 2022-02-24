@@ -22,6 +22,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
+const (
+	// checkTxTimeout is the maximum time the runtime can spend checking transactions.
+	checkTxTimeout = 15 * time.Second
+	// checkTxRetryDelay is the time to wait before queuing a check tx retry.
+	checkTxRetryDelay = 1 * time.Second
+)
+
 // Config is the transaction pool configuration.
 type Config struct {
 	MaxPoolSize          uint64
@@ -469,16 +476,23 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		return
 	}
 
+	checkCtx, cancel := context.WithTimeout(ctx, checkTxTimeout)
+	defer cancel()
+
 	rawTxBatch := make([][]byte, 0, len(batch))
 	for _, item := range batch {
 		rawTxBatch = append(rawTxBatch, item.Tx)
 	}
-	results, err := rr.CheckTx(ctx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
+	results, err := rr.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
 	if err != nil {
 		t.logger.Warn("transaction batch check failed",
 			"err", err,
 		)
-		// NOTE: We do not send the results back as the batch will be retried.
+		// Make sure that the batch check is retried later.
+		go func() {
+			time.Sleep(checkTxRetryDelay)
+			t.checkTxCh.In() <- struct{}{}
+		}()
 		return
 	}
 
@@ -606,6 +620,8 @@ func (t *txPool) checkWorker() {
 		case <-t.stopCh:
 			return
 		case <-t.checkTxCh.Out():
+			t.logger.Debug("checking queued transactions")
+
 			// Check if there are any transactions to check and run the checks.
 			t.checkTxBatch(ctx, rr)
 		}
