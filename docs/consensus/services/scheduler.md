@@ -29,8 +29,8 @@ the committee scheduler does not consider that entity's nodes.
 From these qualifying nodes, the committee scheduler selects at most one node
 from each entity, up to a maximum validator committee size.
 The maximum validator committee size is configured in the genesis document,
-under the path `.scheduler.params.max_validators` (consult the [operator docs]
-for a link to the current genesis document).
+under the path `.scheduler.params.max_validators` (consult the [genesis document]
+for details).
 Unlike how the committee scheduler schedules other committees, it schedules the
 validator committee by choosing nodes from the entities that have the highest
 escrow account balances.
@@ -47,5 +47,5 @@ entity's [escrow account balance].
 [registered]: registry.md#register-node
 [`RoleValidator`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#RoleValidator
 [escrow account balance]: staking.md#escrow
-[operator docs]: https://docs.oasis.dev/operators/current-testnet-parameters.html#current-testnet-parameters
+[genesis document]: /general/oasis-network/genesis-doc#committee-scheduler
 <!-- markdownlint-enable line-length -->

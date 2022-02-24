@@ -9,13 +9,13 @@ tests and some examples on how to prepare test networks for local development of
 Oasis Core components.
 
 * Build Environment Setup and Building
-  * [Prerequisites](setup/prerequisites.md)
-  * [Building](setup/building.md)
+  * [Prerequisites](development-setup/prerequisites.md)
+  * [Building](development-setup/building.md)
 * Running Tests and Development Networks
-  * [Running Tests](setup/running-tests.md)
-  * [Local Network Runner With a Simple Runtime](setup/oasis-net-runner.md)
-  * [Single Validator Node Network](setup/single-validator-node-network.md)
-  * [Deploying a Runtime](setup/deploying-a-runtime.md)
+  * [Running Tests](development-setup/running-tests.md)
+  * [Local Network Runner With a Simple Runtime](development-setup/oasis-net-runner.md)
+  * [Single Validator Node Network](development-setup/single-validator-node-network.md)
+  * [Deploying a Runtime](development-setup/deploying-a-runtime.md)
 
 ## High-Level Components
 

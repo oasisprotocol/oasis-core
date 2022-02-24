@@ -12,7 +12,7 @@ below. This is not intended to be an exhaustive list.
 
 [Oasis Foundation]: https://oasisprotocol.org/
 [Oasis Core]: https://github.com/oasisprotocol/oasis-core
-[Oasis Network]: https://docs.oasis.dev/general/oasis-network/overview
+[Oasis Network]: /general/oasis-network/overview
 
 ## Specifications
 

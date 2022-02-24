@@ -506,7 +506,7 @@ the [Ledger] and [Trezor] hardware wallets.
 [hd-scheme]: #hierarchical-key-derivation-scheme
 [diff-bip32-ed25519]: #difficulties-in-adapting-bip-0032-to-edwards25519-curve
 [key-derivation-paths]: #key-derivation-paths
-[Oasis Network]: https://docs.oasis.dev/general/oasis-network/overview
+[Oasis Network]: /general/oasis-network/overview
 [Account]: ../consensus/services/staking.md#accounts
 [BIP-0032]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 [BIP-0032-use-cases]:
@@ -581,7 +581,7 @@ the [Ledger] and [Trezor] hardware wallets.
 [tor-hd]:
   https://gitweb.torproject.org/torspec.git/tree/proposals/224-rend-spec-ng.txt#n2135
 [oasis-ledger-app]: https://github.com/LedgerHQ/app-oasis
-[bitpie]: https://docs.oasis.dev/general/manage-tokens/mobile-wallets#bitpie-wallet
+[bitpie]: /general/manage-tokens/holding-rose-tokens/bitpie-wallet
 [Andrew Kozlik (SatoshiLabs)]: https://github.com/andrewkozlik
 [kozlik-comments]:
   https://github.com/satoshilabs/slips/issues/703#issuecomment-515213584

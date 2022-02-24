@@ -56,7 +56,7 @@ the parameter values that are used for the Oasis Network, see:
 :::
 
 [Genesis File Overview]:
-  https://docs.oasis.dev/general/mainnet/genesis-file
+  /general/oasis-network/genesis-doc
 
 ### Canonical Form
 

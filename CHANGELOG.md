@@ -70,7 +70,7 @@ The format is inspired by [Keep a Changelog].
 
   <!-- markdownlint-disable line-length -->
   [File Descriptor Limit]:
-    https://docs.oasis.dev/general/run-a-node/prerequisites/system-configuration#file-descriptor-limit
+    /general/run-a-node/prerequisites/system-configuration#file-descriptor-limit
   <!-- markdownlint-enable line-length -->
 
 - runtime: Deprecate `transaction::MethodDispatcher`
@@ -951,7 +951,7 @@ node's data directory.*
   bumping versions on the crates themselves is omitted. Update crate authors.
 
   [oasis core versioning scheme]:
-    https://docs.oasis.dev/oasis-core/processes/versioning
+    /oasis-core/processes/versioning
 
 - go/worker/common: Wait for all child workers to initialize
   ([#4001](https://github.com/oasisprotocol/oasis-core/issues/4001))
@@ -5058,7 +5058,7 @@ node's data directory.*
   ([#2819](https://github.com/oasisprotocol/oasis-core/issues/2819))
 
   As per
-  <https://docs.oasis.dev/operators/the-quest-rules.html#types-of-challenges>,
+  </operators/the-quest-rules.html#types-of-challenges>,
   the availability score formula has changed from "Blocks Signed + 50 x Blocks
   Proposed" to "Blocks Signed + 50 x Blocks Proposed in Round 0".
 
