@@ -10,10 +10,10 @@ runtime metadata, a [scheduler] that elects runtime compute committees and a
 coordinator for [key manager replication].
 
 [consensus layer]: ../consensus/index.md
-[verifying and storing]: ../consensus/roothash.md
-[registry]: ../consensus/registry.md
-[scheduler]: ../consensus/scheduler.md
-[key manager replication]: ../consensus/keymanager.md
+[verifying and storing]: ../consensus/services/roothash.md
+[registry]: ../consensus/services/registry.md
+[scheduler]: ../consensus/services/scheduler.md
+[key manager replication]: ../consensus/services/keymanager.md
 
 ## Runtimes
 
@@ -88,14 +88,14 @@ consensus layer actually know that?
 <!-- markdownlint-disable line-length -->
 [consensus layer services]: ../consensus/index.md
 [runtime identifier]: identifiers.md
-[register the runtime]: ../consensus/registry.md#register-runtime
-[nodes will register]: ../consensus/registry.md#register-node
-[epoch transition]: ../consensus/epochtime.md
-[committee scheduler]: ../consensus/scheduler.md
-[random beacon]: ../consensus/beacon.md
+[register the runtime]: ../consensus/services/registry.md#register-runtime
+[nodes will register]: ../consensus/services/registry.md#register-node
+[epoch transition]: ../consensus/services/epochtime.md
+[committee scheduler]: ../consensus/services/scheduler.md
+[random beacon]: ../consensus/services/beacon.md
 [client RPC API]: ../oasis-node/rpc.md
 [`SubmitTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/runtime/client/api?tab=doc#RuntimeClient.SubmitTx
-[roothash service]: ../consensus/roothash.md
+[roothash service]: ../consensus/services/roothash.md
 <!-- markdownlint-enable line-length -->
 
 ### Discrepancy Detection and Resolution
@@ -182,4 +182,4 @@ Runtimes may [emit messages] to instruct the consensus layer what to do on their
 behalf. This makes it possible for runtimes to [own staking accounts].
 
 [emit messages]: messages.md
-[own staking accounts]: ../consensus/staking.md#runtime-accounts
+[own staking accounts]: ../consensus/services/staking.md#runtime-accounts

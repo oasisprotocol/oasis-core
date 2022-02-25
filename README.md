@@ -6,7 +6,7 @@
 [![Docker status][github-docker-badge]][github-docker-link]
 [![Release status][github-release-badge]][github-release-link]
 [![GoDev][godev-badge]][godev-link]
-[![GitBook][gitbook-badge]][gitbook-link]
+[![Docusaurus][docusaurus-badge]][docs-link]
 
 <!-- NOTE: Markdown doesn't support tables without headers, so we need to
 work around that and make the second (non-header) row also bold. -->
@@ -31,8 +31,8 @@ work around that and make the second (non-header) row also bold. -->
 [coveralls-link]: https://coveralls.io/github/oasisprotocol/oasis-core
 [godev-badge]: https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white
 [godev-link]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go?tab=subdirectories
-[gitbook-badge]: https://img.shields.io/badge/gitbook-docs-007d9c?logo=read-the-docs&logoColor=white
-[gitbook-link]: https://docs.oasis.dev/oasis-core
+[docusaurus-badge]: https://img.shields.io/badge/docusaurus-docs-007d9c?logo=read-the-docs&logoColor=white
+[docs-link]: https://docs.oasis.dev/oasis-core
 <!-- markdownlint-enable line-length -->
 
 ## Note
@@ -48,13 +48,13 @@ See our [Contributing Guidelines](CONTRIBUTING.md).
 
 ## Security
 
-Read our [Security](SECURITY.md) document.
+Read our [Security](docs/SECURITY.md) document.
 
 ## Developer Documentation
 
 See our [developer documentation index].
 
-[developer documentation index]: https://docs.oasis.dev/oasis-core
+[developer documentation index]: /oasis-core
 
 ## Developing and Building the System
 
@@ -62,9 +62,9 @@ See [a list of prerequisites] followed by [build instructions] and an example
 of [setting up a local test network with a simple runtime].
 
 <!-- markdownlint-disable line-length -->
-[a list of prerequisites]: https://docs.oasis.dev/oasis-core/development-setup/build-environment-setup-and-building/prerequisites
-[build instructions]: https://docs.oasis.dev/oasis-core/development-setup/build-environment-setup-and-building/building
-[setting up a local test network with a simple runtime]: https://docs.oasis.dev/oasis-core/development-setup/running-tests-and-development-networks/oasis-net-runner
+[a list of prerequisites]: /oasis-core/development-setup/build-environment-setup-and-building/prerequisites
+[build instructions]: /oasis-core/development-setup/build-environment-setup-and-building/building
+[setting up a local test network with a simple runtime]: /oasis-core/development-setup/running-tests-and-development-networks/oasis-net-runner
 <!-- markdownlint-enable line-length -->
 
 ## Directories

@@ -25,6 +25,7 @@ const (
 	CfgMarkdownTplFile        = "markdown.template.file"
 	CfgMarkdownTplPlaceholder = "markdown.template.placeholder"
 	CfgCodebasePath           = "codebase.path"
+	CfgCodebaseURL            = "codebase.url"
 )
 
 var (
@@ -62,9 +63,9 @@ func markdownTable(metrics map[string]Metric) string {
 		return metrics[ordKeys[i]].Name < metrics[ordKeys[j]].Name
 	})
 
-	tplDir := viper.GetString(CfgCodebasePath)
-	if viper.IsSet(CfgMarkdownTplFile) {
-		tplDir = filepath.Dir(viper.GetString(CfgMarkdownTplFile))
+	baseDir := viper.GetString(CfgCodebasePath)
+	if viper.IsSet(CfgMarkdownTplFile) && !viper.IsSet(CfgCodebaseURL) {
+		baseDir = filepath.Dir(viper.GetString(CfgMarkdownTplFile))
 	}
 
 	mdTable := "Name | Type | Description | Labels | Package\n"
@@ -73,7 +74,10 @@ func markdownTable(metrics map[string]Metric) string {
 		m := metrics[k]
 		pkg, _ := filepath.Rel(viper.GetString(CfgCodebasePath), m.Filename)
 		pkg = filepath.Dir(pkg)
-		fileURL, _ := filepath.Rel(tplDir, m.Filename)
+		fileURL, _ := filepath.Rel(baseDir, m.Filename)
+		if viper.IsSet(CfgCodebaseURL) {
+			fileURL = viper.GetString(CfgCodebaseURL) + fileURL
+		}
 		desc := html.EscapeString(m.Help)
 		labels := strings.Join(m.Labels, ", ")
 
@@ -264,6 +268,7 @@ func extractValue(n ast.Expr) string {
 func main() {
 	rootCmd.Flags().Bool(CfgMarkdown, false, "print metrics in markdown format")
 	rootCmd.Flags().String(CfgCodebasePath, "", "path to Go codebase")
+	rootCmd.Flags().String(CfgCodebaseURL, "", "show URL to Go files with this base instead of relative path (optional) (e.g. https://github.com/oasisprotocol/oasis-core/tree/master/go/)")
 	rootCmd.Flags().String(CfgMarkdownTplFile, "", "path to Markdown template file")
 	rootCmd.Flags().String(CfgMarkdownTplPlaceholder, "<!--- OASIS_METRICS -->", "placeholder for Markdown table in the template")
 	_ = cobra.MarkFlagRequired(rootCmd.Flags(), CfgCodebasePath)

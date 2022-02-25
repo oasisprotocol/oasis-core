@@ -64,7 +64,9 @@ Should give output similar to:
 In following steps we will register and run the [simple-keyvalue] runtime on the
 network.
 
-[simple-keyvalue]: ../../tests/runtimes/simple-keyvalue
+<!-- markdownlint-disable line-length -->
+[simple-keyvalue]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/runtimes/simple-keyvalue
+<!-- markdownlint-enable line-length -->
 
 ## Initializing a Runtime
 
@@ -184,12 +186,14 @@ After confirmation, this command outputs a signed transaction in the
 `/tmp/runtime-example/register_runtime.tx` file. In the next step we will submit
 the transaction to complete the runtime registration.
 
-{% hint style="warning" %} **WARNING**
+:::caution
 
 When registering a runtime on a _non-development_ network you will likely want
 to modify default parameters. Additionally, since we are running this on a debug
 network, we had to enable the `debug.dont_blame_oasis` and
-`debug.allow_test_keys` flags. {% endhint %}
+`debug.allow_test_keys` flags.
+
+:::
 
 <!-- markdownlint-disable line-length -->
 
@@ -272,8 +276,12 @@ Should give output similar to
 }
 ```
 
-{% hint style="info" %} Since we did not setup any runtime nodes, the runtime
-will get [suspended] until nodes for the runtime register. {% endhint %}
+:::info
+
+Since we did not setup any runtime nodes, the runtime
+will get [suspended] until nodes for the runtime register.
+
+:::
 
 In the next step we will setup and run a runtime node.
 
@@ -284,8 +292,12 @@ In the next step we will setup and run a runtime node.
 We will now run a node that will act as a compute, storage and client node for
 the runtime.
 
-{% hint style="info" %} In a real word scenario there would be multiple nodes
-running the runtime, each likely serving as a single type only. {% endhint %}
+:::info
+
+In a real word scenario there would be multiple nodes
+running the runtime, each likely serving as a single type only.
+
+:::
 
 Before running the node, gather the following data parameters and set up
 environment variables to simplify instructions.
@@ -330,14 +342,20 @@ oasis-node \
 
 <!-- markdownlint-enable line-length -->
 
-{% hint style="danger" %} **WARNING**
+:::danger
 
 This also enables unsafe debug-only flags which must never be used in a
-production setting as they may result in node compromise. {% endhint %}
+production setting as they may result in node compromise.
 
-{% hint style="info" %} When running a runtime node in a production setting, the
+:::
+
+:::info
+
+When running a runtime node in a production setting, the
 `worker.p2p.addresses` and `worker.client.addresses` flags need to be configured
-as well. {% endhint %}
+as well.
+
+:::
 
 Following steps should be run in a new terminal window.
 
@@ -409,44 +427,11 @@ oasis-node registry node list -a $ADDR -v | grep "$NODE_ID"
 oasis-node registry runtime list -a $ADDR -v
 ```
 
-{% hint style="info" %} You might need to wait few seconds for an epoch
+:::info
+
+You might need to wait few seconds for an epoch
 transition so that the node is registered and runtime gets resumed.
-{% endhint %}
+
+:::
 
 [node control status command]: ../oasis-node/cli.md#status
-
-## Testing the Runtime
-
-Now that the runtime node is running, is registered, and runtime is resumed, we
-can test the runtime by submitting runtime transactions. For that we use the
-[simple-keyvalue-client] binary which tests the functionality of the
-`simple-keyvalue` runtime.
-
-If you followed [build instructions] the built client binary is available at
-`target/default/debug/simple-keyvalue-client`.
-
-Run the test client:
-
-<!-- markdownlint-disable line-length -->
-
-```
-./target/default/debug/simple-keyvalue-client \
-  --node-address unix:/tmp/runtime-example/runtime-node/internal.sock \
-  --runtime-id $RUNTIME_ID
-
-Initializing simple key/value runtime client!
-Storing "hello_key" as key and "hello_value_from_8000…4567" as value to database...
-Getting "hello_key"...
-Got "hello_value_from_8000…4567"
-Storing long key and value to database...
-Getting long key...
-Got correct long value
-Getting latest block...
-...
-...
-Simple key/value client finished.
-```
-
-<!-- markdownlint-enable line-length -->
-
-[simple-keyvalue-client]: ../../tests/clients/simple-keyvalue

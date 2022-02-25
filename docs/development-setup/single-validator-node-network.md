@@ -8,13 +8,13 @@ an Oasis Core environment followed by [build instructions] for the respective
 environment (non-SGX or SGX). The following sections assume that you have
 successfully completed the required build steps.
 
-{% hint style="danger" %}
-**WARNING**
+:::danger
 
 These instructions are for a development-only instance, do not use them
 for setting up any kind of production instances as they are unsafe and will
 result in insecure configurations leading to node compromise.
-{% endhint %}
+
+:::
 
 [prerequisites]: prerequisites.md
 [build instructions]: building.md
@@ -30,7 +30,7 @@ cd /path/to/entity
 oasis-node registry entity init --signer.backend file --signer.dir .
 ```
 
-[entity]: ../consensus/registry.md#entities-and-nodes
+[entity]: ../consensus/services/registry.md#entities-and-nodes
 
 ## Provisioning a Node
 
@@ -58,8 +58,8 @@ oasis-node registry entity update \
   --entity.node.descriptor /path/to/node/node_genesis.json
 ```
 
-[node]: ../consensus/registry.md#entities-and-nodes
-[entity whitelist]: ../consensus/registry.md#register-node
+[node]: ../consensus/services/registry.md#entities-and-nodes
+[entity whitelist]: ../consensus/services/registry.md#register-node
 
 ## Creating a Test Genesis Document
 
@@ -80,12 +80,12 @@ oasis-node genesis init \
   --staking.token_symbol TEST
 ```
 
-{% hint style="danger" %}
-**WARNING**
+:::danger
 
 This enables unsafe debug-only flags which must never be used in a
 production setting as they may result in node compromise.
-{% endhint %}
+
+:::
 
 ## Running the Node
 
@@ -102,12 +102,12 @@ oasis-node \
   --log.level debug
 ```
 
-{% hint style="danger" %}
-**WARNING**
+:::danger
 
 This enables unsafe debug-only flags which must never be used in a
 production setting as they may result in node compromise.
-{% endhint %}
+
+:::
 
 ## Using the Node CLI
 

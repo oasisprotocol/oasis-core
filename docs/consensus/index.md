@@ -37,18 +37,18 @@ transaction format for mutating state together with any query methods (both are
 consensus backend agnostic).
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus`]: ../../go/consensus
-[`go/consensus/api`]: ../../go/consensus/api
+[`go/consensus`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus
+[`go/consensus/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/api
 [consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc
 [Tendermint]: https://tendermint.com/
-[Epoch Time]: epochtime.md
-[Random Beacon]: beacon.md
-[Staking]: staking.md
-[Registry]: registry.md
-[Committee Scheduler]: scheduler.md
-[Governance]: governance.md
-[Root Hash]: roothash.md
-[Key Manager]: keymanager.md
+[Epoch Time]: services/epochtime.md
+[Random Beacon]: services/beacon.md
+[Staking]: services/staking.md
+[Registry]: services/registry.md
+[Committee Scheduler]: services/scheduler.md
+[Governance]: services/governance.md
+[Root Hash]: services/roothash.md
+[Key Manager]: services/keymanager.md
 [consensus transaction]: transactions.md
 <!-- markdownlint-enable line-length -->
 
@@ -74,8 +74,10 @@ The Tendermint consensus backend is split into two major parts:
    it easy to interact with the ABCI application, presenting everything via the
    Oasis Core Consensus interface.
 
-[`go/consensus/tendermint`]: ../../go/consensus/tendermint
+<!-- markdownlint-disable line-length -->
+[`go/consensus/tendermint`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
 [the Tendermint Core developer documentation]: https://docs.tendermint.com/
+<!-- markdownlint-enable line-length -->
 
 ### ABCI Application Multiplexer
 
@@ -90,9 +92,9 @@ multiplexed applications, generally corresponding to services required by the
 _consensus layer_ interface living in [`go/consensus/tendermint/apps/<app>`].
 
 <!-- markdownlint-disable line-length -->
-[ABCI protocol]: https://docs.tendermint.com/master/spec/abci/
-[`go/consensus/tendermint/abci/mux.go`]: ../../go/consensus/tendermint/abci/mux.go
-[`go/consensus/tendermint/apps/<app>`]: ../../go/consensus/tendermint/apps
+[ABCI protocol]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md
+[`go/consensus/tendermint/abci/mux.go`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/abci/mux.go
+[`go/consensus/tendermint/apps/<app>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/apps
 <!-- markdownlint-enable line-length -->
 
 ### State Storage
@@ -113,7 +115,7 @@ ABCI application state.
 
 #### Queries
 
-Queries do not use the [ABCI query functionality] as that would incurr needless
+Queries do not use the [ABCI query functionality] as that would incur needless
 overhead for our use case (with Tendermint Core running in the same process).
 Instead, each multiplexed service provides its own `QueryFactory` which can be
 used to query state at a specific block height.
@@ -154,8 +156,8 @@ func (s *staking) TotalSupply(ctx context.Context, height int64) (*quantity.Quan
 ```
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus/tendermint/<service>`]: ../../go/consensus/tendermint
-[ABCI query functionality]: https://docs.tendermint.com/master/spec/abci/apps.html#query
+[`go/consensus/tendermint/<service>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
+[ABCI query functionality]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#query-1
 <!-- markdownlint-enable line-length -->
 
 #### Transactions
@@ -170,6 +172,6 @@ application multiplexer mentioned above.
 
 <!-- markdownlint-disable line-length -->
 [serialized signed Oasis Core transaction]: transactions.md
-[Tendermint transaction]: https://docs.tendermint.com/master/app-dev/app-development.html#blockchain-protocol
-[mempool]: https://docs.tendermint.com/master/app-dev/app-development.html#mempool-connection
+[Tendermint transaction]: https://docs.tendermint.com/v0.35/tendermint-core/using-tendermint.html#transactions
+[mempool]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#mempool-connection
 <!-- markdownlint-enable line-length -->

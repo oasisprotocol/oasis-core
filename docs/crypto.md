@@ -99,6 +99,6 @@ Standard Account Key Generation][ADR 0008].
 [Multiple signature envelope (`MultiSigned`)]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#MultiSigned
 [those used for transactions]: consensus/test-vectors.md
-[account]: consensus/staking.md#accounts
+[account]: consensus/services/staking.md#accounts
 [ADR 0008]: adr/0008-standard-account-key-generation.md
 <!-- markdownlint-enable line-length -->

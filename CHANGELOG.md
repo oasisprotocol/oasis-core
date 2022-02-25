@@ -70,7 +70,7 @@ The format is inspired by [Keep a Changelog].
 
   <!-- markdownlint-disable line-length -->
   [File Descriptor Limit]:
-    https://docs.oasis.dev/general/run-a-node/prerequisites/system-configuration#file-descriptor-limit
+    /general/run-a-node/prerequisites/system-configuration#file-descriptor-limit
   <!-- markdownlint-enable line-length -->
 
 - runtime: Deprecate `transaction::MethodDispatcher`
@@ -951,7 +951,7 @@ node's data directory.*
   bumping versions on the crates themselves is omitted. Update crate authors.
 
   [oasis core versioning scheme]:
-    https://docs.oasis.dev/oasis-core/processes/versioning
+    /oasis-core/processes/versioning
 
 - go/worker/common: Wait for all child workers to initialize
   ([#4001](https://github.com/oasisprotocol/oasis-core/issues/4001))
@@ -1249,7 +1249,7 @@ node's data directory.*
   details.
 
   [ADR 0006]: docs/adr/0006-consensus-governance.md
-  [Governance backend documentation]: docs/consensus/governance.md
+  [Governance backend documentation]: docs/consensus/services/governance.md
 
 - runtime: Move consensus layer structures to its own module
   ([#3511](https://github.com/oasisprotocol/oasis-core/issues/3511))
@@ -3360,7 +3360,7 @@ node's data directory.*
   For more details, see [Staking Developer Docs].
 
   [Staking Developer Docs]:
-    docs/consensus/staking.md#tokens-and-base-units
+    docs/consensus/services/staking.md#tokens-and-base-units
 
 - go/control: List all valid TLS public keys in identity status
   ([#3062](https://github.com/oasisprotocol/oasis-core/issues/3062))
@@ -3580,7 +3580,7 @@ node's data directory.*
 - docs: Add the [Accounts section] of the Staking docs
   ([#3005](https://github.com/oasisprotocol/oasis-core/issues/3005))
 
-  [Accounts section]: docs/consensus/staking.md#accounts
+  [Accounts section]: docs/consensus/services/staking.md#accounts
 
 - go/staking/api: Document commission-related public types
   ([#3042](https://github.com/oasisprotocol/oasis-core/issues/3042))
@@ -5058,7 +5058,7 @@ node's data directory.*
   ([#2819](https://github.com/oasisprotocol/oasis-core/issues/2819))
 
   As per
-  <https://docs.oasis.dev/operators/the-quest-rules.html#types-of-challenges>,
+  </operators/the-quest-rules.html#types-of-challenges>,
   the availability score formula has changed from "Blocks Signed + 50 x Blocks
   Proposed" to "Blocks Signed + 50 x Blocks Proposed in Round 0".
 

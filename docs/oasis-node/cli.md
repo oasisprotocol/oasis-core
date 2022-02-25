@@ -227,9 +227,11 @@ To check if a given [genesis file] is valid, run:
 oasis-node genesis check --genesis.file /path/to/genesis.json
 ```
 
-{% hint style="info" %}
+:::info
+
 This also checks if the genesis file is in the [canonical form].
-{% endhint %}
+
+:::
 
 ### `dump`
 
@@ -243,10 +245,12 @@ oasis-node genesis dump \
   --height 717600
 ```
 
-{% hint style="warning" %}
+:::caution
+
 You must only run the following command after the given block height has been
 reached on the network.
-{% endhint %}
+
+:::
 
 ### `init`
 
@@ -259,7 +263,8 @@ oasis-node genesis init --genesis.file /path/to/genesis.json \
   --staking.token_symbol TEST
 ```
 
-{% hint style="info" %}
+:::info
+
 You can set a lot of parameters for the various [consensus layer services].
 
 To see the full list, run:
@@ -268,12 +273,12 @@ To see the full list, run:
 oasis-node genesis init --help
 ```
 
-{% endhint %}
+:::
 
 [genesis file]: ../consensus/genesis.md#genesis-file
 [canonical form]: ../consensus/genesis.md#canonical-form
 [consensus layer services]: ../consensus/index.md
-[staking token symbol]: ../consensus/staking.md#tokens-and-base-units
+[staking token symbol]: ../consensus/services/staking.md#tokens-and-base-units
 
 ## `stake`
 

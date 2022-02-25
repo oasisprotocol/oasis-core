@@ -36,12 +36,12 @@ For details on how certificate verification is performed see
 [the `VerifyCertificate` implementation] in [`go/common/crypto/tls`].
 
 <!-- markdownlint-disable line-length -->
-[registry service]: consensus/registry.md
+[registry service]: consensus/services/registry.md
 [consensus layer]: consensus/index.md
 [signed node descriptor]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#Node
 [Ed25519 key pair]: crypto.md
-[the `VerifyCertificate` implementation]: ../go/common/crypto/tls/verify.go
-[`go/common/crypto/tls`]: ../go/common/crypto/tls
+[the `VerifyCertificate` implementation]: https://github.com/oasisprotocol/oasis-core/tree/master/go/common/crypto/tls/verify.go
+[`go/common/crypto/tls`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/common/crypto/tls
 <!-- markdownlint-enable line-length -->
 
 ## gRPC

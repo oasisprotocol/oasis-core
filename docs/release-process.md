@@ -66,10 +66,15 @@ variables:
 - `RELEASE_BRANCH` (default: `master`): Name of the branch where to tag the next
   release.
 
-[Make]: https://en.wikipedia.org/wiki/Make_\(software\)
-[Change Log]: ../CHANGELOG.md
-[Change Log Fragments]: ../.changelog/README.md
+<!-- markdownlint-disable line-length -->
+[Make]:
+  https://en.wikipedia.org/wiki/Make_\(software\)
+[Change Log]:
+  https://github.com/oasisprotocol/oasis-core/tree/master/CHANGELOG.md
+[Change Log Fragments]:
+  https://github.com/oasisprotocol/oasis-core/tree/master/.changelog/README.md
 [Versioning]: versioning.md
+<!-- markdownlint-enable line-length -->
 
 ## Preparing a Regular Release
 
@@ -79,7 +84,10 @@ Before a release, make sure that the proper protocol versions were bumped
 correctly (see [`go/common/version/version.go`]). If not, make a pull request
 that bumps the respective version(s) before proceeding with the release process.
 
-[`go/common/version/version.go`]: ../go/common/version/version.go
+<!-- markdownlint-disable line-length -->
+[`go/common/version/version.go`]:
+  https://github.com/oasisprotocol/oasis-core/tree/master/go/common/version/version.go
+<!-- markdownlint-enable line-length -->
 
 ### Prepare the Change Log
 
@@ -113,7 +121,10 @@ and make a pull request.
 
 Once the pull request had been reviewed and merged, proceed to the next step.
 
-[version-file]: ../go/common/version/version.go
+<!-- markdownlint-disable line-length -->
+[version-file]:
+  https://github.com/oasisprotocol/oasis-core/tree/master/go/common/version/version.go
+<!-- markdownlint-enable line-length -->
 
 ### Tag Next Release
 
@@ -152,11 +163,15 @@ This command will perform sanity checks to prevent common errors.
 
 After those checks have passed, it will ask for confirmation before proceeding.
 
-[canonical git repository]: https://github.com/oasisprotocol/oasis-core
-[Release manager workflow]: ../.github/workflows/release.yml
+<!-- markdownlint-disable line-length -->
+[canonical git repository]:
+  https://github.com/oasisprotocol/oasis-core
+[Release manager workflow]:
+  https://github.com/oasisprotocol/oasis-core/tree/master/.github/workflows/release.yml
 [GoReleaser]: https://goreleaser.com/
 [Oasis Core's releases page]:
   https://github.com/oasisprotocol/oasis-core/releases
+<!-- markdownlint-enable line-length -->
 
 ## Preparing a Bugfix/Stable Release
 

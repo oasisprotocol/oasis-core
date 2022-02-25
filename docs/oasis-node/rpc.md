@@ -12,10 +12,12 @@ In order to support remote clients and different protocols (e.g. REST), a
 gateway that handles things like authentication and rate limiting should be
 used.
 
-{% hint style="info" %}
+:::info
+
 An example of such a gateway is the [Oasis Core Rosetta Gateway] which exposes
 a subset of the consensus layer via the [Rosetta API].
-{% endhint %}
+
+:::
 
 <!-- markdownlint-disable line-length -->
 [consensus]: ../consensus/index.md
@@ -30,8 +32,8 @@ a subset of the consensus layer via the [Rosetta API].
 Like other parts of Oasis Core, the RPC interface exposed by Oasis Node uses the
 [gRPC protocol] with the [CBOR codec (instead of Protocol Buffers)]. If your
 application is written in Go, you can use the convenience gRPC wrappers provided
-by Oasis Core to create clients (we also provide limited gRPC wrappers for Rust,
-see example in [`client/src/transaction/api/client.rs`]).
+by Oasis Core to create clients. Check the [Oasis SDK](/oasis-sdk) for more
+information.
 
 For example to create a gRPC client connected to the Oasis Node endpoint exposed
 by your local node at `/path/to/datadir/internal.sock` you can do:
@@ -54,7 +56,6 @@ the gRPC helpers see the [API documentation].
 <!-- markdownlint-disable line-length -->
 [gRPC protocol]: https://grpc.io
 [CBOR codec (instead of Protocol Buffers)]: ../authenticated-grpc.md#cbor-codec
-[`client/src/transaction/api/client.rs`]: ../../client/src/transaction/api/client.rs
 [API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/grpc?tab=doc
 <!-- markdownlint-enable line-length -->
 

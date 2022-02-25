@@ -506,8 +506,8 @@ the [Ledger] and [Trezor] hardware wallets.
 [hd-scheme]: #hierarchical-key-derivation-scheme
 [diff-bip32-ed25519]: #difficulties-in-adapting-bip-0032-to-edwards25519-curve
 [key-derivation-paths]: #key-derivation-paths
-[Oasis Network]: https://docs.oasis.dev/general/oasis-network/overview
-[Account]: ../consensus/staking.md#accounts
+[Oasis Network]: /general/oasis-network/overview
+[Account]: ../consensus/services/staking.md#accounts
 [BIP-0032]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 [BIP-0032-use-cases]:
   https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#use-cases
@@ -550,7 +550,7 @@ the [Ledger] and [Trezor] hardware wallets.
   https://github.com/WebOfTrustInfo/rwot3-sf/blob/master/topics-and-advance-readings/HDKeys-Ed25519.pdf
 [Khovratovich]: https://en.wikipedia.org/wiki/Dmitry_Khovratovich
 [BIP32-Ed25519-attack]:
-  https://forum.w3f.community/t/key-recovery-attack-on-bip32-ed25519/44
+  https://web.archive.org/web/20210513183118/https://forum.w3f.community/t/key-recovery-attack-on-bip32-ed25519/44
 [BIP32-Ed25519-orakolo]:
   https://github.com/LedgerHQ/orakolo/blob/0b2d5e669ec61df9a824df9fa1a363060116b490/src/python/orakolo/HDEd25519.py
 [BIP32-Ed25519-orakolo-root-repeat]:
@@ -581,7 +581,7 @@ the [Ledger] and [Trezor] hardware wallets.
 [tor-hd]:
   https://gitweb.torproject.org/torspec.git/tree/proposals/224-rend-spec-ng.txt#n2135
 [oasis-ledger-app]: https://github.com/LedgerHQ/app-oasis
-[bitpie]: https://docs.oasis.dev/general/manage-tokens/mobile-wallets#bitpie-wallet
+[bitpie]: /general/manage-tokens/holding-rose-tokens/bitpie-wallet
 [Andrew Kozlik (SatoshiLabs)]: https://github.com/andrewkozlik
 [kozlik-comments]:
   https://github.com/satoshilabs/slips/issues/703#issuecomment-515213584

@@ -219,6 +219,7 @@ Core:
 In the following instructions, the top-level directory is the directory
 where the code has been checked out.
 
+<!-- markdownlint-disable line-length -->
 [Bubblewrap]: https://github.com/projectatomic/bubblewrap
 [GCC]: http://gcc.gnu.org/
 [Protobuf]: https://github.com/protocolbuffers/protobuf
@@ -233,7 +234,8 @@ where the code has been checked out.
 [download `rustup-init` executable for your platform]:
   https://github.com/rust-lang/rustup#other-installation-methods
 [Rust]: https://www.rust-lang.org/
-[rust-toolchain]: rust-toolchain
+[rust-toolchain]:
+  https://github.com/oasisprotocol/oasis-core/tree/master/rust-toolchain
 [rust-toolchain-precedence]:
   https://github.com/rust-lang/rustup/blob/master/README.md#override-precedence
 [Fortanix Rust EDP]: https://edp.fortanix.com
@@ -243,7 +245,6 @@ where the code has been checked out.
 [protoc-gen-go]: https://github.com/golang/protobuf
 [jemalloc]: https://github.com/jemalloc/jemalloc
 [BadgerDB]: https://github.com/dgraph-io/badger/
-<!-- markdownlint-disable line-length -->
 [jemalloc-hardcode-path]:
   https://github.com/dgraph-io/ristretto/blob/221ca9b2091d12e5d24aa5d7d56e49745fc175d8/z/calloc_jemalloc.go#L9-L13
 <!-- markdownlint-enable line-length -->

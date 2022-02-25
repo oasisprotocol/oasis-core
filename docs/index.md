@@ -8,14 +8,18 @@ Here are instructions on how to set up the local build environment, run the
 tests and some examples on how to prepare test networks for local development of
 Oasis Core components.
 
+<!-- markdownlint-disable line-length -->
+
 * Build Environment Setup and Building
-  * [Prerequisites](setup/prerequisites.md)
-  * [Building](setup/building.md)
+  * [Prerequisites](development-setup/prerequisites.md)
+  * [Building](development-setup/building.md)
 * Running Tests and Development Networks
-  * [Running Tests](setup/running-tests.md)
-  * [Local Network Runner With a Simple Runtime](setup/oasis-net-runner.md)
-  * [Single Validator Node Network](setup/single-validator-node-network.md)
-  * [Deploying a Runtime](setup/deploying-a-runtime.md)
+  * [Running Tests](development-setup/running-tests.md)
+  * [Local Network Runner With a Simple Runtime](development-setup/oasis-net-runner.md)
+  * [Single Validator Node Network](development-setup/single-validator-node-network.md)
+  * [Deploying a Runtime](development-setup/deploying-a-runtime.md)
+
+<!-- markdownlint-enable line-length -->
 
 ## High-Level Components
 
@@ -46,14 +50,14 @@ implementations.
 * [Consensus Layer](consensus/index.md)
   * [Transactions](consensus/transactions.md)
   * Services
-    * [Epoch Time](consensus/epochtime.md)
-    * [Random Beacon](consensus/beacon.md)
-    * [Staking](consensus/staking.md)
-    * [Registry](consensus/registry.md)
-    * [Committee Scheduler](consensus/scheduler.md)
-    * [Governance](consensus/governance.md)
-    * [Root Hash](consensus/roothash.md)
-    * [Key Manager](consensus/keymanager.md)
+    * [Epoch Time](consensus/services/epochtime.md)
+    * [Random Beacon](consensus/services/beacon.md)
+    * [Staking](consensus/services/staking.md)
+    * [Registry](consensus/services/registry.md)
+    * [Committee Scheduler](consensus/services/scheduler.md)
+    * [Governance](consensus/services/governance.md)
+    * [Root Hash](consensus/services/roothash.md)
+    * [Key Manager](consensus/services/keymanager.md)
   * [Genesis Document](consensus/genesis.md)
   * [Transaction Test Vectors](consensus/test-vectors.md)
 * [Runtime Layer](runtime/index.md)
@@ -79,4 +83,4 @@ implementations.
 * [Architectural Decision Records](adr/index.md)
 * [Release Process](release-process.md)
 * [Versioning](versioning.md)
-* [Security](../SECURITY.md)
+* [Security](SECURITY.md)

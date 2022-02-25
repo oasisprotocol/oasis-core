@@ -9,7 +9,7 @@ supported queries and transactions. For more information you can also check out
 the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
-[`go/staking/api`]: ../../go/staking/api/api.go
+[`go/staking/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/staking/api/api.go
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
@@ -66,10 +66,12 @@ account signer's public key (e.g. entity id).
 
 For more details, see the [`NewAddress` function].
 
-{% hint style="info" %}
+:::info
+
 When generating an account's private/public key pair, follow [ADR 0008:
 Standard Account Key Generation][ADR 0008].
-{% endhint %}
+
+:::
 
 ### Runtime Accounts
 
@@ -97,7 +99,7 @@ Currently, they are:
   (defined by the [`GovernanceDeposits` variable]).
 
 <!-- markdownlint-disable line-length -->
-[runtime identifier]: ../runtime/identifiers.md
+[runtime identifier]: ../../runtime/identifiers.md
 [`AddressV0Context` variable]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 [`NewAddress` function]:
@@ -106,7 +108,7 @@ Currently, they are:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 [`NewRuntimeAddress` function]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#NewRuntimeAddress
-[emitting messages]: ../runtime/messages.md
+[emitting messages]: ../../runtime/messages.md
 [Bech32 encoding]:
   https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#bech32
 [`CommonPoolAddress` variable]:
@@ -115,7 +117,7 @@ Currently, they are:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 [`GovernanceDeposits` variable]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
-[ADR 0008]: ../adr/0008-standard-account-key-generation.md
+[ADR 0008]: ../../adr/0008-standard-account-key-generation.md
 <!-- markdownlint-enable line-length -->
 
 ### General
@@ -723,5 +725,5 @@ make -C go staking/gen_vectors
 For more information about the structure of the test vectors see the section
 on [Transaction Test Vectors].
 
-[transactions]: transactions.md
-[Transaction Test Vectors]: test-vectors.md
+[transactions]: ../transactions.md
+[Transaction Test Vectors]: ../test-vectors.md

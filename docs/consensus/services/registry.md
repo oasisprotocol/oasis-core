@@ -8,7 +8,7 @@ supported queries and transactions. For more information you can also check out
 the [consensus service API documentation].
 
 <!-- markdownlint-disable line-length -->
-[`go/registry/api`]: ../../go/registry/api
+[`go/registry/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/registry/api
 [consensus service API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc
 <!-- markdownlint-enable line-length -->
 
@@ -72,7 +72,7 @@ There are currently three supported governance models:
 <!-- markdownlint-enable no-space-in-emphasis -->
 
 <!-- markdownlint-disable line-length -->
-[runtime]: ../runtime/index.md
+[runtime]: ../../runtime/index.md
 [the `Runtime` structure]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime
 <!-- markdownlint-enable line-length -->
 
@@ -103,7 +103,7 @@ Registering an entity may require sufficient stake in the entity's
 [`NewRegisterEntityTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterEntityTx
 [`SignedEntity`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/entity?tab=doc#SignedEntity
 [`Entity`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/entity?tab=doc#Entity
-[signed envelope]: ../crypto.md#signed-envelope
+[signed envelope]: ../../crypto.md#signed-envelope
 [escrow account]: staking.md#escrow
 <!-- markdownlint-enable line-length -->
 
@@ -171,7 +171,7 @@ sum of thresholds of all the runtimes it is registering for.
 [`NewRegisterNodeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterNodeTx
 [`MultiSignedNode`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#MultiSignedNode
 [`Node`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#Node
-[multi-signed envelope]: ../crypto.md#multi-signed-envelope
+[multi-signed envelope]: ../../crypto.md#multi-signed-envelope
 [`Thresholds` in staking consensus parameters]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#ConsensusParameters.Thresholds
 [`Staking` field]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime.Staking
 <!-- markdownlint-enable line-length -->
@@ -250,5 +250,5 @@ make -C go registry/gen_vectors
 For more information about the structure of the test vectors see the section
 on [Transaction Test Vectors].
 
-[transactions]: transactions.md
-[Transaction Test Vectors]: test-vectors.md
+[transactions]: ../transactions.md
+[Transaction Test Vectors]: ../test-vectors.md
