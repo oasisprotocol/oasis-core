@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	dynlib "gitlab.com/yawning/dynlib.git"
+	"github.com/oasisprotocol/oasis-core/go/common/dynlib"
 )
 
 const (
