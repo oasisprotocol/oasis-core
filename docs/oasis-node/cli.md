@@ -273,7 +273,6 @@ To see the full list, run:
 oasis-node genesis init --help
 ```
 
-
 :::
 
 [genesis file]: ../consensus/genesis.md#genesis-file

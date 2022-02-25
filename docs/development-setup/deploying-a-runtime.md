@@ -64,7 +64,9 @@ Should give output similar to:
 In following steps we will register and run the [simple-keyvalue] runtime on the
 network.
 
+<!-- markdownlint-disable line-length -->
 [simple-keyvalue]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/runtimes/simple-keyvalue
+<!-- markdownlint-enable line-length -->
 
 ## Initializing a Runtime
 
@@ -189,7 +191,7 @@ the transaction to complete the runtime registration.
 When registering a runtime on a _non-development_ network you will likely want
 to modify default parameters. Additionally, since we are running this on a debug
 network, we had to enable the `debug.dont_blame_oasis` and
-`debug.allow_test_keys` flags. 
+`debug.allow_test_keys` flags.
 
 :::
 
@@ -277,7 +279,7 @@ Should give output similar to
 :::info
 
 Since we did not setup any runtime nodes, the runtime
-will get [suspended] until nodes for the runtime register. 
+will get [suspended] until nodes for the runtime register.
 
 :::
 
@@ -293,7 +295,7 @@ the runtime.
 :::info
 
 In a real word scenario there would be multiple nodes
-running the runtime, each likely serving as a single type only. 
+running the runtime, each likely serving as a single type only.
 
 :::
 
@@ -343,7 +345,7 @@ oasis-node \
 :::danger
 
 This also enables unsafe debug-only flags which must never be used in a
-production setting as they may result in node compromise. 
+production setting as they may result in node compromise.
 
 :::
 
@@ -351,7 +353,7 @@ production setting as they may result in node compromise.
 
 When running a runtime node in a production setting, the
 `worker.p2p.addresses` and `worker.client.addresses` flags need to be configured
-as well. 
+as well.
 
 :::
 
@@ -433,39 +435,3 @@ transition so that the node is registered and runtime gets resumed.
 :::
 
 [node control status command]: ../oasis-node/cli.md#status
-
-## Testing the Runtime
-
-Now that the runtime node is running, is registered, and runtime is resumed, we
-can test the runtime by submitting runtime transactions. For that we use the
-[simple-keyvalue-client] binary which tests the functionality of the
-`simple-keyvalue` runtime.
-
-If you followed [build instructions] the built client binary is available at
-`target/default/debug/simple-keyvalue-client`.
-
-Run the test client:
-
-<!-- markdownlint-disable line-length -->
-
-```
-./target/default/debug/simple-keyvalue-client \
-  --node-address unix:/tmp/runtime-example/runtime-node/internal.sock \
-  --runtime-id $RUNTIME_ID
-
-Initializing simple key/value runtime client!
-Storing "hello_key" as key and "hello_value_from_8000…4567" as value to database...
-Getting "hello_key"...
-Got "hello_value_from_8000…4567"
-Storing long key and value to database...
-Getting long key...
-Got correct long value
-Getting latest block...
-...
-...
-Simple key/value client finished.
-```
-
-<!-- markdownlint-enable line-length -->
-
-[simple-keyvalue-client]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/clients/simple-keyvalue

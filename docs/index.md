@@ -8,6 +8,8 @@ Here are instructions on how to set up the local build environment, run the
 tests and some examples on how to prepare test networks for local development of
 Oasis Core components.
 
+<!-- markdownlint-disable line-length -->
+
 * Build Environment Setup and Building
   * [Prerequisites](development-setup/prerequisites.md)
   * [Building](development-setup/building.md)
@@ -16,6 +18,8 @@ Oasis Core components.
   * [Local Network Runner With a Simple Runtime](development-setup/oasis-net-runner.md)
   * [Single Validator Node Network](development-setup/single-validator-node-network.md)
   * [Deploying a Runtime](development-setup/deploying-a-runtime.md)
+
+<!-- markdownlint-enable line-length -->
 
 ## High-Level Components
 

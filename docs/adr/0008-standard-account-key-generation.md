@@ -550,7 +550,7 @@ the [Ledger] and [Trezor] hardware wallets.
   https://github.com/WebOfTrustInfo/rwot3-sf/blob/master/topics-and-advance-readings/HDKeys-Ed25519.pdf
 [Khovratovich]: https://en.wikipedia.org/wiki/Dmitry_Khovratovich
 [BIP32-Ed25519-attack]:
-  https://forum.w3f.community/t/key-recovery-attack-on-bip32-ed25519/44
+  https://web.archive.org/web/20210513183118/https://forum.w3f.community/t/key-recovery-attack-on-bip32-ed25519/44
 [BIP32-Ed25519-orakolo]:
   https://github.com/LedgerHQ/orakolo/blob/0b2d5e669ec61df9a824df9fa1a363060116b490/src/python/orakolo/HDEd25519.py
 [BIP32-Ed25519-orakolo-root-repeat]:

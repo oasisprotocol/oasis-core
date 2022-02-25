@@ -74,8 +74,10 @@ The Tendermint consensus backend is split into two major parts:
    it easy to interact with the ABCI application, presenting everything via the
    Oasis Core Consensus interface.
 
+<!-- markdownlint-disable line-length -->
 [`go/consensus/tendermint`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
 [the Tendermint Core developer documentation]: https://docs.tendermint.com/
+<!-- markdownlint-enable line-length -->
 
 ### ABCI Application Multiplexer
 

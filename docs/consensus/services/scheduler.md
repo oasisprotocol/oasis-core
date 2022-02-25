@@ -29,8 +29,8 @@ the committee scheduler does not consider that entity's nodes.
 From these qualifying nodes, the committee scheduler selects at most one node
 from each entity, up to a maximum validator committee size.
 The maximum validator committee size is configured in the genesis document,
-under the path `.scheduler.params.max_validators` (consult the [genesis document]
-for details).
+under the path `.scheduler.params.max_validators` (consult the [genesis
+document] for details).
 Unlike how the committee scheduler schedules other committees, it schedules the
 validator committee by choosing nodes from the entities that have the highest
 escrow account balances.
