@@ -252,6 +252,29 @@ func (n *Node) handleSuspendLocked(height int64) {
 	}
 }
 
+func (n *Node) updateHostedRuntimeVersion() {
+	if n.CurrentDescriptor == nil {
+		return
+	}
+
+	// Update the runtime version based on the currently active deployment.
+	activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
+	// NOTE: If there is no active deployment this will activate the all-zero version which may
+	//       result in the runtime stopping.
+	var activeVersion version.Version
+	if activeDeploy != nil {
+		activeVersion = activeDeploy.Version
+	}
+
+	if err := n.SetHostedRuntimeVersion(n.ctx, activeVersion); err != nil {
+		n.logger.Error("failed to activate runtime version",
+			"err", err,
+			"version", activeVersion,
+		)
+		// This is not fatal and it should result in the node declaring itself unavailable.
+	}
+}
+
 // Guarded by n.CrossNode.
 func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	processedBlockCount.With(n.getMetricLabels()).Inc()
@@ -281,7 +304,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	n.CurrentConsensusBlock = consensusBlk
 
 	// Update active descriptor on epoch transitions.
-	if firstBlockReceived || header.HeaderType == block.EpochTransition {
+	if firstBlockReceived || header.HeaderType == block.EpochTransition || header.HeaderType == block.Suspended {
 		var rs *roothash.RuntimeState
 		rs, err = n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
 			RuntimeID: n.Runtime.ID(),
@@ -303,22 +326,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			return
 		}
 
-		// Update the runtime version based on the currently active deployment.
-		activeDeploy := rs.Runtime.ActiveDeployment(n.CurrentEpoch)
-		// NOTE: If there is no active deployment this will activate the all-zero version which may
-		//       result in the runtime stopping.
-		var activeVersion version.Version
-		if activeDeploy != nil {
-			activeVersion = activeDeploy.Version
-		}
-
-		if err = n.SetHostedRuntimeVersion(n.ctx, activeVersion); err != nil {
-			n.logger.Error("failed to activate runtime version",
-				"err", err,
-				"version", activeVersion,
-			)
-			// This is not fatal and it should result in the node declaring itself unavailable.
-		}
+		n.updateHostedRuntimeVersion()
 	}
 
 	for _, hooks := range n.hooks {
@@ -415,6 +423,14 @@ func (n *Node) worker() {
 		return
 	}
 
+	n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
+	if err != nil {
+		n.logger.Error("failed to fetch current epoch",
+			"err", err,
+		)
+		return
+	}
+
 	n.logger.Info("runtime is registered with the registry")
 
 	// Initialize the CurrentDescriptor to make sure there is one even if the runtime gets
@@ -504,6 +520,10 @@ func (n *Node) worker() {
 		return
 	}
 	defer hrtNotifier.Stop()
+
+	// Perform initial hosted runtime version update to ensure we have something even in cases where
+	// initial block processing fails for any reason.
+	n.updateHostedRuntimeVersion()
 
 	initialized := false
 	for {
