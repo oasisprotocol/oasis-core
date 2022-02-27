@@ -585,11 +585,16 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 	}
 
 	// Update runtimes.
+	knownRuntimes := make(map[common.Namespace]*registry.Runtime)
 	for _, oldRt := range oldDoc.Registry.Runtimes {
 		var newRt registry.Runtime
 		if newRt, err = updateRegistryRuntime(oldRt); err != nil {
 			return nil, fmt.Errorf("failed to update runtime %s: %w", oldRt.ID, err)
 		}
+		if _, exists := knownRuntimes[newRt.ID]; exists {
+			return nil, fmt.Errorf("duplicate runtime %s", newRt.ID)
+		}
+		knownRuntimes[newRt.ID] = &newRt
 		newDoc.Registry.Runtimes = append(newDoc.Registry.Runtimes, &newRt)
 	}
 	for _, oldRt := range oldDoc.Registry.SuspendedRuntimes {
@@ -597,6 +602,10 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 		if newRt, err = updateRegistryRuntime(oldRt); err != nil {
 			return nil, fmt.Errorf("failed to update suspended runtime %s: %w", oldRt.ID, err)
 		}
+		if _, exists := knownRuntimes[newRt.ID]; exists {
+			return nil, fmt.Errorf("duplicate runtime %s", newRt.ID)
+		}
+		knownRuntimes[newRt.ID] = &newRt
 		newDoc.Registry.SuspendedRuntimes = append(newDoc.Registry.SuspendedRuntimes, &newRt)
 	}
 
@@ -664,6 +673,7 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 		newDoc.Registry.Entities = append(newDoc.Registry.Entities, sigEntity)
 		entityMap[entity.ID] = &entity
 	}
+NodeLoop:
 	for _, sigNode := range oldDoc.Registry.Nodes {
 		var node node.Node
 		if err := sigNode.Open(registry.RegisterGenesisNodeSignatureContext, &node); err != nil {
@@ -682,6 +692,26 @@ func updateGenesisDoc(oldDoc v4Document) (*genesis.Document, error) {
 				"node_id", node.ID,
 			)
 			continue
+		}
+		for _, rt := range node.Runtimes {
+			knownRt, exists := knownRuntimes[rt.ID]
+			if !exists {
+				logger.Warn("removing node referencing unknown runtime",
+					"node_id", node.ID,
+					"runtime_id", rt.ID,
+				)
+				continue NodeLoop
+			}
+			if rt.Capabilities.TEE != nil {
+				if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, rt, knownRt, oldDoc.Time); err != nil {
+					logger.Warn("removing node with invalid TEE capability",
+						"err", err,
+						"node_id", node.ID,
+						"runtime_id", rt.ID,
+					)
+					continue NodeLoop
+				}
+			}
 		}
 		newDoc.Registry.Nodes = append(newDoc.Registry.Nodes, sigNode)
 	}
