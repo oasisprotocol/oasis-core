@@ -204,6 +204,8 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 
 	status.Peers = n.P2P.Peers(n.Runtime.ID())
 
+	status.Host.Versions = n.Runtime.HostVersions()
+
 	return &status, nil
 }
 

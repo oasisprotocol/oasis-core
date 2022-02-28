@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -19,4 +20,13 @@ type Status struct {
 
 	// Peers is the list of peers in the runtime P2P network.
 	Peers []string `json:"peers"`
+
+	// Host is the runtime host status.
+	Host HostStatus `json:"host"`
+}
+
+// HostStatus is the runtime host status.
+type HostStatus struct {
+	// Versions are the locally supported versions.
+	Versions []version.Version `json:"versions"`
 }
