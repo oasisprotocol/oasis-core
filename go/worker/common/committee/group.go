@@ -35,6 +35,7 @@ func TagForCommittee(kind scheduler.CommitteeKind) string {
 
 // CommitteeInfo contains information about a committee of nodes.
 type CommitteeInfo struct { // nolint: golint
+	Indices    []int
 	Roles      []scheduler.Role
 	Committee  *scheduler.Committee
 	PublicKeys map[signature.PublicKey]bool
@@ -266,13 +267,17 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	var executorCommittee *CommitteeInfo
 	publicIdentity := g.identity.NodeSigner.Public()
 	for _, cm := range committees {
-		var roles []scheduler.Role
+		var (
+			roles   []scheduler.Role
+			indices []int
+		)
 		publicKeys := make(map[signature.PublicKey]bool)
 		peers := make(map[signature.PublicKey]bool)
-		for _, member := range cm.Members {
+		for index, member := range cm.Members {
 			publicKeys[member.PublicKey] = true
 			if member.PublicKey.Equal(publicIdentity) {
 				roles = append(roles, member.Role)
+				indices = append(indices, index)
 			}
 
 			// Start watching the member's node descriptor.
@@ -285,6 +290,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 		}
 
 		ci := &CommitteeInfo{
+			Indices:    indices,
 			Roles:      roles,
 			Committee:  cm,
 			PublicKeys: publicKeys,

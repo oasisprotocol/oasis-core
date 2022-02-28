@@ -127,6 +127,7 @@ type Node struct {
 	CurrentConsensusBlock *consensus.LightBlock
 	CurrentDescriptor     *registry.Runtime
 	CurrentEpoch          beacon.EpochTime
+	CurrentStatus         *roothash.RuntimeState
 	Height                int64
 
 	logger *logging.Logger
@@ -199,6 +200,17 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	epoch := n.Group.GetEpochSnapshot()
 	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
 		status.ExecutorRoles = cmte.Roles
+
+		// Include liveness statistics if the node is an executor committee member.
+		if ls := n.CurrentStatus.LivenessStatistics; epoch.IsExecutorMember() && ls != nil {
+			status.Liveness = &api.LivenessStatus{
+				TotalRounds: ls.TotalRounds,
+			}
+
+			for _, index := range cmte.Indices {
+				status.Liveness.LiveRounds += ls.LiveRounds[index]
+			}
+		}
 	}
 	status.IsTransactionScheduler = epoch.IsTransactionScheduler(status.LatestRound)
 
@@ -319,6 +331,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			return
 		}
 		n.CurrentDescriptor = rs.Runtime
+		n.CurrentStatus = rs
 
 		n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, height)
 		if err != nil {
