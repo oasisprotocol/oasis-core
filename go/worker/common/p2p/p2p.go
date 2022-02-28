@@ -113,7 +113,13 @@ func (p *P2P) Peers(runtimeID common.Namespace) []string {
 	allPeers = append(allPeers, p.pubsub.ListPeers(p.topicIDForRuntime(runtimeID, TopicKindTx))...)
 
 	var peers []string
+	peerMap := make(map[core.PeerID]bool)
 	for _, peerID := range allPeers {
+		if peerMap[peerID] {
+			continue
+		}
+		peerMap[peerID] = true
+
 		addrs := p.host.Peerstore().Addrs(peerID)
 		if len(addrs) == 0 {
 			continue
