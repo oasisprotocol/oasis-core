@@ -425,7 +425,7 @@ func (impl *backendVRF) scheduleEpochTransitionBlock(
 	nextEpoch beacon.EpochTime,
 ) error {
 	// Schedule the epoch transition based on block height.
-	nextHeight := int64(nextEpoch) * params.Interval
+	nextHeight := (ctx.BlockHeight() + 1) + params.Interval
 	return impl.app.scheduleEpochTransitionBlock(ctx, state, nextEpoch, nextHeight)
 }
 
