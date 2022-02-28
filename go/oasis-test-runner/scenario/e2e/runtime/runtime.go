@@ -736,6 +736,7 @@ func RegisterScenarios() error {
 		// Halt test.
 		HaltRestore,
 		HaltRestoreSuspended,
+		HaltRestoreNonMock,
 		// Consensus upgrade tests.
 		GovernanceConsensusUpgrade,
 		GovernanceConsensusFailUpgrade,
