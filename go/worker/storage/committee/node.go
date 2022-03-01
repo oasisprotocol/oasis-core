@@ -218,7 +218,6 @@ func NewNode(
 	}
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
-	n.ctx = storageApi.WithNodeBlacklist(n.ctx)
 
 	// Create a new checkpointer if enabled.
 	if checkpointerCfg != nil {
