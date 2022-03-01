@@ -7,6 +7,9 @@ import (
 
 // Status is the common runtime worker status.
 type Status struct {
+	// ActiveVersion is the currently active version.
+	ActiveVersion *version.Version `json:"active_version"`
+
 	// LatestRound is the latest runtime round as seen by the committee node.
 	LatestRound uint64 `json:"latest_round"`
 	// LatestHeight is the consensus layer height containing the runtime block for the latest round.

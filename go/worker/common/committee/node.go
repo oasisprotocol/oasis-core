@@ -197,6 +197,11 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 		status.LatestHeight = n.CurrentBlockHeight
 	}
 
+	activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
+	if activeDeploy != nil {
+		status.ActiveVersion = &activeDeploy.Version
+	}
+
 	epoch := n.Group.GetEpochSnapshot()
 	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
 		status.ExecutorRoles = cmte.Roles
@@ -266,7 +271,7 @@ func (n *Node) handleSuspendLocked(height int64) {
 	}
 }
 
-func (n *Node) updateHostedRuntimeVersion() {
+func (n *Node) updateHostedRuntimeVersionLocked() {
 	if n.CurrentDescriptor == nil {
 		return
 	}
@@ -341,7 +346,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			return
 		}
 
-		n.updateHostedRuntimeVersion()
+		n.updateHostedRuntimeVersionLocked()
 	}
 
 	for _, hooks := range n.hooks {
@@ -538,7 +543,7 @@ func (n *Node) worker() {
 
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
-	n.updateHostedRuntimeVersion()
+	n.updateHostedRuntimeVersionLocked()
 
 	initialized := false
 	for {
