@@ -127,6 +127,7 @@ type Node struct {
 	CurrentConsensusBlock *consensus.LightBlock
 	CurrentDescriptor     *registry.Runtime
 	CurrentEpoch          beacon.EpochTime
+	CurrentStatus         *roothash.RuntimeState
 	Height                int64
 
 	logger *logging.Logger
@@ -196,13 +197,31 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 		status.LatestHeight = n.CurrentBlockHeight
 	}
 
+	activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
+	if activeDeploy != nil {
+		status.ActiveVersion = &activeDeploy.Version
+	}
+
 	epoch := n.Group.GetEpochSnapshot()
 	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
 		status.ExecutorRoles = cmte.Roles
+
+		// Include liveness statistics if the node is an executor committee member.
+		if ls := n.CurrentStatus.LivenessStatistics; epoch.IsExecutorMember() && ls != nil {
+			status.Liveness = &api.LivenessStatus{
+				TotalRounds: ls.TotalRounds,
+			}
+
+			for _, index := range cmte.Indices {
+				status.Liveness.LiveRounds += ls.LiveRounds[index]
+			}
+		}
 	}
 	status.IsTransactionScheduler = epoch.IsTransactionScheduler(status.LatestRound)
 
 	status.Peers = n.P2P.Peers(n.Runtime.ID())
+
+	status.Host.Versions = n.Runtime.HostVersions()
 
 	return &status, nil
 }
@@ -252,7 +271,7 @@ func (n *Node) handleSuspendLocked(height int64) {
 	}
 }
 
-func (n *Node) updateHostedRuntimeVersion() {
+func (n *Node) updateHostedRuntimeVersionLocked() {
 	if n.CurrentDescriptor == nil {
 		return
 	}
@@ -317,6 +336,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			return
 		}
 		n.CurrentDescriptor = rs.Runtime
+		n.CurrentStatus = rs
 
 		n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, height)
 		if err != nil {
@@ -326,7 +346,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			return
 		}
 
-		n.updateHostedRuntimeVersion()
+		n.updateHostedRuntimeVersionLocked()
 	}
 
 	for _, hooks := range n.hooks {
@@ -523,7 +543,7 @@ func (n *Node) worker() {
 
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
-	n.updateHostedRuntimeVersion()
+	n.updateHostedRuntimeVersionLocked()
 
 	initialized := false
 	for {
