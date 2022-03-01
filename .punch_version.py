@@ -1,3 +1,3 @@
-year = '21'
-minor = 3
+year = '22'
+minor = 0
 micro = 0
