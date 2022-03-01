@@ -32,10 +32,7 @@ func (impl *boxImpl) Seal(dst, nonce, plaintext, additionalData []byte, peersPub
 		panic(err)
 	}
 
-	ret := aead.Seal(dst, nonce, plaintext, additionalData)
-	aead.(api.ResetAble).Reset()
-
-	return ret
+	return aead.Seal(dst, nonce, plaintext, additionalData)
 }
 
 func (impl *boxImpl) Open(dst, nonce, plaintext, additionalData []byte, peersPublicKey, privateKey *[32]byte) ([]byte, error) {
@@ -48,8 +45,5 @@ func (impl *boxImpl) Open(dst, nonce, plaintext, additionalData []byte, peersPub
 		panic(err)
 	}
 
-	ret, err := aead.Open(dst, nonce, plaintext, additionalData)
-	aead.(api.ResetAble).Reset()
-
-	return ret, err
+	return aead.Open(dst, nonce, plaintext, additionalData)
 }

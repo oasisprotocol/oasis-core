@@ -14,13 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Resetable is the interface implemented by cipher.AEAD implementations
-// that are capable of being reset.
-type ResetAble interface {
-	// Reset clears the AEAD instance of all sensitive data.
-	Reset()
-}
-
 // Box is the interface for using MRAE AEAD primitives with asymmetric
 // public key cryptography.
 type Box interface {
