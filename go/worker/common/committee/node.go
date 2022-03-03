@@ -197,9 +197,11 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 		status.LatestHeight = n.CurrentBlockHeight
 	}
 
-	activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
-	if activeDeploy != nil {
-		status.ActiveVersion = &activeDeploy.Version
+	if n.CurrentDescriptor != nil {
+		activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
+		if activeDeploy != nil {
+			status.ActiveVersion = &activeDeploy.Version
+		}
 	}
 
 	epoch := n.Group.GetEpochSnapshot()
