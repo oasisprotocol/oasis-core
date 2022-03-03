@@ -338,6 +338,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.Identity,
 		n.Consensus,
 		n.commonStore,
+		n.RegistrationWorker,
 	)
 	if err != nil {
 		return err
