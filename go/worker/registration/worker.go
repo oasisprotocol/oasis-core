@@ -918,6 +918,11 @@ func (w *Worker) RequestDeregistration() error {
 	return nil
 }
 
+// WillNeverRegister returns true iff the worker will never register.
+func (w *Worker) WillNeverRegister() bool {
+	return !w.entityID.IsValid() || w.registrationSigner == nil
+}
+
 // GetRegistrationSigner loads the signing credentials as configured by this package's flags.
 func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
 	var defaultPk signature.PublicKey
@@ -1041,7 +1046,7 @@ func (w *Worker) Start() error {
 	w.logger.Info("starting node registration service")
 
 	// HACK: This can be ok in certain configurations.
-	if !w.entityID.IsValid() || w.registrationSigner == nil {
+	if w.WillNeverRegister() {
 		w.logger.Warn("no entity/signer for this node, registration will NEVER succeed")
 		// Make sure the node is stopped on quit and that it can still respond to
 		// shutdown requests from the control api.

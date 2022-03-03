@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 const workerName = "worker/beacon"
@@ -61,6 +62,7 @@ func New(
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	store *persistent.CommonStore,
+	registrationWorker *registration.Worker,
 ) (*Worker, error) {
 	var (
 		err     error
@@ -74,6 +76,12 @@ func New(
 	}
 
 	initLogger := logging.GetLogger(workerName)
+	if registrationWorker.WillNeverRegister() {
+		// Some node configurations never register, and that's ok.
+		initLogger.Info("registration worker disabled, also disabling beacon worker")
+		close(w.allQuitCh)
+		return w, nil
+	}
 
 	if w.vrf, err = newVRF(w); err == nil {
 		w.allQuitWg.Add(1)
