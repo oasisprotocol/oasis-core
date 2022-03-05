@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
 )
 
 // Bundle is a runtime bundle instance.
@@ -80,6 +81,11 @@ func (bnd *Bundle) Validate() error {
 		}
 	}
 
+	// Make sure the SGX signature is valid if it exists.
+	if err := bnd.verifySgxSignature(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -118,6 +124,27 @@ func (bnd *Bundle) MrEnclave() (*sgx.MrEnclave, error) {
 	}
 
 	return &mrEnclave, nil
+}
+
+func (bnd *Bundle) verifySgxSignature() error {
+	if bnd.Manifest.SGX == nil || bnd.Manifest.SGX.Signature == "" {
+		return nil
+	}
+
+	mrEnclave, err := bnd.MrEnclave()
+	if err != nil {
+		return err
+	}
+	_, sigStruct, err := sigstruct.Verify(bnd.Data[bnd.Manifest.SGX.Signature])
+	if err != nil {
+		return fmt.Errorf("runtime/bundle: failed to verify sigstruct: %w", err)
+	}
+
+	if sigStruct.EnclaveHash != *mrEnclave {
+		return fmt.Errorf("runtime/bundle: sigstruct does not match SGXS (got: %s expected: %s)", sigStruct.EnclaveHash, *mrEnclave)
+	}
+
+	return nil
 }
 
 // Write serializes a runtime bundle to the on-disk representation.
