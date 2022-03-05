@@ -116,6 +116,7 @@ type Node struct {
 	stopOnce  sync.Once
 	quitCh    chan struct{}
 	initCh    chan struct{}
+	resumeCh  chan struct{}
 
 	hooks []NodeHooks
 
@@ -271,6 +272,41 @@ func (n *Node) handleSuspendLocked(height int64) {
 	for _, hooks := range n.hooks {
 		hooks.HandleEpochTransitionLocked(epoch)
 	}
+
+	// If the runtime has been suspended, we need to switch to checking the latest registry
+	// descriptor instead of the active one as otherwise we may miss deployment updates and never
+	// register, keeping the runtime suspended.
+	if n.resumeCh == nil {
+		resumeCh := make(chan struct{})
+		n.resumeCh = resumeCh
+		go func() {
+			ch, sub, _ := n.Runtime.WatchRegistryDescriptor()
+			defer sub.Close()
+
+			for {
+				select {
+				case <-n.stopCh:
+					return
+				case rt := <-ch:
+					// Descriptor update while suspended.
+					n.CrossNode.Lock()
+
+					// Make sure we are still suspended.
+					if n.resumeCh == nil {
+						n.CrossNode.Unlock()
+						return
+					}
+
+					n.CurrentDescriptor = rt
+					n.updateHostedRuntimeVersionLocked()
+					n.CrossNode.Unlock()
+				case <-resumeCh:
+					// Runtime no longer suspended, stop.
+					return
+				}
+			}
+		}()
+	}
 }
 
 func (n *Node) updateHostedRuntimeVersionLocked() {
@@ -346,6 +382,12 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 				"err", err,
 			)
 			return
+		}
+
+		// Notify suspended runtime watcher to stop.
+		if !rs.Suspended && n.resumeCh != nil {
+			close(n.resumeCh)
+			n.resumeCh = nil
 		}
 
 		n.updateHostedRuntimeVersionLocked()
