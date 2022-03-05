@@ -13,5 +13,5 @@ cbor = { version = "0.2.1", package = "oasis-cbor" }
 # Third party.
 futures = "0.3.17"
 io-context = "0.2.0"
-lru = "0.7.1"
+lru = "0.7.3"
 thiserror = "1.0"
