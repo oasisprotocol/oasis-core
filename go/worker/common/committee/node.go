@@ -128,7 +128,6 @@ type Node struct {
 	CurrentConsensusBlock *consensus.LightBlock
 	CurrentDescriptor     *registry.Runtime
 	CurrentEpoch          beacon.EpochTime
-	CurrentStatus         *roothash.RuntimeState
 	Height                int64
 
 	logger *logging.Logger
@@ -210,13 +209,19 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 		status.ExecutorRoles = cmte.Roles
 
 		// Include liveness statistics if the node is an executor committee member.
-		if ls := n.CurrentStatus.LivenessStatistics; epoch.IsExecutorMember() && ls != nil {
-			status.Liveness = &api.LivenessStatus{
-				TotalRounds: ls.TotalRounds,
-			}
+		if epoch.IsExecutorMember() {
+			rs, err := n.Consensus.RootHash().GetRuntimeState(n.ctx, &roothash.RuntimeRequest{
+				RuntimeID: n.Runtime.ID(),
+				Height:    consensus.HeightLatest,
+			})
+			if err == nil && rs.LivenessStatistics != nil {
+				status.Liveness = &api.LivenessStatus{
+					TotalRounds: rs.LivenessStatistics.TotalRounds,
+				}
 
-			for _, index := range cmte.Indices {
-				status.Liveness.LiveRounds += ls.LiveRounds[index]
+				for _, index := range cmte.Indices {
+					status.Liveness.LiveRounds += rs.LivenessStatistics.LiveRounds[index]
+				}
 			}
 		}
 	}
@@ -374,7 +379,6 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 			return
 		}
 		n.CurrentDescriptor = rs.Runtime
-		n.CurrentStatus = rs
 
 		n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, height)
 		if err != nil {
