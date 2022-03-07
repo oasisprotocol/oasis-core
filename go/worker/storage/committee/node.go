@@ -809,9 +809,10 @@ func (n *Node) worker() { // nolint: gocyclo
 	if cachedLastRound == defaultUndefinedRound || cachedLastRound < genesisBlock.Header.Round {
 		cachedLastRound = n.undefinedRound
 	}
+	isInitialStartup := (cachedLastRound == n.undefinedRound)
 
 	// Initialize genesis from the runtime descriptor.
-	if cachedLastRound == n.undefinedRound {
+	if isInitialStartup {
 		var rt *registryApi.Runtime
 		rt, err = n.commonNode.Runtime.ActiveDescriptor(n.ctx)
 		if err != nil {
@@ -947,8 +948,14 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	heap.Init(outOfOrderDoneDiffs)
 
-	// Try to perform initial sync from state and io checkpoints.
-	if !n.checkpointSyncCfg.Disabled || n.checkpointSyncForced {
+	// Try to perform initial sync from state and io checkpoints if either:
+	//
+	// - Checkpoint sync has been forced because there is insufficient information available to use
+	//   incremental sync.
+	//
+	// - We haven't synced anything yet and checkpoint sync is not disabled.
+	//
+	if (isInitialStartup && !n.checkpointSyncCfg.Disabled) || n.checkpointSyncForced {
 		var (
 			summary *blockSummary
 			attempt int
