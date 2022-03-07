@@ -2,6 +2,8 @@
 package bundle
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -38,13 +40,19 @@ var (
 	initCmd = &cobra.Command{
 		Use:   "init",
 		Short: "create a runtime bundle",
-		Run:   doInit,
+		RunE:  doInit,
+	}
+
+	infoCmd = &cobra.Command{
+		Use:   "info",
+		Short: "inspect a runtime bundle",
+		RunE:  doInfo,
 	}
 
 	logger = logging.GetLogger("cmd/debug/bundle")
 )
 
-func doInit(cmd *cobra.Command, args []string) {
+func doInit(cmd *cobra.Command, args []string) error {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -61,13 +69,13 @@ func doInit(cmd *cobra.Command, args []string) {
 		logger.Error("failed to parse runtime ID",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 	if manifest.Version, err = version.FromString(viper.GetString(CfgRuntimeVersion)); err != nil {
 		logger.Error("failed to parse runtime version",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
 
 	type runtimeFile struct {
@@ -107,7 +115,7 @@ func doInit(cmd *cobra.Command, args []string) {
 			logger.Error("missing runtime asset",
 				"descr", v.descr,
 			)
-			os.Exit(1)
+			return err
 		}
 		var b []byte
 		if b, err = os.ReadFile(v.fn); err != nil {
@@ -115,7 +123,7 @@ func doInit(cmd *cobra.Command, args []string) {
 				"err", err,
 				"descr", v.descr,
 			)
-			os.Exit(1)
+			return err
 		}
 		_ = bnd.Add(v.dst, b)
 	}
@@ -123,18 +131,52 @@ func doInit(cmd *cobra.Command, args []string) {
 	dstFn := viper.GetString(CfgRuntimeBundle)
 	if dstFn == "" {
 		logger.Error("missing runtime bundle name")
-		os.Exit(1)
+		return err
 	}
 	if err = bnd.Write(dstFn); err != nil {
 		logger.Error("failed to write runtime bundle",
 			"err", err,
 		)
-		os.Exit(1)
+		return err
 	}
+
+	return nil
+}
+
+func doInfo(cmd *cobra.Command, args []string) error {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	fn := viper.GetString(CfgRuntimeBundle)
+	bnd, err := bundle.Open(fn)
+	if err != nil {
+		logger.Error("failed to open bundle",
+			"err", err,
+			"file_name", fn,
+		)
+		return err
+	}
+
+	b, err := json.MarshalIndent(bnd.Manifest, "", "  ")
+	if err != nil {
+		logger.Error("failed to reserialize manifest",
+			"err", err,
+		)
+		return err
+	}
+
+	fmt.Println(string(b))
+
+	return nil
 }
 
 // Register registers the bundle sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
+	commonFlags := flag.NewFlagSet("", flag.ContinueOnError)
+	commonFlags.String(CfgRuntimeBundle, "runtime.orc", "path to runtime bundle")
+	_ = viper.BindPFlags(commonFlags)
+
 	initFlags := flag.NewFlagSet("", flag.ContinueOnError)
 	initFlags.String(CfgRuntimeID, "", "runtime ID (Base16-encoded)")
 	initFlags.String(CfgRuntimeName, "", "runtime name (optional)")
@@ -142,11 +184,15 @@ func Register(parentCmd *cobra.Command) {
 	initFlags.String(CfgRuntimeExecutable, "runtime.bin", "path to runtime ELF binary")
 	initFlags.String(CfgRuntimeSGXExecutable, "", "path to runtime SGX binary")
 	initFlags.String(CfgRuntimeSGXSignature, "", "path to runtime SGX signature")
-	initFlags.String(CfgRuntimeBundle, "runtime.orc", "output path to runtime bundle")
-
 	_ = viper.BindPFlags(initFlags)
 	initCmd.Flags().AddFlagSet(initFlags)
 
-	bundleCmd.AddCommand(initCmd)
+	for _, cmd := range []*cobra.Command{
+		initCmd,
+		infoCmd,
+	} {
+		cmd.Flags().AddFlagSet(commonFlags)
+		bundleCmd.AddCommand(cmd)
+	}
 	parentCmd.AddCommand(bundleCmd)
 }
