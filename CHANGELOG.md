@@ -12,6 +12,39 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.0.1 (2022-03-07)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 5.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/worker/common: Don't crash if current descriptor is not ready
+  ([#4534](https://github.com/oasisprotocol/oasis-core/issues/4534))
+
+- go/worker/beacon: Don't submit VRF proofs if registration disabled
+  ([#4536](https://github.com/oasisprotocol/oasis-core/issues/4536))
+
+- go/runtime/host/multi: Release lock before calling into runtime
+  ([#4538](https://github.com/oasisprotocol/oasis-core/issues/4538))
+
+- go/worker/common: Watch for all deployment updates when suspended
+  ([#4541](https://github.com/oasisprotocol/oasis-core/issues/4541))
+
+- go/worker/common: Properly refresh liveness statistics
+  ([#4543](https://github.com/oasisprotocol/oasis-core/issues/4543))
+
+- go/worker/storage: Only attempt checkpoint sync on initial startup
+  ([#4544](https://github.com/oasisprotocol/oasis-core/issues/4544))
+
+### Internal Changes
+
+- go/runtime/bundle: Verify SGX signature if present
+  ([#4542](https://github.com/oasisprotocol/oasis-core/issues/4542))
+
 ## 22.0 (2022-03-01)
 
 | Protocol          | Version   |
