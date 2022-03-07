@@ -592,6 +592,11 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 // Transactions that pass the check are queued for scheduling.
 func (n *Node) checkTxBatch() {
 	batch := n.checkTxQueue.GetBatch()
+
+	n.logger.Debug("checking a new batch of transactions",
+		"batch_size", len(batch),
+	)
+
 	if len(batch) == 0 {
 		return
 	}
@@ -624,6 +629,10 @@ func (n *Node) checkTxBatch() {
 		return
 	}
 
+	n.logger.Debug("checked transaction batch",
+		"results_size", len(results),
+	)
+
 	txs := make([]*transaction.CheckedTransaction, 0, len(results))
 	for i, res := range results {
 		if !res.IsSuccess() {
@@ -636,6 +645,10 @@ func (n *Node) checkTxBatch() {
 
 	// Remove the checked transaction batch.
 	n.checkTxQueue.RemoveBatch(batch)
+
+	n.logger.Debug("queuing checked transaction batch for scheduling",
+		"batch_size", len(txs),
+	)
 
 	// Queue checked transactions for scheduling.
 	n.queueTxBatch(txs)
