@@ -88,8 +88,6 @@ steps:
       - .buildkite/scripts/daily_txsource.sh --e2e/runtime.epoch.interval=${epochtime_inverval}
     env:
       TEST_BASE_DIR: /var/tmp/longtests
-      # libp2p logging.
-      IPFS_LOGGING: debug
     agents:
       daily: true
     # NOTE: we actually don't want to retry, but this is the only way that we

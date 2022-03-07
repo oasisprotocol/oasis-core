@@ -8,17 +8,14 @@ package logging
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
-	goLog "log"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	ipfsLog "github.com/ipfs/go-log/v2"
 	"github.com/spf13/pflag"
-
-	goLogging "github.com/whyrusleeping/go-logging"
 )
 
 var (
@@ -262,13 +259,15 @@ func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[str
 	backend.earlyLoggers = nil
 
 	// libp2p/IPFS uses yet another logging library, that appears to be a
-	// wrapper around go-logging.  Because it's quality IPFS code, it's
-	// configured via env vars, from the package `init()`.
-	//
-	// Till we can write a nice wrapper around it, to make it do what we
-	// want, reach into the underlying library and squelch it.
-	goLogging.Reset()
-	_ = goLogging.SetBackend(goLogging.NewLogBackend(ioutil.Discard, "libp2p", goLog.LstdFlags))
+	// wrapper around zap.
+	ipfsLogger := newZapCore(logger, "libp2p", 7)
+	backend.setupLogLevelLocked(ipfsLogger.logger)
+
+	// Update the ipfs core logger.
+	ipfsLog.SetPrimaryCore(ipfsLogger)
+	// Enable all logs on the ipfs logger.
+	// zapCore will filter logs based on the configured logging level of the oasis node.
+	ipfsLog.SetDebugLogging()
 
 	return nil
 }
