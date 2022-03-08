@@ -69,6 +69,9 @@ type Runtime interface {
 	// ID is the runtime identifier.
 	ID() common.Namespace
 
+	// Mode returns the configured behavior of runtime workers on this node.
+	Mode() RuntimeMode
+
 	// RegistryDescriptor waits for the runtime to be registered and
 	// then returns its registry descriptor.
 	RegistryDescriptor(ctx context.Context) (*registry.Runtime, error)
@@ -115,6 +118,7 @@ type runtime struct { // nolint: maligned
 	sync.RWMutex
 
 	id                   common.Namespace
+	mode                 RuntimeMode
 	registryDescriptor   *registry.Runtime
 	activeDescriptor     *registry.Runtime
 	activeDescriptorHash hash.Hash
@@ -141,6 +145,10 @@ type runtime struct { // nolint: maligned
 
 func (r *runtime) ID() common.Namespace {
 	return r.id
+}
+
+func (r *runtime) Mode() RuntimeMode {
+	return r.mode
 }
 
 func (r *runtime) RegistryDescriptor(ctx context.Context) (*registry.Runtime, error) {
@@ -546,6 +554,7 @@ func newRuntime(
 
 	rt := &runtime{
 		id:                         id,
+		mode:                       cfg.Mode,
 		consensus:                  consensus,
 		cancelCtx:                  cancel,
 		registryDescriptorCh:       make(chan struct{}),

@@ -7,7 +7,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
@@ -99,5 +98,6 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signatur
 
 // HandlePeerTx implements NodeHooks.
 func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
-	return n.commonNode.TxPool.SubmitTxNoWait(ctx, tx, &txpool.TransactionMeta{Local: false})
+	// Nothing to do here.
+	return nil
 }
