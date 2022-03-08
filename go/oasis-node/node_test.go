@@ -46,6 +46,7 @@ import (
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 	storageTests "github.com/oasisprotocol/oasis-core/go/storage/tests"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	executorCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 	executorWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/tests"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage"
@@ -118,7 +119,9 @@ var (
 type testNode struct {
 	*node.Node
 
-	runtimeID             common.Namespace
+	runtimeID common.Namespace
+
+	commonCommitteeNode   *commonCommittee.Node
 	executorCommitteeNode *executorCommittee.Node
 
 	entity       *entity.Entity
@@ -295,10 +298,11 @@ func testRegisterEntityRuntime(t *testing.T, node *testNode) {
 	err = consensusAPI.SignAndSubmitTx(context.Background(), node.Consensus, testEntitySigner, tx)
 	require.NoError(err, "register test entity")
 
-	// Get the runtime and the corresponding executor committee node instance.
-	executorRT := node.ExecutorWorker.GetRuntime(testRuntime.ID)
-	require.NotNil(t, executorRT)
-	node.executorCommitteeNode = executorRT
+	// Get the runtime and the corresponding committee node instances.
+	node.executorCommitteeNode = node.ExecutorWorker.GetRuntime(testRuntime.ID)
+	node.commonCommitteeNode = node.CommonWorker.GetRuntime(testRuntime.ID)
+	require.NotNil(t, node.executorCommitteeNode)
+	require.NotNil(t, node.commonCommitteeNode)
 }
 
 func testConsensus(t *testing.T, node *testNode) {
@@ -417,6 +421,7 @@ func testExecutorWorker(t *testing.T, node *testNode) {
 		t,
 		node.ExecutorWorker,
 		node.runtimeID,
+		node.commonCommitteeNode,
 		node.executorCommitteeNode,
 		timeSource,
 		node.Consensus.RootHash(),
