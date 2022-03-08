@@ -36,6 +36,7 @@ require (
 	github.com/hashicorp/go-plugin v1.4.3
 	github.com/hpcloud/tail v1.0.0
 	github.com/ianbruene/go-difflib v1.2.0
+	github.com/ipfs/go-log/v2 v2.5.0
 	github.com/libp2p/go-libp2p v0.18.0-rc4
 	github.com/libp2p/go-libp2p-core v0.14.0
 	github.com/libp2p/go-libp2p-pubsub v0.6.1
@@ -55,7 +56,8 @@ require (
 	github.com/tendermint/tm-db v0.6.6
 	github.com/thepudds/fzgo v0.2.2
 	github.com/tyler-smith/go-bip39 v1.1.0
-	github.com/whyrusleeping/go-logging v0.0.1
+	go.uber.org/multierr v1.7.0
+	go.uber.org/zap v1.19.1
 	golang.org/x/crypto v0.0.0-20210915214749-c084706c2272
 	golang.org/x/net v0.0.0-20211005001312-d4b1ae081e3b
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa
@@ -114,7 +116,6 @@ require (
 	github.com/ipfs/go-datastore v0.5.0 // indirect
 	github.com/ipfs/go-ipfs-util v0.0.2 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
-	github.com/ipfs/go-log/v2 v2.5.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
@@ -213,8 +214,6 @@ require (
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/multierr v1.7.0 // indirect
-	go.uber.org/zap v1.19.1 // indirect
 	golang.org/x/mod v0.5.0 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect

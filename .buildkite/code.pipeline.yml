@@ -227,8 +227,6 @@ steps:
       # runs only on non-SGX agents.
       OASIS_EXCLUDE_E2E: e2e/runtime/trust-root,e2e/runtime/txsource-multi-short
       TEST_BASE_DIR: /tmp
-      # libp2p logging.
-      IPFS_LOGGING: debug
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -251,8 +249,6 @@ steps:
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
-      # libp2p logging.
-      IPFS_LOGGING: debug
     agents:
       buildkite_agent_class: ephemeral # XXX: Use a dedicated tag instead.
     retry:
@@ -287,8 +283,6 @@ steps:
       OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
-      # libp2p logging.
-      IPFS_LOGGING: debug
     agents:
       queue: intel-sgx
     retry:
@@ -320,8 +314,6 @@ steps:
       OASIS_E2E_COVERAGE: enable
       OASIS_EXCLUDE_E2E: e2e/runtime/txsource-multi,e2e/runtime/txsource-multi-short
       TEST_BASE_DIR: /tmp
-      # libp2p logging.
-      IPFS_LOGGING: debug
     agents:
       queue: intel-sgx
     retry:
@@ -347,8 +339,6 @@ steps:
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
-      # libp2p logging.
-      IPFS_LOGGING: debug
     agents:
       queue: intel-sgx
     retry:
