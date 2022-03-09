@@ -384,6 +384,9 @@ type RuntimeLookup interface {
 
 	// AllRuntimes returns a list of all runtimes (including suspended ones).
 	AllRuntimes(ctx context.Context) ([]*Runtime, error)
+
+	// Runtimes returns active runtimes (not including suspended ones).
+	Runtimes(ctx context.Context) ([]*Runtime, error)
 }
 
 // VerifyRegisterEntityArgs verifies arguments for RegisterEntity.
