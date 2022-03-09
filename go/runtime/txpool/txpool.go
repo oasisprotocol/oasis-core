@@ -237,7 +237,7 @@ func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 	txHash := hash.NewFromBytes(rawTx)
 	if _, seen := t.seenCache.Peek(txHash); seen && !meta.Recheck {
 		t.logger.Debug("ignoring already seen transaction", "tx", rawTx)
-		return nil
+		return fmt.Errorf("duplicate transaction")
 	}
 
 	tx := &pendingTx{

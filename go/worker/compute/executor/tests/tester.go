@@ -15,7 +15,9 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 )
@@ -31,6 +33,7 @@ func WorkerImplementationTests(
 	t *testing.T,
 	worker *executor.Worker,
 	runtimeID common.Namespace,
+	commonNode *commonCommittee.Node,
 	rtNode *committee.Node,
 	beacon beacon.SetableBackend,
 	roothash roothash.Backend,
@@ -49,7 +52,7 @@ func WorkerImplementationTests(
 	})
 
 	t.Run("QueueTx", func(t *testing.T) {
-		testQueueTx(t, runtimeID, stateCh, rtNode, roothash, storage)
+		testQueueTx(t, runtimeID, stateCh, commonNode, rtNode, roothash, storage)
 	})
 
 	// TODO: Add more tests.
@@ -82,6 +85,7 @@ func testQueueTx(
 	t *testing.T,
 	runtimeID common.Namespace,
 	stateCh <-chan committee.NodeState,
+	commonNode *commonCommittee.Node,
 	rtNode *committee.Node,
 	roothash roothash.Backend,
 	st storage.Backend,
@@ -102,8 +106,9 @@ func testQueueTx(
 	// Include a timestamp so each test invocation uses a unique transaction.
 	testTx := []byte("hello world at: " + time.Now().String())
 	// Submit a test transaction.
-	err = rtNode.HandlePeerTx(ctx, testTx)
-	require.NoError(t, err, "tx message should be handled")
+	result, err := commonNode.TxPool.SubmitTx(ctx, testTx, &txpool.TransactionMeta{Local: false})
+	require.NoError(t, err, "transaction should be accepted")
+	require.True(t, result.IsSuccess(), "transaction should pass checks")
 
 	// Node should transition to ProcessingBatch state.
 	waitForNodeTransition(t, stateCh, committee.ProcessingBatch)
@@ -155,8 +160,8 @@ blockLoop:
 	}
 
 	// Submitting the same transaction should not result in a new block.
-	err = rtNode.HandlePeerTx(ctx, testTx)
-	require.NoError(t, err, "tx message should be handled")
+	_, err = commonNode.TxPool.SubmitTx(ctx, testTx, &txpool.TransactionMeta{Local: false})
+	require.Error(t, err, "duplicate transaction should be rejected")
 
 blockLoop2:
 	for {
