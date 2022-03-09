@@ -61,11 +61,11 @@ func (g *Genesis) SanityCheck(
 		}
 		entities = append(entities, ent)
 	}
-	runtimes, err := runtimesLookup.AllRuntimes(context.Background())
+	allRuntimes, err := runtimesLookup.AllRuntimes(context.Background())
 	if err != nil {
 		return fmt.Errorf("registry: sanity check failed: could not obtain all runtimes from runtimesLookup: %w", err)
 	}
-	for _, rt := range runtimes {
+	for _, rt := range allRuntimes {
 		if publicKeyBlacklist[rt.EntityID] {
 			return fmt.Errorf("registry: sanity check failed: runtime '%s' owned by blacklisted entity: '%s'", rt.ID, rt.EntityID)
 		}
@@ -80,6 +80,11 @@ func (g *Genesis) SanityCheck(
 		nodes, err := nodeLookup.Nodes(context.Background())
 		if err != nil {
 			return fmt.Errorf("registry: sanity check failed: could not obtain node list from nodeLookup: %w", err)
+		}
+		// Skip suspended runtimes for computing stake claims.
+		runtimes, err := runtimesLookup.Runtimes(context.Background())
+		if err != nil {
+			return fmt.Errorf("registry: sanity check failed: could not obtain runtimes from runtimesLookup: %w", err)
 		}
 		// Check stake.
 		return SanityCheckStake(entities, stakeLedger, nodes, runtimes, stakeThresholds, true)
@@ -435,6 +440,14 @@ func (r *sanityCheckRuntimeLookup) AnyRuntime(ctx context.Context, id common.Nam
 
 func (r *sanityCheckRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime, error) {
 	return r.allRuntimes, nil
+}
+
+func (r *sanityCheckRuntimeLookup) Runtimes(ctx context.Context) ([]*Runtime, error) {
+	runtimes := make([]*Runtime, 0, len(r.runtimes))
+	for _, r := range r.runtimes {
+		runtimes = append(runtimes, r)
+	}
+	return runtimes, nil
 }
 
 // Node lookup used in sanity checks.

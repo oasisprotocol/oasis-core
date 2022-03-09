@@ -36,6 +36,10 @@ func (rl *mockRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime, error
 	panic("not implemented")
 }
 
+func (rl *mockRuntimeLookup) Runtimes(ctx context.Context) ([]*Runtime, error) {
+	panic("not implemented")
+}
+
 func TestVerifyNodeUpdate(t *testing.T) {
 	logger := logging.GetLogger("registry/api/tests")
 

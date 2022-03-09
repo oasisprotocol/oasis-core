@@ -172,6 +172,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		ID:        validPK,
 	}
 	signedTestEntity := signEntityOrDie(signer, testEntity)
+	testEntityAddress := staking.NewAddress(validPK)
 
 	kmRuntimeID := hex2ns("4000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff", false)
 	testKMRuntime := &registry.Runtime{
@@ -907,4 +908,37 @@ func TestGenesisSanityCheck(t *testing.T) {
 		ID:    3,
 	})
 	require.Error(d.SanityCheck(), "pending upgrades not UpgradeMinEpochDiff apart")
+
+	// Sanity check entity stake claims.
+	d = testDoc()
+	// Enable stake claims check.
+	d.Registry.Parameters.DebugBypassStake = false
+	// Setup registry state.
+	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
+	d.Registry.Runtimes = []*registry.Runtime{testKMRuntime, testRuntime}
+	// Setup ledger.
+	d.Staking.Ledger[testEntityAddress] = &staking.Account{
+		Escrow: staking.EscrowAccount{
+			Active: staking.SharePool{
+				Balance:     *quantity.NewFromUint64(100),
+				TotalShares: *quantity.NewFromUint64(100),
+			},
+		},
+	}
+	d.Staking.Delegations[testEntityAddress] = map[staking.Address]*staking.Delegation{
+		testEntityAddress: {
+			Shares: *quantity.NewFromUint64(100),
+		},
+	}
+	require.NoError(d.Staking.TotalSupply.Add(quantity.NewFromUint64(100)), "TotalSupply.Add")
+	require.NoError(d.SanityCheck(), "sanity check for entity should pass")
+
+	// Increase runtime stake thresholds.
+	d.Staking.Parameters.Thresholds[staking.KindRuntimeCompute] = *quantity.NewFromUint64(10_000_000)
+	require.Error(d.SanityCheck(), "sanity check for entity should fail")
+
+	// Suspend the runtimes.
+	d.Registry.Runtimes = []*registry.Runtime{}
+	d.Registry.SuspendedRuntimes = []*registry.Runtime{testKMRuntime, testRuntime}
+	require.NoError(d.SanityCheck(), "sanity check for entity should pass")
 }
