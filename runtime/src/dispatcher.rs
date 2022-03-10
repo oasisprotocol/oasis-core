@@ -519,7 +519,7 @@ impl Dispatcher {
         let mut overlay = OverlayTree::new(cache.tree_mut());
 
         let txn_ctx = TxnContext::new(
-            ctx,
+            ctx.clone(),
             protocol,
             consensus_state,
             &mut overlay,
@@ -530,6 +530,10 @@ impl Dispatcher {
             state.check_only,
         );
         let results = txn_dispatcher.check_batch(txn_ctx, &inputs);
+
+        // Commit results to in-memory tree so they persist for subsequent batches that are based on
+        // the same block.
+        let _ = overlay.commit(Context::create_child(&ctx)).unwrap();
 
         debug!(self.logger, "Transaction batch check complete");
 
