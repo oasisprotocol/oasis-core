@@ -75,6 +75,7 @@ func (val *Validator) ExternalGRPCAddress() string {
 
 func (val *Validator) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
+		debugAllowRoot().
 		debugAllowTestKeys().
 		debugSetRlimit().
 		debugEnableProfiling(val.Node.pprofPort).

@@ -35,6 +35,7 @@ func (seed *Seed) AddArgs(args *argBuilder) error {
 	}
 
 	args.debugDontBlameOasis().
+		debugAllowRoot().
 		debugAllowTestKeys().
 		debugSetRlimit().
 		workerCertificateRotation(true).

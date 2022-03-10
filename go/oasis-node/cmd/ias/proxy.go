@@ -269,5 +269,6 @@ func init() {
 	proxyFlags.AddFlagSet(cmdGrpc.ClientFlags)
 	proxyFlags.AddFlagSet(flags.GenesisFileFlags)
 	proxyFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
+	proxyFlags.AddFlagSet(flags.DebugAllowRootFlag)
 	proxyFlags.AddFlagSet(pprof.Flags)
 }

@@ -151,6 +151,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 	defer worker.RUnlock()
 
 	args.debugDontBlameOasis().
+		debugAllowRoot().
 		debugAllowTestKeys().
 		debugSetRlimit().
 		debugEnableProfiling(worker.Node.pprofPort).

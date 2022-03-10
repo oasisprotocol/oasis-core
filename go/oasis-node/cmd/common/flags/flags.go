@@ -14,6 +14,9 @@ const (
 	// CfgDebugTestEntity is the command line flag to enable the debug test
 	// entity.
 	CfgDebugTestEntity = "debug.test_entity"
+	// CfgDebugAllowRoot is the command line flag to enable running the node
+	// as root.
+	CfgDebugAllowRoot = "debug.allow_root"
 	// CfgGenesisFile is the flag used to specify a genesis file.
 	CfgGenesisFile = "genesis.file"
 	// CfgConsensusValidator is the flag used to opt-in to being a validator.
@@ -38,6 +41,8 @@ var (
 	ForceFlags = flag.NewFlagSet("", flag.ContinueOnError)
 	// DebugTestEntityFlags has the test entity enable flag.
 	DebugTestEntityFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	// DebugAllowRootFlag has the root enable flag.
+	DebugAllowRootFlag = flag.NewFlagSet("", flag.ContinueOnError)
 
 	// GenesisFileFlags has the genesis file flag.
 	GenesisFileFlags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -75,6 +80,11 @@ func DebugTestEntity() bool {
 	return DebugDontBlameOasis() && viper.GetBool(CfgDebugTestEntity)
 }
 
+// DebugAllowRoot returns true iff the root account enable flag is set.
+func DebugAllowRoot() bool {
+	return DebugDontBlameOasis() && viper.GetBool(CfgDebugAllowRoot)
+}
+
 // GenesisFile returns the set genesis file.
 func GenesisFile() string {
 	return viper.GetString(CfgGenesisFile)
@@ -107,8 +117,11 @@ func init() {
 
 	GenesisFileFlags.StringP(CfgGenesisFile, "g", "genesis.json", "path to genesis file")
 
-	DebugDontBlameOasisFlag.Bool(CfgDebugDontBlameOasis, false, "Enable debug/unsafe/insecure options")
+	DebugDontBlameOasisFlag.Bool(CfgDebugDontBlameOasis, false, "enable debug/unsafe/insecure options")
 	_ = DebugDontBlameOasisFlag.MarkHidden(CfgDebugDontBlameOasis)
+
+	DebugAllowRootFlag.Bool(CfgDebugAllowRoot, false, "allow running as root account")
+	_ = DebugAllowRootFlag.MarkHidden(CfgDebugAllowRoot)
 
 	DryRunFlag.BoolP(CfgDryRun, "n", false, "don't actually do anything, just show what will be done")
 
@@ -118,6 +131,7 @@ func init() {
 		VerboseFlags,
 		ForceFlags,
 		DebugTestEntityFlags,
+		DebugAllowRootFlag,
 		GenesisFileFlags,
 		ConsensusValidatorFlag,
 		DebugDontBlameOasisFlag,

@@ -113,6 +113,13 @@ func (args *argBuilder) debugDontBlameOasis() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) debugAllowRoot() *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name: flags.CfgDebugAllowRoot,
+	})
+	return args
+}
+
 func (args *argBuilder) debugAllowTestKeys() *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name: cmdCommon.CfgDebugAllowTestKeys,
