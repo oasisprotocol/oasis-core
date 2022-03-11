@@ -167,6 +167,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 		storageBackend(worker.storageBackend).
 		workerStoragePublicRPCEnabled(!worker.disablePublicRPC).
 		workerStorageDebugDisableCheckpointSync(worker.checkpointSyncDisabled).
+		workerStorageCheckpointerEnabled(true).
 		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
 		configureDebugCrashPoints(worker.crashPointsProbability).
 		tendermintSupplementarySanity(worker.supplementarySanityInterval).

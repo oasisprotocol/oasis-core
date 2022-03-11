@@ -81,7 +81,7 @@ func New(
 	}
 
 	var checkpointerCfg *checkpoint.CheckpointerConfig
-	if !viper.GetBool(CfgWorkerCheckpointerDisabled) {
+	if viper.GetBool(CfgWorkerCheckpointerEnabled) {
 		checkpointerCfg = &checkpoint.CheckpointerConfig{
 			CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
 		}

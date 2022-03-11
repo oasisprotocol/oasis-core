@@ -25,8 +25,8 @@ const (
 	// storage committee members.
 	CfgWorkerPublicRPCEnabled = "worker.storage.public_rpc.enabled"
 
-	// CfgWorkerCheckpointerDisabled disables the storage checkpointer.
-	CfgWorkerCheckpointerDisabled = "worker.storage.checkpointer.disabled"
+	// CfgWorkerCheckpointerEnabled enables the storage checkpointer.
+	CfgWorkerCheckpointerEnabled = "worker.storage.checkpointer.enabled"
 	// CfgWorkerCheckpointCheckInterval configures the checkpointer check interval.
 	CfgWorkerCheckpointCheckInterval = "worker.storage.checkpointer.check_interval"
 
@@ -89,7 +89,7 @@ func NewLocalBackend(
 func init() {
 	Flags.Uint(cfgWorkerFetcherCount, 4, "Number of concurrent storage diff fetchers")
 	Flags.Bool(CfgWorkerPublicRPCEnabled, false, "Enable storage RPC access for all nodes")
-	Flags.Bool(CfgWorkerCheckpointerDisabled, false, "Disable the storage checkpointer")
+	Flags.Bool(CfgWorkerCheckpointerEnabled, false, "Enable the storage checkpointer")
 	Flags.Duration(CfgWorkerCheckpointCheckInterval, 1*time.Minute, "Storage checkpointer check interval")
 	Flags.Bool(CfgWorkerCheckpointSyncDisabled, false, "Disable initial storage sync from checkpoints")
 
