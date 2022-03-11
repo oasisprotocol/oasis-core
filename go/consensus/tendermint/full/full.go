@@ -40,6 +40,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/random"
 	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -1387,7 +1388,7 @@ func (t *fullService) lazyInit() error {
 				// when all the other services start shutting down.
 				//
 				// Randomize the period so that not all nodes shut down at the same time.
-				delay := getRandomValueFromInterval(0.5, rand.Float64(), viper.GetDuration(CfgUpgradeStopDelay))
+				delay := random.GetRandomValueFromInterval(0.5, rand.Float64(), viper.GetDuration(CfgUpgradeStopDelay))
 				time.Sleep(delay)
 
 				t.Logger.Info("stopping the node for upgrade")
