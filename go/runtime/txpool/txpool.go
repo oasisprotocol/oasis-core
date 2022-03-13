@@ -2,6 +2,7 @@ package txpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -27,6 +28,8 @@ const (
 	checkTxTimeout = 15 * time.Second
 	// checkTxRetryDelay is the time to wait before queuing a check tx retry.
 	checkTxRetryDelay = 1 * time.Second
+	// abortTimeout is the maximum time the runtime can spend aborting.
+	abortTimeout = 5 * time.Second
 )
 
 // Config is the transaction pool configuration.
@@ -484,7 +487,24 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		rawTxBatch = append(rawTxBatch, item.Tx)
 	}
 	results, err := rr.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
-	if err != nil {
+	switch {
+	case err == nil:
+	case errors.Is(err, context.Canceled):
+		// Context was canceled while the runtime was processing a request.
+		t.logger.Error("transaction batch check aborted by context, aborting runtime")
+
+		// Abort the runtime, so we can start processing the next batch.
+		abortCtx, cancel := context.WithTimeout(ctx, abortTimeout)
+		defer cancel()
+
+		if err = rr.Abort(abortCtx, false); err != nil {
+			t.logger.Error("failed to abort the runtime",
+				"err", err,
+			)
+		}
+
+		fallthrough
+	default:
 		t.logger.Warn("transaction batch check failed",
 			"err", err,
 		)
