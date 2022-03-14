@@ -139,10 +139,7 @@ func (s *service) GetLastRetainedBlock(ctx context.Context, runtimeID common.Nam
 	// we don't actually have state available. This may be because there is only a later checkpoint
 	// available.
 	if lsb, ok := rt.Storage().(storage.LocalBackend); ok {
-		version, err := lsb.NodeDB().GetEarliestVersion(ctx)
-		if err != nil {
-			return nil, err
-		}
+		version := lsb.NodeDB().GetEarliestVersion()
 
 		if version > blk.Header.Round {
 			blk, err = rt.History().GetBlock(ctx, version)

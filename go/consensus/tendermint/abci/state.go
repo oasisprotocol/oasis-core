@@ -498,10 +498,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 	}()
 
 	// Figure out the latest version/hash if any, and use that as the block height/hash.
-	latestVersion, err := ndb.GetLatestVersion(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	latestVersion, _ := ndb.GetLatestVersion()
 	roots, err := ndb.GetRootsForVersion(ctx, latestVersion)
 	if err != nil {
 		return nil, nil, nil, err

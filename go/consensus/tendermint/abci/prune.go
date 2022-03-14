@@ -122,11 +122,7 @@ type genericPruner struct {
 
 func (p *genericPruner) Initialize() error {
 	// Figure out the eldest version currently present in the tree.
-	var err error
-	if p.earliestVersion, err = p.ndb.GetEarliestVersion(context.Background()); err != nil {
-		return fmt.Errorf("failed to get earliest version: %w", err)
-	}
-
+	p.earliestVersion = p.ndb.GetEarliestVersion()
 	// Initially, the earliest version is the last retained version.
 	p.lastRetainedVersion = p.earliestVersion
 
