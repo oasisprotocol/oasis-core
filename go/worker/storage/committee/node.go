@@ -13,7 +13,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -112,11 +111,6 @@ type finalizeResult struct {
 	err     error
 }
 
-// watcherState is the (persistent) watcher state.
-type watcherState struct {
-	LastBlock blockSummary `json:"last_block"`
-}
-
 type roundWaiter struct {
 	round uint64
 	ch    chan uint64
@@ -140,8 +134,6 @@ type Node struct { // nolint: maligned
 
 	fetchPool *workerpool.Pool
 
-	stateStore *persistent.ServiceStore
-
 	workerCommonCfg workerCommon.Config
 
 	checkpointer         checkpoint.Checkpointer
@@ -149,7 +141,7 @@ type Node struct { // nolint: maligned
 	checkpointSyncForced bool
 
 	syncedLock   sync.RWMutex
-	syncedState  watcherState
+	syncedState  blockSummary
 	roundWaiters []roundWaiter
 
 	blockCh    *channels.InfiniteChannel
@@ -168,7 +160,6 @@ type Node struct { // nolint: maligned
 func NewNode(
 	commonNode *committee.Node,
 	fetchPool *workerpool.Pool,
-	store *persistent.ServiceStore,
 	roleProvider registration.RoleProvider,
 	rpcRoleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
@@ -192,8 +183,6 @@ func NewNode(
 
 		fetchPool: fetchPool,
 
-		stateStore: store,
-
 		checkpointSyncCfg: checkpointSyncCfg,
 
 		blockCh:    channels.NewInfiniteChannel(),
@@ -210,12 +199,8 @@ func NewNode(
 		return nil, fmt.Errorf("bad checkpoint sync configuration: %w", err)
 	}
 
-	n.syncedState.LastBlock.Round = defaultUndefinedRound
-	rtID := commonNode.Runtime.ID()
-	err := store.GetCBOR(rtID[:], &n.syncedState)
-	if err != nil && err != persistent.ErrNotFound {
-		return nil, fmt.Errorf("storage worker: failed to restore sync state: %w", err)
-	}
+	// Initialize sync state.
+	n.syncedState.Round = defaultUndefinedRound
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 
@@ -256,6 +241,7 @@ func NewNode(
 				return blk.Header.StorageRoots(), nil
 			},
 		}
+		var err error
 		n.checkpointer, err = checkpoint.NewCheckpointer(
 			n.ctx,
 			localStorage.NodeDB(),
@@ -263,7 +249,7 @@ func NewNode(
 			*checkpointerCfg,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("storage worker: failed to create checkpointer: %w", err)
+			return nil, fmt.Errorf("failed to create checkpointer: %w", err)
 		}
 	}
 
@@ -328,7 +314,7 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	defer n.syncedLock.RUnlock()
 
 	return &api.Status{
-		LastFinalizedRound: n.syncedState.LastBlock.Round,
+		LastFinalizedRound: n.syncedState.Round,
 	}, nil
 }
 
@@ -353,8 +339,8 @@ func (n *Node) WaitForRound(round uint64, root *storageApi.Root) (<-chan uint64,
 	n.syncedLock.Lock()
 	defer n.syncedLock.Unlock()
 
-	if round <= n.syncedState.LastBlock.Round || (root != nil && n.localStorage.NodeDB().HasRoot(*root)) {
-		retCh <- n.syncedState.LastBlock.Round
+	if round <= n.syncedState.Round || (root != nil && n.localStorage.NodeDB().HasRoot(*root)) {
+		retCh <- n.syncedState.Round
 		close(retCh)
 		return retCh, nil
 	}
@@ -419,7 +405,7 @@ func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 	defer n.syncedLock.RUnlock()
 
 	var io, state storageApi.Root
-	for _, root := range n.syncedState.LastBlock.Roots {
+	for _, root := range n.syncedState.Roots {
 		switch root.Type {
 		case storageApi.RootTypeIO:
 			io = root
@@ -428,7 +414,7 @@ func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 		}
 	}
 
-	return n.syncedState.LastBlock.Round, io, state
+	return n.syncedState.Round, io, state
 }
 
 func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
@@ -505,10 +491,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 
 	// Check what the latest finalized version in the database is as we may be using a database
 	// from a previous version or network.
-	latestVersion, err := n.localStorage.NodeDB().GetLatestVersion(n.ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get latest version: %w", err)
-	}
+	latestVersion, _ := n.localStorage.NodeDB().GetLatestVersion()
 
 	stateRoot := storageApi.Root{
 		Namespace: rt.ID,
@@ -532,7 +515,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 				"latest_version", latestVersion,
 			)
 			for v := latestVersion; v < stateRoot.Version; v++ {
-				err = n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
+				err := n.localStorage.Apply(n.ctx, &storageApi.ApplyRequest{
 					Namespace: rt.ID,
 					RootType:  storageApi.RootTypeState,
 					SrcRound:  v,
@@ -589,17 +572,13 @@ func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
 	n.syncedLock.Lock()
 	defer n.syncedLock.Unlock()
 
-	n.syncedState.LastBlock = *summary
-	rtID := n.commonNode.Runtime.ID()
-	if err := n.stateStore.PutCBOR(rtID[:], &n.syncedState); err != nil {
-		n.logger.Error("can't store watcher state to database", "err", err)
-	}
+	n.syncedState = *summary
 
 	// Wake up any round waiters.
 	filtered := make([]roundWaiter, 0, len(n.roundWaiters))
 	for _, w := range n.roundWaiters {
-		if w.round <= n.syncedState.LastBlock.Round {
-			w.ch <- n.syncedState.LastBlock.Round
+		if w.round <= n.syncedState.Round {
+			w.ch <- n.syncedState.Round
 			close(w.ch)
 		} else {
 			filtered = append(filtered, w)
@@ -607,7 +586,7 @@ func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
 	}
 	n.roundWaiters = filtered
 
-	return n.syncedState.LastBlock.Round
+	return n.syncedState.Round
 }
 
 func (n *Node) watchQuit() {
@@ -727,7 +706,7 @@ func (n *Node) consensusCheckpointSyncer() {
 				// We may have not yet synced the corresponding runtime round locally. In this case
 				// we need to wait until this is the case.
 				n.syncedLock.RLock()
-				lastSyncedRound := n.syncedState.LastBlock.Round
+				lastSyncedRound := n.syncedState.Round
 				n.syncedLock.RUnlock()
 				if blk.Header.Round > lastSyncedRound {
 					n.logger.Debug("runtime round not available yet for checkpoint, waiting",
@@ -791,6 +770,7 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	n.logger.Info("starting committee node")
 
+	// Determine genesis block.
 	genesisBlock, err := n.commonNode.Consensus.RootHash().GetGenesisBlock(n.ctx, &roothashApi.RuntimeRequest{
 		RuntimeID: n.commonNode.Runtime.ID(),
 		Height:    consensus.HeightLatest,
@@ -801,17 +781,36 @@ func (n *Node) worker() { // nolint: gocyclo
 	}
 	n.undefinedRound = genesisBlock.Header.Round - 1
 
+	// Determine last finalized storage version.
+	if version, dbNonEmpty := n.localStorage.NodeDB().GetLatestVersion(); dbNonEmpty {
+		var blk *block.Block
+		blk, err = n.commonNode.Runtime.History().GetBlock(n.ctx, version)
+		switch err {
+		case nil:
+			// Set last synced version to last finalized storage version.
+			n.flushSyncedState(summaryFromBlock(blk))
+		default:
+			// Failed to fetch historic block. This is fine when the network just went through a
+			// dump/restore upgrade and we don't have any information before genesis. We treat the
+			// database as unsynced and will proceed to either use checkpoints or sync iteratively.
+			n.logger.Warn("failed to fetch historic block",
+				"err", err,
+				"round", version,
+			)
+		}
+	}
+
 	var fetcherGroup sync.WaitGroup
 
 	n.syncedLock.RLock()
-	cachedLastRound := n.syncedState.LastBlock.Round
+	cachedLastRound := n.syncedState.Round
 	n.syncedLock.RUnlock()
 	if cachedLastRound == defaultUndefinedRound || cachedLastRound < genesisBlock.Header.Round {
 		cachedLastRound = n.undefinedRound
 	}
-	isInitialStartup := (cachedLastRound == n.undefinedRound)
 
 	// Initialize genesis from the runtime descriptor.
+	isInitialStartup := (cachedLastRound == n.undefinedRound)
 	if isInitialStartup {
 		var rt *registryApi.Runtime
 		rt, err = n.commonNode.Runtime.ActiveDescriptor(n.ctx)
