@@ -140,6 +140,9 @@ type ConsensusFixture struct { // nolint: maligned
 
 	// SupplementarySanityInterval configures the sanity check application.
 	SupplementarySanityInterval uint64 `json:"supplementary_sanity_interval,omitempty"`
+
+	// EnableArchiveMode enables the archive node mode.
+	EnableArchiveMode bool `json:"enable_archive_mode,omitempty"`
 }
 
 // NodeFixture is a common subset of settings for node-backed fixtures.

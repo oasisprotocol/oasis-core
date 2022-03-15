@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
@@ -251,7 +252,7 @@ func (args *argBuilder) tendermintDisablePeerExchange() *argBuilder {
 func (args *argBuilder) tendermintSeedMode() *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   tendermint.CfgMode,
-		Values: []string{tendermint.ModeSeed},
+		Values: []string{consensusAPI.ModeSeed.String()},
 	})
 	return args
 }

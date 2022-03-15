@@ -206,7 +206,7 @@ type Backend interface {
 
 	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
-	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription)
+	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error)
 
 	// GetLastRetainedVersion returns the earliest retained version the ABCI
 	// state.

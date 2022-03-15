@@ -134,6 +134,7 @@ func (srv *seedService) GetStatus(ctx context.Context) (*consensus.Status, error
 		Status:   consensus.StatusStateReady,
 		Version:  version.ConsensusProtocol,
 		Backend:  api.BackendName,
+		Mode:     consensus.ModeSeed,
 		Features: srv.SupportedFeatures(),
 	}
 
