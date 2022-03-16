@@ -88,10 +88,12 @@ type NodeDB interface {
 	GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error)
 
 	// GetLatestVersion returns the most recent version in the node database.
-	GetLatestVersion(ctx context.Context) (uint64, error)
+	//
+	// The boolean flag signifies whether any version exists to disambiguate version zero.
+	GetLatestVersion() (uint64, bool)
 
 	// GetEarliestVersion returns the earliest version in the node database.
-	GetEarliestVersion(ctx context.Context) (uint64, error)
+	GetEarliestVersion() uint64
 
 	// GetRootsForVersion returns a list of roots stored under the given version.
 	GetRootsForVersion(ctx context.Context, version uint64) ([]node.Root, error)
@@ -216,12 +218,12 @@ func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node.Roo
 	return nil, ErrWriteLogNotFound
 }
 
-func (d *nopNodeDB) GetLatestVersion(ctx context.Context) (uint64, error) {
-	return 0, nil
+func (d *nopNodeDB) GetLatestVersion() (uint64, bool) {
+	return 0, false
 }
 
-func (d *nopNodeDB) GetEarliestVersion(ctx context.Context) (uint64, error) {
-	return 0, nil
+func (d *nopNodeDB) GetEarliestVersion() uint64 {
+	return 0
 }
 
 func (d *nopNodeDB) GetRootsForVersion(ctx context.Context, version uint64) ([]node.Root, error) {

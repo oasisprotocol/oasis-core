@@ -218,10 +218,7 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 	sort.Slice(cpVersions, func(i, j int) bool { return cpVersions[i] < cpVersions[j] })
 
 	// Make sure to not start earlier than the earliest version.
-	earlyVersion, err := c.ndb.GetEarliestVersion(ctx)
-	if err != nil {
-		return fmt.Errorf("checkpointer: failed to get earliest version: %w", err)
-	}
+	earlyVersion := c.ndb.GetEarliestVersion()
 	firstCheckpointVersion := lastCheckpointVersion + 1 // We can checkpoint the next version.
 	if firstCheckpointVersion < earlyVersion {
 		firstCheckpointVersion = earlyVersion

@@ -1318,12 +1318,11 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	err = ndb.Finalize(ctx, []node.Root{root3})
 	require.NoError(t, err, "Finalize")
 
-	earliestVersion, err := ndb.GetEarliestVersion(ctx)
-	require.NoError(t, err, "GetEarliestVersion")
+	earliestVersion := ndb.GetEarliestVersion()
 	require.EqualValues(t, 0, earliestVersion, "earliest version should be correct")
-	latestVersion, err := ndb.GetLatestVersion(ctx)
-	require.NoError(t, err, "GetLatestVersion")
+	latestVersion, exists := ndb.GetLatestVersion()
 	require.EqualValues(t, 2, latestVersion, "latest version should be correct")
+	require.True(t, exists, "latest version should exist")
 
 	// Prune version 0.
 	err = ndb.Prune(ctx, 0)
@@ -1335,12 +1334,11 @@ func testPruneBasic(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.NoError(t, err, "ndb.New")
 	defer ndb.Close()
 
-	earliestVersion, err = ndb.GetEarliestVersion(ctx)
-	require.NoError(t, err, "GetEarliestVersion")
+	earliestVersion = ndb.GetEarliestVersion()
 	require.EqualValues(t, 1, earliestVersion, "earliest version should be correct")
-	latestVersion, err = ndb.GetLatestVersion(ctx)
-	require.NoError(t, err, "GetLatestVersion")
+	latestVersion, exists = ndb.GetLatestVersion()
 	require.EqualValues(t, 2, latestVersion, "latest version should be correct")
+	require.True(t, exists, "latest version should exist")
 
 	// Keys must still be available in version 2.
 	tree = NewWithRoot(nil, ndb, node.Root{Namespace: testNs, Version: 2, Type: node.RootTypeState, Hash: rootHash3})
