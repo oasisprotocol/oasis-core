@@ -86,6 +86,7 @@ Core:
 
   ```
   rustup install nightly
+  rustup update
   ```
 
   Then install the Fortanix Rust EDP utilities by running:
