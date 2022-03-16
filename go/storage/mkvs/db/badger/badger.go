@@ -468,13 +468,12 @@ func (d *badgerNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node.
 	return nil, api.ErrWriteLogNotFound
 }
 
-func (d *badgerNodeDB) GetLatestVersion(ctx context.Context) (uint64, error) {
-	version, _ := d.meta.getLastFinalizedVersion()
-	return version, nil
+func (d *badgerNodeDB) GetLatestVersion() (uint64, bool) {
+	return d.meta.getLastFinalizedVersion()
 }
 
-func (d *badgerNodeDB) GetEarliestVersion(ctx context.Context) (uint64, error) {
-	return d.meta.getEarliestVersion(), nil
+func (d *badgerNodeDB) GetEarliestVersion() uint64 {
+	return d.meta.getEarliestVersion()
 }
 
 func (d *badgerNodeDB) GetRootsForVersion(ctx context.Context, version uint64) (roots []node.Root, err error) {

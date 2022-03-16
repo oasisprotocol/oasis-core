@@ -46,12 +46,11 @@ func TestPruneKeepN(t *testing.T) {
 		require.NoError(err, "Finalize")
 	}
 
-	earliestVersion, err := ndb.GetEarliestVersion(ctx)
-	require.NoError(err, "GetEarliestVersion")
+	earliestVersion := ndb.GetEarliestVersion()
 	require.EqualValues(1, earliestVersion, "earliest version should be correct")
-	latestVersion, err := ndb.GetLatestVersion(ctx)
-	require.NoError(err, "GetLatestVersion")
+	latestVersion, exists := ndb.GetLatestVersion()
 	require.EqualValues(11, latestVersion, "latest version should be correct")
+	require.True(exists, "latest version should exist")
 
 	pruner, err := newStatePruner(&PruneConfig{
 		Strategy: PruneKeepN,
@@ -59,12 +58,11 @@ func TestPruneKeepN(t *testing.T) {
 	}, ndb)
 	require.NoError(err, "newStatePruner failed")
 
-	earliestVersion, err = ndb.GetEarliestVersion(ctx)
-	require.NoError(err, "GetEarliestVersion")
+	earliestVersion = ndb.GetEarliestVersion()
 	require.EqualValues(1, earliestVersion, "earliest version should be correct")
-	latestVersion, err = ndb.GetLatestVersion(ctx)
-	require.NoError(err, "GetLatestVersion")
+	latestVersion, exists = ndb.GetLatestVersion()
 	require.EqualValues(11, latestVersion, "latest version should be correct")
+	require.True(exists, "latest version should exist")
 
 	lastRetainedVersion := pruner.GetLastRetainedVersion()
 	require.EqualValues(1, lastRetainedVersion, "last retained version should be correct")
@@ -72,12 +70,11 @@ func TestPruneKeepN(t *testing.T) {
 	err = pruner.Prune(ctx, 11)
 	require.NoError(err, "Prune")
 
-	earliestVersion, err = ndb.GetEarliestVersion(ctx)
-	require.NoError(err, "GetEarliestVersion")
+	earliestVersion = ndb.GetEarliestVersion()
 	require.EqualValues(9, earliestVersion, "earliest version should be correct")
-	latestVersion, err = ndb.GetLatestVersion(ctx)
-	require.NoError(err, "GetLatestVersion")
+	latestVersion, exists = ndb.GetLatestVersion()
 	require.EqualValues(11, latestVersion, "latest version should be correct")
+	require.True(exists, "latest version should exist")
 
 	lastRetainedVersion = pruner.GetLastRetainedVersion()
 	require.EqualValues(9, lastRetainedVersion, "last retained version should be correct")

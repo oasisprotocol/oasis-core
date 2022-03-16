@@ -11,8 +11,10 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	iasProxy "github.com/oasisprotocol/oasis-core/go/ias/proxy"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -60,10 +62,11 @@ func (auth *registryAuthenticator) VerifyEvidence(ctx context.Context, evidence 
 func (auth *registryAuthenticator) watchRuntimes(ctx context.Context, conn *grpc.ClientConn) (
 	ch <-chan *registry.Runtime,
 	sub pubsub.ClosableSubscription,
+	client registry.Backend,
 	err error,
 ) {
 	op := func() error {
-		client := registry.NewRegistryClient(conn)
+		client = registry.NewRegistryClient(conn)
 
 		// Subscribe to runtimes.
 		ch, sub, err = client.WatchRuntimes(ctx)
@@ -85,6 +88,109 @@ func (auth *registryAuthenticator) watchRuntimes(ctx context.Context, conn *grpc
 	return
 }
 
+func (auth *registryAuthenticator) watchEpochs(ctx context.Context, conn *grpc.ClientConn) (
+	ch <-chan beacon.EpochTime,
+	sub pubsub.ClosableSubscription,
+	err error,
+) {
+	op := func() error {
+		client := beacon.NewBeaconClient(conn)
+
+		// Subscribe to epochs.
+		ch, sub, err = client.WatchEpochs(ctx)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	sched := backoff.NewConstantBackOff(registryRetryInterval)
+	err = backoff.Retry(op, backoff.WithContext(sched, ctx))
+	if err != nil {
+		auth.logger.Error("unable to connect to timekeeping",
+			"err", err,
+		)
+	}
+
+	return
+}
+
+func (auth *registryAuthenticator) refreshLoop(
+	ctx context.Context,
+	waitRuntimes int,
+	conn *grpc.ClientConn,
+) error {
+	// Start monitoring the relevant events.
+	rtCh, rtSub, regClient, err := auth.watchRuntimes(ctx, conn)
+	if err != nil {
+		return err
+	}
+	defer rtSub.Close()
+
+	epochCh, epochSub, err := auth.watchEpochs(ctx, conn)
+	if err != nil {
+		return err
+	}
+	defer epochSub.Close()
+
+	for {
+		var n int
+		select {
+		case runtime := <-rtCh:
+			if runtime == nil {
+				// Return so the caller can re-dial.
+				auth.logger.Warn("data source stream closed by peer, re-dialing")
+				return nil
+			}
+
+			n, err = auth.enclaves.addRuntime(runtime)
+			if err != nil {
+				auth.logger.Error("failed to add runtime",
+					"err", err,
+					"id", runtime.ID,
+				)
+				continue
+			}
+		case epoch := <-epochCh:
+			auth.logger.Info("new epoch, refreshing all runtimes",
+				"epoch", epoch,
+			)
+
+			var runtimes []*registry.Runtime
+			runtimes, err = regClient.GetRuntimes(ctx, &registry.GetRuntimesQuery{
+				Height:           consensus.HeightLatest,
+				IncludeSuspended: true,
+			})
+			if err != nil {
+				// Return so caller can re-dial.
+				auth.logger.Error("failed to query all runtimes",
+					"err", err,
+				)
+				return nil
+			}
+			for _, runtime := range runtimes {
+				n, err = auth.enclaves.addRuntime(runtime)
+				if err != nil {
+					auth.logger.Error("failed to add/refresh runtime",
+						"err", err,
+						"id", runtime.ID,
+					)
+				}
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		if waitRuntimes > 0 && n >= waitRuntimes {
+			auth.initOnce.Do(func() {
+				auth.logger.Info("sufficient runtimes received, starting verification")
+				close(auth.initCh)
+			})
+		}
+	}
+}
+
 func (auth *registryAuthenticator) worker(ctx context.Context) {
 	waitRuntimes := viper.GetInt(cfgWaitRuntimes)
 	if waitRuntimes <= 0 {
@@ -101,49 +207,13 @@ func (auth *registryAuthenticator) worker(ctx context.Context) {
 	}
 	defer conn.Close()
 
-RedialLoop:
 	for {
-		ch, sub, err := auth.watchRuntimes(ctx, conn)
-		if err != nil {
+		if err = auth.refreshLoop(ctx, waitRuntimes, conn); err != nil {
 			// This can only fail in case the context is cancelled.
-			auth.logger.Info("terminating",
+			auth.logger.Error("terminating",
 				"err", err,
 			)
 			return
-		}
-		defer sub.Close()
-
-		// Watch runtime added events in the registry.
-		for {
-			var runtime *registry.Runtime
-			select {
-			case runtime = <-ch:
-				if runtime == nil {
-					auth.logger.Warn("data source stream closed by peer, re-dialing")
-
-					// Close existing subscription and redial.
-					sub.Close()
-					continue RedialLoop
-				}
-			case <-ctx.Done():
-				return
-			}
-
-			var n int
-			n, err = auth.enclaves.addRuntime(runtime)
-			if err != nil {
-				auth.logger.Error("failed to add runtime",
-					"err", err,
-					"id", runtime.ID,
-				)
-				continue
-			}
-			if waitRuntimes > 0 && n == waitRuntimes {
-				auth.logger.Info("sufficient runtimes received, starting verification")
-				auth.initOnce.Do(func() {
-					close(auth.initCh)
-				})
-			}
 		}
 	}
 }

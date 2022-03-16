@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	envAuthAPIKey    = "OASIS_IAS_APIKEY"
-	cfgAuthAPIKey    = "ias.auth.api_key"
+	envAuthAPIKey    = "OASIS_IAS_APIKEY" //nolint:gosec
+	cfgAuthAPIKey    = "ias.auth.api_key" //nolint:gosec
 	cfgIsProduction  = "ias.production"
 	envSPID          = "OASIS_IAS_SPID"
 	cfgSPID          = "ias.spid"

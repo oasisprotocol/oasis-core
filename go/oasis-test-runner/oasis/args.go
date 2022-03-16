@@ -466,6 +466,13 @@ func (args *argBuilder) workerStorageDebugDisableCheckpointSync(disable bool) *a
 	return args
 }
 
+func (args *argBuilder) workerStorageCheckpointerEnabled(enable bool) *argBuilder {
+	if enable {
+		args.vec = append(args.vec, Argument{Name: workerStorage.CfgWorkerCheckpointerEnabled})
+	}
+	return args
+}
+
 func (args *argBuilder) workerStorageCheckpointCheckInterval(interval time.Duration) *argBuilder {
 	if interval > 0 {
 		args.vec = append(args.vec, Argument{

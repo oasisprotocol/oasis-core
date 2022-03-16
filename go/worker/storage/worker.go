@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -20,8 +19,6 @@ import (
 	storageWorkerAPI "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage/committee"
 )
-
-var workerStorageDBBucketName = "worker/storage/watchers"
 
 // Worker is a worker handling storage operations.
 type Worker struct {
@@ -34,9 +31,8 @@ type Worker struct {
 	initCh chan struct{}
 	quitCh chan struct{}
 
-	runtimes   map[common.Namespace]*committee.Node
-	watchState *persistent.ServiceStore
-	fetchPool  *workerpool.Pool
+	runtimes  map[common.Namespace]*committee.Node
+	fetchPool *workerpool.Pool
 }
 
 // New constructs a new storage worker.
@@ -45,7 +41,6 @@ func New(
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
 	genesis genesis.Provider,
-	commonStore *persistent.CommonStore,
 ) (*Worker, error) {
 	var enabled bool
 	switch commonWorker.RuntimeRegistry.Mode() {
@@ -70,27 +65,20 @@ func New(
 		return s, nil
 	}
 
-	var err error
-
 	s.fetchPool = workerpool.New("storage_fetch")
 	s.fetchPool.Resize(viper.GetUint(cfgWorkerFetcherCount))
 
-	s.watchState, err = commonStore.GetServiceStore(workerStorageDBBucketName)
-	if err != nil {
-		return nil, err
-	}
-
 	var checkpointerCfg *checkpoint.CheckpointerConfig
-	if !viper.GetBool(CfgWorkerCheckpointerDisabled) {
+	if viper.GetBool(CfgWorkerCheckpointerEnabled) {
 		checkpointerCfg = &checkpoint.CheckpointerConfig{
 			CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
 		}
 	}
 
 	// Start storage node for every runtime.
-	for _, rt := range s.commonWorker.GetRuntimes() {
+	for id, rt := range s.commonWorker.GetRuntimes() {
 		if err := s.registerRuntime(commonWorker.DataDir, rt, checkpointerCfg); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create storage worker for runtime %s: %w", id, err)
 		}
 	}
 
@@ -131,7 +119,6 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	node, err := committee.NewNode(
 		commonNode,
 		w.fetchPool,
-		w.watchState,
 		rp,
 		rpRPC,
 		w.commonWorker.GetConfig(),
@@ -230,9 +217,6 @@ func (w *Worker) Stop() {
 	}
 	if w.fetchPool != nil {
 		w.fetchPool.Stop()
-	}
-	if w.watchState != nil {
-		w.watchState.Close()
 	}
 }
 

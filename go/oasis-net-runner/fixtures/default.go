@@ -126,16 +126,16 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
 				GovernanceModel: registry.GovernanceEntity,
-				Deployments: []oasis.DeploymentCfg{
-					{
-						Binaries: map[node.TEEHardware]string{
-							tee: viper.GetString(cfgKeymanagerBinary),
-						},
-					},
-				},
 			},
 		}
 		if usingKeymanager {
+			fixture.Runtimes[0].Deployments = []oasis.DeploymentCfg{
+				{
+					Binaries: map[node.TEEHardware]string{
+						tee: viper.GetString(cfgKeymanagerBinary),
+					},
+				},
+			}
 			fixture.KeymanagerPolicies = []oasis.KeymanagerPolicyFixture{
 				{Runtime: 0, Serial: 1},
 			}

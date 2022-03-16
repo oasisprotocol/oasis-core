@@ -3,6 +3,7 @@ package checkpoint
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"time"
 
@@ -11,9 +12,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/random"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
+
+// Specifies the factor by which the checkpoint interval (in wall clock time)
+// is randomized.
+const checkpointIntervalRandomizationFactor = 0.1
 
 // CheckpointerConfig is a checkpointer configuration.
 type CheckpointerConfig struct {
@@ -212,10 +218,7 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 	sort.Slice(cpVersions, func(i, j int) bool { return cpVersions[i] < cpVersions[j] })
 
 	// Make sure to not start earlier than the earliest version.
-	earlyVersion, err := c.ndb.GetEarliestVersion(ctx)
-	if err != nil {
-		return fmt.Errorf("checkpointer: failed to get earliest version: %w", err)
-	}
+	earlyVersion := c.ndb.GetEarliestVersion()
 	firstCheckpointVersion := lastCheckpointVersion + 1 // We can checkpoint the next version.
 	if firstCheckpointVersion < earlyVersion {
 		firstCheckpointVersion = earlyVersion
@@ -285,17 +288,14 @@ func (c *checkpointer) worker(ctx context.Context) {
 		c.logger.Debug("storage checkpointer terminating")
 	}()
 
-	// Use a ticker to avoid checking for checkpoints too often.
-	ticker := time.NewTicker(c.cfg.CheckInterval)
-	defer ticker.Stop()
-
 	paused := false
 
 	for {
+		interval := random.GetRandomValueFromInterval(checkpointIntervalRandomizationFactor, rand.Float64(), c.cfg.CheckInterval)
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-time.After(interval):
 		case <-c.flushCh.Out():
 		case paused = <-c.pausedCh:
 			continue
