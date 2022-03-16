@@ -68,6 +68,7 @@ var (
 		{"log.format", "JSON"},
 		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
+		{cmdCommonFlags.CfgDebugAllowRoot, true},
 		{storageWorker.CfgBackend, "badger"},
 		{runtimeRegistry.CfgRuntimeMode, string(runtimeRegistry.RuntimeModeCompute)},
 		{runtimeRegistry.CfgRuntimeProvisioner, runtimeRegistry.RuntimeProvisionerMock},

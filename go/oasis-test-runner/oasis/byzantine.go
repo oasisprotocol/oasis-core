@@ -41,6 +41,7 @@ type ByzantineCfg struct {
 
 func (worker *Byzantine) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
+		debugAllowRoot().
 		debugAllowTestKeys().
 		debugSetRlimit().
 		debugEnableProfiling(worker.Node.pprofPort).

@@ -320,3 +320,11 @@ func SetBasicVersionTemplate(cmd *cobra.Command) {
 Go toolchain version: {{ toolchain }}
 `)
 }
+
+// IsNotRootOrAllowed returns if the current user is allowed to run a node,
+// and if the effective user id is elevated or not.
+func IsNotRootOrAllowed() (canRun bool, isRoot bool) {
+	isRoot = os.Geteuid() == 0
+	canRun = !isRoot || flags.DebugAllowRoot()
+	return
+}

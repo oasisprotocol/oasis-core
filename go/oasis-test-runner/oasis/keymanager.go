@@ -254,6 +254,7 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 	}
 
 	args.debugDontBlameOasis().
+		debugAllowRoot().
 		debugAllowTestKeys().
 		debugSetRlimit().
 		debugEnableProfiling(km.Node.pprofPort).

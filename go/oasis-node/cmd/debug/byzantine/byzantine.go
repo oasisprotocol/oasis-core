@@ -310,6 +310,7 @@ func init() {
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugDontBlameOasisFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugTestEntityFlags)
+	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugAllowRootFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(grpc.ServerLocalFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(grpc.ServerTCPFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(p2p.Flags)

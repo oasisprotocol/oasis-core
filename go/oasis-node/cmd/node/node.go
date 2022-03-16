@@ -559,6 +559,18 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, errors.New("data directory not configured")
 	}
 
+	// Check to see if the user has elevated privs or not.
+	canRun, isRoot := cmdCommon.IsNotRootOrAllowed()
+	if !canRun {
+		logger.Error("running with elevated privileges not allowed")
+		return nil, errors.New("running with elevated privileges not allowed")
+	}
+	if isRoot {
+		// The flags for allowing running as root must be set, warn.
+		// If something bad happens, Don't Blame Oasis.
+		logger.Warn("running with elevated privileges is NOT RECOMMENDED")
+	}
+
 	// Load configured values for all registered crash points.
 	crash.LoadViperArgValues()
 
@@ -733,6 +745,7 @@ func Register(parentCmd *cobra.Command) {
 
 func init() {
 	Flags.AddFlagSet(flags.DebugTestEntityFlags)
+	Flags.AddFlagSet(flags.DebugAllowRootFlag)
 	Flags.AddFlagSet(flags.ConsensusValidatorFlag)
 	Flags.AddFlagSet(flags.GenesisFileFlags)
 

@@ -29,6 +29,7 @@ type ClientCfg struct {
 
 func (client *Client) AddArgs(args *argBuilder) error {
 	args.debugDontBlameOasis().
+		debugAllowRoot().
 		debugAllowTestKeys().
 		debugSetRlimit().
 		debugEnableProfiling(client.Node.pprofPort).
