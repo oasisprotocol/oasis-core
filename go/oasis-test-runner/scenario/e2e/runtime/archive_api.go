@@ -234,10 +234,6 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	}
 
 	if !runtime {
-		sc.Logger.Info("testing RequestShutdown")
-		if err = archiveCtrl.RequestShutdown(ctx, true); err != nil {
-			return fmt.Errorf("archive node request shutdown error: %w", err)
-		}
 		return nil
 	}
 
@@ -283,10 +279,6 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	}
 	defer sub.Close()
 
-	sc.Logger.Info("testing RequestShutdown")
-	if err := archiveCtrl.RequestShutdown(ctx, true); err != nil {
-		return fmt.Errorf("archive node request shutdown error: %w", err)
-	}
 	return nil
 }
 
