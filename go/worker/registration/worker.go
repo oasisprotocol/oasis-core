@@ -247,6 +247,8 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 		select {
 		case <-w.stopCh:
 			return
+		case <-w.stopRegCh:
+			return
 		case <-w.consensus.Synced():
 		}
 		w.logger.Debug("consensus synced, entering registration loop")
@@ -325,7 +327,9 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 			var ok bool
 			select {
 			case <-w.stopCh:
-				return context.Canceled
+				return backoff.Permanent(context.Canceled)
+			case <-w.stopRegCh:
+				return backoff.Permanent(context.Canceled)
 			case epoch, ok = <-ch:
 				if !ok {
 					return context.Canceled
@@ -649,6 +653,9 @@ func (w *Worker) doNodeRegistration() {
 			return
 
 		case <-w.stopCh:
+			return
+
+		case <-w.stopRegCh:
 			return
 		}
 	}
