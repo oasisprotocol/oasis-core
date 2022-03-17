@@ -12,6 +12,71 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.0.2 (2022-03-17)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 5.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Configuration Changes
+
+- go/worker/storage: Storage checkpoints are now disabled by default
+  ([#4561](https://github.com/oasisprotocol/oasis-core/issues/4561))
+
+  - `worker.storage.checkpointer.disabled` flag is removed.
+
+  - use the `worker.storage.checkpointer.enabled` flag to enable checkpoints.
+
+### Features
+
+- go/oasis-node/cmd/debug/bundle: Add info command
+  ([#4546](https://github.com/oasisprotocol/oasis-core/issues/4546))
+
+- Randomize storage checkpoints wall-clock interval
+  ([#4561](https://github.com/oasisprotocol/oasis-core/issues/4561))
+
+- go/worker/registration: Add a random re-registration delay
+  ([#4574](https://github.com/oasisprotocol/oasis-core/issues/4574))
+
+### Bug Fixes
+
+- go/oasis-node/cmd/ias: Refresh runtimes on every epoch
+  ([#4548](https://github.com/oasisprotocol/oasis-core/issues/4548))
+
+- go/worker/common: Propagate CheckTx errors
+  ([#4551](https://github.com/oasisprotocol/oasis-core/issues/4551))
+
+- consensus/sanity-checks: skip suspended runtimes for computing stake claims
+  ([#4556](https://github.com/oasisprotocol/oasis-core/issues/4556))
+
+- runtime: Commit check transaction results for subsequent batches
+  ([#4557](https://github.com/oasisprotocol/oasis-core/issues/4557))
+
+- go/runtime/txpool: Abort runtime in case it times out during checks
+  ([#4563](https://github.com/oasisprotocol/oasis-core/issues/4563))
+
+- oasis-net-runner: Fix fixtures without a keymanager
+  ([#4564](https://github.com/oasisprotocol/oasis-core/issues/4564))
+
+### Internal Changes
+
+- go: `libp2p` logs are now emitted via oasis-node logging system
+  ([#4531](https://github.com/oasisprotocol/oasis-core/issues/4531))
+
+- go: Bump libp2p to 0.18.0-rc6
+  ([#4562](https://github.com/oasisprotocol/oasis-core/issues/4562),
+   [#4568](https://github.com/oasisprotocol/oasis-core/issues/4568))
+
+- go/worker/storage: Remove separate storage sync status store
+  ([#4565](https://github.com/oasisprotocol/oasis-core/issues/4565))
+
+  Previously the worker maintaned a separate store that kept information about
+  the progress of storage sync. Since it was a separate store this could cause
+  problems if it got out of sync (e.g. due to partial manual copies). This
+  should make the process more robust as there is only one source of truth.
+
 ## 22.0.1 (2022-03-07)
 
 | Protocol          | Version   |
