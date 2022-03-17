@@ -121,7 +121,7 @@ func init() {
 	Flags.Bool(CfgDebugP2PAllowDuplicateIP, false, "Allow multiple connections from the same IP")
 
 	Flags.StringSlice(CfgP2PSeed, []string{}, "Tendermint seed node(s) of the form ID@host:port")
-	Flags.Int(CfgP2PMaxNumInboundPeers, 40, "Max number of inbound peers")
+	Flags.Int(CfgP2PMaxNumInboundPeers, 100, "Max number of inbound peers")
 	Flags.Int(CfgP2PMaxNumOutboundPeers, 20, "Max number of outbound peers (excluding persistent peers)")
 	Flags.Int64(CfgP2PSendRate, 5120000, "Rate at which packets can be sent (bytes/sec)")
 	Flags.Int64(CfgP2PRecvRate, 5120000, "Rate at which packets can be received (bytes/sec)")
