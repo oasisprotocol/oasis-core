@@ -124,13 +124,12 @@ func (cli *KeyValueEncTestClient) workload(ctx context.Context) error {
 	if _, err = cli.sc.submitRuntimeTx(
 		ctx,
 		runtimeID,
+		rng.Uint64(),
 		"enc_remove",
 		struct {
-			Key   string `json:"key"`
-			Nonce uint64 `json:"nonce"`
+			Key string `json:"key"`
 		}{
-			Key:   cli.key,
-			Nonce: rng.Uint64(),
+			Key: cli.key,
 		},
 	); err != nil {
 		return fmt.Errorf("failed to remove k/v pair: %w", err)
@@ -150,37 +149,6 @@ func (cli *KeyValueEncTestClient) workload(ctx context.Context) error {
 		return fmt.Errorf("key still exists in database after removal: '%v'", resp)
 	}
 
-	// TODO: Someone that cares, that thinks this is still relevant
-	// should convert the test over, but getting rid of grpc from
-	// the Rust side of oasis-core would be really nice.
-
-	/*
-	   // Test that key manager connection via EnclaveRPC works.
-	   println!("Testing key manager connection via gRPC transport...");
-	   // TODO: Key manager MRENCLAVE.
-	   let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_grpc(
-	       runtime_id,
-	       None,
-	       node.channel(),
-	       1024,
-	   ));
-
-	   // Request public key for some "key pair id".
-	   let key_pair_id = KeyPairId::from(Hash::empty_hash().as_ref());
-	   let r = rt
-	       .block_on(km_client.get_public_key(Context::background(), key_pair_id))
-	       .unwrap();
-	   assert!(r.is_some(), "get_public_key should return a public key");
-	   let pkey = r;
-
-	   let r = rt
-	       .block_on(km_client.get_public_key(Context::background(), key_pair_id))
-	       .unwrap();
-	   assert_eq!(r, pkey, "get_public_key should return the same public key");
-
-	   println!("Simple key/value client finished.");
-	*/
-
 	cli.sc.Logger.Info("simple k/v (enc) client finished")
 
 	return nil
@@ -199,14 +167,12 @@ func (sc *runtimeImpl) submitKeyValueRuntimeEncInsertTx(
 	key, value string,
 	nonce uint64,
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, "enc_insert", struct {
+	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "enc_insert", struct {
 		Key   string `json:"key"`
 		Value string `json:"value"`
-		Nonce uint64 `json:"nonce"`
 	}{
 		Key:   key,
 		Value: value,
-		Nonce: nonce,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to submit enc_insert tx to runtime: %w", err)
@@ -226,12 +192,10 @@ func (sc *runtimeImpl) submitKeyValueRuntimeEncGetTx(
 	key string,
 	nonce uint64,
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, "enc_get", struct {
-		Key   string `json:"key"`
-		Nonce uint64 `json:"nonce"`
+	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "enc_get", struct {
+		Key string `json:"key"`
 	}{
-		Key:   key,
-		Nonce: nonce,
+		Key: key,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to submit get tx to runtime: %w", err)

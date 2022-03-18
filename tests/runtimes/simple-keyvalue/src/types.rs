@@ -11,6 +11,8 @@ use oasis_core_runtime::{
 /// Test transaction call.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct Call {
+    /// Nonce.
+    pub nonce: u64,
     /// Method name.
     pub method: String,
     /// Method arguments.
@@ -29,44 +31,37 @@ pub enum CallOutput {
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct Key {
     pub key: String,
-    pub nonce: u64,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
-    pub nonce: u64,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct Withdraw {
-    pub nonce: u64,
     pub withdraw: staking::Withdraw,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct Transfer {
-    pub nonce: u64,
     pub transfer: staking::Transfer,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct AddEscrow {
-    pub nonce: u64,
     pub escrow: staking::Escrow,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct ReclaimEscrow {
-    pub nonce: u64,
     pub reclaim_escrow: staking::ReclaimEscrow,
 }
 
 #[derive(Clone, cbor::Encode, cbor::Decode)]
 pub struct UpdateRuntime {
     pub update_runtime: registry::Runtime,
-    pub nonce: u64,
 }
 
 /// Key format used for transaction artifacts.

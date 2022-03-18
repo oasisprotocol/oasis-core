@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 	keymanagerP2P "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
 
@@ -704,6 +705,8 @@ func NewNode(
 
 	// Register transaction message handler as that is something that all workers must handle.
 	p2pHost.RegisterHandler(runtime.ID(), p2p.TopicKindTx, &txMsgHandler{n})
+	// Register transaction sync service.
+	p2pHost.RegisterProtocolServer(txsync.NewServer(runtime.ID(), txPool))
 
 	return n, nil
 }
