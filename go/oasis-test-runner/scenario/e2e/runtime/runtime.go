@@ -61,6 +61,8 @@ var (
 
 // TxnCall is a transaction call in the test runtime.
 type TxnCall struct {
+	// Nonce is a nonce.
+	Nonce uint64 `json:"nonce"`
 	// Method is the called method name.
 	Method string `json:"method"`
 	// Args are the method arguments.
@@ -202,8 +204,8 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					MaxMessages:     128,
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
-					MaxBatchSize:      1,
-					MaxBatchSizeBytes: 1024,
+					MaxBatchSize:      100,
+					MaxBatchSizeBytes: 1024 * 1024,
 					BatchFlushTimeout: 1 * time.Second,
 					ProposerTimeout:   20,
 					MaxInMessages:     128,
@@ -362,9 +364,15 @@ func (sc *runtimeImpl) Run(childEnv *env.Env) error {
 	return sc.waitTestClient()
 }
 
-func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace, method string, args interface{}) (cbor.RawMessage, error) {
+func (sc *runtimeImpl) submitRuntimeTx(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	method string,
+	args interface{},
+) (cbor.RawMessage, error) {
 	// Submit a transaction and check the result.
-	metaResp, err := sc.submitRuntimeTxMeta(ctx, id, method, args)
+	metaResp, err := sc.submitRuntimeTxMeta(ctx, id, nonce, method, args)
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +386,7 @@ func (sc *runtimeImpl) submitRuntimeTx(ctx context.Context, id common.Namespace,
 func (sc *runtimeImpl) submitRuntimeTxMeta(
 	ctx context.Context,
 	id common.Namespace,
+	nonce uint64,
 	method string,
 	args interface{},
 ) (*runtimeClient.SubmitTxMetaResponse, error) {
@@ -390,12 +399,16 @@ func (sc *runtimeImpl) submitRuntimeTxMeta(
 	resp, err := c.SubmitTxMeta(ctx, &runtimeClient.SubmitTxRequest{
 		RuntimeID: id,
 		Data: cbor.Marshal(&TxnCall{
+			Nonce:  nonce,
 			Method: method,
 			Args:   args,
 		}),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to submit runtime meta tx: %w", err)
+	}
+	if resp.CheckTxError != nil {
+		return nil, fmt.Errorf("check tx failed: %s", resp.CheckTxError.Message)
 	}
 
 	return resp, nil
@@ -418,12 +431,10 @@ func (sc *runtimeImpl) submitConsensusXferTx(
 	xfer staking.Transfer,
 	nonce uint64,
 ) error {
-	_, err := sc.submitRuntimeTx(ctx, runtimeID, "consensus_transfer", struct {
+	_, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "consensus_transfer", struct {
 		Transfer staking.Transfer `json:"transfer"`
-		Nonce    uint64           `json:"nonce"`
 	}{
 		Transfer: xfer,
-		Nonce:    nonce,
 	})
 	return err
 }
@@ -434,16 +445,14 @@ func (sc *runtimeImpl) submitConsensusXferTxMeta(
 	xfer staking.Transfer,
 	nonce uint64,
 ) (*runtimeClient.SubmitTxMetaResponse, error) {
-	return sc.submitRuntimeTxMeta(ctx, runtimeID, "consensus_transfer", struct {
+	return sc.submitRuntimeTxMeta(ctx, runtimeID, nonce, "consensus_transfer", struct {
 		Transfer staking.Transfer `json:"transfer"`
-		Nonce    uint64           `json:"nonce"`
 	}{
 		Transfer: xfer,
-		Nonce:    nonce,
 	})
 }
 
-func (sc *runtimeImpl) submitRuntimeInMsg(ctx context.Context, id common.Namespace, method string, args interface{}) error {
+func (sc *runtimeImpl) submitRuntimeInMsg(ctx context.Context, id common.Namespace, nonce uint64, method string, args interface{}) error {
 	ctrl := sc.Net.ClientController()
 	if ctrl == nil {
 		return fmt.Errorf("client controller not available")
@@ -454,6 +463,7 @@ func (sc *runtimeImpl) submitRuntimeInMsg(ctx context.Context, id common.Namespa
 		ID:  id,
 		Tag: 42,
 		Data: cbor.Marshal(&TxnCall{
+			Nonce:  nonce,
 			Method: method,
 			Args:   args,
 		}),

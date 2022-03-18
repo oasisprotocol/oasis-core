@@ -122,7 +122,7 @@ func (cli *KeyValueTestClient) workload(ctx context.Context) error {
 	// side `to_string()` returns `8000…0000`, and the original Rust
 	// test client was doing a string compare so no one ever noticed
 	// that truncated values were being compared.
-	if _, err = cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, runtimeID); err != nil {
+	if _, err = cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, runtimeID, rng.Uint64()); err != nil {
 		return fmt.Errorf("failed to query remote runtime ID: %w", err)
 	}
 
@@ -217,14 +217,12 @@ func (cli *KeyValueTestClient) workload(ctx context.Context) error {
 		inMsgKey   = "in_msg"
 		inMsgValue = "hello world from inmsg"
 	)
-	err = cli.sc.submitRuntimeInMsg(ctx, runtimeID, "insert", struct {
+	err = cli.sc.submitRuntimeInMsg(ctx, runtimeID, rng.Uint64(), "insert", struct {
 		Key   string `json:"key"`
 		Value string `json:"value"`
-		Nonce uint64 `json:"nonce"`
 	}{
 		Key:   inMsgKey,
 		Value: inMsgValue,
-		Nonce: rng.Uint64(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to submit 'insert' incoming runtime message: %w", err)
@@ -239,7 +237,7 @@ func (cli *KeyValueTestClient) workload(ctx context.Context) error {
 	}
 
 	cli.sc.Logger.Info("testing consensus queries")
-	if _, err = cli.sc.submitRuntimeTx(ctx, runtimeID, "consensus_accounts", nil); err != nil {
+	if _, err = cli.sc.submitRuntimeTx(ctx, runtimeID, rng.Uint64(), "consensus_accounts", nil); err != nil {
 		return fmt.Errorf("failed to submit consensus_accounts query: %w", err)
 	}
 	// TODO: The old test printed out the accounts and delegations, but
@@ -262,14 +260,12 @@ func (sc *runtimeImpl) submitKeyValueRuntimeInsertTx(
 	key, value string,
 	nonce uint64,
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, id, "insert", struct {
+	rawRsp, err := sc.submitRuntimeTx(ctx, id, nonce, "insert", struct {
 		Key   string `json:"key"`
 		Value string `json:"value"`
-		Nonce uint64 `json:"nonce"`
 	}{
 		Key:   key,
 		Value: value,
-		Nonce: nonce,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to submit insert tx to runtime: %w", err)
@@ -289,12 +285,10 @@ func (sc *runtimeImpl) submitKeyValueRuntimeGetTx(
 	key string,
 	nonce uint64,
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, "get", struct {
-		Key   string `json:"key"`
-		Nonce uint64 `json:"nonce"`
+	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "get", struct {
+		Key string `json:"key"`
 	}{
-		Key:   key,
-		Nonce: nonce,
+		Key: key,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to submit get tx to runtime: %w", err)
@@ -311,8 +305,9 @@ func (sc *runtimeImpl) submitKeyValueRuntimeGetTx(
 func (sc *runtimeImpl) submitKeyValueRuntimeGetRuntimeIDTx(
 	ctx context.Context,
 	id common.Namespace,
+	nonce uint64,
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, "get_runtime_id", nil)
+	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "get_runtime_id", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to submit get_runtime_id tx to runtime: %w", err)
 	}

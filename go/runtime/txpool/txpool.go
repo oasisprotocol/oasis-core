@@ -30,6 +30,8 @@ const (
 	checkTxRetryDelay = 1 * time.Second
 	// abortTimeout is the maximum time the runtime can spend aborting.
 	abortTimeout = 5 * time.Second
+	// maxRepublishTxs is the maximum amount of transactions to republish.
+	maxRepublishTxs = 32
 )
 
 // Config is the transaction pool configuration.
@@ -37,7 +39,6 @@ type Config struct {
 	MaxPoolSize          uint64
 	MaxCheckTxBatchSize  uint64
 	MaxLastSeenCacheSize uint64
-	MaxStaleCacheSize    uint64
 
 	RepublishInterval time.Duration
 
@@ -171,9 +172,6 @@ type txPool struct {
 	// seenCache maps from transaction hashes to time.Time that specifies when the transaction was
 	// last published.
 	seenCache *lru.Cache
-	// staleCache maps from transaction hashes to *transaction.CheckedTransaction. It is populated
-	// when clearing the txpool and consulted only when fetching known batches.
-	staleCache *lru.Cache
 
 	checkTxCh       *channels.RingChannel
 	checkTxQueue    *checkTxQueue
@@ -276,9 +274,6 @@ func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
 	defer t.schedulerLock.Unlock()
 
 	t.schedulerQueue.RemoveTxBatch(txs)
-	for _, txHash := range txs {
-		_ = t.staleCache.Remove(txHash)
-	}
 
 	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.Size()))
 }
@@ -301,20 +296,7 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransac
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
-	// First consult the scheduler.
-	txs, missing := t.schedulerQueue.GetKnownBatch(batch)
-
-	// Check the stale cache for any missing transactions.
-	for txHash, idx := range missing {
-		tx, exists := t.staleCache.Get(txHash)
-		if !exists {
-			continue
-		}
-
-		txs[idx] = tx.(*transaction.CheckedTransaction)
-		delete(missing, txHash)
-	}
-	return txs, missing
+	return t.schedulerQueue.GetKnownBatch(batch)
 }
 
 func (t *txPool) ProcessBlock(bi *BlockInfo) error {
@@ -412,12 +394,6 @@ func (t *txPool) Clear() {
 	defer t.schedulerLock.Unlock()
 
 	if t.schedulerQueue != nil {
-		// Before clearing, move some transactions to the stale cache.
-		txs := t.schedulerQueue.GetTransactions(int(t.cfg.MaxStaleCacheSize))
-		for _, tx := range txs {
-			_ = t.staleCache.Put(tx.Hash(), tx)
-		}
-
 		t.schedulerQueue.Clear()
 	}
 	t.seenCache.Clear()
@@ -555,6 +531,11 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	// Unschedule any transactions that are being rechecked and have failed checks.
 	t.RemoveTxBatch(unschedule)
 
+	// If there are more transactions to check, make sure we check them next.
+	if t.checkTxQueue.Size() > 0 {
+		t.checkTxCh.In() <- struct{}{}
+	}
+
 	if len(txs) == 0 {
 		return
 	}
@@ -689,7 +670,6 @@ func (t *txPool) republishWorker() {
 	}()
 
 	for {
-		var force bool
 		select {
 		case <-t.stopCh:
 			return
@@ -710,9 +690,6 @@ func (t *txPool) republishWorker() {
 			}
 		case <-debounceCh:
 			debounceCh = nil
-		case <-t.epoCh.Out():
-			// Force republish on epoch transitions.
-			force = true
 		}
 
 		lastRepublish = time.Now()
@@ -727,7 +704,7 @@ func (t *txPool) republishWorker() {
 		nextPendingRepublish := republishInterval
 		for _, tx := range txs {
 			ts, seen := t.seenCache.Peek(tx.Hash())
-			if !force && seen {
+			if seen {
 				sinceLast := time.Since(ts.(time.Time))
 				if sinceLast < republishInterval {
 					if remaining := republishInterval - sinceLast; remaining < nextPendingRepublish {
@@ -750,6 +727,9 @@ func (t *txPool) republishWorker() {
 			_ = t.seenCache.Put(tx.Hash(), time.Now())
 
 			republishedCount++
+			if republishedCount > maxRepublishTxs {
+				break
+			}
 		}
 
 		// Reschedule ticker for next republish.
@@ -831,11 +811,6 @@ func New(
 		return nil, fmt.Errorf("error creating seen cache: %w", err)
 	}
 
-	staleCache, err := lru.New(lru.Capacity(cfg.MaxStaleCacheSize, false))
-	if err != nil {
-		return nil, fmt.Errorf("error creating stale cache: %w", err)
-	}
-
 	return &txPool{
 		logger:            logging.GetLogger("runtime/txpool"),
 		stopCh:            make(chan struct{}),
@@ -846,7 +821,6 @@ func New(
 		host:              host,
 		txPublisher:       txPublisher,
 		seenCache:         seenCache,
-		staleCache:        staleCache,
 		checkTxQueue:      newCheckTxQueue(cfg.MaxPoolSize, cfg.MaxCheckTxBatchSize),
 		checkTxCh:         channels.NewRingChannel(1),
 		checkTxNotifier:   pubsub.NewBroker(false),
