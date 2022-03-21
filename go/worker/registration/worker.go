@@ -38,7 +38,9 @@ import (
 )
 
 const (
-	workerRegistrationDBBucketName = "worker/registration"
+	// DBBucketName is the name of the database bucket for the registration
+	// worker's service store.
+	DBBucketName = "worker/registration"
 
 	// CfgRegistrationEntity configures the registration worker entity.
 	CfgRegistrationEntity = "worker.registration.entity"
@@ -46,6 +48,9 @@ const (
 	CfgDebugRegistrationPrivateKey = "worker.registration.debug.private_key"
 	// CfgRegistrationForceRegister overrides a previously saved deregistration
 	// request.
+	//
+	// Note: This flag is deprecated and `oasis-node control clear-deregister`
+	// should be used instead.
 	CfgRegistrationForceRegister = "worker.registration.force_register"
 	// CfgRegistrationRotateCerts sets the number of epochs that a node's TLS
 	// certificate should be valid for.
@@ -579,8 +584,10 @@ Loop:
 }
 
 func (w *Worker) doNodeRegistration() {
-	defer close(w.quitCh)
-	defer workerNodeRegistered.Set(0.0)
+	defer func() {
+		close(w.quitCh)
+		workerNodeRegistered.Set(0.0)
+	}()
 
 	if !w.storedDeregister {
 		w.registrationLoop()
@@ -589,6 +596,22 @@ func (w *Worker) doNodeRegistration() {
 	}
 
 	// Loop broken; shutdown requested.
+	//
+	// This is the primary driver of the operator gracefully halting the
+	// node after the node's registration expires.  To ensure that the
+	// deregistration and shutdown occurs, the node will persist the fact
+	// that it is mid-shutdown in a flag.
+	//
+	// Previously, this flag had to be cleared manually by the node operator
+	// which, while serving to ensure that the node does not get restarted
+	// and re-register, is sub-optimal as it required manual intervention.
+	//
+	// Instead, if the node is deregistered cleanly, we will clear the flag
+	// under the assumption that the operator can configure whatever
+	// automation they are using to do the right thing.
+	//
+	// See: `Worker.registrationStopped()` for where this happens.
+
 	publicKey := w.identity.NodeSigner.Public()
 
 	regCh, sub, err := w.registry.WatchNodes(w.ctx)
@@ -633,6 +656,21 @@ func (w *Worker) doNodeRegistration() {
 
 func (w *Worker) registrationStopped() {
 	w.logger.Info("registration stopped, shutting down")
+
+	// If the registration was stopped via-graceful shutdown, clear the
+	// persisted deregister flag.
+	//
+	// This routine is only called if:
+	//  * Registration is never enabled in the first place.
+	//  * The node is deregistered when the shutdown request happens.
+	//  * The node successfully deregisters.
+	if err := SetForcedDeregister(w.store, false); err != nil {
+		// Can't do anything about this, and we are mid-teardown, just log.
+		w.logger.Error("failed to clear persisted force-deregister",
+			"err", err,
+		)
+	}
+
 	if w.delegate != nil {
 		w.delegate.RegistrationStopped()
 	}
@@ -987,9 +1025,7 @@ func (w *Worker) RequestDeregistration() error {
 		// Deregistration already requested, don't do anything.
 		return nil
 	}
-	storedDeregister := true
-	err := w.store.PutCBOR(deregistrationRequestStoreKey, &storedDeregister)
-	if err != nil {
+	if err := SetForcedDeregister(w.store, true); err != nil {
 		w.logger.Error("can't persist deregistration request",
 			"err", err,
 		)
@@ -1052,7 +1088,7 @@ func New(
 ) (*Worker, error) {
 	logger := logging.GetLogger("worker/registration")
 
-	serviceStore, err := store.GetServiceStore(workerRegistrationDBBucketName)
+	serviceStore, err := store.GetServiceStore(DBBucketName)
 	if err != nil {
 		logger.Error("can't get registration worker store bucket",
 			"err", err,
@@ -1065,18 +1101,10 @@ func New(
 		return nil, err
 	}
 
-	storedDeregister := false
+	var storedDeregister bool
 	err = serviceStore.GetCBOR(deregistrationRequestStoreKey, &storedDeregister)
 	if err != nil && err != persistent.ErrNotFound {
 		return nil, err
-	}
-
-	if viper.GetBool(CfgRegistrationForceRegister) {
-		storedDeregister = false
-		err = serviceStore.PutCBOR(deregistrationRequestStoreKey, &storedDeregister)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	if viper.GetUint64(CfgRegistrationRotateCerts) != 0 && identity.DoNotRotateTLS {
@@ -1086,7 +1114,6 @@ func New(
 	w := &Worker{
 		workerCommonCfg:    workerCommonCfg,
 		store:              serviceStore,
-		storedDeregister:   storedDeregister,
 		delegate:           delegate,
 		entityID:           entityID,
 		sentryAddresses:    workerCommonCfg.SentryAddresses,
@@ -1105,6 +1132,14 @@ func New(
 		p2p:                p2p,
 		registerCh:         make(chan struct{}, 64),
 	}
+
+	if viper.GetBool(CfgRegistrationForceRegister) {
+		if err = SetForcedDeregister(w.store, false); err != nil {
+			return nil, fmt.Errorf("failed to clear persisted forced-deregister: %w", err)
+		}
+		storedDeregister = false
+	}
+	w.storedDeregister = storedDeregister
 
 	if flags.ConsensusValidator() {
 		rp, err := w.NewRoleProvider(node.RoleValidator)
@@ -1173,9 +1208,13 @@ func init() {
 
 	Flags.String(CfgRegistrationEntity, "", "entity to use as the node owner in registrations")
 	Flags.String(CfgDebugRegistrationPrivateKey, "", "private key to use to sign node registrations")
-	Flags.Bool(CfgRegistrationForceRegister, false, "override a previously saved deregistration request")
+	Flags.Bool(CfgRegistrationForceRegister, false, "(DEPRECATED) override a previously saved deregistration request")
 	Flags.Uint64(CfgRegistrationRotateCerts, 0, "rotate node TLS certificates every N epochs (0 to disable)")
 	_ = Flags.MarkHidden(CfgDebugRegistrationPrivateKey)
 
 	_ = viper.BindPFlags(Flags)
+}
+
+func SetForcedDeregister(store *persistent.ServiceStore, deregister bool) error {
+	return store.PutCBOR(deregistrationRequestStoreKey, &deregister)
 }
