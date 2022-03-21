@@ -76,6 +76,8 @@ var RuntimeFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // TxnCall is a transaction call in the test runtime.
 type TxnCall struct {
+	// Nonce is a nonce.
+	Nonce uint64 `json:"nonce"`
 	// Method is the called method name.
 	Method string `json:"method"`
 	// Args are the method arguments.
@@ -231,15 +233,14 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 
 	// Submit request.
 	req := &TxnCall{
+		Nonce:  rng.Uint64(),
 		Method: "insert",
 		Args: struct {
 			Key   string `json:"key"`
 			Value string `json:"value"`
-			Nonce uint64 `json:"nonce"`
 		}{
 			Key:   key,
 			Value: value,
-			Nonce: rng.Uint64(),
 		},
 	}
 	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
@@ -284,13 +285,12 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 
 	// Submit request.
 	req := &TxnCall{
+		Nonce:  rng.Uint64(),
 		Method: "get",
 		Args: struct {
-			Key   string `json:"key"`
-			Nonce uint64 `json:"nonce"`
+			Key string `json:"key"`
 		}{
-			Key:   key,
-			Nonce: rng.Uint64(),
+			Key: key,
 		},
 	}
 	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
@@ -332,13 +332,12 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 
 	// Submit request.
 	req := &TxnCall{
+		Nonce:  rng.Uint64(),
 		Method: "remove",
 		Args: struct {
-			Key   string `json:"key"`
-			Nonce uint64 `json:"nonce"`
+			Key string `json:"key"`
 		}{
-			Key:   key,
-			Nonce: rng.Uint64(),
+			Key: key,
 		},
 	}
 	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
@@ -386,15 +385,14 @@ func (r *runtime) doInMsgRequest(ctx context.Context, rng *rand.Rand, rtc runtim
 		ID:  r.runtimeID,
 		Tag: 42,
 		Data: cbor.Marshal(&TxnCall{
+			Nonce:  rng.Uint64(),
 			Method: "insert",
 			Args: struct {
 				Key   string `json:"key"`
 				Value string `json:"value"`
-				Nonce uint64 `json:"nonce"`
 			}{
 				Key:   key,
 				Value: value,
-				Nonce: rng.Uint64(),
 			},
 		}),
 	})
@@ -568,16 +566,15 @@ func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc run
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
+		Nonce:  rng.Uint64(),
 		Method: "consensus_withdraw",
 		Args: struct {
 			Withdraw staking.Withdraw `json:"withdraw"`
-			Nonce    uint64           `json:"nonce"`
 		}{
 			Withdraw: staking.Withdraw{
 				From:   r.testAddress,
 				Amount: amount,
 			},
-			Nonce: rng.Uint64(),
 		},
 	}
 	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
@@ -613,16 +610,15 @@ func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc run
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
+		Nonce:  rng.Uint64(),
 		Method: "consensus_transfer",
 		Args: struct {
 			Transfer staking.Transfer `json:"transfer"`
-			Nonce    uint64           `json:"nonce"`
 		}{
 			Transfer: staking.Transfer{
 				To:     r.testAddress,
 				Amount: amount,
 			},
-			Nonce: rng.Uint64(),
 		},
 	}
 	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
@@ -658,16 +654,15 @@ func (r *runtime) doAddEscrowRequest(ctx context.Context, rng *rand.Rand, rtc ru
 	// Submit message request.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
+		Nonce:  rng.Uint64(),
 		Method: "consensus_add_escrow",
 		Args: struct {
 			Escrow staking.Escrow `json:"escrow"`
-			Nonce  uint64         `json:"nonce"`
 		}{
 			Escrow: staking.Escrow{
 				Account: r.testAddress,
 				Amount:  amount,
 			},
-			Nonce: rng.Uint64(),
 		},
 	}
 	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
@@ -705,16 +700,15 @@ func (r *runtime) doReclaimEscrowRequest(ctx context.Context, rng *rand.Rand, rt
 	// getting any rewards or is being slashed.
 	amount := *quantity.NewFromUint64(1)
 	req := &TxnCall{
+		Nonce:  rng.Uint64(),
 		Method: "consensus_reclaim_escrow",
 		Args: struct {
 			ReclaimEscrow staking.ReclaimEscrow `json:"reclaim_escrow"`
-			Nonce         uint64                `json:"nonce"`
 		}{
 			ReclaimEscrow: staking.ReclaimEscrow{
 				Account: r.testAddress,
 				Shares:  amount,
 			},
-			Nonce: rng.Uint64(),
 		},
 	}
 	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)

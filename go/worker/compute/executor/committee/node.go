@@ -28,6 +28,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -125,7 +126,6 @@ type Node struct { // nolint: maligned
 
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
-	prevEpochWorker  bool
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -147,6 +147,7 @@ type Node struct { // nolint: maligned
 	roundCancelCtx context.CancelFunc
 
 	storage storage.LocalBackend
+	txSync  txsync.Client
 
 	stateTransitions *pubsub.Broker
 	// Bump this when we need to change what the worker selects over.
@@ -280,19 +281,11 @@ func (n *Node) transitionLocked(state NodeState) {
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 	switch {
-	case epoch.IsExecutorWorker():
-		if !n.prevEpochWorker {
-			// Clear incoming queue and cache of any stale transactions in case
-			// we were not part of the compute committee in previous epoch.
-			n.commonNode.TxPool.Clear()
-		}
-		fallthrough
-	case epoch.IsExecutorBackupWorker():
+	case epoch.IsExecutorWorker(), epoch.IsExecutorBackupWorker():
 		n.transitionLocked(StateWaitingForBatch{})
 	default:
 		n.transitionLocked(StateNotReady{})
 	}
-	n.prevEpochWorker = epoch.IsExecutorWorker()
 }
 
 // HandleNewBlockEarlyLocked implements NodeHooks.
@@ -409,26 +402,6 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		)
 
 		n.commonNode.TxPool.WakeupScheduler()
-	}
-}
-
-func (n *Node) handleNewCheckedTransactions(txs []*transaction.CheckedTransaction) {
-	// Check if we are waiting for new transactions.
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-
-	state, ok := n.state.(StateWaitingForTxs)
-	if !ok {
-		return
-	}
-
-	for _, tx := range txs {
-		delete(state.batch.missingTxs, tx.Hash())
-	}
-	if len(state.batch.missingTxs) == 0 {
-		// We have all transactions, signal the node to start processing the batch.
-		n.logger.Info("received all transactions needed for batch processing")
-		n.startProcessingBatchLocked(state.batch)
 	}
 }
 
@@ -1177,6 +1150,7 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 		// Transition into StateWaitingForTxs and wait for peers to republish transactions.
 		n.logger.Debug("some transactions are missing", "num_missing", len(batch.missingTxs))
 		n.transitionLocked(StateWaitingForTxs{batch})
+		go n.requestMissingTransactions()
 		return
 	}
 
@@ -1749,6 +1723,7 @@ func NewNode(
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		state:            StateNotReady{},
+		txSync:           txsync.NewClient(commonNode.P2P, commonNode.Runtime.ID()),
 		stateTransitions: pubsub.NewBroker(false),
 		reselect:         make(chan struct{}, 1),
 		logger:           logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),

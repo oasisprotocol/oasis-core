@@ -110,10 +110,14 @@ func WithPeerFilter(filter PeerFilter) ClientOption {
 	}
 }
 
+// ValidationFunc is a call response validation function.
+type ValidationFunc func(pf PeerFeedback) error
+
 // CallOptions are per-call options.
 type CallOptions struct {
 	retryInterval time.Duration
 	maxRetries    uint64
+	validationFn  ValidationFunc
 }
 
 // CallOption is a per-call option setter.
@@ -130,6 +134,15 @@ func WithMaxRetries(maxRetries uint64) CallOption {
 func WithRetryInterval(retryInterval time.Duration) CallOption {
 	return func(opts *CallOptions) {
 		opts.retryInterval = retryInterval
+	}
+}
+
+// WithValidationFn configures the response validation function to use for the call.
+//
+// When the function is called, the decoded response value will be set.
+func WithValidationFn(fn ValidationFunc) CallOption {
+	return func(opts *CallOptions) {
+		opts.validationFn = fn
 	}
 }
 
@@ -223,6 +236,17 @@ func (c *client) Call(
 			pf, err = c.call(ctx, peer, &request, rsp, maxPeerResponseTime)
 			if err != nil {
 				continue
+			}
+			if co.validationFn != nil {
+				err := co.validationFn(pf)
+				if err != nil {
+					c.logger.Debug("failed to validate peer response",
+						"method", method,
+						"peer_id", peer,
+						"err", err,
+					)
+					continue
+				}
 			}
 			return nil
 		}
