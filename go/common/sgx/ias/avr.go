@@ -330,6 +330,14 @@ func DecodeAVR(data, encodedSignature, encodedCertChain []byte, trustRoots *x509
 		}
 	}
 
+	return UnsafeDecodeAVR(data)
+}
+
+// UnsafeDecodeAVR decodes and validates an Attestation Verification Report,
+// but does not validate the signature.
+//
+// WARNING: This MUST only be used for diagnostic purposes.
+func UnsafeDecodeAVR(data []byte) (*AttestationVerificationReport, error) {
 	// Set the ISVEnclaveQuoteStatus to a sentinel value so that it is
 	// possible to detect it being missing from the JSON.
 	a := &AttestationVerificationReport{
