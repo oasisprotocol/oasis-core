@@ -89,18 +89,6 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Try restarting it; it should shutdown by itself soon after.
-	if err = computeWorker.Restart(ctx); err != nil {
-		return err
-	}
-	err = <-computeWorker.Exit()
-	if err != env.ErrEarlyTerm {
-		sc.Logger.Error("compute worker exited with error on second run",
-			"err", err,
-		)
-		return err
-	}
-
 	// Get the client node to shutdown as well, to make sure the code path works in corner cases too.
 	clientNode := sc.Net.Clients()[0]
 	clientCtrl, err := oasis.NewController(clientNode.SocketPath())
