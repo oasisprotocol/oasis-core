@@ -221,7 +221,7 @@ func (s *sgxProvisioner) hostInitializer(
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 	var capabilityTEE *node.CapabilityTEE
-	if capabilityTEE, err = s.updateCapabilityTEE(ctx, ts, conn); err != nil {
+	if capabilityTEE, err = s.updateCapabilityTEE(ctx, s.logger, ts, conn); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 
@@ -271,7 +271,7 @@ func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime,
 	return &ts, nil
 }
 
-func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
+func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *logging.Logger, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
 
@@ -331,6 +331,26 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 		},
 	)
 	if err != nil {
+		// If we are here, presumably the AVR is well-formed (VerifyEvidence
+		// succeeded).  Since this is more than likely the AVR indicating
+		// rejection, deserialize it and log some pertinent details.
+		avr, err := cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
+		if err == nil {
+			switch avr.ISVEnclaveQuoteStatus {
+			case cmnIAS.QuoteOK, cmnIAS.QuoteSwHardeningNeeded:
+				// That's odd, the quote checks out as ok.  Can't
+				// really get further information.
+			default:
+				// This probably has to do with the never-ending series of
+				// speculative execution trashfires, so log the vulns and
+				// quote status.
+				logger.Error("attestation likely rejected by IAS",
+					"quote_status", avr.ISVEnclaveQuoteStatus.String(),
+					"advisory_ids", avr.AdvisoryIDs,
+				)
+			}
+		}
+
 		return nil, fmt.Errorf("error while configuring AVR: %w", err)
 	}
 
@@ -359,7 +379,7 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, p process.Process, conn
 			// Update CapabilityTEE.
 			logger.Info("regenerating CapabilityTEE")
 
-			capabilityTEE, err := s.updateCapabilityTEE(context.Background(), ts, conn)
+			capabilityTEE, err := s.updateCapabilityTEE(context.Background(), logger, ts, conn)
 			if err != nil {
 				logger.Error("failed to regenerate CapabilityTEE",
 					"err", err,
