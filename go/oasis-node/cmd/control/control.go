@@ -12,10 +12,12 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 var (
@@ -42,6 +44,12 @@ var (
 		Use:   "shutdown",
 		Short: "request node shutdown on next epoch transition",
 		Run:   doShutdown,
+	}
+
+	controlClearDeregisterCmd = &cobra.Command{
+		Use:   "clear-deregister",
+		Short: "clear the forced node deregistration flag",
+		Run:   doClearDeregister,
 	}
 
 	controlUpgradeBinaryCmd = &cobra.Command{
@@ -135,6 +143,56 @@ func doShutdown(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
+}
+
+func doClearDeregister(cmd *cobra.Command, args []string) {
+	if err := cmdCommon.Init(); err != nil {
+		cmdCommon.EarlyLogAndExit(err)
+	}
+
+	dataDir := cmdCommon.DataDir()
+
+	// Sigh, there does not appear to be a "open, but do not create"
+	// badger option.  Instead, check to see if the persistent store
+	// directory exists.
+	dbPath := persistent.GetPersistentStoreDBDir(dataDir)
+	fs, err := os.Stat(dbPath)
+	if err != nil {
+		logger.Error("failed to stat persistent store directory",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	if !fs.IsDir() {
+		logger.Error("persistent store directory, is not a directory")
+		os.Exit(1)
+	}
+
+	commonStore, err := persistent.NewCommonStore(dataDir)
+	if err != nil {
+		logger.Error("failed to open common node store",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	defer commonStore.Close()
+
+	serviceStore, err := commonStore.GetServiceStore(registration.DBBucketName)
+	if err != nil {
+		logger.Error("failed to get registration worker service store",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	if err = registration.SetForcedDeregister(serviceStore, false); err != nil {
+		logger.Error("failed to clear persisted forced-deregister",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+
+	logger.Info("cleared persisted forced-deregister")
 }
 
 func doUpgradeBinary(cmd *cobra.Command, args []string) {
@@ -239,6 +297,7 @@ func Register(parentCmd *cobra.Command) {
 	controlCmd.AddCommand(controlIsSyncedCmd)
 	controlCmd.AddCommand(controlWaitSyncCmd)
 	controlCmd.AddCommand(controlShutdownCmd)
+	controlCmd.AddCommand(controlClearDeregisterCmd)
 	controlCmd.AddCommand(controlUpgradeBinaryCmd)
 	controlCmd.AddCommand(controlCancelUpgradeCmd)
 	controlCmd.AddCommand(controlStatusCmd)
