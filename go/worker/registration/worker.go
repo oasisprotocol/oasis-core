@@ -48,6 +48,9 @@ const (
 	CfgDebugRegistrationPrivateKey = "worker.registration.debug.private_key"
 	// CfgRegistrationForceRegister overrides a previously saved deregistration
 	// request.
+	//
+	// Note: This flag is deprecated and `oasis-node control clear-deregister`
+	// should be used instead.
 	CfgRegistrationForceRegister = "worker.registration.force_register"
 	// CfgRegistrationRotateCerts sets the number of epochs that a node's TLS
 	// certificate should be valid for.
@@ -663,7 +666,7 @@ func (w *Worker) registrationStopped() {
 	//  * The node successfully deregisters.
 	if err := SetForcedDeregister(w.store, false); err != nil {
 		// Can't do anything about this, and we are mid-teardown, just log.
-		w.logger.Error("failed to clear persisted force-deregister, manual intervention may be required",
+		w.logger.Error("failed to clear persisted force-deregister",
 			"err", err,
 		)
 	}
@@ -1205,7 +1208,7 @@ func init() {
 
 	Flags.String(CfgRegistrationEntity, "", "entity to use as the node owner in registrations")
 	Flags.String(CfgDebugRegistrationPrivateKey, "", "private key to use to sign node registrations")
-	Flags.Bool(CfgRegistrationForceRegister, false, "override a previously saved deregistration request")
+	Flags.Bool(CfgRegistrationForceRegister, false, "(DEPRECATED) override a previously saved deregistration request")
 	Flags.Uint64(CfgRegistrationRotateCerts, 0, "rotate node TLS certificates every N epochs (0 to disable)")
 	_ = Flags.MarkHidden(CfgDebugRegistrationPrivateKey)
 
