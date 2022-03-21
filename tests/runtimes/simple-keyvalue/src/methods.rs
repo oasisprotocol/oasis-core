@@ -48,7 +48,7 @@ impl Methods {
         ),
         String,
     > {
-        if ctx.parent.core.check_only {
+        if ctx.is_check_only() {
             return Ok((Default::default(), Default::default()));
         }
 
@@ -73,7 +73,7 @@ impl Methods {
         Ok((result, delegations))
     }
 
-    fn check_nonce(ctx: &mut TxContext, nonce: u64) -> Result<(), String> {
+    pub fn check_nonce(ctx: &mut TxContext, nonce: u64) -> Result<(), String> {
         let nonce_key = NonceKeyFormat { nonce }.encode();
         match ctx
             .parent
@@ -83,7 +83,7 @@ impl Methods {
         {
             Some(_) => Err(format!("Duplicate nonce: {}", nonce)),
             None => {
-                if !ctx.parent.core.check_only {
+                if !ctx.is_check_only() {
                     ctx.parent.core.runtime_state.insert(
                         IoContext::create_child(&ctx.parent.core.io_ctx),
                         &nonce_key,
@@ -104,10 +104,9 @@ impl Methods {
 
     /// Withdraw from the consensus layer into the runtime account.
     pub fn consensus_withdraw(ctx: &mut TxContext, args: Withdraw) -> Result<(), String> {
-        Self::check_nonce(ctx, args.nonce)?;
         Self::check_max_messages(ctx)?;
 
-        if ctx.parent.core.check_only {
+        if ctx.is_check_only() {
             return Ok(());
         }
 
@@ -127,7 +126,6 @@ impl Methods {
 
     /// Transfer from the runtime account to another account in the consensus layer.
     pub fn consensus_transfer(ctx: &mut TxContext, args: Transfer) -> Result<(), String> {
-        Self::check_nonce(ctx, args.nonce)?;
         Self::check_max_messages(ctx)?;
 
         if ctx.is_check_only() {
@@ -150,7 +148,6 @@ impl Methods {
 
     /// Add escrow from the runtime account to an account in the consensus layer.
     pub fn consensus_add_escrow(ctx: &mut TxContext, args: AddEscrow) -> Result<(), String> {
-        Self::check_nonce(ctx, args.nonce)?;
         Self::check_max_messages(ctx)?;
 
         if ctx.is_check_only() {
@@ -176,7 +173,6 @@ impl Methods {
         ctx: &mut TxContext,
         args: ReclaimEscrow,
     ) -> Result<(), String> {
-        Self::check_nonce(ctx, args.nonce)?;
         Self::check_max_messages(ctx)?;
 
         if ctx.is_check_only() {
@@ -199,7 +195,6 @@ impl Methods {
 
     /// Update existing runtime with given descriptor.
     pub fn update_runtime(ctx: &mut TxContext, args: UpdateRuntime) -> Result<(), String> {
-        Self::check_nonce(ctx, args.nonce)?;
         Self::check_max_messages(ctx)?;
 
         if ctx.is_check_only() {
@@ -222,8 +217,6 @@ impl Methods {
 
     /// Insert a key/value pair.
     pub fn insert(ctx: &mut TxContext, args: KeyValue) -> Result<Option<String>, String> {
-        Self::check_nonce(ctx, args.nonce)?;
-
         if args.value.as_bytes().len() > 128 {
             return Err("Value too big to be inserted.".to_string());
         }
@@ -246,8 +239,6 @@ impl Methods {
 
     /// Retrieve a key/value pair.
     pub fn get(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
-        Self::check_nonce(ctx, args.nonce)?;
-
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -266,8 +257,6 @@ impl Methods {
 
     /// Remove a key/value pair.
     pub fn remove(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
-        Self::check_nonce(ctx, args.nonce)?;
-
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -307,8 +296,6 @@ impl Methods {
 
     /// (encrypted) Insert a key/value pair.
     pub fn enc_insert(ctx: &mut TxContext, args: KeyValue) -> Result<Option<String>, String> {
-        Self::check_nonce(ctx, args.nonce)?;
-
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -332,8 +319,6 @@ impl Methods {
 
     /// (encrypted) Retrieve a key/value pair.
     pub fn enc_get(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
-        Self::check_nonce(ctx, args.nonce)?;
-
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -351,8 +336,6 @@ impl Methods {
 
     /// (encrypted) Remove a key/value pair.
     pub fn enc_remove(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
-        Self::check_nonce(ctx, args.nonce)?;
-
         if ctx.is_check_only() {
             return Ok(None);
         }

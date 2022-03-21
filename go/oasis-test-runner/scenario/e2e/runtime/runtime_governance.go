@@ -93,8 +93,8 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				MaxMessages:     128,
 			},
 			TxnScheduler: registry.TxnSchedulerParameters{
-				MaxBatchSize:      1,
-				MaxBatchSizeBytes: 1024,
+				MaxBatchSize:      100,
+				MaxBatchSizeBytes: 1024 * 1024,
 				BatchFlushTimeout: 1 * time.Second,
 				ProposerTimeout:   10,
 			},
@@ -274,12 +274,10 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	newRT.Executor.MaxMessages = 64
 	newRT.Genesis.StateRoot.Empty()
 
-	meta, err := sc.submitRuntimeTxMeta(ctx, rt.ID, "update_runtime", struct {
+	meta, err := sc.submitRuntimeTxMeta(ctx, rt.ID, rtNonce, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
-		Nonce         uint64           `json:"nonce"`
 	}{
 		UpdateRuntime: newRT,
-		Nonce:         rtNonce,
 	})
 	if err != nil {
 		return err
@@ -335,12 +333,10 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 		"src_runtime", rt.ID,
 		"target_runtime", otherRT.ID,
 	)
-	meta, err = sc.submitRuntimeTxMeta(ctx, rt.ID, "update_runtime", struct {
+	meta, err = sc.submitRuntimeTxMeta(ctx, rt.ID, rtNonce, "update_runtime", struct {
 		UpdateRuntime registry.Runtime `json:"update_runtime"`
-		Nonce         uint64           `json:"nonce"`
 	}{
 		UpdateRuntime: newRT,
-		Nonce:         rtNonce,
 	})
 	if err != nil {
 		return err

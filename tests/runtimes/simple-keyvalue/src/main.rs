@@ -4,11 +4,14 @@ pub mod crypto;
 pub mod methods;
 pub mod types;
 
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    convert::TryInto,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use oasis_core_keymanager_client::KeyManagerClient;
 use oasis_core_runtime::{
-    common::version::Version,
+    common::{crypto::hash::Hash, version::Version},
     config::Config,
     consensus::{
         roothash::{IncomingMessage, Message},
@@ -30,6 +33,10 @@ use simple_keymanager::trusted_policy_signers;
 use methods::{BlockHandler, Methods};
 use types::*;
 
+/// Maximum number of transactions in a batch. Should be less than or equal to what is set in the
+/// runtime descriptor to avoid batches being rejected.
+const MAX_BATCH_SIZE: usize = 100;
+
 /// A simple context wrapper for processing test transaction batches.
 ///
 /// For a proper dispatcher see the [Oasis SDK](https://github.com/oasisprotocol/oasis-sdk).
@@ -46,18 +53,21 @@ pub struct Context<'a, 'core> {
 pub struct TxContext<'a, 'b, 'core> {
     pub parent: &'a mut Context<'b, 'core>,
     pub tags: Tags,
+
+    check_only: bool,
 }
 
 impl<'a, 'b, 'core> TxContext<'a, 'b, 'core> {
-    fn new(parent: &'a mut Context<'b, 'core>) -> Self {
+    fn new(parent: &'a mut Context<'b, 'core>, check_only: bool) -> Self {
         Self {
             parent,
             tags: vec![],
+            check_only,
         }
     }
 
     fn is_check_only(&self) -> bool {
-        self.parent.core.check_only
+        self.check_only
     }
 
     fn emit_message(&mut self, message: Message) -> u32 {
@@ -113,6 +123,8 @@ impl Dispatcher {
     }
 
     fn dispatch_tx(ctx: &mut TxContext, tx: Call) -> Result<cbor::Value, String> {
+        Methods::check_nonce(ctx, tx.nonce)?;
+
         match tx.method.as_str() {
             "get_runtime_id" => Self::dispatch_call(ctx, tx.args, Methods::get_runtime_id),
             "consensus_accounts" => Self::dispatch_call(ctx, tx.args, Methods::consensus_accounts),
@@ -148,7 +160,7 @@ impl Dispatcher {
             message: "malformed transaction batch".to_string(),
         })?;
 
-        let mut tx_ctx = TxContext::new(ctx);
+        let mut tx_ctx = TxContext::new(ctx, false);
 
         match Self::dispatch_tx(&mut tx_ctx, tx) {
             Ok(result) => Ok(ExecuteTxResult {
@@ -168,7 +180,7 @@ impl Dispatcher {
     }
 
     fn check_tx(ctx: &mut Context<'_, '_>, tx: &[u8]) -> Result<CheckTxResult, RuntimeError> {
-        let mut tx_ctx = TxContext::new(ctx);
+        let mut tx_ctx = TxContext::new(ctx, true);
 
         match Self::decode_and_dispatch_tx(&mut tx_ctx, tx) {
             Ok(_) => Ok(CheckTxResult::default()),
@@ -269,10 +281,26 @@ impl TxnDispatcher for Dispatcher {
 
         // Execute transactions.
         // TODO: Actually do some batch reordering.
+        let mut new_batch = vec![];
         let mut results = vec![];
-        for tx in batch.iter() {
-            results.push(Self::execute_tx(&mut ctx, tx)?);
+        let mut tx_reject_hashes = vec![];
+        for tx in batch.drain(..) {
+            if new_batch.len() >= MAX_BATCH_SIZE {
+                break;
+            }
+
+            // Reject any transactions that don't pass check tx.
+            if Self::check_tx(&mut ctx, &tx)?.error.code != 0 {
+                tx_reject_hashes.push(Hash::digest_bytes(&tx));
+                continue;
+            }
+
+            results.push(Self::execute_tx(&mut ctx, &tx)?);
+            new_batch.push(tx);
         }
+
+        // Replace input batch with newly generated batch.
+        *batch = new_batch.into();
 
         Ok(ExecuteBatchResult {
             results,
@@ -280,7 +308,7 @@ impl TxnDispatcher for Dispatcher {
             in_msgs_count: in_msgs.len(),
             block_tags: vec![],
             batch_weight_limits: None,
-            tx_reject_hashes: vec![],
+            tx_reject_hashes,
         })
     }
 
@@ -341,7 +369,7 @@ pub fn main_with_version(version: Version) {
             features: Some(Features {
                 // Enable the schedule control feature.
                 schedule_control: Some(FeatureScheduleControl {
-                    initial_batch_size: 10,
+                    initial_batch_size: MAX_BATCH_SIZE.try_into().unwrap(),
                 }),
             }),
             ..Default::default()
