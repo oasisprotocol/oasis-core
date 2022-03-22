@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -204,6 +205,8 @@ func TestRegisterNode(t *testing.T) {
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
 					{ID: rt.ID},
+					// Include the same runtime with a different version to test this works.
+					{ID: rt.ID, Version: version.Version{Major: 1}},
 				}
 			},
 			nil,
@@ -245,6 +248,8 @@ func TestRegisterNode(t *testing.T) {
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
 					{ID: rt1.ID},
+					// Include the same runtime with a different version to test this works.
+					{ID: rt1.ID, Version: version.Version{Major: 1}},
 					{ID: rt2.ID},
 				}
 			},
@@ -282,6 +287,8 @@ func TestRegisterNode(t *testing.T) {
 				tcd.node.AddRoles(node.RoleComputeWorker)
 				tcd.node.Runtimes = []*node.Runtime{
 					{ID: rt1.ID},
+					// Include the same runtime with a different version to test this works.
+					{ID: rt1.ID, Version: version.Version{Major: 1}},
 					{ID: rt2.ID},
 				}
 			},

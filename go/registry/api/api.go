@@ -1469,19 +1469,32 @@ func StakeClaimForRuntime(id common.Namespace) staking.StakeClaim {
 
 // StakeThresholdsForNode returns the staking thresholds for the given node.
 //
-// The passed list of runtimes must be runtime descriptors for all runtimes that the node is
-// registered for in the same order as they appear in the node descriptor (for example as returned
-// by the VerifyRegisterNodeArgs function).
+// The passed list of runtimes must be unique runtime descriptors for all runtimes that the node is
+// registered for.
 func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.StakeThreshold) {
 	// Validator nodes are global.
 	if n.HasRoles(node.RoleValidator) {
 		thresholds = append(thresholds, staking.GlobalStakeThreshold(staking.KindNodeValidator))
 	}
 
+	runtimes := make(map[common.Namespace]*Runtime)
+	for _, rt := range rts {
+		runtimes[rt.ID] = rt
+	}
+
 	// Add runtime-specific role thresholds for each registered runtime.
-	for i, rt := range rts {
-		if !n.Runtimes[i].ID.Equal(&rt.ID) {
-			panic(fmt.Errorf("registry: mismatched runtime order"))
+	seen := make(map[common.Namespace]bool)
+	for _, nodeRt := range n.Runtimes {
+		// A runtime can be included multiple times due to multiple deployments/versions.
+		if seen[nodeRt.ID] {
+			continue
+		}
+		seen[nodeRt.ID] = true
+
+		// Grab the runtime descriptor.
+		rt, exists := runtimes[nodeRt.ID]
+		if !exists {
+			panic(fmt.Errorf("registry: runtime %s not provided for computing thresholds", nodeRt.ID))
 		}
 
 		var roleThresholds []staking.ThresholdKind
