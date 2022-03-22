@@ -129,6 +129,6 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 
 func init() {
 	unsafeResetFlags.Bool(CfgPreserveLocalStorage, false, "preserve per-runtime untrusted local storage")
-	unsafeResetFlags.Bool(CfgPreserveMKVSDatabase, false, "preserve per-runtime MKVS database")
+	unsafeResetFlags.Bool(CfgPreserveMKVSDatabase, true, "preserve per-runtime MKVS database")
 	_ = viper.BindPFlags(unsafeResetFlags)
 }
