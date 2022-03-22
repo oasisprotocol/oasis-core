@@ -10,7 +10,7 @@ cbor = { version = "0.2.1", package = "oasis-cbor" }
 # Third party.
 log = "0.4"
 slog = "2.7.0"
-slog-json = "2.6.0"
+slog-json = "2.6.1"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
 serde = { version = "1.0.130", features = ["derive"] }
