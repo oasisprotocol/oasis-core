@@ -313,20 +313,20 @@ type UnsafeSigner interface {
 
 // PrepareSignerContext prepares a context for use during signing by a Signer.
 func PrepareSignerContext(context Context) ([]byte, error) {
-	// The remote signer implementation uses the raw context, and
-	// registration is dealt with client side.  Just check that the
-	// length is sensible, even though the client should be sending
-	// something sane.
-	if allowUnregisteredContexts {
-		if cLen := len(context); cLen == 0 || cLen > ed25519.ContextMaxSize {
-			return nil, errMalformedContext
-		}
-		return []byte(context), nil
-	}
-
-	// Ensure that the context is registered for use.
 	rawOpts, isRegistered := registeredContexts.Load(context)
 	if !isRegistered {
+		// The remote signer implementation uses the raw context, and
+		// registration is dealt with client side.  Just check that the
+		// length is sensible, even though the client should be sending
+		// something sane.
+		if allowUnregisteredContexts {
+			if cLen := len(context); cLen == 0 || cLen > ed25519.ContextMaxSize {
+				return nil, errMalformedContext
+			}
+			return []byte(context), nil
+		}
+
+		// Ensure that the context is registered for use.
 		return nil, errUnregisteredContext
 	}
 	opts := rawOpts.(*contextOptions)
