@@ -20,6 +20,8 @@ use sgx_isa::{AttributesFlags, Report};
 
 #[cfg_attr(test, macro_use)]
 extern crate base64_serde;
+#[macro_use]
+extern crate oasis_core_runtime_utils;
 
 #[macro_use]
 pub mod common;

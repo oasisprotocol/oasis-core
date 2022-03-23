@@ -1,7 +1,9 @@
 [workspace]
 members = [
     "runtime",
+    "runtime-crypto",
     "runtime-loader",
+    "runtime-utils",
     "client",
     "keymanager-client",
     "keymanager-api-common",

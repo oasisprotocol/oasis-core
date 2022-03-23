@@ -11,7 +11,6 @@ use crate::{
         namespace::Namespace,
     },
     consensus::{roothash::Error, state::StateError},
-    key_format,
     storage::mkvs::ImmutableMKVS,
 };
 

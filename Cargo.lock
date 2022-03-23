@@ -1586,6 +1586,8 @@ dependencies = [
  "lazy_static",
  "oasis-cbor",
  "oasis-core-runtime",
+ "oasis-core-runtime-crypto",
+ "oasis-core-runtime-utils",
  "rand 0.7.3",
  "rustc-hex",
  "thiserror",
@@ -1641,13 +1643,9 @@ dependencies = [
  "byteorder",
  "chrono",
  "crossbeam 0.8.1",
- "curve25519-dalek 3.2.0",
  "deoxysii",
- "ed25519-dalek",
  "futures 0.3.21",
- "hmac",
  "honggfuzz",
- "impl-trait-for-tuples",
  "intrusive-collections",
  "io-context",
  "jsonrpc",
@@ -1657,6 +1655,8 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "oasis-cbor",
+ "oasis-core-runtime-crypto",
+ "oasis-core-runtime-utils",
  "oid-registry",
  "percent-encoding",
  "rand 0.7.3",
@@ -1680,8 +1680,27 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 1.17.0",
- "x25519-dalek",
  "x509-parser",
+ "zeroize",
+]
+
+[[package]]
+name = "oasis-core-runtime-crypto"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "byteorder",
+ "curve25519-dalek 3.2.0",
+ "deoxysii",
+ "ed25519-dalek",
+ "hmac",
+ "oasis-cbor",
+ "oasis-core-runtime-utils",
+ "rand 0.7.3",
+ "rustc-hex",
+ "sha2 0.9.9",
+ "thiserror",
+ "x25519-dalek",
  "zeroize",
 ]
 
@@ -1696,6 +1715,14 @@ dependencies = [
  "futures 0.3.21",
  "sgxs-loaders",
  "tokio 0.2.25",
+]
+
+[[package]]
+name = "oasis-core-runtime-utils"
+version = "0.0.0"
+dependencies = [
+ "impl-trait-for-tuples",
+ "oasis-cbor",
 ]
 
 [[package]]

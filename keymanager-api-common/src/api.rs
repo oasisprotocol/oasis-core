@@ -8,14 +8,12 @@ use thiserror::Error;
 use x25519_dalek;
 use zeroize::Zeroize;
 
-use oasis_core_runtime::{
-    common::{
-        crypto::signature::{PublicKey as OasisPublicKey, Signature, SignatureBundle},
-        namespace::Namespace,
-        sgx::avr::EnclaveIdentity,
-    },
-    impl_bytes,
+use oasis_core_runtime::common::{
+    crypto::signature::{PublicKey as OasisPublicKey, Signature, SignatureBundle},
+    namespace::Namespace,
+    sgx::avr::EnclaveIdentity,
 };
+use oasis_core_runtime_utils::impl_bytes;
 
 impl_bytes!(KeyPairId, 32, "A 256-bit key pair identifier.");
 impl_bytes!(PublicKey, 32, "A public key.");

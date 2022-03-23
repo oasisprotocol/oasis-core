@@ -3,9 +3,9 @@ use std::convert::TryInto;
 
 use sha2::{Digest, Sha512Trunc256};
 
-use crate::common::key_format::KeyFormatAtom;
+use oasis_core_runtime_utils::key_format::KeyFormatAtom;
 
-impl_bytes!(Hash, 32, "A 32-byte SHA-512/256 hash.");
+oasis_core_runtime_utils::impl_bytes!(Hash, 32, "A 32-byte SHA-512/256 hash.");
 
 impl Hash {
     /// Compute a digest of the passed slice of bytes.

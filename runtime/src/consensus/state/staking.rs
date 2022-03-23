@@ -15,7 +15,6 @@ use crate::{
         staking::{Account, DebondingDelegation, Delegation},
         state::StateError,
     },
-    key_format,
     storage::mkvs::ImmutableMKVS,
 };
 

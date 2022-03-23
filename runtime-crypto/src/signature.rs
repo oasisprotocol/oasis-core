@@ -15,7 +15,7 @@ use zeroize::Zeroize;
 
 use super::hash::Hash;
 
-impl_bytes!(
+oasis_core_runtime_utils::impl_bytes!(
     PublicKey,
     ed25519_dalek::PUBLIC_KEY_LENGTH,
     "An Ed25519 public key."
@@ -99,7 +99,7 @@ impl Signer for PrivateKey {
     }
 }
 
-impl_bytes!(Signature, 64, "An Ed25519 signature.");
+oasis_core_runtime_utils::impl_bytes!(Signature, 64, "An Ed25519 signature.");
 
 impl Signature {
     /// Verify signature.

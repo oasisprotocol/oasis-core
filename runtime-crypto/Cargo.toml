@@ -1,0 +1,23 @@
+[package]
+name = "oasis-core-runtime-crypto"
+version = "0.0.0"
+authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
+edition = "2018"
+
+[dependencies]
+cbor = { version = "0.2.1", package = "oasis-cbor" }
+oasis-core-runtime-utils = { path = "../runtime-utils" }
+
+# Third party.
+anyhow = "1.0"
+byteorder = "1.4.3"
+curve25519-dalek = "3.2.0"
+deoxysii = "0.2.3"
+ed25519-dalek = "1.0.1"
+hmac = "0.11.0"
+rand = "0.7.3"
+rustc-hex = "2.0.1"
+sha2 = "0.9.9"
+thiserror = "1.0"
+x25519-dalek = "1.1.0"
+zeroize = "1.4"

@@ -1,0 +1,11 @@
+[package]
+name = "oasis-core-runtime-utils"
+version = "0.0.0"
+authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
+edition = "2018"
+
+[dependencies]
+cbor = { version = "0.2.1", package = "oasis-cbor" }
+
+# Third party.
+impl-trait-for-tuples = "0.2.1"

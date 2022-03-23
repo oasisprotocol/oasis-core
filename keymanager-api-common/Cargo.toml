@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 oasis-core-runtime = { path = "../runtime" }
+oasis-core-runtime-crypto = { path = "../runtime-crypto" }
+oasis-core-runtime-utils = { path = "../runtime-utils" }
 cbor = { version = "0.2.1", package = "oasis-cbor" }
 
 base64 = "0.13.0"
