@@ -71,6 +71,12 @@ var (
 		Run:   doStatus,
 	}
 
+	controlRuntimeStatsCmd = &cobra.Command{
+		Use:   "runtime-stats <runtime-id> [<start-height> [<end-height>]]",
+		Short: "show runtime statistics",
+		Run:   doRuntimeStats,
+	}
+
 	logger = logging.GetLogger("cmd/control")
 )
 
@@ -80,6 +86,10 @@ func DoConnect(cmd *cobra.Command) (*grpc.ClientConn, control.NodeController) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	return doConnectOnly(cmd)
+}
+
+func doConnectOnly(cmd *cobra.Command) (*grpc.ClientConn, control.NodeController) {
 	conn, err := cmdGrpc.NewClient(cmd)
 	if err != nil {
 		logger.Error("failed to establish connection with node",
@@ -301,5 +311,6 @@ func Register(parentCmd *cobra.Command) {
 	controlCmd.AddCommand(controlUpgradeBinaryCmd)
 	controlCmd.AddCommand(controlCancelUpgradeCmd)
 	controlCmd.AddCommand(controlStatusCmd)
+	controlCmd.AddCommand(controlRuntimeStatsCmd)
 	parentCmd.AddCommand(controlCmd)
 }
