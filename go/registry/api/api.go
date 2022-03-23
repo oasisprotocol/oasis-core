@@ -620,7 +620,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		return nil, nil, err
 	}
 
-	// Validate VRFInfo, DeprecatedBeacon.
+	// Validate VRFInfo.
 	if n.VRF != nil {
 		if !sigNode.MultiSigned.IsSignedBy(n.VRF.ID) {
 			logger.Error("RegisterNode: not signed by VRF ID",
@@ -630,21 +630,8 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			return nil, nil, fmt.Errorf("%w: registration not signed by VRF ID", ErrInvalidArgument)
 		}
 		expectedSigners = append(expectedSigners, n.VRF.ID)
-	}
-	switch isGenesis {
-	case true:
-		// Allow legacy entries without a VRF public key, and with the old PVSS
-		// curve point to be in the genesis document, to ease transition.
-		//
-		// All new (re)registrations will require a VRF public key, and reject
-		// descriptors with the old PVSS curve point.
-	case false:
-		if n.VRF == nil {
-			return nil, nil, fmt.Errorf("%w: registration missing VRF ID", ErrInvalidArgument)
-		}
-		if n.DeprecatedBeacon != nil {
-			return nil, nil, fmt.Errorf("%w: registration contains deprecated PVSS field", ErrInvalidArgument)
-		}
+	} else {
+		return nil, nil, fmt.Errorf("%w: registration missing VRF ID", ErrInvalidArgument)
 	}
 
 	// Validate TLSInfo.

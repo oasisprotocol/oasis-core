@@ -150,6 +150,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	nodeConsensusSigner := memorySigner.NewTestSigner("node consensus genesis sanity checks signer")
 	nodeP2PSigner := memorySigner.NewTestSigner("node P2P genesis sanity checks signer")
 	nodeTLSSigner := memorySigner.NewTestSigner("node TLS genesis sanity checks signer")
+	nodeVRFSigner := memorySigner.NewTestSigner("node VRF genesis sanity checks signer")
 	validPK := signer.Public()
 	var validNS common.Namespace
 	_ = validNS.UnmarshalBinary(validPK[:])
@@ -258,6 +259,9 @@ func TestGenesisSanityCheck(t *testing.T) {
 			ID:        nodeP2PSigner.Public(),
 			Addresses: []node.Address{testAddress},
 		},
+		VRF: &node.VRFInfo{
+			ID: nodeVRFSigner.Public(),
+		},
 		Consensus: node.ConsensusInfo{
 			ID:        nodeConsensusSigner.Public(),
 			Addresses: []node.ConsensusAddress{testConsensusAddress},
@@ -268,6 +272,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 		nodeP2PSigner,
 		nodeTLSSigner,
 		nodeConsensusSigner,
+		nodeVRFSigner,
 	}
 	signedTestNode := signNodeOrDie(nodeSigners, testNode)
 

@@ -87,10 +87,6 @@ type Node struct { // nolint: maligned
 	// based elections.
 	VRF *VRFInfo `json:"vrf,omitempty"`
 
-	// DeprecatedBeacon contains information for this node's
-	// participation in the old PVSS based random beacon protocol.
-	DeprecatedBeacon cbor.RawMessage `json:"beacon,omitempty"`
-
 	// Runtimes are the node's runtimes.
 	Runtimes []*Runtime `json:"runtimes"`
 
