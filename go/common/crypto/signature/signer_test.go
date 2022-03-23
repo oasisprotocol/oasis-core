@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/stretchr/testify/require"
 )
 
@@ -139,6 +140,10 @@ func TestContext(t *testing.T) {
 
 	_, err = PrepareSignerMessage(unregCtx, []byte("message"))
 	require.NoError(err, "PrepareSignerMessage should work with unregisered context (bypassed)")
+
+	overlongUnregCtx := Context("test: l" + strings.Repeat("o", ed25519.ContextMaxSize) + "ng")
+	_, err = PrepareSignerMessage(overlongUnregCtx, []byte("message"))
+	require.Error(err, "PrepareSignerMessage should fail with overlong unregistered context")
 
 	msg5UAUC, err := PrepareSignerMessage(ctx5, []byte("message"))
 	require.NoError(err, "PrepareSignerMessage after UnsafeAllowUnregisteredContexts")
