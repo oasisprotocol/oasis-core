@@ -44,8 +44,6 @@ const (
 
 	// CfgRegistrationEntity configures the registration worker entity.
 	CfgRegistrationEntity = "worker.registration.entity"
-	// CfgDebugRegistrationPrivateKey configures the registration worker private key.
-	CfgDebugRegistrationPrivateKey = "worker.registration.debug.private_key"
 	// CfgRegistrationForceRegister overrides a previously saved deregistration
 	// request.
 	//
@@ -247,6 +245,8 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 		select {
 		case <-w.stopCh:
 			return
+		case <-w.stopRegCh:
+			return
 		case <-w.consensus.Synced():
 		}
 		w.logger.Debug("consensus synced, entering registration loop")
@@ -325,7 +325,9 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 			var ok bool
 			select {
 			case <-w.stopCh:
-				return context.Canceled
+				return backoff.Permanent(context.Canceled)
+			case <-w.stopRegCh:
+				return backoff.Permanent(context.Canceled)
 			case epoch, ok = <-ch:
 				if !ok {
 					return context.Canceled
@@ -649,6 +651,9 @@ func (w *Worker) doNodeRegistration() {
 			return
 
 		case <-w.stopCh:
+			return
+
+		case <-w.stopRegCh:
 			return
 		}
 	}
@@ -1207,10 +1212,8 @@ func init() {
 	})
 
 	Flags.String(CfgRegistrationEntity, "", "entity to use as the node owner in registrations")
-	Flags.String(CfgDebugRegistrationPrivateKey, "", "private key to use to sign node registrations")
 	Flags.Bool(CfgRegistrationForceRegister, false, "(DEPRECATED) override a previously saved deregistration request")
 	Flags.Uint64(CfgRegistrationRotateCerts, 0, "rotate node TLS certificates every N epochs (0 to disable)")
-	_ = Flags.MarkHidden(CfgDebugRegistrationPrivateKey)
 
 	_ = viper.BindPFlags(Flags)
 }
