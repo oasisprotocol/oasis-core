@@ -76,8 +76,8 @@ func New(env *env.Env, factory Factory, logger *logging.Logger) *Helpers {
 // runtime state.
 func (h *Helpers) UnsafeReset(dataDir string, preserveRuntimeStorage, preserveLocalStorage bool) error {
 	args := []string{"unsafe-reset", "--" + cmdCommon.CfgDataDir, dataDir}
-	if preserveRuntimeStorage {
-		args = append(args, "--"+cmdNode.CfgPreserveMKVSDatabase)
+	if !preserveRuntimeStorage {
+		args = append(args, "--"+cmdNode.CfgPreserveMKVSDatabase+"=false")
 	}
 	if preserveLocalStorage {
 		args = append(args, "--"+cmdNode.CfgPreserveLocalStorage)
