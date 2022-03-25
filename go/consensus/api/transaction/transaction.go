@@ -221,6 +221,53 @@ func Sign(signer signature.Signer, tx *Transaction) (*SignedTransaction, error) 
 	return &SignedTransaction{Signed: *signed}, nil
 }
 
+// OpenRawTransactions takes a vector of raw byte-serialized SignedTransactions,
+// and deserializes them, returning all of the signing public key and deserialized
+// Transaction, for the transactions that have valid signatures.
+//
+// The index of each of the return values is that of the corresponding raw
+// transaction input.
+func OpenRawTransactions(rawTxBytes [][]byte) ([]signature.PublicKey, []*Transaction, []error) {
+	l := len(rawTxBytes)
+	publicKeys := make([]signature.PublicKey, l)
+	txes := make([]*Transaction, l)
+
+	// Deserialize the transaction envelopes.
+	verifier := signature.NewBatchVerifierWithCapacity(l)
+	signedTxes := make([]SignedTransaction, l)
+	for i, v := range rawTxBytes {
+		err := cbor.Unmarshal(v, &signedTxes[i])
+		switch err {
+		case nil:
+			publicKeys[i] = signedTxes[i].Signed.Signature.PublicKey
+			verifier.Add(
+				publicKeys[i],
+				SignatureContext,
+				signedTxes[i].Signed.Signature.Signature[:],
+				signedTxes[i].Signed.Blob,
+			)
+		default:
+			verifier.AddError(err)
+		}
+	}
+
+	// Verify the transaction signatures, and deserialize the valid transactions.
+	_, errs := verifier.Verify()
+	for i, sigErr := range errs {
+		if sigErr != nil {
+			continue
+		}
+		var tx Transaction
+		if err := cbor.Unmarshal(signedTxes[i].Signed.Blob, &tx); err != nil {
+			errs[i] = err
+			continue
+		}
+		txes[i] = &tx
+	}
+
+	return publicKeys, txes, errs
+}
+
 // MethodSeparator is the separator used to separate backend name from method name.
 const MethodSeparator = "."
 

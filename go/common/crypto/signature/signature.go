@@ -55,6 +55,10 @@ var (
 	// fails when opening a signed blob.
 	ErrVerifyFailed = errors.New("signed: signature verification failed")
 
+	// ErrForbiddenPublicKey is the error returned when a public key is
+	// in the blacklist.
+	ErrForbiddenPublicKey = errors.New("signature: public key forbidden")
+
 	errKeyMismatch = errors.New("signature: public key PEM is not for private key")
 
 	_ encoding.BinaryMarshaler   = PublicKey{}
@@ -623,39 +627,11 @@ func VerifyManyToOne(context Context, message []byte, sigs []Signature) bool {
 		return false
 	}
 
-	verifier := ed25519.NewBatchVerifier()
+	verifier := ed25519.NewBatchVerifierWithCapacity(len(sigs))
 
 	for i := range sigs {
 		v := sigs[i] // This is deliberate.
 		if v.PublicKey.IsBlacklisted() {
-			return false
-		}
-
-		cachingVerifier.AddWithOptions(verifier, v.PublicKey[:], msg, v.Signature[:], defaultOptions)
-	}
-
-	return verifier.VerifyBatchOnly(rand.Reader)
-}
-
-// VerifyBatch verifies multiple signatures, made by multiple public keys,
-// against a single context and multiple messages, returning true iff every
-// signature is valid.
-func VerifyBatch(context Context, messages [][]byte, sigs []Signature) bool {
-	if len(messages) != len(sigs) {
-		panic("signature: VerifyBatch messages/signature count mismatch")
-	}
-
-	verifier := ed25519.NewBatchVerifier()
-
-	for i := range sigs {
-		v := sigs[i] // This is deliberate.
-		if v.PublicKey.IsBlacklisted() {
-			return false
-		}
-
-		// Sigh. :(
-		msg, err := PrepareSignerMessage(context, messages[i])
-		if err != nil {
 			return false
 		}
 
