@@ -21,6 +21,9 @@ import (
 )
 
 const (
+	// CfgHeight configures the consensus height.
+	CfgHeight = "height"
+
 	// CfgAccountAddr configures the account address.
 	CfgAccountAddr = "stake.account.address"
 
@@ -58,6 +61,7 @@ var (
 	sharesFlags             = flag.NewFlagSet("", flag.ContinueOnError)
 	commonEscrowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
 	commissionScheduleFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	accountInfoFlags        = flag.NewFlagSet("", flag.ContinueOnError)
 	accountTransferFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 	accountBurnFlags        = flag.NewFlagSet("", flag.ContinueOnError)
 	accountAllowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
@@ -145,7 +149,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
-	height := consensus.HeightLatest
+	height := viper.GetInt64(CfgHeight)
 
 	ctx := context.Background()
 	acct := getAccount(ctx, addr, height, client)
@@ -158,6 +162,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, exp)
 
+	fmt.Printf("Account State for Height: %d\n", height)
 	fmt.Println("Balance:")
 	prettyPrintAccountBalanceAndDelegationsFrom(ctx, addr, acct.General, outgoingDelegationInfos, outgoingDebondingDelegationInfos, "  ", os.Stdout)
 	fmt.Println()
@@ -509,6 +514,7 @@ func registerAccountCmd() {
 	}
 
 	accountInfoCmd.Flags().AddFlagSet(commonAccountFlags)
+	accountInfoCmd.Flags().AddFlagSet(accountInfoFlags)
 	accountNonceCmd.Flags().AddFlagSet(commonAccountFlags)
 	accountValidateAddressCmd.Flags().AddFlagSet(commonAccountFlags)
 	accountValidateAddressCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
@@ -533,6 +539,9 @@ func init() {
 
 	sharesFlags.String(CfgShares, "0", "amount of shares for the transaction")
 	_ = viper.BindPFlags(sharesFlags)
+
+	accountInfoFlags.Int64(CfgHeight, consensus.HeightLatest, "height at which to query for info (default to latest height)")
+	_ = viper.BindPFlags(accountInfoFlags)
 
 	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account address")
 	_ = viper.BindPFlags(accountTransferFlags)
