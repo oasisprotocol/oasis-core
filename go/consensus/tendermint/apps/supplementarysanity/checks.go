@@ -361,5 +361,5 @@ func checkStakeClaims(ctx *abciAPI.Context, now beacon.EpochTime) error {
 		}
 	}
 
-	return registry.SanityCheckStake(entities, accounts, nodes, runtimes, stakingParams.Thresholds, false)
+	return registry.SanityCheckStake(entities, accounts, nodes, runtimes, runtimes, stakingParams.Thresholds, false)
 }

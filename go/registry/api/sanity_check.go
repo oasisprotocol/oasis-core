@@ -87,7 +87,7 @@ func (g *Genesis) SanityCheck(
 			return fmt.Errorf("registry: sanity check failed: could not obtain runtimes from runtimesLookup: %w", err)
 		}
 		// Check stake.
-		return SanityCheckStake(entities, stakeLedger, nodes, runtimes, stakeThresholds, true)
+		return SanityCheckStake(entities, stakeLedger, nodes, runtimes, allRuntimes, stakeThresholds, true)
 	}
 
 	return nil
@@ -221,6 +221,7 @@ func SanityCheckStake(
 	accounts map[staking.Address]*staking.Account,
 	nodes []*node.Node,
 	runtimes []*Runtime,
+	allRuntimes []*Runtime,
 	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
 	isGenesis bool,
 ) error {
@@ -254,7 +255,7 @@ func SanityCheckStake(
 	// Also generate escrow accounts for all runtimes that are using the
 	// runtime governance model.
 	runtimeMap := make(map[common.Namespace]*Runtime)
-	for _, rt := range runtimes {
+	for _, rt := range allRuntimes {
 		runtimeMap[rt.ID] = rt
 
 		if rt.GovernanceModel == GovernanceRuntime {
