@@ -914,8 +914,9 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// Enable stake claims check.
 	d.Registry.Parameters.DebugBypassStake = false
 	// Setup registry state.
-	d.Registry.Entities = []*entity.SignedEntity{signedTestEntity}
+	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithTestNode}
 	d.Registry.Runtimes = []*registry.Runtime{testKMRuntime, testRuntime}
+	d.Registry.Nodes = []*node.MultiSignedNode{signedComputeTestNode}
 	// Setup ledger.
 	d.Staking.Ledger[testEntityAddress] = &staking.Account{
 		Escrow: staking.EscrowAccount{
