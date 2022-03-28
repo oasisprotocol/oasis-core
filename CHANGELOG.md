@@ -12,6 +12,34 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.11 (2022-03-28)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- go/oasis-node/cmd/stake: Allow querying historical account info
+  ([#4416](https://github.com/oasisprotocol/oasis-core/issues/4416))
+
+  The `oasis-node stake account info` CLI command now accepts `--height` flag
+  which allows one to query an account's info at an arbitrary height.
+
+- go/oasis-node/cmd: Preserve MKVS database by default in unsafe-reset
+  ([#4588](https://github.com/oasisprotocol/oasis-core/issues/4588))
+
+  Preserving the MKVS database is becoming the more common workflow, so we're
+  making that the default for `oasis-node unsafe-reset`.
+
+  Use `--preserve.mkvs_database=false` to wipe the mkvs database as the
+  previous default did.
+
+- go/signature: Apply options on registered contexts
+  ([#4591](https://github.com/oasisprotocol/oasis-core/issues/4591))
+
 ## 21.3.10 (2022-02-23)
 
 | Protocol          | Version   |
