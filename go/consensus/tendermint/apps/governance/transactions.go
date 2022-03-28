@@ -1,6 +1,7 @@
 package governance
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -229,6 +230,10 @@ func (app *governanceApplication) castVote(
 		var node *node.Node
 		node, err = registryState.Node(ctx, nID)
 		if err != nil {
+			// Node not being registered is non-fatal.
+			if errors.Is(err, registryAPI.ErrNoSuchNode) {
+				continue
+			}
 			return fmt.Errorf("governance: failed to query entity node: %w", err)
 		}
 		if _, ok := currentValidators[node.Consensus.ID]; ok {
