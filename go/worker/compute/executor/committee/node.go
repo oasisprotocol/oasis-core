@@ -73,13 +73,6 @@ var (
 		},
 		[]string{"runtime"},
 	)
-	batchReadTime = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "oasis_worker_batch_read_time",
-			Help: "Time it takes to read a batch from storage (seconds).",
-		},
-		[]string{"runtime"},
-	)
 	batchProcessingTime = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name: "oasis_worker_batch_processing_time",
@@ -105,7 +98,6 @@ var (
 		discrepancyDetectedCount,
 		abortedBatchCount,
 		storageCommitLatency,
-		batchReadTime,
 		batchProcessingTime,
 		batchRuntimeProcessingTime,
 		batchSize,
