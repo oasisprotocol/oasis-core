@@ -12,6 +12,92 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.0.3 (2022-03-28)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 5.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- go/oasis-node/cmd/stake: Allow querying historical account info
+  ([#4416](https://github.com/oasisprotocol/oasis-core/issues/4416))
+
+  The `oasis-node stake account info` CLI command now accepts `--height` flag
+  which allows one to query an account's info at an arbitrary height.
+
+- go/consensus/tendermint: Bump default max number of inbound peers
+  ([#4576](https://github.com/oasisprotocol/oasis-core/issues/4576))
+
+- go/oasis-node/cmd/control: Add `clear-deregister`
+  ([#4580](https://github.com/oasisprotocol/oasis-core/issues/4580))
+
+  Instead of using `--worker.registration.force_register` to clear the
+  persisted deregister flag manually, there now is an explicit command
+  that will do so.
+
+- go/oasis-node/cmd: Preserve MKVS database by default in unsafe-reset
+  ([#4588](https://github.com/oasisprotocol/oasis-core/issues/4588))
+
+  Preserving the MKVS database is becoming the more common workflow, so we're
+  making that the default for `oasis-node unsafe-reset`.
+
+  Use `--preserve.mkvs_database=false` to wipe the mkvs database as the
+  previous default did.
+
+- go/signature: Apply options on registered contexts
+  ([#4591](https://github.com/oasisprotocol/oasis-core/issues/4591))
+
+### Bug Fixes
+
+- Don't clear tx pool on epoch transitions, add txsync protocol
+  ([#4579](https://github.com/oasisprotocol/oasis-core/issues/4579))
+
+- go/worker/registration: Clear deregister flag when deregistered
+  ([#4580](https://github.com/oasisprotocol/oasis-core/issues/4580))
+
+  When gracefully halting the node after the node's registration
+  expires, to ensure that the deregistration and shutdown occurs,
+  the node will persist the fact that it is mid-shutdown in a flag.
+
+  Previously, this flag had to be cleared manually by the node operator
+  which, while serving to ensure that the node does not get restarted
+  and re-register, is sub-optimal as it required manual intervention.
+
+  Instead, if the node is deregistered cleanly, we will clear the flag
+  under the assumption that the operator can configure whatever
+  automation they are using to do the right thing.
+
+- go/registry: Fix invalid sanity check
+  ([#4585](https://github.com/oasisprotocol/oasis-core/issues/4585))
+
+- RequestShutdown: fix shutdown if registration never succeeded
+  ([#4595](https://github.com/oasisprotocol/oasis-core/issues/4595))
+
+  This fixes a case where node would never shutdown if the initial
+  registration never succeeded.
+
+- go/registry: Fix node stake claim sanity check with suspended runtimes
+  ([#4603](https://github.com/oasisprotocol/oasis-core/issues/4603))
+
+### Internal Changes
+
+- go: Bump libp2p to 0.18.0
+  ([#4578](https://github.com/oasisprotocol/oasis-core/issues/4578))
+
+- Remove `worker.registration.debug.private_key` flag
+  ([#4595](https://github.com/oasisprotocol/oasis-core/issues/4595))
+
+  The flag was unused.
+
+- ci: Show dirtiness after regenerating protos
+  ([#4598](https://github.com/oasisprotocol/oasis-core/issues/4598))
+
+- go/common/crypto/signature: Improve the batch verification API
+  ([#4602](https://github.com/oasisprotocol/oasis-core/issues/4602))
+
 ## 22.0.2 (2022-03-17)
 
 | Protocol          | Version   |
