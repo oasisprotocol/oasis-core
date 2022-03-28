@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdContext "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/context"
@@ -20,6 +21,9 @@ import (
 )
 
 const (
+	// CfgHeight configures the consensus height.
+	CfgHeight = "height"
+
 	// CfgAccountAddr configures the account address.
 	CfgAccountAddr = "stake.account.address"
 
@@ -57,6 +61,7 @@ var (
 	sharesFlags             = flag.NewFlagSet("", flag.ContinueOnError)
 	commonEscrowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
 	commissionScheduleFlags = flag.NewFlagSet("", flag.ContinueOnError)
+	accountInfoFlags        = flag.NewFlagSet("", flag.ContinueOnError)
 	accountTransferFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 	accountBurnFlags        = flag.NewFlagSet("", flag.ContinueOnError)
 	accountAllowFlags       = flag.NewFlagSet("", flag.ContinueOnError)
@@ -144,17 +149,20 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
+	height := viper.GetInt64(CfgHeight)
+
 	ctx := context.Background()
-	acct := getAccount(ctx, cmd, addr, client)
-	outgoingDelegationInfos := getDelegationInfosFor(ctx, cmd, addr, client)
-	incomingDelegations := getDelegationsTo(ctx, cmd, addr, client)
-	outgoingDebondingDelegationInfos := getDebondingDelegationInfosFor(ctx, cmd, addr, client)
-	incomingDebondingDelegations := getDebondingDelegationsTo(ctx, cmd, addr, client)
-	symbol := getTokenSymbol(ctx, cmd, client)
-	exp := getTokenValueExponent(ctx, cmd, client)
+	acct := getAccount(ctx, addr, height, client)
+	outgoingDelegationInfos := getDelegationInfosFor(ctx, addr, height, client)
+	incomingDelegations := getDelegationsTo(ctx, addr, height, client)
+	outgoingDebondingDelegationInfos := getDebondingDelegationInfosFor(ctx, addr, height, client)
+	incomingDebondingDelegations := getDebondingDelegationsTo(ctx, addr, height, client)
+	symbol := getTokenSymbol(ctx, client)
+	exp := getTokenValueExponent(ctx, client)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenSymbol, symbol)
 	ctx = context.WithValue(ctx, prettyprint.ContextKeyTokenValueExponent, exp)
 
+	fmt.Printf("Account State for Height: %d\n", height)
 	fmt.Println("Balance:")
 	prettyPrintAccountBalanceAndDelegationsFrom(ctx, addr, acct.General, outgoingDelegationInfos, outgoingDebondingDelegationInfos, "  ", os.Stdout)
 	fmt.Println()
@@ -210,8 +218,10 @@ func doAccountNonce(cmd *cobra.Command, args []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
+	height := consensus.HeightLatest
+
 	ctx := context.Background()
-	acct := getAccount(ctx, cmd, addr, client)
+	acct := getAccount(ctx, addr, height, client)
 	fmt.Println(acct.General.Nonce)
 }
 
@@ -504,6 +514,7 @@ func registerAccountCmd() {
 	}
 
 	accountInfoCmd.Flags().AddFlagSet(commonAccountFlags)
+	accountInfoCmd.Flags().AddFlagSet(accountInfoFlags)
 	accountNonceCmd.Flags().AddFlagSet(commonAccountFlags)
 	accountValidateAddressCmd.Flags().AddFlagSet(commonAccountFlags)
 	accountValidateAddressCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
@@ -528,6 +539,9 @@ func init() {
 
 	sharesFlags.String(CfgShares, "0", "amount of shares for the transaction")
 	_ = viper.BindPFlags(sharesFlags)
+
+	accountInfoFlags.Int64(CfgHeight, consensus.HeightLatest, "height at which to query for info (default to latest height)")
+	_ = viper.BindPFlags(accountInfoFlags)
 
 	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account address")
 	_ = viper.BindPFlags(accountTransferFlags)
