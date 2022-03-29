@@ -1,14 +1,12 @@
 package roothash
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
@@ -38,10 +36,6 @@ var (
 
 type metricsWrapper struct {
 	api.Backend
-}
-
-func (w *metricsWrapper) WatchBlocks(ctx context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	return w.Backend.WatchBlocks(ctx, id)
 }
 
 func (w *metricsWrapper) worker() {
