@@ -49,16 +49,6 @@ func processLivenessStatistics(ctx *tmapi.Context, epoch beacon.EpochTime, rtSta
 	// Penalize nodes that were not live enough.
 	regState := registryState.NewMutableState(ctx.State())
 	for nodeID, liveRounds := range goodRoundsPerNode {
-		if liveRounds >= minLiveRounds {
-			continue
-		}
-
-		ctx.Logger().Debug("node deemed faulty",
-			"node_id", nodeID,
-			"live_rounds", liveRounds,
-			"min_live_rounds", minLiveRounds,
-		)
-
 		status, err := regState.NodeStatus(ctx, nodeID)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve status for node %s: %w", nodeID, err)
@@ -67,22 +57,35 @@ func processLivenessStatistics(ctx *tmapi.Context, epoch beacon.EpochTime, rtSta
 			continue
 		}
 
-		status.RecordFailure(rtState.Runtime.ID, epoch)
+		switch {
+		case liveRounds >= minLiveRounds:
+			// Node is live.
+			status.RecordSuccess(rtState.Runtime.ID, epoch)
+		default:
+			// Node is faulty.
+			ctx.Logger().Debug("node deemed faulty",
+				"node_id", nodeID,
+				"live_rounds", liveRounds,
+				"min_live_rounds", minLiveRounds,
+			)
 
-		// Check if the node has reached the maximum allowed number of failures.
-		fault := status.Faults[rtState.Runtime.ID]
-		if fault.Failures >= maxFailures {
-			// Make sure to freeze forever if this would otherwise overflow.
-			if epoch > registry.FreezeForever-slashParams.FreezeInterval {
-				status.FreezeEndTime = registry.FreezeForever
-			} else {
-				status.FreezeEndTime = epoch + slashParams.FreezeInterval
-			}
+			status.RecordFailure(rtState.Runtime.ID, epoch)
 
-			// Slash if configured.
-			err = onRuntimeLivenessFailure(ctx, nodeID, &slashParams.Amount)
-			if err != nil {
-				return fmt.Errorf("failed to slash node %s: %w", nodeID, err)
+			// Check if the node has reached the maximum allowed number of failures.
+			fault := status.Faults[rtState.Runtime.ID]
+			if fault.Failures >= maxFailures {
+				// Make sure to freeze forever if this would otherwise overflow.
+				if epoch > registry.FreezeForever-slashParams.FreezeInterval {
+					status.FreezeEndTime = registry.FreezeForever
+				} else {
+					status.FreezeEndTime = epoch + slashParams.FreezeInterval
+				}
+
+				// Slash if configured.
+				err = onRuntimeLivenessFailure(ctx, nodeID, &slashParams.Amount)
+				if err != nil {
+					return fmt.Errorf("failed to slash node %s: %w", nodeID, err)
+				}
 			}
 		}
 
