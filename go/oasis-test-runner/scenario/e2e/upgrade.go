@@ -143,6 +143,8 @@ var (
 	NodeUpgradeMaxAllowances scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusMaxAllowances16Handler, &noOpUpgradeChecker{})
 	// NodeUpgradeConsensus202108 is the node consensus upgrade 202108 scenario.
 	NodeUpgradeConsensus202108 scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusParamsUpdate202108, &upgrade202108Checker{})
+	// NodeUpgradeEmpty is the empty node upgrade scenario.
+	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{})
 
 	malformedDescriptor = []byte(`{
 		"v": 1,
