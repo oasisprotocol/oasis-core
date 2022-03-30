@@ -20,12 +20,15 @@ func TestLoadOrGenerate(t *testing.T) {
 	factory, err := fileSigner.NewFactory(dataDir, RequiredSignerRoles...)
 	require.NoError(t, err, "NewFactory")
 
+	tlsCertPath, _ := TLSCertPaths(dataDir)
 	tlsSentryClientCertPath, _ := TLSSentryClientCertPaths(dataDir)
 
 	// Generate a new identity.
 	identity, err := LoadOrGenerate(dataDir, factory, true)
 	require.NoError(t, err, "LoadOrGenerate")
 	require.EqualValues(t, []signature.PublicKey{identity.GetTLSSigner().Public()}, identity.GetTLSPubKeys())
+	tlsCertFile1, err := ioutil.ReadFile(tlsCertPath)
+	require.NoError(t, err, "read TLS cert")
 	tlsSentryClientCertFile1, err := ioutil.ReadFile(tlsSentryClientCertPath)
 	require.NoError(t, err, "read sentry client TLS cert")
 
@@ -44,6 +47,9 @@ func TestLoadOrGenerate(t *testing.T) {
 	require.EqualValues(t, identity.GetTLSPubKeys(), identity2.GetTLSPubKeys())
 	require.NotEqual(t, identity.TLSSentryClientCertificate, identity2.TLSSentryClientCertificate)
 	require.EqualValues(t, identity.TLSSentryClientCertificate.PrivateKey, identity2.TLSSentryClientCertificate.PrivateKey)
+	tlsCertFile2, err := ioutil.ReadFile(tlsCertPath)
+	require.NoError(t, err, "read TLS cert (2)")
+	require.NotEqualValues(t, tlsCertFile1, tlsCertFile2)
 	tlsSentryClientCertFile2, err := ioutil.ReadFile(tlsSentryClientCertPath)
 	require.NoError(t, err, "read sentry client TLS cert (2)")
 	require.NotEqualValues(t, tlsSentryClientCertFile1, tlsSentryClientCertFile2)

@@ -269,67 +269,71 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 	var (
 		nextCert   *tls.Certificate
 		nextSigner signature.Signer
-		dnr        bool
+		dontRotate bool
 	)
 
-	// First, check if we can load the TLS certificate from disk.
+	// Load and re-generate node's persistent TLS certificate (if it exists).
+	// NOTE: This will reuse the node's persistent TLS private key (if it
+	// exists) and re-generate the TLS certificate with a validity of 1 year.
+	// NOTE: The node needs to be restarted at least once a year so the TLS
+	// certificate doesn't expire.
 	tlsCertPath, tlsKeyPath := TLSCertPaths(dataDir)
 	cert, err := tlsCert.LoadFromKey(tlsKeyPath, CommonName)
-	if err == nil {
-		// Load successful, ensure that we won't ever rotate the certificates.
-		dnr = true
-	} else {
+	if err == nil || persistTLS {
 		if persistTLS {
-			// Freshly generate TLS certificates.
+			// Loading node's persistent TLS private key failed, generate a new
+			// private key and the corresponding TLS certificate.
 			cert, err = tlsCert.Generate(CommonName)
 			if err != nil {
 				return nil, err
 			}
-
-			// Save generated TLS certificate to disk.
-			err = tlsCert.Save(tlsCertPath, tlsKeyPath, cert)
-			if err != nil {
-				return nil, err
-			}
-
-			// Disable TLS rotation if we're persisting TLS certificates.
-			dnr = true
-		} else {
-			// Current key; try loading, else generate, then save.
-			keyPath := ephemeralKeyPath(dataDir, tlsEphemeralGenCurrent)
-			cert, err = tlsCert.LoadFromKey(keyPath, CommonName)
-			if err != nil {
-				if !os.IsNotExist(err) {
-					return nil, fmt.Errorf("identity: unable to read ephemeral key from file: %w", err)
-				}
-				cert, err = tlsCert.Generate(CommonName)
-				if err != nil {
-					return nil, err
-				}
-			}
-			err = tlsCert.SaveKey(keyPath, cert)
-			if err != nil {
-				return nil, err
-			}
-
-			// Next key, to be used in the next rotation; load or generate.
-			nextKeyPath := ephemeralKeyPath(dataDir, tlsEphemeralGenNext)
-			nextCert, err = tlsCert.LoadFromKey(nextKeyPath, CommonName)
-			if err != nil {
-				if !os.IsNotExist(err) {
-					return nil, fmt.Errorf("identity: unable to read next ephemeral key from file: %w", err)
-				}
-				nextCert, err = tlsCert.Generate(CommonName)
-				if err != nil {
-					return nil, err
-				}
-			}
-			err = tlsCert.SaveKey(nextKeyPath, nextCert)
-			if err != nil {
-				return nil, err
-			}
-			nextSigner = memory.NewFromRuntime(nextCert.PrivateKey.(ed25519.PrivateKey))
 		}
+		// Save re-generated TLS certificate (and private key) to disk.
+		err = tlsCert.Save(tlsCertPath, tlsKeyPath, cert)
+		if err != nil {
+			return nil, err
+		}
+
+		// Disable TLS rotation since we've either successfully loaded an
+		// existing node's persistent TLS certificate or persisting TLS
+		// certificates has been requested.
+		dontRotate = true
+	} else {
+		// Use ephemeral TLS keys.
+		// Current key; try loading, else generate, then save.
+		keyPath := ephemeralKeyPath(dataDir, tlsEphemeralGenCurrent)
+		cert, err = tlsCert.LoadFromKey(keyPath, CommonName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("identity: unable to read ephemeral key from file: %w", err)
+			}
+			cert, err = tlsCert.Generate(CommonName)
+			if err != nil {
+				return nil, err
+			}
+		}
+		err = tlsCert.SaveKey(keyPath, cert)
+		if err != nil {
+			return nil, err
+		}
+
+		// Next key, to be used in the next rotation; load or generate.
+		nextKeyPath := ephemeralKeyPath(dataDir, tlsEphemeralGenNext)
+		nextCert, err = tlsCert.LoadFromKey(nextKeyPath, CommonName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("identity: unable to read next ephemeral key from file: %w", err)
+			}
+			nextCert, err = tlsCert.Generate(CommonName)
+			if err != nil {
+				return nil, err
+			}
+		}
+		err = tlsCert.SaveKey(nextKeyPath, nextCert)
+		if err != nil {
+			return nil, err
+		}
+		nextSigner = memory.NewFromRuntime(nextCert.PrivateKey.(ed25519.PrivateKey))
 	}
 
 	// Load and re-generate the sentry client TLS certificate for this node (if
@@ -366,7 +370,7 @@ func doLoadOrGenerate(dataDir string, signerFactory signature.SignerFactory, sho
 		tlsCertificate:             cert,
 		nextTLSSigner:              nextSigner,
 		nextTLSCertificate:         nextCert,
-		DoNotRotateTLS:             dnr,
+		DoNotRotateTLS:             dontRotate,
 		TLSSentryClientCertificate: sentryClientCert,
 		tlsRotationNotifier:        pubsub.NewBroker(false),
 		dataDir:                    dataDir,
