@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -97,7 +99,13 @@ func NewClient(cmd *cobra.Command) (*grpc.ClientConn, error) {
 		addr = "unix:" + addr
 	}
 
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	var creds credentials.TransportCredentials
+	if strings.HasPrefix(addr, "unix:") {
+		creds = insecure.NewCredentials()
+	} else {
+		creds = credentials.NewTLS(&tls.Config{})
+	}
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
 	if viper.GetBool(CfgWait) {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 	}
