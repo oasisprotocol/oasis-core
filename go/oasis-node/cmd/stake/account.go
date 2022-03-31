@@ -151,6 +151,20 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 
 	height := viper.GetInt64(CfgHeight)
 
+	consensusClient := consensus.NewConsensusClient(conn)
+
+	// If height is latest height, take height from latest block.
+	if height == consensus.HeightLatest {
+		blk, err := consensusClient.GetBlock(context.Background(), consensus.HeightLatest)
+		if err != nil {
+			logger.Error("failed to fetch latest block",
+				"err", err,
+			)
+			os.Exit(1)
+		}
+		height = blk.Height
+	}
+
 	ctx := context.Background()
 	acct := getAccount(ctx, addr, height, client)
 	outgoingDelegationInfos := getDelegationInfosFor(ctx, addr, height, client)
@@ -540,7 +554,11 @@ func init() {
 	sharesFlags.String(CfgShares, "0", "amount of shares for the transaction")
 	_ = viper.BindPFlags(sharesFlags)
 
-	accountInfoFlags.Int64(CfgHeight, consensus.HeightLatest, "height at which to query for info (default to latest height)")
+	accountInfoFlags.Int64(
+		CfgHeight,
+		consensus.HeightLatest,
+		fmt.Sprintf("height at which to query for info (default %d, i.e. latest height)", consensus.HeightLatest),
+	)
 	_ = viper.BindPFlags(accountInfoFlags)
 
 	accountTransferFlags.String(CfgTransferDestination, "", "transfer destination account address")
