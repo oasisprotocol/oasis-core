@@ -115,7 +115,7 @@ func init() {
 	Flags.Uint64(cfgMaxTxPoolSize, 50_000, "Maximum size of the scheduling transaction pool")
 	Flags.Uint64(cfgScheduleTxCacheSize, 100_000, "Maximum cache size of recently scheduled transactions to prevent re-scheduling")
 	Flags.Uint64(cfgCheckTxMaxBatchSize, 1000, "Maximum check tx batch size")
-	Flags.Uint64(cfgRecheckInterval, 32, "Transaction recheck interval (in rounds)")
+	Flags.Uint64(cfgRecheckInterval, 5, "Transaction recheck interval (in rounds)")
 
 	_ = viper.BindPFlags(Flags)
 }
