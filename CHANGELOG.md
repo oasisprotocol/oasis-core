@@ -12,6 +12,28 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.12 (2022-04-01)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- go/worker/compute: Perform periodic transaction re-check
+  ([#4619](https://github.com/oasisprotocol/oasis-core/issues/4619))
+
+### Bug Fixes
+
+- go/oasis-node/cmd/stake: Print actual latest height when querying info
+  ([#4622](https://github.com/oasisprotocol/oasis-core/issues/4622))
+
+  If the `--height` flag in `oasis-node stake account info` CLI command is set
+  to 0 (i.e. latest height), determine which height it actually is and present
+  it in the output.
+
 ## 21.3.11 (2022-03-28)
 
 | Protocol          | Version   |
