@@ -145,6 +145,7 @@ type Node struct { // nolint: maligned
 
 	checkTxCh    *channels.RingChannel
 	checkTxQueue *orderedmap.OrderedMap
+	recheckTxCh  *channels.RingChannel
 
 	// The scheduler mutex is here to protect the initialization
 	// of the scheduler variable and updates to scheduler parameters.
@@ -161,6 +162,7 @@ type Node struct { // nolint: maligned
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
 	prevEpochWorker  bool
+	lastRecheckRound uint64
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -586,6 +588,87 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 
 		n.checkTxCh.In() <- struct{}{}
 	}
+
+	if blk.Header.Round-n.lastRecheckRound > 5 {
+		n.recheckTxCh.In() <- struct{}{}
+		n.lastRecheckRound = blk.Header.Round
+	}
+}
+
+func (n *Node) recheckTxBatch() {
+	rt := n.GetHostedRuntime()
+	if rt == nil {
+		n.logger.Debug("recheckTxBatch: hosted runtime not initialized")
+		return
+	}
+
+	n.commonNode.CrossNode.Lock()
+	currentBlock := n.commonNode.CurrentBlock
+	currentConsensusBlock := n.commonNode.CurrentConsensusBlock
+	currentEpoch := n.commonNode.Group.GetEpochSnapshot().GetEpochNumber()
+	n.commonNode.CrossNode.Unlock()
+
+	// Fetch the active descriptor so we can get the current message limits.
+	rtDsc, err := n.commonNode.Runtime.ActiveDescriptor(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to get active runtime descriptor",
+			"err", err,
+		)
+		return
+	}
+	currentMaxMessages := rtDsc.Executor.MaxMessages
+
+	n.schedulerMutex.Lock()
+	scheduler := n.scheduler
+	n.schedulerMutex.Unlock()
+
+	var lastTxHash *hash.Hash
+	const (
+		recheckBatchSize = 1000
+		checkTxTimeout   = 15 * time.Second
+	)
+
+	for {
+		// Grab a batch of transactions.
+		batch := scheduler.GetPrioritizedBatch(lastTxHash, recheckBatchSize)
+		rawBatch := make([][]byte, 0, len(batch))
+		for _, tx := range batch {
+			rawBatch = append(rawBatch, tx.Raw())
+		}
+
+		n.logger.Debug("performing transaction re-check", "batch_size", len(batch))
+
+		// Recheck all transactions.
+		checkCtx, cancel := context.WithTimeout(n.ctx, checkTxTimeout)
+		results, err := rt.CheckTx(checkCtx, currentBlock, currentConsensusBlock, currentEpoch, currentMaxMessages, rawBatch)
+		cancel()
+		if err != nil {
+			n.logger.Error("transaction batch check tx error", "err", err)
+			return
+		}
+
+		var dropTxs []hash.Hash
+		for i, res := range results {
+			if res.IsSuccess() {
+				continue
+			}
+
+			n.logger.Info("re-check tx failed, dropping", "tx_hash", batch[i].Hash(), "result", res)
+
+			dropTxs = append(dropTxs, batch[i].Hash())
+		}
+
+		_ = scheduler.RemoveTxBatch(dropTxs)
+		incomingQueueSize.With(n.getMetricLabels()).Set(float64(scheduler.UnscheduledSize()))
+
+		if len(batch) < recheckBatchSize {
+			break
+		}
+		txHash := batch[len(batch)-1].Hash()
+		lastTxHash = &txHash
+	}
+
+	n.logger.Debug("finished transaction re-check")
 }
 
 // checkTxBatch requests the runtime to check the validity of a transaction batch.
@@ -2069,6 +2152,9 @@ func (n *Node) worker() {
 			// Check any queued transactions and attempt regular scheduling.
 			n.checkTxBatch()
 			n.handleScheduleBatch(false)
+		case <-n.recheckTxCh.Out():
+			// Perform transaction rechecks.
+			n.recheckTxBatch()
 		case <-n.reselect:
 			// Recalculate select set.
 		}
@@ -2108,6 +2194,7 @@ func NewNode(
 		checkTxQueue:          orderedmap.New(scheduleMaxTxPoolSize, checkTxMaxBatchSize),
 		roundWeightLimits:     make(map[transaction.Weight]uint64),
 		checkTxCh:             channels.NewRingChannel(1),
+		recheckTxCh:           channels.NewRingChannel(1),
 		ctx:                   ctx,
 		cancelCtx:             cancel,
 		stopCh:                make(chan struct{}),
