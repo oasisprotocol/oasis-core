@@ -12,6 +12,280 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1 (2022-04-01)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Upgrading From Previous Versions
+
+Previous versions allowed running Oasis Node (i.e. the `oasis-node` binary) as
+root (effective user ID of 0).
+As of this version, this is no longer allowed and attempting to run the
+`oasis-node` process as the root user will now terminate immediately on startup.
+
+### Removals and Breaking Changes
+
+- governance: Allow unregistered nodes in votes
+  ([#4607](https://github.com/oasisprotocol/oasis-core/issues/4607))
+
+  The intent from the comments is to allow votes to be cast as long as the
+  entity has at least 1 validator in the active set.  This fixes entities
+  with nodes that are not currently registered having their votes rejected.
+
+- go/consensus/tendermint: Record node liveness successes
+  ([#4615](https://github.com/oasisprotocol/oasis-core/issues/4615))
+
+- scheduler: Improve runtime committee election fairness
+  ([#4623](https://github.com/oasisprotocol/oasis-core/issues/4623))
+
+  Prune the per-entity nodes down to the per-runtime cap if configured,
+  prior to doing the election, to improve fairness when entities opt to
+  operate multiple nodes for the same runtime.
+
+### Configuration Changes
+
+- go/oasis-node/cmd/node: Do not allow running Oasis Node as root
+  ([#4464](https://github.com/oasisprotocol/oasis-core/issues/4464))
+
+  Nothing in Oasis Node will ever require elevated privileges.  Attempting
+  to run the `oasis-node` process as the root user will now terminate
+  immediately on startup.
+  While there may be specific circumstances where it is safe to run network
+  services with the effective user ID set to 0, the overwhelming majority of
+  cases where this is done is a misconfiguration.
+
+  If the previous behavior is required, the binary must be run in
+  unsafe/debug mode (via the intentionally undocumented flag), and
+  `debug.allow_root` must also be set.
+
+- go/worker/storage: Storage checkpoints are now disabled by default
+  ([#4561](https://github.com/oasisprotocol/oasis-core/issues/4561))
+
+  - The `worker.storage.checkpointer.disabled` flag is removed.
+
+  - The `worker.storage.checkpointer.enabled` flag is added to allow enabling
+    storage checkpoints.
+
+### Features
+
+- go/oasis-node/cmd/stake: Allow querying historical account info
+  ([#4416](https://github.com/oasisprotocol/oasis-core/issues/4416),
+   [#4620](https://github.com/oasisprotocol/oasis-core/issues/4620))
+
+  The `oasis-node stake account info` CLI command now accepts `--height` flag
+  which allows one to query an account's info at an arbitrary height.
+
+- go/oasis-node/cmd/node: Do not allow running Oasis Node as root
+  ([#4464](https://github.com/oasisprotocol/oasis-core/issues/4464))
+
+  Running network accessible services as the root user is extremely
+  bad for system security as a general rule.  While it would be "ok"
+  if we can drop privileges, `syscall.AllThreadsSyscall` does not
+  work if the binary uses cgo at all.
+
+- go/oasis-node/cmd/debug/bundle: Add `info` command
+  ([#4546](https://github.com/oasisprotocol/oasis-core/issues/4546))
+
+  Add `oasis-node debug bundle info` CLI command for inspecting runtime bundles.
+
+- Randomize storage checkpoints wall-clock interval
+  ([#4561](https://github.com/oasisprotocol/oasis-core/issues/4561))
+
+- go/worker/registration: Add a random re-registration delay
+  ([#4574](https://github.com/oasisprotocol/oasis-core/issues/4574))
+
+- go/consensus/tendermint: Bump default max number of inbound peers
+  ([#4576](https://github.com/oasisprotocol/oasis-core/issues/4576))
+
+- go/worker: Add txsync protocol
+  ([#4579](https://github.com/oasisprotocol/oasis-core/issues/4579))
+
+  No longer clear tx pool on epoch transitions. Add the txsync protocol for
+  syncing transaction between nodes.
+
+- go/oasis-node/cmd/control: Add `clear-deregister` command
+  ([#4580](https://github.com/oasisprotocol/oasis-core/issues/4580))
+
+  Instead of using `--worker.registration.force_register` flag to clear the
+  persisted deregister flag manually, there now is an explicit
+  `oasis-node control clear-deregister` CLI command that will do so.
+
+- runtime/host/sgx: Log the advisory URLs on attestation failure
+  ([#4582](https://github.com/oasisprotocol/oasis-core/issues/4582))
+
+- go/oasis-node/cmd: Preserve MKVS database by default in `unsafe-reset` command
+  ([#4588](https://github.com/oasisprotocol/oasis-core/issues/4588))
+
+  Preserving the MKVS database is becoming the more common workflow (i.e.
+  keeping runtimes' state while wiping consensus state), so we're
+  making that the default for `oasis-node unsafe-reset`.
+
+  Use `--preserve.mkvs_database=false` to wipe the MKVS database as the
+  previous default did.
+
+- go/signature: Apply options on registered contexts
+  ([#4591](https://github.com/oasisprotocol/oasis-core/issues/4591))
+
+- go/oasis-node/cmd/control: Add `runtime-stats` command
+  ([#4596](https://github.com/oasisprotocol/oasis-core/issues/4596))
+
+  The new `oasis-node control runtime-stats` CLI command allows querying
+  historical runtime statistics.
+
+- Implements liveness and some other useful executor metrics
+  ([#4610](https://github.com/oasisprotocol/oasis-core/issues/4610))
+
+  The following Prometheus metrics were added:
+
+  - `oasis_worker_executor_is_worker`
+  - `oasis_worker_executor_is_backup_worker`
+  - `oasis_worker_executor_committee_p2p_peers`
+  - `oasis_worker_executor_liveness_total_rounds`
+  - `oasis_worker_executor_liveness_live_rounds`
+  - `oasis_worker_executor_liveness_live_ratio`
+
+  See [metrics documentation] for descriptions of metrics.
+
+  [metrics documentation]: https://docs.oasis.dev/oasis-core/oasis-node/metrics
+
+- go/oasis-node/cmd: Allow using non local gRPC connections
+  ([#4617](https://github.com/oasisprotocol/oasis-core/issues/4617))
+
+  Require server-side TLS for non unix-socket gRPC connections.
+
+- go/worker/common: Lower default transaction recheck interval
+  ([#4618](https://github.com/oasisprotocol/oasis-core/issues/4618))
+
+### Bug Fixes
+
+- go/common/identity: Save re-generated sentry client TLS certificate
+  ([#4382](https://github.com/oasisprotocol/oasis-core/issues/4382))
+
+  Sentry client TLS certificate is always re-generated from the private key when
+  the Oasis Node starts.
+
+  Previously, the re-generated sentry client TLS certificate was not saved to
+  disk, which caused confusion since the on-disk certificate file (i.e.
+  `sentry_client_tls_identity_cert.pem`) had incorrect/outdated expiry date.
+
+- go/common/identity: Save re-generated node's persistent TLS certificate
+  ([#4382](https://github.com/oasisprotocol/oasis-core/issues/4382))
+
+  If a node's TLS certificate is persistent, it is always re-generated from the
+  private key when the Oasis Node starts.
+
+  Previously, the re-generated node's persistent TLS certificate was not saved
+  to disk, which caused confusion since the on-disk certificate file (i.e.
+  `tls_identity_cert.pem`) had incorrect/outdated expiry date.
+
+- go/worker/common: Don't crash if current descriptor is not ready
+  ([#4534](https://github.com/oasisprotocol/oasis-core/issues/4534))
+
+- go/worker/beacon: Don't submit VRF proofs if registration disabled
+  ([#4536](https://github.com/oasisprotocol/oasis-core/issues/4536))
+
+- go/runtime/host/multi: Release lock before calling into runtime
+  ([#4538](https://github.com/oasisprotocol/oasis-core/issues/4538))
+
+- go/worker/common: Watch for all deployment updates when suspended
+  ([#4541](https://github.com/oasisprotocol/oasis-core/issues/4541))
+
+- go/worker/common: Properly refresh liveness statistics
+  ([#4543](https://github.com/oasisprotocol/oasis-core/issues/4543))
+
+- go/worker/storage: Only attempt checkpoint sync on initial startup
+  ([#4544](https://github.com/oasisprotocol/oasis-core/issues/4544))
+
+- go/oasis-node/cmd/ias: Refresh runtimes on every epoch
+  ([#4548](https://github.com/oasisprotocol/oasis-core/issues/4548))
+
+- go/worker/common: Propagate CheckTx errors
+  ([#4551](https://github.com/oasisprotocol/oasis-core/issues/4551))
+
+- consensus/sanity-checks: Skip suspended runtimes for computing stake claims
+  ([#4556](https://github.com/oasisprotocol/oasis-core/issues/4556))
+
+- runtime: Commit check transaction results for subsequent batches
+  ([#4557](https://github.com/oasisprotocol/oasis-core/issues/4557))
+
+- go/runtime/txpool: Abort runtime in case it times out during checks
+  ([#4563](https://github.com/oasisprotocol/oasis-core/issues/4563))
+
+- oasis-net-runner: Fix fixtures without a keymanager
+  ([#4564](https://github.com/oasisprotocol/oasis-core/issues/4564))
+
+- go/worker/registration: Clear deregister flag when deregistered
+  ([#4580](https://github.com/oasisprotocol/oasis-core/issues/4580))
+
+  When gracefully halting the node after the node's registration
+  expires, to ensure that the deregistration and shutdown occurs,
+  the node will persist the fact that it is mid-shutdown in a flag.
+
+  Previously, this flag had to be cleared manually by the node operator
+  which, while serving to ensure that the node does not get restarted
+  and re-register, is sub-optimal as it required manual intervention.
+
+  Instead, if the node is deregistered cleanly, we will clear the flag
+  under the assumption that the operator can configure whatever
+  automation they are using to do the right thing.
+
+- go/registry: Fix invalid sanity check
+  ([#4585](https://github.com/oasisprotocol/oasis-core/issues/4585))
+
+- go/worker/registration: Fix shutdown if registration never succeeded
+  ([#4595](https://github.com/oasisprotocol/oasis-core/issues/4595))
+
+  This fixes a case where node would never shutdown if the initial
+  registration never succeeded.
+
+- go/registry: Fix node stake claim sanity check with suspended runtimes
+  ([#4603](https://github.com/oasisprotocol/oasis-core/issues/4603))
+
+### Internal Changes
+
+- go: The libp2p logs are now emitted via Oasis Node's logging system
+  ([#4531](https://github.com/oasisprotocol/oasis-core/issues/4531))
+
+- go/runtime/bundle: Verify SGX signature if present
+  ([#4542](https://github.com/oasisprotocol/oasis-core/issues/4542))
+
+- go: Bump libp2p to 0.18.0
+  ([#4562](https://github.com/oasisprotocol/oasis-core/issues/4562),
+   [#4568](https://github.com/oasisprotocol/oasis-core/issues/4568),
+   [#4578](https://github.com/oasisprotocol/oasis-core/issues/4578))
+
+- go/worker/storage: Remove separate storage sync status store
+  ([#4565](https://github.com/oasisprotocol/oasis-core/issues/4565))
+
+  Previously the worker maintained a separate store that kept information about
+  the progress of storage sync. Since it was a separate store this could cause
+  problems if it got out of sync (e.g. due to partial manual copies). This
+  should make the process more robust as there is only one source of truth.
+
+- Remove `worker.registration.debug.private_key` flag
+  ([#4595](https://github.com/oasisprotocol/oasis-core/issues/4595))
+
+  The flag was unused.
+
+- ci: Show dirtiness after regenerating protos
+  ([#4598](https://github.com/oasisprotocol/oasis-core/issues/4598))
+
+- go/common/crypto/signature: Improve the batch verification API
+  ([#4602](https://github.com/oasisprotocol/oasis-core/issues/4602))
+
+- go/upgrade: Add empty upgrade handler
+  ([#4616](https://github.com/oasisprotocol/oasis-core/issues/4616))
+
+- go: Bump github.com/opencontainers/image-spec to 1.0.2
+  ([#4629](https://github.com/oasisprotocol/oasis-core/issues/4629))
+
+- go: Bump github.com/opencontainers/runc to 1.0.3
+  ([#4629](https://github.com/oasisprotocol/oasis-core/issues/4629))
+
 ## 22.0 (2022-03-01)
 
 | Protocol          | Version   |
