@@ -423,75 +423,34 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 			)
 		}
 
-		var elected []*scheduler.CommitteeNode
-		nodesPerEntity := make(map[signature.PublicKey]int)
-		forceElected := make(map[signature.PublicKey]bool)
-		forceParams := make(map[signature.PublicKey]scheduler.ForceElectCommitteeRole)
-		if flags.DebugDontBlameOasis() && schedulerParameters.DebugForceElect != nil {
-			var toForce []signature.PublicKey
-			for nodeID, ri := range schedulerParameters.DebugForceElect[rt.ID] {
-				if kind == ri.Kind && role == ri.Role {
-					toForce = append(toForce, nodeID)
-					forceParams[nodeID] = *ri
-				}
+		// If the election is rigged for testing purposes, force-elect the
+		// nodes if possible.
+		ok, elected, forceState := app.debugForceElect(
+			ctx,
+			schedulerParameters,
+			rt,
+			kind,
+			role,
+			nodeList,
+			wantedNodes,
+		)
+		if !ok {
+			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+				return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
 			}
-			sort.SliceStable(toForce, func(i, j int) bool {
-				a, b := toForce[i], toForce[j]
-				return bytes.Compare(a[:], b[:]) < 0
-			})
-		forceLoop:
-			for _, nodeID := range toForce {
-				ctx.Logger().Debug("attempting to force-elect node",
-					"runtime", rt.ID,
-					"node", nodeID,
-					"role", role,
-				)
-				if len(elected) >= wantedNodes {
-					break
-				}
-
-				// Ensure the node is currently registered and eligible.
-				for _, v := range nodeList {
-					ctx.Logger().Debug("checking to see if this is the force elected node",
-						"iter_id", v.ID,
-						"node", nodeID,
-					)
-					if v.ID.Equal(nodeID) {
-						// And force it into the committee.
-						elected = append(elected, &scheduler.CommitteeNode{
-							Role:      role,
-							PublicKey: nodeID,
-						})
-						forceElected[nodeID] = true
-						ctx.Logger().Debug("force elected node to committee",
-							"runtime", rt.ID,
-							"node", nodeID,
-							"role", role,
-						)
-						continue forceLoop
-					}
-				}
-			}
-			if len(elected) != len(toForce) {
-				ctx.Logger().Error("available nodes can't fulfill forced committee members",
-					"kind", kind,
-					"runtime_id", rt.ID,
-					"nr_nodes", nrNodes,
-					"mandatory_nodes", len(toForce),
-				)
-				if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-					return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
-				}
-				return nil
-			}
+			return nil
 		}
+
+		// Do the actual election by traversing the randomly sorted node
+		// indexes list.
+		nodesPerEntity := make(map[signature.PublicKey]int)
 		for _, idx := range idxs {
 			if len(elected) >= wantedNodes {
 				break
 			}
 
 			n := nodeList[idx]
-			if forceElected[n.ID] {
+			if forceState != nil && forceState.elected[n.ID] {
 				// Already elected to the committee by the debug forcing option.
 				continue
 			}
@@ -534,51 +493,17 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 			return nil
 		}
 
-		if flags.DebugDontBlameOasis() && len(forceElected) > 0 {
-			var (
-				mustBeScheduler    *scheduler.CommitteeNode
-				mustNotBeScheduler []*scheduler.CommitteeNode
-				mayBeAny           []*scheduler.CommitteeNode
-			)
-
-			for i, n := range elected {
-				committeeNode := elected[i]
-				if ri, ok := forceParams[n.PublicKey]; ok {
-					if ri.IsScheduler {
-						if mustBeScheduler != nil {
-							ctx.Logger().Error("already have a forced scheduler",
-								"existing", mustBeScheduler.PublicKey,
-								"new", n.PublicKey,
-							)
-							if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-								return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
-							}
-							return nil
-						}
-						mustBeScheduler = committeeNode
-					} else {
-						mustNotBeScheduler = append(mustNotBeScheduler, committeeNode)
-					}
-				} else {
-					mayBeAny = append(mayBeAny, committeeNode)
-				}
+		// If the election is rigged for testing purposes, fixup the force
+		// elected node roles.
+		if ok, elected = app.debugForceRoles(
+			ctx,
+			forceState,
+			elected,
+		); !ok {
+			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+				return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
 			}
-
-			if mustBeScheduler == nil {
-				if len(mayBeAny) == 0 && len(mustNotBeScheduler) > 0 {
-					ctx.Logger().Error("can't fulfil not committee scheduler requirements")
-					if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
-						return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
-					}
-					return nil
-				}
-				mustBeScheduler = mayBeAny[0]
-				mayBeAny = mayBeAny[1:]
-			}
-
-			elected = []*scheduler.CommitteeNode{mustBeScheduler}
-			elected = append(elected, mustNotBeScheduler...)
-			elected = append(elected, mayBeAny...)
+			return nil
 		}
 
 		members = append(members, elected...)
