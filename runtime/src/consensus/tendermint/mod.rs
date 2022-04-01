@@ -79,7 +79,7 @@ impl TryFrom<RawLightBlock> for LightBlockMeta {
                 .map_err(|error| anyhow!("{}", error))?,
             validators: value
                 .validator_set
-                .ok_or(anyhow!("missing validator set"))?
+                .ok_or_else(|| anyhow!("missing validator set"))?
                 .try_into()
                 .map_err(|error| anyhow!("{}", error))?,
         })
