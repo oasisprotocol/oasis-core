@@ -164,6 +164,11 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 		return nil
 	}
 
+	committeeRoles := []scheduler.Role{
+		scheduler.RoleWorker,
+		scheduler.RoleBackupWorker,
+	}
+
 	// Figure out the when (epoch) and how (beacon backend).
 	epoch, _, err := beaconState.GetEpoch(ctx)
 	if err != nil {
@@ -265,7 +270,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 
 		// Check pre-election scheduling constraints.
 		var eligible bool
-		for _, role := range []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker} {
+		for _, role := range committeeRoles {
 			if groupSizes[role] == 0 {
 				continue
 			}
@@ -292,12 +297,52 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 
 	// Perform election.
 	var members []*scheduler.CommitteeNode
-	for _, role := range []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker} {
+	for _, role := range committeeRoles {
 		if groupSizes[role] == 0 {
 			continue
 		}
 
-		nrNodes := len(nodeLists[role])
+		// Enforce the maximum node per-entity prior to doing the actual
+		// election to reduce "more nodes = more better" problems.  This
+		// will ensure fairness if the constraint is set to 1 (as is the
+		// case with all currently deployed runtimes with the constraint),
+		// but is still not ideal if the constraint is larger.
+		nodeList := nodeLists[role]
+		if mn := cs[role].MaxNodes; mn != nil && mn.Limit > 0 {
+			if flags.DebugDontBlameOasis() && schedulerParameters.DebugForceElect != nil {
+				ctx.Logger().Error("debug force elect is incompatible with de-duplication",
+					"kind", kind,
+					"role", role,
+					"runtime_id", rt.ID,
+				)
+				if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+					return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
+				}
+				return nil
+			}
+
+			switch useVRF {
+			case false:
+				// Just use the first seen nodes in the node list up to
+				// the limit, per-entity.  This is only used in testing.
+				nodeList = dedupEntityNodesTrivial(
+					nodeList,
+					mn.Limit,
+				)
+			case true:
+				nodeList = dedupEntityNodesByHashedBeta(
+					prevState,
+					tmBeacon.MustGetChainContext(ctx),
+					epoch,
+					rt.ID,
+					kind,
+					role,
+					nodeList,
+					mn.Limit,
+				)
+			}
+		}
+		nrNodes := len(nodeList)
 
 		// Check election scheduling constraints.
 		var minPoolSize int
@@ -374,7 +419,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 			idxs = committeeVRFBetaIndexes(
 				prevState,
 				baseHasher,
-				nodeLists[role],
+				nodeList,
 			)
 		}
 
@@ -406,7 +451,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 				}
 
 				// Ensure the node is currently registered and eligible.
-				for _, v := range nodeLists[role] {
+				for _, v := range nodeList {
 					ctx.Logger().Debug("checking to see if this is the force elected node",
 						"iter_id", v.ID,
 						"node", nodeID,
@@ -445,16 +490,27 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 				break
 			}
 
-			n := nodeLists[role][idx]
+			n := nodeList[idx]
 			if forceElected[n.ID] {
 				// Already elected to the committee by the debug forcing option.
 				continue
 			}
 
-			// Check election-time scheduling constraints.
+			// Check election-time scheduling constraints.  In theory this
+			// is pre-enforced by restricting the number of eligible candidates
+			// per entity, but re-checking doesn't hurt.
 			if mn := cs[role].MaxNodes; mn != nil {
 				if nodesPerEntity[n.EntityID] >= int(mn.Limit) {
-					continue
+					ctx.Logger().Error("max nodes per committee exceeded",
+						"runtime", rt.ID,
+						"entity_id", n.EntityID,
+						"role", role,
+						"num_entity_nodes", nodesPerEntity[n.EntityID],
+					)
+					if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
+						return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
+					}
+					return nil
 				}
 				nodesPerEntity[n.EntityID]++
 			}
@@ -604,7 +660,10 @@ func sortNodesByHashedBeta(
 
 type hashedBeta [32]byte
 
-func hashBeta(h *tuplehash.Hasher, beta []byte) hashedBeta {
+func hashBeta(
+	h *tuplehash.Hasher,
+	beta []byte,
+) hashedBeta {
 	hh := h.Clone()
 	_, _ = hh.Write(beta)
 	digest := hh.Sum(nil)
@@ -630,7 +689,26 @@ func newCommitteeBetaHasher(
 	return h
 }
 
-func newBetaHasher(domainSep, chainContext []byte, epoch beacon.EpochTime) *tuplehash.Hasher {
+func newCommitteeDedupBetaHasher(
+	chainContext []byte,
+	epoch beacon.EpochTime,
+	runtimeID common.Namespace,
+	kind scheduler.CommitteeKind,
+	role scheduler.Role,
+) *tuplehash.Hasher {
+	h := newBetaHasher([]byte("oasis-core:vrf/dedup"), chainContext, epoch)
+	_, _ = h.Write(runtimeID[:])
+	_, _ = h.Write([]byte{byte(kind)})
+	_, _ = h.Write([]byte{byte(role)})
+
+	return h
+}
+
+func newBetaHasher(
+	domainSep []byte,
+	chainContext []byte,
+	epoch beacon.EpochTime,
+) *tuplehash.Hasher {
 	h := tuplehash.New256(32, domainSep)
 
 	_, _ = h.Write(chainContext)
@@ -640,4 +718,58 @@ func newBetaHasher(domainSep, chainContext []byte, epoch beacon.EpochTime) *tupl
 	_, _ = h.Write(epochBytes[:])
 
 	return h
+}
+
+func dedupEntityNodesByHashedBeta(
+	prevState *beacon.PrevVRFState,
+	chainContext []byte,
+	epoch beacon.EpochTime,
+	runtimeID common.Namespace,
+	kind scheduler.CommitteeKind,
+	role scheduler.Role,
+	nodeList []*node.Node,
+	perEntityLimit uint16,
+) []*node.Node {
+	// If there is no limit, just return.
+	if perEntityLimit == 0 {
+		return nodeList
+	}
+
+	baseHasher := newCommitteeDedupBetaHasher(
+		chainContext,
+		epoch,
+		runtimeID,
+		kind,
+		role,
+	)
+
+	// Do the cryptographic sortition.
+	shuffledNodeList := sortNodesByHashedBeta(
+		prevState,
+		baseHasher,
+		nodeList,
+	)
+
+	return dedupEntityNodesTrivial(
+		shuffledNodeList,
+		perEntityLimit,
+	)
+}
+
+func dedupEntityNodesTrivial(
+	nodeList []*node.Node,
+	perEntityLimit uint16,
+) []*node.Node {
+	nodesPerEntity := make(map[signature.PublicKey]int)
+	dedupedNodeList := make([]*node.Node, 0, len(nodeList))
+	for i := range nodeList {
+		n := nodeList[i]
+		if nodesPerEntity[n.EntityID] >= int(perEntityLimit) {
+			continue
+		}
+		nodesPerEntity[n.EntityID]++
+		dedupedNodeList = append(dedupedNodeList, n)
+	}
+
+	return dedupedNodeList
 }
