@@ -273,6 +273,9 @@ func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
+	if t.schedulerQueue == nil {
+		return
+	}
 	t.schedulerQueue.RemoveTxBatch(txs)
 
 	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.Size()))
@@ -282,6 +285,9 @@ func (t *txPool) GetScheduledBatch(force bool) []*transaction.CheckedTransaction
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
+	if t.schedulerQueue == nil {
+		return nil
+	}
 	return t.schedulerQueue.GetBatch(force)
 }
 
@@ -289,6 +295,9 @@ func (t *txPool) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transac
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
+	if t.schedulerQueue == nil {
+		return nil
+	}
 	return t.schedulerQueue.GetPrioritizedBatch(offset, limit)
 }
 
@@ -296,6 +305,15 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransac
 	t.schedulerLock.Lock()
 	defer t.schedulerLock.Unlock()
 
+	if t.schedulerQueue == nil {
+		result := make([]*transaction.CheckedTransaction, 0, len(batch))
+		missing := make(map[hash.Hash]int)
+		for index, txHash := range batch {
+			result = append(result, nil)
+			missing[txHash] = index
+		}
+		return result, missing
+	}
 	return t.schedulerQueue.GetKnownBatch(batch)
 }
 
