@@ -755,9 +755,9 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
 name = "enclave-runner"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "019bee453cf919a820b4398a5dfcc229908a3956c35866de5e8fcbab074ad921"
+checksum = "f4cb06df53e13bdcf26f4ee1447e4de3cd3540fbaee91debe4af29ddacdfdd45"
 dependencies = [
  "crossbeam 0.7.3",
  "failure",
@@ -765,6 +765,7 @@ dependencies = [
  "fnv",
  "fortanix-sgx-abi",
  "futures 0.3.21",
+ "ipc-queue",
  "lazy_static",
  "libc",
  "nix 0.13.1",
@@ -859,9 +860,9 @@ dependencies = [
 
 [[package]]
 name = "fortanix-sgx-abi"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c56c422ef86062869b2d57ae87270608dc5929969dd130a6e248979cf4fb6ca6"
+checksum = "5a4dc78078fbba2327b22e5a8141ca5efa172f3a0f31678e94875323de3e7523"
 
 [[package]]
 name = "fuchsia-zircon"
@@ -1146,6 +1147,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "ipc-queue"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e333a441fdc74fdb4908f1c167fb6376ef7318ed6520eabe2f2fd64d5e9a4e43"
+dependencies = [
+ "fortanix-sgx-abi",
 ]
 
 [[package]]
