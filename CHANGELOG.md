@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.1 (2022-04-04)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- go/control: Show the debug option statuses in the control output
+  ([#4634](https://github.com/oasisprotocol/oasis-core/issues/4634))
+
+### Bug Fixes
+
+- go/worker/compute: Always include resolved transactions
+  ([#4633](https://github.com/oasisprotocol/oasis-core/issues/4633))
+
+- go/runtime/txpool: Fix crash on early access
+  ([#4638](https://github.com/oasisprotocol/oasis-core/issues/4638))
+
 ## 22.1 (2022-04-01)
 
 | Protocol          | Version   |
