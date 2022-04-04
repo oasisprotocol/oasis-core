@@ -58,6 +58,9 @@ type Status struct {
 	// SoftwareVersion is the oasis-node software version.
 	SoftwareVersion string `json:"software_version"`
 
+	// Debug is the oasis-node debug status.
+	Debug *DebugStatus `json:"debug,omitempty"`
+
 	// Identity is the identity of the node.
 	Identity IdentityStatus `json:"identity"`
 
@@ -72,6 +75,18 @@ type Status struct {
 
 	// PendingUpgrades are the node's pending upgrades.
 	PendingUpgrades []*upgrade.PendingUpgrade `json:"pending_upgrades"`
+}
+
+// DebugStatus is the current node debug status, listing the various node
+// debug options if enabled.
+type DebugStatus struct {
+	// Enabled is true iff the node is running with DebugDontBlameOasis
+	// set.
+	Enabled bool `json:"enabled"`
+
+	// AllowRoot is true iff the node is running with DebugAllowRoot
+	// set.
+	AllowRoot bool `json:"allow_root"`
 }
 
 // IdentityStatus is the current node identity status, listing all the public keys that identify
