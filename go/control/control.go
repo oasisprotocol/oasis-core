@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -104,8 +105,17 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 
 	ident := c.node.GetIdentity()
 
+	var ds *control.DebugStatus
+	if debugEnabled := cmdFlags.DebugDontBlameOasis(); debugEnabled {
+		ds = &control.DebugStatus{
+			Enabled:   debugEnabled,
+			AllowRoot: cmdFlags.DebugAllowRoot(),
+		}
+	}
+
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
+		Debug:           ds,
 		Identity: control.IdentityStatus{
 			Node:      ident.NodeSigner.Public(),
 			P2P:       ident.P2PSigner.Public(),
