@@ -382,6 +382,12 @@ func (c *client) CallMulti(
 			}
 		}
 	}
+
+	c.logger.Debug("received responses from peers",
+		"method", method,
+		"num_peers", len(rsps),
+	)
+
 	return rsps, pfs, nil
 }
 

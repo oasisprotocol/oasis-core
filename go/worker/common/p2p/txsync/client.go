@@ -2,7 +2,6 @@ package txsync
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -12,14 +11,14 @@ import (
 // Client is a transaction sync protocol client.
 type Client interface {
 	// GetTxs queries peers for transaction data.
-	GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsResponse, rpc.PeerFeedback, error)
+	GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsResponse, error)
 }
 
 type client struct {
 	rc rpc.Client
 }
 
-func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsResponse, rpc.PeerFeedback, error) {
+func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsResponse, error) {
 	// Make sure we don't request too many transactions.
 	if len(request.Txs) > MaxGetTxsCount {
 		request.Txs = request.Txs[:MaxGetTxsCount]
@@ -28,14 +27,17 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 	for _, txHash := range request.Txs {
 		txHashMap[txHash] = struct{}{}
 	}
+	resultTxMap := make(map[hash.Hash][]byte)
 
 	var rsp GetTxsResponse
-	pf, err := c.rc.Call(ctx, MethodGetTxs, request, &rsp, MaxGetTxsResponseTime,
-		rpc.WithValidationFn(func(pf rpc.PeerFeedback) error {
+	_, _, err := c.rc.CallMulti(ctx, MethodGetTxs, request, rsp, MaxGetTxsResponseTime, MaxGetTxsParallelRequests,
+		rpc.WithAggregateFn(func(rawRsp interface{}, pf rpc.PeerFeedback) bool {
+			rsp := rawRsp.(*GetTxsResponse)
+
 			// If we received more transactions than we requested, this is an error.
 			if len(rsp.Txs) > len(request.Txs) {
 				pf.RecordFailure()
-				return fmt.Errorf("more transactions than requested (expected: %d got: %d)", len(request.Txs), len(rsp.Txs))
+				return true
 			}
 
 			// If we received transactions that we didn't request, this is an error.
@@ -43,16 +45,28 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 				txHash := hash.NewFromBytes(tx)
 				if _, valid := txHashMap[txHash]; !valid {
 					pf.RecordFailure()
-					return fmt.Errorf("unsolicited transaction: %s", txHash)
+					return true
 				}
+
+				resultTxMap[txHash] = tx
 			}
-			return nil
-		}),
-	)
+
+			if len(rsp.Txs) > 0 {
+				pf.RecordSuccess()
+			}
+
+			// Check if we have everything and stop early.
+			return len(resultTxMap) != len(txHashMap)
+		}))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return &rsp, pf, nil
+
+	rsp.Txs = make([][]byte, 0, len(resultTxMap))
+	for _, tx := range resultTxMap {
+		rsp.Txs = append(rsp.Txs, tx)
+	}
+	return &rsp, nil
 }
 
 // NewClient creates a new transaction sync protocol client.

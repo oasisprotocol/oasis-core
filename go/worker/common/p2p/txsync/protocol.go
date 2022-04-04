@@ -15,9 +15,10 @@ var TxSyncProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
 
 // Constants related to the GetTxs method.
 const (
-	MethodGetTxs          = "GetTxs"
-	MaxGetTxsResponseTime = 5 * time.Second
-	MaxGetTxsCount        = 128
+	MethodGetTxs              = "GetTxs"
+	MaxGetTxsResponseTime     = 5 * time.Second
+	MaxGetTxsCount            = 128
+	MaxGetTxsParallelRequests = 5
 )
 
 // GetTxsRequest is a GetTxs request.
