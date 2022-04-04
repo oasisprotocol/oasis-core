@@ -33,6 +33,29 @@ func (n *Node) handleNewCheckedTransactions(txs []*transaction.CheckedTransactio
 	}
 }
 
+func (n *Node) addResolvedTransactions(txs [][]byte) bool {
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	state, ok := n.state.(StateWaitingForTxs)
+	if !ok {
+		return true
+	}
+
+	for _, tx := range txs {
+		state.batch.addResolvedTx(tx)
+	}
+
+	if len(state.batch.missingTxs) == 0 {
+		// We have all transactions, signal the node to start processing the batch.
+		n.logger.Info("received all transactions needed for batch processing")
+		n.startProcessingBatchLocked(state.batch)
+		return true
+	}
+
+	return false
+}
+
 func (n *Node) requestMissingTransactions() {
 	requestOp := func() error {
 		// Determine what transactions are missing.
@@ -83,8 +106,8 @@ func (n *Node) requestMissingTransactions() {
 			_ = n.commonNode.TxPool.SubmitTxNoWait(txCtx, tx, &txpool.TransactionMeta{Local: false})
 		}
 
-		// Check if there are still missing transactions and perform another request.
-		if len(txHashes) > len(rsp.Txs) {
+		// Queue all transactions in the batch directly. If still missing, do another request.
+		if !n.addResolvedTransactions(rsp.Txs) {
 			return fmt.Errorf("need to resolve more transactions")
 		}
 
