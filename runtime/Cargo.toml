@@ -55,7 +55,7 @@ x509-parser = "0.12.0"
 oid-registry = "0.2.0"
 rsa = "0.5.0"
 base64-serde = "0.6.1"
-lru = "0.7.3"
+lru = "0.7.4"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
 version = "1"
