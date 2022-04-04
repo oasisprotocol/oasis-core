@@ -303,6 +303,8 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	}
 	n.roundCtx, n.roundCancelCtx = context.WithCancel(n.ctx)
 
+	clearProposalQueue := true
+
 	// Perform actions based on current state.
 	switch state := n.state.(type) {
 	case StateWaitingForBlock:
@@ -310,6 +312,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 		currentHash := header.EncodedHash()
 		if currentHash.Equal(&state.batch.proposal.Header.PreviousHash) {
 			n.logger.Info("received block needed for batch processing")
+			clearProposalQueue = false
 			n.maybeStartProcessingBatchLocked(state.batch)
 			break
 		}
@@ -374,6 +377,11 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 			// Remove processed transactions from queue.
 			n.commonNode.TxPool.RemoveTxBatch(state.txHashes)
 		}()
+	}
+
+	// Clear proposal queue.
+	if clearProposalQueue {
+		n.commonNode.TxPool.ClearProposedBatch()
 	}
 
 	// Clear the potentially set "is proposing timeout" flag from the previous round.
@@ -745,6 +753,9 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 		txHashes[idx] = tx.Hash()
 	}
 
+	// Mark any proposed transactions.
+	n.commonNode.TxPool.PromoteProposedBatch(txHashes)
+
 	ioWriteLog, ioRoot, err := ioTree.Commit(roundCtx)
 	if err != nil {
 		n.logger.Error("failed to create I/O tree",
@@ -887,6 +898,8 @@ func (n *Node) startRuntimeBatchSchedulingLocked(
 
 		// Remove any rejected transactions.
 		n.commonNode.TxPool.RemoveTxBatch(rsp.TxRejectHashes)
+		// Mark any proposed transactions.
+		n.commonNode.TxPool.PromoteProposedBatch(rsp.TxHashes)
 
 		// Submit response to the executor worker.
 		done <- &processedBatch{
@@ -1131,6 +1144,9 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	n.logger.Debug("attempting to resolve batch", "batch", batch.String())
 
 	// TODO: Add metrics for how long it takes to receive the complete batch.
+	if batch.proposal != nil {
+		n.commonNode.TxPool.PromoteProposedBatch(batch.proposal.Batch)
+	}
 	resolvedBatch, err := batch.resolve(n.commonNode.TxPool)
 	if err != nil {
 		n.logger.Error("refusing to process bad batch", "err", err)
