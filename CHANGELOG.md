@@ -12,6 +12,24 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.2 (2022-04-05)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- runtime: Make persistent transaction check state configurable
+  ([#4640](https://github.com/oasisprotocol/oasis-core/issues/4640))
+
+### Bug Fixes
+
+- go/worker/compute: Improve proposed transaction handling
+  ([#4640](https://github.com/oasisprotocol/oasis-core/issues/4640))
+
 ## 22.1.1 (2022-04-04)
 
 | Protocol          | Version   |
