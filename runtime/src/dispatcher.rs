@@ -520,7 +520,7 @@ impl Dispatcher {
 
         let txn_ctx = TxnContext::new(
             ctx.clone(),
-            protocol,
+            protocol.clone(),
             consensus_state,
             &mut overlay,
             &state.header,
@@ -531,9 +531,11 @@ impl Dispatcher {
         );
         let results = txn_dispatcher.check_batch(txn_ctx, &inputs);
 
-        // Commit results to in-memory tree so they persist for subsequent batches that are based on
-        // the same block.
-        let _ = overlay.commit(Context::create_child(&ctx)).unwrap();
+        if protocol.get_config().persist_check_tx_state {
+            // Commit results to in-memory tree so they persist for subsequent batches that are
+            // based on the same block.
+            let _ = overlay.commit(Context::create_child(&ctx)).unwrap();
+        }
 
         debug!(self.logger, "Transaction batch check complete");
 
