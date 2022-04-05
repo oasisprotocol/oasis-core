@@ -334,8 +334,8 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *loggin
 		// If we are here, presumably the AVR is well-formed (VerifyEvidence
 		// succeeded).  Since this is more than likely the AVR indicating
 		// rejection, deserialize it and log some pertinent details.
-		avr, err := cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
-		if err == nil {
+		avr, decErr := cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
+		if decErr == nil {
 			switch avr.ISVEnclaveQuoteStatus {
 			case cmnIAS.QuoteOK, cmnIAS.QuoteSwHardeningNeeded:
 				// That's odd, the quote checks out as ok.  Can't
