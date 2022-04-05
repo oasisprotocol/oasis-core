@@ -13,9 +13,8 @@ import (
 type unresolvedBatch struct {
 	proposal *commitment.Proposal
 
-	batch       transaction.RawBatch
-	missingTxs  map[hash.Hash]int
-	resolvedTxs map[hash.Hash][]byte
+	batch      transaction.RawBatch
+	missingTxs map[hash.Hash]int
 
 	maxBatchSizeBytes uint64
 }
@@ -36,23 +35,6 @@ func (ub *unresolvedBatch) hash() hash.Hash {
 	return ub.proposal.Header.BatchHash
 }
 
-func (ub *unresolvedBatch) addResolvedTx(tx []byte) {
-	if ub.missingTxs == nil {
-		return
-	}
-
-	txHash := hash.NewFromBytes(tx)
-	if _, exists := ub.missingTxs[txHash]; !exists {
-		return
-	}
-
-	if ub.resolvedTxs == nil {
-		ub.resolvedTxs = make(map[hash.Hash][]byte)
-	}
-	ub.resolvedTxs[txHash] = tx
-	delete(ub.missingTxs, txHash)
-}
-
 func (ub *unresolvedBatch) resolve(txPool txpool.TransactionPool) (transaction.RawBatch, error) {
 	if ub.batch != nil {
 		return ub.batch, nil
@@ -65,17 +47,6 @@ func (ub *unresolvedBatch) resolve(txPool txpool.TransactionPool) (transaction.R
 	}
 
 	resolvedBatch, missingTxs := txPool.GetKnownBatch(ub.proposal.Batch)
-	if ub.resolvedTxs != nil {
-		for txHash, txIdx := range missingTxs {
-			rawTx, exists := ub.resolvedTxs[txHash]
-			if !exists {
-				continue
-			}
-
-			delete(missingTxs, txHash)
-			resolvedBatch[txIdx] = transaction.RawCheckedTransaction(rawTx)
-		}
-	}
 	if len(missingTxs) > 0 {
 		ub.missingTxs = missingTxs
 		return nil, nil

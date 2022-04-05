@@ -12,6 +12,9 @@ pub struct Config {
     pub storage: Storage,
     /// Advertised runtime features.
     pub features: Option<Features>,
+    /// Whether storage state should be persisted between transaction check invocations. The state
+    /// is invalidated on the next round.
+    pub persist_check_tx_state: bool,
 }
 
 /// Storage-related configuration.
