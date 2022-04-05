@@ -3,13 +3,13 @@ package committee
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cenkalti/backoff/v4"
 
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
-	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
 
@@ -31,29 +31,6 @@ func (n *Node) handleNewCheckedTransactions(txs []*transaction.CheckedTransactio
 		n.logger.Info("received all transactions needed for batch processing")
 		n.startProcessingBatchLocked(state.batch)
 	}
-}
-
-func (n *Node) addResolvedTransactions(txs [][]byte) bool {
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-
-	state, ok := n.state.(StateWaitingForTxs)
-	if !ok {
-		return true
-	}
-
-	for _, tx := range txs {
-		state.batch.addResolvedTx(tx)
-	}
-
-	if len(state.batch.missingTxs) == 0 {
-		// We have all transactions, signal the node to start processing the batch.
-		n.logger.Info("received all transactions needed for batch processing")
-		n.startProcessingBatchLocked(state.batch)
-		return true
-	}
-
-	return false
 }
 
 func (n *Node) requestMissingTransactions() {
@@ -81,7 +58,7 @@ func (n *Node) requestMissingTransactions() {
 		txCtx, cancel := context.WithCancel(n.roundCtx)
 		defer cancel()
 
-		rsp, pf, err := n.txSync.GetTxs(txCtx, &txsync.GetTxsRequest{
+		rsp, err := n.txSync.GetTxs(txCtx, &txsync.GetTxsRequest{
 			Txs: txHashes,
 		})
 		if err != nil {
@@ -96,18 +73,17 @@ func (n *Node) requestMissingTransactions() {
 			"missing", len(txHashes),
 		)
 
-		// If we received at least some of the requested transactions, count as success.
-		if len(rsp.Txs) > 0 {
-			pf.RecordSuccess()
+		if len(rsp.Txs) == 0 {
+			n.logger.Debug("no peer returned transactions",
+				"tx_hashes", txHashes,
+			)
 		}
 
 		// Queue all transactions in the transaction pool.
-		for _, tx := range rsp.Txs {
-			_ = n.commonNode.TxPool.SubmitTxNoWait(txCtx, tx, &txpool.TransactionMeta{Local: false})
-		}
+		n.commonNode.TxPool.SubmitProposedBatch(rsp.Txs)
 
-		// Queue all transactions in the batch directly. If still missing, do another request.
-		if !n.addResolvedTransactions(rsp.Txs) {
+		// Check if there are still missing transactions and perform another request.
+		if _, missingTxs := n.commonNode.TxPool.GetKnownBatch(txHashes); len(missingTxs) > 0 {
 			return fmt.Errorf("need to resolve more transactions")
 		}
 
@@ -115,11 +91,25 @@ func (n *Node) requestMissingTransactions() {
 	}
 
 	// Retry until we have resolved all transactions (or round context expires).
-	err := backoff.Retry(requestOp, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), n.roundCtx))
+	boff := cmnBackoff.NewExponentialBackOff()
+	boff.MaxInterval = 2 * time.Second
+	err := backoff.Retry(requestOp, backoff.WithContext(boff, n.roundCtx))
 	if err != nil {
 		n.logger.Warn("failed to resolve missing transactions",
 			"err", err,
 		)
 		return
 	}
+
+	// We have all transactions, signal the node to start processing the batch.
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
+
+	state, ok := n.state.(StateWaitingForTxs)
+	if !ok {
+		return
+	}
+
+	n.logger.Info("received all transactions needed for batch processing")
+	n.startProcessingBatchLocked(state.batch)
 }

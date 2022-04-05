@@ -78,6 +78,17 @@ type TransactionPool interface {
 	// SubmitTxNoWait adds the transaction into the transaction pool and returns immediately.
 	SubmitTxNoWait(ctx context.Context, tx []byte, meta *TransactionMeta) error
 
+	// SubmitProposedBatch adds the given (possibly new) transaction batch into the current
+	// proposal queue.
+	SubmitProposedBatch(batch [][]byte)
+
+	// PromoteProposedBatch promotes the specified transactions that are already in the transaction
+	// pool into the current proposal queue.
+	PromoteProposedBatch(batch []hash.Hash)
+
+	// ClearProposedBatch clears the proposal queue.
+	ClearProposedBatch()
+
 	// RemoveTxBatch removes a transaction batch from the transaction pool.
 	RemoveTxBatch(txs []hash.Hash)
 
@@ -183,11 +194,13 @@ type txPool struct {
 	schedulerTicker   *time.Ticker
 	schedulerNotifier *pubsub.Broker
 
+	proposedTxsLock sync.Mutex
+	proposedTxs     map[hash.Hash]*transaction.CheckedTransaction
+
 	blockInfoLock    sync.Mutex
 	blockInfo        *BlockInfo
 	lastRecheckRound uint64
 
-	epoCh       *channels.RingChannel
 	republishCh *channels.RingChannel
 
 	// roundWeightLimits is guarded by schedulerLock.
@@ -237,7 +250,7 @@ func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 	// Skip recently seen transactions.
 	txHash := hash.NewFromBytes(rawTx)
 	if _, seen := t.seenCache.Peek(txHash); seen && !meta.Recheck {
-		t.logger.Debug("ignoring already seen transaction", "tx", rawTx)
+		t.logger.Debug("ignoring already seen transaction", "tx_hash", txHash)
 		return fmt.Errorf("duplicate transaction")
 	}
 
@@ -251,11 +264,13 @@ func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 	// Queue transaction for checks.
 	t.logger.Debug("queuing transaction for check",
 		"tx", rawTx,
+		"tx_hash", txHash,
 		"recheck", meta.Recheck,
 	)
 	if err := t.checkTxQueue.Add(tx); err != nil {
 		t.logger.Warn("unable to queue transaction",
 			"tx", rawTx,
+			"tx_hash", txHash,
 			"err", err,
 		)
 		return err
@@ -267,6 +282,47 @@ func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 	pendingCheckSize.With(t.getMetricLabels()).Set(float64(t.PendingCheckSize()))
 
 	return nil
+}
+
+func (t *txPool) SubmitProposedBatch(batch [][]byte) {
+	// Also ingest into the regular pool (may fail).
+	for _, rawTx := range batch {
+		_ = t.SubmitTxNoWait(context.Background(), rawTx, &TransactionMeta{Local: false})
+	}
+
+	t.proposedTxsLock.Lock()
+	defer t.proposedTxsLock.Unlock()
+
+	for _, rawTx := range batch {
+		tx := transaction.RawCheckedTransaction(rawTx)
+		t.proposedTxs[tx.Hash()] = tx
+	}
+}
+
+func (t *txPool) PromoteProposedBatch(batch []hash.Hash) {
+	txs, missingTxs := t.GetKnownBatch(batch)
+	if len(missingTxs) > 0 {
+		t.logger.Debug("promoted proposed batch contains missing transactions",
+			"missing_tx_count", len(missingTxs),
+		)
+	}
+
+	t.proposedTxsLock.Lock()
+	defer t.proposedTxsLock.Unlock()
+
+	for _, tx := range txs {
+		if tx == nil {
+			continue
+		}
+		t.proposedTxs[tx.Hash()] = tx
+	}
+}
+
+func (t *txPool) ClearProposedBatch() {
+	t.proposedTxsLock.Lock()
+	defer t.proposedTxsLock.Unlock()
+
+	t.proposedTxs = make(map[hash.Hash]*transaction.CheckedTransaction)
 }
 
 func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
@@ -303,7 +359,6 @@ func (t *txPool) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transac
 
 func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {
 	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
 
 	if t.schedulerQueue == nil {
 		result := make([]*transaction.CheckedTransaction, 0, len(batch))
@@ -312,9 +367,28 @@ func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransac
 			result = append(result, nil)
 			missing[txHash] = index
 		}
+		t.schedulerLock.Unlock()
 		return result, missing
 	}
-	return t.schedulerQueue.GetKnownBatch(batch)
+
+	txs, missingTxs := t.schedulerQueue.GetKnownBatch(batch)
+	t.schedulerLock.Unlock()
+
+	// Also check the proposed transactions set.
+	t.proposedTxsLock.Lock()
+	defer t.proposedTxsLock.Unlock()
+
+	for txHash, index := range missingTxs {
+		tx, exists := t.proposedTxs[txHash]
+		if !exists {
+			continue
+		}
+
+		delete(missingTxs, txHash)
+		txs[index] = tx
+	}
+
+	return txs, missingTxs
 }
 
 func (t *txPool) ProcessBlock(bi *BlockInfo) error {
@@ -327,7 +401,6 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 			return fmt.Errorf("failed to update scheduler: %w", err)
 		}
 
-		t.epoCh.In() <- struct{}{}
 		// Force recheck on epoch transitions.
 		t.recheckTxCh.In() <- struct{}{}
 	}
@@ -409,12 +482,13 @@ func (t *txPool) WakeupScheduler() {
 
 func (t *txPool) Clear() {
 	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
-
 	if t.schedulerQueue != nil {
 		t.schedulerQueue.Clear()
 	}
+	t.schedulerLock.Unlock()
+
 	t.seenCache.Clear()
+	t.ClearProposedBatch()
 
 	pendingScheduleSize.With(t.getMetricLabels()).Set(0)
 }
@@ -527,6 +601,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		if !res.IsSuccess() {
 			t.logger.Debug("check tx failed",
 				"tx", batch[i].Tx,
+				"tx_hash", batch[i].TxHash,
 				"result", res,
 				"recheck", batch[i].Meta.Recheck,
 			)
@@ -829,6 +904,10 @@ func New(
 		return nil, fmt.Errorf("error creating seen cache: %w", err)
 	}
 
+	// The transaction check queue should be 10% larger than the transaction pool to allow for some
+	// buffer in case the schedule queue is full and is being rechecked.
+	maxCheckTxQueueSize := (110 * cfg.MaxPoolSize) / 100
+
 	return &txPool{
 		logger:            logging.GetLogger("runtime/txpool"),
 		stopCh:            make(chan struct{}),
@@ -839,13 +918,13 @@ func New(
 		host:              host,
 		txPublisher:       txPublisher,
 		seenCache:         seenCache,
-		checkTxQueue:      newCheckTxQueue(cfg.MaxPoolSize, cfg.MaxCheckTxBatchSize),
+		checkTxQueue:      newCheckTxQueue(maxCheckTxQueueSize, cfg.MaxCheckTxBatchSize),
 		checkTxCh:         channels.NewRingChannel(1),
 		checkTxNotifier:   pubsub.NewBroker(false),
 		recheckTxCh:       channels.NewRingChannel(1),
 		schedulerTicker:   time.NewTicker(1 * time.Hour),
 		schedulerNotifier: pubsub.NewBroker(false),
-		epoCh:             channels.NewRingChannel(1),
+		proposedTxs:       make(map[hash.Hash]*transaction.CheckedTransaction),
 		republishCh:       channels.NewRingChannel(1),
 		roundWeightLimits: make(map[transaction.Weight]uint64),
 	}, nil

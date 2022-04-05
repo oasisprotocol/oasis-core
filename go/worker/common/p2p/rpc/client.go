@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/eapache/channels"
 	core "github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -146,6 +147,27 @@ func WithValidationFn(fn ValidationFunc) CallOption {
 	}
 }
 
+// AggregateFunc returns a result aggregation function.
+//
+// The function is passed the response and PeerFeedback instance. If the function returns true, the
+// client will continue to call other peers. If it returns false, processing will stop.
+type AggregateFunc func(rsp interface{}, pf PeerFeedback) bool
+
+// CallMultiOptions are per-multicall options
+type CallMultiOptions struct {
+	aggregateFn AggregateFunc
+}
+
+// CallMultiOption is a per-multicall option setter.
+type CallMultiOption func(opts *CallMultiOptions)
+
+// WithAggregateFn configures the response aggregation function to use.
+func WithAggregateFn(fn AggregateFunc) CallMultiOption {
+	return func(opts *CallMultiOptions) {
+		opts.aggregateFn = fn
+	}
+}
+
 // Client is an RPC client for a given protocol.
 type Client interface {
 	PeerManager
@@ -174,6 +196,7 @@ type Client interface {
 		body, rspTyp interface{},
 		maxPeerResponseTime time.Duration,
 		maxParallelRequests uint,
+		opts ...CallMultiOption,
 	) ([]interface{}, []PeerFeedback, error)
 }
 
@@ -276,8 +299,14 @@ func (c *client) CallMulti(
 	body, rspTyp interface{},
 	maxPeerResponseTime time.Duration,
 	maxParallelRequests uint,
+	opts ...CallMultiOption,
 ) ([]interface{}, []PeerFeedback, error) {
 	c.logger.Debug("call multiple", "method", method)
+
+	var co CallMultiOptions
+	for _, opt := range opts {
+		opt(&co)
+	}
 
 	// Prepare the request.
 	request := Request{
@@ -290,48 +319,75 @@ func (c *client) CallMulti(
 	pool.Resize(maxParallelRequests)
 	defer pool.Stop()
 
+	// Create a subcontext so we abort further requests if we are done early.
+	peerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// Requests results from peers.
 	type result struct {
 		rsp interface{}
 		pf  PeerFeedback
 		err error
 	}
-	var resultCh []chan *result
+	var resultChs []channels.SimpleOutChannel
 	for _, peer := range c.GetBestPeers() {
 		if !c.isPeerAcceptable(peer) {
 			continue
 		}
 
-		ch := make(chan *result, 1)
-		resultCh = append(resultCh, ch)
+		ch := channels.NewNativeChannel(channels.BufferCap(1))
+		resultChs = append(resultChs, ch)
 
 		pool.Submit(func() {
+			defer close(ch)
+
+			// Abort early in case we are done.
+			select {
+			case <-peerCtx.Done():
+				return
+			default:
+			}
+
 			rsp := reflect.New(reflect.TypeOf(rspTyp)).Interface()
-			pf, err := c.call(ctx, peer, &request, rsp, maxPeerResponseTime)
-			ch <- &result{rsp, pf, err}
-			close(ch)
+			pf, err := c.call(peerCtx, peer, &request, rsp, maxPeerResponseTime)
+			ch.In() <- &result{rsp, pf, err}
 		})
 	}
+
+	if len(resultChs) == 0 {
+		return nil, nil, nil
+	}
+	resultCh := channels.NewNativeChannel(channels.None)
+	channels.Multiplex(resultCh, resultChs...)
 
 	// Gather results.
 	var (
 		rsps []interface{}
 		pfs  []PeerFeedback
 	)
-	for _, ch := range resultCh {
-		select {
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		case result := <-ch:
-			// Ignore failed results.
-			if result.err != nil {
-				continue
-			}
+	for r := range resultCh.Out() {
+		result := r.(*result)
 
-			rsps = append(rsps, result.rsp)
-			pfs = append(pfs, result.pf)
+		// Ignore failed results.
+		if result.err != nil {
+			continue
+		}
+
+		rsps = append(rsps, result.rsp)
+		pfs = append(pfs, result.pf)
+
+		if co.aggregateFn != nil {
+			if !co.aggregateFn(result.rsp, result.pf) {
+				break
+			}
 		}
 	}
+
+	c.logger.Debug("received responses from peers",
+		"method", method,
+		"num_peers", len(rsps),
+	)
+
 	return rsps, pfs, nil
 }
 
