@@ -61,7 +61,8 @@ type P2P struct {
 	sync.RWMutex
 	*PeerManager
 
-	ctx context.Context
+	ctxCancel context.CancelFunc
+	quitCh    chan struct{}
 
 	chainContext string
 
@@ -72,6 +73,33 @@ type P2P struct {
 	topics            map[common.Namespace]map[TopicKind]*topicHandler
 
 	logger *logging.Logger
+}
+
+// Cleanup performs the service specific post-termination cleanup.
+func (p *P2P) Cleanup() {
+}
+
+// Name returns the service name.
+func (p *P2P) Name() string {
+	return "worker p2p"
+}
+
+// Start starts the service.
+func (p *P2P) Start() error {
+	// Unfortunately libp2p starts everything on construction.
+	return nil
+}
+
+// Stop halts the service.
+func (p *P2P) Stop() {
+	p.ctxCancel()
+	_ = p.host.Close() // This blocks until the host stops.
+	close(p.quitCh)
+}
+
+// Quit returns a channel that will be closed when the service terminates.
+func (p *P2P) Quit() <-chan struct{} {
+	return p.quitCh
 }
 
 // Addresses returns the P2P addresses of the node.
@@ -290,7 +318,7 @@ func messageIdFn(pmsg *pb.Message) string {
 }
 
 // New creates a new P2P node.
-func New(ctx context.Context, identity *identity.Identity, consensus consensus.Backend) (*P2P, error) {
+func New(identity *identity.Identity, consensus consensus.Backend) (*P2P, error) {
 	// Instantiate the libp2p host.
 	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgP2pAddresses))
 	if err != nil {
@@ -340,12 +368,9 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 	if err != nil {
 		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p host: %w", err)
 	}
-	go func() {
-		<-ctx.Done()
-		_ = host.Close()
-	}()
 
 	// Initialize the gossipsub router.
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	pubsub, err := pubsub.NewGossipSub(
 		ctx,
 		host,
@@ -359,17 +384,22 @@ func New(ctx context.Context, identity *identity.Identity, consensus consensus.B
 		pubsub.WithMessageIdFn(messageIdFn),
 	)
 	if err != nil {
+		ctxCancel()
+		_ = host.Close()
 		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p gossipsub: %w", err)
 	}
 
 	chainContext, err := consensus.GetChainContext(ctx)
 	if err != nil {
+		ctxCancel()
+		_ = host.Close()
 		return nil, fmt.Errorf("worker/common/p2p: failed to get consensus chain context: %w", err)
 	}
 
 	p := &P2P{
 		PeerManager:       newPeerManager(ctx, host, cg, consensus),
-		ctx:               ctx,
+		ctxCancel:         ctxCancel,
+		quitCh:            make(chan struct{}),
 		chainContext:      chainContext,
 		host:              host,
 		pubsub:            pubsub,
