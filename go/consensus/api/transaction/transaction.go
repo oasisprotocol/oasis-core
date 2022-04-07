@@ -243,8 +243,8 @@ func OpenRawTransactions(rawTxBytes [][]byte) ([]signature.PublicKey, []*Transac
 			verifier.Add(
 				publicKeys[i],
 				SignatureContext,
-				signedTxes[i].Signed.Signature.Signature[:],
 				signedTxes[i].Signed.Blob,
+				signedTxes[i].Signed.Signature.Signature[:],
 			)
 		default:
 			verifier.AddError(err)
