@@ -25,7 +25,7 @@ var (
 	// methodLastBlockFees is the LastBlockFees method.
 	methodLastBlockFees = serviceName.NewMethod("LastBlockFees", int64(0))
 	// methodGovernanceDeposits is the GovernanceDeposits method.
-	methodGovernanceDeposits = serviceName.NewMethod("methodGovernanceDeposits", int64(0))
+	methodGovernanceDeposits = serviceName.NewMethod("GovernanceDeposits", int64(0))
 	// methodThreshold is the Threshold method.
 	methodThreshold = serviceName.NewMethod("Threshold", ThresholdQuery{})
 	// methodAddresses is the Addresses method.
