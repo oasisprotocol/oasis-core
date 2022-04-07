@@ -437,10 +437,10 @@ func (r *sandboxedRuntime) manager() {
 			r.Lock()
 			r.conn = nil
 			r.Unlock()
-
-			// Notify subscribers that the runtime has stopped.
-			r.notifier.Broadcast(&host.Event{Stopped: &host.StoppedEvent{}})
 		}
+
+		// Notify subscribers that the runtime has stopped.
+		r.notifier.Broadcast(&host.Event{Stopped: &host.StoppedEvent{}})
 
 		close(r.quitCh)
 	}()
