@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
-	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
@@ -275,15 +274,14 @@ func (n *Node) initRuntimeWorkers() error {
 	// listening immediately when created, make sure that we don't start it if
 	// it is not needed.
 	if n.RuntimeRegistry.Mode() != runtimeRegistry.RuntimeModeNone {
-		p2pCtx, p2pSvc := service.NewContextCleanup(context.Background())
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
 		}
-		n.P2P, err = p2p.New(p2pCtx, n.Identity, n.Consensus)
+		n.P2P, err = p2p.New(n.Identity, n.Consensus)
 		if err != nil {
 			return err
 		}
-		n.svcMgr.RegisterCleanupOnly(p2pSvc, "worker p2p")
+		n.svcMgr.Register(n.P2P)
 	}
 
 	// Initialize the common worker.

@@ -18,8 +18,6 @@ type p2pReqRes struct {
 }
 
 type p2pHandle struct {
-	context  context.Context
-	cancel   context.CancelFunc
 	service  *p2p.P2P
 	requests chan p2pReqRes
 }
@@ -96,9 +94,8 @@ func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, runtimeI
 		return fmt.Errorf("P2P service already started")
 	}
 
-	ph.context, ph.cancel = context.WithCancel(context.Background())
 	var err error
-	ph.service, err = p2p.New(ph.context, id, ht.service)
+	ph.service, err = p2p.New(id, ht.service)
 	if err != nil {
 		return fmt.Errorf("P2P service New: %w", err)
 	}
@@ -114,10 +111,8 @@ func (ph *p2pHandle) stop() error {
 		return fmt.Errorf("P2P service not started")
 	}
 
-	ph.cancel()
+	ph.service.Stop()
 	ph.service = nil
-	ph.context = nil
-	ph.cancel = nil
 
 	return nil
 }
