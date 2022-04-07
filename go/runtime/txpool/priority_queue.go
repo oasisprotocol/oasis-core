@@ -1,7 +1,6 @@
 package txpool
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 
@@ -13,18 +12,18 @@ import (
 )
 
 type item struct {
-	tx *transaction.CheckedTransaction
+	tx *Transaction
 }
 
 func (i item) Less(other btree.Item) bool {
+	// NOTE: We are iterating over the queue in descending order.
 	i2 := other.(*item)
-	if p1, p2 := i.tx.Priority(), i2.tx.Priority(); p1 != p2 {
+	if p1, p2 := i.tx.priority, i2.tx.priority; p1 != p2 {
+		// Lower priority is first.
 		return p1 < p2
 	}
-	// If transactions have same priority, sort arbitrary.
-	h1 := i.tx.Hash()
-	h2 := i2.tx.Hash()
-	return bytes.Compare(h1[:], h2[:]) < 0
+	// If transactions have same priority, sort by first seen time (newer first).
+	return i.tx.time.After(i2.tx.time)
 }
 
 type priorityQueue struct {
@@ -41,22 +40,31 @@ type priorityQueue struct {
 	lowestPriority uint64
 }
 
-func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
+func (q *priorityQueue) add(tx *Transaction) error {
 	q.Lock()
 	defer q.Unlock()
+
+	// Check if transaction already exists.
+	if _, exists := q.transactions[tx.hash]; exists {
+		return fmt.Errorf("tx already exists in pool")
+	}
 
 	// Check if there is room in the queue.
 	var needsPop bool
 	if q.poolWeights[transaction.WeightCount] >= q.maxTxPoolSize {
 		needsPop = true
 
-		if tx.Priority() <= q.lowestPriority {
+		if tx.priority <= q.lowestPriority {
 			return fmt.Errorf("tx pool is full")
 		}
 	}
 
-	if err := q.checkTxLocked(tx); err != nil {
-		return err
+	// Check weights.
+	for w, l := range q.weightLimits {
+		txW := tx.weights[w]
+		if txW > l {
+			return p2pError.Permanent(fmt.Errorf("call too large"))
+		}
 	}
 
 	// Remove the lowest priority transaction when queue is full.
@@ -69,12 +77,12 @@ func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 
 	item := &item{tx: tx}
 	q.priorityIndex.ReplaceOrInsert(item)
-	q.transactions[tx.Hash()] = item
-	for k, v := range tx.Weights() {
+	q.transactions[tx.hash] = item
+	for k, v := range tx.weights {
 		q.poolWeights[k] += v
 	}
-	if tx.Priority() < q.lowestPriority {
-		q.lowestPriority = tx.Priority()
+	if tx.priority < q.lowestPriority {
+		q.lowestPriority = tx.priority
 	}
 
 	if mlen, qlen := len(q.transactions), q.priorityIndex.Len(); mlen != qlen {
@@ -87,7 +95,7 @@ func (q *priorityQueue) Add(tx *transaction.CheckedTransaction) error {
 	return nil
 }
 
-func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
+func (q *priorityQueue) getBatch(force bool) []*Transaction {
 	q.Lock()
 	defer q.Unlock()
 
@@ -109,7 +117,7 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 		transaction.WeightConsensusMessages: 0,
 	}
 
-	var batch []*transaction.CheckedTransaction
+	var batch []*Transaction
 	batchWeights := make(map[transaction.Weight]uint64)
 	for w := range q.weightLimits {
 		batchWeights[w] = 0
@@ -122,7 +130,7 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 		for w, limit := range q.weightLimits {
 			batchWeight := batchWeights[w]
 
-			txW := item.tx.Weight(w)
+			txW := item.tx.weights[w]
 			// Transaction weight greater than the limit. Drop the tx from the pool.
 			if txW > limit {
 				toRemove = append(toRemove, item)
@@ -142,7 +150,7 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 
 		// Add the tx to the batch.
 		batch = append(batch, item.tx)
-		for w, val := range item.tx.Weights() {
+		for w, val := range item.tx.weights {
 			if _, ok := batchWeights[w]; ok {
 				batchWeights[w] += val
 			}
@@ -162,13 +170,13 @@ func (q *priorityQueue) GetBatch(force bool) []*transaction.CheckedTransaction {
 func (q *priorityQueue) removeTxsLocked(items []*item) {
 	for _, item := range items {
 		// Skip already removed items to avoid corrupting the list in case of duplicates.
-		if _, exists := q.transactions[item.tx.Hash()]; !exists {
+		if _, exists := q.transactions[item.tx.hash]; !exists {
 			continue
 		}
 
-		delete(q.transactions, item.tx.Hash())
+		delete(q.transactions, item.tx.hash)
 		q.priorityIndex.Delete(item)
-		for k, v := range item.tx.Weights() {
+		for k, v := range item.tx.weights {
 			q.poolWeights[k] -= v
 		}
 	}
@@ -176,7 +184,7 @@ func (q *priorityQueue) removeTxsLocked(items []*item) {
 	// Update lowest priority.
 	if len(items) > 0 {
 		if lpi := q.priorityIndex.Min(); lpi != nil {
-			q.lowestPriority = lpi.(*item).tx.Priority()
+			q.lowestPriority = lpi.(*item).tx.priority
 		} else {
 			q.lowestPriority = 0
 		}
@@ -190,12 +198,12 @@ func (q *priorityQueue) removeTxsLocked(items []*item) {
 	}
 }
 
-func (q *priorityQueue) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*transaction.CheckedTransaction {
+func (q *priorityQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []*Transaction {
 	q.Lock()
 	defer q.Unlock()
 
 	var (
-		batch      []*transaction.CheckedTransaction
+		batch      []*Transaction
 		toRemove   []*item
 		offsetItem btree.Item
 	)
@@ -211,7 +219,7 @@ func (q *priorityQueue) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*
 		item := i.(*item)
 
 		for w, l := range q.weightLimits {
-			txW := item.tx.Weight(w)
+			txW := item.tx.weights[w]
 			// Transaction weight greater than the limit. Drop the tx from the pool.
 			if txW > l {
 				toRemove = append(toRemove, item)
@@ -220,7 +228,7 @@ func (q *priorityQueue) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*
 		}
 
 		// Skip the offset item itself (if specified).
-		if txHash := item.tx.Hash(); txHash.Equal(offset) {
+		if item.tx.hash.Equal(offset) {
 			return true
 		}
 
@@ -240,11 +248,11 @@ func (q *priorityQueue) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*
 	return batch
 }
 
-func (q *priorityQueue) GetKnownBatch(batch []hash.Hash) ([]*transaction.CheckedTransaction, map[hash.Hash]int) {
+func (q *priorityQueue) getKnownBatch(batch []hash.Hash) ([]*Transaction, map[hash.Hash]int) {
 	q.Lock()
 	defer q.Unlock()
 
-	result := make([]*transaction.CheckedTransaction, 0, len(batch))
+	result := make([]*Transaction, 0, len(batch))
 	missing := make(map[hash.Hash]int)
 	for index, txHash := range batch {
 		if item, ok := q.transactions[txHash]; ok {
@@ -257,26 +265,18 @@ func (q *priorityQueue) GetKnownBatch(batch []hash.Hash) ([]*transaction.Checked
 	return result, missing
 }
 
-func (q *priorityQueue) GetTransactions(limit int) []*transaction.CheckedTransaction {
+func (q *priorityQueue) getAll() []*Transaction {
 	q.Lock()
 	defer q.Unlock()
 
-	count := len(q.transactions)
-	if limit > 0 && limit < count {
-		count = limit
-	}
-
-	result := make([]*transaction.CheckedTransaction, 0, count)
+	result := make([]*Transaction, 0, len(q.transactions))
 	for _, item := range q.transactions {
-		if len(result) >= count {
-			break
-		}
 		result = append(result, item.tx)
 	}
 	return result
 }
 
-func (q *priorityQueue) RemoveTxBatch(batch []hash.Hash) {
+func (q *priorityQueue) removeTxBatch(batch []hash.Hash) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -289,21 +289,14 @@ func (q *priorityQueue) RemoveTxBatch(batch []hash.Hash) {
 	q.removeTxsLocked(items)
 }
 
-func (q *priorityQueue) IsQueued(txHash hash.Hash) bool {
+func (q *priorityQueue) size() int {
 	q.Lock()
 	defer q.Unlock()
 
-	return q.isQueuedLocked(txHash)
+	return len(q.transactions)
 }
 
-func (q *priorityQueue) Size() uint64 {
-	q.Lock()
-	defer q.Unlock()
-
-	return q.poolWeights[transaction.WeightCount]
-}
-
-func (q *priorityQueue) UpdateMaxPoolSize(maxPoolSize uint64) {
+func (q *priorityQueue) updateMaxPoolSize(maxPoolSize uint64) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -311,7 +304,7 @@ func (q *priorityQueue) UpdateMaxPoolSize(maxPoolSize uint64) {
 	// Any transaction not within the new limits will get removed during GetBatch iteration.
 }
 
-func (q *priorityQueue) UpdateWeightLimits(limits map[transaction.Weight]uint64) {
+func (q *priorityQueue) updateWeightLimits(limits map[transaction.Weight]uint64) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -319,7 +312,7 @@ func (q *priorityQueue) UpdateWeightLimits(limits map[transaction.Weight]uint64)
 	// Any transaction not within the new limits will get removed during GetBatch iteration.
 }
 
-func (q *priorityQueue) Clear() {
+func (q *priorityQueue) clear() {
 	q.Lock()
 	defer q.Unlock()
 
@@ -327,29 +320,6 @@ func (q *priorityQueue) Clear() {
 	q.transactions = make(map[hash.Hash]*item)
 	q.poolWeights = make(map[transaction.Weight]uint64)
 	q.lowestPriority = 0
-}
-
-// NOTE: Assumes lock is held.
-func (q *priorityQueue) checkTxLocked(tx *transaction.CheckedTransaction) error {
-	// Check weights.
-	for w, l := range q.weightLimits {
-		txW := tx.Weight(w)
-		if txW > l {
-			return p2pError.Permanent(fmt.Errorf("call too large"))
-		}
-	}
-
-	if q.isQueuedLocked(tx.Hash()) {
-		return fmt.Errorf("tx already exists in pool")
-	}
-
-	return nil
-}
-
-// NOTE: Assumes lock is held.
-func (q *priorityQueue) isQueuedLocked(txHash hash.Hash) bool {
-	_, ok := q.transactions[txHash]
-	return ok
 }
 
 func newPriorityQueue(maxPoolSize uint64, weightLimits map[transaction.Weight]uint64) *priorityQueue {

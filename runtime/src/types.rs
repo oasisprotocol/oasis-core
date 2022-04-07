@@ -352,9 +352,7 @@ pub struct CheckTxResult {
 /// CheckTx transaction metadata.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct CheckTxMetadata {
-    #[cbor(optional)]
-    #[cbor(default)]
-    #[cbor(skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
     pub priority: u64,
 
     #[cbor(optional)]

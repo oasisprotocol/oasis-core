@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
@@ -42,186 +43,194 @@ func TestPriorityQueue(t *testing.T) {
 	})
 }
 
-func testBasic(t *testing.T, queue *priorityQueue) {
-	queue.Clear()
+func newTestTransaction(data []byte, priority uint64, weights map[transaction.Weight]uint64) *Transaction {
+	tx := newTransaction(data, txStatusPendingCheck)
+	tx.setChecked(&protocol.CheckTxMetadata{
+		Priority: priority,
+		Weights:  weights,
+	})
+	return tx
+}
 
-	queue.UpdateMaxPoolSize(51)
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+func testBasic(t *testing.T, queue *priorityQueue) {
+	queue.clear()
+
+	queue.updateMaxPoolSize(51)
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     10,
 		transaction.WeightSizeBytes: 100,
 	})
 
-	tx := transaction.RawCheckedTransaction([]byte("hello world"))
+	tx := newTestTransaction([]byte("hello world"), 0, nil)
 
-	err := queue.Add(tx)
+	err := queue.add(tx)
 	require.NoError(t, err, "Add")
 
-	err = queue.Add(tx)
+	err = queue.add(tx)
 	require.Error(t, err, "Add error on duplicates")
 
-	oversized := transaction.RawCheckedTransaction(make([]byte, 200))
-	err = queue.Add(oversized)
+	oversized := newTestTransaction(make([]byte, 200), 0, nil)
+	err = queue.add(oversized)
 	require.Error(t, err, "Add error on oversized calls")
 
 	// Add some more calls.
 	for i := 0; i < 50; i++ {
-		err = queue.Add(
-			transaction.RawCheckedTransaction([]byte(fmt.Sprintf("call %d", i))),
+		err = queue.add(
+			newTestTransaction([]byte(fmt.Sprintf("call %d", i)), 0, nil),
 		)
 		require.NoError(t, err, "Add")
 	}
 
-	err = queue.Add(transaction.RawCheckedTransaction([]byte("another call")))
+	err = queue.add(newTestTransaction([]byte("another call"), 0, nil))
 	require.Error(t, err, "Add error on queue full")
 
-	require.EqualValues(t, 51, queue.Size(), "Size")
+	require.EqualValues(t, 51, queue.size(), "Size")
 
-	batch := queue.GetBatch(false)
+	batch := queue.getBatch(false)
 	require.EqualValues(t, 10, len(batch), "Batch size")
-	require.EqualValues(t, 51, queue.Size(), "Size")
+	require.EqualValues(t, 51, queue.size(), "Size")
 
 	hashes := make([]hash.Hash, 0, len(batch))
 	for _, tx := range batch {
 		hashes = append(hashes, tx.Hash())
 		hashes = append(hashes, tx.Hash()) // Duplicate to ensure this is handled correctly.
 	}
-	queue.RemoveTxBatch(hashes)
-	require.EqualValues(t, 41, queue.Size(), "Size")
+	queue.removeTxBatch(hashes)
+	require.EqualValues(t, 41, queue.size(), "Size")
 }
 
 func testGetBatch(t *testing.T, queue *priorityQueue) {
-	queue.Clear()
+	queue.clear()
 
-	queue.UpdateMaxPoolSize(51)
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateMaxPoolSize(51)
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     10,
 		transaction.WeightSizeBytes: 100,
 	})
 
-	err := queue.Add(transaction.RawCheckedTransaction([]byte("hello world")))
+	err := queue.add(newTestTransaction([]byte("hello world"), 0, nil))
 	require.NoError(t, err, "Add")
 
-	batch := queue.GetBatch(false)
+	batch := queue.getBatch(false)
 	require.Empty(t, batch, "GetBatch empty if no batch available")
 
-	batch = queue.GetBatch(true)
+	batch = queue.getBatch(true)
 	require.EqualValues(t, 1, len(batch), "Batch size")
-	require.EqualValues(t, 1, queue.Size(), "Size")
+	require.EqualValues(t, 1, queue.size(), "Size")
 
-	batch = queue.GetPrioritizedBatch(nil, 10)
+	batch = queue.getPrioritizedBatch(nil, 10)
 	require.EqualValues(t, 1, len(batch), "Batch size")
-	require.EqualValues(t, 1, queue.Size(), "Size")
+	require.EqualValues(t, 1, queue.size(), "Size")
 
 	hashes := make([]hash.Hash, len(batch))
 	for i, tx := range batch {
 		hashes[i] = tx.Hash()
 	}
-	queue.RemoveTxBatch(hashes)
-	require.EqualValues(t, 0, queue.Size(), "Size")
+	queue.removeTxBatch(hashes)
+	require.EqualValues(t, 0, queue.size(), "Size")
 }
 
 func testRemoveTxBatch(t *testing.T, queue *priorityQueue) {
-	queue.Clear()
+	queue.clear()
 
-	queue.UpdateMaxPoolSize(51)
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateMaxPoolSize(51)
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     10,
 		transaction.WeightSizeBytes: 100,
 	})
 
-	queue.RemoveTxBatch([]hash.Hash{})
+	queue.removeTxBatch([]hash.Hash{})
 
-	// TODO: change to add.
-	for _, tx := range []*transaction.CheckedTransaction{
-		transaction.RawCheckedTransaction([]byte("hello world")),
-		transaction.RawCheckedTransaction([]byte("one")),
-		transaction.RawCheckedTransaction([]byte("two")),
-		transaction.RawCheckedTransaction([]byte("three")),
+	for _, tx := range []*Transaction{
+		newTestTransaction([]byte("hello world"), 0, nil),
+		newTestTransaction([]byte("one"), 0, nil),
+		newTestTransaction([]byte("two"), 0, nil),
+		newTestTransaction([]byte("three"), 0, nil),
 	} {
-		require.NoError(t, queue.Add(tx), "Add")
+		require.NoError(t, queue.add(tx), "Add")
 	}
-	require.EqualValues(t, 4, queue.Size(), "Size")
+	require.EqualValues(t, 4, queue.size(), "Size")
 
-	queue.RemoveTxBatch([]hash.Hash{})
-	require.EqualValues(t, 4, queue.Size(), "Size")
+	queue.removeTxBatch([]hash.Hash{})
+	require.EqualValues(t, 4, queue.size(), "Size")
 
-	queue.RemoveTxBatch([]hash.Hash{
+	queue.removeTxBatch([]hash.Hash{
 		hash.NewFromBytes([]byte("hello world")),
 		hash.NewFromBytes([]byte("two")),
 	})
-	require.EqualValues(t, 2, queue.Size(), "Size")
+	require.EqualValues(t, 2, queue.size(), "Size")
 
-	queue.RemoveTxBatch([]hash.Hash{
+	queue.removeTxBatch([]hash.Hash{
 		hash.NewFromBytes([]byte("hello world")),
 	})
-	require.EqualValues(t, 2, queue.Size(), "Size")
+	require.EqualValues(t, 2, queue.size(), "Size")
 }
 
 func testUpdateConfig(t *testing.T, queue *priorityQueue) {
-	queue.Clear()
+	queue.clear()
 
-	queue.UpdateMaxPoolSize(50)
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateMaxPoolSize(50)
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     10,
 		transaction.WeightSizeBytes: 100,
 	})
 
-	err := queue.Add(transaction.RawCheckedTransaction([]byte("hello world 1")))
+	err := queue.add(newTestTransaction([]byte("hello world 1"), 0, nil))
 	require.NoError(t, err, "Add")
-	err = queue.Add(transaction.RawCheckedTransaction([]byte("hello world 2")))
+	err = queue.add(newTestTransaction([]byte("hello world 2"), 0, nil))
 	require.NoError(t, err, "Add")
 
-	batch := queue.GetBatch(false)
+	batch := queue.getBatch(false)
 	require.Empty(t, batch, "no transactions should be returned")
 
 	// Update configuration to BatchSize=1.
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     1,
 		transaction.WeightSizeBytes: 100,
 	})
 
-	batch = queue.GetBatch(false)
+	batch = queue.getBatch(false)
 	require.Len(t, batch, 1, "one transaction should be returned")
 
 	hashes := make([]hash.Hash, len(batch))
 	for i, tx := range batch {
 		hashes[i] = tx.Hash()
 	}
-	queue.RemoveTxBatch(hashes)
-	require.EqualValues(t, 1, queue.Size(), "one transaction should remain")
+	queue.removeTxBatch(hashes)
+	require.EqualValues(t, 1, queue.size(), "one transaction should remain")
 
 	// Update configuration back to BatchSize=10.
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     10,
 		transaction.WeightSizeBytes: 100,
 	})
 	// Make sure the transaction is still there.
-	require.EqualValues(t, 1, queue.Size(), "transaction should remain after update")
+	require.EqualValues(t, 1, queue.size(), "transaction should remain after update")
 
 	// Update configuration to MaxBatchSizeBytes=1.
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     10,
 		transaction.WeightSizeBytes: 1,
 	})
 
-	batch = queue.GetBatch(true)
+	batch = queue.getBatch(true)
 	require.Empty(t, batch, "no transaction should be returned")
 	// Make sure the transaction was removed.
-	require.EqualValues(t, 0, queue.Size(), "transaction should get removed after update")
+	require.EqualValues(t, 0, queue.size(), "transaction should get removed after update")
 }
 
 func testWeights(t *testing.T, queue *priorityQueue) {
-	queue.Clear()
+	queue.clear()
 
-	queue.UpdateMaxPoolSize(51)
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateMaxPoolSize(51)
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:             10,
 		transaction.WeightSizeBytes:         100,
 		transaction.WeightConsensusMessages: 10,
 		"custom_weight":                     5,
 	})
 
-	err := queue.Add(transaction.NewCheckedTransaction(
+	err := queue.add(newTestTransaction(
 		[]byte("hello world 1"),
 		0,
 		map[transaction.Weight]uint64{
@@ -231,7 +240,7 @@ func testWeights(t *testing.T, queue *priorityQueue) {
 	))
 	require.NoError(t, err, "Add")
 
-	err = queue.Add(transaction.NewCheckedTransaction(
+	err = queue.add(newTestTransaction(
 		[]byte("hello world 2"),
 		0,
 		map[transaction.Weight]uint64{
@@ -241,7 +250,7 @@ func testWeights(t *testing.T, queue *priorityQueue) {
 	))
 	require.NoError(t, err, "Add")
 
-	err = queue.Add(transaction.NewCheckedTransaction(
+	err = queue.add(newTestTransaction(
 		[]byte("hello world 3"),
 		0,
 		map[transaction.Weight]uint64{
@@ -251,65 +260,65 @@ func testWeights(t *testing.T, queue *priorityQueue) {
 	))
 	require.NoError(t, err, "Add")
 
-	batch := queue.GetBatch(true)
+	batch := queue.getBatch(true)
 	require.Len(t, batch, 2, "two transactions should be returned")
 
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:             10,
 		transaction.WeightSizeBytes:         100,
 		transaction.WeightConsensusMessages: 11,
 		"custom_weight":                     6,
 	})
 
-	batch = queue.GetBatch(true)
+	batch = queue.getBatch(true)
 	require.Len(t, batch, 3, "two transactions should be returned")
 
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:             10,
 		transaction.WeightSizeBytes:         100,
 		transaction.WeightConsensusMessages: 5,
 		"custom_weight":                     5,
 	})
 
-	batch = queue.GetBatch(true)
+	batch = queue.getBatch(true)
 	require.Len(t, batch, 2, "two transactions should be returned")
 }
 
 func testPriority(t *testing.T, queue *priorityQueue) {
-	queue.Clear()
+	queue.clear()
 
-	queue.UpdateMaxPoolSize(3)
-	queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+	queue.updateMaxPoolSize(3)
+	queue.updateWeightLimits(map[transaction.Weight]uint64{
 		transaction.WeightCount:     3,
 		transaction.WeightSizeBytes: 100,
 	})
 
-	txs := []*transaction.CheckedTransaction{
-		transaction.NewCheckedTransaction(
+	txs := []*Transaction{
+		newTestTransaction(
 			[]byte("hello world 10"),
 			10,
 			nil,
 		),
-		transaction.NewCheckedTransaction(
+		newTestTransaction(
 			[]byte("hello world 5"),
 			5,
 			nil,
 		),
-		transaction.NewCheckedTransaction(
+		newTestTransaction(
 			[]byte("hello world 20"),
 			20,
 			nil,
 		),
 	}
 	for _, tx := range txs {
-		require.NoError(t, queue.Add(tx), "Add")
+		require.NoError(t, queue.add(tx), "Add")
 	}
 
-	batch := queue.GetBatch(true)
+	batch := queue.getBatch(true)
 	require.Len(t, batch, 3, "three transactions should be returned")
 	require.EqualValues(
 		t,
-		[]*transaction.CheckedTransaction{
+		[]*Transaction{
 			txs[2], // 20
 			txs[0], // 10
 			txs[1], // 5
@@ -318,11 +327,11 @@ func testPriority(t *testing.T, queue *priorityQueue) {
 		"elements should be returned by priority",
 	)
 
-	batch = queue.GetPrioritizedBatch(nil, 2)
+	batch = queue.getPrioritizedBatch(nil, 2)
 	require.Len(t, batch, 2, "two transactions should be returned")
 	require.EqualValues(
 		t,
-		[]*transaction.CheckedTransaction{
+		[]*Transaction{
 			txs[2], // 20
 			txs[0], // 10
 		},
@@ -331,11 +340,11 @@ func testPriority(t *testing.T, queue *priorityQueue) {
 	)
 
 	offsetTx := txs[2].Hash()
-	batch = queue.GetPrioritizedBatch(&offsetTx, 2)
+	batch = queue.getPrioritizedBatch(&offsetTx, 2)
 	require.Len(t, batch, 2, "two transactions should be returned")
 	require.EqualValues(
 		t,
-		[]*transaction.CheckedTransaction{
+		[]*Transaction{
 			txs[0], // 10
 			txs[1], // 5
 		},
@@ -344,23 +353,23 @@ func testPriority(t *testing.T, queue *priorityQueue) {
 	)
 
 	offsetTx.Empty()
-	batch = queue.GetPrioritizedBatch(&offsetTx, 2)
+	batch = queue.getPrioritizedBatch(&offsetTx, 2)
 	require.Len(t, batch, 0, "no transactions should be returned on invalid hash")
 
 	// When the pool is full, a higher priority transaction should still get queued.
-	highTx := transaction.NewCheckedTransaction(
+	highTx := newTestTransaction(
 		[]byte("hello world 6"),
 		6,
 		nil,
 	)
-	err := queue.Add(highTx)
+	err := queue.add(highTx)
 	require.NoError(t, err, "higher priority transaction should still get queued")
 
-	batch = queue.GetBatch(true)
+	batch = queue.getBatch(true)
 	require.Len(t, batch, 3, "three transactions should be returned")
 	require.EqualValues(
 		t,
-		[]*transaction.CheckedTransaction{
+		[]*Transaction{
 			txs[2], // 20
 			txs[0], // 10
 			highTx, // 6
@@ -370,12 +379,12 @@ func testPriority(t *testing.T, queue *priorityQueue) {
 	)
 
 	// A lower priority transaction should not get queued.
-	lowTx := transaction.NewCheckedTransaction(
+	lowTx := newTestTransaction(
 		[]byte("hello world 3"),
 		3,
 		nil,
 	)
-	err = queue.Add(lowTx)
+	err = queue.add(lowTx)
 	require.Error(t, err, "lower priority transaction should not get queued")
 }
 
@@ -386,16 +395,16 @@ func BenchmarkPriorityQueue(b *testing.B) {
 
 	b.Run(fmt.Sprintf("Add:%d", batchSize), func(b *testing.B) {
 		// Exclude preparation.
-		queue.Clear()
-		queue.UpdateMaxPoolSize(10000000)
-		queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+		queue.clear()
+		queue.updateMaxPoolSize(10000000)
+		queue.updateWeightLimits(map[transaction.Weight]uint64{
 			transaction.WeightCount:     10000000,
 			transaction.WeightSizeBytes: 10000000,
 		})
 
 		for i := 0; i < b.N; i++ {
 			for _, tx := range values {
-				_ = queue.Add(tx)
+				_ = queue.add(tx)
 			}
 		}
 	})
@@ -403,9 +412,9 @@ func BenchmarkPriorityQueue(b *testing.B) {
 	b.Run(fmt.Sprintf("GetBatch:%d", batchSize), func(b *testing.B) {
 		// Exclude preparation.
 		b.StopTimer()
-		queue.Clear()
-		queue.UpdateMaxPoolSize(10000000)
-		queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+		queue.clear()
+		queue.updateMaxPoolSize(10000000)
+		queue.updateWeightLimits(map[transaction.Weight]uint64{
 			transaction.WeightCount:     10000000,
 			transaction.WeightSizeBytes: 10000000,
 		})
@@ -413,26 +422,26 @@ func BenchmarkPriorityQueue(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
 			for _, tx := range values {
-				_ = queue.Add(tx)
+				_ = queue.add(tx)
 			}
 			b.StartTimer()
-			_ = queue.GetBatch(true)
+			_ = queue.getBatch(true)
 		}
 	})
 
 	b.Run(fmt.Sprintf("RemoveTxBatch:%d", batchSize), func(b *testing.B) {
 		// Exclude preparation.
 		b.StopTimer()
-		queue.Clear()
-		queue.UpdateMaxPoolSize(10000000)
-		queue.UpdateWeightLimits(map[transaction.Weight]uint64{
+		queue.clear()
+		queue.updateMaxPoolSize(10000000)
+		queue.updateWeightLimits(map[transaction.Weight]uint64{
 			transaction.WeightCount:     10000000,
 			transaction.WeightSizeBytes: 10000000,
 		})
 
 		hashes := make([]hash.Hash, len(values))
 		for i, tx := range values {
-			_ = queue.Add(tx)
+			_ = queue.add(tx)
 			hashes[i] = tx.Hash()
 		}
 		b.StartTimer()
@@ -445,12 +454,12 @@ func BenchmarkPriorityQueue(b *testing.B) {
 				break
 			}
 			cntr++
-			queue.RemoveTxBatch(hashes[(startIdx):(endIdx)])
+			queue.removeTxBatch(hashes[(startIdx):(endIdx)])
 		}
 	})
 }
 
-func prepareValues(b *testing.B) []*transaction.CheckedTransaction {
+func prepareValues(b *testing.B) []*Transaction {
 	b.StopTimer()
 	rngSrc, err := drbg.New(crypto.SHA512, []byte("seeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeed"), nil, []byte("incoming queue benchmark"))
 	if err != nil {
@@ -458,11 +467,11 @@ func prepareValues(b *testing.B) []*transaction.CheckedTransaction {
 	}
 	rng := rand.New(mathrand.New(rngSrc))
 
-	values := []*transaction.CheckedTransaction{}
+	var values []*Transaction
 	for i := 0; i < 1000000; i++ {
 		b := make([]byte, rng.Intn(128/2)+1)
 		rng.Read(b)
-		values = append(values, transaction.RawCheckedTransaction(b))
+		values = append(values, newTestTransaction(b, 0, nil))
 	}
 	b.StartTimer()
 

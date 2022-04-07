@@ -267,18 +267,6 @@ func (r *CheckTxResult) IsSuccess() bool {
 	return r.Error.Code == errors.CodeNoError
 }
 
-// ToCheckedTransaction creates CheckedTransaction from CheckTx result.
-//
-// Assumes a successful result.
-func (r *CheckTxResult) ToCheckedTransaction(rawTx []byte) *transaction.CheckedTransaction {
-	switch r.Meta {
-	case nil:
-		return transaction.NewCheckedTransaction(rawTx, 0, nil)
-	default:
-		return transaction.NewCheckedTransaction(rawTx, r.Meta.Priority, r.Meta.Weights)
-	}
-}
-
 // RuntimeCheckTxBatchResponse is a worker check tx batch response message body.
 type RuntimeCheckTxBatchResponse struct {
 	// Batch of CheckTx results corresponding to transactions passed on input.

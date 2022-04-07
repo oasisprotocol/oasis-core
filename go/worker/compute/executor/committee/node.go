@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -644,7 +645,7 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 		return
 	}
 
-	var batch []*transaction.CheckedTransaction
+	var batch []*txpool.Transaction
 	switch {
 	case epoch.IsTransactionScheduler(blk.Header.Round) && rtInfo.Features.HasScheduleControl():
 		// The runtime supports schedule control and we are the scheduler in this round.
@@ -849,7 +850,7 @@ func (n *Node) startRuntimeBatchSchedulingLocked(
 	rtState *roothash.RuntimeState,
 	roundResults *roothash.RoundResults,
 	rt host.RichRuntime,
-	batch []*transaction.CheckedTransaction,
+	batch []*txpool.Transaction,
 ) {
 	n.logger.Debug("asking runtime to schedule batch",
 		"initial_batch_size", len(batch),
