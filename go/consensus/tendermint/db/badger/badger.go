@@ -474,11 +474,31 @@ func (ba *badgerDBBatch) WriteSync() error {
 
 	for _, cmd := range ba.cmds {
 		if err := cmd.Execute(tx); err != nil {
-			ba.db.logger.Error("failed to execute command in Tx",
-				"err", err,
-				"cmd", cmd,
-			)
-			return err
+			if err == badger.ErrTxnTooBig {
+				// If a transaction is too big for Badger, the correct way
+				// to handle this (according to Badger docs) is to commit the
+				// current contents of the transaction and start a new one,
+				// instead of failing the entire transaction.
+				//
+				// See the following link for more information:
+				// https://dgraph.io/docs/badger/get-started/#read-write-transactions
+				if grr := tx.Commit(); grr != nil {
+					ba.db.logger.Error("failed to commit Tx",
+						"err", grr,
+					)
+					return grr
+				}
+				tx = ba.db.db.NewTransaction(true)
+				err = cmd.Execute(tx)
+			}
+
+			if err != nil {
+				ba.db.logger.Error("failed to execute command in Tx",
+					"err", err,
+					"cmd", cmd,
+				)
+				return err
+			}
 		}
 	}
 
