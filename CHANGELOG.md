@@ -12,6 +12,37 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.3 (2022-04-08)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- go/staking/grpc: rename misnamed GovernanceDeposits method
+  ([#4652](https://github.com/oasisprotocol/oasis-core/issues/4652))
+
+  Previous misnamed method is deprecated, but will work in the `22.1.x`
+  releases.
+
+### Bug Fixes
+
+- go/runtime/host: Always emit StoppedEvent on stop
+  ([#4647](https://github.com/oasisprotocol/oasis-core/issues/4647))
+
+  Previously the StoppedEvent was only emitted in case the runtime was
+  previously running. In case multihost was performing a version switch when a
+  runtime was not yet started, this resulted in a deadlock.
+
+- go/worker/common/p2p: Make sure P2P stops before service cleanup runs
+  ([#4650](https://github.com/oasisprotocol/oasis-core/issues/4650))
+
+  Otherwise this may result in a crash during shutdown when P2P requests are
+  processed while database is already closed.
+
 ## 22.1.2 (2022-04-05)
 
 | Protocol          | Version   |
