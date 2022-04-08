@@ -25,7 +25,9 @@ var (
 	// methodLastBlockFees is the LastBlockFees method.
 	methodLastBlockFees = serviceName.NewMethod("LastBlockFees", int64(0))
 	// methodGovernanceDeposits is the GovernanceDeposits method.
-	methodGovernanceDeposits = serviceName.NewMethod("methodGovernanceDeposits", int64(0))
+	methodGovernanceDeposits = serviceName.NewMethod("GovernanceDeposits", int64(0))
+	// methodGovernanceDepositsDeprecated is the deprecated GovernanceDeposits method.
+	methodGovernanceDepositsDeprecated = serviceName.NewMethod("methodGovernanceDeposits", int64(0))
 	// methodThreshold is the Threshold method.
 	methodThreshold = serviceName.NewMethod("Threshold", ThresholdQuery{})
 	// methodAddresses is the Addresses method.
@@ -83,7 +85,11 @@ var (
 			},
 			{
 				MethodName: methodGovernanceDeposits.ShortName(),
-				Handler:    handlerGovernanceDeposits,
+				Handler:    getHandlerGovernanceDeposits(methodGovernanceDeposits),
+			},
+			{
+				MethodName: methodGovernanceDepositsDeprecated.ShortName(),
+				Handler:    getHandlerGovernanceDeposits(methodGovernanceDepositsDeprecated),
 			},
 			{
 				MethodName: methodThreshold.ShortName(),
@@ -255,27 +261,29 @@ func handlerLastBlockFees( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGovernanceDeposits( // nolint: golint
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var height int64
-	if err := dec(&height); err != nil {
-		return nil, err
+func getHandlerGovernanceDeposits(methodDesc *cmnGrpc.MethodDesc) func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) { // nolint: golint
+	return func(
+		srv interface{},
+		ctx context.Context,
+		dec func(interface{}) error,
+		interceptor grpc.UnaryServerInterceptor,
+	) (interface{}, error) {
+		var height int64
+		if err := dec(&height); err != nil {
+			return nil, err
+		}
+		if interceptor == nil {
+			return srv.(Backend).GovernanceDeposits(ctx, height)
+		}
+		info := &grpc.UnaryServerInfo{
+			Server:     srv,
+			FullMethod: methodDesc.FullName(),
+		}
+		handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.(Backend).GovernanceDeposits(ctx, req.(int64))
+		}
+		return interceptor(ctx, height, info, handler)
 	}
-	if interceptor == nil {
-		return srv.(Backend).GovernanceDeposits(ctx, height)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGovernanceDeposits.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GovernanceDeposits(ctx, req.(int64))
-	}
-	return interceptor(ctx, height, info, handler)
 }
 
 func handlerThreshold( // nolint: golint
