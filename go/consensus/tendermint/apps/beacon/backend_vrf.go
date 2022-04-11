@@ -262,6 +262,18 @@ func (impl *backendVRF) doProveTx(
 	params *beacon.ConsensusParameters,
 	tx *transaction.Transaction,
 ) error {
+	// HACK HACK HACK:
+	//
+	// The gas check is rather late in the routine, which causes
+	// gas-estimation problems in the bootstrap epoch.  Since we
+	// can't change this to be earlier without breaking consensus,
+	// charge early iff it is estimating gas.
+	if ctx.IsSimulation() {
+		if err := ctx.Gas().UseGas(1, beacon.GasOpVRFProve, params.VRFParameters.GasCosts); err != nil {
+			return err
+		}
+	}
+
 	vrfState, err := state.VRFState(ctx)
 	if err != nil {
 		return fmt.Errorf("beacon: failed to get VRF state: %w", err)
@@ -323,8 +335,10 @@ func (impl *backendVRF) doProveTx(
 		return nil
 	}
 
-	if err = ctx.Gas().UseGas(1, beacon.GasOpVRFProve, params.VRFParameters.GasCosts); err != nil {
-		return err
+	if !ctx.IsSimulation() {
+		if err = ctx.Gas().UseGas(1, beacon.GasOpVRFProve, params.VRFParameters.GasCosts); err != nil {
+			return err
+		}
 	}
 
 	// Fresh proof, store pi.
