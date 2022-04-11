@@ -188,10 +188,10 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 
 		if argLen == 3 {
 			// End height provided.
-			if endHeight, err = strconv.ParseUint(args[1], 10, 64); err != nil {
+			if endHeight, err = strconv.ParseUint(args[2], 10, 64); err != nil {
 				logger.Error("malformed end height",
 					"err", err,
-					"arg", args[1],
+					"arg", args[2],
 				)
 				os.Exit(1)
 			}
