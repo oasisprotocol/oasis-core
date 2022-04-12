@@ -110,6 +110,9 @@ func NewAppendableStakingState() (*AppendableStakingState, error) {
 	st := &AppendableStakingState{
 		State: staking.Genesis{
 			Ledger: make(map[staking.Address]*staking.Account),
+			Parameters: staking.ConsensusParameters{
+				DebondingInterval: 1, // Minimum valid debonding interval.
+			},
 		},
 	}
 	if err := st.setDefaultFeeSplit(); err != nil {
