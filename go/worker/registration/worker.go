@@ -652,9 +652,6 @@ func (w *Worker) doNodeRegistration() {
 
 		case <-w.stopCh:
 			return
-
-		case <-w.stopRegCh:
-			return
 		}
 	}
 }
