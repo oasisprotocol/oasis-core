@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -262,11 +263,11 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
 	rtDsc.Deployments = append(oldRtDsc.Deployments, rtDsc.Deployments...) // Add old deployment.
 	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rtDsc, sc.nonce, kmTxPath); err != nil {
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rtDsc, sc.nonce, kmTxPath); err != nil {
 		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
 	}
 	sc.nonce++
-	if err := cli.Consensus.SubmitTx(kmTxPath); err != nil {
+	if err = cli.Consensus.SubmitTx(kmTxPath); err != nil {
 		return fmt.Errorf("failed to update KM runtime: %w", err)
 	}
 
@@ -274,20 +275,39 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	sc.Logger.Info("waiting for new keymanager node to register",
 		"num_nodes", sc.Net.NumRegisterNodes(),
 	)
-	if err := sc.Net.Keymanagers()[1].WaitReady(ctx); err != nil {
+	if err = sc.Net.Keymanagers()[1].WaitReady(ctx); err != nil {
 		return fmt.Errorf("error waiting for new keymanager to be ready: %w", err)
 	}
 
 	// Ensure replication succeeded.
-	if err := sc.ensureReplicationWorked(ctx, newKm, newRt); err != nil {
+	if err = sc.ensureReplicationWorked(ctx, newKm, newRt); err != nil {
 		return err
 	}
+
+	nodeCh, nodeSub, err := sc.Net.Controller().Registry.WatchNodes(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to watch nodes: %w", err)
+	}
+	defer nodeSub.Close()
 
 	// Shutdown old keymanager and make sure it deregisters.
 	sc.Logger.Info("shutting down old keymanager")
 	oldKm := sc.Net.Keymanagers()[0]
 	if err := oldKm.RequestShutdown(ctx, true); err != nil {
 		return fmt.Errorf("failed to request shutdown: %w", err)
+	}
+
+	// Ensure keymanager deregisters.
+OUTER:
+	for {
+		select {
+		case ev := <-nodeCh:
+			if !ev.IsRegistration && ev.Node.ID.Equal(oldKm.NodeID) {
+				break OUTER
+			}
+		case <-time.After(10 * time.Second):
+			return fmt.Errorf("failed to wait for keymanager to de-register")
+		}
 	}
 
 	// Run client again.
