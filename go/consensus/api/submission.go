@@ -45,6 +45,12 @@ func (pd *staticPriceDiscovery) GasPrice(ctx context.Context) (*quantity.Quantit
 	return pd.price.Clone(), nil
 }
 
+type noOpPriceDiscovery struct{}
+
+func (pd *noOpPriceDiscovery) GasPrice(ctx context.Context) (*quantity.Quantity, error) {
+	return nil, transaction.ErrMethodNotSupported
+}
+
 // SubmissionManager is a transaction submission manager interface.
 type SubmissionManager interface {
 	// PriceDiscovery returns the configured price discovery mechanism instance.
@@ -201,4 +207,22 @@ func NewSubmissionManager(backend ClientBackend, priceDiscovery PriceDiscovery, 
 // estimation and current gas price discovery.
 func SignAndSubmitTx(ctx context.Context, backend Backend, signer signature.Signer, tx *transaction.Transaction) error {
 	return backend.SubmissionManager().SignAndSubmitTx(ctx, signer, tx)
+}
+
+// NoOpSubmissionManager implements a submission manager that doesn't support submitting transactions.
+type NoOpSubmissionManager struct{}
+
+// Implements SubmissionManager.
+func (m *NoOpSubmissionManager) PriceDiscovery() PriceDiscovery {
+	return &noOpPriceDiscovery{}
+}
+
+// Implements SubmissionManager.
+func (m *NoOpSubmissionManager) EstimateGasAndSetFee(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+	return transaction.ErrMethodNotSupported
+}
+
+// Implements SubmissionManager.
+func (m *NoOpSubmissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+	return transaction.ErrMethodNotSupported
 }

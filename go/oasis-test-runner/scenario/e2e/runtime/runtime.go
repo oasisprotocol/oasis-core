@@ -626,6 +626,8 @@ func RegisterScenarios() error {
 		HistoryReindex,
 		// TrustRoot test.
 		TrustRoot,
+		// Archive node API test.
+		ArchiveAPI,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

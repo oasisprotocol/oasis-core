@@ -35,6 +35,13 @@ const (
 
 	// HeightLatest is the height that represents the most recent block height.
 	HeightLatest int64 = 0
+
+	// ModeFull is the name of the full node consensus mode.
+	ModeFull = "full"
+	// ModeSeed is the name of the seed-only node consensus mode.
+	ModeSeed = "seed"
+	// ModeArchive is the name of the archive node consensus mode.
+	ModeArchive = "archive"
 )
 
 var (
@@ -179,6 +186,8 @@ type Status struct { // nolint: maligned
 	Version version.Version `json:"version"`
 	// Backend is the consensus backend identifier.
 	Backend string `json:"backend"`
+	// Mode is the consensus mode identifier.
+	Mode string `json:"mode"`
 	// Features are the indicated consensus backend features.
 	Features FeatureMask `json:"features"`
 

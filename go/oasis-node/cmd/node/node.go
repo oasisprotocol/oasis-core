@@ -584,19 +584,24 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 
-	// Initialize upgrader backend and check if we can even launch.
-	node.Upgrader, err = upgrade.New(node.commonStore, cmdCommon.DataDir())
+	// Initialize upgrader backend.
+	isArchive := tendermint.Mode() == consensusAPI.ModeArchive
+	node.Upgrader, err = upgrade.New(node.commonStore, cmdCommon.DataDir(), !isArchive)
 	if err != nil {
 		logger.Error("failed to initialize upgrade backend",
 			"err", err,
 		)
 		return nil, err
 	}
-	if err = node.Upgrader.StartupUpgrade(); err != nil {
-		logger.Error("error occurred during startup upgrade",
-			"err", err,
-		)
-		return nil, err
+
+	// If not an archive mode, check if we can even launch.
+	if !isArchive {
+		if err = node.Upgrader.StartupUpgrade(); err != nil {
+			logger.Error("error occurred during startup upgrade",
+				"err", err,
+			)
+			return nil, err
+		}
 	}
 
 	// Generate/Load the node identity.

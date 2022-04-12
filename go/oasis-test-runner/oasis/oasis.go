@@ -16,6 +16,8 @@ import (
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -118,6 +120,11 @@ type Node struct { // nolint: maligned
 	entity *Entity
 }
 
+// SetArchiveMode sets the archive mode.
+func (n *Node) SetArchiveMode(archive bool) {
+	n.consensus.EnableArchiveMode = archive
+}
+
 func (n *Node) getProvisionedPort(portName string) uint16 {
 	port, ok := n.assignedPorts[portName]
 	if !ok {
@@ -200,6 +207,10 @@ func (n *Node) Start() error {
 	}
 	for _, hosted := range n.hostedRuntimes {
 		args.appendHostedRuntime(hosted.runtime, hosted.tee, hosted.binaryIdx, hosted.localConfig)
+	}
+
+	if n.consensus.EnableArchiveMode {
+		args.extraArgs([]Argument{{Name: tendermint.CfgMode, Values: []string{consensusAPI.ModeArchive}}})
 	}
 
 	args.extraArgs(n.extraArgs)
