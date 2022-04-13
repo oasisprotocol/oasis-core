@@ -22,9 +22,6 @@ use crate::{
     transaction::types::TxnBatch,
 };
 
-/// Name of the batch weight limit runtime query method.
-pub const BATCH_WEIGHT_LIMIT_QUERY_METHOD: &str = "internal.BatchWeightLimits";
-
 /// Computed batch.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct ComputedBatch {
@@ -170,8 +167,6 @@ pub enum Body {
     },
     RuntimeExecuteTxBatchResponse {
         batch: ComputedBatch,
-        #[cbor(optional)]
-        batch_weight_limits: Option<BTreeMap<TransactionWeight, u64>>,
 
         tx_hashes: Vec<Hash>,
         tx_reject_hashes: Vec<Hash>,
@@ -355,45 +350,10 @@ pub struct CheckTxMetadata {
     #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
     pub priority: u64,
 
-    #[cbor(optional)]
-    pub weights: Option<BTreeMap<TransactionWeight, u64>>,
-}
-
-/// Transaction weight kind.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TransactionWeight {
-    /// Consensus messages weight key.
-    ConsensusMessages,
-    /// Runtime specific weight key.
-    Custom(String),
-}
-
-impl From<&str> for TransactionWeight {
-    fn from(s: &str) -> Self {
-        match s {
-            "consensus_messages" => Self::ConsensusMessages,
-            _ => Self::Custom(s.to_string()),
-        }
-    }
-}
-
-impl cbor::Encode for TransactionWeight {
-    fn into_cbor_value(self) -> cbor::Value {
-        match self {
-            Self::ConsensusMessages => cbor::Value::TextString("consensus_messages".to_string()),
-            Self::Custom(other) => cbor::Value::TextString(other),
-        }
-    }
-}
-
-impl cbor::Decode for TransactionWeight {
-    fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
-        match value {
-            cbor::Value::TextString(v) if &v == "consensus_messages" => Ok(Self::ConsensusMessages),
-            cbor::Value::TextString(other) => Ok(Self::Custom(other)),
-            _ => Err(cbor::DecodeError::UnexpectedType),
-        }
-    }
+    #[cbor(optional, default, skip_serializing_if = "Vec::is_empty")]
+    pub sender: Vec<u8>,
+    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    pub sender_seq: u64,
 }
 
 #[derive(Clone, Copy, Debug, cbor::Encode, cbor::Decode)]
@@ -416,29 +376,4 @@ pub struct Message {
     pub message_type: MessageType,
     /// Message body.
     pub body: Body,
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_consistent_check_tx_weight() {
-        let tcs = vec![
-            (
-                "cmNvbnNlbnN1c19tZXNzYWdlcw==",
-                TransactionWeight::ConsensusMessages,
-            ),
-            ("cmNvbnNlbnN1c19tZXNzYWdlcw==", "consensus_messages".into()),
-            ("Y2dhcw==", "gas".into()),
-        ];
-        for (encoded_base64, rr) in tcs {
-            let dec: TransactionWeight = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("TransactionWeight should deserialize correctly");
-            assert_eq!(
-                dec, rr,
-                "decoded TransactionWeight should match the expected value"
-            );
-        }
-    }
 }

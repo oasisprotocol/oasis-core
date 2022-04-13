@@ -149,28 +149,6 @@ type outputArtifacts struct {
 	Output []byte
 }
 
-// Weight is the transaction weight type.
-type Weight string
-
-const (
-	// WeightConsensusMessages is the consensus messages weight key.
-	WeightConsensusMessages = Weight("consensus_messages")
-	// WeightSizeBytes is the transaction byte size weight key.
-	WeightSizeBytes = Weight("size_bytes")
-	// WeightCount is the transaction count weight key.
-	WeightCount = Weight("count")
-)
-
-// IsCustom returns if the weight is a custom runtime weight.
-func (w Weight) IsCustom() bool {
-	switch w {
-	case WeightConsensusMessages, WeightSizeBytes, WeightCount:
-		return false
-	default:
-		return true
-	}
-}
-
 // Transaction is an executed (or executing) transaction.
 //
 // This is the transaction representation used for convenience as a collection

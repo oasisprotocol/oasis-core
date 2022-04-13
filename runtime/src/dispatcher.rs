@@ -704,7 +704,6 @@ impl Dispatcher {
                 rak_sig,
                 messages: results.messages,
             },
-            batch_weight_limits: results.batch_weight_limits,
             tx_hashes: hashes,
             tx_reject_hashes: results.tx_reject_hashes,
             tx_input_root: input_io_root,

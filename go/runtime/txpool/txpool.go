@@ -177,7 +177,7 @@ type txPool struct {
 	checkTxNotifier *pubsub.Broker
 	recheckTxCh     *channels.RingChannel
 
-	schedulerQueue    *priorityQueue
+	schedulerQueue    *scheduleQueue
 	schedulerTicker   *time.Ticker
 	schedulerNotifier *pubsub.Broker
 
@@ -318,7 +318,7 @@ func (t *txPool) ClearProposedBatch() {
 }
 
 func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
-	t.schedulerQueue.removeTxBatch(txs)
+	t.schedulerQueue.remove(txs)
 
 	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.size()))
 }
@@ -489,16 +489,19 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 	pendingCheckSize.With(t.getMetricLabels()).Set(float64(t.PendingCheckSize()))
 
-	newTxs := make([]*PendingCheckTransaction, 0, len(results))
-	var unschedule []hash.Hash
-	for i, res := range results {
+	notifySubmitter := func(i int) {
 		// Send back the result of running the checks.
 		if batch[i].notifyCh != nil {
 			batch[i].notifyCh <- &results[i]
 			close(batch[i].notifyCh)
 			batch[i].notifyCh = nil
 		}
+	}
 
+	newTxs := make([]*PendingCheckTransaction, 0, len(results))
+	batchIndices := make([]int, 0, len(results))
+	var unschedule []hash.Hash
+	for i, res := range results {
 		if !res.IsSuccess() {
 			t.logger.Debug("check tx failed",
 				"tx", batch[i].tx,
@@ -511,15 +514,20 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 			if batch[i].isRecheck() {
 				unschedule = append(unschedule, batch[i].hash)
 			}
+			notifySubmitter(i)
 			continue
 		}
 
 		if batch[i].flags.isDiscard() || batch[i].isRecheck() {
+			notifySubmitter(i)
 			continue
 		}
 
+		// For any transactions that are to be queued, we defer notification until queued.
+
 		batch[i].setChecked(res.Meta)
 		newTxs = append(newTxs, batch[i])
+		batchIndices = append(batchIndices, i)
 	}
 
 	// Unschedule any transactions that are being rechecked and have failed checks.
@@ -539,15 +547,26 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	)
 
 	// Queue checked transactions for scheduling.
-	for _, tx := range newTxs {
+	for i, tx := range newTxs {
 		// NOTE: Scheduler exists as otherwise there would be no current block info above.
 		if err := t.schedulerQueue.add(tx.Transaction); err != nil {
-			t.logger.Error("unable to schedule transaction",
+			t.logger.Error("unable to queue transaction for scheduling",
 				"err", err,
-				"tx", tx,
+				"tx_hash", tx.hash,
 			)
+
+			// Change the result into an error and notify submitter.
+			results[batchIndices[i]].Error = protocol.Error{
+				Module:  "txpool",
+				Code:    1,
+				Message: err.Error(),
+			}
+			notifySubmitter(batchIndices[i])
 			continue
 		}
+
+		// Notify submitter of success.
+		notifySubmitter(batchIndices[i])
 
 		// Publish local transactions immediately.
 		publishTime := time.Now()
@@ -555,7 +574,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 			if err := t.txPublisher.PublishTx(ctx, tx.tx); err != nil {
 				t.logger.Warn("failed to publish local transaction",
 					"err", err,
-					"tx", tx,
+					"tx_hash", tx.hash,
 				)
 
 				// Since publication failed, make sure we retry early.
@@ -817,7 +836,7 @@ func New(
 		checkTxCh:         channels.NewRingChannel(1),
 		checkTxNotifier:   pubsub.NewBroker(false),
 		recheckTxCh:       channels.NewRingChannel(1),
-		schedulerQueue:    newPriorityQueue(int(cfg.MaxPoolSize)),
+		schedulerQueue:    newScheduleQueue(int(cfg.MaxPoolSize)),
 		schedulerTicker:   time.NewTicker(1 * time.Hour),
 		schedulerNotifier: pubsub.NewBroker(false),
 		proposedTxs:       make(map[hash.Hash]*Transaction),

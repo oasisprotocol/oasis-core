@@ -1,14 +1,11 @@
 //! Runtime transaction batch dispatcher.
-use std::{
-    collections::BTreeMap,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::sync::{atomic::AtomicBool, Arc};
 
 use super::{context::Context, tags::Tags, types::TxnBatch};
 use crate::{
     common::crypto::hash::Hash,
     consensus::roothash,
-    types::{CheckTxResult, Error as RuntimeError, TransactionWeight},
+    types::{CheckTxResult, Error as RuntimeError},
 };
 
 /// Runtime transaction dispatcher trait.
@@ -167,9 +164,6 @@ pub struct ExecuteBatchResult {
     pub in_msgs_count: usize,
     /// Block emitted tags (not emitted by a specific transaction).
     pub block_tags: Tags,
-    /// Batch weight limits valid for next round. This is used as a fast-path,
-    /// to avoid having the transaction scheduler query these on every round.
-    pub batch_weight_limits: Option<BTreeMap<TransactionWeight, u64>>,
     /// Hashes of transactions to reject.
     ///
     /// Note that these are only taken into account in schedule execution mode.
@@ -194,7 +188,6 @@ impl Dispatcher for NoopDispatcher {
             results: Vec::new(),
             messages: Vec::new(),
             block_tags: Tags::new(),
-            batch_weight_limits: None,
             in_msgs_count: in_msgs.len(),
             tx_reject_hashes: Vec::new(),
         })
@@ -210,7 +203,6 @@ impl Dispatcher for NoopDispatcher {
             results: Vec::new(),
             messages: Vec::new(),
             block_tags: Tags::new(),
-            batch_weight_limits: None,
             in_msgs_count: in_msgs.len(),
             tx_reject_hashes: Vec::new(),
         })

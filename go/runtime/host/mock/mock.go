@@ -160,11 +160,6 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 		rq := body.RuntimeQueryRequest
 
 		switch rq.Method {
-		// Handle Batch Weight Limits request.
-		case protocol.MethodQueryBatchWeightLimits:
-			return &protocol.Body{RuntimeQueryResponse: &protocol.RuntimeQueryResponse{
-				Data: cbor.Marshal(map[transaction.Weight]uint64{}),
-			}}, nil
 		default:
 			return &protocol.Body{RuntimeQueryResponse: &protocol.RuntimeQueryResponse{
 				Data: cbor.Marshal(rq.Method + " world at:" + fmt.Sprintf("%d", rq.ConsensusBlock.Height)),
