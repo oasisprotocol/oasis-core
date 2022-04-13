@@ -6,7 +6,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 type txStatus uint8
@@ -31,9 +30,6 @@ type Transaction struct {
 	// priority defines the transaction's priority as specified by the runtime
 	// in the CheckTx response.
 	priority uint64
-	// weights defines the transaction's runtime specific weights as specified
-	// in the CheckTx response.
-	weights map[transaction.Weight]uint64
 }
 
 func newTransaction(tx []byte, status txStatus) *Transaction {
@@ -81,15 +77,7 @@ func (tx *Transaction) setChecked(meta *protocol.CheckTxMetadata) {
 
 	if meta != nil {
 		tx.priority = meta.Priority
-		// TODO: Remove weights in favor of mandating runtime schedule control.
-		tx.weights = meta.Weights
 	}
-
-	if tx.weights == nil {
-		tx.weights = make(map[transaction.Weight]uint64)
-	}
-	tx.weights[transaction.WeightSizeBytes] = uint64(tx.Size())
-	tx.weights[transaction.WeightCount] = 1
 }
 
 // txCheckFlags are the flags describing how transaction should be checked.

@@ -49,7 +49,11 @@ func (r *runtime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoRespons
 	return &protocol.RuntimeInfoResponse{
 		ProtocolVersion: version.RuntimeHostProtocol,
 		RuntimeVersion:  version.MustFromString("0.0.0"),
-		Features:        nil,
+		Features: &protocol.Features{
+			ScheduleControl: &protocol.FeatureScheduleControl{
+				InitialBatchSize: 100,
+			},
+		},
 	}, nil
 }
 
@@ -73,10 +77,28 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 		tree := transaction.NewTree(nil, emptyRoot)
 		defer tree.Close()
 
-		for i := 0; i < len(rq.Inputs); i++ {
+		// Generate input root.
+		var txHashes []hash.Hash
+		for _, tx := range rq.Inputs {
 			err := tree.AddTransaction(ctx, transaction.Transaction{
-				Input:  rq.Inputs[0],
-				Output: rq.Inputs[0],
+				Input: tx,
+			}, tags)
+			if err != nil {
+				return nil, fmt.Errorf("(mock) failed to create I/O tree: %w", err)
+			}
+
+			txHashes = append(txHashes, hash.NewFromBytes(tx))
+		}
+		txInputWriteLog, txInputRoot, err := tree.Commit(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("(mock) failed to create I/O tree: %w", err)
+		}
+
+		// Generate outputs.
+		for _, tx := range rq.Inputs {
+			err = tree.AddTransaction(ctx, transaction.Transaction{
+				Input:  tx,
+				Output: tx,
 			}, tags)
 			if err != nil {
 				return nil, fmt.Errorf("(mock) failed to create I/O tree: %w", err)
@@ -104,6 +126,9 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 				},
 				IOWriteLog: ioWriteLog,
 			},
+			TxHashes:        txHashes,
+			TxInputRoot:     txInputRoot,
+			TxInputWriteLog: txInputWriteLog,
 			// No RakSig in mock response.
 		}}, nil
 	case body.RuntimeCheckTxBatchRequest != nil:

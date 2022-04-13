@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 )
 
 const (
@@ -88,11 +87,7 @@ type TransactionPool interface {
 	// RemoveTxBatch removes a transaction batch from the transaction pool.
 	RemoveTxBatch(txs []hash.Hash)
 
-	// GetScheduledBatch returns a batch of transactions ready for scheduling.
-	GetScheduledBatch(force bool) []*Transaction
-
-	// GetPrioritizedBatch returns a batch of transactions ordered by priority but without taking
-	// any weight limits into account.
+	// GetPrioritizedBatch returns a batch of transactions ordered by priority.
 	//
 	// Offset specifies the transaction hash that should serve as an offset when returning
 	// transactions from the pool. Transactions will be skipped until the given hash is encountered
@@ -107,9 +102,6 @@ type TransactionPool interface {
 
 	// ProcessBlock updates the last known runtime block information.
 	ProcessBlock(bi *BlockInfo) error
-
-	// UpdateWeightLimits updates the per-batch weight limits.
-	UpdateWeightLimits(limits map[transaction.Weight]uint64) error
 
 	// WakeupScheduler explicitly notifies subscribers that they should attempt scheduling.
 	WakeupScheduler()
@@ -185,7 +177,6 @@ type txPool struct {
 	checkTxNotifier *pubsub.Broker
 	recheckTxCh     *channels.RingChannel
 
-	schedulerLock     sync.Mutex
 	schedulerQueue    *priorityQueue
 	schedulerTicker   *time.Ticker
 	schedulerNotifier *pubsub.Broker
@@ -198,9 +189,6 @@ type txPool struct {
 	lastRecheckRound uint64
 
 	republishCh *channels.RingChannel
-
-	// roundWeightLimits is guarded by schedulerLock.
-	roundWeightLimits map[transaction.Weight]uint64
 }
 
 func (t *txPool) Start() error {
@@ -330,53 +318,17 @@ func (t *txPool) ClearProposedBatch() {
 }
 
 func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
-	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
-
-	if t.schedulerQueue == nil {
-		return
-	}
 	t.schedulerQueue.removeTxBatch(txs)
 
 	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.size()))
 }
 
-func (t *txPool) GetScheduledBatch(force bool) []*Transaction {
-	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
-
-	if t.schedulerQueue == nil {
-		return nil
-	}
-	return t.schedulerQueue.getBatch(force)
-}
-
 func (t *txPool) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*Transaction {
-	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
-
-	if t.schedulerQueue == nil {
-		return nil
-	}
 	return t.schedulerQueue.getPrioritizedBatch(offset, limit)
 }
 
 func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*Transaction, map[hash.Hash]int) {
-	t.schedulerLock.Lock()
-
-	if t.schedulerQueue == nil {
-		result := make([]*Transaction, 0, len(batch))
-		missing := make(map[hash.Hash]int)
-		for index, txHash := range batch {
-			result = append(result, nil)
-			missing[txHash] = index
-		}
-		t.schedulerLock.Unlock()
-		return result, missing
-	}
-
 	txs, missingTxs := t.schedulerQueue.getKnownBatch(batch)
-	t.schedulerLock.Unlock()
 
 	// Also check the proposed transactions set.
 	t.proposedTxsLock.Lock()
@@ -399,7 +351,11 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 	t.blockInfoLock.Lock()
 	defer t.blockInfoLock.Unlock()
 
-	if t.blockInfo == nil || bi.RuntimeBlock.Header.HeaderType == block.EpochTransition {
+	switch {
+	case t.blockInfo == nil:
+		close(t.initCh)
+		fallthrough
+	case bi.RuntimeBlock.Header.HeaderType == block.EpochTransition:
 		// Handle scheduler updates.
 		if err := t.updateScheduler(bi); err != nil {
 			return fmt.Errorf("failed to update scheduler: %w", err)
@@ -407,6 +363,7 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 
 		// Force recheck on epoch transitions.
 		t.recheckTxCh.In() <- struct{}{}
+	default:
 	}
 
 	t.blockInfo = bi
@@ -421,61 +378,8 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 }
 
 func (t *txPool) updateScheduler(bi *BlockInfo) error {
-	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
-
-	// Update per round weight limits.
-	t.roundWeightLimits[transaction.WeightConsensusMessages] = uint64(bi.ActiveDescriptor.Executor.MaxMessages)
-	t.roundWeightLimits[transaction.WeightSizeBytes] = bi.ActiveDescriptor.TxnScheduler.MaxBatchSizeBytes
-	t.roundWeightLimits[transaction.WeightCount] = bi.ActiveDescriptor.TxnScheduler.MaxBatchSize
-
-	switch t.schedulerQueue {
-	case nil:
-		// We still need to initialize the scheduler queue.
-		t.logger.Debug("initializing transaction scheduler queue")
-
-		t.schedulerQueue = newPriorityQueue(t.cfg.MaxPoolSize, t.roundWeightLimits)
-		close(t.initCh)
-	default:
-		// Scheduler already initialized, update weight limits.
-		t.schedulerQueue.updateWeightLimits(t.roundWeightLimits)
-	}
-
 	// Reset ticker to the new interval.
 	t.schedulerTicker.Reset(bi.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
-
-	return nil
-}
-
-func (t *txPool) UpdateWeightLimits(limits map[transaction.Weight]uint64) error {
-	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
-
-	if t.schedulerQueue == nil {
-		return nil
-	}
-
-	// Remove batch custom weight limits that don't exist anymore.
-	for w := range t.roundWeightLimits {
-		// Skip non custom runtime weights.
-		if !w.IsCustom() {
-			continue
-		}
-
-		if _, exists := limits[w]; !exists {
-			delete(t.roundWeightLimits, w)
-		}
-	}
-	// Update batch weight limits.
-	for w, l := range limits {
-		t.roundWeightLimits[w] = l
-	}
-
-	t.schedulerQueue.updateWeightLimits(t.roundWeightLimits)
-
-	t.logger.Debug("updated round batch weight limits",
-		"weight_limits", t.roundWeightLimits,
-	)
 
 	return nil
 }
@@ -485,11 +389,7 @@ func (t *txPool) WakeupScheduler() {
 }
 
 func (t *txPool) Clear() {
-	t.schedulerLock.Lock()
-	if t.schedulerQueue != nil {
-		t.schedulerQueue.clear()
-	}
-	t.schedulerLock.Unlock()
+	t.schedulerQueue.clear()
 	t.checkTxQueue.clear()
 
 	t.seenCache.Clear()
@@ -517,12 +417,6 @@ func (t *txPool) PendingCheckSize() int {
 }
 
 func (t *txPool) PendingScheduleSize() int {
-	t.schedulerLock.Lock()
-	defer t.schedulerLock.Unlock()
-
-	if t.schedulerQueue == nil {
-		return 0
-	}
 	return t.schedulerQueue.size()
 }
 
@@ -646,17 +540,14 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 	// Queue checked transactions for scheduling.
 	for _, tx := range newTxs {
-		t.schedulerLock.Lock()
 		// NOTE: Scheduler exists as otherwise there would be no current block info above.
 		if err := t.schedulerQueue.add(tx.Transaction); err != nil {
-			t.schedulerLock.Unlock()
 			t.logger.Error("unable to schedule transaction",
 				"err", err,
 				"tx", tx,
 			)
 			continue
 		}
-		t.schedulerLock.Unlock()
 
 		// Publish local transactions immediately.
 		publishTime := time.Now()
@@ -714,7 +605,7 @@ func (t *txPool) checkWorker() {
 		return
 	}
 
-	// Wait for initialization to make sure that we have the scheduler available.
+	// Wait for initialization.
 	if err = t.ensureInitialized(); err != nil {
 		return
 	}
@@ -761,7 +652,7 @@ func (t *txPool) republishWorker() {
 		"interval", republishInterval,
 	)
 
-	// Wait for initialization to make sure that we have the scheduler available.
+	// Wait for initialization.
 	if err := t.ensureInitialized(); err != nil {
 		return
 	}
@@ -798,9 +689,7 @@ func (t *txPool) republishWorker() {
 		lastRepublish = time.Now()
 
 		// Get scheduled transactions.
-		t.schedulerLock.Lock()
 		txs := t.schedulerQueue.getAll()
-		t.schedulerLock.Unlock()
 
 		// Filter transactions based on whether they can already be republished.
 		var republishedCount int
@@ -846,7 +735,7 @@ func (t *txPool) republishWorker() {
 }
 
 func (t *txPool) recheckWorker() {
-	// Wait for initialization to make sure that we have the scheduler available.
+	// Wait for initialization.
 	if err := t.ensureInitialized(); err != nil {
 		return
 	}
@@ -859,9 +748,7 @@ func (t *txPool) recheckWorker() {
 		}
 
 		// Get a batch of scheduled transactions.
-		t.schedulerLock.Lock()
 		txs := t.schedulerQueue.getAll()
-		t.schedulerLock.Unlock()
 
 		if len(txs) == 0 {
 			continue
@@ -930,10 +817,10 @@ func New(
 		checkTxCh:         channels.NewRingChannel(1),
 		checkTxNotifier:   pubsub.NewBroker(false),
 		recheckTxCh:       channels.NewRingChannel(1),
+		schedulerQueue:    newPriorityQueue(int(cfg.MaxPoolSize)),
 		schedulerTicker:   time.NewTicker(1 * time.Hour),
 		schedulerNotifier: pubsub.NewBroker(false),
 		proposedTxs:       make(map[hash.Hash]*Transaction),
 		republishCh:       channels.NewRingChannel(1),
-		roundWeightLimits: make(map[transaction.Weight]uint64),
 	}, nil
 }

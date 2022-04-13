@@ -50,6 +50,8 @@ var (
 	proposeTimeoutDelay = 2 * time.Second
 	// abortTimeout is the duration to wait for the runtime to abort.
 	abortTimeout = 5 * time.Second
+	// getInfoTimeout is the maximum time the runtime can spend replying to GetInfo.
+	getInfoTimeout = 5 * time.Second
 )
 
 var (
@@ -112,10 +114,6 @@ type Node struct { // nolint: maligned
 	runtimeReady         bool
 	runtimeVersion       version.Version
 	runtimeCapabilityTEE *node.CapabilityTEE
-
-	limitsLastUpdateLock sync.Mutex
-	// limitsLastUpdate is the round of the last update of the round weight limits.
-	limitsLastUpdate uint64
 
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
@@ -290,7 +288,7 @@ func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
 	// abort it no matter what as any processed state may be invalid.
 	n.abortBatchLocked(errSeenNewerBlock)
 	// Update our availability.
-	n.nudgeAvailability(false)
+	n.nudgeAvailabilityLocked(false)
 }
 
 // HandleNewBlockLocked implements NodeHooks.
@@ -388,14 +386,6 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	// Clear the potentially set "is proposing timeout" flag from the previous round.
 	n.proposingTimeout = false
 
-	if header.HeaderType != block.Normal {
-		// If last round was not successful, make sure we re-query the round weight limits
-		// before scheduling a batch as ExecuteTxResponse could have set invalid weights.
-		n.limitsLastUpdateLock.Lock()
-		n.limitsLastUpdate = header.Round - 1
-		n.limitsLastUpdateLock.Unlock()
-	}
-
 	// Check if we are a proposer and if so try to immediately schedule a new batch.
 	if n.commonNode.Group.GetEpochSnapshot().IsTransactionScheduler(blk.Header.Round) {
 		n.logger.Info("we are a transaction scheduler",
@@ -404,38 +394,6 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 
 		n.commonNode.TxPool.WakeupScheduler()
 	}
-}
-
-func (n *Node) updateBatchWeightLimits(ctx context.Context, blk *block.Block, lb *consensus.LightBlock, epoch beacon.EpochTime) error {
-	n.limitsLastUpdateLock.Lock()
-	defer n.limitsLastUpdateLock.Unlock()
-
-	if n.limitsLastUpdate != 0 && n.limitsLastUpdate >= blk.Header.Round {
-		n.logger.Debug("skipping querying batch weight limits",
-			"last_update_round", n.limitsLastUpdate,
-			"round", blk.Header.Round,
-		)
-		// Already queried weights for this round.
-		return nil
-	}
-
-	rt := n.commonNode.GetHostedRuntime()
-	if rt == nil {
-		return fmt.Errorf("updating runtime weight limits while hosted runtime is not initialized")
-	}
-
-	// Query batch limits.
-	batchLimits, err := rt.QueryBatchLimits(ctx, blk, lb, epoch)
-	if err != nil {
-		return fmt.Errorf("querying batch round limits: %w", err)
-	}
-
-	if err := n.commonNode.TxPool.UpdateWeightLimits(batchLimits); err != nil {
-		return err
-	}
-	n.limitsLastUpdate = blk.Header.Round
-
-	return nil
 }
 
 func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
@@ -560,13 +518,12 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 }
 
 func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
-	roundCtx, epoch, rtState, roundResults, blk, lb, err := func() (
+	roundCtx, epoch, rtState, roundResults, blk, err := func() (
 		context.Context,
 		*committee.EpochSnapshot,
 		*roothash.RuntimeState,
 		*roothash.RoundResults,
 		*block.Block,
-		*consensus.LightBlock,
 		error,
 	) {
 		n.commonNode.CrossNode.Lock()
@@ -582,37 +539,30 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 			// scheduler and so we won't actually be able to schedule anything. But we should still
 			// propose a timeout if the transaction scheduler proposed something that nobody has.
 		default:
-			return roundCtx, nil, nil, nil, nil, nil, errIncorrectState
+			return roundCtx, nil, nil, nil, nil, errIncorrectState
 		}
 
 		if n.commonNode.CurrentBlock == nil {
-			return roundCtx, nil, nil, nil, nil, nil, errNoBlocks
+			return roundCtx, nil, nil, nil, nil, errNoBlocks
 		}
 		epoch := n.commonNode.Group.GetEpochSnapshot()
 
 		// If we are not an executor worker in this epoch, we don't need to do anything.
 		if !epoch.IsExecutorWorker() {
-			return roundCtx, nil, nil, nil, nil, nil, errNotExecutor
+			return roundCtx, nil, nil, nil, nil, errNotExecutor
 		}
 
 		rtState, roundResults, err := n.getRtStateAndRoundResults(roundCtx, n.commonNode.CurrentBlockHeight)
 		if err != nil {
-			return roundCtx, nil, nil, nil, nil, nil, err
+			return roundCtx, nil, nil, nil, nil, err
 		}
-		return roundCtx, epoch, rtState, roundResults, n.commonNode.CurrentBlock, n.commonNode.CurrentConsensusBlock, nil
+		return roundCtx, epoch, rtState, roundResults, n.commonNode.CurrentBlock, nil
 	}()
 	if err != nil {
 		n.logger.Debug("not scheduling a batch",
 			"err", err,
 		)
 		return
-	}
-
-	// Update per round scheduler parameters if needed.
-	if err = n.updateBatchWeightLimits(roundCtx, blk, lb, epoch.GetEpochNumber()); err != nil {
-		n.logger.Error("failed updating batch weight limits",
-			"err", err,
-		)
 	}
 
 	// Fetch incoming message queue metadata to see if there's any queued messages.
@@ -644,19 +594,14 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 		)
 		return
 	}
-
-	var batch []*txpool.Transaction
-	switch {
-	case epoch.IsTransactionScheduler(blk.Header.Round) && rtInfo.Features.HasScheduleControl():
-		// The runtime supports schedule control and we are the scheduler in this round.
-		batch = n.commonNode.TxPool.GetPrioritizedBatch(nil, rtInfo.Features.ScheduleControl.InitialBatchSize)
-	default:
-		// Just ask the scheduler for a batch of transactions.
-		batch = n.commonNode.TxPool.GetScheduledBatch(force)
+	if !rtInfo.Features.HasScheduleControl() {
+		n.logger.Error("runtime does not support schedule control")
+		return
 	}
 
-	// Ask the scheduler to get a batch of transactions for us and see if we should be proposing
-	// a new batch to other nodes.
+	// Ask the transaction pool  to get a batch of transactions for us and see if we should be
+	// proposing a new batch to other nodes.
+	batch := n.commonNode.TxPool.GetPrioritizedBatch(nil, rtInfo.Features.ScheduleControl.InitialBatchSize)
 	switch {
 	case len(batch) > 0:
 		// We have some transactions, schedule batch.
@@ -675,7 +620,7 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 
 	// If we are an executor and not a scheduler try proposing a timeout.
 	if !epoch.IsTransactionScheduler(blk.Header.Round) {
-		n.logger.Debug("proposing a timeout",
+		n.logger.Debug("considering to propose a timeout",
 			"round", blk.Header.Round,
 			"batch_size", len(batch),
 			"round_results", roundResults,
@@ -713,92 +658,7 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 		return
 	}
 
-	// If the runtime supports schedule control we ask the runtime to schedule the batch and then
-	// propose that.
-	if rtInfo.Features.HasScheduleControl() {
-		n.startRuntimeBatchSchedulingLocked(rtState, roundResults, rt, batch)
-		return
-	}
-
-	// Runtime does not support scheduling control, do our own scheduling.
-
-	n.logger.Debug("runtime does not support scheduling control, scheduling batch",
-		"batch_size", len(batch),
-		"round_results", roundResults,
-	)
-
-	// Scheduler node starts batch processing.
-
-	// Generate the initial I/O root containing only the inputs (outputs and
-	// tags will be added later by the executor nodes).
-	emptyRoot := storage.Root{
-		Namespace: blk.Header.Namespace,
-		Version:   blk.Header.Round + 1,
-		Type:      storage.RootTypeIO,
-	}
-	emptyRoot.Hash.Empty()
-
-	ioTree := transaction.NewTree(nil, emptyRoot)
-	defer ioTree.Close()
-
-	rawBatch := make(transaction.RawBatch, len(batch))
-	txHashes := make([]hash.Hash, len(batch))
-	for idx, tx := range batch {
-		if err = ioTree.AddTransaction(roundCtx, transaction.Transaction{Input: tx.Raw(), BatchOrder: uint32(idx)}, nil); err != nil {
-			n.logger.Error("failed to create I/O tree",
-				"err", err,
-			)
-			return
-		}
-		rawBatch[idx] = tx.Raw()
-		txHashes[idx] = tx.Hash()
-	}
-
-	// Mark any proposed transactions.
-	n.commonNode.TxPool.PromoteProposedBatch(txHashes)
-
-	ioWriteLog, ioRoot, err := ioTree.Commit(roundCtx)
-	if err != nil {
-		n.logger.Error("failed to create I/O tree",
-			"err", err,
-		)
-		return
-	}
-
-	// Commit I/O tree to local storage.
-	if err = n.schedulerStoreTransactions(roundCtx, blk, ioWriteLog, ioRoot); err != nil {
-		n.logger.Error("failed to commit I/O tree to storage",
-			"err", err,
-		)
-		return
-	}
-
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-
-	// Make sure we are still in the right state/round.
-	if _, ok := n.state.(StateWaitingForBatch); !ok || blk.Header.Round != n.commonNode.CurrentBlock.Header.Round {
-		n.logger.Error("new state or round since started the dispatch",
-			"state", n.state,
-			"expected_round", blk.Header.Round,
-			"round", n.commonNode.CurrentBlock.Header.Round,
-		)
-		return
-	}
-
-	proposal, err := n.schedulerCreateProposalLocked(roundCtx, ioRoot, txHashes)
-	if err != nil {
-		n.logger.Error("failed to create proposal",
-			"err", err,
-		)
-		return
-	}
-
-	// Also process the batch locally.
-	n.maybeStartProcessingBatchLocked(&unresolvedBatch{
-		proposal: proposal,
-		batch:    rawBatch,
-	})
+	n.startRuntimeBatchSchedulingLocked(rtState, roundResults, rt, batch)
 }
 
 func (n *Node) schedulerStoreTransactions(ctx context.Context, blk *block.Block, inputWriteLog storage.WriteLog, inputRoot hash.Hash) error {
@@ -1121,16 +981,6 @@ func (n *Node) runtimeExecuteTxBatch(
 		)
 		return nil, fmt.Errorf("malformed response from runtime")
 	}
-
-	// Update round batch weight limits.
-	n.limitsLastUpdateLock.Lock()
-	if err = n.commonNode.TxPool.UpdateWeightLimits(rsp.RuntimeExecuteTxBatchResponse.BatchWeightLimits); err != nil {
-		n.logger.Error("failed updating batch weight limits",
-			"err", err,
-		)
-	}
-	n.limitsLastUpdate = blk.Header.Round + 1
-	n.limitsLastUpdateLock.Unlock()
 
 	return rsp.RuntimeExecuteTxBatchResponse, nil
 }
@@ -1518,8 +1368,8 @@ func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch) error {
 	return nil
 }
 
-// nudeAvailability checks whether the executor worker should declare itself available.
-func (n *Node) nudgeAvailability(force bool) {
+// nudgeAvailabilityLocked checks whether the executor worker should declare itself available.
+func (n *Node) nudgeAvailabilityLocked(force bool) {
 	// Check availability of the last round which is needed for round processing.
 	_, _, err := n.getRtStateAndRoundResults(n.ctx, consensus.HeightLatest)
 	lastRoundAvailable := (err == nil)
@@ -1553,6 +1403,26 @@ func (n *Node) nudgeAvailability(force bool) {
 func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 	switch {
 	case ev.Started != nil:
+		// Make sure the runtime supports all the required features.
+		n.runtimeReady = false
+
+		ctx, cancel := context.WithTimeout(n.ctx, getInfoTimeout)
+		defer cancel()
+		rt := n.commonNode.GetHostedRuntime()
+		if rt == nil {
+			n.logger.Error("failed to retrieve runtime information")
+			break
+		}
+		rtInfo, err := rt.GetInfo(ctx)
+		if err != nil {
+			n.logger.Error("failed to retrieve runtime information", "err", err)
+			break
+		}
+		if !rtInfo.Features.HasScheduleControl() {
+			n.logger.Error("runtime does not support schedule control")
+			break
+		}
+
 		// We are now able to service requests for this runtime.
 		n.runtimeReady = true
 		n.runtimeVersion = ev.Started.Version
@@ -1571,7 +1441,7 @@ func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 		)
 	}
 
-	n.nudgeAvailability(true)
+	n.nudgeAvailabilityLocked(true)
 }
 
 func (n *Node) handleProcessedBatch(batch *processedBatch, processingCh chan *processedBatch) {
