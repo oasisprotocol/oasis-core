@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -174,6 +175,14 @@ type Node struct {
 
 	hooks []NodeHooks
 
+	// Status states.
+	consensusSynced           uint32
+	runtimeRegistryDescriptor uint32
+	keymanagerAvailable       uint32
+	hostedRuntimeProvisioned  uint32
+	historyReindexingDone     uint32
+	workersInitialized        uint32
+
 	// Mutable and shared between nodes' workers.
 	// Guarded by .CrossNode.
 	CrossNode             sync.Mutex
@@ -185,6 +194,33 @@ type Node struct {
 	Height                int64
 
 	logger *logging.Logger
+}
+
+func (n *Node) getStatusStateLocked() api.StatusState {
+	if atomic.LoadUint32(&n.consensusSynced) == 0 {
+		return api.StatusStateWaitingConsensusSync
+	}
+	if atomic.LoadUint32(&n.runtimeRegistryDescriptor) == 0 {
+		return api.StatusStateWaitingRuntimeRegistry
+	}
+	if atomic.LoadUint32(&n.keymanagerAvailable) == 0 {
+		return api.StatusStateWaitingKeymanager
+	}
+	if atomic.LoadUint32(&n.hostedRuntimeProvisioned) == 0 {
+		return api.StatusStateWaitingHostedRuntime
+	}
+	if atomic.LoadUint32(&n.historyReindexingDone) == 0 {
+		return api.StatusStateWaitingHistoryReindex
+	}
+	if atomic.LoadUint32(&n.workersInitialized) == 0 {
+		return api.StatusStateWaitingWorkersInit
+	}
+	// If resumeCh exists the runtime is suspended (safe to check since the cross node lock should be held).
+	if n.resumeCh != nil {
+		return api.StatusStateRuntimeSuspended
+	}
+
+	return api.StatusStateReady
 }
 
 // Name returns the service name.
@@ -250,6 +286,8 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	defer n.CrossNode.Unlock()
 
 	var status api.Status
+	status.Status = n.getStatusStateLocked()
+
 	if n.CurrentBlock != nil {
 		status.LatestRound = n.CurrentBlock.Header.Round
 		status.LatestHeight = n.CurrentBlockHeight
@@ -520,6 +558,9 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 }
 
 func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
+	if ev.Started != nil {
+		atomic.StoreUint32(&n.hostedRuntimeProvisioned, 1)
+	}
 	for _, hooks := range n.hooks {
 		hooks.HandleRuntimeHostEvent(ev)
 	}
@@ -539,6 +580,7 @@ func (n *Node) worker() {
 	case <-n.Consensus.Synced():
 	}
 	n.logger.Info("consensus has finished initial synchronization")
+	atomic.StoreUint32(&n.consensusSynced, 1)
 
 	// Wait for the runtime.
 	rt, err := n.Runtime.ActiveDescriptor(n.ctx)
@@ -548,6 +590,7 @@ func (n *Node) worker() {
 		)
 		return
 	}
+	atomic.StoreUint32(&n.runtimeRegistryDescriptor, 1)
 
 	n.CurrentEpoch, err = n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
 	if err != nil {
@@ -582,6 +625,7 @@ func (n *Node) worker() {
 
 		n.logger.Info("runtime has a key manager available")
 	}
+	atomic.StoreUint32(&n.keymanagerAvailable, 1)
 
 	// Start watching consensus blocks.
 	consensusBlocks, consensusBlocksSub, err := n.Consensus.WatchBlocks(n.ctx)
@@ -649,7 +693,9 @@ func (n *Node) worker() {
 
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
 	// initial block processing fails for any reason.
+	n.CrossNode.Lock()
 	n.updateHostedRuntimeVersionLocked()
+	n.CrossNode.Unlock()
 
 	initialized := false
 	for {
@@ -671,6 +717,7 @@ func (n *Node) worker() {
 			// history reindexing has been completed.
 			if !initialized {
 				n.logger.Debug("common worker is initialized")
+				atomic.StoreUint32(&n.historyReindexingDone, 1)
 
 				close(n.initCh)
 				initialized = true
@@ -686,6 +733,7 @@ func (n *Node) worker() {
 					}
 				}
 				n.logger.Debug("all child workers are initialized")
+				atomic.StoreUint32(&n.workersInitialized, 1)
 			}
 
 			// Received a block (annotated).
