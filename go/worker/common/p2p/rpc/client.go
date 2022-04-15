@@ -119,6 +119,7 @@ type CallOptions struct {
 	retryInterval time.Duration
 	maxRetries    uint64
 	validationFn  ValidationFunc
+	limitPeers    map[core.PeerID]struct{}
 }
 
 // CallOption is a per-call option setter.
@@ -144,6 +145,20 @@ func WithRetryInterval(retryInterval time.Duration) CallOption {
 func WithValidationFn(fn ValidationFunc) CallOption {
 	return func(opts *CallOptions) {
 		opts.validationFn = fn
+	}
+}
+
+// WithLimitPeers configures the peers that the call should be limited to.
+func WithLimitPeers(peers []PeerFeedback) CallOption {
+	return func(opts *CallOptions) {
+		opts.limitPeers = make(map[core.PeerID]struct{})
+		for _, peer := range peers {
+			pf, ok := peer.(*peerFeedback)
+			if !ok {
+				continue
+			}
+			opts.limitPeers[pf.peerID] = struct{}{}
+		}
 	}
 }
 
@@ -220,6 +235,22 @@ func (c *client) isPeerAcceptable(peerID core.PeerID) bool {
 	return c.opts.peerFilter.IsPeerAcceptable(peerID)
 }
 
+func (c *client) getFilteredBestPeers(limit map[core.PeerID]struct{}) []core.PeerID {
+	var peers []core.PeerID
+	for _, peer := range c.GetBestPeers() {
+		if !c.isPeerAcceptable(peer) {
+			continue
+		}
+		if limit != nil {
+			if _, exists := limit[peer]; !exists {
+				continue
+			}
+		}
+		peers = append(peers, peer)
+	}
+	return peers
+}
+
 func (c *client) Call(
 	ctx context.Context,
 	method string,
@@ -245,11 +276,7 @@ func (c *client) Call(
 	var pf PeerFeedback
 	tryPeers := func() error {
 		// Iterate through the prioritized list of peers and attempt to execute the request.
-		for _, peer := range c.GetBestPeers() {
-			if !c.isPeerAcceptable(peer) {
-				continue
-			}
-
+		for _, peer := range c.getFilteredBestPeers(co.limitPeers) {
 			c.logger.Debug("trying peer",
 				"method", method,
 				"peer_id", peer,
