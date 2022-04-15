@@ -94,6 +94,7 @@ type checkpointer struct {
 	ndb        db.NodeDB
 	creator    Creator
 	notifyCh   *channels.RingChannel
+	forceCh    *channels.RingChannel
 	flushCh    *channels.RingChannel
 	statusCh   chan struct{}
 	pausedCh   chan bool
@@ -102,22 +103,14 @@ type checkpointer struct {
 	logger *logging.Logger
 }
 
-type notifyNewVersion struct {
-	version uint64
-}
-
-type notifyForceCheckpoint struct {
-	version uint64
-}
-
 // Implements Checkpointer.
 func (c *checkpointer) NotifyNewVersion(version uint64) {
-	c.notifyCh.In() <- notifyNewVersion{version}
+	c.notifyCh.In() <- version
 }
 
 // Implements Checkpointer.
 func (c *checkpointer) ForceCheckpoint(version uint64) {
-	c.notifyCh.In() <- notifyForceCheckpoint{version}
+	c.forceCh.In() <- version
 }
 
 // Implements Checkpointer.
@@ -308,16 +301,11 @@ func (c *checkpointer) worker(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case n := <-c.notifyCh.Out():
-			switch nf := n.(type) {
-			case notifyNewVersion:
-				version = nf.version
-			case notifyForceCheckpoint:
-				version = nf.version
-				force = true
-			default:
-				panic(fmt.Errorf("unsupported checkpointer notification type: %T", nf))
-			}
+		case v := <-c.notifyCh.Out():
+			version = v.(uint64)
+		case v := <-c.forceCh.Out():
+			version = v.(uint64)
+			force = true
 		}
 
 		if paused && !force {
@@ -383,6 +371,7 @@ func NewCheckpointer(
 		ndb:        ndb,
 		creator:    creator,
 		notifyCh:   channels.NewRingChannel(1),
+		forceCh:    channels.NewRingChannel(1),
 		flushCh:    channels.NewRingChannel(1),
 		statusCh:   make(chan struct{}),
 		pausedCh:   make(chan bool),
