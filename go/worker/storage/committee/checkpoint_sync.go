@@ -50,8 +50,15 @@ func (cfg *CheckpointSyncConfig) Validate() error {
 	return nil
 }
 
+type chunk struct {
+	*checkpoint.ChunkMetadata
+
+	// checkpoint points to the checkpoint this chunk originated from.
+	checkpoint *storageSync.Checkpoint
+}
+
 type chunkHeap struct {
-	array  []*checkpoint.ChunkMetadata
+	array  []*chunk
 	length int
 }
 
@@ -60,7 +67,7 @@ func (h chunkHeap) Less(i, j int) bool { return h.array[i].Index < h.array[j].In
 func (h chunkHeap) Swap(i, j int)      { h.array[i], h.array[j] = h.array[j], h.array[i] }
 
 func (h *chunkHeap) Push(x interface{}) {
-	h.array[h.length] = x.(*checkpoint.ChunkMetadata)
+	h.array[h.length] = x.(*chunk)
 	h.length++
 }
 
@@ -73,12 +80,12 @@ func (h *chunkHeap) Pop() interface{} {
 
 func (n *Node) checkpointChunkFetcher(
 	ctx context.Context,
-	chunkDispatchCh chan *checkpoint.ChunkMetadata,
-	chunkReturnCh chan *checkpoint.ChunkMetadata,
+	chunkDispatchCh chan *chunk,
+	chunkReturnCh chan *chunk,
 	errorCh chan int,
 ) {
 	for {
-		var chunk *checkpoint.ChunkMetadata
+		var chunk *chunk
 		var ok bool
 		select {
 		case <-ctx.Done():
@@ -98,7 +105,7 @@ func (n *Node) checkpointChunkFetcher(
 			Root:    chunk.Root,
 			Index:   chunk.Index,
 			Digest:  chunk.Digest,
-		})
+		}, chunk.checkpoint)
 		if err != nil {
 			n.logger.Error("failed to fetch chunk from peers",
 				"err", err,
@@ -130,8 +137,13 @@ func (n *Node) checkpointChunkFetcher(
 				pf.RecordFailure()
 				chunkReturnCh <- chunk
 			case errors.Is(err, checkpoint.ErrChunkProofVerificationFailed):
-				// TODO: Also punish peer that gave us this checkpoint.
 				pf.RecordBadPeer()
+
+				// Also punish all peers that advertised this checkpoint.
+				for _, cpPeer := range chunk.checkpoint.Peers {
+					cpPeer.RecordBadPeer()
+				}
+
 				errorCh <- checkpointStatusNext
 				return
 			default:
@@ -144,8 +156,8 @@ func (n *Node) checkpointChunkFetcher(
 	}
 }
 
-func (n *Node) handleCheckpoint(check *checkpoint.Metadata, maxParallelRequests uint) (cpStatus int, rerr error) {
-	if err := n.localStorage.Checkpointer().StartRestore(n.ctx, check); err != nil {
+func (n *Node) handleCheckpoint(check *storageSync.Checkpoint, maxParallelRequests uint) (cpStatus int, rerr error) {
+	if err := n.localStorage.Checkpointer().StartRestore(n.ctx, check.Metadata); err != nil {
 		// Any previous restores were already aborted by the driver up the call stack, so
 		// things should have been going smoothly here; bail.
 		return checkpointStatusBail, fmt.Errorf("can't start checkpoint restore: %w", err)
@@ -166,10 +178,10 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, maxParallelRequests 
 		}
 	}()
 
-	chunkDispatchCh := make(chan *checkpoint.ChunkMetadata)
+	chunkDispatchCh := make(chan *chunk)
 	defer close(chunkDispatchCh)
 
-	chunkReturnCh := make(chan *checkpoint.ChunkMetadata, maxParallelRequests)
+	chunkReturnCh := make(chan *chunk, maxParallelRequests)
 	errorCh := make(chan int, maxParallelRequests)
 
 	ctx, cancel := context.WithCancel(n.ctx)
@@ -198,17 +210,20 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, maxParallelRequests 
 
 	// Prepare the heap of chunks.
 	chunks := &chunkHeap{
-		array:  make([]*checkpoint.ChunkMetadata, len(check.Chunks)),
+		array:  make([]*chunk, len(check.Chunks)),
 		length: 0,
 	}
 	heap.Init(chunks)
 
 	for i, c := range check.Chunks {
-		heap.Push(chunks, &checkpoint.ChunkMetadata{
-			Version: 1,
-			Index:   uint64(i),
-			Digest:  c,
-			Root:    check.Root,
+		heap.Push(chunks, &chunk{
+			ChunkMetadata: &checkpoint.ChunkMetadata{
+				Version: check.Version,
+				Index:   uint64(i),
+				Digest:  c,
+				Root:    check.Root,
+			},
+			checkpoint: check,
 		})
 	}
 	n.logger.Debug("checkpoint chunks prepared for dispatch",
@@ -217,15 +232,15 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, maxParallelRequests 
 	)
 
 	// Feed the workers with chunks.
-	var next *checkpoint.ChunkMetadata
-	var outChan chan *checkpoint.ChunkMetadata
+	var next *chunk
+	var outChan chan *chunk
 
 	for {
 		if chunks.length == 0 {
 			next = nil
 			outChan = nil
 		} else {
-			next = heap.Pop(chunks).(*checkpoint.ChunkMetadata)
+			next = heap.Pop(chunks).(*chunk)
 			outChan = chunkDispatchCh
 		}
 
@@ -260,11 +275,11 @@ func (n *Node) handleCheckpoint(check *checkpoint.Metadata, maxParallelRequests 
 	}
 }
 
-func (n *Node) getCheckpointList() ([]*checkpoint.Metadata, error) {
+func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
 	ctx, cancel := context.WithTimeout(n.ctx, cpListsTimeout)
 	defer cancel()
 
-	cps, err := n.storageSync.GetCheckpoints(ctx, &storageSync.GetCheckpointsRequest{
+	list, err := n.storageSync.GetCheckpoints(ctx, &storageSync.GetCheckpointsRequest{
 		Version: 1,
 	})
 	if err != nil {
@@ -274,8 +289,7 @@ func (n *Node) getCheckpointList() ([]*checkpoint.Metadata, error) {
 		return nil, err
 	}
 
-	// Prepare the list: sort and deduplicate.
-	list := cps.Checkpoints
+	// Sort checkpoints by version, descending.
 	sort.Slice(list, func(i, j int) bool {
 		// Descending!
 		if list[j].Root.Version == list[i].Root.Version {
@@ -283,20 +297,10 @@ func (n *Node) getCheckpointList() ([]*checkpoint.Metadata, error) {
 		}
 		return list[j].Root.Version < list[i].Root.Version
 	})
-	retList := make([]*checkpoint.Metadata, len(list))
-	var prevCheckpoint *checkpoint.Metadata
-	cursor := 0
-	for i := 0; i < len(list); i++ {
-		if prevCheckpoint == nil || !list[i].Root.Equal(&prevCheckpoint.Root) {
-			retList[cursor] = list[i]
-			cursor++
-		}
-	}
-
-	return retList[:cursor], nil
+	return list, nil
 }
 
-func (n *Node) checkCheckpointUsable(cp *checkpoint.Metadata, remainingMask outstandingMask) bool {
+func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask outstandingMask) bool {
 	namespace := n.commonNode.Runtime.ID()
 	if !namespace.Equal(&cp.Root.Namespace) {
 		// Not for the right runtime.
@@ -333,8 +337,8 @@ func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 	// for errors, driven by remainingRoots.
 	var syncState blockSummary
 
-	// Fetch metadata from the current committee.
-	metadata, err := n.getCheckpointList()
+	// Fetch checkpoints from peers.
+	cps, err := n.getCheckpointList()
 	if err != nil {
 		return nil, fmt.Errorf("can't get checkpoint list from peers: %w", err)
 	}
@@ -358,7 +362,7 @@ func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 		}
 	}()
 
-	for _, check := range metadata {
+	for _, check := range cps {
 		if check.Root.Version < genesisRound || !n.checkCheckpointUsable(check, remainingRoots) {
 			continue
 		}
