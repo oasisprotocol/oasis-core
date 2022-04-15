@@ -53,7 +53,7 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.ComputeWorkers[0].CheckpointCheckInterval = 1 * time.Second
 	// Configure runtime for storage checkpointing.
 	f.Runtimes[1].Storage.CheckpointInterval = 10
-	f.Runtimes[1].Storage.CheckpointNumKept = 1
+	f.Runtimes[1].Storage.CheckpointNumKept = 10
 	f.Runtimes[1].Storage.CheckpointChunkSize = 1 * 1024
 
 	// One more compute worker for later, so it can do an initial sync with the snapshots.
