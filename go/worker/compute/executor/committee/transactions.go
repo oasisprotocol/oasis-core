@@ -9,11 +9,11 @@ import (
 
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
 
-func (n *Node) handleNewCheckedTransactions(txs []*transaction.CheckedTransaction) {
+func (n *Node) handleNewCheckedTransactions(txs []*txpool.PendingCheckTransaction) {
 	// Check if we are waiting for new transactions.
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()

@@ -6,6 +6,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -19,9 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
-
-// MethodQueryBatchWeightLimits is the name of the runtime batch weight limits query method.
-const MethodQueryBatchWeightLimits = "internal.BatchWeightLimits"
 
 // NOTE: Bump RuntimeProtocol version in go/common/version if you
 //       change any of the structures below.
@@ -258,25 +256,20 @@ type CheckTxMetadata struct {
 	// Priority is the transaction's priority.
 	Priority uint64 `json:"priority,omitempty"`
 
-	// Weight are runtime specific transaction weights.
-	Weights map[transaction.Weight]uint64 `json:"weights,omitempty"`
+	// Sender is the unique identifier of the transaction sender.
+	Sender []byte `json:"sender,omitempty"`
+	// SenderSeq is the per-sender sequence number of the transaction.
+	SenderSeq uint64 `json:"sender_seq,omitempty"`
+
+	// Fields below are deprecated to avoid breaking protocol changes. They may be removed once
+	// all runtimes stop sending those fields.
+
+	Deprecated1 cbor.RawMessage `json:"weights,omitempty"`
 }
 
 // IsSuccess returns true if transaction execution was successful.
 func (r *CheckTxResult) IsSuccess() bool {
 	return r.Error.Code == errors.CodeNoError
-}
-
-// ToCheckedTransaction creates CheckedTransaction from CheckTx result.
-//
-// Assumes a successful result.
-func (r *CheckTxResult) ToCheckedTransaction(rawTx []byte) *transaction.CheckedTransaction {
-	switch r.Meta {
-	case nil:
-		return transaction.NewCheckedTransaction(rawTx, 0, nil)
-	default:
-		return transaction.NewCheckedTransaction(rawTx, r.Meta.Priority, r.Meta.Weights)
-	}
 }
 
 // RuntimeCheckTxBatchResponse is a worker check tx batch response message body.
@@ -352,8 +345,7 @@ type RuntimeExecuteTxBatchRequest struct {
 
 // RuntimeExecuteTxBatchResponse is a worker execute tx batch response message body.
 type RuntimeExecuteTxBatchResponse struct {
-	Batch             ComputedBatch                 `json:"batch"`
-	BatchWeightLimits map[transaction.Weight]uint64 `json:"batch_weight_limits"`
+	Batch ComputedBatch `json:"batch"`
 
 	// TxHashes are the transaction hashes of the included batch.
 	TxHashes []hash.Hash `json:"tx_hashes,omitempty"`
@@ -364,6 +356,11 @@ type RuntimeExecuteTxBatchResponse struct {
 	TxInputRoot hash.Hash `json:"tx_input_root,omitempty"`
 	// TxInputWriteLog is the write log for generating transaction inputs.
 	TxInputWriteLog storage.WriteLog `json:"tx_input_write_log,omitempty"`
+
+	// Fields below are deprecated to avoid breaking protocol changes. They may be removed once
+	// all runtimes stop sending those fields.
+
+	Deprecated1 cbor.RawMessage `json:"batch_weight_limits,omitempty"`
 }
 
 // RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request

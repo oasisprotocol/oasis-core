@@ -253,7 +253,6 @@ impl TxnDispatcher for Dispatcher {
             messages: ctx.messages,
             in_msgs_count: in_msgs.len(),
             block_tags: vec![],
-            batch_weight_limits: None,
             tx_reject_hashes: vec![],
         })
     }
@@ -307,7 +306,6 @@ impl TxnDispatcher for Dispatcher {
             messages: ctx.messages,
             in_msgs_count: in_msgs.len(),
             block_tags: vec![],
-            batch_weight_limits: None,
             tx_reject_hashes,
         })
     }

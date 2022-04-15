@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -46,14 +45,6 @@ type RichRuntime interface {
 		method string,
 		args []byte,
 	) ([]byte, error)
-
-	// QueryBatchLimits requests the runtime to answer the batch limits query.
-	QueryBatchLimits(
-		ctx context.Context,
-		rb *block.Block,
-		lb *consensus.LightBlock,
-		epoch beacon.EpochTime,
-	) (map[transaction.Weight]uint64, error)
 }
 
 type richRuntime struct {
@@ -124,25 +115,6 @@ func (r *richRuntime) Query(
 		return nil, errors.WithContext(ErrInternal, "malformed runtime response")
 	}
 	return resp.RuntimeQueryResponse.Data, nil
-}
-
-// Implements RichRuntime.
-func (r *richRuntime) QueryBatchLimits(
-	ctx context.Context,
-	rb *block.Block,
-	lb *consensus.LightBlock,
-	epoch beacon.EpochTime,
-) (map[transaction.Weight]uint64, error) {
-	resp, err := r.Query(ctx, rb, lb, epoch, 0, protocol.MethodQueryBatchWeightLimits, cbor.Marshal(nil))
-	if err != nil {
-		return nil, err
-	}
-
-	var weightLimits map[transaction.Weight]uint64
-	if err = cbor.Unmarshal(resp, &weightLimits); err != nil {
-		return nil, errors.WithContext(ErrInternal, fmt.Sprintf("malformed runtime response: %v", err))
-	}
-	return weightLimits, nil
 }
 
 // NewRichRuntime creates a new higher-level wrapper for a given runtime. It provides additional
