@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"crypto/rand"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -11,6 +12,12 @@ import (
 )
 
 func TestBundle(t *testing.T) {
+	execFile := os.Args[0]
+	execBuf, err := os.ReadFile(execFile)
+	if err != nil {
+		t.Fatalf("failed to read test executable %s: %v", execFile, err)
+	}
+
 	// Create a synthetic bundle.
 	//
 	// Assets will be populated during the Add/Write combined test.
@@ -43,7 +50,7 @@ func TestBundle(t *testing.T) {
 			return b
 		}
 
-		err := bundle.Add(manifest.Executable, randomBuffer())
+		err := bundle.Add(manifest.Executable, execBuf)
 		require.NoError(t, err, "bundle.Add(elf)")
 		err = bundle.Add(manifest.SGX.Executable, randomBuffer())
 		require.NoError(t, err, "bundle.Add(sgx)")
