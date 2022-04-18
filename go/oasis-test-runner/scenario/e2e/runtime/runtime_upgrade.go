@@ -114,7 +114,7 @@ func (sc *runtimeUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 
 	kmRuntimeEncID := kmRuntime.GetEnclaveIdentity(0)
 	oldRuntimeEncID := oldRuntime.GetEnclaveIdentity(0)
-	newRuntimeEncID := newRuntime.GetEnclaveIdentity(0)
+	newRuntimeEncID := newRuntime.GetEnclaveIdentity(1)
 
 	if oldRuntimeEncID == nil && newRuntimeEncID == nil {
 		sc.Logger.Info("No SGX runtimes, skipping policy update")
@@ -136,13 +136,16 @@ func (sc *runtimeUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	enclavePolicies[*kmRuntimeEncID].MayQuery = make(map[common.Namespace][]sgx.EnclaveIdentity)
 
 	// Allow new compute runtimes to query private data.
+	var deploymentIdx int
 	for _, rt := range sc.Net.Runtimes() {
 		if rt.Kind() != registry.KindCompute {
 			continue
 		}
-		if eid := rt.GetEnclaveIdentity(0); eid != nil {
+		// The updated runtime includes both deployments, only allow the last (updated) enclave identity.
+		if eid := rt.GetEnclaveIdentity(deploymentIdx); eid != nil {
 			enclavePolicies[*kmRuntimeEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
 		}
+		deploymentIdx++
 	}
 
 	sc.Logger.Info("initing updated KM policy")

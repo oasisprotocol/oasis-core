@@ -38,7 +38,7 @@ import (
 
 const (
 	timeLimitShort    = 6 * time.Minute
-	timeLimitShortSGX = 3 * time.Minute
+	timeLimitShortSGX = 6 * time.Minute
 	timeLimitLong     = 12 * time.Hour
 
 	nodeRestartIntervalLong = 2 * time.Minute
@@ -100,9 +100,9 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 	consensusPruneMaxKept:             200,
 	// XXX: don't use more nodes as SGX E2E test instances cannot handle many
 	// more nodes that are currently configured.
-	numValidatorNodes:  3,
+	numValidatorNodes:  2,
 	numKeyManagerNodes: 1,
-	numComputeNodes:    4,
+	numComputeNodes:    2,
 	numClientNodes:     1,
 }
 
