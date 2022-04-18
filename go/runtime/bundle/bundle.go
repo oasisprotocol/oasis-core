@@ -4,6 +4,7 @@ package bundle
 import (
 	"archive/zip"
 	"bytes"
+	"debug/elf"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -80,6 +81,13 @@ func (bnd *Bundle) Validate() error {
 			return fmt.Errorf("runtime/bundle: invalid digest: '%s'", fn)
 		}
 	}
+
+	// Make sure the ELF executable actually is an ELF image.
+	f, err := elf.NewFile(bytes.NewReader(bnd.Data[bnd.Manifest.Executable]))
+	if err != nil {
+		return fmt.Errorf("runtime/bundle: ELF executable isnt: %w", err)
+	}
+	_ = f.Close()
 
 	// Make sure the SGX signature is valid if it exists.
 	if err := bnd.verifySgxSignature(); err != nil {
