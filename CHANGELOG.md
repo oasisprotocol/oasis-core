@@ -12,6 +12,35 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.13 (2022-04-19)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Features
+
+- Add archive mode support
+  ([#4539](https://github.com/oasisprotocol/oasis-core/issues/4539))
+
+  Node started in archive mode only serves existing consensus and runtime
+  states. The node has all unneeded consensus and P2P functionality disabled so
+  it wont participate in the network. Archive mode can be set using the
+  `consensus.tendermint.mode` setting.
+
+- go/worker/storage: Eliminate artificial wait for heartbeat
+  ([#9740](https://github.com/oasisprotocol/oasis-core/issues/9740))
+
+### Bug Fixes
+
+- RequestShutdown: fix shutdown if registration never succeeded
+  ([#4571](https://github.com/oasisprotocol/oasis-core/issues/4571))
+
+  This fixes a case where node would never shutdown if the initial
+  registration never succeeded.
+
 ## 21.3.12 (2022-04-01)
 
 | Protocol          | Version   |
