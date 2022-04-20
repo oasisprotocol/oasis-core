@@ -18,6 +18,7 @@ import (
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
+	executorWorker "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
@@ -144,10 +145,12 @@ type RuntimeStatus struct {
 	LastRetainedHash hash.Hash `json:"last_retained_hash"`
 
 	// Committee contains the runtime worker status in case this node is a (candidate) member of a
-	// runtime committee (e.g., compute or storage).
+	// runtime committee.
 	Committee *commonWorker.Status `json:"committee"`
+	// Executor contains the executor worker status in case this node is an executor node.
+	Executor *executorWorker.Status `json:"executor,omitempty"`
 	// Storage contains the storage worker status in case this node is a storage node.
-	Storage *storageWorker.Status `json:"storage"`
+	Storage *storageWorker.Status `json:"storage,omitempty"`
 }
 
 // ControlledNode is an internal interface that the controlled oasis-node must provide.

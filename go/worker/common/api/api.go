@@ -104,7 +104,7 @@ func (s *StatusState) UnmarshalText(text []byte) error {
 
 // Status is the common runtime worker status.
 type Status struct {
-	// Status is an concise status of the committee node.
+	// Status is a concise status of the committee node.
 	Status StatusState `json:"status"`
 
 	// ActiveVersion is the currently active version.
