@@ -54,6 +54,9 @@ type RichRuntime interface {
 		lb *consensus.LightBlock,
 		epoch beacon.EpochTime,
 	) (map[transaction.Weight]uint64, error)
+
+	// ConsensusSync requests the runtime to sync its light client up to the given consensus height.
+	ConsensusSync(ctx context.Context, height uint64) error
 }
 
 type richRuntime struct {
@@ -143,6 +146,21 @@ func (r *richRuntime) QueryBatchLimits(
 		return nil, errors.WithContext(ErrInternal, fmt.Sprintf("malformed runtime response: %v", err))
 	}
 	return weightLimits, nil
+}
+
+func (r *richRuntime) ConsensusSync(ctx context.Context, height uint64) error {
+	resp, err := r.Call(ctx, &protocol.Body{
+		RuntimeConsensusSyncRequest: &protocol.RuntimeConsensusSyncRequest{
+			Height: height,
+		},
+	})
+	switch {
+	case err != nil:
+		return err
+	case resp.RuntimeConsensusSyncResponse == nil:
+		return errors.WithContext(ErrInternal, "malformed runtime response")
+	}
+	return nil
 }
 
 // NewRichRuntime creates a new higher-level wrapper for a given runtime. It provides additional

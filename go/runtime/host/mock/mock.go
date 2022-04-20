@@ -145,6 +145,9 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 				Data: cbor.Marshal(rq.Method + " world at:" + fmt.Sprintf("%d", rq.ConsensusBlock.Height)),
 			}}, nil
 		}
+	case body.RuntimeConsensusSyncRequest != nil:
+		// Nothing to be done, but we need to indicate success.
+		return &protocol.Body{RuntimeConsensusSyncResponse: &protocol.Empty{}}, nil
 	default:
 		return nil, fmt.Errorf("(mock) method not supported")
 	}
