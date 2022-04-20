@@ -82,6 +82,9 @@ func (sc *seedAPI) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err != nil {
 		return fmt.Errorf("failed to get status for node: %w", err)
 	}
+	if status.Consensus.Status != consensusAPI.StatusStateReady {
+		return fmt.Errorf("seed node consensus status should be '%s', got: '%s'", consensusAPI.StatusStateReady, status.Consensus.Status)
+	}
 	if status.Consensus.LatestHeight != int64(0) {
 		return fmt.Errorf("seed node latest height should be 0, got: %d", status.Consensus.LatestHeight)
 	}

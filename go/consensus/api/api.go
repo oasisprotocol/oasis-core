@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -202,8 +203,58 @@ type Vote struct {
 	VotingPower   uint64              `json:"voting_power"`
 }
 
+// StatusState is the concise status state of the consensus backend.
+type StatusState uint8
+
+var (
+	// StatusStateReady is the ready status state.
+	StatusStateReady StatusState = 0
+	// StatusStateSyncing is the syncing status state.
+	StatusStateSyncing StatusState = 1
+)
+
+// String returns a string representation of a status state.
+func (s StatusState) String() string {
+	switch s {
+	case StatusStateReady:
+		return "ready"
+	case StatusStateSyncing:
+		return "syncing"
+	default:
+		return "[invalid status state]"
+	}
+}
+
+// MarshalText encodes a StatusState into text form.
+func (s StatusState) MarshalText() ([]byte, error) {
+	switch s {
+	case StatusStateReady:
+		return []byte(StatusStateReady.String()), nil
+	case StatusStateSyncing:
+		return []byte(StatusStateSyncing.String()), nil
+	default:
+		return nil, fmt.Errorf("invalid StatusState: %d", s)
+	}
+}
+
+// UnmarshalText decodes a text slice into a StatusState.
+func (s *StatusState) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case StatusStateReady.String():
+		*s = StatusStateReady
+	case StatusStateSyncing.String():
+		*s = StatusStateSyncing
+	default:
+		return fmt.Errorf("invalid StatusState: %s", string(text))
+	}
+	return nil
+}
+
 // Status is the current status overview.
 type Status struct { // nolint: maligned
+	// Status is an concise status of the consensus backend.
+	Status StatusState `json:"status"`
+
 	// Version is the version of the consensus protocol that the node is using.
 	Version version.Version `json:"version"`
 	// Backend is the consensus backend identifier.

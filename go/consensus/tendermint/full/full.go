@@ -766,6 +766,7 @@ func (t *fullService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte,
 
 func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
+		Status:   consensusAPI.StatusStateSyncing,
 		Version:  version.ConsensusProtocol,
 		Backend:  api.BackendName,
 		Features: t.SupportedFeatures(),
@@ -774,6 +775,15 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	status.ChainContext = t.genesis.ChainContext()
 	status.GenesisHeight = t.genesis.Height
 	if t.started() {
+		// Check if node is synced.
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-t.Synced():
+			status.Status = consensusAPI.StatusStateReady
+		default:
+		}
+
 		// Only attempt to fetch blocks in case the consensus service has started as otherwise
 		// requests will block.
 		genBlk, err := t.GetBlock(ctx, t.genesis.Height)

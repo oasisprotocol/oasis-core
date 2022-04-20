@@ -1,12 +1,112 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
+// StatusState is the concise status state of the common runtime worker.
+type StatusState uint8
+
+const (
+	// StatusStateReady is the ready status state.
+	StatusStateReady StatusState = 0
+	// StatusStateWaitingConsensusSync is the waiting for consensus sync status state.
+	StatusStateWaitingConsensusSync StatusState = 1
+	// StatusStateWaitingRuntimeRegistry is the waiting for runtime registry descriptor status state.
+	StatusStateWaitingRuntimeRegistry StatusState = 2
+	// StatusStateWaitingKeymanager is the waiting for keymanager status state.
+	StatusStateWaitingKeymanager StatusState = 3
+	// StatusStateWaitingHostedRuntime is the waiting for the hosted runtime status state.
+	StatusStateWaitingHostedRuntime StatusState = 4
+	// StatusStateWaitingHistoryReindex is the waiting for runtime history reindex status state.
+	StatusStateWaitingHistoryReindex StatusState = 5
+	// StatusStateWaitingWorkersInit is the waiting for workers to initialize status state.
+	StatusStateWaitingWorkersInit StatusState = 6
+	// StatusStateRuntimeSuspended is the runtime suspended status state.
+	StatusStateRuntimeSuspended StatusState = 7
+)
+
+// String returns a string representation of a status state.
+func (s StatusState) String() string {
+	switch s {
+	case StatusStateReady:
+		return "ready"
+	case StatusStateWaitingConsensusSync:
+		return "waiting for consensus sync"
+	case StatusStateWaitingRuntimeRegistry:
+		return "waiting for runtime registry descriptor"
+	case StatusStateWaitingKeymanager:
+		return "waiting for available keymanager"
+	case StatusStateWaitingHostedRuntime:
+		return "waiting for hosted runtime provision"
+	case StatusStateWaitingHistoryReindex:
+		return "waiting for history reindex"
+	case StatusStateWaitingWorkersInit:
+		return "waiting for workers to initialize"
+	case StatusStateRuntimeSuspended:
+		return "runtime suspended"
+	default:
+		return "[invalid status state]"
+	}
+}
+
+// MarshalText encodes a StatusState into text form.
+func (s StatusState) MarshalText() ([]byte, error) {
+	switch s {
+	case StatusStateReady:
+		return []byte(StatusStateReady.String()), nil
+	case StatusStateWaitingConsensusSync:
+		return []byte(StatusStateWaitingConsensusSync.String()), nil
+	case StatusStateWaitingRuntimeRegistry:
+		return []byte(StatusStateWaitingRuntimeRegistry.String()), nil
+	case StatusStateWaitingKeymanager:
+		return []byte(StatusStateWaitingKeymanager.String()), nil
+	case StatusStateWaitingHostedRuntime:
+		return []byte(StatusStateWaitingHostedRuntime.String()), nil
+	case StatusStateWaitingHistoryReindex:
+		return []byte(StatusStateWaitingHistoryReindex.String()), nil
+	case StatusStateWaitingWorkersInit:
+		return []byte(StatusStateWaitingWorkersInit.String()), nil
+	case StatusStateRuntimeSuspended:
+		return []byte(StatusStateRuntimeSuspended.String()), nil
+	default:
+		return nil, fmt.Errorf("invalid StatusState: %d", s)
+	}
+}
+
+// UnmarshalText decodes a text slice into a StatusState.
+func (s *StatusState) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case StatusStateReady.String():
+		*s = StatusStateReady
+	case StatusStateWaitingConsensusSync.String():
+		*s = StatusStateWaitingConsensusSync
+	case StatusStateWaitingRuntimeRegistry.String():
+		*s = StatusStateWaitingRuntimeRegistry
+	case StatusStateWaitingKeymanager.String():
+		*s = StatusStateWaitingKeymanager
+	case StatusStateWaitingHostedRuntime.String():
+		*s = StatusStateWaitingHostedRuntime
+	case StatusStateWaitingHistoryReindex.String():
+		*s = StatusStateWaitingHistoryReindex
+	case StatusStateWaitingWorkersInit.String():
+		*s = StatusStateWaitingWorkersInit
+	case StatusStateRuntimeSuspended.String():
+		*s = StatusStateRuntimeSuspended
+	default:
+		return fmt.Errorf("invalid StatusState: %s", string(text))
+	}
+	return nil
+}
+
 // Status is the common runtime worker status.
 type Status struct {
+	// Status is an concise status of the committee node.
+	Status StatusState `json:"status"`
+
 	// ActiveVersion is the currently active version.
 	ActiveVersion *version.Version `json:"active_version"`
 

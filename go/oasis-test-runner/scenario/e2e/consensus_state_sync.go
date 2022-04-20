@@ -112,6 +112,9 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 		if err != nil {
 			return fmt.Errorf("failed to get status for validator %s: %w", v.Name, err)
 		}
+		if status.Consensus.Status != consensus.StatusStateReady {
+			return fmt.Errorf("validator %s not ready", v.Name)
+		}
 
 		if status.Registration.Descriptor == nil {
 			return fmt.Errorf("validator %s has not registered", v.Name)
@@ -159,6 +162,9 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 	status, err := ctrl.GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch validator status: %w", err)
+	}
+	if status.Consensus.Status != consensus.StatusStateReady {
+		return fmt.Errorf("synced validator not ready")
 	}
 
 	// Make sure that the last retained height has been set correctly.

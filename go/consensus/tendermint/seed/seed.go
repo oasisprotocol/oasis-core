@@ -131,6 +131,7 @@ func (srv *seedService) SupportedFeatures() consensus.FeatureMask {
 // Implements Backend.
 func (srv *seedService) GetStatus(ctx context.Context) (*consensus.Status, error) {
 	status := &consensus.Status{
+		Status:   consensus.StatusStateReady,
 		Version:  version.ConsensusProtocol,
 		Backend:  api.BackendName,
 		Features: srv.SupportedFeatures(),

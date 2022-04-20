@@ -7,6 +7,7 @@ import (
 
 	tlsCert "github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -25,7 +26,7 @@ type nodeShutdownImpl struct {
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		runtimeImpl: *newRuntimeImpl("node-shutdown", nil),
+		runtimeImpl: *newRuntimeImpl("node-shutdown", BasicKVTestClient),
 	}
 	return sc
 }
@@ -52,11 +53,16 @@ func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
+func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	ctx := context.Background()
 	var err error
 
-	if err = sc.Net.Start(); err != nil {
+	if err = sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+		return err
+	}
+
+	// Wait for the client to exit.
+	if err = sc.waitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -76,6 +82,15 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	status, err := nodeCtrl.GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get status for node: %w", err)
+	}
+	if status.Consensus.Status != consensusAPI.StatusStateReady {
+		return fmt.Errorf("node consensus status should be '%s', got: '%s'", consensusAPI.StatusStateReady, status.Consensus.Status)
+	}
+	if status.Runtimes[runtimeID].Committee == nil {
+		return fmt.Errorf("node committee status missing")
+	}
+	if st := status.Runtimes[runtimeID].Committee.Status; st != api.StatusStateReady {
+		return fmt.Errorf("node compute worker status should be '%s', got: '%s'", api.StatusStateReady, st)
 	}
 	if status.Registration.Descriptor == nil {
 		return fmt.Errorf("node has not registered")
@@ -189,6 +204,9 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error {
 	status, err = ctrl.GetStatus(ctx)
 	if err != nil {
 		return err
+	}
+	if status.Consensus.Status != consensusAPI.StatusStateReady {
+		return fmt.Errorf("node consensus status should be '%s', got: '%s'", consensusAPI.StatusStateReady, status.Consensus.Status)
 	}
 	if status.Registration.NodeStatus != nil {
 		return fmt.Errorf("node should not be registered")
