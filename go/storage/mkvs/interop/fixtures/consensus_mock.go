@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	beaconInterop "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state/interop"
 	stakingInterop "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state/interop"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -31,7 +32,10 @@ func (c *consensusMock) Populate(ctx context.Context, ndb db.NodeDB) (*node.Root
 
 	mkvsTree := mkvs.New(nil, ndb, node.RootTypeState, mkvs.WithoutWriteLog())
 	if err = stakingInterop.InitializeTestStakingState(ctx, mkvsTree); err != nil {
-		return nil, fmt.Errorf("consensus-mock: failed to initialize state: %w", err)
+		return nil, fmt.Errorf("consensus-mock: failed to initialize staking state: %w", err)
+	}
+	if err = beaconInterop.InitializeTestBeaconState(ctx, mkvsTree); err != nil {
+		return nil, fmt.Errorf("consensus-mock: failed to initialize beacon state: %w", err)
 	}
 	_, testRoot.Hash, err = mkvsTree.Commit(ctx, common.Namespace{}, 1)
 	if err != nil {
