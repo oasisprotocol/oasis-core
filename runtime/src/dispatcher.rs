@@ -555,9 +555,11 @@ impl Dispatcher {
         state: TxDispatchState,
     ) -> Result<Body, Error> {
         // Verify consensus state and runtime state root integrity before execution.
-        let consensus_state = state
-            .consensus_verifier
-            .verify(state.consensus_block, state.header.clone())?;
+        let consensus_state = state.consensus_verifier.verify(
+            state.consensus_block,
+            state.header.clone(),
+            state.epoch,
+        )?;
 
         let header = &state.header;
 

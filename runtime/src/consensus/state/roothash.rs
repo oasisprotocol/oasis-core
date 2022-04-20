@@ -15,7 +15,7 @@ use crate::{
     storage::mkvs::ImmutableMKVS,
 };
 
-/// Consensus staking state wrapper.
+/// Consensus roothash state wrapper.
 pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
 }

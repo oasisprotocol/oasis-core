@@ -2,6 +2,7 @@
 use thiserror::Error;
 
 use super::{
+    beacon::EpochTime,
     roothash::{ComputeResultsHeader, Header},
     state::ConsensusState,
     LightBlock,
@@ -44,6 +45,7 @@ pub trait Verifier: Send + Sync {
         &self,
         consensus_block: LightBlock,
         runtime_header: Header,
+        epoch: EpochTime,
     ) -> Result<ConsensusState, Error>;
 
     /// Return the consensus layer state accessor for the given consensus layer block WITHOUT
