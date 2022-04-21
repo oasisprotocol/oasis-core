@@ -114,6 +114,8 @@ type Node struct { // nolint: maligned
 	runtimeReady         bool
 	runtimeVersion       version.Version
 	runtimeCapabilityTEE *node.CapabilityTEE
+	runtimeTrustSynced   bool
+	runtimeTrustSyncCncl context.CancelFunc
 
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
@@ -1375,7 +1377,7 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 	lastRoundAvailable := (err == nil)
 
 	switch {
-	case n.runtimeReady && lastRoundAvailable:
+	case n.runtimeReady && lastRoundAvailable && n.runtimeTrustSynced:
 		// Executor is ready to process requests.
 		if n.roleProvider.IsAvailable() && !force {
 			break
@@ -1405,6 +1407,7 @@ func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 	case ev.Started != nil:
 		// Make sure the runtime supports all the required features.
 		n.runtimeReady = false
+		n.runtimeTrustSynced = false
 
 		ctx, cancel := context.WithTimeout(n.ctx, getInfoTimeout)
 		defer cancel()
@@ -1423,6 +1426,10 @@ func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 			break
 		}
 
+		// If the runtime has a trust root configured, make sure we are able to successfully sync
+		// the runtime up to the latest height as otherwise request processing will fail.
+		n.startRuntimeTrustSyncLocked(rt)
+
 		// We are now able to service requests for this runtime.
 		n.runtimeReady = true
 		n.runtimeVersion = ev.Started.Version
@@ -1434,6 +1441,9 @@ func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
 	case ev.FailedToStart != nil, ev.Stopped != nil:
 		// Runtime failed to start or was stopped -- we can no longer service requests.
 		n.runtimeReady = false
+
+		// Cancel any outstanding runtime light client sync.
+		n.cancelRuntimeTrustSyncLocked()
 	default:
 		// Unknown event.
 		n.logger.Warn("unknown worker event",

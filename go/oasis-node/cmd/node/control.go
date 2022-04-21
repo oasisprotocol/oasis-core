@@ -156,6 +156,17 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			}
 		}
 
+		// Fetch executor worker status.
+		if execNode := n.ExecutorWorker.GetRuntime(rt.ID()); execNode != nil {
+			status.Executor, err = execNode.GetStatus(ctx)
+			if err != nil {
+				n.logger.Error("failed to fetch executor worker status",
+					"err", err,
+					"runtime_id", rt.ID(),
+				)
+			}
+		}
+
 		// Fetch storage worker status.
 		if storageNode := n.StorageWorker.GetRuntime(rt.ID()); storageNode != nil {
 			status.Storage, err = storageNode.GetStatus(ctx)
