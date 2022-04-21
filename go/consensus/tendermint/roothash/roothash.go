@@ -524,11 +524,26 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 		// Request subscription to events for this runtime.
 		sc.queryCh <- app.QueryForRuntime(tr.runtimeID)
 
+		// Resolve the correct block finalization height to use for the latest block at the current
+		// height as the current height may not correspond to the latest block finalization height.
+		rs, err := sc.GetRuntimeState(ctx, &api.RuntimeRequest{
+			RuntimeID: tr.runtimeID,
+			Height:    height,
+		})
+		if err != nil {
+			sc.logger.Warn("failed to get runtime state for latest block",
+				"err",
+				"runtime_id", tr.runtimeID,
+				"height", height,
+			)
+			return nil
+		}
+
 		// Emit latest block.
-		if err := sc.processFinalizedEvent(ctx, height, tr.runtimeID, nil, true); err != nil {
+		if err := sc.processFinalizedEvent(ctx, rs.CurrentBlockHeight, tr.runtimeID, nil, true); err != nil {
 			sc.logger.Warn("failed to emit latest block",
 				"err", err,
-				"runtime_id", c.runtimeID,
+				"runtime_id", tr.runtimeID,
 				"height", height,
 			)
 		}
