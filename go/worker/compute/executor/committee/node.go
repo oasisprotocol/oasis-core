@@ -119,6 +119,7 @@ type Node struct { // nolint: maligned
 
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
+	missingTxsCancel context.CancelFunc
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -792,6 +793,16 @@ func (n *Node) maybeStartProcessingBatchLocked(batch *unresolvedBatch) {
 			return
 		}
 
+		// Immediately resolve the batch so that we are ready when needed.
+		switch resolvedBatch, err := n.resolveBatchLocked(batch, StateWaitingForEvent{batch}); {
+		case err != nil:
+			// TODO: We should indicate failure.
+			return
+		case resolvedBatch == nil:
+			// Missing transactions, batch processing will start once all are available.
+			return
+		}
+
 		n.transitionLocked(StateWaitingForEvent{batch: batch})
 	default:
 		// Currently not a member of an executor committee, log.
@@ -994,24 +1005,13 @@ func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
 	}
 
 	// Try to resolve the batch first.
-	n.logger.Debug("attempting to resolve batch", "batch", batch.String())
-
-	// TODO: Add metrics for how long it takes to receive the complete batch.
-	if batch.proposal != nil {
-		n.commonNode.TxPool.PromoteProposedBatch(batch.proposal.Batch)
-	}
-	resolvedBatch, err := batch.resolve(n.commonNode.TxPool)
-	if err != nil {
-		n.logger.Error("refusing to process bad batch", "err", err)
+	resolvedBatch, err := n.resolveBatchLocked(batch, StateWaitingForTxs{batch})
+	switch {
+	case err != nil:
 		// TODO: We should indicate failure.
 		return
-	}
-	if resolvedBatch == nil {
-		// Some transactions are missing so we cannot start processing the batch just yet.
-		// Transition into StateWaitingForTxs and wait for peers to republish transactions.
-		n.logger.Debug("some transactions are missing", "num_missing", len(batch.missingTxs))
-		n.transitionLocked(StateWaitingForTxs{batch})
-		go n.requestMissingTransactions()
+	case resolvedBatch == nil:
+		// Missing transactions, we will be called again once all are available.
 		return
 	}
 
