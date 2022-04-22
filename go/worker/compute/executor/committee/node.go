@@ -42,10 +42,6 @@ var (
 	errIncorrectState     = fmt.Errorf("executor: incorrect state")
 	errMsgFromNonTxnSched = fmt.Errorf("executor: received txn scheduler dispatch msg from non-txn scheduler")
 
-	// Transaction scheduling errors.
-	errNoBlocks    = fmt.Errorf("executor: no blocks")
-	errNotExecutor = fmt.Errorf("executor: not executor in this round")
-
 	// proposeTimeoutDelay is the duration to wait before submitting the propose timeout request.
 	proposeTimeoutDelay = 2 * time.Second
 	// abortTimeout is the duration to wait for the runtime to abort.
@@ -521,46 +517,34 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 }
 
 func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
-	roundCtx, epoch, rtState, roundResults, blk, err := func() (
-		context.Context,
-		*committee.EpochSnapshot,
-		*roothash.RuntimeState,
-		*roothash.RoundResults,
-		*block.Block,
-		error,
-	) {
-		n.commonNode.CrossNode.Lock()
-		defer n.commonNode.CrossNode.Unlock()
-		roundCtx := n.roundCtx
+	n.commonNode.CrossNode.Lock()
+	defer n.commonNode.CrossNode.Unlock()
 
-		// Check if we are in a suitable state for scheduling a batch.
-		switch n.state.(type) {
-		case StateWaitingForBatch:
-			// We are waiting for a batch.
-		case StateWaitingForTxs:
-			// We are waiting for transactions. Note that this means we are not a transaction
-			// scheduler and so we won't actually be able to schedule anything. But we should still
-			// propose a timeout if the transaction scheduler proposed something that nobody has.
-		default:
-			return roundCtx, nil, nil, nil, nil, errIncorrectState
-		}
+	// Check if we are in a suitable state for scheduling a batch.
+	switch n.state.(type) {
+	case StateWaitingForBatch:
+		// We are waiting for a batch.
+	case StateWaitingForTxs:
+		// We are waiting for transactions. Note that this means we are not a transaction
+		// scheduler and so we won't actually be able to schedule anything. But we should still
+		// propose a timeout if the transaction scheduler proposed something that nobody has.
+	default:
+		n.logger.Debug("not scheduling a batch, incorrect state", "state", n.state)
+		return
+	}
+	if n.commonNode.CurrentBlock == nil {
+		n.logger.Debug("not scheduling a batch, no blocks")
+		return
+	}
 
-		if n.commonNode.CurrentBlock == nil {
-			return roundCtx, nil, nil, nil, nil, errNoBlocks
-		}
-		epoch := n.commonNode.Group.GetEpochSnapshot()
+	epoch := n.commonNode.Group.GetEpochSnapshot()
+	// If we are not an executor worker in this epoch, we don't need to do anything.
+	if !epoch.IsExecutorWorker() {
+		n.logger.Debug("not scheduling a batch, not an executor")
+		return
+	}
 
-		// If we are not an executor worker in this epoch, we don't need to do anything.
-		if !epoch.IsExecutorWorker() {
-			return roundCtx, nil, nil, nil, nil, errNotExecutor
-		}
-
-		rtState, roundResults, err := n.getRtStateAndRoundResults(roundCtx, n.commonNode.CurrentBlockHeight)
-		if err != nil {
-			return roundCtx, nil, nil, nil, nil, err
-		}
-		return roundCtx, epoch, rtState, roundResults, n.commonNode.CurrentBlock, nil
-	}()
+	rtState, roundResults, err := n.getRtStateAndRoundResults(n.roundCtx, n.commonNode.CurrentBlockHeight)
 	if err != nil {
 		n.logger.Debug("not scheduling a batch",
 			"err", err,
@@ -569,7 +553,7 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 	}
 
 	// Fetch incoming message queue metadata to see if there's any queued messages.
-	inMsgMeta, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueueMeta(roundCtx, &roothash.RuntimeRequest{
+	inMsgMeta, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueueMeta(n.roundCtx, &roothash.RuntimeRequest{
 		RuntimeID: n.commonNode.Runtime.ID(),
 		// We make the check at the latest height even though we will later only look at the last
 		// height. This will make sure that any messages eventually get processed even if there are
@@ -590,7 +574,7 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 		n.logger.Debug("not scheduling a batch as the runtime is not yet ready")
 		return
 	}
-	rtInfo, err := rt.GetInfo(roundCtx)
+	rtInfo, err := rt.GetInfo(n.roundCtx)
 	if err != nil {
 		n.logger.Warn("not scheduling a batch as the runtime is broken",
 			"err", err,
@@ -622,35 +606,14 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 	}
 
 	// If we are an executor and not a scheduler try proposing a timeout.
-	if !epoch.IsTransactionScheduler(blk.Header.Round) {
+	if !epoch.IsTransactionScheduler(n.commonNode.CurrentBlock.Header.Round) {
 		n.logger.Debug("considering to propose a timeout",
-			"round", blk.Header.Round,
+			"round", n.commonNode.CurrentBlock.Header.Round,
 			"batch_size", len(batch),
 			"round_results", roundResults,
 		)
 
-		err = func() error {
-			n.commonNode.CrossNode.Lock()
-			defer n.commonNode.CrossNode.Unlock()
-
-			// Make sure we are still in the right state.
-			switch n.state.(type) {
-			case StateWaitingForBatch:
-			case StateWaitingForTxs:
-			default:
-				return errIncorrectState
-			}
-			// Make sure we are still processing the right round.
-			if blk.Header.Round != n.commonNode.CurrentBlock.Header.Round {
-				return errIncorrectState
-			}
-			return n.proposeTimeoutLocked(roundCtx)
-		}()
-		switch err {
-		case nil:
-		case errIncorrectState:
-			return
-		default:
+		if err := n.proposeTimeoutLocked(n.roundCtx); err != nil {
 			n.logger.Error("error proposing a timeout",
 				"err", err,
 			)

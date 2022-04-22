@@ -11,6 +11,7 @@ use crate::{
     types::HostStorageEndpoint,
 };
 
+pub mod beacon;
 pub mod roothash;
 pub mod staking;
 

@@ -61,8 +61,6 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 	}
-	// Avoid unexpected blocks.
-	f.Network.SetMockEpoch()
 	// Enable consensus layer checkpoints.
 	f.Network.Consensus.Parameters.StateCheckpointInterval = 10
 	f.Network.Consensus.Parameters.StateCheckpointNumKept = 2
@@ -81,33 +79,32 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Clients = nil
 	// Exclude runtime from genesis as we will register those dynamically.
 	f.Runtimes[0].ExcludeFromGenesis = true
-	// Only one compute worker that will use state sync after the runtime is registered.
-	f.ComputeWorkers = []oasis.ComputeWorkerFixture{{
-		NodeFixture: oasis.NodeFixture{
-			NoAutoStart: true,
+	// Set up compute workers.
+	f.ComputeWorkers = []oasis.ComputeWorkerFixture{
+		// One compute node that will perform state sync.
+		{
+			NodeFixture: oasis.NodeFixture{
+				NoAutoStart: true,
+			},
+			Entity:                1,
+			CheckpointSyncEnabled: true,
+			LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
+				oasis.LogEventABCIStateSyncComplete(),
+			},
+			Runtimes: []int{0},
 		},
-		Entity:                1,
-		CheckpointSyncEnabled: true,
-		LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
-			oasis.LogEventABCIStateSyncComplete(),
+		// Another compute node that doesn't use state sync to avoid the case where the runtime is
+		// suspended forever because no compute node has the current consensus block.
+		{
+			NodeFixture: oasis.NodeFixture{
+				NoAutoStart: true,
+			},
+			Entity:   1,
+			Runtimes: []int{0},
 		},
-		Runtimes: []int{0},
-	}}
+	}
 
 	return f, nil
-}
-
-func (sc *storageEarlyStateSyncImpl) epochTransition(ctx context.Context) error {
-	sc.epoch++
-
-	sc.Logger.Info("triggering epoch transition",
-		"epoch", sc.epoch,
-	)
-	if err := sc.Net.Controller().SetEpoch(ctx, sc.epoch); err != nil {
-		return fmt.Errorf("failed to set epoch: %w", err)
-	}
-	sc.Logger.Info("epoch transition done")
-	return nil
 }
 
 func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
@@ -126,11 +123,6 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 		if err := n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a validator: %w", err)
 		}
-	}
-
-	// Perform an initial epoch transition.
-	if err := sc.epochTransition(ctx); err != nil {
-		return err
 	}
 
 	// Fetch current epoch.
@@ -152,14 +144,12 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 
-	// Now that the runtime is registered, trigger some epoch transitions.
-	for i := 0; i < 3; i++ {
-		if err := sc.epochTransition(ctx); err != nil {
-			return err
-		}
-
-		// Wait a bit after epoch transitions.
-		time.Sleep(1 * time.Second)
+	// Wait some epoch transitions.
+	sc.Logger.Info("waiting some epoch transitions",
+		"epoch", epoch+5,
+	)
+	if err := sc.Net.Controller().Beacon.WaitEpoch(ctx, epoch+5); err != nil {
+		return fmt.Errorf("failed to wait for epoch: %w", err)
 	}
 
 	// TODO: Make sure we have enough blocks.
@@ -199,6 +189,12 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 
 		trustHeight = uint64(status.Consensus.LatestHeight)
 		trustHash = status.Consensus.LatestHash.Hex()
+	}
+
+	// Start the second (non-state syncing) compute node.
+	sc.Logger.Info("starting compute node without state sync")
+	if err := sc.Net.ComputeWorkers()[1].Start(); err != nil {
+		return fmt.Errorf("can't start compute worker: %w", err)
 	}
 
 	// Configure state sync for the compute node.
