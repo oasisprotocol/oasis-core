@@ -30,6 +30,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	sentryClient "github.com/oasisprotocol/oasis-core/go/sentry/client"
@@ -53,6 +54,8 @@ const (
 	// CfgRegistrationRotateCerts sets the number of epochs that a node's TLS
 	// certificate should be valid for.
 	CfgRegistrationRotateCerts = "worker.registration.rotate_certs"
+
+	periodicMetricsInterval = 60 * time.Second
 )
 
 var (
@@ -69,9 +72,39 @@ var (
 			Help: "Is oasis node registered (binary).",
 		},
 	)
+	workerNodeStatusFrozen = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_node_status_frozen",
+			Help: "Is oasis node frozen (binary).",
+		},
+	)
+	workerNodeRegistrationEligible = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_node_registration_eligible",
+			Help: "Is oasis node eligible for registration (binary).",
+		},
+	)
+	workerNodeStatusFaults = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_node_status_runtime_faults",
+			Help: "Number of runtime faults.",
+		},
+		[]string{"runtime"},
+	)
+	workerNodeRuntimeSuspended = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_worker_node_status_runtime_suspended",
+			Help: "Runtime node suspension status (binary).",
+		},
+		[]string{"runtime"},
+	)
 
 	nodeCollectors = []prometheus.Collector{
 		workerNodeRegistered,
+		workerNodeStatusFrozen,
+		workerNodeRegistrationEligible,
+		workerNodeStatusFaults,
+		workerNodeRuntimeSuspended,
 	}
 
 	metricsOnce sync.Once
@@ -581,6 +614,88 @@ Loop:
 		if tlsRotationPending {
 			lastTLSRotationEpoch = epoch
 			tlsRotationPending = false
+		}
+	}
+}
+
+func (w *Worker) metricsWorker() {
+	w.logger.Info("delaying metrics worker start until initial registration")
+	select {
+	case <-w.stopCh:
+		return
+	case <-w.ctx.Done():
+		return
+	case <-w.initialRegCh:
+	}
+
+	w.logger.Debug("starting metrics worker")
+
+	t := time.NewTicker(periodicMetricsInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-w.stopCh:
+			return
+		case <-w.ctx.Done():
+			return
+		case <-t.C:
+		}
+
+		// Update metrics.
+		epoch, err := w.beacon.GetEpoch(w.ctx, consensus.HeightLatest)
+		if err != nil {
+			w.logger.Warn("unable to query epoch", "err", err)
+			continue
+		}
+		status, err := w.GetRegistrationStatus(w.ctx)
+		if err != nil {
+			w.logger.Warn("unable to get registration status", "err", err)
+			continue
+		}
+		nodeStatus := status.NodeStatus
+		if nodeStatus == nil {
+			w.logger.Debug("skipping node status metrics, empty node status")
+			continue
+		}
+
+		// Frozen metric.
+		switch nodeStatus.IsFrozen() {
+		case true:
+			workerNodeStatusFrozen.Set(1)
+		case false:
+			workerNodeStatusFrozen.Set(0)
+		}
+
+		// Election eligible metric.
+		switch {
+		case nodeStatus.ElectionEligibleAfter == 0:
+			workerNodeRegistrationEligible.Set(0)
+		case nodeStatus.ElectionEligibleAfter >= epoch:
+			workerNodeRegistrationEligible.Set(0)
+		default:
+			workerNodeRegistrationEligible.Set(1)
+		}
+
+		// Runtime metrics.
+		for _, rt := range w.runtimeRegistry.Runtimes() {
+			rtLabel := rt.ID().String()
+
+			faults := nodeStatus.Faults[rt.ID()]
+			switch faults {
+			case nil:
+				// No faults.
+				workerNodeRuntimeSuspended.WithLabelValues(rtLabel).Set(0)
+				workerNodeStatusFaults.WithLabelValues(rtLabel).Set(0)
+			default:
+				workerNodeStatusFaults.WithLabelValues(rtLabel).Set(float64(faults.Failures))
+				switch faults.IsSuspended(epoch) {
+				case true:
+					workerNodeRuntimeSuspended.WithLabelValues(rtLabel).Set(1)
+				case false:
+					workerNodeRuntimeSuspended.WithLabelValues(rtLabel).Set(0)
+				}
+			}
 		}
 	}
 }
@@ -1182,6 +1297,9 @@ func (w *Worker) Start() error {
 	}
 
 	go w.doNodeRegistration()
+	if cmmetrics.Enabled() {
+		go w.metricsWorker()
+	}
 
 	return nil
 }
