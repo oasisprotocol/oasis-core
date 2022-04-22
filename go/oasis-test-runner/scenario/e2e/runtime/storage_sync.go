@@ -40,10 +40,6 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	// Use mock epochtime to ensure syncing starts in the same epoch in which
-	// new node registers.
-	f.Network.SetMockEpoch()
-
 	// Enable consensus layer checkpoints.
 	f.Network.Consensus.Parameters.StateCheckpointInterval = 10
 	f.Network.Consensus.Parameters.StateCheckpointNumKept = 2
@@ -84,17 +80,10 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
+	var err error
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
-		return err
-	}
 
-	fixture, err := sc.Fixture()
-	if err != nil {
-		return err
-	}
-
-	if _, err = sc.initialEpochTransitions(fixture); err != nil {
+	if err = sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 

@@ -61,8 +61,6 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 	}
-	// Avoid unexpected blocks.
-	f.Network.SetMockEpoch()
 	// Enable consensus layer checkpoints.
 	f.Network.Consensus.Parameters.StateCheckpointInterval = 10
 	f.Network.Consensus.Parameters.StateCheckpointNumKept = 2
@@ -97,19 +95,6 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *storageEarlyStateSyncImpl) epochTransition(ctx context.Context) error {
-	sc.epoch++
-
-	sc.Logger.Info("triggering epoch transition",
-		"epoch", sc.epoch,
-	)
-	if err := sc.Net.Controller().SetEpoch(ctx, sc.epoch); err != nil {
-		return fmt.Errorf("failed to set epoch: %w", err)
-	}
-	sc.Logger.Info("epoch transition done")
-	return nil
-}
-
 func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err := sc.Net.Start(); err != nil {
 		return err
@@ -126,11 +111,6 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 		if err := n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a validator: %w", err)
 		}
-	}
-
-	// Perform an initial epoch transition.
-	if err := sc.epochTransition(ctx); err != nil {
-		return err
 	}
 
 	// Fetch current epoch.
@@ -152,14 +132,12 @@ func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: g
 		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 
-	// Now that the runtime is registered, trigger some epoch transitions.
-	for i := 0; i < 3; i++ {
-		if err := sc.epochTransition(ctx); err != nil {
-			return err
-		}
-
-		// Wait a bit after epoch transitions.
-		time.Sleep(1 * time.Second)
+	// Wait some epoch transitions.
+	sc.Logger.Info("waiting some epoch transitions",
+		"epoch", epoch+5,
+	)
+	if err := sc.Net.Controller().Beacon.WaitEpoch(ctx, epoch+5); err != nil {
+		return fmt.Errorf("failed to wait for epoch: %w", err)
 	}
 
 	// TODO: Make sure we have enough blocks.
