@@ -1355,6 +1355,11 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 					continue
 				}
 
+				// Skip sending any old versions that will never be active again.
+				if version.ToU64() < n.runtimeVersion.ToU64() {
+					continue
+				}
+
 				rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID(), version)
 				rt.Capabilities.TEE = n.runtimeCapabilityTEE
 			}
