@@ -543,6 +543,26 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		)
 	}
 
+	// Fetch incoming messages.
+	inMsgs, err := n.Consensus.RootHash().GetIncomingMessageQueue(n.ctx, &roothash.InMessageQueueRequest{
+		RuntimeID: n.Runtime.ID(),
+		Height:    consensusBlk.Height,
+	})
+	if err != nil {
+		n.logger.Error("failed to query incoming messages",
+			"err", err,
+			"height", height,
+			"round", blk.Header.Round,
+		)
+		return
+	}
+	err = n.TxPool.ProcessIncomingMessages(inMsgs)
+	if err != nil {
+		n.logger.Error("failed to process incoming messages in transaction pool",
+			"err", err,
+		)
+	}
+
 	for _, hooks := range n.hooks {
 		hooks.HandleNewBlockLocked(blk)
 	}
