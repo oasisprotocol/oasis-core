@@ -355,5 +355,24 @@ func generateSeccompPolicy(out *os.File) error {
 		return err
 	}
 
+	// We need to handle the clone3 syscall in a special manner as there are several complications
+	// to its handling:
+	//
+	// - Newer glibc versions will try clone3 first and if they see EPERM they will instantly fail
+	//   making the program unable to spawn threads.
+	//
+	// - The clone3 syscall is much more complex than clone and so we can't simply inspect its flags
+	//   as above for clone.
+	//
+	// Therefore we need to reject the syscall with ENOSYS, causing fallback to clone.
+	clone3ID, err := seccomp.GetSyscallFromName("clone3")
+	if err != nil {
+		return err
+	}
+	err = filter.AddRule(clone3ID, seccomp.ActErrno.SetReturnCode(int16(syscall.ENOSYS)))
+	if err != nil {
+		return err
+	}
+
 	return filter.ExportBPF(out)
 }
