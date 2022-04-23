@@ -1532,10 +1532,20 @@ func (n *Node) nudgeAvailability(force bool) {
 
 		n.roleProvider.SetAvailable(func(nd *node.Node) error {
 			for _, version := range n.commonNode.Runtime.HostVersions() {
-				rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID(), version)
-				if rt.Version == n.runtimeVersion {
-					rt.Capabilities.TEE = n.runtimeCapabilityTEE
+				// For TEE-enabled runtimes we can only advertise the active version as this will
+				// otherwise cause additional downtime on upgrades due to capability updates not
+				// being allowed.
+				if n.runtimeCapabilityTEE != nil && version != n.runtimeVersion {
+					continue
 				}
+
+				// Skip sending any old versions that will never be active again.
+				if version.ToU64() < n.runtimeVersion.ToU64() {
+					continue
+				}
+
+				rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID(), version)
+				rt.Capabilities.TEE = n.runtimeCapabilityTEE
 			}
 			return nil
 		})
