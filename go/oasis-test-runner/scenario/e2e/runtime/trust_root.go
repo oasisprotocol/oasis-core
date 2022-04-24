@@ -79,14 +79,22 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 	var nonce uint64
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
+	// Fetch current epoch.
+	epoch, err := sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
 	// Register a new keymanager runtime.
 	kmRt := sc.Net.Runtimes()[0]
+	rtDsc := kmRt.ToRuntimeDescriptor()
+	rtDsc.Deployments[0].ValidFrom = epoch + 2
 	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), kmRt.ToRuntimeDescriptor(), nonce, kmTxPath); err != nil {
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rtDsc, nonce, kmTxPath); err != nil {
 		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
 	}
 	nonce++
-	if err := cli.Consensus.SubmitTx(kmTxPath); err != nil {
+	if err = cli.Consensus.SubmitTx(kmTxPath); err != nil {
 		return fmt.Errorf("failed to register KM runtime: %w", err)
 	}
 
@@ -116,27 +124,27 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 		}
 	}
 	sc.Logger.Info("initing KM policy")
-	if err := cli.Keymanager.InitPolicy(kmRt.ID(), 1, enclavePolicies, kmPolicyPath); err != nil {
+	if err = cli.Keymanager.InitPolicy(kmRt.ID(), 1, enclavePolicies, kmPolicyPath); err != nil {
 		return err
 	}
 	sc.Logger.Info("signing KM policy")
-	if err := cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
+	if err = cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
 		return err
 	}
-	if err := cli.Keymanager.SignPolicy("2", kmPolicyPath, kmPolicySig2Path); err != nil {
+	if err = cli.Keymanager.SignPolicy("2", kmPolicyPath, kmPolicySig2Path); err != nil {
 		return err
 	}
-	if err := cli.Keymanager.SignPolicy("3", kmPolicyPath, kmPolicySig3Path); err != nil {
+	if err = cli.Keymanager.SignPolicy("3", kmPolicyPath, kmPolicySig3Path); err != nil {
 		return err
 	}
 	if havePolicy {
 		// In SGX mode, we can update the policy as intended.
 		sc.Logger.Info("updating KM policy")
-		if err := cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
+		if err = cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
 			return err
 		}
 		nonce++
-		if err := cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
+		if err = cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
 			return fmt.Errorf("failed to update KM policy: %w", err)
 		}
 	}
@@ -144,22 +152,29 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 	// Wait for key manager nodes to register.
 	sc.Logger.Info("waiting for key manager nodes to initialize")
 	for _, n := range sc.Net.Keymanagers() {
-		if err := n.WaitReady(ctx); err != nil {
+		if err = n.WaitReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for a key manager node: %w", err)
 		}
 	}
 
+	// Fetch current epoch.
+	epoch, err = sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
 	// Register a new compute runtime.
 	compRt := sc.Net.Runtimes()[1]
-	if err := compRt.RefreshRuntimeBundles(); err != nil {
+	if err = compRt.RefreshRuntimeBundles(); err != nil {
 		return fmt.Errorf("failed to refresh runtime bundles: %w", err)
 	}
 	compRtDesc := compRt.ToRuntimeDescriptor()
+	compRtDesc.Deployments[0].ValidFrom = epoch + 2
 	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
 		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
 	}
-	if err := cli.Consensus.SubmitTx(txPath); err != nil {
+	if err = cli.Consensus.SubmitTx(txPath); err != nil {
 		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 	return nil
@@ -221,8 +236,8 @@ func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
 		// Make sure the binary is then rebuilt without the env vars set.
 		sc.Logger.Info("rebuilding runtime without the embedded trust root")
 		builder.ResetEnv()
-		if err = builder.Build(); err != nil {
-			err = fmt.Errorf("failed to build plain runtime '%s': %w", trustRootRuntime, err)
+		if buildErr := builder.Build(); buildErr != nil {
+			err = fmt.Errorf("failed to build plain runtime '%s': %w (original error: %s)", trustRootRuntime, buildErr, err)
 			return
 		}
 	}()
