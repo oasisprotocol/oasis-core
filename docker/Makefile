@@ -1,7 +1,7 @@
 IMG_ORG ?= oasisprotocol
 IMG_VER ?= master
 
-IMAGES = oasis-core-dev oasis-core-ci
+IMAGES = oasis-core-dev oasis-core-ci aesmd
 
 .PHONY: all $(IMAGES)
 
@@ -12,3 +12,6 @@ oasis-core-dev: development/Dockerfile
 
 oasis-core-ci: testing/Dockerfile development/Dockerfile
 	docker build --build-arg OASIS_CORE_DEV_BASE_TAG=$(IMG_VER) $@ -t $(IMG_ORG)/$@:$(IMG_VER)
+
+aesmd: aesmd/Dockerfile
+	docker build $@ -t $(IMG_ORG)/$@:$(IMG_VER)
