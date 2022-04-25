@@ -48,7 +48,7 @@ impl EncryptionContext {
         nonce: &[u8],
     ) -> Option<Vec<u8>> {
         let nonce = Self::derive_nonce(nonce);
-        let mut ciphertext = self.d2.seal(&nonce, value.to_vec(), vec![]);
+        let mut ciphertext = self.d2.seal(&nonce, value, vec![]);
         ciphertext.extend_from_slice(&nonce);
 
         let key = self.derive_encrypted_key(key);
@@ -94,7 +94,7 @@ impl EncryptionContext {
         let nonce = [0u8; NONCE_SIZE];
         // XXX: Prefix all keys by 0x01 to make sure they do not clash with pending messages.
         let mut pkey = vec![0x01];
-        pkey.append(&mut self.d2.seal(&nonce, key.to_vec(), vec![]));
+        pkey.append(&mut self.d2.seal(&nonce, key, vec![]));
         pkey
     }
 

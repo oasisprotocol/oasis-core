@@ -72,13 +72,11 @@ impl Marshal for NodeKind {
 
 impl Marshal for InternalNode {
     fn marshal_binary(&self) -> Result<Vec<u8>> {
-        let leaf_node_binary: Vec<u8>;
-        if self.leaf_node.borrow().is_null() {
-            leaf_node_binary = vec![NodeKind::None as u8];
+        let leaf_node_binary = if self.leaf_node.borrow().is_null() {
+            vec![NodeKind::None as u8]
         } else {
-            leaf_node_binary =
-                noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?;
-        }
+            noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?
+        };
 
         let mut result: Vec<u8> = Vec::with_capacity(1 + leaf_node_binary.len() + 2 * Hash::len());
         result.push(NodeKind::Internal as u8);

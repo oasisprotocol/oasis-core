@@ -25,7 +25,7 @@ func (t *tree) Insert(ctx context.Context, key, value []byte) error {
 	t.cache.markPosition()
 
 	var result insertResult
-	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, key, value, 0)
+	result, err := t.doInsert(ctx, t.cache.pendingRoot, 0, key, value)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,6 @@ func (t *tree) doInsert(
 	bitDepth node.Depth,
 	key node.Key,
 	val []byte,
-	depth node.Depth,
 ) (insertResult, error) {
 	if ctx.Err() != nil {
 		return insertResult{}, ctx.Err()
@@ -96,12 +95,12 @@ func (t *tree) doInsert(
 			if key.BitLength() == bitLength {
 				// Key to insert ends exactly at this node. Add it to the
 				// existing internal node as LeafNode.
-				result, err = t.doInsert(ctx, n.LeafNode, bitLength, key, val, depth)
+				result, err = t.doInsert(ctx, n.LeafNode, bitLength, key, val)
 			} else if key.GetBit(bitLength) {
 				// Insert recursively based on the bit value.
-				result, err = t.doInsert(ctx, n.Right, bitLength, key, val, depth+1)
+				result, err = t.doInsert(ctx, n.Right, bitLength, key, val)
 			} else {
-				result, err = t.doInsert(ctx, n.Left, bitLength, key, val, depth+1)
+				result, err = t.doInsert(ctx, n.Left, bitLength, key, val)
 			}
 
 			if err != nil {

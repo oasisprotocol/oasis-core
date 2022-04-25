@@ -73,8 +73,8 @@ jobs:
       - name: "Rebuild oasisprotocol/oasis-core-dev:${{ steps.determine_tag.outputs.tag }}"
         uses: docker/build-push-action@v2.10.0
         with:
-          context: docker/development
-          file: docker/development/Dockerfile
+          context: docker/oasis-core-dev
+          file: docker/oasis-core-dev/Dockerfile
           tags: oasisprotocol/oasis-core-dev:${{ steps.determine_tag.outputs.tag }}
           pull: true
           push: true
@@ -86,8 +86,8 @@ jobs:
       - name: "Rebuild oasisprotocol/oasis-core-ci:${{ steps.determine_tag.outputs.tag }}"
         uses: docker/build-push-action@v2.10.0
         with:
-          context: docker/testing
-          file: docker/testing/Dockerfile
+          context: docker/oasis-core-ci
+          file: docker/oasis-core-ci/Dockerfile
           tags: oasisprotocol/oasis-core-ci:${{ steps.determine_tag.outputs.tag }}
           pull: true
           push: true

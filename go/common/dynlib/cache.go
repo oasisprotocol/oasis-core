@@ -151,6 +151,10 @@ func (c *Cache) ResolveLibraries(binaries []string, extraLibs []string, ldLibrar
 					continue
 				}
 
+				if isIgnoredLib(lib) {
+					continue
+				}
+
 				isInPath := func(l string, p []string) string {
 					for _, d := range p {
 						maybePath := filepath.Join(d, l)
@@ -568,6 +572,17 @@ func fileExists(f string) bool {
 		return false
 	}
 	return true
+}
+
+// isIgnoredLib checks whether the library should be ignored during resolution.
+func isIgnoredLib(lib string) bool {
+	switch lib {
+	case "linux-vdso.so.1":
+		// Not a real library. (We only support the x86-64 variant).
+		return true
+	default:
+		return false
+	}
 }
 
 func debugf(fmt string, args ...interface{}) {
