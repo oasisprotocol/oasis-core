@@ -12,6 +12,36 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.4 (2022-04-25)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- go/worker/compute: Ensure trust root is verified before registering
+  ([#4678](https://github.com/oasisprotocol/oasis-core/issues/4678))
+
+- go/worker/registration: add node status metrics
+  ([#4686](https://github.com/oasisprotocol/oasis-core/issues/4686))
+
+### Bug Fixes
+
+- Fix waiting for deregister event on `RequestShutdown`
+  ([#4662](https://github.com/oasisprotocol/oasis-core/issues/4662))
+
+- go/worker/compute: Only advertise active version for TEE runtimes
+  ([#4683](https://github.com/oasisprotocol/oasis-core/issues/4683))
+
+  Previously this caused additional downtime on upgrades due to capability
+  updates not being allowed.
+
+- go/runtime/host/sandbox: Properly handle clone3 in seccomp policy
+  ([#4687](https://github.com/oasisprotocol/oasis-core/issues/4687))
+
 ## 22.1.3 (2022-04-08)
 
 | Protocol          | Version   |
