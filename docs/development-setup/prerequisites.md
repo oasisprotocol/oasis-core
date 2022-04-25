@@ -35,7 +35,7 @@ Core:
   ```
   <!-- markdownlint-enable line-length -->
 
-* [Go] (at least version 1.17.7).
+* [Go] (at least version 1.17.9).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -44,18 +44,18 @@ Core:
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.17.7, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.17.9, with:
 
     ```
-    go install golang.org/dl/go1.17.7@latest
-    go1.17.7 download
+    go install golang.org/dl/go1.17.9@latest
+    go1.17.9 download
     ```
 
   * instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.17.7
+    export OASIS_GO=go1.17.9
     ```
 
 * [Rust].
@@ -90,10 +90,12 @@ Core:
 
   Then install the Fortanix Rust EDP utilities by running:
 
+  <!-- markdownlint-disable line-length -->
   ```
-  cargo +nightly install --version 0.4.0 fortanix-sgx-tools
-  cargo +nightly install --version 0.8.2 sgxs-tools
+  cargo +nightly install --git https://github.com/fortanix/rust-sgx --rev 998c34d158a69dd1af33f22587e8ae1c26ca6a27 fortanix-sgx-tools
+  cargo +nightly install --git https://github.com/fortanix/rust-sgx --rev 998c34d158a69dd1af33f22587e8ae1c26ca6a27 sgxs-tools
   ```
+  <!-- markdownlint-enable line-length -->
 
   _NOTE: These utilities must be compiled with a nightly version of the Rust
   toolchain since they use the `#![feature]` macro._
@@ -124,8 +126,8 @@ Core:
   active toolchain
   ----------------
 
-  nightly-2021-11-04-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain')
-  rustc 1.58.0-nightly (baba6687d 2021-11-03)
+  nightly-2022-04-13-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain')
+  rustc 1.62.0-nightly (52ca603da 2022-04-12)
   ```
 
   Then add the Fortanix SGX Rust target to this version of the Rust toolchain by

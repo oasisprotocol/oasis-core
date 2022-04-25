@@ -54,9 +54,8 @@ dependencies = [
 
 [[package]]
 name = "aesm-client"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3ba08bda1e73012123da15ae239b0510b26f1c44120c3ec62ff10de6495d0d5"
+version = "0.5.4"
+source = "git+https://github.com/fortanix/rust-sgx?rev=998c34d158a69dd1af33f22587e8ae1c26ca6a27#998c34d158a69dd1af33f22587e8ae1c26ca6a27"
 dependencies = [
  "byteorder",
  "failure",
@@ -65,7 +64,7 @@ dependencies = [
  "libloading",
  "protobuf",
  "protoc-rust",
- "sgx-isa",
+ "sgx-isa 0.4.0",
  "sgxs",
  "unix_socket2",
  "winapi 0.3.9",
@@ -764,9 +763,8 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
 name = "enclave-runner"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4cb06df53e13bdcf26f4ee1447e4de3cd3540fbaee91debe4af29ddacdfdd45"
+version = "0.5.1"
+source = "git+https://github.com/fortanix/rust-sgx?rev=998c34d158a69dd1af33f22587e8ae1c26ca6a27#998c34d158a69dd1af33f22587e8ae1c26ca6a27"
 dependencies = [
  "crossbeam 0.7.3",
  "failure",
@@ -780,7 +778,7 @@ dependencies = [
  "nix 0.13.1",
  "num_cpus",
  "openssl",
- "sgx-isa",
+ "sgx-isa 0.4.0",
  "sgxs",
  "tokio 0.2.25",
 ]
@@ -869,9 +867,8 @@ dependencies = [
 
 [[package]]
 name = "fortanix-sgx-abi"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a4dc78078fbba2327b22e5a8141ca5efa172f3a0f31678e94875323de3e7523"
+version = "0.4.1"
+source = "git+https://github.com/fortanix/rust-sgx?rev=998c34d158a69dd1af33f22587e8ae1c26ca6a27#998c34d158a69dd1af33f22587e8ae1c26ca6a27"
 
 [[package]]
 name = "fuchsia-zircon"
@@ -1160,9 +1157,8 @@ dependencies = [
 
 [[package]]
 name = "ipc-queue"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e333a441fdc74fdb4908f1c167fb6376ef7318ed6520eabe2f2fd64d5e9a4e43"
+version = "0.1.1"
+source = "git+https://github.com/fortanix/rust-sgx?rev=998c34d158a69dd1af33f22587e8ae1c26ca6a27#998c34d158a69dd1af33f22587e8ae1c26ca6a27"
 dependencies = [
  "fortanix-sgx-abi",
 ]
@@ -1638,7 +1634,7 @@ dependencies = [
  "oasis-core-keymanager-client",
  "oasis-core-runtime",
  "rand 0.7.3",
- "sgx-isa",
+ "sgx-isa 0.3.3",
  "sp800-185",
  "tiny-keccak 2.0.2",
  "tokio 1.17.0",
@@ -1682,7 +1678,7 @@ dependencies = [
  "rustc-hex",
  "serde",
  "serde_json",
- "sgx-isa",
+ "sgx-isa 0.3.3",
  "sha2 0.9.9",
  "slog",
  "slog-json",
@@ -2294,10 +2290,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sgx-isa"
+version = "0.4.0"
+source = "git+https://github.com/fortanix/rust-sgx?rev=998c34d158a69dd1af33f22587e8ae1c26ca6a27#998c34d158a69dd1af33f22587e8ae1c26ca6a27"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
 name = "sgxs"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47d3271865cbe8da468d02b2b3b5416c7a460f13b739c38ee2933aa970e7ed2e"
+version = "0.7.3"
+source = "git+https://github.com/fortanix/rust-sgx?rev=998c34d158a69dd1af33f22587e8ae1c26ca6a27#998c34d158a69dd1af33f22587e8ae1c26ca6a27"
 dependencies = [
  "byteorder",
  "failure",
@@ -2305,15 +2308,14 @@ dependencies = [
  "foreign-types",
  "openssl",
  "openssl-sys",
- "sgx-isa",
+ "sgx-isa 0.4.0",
  "time 0.1.44",
 ]
 
 [[package]]
 name = "sgxs-loaders"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a407295eaa883c876f9dafdd1568273ddba7ebc7267bf9e8f64c5f0429407bce"
+version = "0.3.3"
+source = "git+https://github.com/fortanix/rust-sgx?rev=998c34d158a69dd1af33f22587e8ae1c26ca6a27#998c34d158a69dd1af33f22587e8ae1c26ca6a27"
 dependencies = [
  "bitflags",
  "failure",
@@ -2321,7 +2323,7 @@ dependencies = [
  "libc",
  "libloading",
  "nix 0.15.0",
- "sgx-isa",
+ "sgx-isa 0.4.0",
  "sgxs",
  "winapi 0.3.9",
 ]

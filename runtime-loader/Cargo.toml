@@ -12,9 +12,9 @@ futures = { version = "0.3.17", features = ["compat", "io-compat"] }
 tokio = { version = "0.2", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-aesm-client = { version = "0.5.3", features = ["sgxs"] }
-enclave-runner = "0.5.0"
-sgxs-loaders = "0.3.2"
+aesm-client = { git = "https://github.com/fortanix/rust-sgx", rev = "998c34d158a69dd1af33f22587e8ae1c26ca6a27", features = ["sgxs"] }
+enclave-runner = { git = "https://github.com/fortanix/rust-sgx", rev = "998c34d158a69dd1af33f22587e8ae1c26ca6a27" }
+sgxs-loaders = { git = "https://github.com/fortanix/rust-sgx", rev = "998c34d158a69dd1af33f22587e8ae1c26ca6a27" }
 
 [[bin]]
 name = "oasis-core-runtime-loader"
