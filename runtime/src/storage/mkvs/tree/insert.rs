@@ -18,7 +18,7 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        let (new_root, old_val) = self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val, 0)?;
+        let (new_root, old_val) = self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val)?;
         self.cache.borrow_mut().set_pending_root(new_root);
 
         Ok(old_val)
@@ -31,7 +31,6 @@ impl Tree {
         bit_depth: Depth,
         key: &Key,
         val: Value,
-        depth: Depth,
     ) -> Result<(NodePtrRef, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
@@ -69,7 +68,6 @@ impl Tree {
                                 bit_depth + n.label_bit_length,
                                 key,
                                 val,
-                                depth,
                             )?;
                             n.leaf_node = r.0;
                         } else if key.get_bit(bit_depth + n.label_bit_length) {
@@ -80,7 +78,6 @@ impl Tree {
                                 bit_depth + n.label_bit_length,
                                 key,
                                 val,
-                                depth + 1,
                             )?;
                             n.right = r.0;
                         } else {
@@ -90,7 +87,6 @@ impl Tree {
                                 bit_depth + n.label_bit_length,
                                 key,
                                 val,
-                                depth + 1,
                             )?;
                             n.left = r.0;
                         }

@@ -182,13 +182,10 @@ impl Protocol {
         info!(self.logger, "Starting protocol reader thread");
         let mut reader = BufReader::new(&self.stream);
 
-        'recv: loop {
-            match self.handle_message(&mut reader) {
-                Err(error) => {
-                    error!(self.logger, "Failed to handle message"; "err" => %error);
-                    break 'recv;
-                }
-                Ok(()) => {}
+        loop {
+            if let Err(error) = self.handle_message(&mut reader) {
+                error!(self.logger, "Failed to handle message"; "err" => %error);
+                break;
             }
         }
 

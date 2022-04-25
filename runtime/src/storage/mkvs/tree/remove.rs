@@ -18,7 +18,7 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        let (new_root, _, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key, 0)?;
+        let (new_root, _, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key)?;
         self.cache.borrow_mut().set_pending_root(new_root);
 
         Ok(old_val)
@@ -30,7 +30,6 @@ impl Tree {
         ptr: NodePtrRef,
         bit_depth: Depth,
         key: &Key,
-        depth: Depth,
     ) -> Result<(NodePtrRef, bool, Option<Value>)> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ctx,
@@ -63,11 +62,11 @@ impl Tree {
                     }
 
                     let (new_child, c, o) = if key.bit_length() == bit_length {
-                        self._remove(ctx, n.leaf_node.clone(), bit_depth, key, depth)?
+                        self._remove(ctx, n.leaf_node.clone(), bit_depth, key)?
                     } else if key.get_bit(bit_length) {
-                        self._remove(ctx, n.right.clone(), bit_length, key, depth + 1)?
+                        self._remove(ctx, n.right.clone(), bit_length, key)?
                     } else {
-                        self._remove(ctx, n.left.clone(), bit_length, key, depth + 1)?
+                        self._remove(ctx, n.left.clone(), bit_length, key)?
                     };
 
                     changed = c;

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use io_context::Context;
 
@@ -11,11 +9,10 @@ use crate::{
 impl Tree {
     /// Commit tree updates to the underlying database and return
     /// the write log and new merkle root.
-    pub fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
-        let ctx = ctx.freeze();
+    pub fn commit(&mut self, _ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
         let pending_root = self.cache.borrow().get_pending_root();
-        let new_hash = _commit(&ctx, pending_root, &mut update_list)?;
+        let new_hash = _commit(pending_root, &mut update_list)?;
 
         update_list.commit(&mut self.cache.borrow_mut());
 
@@ -30,11 +27,7 @@ impl Tree {
     }
 }
 
-pub fn _commit<C: Cache>(
-    ctx: &Arc<Context>,
-    ptr: NodePtrRef,
-    update_list: &mut UpdateList<C>,
-) -> Result<Hash> {
+pub fn _commit<C: Cache>(ptr: NodePtrRef, update_list: &mut UpdateList<C>) -> Result<Hash> {
     if ptr.borrow().clean {
         return Ok(ptr.borrow().hash);
     }
@@ -52,9 +45,9 @@ pub fn _commit<C: Cache>(
                 let int_left = noderef_as!(some_node_ref, Internal).left.clone();
                 let int_right = noderef_as!(some_node_ref, Internal).right.clone();
 
-                _commit(ctx, int_leaf_node, update_list)?;
-                _commit(ctx, int_left, update_list)?;
-                _commit(ctx, int_right, update_list)?;
+                _commit(int_leaf_node, update_list)?;
+                _commit(int_left, update_list)?;
+                _commit(int_right, update_list)?;
 
                 some_node_ref.borrow_mut().update_hash();
                 ptr.borrow_mut().hash = some_node_ref.borrow().get_hash();

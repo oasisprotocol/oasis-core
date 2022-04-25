@@ -410,7 +410,7 @@ impl Kdf {
         // Decrypt the persisted master secret.
         let d2 = Self::new_d2();
         let plaintext = d2
-            .open(&nonce, ciphertext.to_vec(), runtime_id.as_ref().to_vec())
+            .open(&nonce, ciphertext.to_vec(), runtime_id.as_ref())
             .expect("persisted state is corrupted");
 
         Some(MasterSecret(plaintext.try_into().unwrap()))
@@ -427,11 +427,7 @@ impl Kdf {
         let mut nonce = [0u8; NONCE_SIZE];
         rng.fill(&mut nonce);
         let d2 = Self::new_d2();
-        let mut ciphertext = d2.seal(
-            &nonce,
-            master_secret.as_ref().to_vec(),
-            runtime_id.as_ref().to_vec(),
-        );
+        let mut ciphertext = d2.seal(&nonce, master_secret.as_ref(), runtime_id.as_ref());
         ciphertext.extend_from_slice(&nonce);
 
         // Persist the encrypted master secret.

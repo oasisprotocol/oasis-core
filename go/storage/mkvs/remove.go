@@ -27,7 +27,7 @@ func (t *tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 	// Remember where the path from root to target node ends (will end).
 	t.cache.markPosition()
 
-	newRoot, changed, existing, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key, 0)
+	newRoot, changed, existing, err := t.doRemove(ctx, t.cache.pendingRoot, 0, key)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,6 @@ func (t *tree) doRemove(
 	ptr *node.Pointer,
 	bitDepth node.Depth,
 	key node.Key,
-	depth node.Depth,
 ) (*node.Pointer, bool, []byte, error) {
 	if ctx.Err() != nil {
 		return nil, false, nil, ctx.Err()
@@ -83,11 +82,11 @@ func (t *tree) doRemove(
 			// Lookup key is too short for the current n.Label, so it doesn't exist.
 			return ptr, false, nil, nil
 		} else if key.BitLength() == bitLength {
-			n.LeafNode, changed, existing, err = t.doRemove(ctx, n.LeafNode, bitLength, key, depth)
+			n.LeafNode, changed, existing, err = t.doRemove(ctx, n.LeafNode, bitLength, key)
 		} else if key.GetBit(bitLength) {
-			n.Right, changed, existing, err = t.doRemove(ctx, n.Right, bitLength, key, depth+1)
+			n.Right, changed, existing, err = t.doRemove(ctx, n.Right, bitLength, key)
 		} else {
-			n.Left, changed, existing, err = t.doRemove(ctx, n.Left, bitLength, key, depth+1)
+			n.Left, changed, existing, err = t.doRemove(ctx, n.Left, bitLength, key)
 		}
 		if err != nil {
 			return nil, false, existing, err

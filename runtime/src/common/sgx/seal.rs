@@ -18,7 +18,7 @@ pub fn seal(key_policy: Keypolicy, context: &[u8], data: &[u8]) -> Vec<u8> {
     let mut nonce = [0u8; NONCE_SIZE];
     rng.fill(&mut nonce);
     let d2 = new_d2(key_policy, context);
-    let mut ciphertext = d2.seal(&nonce, data.to_vec(), vec![]);
+    let mut ciphertext = d2.seal(&nonce, data, vec![]);
     ciphertext.extend_from_slice(&nonce);
 
     ciphertext
