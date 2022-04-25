@@ -28,6 +28,11 @@ on:
   schedule:
     - cron: "0 4 * * *"
 
+# Cancel in progress jobs on new pushes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   build-images:
