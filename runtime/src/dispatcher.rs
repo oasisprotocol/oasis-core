@@ -462,11 +462,12 @@ impl Dispatcher {
         let txn_dispatcher = txn_dispatcher.clone();
 
         tokio::task::spawn_blocking(move || {
-            // For queries we don't do any consensus layer integrity verification.
-            let consensus_state = state
-                .consensus_verifier
-                .unverified_state(state.consensus_block)
-                .unwrap();
+            // Verify consensus state and runtime state root integrity before executing the query.
+            let consensus_state = state.consensus_verifier.verify(
+                state.consensus_block,
+                state.header.clone(),
+                state.epoch,
+            )?;
 
             let cache = cache_set.query(Root {
                 namespace: state.header.namespace,
