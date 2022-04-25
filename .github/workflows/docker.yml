@@ -102,7 +102,7 @@ jobs:
         with:
           context: docker/aesmd
           file: docker/aesmd/Dockerfile
-          tags: oasisprotocol/oasis-core-ci:${{ steps.determine_tag.outputs.tag }}
+          tags: oasisprotocol/aesmd:${{ steps.determine_tag.outputs.tag }}
           pull: true
           push: true
           labels: |
