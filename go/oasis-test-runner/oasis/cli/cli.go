@@ -79,8 +79,8 @@ func (h *Helpers) UnsafeReset(dataDir string, preserveRuntimeStorage, preserveLo
 	if !preserveRuntimeStorage {
 		args = append(args, "--"+cmdNode.CfgPreserveMKVSDatabase+"=false")
 	}
-	if preserveLocalStorage {
-		args = append(args, "--"+cmdNode.CfgPreserveLocalStorage)
+	if !preserveLocalStorage {
+		args = append(args, "--"+cmdNode.CfgPreserveLocalStorage+"=false")
 	}
 	return h.runSubCommand("unsafe-reset", args)
 }
