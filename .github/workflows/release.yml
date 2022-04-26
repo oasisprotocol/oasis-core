@@ -35,16 +35,20 @@ jobs:
           # For more info, see:
           # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
           fetch-depth: 0
+
       - name: Set up Go 1.17
         uses: actions/setup-go@v3
         with:
           go-version: "1.17.x"
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
+
       - name: Install Oasis Node prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install make libseccomp-dev protobuf-compiler
+
       - name: Install jemalloc
         run: |
           cd $(mktemp --directory /tmp/jemalloc.XXXXX)
@@ -62,6 +66,7 @@ jobs:
           sudo make install
         env:
           JEMALLOC_TARBALL: jemalloc.tar.bz2
+
       - name: Install GoReleaser
         run: |
           cd $(mktemp --directory /tmp/goreleaser.XXXXX)
@@ -74,16 +79,22 @@ jobs:
           sudo mv goreleaser /usr/local/bin
         env:
           GORELEASER_TARBALL: goreleaser_Linux_x86_64.tar.gz
+
       - name: Set RELEASE_BRANCH name for stable/bugfix releases
         run: |
           GIT_VERSION=${GITHUB_REF#refs/tags/v}
           if [[ ! ${GIT_VERSION} =~ ^[0-9]+\.[0-9]+$ ]]; then
             echo "RELEASE_BRANCH=stable/${GIT_VERSION%.*}.x" >> $GITHUB_ENV
           fi
+
       - name: Build and publish the next release
         run: |
           make release-build
         env:
+          # Make sure OpenSSL is built statically.
+          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
+          OPENSSL_INCLUDE_DIR: /usr/include
+          OPENSSL_STATIC: yes
           # Instruct Make to create a real release.
           OASIS_CORE_REAL_RELEASE: "true"
           # Pass automatically created GitHub App installation token to the action.
