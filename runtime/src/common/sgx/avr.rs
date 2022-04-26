@@ -426,9 +426,9 @@ fn validate_avr_signature(
     if !leaf.validity().is_valid_at(time) {
         return Err(AVRError::ExpiredCertificate.into());
     }
-    match leaf.tbs_certificate.key_usage() {
+    match leaf.tbs_certificate.key_usage()? {
         Some(ku) => {
-            if !ku.1.digital_signature() {
+            if !ku.value.digital_signature() {
                 return Err(anyhow!("leaf certificate can't sign"));
             }
         }
