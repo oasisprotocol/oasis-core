@@ -737,6 +737,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 func Register(parentCmd *cobra.Command) {
 	unsafeResetCmd.Flags().AddFlagSet(flags.DryRunFlag)
 	unsafeResetCmd.Flags().AddFlagSet(unsafeResetFlags)
+	unsafeResetCmd.Flags().AddFlagSet(flags.ForceFlags)
 
 	parentCmd.AddCommand(unsafeResetCmd)
 }

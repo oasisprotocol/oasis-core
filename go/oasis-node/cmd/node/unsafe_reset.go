@@ -1,6 +1,7 @@
 package node
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -8,6 +9,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -65,6 +67,23 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 	if dataDir == "" {
 		logger.Error("data directory must be set")
 		return
+	}
+
+	// Do a state dir sanity check.
+	for _, f := range []string{tendermintCommon.StateDir, identity.NodeKeyPubFilename} {
+		glob := filepath.Join(dataDir, f)
+		matches, err := filepath.Glob(glob)
+		if err != nil {
+			logger.Error("invalid glob pattern",
+				"err", err,
+				"glob", glob,
+			)
+			return
+		}
+		if len(matches) == 0 && !cmdFlags.Force() {
+			fmt.Printf("%s does not look like an oasis-node data directory, not removing any files. Use --force to run the command regardless.\n", dataDir)
+			return
+		}
 	}
 
 	isDryRun := cmdFlags.DryRun()
