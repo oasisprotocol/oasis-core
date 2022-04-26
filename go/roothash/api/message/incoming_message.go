@@ -1,6 +1,9 @@
 package message
 
 import (
+	"fmt"
+
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -26,8 +29,34 @@ type IncomingMessage struct {
 	// transferred before the message is processed by the runtime.
 	Tokens quantity.Quantity `json:"tokens,omitempty"`
 
-	// Data is arbitrary runtime-dependent data.
+	// Data is a serialized IncomingMessageData.
 	Data []byte `json:"data,omitempty"`
+}
+
+const LatestIncomingMessageDataVersion = 1
+
+// IncomingMessageData contains any information that does not need to be
+// handled at the consensus layer. Storing this as a separate struct allows us
+// to make changes to this without causing a consensus-breaking change.
+type IncomingMessageData struct {
+	cbor.Versioned
+
+	// Transaction is a runtime transaction.
+	Transaction *[]byte `json:"tx,omitempty"`
+
+	// RuntimeData is any data that does not need to be processed outside the
+	// runtime.
+	RuntimeData []byte `json:"rt_data,omitempty"`
+}
+
+func (d *IncomingMessageData) ValidateBasic() error {
+	if d.V != LatestIncomingMessageDataVersion {
+		return fmt.Errorf("invalid incoming message data version (expected: %d got: %d)",
+			LatestIncomingMessageDataVersion,
+			d.V,
+		)
+	}
+	return nil
 }
 
 // InMessagesHash returns a hash of provided incoming runtime messages.
