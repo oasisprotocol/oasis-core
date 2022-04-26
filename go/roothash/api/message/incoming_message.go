@@ -26,7 +26,7 @@ type IncomingMessage struct {
 	// transferred before the message is processed by the runtime.
 	Tokens quantity.Quantity `json:"tokens,omitempty"`
 
-	// Data is arbitrary runtime-dependent data.
+	// Data is a runtime transaction.
 	Data []byte `json:"data,omitempty"`
 }
 
