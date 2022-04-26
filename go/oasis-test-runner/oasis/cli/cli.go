@@ -74,13 +74,16 @@ func New(env *env.Env, factory Factory, logger *logging.Logger) *Helpers {
 
 // UnsafeReset launches the unsafe-reset subcommand, clearing all consensus and (optionally)
 // runtime state.
-func (h *Helpers) UnsafeReset(dataDir string, preserveRuntimeStorage, preserveLocalStorage bool) error {
+func (h *Helpers) UnsafeReset(dataDir string, preserveRuntimeStorage, preserveLocalStorage, force bool) error {
 	args := []string{"unsafe-reset", "--" + cmdCommon.CfgDataDir, dataDir}
 	if !preserveRuntimeStorage {
 		args = append(args, "--"+cmdNode.CfgPreserveMKVSDatabase+"=false")
 	}
 	if !preserveLocalStorage {
 		args = append(args, "--"+cmdNode.CfgPreserveLocalStorage+"=false")
+	}
+	if force {
+		args = append(args, "--force")
 	}
 	return h.runSubCommand("unsafe-reset", args)
 }

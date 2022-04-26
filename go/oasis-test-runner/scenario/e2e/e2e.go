@@ -189,32 +189,32 @@ func (sc *E2E) GetExportedGenesisFiles(skipCompute bool) ([]string, error) {
 func (sc *E2E) ResetConsensusState(childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 	for _, val := range sc.Net.Validators() {
-		if err := cli.UnsafeReset(val.DataDir(), false, false); err != nil {
+		if err := cli.UnsafeReset(val.DataDir(), false, false, false); err != nil {
 			return err
 		}
 	}
 	for _, cw := range sc.Net.ComputeWorkers() {
-		if err := cli.UnsafeReset(cw.DataDir(), true, false); err != nil {
+		if err := cli.UnsafeReset(cw.DataDir(), true, false, false); err != nil {
 			return err
 		}
 	}
 	for _, cl := range sc.Net.Clients() {
-		if err := cli.UnsafeReset(cl.DataDir(), false, false); err != nil {
+		if err := cli.UnsafeReset(cl.DataDir(), false, false, false); err != nil {
 			return err
 		}
 	}
 	for _, bz := range sc.Net.Byzantine() {
-		if err := cli.UnsafeReset(bz.DataDir(), false, false); err != nil {
+		if err := cli.UnsafeReset(bz.DataDir(), false, false, false); err != nil {
 			return err
 		}
 	}
 	for _, se := range sc.Net.Sentries() {
-		if err := cli.UnsafeReset(se.DataDir(), false, false); err != nil {
+		if err := cli.UnsafeReset(se.DataDir(), false, false, false); err != nil {
 			return err
 		}
 	}
 	for _, kw := range sc.Net.Keymanagers() {
-		if err := cli.UnsafeReset(kw.DataDir(), false, true); err != nil {
+		if err := cli.UnsafeReset(kw.DataDir(), false, true, false); err != nil {
 			return err
 		}
 	}
