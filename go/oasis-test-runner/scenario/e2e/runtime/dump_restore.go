@@ -165,16 +165,17 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	// Completely reset state for one of the compute nodes so we can test initial sync.
-	sc.Logger.Info("completely resetting state for one of the compute nodes")
-	cli := cli.New(childEnv, sc.Net, sc.Logger)
-	if err = cli.UnsafeReset(sc.Net.ComputeWorkers()[1].DataDir(), false, false); err != nil {
-		return fmt.Errorf("failed to reset state for compute worker: %w", err)
-	}
-
 	if err = sc.DumpRestoreNetwork(childEnv, fixture, true, sc.mapGenesisDocumentFn); err != nil {
 		return err
 	}
+
+	// Completely reset state for one of the compute nodes so we can test initial sync.
+	sc.Logger.Info("completely resetting state for one of the compute nodes")
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
+	if err = cli.UnsafeReset(sc.Net.ComputeWorkers()[1].DataDir(), false, false, true); err != nil {
+		return fmt.Errorf("failed to reset state for compute worker: %w", err)
+	}
+
 	if err = sc.Net.Start(); err != nil {
 		return fmt.Errorf("failed to start restored network: %w", err)
 	}
