@@ -1628,7 +1628,7 @@ dependencies = [
  "oasis-cbor",
  "oasis-core-runtime",
  "thiserror",
- "tokio 1.17.0",
+ "tokio 1.18.0",
 ]
 
 [[package]]
@@ -1677,7 +1677,7 @@ dependencies = [
  "sgx-isa 0.3.3",
  "sp800-185",
  "tiny-keccak 2.0.2",
- "tokio 1.17.0",
+ "tokio 1.18.0",
  "x25519-dalek",
  "zeroize",
 ]
@@ -1733,7 +1733,7 @@ dependencies = [
  "tendermint-rpc",
  "thiserror",
  "tiny-keccak 2.0.2",
- "tokio 1.17.0",
+ "tokio 1.18.0",
  "x25519-dalek",
  "x509-parser",
  "zeroize",
@@ -1749,7 +1749,7 @@ dependencies = [
  "failure",
  "futures 0.3.21",
  "sgxs-loaders",
- "tokio 0.2.25",
+ "tokio 1.18.0",
 ]
 
 [[package]]
@@ -2432,7 +2432,7 @@ dependencies = [
  "oasis-core-tools",
  "simple-keymanager",
  "thiserror",
- "tokio 1.17.0",
+ "tokio 1.18.0",
 ]
 
 [[package]]
@@ -2851,9 +2851,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.17.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2af73ac49756f3f7c01172e34a23e5d0216f6c32333757c2c61feb2bbff5a5ee"
+checksum = "0f48b6d60512a392e34dbf7fd456249fd2de3c83669ab642e021903f4015185b"
 dependencies = [
  "bytes 1.1.0",
  "libc",
