@@ -357,6 +357,8 @@ func (c *connection) workerOutgoing() {
 	for {
 		select {
 		case msg := <-c.outCh:
+			c.logger.Debug("sending outgoing message", "message", msg)
+
 			if err := c.conn.SetWriteDeadline(time.Now().Add(connWriteTimeout)); err != nil {
 				c.logger.Error("error setting connection deadline",
 					"err", err,
@@ -489,6 +491,8 @@ func (c *connection) workerIncoming() {
 			)
 			break
 		}
+
+		c.logger.Debug("received incoming message", "message", message)
 
 		// Handle message in a separate goroutine.
 		go c.handleMessage(ctx, &message)
