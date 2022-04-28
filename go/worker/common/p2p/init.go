@@ -30,6 +30,11 @@ const (
 	CfgP2PMaxNumPeers = "worker.p2p.max_num_peers"
 	// CfgP2PPeerGracePeriod is the peer grace period.
 	CfgP2PPeerGracePeriod = "worker.p2p.peer_grace_period"
+
+	// CfgP2PBlockedPeerIPs is a list of blocked peer IP addresses.
+	CfgP2PBlockedPeerIPs = "worker.p2p.blocked_peers"
+	// CfgP2PPersistentPeers is a list of persistent peer node addresses in format P2Ppubkey@IP:port.
+	CfgP2PPersistentPeers = "worker.p2p.persistent_peers"
 )
 
 // Flags has the configuration flags.
@@ -45,6 +50,8 @@ func init() {
 	Flags.Float64(CfgP2PConnectednessLowWater, 0.2, "Set the low water mark at which the peer manager will try to reconnect to peers")
 	Flags.Uint32(CfgP2PMaxNumPeers, 100, "Set maximum number of P2P peers")
 	Flags.Duration(CfgP2PPeerGracePeriod, 20*time.Second, "Time duration for new peer connections to be immune from pruning")
+	Flags.StringSlice(CfgP2PBlockedPeerIPs, []string{}, "List of blocked peer IPs")
+	Flags.StringSlice(CfgP2PPersistentPeers, []string{}, "List of persistent peer node addresses in format P2Ppubkey@IP:port")
 
 	_ = viper.BindPFlags(Flags)
 }
