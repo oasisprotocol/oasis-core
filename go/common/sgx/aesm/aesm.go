@@ -234,3 +234,152 @@ func (c *Client) GetQuote(
 
 	return quote, nil
 }
+
+// GetAttestationKeyIDs returns the available attestation keys.
+func (c *Client) GetAttestationKeyIDs(ctx context.Context) ([]*AttestationKeyID, error) {
+	// Request the number of attestation keys first.
+	timeout := uint32(localAESMTimeout.Nanoseconds() / 1000)
+	resp, err := c.transact(ctx, &Request{
+		GetSupportedAttKeyIDNumReq: &Request_GetSupportedAttKeyIDNumRequest{
+			Timeout: &timeout,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetSupportedAttKeyIDNumRes == nil {
+		return nil, errMalformedResponse
+	}
+	if errCode := resp.GetSupportedAttKeyIDNumRes.GetErrorCode(); errCode != 0 {
+		return nil, fmt.Errorf("aesm: get supported attestation key count: error %d", errCode)
+	}
+	keyCount := resp.GetSupportedAttKeyIDNumRes.GetAttKeyIdNum()
+
+	// Request the attestation key IDs.
+	const sgxKeyIDSize = 256
+	bufSize := keyCount * sgxKeyIDSize
+	resp, err = c.transact(ctx, &Request{
+		GetSupportedAttKeyIDsReq: &Request_GetSupportedAttKeyIDsRequest{
+			BufSize: &bufSize,
+			Timeout: &timeout,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetSupportedAttKeyIDsRes == nil {
+		return nil, errMalformedResponse
+	}
+	if errCode := resp.GetSupportedAttKeyIDsRes.GetErrorCode(); errCode != 0 {
+		return nil, fmt.Errorf("aesm: get supported attestation key IDs: error %d", errCode)
+	}
+	keyIDsBuf := resp.GetSupportedAttKeyIDsRes.GetAttKeyIds()
+	if len(keyIDsBuf) != int(bufSize) {
+		return nil, errMalformedResponse
+	}
+	keyIDs := make([]*AttestationKeyID, 0, keyCount)
+	for i := 0; i < int(keyCount); i++ {
+		offset := i * sgxKeyIDSize
+
+		var keyID AttestationKeyID
+		if err = keyID.UnmarshalBinary(keyIDsBuf[offset : offset+sgxKeyIDSize]); err != nil {
+			// Skip bad keys.
+			continue
+		}
+		keyID.Index = uint32(i)
+		keyIDs = append(keyIDs, &keyID)
+	}
+
+	return keyIDs, nil
+}
+
+// GetTargetInfo retrieves the target enclave information for QE.
+func (c *Client) GetTargetInfo(ctx context.Context, keyID *AttestationKeyID) ([]byte, error) {
+	// First we need to determine the public key size so that we can pass it back to the same daemon
+	// that reported it. This is stupid, but it is how it is.
+	timeout := uint32(localAESMTimeout.Nanoseconds() / 1000)
+	noPubKey := false
+	resp, err := c.transact(ctx, &Request{
+		InitQuoteExReq: &Request_InitQuoteExRequest{
+			AttKeyId:  keyID.raw,
+			BPubKeyId: &noPubKey,
+			Timeout:   &timeout,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.InitQuoteExRes == nil {
+		return nil, errMalformedResponse
+	}
+	if errCode := resp.InitQuoteExRes.GetErrorCode(); errCode != 0 {
+		return nil, fmt.Errorf("aesm: get public key size: error %d", errCode)
+	}
+	pubKeySize := resp.InitQuoteExRes.GetPubKeyIdSize()
+
+	// Now get the actual target info.
+	yesPubKey := true
+	resp, err = c.transact(ctx, &Request{
+		InitQuoteExReq: &Request_InitQuoteExRequest{
+			AttKeyId:  keyID.raw,
+			BPubKeyId: &yesPubKey,
+			BufSize:   &pubKeySize,
+			Timeout:   &timeout,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.InitQuoteExRes == nil {
+		return nil, errMalformedResponse
+	}
+	if errCode := resp.InitQuoteExRes.GetErrorCode(); errCode != 0 {
+		return nil, fmt.Errorf("aesm: get QE target info: error %d", errCode)
+	}
+
+	return resp.InitQuoteExRes.GetTargetInfo(), nil
+}
+
+// GetQuoteEx exchanges the report for an attestation quote.
+func (c *Client) GetQuoteEx(ctx context.Context, keyID *AttestationKeyID, report []byte) ([]byte, error) {
+	// First we need to determine the quote size so that we can pass it back to the same daemon that
+	// reported it. This is stupid, but it is how it is.
+	timeout := uint32(localAESMTimeout.Nanoseconds() / 1000)
+	resp, err := c.transact(ctx, &Request{
+		GetQuoteSizeExReq: &Request_GetQuoteSizeExRequest{
+			AttKeyId: keyID.raw,
+			Timeout:  &timeout,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetQuoteSizeExRes == nil {
+		return nil, errMalformedResponse
+	}
+	if errCode := resp.GetQuoteSizeExRes.GetErrorCode(); errCode != 0 {
+		return nil, fmt.Errorf("aesm: get quote size: error %d", errCode)
+	}
+	quoteSize := resp.GetQuoteSizeExRes.GetQuoteSize()
+
+	// Then request the quote itself.
+	resp, err = c.transact(ctx, &Request{
+		GetQuoteExReq: &Request_GetQuoteExRequest{
+			Report:   report,
+			AttKeyId: keyID.raw,
+			BufSize:  &quoteSize,
+			Timeout:  &timeout,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetQuoteExRes == nil {
+		return nil, errMalformedResponse
+	}
+	if errCode := resp.GetQuoteExRes.GetErrorCode(); errCode != 0 {
+		return nil, fmt.Errorf("aesm: get quote: error %d", errCode)
+	}
+
+	return resp.GetQuoteExRes.GetQuote(), nil
+}
