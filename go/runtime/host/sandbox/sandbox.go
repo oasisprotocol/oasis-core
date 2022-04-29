@@ -534,8 +534,9 @@ func New(cfg Config) (host.Provisioner, error) {
 		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
 			logWrapper := host.NewRuntimeLogWrapper(
 				cfg.Logger,
-				"runtime_id", hostCfg.Bundle.Manifest.ID.Hex(),
-				"runtime_name", hostCfg.Bundle.Manifest.Name)
+				"runtime_id", hostCfg.Bundle.Manifest.ID,
+				"runtime_name", hostCfg.Bundle.Manifest.Name,
+			)
 			return process.Config{
 				Path: hostCfg.Bundle.Path,
 				Env: map[string]string{
