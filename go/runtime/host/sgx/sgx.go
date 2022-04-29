@@ -4,7 +4,6 @@ package sgx
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,12 +13,10 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/aesm"
-	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -78,13 +75,52 @@ type RuntimeExtra struct {
 	UnsafeDebugGenerateSigstruct bool
 }
 
+type teeStateImpl interface {
+	// Init initializes the TEE state and returns the QE target info.
+	Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace) ([]byte, error)
+
+	// Update updates the TEE state and returns a new attestation.
+	Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error)
+}
+
 type teeState struct {
 	runtimeID    common.Namespace
 	eventEmitter host.RuntimeEventEmitter
 
-	epidGID   uint32
-	spid      cmnIAS.SPID
-	quoteType *cmnIAS.SignatureType
+	impl teeStateImpl
+}
+
+func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error) {
+	if ts.impl != nil {
+		return nil, fmt.Errorf("already initialized")
+	}
+
+	var (
+		targetInfo []byte
+		err        error
+	)
+
+	// Try ECDSA first. If it fails, try EPID.
+	implECDSA := &teeStateECDSA{}
+	if targetInfo, err = implECDSA.Init(ctx, sp, ts.runtimeID); err != nil {
+		sp.logger.Debug("ECDSA attestation initialization failed, trying EPID",
+			"err", err,
+		)
+
+		implEPID := &teeStateEPID{}
+		if targetInfo, err = implEPID.Init(ctx, sp, ts.runtimeID); err != nil {
+			return nil, err
+		}
+		ts.impl = implEPID
+	} else {
+		ts.impl = implECDSA
+	}
+
+	return targetInfo, nil
+}
+
+func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
+	return ts.impl.Update(ctx, sp, conn, report, nonce)
 }
 
 type sgxProvisioner struct {
@@ -244,24 +280,16 @@ func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime,
 		eventEmitter: rt.(host.RuntimeEventEmitter),
 	}
 
-	qi, err := s.aesm.InitQuote(ctx)
+	targetInfo, err := ts.init(ctx, s)
 	if err != nil {
-		return nil, fmt.Errorf("error while getting quote info from AESMD: %w", err)
+		return nil, fmt.Errorf("error while initializing TEE state: %w", err)
 	}
-	ts.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
-
-	spidInfo, err := s.ias.GetSPIDInfo(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error while getting IAS SPID information: %w", err)
-	}
-	ts.spid = spidInfo.SPID
-	ts.quoteType = &spidInfo.QuoteSignatureType
 
 	if _, err = conn.Call(
 		ctx,
 		&protocol.Body{
 			RuntimeCapabilityTEERakInitRequest: &protocol.RuntimeCapabilityTEERakInitRequest{
-				TargetInfo: qi.TargetInfo,
+				TargetInfo: targetInfo,
 			},
 		},
 	); err != nil {
@@ -274,13 +302,6 @@ func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime,
 func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *logging.Logger, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
-
-	// Update the SigRL (Not cached, knowing if revoked is important).
-	sigRL, err := s.ias.GetSigRL(ctx, ts.epidGID)
-	if err != nil {
-		return nil, fmt.Errorf("error while requesting SigRL: %w", err)
-	}
-	sigRL = cbor.FixSliceForSerde(sigRL)
 
 	rakQuoteRes, err := conn.Call(
 		ctx,
@@ -295,66 +316,11 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *loggin
 	report := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.Report
 	nonce := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.Nonce
 
-	quote, err := s.aesm.GetQuote(
-		ctx,
-		report,
-		*ts.quoteType,
-		ts.spid,
-		make([]byte, 16),
-		sigRL,
-	)
+	attestation, err := ts.update(ctx, s, conn, report, nonce)
 	if err != nil {
-		return nil, fmt.Errorf("error while getting quote: %w", err)
+		return nil, err
 	}
 
-	evidence := ias.Evidence{
-		RuntimeID: ts.runtimeID,
-		Quote:     quote,
-		Nonce:     nonce,
-	}
-
-	avrBundle, err := s.ias.VerifyEvidence(ctx, &evidence)
-	if err != nil {
-		return nil, fmt.Errorf("error while verifying attestation evidence: %w", err)
-	}
-
-	avrBundle.Body = cbor.FixSliceForSerde(avrBundle.Body)
-	avrBundle.CertificateChain = cbor.FixSliceForSerde(avrBundle.CertificateChain)
-	avrBundle.Signature = cbor.FixSliceForSerde(avrBundle.Signature)
-
-	_, err = conn.Call(
-		ctx,
-		&protocol.Body{
-			RuntimeCapabilityTEERakAvrRequest: &protocol.RuntimeCapabilityTEERakAvrRequest{
-				AVR: *avrBundle,
-			},
-		},
-	)
-	if err != nil {
-		// If we are here, presumably the AVR is well-formed (VerifyEvidence
-		// succeeded).  Since this is more than likely the AVR indicating
-		// rejection, deserialize it and log some pertinent details.
-		avr, decErr := cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
-		if decErr == nil {
-			switch avr.ISVEnclaveQuoteStatus {
-			case cmnIAS.QuoteOK, cmnIAS.QuoteSwHardeningNeeded:
-				// That's odd, the quote checks out as ok.  Can't
-				// really get further information.
-			default:
-				// This probably has to do with the never-ending series of
-				// speculative execution trashfires, so log the vulns and
-				// quote status.
-				logger.Error("attestation likely rejected by IAS",
-					"quote_status", avr.ISVEnclaveQuoteStatus.String(),
-					"advisory_ids", avr.AdvisoryIDs,
-				)
-			}
-		}
-
-		return nil, fmt.Errorf("error while configuring AVR: %w", err)
-	}
-
-	attestation := cbor.Marshal(avrBundle)
 	capabilityTEE := &node.CapabilityTEE{
 		Hardware:    node.TEEHardwareIntelSGX,
 		RAK:         rakPub,
