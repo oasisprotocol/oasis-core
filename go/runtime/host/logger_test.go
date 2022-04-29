@@ -38,7 +38,9 @@ func TestRuntimeLogWrapper(t *testing.T) {
 	// Feed data to RuntimeLogWrapper.
 	w := NewRuntimeLogWrapper(logging.GetLogger("testenv"))
 	for _, chunk := range logChunks {
-		w.Write([]byte(chunk))
+		n, err := w.Write([]byte(chunk))
+		require.Equal(len(chunk), n)
+		require.NoError(err)
 	}
 
 	actual := strings.Split(buf.String(), "\n")
@@ -47,7 +49,7 @@ func TestRuntimeLogWrapper(t *testing.T) {
 		`{"level":"info","module":"runtime","msg":"My info\\nwith a newline","ts":"2022"}`,
 		`{"level":"debug","module":"runtime/dispatcher","msg":"My debug","ts":"2022-04-27"}`,
 		`{"err":"some explanation","level":"error","module":"runtime/protocol","msg":"My error","ts":"2022-04-28"}`,
-		`{"caller":"helpers.go:\d+","err":"invalid character 'R' looking for beginning of value","level":"warn","log_line":"\\t\\tRandom crap","module":"testenv","msg":"non-JSON log line from runtime","ts":"[^"]+"}`,
+		`{"caller":"logger.go:\d+","err":"invalid character 'R' looking for beginning of value","level":"warn","log_line":"\\t\\tRandom crap","module":"testenv","msg":"non-JSON log line from runtime","ts":"[^"]+"}`,
 		`{"level":"info","module":"runtime/foo","msg":"Should be recovered","ts":"2022"}`,
 		``, // Because we split on newline and the last log entry ends with a newline
 	}
