@@ -223,8 +223,9 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 
 	logWrapper := host.NewRuntimeLogWrapper(
 		s.logger,
-		"runtime_id", rtCfg.Bundle.Manifest.ID.Hex(),
-		"runtime_name", rtCfg.Bundle.Manifest.Name)
+		"runtime_id", rtCfg.Bundle.Manifest.ID,
+		"runtime_name", rtCfg.Bundle.Manifest.Name,
+	)
 
 	return process.Config{
 		Path: s.cfg.LoaderPath,
