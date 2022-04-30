@@ -1525,8 +1525,16 @@ func (n *Node) nudgeAvailability(force bool) {
 	_, _, err := n.getRtStateAndRoundResults(n.ctx, consensus.HeightLatest)
 	lastRoundAvailable := (err == nil)
 
+	// Make sure the key manager is available (or not needed).
+	var keymanagerAvailable bool
+	select {
+	case <-n.commonNode.KeyManagerClient.Initialized():
+		keymanagerAvailable = true
+	default:
+	}
+
 	switch {
-	case n.runtimeReady && lastRoundAvailable && n.runtimeTrustSynced:
+	case n.runtimeReady && lastRoundAvailable && n.runtimeTrustSynced && keymanagerAvailable:
 		// Executor is ready to process requests.
 		if n.roleProvider.IsAvailable() && !force {
 			break
@@ -1732,6 +1740,11 @@ func (n *Node) worker() {
 		case txs := <-txCh:
 			// Check any queued transactions.
 			n.handleNewCheckedTransactions(txs)
+		case <-n.commonNode.KeyManagerClient.Initialized():
+			// Key manager client has been initialized, update availability if needed.
+			n.commonNode.CrossNode.Lock()
+			n.nudgeAvailability(false)
+			n.commonNode.CrossNode.Unlock()
 		case <-n.reselect:
 			// Recalculate select set.
 		}

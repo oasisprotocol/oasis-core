@@ -25,7 +25,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
-	keymanagerP2P "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
 
 const periodicMetricsInterval = 60 * time.Second
@@ -158,7 +157,7 @@ type Node struct {
 
 	Identity         *identity.Identity
 	KeyManager       keymanager.Backend
-	KeyManagerClient keymanagerP2P.Client
+	KeyManagerClient *KeyManagerClientWrapper
 	Consensus        consensus.Backend
 	Group            *Group
 	P2P              *p2p.P2P
@@ -216,10 +215,7 @@ func (n *Node) Stop() {
 	n.stopOnce.Do(func() {
 		close(n.stopCh)
 		n.TxPool.Stop()
-
-		if n.KeyManagerClient != nil {
-			n.KeyManagerClient.Stop()
-		}
+		n.KeyManagerClient.setKeymanagerID(nil)
 	})
 }
 
@@ -453,6 +449,9 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		}
 
 		n.updateHostedRuntimeVersionLocked()
+
+		// Make sure to update the key manager if needed.
+		n.KeyManagerClient.setKeymanagerID(n.CurrentDescriptor.KeyManager)
 	}
 
 	for _, hooks := range n.hooks {
@@ -570,7 +569,7 @@ func (n *Node) worker() {
 			"keymanager_runtime_id", *rt.KeyManager,
 		)
 
-		n.KeyManagerClient = keymanagerP2P.NewClient(n.P2P, n.Consensus, *rt.KeyManager)
+		n.KeyManagerClient.setKeymanagerID(rt.KeyManager)
 		select {
 		case <-n.ctx.Done():
 			n.logger.Error("failed to wait for key manager",
@@ -818,6 +817,9 @@ func NewNode(
 		initCh:     make(chan struct{}),
 		logger:     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
+
+	// Prepare the key manager client wrapper.
+	n.KeyManagerClient = newKeyManagerClientWrapper(n)
 
 	// Prepare the runtime host node helpers.
 	rhn, err := runtimeRegistry.NewRuntimeHostNode(n)
