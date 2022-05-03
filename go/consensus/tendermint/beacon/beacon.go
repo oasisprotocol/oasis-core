@@ -367,10 +367,11 @@ func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
 	}
 
 	sc := &serviceClient{
-		logger:  logging.GetLogger("beacon/tendermint"),
-		querier: a.QueryFactory().(*app.QueryFactory),
-		backend: backend,
-		ctx:     ctx,
+		logger:            logging.GetLogger("beacon/tendermint"),
+		querier:           a.QueryFactory().(*app.QueryFactory),
+		backend:           backend,
+		ctx:               ctx,
+		epochLastNotified: beaconAPI.EpochInvalid,
 	}
 	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		sc.RLock()
