@@ -48,7 +48,7 @@ hmac = "0.11.0"
 honggfuzz = "0.5.54"
 arbitrary = { version = "1.0.2", features = ["derive"] }
 num-bigint = "0.4"
-num-traits = "0.2.14"
+num-traits = "0.2.15"
 bech32 = "0.8.1"
 impl-trait-for-tuples = "0.2.1"
 x509-parser = "0.13.2"
