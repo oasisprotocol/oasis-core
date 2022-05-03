@@ -103,7 +103,7 @@ Core:
 * Oasis Core's Rust toolchain version with Fortanix SGX target.
 
   The version of the Rust toolchain we use in Oasis Core is specified in the
-  [rust-toolchain] file.
+  [`rust-toolchain.toml`] file.
 
   The rustup-installed versions of `cargo`, `rustc` and other tools will
   [automatically detect this file and use the appropriate version of the Rust
@@ -126,15 +126,8 @@ Core:
   active toolchain
   ----------------
 
-  nightly-2022-04-13-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain')
+  nightly-2022-04-13-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain.toml')
   rustc 1.62.0-nightly (52ca603da 2022-04-12)
-  ```
-
-  Then add the Fortanix SGX Rust target to this version of the Rust toolchain by
-  running:
-
-  ```
-  rustup target add x86_64-fortanix-unknown-sgx
   ```
 
 * (**OPTIONAL**) [gofumpt] and [goimports].
@@ -236,8 +229,8 @@ where the code has been checked out.
 [download `rustup-init` executable for your platform]:
   https://github.com/rust-lang/rustup#other-installation-methods
 [Rust]: https://www.rust-lang.org/
-[rust-toolchain]:
-  https://github.com/oasisprotocol/oasis-core/tree/master/rust-toolchain
+[`rust-toolchain.toml`]:
+  https://github.com/oasisprotocol/oasis-core/tree/master/rust-toolchain.toml
 [rust-toolchain-precedence]:
   https://github.com/rust-lang/rustup/blob/master/README.md#override-precedence
 [Fortanix Rust EDP]: https://edp.fortanix.com
