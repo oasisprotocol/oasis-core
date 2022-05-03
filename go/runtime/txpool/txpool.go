@@ -599,6 +599,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		}
 
 		if !res.IsSuccess() {
+			rejectedTransactions.With(t.getMetricLabels()).Inc()
 			t.logger.Debug("check tx failed",
 				"tx", batch[i].Tx,
 				"tx_hash", batch[i].TxHash,
@@ -617,6 +618,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 			continue
 		}
 
+		acceptedTransactions.With(t.getMetricLabels()).Inc()
 		txs = append(txs, res.ToCheckedTransaction(rawTxBatch[i]))
 		isLocal = append(isLocal, batch[i].Meta.Local)
 	}
