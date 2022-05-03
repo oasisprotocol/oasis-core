@@ -384,7 +384,7 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	defer entitySub.Close()
 
 	var (
-		epoch                beacon.EpochTime
+		epoch                beacon.EpochTime = beacon.EpochInvalid
 		lastTLSRotationEpoch beacon.EpochTime
 
 		reregisterHeight int64 = math.MaxInt64
@@ -466,6 +466,11 @@ Loop:
 			}
 		case <-w.registerCh:
 			// Notification that a role provider has been updated.
+		}
+
+		// We need to know the current epoch before we can register.
+		if epoch == beacon.EpochInvalid {
+			continue
 		}
 
 		// Disarm the re-registration delay height.
