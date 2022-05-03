@@ -503,6 +503,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	var unschedule []hash.Hash
 	for i, res := range results {
 		if !res.IsSuccess() {
+			rejectedTransactions.With(t.getMetricLabels()).Inc()
 			t.logger.Debug("check tx failed",
 				"tx", batch[i].tx,
 				"tx_hash", batch[i].hash,
@@ -525,6 +526,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 		// For any transactions that are to be queued, we defer notification until queued.
 
+		acceptedTransactions.With(t.getMetricLabels()).Inc()
 		batch[i].setChecked(res.Meta)
 		newTxs = append(newTxs, batch[i])
 		batchIndices = append(batchIndices, i)
