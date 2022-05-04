@@ -296,9 +296,21 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 	defer stSub.Close()
 	n.logger.Debug("watching policy updates")
 
-	var rtDsc *registry.Runtime
+	// Subscribe to runtime host events.
+	evCh, evSub, err := n.host.WatchEvents(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to subscribe to runtime host events",
+			"err", err,
+		)
+		return
+	}
+	defer evSub.Close()
+
+	var (
+		rtDsc *registry.Runtime
+		st    *keymanager.Status
+	)
 	for {
-		var st *keymanager.Status
 		select {
 		case <-n.ctx.Done():
 			n.logger.Debug("context canceled")
@@ -332,6 +344,16 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 			if rtDsc == nil || !st.ID.Equal(rtDsc.KeyManager) {
 				continue
 			}
+		case ev := <-evCh:
+			// Runtime host changes, make sure to update the policy if runtime is restarted.
+			if ev.Started == nil && ev.Updated == nil {
+				continue
+			}
+		}
+
+		// Make sure that we actually have a policy.
+		if st == nil {
+			continue
 		}
 
 		// Update key manager policy.
