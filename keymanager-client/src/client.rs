@@ -75,10 +75,9 @@ impl RemoteClient {
 
     /// Create a new key manager client with runtime-internal transport.
     ///
-    /// Using this method valid enclave identities won't be preset and should
-    /// be obtained via the worker-host protocol and updated with the set_policy
-    /// method. In case of sgx, the session establishment will fail until the
-    /// initial policies will be updated.
+    /// Using this method valid enclave identities won't be preset and should be obtained via the
+    /// worker-host protocol and updated with the set_policy method. In case the signer set is
+    /// non-empty, session establishment will fail until the initial policies will be updated.
     pub fn new_runtime(
         runtime_id: Namespace,
         protocol: Arc<Protocol>,
@@ -86,16 +85,17 @@ impl RemoteClient {
         keys_cache_sizes: usize,
         signers: TrustedPolicySigners,
     ) -> Self {
-        #[cfg(target_env = "sgx")]
+        // When using a non-empty policy signer set we set enclaves to an empty set so until we get
+        // a policy we will not accept any enclave identities (as we don't know what they should
+        // be). When the policy signer set is empty (e.g. in tests) we allow any enclave.
+        let enclaves = if !signers.signers.is_empty() {
+            Some(HashSet::new())
+        } else {
+            None
+        };
+
+        // Configure trusted policy signers.
         set_trusted_policy_signers(signers);
-
-        #[cfg(not(target_env = "sgx"))]
-        let _ = signers;
-
-        #[cfg(target_env = "sgx")]
-        let enclaves = Some(HashSet::new());
-        #[cfg(not(target_env = "sgx"))]
-        let enclaves = None;
 
         Self::new_runtime_with_enclave_identities(
             runtime_id,
