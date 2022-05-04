@@ -12,6 +12,50 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.5 (2022-05-04)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- go/oasis-node/cmd: unsafe-reset preserve local storage by default
+  ([#4700](https://github.com/oasisprotocol/oasis-core/issues/4700))
+
+- go/oasis-node/cmd: unsafe-reset check datadir validity
+  ([#4702](https://github.com/oasisprotocol/oasis-core/issues/4702))
+
+- go/worker/common: Properly handle dynamic key manager configuration
+  ([#4715](https://github.com/oasisprotocol/oasis-core/issues/4715))
+
+- go/runtime/txpool: Add txpool metric for rejected runtime transactions
+  ([#4724](https://github.com/oasisprotocol/oasis-core/issues/4724))
+
+### Bug Fixes
+
+- go/runtime/config: report error if SGX loader required but not configured
+  ([#4710](https://github.com/oasisprotocol/oasis-core/issues/4710))
+
+- go/worker/keymanager: Fix crash on capability TEE updates
+  ([#4725](https://github.com/oasisprotocol/oasis-core/issues/4725))
+
+- go/worker/registration: Only register once epoch is known
+  ([#4726](https://github.com/oasisprotocol/oasis-core/issues/4726))
+
+- go/runtime/registry: Refresh key manager policy on runtime changes
+  ([#4729](https://github.com/oasisprotocol/oasis-core/issues/4729))
+
+### Internal Changes
+
+- ci: Build OpenSSL statically for Oasis Core releases
+  ([#4707](https://github.com/oasisprotocol/oasis-core/issues/4707))
+
+  This makes sure that oasis-core-runtime-loader is more portable between
+  distributions.
+
 ## 22.1.4 (2022-04-25)
 
 | Protocol          | Version   |
