@@ -190,6 +190,8 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 	// Check if any runtimes are configured to be hosted.
 	if viper.IsSet(CfgRuntimePaths) || (cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs)) {
+		forceNoSGX := cfg.Mode.IsClientOnly() || (cmdFlags.DebugDontBlameOasis() && viper.GetBool(CfgDebugForceELF))
+
 		var rh RuntimeHostConfig
 
 		// Configure host environment information.
@@ -247,6 +249,11 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 			switch sgxLoader := viper.GetString(CfgRuntimeSGXLoader); sgxLoader {
 			case "":
+				// Fail if SGX is required and provisioner is not configured.
+				if !forceNoSGX {
+					return nil, fmt.Errorf("SGX loader binary path is not configured")
+				}
+
 				// No SGX loader is configured, remap to non-SGX.
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSandbox.New(hostSandbox.Config{
 					HostInfo:          hostInfo,
@@ -274,7 +281,6 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 		}
 
 		// Configure runtimes.
-		forceNoSGX := cfg.Mode.IsClientOnly() || (cmdFlags.DebugDontBlameOasis() && viper.GetBool(CfgDebugForceELF))
 		rh.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
 		for _, path := range viper.GetStringSlice(CfgRuntimePaths) {
 			// Open and explode the bundle.  This will call Validate().

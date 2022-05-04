@@ -363,7 +363,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
 	// Generate and submit all executor commitments.
@@ -463,7 +463,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
 	// Only submit a single commitment to cause a timeout.
@@ -549,7 +549,7 @@ func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
 	// Only submit a single commitment to cause a timeout.
@@ -674,7 +674,7 @@ WaitForProposerTimeoutBlocks:
 	}
 	require.NotNil(timeoutNode, "No nodes that aren't transaction scheduler among test nodes")
 
-	ctx, cancel := context.WithTimeout(ctx, recvTimeout)
+	ctx, cancel := context.WithTimeout(ctx, 5*recvTimeout)
 	defer cancel()
 
 	tx := api.NewRequestProposerTimeoutTx(0, nil, s.rt.Runtime.ID, child.Header.Round)
