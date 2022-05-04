@@ -221,6 +221,12 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 	}
 	s.logger.Info("found SGX device", "path", sgxDev)
 
+	logWrapper := host.NewRuntimeLogWrapper(
+		s.logger,
+		"runtime_id", rtCfg.Bundle.Manifest.ID,
+		"runtime_name", rtCfg.Bundle.Manifest.Name,
+	)
+
 	return process.Config{
 		Path: s.cfg.LoaderPath,
 		Args: []string{
@@ -240,6 +246,8 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 			signaturePath: bytes.NewReader(sig),
 		},
 		SandboxBinaryPath: s.cfg.SandboxBinaryPath,
+		Stdout:            logWrapper,
+		Stderr:            logWrapper,
 	}, nil
 }
 

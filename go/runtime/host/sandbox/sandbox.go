@@ -525,15 +525,26 @@ func (r *sandboxedRuntime) manager() {
 
 // New creates a new runtime provisioner that uses a local process sandbox.
 func New(cfg Config) (host.Provisioner, error) {
+	// Use a default Logger if none was provided.
+	if cfg.Logger == nil {
+		cfg.Logger = logging.GetLogger("runtime/host/sandbox")
+	}
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
 		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
+			logWrapper := host.NewRuntimeLogWrapper(
+				cfg.Logger,
+				"runtime_id", hostCfg.Bundle.Manifest.ID,
+				"runtime_name", hostCfg.Bundle.Manifest.Name,
+			)
 			return process.Config{
 				Path: hostCfg.Bundle.Path,
 				Env: map[string]string{
 					"OASIS_WORKER_HOST": socketPath,
 				},
 				SandboxBinaryPath: cfg.SandboxBinaryPath,
+				Stdout:            logWrapper,
+				Stderr:            logWrapper,
 			}, nil
 		}
 	}
@@ -554,10 +565,6 @@ func New(cfg Config) (host.Provisioner, error) {
 				Version: version,
 			}, nil
 		}
-	}
-	// Use a default Logger if none was provided.
-	if cfg.Logger == nil {
-		cfg.Logger = logging.GetLogger("runtime/host/sandbox")
 	}
 	return &provisioner{cfg: cfg}, nil
 }

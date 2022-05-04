@@ -213,6 +213,19 @@ func GetLoggerEx(module string, extraUnwind int) *Logger {
 	return backend.getLogger(module, extraUnwind)
 }
 
+// GetBaseLogger creates a new non-prefixed logger instance with the
+// specified module.
+//
+// The returned logger will not pre-include any log fields (aka prefixes)
+// except for the module name. Its level will be set in accordance
+// with the global config, which can be per-module.
+//
+// This may be called from any point, including before Initialize is
+// called, allowing for the construction of a package level Logger.
+func GetBaseLogger(module string) *Logger {
+	return backend.getBaseLogger(module)
+}
+
 // Initialize initializes the logging backend to write to the provided
 // Writer with the given format and log levels specified for each
 // module. If the requested module is not given, default level is
@@ -239,7 +252,6 @@ func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[str
 	}
 
 	logger = level.NewFilter(logger, defaultLvl.toOption())
-	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 
 	backend.baseLogger = logger
 	backend.moduleLevels = moduleLvls
@@ -260,7 +272,7 @@ func Initialize(w io.Writer, format Format, defaultLvl Level, moduleLvls map[str
 
 	// libp2p/IPFS uses yet another logging library, that appears to be a
 	// wrapper around zap.
-	ipfsLogger := newZapCore(logger, "libp2p", 7)
+	ipfsLogger := newZapCore(log.With(logger, "ts", log.DefaultTimestampUTC), "libp2p", 7)
 	backend.setupLogLevelLocked(ipfsLogger.logger)
 
 	// Update the ipfs core logger.
@@ -323,19 +335,38 @@ func (b *logBackend) getLogger(module string, extraUnwind int) *Logger {
 		logger = &log.SwapLogger{}
 	}
 
-	var keyvals []interface{}
-	if module != "" {
-		keyvals = append(keyvals, []interface{}{
-			"module",
-			module,
-		}...)
+	prefixes := []interface{}{
+		"ts", log.DefaultTimestampUTC,
+		"caller", log.Caller(defaultUnwind + extraUnwind),
+		"module", module,
 	}
-	keyvals = append(keyvals, []interface{}{
-		"caller",
-		log.Caller(defaultUnwind + extraUnwind),
-	}...)
 	l := &Logger{
-		logger: log.WithPrefix(logger, keyvals...),
+		logger: log.WithPrefix(logger, prefixes...),
+		module: module,
+	}
+	b.setupLogLevelLocked(l)
+
+	if !b.initialized {
+		// Stash the logger so that it can be instantiated once logging
+		// is actually initialized.
+		sLog := logger.(*log.SwapLogger)
+		b.earlyLoggers = append(b.earlyLoggers, &earlyLogger{swapLogger: sLog, logger: l})
+	}
+
+	return l
+}
+
+func (b *logBackend) getBaseLogger(module string) *Logger {
+	b.Lock()
+	defer b.Unlock()
+
+	logger := b.baseLogger
+	if !b.initialized {
+		logger = &log.SwapLogger{}
+	}
+
+	l := &Logger{
+		logger: log.WithPrefix(logger, "module", module),
 		module: module,
 	}
 	b.setupLogLevelLocked(l)
