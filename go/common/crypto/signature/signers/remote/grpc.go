@@ -7,8 +7,10 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"strings"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -272,6 +274,11 @@ type FactoryConfig struct {
 	ClientCertificate *tls.Certificate
 }
 
+// IsLocal returns true iff the configured endpoint is over AF_LOCAL.
+func (fc *FactoryConfig) IsLocal() bool {
+	return strings.HasPrefix(strings.ToLower(fc.Address), "unix:")
+}
+
 // NewFactory creates a new factory with the specified roles.
 func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
 	cfg, ok := config.(*FactoryConfig)
@@ -279,27 +286,34 @@ func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.Si
 		return nil, fmt.Errorf("signature/signer/remote: invalid remote signer configuration provided")
 	}
 
-	if cfg.ServerCertificate == nil {
-		return nil, fmt.Errorf("signature/signer/remote: server certificate is required")
+	var cOpts []grpc.DialOption
+	if !cfg.IsLocal() {
+		if cfg.ServerCertificate == nil {
+			return nil, fmt.Errorf("signature/signer/remote: server certificate is required")
+		}
+
+		serverCert, err := x509.ParseCertificate(cfg.ServerCertificate.Certificate[0])
+		if err != nil {
+			return nil, fmt.Errorf("signature/signer/remote: failed to parse server certificate: %w", err)
+		}
+
+		creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
+			Certificates: []tls.Certificate{
+				*cfg.ClientCertificate,
+			},
+			GetServerPubKeys: cmnGrpc.ServerPubKeysGetterFromCertificate(serverCert),
+			CommonName:       "remote-signer-server",
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		cOpts = append(cOpts, grpc.WithTransportCredentials(creds))
+	} else {
+		cOpts = append(cOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	serverCert, err := x509.ParseCertificate(cfg.ServerCertificate.Certificate[0])
-	if err != nil {
-		return nil, fmt.Errorf("signature/signer/remote: failed to parse server certificate: %w", err)
-	}
-
-	creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
-		Certificates: []tls.Certificate{
-			*cfg.ClientCertificate,
-		},
-		GetServerPubKeys: cmnGrpc.ServerPubKeysGetterFromCertificate(serverCert),
-		CommonName:       "remote-signer-server",
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := cmnGrpc.Dial(cfg.Address, grpc.WithTransportCredentials(creds))
+	conn, err := cmnGrpc.Dial(cfg.Address, cOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("signature/signer/remote: failed to dial server: %w", err)
 	}
