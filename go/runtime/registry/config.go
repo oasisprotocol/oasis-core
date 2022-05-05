@@ -249,12 +249,11 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 			switch sgxLoader := viper.GetString(CfgRuntimeSGXLoader); sgxLoader {
 			case "":
-				// Fail if SGX is required and provisioner is not configured.
+				// If no SGX is forced, remap to non-SGX.
 				if !forceNoSGX {
-					return nil, fmt.Errorf("SGX loader binary path is not configured")
+					break
 				}
 
-				// No SGX loader is configured, remap to non-SGX.
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSandbox.New(hostSandbox.Config{
 					HostInfo:          hostInfo,
 					InsecureNoSandbox: insecureNoSandbox,
@@ -315,6 +314,11 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 			var haveSGXSignature bool
 			if !forceNoSGX && bnd.Manifest.SGX != nil {
+				// Ensure SGX provisioner is configured.
+				if _, ok := rh.Provisioners[node.TEEHardwareIntelSGX]; !ok {
+					return nil, fmt.Errorf("SGX loader binary path is not configured")
+				}
+
 				// If this is a TEE enclave, override the executable to point
 				// at the enclave binary instead.
 				runtimeHostCfg.Bundle.Path = bnd.ExplodedPath(dataDir, bnd.Manifest.SGX.Executable)
