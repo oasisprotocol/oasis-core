@@ -34,7 +34,7 @@ require (
 	github.com/google/btree v1.0.1
 	github.com/hashicorp/go-hclog v1.2.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/hashicorp/go-plugin v1.4.3
+	github.com/hashicorp/go-plugin v1.4.4
 	github.com/hpcloud/tail v1.0.0
 	github.com/ianbruene/go-difflib v1.2.0
 	github.com/ipfs/go-log/v2 v2.5.1
