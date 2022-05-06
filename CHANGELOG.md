@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.6 (2022-05-06)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/runtime/config: fix SGX provisioner check for runtimes without SGX
+  ([#4734](https://github.com/oasisprotocol/oasis-core/issues/4734))
+
+  This fixes a bug in `22.1.5` where an SGX provisioner was required even for
+  non-SGX runtimes.
+
 ## 22.1.5 (2022-05-04)
 
 | Protocol          | Version   |
