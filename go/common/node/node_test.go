@@ -223,10 +223,10 @@ func TestNodeForTestSerialization(t *testing.T) {
 					Addresses: []TLSAddress{
 						{
 							PubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
-							Address: Address{TCPAddr: net.TCPAddr{
+							Address: Address{
 								IP:   net.IPv4(127, 0, 0, 1),
 								Port: 1111,
-							}},
+							},
 						},
 					},
 				},

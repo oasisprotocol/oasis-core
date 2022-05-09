@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"testing"
 	"time"
 
@@ -1080,10 +1079,8 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 			Roles:    role,
 		}
 		addr := node.Address{
-			TCPAddr: net.TCPAddr{
-				IP:   []byte{192, 0, 2, byte(i + 1)},
-				Port: 451,
-			},
+			IP:   []byte{192, 0, 2, byte(i + 1)},
+			Port: 451,
 		}
 		nod.Node.P2P.ID = nodeIdentity.P2PSigner.Public()
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
@@ -1368,10 +1365,8 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 			VRF:        nod.Node.VRF,
 		}
 		addr = node.Address{
-			TCPAddr: net.TCPAddr{
-				IP:   []byte{192, 0, 2, byte(i + 1)},
-				Port: 452,
-			},
+			IP:   []byte{192, 0, 2, byte(i + 1)},
+			Port: 452,
 		}
 		nod.UpdatedNode.P2P.ID = nod.Node.P2P.ID
 		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
