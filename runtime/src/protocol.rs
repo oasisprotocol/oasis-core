@@ -15,7 +15,9 @@ use slog::{error, info, warn, Logger};
 use thiserror::Error;
 
 use crate::{
-    common::{logger::get_logger, namespace::Namespace, version::Version},
+    common::{
+        crypto::signature::PublicKey, logger::get_logger, namespace::Namespace, version::Version,
+    },
     config::Config,
     consensus::{tendermint, verifier::Verifier},
     dispatcher::Dispatcher,
@@ -138,6 +140,11 @@ impl Protocol {
     /// The supplied runtime configuration.
     pub fn get_config(&self) -> &Config {
         &self.config
+    }
+
+    /// The runtime attestation public key.
+    pub fn get_public_rak(&self) -> Option<PublicKey> {
+        self.rak.public_key()
     }
 
     /// The runtime identifier for this instance.

@@ -18,6 +18,233 @@ use crate::{
     consensus::{beacon::EpochTime, scheduler, staking},
 };
 
+/// Represents the address of a TCP endpoint.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct TCPAddress {
+    #[cbor(rename = "IP")]
+    pub ip: Vec<u8>,
+    #[cbor(rename = "Port")]
+    pub port: i64,
+    #[cbor(rename = "Zone")]
+    pub zone: String,
+}
+
+/// Represents an Oasis committee address that includes a TLS public key and a TCP address.
+///
+/// NOTE: The address TLS public key can be different from the actual node TLS public key to allow
+/// using a sentry node's addresses.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct TLSAddress {
+    /// Public key used for establishing TLS connections.
+    pub pub_key: PublicKey,
+
+    /// Address at which the node can be reached.
+    pub address: TCPAddress,
+}
+
+/// Node's TLS information.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct TLSInfo {
+    /// Public key used for establishing TLS connections.
+    pub pub_key: PublicKey,
+
+    /// Public key that will be used for establishing connections after certificate rotation (if enabled).
+    pub next_pub_key: PublicKey,
+
+    /// List of addresses at which the node can be reached.
+    pub addresses: Option<Vec<TLSAddress>>,
+}
+
+/// Node's P2P information.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct P2PInfo {
+    /// Unique identifier of the node on the P2P transport.
+    pub id: PublicKey,
+
+    /// List of addresses at which the node can be reached.
+    pub addresses: Option<Vec<TCPAddress>>,
+}
+
+/// Represents a consensus address that includes an ID and a TCP address.
+///
+/// NOTE: The consensus address ID could be different from the consensus ID
+/// to allow using a sentry node's ID and address instead of the validator's.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct ConsensusAddress {
+    /// Public key identifying the node.
+    pub id: PublicKey,
+
+    /// Address at which the node can be reached.
+    pub address: TCPAddress,
+}
+
+/// Node's consensus member information.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct ConsensusInfo {
+    /// Unique identifier of the node as a consensus member.
+    pub id: PublicKey,
+
+    /// List of addresses at which the node can be reached.
+    pub addresses: Option<Vec<ConsensusAddress>>,
+}
+
+/// Contains information for this node's participation in VRF based elections.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct VRFInfo {
+    /// Unique identifier of the node used to generate VRF proofs.
+    pub id: PublicKey,
+}
+
+/// Represents the node's TEE capability.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct CapabilityTEE {
+    /// Hardware type.
+    pub hardware: TEEHardware,
+
+    /// Runtime attestation key.
+    pub rak: PublicKey,
+
+    /// Attestation.
+    pub attestation: Vec<u8>,
+}
+
+/// Represents a node's capabilities.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct Capabilities {
+    /// Is the capability of a node executing batches in a TEE.
+    #[cbor(optional, default)]
+    pub tee: Option<CapabilityTEE>,
+}
+
+/// Represents the runtimes supported by a given Oasis node.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct NodeRuntime {
+    /// Public key identifying the runtime.
+    pub id: Namespace,
+
+    /// Version of the runtime.
+    pub version: Version,
+
+    /// Node's capabilities for a given runtime.
+    pub capabilities: Capabilities,
+
+    /// Extra per node + per runtime opaque data associated with the current instance.
+    pub extra_info: Option<Vec<u8>>,
+}
+
+/// TEE hardware implementation.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[cbor(transparent)]
+pub struct RolesMask(pub u32);
+
+// XXX: Would be nicer to use bitflags crate for this, but there is no way to add
+// custom derives to the enum at the moment.
+// Should be possible in v2.0 (https://github.com/bitflags/bitflags/issues/262).
+impl RolesMask {
+    /// Empty roles mask.
+    pub const ROLE_EMPTY: RolesMask = RolesMask(0);
+    /// Compute worker role.
+    pub const ROLE_COMPUTE_WORKER: RolesMask = RolesMask(1 << 0);
+    /// Reserved role (storage role in v1 descriptors).
+    pub const ROLE_RESERVED_2: RolesMask = RolesMask(1 << 1);
+    /// Key manager role.
+    pub const ROLE_KEY_MANAGER: RolesMask = RolesMask(1 << 2);
+    /// Validator role.
+    pub const ROLE_VALIDATOR: RolesMask = RolesMask(1 << 3);
+    /// Public consensus RPC services worker role.
+    pub const ROLE_CONSENSUS_RPC: RolesMask = RolesMask(1 << 4);
+    /// Public storage RPC services worker role.
+    pub const ROLE_STORAGE_RPC: RolesMask = RolesMask(1 << 5);
+
+    // Bits of the Oasis node roles bitmask that are reserved and must not be used.
+    pub const ROLES_RESERVED: RolesMask =
+        RolesMask(u32::MAX & !((Self::ROLE_STORAGE_RPC.0 << 1) - 1) | Self::ROLE_RESERVED_2.0);
+}
+
+impl PartialOrd for RolesMask {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl Ord for RolesMask {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl Default for RolesMask {
+    fn default() -> Self {
+        Self::ROLE_EMPTY
+    }
+}
+
+/// Node registry descriptor.
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub struct Node {
+    /// Structure version.
+    pub v: u16,
+
+    /// Public key identifying the node.
+    pub id: PublicKey,
+
+    /// Public key identifying the Entity controlling the node.
+    pub entity_id: PublicKey,
+
+    /// Epoch in which the node's commitment expires.
+    pub expiration: u64,
+
+    /// Information for connecting to this node via TLS.
+    pub tls: TLSInfo,
+
+    /// Information for connecting to this node via P2P.
+    pub p2p: P2PInfo,
+
+    /// Information for connecting to this node as a consensus member.
+    pub consensus: ConsensusInfo,
+
+    /// Information for this node's participation in VRF based elections.
+    #[cbor(optional, default)]
+    pub vrf: Option<VRFInfo>,
+
+    /// Information for this node's participation in the old PVSS based random beacon protocol.
+    /// Deprecated.
+    #[cbor(optional, default)]
+    pub beacon: Option<cbor::Value>,
+
+    /// Node's runtimes.
+    pub runtimes: Option<Vec<NodeRuntime>>,
+
+    /// Bitmask representing the node roles.
+    pub roles: RolesMask,
+
+    /// Node's oasis-node software version.
+    #[cbor(optional, default)]
+    pub software_version: Option<String>,
+}
+
+impl Node {
+    /// Returns if the node has the provided RAK configured.
+    pub fn has_rak(&self, rak: &PublicKey, runtime_id: &Namespace, version: &Version) -> bool {
+        if let Some(rts) = &self.runtimes {
+            for rt in rts {
+                if runtime_id != &rt.id {
+                    continue;
+                }
+                if version != &rt.version {
+                    continue;
+                }
+                if let Some(tee) = &rt.capabilities.tee {
+                    if rak == &tee.rak {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
 /// Runtime kind.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u32)]
@@ -153,22 +380,6 @@ pub struct RuntimeStakingParameters {
     /// message to be queued.
     #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
     pub min_in_message_fee: quantity::Quantity,
-}
-
-/// Oasis node roles bitmask.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, cbor::Encode, cbor::Decode)]
-#[repr(u32)]
-pub enum RolesMask {
-    /// Compute worker role.
-    RoleComputeWorker = 1 << 0,
-    /// Key manager role.
-    RoleKeyManager = 1 << 2,
-    /// Validator role.
-    RoleValidator = 1 << 3,
-    /// Public consensus RPC services worker role.
-    RoleConsensusRPC = 1 << 4,
-    /// Public storage RPC services worker role.
-    RoleStorageRPC = 1 << 5,
 }
 
 /// Policy that allows only whitelisted entities' nodes to register.
@@ -324,6 +535,8 @@ pub struct RuntimeGenesis {
 }
 #[cfg(test)]
 mod tests {
+    use std::net::Ipv4Addr;
+
     use crate::common::quantity::Quantity;
 
     use super::*;
@@ -416,8 +629,8 @@ mod tests {
                             btreemap! {
                                 PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000") => EntityWhitelistConfig {
                                      max_nodes: Some(btreemap! {
-                                         RolesMask::RoleComputeWorker => 3,
-                                         RolesMask::RoleKeyManager => 1,
+                                         RolesMask::ROLE_COMPUTE_WORKER => 3,
+                                         RolesMask::ROLE_KEY_MANAGER => 1,
                                     })
                                 }
                             }
@@ -458,6 +671,75 @@ mod tests {
             assert_eq!(dec, rr, "decoded runtime should match the expected value");
             let ser = base64::encode(cbor::to_vec(dec));
             assert_eq!(ser, encoded_base64, "runtime should serialize correctly");
+        }
+    }
+
+    #[test]
+    fn test_consistent_node() {
+        // NOTE: These tests MUST be synced with go/common/node/node_test.go.
+        let tcs = vec![
+            ("qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==", Node{v: 2, ..Default::default()}),
+			(
+                "qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBkEV2Rab25lYGdwdWJfa2V5WCD/////////////////////////////////////////9GxuZXh0X3B1Yl9rZXlYIP/////////////////////////////////////////zY3ZyZqFiaWRYIP/////////////////////////////////////////3ZXJvbGVzAGhydW50aW1lc4KkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEGd2ZXJzaW9uoWVwYXRjaBkBQWpleHRyYV9pbmZv9mxjYXBhYmlsaXRpZXOgpGJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFndmVyc2lvbqFlcGF0Y2gYe2pleHRyYV9pbmZvRAUDAgFsY2FwYWJpbGl0aWVzoWN0ZWWjY3Jha1gg//////////////////////////////////////////hoaGFyZHdhcmUBa2F0dGVzdGF0aW9uRgABAgMEBWljb25zZW5zdXOiYmlkWCD/////////////////////////////////////////9mlhZGRyZXNzZXOAaWVudGl0eV9pZFgg//////////////////////////////////////////FqZXhwaXJhdGlvbhgg",
+                Node{
+                    v: 2,
+                    id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+                    entity_id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+                    expiration: 32,
+                    tls: TLSInfo{
+                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        addresses: Some(vec![
+                            TLSAddress{
+                                pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+                                address: TCPAddress{
+                                    ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(),
+                                    port: 1111,
+                                    ..Default::default()
+                                },
+                            },
+                        ]),
+                    },
+                    p2p: P2PInfo{
+                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
+                        ..Default::default()
+                    },
+                    consensus: ConsensusInfo{
+                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
+                        addresses: Some(Vec::new()),
+                    },
+                    vrf: Some(VRFInfo{
+                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
+                    }),
+                    runtimes: Some(vec![
+                        NodeRuntime{
+                            id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),
+                            version: Version::from(321u64),
+                            ..Default::default()
+                        },
+                        NodeRuntime{
+                            id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000011"),
+                            version: Version::from(123),
+                            capabilities: Capabilities{
+                               tee: Some(CapabilityTEE{
+                                   hardware: TEEHardware::TEEHardwareIntelSGX,
+                                    rak: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+                                    attestation: vec![0, 1,2,3,4,5],
+                               }),
+                            },
+                            extra_info: Some(vec![5,3,2,1]),
+                        },
+                    ]),
+                    ..Default::default()
+                },
+            ),
+        ];
+        for (encoded_base64, node) in tcs {
+            let dec: Node = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("node should deserialize correctly");
+            assert_eq!(dec, node, "decoded node should match the expected value");
+            let ser = base64::encode(cbor::to_vec(dec));
+            assert_eq!(ser, encoded_base64, "node should serialize correctly");
         }
     }
 }

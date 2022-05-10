@@ -33,17 +33,18 @@ use tendermint_rpc::error::Error as RpcError;
 use super::store::LruStore;
 use crate::{
     common::{
-        crypto::hash::Hash,
+        crypto::{hash::Hash, signature::PublicKey},
         logger::get_logger,
         sgx::{avr::EnclaveIdentity, seal},
         time,
+        version::Version,
     },
     consensus::{
         beacon::EpochTime,
         roothash::{ComputeResultsHeader, Header, HeaderType::EpochTransition},
         state::{
-            beacon::ImmutableState as BeaconState, roothash::ImmutableState as RoothashState,
-            ConsensusState,
+            beacon::ImmutableState as BeaconState, registry::ImmutableState as RegistryState,
+            roothash::ImmutableState as RoothashState, ConsensusState,
         },
         tendermint::{decode_light_block, LightBlockMeta, TENDERMINT_CONTEXT},
         verifier::{self, Error, TrustRoot},
@@ -121,6 +122,7 @@ enum Command {
 /// Tendermint consensus layer verifier.
 pub struct Verifier {
     protocol: Arc<Protocol>,
+    runtime_version: Version,
     trust_root: TrustRoot,
     command_sender: channel::Sender<Command>,
     command_receiver: channel::Receiver<Command>,
@@ -132,6 +134,7 @@ struct Cache {
     last_verified_epoch: u64,
     last_trust_root: TrustRoot,
     verified_state_roots: lru::LruCache<u64, Hash>,
+    node_id: Option<PublicKey>,
 }
 
 impl Default for Cache {
@@ -142,6 +145,7 @@ impl Default for Cache {
             last_verified_epoch: 0,
             last_trust_root: TrustRoot::default(),
             verified_state_roots: lru::LruCache::new(128),
+            node_id: None,
         }
     }
 }
@@ -150,9 +154,11 @@ impl Verifier {
     /// Create a new Tendermint consensus layer verifier.
     pub fn new(protocol: Arc<Protocol>, trust_root: TrustRoot) -> Self {
         let (command_sender, command_receiver) = channel::unbounded();
+        let runtime_version = protocol.get_config().version;
 
         Self {
             protocol,
+            runtime_version,
             trust_root,
             command_sender,
             command_receiver,
@@ -305,6 +311,66 @@ impl Verifier {
                 current_epoch,
                 epoch,
             )));
+        }
+
+        // Verify our own RAK is published in registry once per epoch.
+        // This ensures consensus state is recent enough.
+        if cache.last_verified_epoch != epoch {
+            if let Some(rak) = self.protocol.get_public_rak() {
+                let registry_state = RegistryState::new(&state);
+
+                match cache.node_id {
+                    // Node ID is cached, query the node and check for matching RAK.
+                    Some(node_id) => {
+                        let node = registry_state
+                            .node(Context::background(), &node_id)
+                            .map_err(|err| {
+                                Error::VerificationFailed(anyhow!(
+                                    "failed to retrieve node from the registry: {}",
+                                    err
+                                ))
+                            })?;
+                        let node = node.ok_or_else(|| {
+                            Error::VerificationFailed(anyhow!(
+                                "own node ID: '{}' not found in registry state",
+                                node_id,
+                            ))
+                        })?;
+                        if !node.has_rak(&rak, &runtime_header.namespace, &self.runtime_version) {
+                            return Err(Error::VerificationFailed(anyhow!(
+                                "own RAK: '{}' not found in registry state",
+                                rak
+                            )));
+                        }
+                    }
+                    // Node ID not cached, need to scan all registry nodes.
+                    None => {
+                        let nodes = registry_state.nodes(Context::background()).map_err(|err| {
+                            Error::VerificationFailed(anyhow!(
+                                "failed to retrieve nodes from the registry: {}",
+                                err
+                            ))
+                        })?;
+                        let mut found_node: Option<PublicKey> = None;
+                        for node in nodes {
+                            if node.has_rak(&rak, &runtime_header.namespace, &self.runtime_version)
+                            {
+                                found_node = Some(node.id);
+                                break;
+                            }
+                        }
+                        if found_node.is_none() {
+                            return Err(Error::VerificationFailed(anyhow!(
+                                "own RAK: '{}' not found in registry state",
+                                rak
+                            )));
+                        }
+
+                        // Cache node ID to avoid re-scanning.
+                        cache.node_id = found_node;
+                    }
+                }
+            }
         }
 
         // Cache verified runtime header.

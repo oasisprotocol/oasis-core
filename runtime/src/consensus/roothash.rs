@@ -328,7 +328,7 @@ mod tests {
         st.insert(staking::ThresholdKind::KindNodeCompute, q.clone());
 
         let mut wlc = BTreeMap::new();
-        wlc.insert(registry::RolesMask::RoleComputeWorker, 2);
+        wlc.insert(registry::RolesMask::ROLE_COMPUTE_WORKER, 2);
 
         let mut wl = BTreeMap::new();
         wl.insert(
