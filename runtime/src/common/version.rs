@@ -58,9 +58,9 @@ impl From<Version> for u64 {
 impl From<u64> for Version {
     fn from(v: u64) -> Version {
         Version {
-            major: ((v >> 32) & 0xff) as u16,
-            minor: ((v >> 16) & 0xff) as u16,
-            patch: (v & 0xff) as u16,
+            major: ((v >> 32) & 0xffff) as u16,
+            minor: ((v >> 16) & 0xffff) as u16,
+            patch: (v & 0xffff) as u16,
         }
     }
 }
@@ -106,5 +106,40 @@ mod test {
         };
         let vi: u64 = v.into();
         assert_eq!(v, Version::from(vi));
+    }
+
+    #[test]
+    fn test_version_u64() {
+        for v in vec![
+            Version::default(),
+            Version {
+                major: 0,
+                minor: 0,
+                patch: 0,
+            },
+            Version {
+                major: 1,
+                minor: 1,
+                patch: 1,
+            },
+            Version {
+                major: 10,
+                minor: 20,
+                patch: 30,
+            },
+            Version {
+                major: 300,
+                minor: 400,
+                patch: 500,
+            },
+            Version {
+                major: 30000,
+                minor: 40000,
+                patch: 50000,
+            },
+        ] {
+            let vi: u64 = v.into();
+            assert_eq!(Version::from(vi), v)
+        }
     }
 }
