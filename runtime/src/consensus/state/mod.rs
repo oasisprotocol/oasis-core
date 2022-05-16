@@ -12,6 +12,7 @@ use crate::{
 };
 
 pub mod beacon;
+pub mod registry;
 pub mod roothash;
 pub mod staking;
 
