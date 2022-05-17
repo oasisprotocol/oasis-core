@@ -89,11 +89,9 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace, epoch beacon.
 
 func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signature.PublicKey, runtimeID common.Namespace) *node.Node {
 	nodeAddr := node.Address{
-		TCPAddr: net.TCPAddr{
-			IP:   net.IPv4(127, 0, 0, 1),
-			Port: 12345,
-			Zone: "",
-		},
+		IP:   net.IPv4(127, 0, 0, 1),
+		Port: 12345,
+		Zone: "",
 	}
 
 	// NOTE: we shouldn't be registering validators, as that would lead to

@@ -357,16 +357,16 @@ func (sc *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeDataDir
 func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node, []string, []string, []string, error) {
 	// Addresses.
 	testAddresses := []node.Address{
-		{TCPAddr: net.TCPAddr{
+		{
 			IP:   net.IPv4(127, 0, 0, 1),
 			Port: 12345,
 			Zone: "",
-		}},
-		{TCPAddr: net.TCPAddr{
+		},
+		{
 			IP:   net.IPv4(127, 0, 0, 2),
 			Port: 54321,
 			Zone: "",
-		}},
+		},
 	}
 	testAddressesStr := []string{}
 	for _, a := range testAddresses {

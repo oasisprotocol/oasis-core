@@ -458,7 +458,7 @@ func nodeToAddrInfo(node *node.Node) (*peer.AddrInfo, error) {
 		return nil, fmt.Errorf("failed to extract public key from node P2P ID: %w", err)
 	}
 	for _, nodeAddr := range node.P2P.Addresses {
-		addr, err := manet.FromNetAddr(&nodeAddr.TCPAddr)
+		addr, err := manet.FromNetAddr(nodeAddr.ToTCPAddr())
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert address to libp2p format: %w", err)
 		}

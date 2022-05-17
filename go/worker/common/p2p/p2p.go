@@ -124,7 +124,12 @@ func (p *P2P) Addresses() []node.Address {
 			panic(err)
 		}
 		tcpAddr := (netAddr).(*net.TCPAddr)
-		nodeAddr := node.Address{TCPAddr: *tcpAddr}
+		nodeAddr := node.Address{
+			IP:   tcpAddr.IP,
+			Port: int64(tcpAddr.Port),
+			Zone: tcpAddr.Zone,
+		}
+
 		if err := registryAPI.VerifyAddress(nodeAddr, allowUnroutable); err != nil {
 			continue
 		}
@@ -329,7 +334,7 @@ func New(identity *identity.Identity, consensus consensus.Backend) (*P2P, error)
 	var registerAddresses []multiaddr.Multiaddr
 	for _, addr := range addresses {
 		var mAddr multiaddr.Multiaddr
-		mAddr, err = manet.FromNetAddr(&addr.TCPAddr)
+		mAddr, err = manet.FromNetAddr(addr.ToTCPAddr())
 		if err != nil {
 			return nil, err
 		}

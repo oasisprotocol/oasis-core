@@ -29,7 +29,18 @@ var (
 
 // Address represents a TCP address for the purpose of node descriptors.
 type Address struct {
-	net.TCPAddr
+	IP   net.IP `json:"IP"`
+	Port int64  `json:"Port"`
+	Zone string `json:"Zone"`
+}
+
+// ToTCPAddr returns a net TCP address.
+func (a *Address) ToTCPAddr() *net.TCPAddr {
+	return &net.TCPAddr{
+		IP:   a.IP,
+		Port: int(a.Port),
+		Zone: a.Zone,
+	}
 }
 
 // Equal compares vs another address for equality.
@@ -58,7 +69,9 @@ func (a *Address) UnmarshalText(text []byte) error {
 		return err
 	}
 
-	a.TCPAddr = *tcpAddr
+	a.IP = tcpAddr.IP
+	a.Port = int64(tcpAddr.Port)
+	a.Zone = tcpAddr.Zone
 
 	return nil
 }
@@ -73,7 +86,7 @@ func (a *Address) FromIP(ip net.IP, port uint16) error {
 		return ErrInvalidAddress
 	}
 
-	a.Port = int(port)
+	a.Port = int64(port)
 	a.Zone = ""
 
 	return nil
@@ -86,7 +99,11 @@ func (a *Address) IsRoutable() bool {
 
 // String returns the string representation of an address.
 func (a Address) String() string {
-	return a.TCPAddr.String()
+	ip := a.IP.String()
+	if a.Zone != "" {
+		return net.JoinHostPort(ip+"%"+a.Zone, fmt.Sprintf("%d", a.Port))
+	}
+	return net.JoinHostPort(ip, fmt.Sprintf("%d", a.Port))
 }
 
 // ConsensusAddress represents a Tendermint consensus address that includes an

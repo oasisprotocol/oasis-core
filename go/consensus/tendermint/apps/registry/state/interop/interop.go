@@ -61,10 +61,10 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 					Addresses: []node.TLSAddress{
 						{
 							PubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
-							Address: node.Address{TCPAddr: net.TCPAddr{
+							Address: node.Address{
 								IP:   net.IPv4(127, 0, 0, 1),
 								Port: 1111,
-							}},
+							},
 						},
 					},
 				},

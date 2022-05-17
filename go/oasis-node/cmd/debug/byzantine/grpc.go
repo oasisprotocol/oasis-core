@@ -12,10 +12,8 @@ import (
 func getGrpcAddress() []node.Address {
 	return []node.Address{
 		{
-			TCPAddr: net.TCPAddr{
-				IP:   net.IPv4(127, 0, 0, 1),
-				Port: viper.GetInt(cmdGrpc.CfgServerPort),
-			},
+			IP:   net.IPv4(127, 0, 0, 1),
+			Port: viper.GetInt64(cmdGrpc.CfgServerPort),
 		},
 	}
 }
