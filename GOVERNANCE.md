@@ -39,12 +39,12 @@ doing one or more of the following:
 * adding features
 
 Contributors engage with the project through the issue tracker, writing or
-editing documentation, and participating in the [Oasis Community Slack
-channels]. They submit changes to the project itself via pull requests, which
-will be considered for inclusion in the project by existing committers (see next
-section).
+editing documentation, and participating at our [Oasis Network Community server
+on Discord]. They submit changes to the project itself via pull requests, which
+will be considered for inclusion in the project by existing committers (see
+next section).
 
-[Oasis Community Slack channels]: https://oasiscommunity.slack.com
+[Oasis Network Community server on Discord]: https://discord.gg/RwNTK8t
 
 ### Committers
 
@@ -63,9 +63,9 @@ have provided valuable contributions to the project over a period of time.
 ## Contribution Process
 
 Anyone can contribute to the project, regardless of their skills, as there are
-many ways to contribute. The [Oasis Community Slack channels] are the best place
-to ask questions, and the [Oasis Protocol GitHub] is the best place to see open
-bugs, open proposals and more.
+many ways to contribute. The [Oasis Network Community server on Discord] is the
+best place to ask questions, and the [Oasis Protocol GitHub] is the best place
+to see open bugs, open proposals and more.
 
 For details on how to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
