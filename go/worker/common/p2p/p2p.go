@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
 	core "github.com/libp2p/go-libp2p-core"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -362,6 +365,74 @@ func New(identity *identity.Identity, consensus consensus.Backend) (*P2P, error)
 		return nil, fmt.Errorf("worker/common/p2p: failed to create connection gater: %w", err)
 	}
 
+	// Block peers specified in the blacklist.
+	blacklist := viper.GetStringSlice(CfgP2PBlockedPeerIPs)
+	for _, blockedIP := range blacklist {
+		parsedIP := net.ParseIP(blockedIP)
+		if parsedIP == nil {
+			return nil, fmt.Errorf("worker/common/p2p: malformed blocked IP: %s", blockedIP)
+		}
+
+		if grr := cg.BlockAddr(parsedIP); grr != nil {
+			return nil, fmt.Errorf("worker/common/p2p: failed to block IP (%s): %w", blockedIP, err)
+		}
+	}
+
+	// Maintain persistent peers.
+	persistentPeers := make(map[core.PeerID]bool)
+	persistentPeersAI := []peer.AddrInfo{}
+	for _, pp := range viper.GetStringSlice(CfgP2PPersistentPeers) {
+		// The persistent peer addresses are in the format P2Ppubkey@IP:port,
+		// because we use a similar format elsewhere and it's easier for users
+		// to understand than a multiaddr.
+
+		if strings.Count(pp, "@") != 1 || strings.Count(pp, ":") != 1 {
+			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer address (expected P2Ppubkey@IP:port)")
+		}
+
+		pkaddr := strings.Split(pp, "@")
+		pubkey := pkaddr[0]
+		addr := pkaddr[1]
+
+		var pk signature.PublicKey
+		if grr := pk.UnmarshalText([]byte(pubkey)); grr != nil {
+			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer address: cannot unmarshal P2P public key (%s): %w", pubkey, grr)
+		}
+		pid, grr := PublicKeyToPeerID(pk)
+		if grr != nil {
+			return nil, fmt.Errorf("worker/common/p2p: invalid persistent peer public key (%s): %w", pubkey, grr)
+		}
+
+		ip, port, grr := net.SplitHostPort(addr)
+		if grr != nil {
+			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer IP address and/or port (%s): %w", addr, grr)
+		}
+
+		ma, grr := multiaddr.NewMultiaddr("/ip4/" + ip + "/tcp/" + port)
+		if grr != nil {
+			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer IP address and/or port (%s): %w", addr, grr)
+		}
+
+		if _, exists := persistentPeers[pid]; exists {
+			// If we already have this peer ID, append to its addresses.
+			for _, p := range persistentPeersAI {
+				if p.ID == pid {
+					p.Addrs = append(p.Addrs, ma)
+					break
+				}
+			}
+		} else {
+			// Fresh entry.
+			ai := peer.AddrInfo{
+				ID:    pid,
+				Addrs: []multiaddr.Multiaddr{ma},
+			}
+			persistentPeersAI = append(persistentPeersAI, ai)
+		}
+		persistentPeers[pid] = true
+		cm.Protect(pid, "")
+	}
+
 	// Create the P2P host.
 	host, err := libp2p.New(
 		libp2p.UserAgent(fmt.Sprintf("oasis-core/%s", version.SoftwareVersion)),
@@ -387,6 +458,7 @@ func New(identity *identity.Identity, consensus consensus.Backend) (*P2P, error)
 		pubsub.WithValidateQueueSize(viper.GetInt(CfgP2PValidateQueueSize)),
 		pubsub.WithValidateThrottle(viper.GetInt(CfgP2PValidateThrottle)),
 		pubsub.WithMessageIdFn(messageIdFn),
+		pubsub.WithDirectPeers(persistentPeersAI),
 	)
 	if err != nil {
 		ctxCancel()
@@ -402,7 +474,7 @@ func New(identity *identity.Identity, consensus consensus.Backend) (*P2P, error)
 	}
 
 	p := &P2P{
-		PeerManager:       newPeerManager(ctx, host, cg, consensus),
+		PeerManager:       newPeerManager(ctx, host, cg, consensus, persistentPeers),
 		ctxCancel:         ctxCancel,
 		quitCh:            make(chan struct{}),
 		chainContext:      chainContext,
@@ -416,6 +488,12 @@ func New(identity *identity.Identity, consensus consensus.Backend) (*P2P, error)
 	p.logger.Info("p2p host initialized",
 		"address", fmt.Sprintf("%+v", host.Addrs()),
 	)
+
+	if len(blacklist) > 0 {
+		p.logger.Info("p2p blacklist initialized",
+			"num_blocked_peers", len(blacklist),
+		)
+	}
 
 	return p, nil
 }

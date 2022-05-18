@@ -67,8 +67,9 @@ type PeerManager struct {
 	host core.Host
 	cg   *conngater.BasicConnectionGater
 
-	peers          map[core.PeerID]*p2pPeer
-	importantPeers map[ImportanceKind]map[common.Namespace]map[core.PeerID]bool
+	peers           map[core.PeerID]*p2pPeer
+	importantPeers  map[ImportanceKind]map[common.Namespace]map[core.PeerID]bool
+	persistentPeers map[core.PeerID]bool
 
 	initCh   chan struct{}
 	initOnce sync.Once
@@ -131,12 +132,15 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 		newNodes[peerID] = node
 	}
 
-	// Remove existing peers that are not in the new node list.
+	// Remove existing peers that are not in the new node list
+	// and not in the persistent peer list.
 	for peerID := range mgr.peers {
 		node := newNodes[peerID]
 		if node == nil {
-			mgr.removePeerLocked(peerID)
-			continue
+			if _, persistent := mgr.persistentPeers[peerID]; !persistent {
+				mgr.removePeerLocked(peerID)
+				continue
+			}
 		}
 	}
 
@@ -361,17 +365,24 @@ func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
 	}
 }
 
-func newPeerManager(ctx context.Context, host core.Host, cg *conngater.BasicConnectionGater, consensus consensus.Backend) *PeerManager {
-	mgr := &PeerManager{
-		ctx:            ctx,
-		host:           host,
-		cg:             cg,
-		peers:          make(map[core.PeerID]*p2pPeer),
-		importantPeers: make(map[ImportanceKind]map[common.Namespace]map[core.PeerID]bool),
-		initCh:         make(chan struct{}),
-		logger:         logging.GetLogger("worker/common/p2p/peermgr"),
+func newPeerManager(ctx context.Context, host core.Host, cg *conngater.BasicConnectionGater, consensus consensus.Backend, persistentPeers map[core.PeerID]bool) *PeerManager {
+	if persistentPeers == nil {
+		persistentPeers = make(map[core.PeerID]bool)
 	}
+
+	mgr := &PeerManager{
+		ctx:             ctx,
+		host:            host,
+		cg:              cg,
+		peers:           make(map[core.PeerID]*p2pPeer),
+		importantPeers:  make(map[ImportanceKind]map[common.Namespace]map[core.PeerID]bool),
+		persistentPeers: persistentPeers,
+		initCh:          make(chan struct{}),
+		logger:          logging.GetLogger("worker/common/p2p/peermgr"),
+	}
+
 	go mgr.watchRegistryNodes(consensus)
+
 	return mgr
 }
 
