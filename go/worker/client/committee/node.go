@@ -214,7 +214,7 @@ func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[has
 	}
 
 	// Remove processed transactions from pool.
-	n.commonNode.TxPool.RemoveTxBatch(processed)
+	n.commonNode.TxPool.HandleTxsUsed(processed)
 
 	return nil
 }

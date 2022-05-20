@@ -76,18 +76,8 @@ func (mq *mainQueue) TakeAll() []*TxQueueMeta {
 }
 
 func (mq *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
-	txMeta := newTransaction(tx.Raw, txStatusChecked)
-	if meta != nil {
-		txMeta.priority = meta.Priority
-		txMeta.sender = string(meta.Sender)
-		txMeta.senderSeq = meta.SenderSeq
-	}
-
-	// If the sender is empty (e.g. because the runtime does not support specifying a sender), we
-	// treat each transaction as having a unique sender. This is to allow backwards compatibility.
-	if len(txMeta.sender) == 0 {
-		txMeta.sender = string(txMeta.hash[:])
-	}
+	txMeta := newTransaction(tx.Raw)
+	txMeta.setChecked(meta)
 
 	return mq.inner.add(txMeta)
 }

@@ -11,7 +11,7 @@ import (
 )
 
 func newTestTransaction(data []byte, priority uint64) *Transaction {
-	tx := newTransaction(data, txStatusPendingCheck)
+	tx := newTransaction(data)
 	tx.setChecked(&protocol.CheckTxMetadata{
 		Priority: priority,
 	})

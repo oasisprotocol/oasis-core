@@ -5,6 +5,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
+// TxQueueMeta stores some queuing-related metadata alongside a raw transaction.
 type TxQueueMeta struct {
 	Raw  []byte
 	Hash hash.Hash
