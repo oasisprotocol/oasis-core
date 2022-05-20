@@ -393,7 +393,8 @@ func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 	// Nothing to do here.
 }
 
-func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
+// Guarded by CrossNode.
+func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
 	// Nothing to do here.
 }
 

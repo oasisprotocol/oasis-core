@@ -277,26 +277,31 @@ func (qs *QuoteSignatureECDSA_P256) verifyCertificateChain(ts time.Time) (*x509.
 	return leafCert, nil
 }
 
-// Verify verifies the quote signature.
-func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *ReportBody, ts time.Time, tcb *TCBBundle) (*TCBLevel, error) {
-	// 1. Verify PCK certificate chain.
+// PCKInfo contains information extracted from the PCK certificate.
+type PCKInfo struct {
+	PublicKey  *ecdsa.PublicKey
+	FMSPC      []byte
+	TCBCompSVN [16]int32
+	PCESVN     int32
+	CPUSVN     [16]byte
+}
+
+// VerifyPCK verifies the PCK certificate and returns the extracted information.
+func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
+	// Verify PCK certificate chain.
 	leafCert, err := qs.verifyCertificateChain(ts)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Get PCK public key and FMSPC from PCK certificate.
+	// Get PCK public key and FMSPC from PCK certificate.
+	var pckInfo PCKInfo
 	pk, ok := leafCert.PublicKey.(*ecdsa.PublicKey)
 	if !ok {
 		return nil, fmt.Errorf("pcs/quote: PCK certificate with non-ECDSA signature scheme")
 	}
+	pckInfo.PublicKey = pk
 
-	var (
-		fmspc      []byte
-		tcbCompSvn [16]int32
-		pcesvn     int32
-		cpusvn     [16]byte
-	)
 	for _, ext := range leafCert.Extensions {
 		if !ext.Id.Equal(PCK_SGX_Extensions) {
 			continue
@@ -312,11 +317,11 @@ func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *Repor
 			switch {
 			case sgxExt.Id.Equal(PCK_SGX_Extensions_FMSPC):
 				// FMSPC
-				if _, err = asn1.Unmarshal(sgxExt.Value.FullBytes, &fmspc); err != nil {
+				if _, err = asn1.Unmarshal(sgxExt.Value.FullBytes, &pckInfo.FMSPC); err != nil {
 					return nil, fmt.Errorf("pcs/quote: bad FMSPC value: %w", err)
 				}
-				if len(fmspc) != 6 {
-					return nil, fmt.Errorf("pcs/quote: bad FMSPC length: %d", len(fmspc))
+				if len(pckInfo.FMSPC) != 6 {
+					return nil, fmt.Errorf("pcs/quote: bad FMSPC length: %d", len(pckInfo.FMSPC))
 				}
 			case sgxExt.Id.Equal(PCK_SGX_Extensions_TCB):
 				// TCB
@@ -329,17 +334,17 @@ func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *Repor
 					switch compId := tcbExt.Id[len(tcbExt.Id)-1]; {
 					case compId >= 1 && compId <= 16:
 						// TCB Component SVNs
-						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &tcbCompSvn[compId-1]); err != nil {
+						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &pckInfo.TCBCompSVN[compId-1]); err != nil {
 							return nil, fmt.Errorf("pcs/quote: bad TCB component '%d' SVN value: %w", compId, err)
 						}
 					case compId == 17:
 						// PCESVN
-						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &pcesvn); err != nil {
+						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &pckInfo.PCESVN); err != nil {
 							return nil, fmt.Errorf("pcs/quote: bad PCESVN: %w", err)
 						}
 					case compId == 18:
 						// CPUSVN
-						cpusvnSlice := cpusvn[:]
+						cpusvnSlice := pckInfo.CPUSVN[:]
 						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &cpusvnSlice); err != nil {
 							return nil, fmt.Errorf("pcs/quote: bad CPUSVN: %w", err)
 						}
@@ -349,19 +354,30 @@ func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *Repor
 		}
 		break
 	}
-	if fmspc == nil {
+	if pckInfo.FMSPC == nil {
 		return nil, fmt.Errorf("pcs/quote: missing FMSPC field")
 	}
 
-	// 3. Verify QE report signature using PCK public key.
+	return &pckInfo, nil
+}
+
+// Verify verifies the quote signature.
+func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *ReportBody, ts time.Time, tcb *TCBBundle) (*TCBLevel, error) {
+	// Verify PCK certificate chain and extract relevant information (e.g. public key and FMSPC).
+	pckInfo, err := qs.VerifyPCK(ts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify QE report signature using PCK public key.
 	reportHash := sha256.Sum256(qs.QEReport.raw)
-	if !qs.QESignature.Verify(pk, reportHash[:]) {
+	if !qs.QESignature.Verify(pckInfo.PublicKey, reportHash[:]) {
 		return nil, fmt.Errorf("pcs/quote: failed to verify QE report signature using PCK public key")
 	}
 
-	// 4. Verify QE report data. First 32 bytes MUST be:
-	//      SHA-256(AttestationPublicKey || AuthenticationData)
-	//    and the remaining 32 bytes MUST be zero.
+	// Verify QE report data. First 32 bytes MUST be:
+	//   SHA-256(AttestationPublicKey || AuthenticationData)
+	// and the remaining 32 bytes MUST be zero.
 	h := sha256.New()
 	h.Write(qs.AttestationPublicKey[:])
 	h.Write(qs.AuthenticationData[:])
@@ -375,16 +391,16 @@ func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *Repor
 		return nil, fmt.Errorf("pcs/quote: QE report data does not match expected value")
 	}
 
-	// 5. Verify TCB and QE identity.
+	// Verify TCB and QE identity.
 	if tcb == nil {
 		return nil, fmt.Errorf("pcs/quote: missing TCB bundle")
 	}
-	tcbLevel, err := tcb.GetTCBLevel(ts, fmspc, tcbCompSvn, pcesvn, &qs.QEReport)
+	tcbLevel, err := tcb.GetTCBLevel(ts, pckInfo.FMSPC, pckInfo.TCBCompSVN, pckInfo.PCESVN, &qs.QEReport)
 	if err != nil {
 		return nil, fmt.Errorf("pcs/quote: failed to get TCB level: %w", err)
 	}
 
-	// 6. Verify quote header and ISV report body signature.
+	// Verify quote header and ISV report body signature.
 	attPkWithTag := append([]byte{0x04}, qs.AttestationPublicKey[:]...) // Add SEC 1 tag (uncompressed).
 	x, y := elliptic.Unmarshal(elliptic.P256(), attPkWithTag)
 	if x == nil {
