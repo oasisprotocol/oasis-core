@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -264,10 +265,19 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 				}
 			default:
 				// Configure the provided SGX loader.
+				var pc pcs.Client
+				pc, err = pcs.NewHTTPClient(&pcs.HTTPClientConfig{
+					// TODO: Support configuring the API key.
+				})
+				if err != nil {
+					return nil, fmt.Errorf("failed to create PCS HTTP client: %w", err)
+				}
+
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
 					HostInfo:          hostInfo,
 					LoaderPath:        sgxLoader,
 					IAS:               ias,
+					PCS:               pc,
 					SandboxBinaryPath: sandboxBinary,
 					InsecureNoSandbox: insecureNoSandbox,
 				})

@@ -7,18 +7,8 @@ import (
 
 // Client is an Intel SGX PCS client interface.
 type Client interface {
-	// GetTCBInfo retrieves the signed TCB info for the given platform.
-	GetTCBInfo(ctx context.Context, fmspc []byte) (*SignedTCBInfo, error)
-
-	// GetQEIdentity retrieves the signed Intel QE identity.
-	GetQEIdentity(ctx context.Context) (*SignedQEIdentity, error)
-}
-
-// Config is the Intel SGX PCS client configuration.
-type Config struct {
-	// SubscriptionKey is the Intel PCS API key used for client authentication (needed for PCK
-	// certificate retrieval).
-	SubscriptionKey string
+	// GetTCBBundle retrieves the signed TCB artifacts needed to verify a quote.
+	GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundle, error)
 }
 
 // QuoteBundle is an attestation quote together with the TCB bundle required for its verification.

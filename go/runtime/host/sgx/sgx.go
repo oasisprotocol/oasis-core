@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/aesm"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -53,6 +54,8 @@ type Config struct {
 
 	// IAS is the Intel Attestation Service endpoint.
 	IAS ias.Endpoint
+	// PCS is the Intel Provisioning Certification Service client.
+	PCS pcs.Client
 
 	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
@@ -130,6 +133,7 @@ type sgxProvisioner struct {
 
 	sandbox host.Provisioner
 	ias     ias.Endpoint
+	pcs     pcs.Client
 	aesm    *aesm.Client
 
 	logger *logging.Logger
@@ -385,6 +389,7 @@ func New(cfg Config) (host.Provisioner, error) {
 	s := &sgxProvisioner{
 		cfg:    cfg,
 		ias:    cfg.IAS,
+		pcs:    cfg.PCS,
 		aesm:   aesm.NewClient(aesmdSocketPath),
 		logger: logging.GetLogger("runtime/host/sgx"),
 	}
