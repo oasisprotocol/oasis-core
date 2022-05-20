@@ -141,7 +141,8 @@ type NodeHooks interface {
 	HandleNewBlockLocked(*block.Block)
 	// Guarded by CrossNode.
 	HandleNewEventLocked(*roothash.Event)
-	HandleRuntimeHostEvent(*host.Event)
+	// Guarded by CrossNode.
+	HandleRuntimeHostEventLocked(*host.Event)
 
 	// Initialized returns a channel that will be closed when the worker is initialized and ready
 	// to service requests.
@@ -556,12 +557,13 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 	}
 }
 
-func (n *Node) handleRuntimeHostEvent(ev *host.Event) {
+// Guarded by n.CrossNode.
+func (n *Node) handleRuntimeHostEventLocked(ev *host.Event) {
 	if ev.Started != nil {
 		atomic.StoreUint32(&n.hostedRuntimeProvisioned, 1)
 	}
 	for _, hooks := range n.hooks {
-		hooks.HandleRuntimeHostEvent(ev)
+		hooks.HandleRuntimeHostEventLocked(ev)
 	}
 }
 
@@ -750,7 +752,11 @@ func (n *Node) worker() {
 			}()
 		case ev := <-hrtEventCh:
 			// Received a hosted runtime event.
-			n.handleRuntimeHostEvent(ev)
+			func() {
+				n.CrossNode.Lock()
+				defer n.CrossNode.Unlock()
+				n.handleRuntimeHostEventLocked(ev)
+			}()
 		}
 	}
 }

@@ -1383,7 +1383,7 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 	}
 }
 
-func (n *Node) HandleRuntimeHostEvent(ev *host.Event) {
+func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
 	switch {
 	case ev.Started != nil:
 		// Make sure the runtime supports all the required features.

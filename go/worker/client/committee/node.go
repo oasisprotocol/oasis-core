@@ -97,7 +97,8 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 func (n *Node) HandleNewEventLocked(*roothash.Event) {
 }
 
-func (n *Node) HandleRuntimeHostEvent(*host.Event) {
+// Guarded by CrossNode.
+func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
 }
 
 func (n *Node) SubmitTx(ctx context.Context, tx []byte) (<-chan *api.SubmitTxResult, *protocol.Error, error) {
