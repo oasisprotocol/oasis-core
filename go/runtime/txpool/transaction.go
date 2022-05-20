@@ -8,20 +8,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
-type txStatus uint8
-
-const (
-	txStatusPendingCheck = iota
-	txStatusChecked
-)
-
 // Transaction is a transaction in the transaction pool.
+// todo: move to main_queue.go
 type Transaction struct {
 	// tx represents the raw binary transaction data.
 	tx []byte
 
-	// status is the transaction status.
-	status txStatus
 	// time is the timestamp when the transaction was first seen.
 	time time.Time
 	// hash is the cached transaction hash.
@@ -36,12 +28,11 @@ type Transaction struct {
 	senderSeq uint64
 }
 
-func newTransaction(tx []byte, status txStatus) *Transaction {
+func newTransaction(tx []byte) *Transaction {
 	return &Transaction{
-		tx:     tx,
-		status: status,
-		time:   time.Now(),
-		hash:   hash.NewFromBytes(tx),
+		tx:   tx,
+		time: time.Now(),
+		hash: hash.NewFromBytes(tx),
 	}
 }
 
@@ -87,8 +78,6 @@ func (tx *Transaction) SenderSeq() uint64 {
 
 // setChecked populates transaction data retrieved from checks.
 func (tx *Transaction) setChecked(meta *protocol.CheckTxMetadata) {
-	tx.status = txStatusChecked
-
 	if meta != nil {
 		tx.priority = meta.Priority
 		tx.sender = string(meta.Sender)
@@ -106,32 +95,22 @@ func (tx *Transaction) setChecked(meta *protocol.CheckTxMetadata) {
 type txCheckFlags uint8
 
 const (
-	// txCheckLocal is a flag indicating that the transaction was obtained from a local client.
-	txCheckLocal = (1 << 0)
-	// txCheckDiscard is a flag indicating that the transaction should be discarded after checks.
-	txCheckDiscard = (1 << 1)
+	// txCheckRecheck is a flag indicating that the transaction already passed checking earlier.
+	txCheckRecheck = 1 << 0
 )
 
-func (f txCheckFlags) isLocal() bool {
-	return (f & txCheckLocal) != 0
-}
-
-func (f txCheckFlags) isDiscard() bool {
-	return (f & txCheckDiscard) != 0
+func (f txCheckFlags) isRecheck() bool {
+	return (f * txCheckRecheck) != 0
 }
 
 // PendingCheckTransaction is a transaction pending checks.
 type PendingCheckTransaction struct {
-	*Transaction
+	*TxQueueMeta
 
 	// flags are the transaction check flags.
 	flags txCheckFlags
+	// dstQueue is where to offer the tx after checking, or nil to discard
+	dstQueue RecheckableTransactionStore
 	// notifyCh is a channel for sending back the transaction check result.
 	notifyCh chan *protocol.CheckTxResult
-}
-
-func (pct *PendingCheckTransaction) isRecheck() bool {
-	// If transaction has already been checked then the fact that it is wrapped in a pending check
-	// transaction again means that this is a re-check.
-	return pct.status == txStatusChecked
 }

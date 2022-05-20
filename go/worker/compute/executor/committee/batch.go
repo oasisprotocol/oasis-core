@@ -58,12 +58,12 @@ func (ub *unresolvedBatch) resolve(txPool txpool.TransactionPool) (transaction.R
 		totalSizeBytes int
 	)
 	for _, checkedTx := range resolvedBatch {
-		totalSizeBytes = totalSizeBytes + checkedTx.Size()
+		totalSizeBytes = totalSizeBytes + len(checkedTx.Raw)
 		if ub.maxBatchSizeBytes > 0 && uint64(totalSizeBytes) > ub.maxBatchSizeBytes {
 			return nil, fmt.Errorf("batch too large (max: %d size: >=%d)", ub.maxBatchSizeBytes, totalSizeBytes)
 		}
 
-		batch = append(batch, checkedTx.Raw())
+		batch = append(batch, checkedTx.Raw)
 	}
 	ub.batch = batch
 

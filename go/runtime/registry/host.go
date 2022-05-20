@@ -249,10 +249,10 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 			return nil, err
 		}
 
-		batch := txPool.GetPrioritizedBatch(rq.Offset, rq.Limit)
+		batch := txPool.GetSchedulingExtra(rq.Offset, rq.Limit)
 		raw := make([][]byte, 0, len(batch))
 		for _, tx := range batch {
-			raw = append(raw, tx.Raw())
+			raw = append(raw, tx.Raw)
 		}
 
 		return &protocol.Body{HostFetchTxBatchResponse: &protocol.HostFetchTxBatchResponse{

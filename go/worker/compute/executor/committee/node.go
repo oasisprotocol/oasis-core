@@ -373,7 +373,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 				"io_root", header.IORoot,
 			)
 			// Remove processed transactions from queue.
-			n.commonNode.TxPool.RemoveTxBatch(state.txHashes)
+			n.commonNode.TxPool.HandleTxsUsed(state.txHashes)
 		}()
 	}
 
@@ -516,7 +516,7 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 	return state, roundResults, nil
 }
 
-func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
+func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 
@@ -588,7 +588,7 @@ func (n *Node) handleScheduleBatch(force bool) { //nolint: gocyclo
 
 	// Ask the transaction pool  to get a batch of transactions for us and see if we should be
 	// proposing a new batch to other nodes.
-	batch := n.commonNode.TxPool.GetPrioritizedBatch(nil, rtInfo.Features.ScheduleControl.InitialBatchSize)
+	batch := n.commonNode.TxPool.GetSchedulingSuggestion(rtInfo.Features.ScheduleControl.InitialBatchSize)
 	switch {
 	case len(batch) > 0:
 		// We have some transactions, schedule batch.
@@ -676,7 +676,7 @@ func (n *Node) startRuntimeBatchSchedulingLocked(
 	rtState *roothash.RuntimeState,
 	roundResults *roothash.RoundResults,
 	rt host.RichRuntime,
-	batch []*txpool.Transaction,
+	batch []*txpool.TxQueueMeta,
 ) {
 	n.logger.Debug("asking runtime to schedule batch",
 		"initial_batch_size", len(batch),
@@ -700,7 +700,7 @@ func (n *Node) startRuntimeBatchSchedulingLocked(
 
 		initialBatch := make([][]byte, 0, len(batch))
 		for _, tx := range batch {
-			initialBatch = append(initialBatch, tx.Raw())
+			initialBatch = append(initialBatch, tx.Raw)
 		}
 
 		// Ask the runtime to execute the batch.
@@ -724,7 +724,7 @@ func (n *Node) startRuntimeBatchSchedulingLocked(
 		}
 
 		// Remove any rejected transactions.
-		n.commonNode.TxPool.RemoveTxBatch(rsp.TxRejectHashes)
+		n.commonNode.TxPool.HandleTxsUsed(rsp.TxRejectHashes)
 		// Mark any proposed transactions.
 		n.commonNode.TxPool.PromoteProposedBatch(rsp.TxHashes)
 

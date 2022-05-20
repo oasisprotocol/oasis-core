@@ -76,7 +76,7 @@ func (mq *mainQueue) TakeAll() []*TxQueueMeta {
 }
 
 func (mq *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
-	txMeta := newTransaction(tx.Raw, txStatusChecked)
+	txMeta := newTransaction(tx.Raw)
 	if meta != nil {
 		txMeta.priority = meta.Priority
 		txMeta.sender = string(meta.Sender)

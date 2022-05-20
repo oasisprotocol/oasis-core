@@ -18,8 +18,8 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
+	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -86,21 +86,20 @@ type TransactionPool interface {
 	// ClearProposedBatch clears the proposal queue.
 	ClearProposedBatch()
 
-	// RemoveTxBatch removes a transaction batch from the transaction pool.
-	RemoveTxBatch(txs []hash.Hash)
+	// HandleTxsUsed uh
+	HandleTxsUsed(txs []hash.Hash)
 
-	// GetPrioritizedBatch returns a batch of transactions ordered by priority.
-	//
-	// Offset specifies the transaction hash that should serve as an offset when returning
-	// transactions from the pool. Transactions will be skipped until the given hash is encountered
-	// and only following transactions will be returned.
-	GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*Transaction
+	// GetSchedulingSuggestion uh
+	GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta
+
+	// GetSchedulingExtra uh
+	GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta
 
 	// GetKnownBatch gets a set of known transactions from the transaction pool.
 	//
 	// For any missing transactions nil will be returned in their place and the map of missing
 	// transactions will be populated accordingly.
-	GetKnownBatch(batch []hash.Hash) ([]*Transaction, map[hash.Hash]int)
+	GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int)
 
 	// ProcessBlock updates the last known runtime block information.
 	ProcessBlock(bi *BlockInfo) error
@@ -110,9 +109,6 @@ type TransactionPool interface {
 
 	// WakeupScheduler explicitly notifies subscribers that they should attempt scheduling.
 	WakeupScheduler()
-
-	// Clear clears the transaction pool.
-	Clear()
 
 	// WatchScheduler subscribes to notifications about when to attempt scheduling. The emitted
 	// boolean flag indicates whether the batch flush timeout expired.
@@ -124,9 +120,6 @@ type TransactionPool interface {
 
 	// PendingCheckSize returns the number of transactions currently pending to be checked.
 	PendingCheckSize() int
-
-	// PendingScheduleSize returns the number of transactions currently pending to be scheduled.
-	PendingScheduleSize() int
 }
 
 // RuntimeHostProvisioner is a runtime host provisioner.
@@ -183,12 +176,18 @@ type txPool struct {
 	checkTxNotifier *pubsub.Broker
 	recheckTxCh     *channels.RingChannel
 
-	schedulerQueue    *scheduleQueue
+	usableSources        []UsableTransactionSource
+	recheckableStores    []RecheckableTransactionStore
+	republishableSources []RepublishableTransactionSource
+	rimQueue             *rimQueue
+	localQueue           *localQueue
+	mainQueue            *mainQueue
+
 	schedulerTicker   *time.Ticker
 	schedulerNotifier *pubsub.Broker
 
 	proposedTxsLock sync.Mutex
-	proposedTxs     map[hash.Hash]*Transaction
+	proposedTxs     map[hash.Hash]*TxQueueMeta
 
 	blockInfoLock    sync.Mutex
 	blockInfo        *BlockInfo
@@ -237,24 +236,31 @@ func (t *txPool) SubmitTxNoWait(ctx context.Context, tx []byte, meta *Transactio
 }
 
 func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMeta, notifyCh chan *protocol.CheckTxResult) error {
-	tx := newTransaction(rawTx, txStatusPendingCheck)
+	// todo: in the new design, we'll be submitting to the check queue first, which won't have "first seen time"
+	// metadata. seems like it could still work out, as checking is single threaded, so we can still preserve the
+	// original order when we finish checking and offer to the main queue
 
+	tx := &TxQueueMeta{
+		Raw:  rawTx,
+		Hash: hash.NewFromBytes(rawTx),
+	}
 	// Skip recently seen transactions.
-	if _, seen := t.seenCache.Peek(tx.hash); seen {
-		t.logger.Debug("ignoring already seen transaction", "tx_hash", tx.hash)
+	if _, seen := t.seenCache.Peek(tx.Hash); seen {
+		t.logger.Debug("ignoring already seen transaction", "tx_hash", tx.Hash)
 		return fmt.Errorf("duplicate transaction")
 	}
 
 	// Queue transaction for checks.
 	pct := &PendingCheckTransaction{
-		Transaction: tx,
+		TxQueueMeta: tx,
 		notifyCh:    notifyCh,
 	}
-	if meta.Local {
-		pct.flags |= txCheckLocal
-	}
 	if meta.Discard {
-		pct.flags |= txCheckDiscard
+		pct.dstQueue = nil
+	} else if meta.Local {
+		pct.dstQueue = t.localQueue
+	} else {
+		pct.dstQueue = t.mainQueue
 	}
 
 	return t.addToCheckQueue(pct)
@@ -262,13 +268,13 @@ func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 
 func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
 	t.logger.Debug("queuing transaction for check",
-		"tx", pct.tx,
-		"tx_hash", pct.hash,
-		"recheck", pct.isRecheck(),
+		"tx", pct.Raw,
+		"tx_hash", pct.Hash,
+		"recheck", pct.flags.isRecheck(),
 	)
 	if err := t.checkTxQueue.add(pct); err != nil {
 		t.logger.Warn("unable to queue transaction",
-			"tx_hash", pct.hash,
+			"tx_hash", pct.Hash,
 			"err", err,
 		)
 		return err
@@ -292,8 +298,11 @@ func (t *txPool) SubmitProposedBatch(batch [][]byte) {
 	defer t.proposedTxsLock.Unlock()
 
 	for _, rawTx := range batch {
-		tx := newTransaction(rawTx, txStatusChecked)
-		t.proposedTxs[tx.hash] = tx
+		tx := &TxQueueMeta{
+			Raw:  rawTx,
+			Hash: hash.NewFromBytes(rawTx),
+		}
+		t.proposedTxs[tx.Hash] = tx
 	}
 }
 
@@ -312,7 +321,7 @@ func (t *txPool) PromoteProposedBatch(batch []hash.Hash) {
 		if tx == nil {
 			continue
 		}
-		t.proposedTxs[tx.hash] = tx
+		t.proposedTxs[tx.Hash] = tx
 	}
 }
 
@@ -320,21 +329,44 @@ func (t *txPool) ClearProposedBatch() {
 	t.proposedTxsLock.Lock()
 	defer t.proposedTxsLock.Unlock()
 
-	t.proposedTxs = make(map[hash.Hash]*Transaction)
+	t.proposedTxs = make(map[hash.Hash]*TxQueueMeta)
 }
 
-func (t *txPool) RemoveTxBatch(txs []hash.Hash) {
-	t.schedulerQueue.remove(txs)
-
-	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.size()))
+func (t *txPool) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
+	var txs []*TxQueueMeta
+	for _, q := range t.usableSources {
+		txs = append(txs, q.GetSchedulingSuggestion(countHint)...)
+	}
+	return txs
 }
 
-func (t *txPool) GetPrioritizedBatch(offset *hash.Hash, limit uint32) []*Transaction {
-	return t.schedulerQueue.getPrioritizedBatch(offset, limit)
+func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta {
+	return t.mainQueue.GetSchedulingExtra(offset, limit)
 }
 
-func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*Transaction, map[hash.Hash]int) {
-	txs, missingTxs := t.schedulerQueue.getKnownBatch(batch)
+func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
+	for _, q := range t.usableSources {
+		q.HandleTxsUsed(hashes)
+	}
+
+	// todo: metrics
+	// pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.size()))
+}
+
+func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int) {
+	var txs []*TxQueueMeta
+	missingTxs := make(map[hash.Hash]int)
+HASH_LOOP:
+	for i, h := range batch {
+		for _, q := range t.usableSources {
+			if tx, ok := q.GetTxByHash(h); ok {
+				txs = append(txs, tx)
+				continue HASH_LOOP
+			}
+		}
+		txs = append(txs, nil)
+		missingTxs[h] = i
+	}
 
 	// Also check the proposed transactions set.
 	t.proposedTxsLock.Lock()
@@ -399,16 +431,6 @@ func (t *txPool) WakeupScheduler() {
 	t.schedulerNotifier.Broadcast(false)
 }
 
-func (t *txPool) Clear() {
-	t.schedulerQueue.clear()
-	t.checkTxQueue.clear()
-
-	t.seenCache.Clear()
-	t.ClearProposedBatch()
-
-	pendingScheduleSize.With(t.getMetricLabels()).Set(0)
-}
-
 func (t *txPool) WatchScheduler() (pubsub.ClosableSubscription, <-chan bool) {
 	sub := t.schedulerNotifier.Subscribe()
 	ch := make(chan bool)
@@ -425,10 +447,6 @@ func (t *txPool) WatchCheckedTransactions() (pubsub.ClosableSubscription, <-chan
 
 func (t *txPool) PendingCheckSize() int {
 	return t.checkTxQueue.size()
-}
-
-func (t *txPool) PendingScheduleSize() int {
-	return t.schedulerQueue.size()
 }
 
 func (t *txPool) getCurrentBlockInfo() (*BlockInfo, error) {
@@ -470,7 +488,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		// Check batch.
 		rawTxBatch := make([][]byte, 0, len(batch))
 		for _, pct := range batch {
-			rawTxBatch = append(rawTxBatch, pct.tx)
+			rawTxBatch = append(rawTxBatch, pct.Raw)
 		}
 		return rr.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
 	}()
@@ -518,28 +536,29 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		}
 	}
 
-	newTxs := make([]*PendingCheckTransaction, 0, len(results))
+	numNewTxs := 0
+	goodPcts := make([]*PendingCheckTransaction, 0, len(results))
 	batchIndices := make([]int, 0, len(results))
-	var unschedule []hash.Hash
 	for i, res := range results {
 		if !res.IsSuccess() {
 			rejectedTransactions.With(t.getMetricLabels()).Inc()
 			t.logger.Debug("check tx failed",
-				"tx", batch[i].tx,
-				"tx_hash", batch[i].hash,
+				"tx", batch[i].Raw,
+				"tx_hash", batch[i].Hash,
 				"result", res,
-				"recheck", batch[i].isRecheck(),
+				"recheck", batch[i].flags.isRecheck(),
 			)
 
-			// If this was a recheck, make sure to remove the transaction from the scheduling queue.
-			if batch[i].isRecheck() {
-				unschedule = append(unschedule, batch[i].hash)
-			}
+			// We won't be sending this tx on to its destination queue.
 			notifySubmitter(i)
 			continue
 		}
 
-		if batch[i].flags.isDiscard() || batch[i].isRecheck() {
+		if !batch[i].flags.isRecheck() {
+			numNewTxs++
+		}
+
+		if batch[i].dstQueue == nil {
 			notifySubmitter(i)
 			continue
 		}
@@ -547,34 +566,29 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		// For any transactions that are to be queued, we defer notification until queued.
 
 		acceptedTransactions.With(t.getMetricLabels()).Inc()
-		batch[i].setChecked(res.Meta)
-		newTxs = append(newTxs, batch[i])
+		goodPcts = append(goodPcts, batch[i])
 		batchIndices = append(batchIndices, i)
 	}
-
-	// Unschedule any transactions that are being rechecked and have failed checks.
-	t.RemoveTxBatch(unschedule)
 
 	// If there are more transactions to check, make sure we check them next.
 	if t.checkTxQueue.size() > 0 {
 		t.checkTxCh.In() <- struct{}{}
 	}
 
-	if len(newTxs) == 0 {
+	if len(goodPcts) == 0 {
 		return
 	}
 
 	t.logger.Debug("checked new transactions",
-		"num_txs", len(newTxs),
+		"num_txs", numNewTxs,
 	)
 
 	// Queue checked transactions for scheduling.
-	for i, tx := range newTxs {
-		// NOTE: Scheduler exists as otherwise there would be no current block info above.
-		if err := t.schedulerQueue.add(tx.Transaction); err != nil {
+	for i, pct := range goodPcts {
+		if err = pct.dstQueue.OfferChecked(pct.TxQueueMeta, results[batchIndices[i]].Meta); err != nil {
 			t.logger.Error("unable to queue transaction for scheduling",
 				"err", err,
-				"tx_hash", tx.hash,
+				"tx_hash", pct.Hash,
 			)
 
 			// Change the result into an error and notify submitter.
@@ -590,31 +604,34 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		// Notify submitter of success.
 		notifySubmitter(batchIndices[i])
 
-		// Publish local transactions immediately.
-		publishTime := time.Now()
-		if tx.flags.isLocal() {
-			if err := t.txPublisher.PublishTx(ctx, tx.tx); err != nil {
-				t.logger.Warn("failed to publish local transaction",
-					"err", err,
-					"tx_hash", tx.hash,
-				)
-
-				// Since publication failed, make sure we retry early.
-				t.republishCh.In() <- struct{}{}
-				publishTime = time.Time{}
+		if !pct.flags.isRecheck() {
+			// Mark new transactions as never having been published. The republish worker will
+			// publish these immediately.
+			publishTime := time.Time{}
+			if pct.dstQueue == t.mainQueue {
+				// This being a tx we got from outside, it's usually something that another node
+				// has just broadcast. Treat it as if it were published just now so that we don't
+				// immediately publish again from our node.
+				publishTime = time.Now()
 			}
+			// Put cannot fail as seenCache's LRU capacity is not in bytes and the only case where it
+			// can error is if the capacity is in bytes and the value size is over capacity.
+			_ = t.seenCache.Put(pct.Hash, publishTime)
 		}
+	}
 
-		// Put cannot fail as seenCache's LRU capacity is not in bytes and the only case where it
-		// can error is if the capacity is in bytes and the value size is over capacity.
-		_ = t.seenCache.Put(tx.hash, publishTime)
+	if numNewTxs != 0 {
+		// Kick off publishing for any new txs.
+		t.republishCh.In() <- struct{}{}
 	}
 
 	// Notify subscribers that we have received new transactions.
-	t.checkTxNotifier.Broadcast(newTxs)
+	// todo: this now broadcasts rechecked transactions too
+	t.checkTxNotifier.Broadcast(goodPcts)
 	t.schedulerNotifier.Broadcast(false)
 
-	pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.PendingScheduleSize()))
+	// todo: metrics
+	// pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.PendingScheduleSize()))
 }
 
 func (t *txPool) ensureInitialized() error {
@@ -727,16 +744,17 @@ func (t *txPool) republishWorker() {
 			debounceCh = nil
 		}
 
-		lastRepublish = time.Now()
-
-		// Get scheduled transactions.
-		txs := t.schedulerQueue.getAll()
+		// Get transactions to republish.
+		var txs []*TxQueueMeta
+		for _, q := range t.republishableSources {
+			txs = append(txs, q.GetTxsToPublish()...)
+		}
 
 		// Filter transactions based on whether they can already be republished.
 		var republishedCount int
 		nextPendingRepublish := republishInterval
 		for _, tx := range txs {
-			ts, seen := t.seenCache.Peek(tx.hash)
+			ts, seen := t.seenCache.Peek(tx.Hash)
 			if seen {
 				sinceLast := time.Since(ts.(time.Time))
 				if sinceLast < republishInterval {
@@ -747,7 +765,7 @@ func (t *txPool) republishWorker() {
 				}
 			}
 
-			if err := t.txPublisher.PublishTx(ctx, tx.tx); err != nil {
+			if err := t.txPublisher.PublishTx(ctx, tx.Raw); err != nil {
 				t.logger.Warn("failed to publish transaction",
 					"err", err,
 					"tx", tx,
@@ -757,7 +775,7 @@ func (t *txPool) republishWorker() {
 			}
 
 			// Update publish timestamp.
-			_ = t.seenCache.Put(tx.hash, time.Now())
+			_ = t.seenCache.Put(tx.Hash, time.Now())
 
 			republishedCount++
 			if republishedCount > maxRepublishTxs {
@@ -789,21 +807,28 @@ func (t *txPool) recheckWorker() {
 		}
 
 		// Get a batch of scheduled transactions.
-		txs := t.schedulerQueue.getAll()
+		var pcts []*PendingCheckTransaction
+		for _, q := range t.recheckableStores {
+			for _, tx := range q.TakeAll() {
+				pcts = append(pcts, &PendingCheckTransaction{
+					TxQueueMeta: tx,
+					flags:       txCheckRecheck,
+					dstQueue:    q,
+				})
+			}
+		}
 
-		if len(txs) == 0 {
+		if len(pcts) == 0 {
 			continue
 		}
 
 		// Recheck all transactions in batch.
-		for _, tx := range txs {
-			err := t.addToCheckQueue(&PendingCheckTransaction{
-				Transaction: tx,
-			})
+		for _, pct := range pcts {
+			err := t.addToCheckQueue(pct)
 			if err != nil {
 				t.logger.Warn("failed to submit transaction for recheck",
 					"err", err,
-					"tx_hash", tx.hash,
+					"tx_hash", pct.Hash,
 				)
 			}
 		}
@@ -845,25 +870,34 @@ func New(
 	// buffer in case the schedule queue is full and is being rechecked.
 	maxCheckTxQueueSize := int((110 * cfg.MaxPoolSize) / 100)
 
+	rq := newRimQueue()
+	lq := newLocalQueue()
+	mq := newMainQueue(int(cfg.MaxPoolSize))
+
 	return &txPool{
-		logger:            logging.GetLogger("runtime/txpool"),
-		stopCh:            make(chan struct{}),
-		quitCh:            make(chan struct{}),
-		initCh:            make(chan struct{}),
-		runtimeID:         runtimeID,
-		cfg:               cfg,
-		host:              host,
-		history:           history,
-		txPublisher:       txPublisher,
-		seenCache:         seenCache,
-		checkTxQueue:      newCheckTxQueue(maxCheckTxQueueSize, int(cfg.MaxCheckTxBatchSize)),
-		checkTxCh:         channels.NewRingChannel(1),
-		checkTxNotifier:   pubsub.NewBroker(false),
-		recheckTxCh:       channels.NewRingChannel(1),
-		schedulerQueue:    newScheduleQueue(int(cfg.MaxPoolSize)),
-		schedulerTicker:   time.NewTicker(1 * time.Hour),
-		schedulerNotifier: pubsub.NewBroker(false),
-		proposedTxs:       make(map[hash.Hash]*Transaction),
-		republishCh:       channels.NewRingChannel(1),
+		logger:               logging.GetLogger("runtime/txpool"),
+		stopCh:               make(chan struct{}),
+		quitCh:               make(chan struct{}),
+		initCh:               make(chan struct{}),
+		runtimeID:            runtimeID,
+		cfg:                  cfg,
+		host:                 host,
+		history:              history,
+		txPublisher:          txPublisher,
+		seenCache:            seenCache,
+		checkTxQueue:         newCheckTxQueue(maxCheckTxQueueSize, int(cfg.MaxCheckTxBatchSize)),
+		checkTxCh:            channels.NewRingChannel(1),
+		checkTxNotifier:      pubsub.NewBroker(false),
+		recheckTxCh:          channels.NewRingChannel(1),
+		usableSources:        []UsableTransactionSource{rq, lq, mq},
+		recheckableStores:    []RecheckableTransactionStore{lq, mq},
+		republishableSources: []RepublishableTransactionSource{lq, mq},
+		rimQueue:             rq,
+		localQueue:           lq,
+		mainQueue:            mq,
+		schedulerTicker:      time.NewTicker(1 * time.Hour),
+		schedulerNotifier:    pubsub.NewBroker(false),
+		proposedTxs:          make(map[hash.Hash]*TxQueueMeta),
+		republishCh:          channels.NewRingChannel(1),
 	}, nil
 }
