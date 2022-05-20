@@ -122,9 +122,10 @@ func (f txCheckFlags) isDiscard() bool {
 
 // PendingCheckTransaction is a transaction pending checks.
 type PendingCheckTransaction struct {
-	*Transaction
+	tx []byte
 
 	// flags are the transaction check flags.
+	// todo: replace with queue reference
 	flags txCheckFlags
 	// notifyCh is a channel for sending back the transaction check result.
 	notifyCh chan *protocol.CheckTxResult
