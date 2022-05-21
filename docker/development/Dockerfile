@@ -61,7 +61,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     # Install a specific version of protoc-gen-go.
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
     # Install golangci-lint.
-    curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
+    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin && \
     # Install gocovmerge for e2e coverage.
     go install github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION} && \
