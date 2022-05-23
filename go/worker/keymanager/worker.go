@@ -750,7 +750,13 @@ func (crw *clientRuntimeWatcher) worker() {
 		select {
 		case <-crw.w.ctx.Done():
 			return
-		case <-ch:
+		case nu := <-ch:
+			if nu.Reset {
+				// Ignore reset events to avoid clearing the access list before setting a new one.
+				// This is safe because a reset event is always followed by a freeze event after the
+				// nodes have been set (even if the new set is empty).
+				continue
+			}
 			crw.w.setAccessList(crw.runtimeID, crw.nodes.GetNodes())
 		}
 	}
