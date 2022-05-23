@@ -215,7 +215,7 @@ func (n *Node) Stop() {
 	n.stopOnce.Do(func() {
 		close(n.stopCh)
 		n.TxPool.Stop()
-		n.KeyManagerClient.setKeymanagerID(nil)
+		n.KeyManagerClient.SetKeyManagerID(nil)
 	})
 }
 
@@ -451,7 +451,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		n.updateHostedRuntimeVersionLocked()
 
 		// Make sure to update the key manager if needed.
-		n.KeyManagerClient.setKeymanagerID(n.CurrentDescriptor.KeyManager)
+		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
 	}
 
 	for _, hooks := range n.hooks {
@@ -569,7 +569,7 @@ func (n *Node) worker() {
 			"keymanager_runtime_id", *rt.KeyManager,
 		)
 
-		n.KeyManagerClient.setKeymanagerID(rt.KeyManager)
+		n.KeyManagerClient.SetKeyManagerID(rt.KeyManager)
 		select {
 		case <-n.ctx.Done():
 			n.logger.Error("failed to wait for key manager",
@@ -819,7 +819,7 @@ func NewNode(
 	}
 
 	// Prepare the key manager client wrapper.
-	n.KeyManagerClient = newKeyManagerClientWrapper(n)
+	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, n.logger)
 
 	// Prepare the runtime host node helpers.
 	rhn, err := runtimeRegistry.NewRuntimeHostNode(n)

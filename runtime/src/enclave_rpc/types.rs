@@ -61,3 +61,11 @@ pub enum Message {
     Response(Response),
     Close,
 }
+
+/// Feedback on the peer that handled the last EnclaveRPC call.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub enum PeerFeedback {
+    Success = 0,
+    Failure = 1,
+    BadPeer = 2,
+}
