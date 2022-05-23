@@ -8,7 +8,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -27,25 +26,6 @@ const (
 )
 
 var (
-	// CommonPoolAddress is the common pool address.
-	// The address is reserved to prevent it being accidentally used in the actual ledger.
-	CommonPoolAddress = NewReservedAddress(
-		signature.NewPublicKey("1abe11edc001ffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-	)
-
-	// FeeAccumulatorAddress is the per-block fee accumulator address.
-	// It holds all fees from txs in a block which are later disbursed to validators appropriately.
-	// The address is reserved to prevent it being accidentally used in the actual ledger.
-	FeeAccumulatorAddress = NewReservedAddress(
-		signature.NewPublicKey("1abe11edfeeaccffffffffffffffffffffffffffffffffffffffffffffffffff"),
-	)
-
-	// GovernanceDepositsAddress is the governance deposits address.
-	// This address is reserved to prevent it from being accidentally used in the actual ledger.
-	GovernanceDepositsAddress = NewReservedAddress(
-		signature.NewPublicKey("1abe11eddeaccfffffffffffffffffffffffffffffffffffffffffffffffffff"),
-	)
-
 	// ErrInvalidArgument is the error returned on malformed arguments.
 	ErrInvalidArgument = errors.New(ModuleName, 1, "staking: invalid argument")
 
