@@ -70,7 +70,7 @@ func onEvidenceRuntimeEquivocation(
 	}
 	// Since evidence can be submitted for past rounds, the node can be out of stake.
 	if totalSlashed.IsZero() {
-		ctx.Logger().WarnQ("nothing to slash from entity for runtime equivocation",
+		ctx.Logger().Debug("nothing to slash from entity for runtime equivocation",
 			"penalty", penaltyAmount,
 			"addr", entityAddr,
 		)
