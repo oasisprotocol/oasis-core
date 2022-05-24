@@ -18,6 +18,7 @@ use crate::{
         roothash::{self, Block, ComputeResultsHeader, Header},
         LightBlock,
     },
+    enclave_rpc,
     storage::mkvs::{sync, WriteLog},
     transaction::types::TxnBatch,
 };
@@ -199,6 +200,8 @@ pub enum Body {
     HostRPCCallRequest {
         endpoint: String,
         request: Vec<u8>,
+        #[cbor(optional, rename = "pf")]
+        peer_feedback: Option<enclave_rpc::types::PeerFeedback>,
     },
     HostRPCCallResponse {
         response: Vec<u8>,

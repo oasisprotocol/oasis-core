@@ -6,23 +6,34 @@ import (
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	keymanagerP2P "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
 
 // KeyManagerClientWrapper is a wrapper for the key manager P2P client that handles deferred
 // initialization after the key manager runtime ID is known.
+//
+// It also handles peer feedback propagation from EnclaveRPC in the runtime.
 type KeyManagerClientWrapper struct {
-	l sync.RWMutex
+	l sync.Mutex
 
-	id  *common.Namespace
-	n   *Node
-	cli keymanagerP2P.Client
+	id        *common.Namespace
+	p2p       *p2p.P2P
+	consensus consensus.Backend
+	cli       keymanagerP2P.Client
+	logger    *logging.Logger
+
+	lastPeerFeedback rpc.PeerFeedback
 }
 
 // Initialized returns a channel that gets closed when the client is initialized.
 func (km *KeyManagerClientWrapper) Initialized() <-chan struct{} {
-	km.l.RLock()
-	defer km.l.RUnlock()
+	km.l.Lock()
+	defer km.l.Unlock()
 
 	// If no active key manager client, return a closed channel.
 	if km.cli == nil {
@@ -34,7 +45,8 @@ func (km *KeyManagerClientWrapper) Initialized() <-chan struct{} {
 	return km.cli.Initialized()
 }
 
-func (km *KeyManagerClientWrapper) setKeymanagerID(id *common.Namespace) {
+// SetKeyManagerID configures the key manager runtime ID to use.
+func (km *KeyManagerClientWrapper) SetKeyManagerID(id *common.Namespace) {
 	km.l.Lock()
 	defer km.l.Unlock()
 
@@ -43,7 +55,7 @@ func (km *KeyManagerClientWrapper) setKeymanagerID(id *common.Namespace) {
 		return
 	}
 
-	km.n.logger.Debug("key manager updated",
+	km.logger.Debug("key manager updated",
 		"keymanager_id", id,
 	)
 	km.id = id
@@ -54,33 +66,72 @@ func (km *KeyManagerClientWrapper) setKeymanagerID(id *common.Namespace) {
 	}
 
 	if id != nil {
-		km.cli = keymanagerP2P.NewClient(km.n.P2P, km.n.Consensus, *id)
+		km.cli = keymanagerP2P.NewClient(km.p2p, km.consensus, *id)
 	}
+
+	km.lastPeerFeedback = nil
 }
 
 // Implements runtimeKeymanager.Client.
-func (km *KeyManagerClientWrapper) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
-	km.l.RLock()
+func (km *KeyManagerClientWrapper) CallEnclave(
+	ctx context.Context,
+	data []byte,
+	pf *enclaverpc.PeerFeedback,
+) ([]byte, error) {
+	km.l.Lock()
 	cli := km.cli
-	km.l.RUnlock()
+	lastPf := km.lastPeerFeedback
+	km.l.Unlock()
 
 	if cli == nil {
 		return nil, fmt.Errorf("key manager not available")
 	}
 
-	rsp, pf, err := km.cli.CallEnclave(ctx, &keymanagerP2P.CallEnclaveRequest{
+	// Propagate peer feedback on the last EnclaveRPC call to guide routing decision.
+	if lastPf != nil {
+		// If no feedback has been provided by the runtime, treat previous call as success.
+		if pf == nil {
+			pfv := enclaverpc.PeerFeedbackSuccess
+			pf = &pfv
+		}
+
+		km.logger.Debug("received peer feedback from runtime",
+			"peer_feedback", *pf,
+		)
+
+		switch *pf {
+		case enclaverpc.PeerFeedbackSuccess:
+			lastPf.RecordSuccess()
+		case enclaverpc.PeerFeedbackFailure:
+			lastPf.RecordFailure()
+		case enclaverpc.PeerFeedbackBadPeer:
+			lastPf.RecordBadPeer()
+		default:
+		}
+	}
+
+	rsp, nextPf, err := cli.CallEnclave(ctx, &keymanagerP2P.CallEnclaveRequest{
 		Data: data,
 	})
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Support reporting peer feedback from the enclave.
-	pf.RecordSuccess()
+
+	// Store peer feedback instance that we can use.
+	km.l.Lock()
+	if km.cli == cli { // Key manager could get updated while we are doing the call.
+		km.lastPeerFeedback = nextPf
+	}
+	km.l.Unlock()
+
 	return rsp.Data, nil
 }
 
-func newKeyManagerClientWrapper(n *Node) *KeyManagerClientWrapper {
+// NewKeyManagerClientWrapper creates a new key manager client wrapper.
+func NewKeyManagerClientWrapper(p2p *p2p.P2P, consensus consensus.Backend, logger *logging.Logger) *KeyManagerClientWrapper {
 	return &KeyManagerClientWrapper{
-		n: n,
+		p2p:       p2p,
+		consensus: consensus,
+		logger:    logger,
 	}
 }
