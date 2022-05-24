@@ -77,7 +77,7 @@ func (app *rootHashApplication) executorProposerTimeout(
 	proposerTimeout := rtState.Runtime.TxnScheduler.ProposerTimeout
 	currentBlockHeight := rtState.CurrentBlockHeight
 	if height := ctx.BlockHeight(); height < currentBlockHeight+proposerTimeout {
-		ctx.Logger().Error("failed requesting proposer round timeout, timeout not allowed yet",
+		ctx.Logger().ErrorQ("failed requesting proposer round timeout, timeout not allowed yet",
 			"height", height,
 			"current_block_height", currentBlockHeight,
 			"proposer_timeout", proposerTimeout,
@@ -197,7 +197,7 @@ func (app *rootHashApplication) submitEvidence(
 ) error {
 	// Validate proposal content basics.
 	if err := evidence.ValidateBasic(); err != nil {
-		ctx.Logger().Error("Evidence: submitted evidence not valid",
+		ctx.Logger().ErrorQ("Evidence: submitted evidence not valid",
 			"evidence", evidence,
 			"err", err,
 		)
@@ -232,7 +232,7 @@ func (app *rootHashApplication) submitEvidence(
 
 	if len(rtState.Runtime.Staking.Slashing) == 0 {
 		// No slashing instructions for runtime, no point in collecting evidence.
-		ctx.Logger().Error("Evidence: runtime has no slashing instructions",
+		ctx.Logger().ErrorQ("Evidence: runtime has no slashing instructions",
 			"err", roothash.ErrRuntimeDoesNotSlash,
 		)
 		return roothash.ErrRuntimeDoesNotSlash
@@ -240,7 +240,7 @@ func (app *rootHashApplication) submitEvidence(
 	slash := rtState.Runtime.Staking.Slashing[staking.SlashRuntimeEquivocation].Amount
 	if slash.IsZero() {
 		// Slash amount is zero for runtime, no point in collecting evidence.
-		ctx.Logger().Error("Evidence: runtime has no slashing instructions for equivocation",
+		ctx.Logger().ErrorQ("Evidence: runtime has no slashing instructions for equivocation",
 			"err", roothash.ErrRuntimeDoesNotSlash,
 		)
 		return roothash.ErrRuntimeDoesNotSlash
@@ -254,7 +254,7 @@ func (app *rootHashApplication) submitEvidence(
 		commitA := evidence.EquivocationExecutor.CommitA
 
 		if commitA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
-			ctx.Logger().Error("Evidence: commitment equivocation evidence expired",
+			ctx.Logger().ErrorQ("Evidence: commitment equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.CurrentBlock.Header.Round,
 				"max_evidence_age", params.MaxEvidenceAge,
@@ -267,7 +267,7 @@ func (app *rootHashApplication) submitEvidence(
 		proposalA := evidence.EquivocationProposal.ProposalA
 
 		if proposalA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
-			ctx.Logger().Error("Evidence: proposal equivocation evidence expired",
+			ctx.Logger().ErrorQ("Evidence: proposal equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.CurrentBlock.Header.Round,
 				"max_evidence_age", params.MaxEvidenceAge,

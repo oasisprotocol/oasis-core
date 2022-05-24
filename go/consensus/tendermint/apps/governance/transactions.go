@@ -27,7 +27,7 @@ func (app *governanceApplication) submitProposal(
 
 	// Validate proposal content basics.
 	if err := proposalContent.ValidateBasic(); err != nil {
-		ctx.Logger().Error("governance: malformed proposal content",
+		ctx.Logger().ErrorQ("governance: malformed proposal content",
 			"content", proposalContent,
 			"err", err,
 		)
@@ -61,7 +61,7 @@ func (app *governanceApplication) submitProposal(
 
 	// Check if submitter has enough balance for proposal deposit.
 	if submitter.General.Balance.Cmp(&params.MinProposalDeposit) < 0 {
-		ctx.Logger().Error("governance: not enough balance to submit proposal",
+		ctx.Logger().ErrorQ("governance: not enough balance to submit proposal",
 			"submitter", submitterAddr,
 			"min_proposal_deposit", params.MinProposalDeposit,
 		)
@@ -81,7 +81,7 @@ func (app *governanceApplication) submitProposal(
 		upgrade := proposalContent.Upgrade
 		// Ensure upgrade descriptor epoch is far enough in future.
 		if upgrade.Descriptor.Epoch < params.UpgradeMinEpochDiff+epoch {
-			ctx.Logger().Error("governance: upgrade descriptor epoch too soon",
+			ctx.Logger().ErrorQ("governance: upgrade descriptor epoch too soon",
 				"submitter", submitterAddr,
 				"descriptor", upgrade.Descriptor,
 				"upgrade_min_epoch_diff", params.UpgradeMinEpochDiff,
@@ -111,7 +111,7 @@ func (app *governanceApplication) submitProposal(
 		switch err {
 		case nil:
 		case governance.ErrNoSuchUpgrade:
-			ctx.Logger().Error("governance: cancel upgrade for a non existing pending upgrade",
+			ctx.Logger().ErrorQ("governance: cancel upgrade for a non existing pending upgrade",
 				"proposal_id", cancelUpgrade.ProposalID,
 				"err", err,
 			)
@@ -242,7 +242,7 @@ func (app *governanceApplication) castVote(
 		}
 	}
 	if !eligible {
-		ctx.Logger().Error("governance: submitter not eligible to vote",
+		ctx.Logger().ErrorQ("governance: submitter not eligible to vote",
 			"submitter", ctx.TxSigner(),
 		)
 		return governance.ErrNotEligible
@@ -253,12 +253,12 @@ func (app *governanceApplication) castVote(
 	switch err {
 	case nil:
 	case governance.ErrNoSuchProposal:
-		ctx.Logger().Error("governance: vote for a missing proposal",
+		ctx.Logger().ErrorQ("governance: vote for a missing proposal",
 			"proposal_id", proposalVote.ID,
 		)
 		return governance.ErrNoSuchProposal
 	default:
-		ctx.Logger().Error("governance: error loading proposal",
+		ctx.Logger().ErrorQ("governance: error loading proposal",
 			"err", err,
 			"proposal_id", proposalVote.ID,
 		)

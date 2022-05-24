@@ -101,7 +101,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 		case types.EvidenceType_LIGHT_CLIENT_ATTACK:
 			reason = staking.SlashConsensusLightClientAttack
 		default:
-			ctx.Logger().Warn("ignoring unknown evidence type",
+			ctx.Logger().WarnQ("ignoring unknown evidence type",
 				"evidence_type", evidence.Type,
 			)
 			continue

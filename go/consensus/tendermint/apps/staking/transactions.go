@@ -59,7 +59,7 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 		// Handle transfer to self as just a balance check.
 		if from.General.Balance.Cmp(&xfer.Amount) < 0 {
 			err = staking.ErrInsufficientBalance
-			ctx.Logger().Error("Transfer: self-transfer greater than balance",
+			ctx.Logger().ErrorQ("Transfer: self-transfer greater than balance",
 				"err", err,
 				"from", fromAddr,
 				"to", xfer.To,
@@ -87,7 +87,7 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 
 		// Check against minimum balance.
 		if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
-			ctx.Logger().Error("after transfer source account balance too low",
+			ctx.Logger().ErrorQ("after transfer source account balance too low",
 				"account_addr", fromAddr,
 				"account_balance", from.General.Balance,
 				"min_transact_balance", params.MinTransactBalance,
@@ -95,7 +95,7 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 			return nil, errors.WithContext(staking.ErrBalanceTooLow, "source account")
 		}
 		if to.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
-			ctx.Logger().Error("after transfer dest account balance too low",
+			ctx.Logger().ErrorQ("after transfer dest account balance too low",
 				"account_addr", xfer.To,
 				"account_balance", to.General.Balance,
 				"min_transact_balance", params.MinTransactBalance,
@@ -176,7 +176,7 @@ func (app *stakingApplication) burn(ctx *api.Context, state *stakingState.Mutabl
 
 	// Check against minimum balance.
 	if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
-		ctx.Logger().Error("after burn account balance too low",
+		ctx.Logger().ErrorQ("after burn account balance too low",
 			"account_addr", fromAddr,
 			"account_balance", from.General.Balance,
 			"min_transact_balance", params.MinTransactBalance,
@@ -286,7 +286,7 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 
 	// Check against minimum balance.
 	if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
-		ctx.Logger().Error("after add escrow account balance too low",
+		ctx.Logger().ErrorQ("after add escrow account balance too low",
 			"account_addr", fromAddr,
 			"account_balance", from.General.Balance,
 			"min_transact_balance", params.MinTransactBalance,
@@ -526,7 +526,7 @@ func (app *stakingApplication) amendCommissionSchedule(
 	}
 
 	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, &params.CommissionScheduleRules, epoch); err != nil {
-		ctx.Logger().Error("AmendCommissionSchedule: amendment not acceptable",
+		ctx.Logger().ErrorQ("AmendCommissionSchedule: amendment not acceptable",
 			"err", err,
 			"from", fromAddr,
 		)
@@ -705,7 +705,7 @@ func (app *stakingApplication) withdraw(
 
 	// Check against minimum balance.
 	if from.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
-		ctx.Logger().Error("after withdraw source account balance too low",
+		ctx.Logger().ErrorQ("after withdraw source account balance too low",
 			"account_addr", withdraw.From,
 			"account_balance", from.General.Balance,
 			"min_transact_balance", params.MinTransactBalance,
@@ -713,7 +713,7 @@ func (app *stakingApplication) withdraw(
 		return nil, errors.WithContext(staking.ErrBalanceTooLow, "source account")
 	}
 	if to.General.Balance.Cmp(&params.MinTransactBalance) < 0 {
-		ctx.Logger().Error("after withdraw dest account balance too low",
+		ctx.Logger().ErrorQ("after withdraw dest account balance too low",
 			"account_addr", toAddr,
 			"account_balance", to.General.Balance,
 			"min_transact_balance", params.MinTransactBalance,
