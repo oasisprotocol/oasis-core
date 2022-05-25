@@ -12,6 +12,36 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.7 (2022-05-25)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- runtime: Emit runtime logs as oasis-node logs
+  ([#4709](https://github.com/oasisprotocol/oasis-core/issues/4709))
+
+  Previously, runtime logs used a slightly different format.
+  Also, they were written to stdout in a manner that was not
+  synchronized with node logs, so the two sets of logs
+  sometimes intertwined mid-line. Those annoyances are gone,
+  plus runtime logs are now annotated with the runtime ID.
+
+- runtime: Add support for reporting EnclaveRPC peer feedback
+  ([#4757](https://github.com/oasisprotocol/oasis-core/issues/4757))
+
+  This makes EnclaveRPC more robust as the higher-level layer in the
+  runtime can trigger peer replacement on high level errors.
+
+### Internal Changes
+
+- docker/oasis-core-dev: Fix golangci-lint install
+  ([#4754](https://github.com/oasisprotocol/oasis-core/issues/4754))
+
 ## 22.1.6 (2022-05-06)
 
 | Protocol          | Version   |
