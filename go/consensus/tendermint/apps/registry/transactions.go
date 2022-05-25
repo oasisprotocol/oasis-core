@@ -60,7 +60,7 @@ func (app *registryApplication) registerEntity(
 			registry.StakeClaimRegisterEntity,
 			staking.GlobalStakeThresholds(staking.KindEntity),
 		); err != nil {
-			ctx.Logger().Error("RegisterEntity: Insufficient stake",
+			ctx.Logger().Debug("RegisterEntity: Insufficient stake",
 				"err", err,
 				"entity", ent.ID,
 				"account", acctAddr,
@@ -110,7 +110,7 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 		return err
 	}
 	if hasNodes {
-		ctx.Logger().Error("DeregisterEntity: entity still has nodes",
+		ctx.Logger().Debug("DeregisterEntity: entity still has nodes",
 			"entity_id", id,
 		)
 		return registry.ErrEntityHasNodes
@@ -124,7 +124,7 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 		return err
 	}
 	if hasRuntimes {
-		ctx.Logger().Error("DeregisterEntity: entity still has runtimes",
+		ctx.Logger().Debug("DeregisterEntity: entity still has runtimes",
 			"entity_id", id,
 		)
 		return registry.ErrEntityHasRuntimes
@@ -167,7 +167,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	// Peek into the to-be-verified node to pull out the owning entity ID.
 	var untrustedNode node.Node
 	if err := cbor.Unmarshal(sigNode.Blob, &untrustedNode); err != nil {
-		ctx.Logger().Error("RegisterNode: failed to extract entity",
+		ctx.Logger().Debug("RegisterNode: failed to extract entity",
 			"err", err,
 			"signed_node", sigNode,
 		)
@@ -231,7 +231,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 		wcfg, entIsWhitelisted := rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityID]
 		if !entIsWhitelisted {
-			ctx.Logger().Error("RegisterNode: node's entity not in a runtime's whitelist",
+			ctx.Logger().Debug("RegisterNode: node's entity not in a runtime's whitelist",
 				"entity_id", newNode.EntityID,
 				"runtime_id", rt.ID,
 				"node_id", newNode.ID,
@@ -256,7 +256,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			maxNodes, exists := wcfg.MaxNodes[role]
 			if !exists {
 				// No such role found in whitelist.
-				ctx.Logger().Error("RegisterNode: runtime's whitelist does not allow nodes with given role",
+				ctx.Logger().Debug("RegisterNode: runtime's whitelist does not allow nodes with given role",
 					"role", role.String(),
 					"runtime_id", rt.ID,
 					"node_id", newNode.ID,
@@ -265,7 +265,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			}
 			if maxNodes == 0 {
 				// No nodes of this type are allowed.
-				ctx.Logger().Error("RegisterNode: runtime's whitelist does not allow nodes with given role",
+				ctx.Logger().Debug("RegisterNode: runtime's whitelist does not allow nodes with given role",
 					"role", role.String(),
 					"runtime_id", rt.ID,
 				)
@@ -317,7 +317,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	//
 	// Yes, this is duplicated.  Blame the sanity checker.
 	if !ctx.IsInitChain() && newNode.Expiration <= uint64(epoch) {
-		ctx.Logger().Error("RegisterNode: node descriptor is expired",
+		ctx.Logger().Debug("RegisterNode: node descriptor is expired",
 			"new_node", newNode,
 			"epoch", epoch,
 		)
@@ -379,7 +379,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		acctAddr := staking.NewAddress(newNode.EntityID)
 
 		if err = stakeAcc.AddStakeClaim(acctAddr, claim, thresholds); err != nil {
-			ctx.Logger().Error("RegisterNode: insufficient stake for new node",
+			ctx.Logger().Debug("RegisterNode: insufficient stake for new node",
 				"err", err,
 				"entity", newNode.EntityID,
 				"account", acctAddr,
@@ -703,21 +703,21 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 
 		expectedAddr := rtToCheck.StakingAddress()
 		if expectedAddr == nil {
-			ctx.Logger().Error("RegisterRuntime: runtimes with consensus-layer governance can only be registered at genesis")
+			ctx.Logger().Debug("RegisterRuntime: runtimes with consensus-layer governance can only be registered at genesis")
 			return nil, registry.ErrForbidden
 		}
 
 		if !ctx.CallerAddress().Equal(*expectedAddr) {
 			switch rtToCheck.GovernanceModel {
 			case registry.GovernanceEntity:
-				ctx.Logger().Error("RegisterRuntime: transaction must be signed by controlling entity")
+				ctx.Logger().Debug("RegisterRuntime: transaction must be signed by controlling entity")
 				return nil, registry.ErrIncorrectTxSigner
 			case registry.GovernanceRuntime:
-				ctx.Logger().Error("RegisterRuntime: caller must be the runtime itself")
+				ctx.Logger().Debug("RegisterRuntime: caller must be the runtime itself")
 				return nil, registry.ErrForbidden
 			default:
 				// Basic validation should have caught this, but just in case...
-				ctx.Logger().Error("RegisterRuntime: invalid governance model")
+				ctx.Logger().Debug("RegisterRuntime: invalid governance model")
 				return nil, registry.ErrInvalidArgument
 			}
 		}
@@ -736,12 +736,12 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			acctAddr = ctx.CallerAddress()
 		default:
 			// Basic validation should have caught this, but just in case...
-			ctx.Logger().Error("RegisterRuntime: invalid governance model")
+			ctx.Logger().Debug("RegisterRuntime: invalid governance model")
 			return nil, registry.ErrInvalidArgument
 		}
 
 		if err = stakingState.AddStakeClaim(ctx, acctAddr, claim, thresholds); err != nil {
-			ctx.Logger().Error("RegisterRuntime: insufficient stake",
+			ctx.Logger().Debug("RegisterRuntime: insufficient stake",
 				"err", err,
 				"entity", rt.EntityID,
 				"runtime", rt.ID,

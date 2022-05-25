@@ -165,7 +165,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 			}
 
 			if err = stakeAcc.CheckStakeClaims(*acctAddr); err != nil {
-				ctx.Logger().Warn("insufficient stake for runtime operation",
+				ctx.Logger().Debug("insufficient stake for runtime operation",
 					"err", err,
 					"entity", rt.EntityID,
 					"account", *acctAddr,
@@ -220,7 +220,7 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 	rtState *roothash.RuntimeState,
 	regState *registryState.MutableState,
 ) error {
-	ctx.Logger().Warn("maintenance fees not paid for runtime or owner debonded, suspending",
+	ctx.Logger().Debug("maintenance fees not paid for runtime or owner debonded, suspending",
 		"runtime_id", rtState.Runtime.ID,
 	)
 
@@ -412,7 +412,7 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 
 func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *registry.Runtime, genesis *roothash.Genesis, suspended bool) error {
 	if !runtime.IsCompute() {
-		ctx.Logger().Warn("onNewRuntime: ignoring non-compute runtime",
+		ctx.Logger().Debug("onNewRuntime: ignoring non-compute runtime",
 			"runtime", runtime,
 		)
 		return nil
@@ -423,7 +423,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	_, err := state.RuntimeState(ctx, runtime.ID)
 	switch err {
 	case nil:
-		ctx.Logger().Warn("onNewRuntime: state for runtime already exists",
+		ctx.Logger().Debug("onNewRuntime: state for runtime already exists",
 			"runtime", runtime,
 		)
 		return nil

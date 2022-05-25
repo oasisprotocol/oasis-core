@@ -507,7 +507,7 @@ func (mux *abciMux) decodeTx(ctx *api.Context, rawTx []byte) (*transaction.Trans
 	if params.MaxTxSize > 0 && uint64(len(rawTx)) > params.MaxTxSize {
 		// This deliberately avoids logging the rawTx since spamming the
 		// logs is also bad.
-		ctx.Logger().Error("received oversized transaction",
+		ctx.Logger().Debug("received oversized transaction",
 			"tx_size", len(rawTx),
 		)
 		return nil, nil, consensus.ErrOversizedTx
@@ -516,20 +516,20 @@ func (mux *abciMux) decodeTx(ctx *api.Context, rawTx []byte) (*transaction.Trans
 	// Unmarshal envelope and verify transaction.
 	var sigTx transaction.SignedTransaction
 	if err := cbor.Unmarshal(rawTx, &sigTx); err != nil {
-		ctx.Logger().Error("failed to unmarshal signed transaction",
+		ctx.Logger().Debug("failed to unmarshal signed transaction",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
 		return nil, nil, err
 	}
 	var tx transaction.Transaction
 	if err := sigTx.Open(&tx); err != nil {
-		ctx.Logger().Error("failed to verify transaction signature",
+		ctx.Logger().Debug("failed to verify transaction signature",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
 		return nil, nil, err
 	}
 	if err := tx.SanityCheck(); err != nil {
-		ctx.Logger().Error("bad transaction",
+		ctx.Logger().Debug("bad transaction",
 			"tx", base64.StdEncoding.EncodeToString(rawTx),
 		)
 		return nil, nil, err
@@ -542,7 +542,7 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 	// Lookup method handler.
 	app := mux.appsByMethod[tx.Method]
 	if app == nil {
-		ctx.Logger().Error("unknown method",
+		ctx.Logger().Debug("unknown method",
 			"tx", tx,
 			"method", tx.Method,
 		)

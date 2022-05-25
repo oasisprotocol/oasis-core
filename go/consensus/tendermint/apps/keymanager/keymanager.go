@@ -128,7 +128,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 			}
 
 			if err = stakeAcc.CheckStakeClaims(*acctAddr); err != nil {
-				ctx.Logger().Warn("insufficient stake for key manager runtime operation",
+				ctx.Logger().Debug("insufficient stake for key manager runtime operation",
 					"err", err,
 					"entity", rt.EntityID,
 					"account", *acctAddr,
