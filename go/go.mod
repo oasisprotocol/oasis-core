@@ -1,11 +1,6 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
-	// Fixes vulnerabilities in etcd v3.3.{10,13} (dependencies via viper).
-	// Can be removed once there is a spf13/viper release with updated
-	// etcd and other dependencies using viper are updated.
-	// https://github.com/spf13/viper/issues/956
-	github.com/coreos/etcd => github.com/coreos/etcd v3.3.25+incompatible
 	// Updates the version used by badgerdb, because some of the Go
 	// module caches apparently have a messed up copy that causes
 	// build failures.
@@ -28,13 +23,13 @@ require (
 	github.com/eapache/channels v1.1.0
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/gammazero/deque v0.1.1
-	github.com/go-kit/log v0.2.0
+	github.com/go-kit/log v0.2.1
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.0.1
 	github.com/hashicorp/go-hclog v1.2.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/hashicorp/go-plugin v1.4.3
+	github.com/hashicorp/go-plugin v1.4.4
 	github.com/hpcloud/tail v1.0.0
 	github.com/ianbruene/go-difflib v1.2.0
 	github.com/ipfs/go-log/v2 v2.5.1
@@ -46,7 +41,7 @@ require (
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7
 	github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5
 	github.com/powerman/rpc-codec v1.2.2
-	github.com/prometheus/client_golang v1.12.1
+	github.com/prometheus/client_golang v1.12.2
 	github.com/prometheus/common v0.34.0
 	github.com/prometheus/procfs v0.7.3
 	github.com/seccomp/libseccomp-golang v0.9.1
@@ -63,7 +58,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 	golang.org/x/net v0.0.0-20220418201149-a630d4f3e7a2
 	google.golang.org/genproto v0.0.0-20220407144326-9054f6ed7bac
-	google.golang.org/grpc v1.46.0
+	google.golang.org/grpc v1.46.2
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
 	google.golang.org/protobuf v1.28.0
 )
