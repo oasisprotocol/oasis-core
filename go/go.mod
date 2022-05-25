@@ -1,11 +1,6 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
-	// Fixes vulnerabilities in etcd v3.3.{10,13} (dependencies via viper).
-	// Can be removed once there is a spf13/viper release with updated
-	// etcd and other dependencies using viper are updated.
-	// https://github.com/spf13/viper/issues/956
-	github.com/coreos/etcd => github.com/coreos/etcd v3.3.25+incompatible
 	// Updates the version used by badgerdb, because some of the Go
 	// module caches apparently have a messed up copy that causes
 	// build failures.
