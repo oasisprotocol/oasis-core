@@ -53,7 +53,7 @@ pub enum RpcClientError {
 type SendqRequest = (
     Arc<Context>,
     types::Request,
-    oneshot::Sender<Result<types::Response, RpcClientError>>,
+    oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
     usize,
 );
 
@@ -120,13 +120,7 @@ impl RpcClient {
 
     /// Construct an unconnected RPC client with runtime-internal transport.
     pub fn new_runtime(builder: Builder, protocol: Arc<Protocol>, endpoint: &str) -> Self {
-        Self::new(
-            Box::new(RuntimeTransport {
-                protocol,
-                endpoint: endpoint.to_owned(),
-            }),
-            builder,
-        )
+        Self::new(Box::new(RuntimeTransport::new(protocol, endpoint)), builder)
     }
 
     /// Call a remote method.
@@ -145,18 +139,27 @@ impl RpcClient {
             args: cbor::to_value(args),
         };
 
-        let response = self.execute_call(ctx, request).await?;
-        match response.body {
-            types::Body::Success(value) => Ok(cbor::from_value(value)?),
+        let (pfid, response) = self.execute_call(ctx, request).await?;
+        let result = match response.body {
+            types::Body::Success(value) => cbor::from_value(value).map_err(Into::into),
             types::Body::Error(error) => Err(RpcClientError::CallFailed(error)),
-        }
+        };
+
+        // Report peer feedback based on whether call was successful.
+        let pf = match result {
+            Ok(_) => types::PeerFeedback::Success,
+            Err(_) => types::PeerFeedback::Failure,
+        };
+        self.inner.transport.set_peer_feedback(pfid, Some(pf));
+
+        result
     }
 
     async fn execute_call(
         &self,
         ctx: Context,
         request: types::Request,
-    ) -> Result<types::Response, RpcClientError> {
+    ) -> Result<(u64, types::Response), RpcClientError> {
         // Spawn a new controller if we haven't spawned one yet.
         if self
             .inner
@@ -186,10 +189,23 @@ impl RpcClient {
                     }
                     .await;
 
+                    // Update peer feedback for next request.
+                    let pfid = inner.transport.get_peer_feedback_id();
+                    if result.is_err() {
+                        // In case there was a transport error we need to reset the session
+                        // immediately as no progress is possible.
+                        let mut session = inner.session.lock().unwrap();
+                        session.reset();
+                        // Set peer feedback immediately so retries can try new peers.
+                        inner
+                            .transport
+                            .set_peer_feedback(pfid, Some(types::PeerFeedback::Failure));
+                    }
+
                     match result {
                         ref r if r.is_ok() || retries >= inner.max_retries => {
                             // Request was successful or number of retries has been exceeded.
-                            let _ = rsp_tx.send(result);
+                            let _ = rsp_tx.send(result.map(|rsp| (pfid, rsp)));
                         }
 
                         _ => {
@@ -373,6 +389,8 @@ mod test {
         rak: Arc<RAK>,
         demux: Arc<Mutex<Demux>>,
         next_error: Arc<AtomicBool>,
+        peer_feedback: Arc<Mutex<(u64, Option<types::PeerFeedback>)>>,
+        peer_feedback_history: Arc<Mutex<Vec<(u64, Option<types::PeerFeedback>)>>>,
     }
 
     impl MockTransport {
@@ -383,6 +401,8 @@ mod test {
                 rak: rak.clone(),
                 demux: Arc::new(Mutex::new(Demux::new(rak))),
                 next_error: Arc::new(AtomicBool::new(false)),
+                peer_feedback: Arc::new(Mutex::new((0, None))),
+                peer_feedback_history: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
@@ -394,6 +414,17 @@ mod test {
         fn induce_transport_error(&self) {
             self.next_error.store(true, Ordering::SeqCst);
         }
+
+        fn take_peer_feedback_history(&self) -> Vec<(u64, Option<types::PeerFeedback>)> {
+            let mut pfh: Vec<_> = {
+                let mut pfh = self.peer_feedback_history.lock().unwrap();
+                std::mem::take(&mut pfh)
+            };
+            // Also add the pending feedback.
+            let pf = self.peer_feedback.lock().unwrap();
+            pfh.push(pf.clone());
+            pfh
+        }
     }
 
     impl Transport for MockTransport {
@@ -402,9 +433,23 @@ mod test {
             _ctx: Context,
             data: Vec<u8>,
         ) -> BoxFuture<Result<Vec<u8>, anyhow::Error>> {
+            let pf = {
+                let mut pf = self.peer_feedback.lock().unwrap();
+                let peer_feedback = pf.1.take();
+
+                if !matches!(peer_feedback, None | Some(types::PeerFeedback::Success)) {
+                    pf.0 += 1;
+                }
+
+                (pf.0, peer_feedback)
+            };
+            self.peer_feedback_history.lock().unwrap().push(pf);
+
+            // Induce error when configured to do so.
             if self
                 .next_error
-                .compare_and_swap(true, false, Ordering::SeqCst)
+                .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
             {
                 return Box::pin(future::err(anyhow!("transport error")));
             }
@@ -438,6 +483,19 @@ mod test {
                 }
             }
         }
+
+        fn set_peer_feedback(&self, pfid: u64, peer_feedback: Option<types::PeerFeedback>) {
+            let mut pf = self.peer_feedback.lock().unwrap();
+            if pf.0 != pfid {
+                return;
+            }
+
+            pf.1 = peer_feedback;
+        }
+
+        fn get_peer_feedback_id(&self) -> u64 {
+            self.peer_feedback.lock().unwrap().0
+        }
     }
 
     #[test]
@@ -454,6 +512,15 @@ mod test {
             .block_on(client.call(Context::background(), "test", 42))
             .unwrap();
         assert_eq!(result, 42, "call should work");
+        assert_eq!(
+            transport.take_peer_feedback_history(),
+            vec![
+                (0, None),                               // Handshake.
+                (0, None),                               // Handshake.
+                (0, None),                               // Call.
+                (0, Some(types::PeerFeedback::Success)), // Handled call.
+            ]
+        );
 
         // Reset all sessions on the server and make sure that we can still get a response.
         transport.reset();
@@ -462,6 +529,16 @@ mod test {
             .block_on(client.call(Context::background(), "test", 43))
             .unwrap();
         assert_eq!(result, 43, "call should work");
+        assert_eq!(
+            transport.take_peer_feedback_history(),
+            vec![
+                (0, Some(types::PeerFeedback::Success)), // Previous handled call.
+                (1, Some(types::PeerFeedback::Failure)), // Failed call due to session reset.
+                (1, None),                               // New handshake.
+                (1, None),                               // New handshake.
+                (1, Some(types::PeerFeedback::Success)), // Handled call.
+            ]
+        );
 
         // Induce a single transport error without resetting the server sessions and make sure we
         // can still get a response.
@@ -471,5 +548,15 @@ mod test {
             .block_on(client.call(Context::background(), "test", 44))
             .unwrap();
         assert_eq!(result, 44, "call should work");
+        assert_eq!(
+            transport.take_peer_feedback_history(),
+            vec![
+                (1, Some(types::PeerFeedback::Success)), // Previous handled call.
+                (2, Some(types::PeerFeedback::Failure)), // Failed call due to induced error.
+                (2, None),                               // New handshake.
+                (2, None),                               // New handshake.
+                (2, Some(types::PeerFeedback::Success)), // Handled call.
+            ]
+        );
     }
 }

@@ -173,7 +173,7 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 			if err != nil {
 				return nil, err
 			}
-			res, err := kmCli.CallEnclave(ctx, body.HostRPCCallRequest.Request)
+			res, err := kmCli.CallEnclave(ctx, body.HostRPCCallRequest.Request, body.HostRPCCallRequest.PeerFeedback)
 			if err != nil {
 				return nil, err
 			}

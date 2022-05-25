@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 )
@@ -405,6 +406,14 @@ type RuntimeConsensusSyncRequest struct {
 type HostRPCCallRequest struct {
 	Endpoint string `json:"endpoint"`
 	Request  []byte `json:"request"`
+
+	// PeerFeedback contains optional peer feedback for the last RPC call under the given endpoint.
+	//
+	// This enables the runtime to notify the node whether the given peer should continue to be used
+	// or not based on higher-level logic that lives in the runtime.
+	//
+	// In case no feedback is given success is assumed.
+	PeerFeedback *enclaverpc.PeerFeedback `json:"pf,omitempty"`
 }
 
 // HostRPCCallResponse is a host RPC call response message body.

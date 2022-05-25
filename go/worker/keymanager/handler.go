@@ -10,7 +10,7 @@ import (
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
+	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
 var (
@@ -24,7 +24,7 @@ type hostHandler struct {
 	sync.Mutex
 
 	w            *Worker
-	remoteClient p2p.Client
+	remoteClient *committeeCommon.KeyManagerClientWrapper
 	localStorage localstorage.LocalStorage
 }
 
@@ -48,16 +48,12 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 		switch body.HostRPCCallRequest.Endpoint {
 		case runtimeKeymanager.EnclaveRPCEndpoint:
 			// Call into the remote key manager.
-			rsp, pf, err := h.remoteClient.CallEnclave(ctx, &p2p.CallEnclaveRequest{
-				Data: body.HostRPCCallRequest.Request,
-			})
+			rsp, err := h.remoteClient.CallEnclave(ctx, body.HostRPCCallRequest.Request, body.HostRPCCallRequest.PeerFeedback)
 			if err != nil {
 				return nil, err
 			}
-			// TODO: Support reporting peer feedback from the enclave.
-			pf.RecordSuccess()
 			return &protocol.Body{HostRPCCallResponse: &protocol.HostRPCCallResponse{
-				Response: cbor.FixSliceForSerde(rsp.Data),
+				Response: cbor.FixSliceForSerde(rsp),
 			}}, nil
 		default:
 			return nil, errEndpointNotSupported
@@ -68,9 +64,13 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 }
 
 func newHostHandler(w *Worker, commonWorker *workerCommon.Worker, localStorage localstorage.LocalStorage) protocol.Handler {
+	remoteClient := committeeCommon.NewKeyManagerClientWrapper(commonWorker.P2P, commonWorker.Consensus, w.logger)
+	runtimeID := w.runtime.ID()
+	remoteClient.SetKeyManagerID(&runtimeID)
+
 	return &hostHandler{
 		w:            w,
-		remoteClient: p2p.NewClient(commonWorker.P2P, commonWorker.Consensus, w.runtime.ID()),
+		remoteClient: remoteClient,
 		localStorage: localStorage,
 	}
 }

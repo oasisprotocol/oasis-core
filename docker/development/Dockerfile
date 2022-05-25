@@ -1,9 +1,9 @@
 FROM ubuntu:20.04
 
 # Package versions.
-ARG GO_VERSION=1.17.7
-ARG GO_NANCY_VERSION=1.0.0
-ARG GO_NANCY_CHECKSUM=13804837a34c07e7a933b0d6f52c5e580b03ccb209e38fc3d6394b791b414c33
+ARG GO_VERSION=1.17.9
+ARG GO_NANCY_VERSION=1.0.33
+ARG GO_NANCY_CHECKSUM=a4bf5290d41b095c04f941ed5380674770c79d59735e33b1bd07a5cd5fbb135d
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
 ARG GOLANGCILINT_VERSION=1.41.1
@@ -61,12 +61,12 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     # Install a specific version of protoc-gen-go.
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
     # Install golangci-lint.
-    curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
+    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /tmp/bin v${GOLANGCILINT_VERSION} && \
     mv /tmp/bin/golangci-lint /go/bin && \
     # Install gocovmerge for e2e coverage.
     go install github.com/wadey/gocovmerge@${GOCOVMERGE_VERSION} && \
     # Install nancy for auditing dependencies.
-    curl -sfL -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/v${GO_NANCY_VERSION}/nancy-linux.amd64-v${GO_NANCY_VERSION} && \
+    curl -sfL -o nancy https://github.com/sonatype-nexus-community/nancy/releases/download/v${GO_NANCY_VERSION}/nancy-v${GO_NANCY_VERSION}-linux-amd64 && \
     echo "${GO_NANCY_CHECKSUM} nancy" | sha256sum -c && \
     mv nancy /go/bin/nancy && \
     chmod +x /go/bin/nancy && \
