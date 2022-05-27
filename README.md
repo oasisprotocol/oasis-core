@@ -54,7 +54,7 @@ Read our [Security](docs/SECURITY.md) document.
 
 See our [developer documentation index].
 
-[developer documentation index]: /oasis-core
+[developer documentation index]: docs/index.md
 
 ## Developing and Building the System
 
@@ -62,9 +62,9 @@ See [a list of prerequisites] followed by [build instructions] and an example
 of [setting up a local test network with a simple runtime].
 
 <!-- markdownlint-disable line-length -->
-[a list of prerequisites]: /oasis-core/development-setup/build-environment-setup-and-building/prerequisites
-[build instructions]: /oasis-core/development-setup/build-environment-setup-and-building/building
-[setting up a local test network with a simple runtime]: /oasis-core/development-setup/running-tests-and-development-networks/oasis-net-runner
+[a list of prerequisites]: docs/development-setup/prerequisites.md
+[build instructions]: docs/development-setup/building.md
+[setting up a local test network with a simple runtime]: docs/development-setup/oasis-net-runner.md
 <!-- markdownlint-enable line-length -->
 
 ## Directories
