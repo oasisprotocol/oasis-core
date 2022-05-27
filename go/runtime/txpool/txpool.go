@@ -564,9 +564,9 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	for i, tx := range newTxs {
 		// todo: hash used to be cached
 		h := hash.NewFromBytes(tx.tx)
-		// todo: get queue reference from metadata
-		var someRecheckable RecheckableTransactionStore
-		someRecheckable.OfferChecked(tx.tx)
+		if tx.dstQueue != nil {
+			tx.dstQueue.OfferChecked(tx.tx)
+		}
 		// todo: notify submitter if it falls off the queue immediately
 		if false {
 			t.logger.Error("unable to queue transaction for scheduling",
@@ -607,6 +607,8 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		// can error is if the capacity is in bytes and the value size is over capacity.
 		_ = t.seenCache.Put(h, publishTime)
 	}
+
+	// todo: unpark republish queue?
 
 	// Notify subscribers that we have received new transactions.
 	t.checkTxNotifier.Broadcast(newTxs)
