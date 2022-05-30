@@ -38,6 +38,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -123,6 +124,9 @@ type NetworkCfg struct { // nolint: maligned
 
 	// GovernanceParameters are the governance consensus parameters.
 	GovernanceParameters *governance.ConsensusParameters `json:"governance_parameters,omitempty"`
+
+	// RoothashParameters are the roothash consensus parameters.
+	RoothashParameters *roothash.ConsensusParameters `json:"roothash_parameters,omitempty"`
 
 	// SchedulerWeakAlpkaOk is for disabling the VRF alpha entropy requirement.
 	SchedulerWeakAlphaOk bool `json:"scheduler_weak_alpha_ok,omitempty"`
@@ -739,6 +743,12 @@ func (net *Network) MakeGenesis() error {
 			"--" + genesis.CfgGovernanceUpgradeCancelMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeCancelMinEpochDiff), 10),
 			"--" + genesis.CfgGovernanceUpgradeMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeMinEpochDiff), 10),
 			"--" + genesis.CfgGovernanceVotingPeriod, strconv.FormatUint(uint64(cfg.VotingPeriod), 10),
+		}...)
+	}
+	if cfg := net.cfg.RoothashParameters; cfg != nil {
+		args = append(args, []string{
+			"--" + genesis.CfgRoothashMaxRuntimeMessages, strconv.FormatUint(uint64(cfg.MaxRuntimeMessages), 10),
+			"--" + genesis.CfgRoothashMaxInRuntimeMessages, strconv.FormatUint(uint64(cfg.MaxInRuntimeMessages), 10),
 		}...)
 	}
 	if cfg := net.cfg.SchedulerForceElect; cfg != nil {
