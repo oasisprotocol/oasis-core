@@ -12,7 +12,7 @@ use oasis_core_runtime::{
     common::{
         crypto::signature::{PublicKey as OasisPublicKey, Signature, SignatureBundle},
         namespace::Namespace,
-        sgx::avr::EnclaveIdentity,
+        sgx::EnclaveIdentity,
     },
     impl_bytes,
 };

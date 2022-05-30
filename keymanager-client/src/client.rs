@@ -12,7 +12,7 @@ use lru::LruCache;
 use oasis_core_client::RpcClient;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
-    common::{namespace::Namespace, sgx::avr::EnclaveIdentity},
+    common::{namespace::Namespace, sgx::EnclaveIdentity},
     enclave_rpc::session,
     protocol::Protocol,
     rak::RAK,

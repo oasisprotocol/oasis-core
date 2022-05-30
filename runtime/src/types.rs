@@ -10,7 +10,7 @@ use crate::{
             signature::{PublicKey, Signature},
         },
         namespace::Namespace,
-        sgx::avr::AVR,
+        sgx::ias::AVR,
         version::Version,
     },
     consensus::{

@@ -9,7 +9,7 @@ use super::types::Message;
 use crate::{
     common::{
         crypto::signature::{PublicKey, Signature, Signer},
-        sgx::avr,
+        sgx::{ias, EnclaveIdentity},
     },
     rak::RAK,
 };
@@ -35,7 +35,7 @@ enum SessionError {
 /// Information about a session.
 pub struct SessionInfo {
     pub rak_binding: RAKBinding,
-    pub authenticated_avr: avr::AuthenticatedAVR,
+    pub authenticated_avr: ias::AuthenticatedAVR,
 }
 
 enum State {
@@ -49,7 +49,7 @@ enum State {
 pub struct Session {
     local_static_pub: Vec<u8>,
     rak: Option<Arc<RAK>>,
-    remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
+    remote_enclaves: Option<HashSet<EnclaveIdentity>>,
     info: Option<Arc<SessionInfo>>,
     state: State,
     buf: Vec<u8>,
@@ -60,7 +60,7 @@ impl Session {
         handshake_state: snow::HandshakeState,
         local_static_pub: Vec<u8>,
         rak: Option<Arc<RAK>>,
-        remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
+        remote_enclaves: Option<HashSet<EnclaveIdentity>>,
     ) -> Self {
         Self {
             local_static_pub,
@@ -208,7 +208,7 @@ impl Session {
         }
 
         let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
-        let authenticated_avr = avr::verify(&rak_binding.avr)?;
+        let authenticated_avr = ias::verify(&rak_binding.avr)?;
 
         // Verify MRENCLAVE/MRSIGNER.
         if let Some(ref remote_enclaves) = self.remote_enclaves {
@@ -262,7 +262,7 @@ impl Session {
 ///   public key to RAK.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct RAKBinding {
-    pub avr: avr::AVR,
+    pub avr: ias::AVR,
     pub rak_pub: PublicKey,
     pub binding: Signature,
 }
@@ -271,17 +271,17 @@ pub struct RAKBinding {
 #[derive(Clone, Default)]
 pub struct Builder {
     rak: Option<Arc<RAK>>,
-    remote_enclaves: Option<HashSet<avr::EnclaveIdentity>>,
+    remote_enclaves: Option<HashSet<EnclaveIdentity>>,
 }
 
 impl Builder {
     /// Return remote enclave identities if configured in the builder.
-    pub fn get_remote_enclaves(&self) -> &Option<HashSet<avr::EnclaveIdentity>> {
+    pub fn get_remote_enclaves(&self) -> &Option<HashSet<EnclaveIdentity>> {
         &self.remote_enclaves
     }
 
     /// Enable remote enclave identity verification.
-    pub fn remote_enclaves(mut self, enclaves: Option<HashSet<avr::EnclaveIdentity>>) -> Self {
+    pub fn remote_enclaves(mut self, enclaves: Option<HashSet<EnclaveIdentity>>) -> Self {
         self.remote_enclaves = enclaves;
         self
     }
@@ -298,7 +298,7 @@ impl Builder {
         snow::Builder<'a>,
         snow::Keypair,
         Option<Arc<RAK>>,
-        Option<HashSet<avr::EnclaveIdentity>>,
+        Option<HashSet<EnclaveIdentity>>,
     ) {
         let noise_builder = snow::Builder::new(NOISE_PATTERN.parse().unwrap());
         let rak = self.rak.take();
