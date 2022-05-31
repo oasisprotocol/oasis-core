@@ -49,7 +49,7 @@ accepted into the project.*
 
 <!-- markdownlint-disable line-length -->
 [new Feature request]: https://github.com/oasisprotocol/oasis-core/issues/new?template=feature_request.md
-[proposing an ADR]: docs/adr/index.md
+[proposing an ADR]: https://github.com/oasisprotocol/adrs/blob/main/README.md
 <!-- markdownlint-enable line-length -->
 
 ## Bug Reports

@@ -313,7 +313,8 @@ As of this version, this is no longer allowed and attempting to run the
   [ADR 0010]
   ([#4248](https://github.com/oasisprotocol/oasis-core/issues/4248))
 
-  [ADR 0010]: https://docs.oasis.dev/oasis-core/adr/0010-vrf-elections
+  [ADR 0010]:
+    https://github.com/oasisprotocol/adrs/blob/main/0010-vrf-elections.md
 
 - Remove runtime genesis state parameter
   ([#4308](https://github.com/oasisprotocol/oasis-core/issues/4308))
@@ -350,8 +351,10 @@ As of this version, this is no longer allowed and attempting to run the
 - go/roothash: Add incoming runtime messages as defined in [ADR 0011]
   ([#4415](https://github.com/oasisprotocol/oasis-core/issues/4415))
 
+  <!-- markdownlint-disable line-length -->
   [ADR 0011]:
-    https://docs.oasis.dev/oasis-core/adr/0011-incoming-runtime-messages
+    https://github.com/oasisprotocol/adrs/blob/main/0011-incoming-runtime-messages.md
+  <!-- markdownlint-enable line-length -->
 
 - go/staking: `DebondEndTime` is added to the `DebondingStartEscrowEvent`
   ([#4437](https://github.com/oasisprotocol/oasis-core/issues/4437))
@@ -524,7 +527,10 @@ As of this version, this is no longer allowed and attempting to run the
 - Add support for runtime message results as defined in [ADR 0012]
   ([#4443](https://github.com/oasisprotocol/oasis-core/issues/4443))
 
-  [ADR 0012]: https://docs.oasis.dev/oasis-core/adr/0012-runtime-message-results
+  <!-- markdownlint-disable line-length -->
+  [ADR 0012]:
+    https://github.com/oasisprotocol/adrs/blob/main/0012-runtime-message-results.md
+  <!-- markdownlint-enable line-length -->
 
 - go/runtime: Downtime-less runtime updates
   ([#4449](https://github.com/oasisprotocol/oasis-core/issues/4449))
@@ -1512,7 +1518,10 @@ node's data directory.*
 - go/common/crypto/sakg: Add [ADR 0008] implementation
   ([#3918](https://github.com/oasisprotocol/oasis-core/issues/3918))
 
-  [ADR 0008]: docs/adr/0008-standard-account-key-generation.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0008]:
+    https://github.com/oasisprotocol/adrs/blob/main/0008-standard-account-key-generation.md
+  <!-- markdownlint-enable line-length -->
 
 - go/worker/compute: Propose block on new epoch
   ([#3987](https://github.com/oasisprotocol/oasis-core/issues/3987))
@@ -1627,7 +1636,10 @@ node's data directory.*
   ([#3918](https://github.com/oasisprotocol/oasis-core/issues/3918),
    [#3960](https://github.com/oasisprotocol/oasis-core/issues/3960))
 
-  [ADR 0008]: docs/adr/0008-standard-account-key-generation.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0008]:
+    https://github.com/oasisprotocol/adrs/blob/main/0008-standard-account-key-generation.md
+  <!-- markdownlint-enable line-length -->
 
 - go: bump github.com/libp2p/go-libp2p from 0.13.0 to 0.14.0
   ([#3928](https://github.com/oasisprotocol/oasis-core/issues/3928))
@@ -1842,7 +1854,10 @@ node's data directory.*
 
   For more details, see [ADR 0007].
 
-  [ADR 0007]: docs/adr/0007-improved-random-beacon.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0007]:
+    https://github.com/oasisprotocol/adrs/blob/main/0007-improved-random-beacon.md
+  <!-- markdownlint-enable line-length -->
 
 - go: Use human readable identifiers for slashing reasons
   ([#3276](https://github.com/oasisprotocol/oasis-core/issues/3276),
@@ -1920,7 +1935,10 @@ node's data directory.*
 
   For more details, see [ADR 0005].
 
-  [ADR 0005]: docs/adr/0005-runtime-compute-slashing.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0005]:
+    https://github.com/oasisprotocol/adrs/blob/main/0005-runtime-compute-slashing.md
+  <!-- markdownlint-enable line-length -->
 
 - Introduce storage root types
   ([#3415](https://github.com/oasisprotocol/oasis-core/issues/3415))
@@ -1935,7 +1953,10 @@ node's data directory.*
   The staking service now supports setting allowances on general account
   balances as specified by [ADR 0003].
 
-  [ADR 0003]: docs/adr/0003-consensus-runtime-token-transfer.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0003]:
+    https://github.com/oasisprotocol/adrs/blob/main/0003-consensus-runtime-token-transfer.md
+  <!-- markdownlint-enable line-length -->
 
 - Add runtime accounts in the consensus layer
   ([#3429](https://github.com/oasisprotocol/oasis-core/issues/3429))
@@ -1944,7 +1965,10 @@ node's data directory.*
   the consensus layer. Runtimes can manipulate those accounts by emitting newly
   introduced transfer and withdraw runtime messages.
 
-  [ADR 0003]: docs/adr/0003-consensus-runtime-token-transfer.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0003]:
+    https://github.com/oasisprotocol/adrs/blob/main/0003-consensus-runtime-token-transfer.md
+  <!-- markdownlint-enable line-length -->
 
 - go/roothash: Refactor runtime messages
   ([#3430](https://github.com/oasisprotocol/oasis-core/issues/3430))
@@ -1952,7 +1976,10 @@ node's data directory.*
   Several modifications are made to the runtime message representation and
   processing as specified by [ADR 0003].
 
-  [ADR 0003]: docs/adr/0003-consensus-runtime-token-transfer.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0003]:
+    https://github.com/oasisprotocol/adrs/blob/main/0003-consensus-runtime-token-transfer.md
+  <!-- markdownlint-enable line-length -->
 
 - go/roothash: Renamed `FinalizedEvent` field in `roothash.Event`
   ([#3448](https://github.com/oasisprotocol/oasis-core/issues/3448))
@@ -1974,7 +2001,8 @@ node's data directory.*
   This also affects the genesis file. Use the `oasis-node debug fix-genesis`
   command to convert a genesis file from the old format to the new one.
 
-  [ADR 0004]: docs/adr/0004-runtime-governance.md
+  [ADR 0004]:
+    https://github.com/oasisprotocol/adrs/blob/main/0004-runtime-governance.md
 
 - Modify runtime descriptors to support ADR 0004
   ([#3450](https://github.com/oasisprotocol/oasis-core/issues/3450))
@@ -1982,7 +2010,8 @@ node's data directory.*
   As described in [ADR 0004], the runtime descriptors are modified to
   enable runtime governance.
 
-  [ADR 0004]: docs/adr/0004-runtime-governance.md
+  [ADR 0004]:
+    https://github.com/oasisprotocol/adrs/blob/main/0004-runtime-governance.md
 
 - go/consensus/tendermint: Use canonical chain context in InitChain
   ([#3477](https://github.com/oasisprotocol/oasis-core/issues/3477))
@@ -2003,7 +2032,8 @@ node's data directory.*
   See [ADR 0006] and [Governance backend documentation] for more
   details.
 
-  [ADR 0006]: docs/adr/0006-consensus-governance.md
+  [ADR 0006]:
+    https://github.com/oasisprotocol/adrs/blob/main/0006-consensus-governance.md
   [Governance backend documentation]: docs/consensus/services/governance.md
 
 - runtime: Move consensus layer structures to its own module
@@ -2090,7 +2120,10 @@ node's data directory.*
 
   For more details, see [ADR 0005].
 
-  [ADR 0005]: docs/adr/0005-runtime-compute-slashing.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0005]:
+    https://github.com/oasisprotocol/adrs/blob/main/0005-runtime-compute-slashing.md
+  <!-- markdownlint-enable line-length -->
 
 - runtimes: Support for `Add/ReclaimEscrow` runtime messages
   ([#3641](https://github.com/oasisprotocol/oasis-core/issues/3641))
@@ -2277,7 +2310,10 @@ node's data directory.*
   [ADR 0002] (i.e. a Go Modules compatible Git tag without the `go/` prefix) to
   the canonical Oasis Core version.
 
-  [ADR 0002]: docs/adr/0002-go-modules-compatible-git-tags.md
+  <!-- markdownlint-disable line-length -->
+  [ADR 0002]:
+    https://github.com/oasisprotocol/adrs/blob/main/0002-go-modules-compatible-git-tags.md
+  <!-- markdownlint-enable line-length -->
 
 - go/oasis-node/cmd: Add `oasis-node stake account nonce` CLI command
   ([#3559](https://github.com/oasisprotocol/oasis-core/issues/3559))
@@ -3805,8 +3841,10 @@ node's data directory.*
   This implements the tagging scheme described in
   [ADR 0002: Go Modules Compatible Git Tags].
 
+  <!-- markdownlint-disable line-length -->
   [ADR 0002: Go Modules Compatible Git Tags]:
-    docs/adr/0002-go-modules-compatible-git-tags.md
+    https://github.com/oasisprotocol/adrs/blob/main/0002-go-modules-compatible-git-tags.md
+  <!-- markdownlint-enable line-length -->
 
 ## 20.9 (2020-08-05)
 
@@ -3815,7 +3853,8 @@ node's data directory.*
 - Introduce [Architectural Decision Records]
   ([#2924](https://github.com/oasisprotocol/oasis-core/issues/2924))
 
-  [Architectural Decision Records]: docs/adr/index.md
+  [Architectural Decision Records]:
+    https://github.com/oasisprotocol/adrs/blob/main/README.md
 
 - Remind to bump protocol versions before release
   ([#3097](https://github.com/oasisprotocol/oasis-core/issues/3097))
