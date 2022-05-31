@@ -69,6 +69,7 @@ features = ["full"]
 # For storage interoperability tests only.
 jsonrpc = { version = "0.12.1", features = ["simple_uds"] }
 tempfile = "3.3.0"
+hex = "0.4"
 
 [[bin]]
 name = "fuzz-mkvs-proof"
