@@ -5,7 +5,8 @@ OSS Watch. It should not be considered set in stone and may evolve over time as
 the project grows.*
 
 <!-- markdownlint-disable line-length -->
-[Meritocratic Governance Model]: http://oss-watch.ac.uk/resources/meritocraticgovernancemodel
+[Meritocratic Governance Model]:
+  http://oss-watch.ac.uk/resources/meritocraticgovernancemodel
 <!-- markdownlint-enable line-length -->
 
 ## Overview
@@ -82,7 +83,8 @@ In order to ensure that the project is not bogged down by endless discussion and
 continual voting, the project operates a policy of lazy consensus. This allows
 the majority of decisions to be made without resorting to a formal vote.
 
-[Architectural Decision Records (ADRs)]: docs/adr/index.md
+[Architectural Decision Records (ADRs)]:
+  https://github.com/oasisprotocol/adrs/blob/main/README.md
 
 ### ADRs and Lazy Consensus
 

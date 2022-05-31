@@ -80,7 +80,7 @@ implementations.
 
 ## Processes
 
-* [Architectural Decision Records](adr/index.md)
+* [Architectural Decision Records](https://github.com/oasisprotocol/adrs)
 * [Release Process](release-process.md)
 * [Versioning](versioning.md)
 * [Security](SECURITY.md)
