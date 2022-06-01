@@ -1,12 +1,14 @@
 package deoxysii
 
 import (
-	"testing"
 	"encoding/hex"
-	"github.com/oasisprotocol/deoxysii"
+	"testing"
+
 	curve25519 "github.com/oasisprotocol/curve25519-voi/primitives/x25519"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/mrae/api"
+	"github.com/oasisprotocol/deoxysii"
 	"github.com/stretchr/testify/require"
+
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/mrae/api"
 )
 
 func Test_DeriveSymmetricKey(t *testing.T) {
@@ -17,7 +19,7 @@ func Test_DeriveSymmetricKey(t *testing.T) {
 	curve25519.ScalarBaseMult(&publicKey, &privateKey)
 	publicKeyHex := hex.EncodeToString(publicKey[:])
 	require.EqualValues(t, publicKeyHex, "3046db3fa70ce605457dc47c48837ebd8bd0a26abfde5994d033e1ced68e2576", "derive public key")
-	
+
 	var sharedKey [deoxysii.KeySize]byte
 	Box.DeriveSymmetricKey(sharedKey[:], &publicKey, &privateKey)
 	sharedKeyHex := hex.EncodeToString(sharedKey[:])
