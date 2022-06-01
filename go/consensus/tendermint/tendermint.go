@@ -21,16 +21,14 @@ const (
 	CfgMode = "consensus.tendermint.mode"
 )
 
-const (
-	// ModeFull is the name of the full node consensus mode.
-	ModeFull = "full"
-
-	// ModeSeed is the name of the seed-only node consensus mode.
-	ModeSeed = "seed"
-)
-
 // Flags has the configuration flags.
 var Flags = flag.NewFlagSet("", flag.ContinueOnError)
+
+// Mode returns the configured tendermint mode.
+func Mode() (mode consensusAPI.Mode, err error) {
+	err = mode.UnmarshalText([]byte(viper.GetString(CfgMode)))
+	return
+}
 
 // New creates a new Tendermint consensus backend.
 func New(
@@ -40,20 +38,28 @@ func New(
 	upgrader upgradeAPI.Backend,
 	genesisProvider genesisAPI.Provider,
 ) (consensusAPI.Backend, error) {
-	switch mode := viper.GetString(CfgMode); mode {
-	case ModeFull:
+	var mode consensusAPI.Mode
+	if err := mode.UnmarshalText([]byte(viper.GetString(CfgMode))); err != nil {
+		return nil, err
+	}
+
+	switch mode {
+	case consensusAPI.ModeFull:
 		// Full node.
 		return full.New(ctx, dataDir, identity, upgrader, genesisProvider)
-	case ModeSeed:
+	case consensusAPI.ModeSeed:
 		// Seed-only node.
 		return seed.New(dataDir, identity, genesisProvider)
+	case consensusAPI.ModeArchive:
+		// Archive node.
+		return full.NewArchive(ctx, dataDir, identity, genesisProvider)
 	default:
 		return nil, fmt.Errorf("tendermint: unsupported mode: %s", mode)
 	}
 }
 
 func init() {
-	Flags.String(CfgMode, ModeFull, "tendermint mode (full, seed)")
+	Flags.String(CfgMode, consensusAPI.ModeFull.String(), "tendermint mode (full, seed, archive)")
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(common.Flags)
