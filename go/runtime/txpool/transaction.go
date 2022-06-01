@@ -102,7 +102,7 @@ func (tx *Transaction) setChecked(meta *protocol.CheckTxMetadata) {
 	}
 }
 
-// txCheckFlags are the flags describing how transaction should be checked.
+// txCheckFlags are the flags describing how a transaction should be checked.
 type txCheckFlags uint8
 
 const (

@@ -67,7 +67,7 @@ type TransactionPool interface {
 	// Quit returns a channel that will be closed when the service terminates.
 	Quit() <-chan struct{}
 
-	// Submit adds the transaction into the transaction pool, first performing checks on it by
+	// SubmitTx adds the transaction into the transaction pool, first performing checks on it by
 	// invoking the runtime. This method waits for the checks to complete.
 	SubmitTx(ctx context.Context, tx []byte, meta *TransactionMeta) (*protocol.CheckTxResult, error)
 
