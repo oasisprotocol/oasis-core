@@ -23,6 +23,9 @@ if [ ! -d $src_dir ]; then
 fi
 shift
 
+# Make sure we can run unit tests for production enclaves.
+unset OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES
+
 #########################
 # Run the build and tests
 #########################

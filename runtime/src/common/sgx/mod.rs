@@ -2,6 +2,7 @@
 
 pub mod egetkey;
 pub mod ias;
+pub mod pcs;
 pub mod seal;
 
 #[cfg(target_env = "sgx")]
@@ -42,4 +43,13 @@ impl EnclaveIdentity {
             ),
         }
     }
+}
+
+/// A remote attestation quote that has undergone verification.
+#[derive(Debug, Default, Clone)]
+pub struct VerifiedQuote {
+    pub report_data: Vec<u8>,
+    pub identity: EnclaveIdentity,
+    pub timestamp: i64,
+    pub nonce: Vec<u8>,
 }

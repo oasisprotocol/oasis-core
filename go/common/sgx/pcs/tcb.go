@@ -130,8 +130,8 @@ func verifyTCBSignature(data json.RawMessage, signature string, pk *ecdsa.Public
 
 // SignedTCBInfo is the signed TCB info structure.
 type SignedTCBInfo struct {
-	TCBInfo   json.RawMessage `json:"tcbInfo"`
-	Signature string          `json:"signature"`
+	TCBInfo   json.RawMessage `cbor:"tcb_info" json:"tcbInfo"`
+	Signature string          `cbor:"signature" json:"signature"`
 }
 
 // Open verifies the signature and unmarshals the inner TCB info.
@@ -352,8 +352,8 @@ func (s TCBStatus) String() string {
 
 // SignedQEIdentity is the signed Quoting Enclave identity.
 type SignedQEIdentity struct {
-	EnclaveIdentity json.RawMessage `json:"enclaveIdentity"`
-	Signature       string          `json:"signature"`
+	EnclaveIdentity json.RawMessage `cbor:"enclave_identity" json:"enclaveIdentity"`
+	Signature       string          `cbor:"signature" json:"signature"`
 }
 
 // Open verifies the signature and unmarshals the inner Quoting Enclave identity.
@@ -396,7 +396,7 @@ func (qe *QEIdentity) validate(ts time.Time) error {
 		return fmt.Errorf("pcs/tcb: unexpected QE identity version: %d", qe.Version)
 	}
 
-	// Validate TCB info is not expired/not yet valid based on current time.
+	// Validate QE identity is not expired/not yet valid based on current time.
 	var (
 		issueDate  time.Time
 		nextUpdate time.Time
