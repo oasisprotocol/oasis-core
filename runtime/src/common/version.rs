@@ -5,18 +5,12 @@
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Version {
     #[cbor(optional)]
-    #[cbor(default)]
-    #[cbor(skip_serializing_if = "num_traits::Zero::is_zero")]
     pub major: u16,
 
     #[cbor(optional)]
-    #[cbor(default)]
-    #[cbor(skip_serializing_if = "num_traits::Zero::is_zero")]
     pub minor: u16,
 
     #[cbor(optional)]
-    #[cbor(default)]
-    #[cbor(skip_serializing_if = "num_traits::Zero::is_zero")]
     pub patch: u16,
 }
 

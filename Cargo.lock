@@ -1594,9 +1594,9 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38035ab5ba813379234cc722327cc66f45b09316f109f69b54c589cc0e9e5f03"
+checksum = "a4fb4c15ae11fe511d3570a8b4f0e311e91a8c8a41f446ecd0e09bdf04abf395"
 dependencies = [
  "impl-trait-for-tuples",
  "oasis-cbor-derive",
@@ -1606,9 +1606,9 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor-derive"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "329dfab5a691b5059ca211567f795876ad49ebd2cd14ab8680e18c17f4f1a805"
+checksum = "6a4bb643d88ebb5e0adf586dfdfab57a4248d51e6ec943ee70c6dd7e3323f825"
 dependencies = [
  "darling",
  "proc-macro-crate",
@@ -2312,9 +2312,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.80"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f972498cf015f7c0746cac89ebe1d6ef10c293b94175a243a2d9442c163d9944"
+checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
 dependencies = [
  "itoa",
  "ryu",

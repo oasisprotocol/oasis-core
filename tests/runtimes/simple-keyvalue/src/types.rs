@@ -10,6 +10,7 @@ use oasis_core_runtime::{
 
 /// Test transaction call.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[cbor(no_default)]
 pub struct Call {
     /// Nonce.
     pub nonce: u64,
@@ -28,38 +29,38 @@ pub enum CallOutput {
     Error(String),
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Key {
     pub key: String,
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Withdraw {
     pub withdraw: staking::Withdraw,
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Transfer {
     pub transfer: staking::Transfer,
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct AddEscrow {
     pub escrow: staking::Escrow,
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct ReclaimEscrow {
     pub reclaim_escrow: staking::ReclaimEscrow,
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct UpdateRuntime {
     pub update_runtime: registry::Runtime,
 }

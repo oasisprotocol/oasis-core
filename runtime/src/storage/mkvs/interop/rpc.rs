@@ -13,7 +13,7 @@ use crate::{
 // Calls should still have a timeout to handle the case where the interop server exits prematurely.
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct ApplyRequest {
     pub namespace: Namespace,
     pub root_type: RootType,

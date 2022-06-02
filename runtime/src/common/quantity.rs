@@ -201,6 +201,10 @@ impl fmt::Display for Quantity {
 }
 
 impl cbor::Encode for Quantity {
+    fn is_empty(&self) -> bool {
+        self.0.is_zero()
+    }
+
     fn into_cbor_value(self) -> cbor::Value {
         if self.0.is_zero() {
             cbor::Value::ByteString(vec![])
@@ -211,6 +215,10 @@ impl cbor::Encode for Quantity {
 }
 
 impl cbor::Decode for Quantity {
+    fn try_default() -> Result<Self, cbor::DecodeError> {
+        Ok(Default::default())
+    }
+
     fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
         match value {
             cbor::Value::ByteString(data) => Ok(Quantity(BigUint::from_bytes_be(&data))),

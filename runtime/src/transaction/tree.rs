@@ -101,7 +101,7 @@ impl KeyFormat for TagKeyFormat {
 /// The input transaction artifacts.
 ///
 /// These are the artifacts that are stored CBOR-serialized in the Merkle tree.
-#[derive(Clone, Debug, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 #[cbor(as_array)]
 struct InputArtifacts {
     /// Transaction input.
@@ -117,7 +117,7 @@ struct InputArtifacts {
 /// The output transaction artifacts.
 ///
 /// These are the artifacts that are stored CBOR-serialized in the Merkle tree.
-#[derive(Clone, Debug, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
 #[cbor(as_array)]
 struct OutputArtifacts {
     /// Transaction output.

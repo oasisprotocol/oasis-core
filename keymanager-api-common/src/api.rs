@@ -51,7 +51,7 @@ impl AsRef<[u8]> for MasterSecret {
 }
 
 /// Key manager initialization request.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct InitRequest {
     /// Checksum for validating replication.
     pub checksum: Vec<u8>,
@@ -62,7 +62,7 @@ pub struct InitRequest {
 }
 
 /// Key manager initialization response.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct InitResponse {
     /// True iff the key manager thinks it's running in a secure mode.
     pub is_secure: bool,
@@ -76,7 +76,7 @@ pub struct InitResponse {
 pub const INIT_RESPONSE_CONTEXT: &[u8] = b"oasis-core/keymanager: init response";
 
 /// Signed InitResponse.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct SignedInitResponse {
     /// InitResponse.
     pub init_response: InitResponse,
@@ -85,19 +85,19 @@ pub struct SignedInitResponse {
 }
 
 /// Key manager replication request.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct ReplicateRequest {
     // Empty.
 }
 
 /// Key manager replication response.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct ReplicateResponse {
     pub master_secret: MasterSecret,
 }
 
 /// Request runtime/key pair id tuple.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct RequestIds {
     /// Runtime ID.
     pub runtime_id: Namespace,
@@ -121,7 +121,7 @@ impl RequestIds {
 }
 
 /// A key pair managed by the key manager.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct KeyPair {
     /// Input key pair (pk, sk)
     pub input_keypair: InputKeyPair,
@@ -171,7 +171,7 @@ impl KeyPair {
     }
 }
 
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct InputKeyPair {
     /// Public key.
     pub pk: PublicKey,
@@ -183,7 +183,7 @@ pub struct InputKeyPair {
 pub const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 
 /// Signed public key.
-#[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct SignedPublicKey {
     /// Public key.
     pub key: PublicKey,
@@ -221,7 +221,7 @@ pub enum KeyManagerError {
 }
 
 /// Key manager access control policy.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct PolicySGX {
     pub serial: u32,
     pub id: Namespace,
@@ -229,14 +229,14 @@ pub struct PolicySGX {
 }
 
 /// Per enclave key manager access control policy.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct EnclavePolicySGX {
     pub may_query: HashMap<Namespace, Vec<EnclaveIdentity>>,
     pub may_replicate: Vec<EnclaveIdentity>,
 }
 
 /// Signed key manager access control policy.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct SignedPolicySGX {
     pub policy: PolicySGX,
     pub signatures: Vec<SignatureBundle>,

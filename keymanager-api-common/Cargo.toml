@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 oasis-core-runtime = { path = "../runtime" }
-cbor = { version = "0.2.1", package = "oasis-cbor" }
+cbor = { version = "0.3.0", package = "oasis-cbor" }
 
 base64 = "0.13.0"
 rustc-hex = "2.0.1"

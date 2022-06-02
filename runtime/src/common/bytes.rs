@@ -153,6 +153,10 @@ macro_rules! impl_bytes {
         // Deserialization.
 
         impl $crate::cbor::Decode for $name {
+            fn try_default() -> Result<Self, $crate::cbor::DecodeError> {
+                Ok(Default::default())
+            }
+
             fn try_from_cbor_value(
                 value: $crate::cbor::Value,
             ) -> Result<Self, $crate::cbor::DecodeError> {
@@ -200,5 +204,14 @@ mod tests {
         // Deserialize.
         let new_test_key: TestKey = cbor::from_slice(&test_key_vec).unwrap();
         assert_eq!(new_test_key, test_key);
+    }
+
+    #[test]
+    fn test_cbor_null() {
+        let test_key: TestKey = cbor::from_slice(&[0xF6]).unwrap();
+        assert_eq!(
+            test_key,
+            "0000000000000000000000000000000000000000000000000000000000000000".into()
+        );
     }
 }

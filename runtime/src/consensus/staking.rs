@@ -61,11 +61,9 @@ pub enum ThresholdKind {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Account {
     #[cbor(optional)]
-    #[cbor(default)]
     pub general: GeneralAccount,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub escrow: EscrowAccount,
 }
 
@@ -73,34 +71,28 @@ pub struct Account {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct GeneralAccount {
     #[cbor(optional)]
-    #[cbor(default)]
     pub balance: Quantity,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub nonce: u64,
 
     #[cbor(optional)]
-    pub allowances: Option<BTreeMap<Address, Quantity>>,
+    pub allowances: BTreeMap<Address, Quantity>,
 }
 
 /// Escrow account.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct EscrowAccount {
     #[cbor(optional)]
-    #[cbor(default)]
     pub active: SharePool,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub debonding: SharePool,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub commission_schedule: CommissionSchedule,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub stake_accumulator: StakeAccumulator,
 }
 
@@ -108,11 +100,9 @@ pub struct EscrowAccount {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct SharePool {
     #[cbor(optional)]
-    #[cbor(default)]
     pub balance: Quantity,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub total_shares: Quantity,
 }
 
@@ -120,10 +110,10 @@ pub struct SharePool {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct CommissionSchedule {
     #[cbor(optional)]
-    pub rates: Option<Vec<CommissionRateStep>>,
+    pub rates: Vec<CommissionRateStep>,
 
     #[cbor(optional)]
-    pub bounds: Option<Vec<CommissionRateBoundStep>>,
+    pub bounds: Vec<CommissionRateBoundStep>,
 }
 
 /// Commission rate and its starting time.
@@ -137,15 +127,12 @@ pub struct CommissionRateStep {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct CommissionRateBoundStep {
     #[cbor(optional)]
-    #[cbor(default)]
     pub start: EpochTime,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub rate_min: Quantity,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub rate_max: Quantity,
 }
 
@@ -153,7 +140,7 @@ pub struct CommissionRateBoundStep {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct StakeAccumulator {
     #[cbor(optional)]
-    pub claims: Option<BTreeMap<StakeClaim, Vec<StakeThreshold>>>,
+    pub claims: BTreeMap<StakeClaim, Vec<StakeThreshold>>,
 }
 
 /// Unique stake claim identifier.
@@ -165,8 +152,7 @@ pub struct StakeThreshold {
     #[cbor(optional)]
     pub global: Option<ThresholdKind>,
 
-    #[cbor(rename = "const")]
-    #[cbor(optional)]
+    #[cbor(optional, rename = "const")]
     pub constant: Option<Quantity>,
 }
 
@@ -270,10 +256,10 @@ mod tests {
             {
                 Account {
                     general: GeneralAccount {
-                        allowances: Some([
+                        allowances: [
                             (COMMON_POOL_ADDRESS.clone(), Quantity::from(100u32)),
                             (GOVERNANCE_DEPOSITS_ADDRESS.clone(), Quantity::from(33u32))
-                        ].iter().cloned().collect()),
+                        ].iter().cloned().collect(),
                         ..Default::default()
                         },
                     ..Default::default()
@@ -290,15 +276,15 @@ mod tests {
                     },
                     debonding: SharePool::default(),
                     commission_schedule: CommissionSchedule {
-                        bounds: Some(vec![CommissionRateBoundStep{
+                        bounds: vec![CommissionRateBoundStep{
                             start: 33,
                             rate_min: Quantity::from(10u32),
                             rate_max: Quantity::from(1000u32),
-                        }]),
+                        }],
                         ..Default::default()
                     },
                     stake_accumulator: StakeAccumulator {
-                        claims: Some([
+                        claims: [
                             (
                                 "entity".to_string(),
                                 vec![
@@ -312,7 +298,7 @@ mod tests {
                                     },
                                 ]
                             )
-                        ].iter().cloned().collect())
+                        ].iter().cloned().collect()
                     }
                 },
                 ..Default::default()

@@ -6,8 +6,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
+
+func TestAddressDeserialization(t *testing.T) {
+	require := require.New(t)
+
+	var addr Address
+	err := cbor.Unmarshal([]byte{0xF6}, &addr)
+	require.NoError(err, "cbor.Unmarshal")
+	require.EqualValues("oasis1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq0ltrq9", addr.String())
+
+	raw, _ := addr.MarshalBinary()
+	require.EqualValues([]byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, raw)
+}
 
 func TestReserved(t *testing.T) {
 	require := require.New(t)

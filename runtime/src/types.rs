@@ -24,7 +24,7 @@ use crate::{
 };
 
 /// Computed batch.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct ComputedBatch {
     /// Compute results header.
     pub header: ComputeResultsHeader,
@@ -153,14 +153,14 @@ pub enum Body {
         results: Vec<CheckTxResult>,
     },
     RuntimeExecuteTxBatchRequest {
-        #[cbor(optional, default)]
+        #[cbor(optional)]
         mode: ExecutionMode,
         consensus_block: LightBlock,
         round_results: roothash::RoundResults,
         io_root: Hash,
         #[cbor(optional)]
         inputs: Option<TxnBatch>,
-        #[cbor(optional, default)]
+        #[cbor(optional)]
         in_msgs: Vec<roothash::IncomingMessage>,
         block: Block,
         epoch: EpochTime,
@@ -184,11 +184,11 @@ pub enum Body {
         epoch: EpochTime,
         max_messages: u32,
         method: String,
-        #[cbor(optional, default)]
+        #[cbor(optional)]
         args: Vec<u8>,
     },
     RuntimeQueryResponse {
-        #[cbor(optional, default)]
+        #[cbor(optional)]
         data: Vec<u8>,
     },
     RuntimeConsensusSyncRequest {
@@ -236,20 +236,23 @@ pub enum Body {
     },
 }
 
+impl Default for Body {
+    fn default() -> Self {
+        Self::Empty {}
+    }
+}
+
 /// A serializable error.
 #[derive(Clone, Debug, Default, Error, cbor::Encode, cbor::Decode)]
 #[error("module: {module} code: {code} message: {message}")]
 pub struct Error {
     #[cbor(optional)]
-    #[cbor(default)]
     pub module: String,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub code: u32,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub message: String,
 }
 
@@ -275,7 +278,7 @@ impl From<anyhow::Error> for Error {
 }
 
 /// Runtime information request.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct RuntimeInfoRequest {
     pub runtime_id: Namespace,
     pub consensus_backend: String,
@@ -283,8 +286,6 @@ pub struct RuntimeInfoRequest {
     pub consensus_chain_context: String,
 
     #[cbor(optional)]
-    #[cbor(default)]
-    #[cbor(skip_serializing_if = "BTreeMap::is_empty")]
     pub local_config: BTreeMap<String, cbor::Value>,
 }
 
@@ -292,21 +293,21 @@ pub struct RuntimeInfoRequest {
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Features {
     /// Schedule control feature.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub schedule_control: Option<FeatureScheduleControl>,
 }
 
 /// A feature specifying that the runtime supports controlling the scheduling of batches. This means
 /// that the scheduler should only take priority into account and ignore weights, leaving it up to
 /// the runtime to decide which transactions to include.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct FeatureScheduleControl {
     /// Size of the initial batch of transactions.
     pub initial_batch_size: u32,
 }
 
 /// Runtime information response.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct RuntimeInfoResponse {
     /// The runtime protocol version supported by the runtime.
     pub protocol_version: Version,
@@ -315,12 +316,13 @@ pub struct RuntimeInfoResponse {
     pub runtime_version: Version,
 
     /// Describes the features supported by the runtime.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub features: Option<Features>,
 }
 
 /// Batch execution mode.
 #[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+#[cbor(with_default)]
 pub enum ExecutionMode {
     /// Execution mode where the batch of transactions is executed as-is without the ability to
     /// perform and modifications to the batch.
@@ -350,12 +352,12 @@ pub struct CheckTxResult {
 /// CheckTx transaction metadata.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct CheckTxMetadata {
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub priority: u64,
 
-    #[cbor(optional, default, skip_serializing_if = "Vec::is_empty")]
+    #[cbor(optional)]
     pub sender: Vec<u8>,
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub sender_seq: u64,
 }
 
@@ -370,8 +372,14 @@ pub enum MessageType {
     Response = 2,
 }
 
+impl Default for MessageType {
+    fn default() -> Self {
+        Self::Invalid
+    }
+}
+
 /// Runtime protocol message.
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Message {
     /// Unique request identifier.
     pub id: u64,
