@@ -41,7 +41,7 @@ require (
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20211219162838-e9a669f65da9
 	github.com/oasisprotocol/deoxysii v0.0.0-20200527154044-851aec403956
 	github.com/powerman/rpc-codec v1.2.2
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/common v0.31.0
 	github.com/prometheus/procfs v0.7.3
 	github.com/seccomp/libseccomp-golang v0.9.1
