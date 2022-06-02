@@ -5,7 +5,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 )
 
 type kmNodeWatcher struct {

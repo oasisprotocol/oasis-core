@@ -17,7 +17,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/sentry/policywatcher"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 )
 
 // Worker is a garbage bag with lower level services and common runtime objects.
@@ -31,7 +31,7 @@ type Worker struct {
 	Consensus         consensus.Backend
 	Grpc              *grpc.Server
 	GrpcPolicyWatcher policyAPI.PolicyWatcher
-	P2P               *p2p.P2P
+	P2P               p2p.Service
 	IAS               ias.Endpoint
 	KeyManager        keymanagerApi.Backend
 	RuntimeRegistry   runtimeRegistry.Registry
@@ -198,7 +198,7 @@ func newWorker(
 	consensus consensus.Backend,
 	grpc *grpc.Server,
 	grpcPolicyWatcher policyAPI.PolicyWatcher,
-	p2p *p2p.P2P,
+	p2p p2p.Service,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	rtRegistry runtimeRegistry.Registry,
@@ -256,7 +256,7 @@ func New(
 	dataDir string,
 	identity *identity.Identity,
 	consensus consensus.Backend,
-	p2p *p2p.P2P,
+	p2p p2p.Service,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	runtimeRegistry runtimeRegistry.Registry,

@@ -116,6 +116,7 @@ func (n *commonNode) ensureStarted(ctx context.Context) error {
 	return nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Start() error {
 	n.Lock()
 	defer n.Unlock()
@@ -138,6 +139,7 @@ func (n *commonNode) Start() error {
 	return nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Stop() {
 	n.Lock()
 	defer n.Unlock()
@@ -275,20 +277,23 @@ func (n *commonNode) initialize() error {
 	return nil
 }
 
-// Implements service.BackgroundService.
+// Implements consensusAPI.Backend.
 func (n *commonNode) Cleanup() {
 	n.serviceClientsWg.Wait()
 	n.svcMgr.Cleanup()
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) ConsensusKey() signature.PublicKey {
 	return n.identity.ConsensusSigner.Public()
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) SupportedFeatures() consensusAPI.FeatureMask {
 	return consensusAPI.FeatureServices | consensusAPI.FeatureFullNode
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetAddresses() ([]node.ConsensusAddress, error) {
 	u, err := common.GetExternalAddress()
 	if err != nil {
@@ -304,10 +309,12 @@ func (n *commonNode) GetAddresses() ([]node.ConsensusAddress, error) {
 	return []node.ConsensusAddress{addr}, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Checkpointer() checkpoint.Checkpointer {
 	return n.mux.State().Checkpointer()
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*genesisAPI.Document, error) {
 	blk, err := n.GetTendermintBlock(ctx, blockHeight)
 	if err != nil {
@@ -376,62 +383,77 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 	}, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetGenesisDocument(ctx context.Context) (*genesisAPI.Document, error) {
 	return n.genesis, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetChainContext(ctx context.Context) (string, error) {
 	return n.genesis.ChainContext(), nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Beacon() beaconAPI.Backend {
 	return n.beacon
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) KeyManager() keymanagerAPI.Backend {
 	return n.keymanager
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Registry() registryAPI.Backend {
 	return n.registry
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) RootHash() roothashAPI.Backend {
 	return n.roothash
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Staking() stakingAPI.Backend {
 	return n.staking
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Scheduler() schedulerAPI.Backend {
 	return n.scheduler
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Governance() governanceAPI.Backend {
 	return n.governance
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) RegisterApplication(app api.Application) error {
 	return n.mux.Register(app)
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) SetTransactionAuthHandler(handler api.TransactionAuthHandler) error {
 	return n.mux.SetTransactionAuthHandler(handler)
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) TransactionAuthHandler() consensusAPI.TransactionAuthHandler {
 	return n.mux.TransactionAuthHandler()
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
 	return n.mux.EstimateGas(req.Signer, req.Transaction)
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) Pruner() api.StatePruner {
 	return n.mux.Pruner()
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) RegisterHaltHook(hook consensusAPI.HaltHook) {
 	if !n.initialized() {
 		return
@@ -458,11 +480,12 @@ func (n *commonNode) heightToTendermintHeight(height int64) (int64, error) {
 	return tmHeight, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
 	return n.mux.TransactionAuthHandler().GetSignerNonce(ctx, req)
 }
 
-// These method need to be provided.
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
@@ -485,6 +508,7 @@ func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmt
 	return result.Block, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*tmcoretypes.ResultBlockResults, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
@@ -502,6 +526,7 @@ func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*tmcore
 	return result, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetLastRetainedVersion(ctx context.Context) (int64, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return -1, err
@@ -510,7 +535,7 @@ func (n *commonNode) GetLastRetainedVersion(ctx context.Context) (int64, error) 
 	return state.Base, nil
 }
 
-// Following use the provided methods.
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.Block, error) {
 	blk, err := n.GetTendermintBlock(ctx, height)
 	if err != nil {
@@ -523,6 +548,7 @@ func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.
 	return api.NewBlock(blk), nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
 	blk, err := n.GetTendermintBlock(ctx, height)
 	if err != nil {
@@ -539,6 +565,7 @@ func (n *commonNode) GetTransactions(ctx context.Context, height int64) ([][]byt
 	return txs, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int64) (*consensusAPI.TransactionsWithResults, error) {
 	var txsWithResults consensusAPI.TransactionsWithResults
 
@@ -624,6 +651,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 	return &txsWithResults, nil
 }
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status := &consensusAPI.Status{
 		Version:  version.ConsensusProtocol,
@@ -703,36 +731,37 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 
 // Unimplemented methods.
 
+// Implements consensusAPI.Backend.
 func (n *commonNode) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error) {
 	return nil, nil, consensusAPI.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetNextBlockState(ctx context.Context) (*consensusAPI.NextBlockState, error) {
 	return nil, consensusAPI.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (n *commonNode) SubmitEvidence(ctx context.Context, evidence *consensusAPI.Evidence) error {
 	return consensusAPI.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (n *commonNode) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return consensusAPI.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
 	return nil, consensusAPI.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (n *commonNode) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
 	return nil, nil, consensusAPI.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (n *commonNode) SubmissionManager() consensusAPI.SubmissionManager {
 	return &consensusAPI.NoOpSubmissionManager{}
 }

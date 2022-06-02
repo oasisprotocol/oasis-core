@@ -14,6 +14,7 @@ import (
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
@@ -30,33 +31,15 @@ type rawMessage struct {
 	msg []byte
 }
 
-// Handler is a handler for P2P messages.
-type Handler interface {
-	// DecodeMessage decodes the given incoming message.
-	DecodeMessage(msg []byte) (interface{}, error)
-
-	// AuthorizeMessage handles authorizing an incoming message.
-	//
-	// The message handler will be re-invoked on error with a periodic backoff unless errors are
-	// wrapped via `p2pError.Permanent`.
-	AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}) error
-
-	// HandleMessage handles an incoming message from a peer.
-	//
-	// The message handler will be re-invoked on error with a periodic backoff unless errors are
-	// wrapped via `p2pError.Permanent`.
-	HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error
-}
-
 type topicHandler struct {
 	ctx context.Context
 
-	p2p *P2P
+	p2p *p2p
 
 	topic       *pubsub.Topic
 	host        core.Host
 	cancelRelay pubsub.RelayCancelFunc
-	handler     Handler
+	handler     api.Handler
 
 	numWorkers uint64
 
@@ -265,7 +248,7 @@ func (h *topicHandler) pendingMessagesWorker() {
 	}
 }
 
-func newTopicHandler(p *P2P, runtimeID common.Namespace, kind TopicKind, handler Handler) (string, *topicHandler, error) {
+func newTopicHandler(p *p2p, runtimeID common.Namespace, kind api.TopicKind, handler api.Handler) (string, *topicHandler, error) {
 	topicID := p.topicIDForRuntime(runtimeID, kind)
 	topic, err := p.pubsub.Join(topicID) // Note: Disallows duplicates.
 	if err != nil {
@@ -301,5 +284,5 @@ func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
 	if err != nil {
 		return signature.PublicKey{}, err
 	}
-	return pubKeyToPublicKey(pk)
+	return api.PubKeyToPublicKey(pk)
 }

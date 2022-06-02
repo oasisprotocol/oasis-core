@@ -1,4 +1,4 @@
-package p2p
+package api
 
 import (
 	"errors"
@@ -54,13 +54,15 @@ func (s *p2pSigner) GetPublic() libp2pCrypto.PubKey {
 	return pubKey
 }
 
-func signerToPrivKey(signer signature.Signer) libp2pCrypto.PrivKey {
+// SignerToPRivKey converts a Signer to a libp2pCrypto.PrivKey.
+func SignerToPrivKey(signer signature.Signer) libp2pCrypto.PrivKey {
 	return &p2pSigner{
 		signer: signer,
 	}
 }
 
-func pubKeyToPublicKey(pubKey libp2pCrypto.PubKey) (signature.PublicKey, error) {
+// PubKeyToPublicKey converts a libp2pCrypto.PubKey to a PublicKey.
+func PubKeyToPublicKey(pubKey libp2pCrypto.PubKey) (signature.PublicKey, error) {
 	var pk signature.PublicKey
 	if pubKey.Type() != libp2pCrypto.Ed25519 {
 		return pk, errCryptoNotSupported

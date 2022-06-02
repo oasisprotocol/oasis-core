@@ -517,6 +517,10 @@ func NewClient(p2p P2P, runtimeID common.Namespace, protocolID string, version v
 		opt(&co)
 	}
 
+	if p2p.GetHost() == nil {
+		// No P2P service, use the no-op client.
+		return &nopClient{&nopPeerManager{}}
+	}
 	return &client{
 		PeerManager: NewPeerManager(p2p, pid, co.stickyPeers),
 		host:        p2p.GetHost(),

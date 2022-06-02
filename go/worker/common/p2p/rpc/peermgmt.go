@@ -325,6 +325,10 @@ func (mgr *peerManager) peerProtocolWatcher() {
 
 // NewPeerManager creates a new peer manager for the given protocol.
 func NewPeerManager(p2p P2P, protocolID protocol.ID, stickyPeers bool) PeerManager {
+	if p2p.GetHost() == nil {
+		// No P2P service, use the no-op peer manager
+		return &nopPeerManager{}
+	}
 	mgr := &peerManager{
 		p2p:          p2p,
 		host:         p2p.GetHost(),

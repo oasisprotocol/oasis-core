@@ -12,7 +12,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 )
 
@@ -56,7 +56,7 @@ func (c *client) Initialized() <-chan struct{} {
 type nodeTracker struct {
 	sync.Mutex
 
-	p2p          *p2p.P2P
+	p2p          p2p.Service
 	consensus    consensus.Backend
 	keymanagerID common.Namespace
 
@@ -154,7 +154,7 @@ func (nt *nodeTracker) trackKeymanagerNodes() {
 }
 
 // NewClient creates a new keymanager protocol client.
-func NewClient(p2p *p2p.P2P, consensus consensus.Backend, keymanagerID common.Namespace) Client {
+func NewClient(p2p p2p.Service, consensus consensus.Backend, keymanagerID common.Namespace) Client {
 	// Create a peer filter as we want the client to only talk to known key manager nodes.
 	nt := &nodeTracker{
 		p2p:          p2p,

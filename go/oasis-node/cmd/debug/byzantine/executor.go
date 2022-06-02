@@ -20,7 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 )
 
 type computeBatchContext struct {

@@ -1,4 +1,4 @@
-package p2p
+package api
 
 import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"

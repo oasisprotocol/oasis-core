@@ -27,7 +27,7 @@ import (
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
