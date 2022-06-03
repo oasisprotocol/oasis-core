@@ -16,5 +16,5 @@ set -euxo pipefail
 # Check dependencies for vulnerabilities
 ########################################
 pushd go/oasis-node
-    go list -json -deps | nancy sleuth
+    go list -json -deps | nancy sleuth -e sonatype-2020-0722
 popd
