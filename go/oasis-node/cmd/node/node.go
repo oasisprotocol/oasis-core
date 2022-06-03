@@ -368,6 +368,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.RegistrationWorker,
 		n.Genesis,
 		n.commonStore,
+		tendermint.Mode() == consensusAPI.ModeArchive,
 	)
 	if err != nil {
 		return err
