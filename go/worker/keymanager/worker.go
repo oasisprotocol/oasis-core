@@ -29,7 +29,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )

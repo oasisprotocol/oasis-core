@@ -167,7 +167,7 @@ func (t *fullService) started() bool {
 	return t.isStarted
 }
 
-// Implements service.BackgroundService.
+// Implements consensusAPI.Backend.
 func (t *fullService) Start() error {
 	if t.started() {
 		return fmt.Errorf("tendermint: service already started")
@@ -223,12 +223,12 @@ func (t *fullService) Start() error {
 	return nil
 }
 
-// Implements service.BackgroundService.
+// Implements consensusAPI.Backend.
 func (t *fullService) Quit() <-chan struct{} {
 	return t.quitCh
 }
 
-// Implements service.BackgroundService.
+// Implements consensusAPI.Backend.
 func (t *fullService) Stop() {
 	if !t.initialized() || !t.started() {
 		return
@@ -244,14 +244,22 @@ func (t *fullService) Stop() {
 	})
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) Started() <-chan struct{} {
 	return t.startedCh
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) Synced() <-chan struct{} {
 	return t.syncedCh
 }
 
+// Implements consensusAPI.Backend.
+func (t *fullService) Mode() consensusAPI.Mode {
+	return consensusAPI.ModeFull
+}
+
+// Implements consensusAPI.Backend.
 func (t *fullService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	// Subscribe to the transaction being included in a block.
 	data := cbor.Marshal(tx)
@@ -331,6 +339,7 @@ func (t *fullService) newSubscriberID() string {
 	return fmt.Sprintf("%s/subscriber-%d", tmSubscriberID, atomic.AddUint64(&t.nextSubscriberID, 1))
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) SubmitEvidence(ctx context.Context, evidence *consensusAPI.Evidence) error {
 	var protoEv tmproto.Evidence
 	if err := protoEv.Unmarshal(evidence.Meta); err != nil {
@@ -397,10 +406,12 @@ func (t *fullService) unsubscribe(subscriber string, query tmpubsub.Query) error
 	return fmt.Errorf("tendermint: unsubscribe called with no backing service")
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) SubmissionManager() consensusAPI.SubmissionManager {
 	return t.submissionMgr
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
 	mempoolTxs := t.node.Mempool().ReapMaxTxs(-1)
 	txs := make([][]byte, 0, len(mempoolTxs))
@@ -410,6 +421,7 @@ func (t *fullService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte,
 	return txs, nil
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status, err := t.commonNode.GetStatus(ctx)
 	if err != nil {
@@ -441,6 +453,7 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	return status, nil
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) GetNextBlockState(ctx context.Context) (*consensusAPI.NextBlockState, error) {
 	if !t.started() {
 		return nil, fmt.Errorf("tendermint: not yet started")
@@ -482,6 +495,7 @@ func (t *fullService) GetNextBlockState(ctx context.Context) (*consensusAPI.Next
 	return nbs, nil
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
 	ch, sub, err := t.WatchTendermintBlocks()
 	if err != nil {
@@ -508,6 +522,7 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 	return mapCh, sub, nil
 }
 
+// Implements consensusAPI.Backend.
 func (t *fullService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error) {
 	typedCh := make(chan *tmtypes.Block)
 	sub := t.blockNotifier.Subscribe()

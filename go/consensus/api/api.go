@@ -355,6 +355,9 @@ type Backend interface {
 	service.BackgroundService
 	ServicesBackend
 
+	// Mode returns the configured consensus mode.
+	Mode() Mode
+
 	// SupportedFeatures returns the features supported by this consensus backend.
 	SupportedFeatures() FeatureMask
 

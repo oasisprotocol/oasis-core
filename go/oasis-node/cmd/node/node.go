@@ -52,6 +52,7 @@ import (
 	workerClient "github.com/oasisprotocol/oasis-core/go/worker/client"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
@@ -113,7 +114,7 @@ type Node struct {
 	StorageWorker      *workerStorage.Worker
 	ClientWorker       *workerClient.Worker
 	SentryWorker       *workerSentry.Worker
-	P2P                *p2p.P2P
+	P2P                p2pAPI.Service
 	RegistrationWorker *registration.Worker
 	KeymanagerWorker   *workerKeymanager.Worker
 	ConsensusWorker    *workerConsensusRPC.Worker
@@ -273,7 +274,8 @@ func (n *Node) initRuntimeWorkers() error {
 	// Since the P2P layer does not have a separate Start method and starts
 	// listening immediately when created, make sure that we don't start it if
 	// it is not needed.
-	if n.RuntimeRegistry.Mode() != runtimeRegistry.RuntimeModeNone {
+	switch {
+	case n.RuntimeRegistry.Mode() != runtimeRegistry.RuntimeModeNone && n.Consensus.Mode() != consensusAPI.ModeArchive:
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
 		}
@@ -281,8 +283,10 @@ func (n *Node) initRuntimeWorkers() error {
 		if err != nil {
 			return err
 		}
-		n.svcMgr.Register(n.P2P)
+	default:
+		n.P2P = p2p.NewNop()
 	}
+	n.svcMgr.Register(n.P2P)
 
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(

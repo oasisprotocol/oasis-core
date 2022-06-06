@@ -24,7 +24,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
 
@@ -162,7 +162,7 @@ type Node struct {
 	KeyManagerClient *KeyManagerClientWrapper
 	Consensus        consensus.Backend
 	Group            *Group
-	P2P              *p2p.P2P
+	P2P              p2pAPI.Service
 	TxPool           txpool.TransactionPool
 
 	ctx       context.Context
@@ -350,7 +350,7 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 
 	// Mark all executor nodes in the current committee as important.
 	if ec := epoch.GetExecutorCommittee(); ec != nil {
-		n.P2P.SetNodeImportance(p2p.ImportantNodeCompute, n.Runtime.ID(), ec.Peers)
+		n.P2P.SetNodeImportance(p2pAPI.ImportantNodeCompute, n.Runtime.ID(), ec.Peers)
 	}
 
 	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
@@ -840,7 +840,7 @@ func NewNode(
 	identity *identity.Identity,
 	keymanager keymanager.Backend,
 	consensus consensus.Backend,
-	p2pHost *p2p.P2P,
+	p2pHost p2pAPI.Service,
 	txPoolCfg *txpool.Config,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
@@ -890,7 +890,7 @@ func NewNode(
 	n.TxPool = txPool
 
 	// Register transaction message handler as that is something that all workers must handle.
-	p2pHost.RegisterHandler(runtime.ID(), p2p.TopicKindTx, &txMsgHandler{n})
+	p2pHost.RegisterHandler(runtime.ID(), p2pAPI.TopicKindTx, &txMsgHandler{n})
 	// Register transaction sync service.
 	p2pHost.RegisterProtocolServer(txsync.NewServer(runtime.ID(), txPool))
 

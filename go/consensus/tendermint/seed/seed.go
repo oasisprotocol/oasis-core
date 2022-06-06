@@ -69,12 +69,12 @@ type seedService struct {
 	quitCh   chan struct{}
 }
 
-// Name returns the service name.
+// Implements consensus.Backend.
 func (srv *seedService) Name() string {
 	return "tendermint/seed"
 }
 
-// Start starts the service.
+// Implements consensus.Backend.
 func (srv *seedService) Start() error {
 	if err := srv.transport.Listen(*srv.addr); err != nil {
 		return fmt.Errorf("tendermint/seed: failed to listen on transport: %w", err)
@@ -88,7 +88,7 @@ func (srv *seedService) Start() error {
 	return nil
 }
 
-// Stop halts the service.
+// Implements consensus.Backend.
 func (srv *seedService) Stop() {
 	srv.stopOnce.Do(func() {
 		close(srv.quitCh)
@@ -105,17 +105,17 @@ func (srv *seedService) Stop() {
 	})
 }
 
-// Quit returns a channel that will be closed when the service terminates.
+// Implements consensus.Backend.
 func (srv *seedService) Quit() <-chan struct{} {
 	return srv.quitCh
 }
 
-// Cleanup performs the service specific post-termination cleanup.
+// Implements consensus.Backend.
 func (srv *seedService) Cleanup() {
 	// No cleanup in particular.
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) Synced() <-chan struct{} {
 	// Seed is always considered synced.
 	ch := make(chan struct{})
@@ -123,12 +123,17 @@ func (srv *seedService) Synced() <-chan struct{} {
 	return ch
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
+func (srv *seedService) Mode() consensus.Mode {
+	return consensus.ModeSeed
+}
+
+// Implements consensus.Backend.
 func (srv *seedService) SupportedFeatures() consensus.FeatureMask {
 	return consensus.FeatureMask(0)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetStatus(ctx context.Context) (*consensus.Status, error) {
 	status := &consensus.Status{
 		Status:   consensus.StatusStateReady,
@@ -150,22 +155,22 @@ func (srv *seedService) GetStatus(ctx context.Context) (*consensus.Status, error
 	return status, nil
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetNextBlockState(ctx context.Context) (*consensus.NextBlockState, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetGenesisDocument(ctx context.Context) (*genesis.Document, error) {
 	return srv.doc, nil
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetChainContext(ctx context.Context) (string, error) {
 	return srv.doc.ChainContext(), nil
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetAddresses() ([]node.ConsensusAddress, error) {
 	u, err := tmcommon.GetExternalAddress()
 	if err != nil {
@@ -181,87 +186,87 @@ func (srv *seedService) GetAddresses() ([]node.ConsensusAddress, error) {
 	return []node.ConsensusAddress{addr}, nil
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) Checkpointer() checkpoint.Checkpointer {
 	return nil
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) SubmitEvidence(ctx context.Context, evidence *consensus.Evidence) error {
 	return consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) EstimateGas(ctx context.Context, req *consensus.EstimateGasRequest) (transaction.Gas, error) {
 	return 0, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetBlock(ctx context.Context, height int64) (*consensus.Block, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetTransactions(ctx context.Context, height int64) ([][]byte, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetTransactionsWithResults(ctx context.Context, height int64) (*consensus.TransactionsWithResults, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) WatchBlocks(ctx context.Context) (<-chan *consensus.Block, pubsub.ClosableSubscription, error) {
 	return nil, nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetSignerNonce(ctx context.Context, req *consensus.GetSignerNonceRequest) (uint64, error) {
 	return 0, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, error) {
 	return nil, consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) State() syncer.ReadSyncer {
 	return syncer.NopReadSyncer
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) ConsensusKey() signature.PublicKey {
 	return srv.identity.ConsensusSigner.Public()
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return consensus.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) RegisterHaltHook(consensus.HaltHook) {
 	panic(consensus.ErrUnsupported)
 }
@@ -270,42 +275,42 @@ func (srv *seedService) RegisterHaltHook(consensus.HaltHook) {
 // consensus services so the caller is at fault for not adhering to the
 // SupportedFeatures flag, in case any of the following methods is called.
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) Beacon() beacon.Backend {
 	panic(consensus.ErrUnsupported)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) KeyManager() keymanager.Backend {
 	panic(consensus.ErrUnsupported)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) Registry() registry.Backend {
 	panic(consensus.ErrUnsupported)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) RootHash() roothash.Backend {
 	panic(consensus.ErrUnsupported)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) Staking() staking.Backend {
 	panic(consensus.ErrUnsupported)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) Scheduler() scheduler.Backend {
 	panic(consensus.ErrUnsupported)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) Governance() governance.Backend {
 	panic(consensus.ErrUnsupported)
 }
 
-// Implements Backend.
+// Implements consensus.Backend.
 func (srv *seedService) SubmissionManager() consensus.SubmissionManager {
 	panic(consensus.ErrUnsupported)
 }

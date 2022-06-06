@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 )
 
 type p2pReqRes struct {
@@ -18,7 +19,7 @@ type p2pReqRes struct {
 }
 
 type p2pHandle struct {
-	service  *p2p.P2P
+	service  p2pAPI.Service
 	requests chan p2pReqRes
 }
 
@@ -63,7 +64,7 @@ type committeeMsgHandler struct {
 }
 
 func (h *committeeMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
-	var dec p2p.CommitteeMessage
+	var dec p2pAPI.CommitteeMessage
 	if err := cbor.Unmarshal(msg, &dec); err != nil {
 		return nil, err
 	}
@@ -100,8 +101,8 @@ func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, runtimeI
 		return fmt.Errorf("P2P service New: %w", err)
 	}
 
-	ph.service.RegisterHandler(runtimeID, p2p.TopicKindTx, &txMsgHandler{ph})
-	ph.service.RegisterHandler(runtimeID, p2p.TopicKindCommittee, &committeeMsgHandler{ph})
+	ph.service.RegisterHandler(runtimeID, p2pAPI.TopicKindTx, &txMsgHandler{ph})
+	ph.service.RegisterHandler(runtimeID, p2pAPI.TopicKindCommittee, &committeeMsgHandler{ph})
 
 	return nil
 }

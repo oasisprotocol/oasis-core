@@ -55,7 +55,7 @@ func (srv *archiveService) started() bool {
 	return srv.isStarted
 }
 
-// Start starts the service.
+// Implements consensusAPI.Backend.
 func (srv *archiveService) Start() error {
 	if srv.started() {
 		return fmt.Errorf("tendermint: service already started")
@@ -90,7 +90,7 @@ func (srv *archiveService) Start() error {
 	return nil
 }
 
-// Stop halts the service.
+// Implements consensusAPI.Backend.
 func (srv *archiveService) Stop() {
 	if !srv.started() {
 		return
@@ -103,12 +103,12 @@ func (srv *archiveService) Stop() {
 	})
 }
 
-// Quit returns a channel that will be closed when the service terminates.
+// Implements consensusAPI.Backend.
 func (srv *archiveService) Quit() <-chan struct{} {
 	return srv.quitCh
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (srv *archiveService) Synced() <-chan struct{} {
 	// Archive node is always considered synced.
 	ch := make(chan struct{})
@@ -116,7 +116,12 @@ func (srv *archiveService) Synced() <-chan struct{} {
 	return ch
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
+func (srv *archiveService) Mode() consensusAPI.Mode {
+	return consensusAPI.ModeArchive
+}
+
+// Implements consensusAPI.Backend.
 func (srv *archiveService) GetStatus(ctx context.Context) (*consensusAPI.Status, error) {
 	status, err := srv.commonNode.GetStatus(ctx)
 	if err != nil {
@@ -128,12 +133,12 @@ func (srv *archiveService) GetStatus(ctx context.Context) (*consensusAPI.Status,
 	return status, nil
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (srv *archiveService) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
 	return 0, consensusAPI.ErrUnsupported
 }
 
-// Implements Backend.
+// Implements consensusAPI.Backend.
 func (srv *archiveService) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
 	return 0, consensusAPI.ErrUnsupported
 }

@@ -35,7 +35,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	sentryClient "github.com/oasisprotocol/oasis-core/go/sentry/client"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 )
 
 const (
@@ -206,7 +206,7 @@ type Worker struct { // nolint: maligned
 	beacon          beacon.Backend
 	registry        registry.Backend
 	identity        *identity.Identity
-	p2p             *p2p.P2P
+	p2p             p2p.Service
 	ctx             context.Context
 
 	// Bandaid: Idempotent Stop for testing.
@@ -1202,7 +1202,7 @@ func New(
 	registry registry.Backend,
 	identity *identity.Identity,
 	consensus consensus.Backend,
-	p2p *p2p.P2P,
+	p2p p2p.Service,
 	workerCommonCfg *workerCommon.Config,
 	store *persistent.CommonStore,
 	delegate Delegate,

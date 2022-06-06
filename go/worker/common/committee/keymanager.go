@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
+	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	keymanagerP2P "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
@@ -22,7 +22,7 @@ type KeyManagerClientWrapper struct {
 	l sync.Mutex
 
 	id        *common.Namespace
-	p2p       *p2p.P2P
+	p2p       p2p.Service
 	consensus consensus.Backend
 	cli       keymanagerP2P.Client
 	logger    *logging.Logger
@@ -128,7 +128,7 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 }
 
 // NewKeyManagerClientWrapper creates a new key manager client wrapper.
-func NewKeyManagerClientWrapper(p2p *p2p.P2P, consensus consensus.Backend, logger *logging.Logger) *KeyManagerClientWrapper {
+func NewKeyManagerClientWrapper(p2p p2p.Service, consensus consensus.Backend, logger *logging.Logger) *KeyManagerClientWrapper {
 	return &KeyManagerClientWrapper{
 		p2p:       p2p,
 		consensus: consensus,
