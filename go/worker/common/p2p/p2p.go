@@ -35,9 +35,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 )
 
-// peersHighWatermarkDelta specifies how many peers after the maximum peer count is reached we ask
-// the connection manager to start pruning peers.
-const peersHighWatermarkDelta = 30
+const (
+	// peersHighWatermarkDelta specifies how many peers after the maximum peer count is reached we
+	// ask the connection manager to start pruning peers.
+	peersHighWatermarkDelta = 30
+
+	// seenMessagesTTL is the amount of time pubsub messages will be remembered as seen and any
+	// duplicates will be dropped before propagation.
+	seenMessagesTTL = 120 * time.Second
+)
 
 // messageIdContext is the domain separation context for computing message identifier hashes.
 var messageIdContext = []byte("oasis-core/p2p: message id")
@@ -298,7 +304,7 @@ func (p *p2p) RegisterProtocolServer(srv rpc.Server) {
 
 // Implements api.Service.
 func (p *p2p) GetMinRepublishInterval() time.Duration {
-	return pubsub.TimeCacheDuration + 5*time.Second
+	return seenMessagesTTL + 5*time.Second
 }
 
 func messageIdFn(pmsg *pb.Message) string {
@@ -443,6 +449,7 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 		pubsub.WithValidateThrottle(viper.GetInt(CfgP2PValidateThrottle)),
 		pubsub.WithMessageIdFn(messageIdFn),
 		pubsub.WithDirectPeers(persistentPeersAI),
+		pubsub.WithSeenMessagesTTL(seenMessagesTTL),
 	)
 	if err != nil {
 		ctxCancel()
