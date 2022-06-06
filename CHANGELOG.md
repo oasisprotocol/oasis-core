@@ -12,6 +12,39 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 21.3.14 (2022-06-06)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 4.0.0     |
+| Runtime Host      | 4.0.0     |
+| Runtime Committee | 3.0.0     |
+
+### Bug Fixes
+
+- go/runtime/host/sandbox: Properly handle clone3 in seccomp policy
+  ([#4687](https://github.com/oasisprotocol/oasis-core/issues/4687))
+
+  We need to handle the clone3 syscall in a special manner as there are
+  several complications to its handling:
+
+  - Newer glibc versions will try clone3 first and if they see EPERM they
+    will instantly fail making the program unable to spawn threads.
+
+  - The clone3 syscall is much more complex than clone and so we can't
+    simply inspect its flags as we do for clone.
+
+  Therefore we need to reject the syscall with ENOSYS, causing fallback to
+  clone.
+
+- Disable storage sync for archive nodes
+  ([#4776](https://github.com/oasisprotocol/oasis-core/issues/4776))
+
+### Internal Changes
+
+- docker/oasis-core-dev: Fix golangci-lint install
+  ([#4754](https://github.com/oasisprotocol/oasis-core/issues/4754))
+
 ## 21.3.13 (2022-04-19)
 
 | Protocol          | Version   |
