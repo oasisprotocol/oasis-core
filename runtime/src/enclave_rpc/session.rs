@@ -260,7 +260,7 @@ impl Session {
 /// * `rak_pub` contains the public part of RAK.
 /// * `binding` is signed by `rak_pub` and binds the session's static
 ///   public key to RAK.
-#[derive(Clone, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct RAKBinding {
     pub avr: avr::AVR,
     pub rak_pub: PublicKey,

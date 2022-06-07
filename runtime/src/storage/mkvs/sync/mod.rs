@@ -39,7 +39,6 @@ pub struct GetRequest {
     pub tree: TreeID,
     pub key: Vec<u8>,
     #[cbor(optional)]
-    #[cbor(default)]
     pub include_siblings: bool,
 }
 

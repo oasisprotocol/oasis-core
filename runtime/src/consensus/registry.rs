@@ -112,7 +112,7 @@ pub struct CapabilityTEE {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct Capabilities {
     /// Is the capability of a node executing batches in a TEE.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub tee: Option<CapabilityTEE>,
 }
 
@@ -204,12 +204,12 @@ pub struct Node {
     pub consensus: ConsensusInfo,
 
     /// Information for this node's participation in VRF based elections.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub vrf: Option<VRFInfo>,
 
     /// Information for this node's participation in the old PVSS based random beacon protocol.
     /// Deprecated.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub beacon: Option<cbor::Value>,
 
     /// Node's runtimes.
@@ -219,7 +219,7 @@ pub struct Node {
     pub roles: RolesMask,
 
     /// Node's oasis-node software version.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub software_version: Option<String>,
 }
 
@@ -279,15 +279,15 @@ pub struct ExecutorParameters {
     pub max_messages: u32,
     /// Minimum percentage of rounds in an epoch that a node must participate in positively in order
     /// to be considered live. Nodes not satisfying this may be penalized.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub min_live_rounds_percent: u8,
     /// Minimum number of live rounds in an epoch for the liveness calculations to be considered for
     /// evaluation.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub min_live_rounds_eval: u64,
     /// Maximum number of liveness failures that are tolerated before suspending and/or slashing the
     /// node. Zero means unlimited.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub max_liveness_fails: u8,
 }
 
@@ -302,7 +302,7 @@ pub struct TxnSchedulerParameters {
     /// Maximum size of a scheduled batch in bytes.
     pub max_batch_size_bytes: u64,
     /// Maximum size of the incoming message queue.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub max_in_messages: u32,
     /// Timeout (in consensus blocks) for the scheduler to propose a batch.
     pub propose_batch_timeout: i64,
@@ -360,25 +360,25 @@ pub struct RuntimeStakingParameters {
     /// In case a node is registered for multiple runtimes, it will need to
     /// satisfy the maximum threshold of all the runtimes.
     #[cbor(optional)]
-    pub thresholds: Option<BTreeMap<staking::ThresholdKind, quantity::Quantity>>,
+    pub thresholds: BTreeMap<staking::ThresholdKind, quantity::Quantity>,
 
     /// Per-runtime misbehavior slashing parameters.
     #[cbor(optional)]
-    pub slashing: Option<BTreeMap<staking::SlashReason, staking::Slash>>,
+    pub slashing: BTreeMap<staking::SlashReason, staking::Slash>,
 
     /// The percentage of the reward obtained when slashing for equivocation that is transferred to
     /// the runtime's account.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub reward_equivocation: u8,
 
     /// The percentage of the reward obtained when slashing for incorrect results that is
     /// transferred to the runtime's account.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub reward_bad_results: u8,
 
     /// Specifies the minimum fee that the incoming message must include for the
     /// message to be queued.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub min_in_message_fee: quantity::Quantity,
 }
 
@@ -387,7 +387,7 @@ pub struct RuntimeStakingParameters {
 pub struct EntityWhitelistRuntimeAdmissionPolicy {
     /// Entity whitelist configuration for each whitelisted entity.
     #[cbor(optional)]
-    pub entities: Option<BTreeMap<PublicKey, EntityWhitelistConfig>>,
+    pub entities: BTreeMap<PublicKey, EntityWhitelistConfig>,
 }
 
 /// Entity whitelist configuration.
@@ -399,7 +399,7 @@ pub struct EntityWhitelistConfig {
     /// of nodes is restricted to the specified maximum (where zero
     /// means no nodes allowed), any missing roles imply zero nodes.
     #[cbor(optional)]
-    pub max_nodes: Option<BTreeMap<RolesMask, u16>>,
+    pub max_nodes: BTreeMap<RolesMask, u16>,
 }
 
 /// Specification of which nodes are allowed to register for a runtime.
@@ -448,7 +448,7 @@ pub struct VersionInfo {
     pub valid_from: EpochTime,
     /// Enclave version information, in an enclave provided specific format (if any).
     #[cbor(optional)]
-    pub tee: Option<Vec<u8>>,
+    pub tee: Vec<u8>,
 }
 
 /// TEE hardware implementation.
@@ -487,37 +487,36 @@ pub struct Runtime {
     /// Runtime's TEE hardware requirements.
     pub tee_hardware: TEEHardware,
     /// Runtime deployment information.
-    #[cbor(optional, default, skip_serializing_if = "Vec::is_empty")]
+    #[cbor(optional)]
     pub deployments: Vec<VersionInfo>,
     /// Key manager runtime ID for this runtime.
     #[cbor(optional)]
     pub key_manager: Option<Namespace>,
     /// Parameters of the executor committee.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub executor: ExecutorParameters,
     /// Transaction scheduling parameters of the executor committee.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub txn_scheduler: TxnSchedulerParameters,
     /// Parameters of the storage committee.
-    #[cbor(optional, default)]
+    #[cbor(optional)]
     pub storage: StorageParameters,
     /// Which nodes are allowed to register for this runtime.
     pub admission_policy: RuntimeAdmissionPolicy,
     /// Node scheduling constraints.
     #[cbor(optional)]
-    pub constraints: Option<
+    pub constraints:
         BTreeMap<scheduler::CommitteeKind, BTreeMap<scheduler::Role, SchedulingConstraints>>,
-    >,
     /// Runtime's staking-related parameters.
-    #[cbor(optional, default, skip_serializing_if = "staking_params_are_empty")]
+    #[cbor(optional, skip_serializing_if = "staking_params_are_empty")]
     pub staking: RuntimeStakingParameters,
     /// Runtime governance model.
     pub governance_model: RuntimeGovernanceModel,
 }
 
 fn staking_params_are_empty(p: &RuntimeStakingParameters) -> bool {
-    p.thresholds.is_none()
-        && p.slashing.is_none()
+    p.thresholds.is_empty()
+        && p.slashing.is_empty()
         && p.reward_equivocation == 0
         && p.reward_bad_results == 0
         && p.min_in_message_fee.is_zero()
@@ -533,6 +532,7 @@ pub struct RuntimeGenesis {
     /// Runtime round in the genesis.
     pub round: u64,
 }
+
 #[cfg(test)]
 mod tests {
     use std::net::Ipv4Addr;
@@ -562,8 +562,8 @@ mod tests {
             ("q2F2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAbXR4bl9zY2hlZHVsZXKkbm1heF9iYXRjaF9zaXplAHNiYXRjaF9mbHVzaF90aW1lb3V0AHRtYXhfYmF0Y2hfc2l6ZV9ieXRlcwB1cHJvcG9zZV9iYXRjaF90aW1lb3V0AHBhZG1pc3Npb25fcG9saWN5oWhhbnlfbm9kZaBwZ292ZXJuYW5jZV9tb2RlbAA=",
                 Runtime {
                     staking: RuntimeStakingParameters {
-                        thresholds:          None,
-                        slashing:            None,
+                        thresholds:          BTreeMap::new(),
+                        slashing:            BTreeMap::new(),
                         reward_equivocation: 0,
                         reward_bad_results:  0,
                         min_in_message_fee:  Quantity::from(0u32),
@@ -573,8 +573,8 @@ mod tests {
             ("rGF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0YWtpbmehcnJld2FyZF9iYWRfcmVzdWx0cwpnc3RvcmFnZaNzY2hlY2twb2ludF9pbnRlcnZhbABzY2hlY2twb2ludF9udW1fa2VwdAB1Y2hlY2twb2ludF9jaHVua19zaXplAGhleGVjdXRvcqVqZ3JvdXBfc2l6ZQBsbWF4X21lc3NhZ2VzAG1yb3VuZF90aW1lb3V0AHFncm91cF9iYWNrdXBfc2l6ZQByYWxsb3dlZF9zdHJhZ2dsZXJzAGllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbHRlZV9oYXJkd2FyZQBtdHhuX3NjaGVkdWxlcqRubWF4X2JhdGNoX3NpemUAc2JhdGNoX2ZsdXNoX3RpbWVvdXQAdG1heF9iYXRjaF9zaXplX2J5dGVzAHVwcm9wb3NlX2JhdGNoX3RpbWVvdXQAcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA==",
                 Runtime {
                     staking: RuntimeStakingParameters {
-                        thresholds:          None,
-                        slashing:            None,
+                        thresholds:          BTreeMap::new(),
+                        slashing:            BTreeMap::new(),
                         reward_equivocation: 0,
                         reward_bad_results:  10,
                         min_in_message_fee:  Quantity::from(0u32),
@@ -596,7 +596,7 @@ mod tests {
                         VersionInfo{
                             version: Version { major: 44, minor: 0, patch: 1 },
                             valid_from: 0,
-                            tee: Some(b"version tee".to_vec()),
+                            tee: b"version tee".to_vec(),
                         },
                     ],
                     key_manager: Some(
@@ -625,18 +625,17 @@ mod tests {
                         checkpoint_chunk_size: 101,
                     },
                     admission_policy: RuntimeAdmissionPolicy::EntityWhitelist(EntityWhitelistRuntimeAdmissionPolicy{
-                        entities: Some(
+                        entities:
                             btreemap! {
                                 PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000") => EntityWhitelistConfig {
-                                     max_nodes: Some(btreemap! {
+                                     max_nodes: btreemap! {
                                          RolesMask::ROLE_COMPUTE_WORKER => 3,
                                          RolesMask::ROLE_KEY_MANAGER => 1,
-                                    })
+                                    }
                                 }
                             }
-                        )
                     }),
-                    constraints: Some(
+                    constraints:
                         btreemap! {
                             scheduler::CommitteeKind::ComputeExecutor => btreemap! {
                                 scheduler::Role::Worker => SchedulingConstraints{
@@ -653,11 +652,10 @@ mod tests {
                                     validator_set: Some(ValidatorSetConstraint{}),
                                 },
                             }
-                        }
-                    ),
+                        },
                     staking: RuntimeStakingParameters {
-                        thresholds:          None,
-                        slashing:            None,
+                        thresholds:          BTreeMap::new(),
+                        slashing:            BTreeMap::new(),
                         reward_equivocation: 0,
                         reward_bad_results:  10,
                         min_in_message_fee:  Quantity::from(0u32),
@@ -678,7 +676,11 @@ mod tests {
     fn test_consistent_node() {
         // NOTE: These tests MUST be synced with go/common/node/node_test.go.
         let tcs = vec![
-            ("qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==", Node{v: 2, ..Default::default()}),
+            (
+                "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==",
+                Node{v: 2, ..Default::default()},
+                true,
+            ),
 			(
                 "qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBkEV2Rab25lYGdwdWJfa2V5WCD/////////////////////////////////////////9GxuZXh0X3B1Yl9rZXlYIP/////////////////////////////////////////zY3ZyZqFiaWRYIP/////////////////////////////////////////3ZXJvbGVzAGhydW50aW1lc4KkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEGd2ZXJzaW9uoWVwYXRjaBkBQWpleHRyYV9pbmZv9mxjYXBhYmlsaXRpZXOgpGJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFndmVyc2lvbqFlcGF0Y2gYe2pleHRyYV9pbmZvRAUDAgFsY2FwYWJpbGl0aWVzoWN0ZWWjY3Jha1gg//////////////////////////////////////////hoaGFyZHdhcmUBa2F0dGVzdGF0aW9uRgABAgMEBWljb25zZW5zdXOiYmlkWCD/////////////////////////////////////////9mlhZGRyZXNzZXOAaWVudGl0eV9pZFgg//////////////////////////////////////////FqZXhwaXJhdGlvbhgg",
                 Node{
@@ -732,14 +734,39 @@ mod tests {
                     ]),
                     ..Default::default()
                 },
+                true,
+            ),
+            (
+                "qmF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAHBzb2Z0d2FyZV92ZXJzaW9u9g==",
+                Node{v: 2, ..Default::default()},
+                false,
+            ),
+            (
+                "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXOBomJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBndmVyc2lvbvZpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
+                Node{
+                    v: 2,
+                    runtimes: Some(vec![
+                        NodeRuntime{
+                            id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),
+                            version: Version::from(0u64),
+                            ..Default::default()
+                        },
+                    ]),
+                    ..Default::default()
+                },
+                false,
             ),
         ];
-        for (encoded_base64, node) in tcs {
+        for (encoded_base64, node, round_trip) in tcs {
+            println!("{:?}", node);
             let dec: Node = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
                 .expect("node should deserialize correctly");
             assert_eq!(dec, node, "decoded node should match the expected value");
-            let ser = base64::encode(cbor::to_vec(dec));
-            assert_eq!(ser, encoded_base64, "node should serialize correctly");
+
+            if round_trip {
+                let ser = base64::encode(cbor::to_vec(dec));
+                assert_eq!(ser, encoded_base64, "node should serialize correctly");
+            }
         }
     }
 }

@@ -29,7 +29,7 @@ pub enum LogEntryKind {
 }
 
 /// An entry in the write log, describing a single update.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash, cbor::Encode, cbor::Decode)]
 #[cbor(as_array)]
 pub struct LogEntry {
     /// The key that was inserted or deleted.

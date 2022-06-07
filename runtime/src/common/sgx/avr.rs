@@ -158,7 +158,7 @@ impl QuoteBody {
 }
 
 /// Attestation verification report.
-#[derive(Debug, Clone, cbor::Encode, cbor::Decode)]
+#[derive(Debug, Default, Clone, cbor::Encode, cbor::Decode)]
 pub struct AVR {
     pub body: Vec<u8>,
     pub signature: Vec<u8>,
@@ -481,20 +481,13 @@ pub(crate) fn timestamp_is_fresh(now: i64, timestamp: i64) -> bool {
 }
 
 /// Enclave identity.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq, cbor::Encode, cbor::Decode)]
 pub struct EnclaveIdentity {
     pub mr_enclave: MrEnclave,
     pub mr_signer: MrSigner,
 }
 
 impl EnclaveIdentity {
-    pub fn default() -> Self {
-        Self {
-            mr_enclave: MrEnclave::default(),
-            mr_signer: MrSigner::default(),
-        }
-    }
-
     pub fn current() -> Option<Self> {
         #[cfg(target_env = "sgx")]
         {

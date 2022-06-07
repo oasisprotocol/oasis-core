@@ -109,19 +109,15 @@ pub enum RegistryMessage {
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct MessageEvent {
     #[cbor(optional)]
-    #[cbor(default)]
     pub module: String,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub code: u32,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub index: u32,
 
     #[cbor(optional)]
-    #[cbor(default)]
     pub result: Option<cbor::Value>,
 }
 
@@ -141,18 +137,18 @@ pub struct IncomingMessage {
     pub caller: Address,
     /// An optional tag provided by the caller which is ignored and can be used to match processed
     /// incoming message events later.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub tag: u64,
     /// Fee sent into the runtime as part of the message being sent. The fee is transferred before
     /// the message is processed by the runtime.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub fee: Quantity,
     /// Tokens sent into the runtime as part of the message being sent. The tokens are transferred
     /// before the message is processed by the runtime.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub tokens: Quantity,
     /// Arbitrary runtime-dependent data.
-    #[cbor(optional, default, skip_serializing_if = "Vec::is_empty")]
+    #[cbor(optional)]
     pub data: Vec<u8>,
 }
 
@@ -172,18 +168,15 @@ impl IncomingMessage {
 pub struct RoundResults {
     /// Results of executing emitted runtime messages.
     #[cbor(optional)]
-    #[cbor(default)]
     pub messages: Vec<MessageEvent>,
 
     /// Public keys of compute nodes' controlling entities that positively contributed to the round
     /// by replicating the computation correctly.
     #[cbor(optional)]
-    #[cbor(default)]
     pub good_compute_entities: Vec<PublicKey>,
     /// Public keys of compute nodes' controlling entities that negatively contributed to the round
     /// by causing discrepancies.
     #[cbor(optional)]
-    #[cbor(default)]
     pub bad_compute_entities: Vec<PublicKey>,
 }
 
@@ -247,7 +240,7 @@ pub struct ComputeResultsHeader {
     #[cbor(optional)]
     pub in_msgs_hash: Option<Hash>,
     /// The number of processed incoming messages.
-    #[cbor(optional, default, skip_serializing_if = "num_traits::Zero::is_zero")]
+    #[cbor(optional)]
     pub in_msgs_count: u32,
 }
 
@@ -333,9 +326,7 @@ mod tests {
         let mut wl = BTreeMap::new();
         wl.insert(
             test_ent_id,
-            registry::EntityWhitelistConfig {
-                max_nodes: Some(wlc),
-            },
+            registry::EntityWhitelistConfig { max_nodes: wlc },
         );
 
         let rt = registry::Runtime {
@@ -371,7 +362,7 @@ mod tests {
                 checkpoint_chunk_size: 0,
             },
             admission_policy: registry::RuntimeAdmissionPolicy::EntityWhitelist(
-                registry::EntityWhitelistRuntimeAdmissionPolicy { entities: Some(wl) },
+                registry::EntityWhitelistRuntimeAdmissionPolicy { entities: wl },
             ),
             constraints: {
                 let mut cs = BTreeMap::new();
@@ -395,10 +386,10 @@ mod tests {
                     ce
                 });
 
-                Some(cs)
+                cs
             },
             staking: registry::RuntimeStakingParameters {
-                thresholds: Some(st),
+                thresholds: st,
                 ..Default::default()
             },
             governance_model: registry::RuntimeGovernanceModel::GovernanceEntity,
@@ -454,6 +445,7 @@ mod tests {
             ),
         ];
         for (msgs, expected_hash) in tcs {
+            println!("{:?}", cbor::to_vec(msgs.clone()));
             assert_eq!(Message::messages_hash(&msgs), Hash::from(expected_hash));
         }
     }

@@ -20,7 +20,7 @@ impl SessionID {
 }
 
 /// Frame.
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Frame {
     pub session: SessionID,
     // The `untrusted_plaintext` field is only a temporary workaround until
@@ -33,29 +33,31 @@ pub struct Frame {
 }
 
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[cbor(no_default)]
 pub struct Request {
     pub method: String,
     pub args: cbor::Value,
 }
 
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Error {
     pub message: String,
 }
 
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub enum Body {
     Success(cbor::Value),
     Error(String),
 }
 
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[cbor(no_default)]
 pub struct Response {
     pub body: Body,
 }
 
 /// Protocol message.
-#[derive(Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub enum Message {
     Request(Request),
     Response(Response),

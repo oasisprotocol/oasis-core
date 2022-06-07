@@ -137,6 +137,10 @@ impl cbor::Encode for Address {
 }
 
 impl cbor::Decode for Address {
+    fn try_default() -> Result<Self, cbor::DecodeError> {
+        Ok(Default::default())
+    }
+
     fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
         match value {
             cbor::Value::ByteString(data) => Ok(Address(
@@ -194,6 +198,15 @@ mod test {
         assert_eq!(
             addr.to_bech32(),
             "oasis1qpllh99nhwzrd56px4txvl26atzgg4f3a58jzzad"
+        );
+    }
+
+    #[test]
+    fn test_deserialization() {
+        let addr: Address = cbor::from_slice(&[0xF6]).unwrap();
+        assert_eq!(
+            addr.to_bech32(),
+            "oasis1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq0ltrq9"
         );
     }
 }

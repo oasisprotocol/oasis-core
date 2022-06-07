@@ -14,7 +14,7 @@ pub mod verifier;
 pub const HEIGHT_LATEST: u64 = 0;
 
 /// Light consensus block.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, Debug, cbor::Encode, cbor::Decode)]
 pub struct LightBlock {
     pub height: u64,
     pub meta: Vec<u8>,

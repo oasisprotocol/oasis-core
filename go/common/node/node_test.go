@@ -2,7 +2,6 @@ package node
 
 import (
 	"encoding/base64"
-	"fmt"
 	"net"
 	"testing"
 
@@ -271,6 +270,43 @@ func TestNodeForTestSerialization(t *testing.T) {
 		var t map[string]interface{}
 		err = cbor.Unmarshal(enc, &t)
 		require.NoError(err, "Unamarshal inter")
-		fmt.Println(t)
+	}
+}
+
+func TestNodeDeserialization(t *testing.T) {
+	require := require.New(t)
+
+	var runtimeID common.Namespace
+	require.NoError(runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000010"), "runtime id")
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/registry.rs.
+	for _, tc := range []struct {
+		rawBase64    string
+		expectedNode Node
+	}{
+		{
+			"qmF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAHBzb2Z0d2FyZV92ZXJzaW9u9g==",
+			Node{Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion)},
+		},
+		{
+			"qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXOBomJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBndmVyc2lvbvZpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
+			Node{
+				Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion),
+				Runtimes: []*Runtime{
+					{
+						ID:      runtimeID,
+						Version: version.FromU64(0),
+					},
+				},
+			},
+		},
+	} {
+		raw, err := base64.StdEncoding.DecodeString(tc.rawBase64)
+		require.NoError(err, "DecodeString")
+
+		var dec Node
+		err = cbor.Unmarshal(raw, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.expectedNode, dec, "Node serialization should round-trip")
 	}
 }
