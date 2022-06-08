@@ -45,13 +45,8 @@ func (q *Quantity) MarshalBinary() ([]byte, error) {
 func (q *Quantity) UnmarshalBinary(data []byte) error {
 	var tmp big.Int
 	tmp.SetBytes(data)
-	q.inner.Set(&tmp)
 
-	if !q.IsValid() {
-		return ErrInvalidQuantity
-	}
-
-	return nil
+	return q.FromBigInt(&tmp)
 }
 
 // MarshalText encodes a Quantity into text form.
@@ -65,13 +60,8 @@ func (q *Quantity) UnmarshalText(text []byte) error {
 	if err := tmp.UnmarshalText(text); err != nil {
 		return err
 	}
-	q.inner.Set(&tmp)
 
-	if !q.IsValid() {
-		return ErrInvalidQuantity
-	}
-
-	return nil
+	return q.FromBigInt(&tmp)
 }
 
 // FromInt64 converts from an int64 to a Quantity.
