@@ -71,6 +71,7 @@ type ApplicationConfig struct { // nolint: maligned
 	StorageBackend  string
 	Pruning         PruneConfig
 	HaltEpochHeight beacon.EpochTime
+	HaltBlockHeight uint64
 	MinGasPrice     uint64
 
 	DisableCheckpointer       bool
@@ -433,7 +434,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	switch mux.state.haltMode {
 	case false:
-		if !mux.state.inHaltEpoch(ctx) {
+		if !mux.state.shouldHalt(ctx) {
 			break
 		}
 		// On transition, trigger halt hooks.
@@ -441,18 +442,21 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 			"block_height", blockHeight,
 			"epoch", mux.state.haltEpochHeight,
 		)
-		mux.logger.Debug("dispatching halt hooks before halt epoch")
+		mux.logger.Debug("dispatching halt hooks before halt point")
 		mux.dispatchHaltHooks(blockHeight, currentEpoch, nil)
 		return types.ResponseBeginBlock{}
 	case true:
-		// After one block into the halt epoch, terminate.
-		mux.logger.Info("BeginBlock: after halt epoch, halting",
+		// After one block past the halt point, terminate.
+		mux.logger.Info("BeginBlock: after halt point, halting",
 			"block_height", blockHeight,
 		)
 		// XXX: there is no way to stop tendermint consensus other than
 		// triggering a panic. Once possible, we should stop the consensus
 		// layer here and gracefully shutdown the node.
-		panic("tendermint: after halt epoch, halting")
+		//
+		// The cosmos-sdk way of doing things is to SIGINT/SIGTERM yourself
+		// and exit on failure.
+		panic("tendermint: after halt point, halting")
 	}
 
 	// Dispatch BeginBlock to all applications.

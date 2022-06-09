@@ -66,6 +66,7 @@ type applicationState struct { // nolint: maligned
 
 	haltMode        bool
 	haltEpochHeight beacon.EpochTime
+	haltBlockHeight uint64
 
 	minGasPrice        quantity.Quantity
 	ownTxSigner        signature.PublicKey
@@ -248,18 +249,36 @@ func (s *applicationState) Upgrader() upgrade.Backend {
 	return s.upgrader
 }
 
-func (s *applicationState) inHaltEpoch(ctx *api.Context) bool {
+func (s *applicationState) shouldHalt(ctx *api.Context) bool {
 	blockHeight := s.BlockHeight()
 
-	currentEpoch, err := s.GetEpoch(ctx, blockHeight+1)
-	if err != nil {
-		s.logger.Error("inHaltEpoch: failed to get epoch",
-			"err", err,
-			"block_height", blockHeight+1,
+	// We care about the *next* block height, since this is called
+	// from the BeginBlock handler.
+	h := blockHeight + 1
+
+	// If there is a halt block height configured, and the height(+1)
+	// is greater than or equal to the height point, transition into
+	// the halting state.
+	if s.haltBlockHeight != 0 && uint64(h) >= s.haltBlockHeight {
+		s.logger.Info("shouldHalt: reached halt block height",
+			"block_height", h,
+			"halt_block_height", s.haltBlockHeight,
 		)
-		return false
+		s.haltMode = true
+	} else {
+		// Otherwise, check to see if the epoch will be equal to
+		// the halt epoch (if any).
+		currentEpoch, err := s.GetEpoch(ctx, h)
+		if err != nil {
+			s.logger.Error("inHaltEpoch: failed to get epoch",
+				"err", err,
+				"block_height", h,
+			)
+			return false
+		}
+		s.haltMode = currentEpoch == s.haltEpochHeight
 	}
-	s.haltMode = currentEpoch == s.haltEpochHeight
+
 	return s.haltMode
 }
 
@@ -571,6 +590,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 		pruneInterval:      cfg.Pruning.PruneInterval,
 		upgrader:           upgrader,
 		haltEpochHeight:    cfg.HaltEpochHeight,
+		haltBlockHeight:    cfg.HaltBlockHeight,
 		minGasPrice:        minGasPrice,
 		ownTxSigner:        cfg.OwnTxSigner,
 		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
