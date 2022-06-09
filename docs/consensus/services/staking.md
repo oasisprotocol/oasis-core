@@ -117,7 +117,8 @@ Currently, they are:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
 [`GovernanceDeposits` variable]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#pkg-variables
-[ADR 0008]: ../../adr/0008-standard-account-key-generation.md
+[ADR 0008]:
+  https://github.com/oasisprotocol/adrs/blob/main/0008-standard-account-key-generation.md
 <!-- markdownlint-enable line-length -->
 
 ### General
