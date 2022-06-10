@@ -128,6 +128,9 @@ const (
 
 	// CfgUpgradeStopDelay is the average amount of time to delay shutting down the node on upgrade.
 	CfgUpgradeStopDelay = "consensus.tendermint.upgrade.stop_delay"
+
+	// CfgHaltHeight is the block height at which the local node should be shutdown.
+	CfgHaltHeight = "consensus.tendermint.halt_height"
 )
 
 const (
@@ -1157,6 +1160,7 @@ func (t *fullService) lazyInit() error {
 		StorageBackend:            db.GetBackendName(),
 		Pruning:                   pruneCfg,
 		HaltEpochHeight:           t.genesis.HaltEpoch,
+		HaltBlockHeight:           viper.GetUint64(CfgHaltHeight),
 		MinGasPrice:               viper.GetUint64(CfgMinGasPrice),
 		OwnTxSigner:               t.identity.NodeSigner.Public(),
 		DisableCheckpointer:       viper.GetBool(CfgCheckpointerDisabled),
@@ -1594,6 +1598,8 @@ func init() {
 
 	Flags.Bool(CfgSupplementarySanityEnabled, false, "enable supplementary sanity checks (slows down consensus)")
 	Flags.Uint64(CfgSupplementarySanityInterval, 10, "supplementary sanity check interval (in blocks)")
+
+	Flags.Uint64(CfgHaltHeight, 0, "height at which to force-shutdown the node (in blocks)")
 
 	// State sync.
 	Flags.Bool(CfgConsensusStateSyncEnabled, false, "enable state sync")
