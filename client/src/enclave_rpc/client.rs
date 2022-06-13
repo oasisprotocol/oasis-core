@@ -18,7 +18,7 @@ use tokio;
 
 use oasis_core_runtime::{
     cbor,
-    common::sgx::avr::EnclaveIdentity,
+    common::sgx::EnclaveIdentity,
     enclave_rpc::{
         session::{Builder, Session},
         types,

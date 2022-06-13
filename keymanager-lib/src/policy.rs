@@ -15,8 +15,8 @@ use oasis_core_runtime::{
     common::{
         namespace::Namespace,
         sgx::{
-            avr::EnclaveIdentity,
             seal::{seal, unseal},
+            EnclaveIdentity,
         },
     },
     enclave_rpc::Context as RpcContext,

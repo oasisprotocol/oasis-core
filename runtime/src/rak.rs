@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::common::crypto::hash::Hash;
 use crate::common::{
     crypto::signature::{PrivateKey, PublicKey, Signature, Signer},
-    sgx::avr,
+    sgx::{ias, EnclaveIdentity},
     time::insecure_posix_time,
 };
 
@@ -51,10 +51,10 @@ enum AVRError {
 
 struct Inner {
     private_key: Option<PrivateKey>,
-    avr: Option<Arc<avr::AVR>>,
+    avr: Option<Arc<ias::AVR>>,
     avr_timestamp: Option<i64>,
     #[allow(unused)]
-    enclave_identity: Option<avr::EnclaveIdentity>,
+    enclave_identity: Option<EnclaveIdentity>,
     #[allow(unused)]
     target_info: Option<Targetinfo>,
     #[allow(unused)]
@@ -80,7 +80,7 @@ impl Default for RAK {
                 private_key: None,
                 avr: None,
                 avr_timestamp: None,
-                enclave_identity: avr::EnclaveIdentity::current(),
+                enclave_identity: EnclaveIdentity::current(),
                 target_info: None,
                 nonce: None,
             }),
@@ -175,7 +175,7 @@ impl RAK {
 
     /// Configure the attestation verification report for RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn set_avr(&self, avr: avr::AVR) -> Result<()> {
+    pub(crate) fn set_avr(&self, avr: ias::AVR) -> Result<()> {
         let rak_pub = self.public_key().expect("RAK must be configured");
 
         let mut inner = self.inner.write().unwrap();
@@ -191,14 +191,14 @@ impl RAK {
         // and remove it.  If the validation fails for any reason, we
         // should not accept a new AVR with the same nonce as an AVR
         // that failed.
-        let unchecked_avr = avr::ParsedAVR::new(&avr)?;
+        let unchecked_avr = ias::ParsedAVR::new(&avr)?;
         let unchecked_nonce = unchecked_avr.nonce()?;
         if expected_nonce != unchecked_nonce {
             return Err(AVRError::NonceMismatch.into());
         }
         inner.nonce = None;
 
-        let authenticated_avr = avr::verify(&avr)?;
+        let authenticated_avr = ias::verify(&avr)?;
 
         // Verify that the AVR's enclave identity matches our own.
         let enclave_identity = inner
@@ -253,14 +253,14 @@ impl RAK {
     ///
     /// This method may return `None` in case AVR has not yet been set from
     /// the outside, or if the AVR has expired.
-    pub fn avr(&self) -> Option<Arc<avr::AVR>> {
+    pub fn avr(&self) -> Option<Arc<ias::AVR>> {
         let now = insecure_posix_time();
 
         // Enforce AVR expiration.
         let mut inner = self.inner.write().unwrap();
         if inner.avr.is_some() {
             let timestamp = inner.avr_timestamp.unwrap();
-            if !avr::timestamp_is_fresh(now, timestamp) {
+            if !ias::timestamp_is_fresh(now, timestamp) {
                 // Reset the AVR.
                 inner.avr = None;
                 inner.avr_timestamp = None;
@@ -273,7 +273,7 @@ impl RAK {
     }
 
     /// Verify a provided RAK binding.
-    pub fn verify_binding(avr: &avr::AuthenticatedAVR, rak: &PublicKey) -> Result<()> {
+    pub fn verify_binding(avr: &ias::AuthenticatedAVR, rak: &PublicKey) -> Result<()> {
         if avr.report_data.len() < 32 {
             return Err(RAKError::MalformedReportData.into());
         }

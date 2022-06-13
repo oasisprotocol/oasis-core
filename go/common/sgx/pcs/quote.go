@@ -85,6 +85,21 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 //
 // In case of successful verification it returns the TCB level.
 func (q *Quote) Verify(ts time.Time, tcb *TCBBundle) (*TCBLevel, error) {
+	if !bytes.Equal(q.Header.QEVendorID[:], QEVendorID_Intel) {
+		return nil, fmt.Errorf("pcs/quote: unsupported QE vendor: %X", q.Header.QEVendorID)
+	}
+
+	if mrSignerBlacklist[q.ISVReport.MRSIGNER] {
+		return nil, fmt.Errorf("pcs/quote: blacklisted MRSIGNER")
+	}
+
+	isDebug := q.ISVReport.Attributes.Flags.Contains(sgx.AttributeDebug)
+	if unsafeAllowDebugEnclaves != isDebug {
+		// Debug enclaves are only allowed in debug mode, prod enclaves in prod mode.
+		// A mismatch is an error.
+		return nil, fmt.Errorf("pcs/quote: disallowed debug/production enclave/mode combination")
+	}
+
 	return q.Signature.Verify(&q.Header, &q.ISVReport, ts, tcb)
 }
 

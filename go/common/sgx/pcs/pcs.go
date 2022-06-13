@@ -3,6 +3,14 @@ package pcs
 import (
 	"context"
 	"time"
+
+	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+)
+
+var (
+	unsafeAllowDebugEnclaves bool
+
+	mrSignerBlacklist = make(map[sgx.MrSigner]bool)
 )
 
 // Client is an Intel SGX PCS client interface.
@@ -29,4 +37,31 @@ func (bnd *QuoteBundle) Verify(ts time.Time) (*TCBLevel, error) {
 		return nil, err
 	}
 	return quote.Verify(ts, &bnd.TCB)
+}
+
+// SetAllowDebugEnclave will enable running and communicating with enclaves with debug flag enabled
+// in report body for the remainder of the process' lifetime.
+func SetAllowDebugEnclaves() {
+	unsafeAllowDebugEnclaves = true
+}
+
+// UnsetAllowDebugEnclave will disable running and communicating with enclaves with debug flag
+// enabled in report body for the remainder of the process' lifetime.
+func UnsetAllowDebugEnclaves() {
+	unsafeAllowDebugEnclaves = false
+}
+
+// BuildMrSignerBlacklist builds the MRSIGNER blacklist.
+func BuildMrSignerBlacklist(allowTestKeys bool) {
+	if !allowTestKeys {
+		for _, v := range []string{
+			sgx.FortanixDummyMrSigner.String(),
+		} {
+			var signer sgx.MrSigner
+			if err := signer.UnmarshalHex(v); err != nil {
+				panic("pcs: failed to decode MRSIGNER: " + v)
+			}
+			mrSignerBlacklist[signer] = true
+		}
+	}
 }

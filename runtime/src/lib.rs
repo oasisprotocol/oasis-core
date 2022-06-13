@@ -39,7 +39,7 @@ pub mod types;
 use crate::common::version::{Version, CONSENSUS_VERSION, PROTOCOL_VERSION};
 
 #[cfg(target_env = "sgx")]
-use self::common::sgx::avr::{EnclaveIdentity, MrSigner};
+use self::common::sgx::{EnclaveIdentity, MrSigner};
 
 lazy_static! {
     pub static ref BUILD_INFO: BuildInfo = {

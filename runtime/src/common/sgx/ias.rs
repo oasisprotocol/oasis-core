@@ -1,4 +1,4 @@
-//! Attestation verification report handling.
+//! Intel Attestation Service (IAS) attestation verification report handling.
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use anyhow::{anyhow, Result};
@@ -15,7 +15,10 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use x509_parser::prelude::*;
 
-use crate::common::time::{insecure_posix_time, update_insecure_posix_time};
+use crate::common::{
+    sgx::{EnclaveIdentity, MrEnclave, MrSigner},
+    time::{insecure_posix_time, update_insecure_posix_time},
+};
 
 /// AVR verification error.
 #[derive(Error, Debug)]
@@ -58,9 +61,6 @@ pub const QUOTE_CONTEXT_LEN: usize = 8;
 /// The purpose of `QuoteContext` is to prevent quotes from being used in
 /// different contexts. The value is included as a prefix in report data.
 pub type QuoteContext = [u8; QUOTE_CONTEXT_LEN];
-
-impl_bytes!(MrEnclave, 32, "Enclave hash (MRENCLAVE).");
-impl_bytes!(MrSigner, 32, "Enclave signer hash (MRSIGNER).");
 
 // AVR signature validation constants.
 const IAS_TRUST_ANCHOR_PEM: &str = r#"-----BEGIN CERTIFICATE-----
@@ -478,40 +478,6 @@ fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RsaPubli
 /// of a cached AVR, given the current time.
 pub(crate) fn timestamp_is_fresh(now: i64, timestamp: i64) -> bool {
     (now - timestamp).abs() < 60 * 60 * 24
-}
-
-/// Enclave identity.
-#[derive(Debug, Default, Clone, Hash, Eq, PartialEq, cbor::Encode, cbor::Decode)]
-pub struct EnclaveIdentity {
-    pub mr_enclave: MrEnclave,
-    pub mr_signer: MrSigner,
-}
-
-impl EnclaveIdentity {
-    pub fn current() -> Option<Self> {
-        #[cfg(target_env = "sgx")]
-        {
-            let report = Report::for_self();
-            Some(EnclaveIdentity {
-                mr_enclave: MrEnclave(report.mrenclave),
-                mr_signer: MrSigner(report.mrsigner),
-            })
-        }
-
-        // TODO: There should be a mechanism for setting mock values for
-        // the purpose of testing.
-        #[cfg(not(target_env = "sgx"))]
-        None
-    }
-
-    pub fn fortanix_test(mr_enclave: MrEnclave) -> Self {
-        Self {
-            mr_enclave,
-            mr_signer: MrSigner::from(
-                "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a",
-            ),
-        }
-    }
 }
 
 #[cfg(test)]

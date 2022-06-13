@@ -35,7 +35,7 @@ use crate::{
     common::{
         crypto::{hash::Hash, signature::PublicKey},
         logger::get_logger,
-        sgx::{avr::EnclaveIdentity, seal},
+        sgx::{seal, EnclaveIdentity},
         time,
         version::Version,
     },
