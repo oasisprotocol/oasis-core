@@ -725,6 +725,7 @@ func RegisterScenarios() error {
 		ByzantineExecutorSchedulerWrong,
 		ByzantineExecutorSchedulerBogus,
 		ByzantineExecutorStraggler,
+		ByzantineExecutorStragglerBackup,
 		ByzantineExecutorSchedulerStraggler,
 		ByzantineExecutorFailureIndicating,
 		ByzantineExecutorSchedulerFailureIndicating,
