@@ -100,5 +100,6 @@ Standard Account Key Generation][ADR 0008].
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/crypto/signature?tab=doc#MultiSigned
 [those used for transactions]: consensus/test-vectors.md
 [account]: consensus/services/staking.md#accounts
-[ADR 0008]: adr/0008-standard-account-key-generation.md
+[ADR 0008]:
+  https://github.com/oasisprotocol/adrs/blob/master/0008-standard-account-key-generation.md
 <!-- markdownlint-enable line-length -->
