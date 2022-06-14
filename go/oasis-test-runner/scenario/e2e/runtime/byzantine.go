@@ -181,7 +181,7 @@ var (
 		false,
 		// Byzantine node entity should be slashed once for liveness.
 		map[staking.SlashReason]uint64{
-			staking.SlashRuntimeLiveness: 0, // XXX: Disabled due to a known bug, fix is breaking.
+			staking.SlashRuntimeLiveness: 1,
 		},
 		[]oasis.Argument{
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},

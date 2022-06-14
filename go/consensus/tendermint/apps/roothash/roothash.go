@@ -642,18 +642,22 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 		regState := registryState.NewMutableState(ctx.State())
 		for i, n := range pool.Committee.Members {
 			c, ok := commitments[n.PublicKey]
+			// Make sure to not include nodes in multiple roles multiple times.
+			wasSeen := seen[n.PublicKey]
+			seen[n.PublicKey] = true
 			switch {
-			case !ok && n.Role == scheduler.RoleBackupWorker && !pool.Discrepancy:
-				// This is a backup worker that did not submit a commitment and there was no
+			case !ok && n.Role == scheduler.RoleBackupWorker && !pool.Discrepancy && !wasSeen:
+				// This is a backup worker only that did not submit a commitment and there was no
 				// discrepancy. Count the worker as live.
+				//
+				// Note that this skips the case where the node is both primary and backup and the
+				// primary did not commit as that should be treated as failure.
 				livenessStats.LiveRounds[i]++
 				continue
-			case !ok || c.IsIndicatingFailure() || seen[n.PublicKey]:
+			case !ok || c.IsIndicatingFailure() || wasSeen:
 				continue
 			default:
 			}
-			// Make sure to not include nodes in multiple roles multiple times.
-			seen[n.PublicKey] = true
 
 			// Resolve the entity owning the node.
 			var node *node.Node
