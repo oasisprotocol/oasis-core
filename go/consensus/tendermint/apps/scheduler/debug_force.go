@@ -40,7 +40,7 @@ func (app *schedulerApplication) debugForceElect(
 	)
 
 	for nodeID, ri := range schedulerParameters.DebugForceElect[rt.ID] {
-		if kind == ri.Kind && role == ri.Role {
+		if kind == ri.Kind && ri.HasRole(role) {
 			toForce = append(toForce, nodeID)
 			state.params[nodeID] = *ri
 		}
@@ -99,8 +99,9 @@ func (app *schedulerApplication) debugForceRoles(
 	ctx *api.Context,
 	state *debugForceElectState,
 	elected []*scheduler.CommitteeNode,
+	role scheduler.Role,
 ) (bool, []*scheduler.CommitteeNode) {
-	if !flags.DebugDontBlameOasis() || state == nil || len(state.elected) == 0 {
+	if !flags.DebugDontBlameOasis() || state == nil || len(state.elected) == 0 || role != scheduler.RoleWorker {
 		return true, elected
 	}
 

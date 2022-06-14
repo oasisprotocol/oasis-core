@@ -224,70 +224,13 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 			DebugAllowWeakAlpha:    viper.GetBool(CfgSchedulerDebugAllowWeakAlpha),
 		},
 	}
-	if forceElectStrs := viper.GetStringSlice(CfgSchedulerDebugForceElect); forceElectStrs != nil {
-		m := make(map[common.Namespace]map[signature.PublicKey]*scheduler.ForceElectCommitteeRole)
-		for _, s := range forceElectStrs {
-			subS := strings.Split(s, ",")
-			if len(subS) != 5 {
-				tmp, _ := json.Marshal(subS)
-				logger.Error("malformed forced scheduler elect directive",
-					"directive", s,
-					"sub_s", string(tmp),
-				)
-				return
-			}
-			var (
-				ns common.Namespace
-				pk signature.PublicKey
+	if forceElectCfg := viper.GetString(CfgSchedulerDebugForceElect); forceElectCfg != "" {
+		var m map[common.Namespace]map[signature.PublicKey]*scheduler.ForceElectCommitteeRole
+		if err := json.Unmarshal([]byte(forceElectCfg), &m); err != nil {
+			logger.Error("malformed forced scheduler elect configuration",
+				"err", err,
 			)
-			if err := ns.UnmarshalText([]byte(subS[0])); err != nil {
-				logger.Error("failed to parse namespace for forced election",
-					"err", err,
-					"ns_str", subS[0],
-				)
-				return
-			}
-			if err := pk.UnmarshalText([]byte(subS[1])); err != nil {
-				logger.Error("failed to parse public key for forced election",
-					"err", err,
-					"pk_str", subS[1],
-				)
-				return
-			}
-			i, err := strconv.Atoi(subS[2])
-			if err != nil {
-				logger.Error("failed to parse kind for forced election",
-					"err", err,
-					"kind_str", subS[2],
-				)
-				return
-			}
-			j, err := strconv.Atoi(subS[3])
-			if err != nil {
-				logger.Error("failed to parse role for forced election",
-					"err", err,
-					"role_str", subS[3],
-				)
-				return
-			}
-			k, err := strconv.ParseBool(subS[4])
-			if err != nil {
-				logger.Error("failed to parse is_scheduler for forced election",
-					"err", err,
-					"is_scheduler_str", subS[4],
-				)
-				return
-			}
-			subM := m[ns]
-			if subM == nil {
-				subM = make(map[signature.PublicKey]*scheduler.ForceElectCommitteeRole)
-				m[ns] = subM
-			}
-			m[ns][pk] = &scheduler.ForceElectCommitteeRole{
-				Kind:        scheduler.CommitteeKind(i),
-				Role:        scheduler.Role(j),
-				IsScheduler: k,
-			}
+			return
 		}
 		doc.Scheduler.Parameters.DebugForceElect = m
 	}
@@ -824,7 +767,7 @@ func init() {
 	initGenesisFlags.Int(cfgSchedulerMaxValidators, 100, "maximum number of validators")
 	initGenesisFlags.Int(cfgSchedulerMaxValidatorsPerEntity, 1, "maximum number of validators per entity")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
-	initGenesisFlags.StringSlice(CfgSchedulerDebugForceElect, nil, "force elect the (runtime, node, role) tuple(s) (UNSAFE)")
+	initGenesisFlags.String(CfgSchedulerDebugForceElect, "", "force elect the (runtime, node, role) tuple(s) (UNSAFE)")
 	initGenesisFlags.Bool(CfgSchedulerDebugAllowWeakAlpha, false, "bypass alpha strength check for VRF elections (UNSAFE)")
 	_ = initGenesisFlags.MarkHidden(cfgSchedulerDebugBypassStake)
 	_ = initGenesisFlags.MarkHidden(CfgSchedulerDebugForceElect)

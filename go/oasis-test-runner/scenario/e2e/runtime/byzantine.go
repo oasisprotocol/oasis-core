@@ -39,8 +39,8 @@ var (
 		nil,
 		nil,
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 	// ByzantineExecutorSchedulerHonest is the byzantine executor scheduler honest scenario.
@@ -56,7 +56,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -82,8 +82,8 @@ var (
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 	// ByzantineExecutorSchedulerWrong is the byzantine executor wrong scheduler scenario.
@@ -110,7 +110,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -138,7 +138,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -162,9 +162,40 @@ var (
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
+	)
+	// ByzantineExecutorStragglerBackup is the byzantine executor straggler scenario where the
+	// byzantine node is both primary and backup.
+	ByzantineExecutorStragglerBackup scenario.Scenario = newByzantineImpl(
+		"executor-straggler-backup",
+		"executor",
+		[]log.WatcherHandlerFactory{
+			// Straggler should trigger timeout, but no discrepancies or round failures.
+			oasis.LogAssertTimeouts(),
+			oasis.LogAssertNoRoundFailures(),
+			oasis.LogAssertNoExecutionDiscrepancyDetected(),
+		},
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+		// Byzantine node entity should be slashed once for liveness.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 0, // XXX: Disabled due to a known bug, fix is breaking.
+		},
+		[]oasis.Argument{
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker},
+		},
+		withCustomRuntimeConfig(func(rt *oasis.RuntimeFixture) {
+			// One straggler is allowed.
+			rt.Executor.AllowedStragglers = 1
+			// One byzantine node is in the backup committee so we need more to not fail.
+			rt.Executor.GroupBackupSize = 3
+		}),
 	)
 	// ByzantineExecutorSchedulerStraggler is the byzantine executor scheduler straggler scenario.
 	ByzantineExecutorSchedulerStraggler scenario.Scenario = newByzantineImpl(
@@ -190,7 +221,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -215,8 +246,8 @@ var (
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 	// ByzantineExecutorSchedulerFailureIndicating is the byzantine executor scheduler failure indicating scenario.
@@ -243,7 +274,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -262,16 +293,25 @@ var (
 			{Name: byzantine.CfgCorruptGetDiff},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 )
 
+type byzantineOption func(opts *byzantineImpl)
+
+func withCustomRuntimeConfig(cfgFn func(rt *oasis.RuntimeFixture)) byzantineOption {
+	return func(opts *byzantineImpl) {
+		opts.configureRuntimeFn = cfgFn
+	}
+}
+
 type byzantineImpl struct {
 	runtimeImpl
 
-	schedParams scheduler.ForceElectCommitteeRole
+	schedParams        scheduler.ForceElectCommitteeRole
+	configureRuntimeFn func(*oasis.RuntimeFixture)
 
 	script    string
 	extraArgs []oasis.Argument
@@ -295,6 +335,7 @@ func newByzantineImpl(
 	expectedSlashes map[staking.SlashReason]uint64,
 	extraArgs []oasis.Argument,
 	schedParams scheduler.ForceElectCommitteeRole,
+	opts ...byzantineOption,
 ) scenario.Scenario {
 	sc := &byzantineImpl{
 		runtimeImpl:                *newRuntimeImpl("byzantine/"+name, nil),
@@ -305,6 +346,10 @@ func newByzantineImpl(
 		logWatcherHandlerFactories: logWatcherHandlerFactories,
 		expectedSlashes:            expectedSlashes,
 		schedParams:                schedParams,
+	}
+
+	for _, opt := range opts {
+		opt(sc)
 	}
 
 	// The byzantine node code and our tests are extremely sensitive
@@ -325,6 +370,7 @@ func (sc *byzantineImpl) Clone() scenario.Scenario {
 		logWatcherHandlerFactories: sc.logWatcherHandlerFactories,
 		expectedSlashes:            sc.expectedSlashes,
 		schedParams:                sc.schedParams,
+		configureRuntimeFn:         sc.configureRuntimeFn,
 	}
 }
 
@@ -352,6 +398,11 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 	}
+
+	if sc.configureRuntimeFn != nil {
+		sc.configureRuntimeFn(&f.Runtimes[1])
+	}
+
 	f.Network.StakingGenesis = &staking.Genesis{
 		TotalSupply: *quantity.NewFromUint64(100),
 		Ledger: map[staking.Address]*staking.Account{

@@ -293,10 +293,20 @@ type ConsensusParameters struct {
 type ForceElectCommitteeRole struct {
 	// Kind is the kind of committee to force-elect the node into.
 	Kind CommitteeKind `json:"kind"`
-	// Role is the role that the given node is force elected as.
-	Role Role `json:"role"`
+	// Roles are the roles that the given node is force elected as.
+	Roles []Role `json:"roles"`
 	// IsScheduler is true iff the node should be set as the scheduler.
 	IsScheduler bool `json:"is_scheduler,omitempty"`
+}
+
+// HasRole returns true whether the force election configuration specifies a given role.
+func (fe *ForceElectCommitteeRole) HasRole(role Role) bool {
+	for _, r := range fe.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 // SanityCheck does basic sanity checking on the genesis state.
