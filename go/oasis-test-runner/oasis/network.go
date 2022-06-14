@@ -752,14 +752,15 @@ func (net *Network) MakeGenesis() error {
 		}...)
 	}
 	if cfg := net.cfg.SchedulerForceElect; cfg != nil {
-		for rt, pkMap := range cfg {
-			for pk, ri := range pkMap {
-				args = append(args, []string{
-					"--" + genesis.CfgSchedulerDebugForceElect,
-					"\"" + rt.String() + "," + pk.String() + "," + strconv.FormatUint(uint64(ri.Kind), 10) + "," + strconv.FormatUint(uint64(ri.Role), 10) + "," + strconv.FormatBool(ri.IsScheduler) + "\"",
-				}...)
-			}
+		data, err := json.Marshal(cfg)
+		if err != nil {
+			return fmt.Errorf("oasis: failed to marshal scheduler force elect config: %w", err)
 		}
+
+		args = append(args, []string{
+			"--" + genesis.CfgSchedulerDebugForceElect,
+			string(data),
+		}...)
 	}
 	for _, v := range net.entities {
 		args = append(args, v.toGenesisDescriptorArgs()...)

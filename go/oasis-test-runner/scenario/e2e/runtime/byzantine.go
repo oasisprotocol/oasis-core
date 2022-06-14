@@ -39,8 +39,8 @@ var (
 		nil,
 		nil,
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 	// ByzantineExecutorSchedulerHonest is the byzantine executor scheduler honest scenario.
@@ -56,7 +56,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -82,8 +82,8 @@ var (
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 	// ByzantineExecutorSchedulerWrong is the byzantine executor wrong scheduler scenario.
@@ -110,7 +110,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -138,7 +138,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -162,8 +162,8 @@ var (
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 	// ByzantineExecutorSchedulerStraggler is the byzantine executor scheduler straggler scenario.
@@ -190,7 +190,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -215,8 +215,8 @@ var (
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 	// ByzantineExecutorSchedulerFailureIndicating is the byzantine executor scheduler failure indicating scenario.
@@ -243,7 +243,7 @@ var (
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:        scheduler.KindComputeExecutor,
-			Role:        scheduler.RoleWorker,
+			Roles:       []scheduler.Role{scheduler.RoleWorker},
 			IsScheduler: true,
 		},
 	)
@@ -262,8 +262,8 @@ var (
 			{Name: byzantine.CfgCorruptGetDiff},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind: scheduler.KindComputeExecutor,
-			Role: scheduler.RoleWorker,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
 		},
 	)
 )

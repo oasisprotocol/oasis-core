@@ -499,6 +499,7 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 			ctx,
 			forceState,
 			elected,
+			role,
 		); !ok {
 			if err = schedulerState.NewMutableState(ctx.State()).DropCommittee(ctx, kind, rt.ID); err != nil {
 				return fmt.Errorf("tendermint/scheduler: failed to drop committee: %w", err)
