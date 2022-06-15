@@ -31,7 +31,7 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
+  sudo apt install bubblewrap gcc g++ gcc-multilib protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
   ```
   <!-- markdownlint-enable line-length -->
 
