@@ -18,6 +18,10 @@ Core:
   * [OpenSSL] development package.
   * [libseccomp] development package.
 
+  _NOTE: On Ubuntu/Debian systems, compiling [mbedtls] crate when building the
+  `oasis-core-runtime` binary requires having the `gcc-multilib` package
+  installed._
+
   On Fedora 29+, you can install all the above with:
 
   <!-- markdownlint-disable line-length -->
@@ -31,7 +35,7 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo apt install bubblewrap gcc g++ protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
+  sudo apt install bubblewrap gcc g++ gcc-multilib protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
   ```
   <!-- markdownlint-enable line-length -->
 
@@ -223,6 +227,7 @@ where the code has been checked out.
 [pkg-config]: https://www.freedesktop.org/wiki/Software/pkg-config
 [OpenSSL]: https://www.openssl.org/
 [libseccomp]: https://github.com/seccomp/libseccomp
+[mbedtls]: https://github.com/fortanix/rust-mbedtls
 [Go]: https://golang.org
 [rustup]: https://rustup.rs/
 [rust-upstream-rustup]: https://www.rust-lang.org/tools/install
