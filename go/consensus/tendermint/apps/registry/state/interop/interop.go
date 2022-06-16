@@ -107,5 +107,64 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 		}
 	}
 
+	// Populate runtimes.
+	for _, fix := range []struct {
+		rt        *registry.Runtime
+		suspended bool
+	}{
+		{
+			&registry.Runtime{
+				Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+				ID:          runtimeID,
+				EntityID:    entitySigner.Public(),
+				Kind:        registry.KindCompute,
+				TEEHardware: node.TEEHardwareInvalid,
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
+				Deployments: []*registry.VersionInfo{
+					{
+						Version:   version.FromU64(321),
+						ValidFrom: 42,
+					},
+					{
+						Version:   version.FromU64(320),
+						ValidFrom: 10,
+					},
+				},
+			},
+			false,
+		},
+		{
+			&registry.Runtime{
+				Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+				ID:          runtimeID2,
+				EntityID:    entitySigner.Public(),
+				Kind:        registry.KindCompute,
+				TEEHardware: node.TEEHardwareIntelSGX,
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
+				Deployments: []*registry.VersionInfo{
+					{
+						Version:   version.FromU64(123),
+						ValidFrom: 42,
+						TEE:       []byte{1, 2, 3, 4, 5},
+					},
+					{
+						Version:   version.FromU64(120),
+						ValidFrom: 10,
+						TEE:       []byte{5, 4, 3, 2, 1},
+					},
+				},
+			},
+			true,
+		},
+	} {
+		if err := state.SetRuntime(ctx, fix.rt, fix.suspended); err != nil {
+			return fmt.Errorf("setting runtime: %w", err)
+		}
+	}
+
 	return nil
 }

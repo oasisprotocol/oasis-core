@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -74,6 +75,8 @@ type Body struct {
 	RuntimeCapabilityTEERakReportResponse *RuntimeCapabilityTEERakReportResponse `json:",omitempty"`
 	RuntimeCapabilityTEERakAvrRequest     *RuntimeCapabilityTEERakAvrRequest     `json:",omitempty"`
 	RuntimeCapabilityTEERakAvrResponse    *Empty                                 `json:",omitempty"`
+	RuntimeCapabilityTEERakQuoteRequest   *RuntimeCapabilityTEERakQuoteRequest   `json:",omitempty"`
+	RuntimeCapabilityTEERakQuoteResponse  *Empty                                 `json:",omitempty"`
 	RuntimeRPCCallRequest                 *RuntimeRPCCallRequest                 `json:",omitempty"`
 	RuntimeRPCCallResponse                *RuntimeRPCCallResponse                `json:",omitempty"`
 	RuntimeLocalRPCCallRequest            *RuntimeLocalRPCCallRequest            `json:",omitempty"`
@@ -199,6 +202,12 @@ type RuntimeCapabilityTEERakReportResponse struct {
 // RuntimeCapabilityTEERakAvrRequest is a worker RFC 0009 CapabilityTEE RAK AVR setup request message body.
 type RuntimeCapabilityTEERakAvrRequest struct {
 	AVR ias.AVRBundle `json:"avr"`
+}
+
+// RuntimeCapabilityTEERakQuoteRequest is a worker RFC 0009 CapabilityTEE RAK quote setup request message body.
+type RuntimeCapabilityTEERakQuoteRequest struct {
+	// Quote is the remote attestation quote.
+	Quote quote.Quote `json:"quote"`
 }
 
 // RuntimeRPCCallRequest is a worker RPC call request message body.

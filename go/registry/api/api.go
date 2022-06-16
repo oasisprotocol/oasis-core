@@ -589,7 +589,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 			// If the node indicates TEE support for any of it's runtimes,
 			// validate the attestation evidence.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRt, now); err != nil && !isSanityCheck {
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRt, params.TEEFeatures, now); err != nil && !isSanityCheck {
 				return nil, nil, err
 			}
 
@@ -773,7 +773,13 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 }
 
 // VerifyNodeRuntimeEnclaveIDs verifies TEE-specific attributes of the node's runtime.
-func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRt *Runtime, ts time.Time) error {
+func VerifyNodeRuntimeEnclaveIDs(
+	logger *logging.Logger,
+	rt *node.Runtime,
+	regRt *Runtime,
+	teeCfg *node.TEEFeatures,
+	ts time.Time,
+) error {
 	// If no TEE available, do nothing.
 	if rt.Capabilities.TEE == nil {
 		return nil
@@ -796,7 +802,7 @@ func VerifyNodeRuntimeEnclaveIDs(logger *logging.Logger, rt *node.Runtime, regRt
 			continue
 		}
 
-		if err := rt.Capabilities.TEE.Verify(ts, rtVersionInfo.TEE); err != nil {
+		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, rtVersionInfo.TEE); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
 				"runtime_id", rt.ID,
 				"ts", ts,
@@ -1063,16 +1069,6 @@ func VerifyNodeUpdate(
 	return nil
 }
 
-func exactlyOneTrue(conds ...bool) bool {
-	total := 0
-	for _, c := range conds {
-		if c {
-			total++
-		}
-	}
-	return total == 1
-}
-
 // VerifyRuntime verifies the given runtime.
 func VerifyRuntime( // nolint: gocyclo
 	params *ConsensusParameters,
@@ -1125,7 +1121,7 @@ func VerifyRuntime( // nolint: gocyclo
 
 	// Validate the deployments.  This also handles validating that the
 	// appropriate TEE configuration is present in each deployment.
-	if err := rt.ValidateDeployments(now); err != nil {
+	if err := rt.ValidateDeployments(now, params.TEEFeatures); err != nil {
 		logger.Error("RegisterRuntime: invalid deployments",
 			"runtime_id", rt.ID,
 			"err", err,
@@ -1134,7 +1130,7 @@ func VerifyRuntime( // nolint: gocyclo
 	}
 
 	// Ensure there's a valid admission policy.
-	if !exactlyOneTrue(rt.AdmissionPolicy.AnyNode != nil, rt.AdmissionPolicy.EntityWhitelist != nil) {
+	if !common.ExactlyOneTrue(rt.AdmissionPolicy.AnyNode != nil, rt.AdmissionPolicy.EntityWhitelist != nil) {
 		logger.Error("RegisterRuntime: invalid admission policy. exactly one policy should be non-nil",
 			"admission_policy", rt.AdmissionPolicy,
 		)
@@ -1227,7 +1223,12 @@ func VerifyRuntimeNew(logger *logging.Logger, rt *Runtime, now beacon.EpochTime,
 }
 
 // VerifyRuntimeUpdate verifies changes while updating the runtime.
-func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime, now beacon.EpochTime) error {
+func VerifyRuntimeUpdate(
+	logger *logging.Logger,
+	currentRt, newRt *Runtime,
+	now beacon.EpochTime,
+	params *ConsensusParameters,
+) error {
 	if !currentRt.EntityID.Equal(newRt.EntityID) {
 		logger.Error("RegisterRuntime: trying to change runtime owner",
 			"current_owner", currentRt.EntityID,
@@ -1289,7 +1290,7 @@ func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime, now 
 
 	// Validate the deployments.
 	activeDeployment := currentRt.ActiveDeployment(now)
-	if err := currentRt.ValidateDeployments(now); err != nil {
+	if err := currentRt.ValidateDeployments(now, params.TEEFeatures); err != nil {
 		// Invariant violation, this should NEVER happen.
 		logger.Error("RegisterRuntime: malformed deployments present in state",
 			"runtime_id", currentRt.ID,
@@ -1303,7 +1304,7 @@ func VerifyRuntimeUpdate(logger *logging.Logger, currentRt, newRt *Runtime, now 
 	}
 
 	newActiveDeployment := newRt.ActiveDeployment(now)
-	if err := newRt.ValidateDeployments(now); err != nil {
+	if err := newRt.ValidateDeployments(now, params.TEEFeatures); err != nil {
 		logger.Error("RegisterRuntime: malformed deployments",
 			"runtime_id", currentRt.ID,
 			"err", err,
@@ -1428,6 +1429,9 @@ type ConsensusParameters struct {
 
 	// EnableRuntimeGovernanceModels is a set of enabled runtime governance models.
 	EnableRuntimeGovernanceModels map[RuntimeGovernanceModel]bool `json:"enable_runtime_governance_models,omitempty"`
+
+	// TEEFeatures contains the configuration of supported TEE features.
+	TEEFeatures *node.TEEFeatures `json:"tee_features,omitempty"`
 }
 
 const (

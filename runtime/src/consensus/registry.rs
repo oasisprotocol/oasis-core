@@ -12,7 +12,7 @@ use crate::{
     common::{
         crypto::{hash::Hash, signature::PublicKey},
         namespace::Namespace,
-        quantity,
+        quantity, sgx,
         version::Version,
     },
     consensus::{beacon::EpochTime, scheduler, staking},
@@ -408,6 +408,7 @@ pub enum RuntimeAdmissionPolicy {
     /// Allow any node to register.
     #[cbor(rename = "any_node")]
     AnyNode {},
+
     /// Allow only the whitelisted entities' nodes to register.
     #[cbor(rename = "entity_whitelist")]
     EntityWhitelist(EntityWhitelistRuntimeAdmissionPolicy),
@@ -449,6 +450,81 @@ pub struct VersionInfo {
     /// Enclave version information, in an enclave provided specific format (if any).
     #[cbor(optional)]
     pub tee: Vec<u8>,
+}
+
+impl VersionInfo {
+    /// Tries to decode the TEE-specific version information.
+    pub fn try_decode_tee<T>(&self) -> Result<T, cbor::DecodeError>
+    where
+        T: cbor::Decode,
+    {
+        cbor::from_slice_non_strict(&self.tee)
+    }
+}
+
+/// Intel SGX TEE constraints.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[cbor(tag = "v")]
+pub enum SGXConstraints {
+    /// Old V0 format that only supported IAS policies.
+    #[cbor(rename = 0, missing)]
+    V0 {
+        #[cbor(optional)]
+        enclaves: Vec<sgx::EnclaveIdentity>,
+
+        #[cbor(optional)]
+        allowed_quote_statuses: Vec<i64>,
+    },
+
+    /// New V1 format that supports both IAS and PCS policies.
+    #[cbor(rename = 1)]
+    V1 {
+        #[cbor(optional)]
+        enclaves: Vec<sgx::EnclaveIdentity>,
+
+        #[cbor(optional)]
+        policy: sgx::QuotePolicy,
+    },
+}
+
+impl SGXConstraints {
+    /// Checks whether the given enclave identity is whitelisted.
+    pub fn contains_enclave(&self, eid: &sgx::EnclaveIdentity) -> bool {
+        let enclaves = match self {
+            Self::V0 { ref enclaves, .. } => enclaves,
+            Self::V1 { ref enclaves, .. } => enclaves,
+        };
+        enclaves.contains(eid)
+    }
+
+    /// SGX quote policy.
+    pub fn policy(&self) -> sgx::QuotePolicy {
+        match self {
+            Self::V0 {
+                ref allowed_quote_statuses,
+                ..
+            } => sgx::QuotePolicy {
+                ias: Some(sgx::ias::QuotePolicy {
+                    allowed_quote_statuses: allowed_quote_statuses.clone(),
+                }),
+                ..Default::default()
+            },
+            Self::V1 { ref policy, .. } => policy.clone(),
+        }
+    }
+}
+
+/// Intel SGX remote attestation.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[cbor(tag = "v")]
+pub enum SGXAttestation {
+    /// Old V0 format that only supported IAS quotes.
+    #[cbor(rename = 0, missing)]
+    V0(sgx::ias::AVR),
+
+    /// New V1 format that supports both IAS and PCS policies.
+    #[cbor(rename = 1)]
+    V1 { quote: sgx::Quote },
 }
 
 /// TEE hardware implementation.
@@ -520,6 +596,28 @@ fn staking_params_are_empty(p: &RuntimeStakingParameters) -> bool {
         && p.reward_equivocation == 0
         && p.reward_bad_results == 0
         && p.min_in_message_fee.is_zero()
+}
+
+impl Runtime {
+    /// The currently active deployment for the specified epoch if it exists.
+    pub fn active_deployment(&self, now: EpochTime) -> Option<VersionInfo> {
+        self.deployments
+            .iter()
+            .filter(|vi| vi.valid_from <= now) // Ignore versions that are not valid yet.
+            .fold(None, |acc, vi| match acc {
+                None => Some(vi.clone()),
+                Some(ad) if ad.valid_from < vi.valid_from => Some(vi.clone()),
+                _ => acc,
+            })
+    }
+
+    /// Deployment corresponding to the specified version if it exists.
+    pub fn deployment_for_version(&self, version: Version) -> Option<VersionInfo> {
+        self.deployments
+            .iter()
+            .find(|vi| vi.version == version)
+            .cloned()
+    }
 }
 
 /// Runtime genesis information that is used to initialize runtime state in the first block.
@@ -768,5 +866,92 @@ mod tests {
                 assert_eq!(ser, encoded_base64, "node should serialize correctly");
             }
         }
+    }
+
+    #[test]
+    fn test_runtime_deployments() {
+        let rt = Runtime::default();
+        assert_eq!(rt.active_deployment(0), None);
+
+        let rt = Runtime {
+            deployments: vec![
+                VersionInfo {
+                    version: Version {
+                        major: 0,
+                        minor: 1,
+                        patch: 0,
+                    },
+                    valid_from: 0,
+                    ..Default::default()
+                },
+                VersionInfo {
+                    version: Version {
+                        major: 0,
+                        minor: 2,
+                        patch: 0,
+                    },
+                    valid_from: 10,
+                    ..Default::default()
+                },
+                VersionInfo {
+                    version: Version {
+                        major: 0,
+                        minor: 3,
+                        patch: 0,
+                    },
+                    valid_from: 20,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let ad = rt.active_deployment(0).unwrap();
+        assert_eq!(ad.version.minor, 1);
+        let ad = rt.active_deployment(1).unwrap();
+        assert_eq!(ad.version.minor, 1);
+        let ad = rt.active_deployment(9).unwrap();
+        assert_eq!(ad.version.minor, 1);
+        let ad = rt.active_deployment(10).unwrap();
+        assert_eq!(ad.version.minor, 2);
+        let ad = rt.active_deployment(20).unwrap();
+        assert_eq!(ad.version.minor, 3);
+        let ad = rt.active_deployment(50).unwrap();
+        assert_eq!(ad.version.minor, 3);
+        let ad = rt.active_deployment(100).unwrap();
+        assert_eq!(ad.version.minor, 3);
+        let ad = rt.active_deployment(1000).unwrap();
+        assert_eq!(ad.version.minor, 3);
+
+        let ad = rt
+            .deployment_for_version(Version {
+                major: 0,
+                minor: 1,
+                patch: 0,
+            })
+            .unwrap();
+        assert_eq!(ad.valid_from, 0);
+        let ad = rt
+            .deployment_for_version(Version {
+                major: 0,
+                minor: 2,
+                patch: 0,
+            })
+            .unwrap();
+        assert_eq!(ad.valid_from, 10);
+        let ad = rt
+            .deployment_for_version(Version {
+                major: 0,
+                minor: 3,
+                patch: 0,
+            })
+            .unwrap();
+        assert_eq!(ad.valid_from, 20);
+        let ad = rt.deployment_for_version(Version {
+            major: 0,
+            minor: 99,
+            patch: 0,
+        });
+        assert_eq!(ad, None);
     }
 }

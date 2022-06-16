@@ -15,7 +15,7 @@ use slog::{debug, error, info, warn, Logger};
 use tokio::sync::mpsc;
 
 use crate::{
-    cache,
+    attestation, cache,
     common::{
         crypto::{
             hash::Hash,
@@ -136,6 +136,8 @@ struct State {
     rpc_demux: Arc<Mutex<RpcDemux>>,
     rpc_dispatcher: Arc<RpcDispatcher>,
     txn_dispatcher: Arc<dyn TxnDispatcher>,
+    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
+    attestation_handler: attestation::Handler,
     cache_set: cache::CacheSet,
 }
 
@@ -254,13 +256,20 @@ impl Dispatcher {
         };
         txn_dispatcher.set_abort_batch_flag(self.abort_batch.clone());
 
+        let consensus_verifier: Arc<dyn Verifier> = Arc::from(consensus_verifier);
         let state = State {
             protocol: protocol.clone(),
-            consensus_verifier: Arc::from(consensus_verifier),
+            consensus_verifier: consensus_verifier.clone(),
             dispatcher: self.clone(),
             rpc_demux: Arc::new(Mutex::new(rpc_demux)),
             rpc_dispatcher: Arc::new(rpc_dispatcher),
             txn_dispatcher: Arc::from(txn_dispatcher),
+            attestation_handler: attestation::Handler::new(
+                self.rak.clone(),
+                consensus_verifier,
+                protocol.get_runtime_id(),
+                protocol.get_config().version,
+            ),
             cache_set: cache::CacheSet::new(protocol.clone()),
         };
 
@@ -304,6 +313,16 @@ impl Dispatcher {
         request: Body,
     ) -> Result<Body, Error> {
         match request {
+            // Attestation-related requests.
+            #[cfg(target_env = "sgx")]
+            Body::RuntimeCapabilityTEERakInitRequest { .. }
+            | Body::RuntimeCapabilityTEERakReportRequest {}
+            | Body::RuntimeCapabilityTEERakAvrRequest { .. }
+            | Body::RuntimeCapabilityTEERakQuoteRequest { .. } => {
+                Ok(state.attestation_handler.handle(ctx, request)?)
+            }
+
+            // RPC and transaction requests.
             Body::RuntimeRPCCallRequest { request } => {
                 // RPC call.
                 self.dispatch_rpc(
@@ -411,6 +430,8 @@ impl Dispatcher {
                 )
                 .await
             }
+
+            // Other requests.
             Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
                 // KeyManager policy update local RPC call.
                 self.handle_km_policy_update(&state.rpc_dispatcher, ctx, signed_policy_raw)
@@ -420,6 +441,7 @@ impl Dispatcher {
                 .sync(height)
                 .map_err(Into::into)
                 .map(|_| Body::RuntimeConsensusSyncResponse {}),
+
             _ => {
                 error!(self.logger, "Unsupported request type");
                 Err(Error::new("dispatcher", 1, "Unsupported request type"))

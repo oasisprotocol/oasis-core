@@ -9,7 +9,7 @@ use super::types::Message;
 use crate::{
     common::{
         crypto::signature::{PublicKey, Signature, Signer},
-        sgx::{ias, EnclaveIdentity},
+        sgx::{ias, EnclaveIdentity, Quote, VerifiedQuote},
     },
     rak::RAK,
 };
@@ -35,7 +35,7 @@ enum SessionError {
 /// Information about a session.
 pub struct SessionInfo {
     pub rak_binding: RAKBinding,
-    pub authenticated_avr: ias::AuthenticatedAVR,
+    pub verified_quote: VerifiedQuote,
 }
 
 enum State {
@@ -173,18 +173,29 @@ impl Session {
     fn get_rak_binding(&self) -> Vec<u8> {
         match self.rak {
             Some(ref rak) => {
-                if rak.public_key().is_none() || rak.avr().is_none() {
+                if rak.public_key().is_none() || rak.quote().is_none() {
                     return vec![];
                 }
 
-                let rak_pub = rak.public_key().expect("rak is configured");
-                let avr = rak.avr().expect("avr is configured");
-                let rak_binding = RAKBinding {
-                    avr: (*avr).clone(),
-                    rak_pub,
-                    binding: rak
-                        .sign(&RAK_SESSION_BINDING_CONTEXT, &self.local_static_pub)
-                        .unwrap(),
+                let rak_pub = rak.public_key().expect("RAK is configured");
+                let quote = rak.quote().expect("quote is configured");
+                let binding = rak
+                    .sign(&RAK_SESSION_BINDING_CONTEXT, &self.local_static_pub)
+                    .unwrap();
+
+                // TODO: Change this once all runtimes have migrated to the new scheme.
+                let rak_binding = if let Quote::Ias(ref avr) = *quote {
+                    RAKBinding::V0 {
+                        rak_pub,
+                        binding,
+                        avr: avr.clone(),
+                    }
+                } else {
+                    RAKBinding::V1 {
+                        rak_pub,
+                        binding,
+                        quote: (*quote).clone(),
+                    }
                 };
 
                 cbor::to_vec(rak_binding)
@@ -208,28 +219,11 @@ impl Session {
         }
 
         let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
-        let authenticated_avr = ias::verify(&rak_binding.avr)?;
-
-        // Verify MRENCLAVE/MRSIGNER.
-        if let Some(ref remote_enclaves) = self.remote_enclaves {
-            if !remote_enclaves.contains(&authenticated_avr.identity) {
-                return Err(SessionError::MismatchedEnclaveIdentity.into());
-            }
-        }
-
-        // Verify RAK binding.
-        RAK::verify_binding(&authenticated_avr, &rak_binding.rak_pub)?;
-
-        // Verify remote static key binding.
-        rak_binding.binding.verify(
-            &rak_binding.rak_pub,
-            &RAK_SESSION_BINDING_CONTEXT,
-            remote_static,
-        )?;
+        let verified_quote = rak_binding.verify(&self.remote_enclaves, remote_static)?;
 
         Ok(Some(Arc::new(SessionInfo {
             rak_binding,
-            authenticated_avr,
+            verified_quote,
         })))
     }
 
@@ -260,11 +254,75 @@ impl Session {
 /// * `rak_pub` contains the public part of RAK.
 /// * `binding` is signed by `rak_pub` and binds the session's static
 ///   public key to RAK.
-#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct RAKBinding {
-    pub avr: ias::AVR,
-    pub rak_pub: PublicKey,
-    pub binding: Signature,
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[cbor(tag = "v")]
+pub enum RAKBinding {
+    /// Old V0 format that only supported IAS quotes.
+    #[cbor(rename = 0, missing)]
+    V0 {
+        rak_pub: PublicKey,
+        binding: Signature,
+        avr: ias::AVR,
+    },
+
+    /// New V1 format that supports both IAS and PCS quotes.
+    #[cbor(rename = 1)]
+    V1 {
+        rak_pub: PublicKey,
+        binding: Signature,
+        quote: Quote,
+    },
+}
+
+impl RAKBinding {
+    /// Public part of the RAK.
+    pub fn rak_pub(&self) -> PublicKey {
+        match self {
+            Self::V0 { rak_pub, .. } => *rak_pub,
+            Self::V1 { rak_pub, .. } => *rak_pub,
+        }
+    }
+
+    /// Signature from RAK, binding the session's static public key to RAK.
+    pub fn binding(&self) -> Signature {
+        match self {
+            Self::V0 { binding, .. } => *binding,
+            Self::V1 { binding, .. } => *binding,
+        }
+    }
+
+    /// Verify the RAK binding.
+    pub fn verify(
+        &self,
+        remote_enclaves: &Option<HashSet<EnclaveIdentity>>,
+        remote_static: &[u8],
+    ) -> Result<VerifiedQuote> {
+        let verified_quote = self.verify_quote()?;
+
+        // Verify MRENCLAVE/MRSIGNER.
+        if let Some(ref remote_enclaves) = remote_enclaves {
+            if !remote_enclaves.contains(&verified_quote.identity) {
+                return Err(SessionError::MismatchedEnclaveIdentity.into());
+            }
+        }
+
+        // Verify RAK binding.
+        RAK::verify_binding(&verified_quote, &self.rak_pub())?;
+
+        // Verify remote static key binding.
+        self.binding()
+            .verify(&self.rak_pub(), &RAK_SESSION_BINDING_CONTEXT, remote_static)?;
+
+        Ok(verified_quote)
+    }
+
+    /// Verify the quote that is part of the RAK binding.
+    pub fn verify_quote(&self) -> Result<VerifiedQuote> {
+        match self {
+            Self::V0 { ref avr, .. } => ias::verify(avr),
+            Self::V1 { ref quote, .. } => quote.verify(&Default::default()), // TODO: Add policy.
+        }
+    }
 }
 
 /// Session builder.
@@ -282,6 +340,7 @@ impl Builder {
 
     /// Enable remote enclave identity verification.
     pub fn remote_enclaves(mut self, enclaves: Option<HashSet<EnclaveIdentity>>) -> Self {
+        // TODO: Also add quote_policy argument.
         self.remote_enclaves = enclaves;
         self
     }

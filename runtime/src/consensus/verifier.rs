@@ -65,6 +65,9 @@ pub trait Verifier: Send + Sync {
     /// require integrity guarantees.
     fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error>;
 
+    /// Return the latest verified consensus layer state.
+    fn latest_state(&self) -> Result<ConsensusState, Error>;
+
     /// Record the given (locally computed and thus verified) results header as trusted.
     fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error>;
 }

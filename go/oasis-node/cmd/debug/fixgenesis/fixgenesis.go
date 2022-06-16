@@ -704,7 +704,7 @@ NodeLoop:
 				continue NodeLoop
 			}
 			if rt.Capabilities.TEE != nil {
-				if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, rt, knownRt, oldDoc.Time); err != nil {
+				if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, rt, knownRt, newDoc.Registry.Parameters.TEEFeatures, oldDoc.Time); err != nil {
 					logger.Warn("removing node with invalid TEE capability",
 						"err", err,
 						"node_id", node.ID,

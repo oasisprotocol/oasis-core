@@ -162,7 +162,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 			return fmt.Errorf("failed to query key manager status: %w", err)
 		}
 
-		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes)
+		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes, params)
 		if forceEmit || !bytes.Equal(cbor.Marshal(oldStatus), cbor.Marshal(newStatus)) {
 			ctx.Logger().Debug("status updated",
 				"id", newStatus.ID,
@@ -193,7 +193,13 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 	return nil
 }
 
-func (app *keymanagerApplication) generateStatus(ctx *tmapi.Context, kmrt *registry.Runtime, oldStatus *api.Status, nodes []*node.Node) *api.Status {
+func (app *keymanagerApplication) generateStatus(
+	ctx *tmapi.Context,
+	kmrt *registry.Runtime,
+	oldStatus *api.Status,
+	nodes []*node.Node,
+	params *registry.ConsensusParameters,
+) *api.Status {
 	status := &api.Status{
 		ID:            kmrt.ID,
 		IsInitialized: oldStatus.IsInitialized,
@@ -238,7 +244,7 @@ func (app *keymanagerApplication) generateStatus(ctx *tmapi.Context, kmrt *regis
 			continue
 		}
 
-		initResponse, err := api.VerifyExtraInfo(ctx.Logger(), kmrt, nodeRt, ctx.Now())
+		initResponse, err := api.VerifyExtraInfo(ctx.Logger(), kmrt, nodeRt, ctx.Now(), params)
 		if err != nil {
 			ctx.Logger().Error("failed to validate ExtraInfo",
 				"err", err,

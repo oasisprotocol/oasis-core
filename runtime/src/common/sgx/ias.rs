@@ -16,7 +16,7 @@ use thiserror::Error;
 use x509_parser::prelude::*;
 
 use crate::common::{
-    sgx::{EnclaveIdentity, MrEnclave, MrSigner},
+    sgx::{EnclaveIdentity, MrEnclave, MrSigner, VerifiedQuote},
     time::{insecure_posix_time, update_insecure_posix_time},
 };
 
@@ -115,6 +115,17 @@ lazy_static! {
     };
 }
 
+/// Quote validity policy.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct QuotePolicy {
+    /// Allowed quote statuses.
+    ///
+    /// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be
+    /// specified.
+    #[cbor(optional)]
+    pub allowed_quote_statuses: Vec<i64>, // TODO: Define ISVEnclaveQuoteStatus type.
+}
+
 /// Decoded quote body.
 #[derive(Default, Debug)]
 struct QuoteBody {
@@ -165,16 +176,6 @@ pub struct AVR {
     pub certificate_chain: Vec<u8>,
 }
 
-/// Authenticated information obtained from validating an AVR.
-#[derive(Debug, Clone)]
-pub struct AuthenticatedAVR {
-    pub report_data: Vec<u8>,
-    // TODO: add other av report/quote body/report fields we want to give the consumer
-    pub identity: EnclaveIdentity,
-    pub timestamp: i64,
-    pub nonce: String,
-}
-
 /// Parsed AVR body.
 #[derive(Debug, Clone)]
 pub(crate) struct ParsedAVR {
@@ -223,7 +224,7 @@ impl ParsedAVR {
 }
 
 /// Verify attestation report.
-pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
+pub fn verify(avr: &AVR) -> Result<VerifiedQuote> {
     let unsafe_skip_avr_verification = option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_some();
     let unsafe_lax_avr_verification = option_env!("OASIS_UNSAFE_LAX_AVR_VERIFY").is_some();
 
@@ -297,14 +298,14 @@ pub fn verify(avr: &AVR) -> Result<AuthenticatedAVR> {
     // Force-ratchet the clock forward, to at least the time in the AVR.
     update_insecure_posix_time(timestamp);
 
-    Ok(AuthenticatedAVR {
+    Ok(VerifiedQuote {
         report_data: quote_body.report_body.reportdata.to_vec(),
         identity: EnclaveIdentity {
             mr_enclave: MrEnclave::from(quote_body.report_body.mrenclave.to_vec()),
             mr_signer: MrSigner::from(quote_body.report_body.mrsigner.to_vec()),
         },
         timestamp,
-        nonce,
+        nonce: nonce.into_bytes(),
     })
 }
 

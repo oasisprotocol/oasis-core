@@ -126,6 +126,10 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 		filterCommitteeNodes := beaconParameters.Backend == beacon.BackendVRF && !params.DebugAllowWeakAlpha
 
 		regState := registryState.NewMutableState(ctx.State())
+		registryParameters, err := regState.ConsensusParameters(ctx)
+		if err != nil {
+			return fmt.Errorf("tendermint/scheduler: couldn't get registry parameters: %w", err)
+		}
 		runtimes, err := regState.Runtimes(ctx)
 		if err != nil {
 			return fmt.Errorf("tendermint/scheduler: couldn't get runtimes: %w", err)
@@ -206,6 +210,7 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 				params,
 				beaconState,
 				beaconParameters,
+				registryParameters,
 				stakeAcc,
 				entitiesEligibleForReward,
 				validatorEntities,
@@ -319,7 +324,13 @@ func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEnd
 	return resp, nil
 }
 
-func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *nodeWithStatus, rt *registry.Runtime, epoch beacon.EpochTime) bool {
+func (app *schedulerApplication) isSuitableExecutorWorker(
+	ctx *api.Context,
+	n *nodeWithStatus,
+	rt *registry.Runtime,
+	epoch beacon.EpochTime,
+	registryParams *registry.ConsensusParameters,
+) bool {
 	if !n.node.HasRoles(node.RoleComputeWorker) {
 		return false
 	}
@@ -353,7 +364,7 @@ func (app *schedulerApplication) isSuitableExecutorWorker(ctx *api.Context, n *n
 			if nrt.Capabilities.TEE.Hardware != rt.TEEHardware {
 				return false
 			}
-			if err := nrt.Capabilities.TEE.Verify(ctx.Now(), activeDeployment.TEE); err != nil {
+			if err := nrt.Capabilities.TEE.Verify(registryParams.TEEFeatures, ctx.Now(), activeDeployment.TEE); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestaion",
 					"err", err,
 					"node_id", n.node.ID,
@@ -385,6 +396,7 @@ func (app *schedulerApplication) electAllCommittees(
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
+	registryParameters *registry.ConsensusParameters,
 	stakeAcc *stakingState.StakeAccumulatorCache,
 	entitiesEligibleForReward map[staking.Address]bool,
 	validatorEntities map[staking.Address]bool,
@@ -399,6 +411,7 @@ func (app *schedulerApplication) electAllCommittees(
 			schedulerParameters,
 			beaconState,
 			beaconParameters,
+			registryParameters,
 			stakeAcc,
 			entitiesEligibleForReward,
 			validatorEntities,

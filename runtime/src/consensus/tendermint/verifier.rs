@@ -46,7 +46,9 @@ use crate::{
             beacon::ImmutableState as BeaconState, registry::ImmutableState as RegistryState,
             roothash::ImmutableState as RoothashState, ConsensusState,
         },
-        tendermint::{decode_light_block, LightBlockMeta, TENDERMINT_CONTEXT},
+        tendermint::{
+            decode_light_block, state_root_from_header, LightBlockMeta, TENDERMINT_CONTEXT,
+        },
         verifier::{self, Error, TrustRoot},
         LightBlock, HEIGHT_LATEST,
     },
@@ -112,6 +114,25 @@ impl verifier::Verifier for NopVerifier {
         ))
     }
 
+    fn latest_state(&self) -> Result<ConsensusState, Error> {
+        let result = self
+            .protocol
+            .call_host(
+                Context::background(),
+                Body::HostFetchConsensusBlockRequest {
+                    height: HEIGHT_LATEST,
+                },
+            )
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        let block = match result {
+            Body::HostFetchConsensusBlockResponse { block } => block,
+            _ => return Err(Error::VerificationFailed(anyhow!("bad response from host"))),
+        };
+
+        self.unverified_state(block)
+    }
+
     fn trust(&self, _header: &ComputeResultsHeader) -> Result<(), Error> {
         Ok(())
     }
@@ -127,6 +148,7 @@ enum Command {
         bool,
     ),
     Trust(ComputeResultsHeader, channel::Sender<Result<(), Error>>),
+    LatestState(channel::Sender<Result<ConsensusState, Error>>),
 }
 
 /// Tendermint consensus layer verifier.
@@ -201,6 +223,19 @@ impl Verifier {
         cache.last_trust_root.hash = header.hash().to_string();
 
         Ok(())
+    }
+
+    fn latest_consensus_state(&self, instance: &mut Instance) -> Result<ConsensusState, Error> {
+        let verified_block = instance
+            .light_client
+            .verify_to_highest(&mut instance.state)
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        let state_root = state_root_from_header(&verified_block.signed_header);
+        Ok(ConsensusState::from_protocol(
+            self.protocol.clone(),
+            state_root,
+        ))
     }
 
     fn verify_consensus_only(
@@ -682,6 +717,11 @@ impl Verifier {
                         .send(self.trust(&mut cache, header))
                         .map_err(|_| Error::Internal)?;
                 }
+                Command::LatestState(sender) => {
+                    sender
+                        .send(self.latest_consensus_state(&mut instance))
+                        .map_err(|_| Error::Internal)?;
+                }
             }
 
             // Persist trusted root every once in a while.
@@ -761,6 +801,15 @@ impl verifier::Verifier for Handle {
         ))
     }
 
+    fn latest_state(&self) -> Result<ConsensusState, Error> {
+        let (sender, receiver) = channel::bounded(1);
+        self.command_sender
+            .send(Command::LatestState(sender))
+            .map_err(|_| Error::Internal)?;
+
+        receiver.recv().map_err(|_| Error::Internal)?
+    }
+
     fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
         let (sender, receiver) = channel::bounded(1);
         self.command_sender
@@ -821,14 +870,19 @@ impl components::io::Io for Io {
 
         // Fetch light block at height and height+1.
         let block = Io::fetch_light_block(self, height)?;
+        let height: u64 = block
+            .signed_header
+            .as_ref()
+            .ok_or_else(|| IoError::rpc(RpcError::server("missing signed header".to_string())))?
+            .header()
+            .height
+            .into();
         // NOTE: It seems that the requirement to fetch the next validator set is redundant and it
         //       should be handled at a higher layer of the light client.
         let next_block = Io::fetch_light_block(self, height + 1)?;
 
         Ok(TMLightBlock {
-            signed_header: block.signed_header.ok_or_else(|| {
-                IoError::rpc(RpcError::server("missing signed header".to_string()))
-            })?,
+            signed_header: block.signed_header.unwrap(), // Checked above.
             validators: block.validators,
             next_validators: next_block.validators,
             provider: PeerId::new([0; 20]),

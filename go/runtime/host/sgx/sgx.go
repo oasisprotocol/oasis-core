@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -56,6 +57,8 @@ type Config struct {
 	IAS ias.Endpoint
 	// PCS is the Intel Provisioning Certification Service client.
 	PCS pcs.Client
+	// Consensus is the consensus layer backend.
+	Consensus consensus.Backend
 
 	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
@@ -80,7 +83,7 @@ type RuntimeExtra struct {
 
 type teeStateImpl interface {
 	// Init initializes the TEE state and returns the QE target info.
-	Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace) ([]byte, error)
+	Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error)
 
 	// Update updates the TEE state and returns a new attestation.
 	Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error)
@@ -88,6 +91,7 @@ type teeStateImpl interface {
 
 type teeState struct {
 	runtimeID    common.Namespace
+	version      version.Version
 	eventEmitter host.RuntimeEventEmitter
 
 	impl teeStateImpl
@@ -105,13 +109,13 @@ func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error
 
 	// Try ECDSA first. If it fails, try EPID.
 	implECDSA := &teeStateECDSA{}
-	if targetInfo, err = implECDSA.Init(ctx, sp, ts.runtimeID); err != nil {
+	if targetInfo, err = implECDSA.Init(ctx, sp, ts.runtimeID, ts.version); err != nil {
 		sp.logger.Debug("ECDSA attestation initialization failed, trying EPID",
 			"err", err,
 		)
 
 		implEPID := &teeStateEPID{}
-		if targetInfo, err = implEPID.Init(ctx, sp, ts.runtimeID); err != nil {
+		if targetInfo, err = implEPID.Init(ctx, sp, ts.runtimeID, ts.version); err != nil {
 			return nil, err
 		}
 		ts.impl = implEPID
@@ -131,10 +135,11 @@ type sgxProvisioner struct {
 
 	cfg Config
 
-	sandbox host.Provisioner
-	ias     ias.Endpoint
-	pcs     pcs.Client
-	aesm    *aesm.Client
+	sandbox   host.Provisioner
+	ias       ias.Endpoint
+	pcs       pcs.Client
+	aesm      *aesm.Client
+	consensus consensus.Backend
 
 	logger *logging.Logger
 }
@@ -265,7 +270,7 @@ func (s *sgxProvisioner) hostInitializer(
 	// Initialize TEE.
 	var err error
 	var ts *teeState
-	if ts, err = s.initCapabilityTEE(ctx, rt, conn); err != nil {
+	if ts, err = s.initCapabilityTEE(ctx, rt, conn, version); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 	var capabilityTEE *node.CapabilityTEE
@@ -281,12 +286,13 @@ func (s *sgxProvisioner) hostInitializer(
 	}, nil
 }
 
-func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime, conn protocol.Connection) (*teeState, error) {
+func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime, conn protocol.Connection, version version.Version) (*teeState, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
 
 	ts := teeState{
 		runtimeID: rt.ID(),
+		version:   version,
 		// We know that the runtime implementation provided by sandbox runtime provisioner
 		// implements the RuntimeEventEmitter interface.
 		eventEmitter: rt.(host.RuntimeEventEmitter),
@@ -387,11 +393,12 @@ func New(cfg Config) (host.Provisioner, error) {
 	}
 
 	s := &sgxProvisioner{
-		cfg:    cfg,
-		ias:    cfg.IAS,
-		pcs:    cfg.PCS,
-		aesm:   aesm.NewClient(aesmdSocketPath),
-		logger: logging.GetLogger("runtime/host/sgx"),
+		cfg:       cfg,
+		ias:       cfg.IAS,
+		pcs:       cfg.PCS,
+		aesm:      aesm.NewClient(aesmdSocketPath),
+		consensus: cfg.Consensus,
+		logger:    logging.GetLogger("runtime/host/sgx"),
 	}
 	p, err := sandbox.New(sandbox.Config{
 		GetSandboxConfig:  s.getSandboxConfig,

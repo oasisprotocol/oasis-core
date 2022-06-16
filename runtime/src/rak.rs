@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::common::crypto::hash::Hash;
 use crate::common::{
     crypto::signature::{PrivateKey, PublicKey, Signature, Signer},
-    sgx::{ias, EnclaveIdentity},
+    sgx::{EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
     time::insecure_posix_time,
 };
 
@@ -35,24 +35,25 @@ enum RAKError {
     MalformedReportData,
 }
 
-/// AVR-related errors.
+/// Quote-related errors.
 #[cfg(target_env = "sgx")]
 #[derive(Error, Debug)]
-enum AVRError {
+enum QuoteError {
     #[error("malformed target_info")]
     MalformedTargetInfo,
     #[error("MRENCLAVE mismatch")]
     MrEnclaveMismatch,
     #[error("MRSIGNER mismatch")]
     MrSignerMismatch,
-    #[error("AVR nonce mismatch")]
+    #[error("quote nonce mismatch")]
     NonceMismatch,
 }
 
 struct Inner {
     private_key: Option<PrivateKey>,
-    avr: Option<Arc<ias::AVR>>,
-    avr_timestamp: Option<i64>,
+    quote: Option<Arc<Quote>>,
+    quote_timestamp: Option<i64>,
+    quote_policy: Option<QuotePolicy>,
     #[allow(unused)]
     enclave_identity: Option<EnclaveIdentity>,
     #[allow(unused)]
@@ -65,8 +66,8 @@ struct Inner {
 ///
 /// The runtime attestation key (RAK) represents the identity of the enclave
 /// and can be used to sign remote attestations. Its purpose is to avoid
-/// round trips to IAS for each verification as the verifier can instead
-/// verify the RAK signature and the signature on the provided AVR which
+/// round trips to IAS/PCS for each verification as the verifier can instead
+/// verify the RAK signature and the signature on the provided quote which binds
 /// RAK to the enclave.
 pub struct RAK {
     inner: RwLock<Inner>,
@@ -78,8 +79,9 @@ impl Default for RAK {
         Self {
             inner: RwLock::new(Inner {
                 private_key: None,
-                avr: None,
-                avr_timestamp: None,
+                quote: None,
+                quote_timestamp: None,
+                quote_policy: None,
                 enclave_identity: EnclaveIdentity::current(),
                 target_info: None,
                 nonce: None,
@@ -97,7 +99,7 @@ impl RAK {
         Hash::digest_bytes(&message)
     }
 
-    /// Generate a random 32 character nonce, for IAS anti-replay.
+    /// Generate a random 32 character nonce, for anti-replay.
     #[cfg(target_env = "sgx")]
     fn generate_nonce() -> String {
         // Note: The IAS protocol specifies this as 32 characters, and
@@ -132,7 +134,7 @@ impl RAK {
         // it can fail.
         let target_info = match Targetinfo::try_copy_from(&target_info) {
             Some(target_info) => target_info,
-            None => return Err(AVRError::MalformedTargetInfo.into()),
+            None => return Err(QuoteError::MalformedTargetInfo.into()),
         };
         inner.target_info = Some(target_info);
 
@@ -152,7 +154,7 @@ impl RAK {
             .get_sgx_target_info()
             .expect("target_info must be configured");
 
-        // Generate a new IAS anti-replay nonce.
+        // Generate a new anti-replay nonce.
         let nonce = Self::generate_nonce();
 
         // Generate report body.
@@ -163,7 +165,7 @@ impl RAK {
 
         let report = Report::for_target(&target_info, &report_data);
 
-        // This used to reset the AVR, but that is now done in the external
+        // This used to reset the quote, but that is now done in the external
         // accessor combined with a freshness check.
 
         // Cache the nonce, the report was generated.
@@ -173,9 +175,9 @@ impl RAK {
         (rak_pub, report, nonce)
     }
 
-    /// Configure the attestation verification report for RAK.
+    /// Configure the remote attestation quote for RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn set_avr(&self, avr: ias::AVR) -> Result<()> {
+    pub(crate) fn set_quote(&self, quote: Quote, policy: QuotePolicy) -> Result<()> {
         let rak_pub = self.public_key().expect("RAK must be configured");
 
         let mut inner = self.inner.write().unwrap();
@@ -184,59 +186,52 @@ impl RAK {
         // of attesting.
         let expected_nonce = match &inner.nonce {
             Some(nonce) => nonce.clone(),
-            None => return Err(AVRError::NonceMismatch.into()),
+            None => return Err(QuoteError::NonceMismatch.into()),
         };
 
-        // Verify that the AVR's nonce matches one that we generated,
+        // Verify that the quote's nonce matches one that we generated,
         // and remove it.  If the validation fails for any reason, we
-        // should not accept a new AVR with the same nonce as an AVR
+        // should not accept a new quote with the same nonce as a quote
         // that failed.
-        let unchecked_avr = ias::ParsedAVR::new(&avr)?;
-        let unchecked_nonce = unchecked_avr.nonce()?;
-        if expected_nonce != unchecked_nonce {
-            return Err(AVRError::NonceMismatch.into());
-        }
         inner.nonce = None;
 
-        let authenticated_avr = ias::verify(&avr)?;
+        let verified_quote = quote.verify(&policy)?;
+        if expected_nonce.as_bytes() != verified_quote.nonce {
+            return Err(QuoteError::NonceMismatch.into());
+        }
 
-        // Verify that the AVR's enclave identity matches our own.
+        // Verify that the quote's enclave identity matches our own.
         let enclave_identity = inner
             .enclave_identity
             .as_ref()
             .expect("Enclave identity must be configured");
-        if authenticated_avr.identity.mr_enclave != enclave_identity.mr_enclave {
-            return Err(AVRError::MrEnclaveMismatch.into());
+        if verified_quote.identity.mr_enclave != enclave_identity.mr_enclave {
+            return Err(QuoteError::MrEnclaveMismatch.into());
         }
-        if authenticated_avr.identity.mr_signer != enclave_identity.mr_signer {
-            return Err(AVRError::MrSignerMismatch.into());
-        }
-
-        // Verify that the AVR has H(RAK) in report body.
-        Self::verify_binding(&authenticated_avr, &rak_pub)?;
-
-        // Cross check the unchecked nonce with the post validation one.
-        // Technically a waste of CPU cycles, doesn't hurt anything.
-        if authenticated_avr.nonce != unchecked_nonce {
-            panic!("invariant violation, unchecked nonce != authenticated nonce");
+        if verified_quote.identity.mr_signer != enclave_identity.mr_signer {
+            return Err(QuoteError::MrSignerMismatch.into());
         }
 
-        // Verify that the AVR's report also contains the nonce.
-        if authenticated_avr.nonce.as_bytes() != &authenticated_avr.report_data[32..64] {
-            return Err(AVRError::NonceMismatch.into());
+        // Verify that the quote has H(RAK) in report body.
+        Self::verify_binding(&verified_quote, &rak_pub)?;
+
+        // Verify that the quote's report also contains the nonce.
+        if verified_quote.nonce != &verified_quote.report_data[32..64] {
+            return Err(QuoteError::NonceMismatch.into());
         }
 
-        // If there is an existing AVR that is dated more recently than
+        // If there is an existing quote that is dated more recently than
         // the one being set, silently ignore the update.
-        if inner.avr.is_some() {
-            let existing_timestamp = inner.avr_timestamp.unwrap();
-            if existing_timestamp > authenticated_avr.timestamp {
+        if inner.quote.is_some() {
+            let existing_timestamp = inner.quote_timestamp.unwrap();
+            if existing_timestamp > verified_quote.timestamp {
                 return Ok(());
             }
         }
 
-        inner.avr = Some(Arc::new(avr));
-        inner.avr_timestamp = Some(authenticated_avr.timestamp);
+        inner.quote = Some(Arc::new(quote));
+        inner.quote_timestamp = Some(verified_quote.timestamp);
+        inner.quote_policy = Some(policy);
         Ok(())
     }
 
@@ -249,35 +244,39 @@ impl RAK {
         inner.private_key.as_ref().map(|pk| pk.public_key())
     }
 
-    /// Attestation verification report for RAK.
+    /// Quote for RAK.
     ///
-    /// This method may return `None` in case AVR has not yet been set from
-    /// the outside, or if the AVR has expired.
-    pub fn avr(&self) -> Option<Arc<ias::AVR>> {
+    /// This method may return `None` in case quote has not yet been set from
+    /// the outside, or if the quote has expired.
+    pub fn quote(&self) -> Option<Arc<Quote>> {
         let now = insecure_posix_time();
 
-        // Enforce AVR expiration.
+        // Enforce quote expiration.
         let mut inner = self.inner.write().unwrap();
-        if inner.avr.is_some() {
-            let timestamp = inner.avr_timestamp.unwrap();
-            if !ias::timestamp_is_fresh(now, timestamp) {
-                // Reset the AVR.
-                inner.avr = None;
-                inner.avr_timestamp = None;
+        if inner.quote.is_some() {
+            let quote = inner.quote.as_ref().unwrap();
+            let timestamp = inner.quote_timestamp.unwrap();
+            let quote_policy = inner.quote_policy.as_ref().unwrap();
+
+            if !quote.is_fresh(now, timestamp, quote_policy) {
+                // Reset the quote.
+                inner.quote = None;
+                inner.quote_timestamp = None;
+                inner.quote_policy = None;
 
                 return None;
             }
         }
 
-        inner.avr.clone()
+        inner.quote.clone()
     }
 
     /// Verify a provided RAK binding.
-    pub fn verify_binding(avr: &ias::AuthenticatedAVR, rak: &PublicKey) -> Result<()> {
-        if avr.report_data.len() < 32 {
+    pub fn verify_binding(quote: &VerifiedQuote, rak: &PublicKey) -> Result<()> {
+        if quote.report_data.len() < 32 {
             return Err(RAKError::MalformedReportData.into());
         }
-        if Self::report_body_for_rak(rak).as_ref() != &avr.report_data[..32] {
+        if Self::report_body_for_rak(rak).as_ref() != &quote.report_data[..32] {
             return Err(RAKError::BindingMismatch.into());
         }
 
@@ -286,7 +285,6 @@ impl RAK {
 }
 
 impl Signer for RAK {
-    /// Generate a RAK signature with the private key over the context and message.
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         let inner = self.inner.read().unwrap();
         let sk = inner.private_key.as_ref().ok_or(RAKError::NotConfigured)?;
