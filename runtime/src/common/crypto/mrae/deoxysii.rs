@@ -93,6 +93,7 @@ mod tests {
 
     #[test]
     fn test_drive_symmetric_key() {
+        // use the same test Hex string for golang at: oasis-core/go/common/crypto/mrae/deoxysii/asymmetric_test.go
         let private_key_buffer = <[u8; 32]>::from_hex(
             "c07b151fbc1e7a11dff926111188f8d872f62eba0396da97c0a24adb75161750",
         )

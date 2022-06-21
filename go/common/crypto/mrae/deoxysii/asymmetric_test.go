@@ -12,6 +12,7 @@ import (
 )
 
 func Test_DeriveSymmetricKey(t *testing.T) {
+	// use the same test Hex string for rust at: oasis-core/runtime/src/common/crypto/mrae/deoxysii.rs
 	p, _ := hex.DecodeString("c07b151fbc1e7a11dff926111188f8d872f62eba0396da97c0a24adb75161750")
 	var privateKey [32]byte
 	copy(privateKey[:], p)
