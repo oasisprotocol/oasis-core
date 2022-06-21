@@ -17,6 +17,7 @@ import (
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
@@ -116,8 +117,12 @@ func (n *commonNode) ensureStarted(ctx context.Context) error {
 	return nil
 }
 
-// Implements consensusAPI.Backend.
-func (n *commonNode) Start() error {
+// start starts the common node services.
+//
+// Note that this explicitly does not finish startup (e.g. the common node will still be considered
+// not started after this method is called) and it is the caller's job to do so by calling the
+// finishStart method.
+func (n *commonNode) start() error {
 	n.Lock()
 	defer n.Unlock()
 
@@ -133,14 +138,17 @@ func (n *commonNode) Start() error {
 		return err
 	}
 
-	n.isStarted = true
-	close(n.startedCh)
-
 	return nil
 }
 
-// Implements consensusAPI.Backend.
-func (n *commonNode) Stop() {
+func (n *commonNode) finishStart() {
+	n.Lock()
+	n.isStarted = true
+	n.Unlock()
+	close(n.startedCh)
+}
+
+func (n *commonNode) stop() {
 	n.Lock()
 	defer n.Unlock()
 
@@ -275,6 +283,11 @@ func (n *commonNode) initialize() error {
 	n.isInitialized = true
 
 	return nil
+}
+
+// Implements consensusAPI.Backend.
+func (n *commonNode) Started() <-chan struct{} {
+	return n.startedCh
 }
 
 // Implements consensusAPI.Backend.
@@ -764,4 +777,37 @@ func (n *commonNode) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Bloc
 // Implements consensusAPI.Backend.
 func (n *commonNode) SubmissionManager() consensusAPI.SubmissionManager {
 	return &consensusAPI.NoOpSubmissionManager{}
+}
+
+func newCommonNode(
+	ctx context.Context,
+	dataDir string,
+	identity *identity.Identity,
+	genesisProvider genesisAPI.Provider,
+) (*commonNode, error) {
+	// Retrieve the genesis document early so that it is possible to
+	// use it while initializing other things.
+	genesisDoc, err := genesisProvider.GetGenesisDocument()
+	if err != nil {
+		return nil, fmt.Errorf("tendermint: failed to get genesis doc: %w", err)
+	}
+
+	// Make sure that the consensus backend specified in the genesis
+	// document is the correct one.
+	if genesisDoc.Consensus.Backend != api.BackendName {
+		return nil, fmt.Errorf("tendermint: genesis document contains incorrect consensus backend: %s",
+			genesisDoc.Consensus.Backend,
+		)
+	}
+
+	return &commonNode{
+		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
+		ctx:                   ctx,
+		identity:              identity,
+		rpcCtx:                &tmrpctypes.Context{},
+		genesis:               genesisDoc,
+		dataDir:               dataDir,
+		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
+		startedCh:             make(chan struct{}),
+	}, nil
 }

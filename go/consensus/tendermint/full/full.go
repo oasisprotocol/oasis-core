@@ -25,7 +25,6 @@ import (
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcli "github.com/tendermint/tendermint/rpc/client/local"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
 	tmstate "github.com/tendermint/tendermint/state"
 	tmstatesync "github.com/tendermint/tendermint/statesync"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -40,7 +39,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/random"
-	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
@@ -51,7 +49,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -141,7 +138,7 @@ var (
 // fullService implements a full Tendermint node.
 type fullService struct { // nolint: maligned
 	sync.Mutex
-	commonNode
+	*commonNode
 
 	upgrader      upgradeAPI.Backend
 	node          *tmnode.Node
@@ -152,8 +149,6 @@ type fullService struct { // nolint: maligned
 	submissionMgr consensusAPI.SubmissionManager
 
 	genesisProvider genesisAPI.Provider
-	isStarted       bool
-	startedCh       chan struct{}
 	syncedCh        chan struct{}
 	quitCh          chan struct{}
 
@@ -161,13 +156,6 @@ type fullService struct { // nolint: maligned
 	stopOnce sync.Once
 
 	nextSubscriberID uint64
-}
-
-func (t *fullService) started() bool {
-	t.Lock()
-	defer t.Unlock()
-
-	return t.isStarted
 }
 
 // Implements consensusAPI.Backend.
@@ -178,7 +166,7 @@ func (t *fullService) Start() error {
 
 	switch t.initialized() {
 	case true:
-		if err := t.commonNode.Start(); err != nil {
+		if err := t.commonNode.start(); err != nil {
 			return err
 		}
 		if err := t.startFn(); err != nil {
@@ -218,10 +206,7 @@ func (t *fullService) Start() error {
 		close(t.syncedCh)
 	}
 
-	t.Lock()
-	t.isStarted = true
-	t.Unlock()
-	close(t.startedCh)
+	t.commonNode.finishStart()
 
 	return nil
 }
@@ -243,13 +228,8 @@ func (t *fullService) Stop() {
 			t.Logger.Error("Error on stopping node", err)
 		}
 
-		t.commonNode.Stop()
+		t.commonNode.stop()
 	})
-}
-
-// Implements consensusAPI.Backend.
-func (t *fullService) Started() <-chan struct{} {
-	return t.startedCh
 }
 
 // Implements consensusAPI.Backend.
@@ -943,36 +923,16 @@ func New(
 	upgrader upgradeAPI.Backend,
 	genesisProvider genesisAPI.Provider,
 ) (consensusAPI.Backend, error) {
-	// Retrieve the genesis document early so that it is possible to
-	// use it while initializing other things.
-	genesisDoc, err := genesisProvider.GetGenesisDocument()
+	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisProvider)
 	if err != nil {
-		return nil, fmt.Errorf("tendermint: failed to get genesis doc: %w", err)
-	}
-
-	// Make sure that the consensus backend specified in the genesis
-	// document is the correct one.
-	if genesisDoc.Consensus.Backend != api.BackendName {
-		return nil, fmt.Errorf("tendermint: genesis document contains incorrect consensus backend: %s",
-			genesisDoc.Consensus.Backend,
-		)
+		return nil, err
 	}
 
 	t := &fullService{
-		commonNode: commonNode{
-			BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
-			ctx:                   ctx,
-			identity:              identity,
-			rpcCtx:                &tmrpctypes.Context{},
-			genesis:               genesisDoc,
-			dataDir:               dataDir,
-			svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
-			startedCh:             make(chan struct{}),
-		},
+		commonNode:      commonNode,
 		upgrader:        upgrader,
 		blockNotifier:   pubsub.NewBroker(false),
 		genesisProvider: genesisProvider,
-		startedCh:       make(chan struct{}),
 		syncedCh:        make(chan struct{}),
 		quitCh:          make(chan struct{}),
 	}
