@@ -14,14 +14,11 @@ import (
 	tmnode "github.com/tendermint/tendermint/node"
 	tmproxy "github.com/tendermint/tendermint/proxy"
 	tmcore "github.com/tendermint/tendermint/rpc/core"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
 	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/store"
 	tdbm "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
@@ -29,30 +26,19 @@ import (
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	cmbackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 )
 
 var _ api.Backend = (*archiveService)(nil)
 
 type archiveService struct {
 	sync.Mutex
-	commonNode
+	*commonNode
 
 	abciClient abcicli.Client
 
-	isStarted bool
-
-	startedCh chan struct{}
-	quitCh    chan struct{}
+	quitCh chan struct{}
 
 	stopOnce sync.Once
-}
-
-func (srv *archiveService) started() bool {
-	srv.Lock()
-	defer srv.Unlock()
-
-	return srv.isStarted
 }
 
 // Implements consensusAPI.Backend.
@@ -61,7 +47,7 @@ func (srv *archiveService) Start() error {
 		return fmt.Errorf("tendermint: service already started")
 	}
 
-	if err := srv.commonNode.Start(); err != nil {
+	if err := srv.commonNode.start(); err != nil {
 		return err
 	}
 
@@ -82,10 +68,7 @@ func (srv *archiveService) Start() error {
 		}
 	}()
 
-	srv.Lock()
-	srv.isStarted = true
-	srv.Unlock()
-	close(srv.startedCh)
+	srv.commonNode.finishStart()
 
 	return nil
 }
@@ -99,7 +82,7 @@ func (srv *archiveService) Stop() {
 		if err := srv.abciClient.Stop(); err != nil {
 			srv.Logger.Error("error on stopping abci client", "err", err)
 		}
-		srv.commonNode.Stop()
+		srv.commonNode.stop()
 	})
 }
 
@@ -150,29 +133,17 @@ func NewArchive(
 	identity *identity.Identity,
 	genesisProvider genesisAPI.Provider,
 ) (consensusAPI.Backend, error) {
-	var err error
+	commonNode, err := newCommonNode(ctx, dataDir, identity, genesisProvider)
+	if err != nil {
+		return nil, err
+	}
 
 	srv := &archiveService{
-		commonNode: commonNode{
-			BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
-			ctx:                   ctx,
-			rpcCtx:                &tmrpctypes.Context{},
-			identity:              identity,
-			dataDir:               dataDir,
-			svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
-			startedCh:             make(chan struct{}),
-		},
-		startedCh: make(chan struct{}),
-		quitCh:    make(chan struct{}),
+		commonNode: commonNode,
+		quitCh:     make(chan struct{}),
 	}
 	// Common node needs access to parent struct for initializing consensus services.
 	srv.commonNode.parentNode = srv
-
-	doc, err := genesisProvider.GetGenesisDocument()
-	if err != nil {
-		return nil, fmt.Errorf("tendermint/archive: failed to get genesis document: %w", err)
-	}
-	srv.genesis = doc
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:        filepath.Join(srv.dataDir, tmcommon.StateDir),
