@@ -465,6 +465,7 @@ func (s *Server) Start() error {
 		s.Logger.Warn("The debug gRPC port is NOT FOR PRODUCTION USE.")
 	}
 
+	var wg sync.WaitGroup
 	for _, v := range s.listenerCfgs {
 		cfg := v
 
@@ -479,13 +480,22 @@ func (s *Server) Start() error {
 
 		s.startedListeners = append(s.startedListeners, ln)
 
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			if err := server.Serve(ln); err != nil {
-				s.BaseBackgroundService.Stop()
+				server.Stop() // Force stop in case of errors so all other listeners stop.
 				s.errCh <- err
 			}
 		}()
 	}
+
+	// Wait for all of the listeners to stop.
+	go func() {
+		wg.Wait()
+		s.BaseBackgroundService.Stop()
+	}()
 
 	return nil
 }
@@ -494,6 +504,12 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	s.Lock()
 	defer s.Unlock()
+
+	// If we never started, make sure that the service doesn't hang forever.
+	if len(s.startedListeners) == 0 {
+		s.BaseBackgroundService.Stop()
+		return
+	}
 
 	if s.server != nil {
 		select {

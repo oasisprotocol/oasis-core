@@ -7,10 +7,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 )
+
+const svcStopTimeout = 10 * time.Second
 
 // ServiceManager manages a group of background services.
 type ServiceManager struct {
@@ -67,6 +70,22 @@ func (m *ServiceManager) Wait() {
 				"svc", svc.Name(),
 			)
 			svc.Stop()
+		}
+	}
+	for _, svc := range m.services {
+		if service.IsCleanupOnlyService(svc) {
+			continue
+		}
+
+		m.logger.Debug("waiting for the service to stop",
+			"svc", svc.Name(),
+		)
+		select {
+		case <-svc.Quit():
+		case <-time.After(svcStopTimeout):
+			m.logger.Warn("timed out waiting for the service to stop",
+				"svc", svc.Name(),
+			)
 		}
 	}
 	m.logger.Debug("all services stopped")

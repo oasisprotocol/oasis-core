@@ -93,6 +93,12 @@ func NewCleanupOnlyService(svc CleanupAble, name string) BackgroundService {
 	}
 }
 
+// IsCleanupOnlyService checks whether a given service is a cleanup only service.
+func IsCleanupOnlyService(svc BackgroundService) bool {
+	_, ok := svc.(*cleanupOnlyService)
+	return ok
+}
+
 type contextCleanup struct {
 	cancel context.CancelFunc
 }
