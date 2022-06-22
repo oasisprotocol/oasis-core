@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -30,6 +31,7 @@ const (
 	cfgNumEntities             = "fixture.default.num_entities"
 	cfgRuntimeID               = "fixture.default.runtime.id"
 	cfgRuntimeBinary           = "fixture.default.runtime.binary"
+	cfgRuntimeVersion          = "fixture.default.runtime.version"
 	cfgRuntimeProvisioner      = "fixture.default.runtime.provisioner"
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
 	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
@@ -158,7 +160,13 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 
 		runtimes := viper.GetStringSlice(cfgRuntimeBinary)
 		if l1, l2 := len(runtimeIDs), len(runtimes); l1 < l2 {
-			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime IDs, provided: %d, required: %d", l1, l2))
+			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime IDs, required: %d, provided: %d", l1, l2))
+		}
+
+		// Runtime versions should be ignored or must be one-to-one mapped to runtimes.
+		runtimeVersions := viper.GetStringSlice(cfgRuntimeVersion)
+		if l1, l2 := len(runtimeIDs), len(runtimeVersions); l2 != 0 && l1 != l2 {
+			cmdCommon.EarlyLogAndExit(fmt.Errorf("runtime versions number mismatch, required: %d, provided: %d", l1, l2))
 		}
 
 		keymanagerIdx := -1
@@ -168,6 +176,13 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 
 		for i, rt := range runtimes {
 			// Compute runtime.
+			rtVersion := version.Version{}
+			if len(runtimeVersions) > i {
+				rtVersion, err = version.FromString(runtimeVersions[i])
+				if err != nil {
+					return nil, fmt.Errorf("parsing runtime version: %w", err)
+				}
+			}
 			fixture.Runtimes = append(fixture.Runtimes, oasis.RuntimeFixture{
 				ID:         runtimeIDs[i],
 				Kind:       registry.KindCompute,
@@ -192,6 +207,8 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				GovernanceModel: registry.GovernanceEntity,
 				Deployments: []oasis.DeploymentCfg{
 					{
+						Version:   rtVersion,
+						ValidFrom: 0,
 						Binaries: map[node.TEEHardware]string{
 							tee: rt,
 						},
@@ -220,6 +237,7 @@ func init() {
 	DefaultFixtureFlags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeID, []string{"8000000000000000000000000000000000000000000000000000000000000000"}, "runtime ID")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeBinary, []string{"simple-keyvalue"}, "path to the runtime binary")
+	DefaultFixtureFlags.StringSlice(cfgRuntimeVersion, []string{"1.0.0"}, "runtime version to register")
 	DefaultFixtureFlags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
