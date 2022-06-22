@@ -78,12 +78,24 @@ func (srv *archiveService) Stop() {
 	if !srv.started() {
 		return
 	}
+
 	srv.stopOnce.Do(func() {
 		if err := srv.abciClient.Stop(); err != nil {
 			srv.Logger.Error("error on stopping abci client", "err", err)
 		}
 		srv.commonNode.stop()
 	})
+}
+
+func (srv *archiveService) Cleanup() {
+	srv.commonNode.Cleanup()
+
+	if err := srv.blockStoreDB.Close(); err != nil {
+		srv.Logger.Error("error on closing block store", "err", err)
+	}
+	if err := srv.stateStore.Close(); err != nil {
+		srv.Logger.Error("error on closing state store", "err", err)
+	}
 }
 
 // Implements consensusAPI.Backend.
