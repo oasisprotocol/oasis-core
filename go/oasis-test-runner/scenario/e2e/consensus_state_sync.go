@@ -53,6 +53,10 @@ func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 		},
 	)
+	// Disable certificate rotation on validator nodes so we can more easily use them for sync.
+	for i := range f.Validators {
+		f.Validators[i].DisableCertRotation = true
+	}
 
 	return f, nil
 }
