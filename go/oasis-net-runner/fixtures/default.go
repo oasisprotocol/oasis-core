@@ -237,7 +237,7 @@ func init() {
 	DefaultFixtureFlags.String(cfgNodeBinary, "oasis-node", "path to the oasis-node binary")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeID, []string{"8000000000000000000000000000000000000000000000000000000000000000"}, "runtime ID")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeBinary, []string{"simple-keyvalue"}, "path to the runtime binary")
-	DefaultFixtureFlags.StringSlice(cfgRuntimeVersion, []string{"1.0.0"}, "runtime version to register")
+	DefaultFixtureFlags.StringSlice(cfgRuntimeVersion, []string{"0.1.0"}, "runtime version to register")
 	DefaultFixtureFlags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
