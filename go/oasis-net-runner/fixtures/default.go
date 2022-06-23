@@ -115,9 +115,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 	usingKeymanager := len(viper.GetString(cfgKeymanagerBinary)) > 0
 
 	if viper.GetBool(cfgSetupRuntimes) {
-		fixture.Runtimes = []oasis.RuntimeFixture{
+		if usingKeymanager {
 			// Key manager runtime.
-			{
+			fixture.Runtimes = append(fixture.Runtimes, oasis.RuntimeFixture{
 				ID:         keymanagerID,
 				Kind:       registry.KindKeyManager,
 				Entity:     0,
@@ -126,16 +126,14 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 				},
 				GovernanceModel: registry.GovernanceEntity,
-			},
-		}
-		if usingKeymanager {
-			fixture.Runtimes[0].Deployments = []oasis.DeploymentCfg{
-				{
-					Binaries: map[node.TEEHardware]string{
-						tee: viper.GetString(cfgKeymanagerBinary),
+				Deployments: []oasis.DeploymentCfg{
+					{
+						Binaries: map[node.TEEHardware]string{
+							tee: viper.GetString(cfgKeymanagerBinary),
+						},
 					},
 				},
-			}
+			})
 			fixture.KeymanagerPolicies = []oasis.KeymanagerPolicyFixture{
 				{Runtime: 0, Serial: 1},
 			}
@@ -200,11 +198,12 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					},
 				},
 			})
+			rtIndex := len(fixture.Runtimes) - 1
 
 			for j := range fixture.ComputeWorkers {
-				fixture.ComputeWorkers[j].Runtimes = append(fixture.ComputeWorkers[j].Runtimes, i+1)
+				fixture.ComputeWorkers[j].Runtimes = append(fixture.ComputeWorkers[j].Runtimes, rtIndex)
 			}
-			fixture.Clients[0].Runtimes = append(fixture.Clients[0].Runtimes, i+1)
+			fixture.Clients[0].Runtimes = append(fixture.Clients[0].Runtimes, rtIndex)
 		}
 	}
 
