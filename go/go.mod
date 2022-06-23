@@ -9,7 +9,7 @@ replace (
 
 	// v1.5.0 has broken uint parsing, use my commit with fixes instead until
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
-	github.com/spf13/cast => github.com/abukosek/cast v0.0.0-20220606122631-eba453e69641
+	github.com/spf13/cast => github.com/oasisprotocol/cast v0.0.0-20220606122631-eba453e69641
 
 	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.15-oasis1
 
