@@ -80,6 +80,7 @@ func (app *keymanagerApplication) updatePolicy(
 		panic(fmt.Errorf("failed to set keymanager status: %w", err))
 	}
 
+	ctx.Logger().Info("keymanagerApplication.updated emit statuses", "new_status", newStatus)
 	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&api.StatusUpdateEvent{
 		Statuses: []*api.Status{newStatus},
 	}))

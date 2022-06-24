@@ -355,6 +355,7 @@ func (t *txPool) FinishScheduling() {
 }
 
 func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
+	t.logger.Info("spinach: HandleTxsUsed", "hashes", hashes)
 	for _, q := range t.usableSources {
 		q.HandleTxsUsed(hashes)
 	}
@@ -665,6 +666,7 @@ func (t *txPool) checkWorker() {
 	}()
 
 	// Wait for the hosted runtime to be available.
+	t.logger.Debug("checkWorker -> WaitHostedRuntime")
 	rr, err := t.host.WaitHostedRuntime(ctx)
 	if err != nil {
 		t.logger.Error("failed waiting for hosted runtime to become available",
@@ -672,15 +674,20 @@ func (t *txPool) checkWorker() {
 		)
 		return
 	}
+	t.logger.Debug("checkWorker <- WaitHostedRuntime")
 
 	// Wait for initialization.
+	t.logger.Debug("checkWorker -> ensureInitialized")
 	if err = t.ensureInitialized(); err != nil {
 		return
 	}
+	t.logger.Debug("checkWorker <- ensureInitialized")
 
 	for {
+		t.logger.Debug("checkWorker -> select")
 		select {
 		case <-t.stopCh:
+			t.logger.Debug("checkWorker <- select stopCh")
 			return
 		case <-t.checkTxCh.Out():
 			t.logger.Debug("checking queued transactions")

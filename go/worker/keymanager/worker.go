@@ -225,6 +225,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
 }
 
 func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) error {
+	w.logger.Info("spinach: updateStatus", "status", status)
 	var initOk bool
 	defer func() {
 		if !initOk {

@@ -1,7 +1,9 @@
 //! RPC dispatcher.
 use std::collections::HashMap;
 
-use anyhow::Result;
+use crate::common::logger::get_logger;
+use anyhow::{Context as _, Result};
+use slog::warn;
 use thiserror::Error;
 
 use super::{
@@ -82,7 +84,10 @@ where
 
     fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response> {
         let request = cbor::from_value(request.args)?;
-        let response = self.handler.handle(&request, ctx)?;
+        let response = self
+            .handler
+            .handle(&request, ctx)
+            .with_context(|| "handler handle")?;
 
         Ok(Response {
             body: Body::Success(cbor::to_value(response)),
@@ -185,6 +190,8 @@ impl Dispatcher {
             ctx_init.init(ctx);
         }
 
+        let logger = get_logger("runtime/enclave_rpc/dispatcher");
+        warn!(logger, "dispatch_fallible looking in vtbl"; "method" => &request.method);
         match vtbl.get(&request.method) {
             Some(dispatcher) => dispatcher.dispatch(request, ctx),
             None => Err(DispatchError::MethodNotFound {
@@ -203,7 +210,7 @@ impl Dispatcher {
         match self.dispatch_fallible(request, &mut ctx, true) {
             Ok(response) => response,
             Err(error) => Response {
-                body: Body::Error(format!("{}", error)),
+                body: Body::Error(format!("{:?}", error)),
             },
         }
     }

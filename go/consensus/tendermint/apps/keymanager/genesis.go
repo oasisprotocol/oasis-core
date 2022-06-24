@@ -82,6 +82,7 @@ func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, request types.Re
 	}
 
 	if len(toEmit) > 0 {
+		ctx.Logger().Info("spinach: keymanagerApplication.InitChain emit statuses", "to_emi", toEmit)
 		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&keymanager.StatusUpdateEvent{
 			Statuses: toEmit,
 		}))

@@ -185,6 +185,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 
 	// Emit the update event if required.
 	if len(toEmit) > 0 {
+		ctx.Logger().Info("keymanagerApplication.onEpochChange emit statuses", "to_emit", toEmit)
 		ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&api.StatusUpdateEvent{
 			Statuses: toEmit,
 		}))

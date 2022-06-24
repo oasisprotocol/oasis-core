@@ -89,6 +89,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 			}
 
 			for _, status := range event.Statuses {
+				sc.logger.Info("spinach: broadcasting keymanager status", "status", status)
 				sc.notifier.Broadcast(status)
 			}
 		}

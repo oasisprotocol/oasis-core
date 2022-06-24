@@ -122,9 +122,11 @@ func (cli *KeyValueTestClient) workload(ctx context.Context) error {
 	// side `to_string()` returns `8000…0000`, and the original Rust
 	// test client was doing a string compare so no one ever noticed
 	// that truncated values were being compared.
-	if _, err = cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, runtimeID, rng.Uint64()); err != nil {
+	var iiii string
+	if iiii, err = cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, runtimeID, rng.Uint64()); err != nil {
 		return fmt.Errorf("failed to query remote runtime ID: %w", err)
 	}
+	cli.sc.Logger.Info("spinach: got runtime ID from kv runtime", "runtime_id", iiii)
 
 	for iter := 0; ; iter++ {
 		var resp string

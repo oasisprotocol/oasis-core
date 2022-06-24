@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
@@ -17,8 +17,12 @@ use crate::{context, kdf::Kdf, methods, policy::Policy};
 
 /// Initialize the Kdf.
 fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Result<SignedInitResponse> {
-    let policy_checksum = Policy::global().init(ctx, &req.policy)?;
-    Kdf::global().init(req, ctx, policy_checksum)
+    let policy_checksum = Policy::global()
+        .init(ctx, &req.policy)
+        .with_context(|| format!("policy global init {:?}", &req.policy))?;
+    Kdf::global()
+        .init(req, ctx, policy_checksum)
+        .with_context(|| "kdf global init")
 }
 
 /// Initialize a keymanager with trusted policy signers.
