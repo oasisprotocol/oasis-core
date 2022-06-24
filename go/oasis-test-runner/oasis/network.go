@@ -579,8 +579,8 @@ func GenerateDeterministicNodeKeys(dir *env.Dir, rawSeed string, roles []signatu
 //
 // This function is used to obtain shorter socket path than the one in datadir since that one might
 // be too long for unix socket path.
-func (net *Network) generateTempSocketPath() string {
-	f, err := ioutil.TempFile(env.GetRootDir().String(), "internal-*.sock")
+func (net *Network) generateTempSocketPath(prefix string) string {
+	f, err := ioutil.TempFile(env.GetRootDir().String(), fmt.Sprintf("%s-internal-*.sock", prefix))
 	if err != nil {
 		return ""
 	}
@@ -616,7 +616,7 @@ func (net *Network) startOasisNode(
 	if net.cfg.UseShortGrpcSocketPaths {
 		// Keep the socket, if it was already generated!
 		if node.customGrpcSocketPath == "" {
-			node.customGrpcSocketPath = net.generateTempSocketPath()
+			node.customGrpcSocketPath = net.generateTempSocketPath(node.Name)
 		}
 		extraArgs = extraArgs.debugDontBlameOasis()
 		extraArgs = extraArgs.grpcDebugGrpcInternalSocketPath(node.customGrpcSocketPath)
@@ -865,7 +865,7 @@ func (net *Network) GetCLIConfig() cli.Config {
 	if len(net.Validators()) > 0 {
 		val := net.Validators()[0]
 		if net.cfg.UseShortGrpcSocketPaths && val.customGrpcSocketPath == "" {
-			val.customGrpcSocketPath = net.generateTempSocketPath()
+			val.customGrpcSocketPath = net.generateTempSocketPath(val.Node.Name)
 		}
 		cfg.NodeSocketPath = val.SocketPath()
 	}
