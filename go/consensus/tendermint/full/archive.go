@@ -19,6 +19,7 @@ import (
 	tdbm "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
@@ -78,12 +79,24 @@ func (srv *archiveService) Stop() {
 	if !srv.started() {
 		return
 	}
+
 	srv.stopOnce.Do(func() {
 		if err := srv.abciClient.Stop(); err != nil {
 			srv.Logger.Error("error on stopping abci client", "err", err)
 		}
 		srv.commonNode.stop()
 	})
+}
+
+func (srv *archiveService) Cleanup() {
+	srv.commonNode.Cleanup()
+
+	if err := srv.blockStoreDB.Close(); err != nil {
+		srv.Logger.Error("error on closing block store", "err", err)
+	}
+	if err := srv.stateStore.Close(); err != nil {
+		srv.Logger.Error("error on closing state store", "err", err)
+	}
 }
 
 // Implements consensusAPI.Backend.
@@ -124,6 +137,17 @@ func (srv *archiveService) EstimateGas(ctx context.Context, req *consensusAPI.Es
 // Implements consensusAPI.Backend.
 func (srv *archiveService) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
 	return 0, consensusAPI.ErrUnsupported
+}
+
+// Implements consensusAPI.Backend.
+func (srv *archiveService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
+	ctx, sub := pubsub.NewContextSubscription(ctx)
+	ch := make(chan *consensusAPI.Block)
+	go func() {
+		defer close(ch)
+		<-ctx.Done()
+	}()
+	return ch, sub, nil
 }
 
 // New creates a new archive-only consensus service.

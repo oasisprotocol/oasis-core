@@ -112,6 +112,7 @@ func (w *Worker) Stop() {
 	w.logger.Info("stopping key manager service")
 
 	if !w.enabled {
+		close(w.quitCh)
 		return
 	}
 

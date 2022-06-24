@@ -59,31 +59,8 @@ var (
 	invalidLabelCharactersRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 )
 
-type stubService struct {
-	service.BaseBackgroundService
-
-	rsvc *resourceService
-}
-
-func (s *stubService) Start() error {
-	if err := s.rsvc.Start(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *stubService) Stop() {}
-
-func (s *stubService) Cleanup() {}
-
 func newStubService() (service.BackgroundService, error) {
-	svc := *service.NewBaseBackgroundService("metrics")
-
-	return &stubService{
-		BaseBackgroundService: svc,
-		rsvc:                  newResourceService(viper.GetDuration(CfgMetricsInterval)),
-	}, nil
+	return service.NewBaseBackgroundService("metrics"), nil
 }
 
 type pullService struct {
@@ -105,14 +82,18 @@ func (s *pullService) Start() error {
 
 	go func() {
 		if err := s.s.Serve(s.ln); err != nil {
-			s.BaseBackgroundService.Stop()
 			s.errCh <- err
 		}
+
+		<-s.rsvc.Quit()
+		s.BaseBackgroundService.Stop()
 	}()
 	return nil
 }
 
 func (s *pullService) Stop() {
+	s.rsvc.Stop()
+
 	if s.s != nil {
 		select {
 		case err := <-s.errCh:
@@ -122,13 +103,15 @@ func (s *pullService) Stop() {
 				)
 			}
 		default:
-			_ = s.s.Shutdown(s.ctx)
+			_ = s.s.Close()
 		}
 		s.s = nil
 	}
 }
 
 func (s *pullService) Cleanup() {
+	s.rsvc.Cleanup()
+
 	if s.ln != nil {
 		_ = s.ln.Close()
 		s.ln = nil
@@ -171,6 +154,9 @@ type pushService struct {
 	interval time.Duration
 
 	rsvc *resourceService
+
+	stopCh chan struct{}
+	quitCh chan struct{}
 }
 
 func (s *pushService) Start() error {
@@ -184,13 +170,31 @@ func (s *pushService) Start() error {
 	return nil
 }
 
+func (s *pushService) Stop() {
+	close(s.stopCh)
+}
+
+func (s *pushService) Quit() <-chan struct{} {
+	return s.quitCh
+}
+
+func (s *pushService) Cleanup() {
+	s.rsvc.Cleanup()
+}
+
 func (s *pushService) worker() {
+	defer func() {
+		s.rsvc.Stop()
+		<-s.rsvc.Quit()
+		close(s.quitCh)
+	}()
+
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
 
 	for {
 		select {
-		case <-s.Quit():
+		case <-s.stopCh:
 			return
 		case <-t.C:
 		}
@@ -238,6 +242,8 @@ func newPushService() (service.BackgroundService, error) {
 		labels:                viper.GetStringMapString(CfgMetricsLabels),
 		interval:              viper.GetDuration(CfgMetricsInterval),
 		rsvc:                  newResourceService(viper.GetDuration(CfgMetricsInterval)),
+		stopCh:                make(chan struct{}),
+		quitCh:                make(chan struct{}),
 	}
 
 	if svc.jobName == "" {

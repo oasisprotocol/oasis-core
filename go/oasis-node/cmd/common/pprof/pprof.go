@@ -86,15 +86,21 @@ func (p *pprofService) Start() error {
 
 	go func() {
 		if err := p.server.Serve(p.listener); err != nil {
-			p.BaseBackgroundService.Stop()
 			p.errCh <- err
 		}
+		p.BaseBackgroundService.Stop()
 	}()
 
 	return nil
 }
 
 func (p *pprofService) Stop() {
+	// If we never started, make sure that the service doesn't hang forever.
+	if p.address == "" {
+		p.BaseBackgroundService.Stop()
+		return
+	}
+
 	if p.server != nil {
 		select {
 		case err := <-p.errCh:
@@ -104,7 +110,7 @@ func (p *pprofService) Stop() {
 				)
 			}
 		default:
-			_ = p.server.Shutdown(p.ctx)
+			_ = p.server.Close()
 		}
 		p.server = nil
 	}

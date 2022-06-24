@@ -79,6 +79,7 @@ type commonNode struct {
 	scheduler  schedulerAPI.Backend
 	staking    stakingAPI.Backend
 
+	// These stores must be populated by the parent before the node is deemed ready.
 	blockStoreDB tmdb.DB
 	stateStore   state.Store
 
@@ -158,12 +159,6 @@ func (n *commonNode) stop() {
 
 	n.svcMgr.Stop()
 	n.mux.Stop()
-	if err := n.blockStoreDB.Close(); err != nil {
-		n.Logger.Error("error on stopping block store", "err", err)
-	}
-	if err := n.stateStore.Close(); err != nil {
-		n.Logger.Error("error on stopping state store", "err", err)
-	}
 }
 
 func (n *commonNode) initialize() error {

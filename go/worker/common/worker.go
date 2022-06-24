@@ -63,15 +63,13 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	// Wait for the gRPC server and all runtimes to terminate.
+	// Wait for all runtimes to terminate.
 	go func() {
 		defer close(w.quitCh)
 
 		for _, rt := range w.runtimes {
 			<-rt.Quit()
 		}
-
-		<-w.Grpc.Quit()
 	}()
 
 	// Wait for all runtimes to be initialized.
@@ -112,7 +110,6 @@ func (w *Worker) Stop() {
 		rt.Stop()
 	}
 
-	w.Grpc.Stop()
 	w.cancelCtx()
 }
 
@@ -135,8 +132,6 @@ func (w *Worker) Cleanup() {
 	for _, rt := range w.runtimes {
 		rt.Cleanup()
 	}
-
-	w.Grpc.Cleanup()
 }
 
 // Initialized returns a channel that will be closed when the transaction scheduler is
