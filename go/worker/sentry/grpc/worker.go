@@ -43,7 +43,8 @@ type Worker struct { // nolint: maligned
 func (g *Worker) authFunction() auth.AuthenticationFunction {
 	return func(ctx context.Context,
 		fullMethodName string,
-		req interface{}) error {
+		req interface{},
+	) error {
 		serviceName := cmnGrpc.ServiceNameFromMethod(fullMethodName)
 		if serviceName == "" {
 			g.logger.Error("error getting service name from method",
