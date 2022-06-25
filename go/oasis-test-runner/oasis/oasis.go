@@ -345,8 +345,11 @@ func (n *Node) setProvisionedIdentity(persistTLS bool, seed string) error {
 		return err
 	}
 
-	if err := n.entity.addNode(nodeSigner); err != nil {
-		return err
+	if n.entity != nil {
+		// Client nodes may need a provisioned identity. They never need an entity, however.
+		if err := n.entity.addNode(nodeSigner); err != nil {
+			return err
+		}
 	}
 
 	n.nodeSigner = nodeSigner
