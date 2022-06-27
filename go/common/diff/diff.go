@@ -4,7 +4,7 @@ package diff
 import (
 	"fmt"
 
-	"github.com/ianbruene/go-difflib/difflib"
+	"github.com/goki/go-difflib/difflib"
 )
 
 // Number of surrounding lines to show in unified diff.
