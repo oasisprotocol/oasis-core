@@ -550,6 +550,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		rtVersionMap := make(map[common.Namespace]map[version.Version]bool)
 
 		for _, rt := range n.Runtimes {
+			// Ensure no nil runtime.
+			if rt == nil {
+				return nil, nil, ErrInvalidArgument
+			}
 			if rtVersionMap[rt.ID] == nil {
 				rtVersionMap[rt.ID] = make(map[version.Version]bool)
 			}

@@ -2,16 +2,49 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 )
+
+type mockNodeLookup struct {
+	nodesList []*node.Node
+}
+
+func (n *mockNodeLookup) NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
+	for _, nd := range n.nodesList {
+		if nd.ID.Equal(key) {
+			return nd, nil
+		}
+		if nd.Consensus.ID.Equal(key) {
+			return nd, nil
+		}
+		if nd.P2P.ID.Equal(key) {
+			return nd, nil
+		}
+		if nd.TLS.PubKey.Equal(key) {
+			return nd, nil
+		}
+	}
+	return nil, ErrNoSuchNode
+}
+
+func (n *mockNodeLookup) Nodes(ctx context.Context) ([]*node.Node, error) {
+	return n.nodesList, nil
+}
 
 type mockRuntimeLookup struct {
 	runtimes map[common.Namespace]*Runtime
@@ -38,6 +71,160 @@ func (rl *mockRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime, error
 
 func (rl *mockRuntimeLookup) Runtimes(ctx context.Context) ([]*Runtime, error) {
 	panic("not implemented")
+}
+
+func TestVerifyRegisterNodeArgs(t *testing.T) {
+	require := require.New(t)
+
+	logger := logging.GetLogger("registry/api/tests")
+
+	entityID1 := signature.NewPublicKey("1000000000000000000000000000000000000000000000000000000000000001")
+	nodeSigner := memorySigner.NewTestSigner("node tests signer")
+	nodeConsensusSigner := memorySigner.NewTestSigner("node registry tests consensus signer")
+	nodeP2PSigner := memorySigner.NewTestSigner("node registry tests P2P signer")
+	nodeTLSSigner := memorySigner.NewTestSigner("node registry tests TLS signer")
+	nodeVRFSigner := memorySigner.NewTestSigner("node registry tests VRF signer")
+	nodeSigners := []signature.Signer{
+		nodeSigner,
+		nodeP2PSigner,
+		nodeTLSSigner,
+		nodeVRFSigner,
+		nodeConsensusSigner,
+	}
+
+	params := &ConsensusParameters{
+		DebugAllowUnroutableAddresses: true,
+		MaxNodeExpiration:             10,
+		EnableRuntimeGovernanceModels: map[RuntimeGovernanceModel]bool{
+			GovernanceConsensus: true,
+			GovernanceEntity:    true,
+			GovernanceRuntime:   true,
+		},
+	}
+	ndLookup := &mockNodeLookup{}
+	rtLookup := &mockRuntimeLookup{
+		runtimes: map[common.Namespace]*Runtime{},
+	}
+
+	entity := &entity.Entity{
+		ID:    entityID1,
+		Nodes: []signature.PublicKey{nodeSigner.Public()},
+	}
+
+	for _, tc := range []struct {
+		n   node.Node
+		err error
+		msg string
+	}{
+		{
+			node.Node{
+				Versioned: cbor.NewVersioned(2),
+				ID:        nodeSigner.Public(),
+				EntityID:  entityID1,
+				Consensus: node.ConsensusInfo{
+					ID: nodeConsensusSigner.Public(),
+					Addresses: []node.ConsensusAddress{
+						{ID: nodeConsensusSigner.Public(), Address: node.Address{IP: net.IPv4(127, 0, 0, 1), Port: 9000}},
+					},
+				},
+				TLS: node.TLSInfo{
+					PubKey: nodeTLSSigner.Public(),
+				},
+				P2P: node.P2PInfo{
+					ID: nodeP2PSigner.Public(),
+				},
+				VRF: &node.VRFInfo{
+					ID: nodeVRFSigner.Public(),
+				},
+				Roles:      node.RoleConsensusRPC,
+				Expiration: 11,
+			},
+			ErrInvalidArgument,
+			"invalid consensus RPC node (missing TLS address)",
+		},
+		{
+			node.Node{
+				Versioned: cbor.NewVersioned(2),
+				ID:        nodeSigner.Public(),
+				EntityID:  entityID1,
+				Consensus: node.ConsensusInfo{
+					ID: nodeConsensusSigner.Public(),
+					Addresses: []node.ConsensusAddress{
+						{ID: nodeConsensusSigner.Public(), Address: node.Address{IP: net.IPv4(127, 0, 0, 1), Port: 9000}},
+					},
+				},
+				TLS: node.TLSInfo{
+					PubKey: nodeTLSSigner.Public(),
+					Addresses: []node.TLSAddress{
+						{
+							PubKey:  nodeTLSSigner.Public(),
+							Address: node.Address{IP: net.IPv4(127, 0, 0, 2), Port: 9001},
+						},
+					},
+				},
+				P2P: node.P2PInfo{
+					ID: nodeP2PSigner.Public(),
+				},
+				VRF: &node.VRFInfo{
+					ID: nodeVRFSigner.Public(),
+				},
+				Roles:      node.RoleConsensusRPC,
+				Expiration: 11,
+			},
+			nil,
+			"valid consensus RPC node",
+		},
+		{
+			node.Node{
+				Versioned: cbor.NewVersioned(2),
+				ID:        nodeSigner.Public(),
+				EntityID:  entityID1,
+				Consensus: node.ConsensusInfo{
+					ID: nodeConsensusSigner.Public(),
+					Addresses: []node.ConsensusAddress{
+						{ID: nodeConsensusSigner.Public(), Address: node.Address{IP: net.IPv4(127, 0, 0, 1), Port: 9000}},
+					},
+				},
+				TLS: node.TLSInfo{
+					PubKey: nodeTLSSigner.Public(),
+					Addresses: []node.TLSAddress{
+						{
+							PubKey:  nodeTLSSigner.Public(),
+							Address: node.Address{IP: net.IPv4(127, 0, 0, 2), Port: 9001},
+						},
+					},
+				},
+				P2P: node.P2PInfo{
+					ID: nodeP2PSigner.Public(),
+				},
+				VRF: &node.VRFInfo{
+					ID: nodeVRFSigner.Public(),
+				},
+				Roles:      node.RoleComputeWorker,
+				Expiration: 11,
+				Runtimes: []*node.Runtime{
+					nil,
+				},
+			},
+			ErrInvalidArgument,
+			"invalid compute worker node (nil runtime)",
+		},
+	} {
+
+		signedNode, err := node.MultiSignNode(
+			nodeSigners,
+			RegisterGenesisNodeSignatureContext,
+			&tc.n,
+		)
+		require.NoError(err, "singing node")
+		_, _, err = VerifyRegisterNodeArgs(context.Background(), params, logger, signedNode, entity, time.Now(), false, false, beacon.EpochTime(10), rtLookup, ndLookup)
+		switch {
+		case tc.err == nil:
+			require.NoError(err, tc.msg)
+		default:
+			require.True(errors.Is(err, tc.err), fmt.Sprintf("expected err: '%v', got: '%v', for: %s", tc.err, err, tc.msg))
+		}
+	}
 }
 
 func TestVerifyNodeUpdate(t *testing.T) {
