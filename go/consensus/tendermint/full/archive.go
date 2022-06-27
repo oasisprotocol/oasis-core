@@ -88,17 +88,6 @@ func (srv *archiveService) Stop() {
 	})
 }
 
-func (srv *archiveService) Cleanup() {
-	srv.commonNode.Cleanup()
-
-	if err := srv.blockStoreDB.Close(); err != nil {
-		srv.Logger.Error("error on closing block store", "err", err)
-	}
-	if err := srv.stateStore.Close(); err != nil {
-		srv.Logger.Error("error on closing state store", "err", err)
-	}
-}
-
 // Implements consensusAPI.Backend.
 func (srv *archiveService) Quit() <-chan struct{} {
 	return srv.quitCh
@@ -207,6 +196,7 @@ func NewArchive(
 	if err != nil {
 		return nil, err
 	}
+	srv.blockStoreDB = db.WithCloser(srv.blockStoreDB, srv.dbCloser)
 
 	// NOTE: DBContext uses a full tendermint config but the only thing that is actually used
 	// is the data dir field.
@@ -215,6 +205,7 @@ func NewArchive(
 	if err != nil {
 		return nil, err
 	}
+	stateDB = db.WithCloser(stateDB, srv.dbCloser)
 	srv.stateStore = state.NewStore(stateDB)
 
 	tmGenDoc, err := api.GetTendermintGenesisDocument(genesisProvider)

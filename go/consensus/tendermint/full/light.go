@@ -61,6 +61,10 @@ func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensu
 
 // Implements LightClientBackend.
 func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensusAPI.Parameters, error) {
+	if err := n.ensureStarted(ctx); err != nil {
+		return nil, err
+	}
+
 	tmHeight, err := n.heightToTendermintHeight(height)
 	if err != nil {
 		return nil, err

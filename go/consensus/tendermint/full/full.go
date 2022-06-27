@@ -658,10 +658,11 @@ func (t *fullService) lazyInit() error {
 	// Tendermint does not expose a way to access the state database and we need it to bypass some
 	// stupid things like pagination on the in-process "client".
 	wrapDbProvider := func(dbCtx *tmnode.DBContext) (tmdb.DB, error) {
-		db, derr := dbProvider(dbCtx)
+		rawDB, derr := dbProvider(dbCtx)
 		if derr != nil {
 			return nil, derr
 		}
+		db := db.WithCloser(rawDB, t.dbCloser)
 
 		switch dbCtx.ID {
 		case "state":
