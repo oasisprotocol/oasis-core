@@ -2,15 +2,19 @@ package api
 
 import (
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -147,5 +151,201 @@ func TestRuntimeSerialization(t *testing.T) {
 		err := cbor.Unmarshal(enc, &dec)
 		require.NoError(err, "Unmarshal")
 		require.EqualValues(tc.rr, dec, "Runtime serialization should round-trip")
+	}
+}
+
+func TestVerifyRuntime(t *testing.T) {
+	require := require.New(t)
+
+	var runtimeID common.Namespace
+	require.NoError(runtimeID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000"), "runtime id")
+	var keymanagerID common.Namespace
+	require.NoError(keymanagerID.UnmarshalHex("c000000000000000000000000000000000000000000000000000000000000001"), "keymanager id")
+	var h hash.Hash
+	h.FromBytes([]byte("stateroot hash"))
+
+	cp := &ConsensusParameters{
+		MaxNodeExpiration: 10,
+		EnableRuntimeGovernanceModels: map[RuntimeGovernanceModel]bool{
+			GovernanceConsensus: true,
+			GovernanceEntity:    true,
+			GovernanceRuntime:   true,
+		},
+	}
+
+	for _, tc := range []struct {
+		rr  Runtime
+		err error
+		msg string
+	}{
+		{
+			Runtime{
+				Versioned: cbor.NewVersioned(3),
+				EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
+				ID:        runtimeID,
+				Genesis: RuntimeGenesis{
+					Round:     43,
+					StateRoot: h,
+				},
+				Kind:        KindCompute,
+				TEEHardware: node.TEEHardwareInvalid,
+				Deployments: []*VersionInfo{
+					{
+						Version: version.Version{
+							Major: 44,
+							Minor: 0,
+							Patch: 1,
+						},
+					},
+				},
+				KeyManager: &keymanagerID,
+				Executor: ExecutorParameters{
+					GroupSize:                  9,
+					GroupBackupSize:            8,
+					AllowedStragglers:          7,
+					RoundTimeout:               6,
+					MaxMessages:                5,
+					MinLiveRoundsPercent:       4,
+					MinLiveRoundsForEvaluation: 3,
+					MaxLivenessFailures:        2,
+				},
+				TxnScheduler: TxnSchedulerParameters{
+					BatchFlushTimeout: 1 * time.Second,
+					MaxBatchSize:      10_000,
+					MaxBatchSizeBytes: 10_000_000,
+					MaxInMessages:     32,
+					ProposerTimeout:   2,
+				},
+				Storage: StorageParameters{
+					CheckpointInterval:  33,
+					CheckpointNumKept:   6,
+					CheckpointChunkSize: 1_000_000_000,
+				},
+				AdmissionPolicy: RuntimeAdmissionPolicy{
+					EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
+						Entities: map[signature.PublicKey]EntityWhitelistConfig{
+							signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
+								MaxNodes: map[node.RolesMask]uint16{
+									node.RoleComputeWorker: 3,
+									node.RoleKeyManager:    1,
+								},
+							},
+						},
+					},
+				},
+				Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
+					api.KindComputeExecutor: {
+						api.RoleWorker: {
+							MaxNodes: &MaxNodesConstraint{
+								Limit: 10,
+							},
+							MinPoolSize: &MinPoolSizeConstraint{
+								Limit: 5,
+							},
+							ValidatorSet: &ValidatorSetConstraint{},
+						},
+					},
+				},
+				GovernanceModel: GovernanceConsensus,
+				Staking: RuntimeStakingParameters{
+					Thresholds:                           nil,
+					Slashing:                             nil,
+					RewardSlashBadResultsRuntimePercent:  10,
+					RewardSlashEquvocationRuntimePercent: 0,
+					MinInMessageFee:                      quantity.Quantity{},
+				},
+			},
+			nil,
+			"valid runtime",
+		},
+		{
+			Runtime{
+				Versioned: cbor.NewVersioned(3),
+				EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
+				ID:        runtimeID,
+				Genesis: RuntimeGenesis{
+					Round:     43,
+					StateRoot: h,
+				},
+				Kind:        KindCompute,
+				TEEHardware: node.TEEHardwareInvalid,
+				Deployments: []*VersionInfo{
+					{
+						Version: version.Version{
+							Major: 44,
+							Minor: 0,
+							Patch: 1,
+						},
+					},
+					nil,
+				},
+				KeyManager: &keymanagerID,
+				Executor: ExecutorParameters{
+					GroupSize:                  9,
+					GroupBackupSize:            8,
+					AllowedStragglers:          7,
+					RoundTimeout:               6,
+					MaxMessages:                5,
+					MinLiveRoundsPercent:       4,
+					MinLiveRoundsForEvaluation: 3,
+					MaxLivenessFailures:        2,
+				},
+				TxnScheduler: TxnSchedulerParameters{
+					BatchFlushTimeout: 1 * time.Second,
+					MaxBatchSize:      10_000,
+					MaxBatchSizeBytes: 10_000_000,
+					MaxInMessages:     32,
+					ProposerTimeout:   2,
+				},
+				Storage: StorageParameters{
+					CheckpointInterval:  33,
+					CheckpointNumKept:   6,
+					CheckpointChunkSize: 1_000_000_000,
+				},
+				AdmissionPolicy: RuntimeAdmissionPolicy{
+					EntityWhitelist: &EntityWhitelistRuntimeAdmissionPolicy{
+						Entities: map[signature.PublicKey]EntityWhitelistConfig{
+							signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"): {
+								MaxNodes: map[node.RolesMask]uint16{
+									node.RoleComputeWorker: 3,
+									node.RoleKeyManager:    1,
+								},
+							},
+						},
+					},
+				},
+				Constraints: map[api.CommitteeKind]map[api.Role]SchedulingConstraints{
+					api.KindComputeExecutor: {
+						api.RoleWorker: {
+							MaxNodes: &MaxNodesConstraint{
+								Limit: 10,
+							},
+							MinPoolSize: &MinPoolSizeConstraint{
+								Limit: 5,
+							},
+							ValidatorSet: &ValidatorSetConstraint{},
+						},
+					},
+				},
+				GovernanceModel: GovernanceConsensus,
+				Staking: RuntimeStakingParameters{
+					Thresholds:                           nil,
+					Slashing:                             nil,
+					RewardSlashBadResultsRuntimePercent:  10,
+					RewardSlashEquvocationRuntimePercent: 0,
+					MinInMessageFee:                      quantity.Quantity{},
+				},
+			},
+			ErrInvalidArgument,
+			"invalid runtime (nil deployment)",
+		},
+	} {
+		err := VerifyRuntime(cp, logging.GetLogger("runtime/tests"), &tc.rr, false, true, beacon.EpochTime(10))
+		switch {
+		case tc.err == nil:
+			require.NoError(err, tc.msg)
+		default:
+			require.True(errors.Is(err, tc.err), fmt.Sprintf("expected err: '%v', got: '%v', for: %s", tc.err, err, tc.msg))
+		}
 	}
 }

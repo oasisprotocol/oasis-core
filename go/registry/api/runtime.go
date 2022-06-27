@@ -532,6 +532,12 @@ func (r *Runtime) ValidateDeployments(now beacon.EpochTime) error {
 	if len(r.Deployments) > 2 {
 		return fmt.Errorf("%w: too many deployments", ErrInvalidArgument)
 	}
+	// Ensure no nil deployments.
+	for _, d := range r.Deployments {
+		if d == nil {
+			return fmt.Errorf("%w: nil deployment", ErrInvalidArgument)
+		}
+	}
 
 	deployments := make([]*VersionInfo, len(r.Deployments))
 	copy(deployments, r.Deployments)
