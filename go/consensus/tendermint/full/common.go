@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/spf13/viper"
 	tmcore "github.com/tendermint/tendermint/rpc/core"
@@ -31,6 +32,7 @@ import (
 	tmbeacon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/beacon"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
 	tmgovernance "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/governance"
 	tmkeymanager "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/keymanager"
 	tmregistry "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/registry"
@@ -82,27 +84,28 @@ type commonNode struct {
 	// These stores must be populated by the parent before the node is deemed ready.
 	blockStoreDB tmdb.DB
 	stateStore   state.Store
+	dbCloser     *db.Closer
 
-	// Guarded by the lock.
-	isStarted, isInitialized bool
-
+	state     uint32
 	startedCh chan struct{}
 
 	parentNode api.Backend
 }
 
-func (n *commonNode) initialized() bool {
-	n.Lock()
-	defer n.Unlock()
+// Possible internal node states.
+const (
+	stateNotReady    = 0
+	stateInitialized = 1
+	stateStarted     = 2
+	stateStopping    = 3
+)
 
-	return n.isInitialized
+func (n *commonNode) initialized() bool {
+	return atomic.LoadUint32(&n.state) >= stateInitialized
 }
 
 func (n *commonNode) started() bool {
-	n.Lock()
-	defer n.Unlock()
-
-	return n.isStarted
+	return atomic.LoadUint32(&n.state) >= stateStarted
 }
 
 func (n *commonNode) ensureStarted(ctx context.Context) error {
@@ -113,6 +116,10 @@ func (n *commonNode) ensureStarted(ctx context.Context) error {
 		return n.ctx.Err()
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+
+	if atomic.LoadUint32(&n.state) >= stateStopping {
+		return fmt.Errorf("node is shutting down")
 	}
 
 	return nil
@@ -127,12 +134,8 @@ func (n *commonNode) start() error {
 	n.Lock()
 	defer n.Unlock()
 
-	if n.isStarted {
-		return fmt.Errorf("tendermint/common_node: already started")
-	}
-
-	if !n.isInitialized {
-		return fmt.Errorf("tendermint/common_node: not initialized")
+	if atomic.LoadUint32(&n.state) != stateInitialized {
+		return fmt.Errorf("tendermint/common_node: not in initialized state")
 	}
 
 	if err := n.mux.Start(); err != nil {
@@ -143,9 +146,7 @@ func (n *commonNode) start() error {
 }
 
 func (n *commonNode) finishStart() {
-	n.Lock()
-	n.isStarted = true
-	n.Unlock()
+	atomic.StoreUint32(&n.state, stateStarted)
 	close(n.startedCh)
 }
 
@@ -153,19 +154,21 @@ func (n *commonNode) stop() {
 	n.Lock()
 	defer n.Unlock()
 
-	if !n.isStarted || !n.isInitialized {
+	if !n.started() {
 		return
 	}
 
 	n.svcMgr.Stop()
 	n.mux.Stop()
+
+	atomic.StoreUint32(&n.state, stateStopping)
 }
 
 func (n *commonNode) initialize() error {
 	n.Lock()
 	defer n.Unlock()
 
-	if n.isInitialized {
+	if atomic.LoadUint32(&n.state) != stateNotReady {
 		return nil
 	}
 
@@ -275,7 +278,7 @@ func (n *commonNode) initialize() error {
 		}
 	}
 
-	n.isInitialized = true
+	atomic.StoreUint32(&n.state, stateInitialized)
 
 	return nil
 }
@@ -289,6 +292,7 @@ func (n *commonNode) Started() <-chan struct{} {
 func (n *commonNode) Cleanup() {
 	n.serviceClientsWg.Wait()
 	n.svcMgr.Cleanup()
+	n.dbCloser.Close()
 }
 
 // Implements consensusAPI.Backend.
@@ -803,6 +807,7 @@ func newCommonNode(
 		genesis:               genesisDoc,
 		dataDir:               dataDir,
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),
+		dbCloser:              db.NewCloser(),
 		startedCh:             make(chan struct{}),
 	}, nil
 }
