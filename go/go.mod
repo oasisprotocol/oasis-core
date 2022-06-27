@@ -28,6 +28,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/gammazero/deque v0.1.1
 	github.com/go-kit/log v0.2.1
+	github.com/goki/go-difflib v1.2.1
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.0.1
@@ -35,7 +36,6 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.4.4
 	github.com/hpcloud/tail v1.0.0
-	github.com/ianbruene/go-difflib v1.2.0
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/libp2p/go-libp2p v0.20.1
 	github.com/libp2p/go-libp2p-core v0.16.1
