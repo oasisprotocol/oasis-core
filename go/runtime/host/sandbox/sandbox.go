@@ -351,6 +351,11 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
+	// Make sure the version matches what is configured in the bundle.
+	if bndVersion := r.rtCfg.Bundle.Manifest.Version; *rtVersion != bndVersion {
+		return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
+	}
+
 	// Perform configuration-specific host initialization.
 	exInitCtx, cancelExInit := context.WithTimeout(ctx, runtimeExtendedInitTimeout)
 	defer cancelExInit()

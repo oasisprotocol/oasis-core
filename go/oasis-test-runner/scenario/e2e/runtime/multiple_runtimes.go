@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -154,15 +153,13 @@ func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for the nodes.
-	var epoch beacon.EpochTime
-	if epoch, err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(fixture); err != nil {
 		return err
 	}
 
 	ctx := context.Background()
 
 	// Submit transactions.
-	epoch++ // Want to advance the epoch.
 	numComputeRuntimeTxns, _ := sc.Flags.GetInt(cfgNumComputeRuntimeTxns)
 	for _, r := range sc.Net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()
@@ -176,15 +173,6 @@ func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 				if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), uint64(i)); err != nil {
 					return err
 				}
-
-				sc.Logger.Info("triggering epoch transition",
-					"epoch", epoch,
-				)
-				if err := sc.Net.Controller().SetEpoch(context.Background(), epoch); err != nil {
-					return fmt.Errorf("failed to set epoch: %w", err)
-				}
-				sc.Logger.Info("epoch transition done")
-				epoch++
 			}
 		}
 	}
