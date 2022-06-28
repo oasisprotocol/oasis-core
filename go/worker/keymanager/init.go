@@ -3,6 +3,7 @@ package keymanager
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	core "github.com/libp2p/go-libp2p-core"
@@ -10,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -17,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
@@ -26,6 +29,8 @@ const (
 	CfgRuntimeID = "worker.keymanager.runtime.id"
 	// CfgMayGenerate allows the enclave to generate a master secret.
 	CfgMayGenerate = "worker.keymanager.may_generate"
+	// CfgPrivatePeerPks allows adding manual, unadvertised peers that can call protected methods.
+	CfgPrivatePeerPubKeys = "worker.keymanager.private_peer_pub_keys"
 )
 
 // Flags has the configuration flags.
@@ -59,6 +64,7 @@ func New(
 		initCh:              make(chan struct{}),
 		initTickerCh:        nil,
 		accessList:          make(map[core.PeerID]map[common.Namespace]struct{}),
+		privatePeers:        make(map[core.PeerID]struct{}),
 		accessListByRuntime: make(map[common.Namespace][]core.PeerID),
 		commonWorker:        commonWorker,
 		backend:             backend,
@@ -68,6 +74,22 @@ func New(
 
 	if !w.enabled {
 		return w, nil
+	}
+
+	for _, b64pk := range viper.GetStringSlice(CfgPrivatePeerPubKeys) {
+		pkBytes, err := base64.StdEncoding.DecodeString(b64pk)
+		if err != nil {
+			return nil, fmt.Errorf("oasis/keymanager: `%s` is not a base64-encoded public key (%w)", b64pk, err)
+		}
+		var pk signature.PublicKey
+		if err = pk.UnmarshalBinary(pkBytes); err != nil {
+			return nil, fmt.Errorf("oasis/keymanager: `%s` is not a public key (%w)", b64pk, err)
+		}
+		peerID, err := p2pAPI.PublicKeyToPeerID(pk)
+		if err != nil {
+			return nil, fmt.Errorf("oasis/keymanager: `%s` can not be converted to a peer id (%w)", b64pk, err)
+		}
+		w.privatePeers[peerID] = struct{}{}
 	}
 
 	var runtimeID common.Namespace
@@ -115,6 +137,7 @@ func New(
 func init() {
 	Flags.String(CfgRuntimeID, "", "Key manager Runtime ID")
 	Flags.Bool(CfgMayGenerate, false, "Key manager may generate new master secret")
+	Flags.StringSlice(CfgPrivatePeerPubKeys, []string{}, "b64-encoded public keys of unadvertised peers that may call protected methods")
 
 	_ = viper.BindPFlags(Flags)
 }
