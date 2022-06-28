@@ -12,6 +12,46 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.8 (2022-06-28)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- go/consensus/tendermint: Add `consensus.tendermint.halt_height`
+  ([#4793](https://github.com/oasisprotocol/oasis-core/issues/4793))
+
+  This is equivalent to the cosmos `halt-height` option, to be used to
+  bring a node down gracefully at a specific height.
+
+- net-runner: Add --fixture.default.runtime.version flag
+  ([#4813](https://github.com/oasisprotocol/oasis-core/issues/4813))
+
+- go/oasis-node: allow km to have private peers
+  ([#4821](https://github.com/oasisprotocol/oasis-core/issues/4821))
+
+### Bug Fixes
+
+- net-runner: Fix regression introduced in #4564
+  ([#4808](https://github.com/oasisprotocol/oasis-core/issues/4808))
+
+  Fix the missing Deployments field when oasis-net-runner generating the genesis
+  state and no key manager is provided.
+
+### Documentation Improvements
+
+- doc: Migrate ADRs to oasisprotocol/adrs repo
+  ([#4770](https://github.com/oasisprotocol/oasis-core/issues/4770))
+
+### Internal Changes
+
+- rust-toolchain: Migrate to TOML version of rust-toolchain
+  ([#4727](https://github.com/oasisprotocol/oasis-core/issues/4727))
+
 ## 22.1.7 (2022-05-25)
 
 | Protocol          | Version   |
