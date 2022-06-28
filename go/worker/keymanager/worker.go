@@ -80,6 +80,7 @@ type Worker struct { // nolint: maligned
 
 	accessList          map[core.PeerID]map[common.Namespace]struct{}
 	accessListByRuntime map[common.Namespace][]core.PeerID
+	privatePeers        map[core.PeerID]struct{}
 
 	commonWorker  *workerCommon.Worker
 	roleProvider  registration.RoleProvider
@@ -175,12 +176,14 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
 	case getPublicKeyRequestMethod:
 		// Anyone can get public keys.
 	default:
-		// Defer to access control to check the policy.
-		w.RLock()
-		_, allowed := w.accessList[peerID]
-		w.RUnlock()
-		if !allowed {
-			return nil, fmt.Errorf("not authorized")
+		if _, privatePeered := w.privatePeers[peerID]; !privatePeered {
+			// Defer to access control to check the policy.
+			w.RLock()
+			_, allowed := w.accessList[peerID]
+			w.RUnlock()
+			if !allowed {
+				return nil, fmt.Errorf("not authorized")
+			}
 		}
 	}
 

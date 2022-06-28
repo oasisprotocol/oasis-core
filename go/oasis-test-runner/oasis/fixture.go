@@ -321,6 +321,8 @@ type KeymanagerFixture struct {
 	CrashPointsProbability float64 `json:"crash_points_probability,omitempty"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
+
+	PrivatePeerPubKeys []string `json:"private_peer_pub_keys,omitempty"`
 }
 
 // Create instantiates the key manager described by the fixture.
@@ -356,6 +358,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 		Runtime:            runtime,
 		Policy:             policy,
 		SentryIndices:      f.Sentries,
+		PrivatePeerPubKeys: f.PrivatePeerPubKeys,
 	})
 }
 

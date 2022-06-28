@@ -162,6 +162,8 @@ type Keymanager struct { // nolint: maligned
 	p2pPort          uint16
 
 	mayGenerate bool
+
+	privatePeerPubKeys []string
 }
 
 // KeymanagerCfg is the Oasis key manager provisioning configuration.
@@ -173,6 +175,9 @@ type KeymanagerCfg struct {
 	Runtime            *Runtime
 	Policy             *KeymanagerPolicy
 	RuntimeProvisioner string
+
+	// PrivatePeerPubKeys is a list of base64-encoded libp2p public keys of peers who may call non-public methods.
+	PrivatePeerPubKeys []string
 }
 
 // IdentityKeyPath returns the paths to the node's identity key.
@@ -270,6 +275,7 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
 		runtimePath(km.runtime).
 		workerKeymanagerRuntimeID(km.runtime.ID()).
+		workerKeymanagerPrivatePeerPubKeys(km.privatePeerPubKeys).
 		configureDebugCrashPoints(km.crashPointsProbability).
 		tendermintSupplementarySanity(km.supplementarySanityInterval).
 		appendNetwork(km.net).
@@ -336,6 +342,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		workerClientPort:   host.getProvisionedPort(nodePortClient),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 		mayGenerate:        len(net.keymanagers) == 0,
+		privatePeerPubKeys: cfg.PrivatePeerPubKeys,
 	}
 
 	net.keymanagers = append(net.keymanagers, km)

@@ -6,6 +6,10 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
+const (
+	clientIdentitySeedTemplate = "ekiden node client %d"
+)
+
 // Client is an Oasis client node.
 type Client struct {
 	*Node
@@ -68,6 +72,12 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	}
 	if isNoSandbox() {
 		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerUnconfined
+	}
+
+	// Pre-provision the node identity so that we can identify the entity.
+	err = host.setProvisionedIdentity(false, fmt.Sprintf(clientIdentitySeedTemplate, len(net.clients)))
+	if err != nil {
+		return nil, fmt.Errorf("oasis/client: failed to provision node identity: %w", err)
 	}
 
 	client := &Client{

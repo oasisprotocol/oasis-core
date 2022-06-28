@@ -409,6 +409,17 @@ func (args *argBuilder) workerKeymanagerMayGenerate() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) workerKeymanagerPrivatePeerPubKeys(peerPKs []string) *argBuilder {
+	for _, pk := range peerPKs {
+		args.vec = append(args.vec, Argument{
+			Name:        keymanager.CfgPrivatePeerPubKeys,
+			Values:      []string{pk},
+			MultiValued: true,
+		})
+	}
+	return args
+}
+
 func (args *argBuilder) workerSentryEnabled() *argBuilder {
 	args.vec = append(args.vec, Argument{Name: workerSentry.CfgEnabled})
 	return args
