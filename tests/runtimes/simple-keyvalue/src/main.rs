@@ -201,6 +201,40 @@ impl Dispatcher {
 }
 
 impl TxnDispatcher for Dispatcher {
+    fn query(
+        &self,
+        mut ctx: TxnContext,
+        method: &str,
+        args: Vec<u8>,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        let mut ctx = Context {
+            core: &mut ctx,
+            host_info: &self.host_info,
+            key_manager: &self.key_manager,
+            messages: vec![],
+        };
+        let mut ctx = TxContext::new(&mut ctx, false);
+
+        let res = match method {
+            "get_runtime_id" => Self::dispatch_call(
+                &mut ctx,
+                cbor::from_slice(&args).unwrap(),
+                Methods::get_runtime_id,
+            ),
+            "get" => Self::dispatch_call(&mut ctx, cbor::from_slice(&args).unwrap(), Methods::get),
+            _ => Err("method not found".to_string()),
+        };
+
+        match res {
+            Ok(res) => Ok(cbor::to_vec(res)),
+            Err(err) => Err(RuntimeError {
+                module: "test".to_string(),
+                code: 1,
+                message: err,
+            }),
+        }
+    }
+
     fn check_batch(
         &self,
         mut ctx: TxnContext,
