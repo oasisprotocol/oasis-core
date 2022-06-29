@@ -48,6 +48,18 @@ pub trait Verifier: Send + Sync {
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error>;
 
+    /// Verify that the given runtime header is valid at the given consensus layer block and return
+    /// the consensus layer state accessor for that block.
+    ///
+    /// This is a relaxed version of the `verify` function that should be used for verifying state
+    /// in queries.
+    fn verify_for_query(
+        &self,
+        consensus_block: LightBlock,
+        runtime_header: Header,
+        epoch: EpochTime,
+    ) -> Result<ConsensusState, Error>;
+
     /// Return the consensus layer state accessor for the given consensus layer block WITHOUT
     /// performing any verification. This method should only be used for operations that do not
     /// require integrity guarantees.
