@@ -79,25 +79,25 @@ func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
 	return nil
 }
 
-// Guarded by CrossNode.
+// HandleEpochTransitionLocked is guarded by CrossNode.
 func (n *Node) HandleEpochTransitionLocked(*committee.EpochSnapshot) {
 }
 
-// Guarded by CrossNode.
+// HandleNewBlockEarlyLocked is guarded by CrossNode.
 func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 }
 
-// Guarded by CrossNode.
+// HandleNewBlockLocked is guarded by CrossNode.
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	// Queue block for checks.
 	n.checkCh.In() <- blk
 }
 
-// Guarded by CrossNode.
+// HandleNewEventLocked is guarded by CrossNode.
 func (n *Node) HandleNewEventLocked(*roothash.Event) {
 }
 
-// Guarded by CrossNode.
+// HandleRuntimeHostEventLocked is guarded by CrossNode.
 func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
 }
 

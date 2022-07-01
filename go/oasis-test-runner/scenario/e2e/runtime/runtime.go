@@ -38,7 +38,7 @@ const (
 
 var (
 	// RuntimeParamsDummy is a dummy instance of runtimeImpl used to register global e2e/runtime flags.
-	RuntimeParamsDummy *runtimeImpl = newRuntimeImpl("", nil)
+	RuntimeParamsDummy = newRuntimeImpl("", nil)
 
 	// Runtime is the basic network + client test case with runtime support.
 	Runtime scenario.Scenario = newRuntimeImpl("runtime", BasicKVTestClient)

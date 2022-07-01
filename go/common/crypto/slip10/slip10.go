@@ -53,7 +53,7 @@ func NewChildKey(parentSigner signature.Signer, cPar ChainCode, index uint32) (s
 		return nil, ChainCode{}, fmt.Errorf("slip10: failed to get parent public key")
 	}
 
-	kPar := unsafeSigner.UnsafeBytes()
+	kPar := unsafeSigner.UnsafeBytes() // nolint: revive
 	if len(kPar) < memory.SeedSize {
 		return nil, ChainCode{}, fmt.Errorf("slip10: invalid parent key")
 	}

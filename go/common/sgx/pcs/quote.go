@@ -138,23 +138,23 @@ func (qh *QuoteHeader) UnmarshalBinary(data []byte) error {
 }
 
 // QEVendorID_Intel is the Quoting Enclave vendor ID for Intel (939A7233F79C4CA9940A0DB3957F0607).
-var QEVendorID_Intel = []byte{0x93, 0x9a, 0x72, 0x33, 0xf7, 0x9c, 0x4c, 0xa9, 0x94, 0x0a, 0x0d, 0xb3, 0x95, 0x7f, 0x06, 0x07}
+var QEVendorID_Intel = []byte{0x93, 0x9a, 0x72, 0x33, 0xf7, 0x9c, 0x4c, 0xa9, 0x94, 0x0a, 0x0d, 0xb3, 0x95, 0x7f, 0x06, 0x07} // nolint: revive
 
 // SGXExtension is an ASN1 SGX extension.
 type SGXExtension struct {
-	Id    asn1.ObjectIdentifier
+	Id    asn1.ObjectIdentifier // nolint: revive
 	Value asn1.RawValue
 }
 
 var (
 	// PCK_SGX_Extensions is the ASN1 Object Identifier for the SGX Extensions X509 extension.
-	PCK_SGX_Extensions = asn1.ObjectIdentifier{1, 2, 840, 113741, 1, 13, 1}
+	PCK_SGX_Extensions = asn1.ObjectIdentifier{1, 2, 840, 113741, 1, 13, 1} // nolint: revive
 
 	// PCK_SGX_Extensions_FMSPC is the ASN1 Object Identifier for the FMSPC SGX Extension.
-	PCK_SGX_Extensions_FMSPC = asn1.ObjectIdentifier{1, 2, 840, 113741, 1, 13, 1, 4}
+	PCK_SGX_Extensions_FMSPC = asn1.ObjectIdentifier{1, 2, 840, 113741, 1, 13, 1, 4} // nolint: revive
 
 	// PCK_SGX_Extensions_TCB is the ASN1 Object Identifier for the TCB SGX Extension.
-	PCK_SGX_Extensions_TCB = asn1.ObjectIdentifier{1, 2, 840, 113741, 1, 13, 1, 2}
+	PCK_SGX_Extensions_TCB = asn1.ObjectIdentifier{1, 2, 840, 113741, 1, 13, 1, 2} // nolint: revive
 )
 
 // AttestationKeyType is the attestation key type.
@@ -162,7 +162,7 @@ type AttestationKeyType uint16
 
 const (
 	// AttestationKeyECDSA_P256 is the ECDSA-P256 attestation key type.
-	AttestationKeyECDSA_P256 AttestationKeyType = 2
+	AttestationKeyECDSA_P256 AttestationKeyType = 2 // nolint: revive
 )
 
 // String returns a string representation of the attestation key type.
@@ -187,7 +187,7 @@ type QuoteSignature interface {
 }
 
 // QuoteSignatureECDSA_P256 is an ECDSA-P256 quote signature.
-type QuoteSignatureECDSA_P256 struct {
+type QuoteSignatureECDSA_P256 struct { // nolint: revive
 	Signature            SignatureECDSA_P256
 	AttestationPublicKey [64]byte
 	QEReport             ReportBody
@@ -346,7 +346,7 @@ func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
 				}
 
 				for _, tcbExt := range tcbExts {
-					switch compId := tcbExt.Id[len(tcbExt.Id)-1]; {
+					switch compId := tcbExt.Id[len(tcbExt.Id)-1]; { // nolint: revive
 					case compId >= 1 && compId <= 16:
 						// TCB Component SVNs
 						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &pckInfo.TCBCompSVN[compId-1]); err != nil {
@@ -436,7 +436,7 @@ func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *Repor
 }
 
 // SignatureECDSA_P256 is an ECDSA-P256 signature in the form r || s.
-type SignatureECDSA_P256 [64]byte
+type SignatureECDSA_P256 [64]byte // nolint: revive
 
 // UnmarshalHex decodes the signature from a hex-encoded string.
 func (ec *SignatureECDSA_P256) UnmarshalHex(data string) error {
@@ -501,7 +501,7 @@ type CertificationData interface {
 }
 
 // CertificationData_PPID is the PPID certification data.
-type CertificationData_PPID struct {
+type CertificationData_PPID struct { // nolint: revive
 	PPID   [384]byte
 	CPUSVN [16]byte
 	PCESVN uint16
@@ -530,7 +530,7 @@ func (cd *CertificationData_PPID) UnmarshalBinary(data []byte) error {
 }
 
 // CertificationData_PCKCertificateChain is the PCK certificate chain certification data.
-type CertificationData_PCKCertificateChain struct {
+type CertificationData_PCKCertificateChain struct { // nolint: revive
 	CertificateChain []*x509.Certificate
 }
 

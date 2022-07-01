@@ -279,7 +279,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 	})
 }
 
-// KeymangerPolicyFixgure is a key manager policy fixture.
+// KeymanagerPolicyFixture is a key manager policy fixture.
 type KeymanagerPolicyFixture struct {
 	Runtime int `json:"runtime"`
 	Serial  int `json:"serial"`

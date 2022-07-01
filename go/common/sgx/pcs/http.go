@@ -79,7 +79,7 @@ func (hc *httpClient) doPCSRequest(ctx context.Context, u *url.URL, method, body
 	return resp, nil
 }
 
-func (hc *httpClient) getUrl(p string) *url.URL {
+func (hc *httpClient) getUrl(p string) *url.URL { // nolint: revive
 	u := *hc.baseURL
 	u.Path = path.Join(u.Path, p)
 	return &u

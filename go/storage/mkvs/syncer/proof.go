@@ -96,12 +96,12 @@ func (b *ProofBuilder) Include(n node.Node) {
 	b.size += 1 + uint64(len(pn.serialized))
 }
 
-// HasSubtree returns true if the subtree root node has already been included.
+// HasSubtreeRoot returns true if the subtree root node has already been included.
 func (b *ProofBuilder) HasSubtreeRoot() bool {
 	return b.included[b.subtree] != nil
 }
 
-// GetSubtree returns the subtree root hash for this proof.
+// GetSubtreeRoot returns the subtree root hash for this proof.
 func (b *ProofBuilder) GetSubtreeRoot() hash.Hash {
 	return b.subtree
 }

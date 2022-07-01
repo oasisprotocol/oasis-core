@@ -11,7 +11,7 @@ type StatsCollector struct {
 	rs ReadSyncer
 }
 
-// NewnopReadSyncer creates a new no-op read syncer.
+// NewStatsCollector creates a new no-op read syncer.
 func NewStatsCollector(rs ReadSyncer) *StatsCollector {
 	return &StatsCollector{
 		rs: rs,

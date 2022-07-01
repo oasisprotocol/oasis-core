@@ -30,7 +30,7 @@ import (
 const BackendName = "tendermint"
 
 const (
-	// LogEventPeerExchangeDisable is a log event that indicates that
+	// LogEventPeerExchangeDisabled is a log event that indicates that
 	// Tendermint's peer exchange has been disabled.
 	LogEventPeerExchangeDisabled = "tendermint/peer_exchange_disabled"
 )
@@ -344,17 +344,17 @@ type ServiceClient interface {
 // all the delivery methods. Implementations should override them as needed.
 type BaseServiceClient struct{}
 
-// Implements ServiceClient.
+// DeliverBlock implements ServiceClient.
 func (bsc *BaseServiceClient) DeliverBlock(ctx context.Context, height int64) error {
 	return nil
 }
 
-// Implements ServiceClient.
+// DeliverEvent implements ServiceClient.
 func (bsc *BaseServiceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *types.Event) error {
 	return nil
 }
 
-// Implements ServiceClient.
+// DeliverCommand implements ServiceClient.
 func (bsc *BaseServiceClient) DeliverCommand(ctx context.Context, height int64, cmd interface{}) error {
 	return nil
 }

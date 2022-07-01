@@ -72,7 +72,7 @@ func (km *KeyManagerClientWrapper) SetKeyManagerID(id *common.Namespace) {
 	km.lastPeerFeedback = nil
 }
 
-// Implements runtimeKeymanager.Client.
+// CallEnclave implements runtimeKeymanager.Client.
 func (km *KeyManagerClientWrapper) CallEnclave(
 	ctx context.Context,
 	data []byte,

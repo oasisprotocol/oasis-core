@@ -376,7 +376,7 @@ func (s *MutableState) SetIncomingMessageQueueMeta(ctx context.Context, runtimeI
 	return api.UnavailableStateError(err)
 }
 
-// SetIncomingMessageQueue sets an entry in the incoming message queue.
+// SetIncomingMessageInQueue sets an entry in the incoming message queue.
 func (s *MutableState) SetIncomingMessageInQueue(ctx context.Context, runtimeID common.Namespace, msg *message.IncomingMessage) error {
 	err := s.ms.Insert(ctx, inMsgQueueKeyFmt.Encode(&runtimeID, msg.ID), cbor.Marshal(msg))
 	return api.UnavailableStateError(err)

@@ -36,7 +36,7 @@ var (
 	}
 )
 
-func handlerSetEpoch( // nolint: golint
+func handlerSetEpoch(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -59,7 +59,7 @@ func handlerSetEpoch( // nolint: golint
 	return interceptor(ctx, epoch, info, handler)
 }
 
-func handlerWaitNodesRegistered( // nolint: golint
+func handlerWaitNodesRegistered(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

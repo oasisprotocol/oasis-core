@@ -29,7 +29,7 @@ const (
 	CfgRuntimeID = "worker.keymanager.runtime.id"
 	// CfgMayGenerate allows the enclave to generate a master secret.
 	CfgMayGenerate = "worker.keymanager.may_generate"
-	// CfgPrivatePeerPks allows adding manual, unadvertised peers that can call protected methods.
+	// CfgPrivatePeerPubKeys allows adding manual, unadvertised peers that can call protected methods.
 	CfgPrivatePeerPubKeys = "worker.keymanager.private_peer_pub_keys"
 )
 

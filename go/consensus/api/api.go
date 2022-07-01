@@ -1,5 +1,4 @@
-// Package consensus provides the implementation agnostic consensus
-// backend.
+// Package api provides the implementation agnostic consensus API.
 package api
 
 import (
@@ -263,7 +262,7 @@ type StatusState uint8
 
 var (
 	// StatusStateReady is the ready status state.
-	StatusStateReady StatusState = 0
+	StatusStateReady StatusState
 	// StatusStateSyncing is the syncing status state.
 	StatusStateSyncing StatusState = 1
 )

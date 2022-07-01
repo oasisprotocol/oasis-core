@@ -1,4 +1,4 @@
-// Package genesis implements the consensus sub-commands.
+// Package consensus implements the consensus sub-commands.
 package consensus
 
 import (

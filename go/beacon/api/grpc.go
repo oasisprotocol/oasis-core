@@ -82,9 +82,9 @@ var (
 	}
 )
 
-func handlerGetBaseEpoch( //nolint:golint
+func handlerGetBaseEpoch(
 	srv interface{},
-	ctx context.Context,
+	ctx context.Context, //nolint: revive
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
@@ -101,7 +101,7 @@ func handlerGetBaseEpoch( //nolint:golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerGetEpoch( //nolint:golint
+func handlerGetEpoch(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -124,9 +124,9 @@ func handlerGetEpoch( //nolint:golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetFutureEpoch( //nolint:golint
+func handlerGetFutureEpoch(
 	srv interface{},
-	ctx context.Context,
+	ctx context.Context, //nolint: revive
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
@@ -147,7 +147,7 @@ func handlerGetFutureEpoch( //nolint:golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerWaitEpoch( // nolint: golint
+func handlerWaitEpoch(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -170,7 +170,7 @@ func handlerWaitEpoch( // nolint: golint
 	return interceptor(ctx, epoch, info, handler)
 }
 
-func handlerGetEpochBlock( //nolint:golint
+func handlerGetEpochBlock(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -193,7 +193,7 @@ func handlerGetEpochBlock( //nolint:golint
 	return interceptor(ctx, epoch, info, handler)
 }
 
-func handlerGetBeacon( //nolint:golint
+func handlerGetBeacon(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -216,7 +216,7 @@ func handlerGetBeacon( //nolint:golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerStateToGenesis( // nolint: golint
+func handlerStateToGenesis(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

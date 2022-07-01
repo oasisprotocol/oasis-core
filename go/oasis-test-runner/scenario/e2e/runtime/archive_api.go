@@ -38,7 +38,7 @@ func (sc *archiveAPI) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Add a compute node that will be turned into an archive node.
 	f.ComputeWorkers = append(f.ComputeWorkers, oasis.ComputeWorkerFixture{Entity: 1, Runtimes: []int{1}, AllowEarlyTermination: true})
-	f.Runtimes[1].Executor.GroupSize += 1
+	f.Runtimes[1].Executor.GroupSize++
 
 	f.Network.SetMockEpoch()
 	f.Network.HaltEpoch = uint64(haltEpoch)
@@ -203,7 +203,7 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 			}
 			select {
 			case <-blockCh:
-				wait += 1
+				wait++
 			case <-time.After(30 * time.Second):
 				return fmt.Errorf("timed out waiting for blocks")
 			}

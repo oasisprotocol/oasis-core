@@ -71,9 +71,8 @@ func (ps *peerStats) getScore(avgRequestLatency time.Duration) float64 {
 		// We have some history for this peer.
 		failRate := float64(ps.failures) / float64(ps.failures+ps.successes)
 		return float64(ps.avgRequestLatency) + failRate*float64(avgRequestLatency)
-	} else {
-		return float64(avgRequestLatency) * newPeerScoreMultiplier
 	}
+	return float64(avgRequestLatency) * newPeerScoreMultiplier
 }
 
 func (ps *peerStats) recordLatency(latency time.Duration) {

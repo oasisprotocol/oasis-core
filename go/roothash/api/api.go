@@ -452,7 +452,7 @@ func (e *RuntimeIDAttribute) EventValue() string {
 
 // DecodeValue decodes the attribute event value.
 func (e *RuntimeIDAttribute) DecodeValue(value string) error {
-	rtId := common.Namespace{}
+	rtId := common.Namespace{} // nolint: revive
 	if err := rtId.UnmarshalBase64([]byte(value)); err != nil {
 		return err
 	}

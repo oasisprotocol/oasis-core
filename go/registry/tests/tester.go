@@ -1571,7 +1571,7 @@ func (rt *TestRuntime) Populate(t *testing.T, backend api.Backend, consensus con
 	return BulkPopulate(t, backend, consensus, []*TestRuntime{rt}, seed)
 }
 
-// PopulateBulk bulk populates the registry for the given TestRuntimes.
+// BulkPopulate bulk populates the registry for the given TestRuntimes.
 func BulkPopulate(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, runtimes []*TestRuntime, seed []byte) []*node.Node {
 	require := require.New(t)
 

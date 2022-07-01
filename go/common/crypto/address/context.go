@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// ContextMaxSize is the maximum size of a context's identifier string.
+// ContextIdentifierMaxSize is the maximum size of a context's identifier string.
 const ContextIdentifierMaxSize = 64
 
 var (

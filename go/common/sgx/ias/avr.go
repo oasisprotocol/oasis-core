@@ -408,13 +408,13 @@ func SetSkipVerify() {
 	unsafeSkipVerify = true
 }
 
-// SetAllowDebugEnclave will enable running and communicating with enclaves
+// SetAllowDebugEnclaves will enable running and communicating with enclaves
 // with debug flag enabled in AVR for the remainder of the process' lifetime.
 func SetAllowDebugEnclaves() {
 	unsafeAllowDebugEnclaves = true
 }
 
-// UnsetAllowDebugEnclave will disable running and communicating with enclaves
+// UnsetAllowDebugEnclaves will disable running and communicating with enclaves
 // with debug flag enabled in AVR for the remainder of the process' lifetime.
 func UnsetAllowDebugEnclaves() {
 	unsafeAllowDebugEnclaves = false

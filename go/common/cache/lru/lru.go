@@ -1,4 +1,4 @@
-// Package LRU implements an in-memory Least-Recently-Used cache.
+// Package lru implements an in-memory Least-Recently-Used cache.
 package lru
 
 import (
@@ -10,7 +10,7 @@ import (
 // ErrTooLarge is the error returned when a value is too large for the cache.
 var ErrTooLarge = errors.New("lru: value size exceeds maximum capacity")
 
-// Sizable is the interface implemented by types that support returning their
+// Sizeable is the interface implemented by types that support returning their
 // own memory size in bytes.
 type Sizeable interface {
 	// Size returns the size of the instance in bytes.

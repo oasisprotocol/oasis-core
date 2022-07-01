@@ -14,7 +14,7 @@ const NumAccounts = 7
 
 // Accounts stores an AccountList with staking accounts used in the
 // staking genesis state as returned by GenesisState.
-var Accounts AccountList = newAccountList()
+var Accounts = newAccountList()
 
 // newAccountList generates a new AccountList for the required number of
 // staking accounts.

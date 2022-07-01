@@ -225,7 +225,7 @@ type Worker struct { // nolint: maligned
 	status control.RegistrationStatus
 }
 
-// DebugForceallowUnroutableAddresses allows unroutable addresses.
+// DebugForceAllowUnroutableAddresses allows unroutable addresses.
 func DebugForceAllowUnroutableAddresses() {
 	allowUnroutableAddresses = true
 }

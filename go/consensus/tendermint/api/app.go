@@ -35,11 +35,11 @@ type MessageDispatcher interface {
 // NoopMessageDispatcher is a no-op message dispatcher that performs no dispatch.
 type NoopMessageDispatcher struct{}
 
-// Implements MessageDispatcher.
+// Subscribe implements MessageDispatcher.
 func (nd *NoopMessageDispatcher) Subscribe(interface{}, MessageSubscriber) {
 }
 
-// Implements MessageDispatcher.
+// Publish implements MessageDispatcher.
 func (nd *NoopMessageDispatcher) Publish(*Context, interface{}, interface{}) (interface{}, error) {
 	return nil, nil
 }

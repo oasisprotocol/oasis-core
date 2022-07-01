@@ -90,7 +90,7 @@ type Database struct {
 	inner storage.LocalBackend
 }
 
-// Don't ask.  I think this is stupid too, and I wrote it.
+// RPCRequest should not be asked about, as the author also thinks it is stupid.
 type RPCRequest struct {
 	Payload []byte `json:"payload"`
 }
@@ -99,8 +99,8 @@ type RPCResponse struct {
 	Payload []byte `json:"payload"`
 }
 
-// Sigh, the Rust crate insists on sending args as an array.
 type (
+	// ApplyRequest and family are arrays because that's what Rust sends.
 	ApplyRequest       []RPCRequest
 	GetRequest         []RPCRequest
 	GetPrefixesRequest []RPCRequest

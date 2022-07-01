@@ -192,7 +192,7 @@ func (q *Quantity) IsValid() bool {
 	return isValid(&q.inner)
 }
 
-// New creates a new Quantity, initialized to zero.
+// NewQuantity creates a new Quantity, initialized to zero.
 func NewQuantity() (q *Quantity) {
 	return &Quantity{}
 }

@@ -79,12 +79,12 @@ func (k Key) BitLength() Depth {
 	return Depth(len(k[:]) * 8)
 }
 
-// GetKeyBit returns the given bit of the key.
+// GetBit returns the given bit of the key.
 func (k Key) GetBit(bit Depth) bool {
 	return k[bit/8]&(1<<(7-(bit%8))) != 0
 }
 
-// SetKeyBit sets the bit at the given position bit to value val.
+// SetBit sets the bit at the given position bit to value val.
 //
 // This function is immutable and returns a new instance of Key
 func (k Key) SetBit(bit Depth, val bool) Key {
@@ -177,7 +177,7 @@ func (k Key) AppendBit(keyLen Depth, val bool) Key {
 	return newKey
 }
 
-// CommonPrefix computes length of common prefix of k and k2.
+// CommonPrefixLen computes length of common prefix of k and k2.
 //
 // Additionally, keyBitLen and k2bitLen are key lengths in bits of k and k2
 // respectively.

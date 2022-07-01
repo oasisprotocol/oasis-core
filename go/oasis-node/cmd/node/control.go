@@ -19,12 +19,12 @@ var (
 	_ registration.Delegate  = (*Node)(nil)
 )
 
-// Implements registration.Delegate.
+// RegistrationStopped implements registration.Delegate.
 func (n *Node) RegistrationStopped() {
 	n.Stop()
 }
 
-// Implements control.ControlledNode.
+// RequestShutdown implements control.ControlledNode.
 func (n *Node) RequestShutdown() (<-chan struct{}, error) {
 	if n.RegistrationWorker == nil {
 		// In case there is no registration worker, we can just trigger an immediate shutdown.
@@ -46,17 +46,17 @@ func (n *Node) RequestShutdown() (<-chan struct{}, error) {
 	return n.RegistrationWorker.Quit(), nil
 }
 
-// Implements control.ControlledNode.
+// Ready implements control.ControlledNode.
 func (n *Node) Ready() <-chan struct{} {
 	return n.readyCh
 }
 
-// Implements control.ControlledNode.
+// GetIdentity implements control.ControlledNode.
 func (n *Node) GetIdentity() *identity.Identity {
 	return n.Identity
 }
 
-// Implements control.ControlledNode.
+// GetRegistrationStatus implements control.ControlledNode.
 func (n *Node) GetRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
 	if n.RegistrationWorker == nil {
 		return &control.RegistrationStatus{}, nil
@@ -64,7 +64,7 @@ func (n *Node) GetRegistrationStatus(ctx context.Context) (*control.Registration
 	return n.RegistrationWorker.GetRegistrationStatus(ctx)
 }
 
-// Implements control.ControlledNode.
+// GetRuntimeStatus implements control.ControlledNode.
 func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]control.RuntimeStatus, error) {
 	runtimes := make(map[common.Namespace]control.RuntimeStatus)
 
@@ -183,7 +183,7 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 	return runtimes, nil
 }
 
-// Implements control.ControlledNode.
+// GetPendingUpgrades implements control.ControlledNode.
 func (n *Node) GetPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error) {
 	return n.Upgrader.PendingUpgrades(ctx)
 }

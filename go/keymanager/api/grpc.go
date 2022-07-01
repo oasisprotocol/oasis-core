@@ -35,7 +35,7 @@ var (
 	}
 )
 
-func handlerGetStatus( //nolint: golint
+func handlerGetStatus(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -58,7 +58,7 @@ func handlerGetStatus( //nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerGetStatuses( //nolint: golint
+func handlerGetStatuses(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

@@ -148,7 +148,7 @@ var multiServiceDesc = grpc.ServiceDesc{
 	},
 }
 
-func multiPingUnaryHandler( // nolint: golint
+func multiPingUnaryHandler(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -171,7 +171,7 @@ func multiPingUnaryHandler( // nolint: golint
 	return interceptor(ctx, pq, info, handler)
 }
 
-func multiPingStreamHandler( // nolint: golint
+func multiPingStreamHandler(
 	srv interface{},
 	stream grpc.ServerStream,
 ) error {

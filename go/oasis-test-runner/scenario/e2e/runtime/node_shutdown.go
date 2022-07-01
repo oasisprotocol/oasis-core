@@ -194,7 +194,7 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 		}
 		select {
 		case <-blockCh:
-			wait += 1
+			wait++
 		case <-time.After(30 * time.Second):
 			return fmt.Errorf("timed out waiting for blocks")
 		}

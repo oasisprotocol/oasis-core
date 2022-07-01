@@ -122,7 +122,8 @@ const (
 	// that are reserved and must not be used.
 	RoleReserved RolesMask = ((1<<32)-1) & ^((RoleStorageRPC<<1)-1) | roleReserved2
 
-	// Human friendly role names.
+	// Human friendly role names:
+
 	RoleComputeWorkerName = "compute"
 	RoleKeyManagerName    = "key-manager"
 	RoleValidatorName     = "validator"

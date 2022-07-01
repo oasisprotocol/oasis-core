@@ -166,7 +166,7 @@ func (rt *Runtime) RefreshRuntimeBundles() error {
 	return err
 }
 
-// ToRuntimeBundle serializes the runtime to disk and returns the bundle.
+// ToRuntimeBundles serializes the runtime to disk and returns the bundle.
 func (rt *Runtime) ToRuntimeBundles() ([]*bundle.Bundle, error) {
 	var bundles []*bundle.Bundle
 	for i := range rt.cfgSave.deployments {

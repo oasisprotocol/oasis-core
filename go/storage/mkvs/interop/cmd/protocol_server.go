@@ -142,7 +142,7 @@ func doProtoServer(cmd *cobra.Command, args []string) {
 	svcMgr.Wait()
 }
 
-// Register registers the grpc-server sub-command and all of it's children.
+// RegisterProtoServer registers the grpc-server sub-command and all of it's children.
 func RegisterProtoServer(parentCmd *cobra.Command) {
 	protoServerCmd.Flags().AddFlagSet(protoServerFlags)
 

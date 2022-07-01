@@ -97,7 +97,7 @@ var (
 	}
 )
 
-func handlerSyncGet( // nolint: golint
+func handlerSyncGet(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -120,7 +120,7 @@ func handlerSyncGet( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerSyncGetPrefixes( // nolint: golint
+func handlerSyncGetPrefixes(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -143,7 +143,7 @@ func handlerSyncGetPrefixes( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerSyncIterate( // nolint: golint
+func handlerSyncIterate(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -166,7 +166,7 @@ func handlerSyncIterate( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerGetCheckpoints( // nolint: golint
+func handlerGetCheckpoints(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

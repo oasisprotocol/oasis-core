@@ -28,7 +28,7 @@ const (
 	// CfgRuntimeDescriptor is the flag to specify the path to runtime descriptor.
 	CfgRuntimeDescriptor = "runtime.descriptor"
 
-	// List runtimes flags.
+	// CfgIncludeSuspended is the flag to include suspended runtimes.
 	CfgIncludeSuspended = "include_suspended"
 )
 

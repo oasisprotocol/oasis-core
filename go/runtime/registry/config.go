@@ -37,7 +37,7 @@ const (
 	CfgRuntimePaths = "runtime.paths"
 	// CfgSandboxBinary configures the runtime sandbox binary location.
 	CfgSandboxBinary = "runtime.sandbox.binary"
-	// CfgRuntimeEnv sets the runtime environment. Setting an environment that does not
+	// CfgRuntimeEnvironment sets the runtime environment. Setting an environment that does not
 	// agree with the runtime descriptor or system hardware will cause an error.
 	CfgRuntimeEnvironment = "runtime.environment"
 	// CfgRuntimeSGXLoader configures the runtime loader binary required for SGX runtimes.

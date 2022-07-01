@@ -44,6 +44,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
+// nolint: revive
 const (
 	cfgEntity        = "entity"
 	cfgRuntime       = "runtime"

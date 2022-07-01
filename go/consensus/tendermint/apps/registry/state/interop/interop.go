@@ -22,7 +22,7 @@ var (
 	nodeSigner2  = memorySigner.NewTestSigner("consensus/tendermint/apps/registry/state/interop: node signer 2")
 )
 
-// Keep this in sync with tests in runtimes/consensus/state/registry.rs.
+// InitializeTestRegistryState must be kept in sync with tests in runtimes/consensus/state/registry.rs.
 func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 	state := registryState.NewMutableState(mkvs)
 

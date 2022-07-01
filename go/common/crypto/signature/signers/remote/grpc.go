@@ -112,7 +112,7 @@ func (w *wrapper) Prove(ctx context.Context, req *ProveRequest) ([]byte, error) 
 	return vrfSigner.Prove(req.Alpha)
 }
 
-func handlerPublicKeys( // nolint: golint
+func handlerPublicKeys(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -131,7 +131,7 @@ func handlerPublicKeys( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerSign( // nolint: golint
+func handlerSign(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -154,7 +154,7 @@ func handlerSign( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerProve( // nolint: golint
+func handlerProve(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

@@ -18,7 +18,7 @@ const (
 
 // RemoteSignerParamsDummy is a dummy instance of remoteSignerImpl used to register global
 // remote-signer flags.
-var RemoteSignerParamsDummy *remoteSignerImpl = newRemoteSignerImpl("")
+var RemoteSignerParamsDummy = newRemoteSignerImpl("")
 
 type remoteSignerImpl struct {
 	name   string

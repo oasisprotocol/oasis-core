@@ -12,15 +12,6 @@ linters-settings:
     # Enable once suggested fixes are shown: https://github.com/golangci/golangci-lint/issues/2134
     #enable:
     #  - fieldalignment
-  stylecheck:
-    go: "1.16"
-    # https://staticcheck.io/docs/options#checks
-    checks:
-      - all
-      # https://staticcheck.io/docs/checks#ST1003
-      - -ST1003
-      # https://staticcheck.io/docs/checks#ST1023
-      - -ST1023
 
 linters:
   disable-all: true
@@ -42,10 +33,10 @@ linters:
     - ineffassign
     - megacheck
     - misspell
+    - revive
     - rowserrcheck
     - staticcheck
     - structcheck
-    - stylecheck
     - typecheck
     - unconvert
     - unused
@@ -57,3 +48,11 @@ run:
     # to run, and Go plugins do not compile unless `-buildmode=plugin`
     # is set, which linters do not do.
     - oasis-test-runner/scenario/pluginsigner/example_signer_plugin
+
+exclude-use-default: false
+
+issues:
+  include:
+    - EXC0014 # un-exclude revive `exported` which warns about incorrect comments on exported items.
+  exclude:
+    - context-as-argument # revive

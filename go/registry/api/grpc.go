@@ -116,7 +116,7 @@ var (
 	}
 )
 
-func handlerGetEntity( // nolint: golint
+func handlerGetEntity(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -139,7 +139,7 @@ func handlerGetEntity( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerGetEntities( // nolint: golint
+func handlerGetEntities(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -162,7 +162,7 @@ func handlerGetEntities( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetNode( // nolint: golint
+func handlerGetNode(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -185,7 +185,7 @@ func handlerGetNode( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerGetNodeByConsensusAddress( // nolint: golint
+func handlerGetNodeByConsensusAddress(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -208,7 +208,7 @@ func handlerGetNodeByConsensusAddress( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerGetNodeStatus( // nolint: golint
+func handlerGetNodeStatus(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -231,7 +231,7 @@ func handlerGetNodeStatus( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerGetNodes( // nolint: golint
+func handlerGetNodes(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -254,7 +254,7 @@ func handlerGetNodes( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetRuntime( // nolint: golint
+func handlerGetRuntime(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -277,7 +277,7 @@ func handlerGetRuntime( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerGetRuntimes( // nolint: golint
+func handlerGetRuntimes(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -300,7 +300,7 @@ func handlerGetRuntimes( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerStateToGenesis( // nolint: golint
+func handlerStateToGenesis(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -323,7 +323,7 @@ func handlerStateToGenesis( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetEvents( // nolint: golint
+func handlerGetEvents(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

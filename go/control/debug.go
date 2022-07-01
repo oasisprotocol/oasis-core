@@ -62,7 +62,7 @@ Loop:
 	return nil
 }
 
-// New creates a new oasis-node debug controller.
+// NewDebug creates a new oasis-node debug controller.
 func NewDebug(consensus consensus.Backend) api.DebugController {
 	return &debugController{
 		timeSource: consensus.Beacon(),

@@ -13,7 +13,7 @@ const (
 	MetricCPUUTimeSeconds = "oasis_node_cpu_utime_seconds"
 	MetricCPUSTimeSeconds = "oasis_node_cpu_stime_seconds"
 
-	// getconf CLK_TCK
+	// ClockTicks is getconf CLK_TCK
 	ClockTicks = 100
 )
 

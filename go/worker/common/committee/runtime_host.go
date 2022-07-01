@@ -11,12 +11,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 )
 
-// Implements RuntimeHostHandlerFactory.
+// GetRuntime implements RuntimeHostHandlerFactory.
 func (n *Node) GetRuntime() runtimeRegistry.Runtime {
 	return n.Runtime
 }
 
-// Implements RuntimeHostHandlerFactory.
+// NewRuntimeHostNotifier implements RuntimeHostHandlerFactory.
 func (n *Node) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
 	return runtimeRegistry.NewRuntimeHostNotifier(ctx, n.Runtime, host, n.Consensus)
 }
@@ -25,7 +25,7 @@ type nodeEnvironment struct {
 	n *Node
 }
 
-// Implements RuntimeHostHandlerEnvironment.
+// GetCurrentBlock implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetCurrentBlock(ctx context.Context) (*block.Block, error) {
 	var blk *block.Block
 	env.n.CrossNode.Lock()
@@ -34,17 +34,17 @@ func (env *nodeEnvironment) GetCurrentBlock(ctx context.Context) (*block.Block, 
 	return blk, nil
 }
 
-// Implements RuntimeHostHandlerEnvironment.
+// GetKeyManagerClient implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetKeyManagerClient(ctx context.Context) (runtimeKeymanager.Client, error) {
 	return env.n.KeyManagerClient, nil
 }
 
-// Implements RuntimeHostHandlerEnvironment.
+// GetTxPool implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetTxPool(ctx context.Context) (txpool.TransactionPool, error) {
 	return env.n.TxPool, nil
 }
 
-// Implements RuntimeHostHandlerFactory.
+// NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
 func (n *Node) NewRuntimeHostHandler() protocol.Handler {
 	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
 }

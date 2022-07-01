@@ -42,7 +42,7 @@ func (path BIP32Path) String() string {
 	return strings.Join(compStrs, "/")
 }
 
-// MarshallText encodes a BIP-0032 path into text form.
+// MarshalText encodes a BIP-0032 path into text form.
 func (path BIP32Path) MarshalText() ([]byte, error) {
 	return []byte(path.String()), nil
 }
