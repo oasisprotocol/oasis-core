@@ -383,6 +383,26 @@ func (sc *runtimeImpl) submitRuntimeTx(
 	return rsp, nil
 }
 
+func (sc *runtimeImpl) submitRuntimeQuery(
+	ctx context.Context,
+	id common.Namespace,
+	round uint64,
+	method string,
+	args interface{},
+) (cbor.RawMessage, error) {
+	ctrl := sc.Net.ClientController()
+	if ctrl == nil {
+		return nil, fmt.Errorf("client controller not available")
+	}
+	c := ctrl.RuntimeClient
+
+	resp, err := c.Query(ctx, &runtimeClient.QueryRequest{RuntimeID: id, Round: round, Method: method, Args: cbor.Marshal(args)})
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	return resp.Data, nil
+}
+
 func (sc *runtimeImpl) submitRuntimeTxMeta(
 	ctx context.Context,
 	id common.Namespace,

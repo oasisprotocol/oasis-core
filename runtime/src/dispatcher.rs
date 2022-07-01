@@ -463,7 +463,7 @@ impl Dispatcher {
 
         tokio::task::spawn_blocking(move || {
             // Verify consensus state and runtime state root integrity before executing the query.
-            let consensus_state = state.consensus_verifier.verify(
+            let consensus_state = state.consensus_verifier.verify_for_query(
                 state.consensus_block,
                 state.header.clone(),
                 state.epoch,

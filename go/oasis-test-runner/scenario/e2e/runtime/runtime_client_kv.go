@@ -302,6 +302,29 @@ func (sc *runtimeImpl) submitKeyValueRuntimeGetTx(
 	return rsp, nil
 }
 
+func (sc *runtimeImpl) submitKeyValueRuntimeGetQuery(
+	ctx context.Context,
+	id common.Namespace,
+	key string,
+	round uint64,
+) (string, error) {
+	rawRsp, err := sc.submitRuntimeQuery(ctx, runtimeID, round, "get", struct {
+		Key string `json:"key"`
+	}{
+		Key: key,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to submit get query to runtime: %w", err)
+	}
+
+	var rsp string
+	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
+		return "", fmt.Errorf("failed to unmarshal response from runtime: %w", err)
+	}
+
+	return rsp, nil
+}
+
 func (sc *runtimeImpl) submitKeyValueRuntimeGetRuntimeIDTx(
 	ctx context.Context,
 	id common.Namespace,

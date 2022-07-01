@@ -92,6 +92,15 @@ impl verifier::Verifier for NopVerifier {
         self.unverified_state(consensus_block)
     }
 
+    fn verify_for_query(
+        &self,
+        consensus_block: LightBlock,
+        _runtime_header: Header,
+        _epoch: EpochTime,
+    ) -> Result<ConsensusState, Error> {
+        self.unverified_state(consensus_block)
+    }
+
     fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
         let untrusted_block =
             decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
@@ -115,6 +124,7 @@ enum Command {
         Header,
         EpochTime,
         channel::Sender<Result<ConsensusState, Error>>,
+        bool,
     ),
     Trust(ComputeResultsHeader, channel::Sender<Result<(), Error>>),
 }
@@ -134,6 +144,7 @@ struct Cache {
     last_verified_epoch: u64,
     last_trust_root: TrustRoot,
     verified_state_roots: lru::LruCache<u64, Hash>,
+    verified_state_roots_queries: lru::LruCache<u64, (Hash, u64)>,
     node_id: Option<PublicKey>,
 }
 
@@ -145,6 +156,7 @@ impl Default for Cache {
             last_verified_epoch: 0,
             last_trust_root: TrustRoot::default(),
             verified_state_roots: lru::LruCache::new(128),
+            verified_state_roots_queries: lru::LruCache::new(128),
             node_id: None,
         }
     }
@@ -213,6 +225,7 @@ impl Verifier {
             .ok_or_else(|| Error::VerificationFailed(anyhow!("missing signed header")))?;
 
         // Verify up to the block at current height.
+        // Only does forward verification and fails if height is lower than the last trust height.
         let verified_block = instance
             .light_client
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
@@ -383,6 +396,104 @@ impl Verifier {
         Ok(state)
     }
 
+    fn verify_for_query(
+        &self,
+        cache: &mut Cache,
+        instance: &mut Instance,
+        consensus_block: LightBlock,
+        runtime_header: Header,
+        epoch: EpochTime,
+    ) -> Result<ConsensusState, Error> {
+        // Verify runtime ID matches.
+        if runtime_header.namespace != self.trust_root.runtime_id {
+            return Err(Error::VerificationFailed(anyhow!(
+                "header namespace does not match trusted runtime id"
+            )));
+        }
+
+        // Verify the consensus layer block first to obtain an authoritative state root.
+        let untrusted_block =
+            decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
+        let untrusted_header = untrusted_block
+            .signed_header
+            .as_ref()
+            .ok_or_else(|| Error::VerificationFailed(anyhow!("missing signed header")))?;
+
+        // Verify up to the block at current height.
+        // Only does forward verification and fails if height is lower than the last trust height.
+        let verified_block = instance
+            .light_client
+            .verify_to_target(untrusted_header.header().height, &mut instance.state)
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        // Validate passed consensus block.
+        if untrusted_header != &verified_block.signed_header {
+            return Err(Error::VerificationFailed(anyhow!("header mismatch")));
+        }
+        let consensus_block = untrusted_block;
+
+        let state =
+            ConsensusState::from_protocol(self.protocol.clone(), consensus_block.get_state_root());
+
+        // Check if we have already verified this runtime header to avoid re-verification.
+        if let Some((state_root, state_epoch)) = cache
+            .verified_state_roots_queries
+            .get(&runtime_header.round)
+        {
+            if state_root == &runtime_header.state_root && state_epoch == &epoch {
+                // Header and epoch matches, no need to perform re-verification.
+                return Ok(state);
+            }
+
+            // Force full verification in case of cache mismatch.
+        }
+
+        // Verify that the state root matches.
+        let roothash_state = RoothashState::new(&state);
+        let state_root = roothash_state
+            .state_root(Context::background(), self.trust_root.runtime_id)
+            .map_err(|err| {
+                Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
+            })?;
+
+        if runtime_header.state_root != state_root {
+            return Err(Error::VerificationFailed(anyhow!(
+                "state root mismatch (expected: {} got: {})",
+                state_root,
+                runtime_header.state_root
+            )));
+        }
+
+        // Verify that the epoch matches.
+        let beacon_state = BeaconState::new(&state);
+        let state_epoch = match runtime_header.header_type {
+            // Query future epoch as the epoch just changed in the epoch transition block.
+            EpochTransition => beacon_state
+                .future_epoch(Context::background())
+                .map_err(|err| {
+                    Error::VerificationFailed(anyhow!("failed to retrieve future epoch: {}", err))
+                }),
+            _ => beacon_state.epoch(Context::background()).map_err(|err| {
+                Error::VerificationFailed(anyhow!("failed to retrieve epoch: {}", err))
+            }),
+        }?;
+
+        if state_epoch != epoch {
+            return Err(Error::VerificationFailed(anyhow!(
+                "epoch number mismatch (expected: {} got: {})",
+                state_epoch,
+                epoch,
+            )));
+        }
+
+        // Cache verified runtime header.
+        cache
+            .verified_state_roots_queries
+            .put(runtime_header.round, (state_root, state_epoch));
+
+        Ok(state)
+    }
+
     fn trust(&self, cache: &mut Cache, header: ComputeResultsHeader) -> Result<(), Error> {
         if let Some(state_root) = header.state_root {
             cache.verified_state_roots.put(header.round, state_root);
@@ -544,9 +655,20 @@ impl Verifier {
                         .send(self.sync(&mut cache, &mut instance, height))
                         .map_err(|_| Error::Internal)?;
                 }
-                Command::Verify(consensus_block, runtime_header, epoch, sender) => {
+                Command::Verify(consensus_block, runtime_header, epoch, sender, false) => {
                     sender
                         .send(self.verify(
+                            &mut cache,
+                            &mut instance,
+                            consensus_block,
+                            runtime_header,
+                            epoch,
+                        ))
+                        .map_err(|_| Error::Internal)?;
+                }
+                Command::Verify(consensus_block, runtime_header, epoch, sender, true) => {
+                    sender
+                        .send(self.verify_for_query(
                             &mut cache,
                             &mut instance,
                             consensus_block,
@@ -601,6 +723,27 @@ impl verifier::Verifier for Handle {
                 runtime_header,
                 epoch,
                 sender,
+                false,
+            ))
+            .map_err(|_| Error::Internal)?;
+
+        receiver.recv().map_err(|_| Error::Internal)?
+    }
+
+    fn verify_for_query(
+        &self,
+        consensus_block: LightBlock,
+        runtime_header: Header,
+        epoch: EpochTime,
+    ) -> Result<ConsensusState, Error> {
+        let (sender, receiver) = channel::bounded(1);
+        self.command_sender
+            .send(Command::Verify(
+                consensus_block,
+                runtime_header,
+                epoch,
+                sender,
+                true,
             ))
             .map_err(|_| Error::Internal)?;
 

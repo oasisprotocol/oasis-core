@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/rust"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
 const (
@@ -278,5 +279,36 @@ func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
 	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}
-	return sc.waitTestClient()
+	if err = sc.waitTestClient(); err != nil {
+		return err
+	}
+
+	sc.Logger.Info("testing query latest block")
+	_, err = sc.submitKeyValueRuntimeGetQuery(
+		ctx,
+		runtimeID,
+		"hello_key",
+		roothash.RoundLatest,
+	)
+	if err != nil {
+		return err
+	}
+
+	latestBlk, err := ctrl.Roothash.GetLatestBlock(ctx, &roothash.RuntimeRequest{RuntimeID: runtimeID, Height: consensus.HeightLatest})
+	if err != nil {
+		return err
+	}
+	round := latestBlk.Header.Round - 3
+	sc.Logger.Info("testing query for past round", "round", round)
+	_, err = sc.submitKeyValueRuntimeGetQuery(
+		ctx,
+		runtimeID,
+		"hello_key",
+		round,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
