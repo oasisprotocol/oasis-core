@@ -211,6 +211,7 @@ docker-shell:
 	  --security-opt apparmor:unconfined \
 	  --security-opt seccomp=unconfined \
 	  -v $(shell pwd):/code \
+	  -v $(shell pwd)/docker-shell-history.txt:/root/.bash_history \
 	  -w /code \
 	  oasisprotocol/oasis-core-dev:master \
 	  bash
