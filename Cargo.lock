@@ -733,9 +733,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.13.4"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
+checksum = "4529658bdda7fd6769b8614be250cdcfc3aeb0ee72fe66f9e41e5e5eb73eac02"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -743,9 +743,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.13.4"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
+checksum = "649c91bc01e8b1eac09fb91e8dbc7d517684ca6be8ebc75bb9cafc894f9fdb6f"
 dependencies = [
  "fnv",
  "ident_case",
@@ -757,9 +757,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.13.4"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
+checksum = "ddfc69c5bfcbd2fc09a0f38451d2daf0e372e367986a83906d1b0dbc88134fb5"
 dependencies = [
  "darling_core",
  "quote 1.0.18",
@@ -1841,29 +1841,35 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4fb4c15ae11fe511d3570a8b4f0e311e91a8c8a41f446ecd0e09bdf04abf395"
+checksum = "c3aac2d3f302ff2c798290dcab1fc6b6bb3b0c3349590e3bc20dc003fb4896bd"
 dependencies = [
  "impl-trait-for-tuples",
  "oasis-cbor-derive",
- "sk-cbor",
+ "oasis-cbor-value",
  "thiserror",
 ]
 
 [[package]]
 name = "oasis-cbor-derive"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a4bb643d88ebb5e0adf586dfdfab57a4248d51e6ec943ee70c6dd7e3323f825"
+checksum = "ed014924fce6fb5ac3800675a92fc90b94b5415aacc1d690c8ab47f6804f7521"
 dependencies = [
  "darling",
+ "oasis-cbor-value",
  "proc-macro-crate",
  "proc-macro2 1.0.37",
  "quote 1.0.18",
- "sk-cbor",
  "syn 1.0.92",
 ]
+
+[[package]]
+name = "oasis-cbor-value"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdad9546f1654987df1462e2f442eb7bf2471794ea220a33413698cf91b47783"
 
 [[package]]
 name = "oasis-core-client"
@@ -2758,12 +2764,6 @@ dependencies = [
  "thiserror",
  "tokio 1.18.1",
 ]
-
-[[package]]
-name = "sk-cbor"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e94879a793aba6e65d691f345cfd172c4cc924a78259d5f9612a2cbfb78847a"
 
 [[package]]
 name = "slab"
