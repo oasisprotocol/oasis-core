@@ -82,7 +82,7 @@ var (
 	}
 )
 
-func handlerActiveProposals( // nolint: golint
+func handlerActiveProposals(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -105,7 +105,7 @@ func handlerActiveProposals( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerProposals( // nolint: golint
+func handlerProposals(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -128,7 +128,7 @@ func handlerProposals( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerVotes( // nolint: golint
+func handlerVotes(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -151,7 +151,7 @@ func handlerVotes( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerProposal( // nolint: golint
+func handlerProposal(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -174,7 +174,7 @@ func handlerProposal( // nolint: golint
 	return interceptor(ctx, &query, info, handler)
 }
 
-func handlerPendingUpgrades( // nolint: golint
+func handlerPendingUpgrades(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -197,7 +197,7 @@ func handlerPendingUpgrades( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerStateToGenesis( // nolint: golint
+func handlerStateToGenesis(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -220,7 +220,7 @@ func handlerStateToGenesis( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerConsensusParameters( // nolint: golint
+func handlerConsensusParameters(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -243,7 +243,7 @@ func handlerConsensusParameters( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetEvents( // nolint: golint
+func handlerGetEvents(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

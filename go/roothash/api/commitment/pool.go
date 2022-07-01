@@ -18,6 +18,7 @@ import (
 // moduleName is the module name used for namespacing errors.
 const moduleName = "roothash/commitment"
 
+// nolint: revive
 var (
 	ErrNoRuntime              = errors.New(moduleName, 1, "roothash/commitment: no runtime configured")
 	ErrNoCommittee            = errors.New(moduleName, 2, "roothash/commitment: no committee configured")

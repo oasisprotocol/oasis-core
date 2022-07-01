@@ -1,3 +1,4 @@
+// Package state is deprecated.
 package state
 
 import "github.com/oasisprotocol/oasis-core/go/common/keyformat"

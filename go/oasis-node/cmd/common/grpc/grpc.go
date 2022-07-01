@@ -26,7 +26,7 @@ import (
 const (
 	// CfgServerPort configures the server port.
 	CfgServerPort = "grpc.port"
-	// CfgDebugPort configures the remote address.
+	// CfgAddress configures the remote address.
 	CfgAddress = "address"
 	// CfgWait waits for the remote address to become available.
 	CfgWait = "wait"

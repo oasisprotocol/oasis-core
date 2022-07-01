@@ -856,7 +856,7 @@ func (net *Network) BasePath() string {
 	return net.baseDir.String()
 }
 
-// Implements cli.Factory.
+// GetCLIConfig implements cli.Factory.
 func (net *Network) GetCLIConfig() cli.Config {
 	cfg := cli.Config{
 		NodeBinary:  net.cfg.NodeBinary,

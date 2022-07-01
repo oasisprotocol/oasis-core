@@ -405,7 +405,7 @@ func loadCacheGlibc() (*Cache, error) {
 
 		e := new(cacheEntry)
 		e.flags = binary.LittleEndian.Uint32(rawE[0:])
-		kIdx := int(binary.LittleEndian.Uint32(rawE[4:]))
+		kIdx := int(binary.LittleEndian.Uint32(rawE[4:])) // nolint: revive
 		vIdx := int(binary.LittleEndian.Uint32(rawE[8:]))
 		e.osVersion = binary.LittleEndian.Uint32(rawE[12:])
 		e.hwcap = binary.LittleEndian.Uint64(rawE[16:])

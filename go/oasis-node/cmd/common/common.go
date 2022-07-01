@@ -35,7 +35,7 @@ const (
 	CfgConfigFile = "config"
 	CfgDataDir    = "datadir"
 
-	// RequiredRLimit is the minimum required RLIMIT_NOFILE as too low of a
+	// RequiredRlimit is the minimum required RLIMIT_NOFILE as too low of a
 	// limit can cause problems with BadgerDB.
 	RequiredRlimit = 50_000
 )

@@ -13,7 +13,7 @@ import (
 
 var addresses []staking.Address
 
-// Keep this in sync with tests in runtimes/consensus/state/staking.rs.
+// InitializeTestStakingState must be kept in sync with tests in runtimes/consensus/state/staking.rs.
 func InitializeTestStakingState(ctx context.Context, mkvs mkvs.Tree) error {
 	state := stakingState.NewMutableState(mkvs)
 

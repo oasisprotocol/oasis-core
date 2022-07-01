@@ -72,7 +72,7 @@ var (
 	}
 )
 
-func handlerRequestShutdown( // nolint: golint
+func handlerRequestShutdown(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -95,7 +95,7 @@ func handlerRequestShutdown( // nolint: golint
 	return interceptor(ctx, wait, info, handler)
 }
 
-func handlerWaitSync( // nolint: golint
+func handlerWaitSync(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -114,7 +114,7 @@ func handlerWaitSync( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerIsSynced( // nolint: golint
+func handlerIsSynced(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -133,7 +133,7 @@ func handlerIsSynced( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerWaitReady( // nolint: golint
+func handlerWaitReady(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -152,7 +152,7 @@ func handlerWaitReady( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerIsReady( // nolint: golint
+func handlerIsReady(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -171,7 +171,7 @@ func handlerIsReady( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerUpgradeBinary( // nolint: golint
+func handlerUpgradeBinary(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -194,7 +194,7 @@ func handlerUpgradeBinary( // nolint: golint
 	return interceptor(ctx, &descriptor, info, handler)
 }
 
-func handlerCancelUpgrade( // nolint: golint
+func handlerCancelUpgrade(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -217,7 +217,7 @@ func handlerCancelUpgrade( // nolint: golint
 	return interceptor(ctx, &descriptor, info, handler)
 }
 
-func handlerGetStatus( // nolint: golint
+func handlerGetStatus(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

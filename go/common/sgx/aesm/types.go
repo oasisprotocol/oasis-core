@@ -16,7 +16,7 @@ const (
 	// AttestationKeyEPIDLinkable is the unlinkable EPID attestation key type.
 	AttestationKeyEPIDLinkable AttestationKeyType = 1
 	// AttestationKeyECDSA_P256 is the ECDSA-P256 attestation key type.
-	AttestationKeyECDSA_P256 AttestationKeyType = 2
+	AttestationKeyECDSA_P256 AttestationKeyType = 2 // nolint: revive
 )
 
 // String returns a string representation of the attestation key type.

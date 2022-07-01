@@ -167,7 +167,7 @@ var (
 	}
 )
 
-func handlerSubmitTx( // nolint: golint
+func handlerSubmitTx(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -190,7 +190,7 @@ func handlerSubmitTx( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerStateToGenesis( // nolint: golint
+func handlerStateToGenesis(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -213,7 +213,7 @@ func handlerStateToGenesis( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerEstimateGas( // nolint: golint
+func handlerEstimateGas(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -236,7 +236,7 @@ func handlerEstimateGas( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerGetSignerNonce( // nolint: golint
+func handlerGetSignerNonce(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -259,7 +259,7 @@ func handlerGetSignerNonce( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerGetBlock( // nolint: golint
+func handlerGetBlock(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -282,7 +282,7 @@ func handlerGetBlock( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetTransactions( // nolint: golint
+func handlerGetTransactions(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -305,7 +305,7 @@ func handlerGetTransactions( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetTransactionsWithResults( // nolint: golint
+func handlerGetTransactionsWithResults(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -328,7 +328,7 @@ func handlerGetTransactionsWithResults( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetUnconfirmedTransactions( // nolint: golint
+func handlerGetUnconfirmedTransactions(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -347,7 +347,7 @@ func handlerGetUnconfirmedTransactions( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerGetGenesisDocument( // nolint: golint
+func handlerGetGenesisDocument(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -366,7 +366,7 @@ func handlerGetGenesisDocument( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerGetChainContext( // nolint: golint
+func handlerGetChainContext(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -385,7 +385,7 @@ func handlerGetChainContext( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerGetStatus( // nolint: golint
+func handlerGetStatus(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -404,7 +404,7 @@ func handlerGetStatus( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerGetNextBlockState( // nolint: golint
+func handlerGetNextBlockState(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -451,7 +451,7 @@ func handlerWatchBlocks(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
-func handlerGetLightBlock( // nolint: golint
+func handlerGetLightBlock(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -474,7 +474,7 @@ func handlerGetLightBlock( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetParameters( // nolint: golint
+func handlerGetParameters(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -497,7 +497,7 @@ func handlerGetParameters( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerStateSyncGet( // nolint: golint
+func handlerStateSyncGet(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -520,7 +520,7 @@ func handlerStateSyncGet( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerStateSyncGetPrefixes( // nolint: golint
+func handlerStateSyncGetPrefixes(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -543,7 +543,7 @@ func handlerStateSyncGetPrefixes( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerStateSyncIterate( // nolint: golint
+func handlerStateSyncIterate(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -566,7 +566,7 @@ func handlerStateSyncIterate( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerSubmitTxNoWait( // nolint: golint
+func handlerSubmitTxNoWait(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -589,7 +589,7 @@ func handlerSubmitTxNoWait( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerSubmitEvidence( // nolint: golint
+func handlerSubmitEvidence(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

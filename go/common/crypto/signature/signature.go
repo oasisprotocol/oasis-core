@@ -381,7 +381,7 @@ func (s Signature) MarshalPEM() (data []byte, err error) {
 	return bytes.Join([][]byte{pk, sig}, []byte{}), nil
 }
 
-// UnmarshalPem decodes a PEM marshaled signature.
+// UnmarshalPEM decodes a PEM marshaled signature.
 func (s *Signature) UnmarshalPEM(data []byte) error {
 	// Marshalled PEM file contains public key block first...
 	blk, rest := encPem.Decode(data)

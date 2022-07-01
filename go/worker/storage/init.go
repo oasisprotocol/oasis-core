@@ -30,7 +30,7 @@ const (
 	// CfgWorkerCheckpointCheckInterval configures the checkpointer check interval.
 	CfgWorkerCheckpointCheckInterval = "worker.storage.checkpointer.check_interval"
 
-	// CfgCheckpointSyncDisabled disables syncing from checkpoints on worker startup.
+	// CfgWorkerCheckpointSyncDisabled disables syncing from checkpoints on worker startup.
 	CfgWorkerCheckpointSyncDisabled = "worker.storage.checkpoint_sync.disabled"
 
 	// CfgBackend configures the storage backend flag.

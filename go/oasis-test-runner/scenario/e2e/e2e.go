@@ -32,7 +32,7 @@ const (
 )
 
 // E2eParamsDummy is a dummy instance of E2E used to register global e2e flags.
-var E2eParamsDummy *E2E = NewE2E("")
+var E2eParamsDummy = NewE2E("")
 
 // E2E is a base scenario for oasis-node end-to-end tests.
 type E2E struct {
@@ -61,7 +61,7 @@ func NewE2E(name string) *E2E {
 	return sc
 }
 
-// Implements scenario.Scenario.
+// Clone implements scenario.Scenario.
 func (sc *E2E) Clone() E2E {
 	return E2E{
 		Net:    sc.Net,
@@ -71,22 +71,22 @@ func (sc *E2E) Clone() E2E {
 	}
 }
 
-// Implements scenario.Scenario.
+// Name implements scenario.Scenario.
 func (sc *E2E) Name() string {
 	return sc.name
 }
 
-// Implements scenario.Scenario.
+// Parameters implements scenario.Scenario.
 func (sc *E2E) Parameters() *env.ParameterFlagSet {
 	return sc.Flags
 }
 
-// Implements scenario.Scenario.
+// PreInit implements scenario.Scenario.
 func (sc *E2E) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
-// Implements scenario.Scenario.
+// Fixture implements scenario.Scenario.
 func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
 
@@ -114,7 +114,7 @@ func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 	}, nil
 }
 
-// Implements scenario.Scenario.
+// Init implements scenario.Scenario.
 func (sc *E2E) Init(childEnv *env.Env, net *oasis.Network) error {
 	sc.Net = net
 	return nil

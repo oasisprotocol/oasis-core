@@ -97,7 +97,7 @@ var (
 	}
 )
 
-func handlerGetGenesisBlock( // nolint: golint
+func handlerGetGenesisBlock(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -120,7 +120,7 @@ func handlerGetGenesisBlock( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerGetLatestBlock( // nolint: golint
+func handlerGetLatestBlock(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -143,7 +143,7 @@ func handlerGetLatestBlock( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerGetRuntimeState( // nolint: golint
+func handlerGetRuntimeState(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -166,7 +166,7 @@ func handlerGetRuntimeState( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerGetLastRoundResults( // nolint: golint
+func handlerGetLastRoundResults(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -189,7 +189,7 @@ func handlerGetLastRoundResults( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerGetIncomingMessageQueueMeta( // nolint: golint
+func handlerGetIncomingMessageQueueMeta(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -212,7 +212,7 @@ func handlerGetIncomingMessageQueueMeta( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerGetIncomingMessageQueue( // nolint: golint
+func handlerGetIncomingMessageQueue(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -235,7 +235,7 @@ func handlerGetIncomingMessageQueue( // nolint: golint
 	return interceptor(ctx, &rq, info, handler)
 }
 
-func handlerStateToGenesis( // nolint: golint
+func handlerStateToGenesis(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -258,7 +258,7 @@ func handlerStateToGenesis( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerConsensusParameters( // nolint: golint
+func handlerConsensusParameters(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -281,7 +281,7 @@ func handlerConsensusParameters( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetEvents( // nolint: golint
+func handlerGetEvents(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

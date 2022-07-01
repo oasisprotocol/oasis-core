@@ -78,14 +78,14 @@ func (q Quantity) String() string {
 	return q.quan.String()
 }
 
-// New creates a new Quantity, initialized to zero.
+// NewQuantity creates a new Quantity, initialized to zero.
 func NewQuantity() (q Quantity) {
 	return Quantity{
 		quan: quantity.NewQuantity(),
 	}
 }
 
-// New creates a new Quantity from a given quantity.Quantity object.
+// NewFromQuanQuantity creates a new Quantity from a given quantity.Quantity object.
 func NewFromQuanQuantity(q *quantity.Quantity) Quantity {
 	return Quantity{
 		quan:    q.Clone(),

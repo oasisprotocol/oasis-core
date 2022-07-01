@@ -72,12 +72,12 @@ type Aggregate struct {
 	notifier *pubsub.Broker
 }
 
-// Implements host.Runtime.
+// ID implements host.Runtime.
 func (agg *Aggregate) ID() common.Namespace {
 	return agg.id
 }
 
-// Implements host.Runtime.
+// GetInfo implements host.Runtime.
 func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
@@ -88,7 +88,7 @@ func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoRespons
 	return agg.active.host.GetInfo(ctx)
 }
 
-// Implements host.Runtime.
+// Call implements host.Runtime.
 func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
 	callFn := func() error {
 		agg.l.RLock()
@@ -116,7 +116,7 @@ func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (rsp *proto
 	return
 }
 
-// Implements host.Runtime.
+// WatchEvents implements host.Runtime.
 func (agg *Aggregate) WatchEvents(ctx context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *host.Event)
 	sub := agg.notifier.Subscribe()
@@ -125,7 +125,7 @@ func (agg *Aggregate) WatchEvents(ctx context.Context) (<-chan *host.Event, pubs
 	return typedCh, sub, nil
 }
 
-// Implements host.Runtime.
+// Start implements host.Runtime.
 func (agg *Aggregate) Start() error {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
@@ -138,7 +138,7 @@ func (agg *Aggregate) Start() error {
 	return agg.active.host.Start()
 }
 
-// Implements host.Runtime.
+// Abort implements host.Runtime.
 func (agg *Aggregate) Abort(ctx context.Context, force bool) error {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
@@ -149,7 +149,7 @@ func (agg *Aggregate) Abort(ctx context.Context, force bool) error {
 	return agg.active.host.Abort(ctx, force)
 }
 
-// Implements host.Runtime.
+// Stop implements host.Runtime.
 func (agg *Aggregate) Stop() {
 	agg.l.Lock()
 	defer agg.l.Unlock()

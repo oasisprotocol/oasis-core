@@ -116,7 +116,7 @@ func (worker *Compute) GetClientAddress() string {
 	return fmt.Sprintf("127.0.0.1:%d", worker.clientPort)
 }
 
-// WaitForRoot waits until the node syncs up to the given root.
+// WaitForRound waits until the node syncs up to the given root.
 func (worker *Compute) WaitForRound(ctx context.Context, runtimeID common.Namespace, round uint64) (uint64, error) {
 	ctrl, err := NewController(worker.SocketPath())
 	if err != nil {

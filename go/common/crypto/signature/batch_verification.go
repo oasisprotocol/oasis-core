@@ -130,7 +130,7 @@ func (v *BatchVerifier) Verify() (bool, []error) {
 	return allOk && !v.hasError, ret
 }
 
-// NewBatchVerfier creates an empty BatchVerifier.
+// NewBatchVerifier creates an empty BatchVerifier.
 func NewBatchVerifier() *BatchVerifier {
 	return &BatchVerifier{
 		verifier:   ed25519.NewBatchVerifier(),

@@ -139,7 +139,7 @@ func (srv *archiveService) WatchBlocks(ctx context.Context) (<-chan *consensusAP
 	return ch, sub, nil
 }
 
-// New creates a new archive-only consensus service.
+// NewArchive creates a new archive-only consensus service.
 func NewArchive(
 	ctx context.Context,
 	dataDir string,

@@ -53,7 +53,7 @@ type runtimeStatus struct {
 	capabilityTEE *node.CapabilityTEE
 }
 
-// The key manager worker.
+// Worker is the key manager worker.
 //
 // It behaves differently from other workers as the key manager has its
 // own runtime. It needs to keep track of executor committees for other
@@ -140,17 +140,17 @@ func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
 }
 
-// Implements workerCommon.RuntimeHostHandlerFactory.
+// GetRuntime implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
 	return w.runtime
 }
 
-// Implements workerCommon.RuntimeHostHandlerFactory.
+// NewRuntimeHostNotifier implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
 	return &protocol.NoOpNotifier{}
 }
 
-// Implements workerCommon.RuntimeHostHandlerFactory.
+// NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
 	return w.runtimeHostHandler
 }

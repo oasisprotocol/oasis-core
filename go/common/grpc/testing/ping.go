@@ -218,7 +218,7 @@ var ServiceDesc = grpc.ServiceDesc{
 	},
 }
 
-func pingHandler( // nolint: golint
+func pingHandler(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

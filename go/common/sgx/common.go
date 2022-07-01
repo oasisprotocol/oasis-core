@@ -1,4 +1,4 @@
-// Package SGX provides common Intel SGX datatypes and utilities.
+// Package sgx provides common Intel SGX datatypes and utilities.
 package sgx
 
 import (
@@ -45,12 +45,12 @@ type Attributes struct {
 	Xfrm  uint64
 }
 
-// GetFlagInit returns value of given flag attribute of the Report.
+// Contains returns value of given flag attribute of the Report.
 func (a AttributesFlags) Contains(flag AttributesFlags) bool {
 	return (uint64(a) & uint64(flag)) != 0
 }
 
-// Mrenclave is a SGX enclave identity register value (MRENCLAVE).
+// MrEnclave is a SGX enclave identity register value (MRENCLAVE).
 type MrEnclave [MrEnclaveSize]byte
 
 // MarshalBinary encodes a Mrenclave into binary form.

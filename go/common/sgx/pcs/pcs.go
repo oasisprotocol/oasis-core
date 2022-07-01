@@ -39,13 +39,13 @@ func (bnd *QuoteBundle) Verify(ts time.Time) (*TCBLevel, error) {
 	return quote.Verify(ts, &bnd.TCB)
 }
 
-// SetAllowDebugEnclave will enable running and communicating with enclaves with debug flag enabled
+// SetAllowDebugEnclaves will enable running and communicating with enclaves with debug flag enabled
 // in report body for the remainder of the process' lifetime.
 func SetAllowDebugEnclaves() {
 	unsafeAllowDebugEnclaves = true
 }
 
-// UnsetAllowDebugEnclave will disable running and communicating with enclaves with debug flag
+// UnsetAllowDebugEnclaves will disable running and communicating with enclaves with debug flag
 // enabled in report body for the remainder of the process' lifetime.
 func UnsetAllowDebugEnclaves() {
 	unsafeAllowDebugEnclaves = false

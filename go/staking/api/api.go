@@ -289,7 +289,7 @@ func (e *TakeEscrowEvent) EventKind() string {
 	return "take_escrow"
 }
 
-// DebondingStartEvent is the event emitted when the debonding process has
+// DebondingStartEscrowEvent is the event emitted when the debonding process has
 // started and the given number of active shares have been moved into the
 // debonding pool and started debonding.
 //
@@ -647,6 +647,7 @@ func (p *SharePool) Withdraw(stakeDst, shareSrc, shareAmount *quantity.Quantity)
 // ThresholdKind is the kind of staking threshold.
 type ThresholdKind int
 
+// nolint: revive
 const (
 	KindEntity        ThresholdKind = 0
 	KindNodeValidator ThresholdKind = 1

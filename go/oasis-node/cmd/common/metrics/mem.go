@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	MetricMemVmSizeBytes   = "oasis_node_mem_vm_size_bytes" // nolint: golint
+	MetricMemVmSizeBytes   = "oasis_node_mem_vm_size_bytes" // nolint: revive
 	MetricMemRssAnonBytes  = "oasis_node_mem_rss_anon_bytes"
 	MetricMemRssFileBytes  = "oasis_node_mem_rss_file_bytes"
 	MetricMemRssShmemBytes = "oasis_node_mem_rss_shmem_bytes"

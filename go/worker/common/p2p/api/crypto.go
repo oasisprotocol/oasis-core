@@ -54,7 +54,7 @@ func (s *p2pSigner) GetPublic() libp2pCrypto.PubKey {
 	return pubKey
 }
 
-// SignerToPRivKey converts a Signer to a libp2pCrypto.PrivKey.
+// SignerToPrivKey converts a Signer to a libp2pCrypto.PrivKey.
 func SignerToPrivKey(signer signature.Signer) libp2pCrypto.PrivKey {
 	return &p2pSigner{
 		signer: signer,

@@ -7,11 +7,11 @@ const (
 	// ModuleName is a unique module name for the staking/token module.
 	ModuleName = "staking/token"
 
-	// Maximum length of the token symbol.
+	// TokenSymbolMaxLength is the maximum length of the token symbol.
 	TokenSymbolMaxLength = 8
-	// Regular expression defining valid token symbol characters.
+	// TokenSymbolRegexp is the regular expression defining valid token symbol characters.
 	TokenSymbolRegexp = "^[A-Z]+$" // nolint: gosec // Not that kind of token :).
-	// Maximum value of token's value base-10 exponent.
+	// TokenValueExponentMaxValue is the maximum value of token's value base-10 exponent.
 	TokenValueExponentMaxValue = 20
 )
 

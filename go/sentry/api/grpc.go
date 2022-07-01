@@ -51,7 +51,7 @@ var (
 	}
 )
 
-func handlerGetAddresses( // nolint: golint
+func handlerGetAddresses(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -70,7 +70,7 @@ func handlerGetAddresses( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerSetUpstreamTLSPubKeys( // nolint: golint
+func handlerSetUpstreamTLSPubKeys(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -93,7 +93,7 @@ func handlerSetUpstreamTLSPubKeys( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerGetUpstreamTLSPubKeys( // nolint: golint
+func handlerGetUpstreamTLSPubKeys(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -112,7 +112,7 @@ func handlerGetUpstreamTLSPubKeys( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerUpdatePolicies( // nolint: golint
+func handlerUpdatePolicies(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

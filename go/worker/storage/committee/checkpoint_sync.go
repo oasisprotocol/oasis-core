@@ -345,7 +345,7 @@ func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 
 	// Try all the checkpoints now, from most recent backwards.
 	var (
-		prevVersion      uint64 = ^uint64(0)
+		prevVersion      = ^uint64(0)
 		multipartRunning bool
 		mask             outstandingMask
 	)

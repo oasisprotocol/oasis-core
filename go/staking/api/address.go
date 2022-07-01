@@ -36,7 +36,7 @@ func (a Address) MarshalBinary() ([]byte, error) {
 	return (address.Address)(a).MarshalBinary()
 }
 
-// UnMarshalBinary decodes a binary marshaled address.
+// UnmarshalBinary decodes a binary marshaled address.
 func (a *Address) UnmarshalBinary(data []byte) error {
 	return (*address.Address)(a).UnmarshalBinary(data)
 }

@@ -17,7 +17,7 @@ const (
 	cfgPluginConfig = "config"
 )
 
-var pluginSignerParamsDummy *pluginSignerImpl = newPluginSignerImpl("")
+var pluginSignerParamsDummy = newPluginSignerImpl("")
 
 type pluginSignerImpl struct {
 	name   string

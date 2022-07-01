@@ -17,8 +17,8 @@ const MaxAccountKeyNumber = uint32(0x7fffffff)
 // ADR 0008.
 const BIP32PathPrefix = "m/44'/474'"
 
-// Generate signer for the given mnemonic, passphrase and account according to
-// ADR 0008.
+// GetAccountSigner generates a signer for the given mnemonic, passphrase and
+// account according to ADR 0008.
 func GetAccountSigner(
 	mnemonic string,
 	passphrase string,

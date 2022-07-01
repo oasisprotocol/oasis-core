@@ -46,7 +46,7 @@ const (
 )
 
 // messageIdContext is the domain separation context for computing message identifier hashes.
-var messageIdContext = []byte("oasis-core/p2p: message id")
+var messageIdContext = []byte("oasis-core/p2p: message id") // nolint: revive
 
 var allowUnroutableAddresses bool
 
@@ -307,7 +307,7 @@ func (p *p2p) GetMinRepublishInterval() time.Duration {
 	return seenMessagesTTL + 5*time.Second
 }
 
-func messageIdFn(pmsg *pb.Message) string {
+func messageIdFn(pmsg *pb.Message) string { // nolint: revive
 	// id := TupleHash[messageIdContext](topic, data)
 	h := tuplehash.New256(32, messageIdContext)
 	_, _ = h.Write([]byte(pmsg.GetTopic()))

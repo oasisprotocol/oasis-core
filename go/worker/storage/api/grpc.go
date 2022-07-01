@@ -41,7 +41,7 @@ var (
 	}
 )
 
-func handlerGetLastSyncedRound( // nolint: golint
+func handlerGetLastSyncedRound(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -64,7 +64,7 @@ func handlerGetLastSyncedRound( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerWaitForRound( // nolint: golint
+func handlerWaitForRound(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -87,7 +87,7 @@ func handlerWaitForRound( // nolint: golint
 	return interceptor(ctx, rq, info, handler)
 }
 
-func handlerPauseCheckpointer( // nolint: golint
+func handlerPauseCheckpointer(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

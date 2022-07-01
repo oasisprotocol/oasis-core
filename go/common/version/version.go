@@ -216,7 +216,7 @@ var Versions = ProtocolVersions{
 
 var goModulesVersionRegex = regexp.MustCompile(`v0.(?P<year>[0-9]{2})(?P<minor>[0-9]{2}).(?P<micro>[0-9]+)`)
 
-// Convert Go Modules compatible version to Oasis Core's canonical version.
+// ConvertGoModulesVersion converts a Go modules compatible version to Oasis Core's canonical version.
 func ConvertGoModulesVersion(goModVersion string) string {
 	match := goModulesVersionRegex.FindStringSubmatch(goModVersion)
 	// NOTE: match[0] contains the whole matched string.

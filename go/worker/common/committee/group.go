@@ -34,7 +34,7 @@ func TagForCommittee(kind scheduler.CommitteeKind) string {
 }
 
 // CommitteeInfo contains information about a committee of nodes.
-type CommitteeInfo struct { // nolint: golint
+type CommitteeInfo struct { // nolint: revive
 	Indices    []int
 	Roles      []scheduler.Role
 	Committee  *scheduler.Committee

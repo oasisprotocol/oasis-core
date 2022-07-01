@@ -24,11 +24,11 @@ var (
 )
 
 const (
-	// Prefix used in hash computations of leaf nodes.
+	// PrefixLeafNode is the prefix used in hash computations of leaf nodes.
 	PrefixLeafNode byte = 0x00
-	// Prefix used in hash computations of internal nodes.
+	// PrefixInternalNode is the prefix used in hash computations of internal nodes.
 	PrefixInternalNode byte = 0x01
-	// Prefix used to mark a nil pointer in a subtree serialization.
+	// PrefixNilNode is the prefix used to mark a nil pointer in a subtree serialization.
 	PrefixNilNode byte = 0x02
 
 	// PointerSize is the size of a node pointer in memory.
@@ -212,7 +212,7 @@ func (p *Pointer) Extract() *Pointer {
 	return p.ExtractUnchecked()
 }
 
-// Extract makes a copy of the pointer containing only hash references
+// ExtractUnchecked makes a copy of the pointer containing only hash references
 // without checking the dirty flag.
 func (p *Pointer) ExtractUnchecked() *Pointer {
 	if p == nil {
@@ -366,7 +366,7 @@ func (n *InternalNode) Extract() Node {
 	}
 }
 
-// Extract makes a copy of the node containing only hash references without
+// ExtractUnchecked makes a copy of the node containing only hash references without
 // checking the dirty flag.
 //
 // For LeafNode, it makes a deep copy so that the parent internal node always
@@ -573,7 +573,7 @@ func (n *LeafNode) Extract() Node {
 	return n.ExtractUnchecked()
 }
 
-// Extract makes a copy of the node containing only hash references
+// ExtractUnchecked makes a copy of the node containing only hash references
 // without checking the dirty flag.
 func (n *LeafNode) ExtractUnchecked() Node {
 	return &LeafNode{

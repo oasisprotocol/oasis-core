@@ -41,13 +41,13 @@ func (m MessageType) String() string {
 }
 
 const (
-	// Invalid message (should never be seen on the wire).
+	// MessageInvalid indicates an invalid message (should never be seen on the wire).
 	MessageInvalid MessageType = 0
 
-	// Request message.
+	// MessageRequest indicates a request message.
 	MessageRequest MessageType = 1
 
-	// Response message.
+	// MessageResponse indicates a response message.
 	MessageResponse MessageType = 2
 )
 
@@ -389,7 +389,7 @@ type RuntimeQueryRequest struct {
 	Args   []byte `json:"args,omitempty"`
 }
 
-// RuntimeQueryRequest is a runtime query response message body.
+// RuntimeQueryResponse is a runtime query response message body.
 type RuntimeQueryResponse struct {
 	Data []byte `json:"data,omitempty"`
 }

@@ -42,7 +42,7 @@ var (
 	}
 )
 
-func handlerVerifyEvidence( // nolint: golint
+func handlerVerifyEvidence(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -65,7 +65,7 @@ func handlerVerifyEvidence( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerGetSPIDInfo( // nolint: golint
+func handlerGetSPIDInfo(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -84,7 +84,7 @@ func handlerGetSPIDInfo( // nolint: golint
 	return interceptor(ctx, nil, info, handler)
 }
 
-func handlerGetSigRL( // nolint: golint
+func handlerGetSigRL(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

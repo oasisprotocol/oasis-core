@@ -212,17 +212,17 @@ func SignAndSubmitTx(ctx context.Context, backend Backend, signer signature.Sign
 // NoOpSubmissionManager implements a submission manager that doesn't support submitting transactions.
 type NoOpSubmissionManager struct{}
 
-// Implements SubmissionManager.
+// PriceDiscovery implements SubmissionManager.
 func (m *NoOpSubmissionManager) PriceDiscovery() PriceDiscovery {
 	return &noOpPriceDiscovery{}
 }
 
-// Implements SubmissionManager.
+// EstimateGasAndSetFee implements SubmissionManager.
 func (m *NoOpSubmissionManager) EstimateGasAndSetFee(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	return transaction.ErrMethodNotSupported
 }
 
-// Implements SubmissionManager.
+// SignAndSubmitTx implements SubmissionManager.
 func (m *NoOpSubmissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	return transaction.ErrMethodNotSupported
 }

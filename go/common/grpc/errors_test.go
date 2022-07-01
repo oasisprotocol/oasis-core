@@ -93,7 +93,7 @@ var errorTestServiceDesc = grpc.ServiceDesc{
 	Streams: []grpc.StreamDesc{},
 }
 
-func handlerErrorTest( // nolint: golint
+func handlerErrorTest(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -116,7 +116,7 @@ func handlerErrorTest( // nolint: golint
 	return interceptor(ctx, req, info, handler)
 }
 
-func handlerErrorTestWithContext( // nolint: golint
+func handlerErrorTestWithContext(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -139,7 +139,7 @@ func handlerErrorTestWithContext( // nolint: golint
 	return interceptor(ctx, req, info, handler)
 }
 
-func handlerErrorStatusTest( // nolint: golint
+func handlerErrorStatusTest(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

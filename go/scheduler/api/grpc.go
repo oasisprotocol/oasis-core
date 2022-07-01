@@ -57,7 +57,7 @@ var (
 	}
 )
 
-func handlerGetValidators( // nolint: golint
+func handlerGetValidators(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -80,7 +80,7 @@ func handlerGetValidators( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerGetCommittees( // nolint: golint
+func handlerGetCommittees(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -103,7 +103,7 @@ func handlerGetCommittees( // nolint: golint
 	return interceptor(ctx, &req, info, handler)
 }
 
-func handlerStateToGenesis( // nolint: golint
+func handlerStateToGenesis(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,
@@ -126,7 +126,7 @@ func handlerStateToGenesis( // nolint: golint
 	return interceptor(ctx, height, info, handler)
 }
 
-func handlerConsensusParameters( // nolint: golint
+func handlerConsensusParameters(
 	srv interface{},
 	ctx context.Context,
 	dec func(interface{}) error,

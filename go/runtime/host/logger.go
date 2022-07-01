@@ -37,7 +37,7 @@ func NewRuntimeLogWrapper(logger *logging.Logger, suffixes ...interface{}) *Runt
 	}
 }
 
-// Implements io.Writer
+// Write implements io.Writer
 func (w *RuntimeLogWrapper) Write(chunk []byte) (int, error) {
 	w.buf = append(w.buf, chunk...)
 
