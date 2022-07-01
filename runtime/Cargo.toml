@@ -5,7 +5,7 @@ authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
 edition = "2018"
 
 [dependencies]
-cbor = { version = "0.3.0", package = "oasis-cbor" }
+cbor = { version = "0.4.0", package = "oasis-cbor" }
 
 # Third party.
 log = "0.4"

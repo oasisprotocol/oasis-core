@@ -30,15 +30,19 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 key_format!(SignedNodeKeyFmt, 0x11, Hash);
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
+    fn decode_node(&self, data: &[u8]) -> Result<Node, StateError> {
+        let signed: MultiSigned =
+            cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))?;
+        // The signed blob is transported as-is so we need to use non-strict decoding.
+        cbor::from_slice_non_strict(&signed.blob)
+            .map_err(|err| StateError::Unavailable(anyhow!(err)))
+    }
+
     /// Looks up a specific node by its identifier.
     pub fn node(&self, ctx: Context, id: &PublicKey) -> Result<Option<Node>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
         match self.mkvs.get(ctx, &SignedNodeKeyFmt(h).encode()) {
-            Ok(Some(b)) => {
-                let signed: MultiSigned =
-                    cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))?;
-                cbor::from_slice(&signed.blob).map_err(|err| StateError::Unavailable(anyhow!(err)))
-            }
+            Ok(Some(b)) => Ok(Some(self.decode_node(&b)?)),
             Ok(None) => Ok(None),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
         }
@@ -55,11 +59,7 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
             .next()
             .and_then(|(key, value)| SignedNodeKeyFmt::decode(&key).map(|_| value))
         {
-            let signed: MultiSigned =
-                cbor::from_slice(&value).map_err(|err| StateError::Unavailable(anyhow!(err)))?;
-            let node = cbor::from_slice(&signed.blob)
-                .map_err(|err| StateError::Unavailable(anyhow!(err)))?;
-            result.push(node)
+            result.push(self.decode_node(&value)?)
         }
 
         Ok(result)
