@@ -95,6 +95,9 @@ type TransactionPool interface {
 	// GetSchedulingExtra uh
 	GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta
 
+	// FinishScheduling uh
+	FinishScheduling()
+
 	// GetKnownBatch gets a set of known transactions from the transaction pool.
 	//
 	// For any missing transactions nil will be returned in their place and the map of missing
@@ -175,6 +178,8 @@ type txPool struct {
 	checkTxQueue    *checkTxQueue
 	checkTxNotifier *pubsub.Broker
 	recheckTxCh     *channels.RingChannel
+
+	drainLock sync.Mutex
 
 	usableSources        []UsableTransactionSource
 	recheckableStores    []RecheckableTransactionStore
@@ -333,6 +338,7 @@ func (t *txPool) ClearProposedBatch() {
 }
 
 func (t *txPool) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
+	t.drainLock.Lock()
 	var txs []*TxQueueMeta
 	for _, q := range t.usableSources {
 		txs = append(txs, q.GetSchedulingSuggestion(countHint)...)
@@ -342,6 +348,10 @@ func (t *txPool) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
 
 func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta {
 	return t.mainQueue.GetSchedulingExtra(offset, limit)
+}
+
+func (t *txPool) FinishScheduling() {
+	t.drainLock.Unlock()
 }
 
 func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
@@ -746,9 +756,13 @@ func (t *txPool) republishWorker() {
 
 		// Get transactions to republish.
 		var txs []*TxQueueMeta
-		for _, q := range t.republishableSources {
-			txs = append(txs, q.GetTxsToPublish()...)
-		}
+		(func() {
+			t.drainLock.Lock()
+			defer t.drainLock.Unlock()
+			for _, q := range t.republishableSources {
+				txs = append(txs, q.GetTxsToPublish()...)
+			}
+		})()
 
 		// Filter transactions based on whether they can already be republished.
 		var republishedCount int
@@ -806,31 +820,52 @@ func (t *txPool) recheckWorker() {
 		case <-t.recheckTxCh.Out():
 		}
 
-		// Get a batch of scheduled transactions.
-		var pcts []*PendingCheckTransaction
-		for _, q := range t.recheckableStores {
-			for _, tx := range q.TakeAll() {
-				pcts = append(pcts, &PendingCheckTransaction{
-					TxQueueMeta: tx,
-					flags:       txCheckRecheck,
-					dstQueue:    q,
-				})
-			}
-		}
+		t.recheck()
+	}
+}
 
-		if len(pcts) == 0 {
-			continue
-		}
+func (t *txPool) recheck() {
+	t.drainLock.Lock()
+	defer t.drainLock.Unlock()
 
-		// Recheck all transactions in batch.
-		for _, pct := range pcts {
-			err := t.addToCheckQueue(pct)
-			if err != nil {
-				t.logger.Warn("failed to submit transaction for recheck",
-					"err", err,
-					"tx_hash", pct.Hash,
-				)
-			}
+	// Get a batch of scheduled transactions.
+	var pcts []*PendingCheckTransaction
+	var results []chan *protocol.CheckTxResult
+	for _, q := range t.recheckableStores {
+		for _, tx := range q.TakeAll() {
+			notifyCh := make(chan *protocol.CheckTxResult, 1)
+			pcts = append(pcts, &PendingCheckTransaction{
+				TxQueueMeta: tx,
+				flags:       txCheckRecheck,
+				dstQueue:    q,
+				notifyCh:    notifyCh,
+			})
+			results = append(results, notifyCh)
+		}
+	}
+
+	if len(pcts) == 0 {
+		return
+	}
+
+	// Recheck all transactions in batch.
+	for _, pct := range pcts {
+		err := t.addToCheckQueue(pct)
+		if err != nil {
+			t.logger.Warn("failed to submit transaction for recheck",
+				"err", err,
+				"tx_hash", pct.Hash,
+			)
+		}
+	}
+
+	// Block until checking is done.
+	for _, notifyCh := range results {
+		select {
+		case <-t.stopCh:
+			return
+		case <-notifyCh:
+			// Don't care about result.
 		}
 	}
 }
