@@ -338,7 +338,9 @@ func (t *txPool) ClearProposedBatch() {
 }
 
 func (t *txPool) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
+	t.logger.Info("spinach: begin scheduling, acquiring drain lock")
 	t.drainLock.Lock()
+	t.logger.Info("spinach: begin scheduling, acquired drain lock")
 	var txs []*TxQueueMeta
 	for _, q := range t.usableSources {
 		txs = append(txs, q.GetSchedulingSuggestion(countHint)...)
@@ -351,6 +353,7 @@ func (t *txPool) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueM
 }
 
 func (t *txPool) FinishScheduling() {
+	t.logger.Info("spinach: finish scheduling, releasing drain lock")
 	t.drainLock.Unlock()
 }
 
@@ -764,8 +767,11 @@ func (t *txPool) republishWorker() {
 		// Get transactions to republish.
 		var txs []*TxQueueMeta
 		(func() {
+			t.logger.Info("spinach: republishing, acquiring drain lock")
 			t.drainLock.Lock()
+			t.logger.Info("spinach: republishing, acquired drain lock")
 			defer t.drainLock.Unlock()
+			defer t.logger.Info("spinach: republishing, releasing drain lock")
 			for _, q := range t.republishableSources {
 				txs = append(txs, q.GetTxsToPublish()...)
 			}
@@ -832,8 +838,11 @@ func (t *txPool) recheckWorker() {
 }
 
 func (t *txPool) recheck() {
+	t.logger.Info("spinach: begin recheck, acquiring drain lock")
 	t.drainLock.Lock()
+	t.logger.Info("spinach: begin recheck, acquired drain lock")
 	defer t.drainLock.Unlock()
+	defer t.logger.Info("spinach: finish recheck, releasing drain lock")
 
 	// Get a batch of scheduled transactions.
 	var pcts []*PendingCheckTransaction
@@ -867,6 +876,7 @@ func (t *txPool) recheck() {
 	}
 
 	// Block until checking is done.
+	t.logger.Info("spinach: recheck waiting for results")
 	for _, notifyCh := range results {
 		select {
 		case <-t.stopCh:
@@ -875,6 +885,7 @@ func (t *txPool) recheck() {
 			// Don't care about result.
 		}
 	}
+	t.logger.Info("spinach: recheck all results received")
 }
 
 func (t *txPool) flushWorker() {
