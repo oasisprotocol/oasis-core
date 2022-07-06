@@ -894,6 +894,12 @@ func (n *Node) runtimeExecuteTxBatch(
 	inputRoot hash.Hash,
 	inputs transaction.RawBatch,
 ) (*protocol.RuntimeExecuteTxBatchResponse, error) {
+	// Ensure block round is synced to storage.
+	n.logger.Debug("ensuring block round is synced", "round", blk.Header.Round)
+	if _, err := n.commonNode.Runtime.History().WaitRoundSynced(ctx, blk.Header.Round); err != nil {
+		return nil, err
+	}
+
 	// Fetch any incoming messages.
 	inMsgs, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueue(ctx, &roothash.InMessageQueueRequest{
 		RuntimeID: n.commonNode.Runtime.ID(),

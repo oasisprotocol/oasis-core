@@ -506,7 +506,8 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 	rt.managed = true
 
 	// Create runtime history keeper.
-	history, err := history.New(path, id, &r.cfg.History)
+	// NOTE: Archive node won't commit any new blocks, so disable waiting for storage sync commits.
+	history, err := history.New(path, id, &r.cfg.History, r.cfg.Mode.HasLocalStorage() && r.consensus.Mode() != consensus.ModeArchive)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}

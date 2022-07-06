@@ -14,8 +14,6 @@ var (
 
 	// methodGetLastSyncedRound is the GetLastSyncedRound method.
 	methodGetLastSyncedRound = serviceName.NewMethod("GetLastSyncedRound", &GetLastSyncedRoundRequest{})
-	// methodWaitForRound is the WaitForRound method.
-	methodWaitForRound = serviceName.NewMethod("WaitForRound", &WaitForRoundRequest{})
 	// methodPauseCheckpointer is the PauseCheckpointer method.
 	methodPauseCheckpointer = serviceName.NewMethod("PauseCheckpointer", &PauseCheckpointerRequest{})
 
@@ -27,10 +25,6 @@ var (
 			{
 				MethodName: methodGetLastSyncedRound.ShortName(),
 				Handler:    handlerGetLastSyncedRound,
-			},
-			{
-				MethodName: methodWaitForRound.ShortName(),
-				Handler:    handlerWaitForRound,
 			},
 			{
 				MethodName: methodPauseCheckpointer.ShortName(),
@@ -60,29 +54,6 @@ func handlerGetLastSyncedRound(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StorageWorker).GetLastSyncedRound(ctx, req.(*GetLastSyncedRoundRequest))
-	}
-	return interceptor(ctx, rq, info, handler)
-}
-
-func handlerWaitForRound(
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	rq := new(WaitForRoundRequest)
-	if err := dec(rq); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StorageWorker).WaitForRound(ctx, rq)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodWaitForRound.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StorageWorker).WaitForRound(ctx, req.(*WaitForRoundRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -122,14 +93,6 @@ type storageWorkerClient struct {
 func (c *storageWorkerClient) GetLastSyncedRound(ctx context.Context, req *GetLastSyncedRoundRequest) (*GetLastSyncedRoundResponse, error) {
 	var rsp GetLastSyncedRoundResponse
 	if err := c.conn.Invoke(ctx, methodGetLastSyncedRound.FullName(), req, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
-}
-
-func (c *storageWorkerClient) WaitForRound(ctx context.Context, req *WaitForRoundRequest) (*WaitForRoundResponse, error) {
-	var rsp WaitForRoundResponse
-	if err := c.conn.Invoke(ctx, methodWaitForRound.FullName(), req, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

@@ -18,6 +18,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -167,6 +168,7 @@ type txPool struct {
 	cfg         *Config
 	host        RuntimeHostProvisioner
 	txPublisher TransactionPublisher
+	history     history.History
 
 	// seenCache maps from transaction hashes to time.Time that specifies when the transaction was
 	// last published.
@@ -446,14 +448,23 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		return
 	}
 
-	checkCtx, cancel := context.WithTimeout(ctx, checkTxTimeout)
-	defer cancel()
+	results, err := func() ([]protocol.CheckTxResult, error) {
+		checkCtx, cancel := context.WithTimeout(ctx, checkTxTimeout)
+		defer cancel()
 
-	rawTxBatch := make([][]byte, 0, len(batch))
-	for _, pct := range batch {
-		rawTxBatch = append(rawTxBatch, pct.tx)
-	}
-	results, err := rr.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
+		// Ensure block round is synced to storage.
+		t.logger.Debug("ensuring block round is synced", "round", bi.RuntimeBlock.Header.Round)
+		if _, err = t.history.WaitRoundSynced(checkCtx, bi.RuntimeBlock.Header.Round); err != nil {
+			return nil, err
+		}
+
+		// Check batch.
+		rawTxBatch := make([][]byte, 0, len(batch))
+		for _, pct := range batch {
+			rawTxBatch = append(rawTxBatch, pct.tx)
+		}
+		return rr.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
+	}()
 	switch {
 	case err == nil:
 	case errors.Is(err, context.Canceled):
@@ -811,6 +822,7 @@ func New(
 	runtimeID common.Namespace,
 	cfg *Config,
 	host RuntimeHostProvisioner,
+	history history.History,
 	txPublisher TransactionPublisher,
 ) (TransactionPool, error) {
 	initMetrics()
@@ -832,6 +844,7 @@ func New(
 		runtimeID:         runtimeID,
 		cfg:               cfg,
 		host:              host,
+		history:           history,
 		txPublisher:       txPublisher,
 		seenCache:         seenCache,
 		checkTxQueue:      newCheckTxQueue(maxCheckTxQueueSize, int(cfg.MaxCheckTxBatchSize)),

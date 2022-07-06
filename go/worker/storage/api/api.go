@@ -24,11 +24,6 @@ type StorageWorker interface {
 	// GetLastSyncedRound retrieves the last synced round for the storage worker.
 	GetLastSyncedRound(ctx context.Context, request *GetLastSyncedRoundRequest) (*GetLastSyncedRoundResponse, error)
 
-	// WaitForRound waits until the storage worker syncs the given round or root.
-	// It returns the round synced to; this will typically equal the given root's
-	// round, but may be higher.
-	WaitForRound(ctx context.Context, request *WaitForRoundRequest) (*WaitForRoundResponse, error)
-
 	// PauseCheckpointer pauses or unpauses the storage worker's checkpointer.
 	PauseCheckpointer(ctx context.Context, request *PauseCheckpointerRequest) error
 }
@@ -43,18 +38,6 @@ type GetLastSyncedRoundResponse struct {
 	Round     uint64       `json:"round"`
 	IORoot    storage.Root `json:"io_root"`
 	StateRoot storage.Root `json:"state_root"`
-}
-
-// WaitForRoundRequest is a WaitForStorageRound request.
-type WaitForRoundRequest struct {
-	RuntimeID common.Namespace `json:"runtime_id"`
-	Round     uint64           `json:"round"`
-	Root      *storage.Root    `json:"root"`
-}
-
-// WaitForRoundResponse is a WaitForRound response.
-type WaitForRoundResponse struct {
-	LastRound uint64 `json:"last_round"`
 }
 
 // PauseCheckpointerRequest is a PauseCheckpointer request.

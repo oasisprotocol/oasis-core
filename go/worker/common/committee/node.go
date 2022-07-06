@@ -883,7 +883,7 @@ func NewNode(
 	n.RuntimeHostNode = rhn
 
 	// Prepare transaction pool.
-	txPool, err := txpool.New(runtime.ID(), txPoolCfg, n, n)
+	txPool, err := txpool.New(runtime.ID(), txPoolCfg, n, runtime.History(), n)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transaction pool: %w", err)
 	}
