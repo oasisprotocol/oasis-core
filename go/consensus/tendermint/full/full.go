@@ -559,7 +559,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		tenderConfig.Mode = tmconfig.ModeFull
 	}
 	tenderConfig.Moniker = "oasis-node-" + t.identity.NodeSigner.Public().String()
-	tenderConfig.Mempool.Version = tmconfig.MempoolV0
+	tenderConfig.Mempool.Version = tmconfig.MempoolV1
 	timeoutCommit := t.genesis.Consensus.Parameters.TimeoutCommit
 	emptyBlockInterval := t.genesis.Consensus.Parameters.EmptyBlockInterval
 	tenderConfig.Consensus.TimeoutCommit = timeoutCommit

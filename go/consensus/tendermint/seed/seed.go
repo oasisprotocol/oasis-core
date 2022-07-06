@@ -359,7 +359,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	nodeCfg := config.DefaultConfig()
 	nodeCfg.Mode = config.ModeSeed
 	nodeCfg.Moniker = "oasis-seed-" + identity.NodeSigner.Public().String()
-	nodeCfg.Mempool.Version = config.MempoolV0
+	nodeCfg.Mempool.Version = config.MempoolV1
 	nodeCfg.P2P = p2pCfg
 	nodeCfg.SetRoot(seedDataDir)
 
