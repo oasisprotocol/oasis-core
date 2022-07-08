@@ -124,7 +124,7 @@ func (s *Signer) Prove(alphaString []byte) ([]byte, error) {
 	if s.role != signature.SignerVRF {
 		return nil, signature.ErrInvalidRole
 	}
-	return ecvrf.Prove(s.privateKey, alphaString), nil
+	return ecvrf.Prove_v10(s.privateKey, alphaString), nil
 }
 
 // StaticEntropy returns PrivateKeySize bytes of cryptographic entropy that

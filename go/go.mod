@@ -41,7 +41,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.16.1
 	github.com/libp2p/go-libp2p-pubsub v0.7.0
 	github.com/multiformats/go-multiaddr v0.5.0
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20211219162838-e9a669f65da9
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20220708102147-0a8a51822cae
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7
 	github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5
 	github.com/powerman/rpc-codec v1.2.2
