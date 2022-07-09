@@ -15,7 +15,9 @@ const (
 	BetaSize = ecvrf.OutputSize
 )
 
-// VRFSigner is a Signer that also supports generating VRF proofs.
+// VRFSigner is a Signer that also supports generating VRF proofs,
+// using the semantics from v10 of the IETF Verifiable Random Functions
+// draft.
 type VRFSigner interface {
 	Signer
 
@@ -80,7 +82,7 @@ func (k PublicKey) VerifyVRF(alphaString, piString []byte) (bool, []byte) {
 		return false, nil
 	}
 
-	return ecvrf.Verify(k[:], piString, alphaString)
+	return ecvrf.Verify_v10(k[:], piString, alphaString)
 }
 
 // RawProof is a raw VRF proof.
