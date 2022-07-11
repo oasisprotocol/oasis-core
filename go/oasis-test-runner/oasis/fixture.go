@@ -6,6 +6,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -222,8 +223,9 @@ type RuntimeFixture struct { // nolint: maligned
 	Entity     int                  `json:"entity"`
 	Keymanager int                  `json:"keymanager"`
 
-	Deployments  []DeploymentCfg `json:"deployments"`
-	GenesisRound uint64          `json:"genesis_round,omitempty"`
+	Deployments      []DeploymentCfg `json:"deployments"`
+	GenesisRound     uint64          `json:"genesis_round,omitempty"`
+	GenesisStateRoot *hash.Hash      `json:"genesis_state_root,omitempty"`
 
 	Executor     registry.ExecutorParameters     `json:"executor"`
 	TxnScheduler registry.TxnSchedulerParameters `json:"txn_scheduler"`
@@ -272,6 +274,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		AdmissionPolicy:    f.AdmissionPolicy,
 		Staking:            f.Staking,
 		GenesisRound:       f.GenesisRound,
+		GenesisStateRoot:   f.GenesisStateRoot,
 		Pruner:             f.Pruner,
 		ExcludeFromGenesis: f.ExcludeFromGenesis,
 		GovernanceModel:    f.GovernanceModel,
@@ -393,6 +396,8 @@ type ComputeWorkerFixture struct {
 
 	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
+	// RuntimeStatePaths are the paths to runtime state that will be copied to the compute worker node.
+	RuntimeStatePaths map[int]string `json:"runtime_state_paths"`
 
 	// RuntimeConfig contains the per-runtime node-local configuration.
 	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`
@@ -430,6 +435,7 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		DisablePublicRPC:       f.DisablePublicRPC,
 		Runtimes:               f.Runtimes,
 		RuntimeConfig:          f.RuntimeConfig,
+		RuntimeStatePaths:      f.RuntimeStatePaths,
 	})
 }
 
