@@ -289,9 +289,7 @@ impl Signer for RAK {
     /// Generate a RAK signature with the private key over the context and message.
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         let inner = self.inner.read().unwrap();
-        match inner.private_key {
-            Some(ref key) => Ok(key.sign(context, message)?),
-            None => Err(RAKError::NotConfigured.into()),
-        }
+        let sk = inner.private_key.as_ref().ok_or(RAKError::NotConfigured)?;
+        sk.sign(context, message)
     }
 }

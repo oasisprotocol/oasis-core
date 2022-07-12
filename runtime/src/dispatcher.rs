@@ -785,17 +785,14 @@ impl Dispatcher {
 
         // Process frame.
         let mut buffer = vec![];
-        let result = match rpc_demux
+        let result = rpc_demux
             .lock()
             .unwrap()
             .process_frame(request, &mut buffer)
-        {
-            Ok(result) => result,
-            Err(error) => {
-                error!(self.logger, "Error while processing frame"; "err" => %error);
-                return Err(Error::new("rhp/dispatcher", 1, &format!("{}", error)));
-            }
-        };
+            .map_err(|err| {
+                error!(self.logger, "Error while processing frame"; "err" => %err);
+                Error::new("rhp/dispatcher", 1, &format!("{}", err))
+            })?;
 
         if let Some((session_id, session_info, message, untrusted_plaintext)) = result {
             // Dispatch request.
@@ -843,34 +840,28 @@ impl Dispatcher {
                     debug!(self.logger, "RPC call dispatch complete");
 
                     let mut buffer = vec![];
-                    match rpc_demux
+                    rpc_demux
                         .lock()
                         .unwrap()
                         .write_message(session_id, response, &mut buffer)
-                    {
-                        Ok(_) => {
-                            // Transmit response.
-                            Ok(Body::RuntimeRPCCallResponse { response: buffer })
-                        }
-                        Err(error) => {
-                            error!(self.logger, "Error while writing response"; "err" => %error);
-                            Err(Error::new("rhp/dispatcher", 1, &format!("{}", error)))
-                        }
-                    }
+                        .map_err(|err| {
+                            error!(self.logger, "Error while writing response"; "err" => %err);
+                            Error::new("rhp/dispatcher", 1, &format!("{}", err))
+                        })
+                        .map(|_| Body::RuntimeRPCCallResponse { response: buffer })
                 }
                 RpcMessage::Close => {
                     // Session close.
                     let mut buffer = vec![];
-                    match rpc_demux.lock().unwrap().close(session_id, &mut buffer) {
-                        Ok(_) => {
-                            // Transmit response.
-                            Ok(Body::RuntimeRPCCallResponse { response: buffer })
-                        }
-                        Err(error) => {
-                            error!(self.logger, "Error while closing session"; "err" => %error);
-                            Err(Error::new("rhp/dispatcher", 1, &format!("{}", error)))
-                        }
-                    }
+                    rpc_demux
+                        .lock()
+                        .unwrap()
+                        .close(session_id, &mut buffer)
+                        .map_err(|err| {
+                            error!(self.logger, "Error while closing session"; "err" => %err);
+                            Error::new("rhp/dispatcher", 1, &format!("{}", err))
+                        })
+                        .map(|_| Body::RuntimeRPCCallResponse { response: buffer })
                 }
                 msg => {
                     warn!(self.logger, "Ignoring invalid RPC message type"; "msg" => ?msg);

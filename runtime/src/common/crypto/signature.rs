@@ -57,7 +57,7 @@ impl PrivateKey {
     /// Convert this private key into bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = self.0.secret.to_bytes();
-        let bvec = (&bytes).to_vec();
+        let bvec = bytes.to_vec();
         bytes.zeroize();
         bvec
     }
@@ -70,6 +70,7 @@ impl PrivateKey {
     pub fn from_bytes(mut bytes: Vec<u8>) -> PrivateKey {
         let secret = ed25519_dalek::SecretKey::from_bytes(&bytes).unwrap();
         bytes.zeroize();
+        #[allow(clippy::needless_borrow)]
         let public = (&secret).into();
 
         PrivateKey(ed25519_dalek::Keypair { secret, public })
@@ -79,6 +80,7 @@ impl PrivateKey {
     pub fn from_test_seed(seed: String) -> Self {
         let seed = Hash::digest_bytes(seed.as_bytes());
         let secret = ed25519_dalek::SecretKey::from_bytes(seed.as_ref()).unwrap();
+        #[allow(clippy::needless_borrow)]
         let pk: ed25519_dalek::PublicKey = (&secret).into();
 
         PrivateKey(ed25519_dalek::Keypair { secret, public: pk })

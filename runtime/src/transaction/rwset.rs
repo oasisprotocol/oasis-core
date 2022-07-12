@@ -2,7 +2,7 @@
 
 /// A coarsened key prefix that represents any key that starts with
 /// this prefix.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 #[cbor(transparent)]
 pub struct CoarsenedKey(pub Vec<u8>);
 
@@ -28,7 +28,7 @@ impl From<Vec<u8>> for CoarsenedKey {
 pub type CoarsenedSet = Vec<CoarsenedKey>;
 
 /// A read/write set.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct ReadWriteSet {
     /// Size of the key prefixes (in bytes) used for coarsening the keys.
     pub granularity: u16,

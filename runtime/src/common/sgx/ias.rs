@@ -456,7 +456,7 @@ fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<RsaPubli
 
     match RsaPublicKey::from_pkcs1_der(cert_spki.subject_public_key.data) {
         Ok(pk) => Ok(pk),
-        Err(err) => return Err(anyhow!("invalid certificate public key: {:?}", err)),
+        Err(err) => Err(anyhow!("invalid certificate public key: {:?}", err)),
     }
 }
 

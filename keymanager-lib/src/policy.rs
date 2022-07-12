@@ -67,13 +67,10 @@ impl Policy {
         let mut inner = self.inner.write().unwrap();
 
         // If there is no existing policy, attempt to load from local storage.
-        let old_policy = match inner.policy.as_ref() {
-            Some(old_policy) => old_policy.clone(),
-            None => match Self::load_policy(ctx.untrusted_local_storage) {
-                Some(old_policy) => old_policy,
-                None => CachedPolicy::default(),
-            },
-        };
+        let old_policy =
+            inner.policy.as_ref().cloned().unwrap_or_else(|| {
+                Self::load_policy(ctx.untrusted_local_storage).unwrap_or_default()
+            });
 
         // De-serialize the new policy, verify signatures.
         let new_policy = CachedPolicy::parse(raw_policy)?;
@@ -116,10 +113,11 @@ impl Policy {
         req: &RequestIds,
     ) -> Result<()> {
         let inner = self.inner.read().unwrap();
-        let policy = match inner.policy.as_ref() {
-            Some(policy) => policy,
-            None => return Err(KeyManagerError::InvalidAuthentication.into()),
-        };
+        let policy = inner
+            .policy
+            .as_ref()
+            .ok_or(KeyManagerError::InvalidAuthentication)?;
+
         match policy.may_get_or_create_keys(remote_enclave, req) {
             true => Ok(()),
             false => Err(KeyManagerError::InvalidAuthentication.into()),
@@ -139,10 +137,11 @@ impl Policy {
         }
 
         let inner = self.inner.read().unwrap();
-        let policy = match inner.policy.as_ref() {
-            Some(policy) => policy,
-            None => return Err(KeyManagerError::InvalidAuthentication.into()),
-        };
+        let policy = inner
+            .policy
+            .as_ref()
+            .ok_or(KeyManagerError::InvalidAuthentication)?;
+
         match policy.may_replicate_master_secret(remote_enclave) {
             true => Ok(()),
             false => Err(KeyManagerError::InvalidAuthentication.into()),
@@ -152,10 +151,11 @@ impl Policy {
     /// Return the set of enclave identities we are allowed to replicate from.
     pub fn may_replicate_from(&self) -> Option<HashSet<EnclaveIdentity>> {
         let inner = self.inner.read().unwrap();
-        let mut src_set = match inner.policy.as_ref() {
-            Some(policy) => policy.may_replicate_from.clone(),
-            None => HashSet::new(),
-        };
+        let mut src_set = inner
+            .policy
+            .as_ref()
+            .map(|policy| policy.may_replicate_from.clone())
+            .unwrap_or_default();
 
         if let Some(id) = EnclaveIdentity::current() {
             src_set.insert(id);
@@ -186,7 +186,7 @@ impl Policy {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 struct CachedPolicy {
     pub checksum: Vec<u8>,
     pub serial: u32,
@@ -241,17 +241,6 @@ impl CachedPolicy {
         }
 
         Ok(cached_policy)
-    }
-
-    fn default() -> Self {
-        CachedPolicy {
-            checksum: vec![],
-            serial: 0,
-            runtime_id: Namespace::default(),
-            may_query: HashMap::new(),
-            may_replicate: HashSet::new(),
-            may_replicate_from: HashSet::new(),
-        }
     }
 
     fn may_get_or_create_keys(&self, remote_enclave: &EnclaveIdentity, req: &RequestIds) -> bool {

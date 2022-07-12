@@ -73,7 +73,7 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
         batch: &TxnBatch,
         in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
-        T::execute_batch(&*self, ctx, batch, in_msgs)
+        T::execute_batch(&**self, ctx, batch, in_msgs)
     }
 
     fn schedule_and_execute_batch(
@@ -82,7 +82,7 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
         initial_batch: &mut TxnBatch,
         in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
-        T::schedule_and_execute_batch(&*self, ctx, initial_batch, in_msgs)
+        T::schedule_and_execute_batch(&**self, ctx, initial_batch, in_msgs)
     }
 
     fn check_batch(
@@ -90,19 +90,19 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Box<T> {
         ctx: Context,
         batch: &TxnBatch,
     ) -> Result<Vec<CheckTxResult>, RuntimeError> {
-        T::check_batch(&*self, ctx, batch)
+        T::check_batch(&**self, ctx, batch)
     }
 
     fn finalize(&self, new_storage_root: Hash) {
-        T::finalize(&*self, new_storage_root)
+        T::finalize(&**self, new_storage_root)
     }
 
     fn set_abort_batch_flag(&mut self, abort_batch: Arc<AtomicBool>) {
-        T::set_abort_batch_flag(&mut *self, abort_batch)
+        T::set_abort_batch_flag(&mut **self, abort_batch)
     }
 
     fn query(&self, ctx: Context, method: &str, args: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
-        T::query(&*self, ctx, method, args)
+        T::query(&**self, ctx, method, args)
     }
 }
 
@@ -113,7 +113,7 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
         batch: &TxnBatch,
         in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
-        T::execute_batch(&*self, ctx, batch, in_msgs)
+        T::execute_batch(&**self, ctx, batch, in_msgs)
     }
 
     fn schedule_and_execute_batch(
@@ -122,7 +122,7 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
         initial_batch: &mut TxnBatch,
         in_msgs: &[roothash::IncomingMessage],
     ) -> Result<ExecuteBatchResult, RuntimeError> {
-        T::schedule_and_execute_batch(&*self, ctx, initial_batch, in_msgs)
+        T::schedule_and_execute_batch(&**self, ctx, initial_batch, in_msgs)
     }
 
     fn check_batch(
@@ -130,11 +130,11 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
         ctx: Context,
         batch: &TxnBatch,
     ) -> Result<Vec<CheckTxResult>, RuntimeError> {
-        T::check_batch(&*self, ctx, batch)
+        T::check_batch(&**self, ctx, batch)
     }
 
     fn finalize(&self, new_storage_root: Hash) {
-        T::finalize(&*self, new_storage_root)
+        T::finalize(&**self, new_storage_root)
     }
 
     fn set_abort_batch_flag(&mut self, _abort_batch: Arc<AtomicBool>) {
@@ -142,7 +142,7 @@ impl<T: Dispatcher + ?Sized> Dispatcher for Arc<T> {
     }
 
     fn query(&self, ctx: Context, method: &str, args: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
-        T::query(&*self, ctx, method, args)
+        T::query(&**self, ctx, method, args)
     }
 }
 

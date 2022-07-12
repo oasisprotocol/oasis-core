@@ -124,7 +124,7 @@ where
         if self.capacity > 0 {
             let target_size = val.borrow().get_cached_size();
             while !self.list.is_empty() && self.size + target_size > self.capacity {
-                let back = (*self.list.back().get().unwrap()).item.clone();
+                let back = self.list.back().get().unwrap().item.clone();
                 if let Some(locked_val) = locked_val {
                     if back.as_ptr() == locked_val.as_ptr() {
                         return Err(RemoveLockedError);

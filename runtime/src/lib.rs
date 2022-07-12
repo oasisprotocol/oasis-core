@@ -11,7 +11,6 @@
 //! This will start the required services needed to communicate with
 //! the worker host.
 #![feature(test)]
-#![feature(box_into_pin)]
 #![feature(arbitrary_self_types)]
 
 use lazy_static::lazy_static;

@@ -24,7 +24,7 @@ use crate::{
 };
 
 /// Identifies a specific tree and a position within that tree.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct TreeID {
     /// The Merkle tree root.
     pub root: Root,
@@ -34,7 +34,7 @@ pub struct TreeID {
 }
 
 /// Request for the SyncGet operation.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct GetRequest {
     pub tree: TreeID,
     pub key: Vec<u8>,
@@ -43,7 +43,7 @@ pub struct GetRequest {
 }
 
 /// Request for the SyncGetPrefixes operation.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct GetPrefixesRequest {
     pub tree: TreeID,
     pub prefixes: Vec<Prefix>,
@@ -51,7 +51,7 @@ pub struct GetPrefixesRequest {
 }
 
 /// Request for the SyncIterate operation.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct IterateRequest {
     pub tree: TreeID,
     pub key: Vec<u8>,
@@ -59,7 +59,7 @@ pub struct IterateRequest {
 }
 
 /// Response for requests that produce proofs.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct ProofResponse {
     pub proof: Proof,
 }
