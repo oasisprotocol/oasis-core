@@ -33,6 +33,6 @@ pub fn init_logger(level: Level) {
             .lock()
             .unwrap()
             .get_or_insert(slog_scope::set_global_logger(global_logger));
-        let _log_guard = slog_stdlog::init_with_level(level).unwrap();
+        slog_stdlog::init_with_level(level).unwrap();
     });
 }

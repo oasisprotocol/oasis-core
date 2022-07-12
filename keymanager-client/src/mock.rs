@@ -35,14 +35,10 @@ impl KeyManagerClient for MockClient {
         key_pair_id: KeyPairId,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
         let mut keys = self.keys.lock().unwrap();
-        let key = match keys.get(&key_pair_id) {
-            Some(key) => key.clone(),
-            None => {
-                let key = KeyPair::generate_mock();
-                keys.insert(key_pair_id, key.clone());
-                key
-            }
-        };
+        let key = keys
+            .entry(key_pair_id)
+            .or_insert_with(KeyPair::generate_mock)
+            .clone();
 
         Box::pin(future::ok(key))
     }

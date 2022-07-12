@@ -15,7 +15,7 @@ const PROOF_ENTRY_FULL: u8 = 0x01;
 const PROOF_ENTRY_HASH: u8 = 0x02;
 
 /// A raw proof entry.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode, Arbitrary)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode, Arbitrary)]
 #[cbor(transparent)]
 pub struct RawProofEntry(pub Vec<u8>);
 
@@ -52,7 +52,7 @@ impl From<Vec<u8>> for RawProofEntry {
 }
 
 /// A Merkle proof for a subtree.
-#[derive(Clone, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct Proof {
     /// The root hash this proof is for. This should only be used as a quick
     /// sanity check and proof verification MUST use an independently obtained

@@ -361,10 +361,10 @@ impl Kdf {
         let checksum = inner.get_checksum()?;
         body.extend_from_slice(&checksum);
 
-        let signer = match inner.signer.as_ref() {
-            Some(rak) => rak,
-            None => return Err(KeyManagerError::NotInitialized.into()),
-        };
+        let signer = inner
+            .signer
+            .as_ref()
+            .ok_or(KeyManagerError::NotInitialized)?;
         let signature = signer.sign(&PUBLIC_KEY_CONTEXT, &body)?;
 
         Ok(SignedPublicKey {
@@ -378,12 +378,12 @@ impl Kdf {
     pub fn replicate_master_secret(&self) -> Result<ReplicateResponse> {
         let inner = self.inner.read().unwrap();
 
-        match inner.master_secret {
-            Some(ref master_secret) => Ok(ReplicateResponse {
-                master_secret: master_secret.clone(),
-            }),
-            None => Err(KeyManagerError::NotInitialized.into()),
-        }
+        let master_secret = inner
+            .master_secret
+            .as_ref()
+            .cloned()
+            .ok_or(KeyManagerError::NotInitialized)?;
+        Ok(ReplicateResponse { master_secret })
     }
 
     fn load_master_secret(

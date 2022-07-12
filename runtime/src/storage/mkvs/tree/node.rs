@@ -36,7 +36,7 @@ impl Default for RootType {
 }
 
 /// Storage root.
-#[derive(Clone, Copy, Debug, Default, PartialEq, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct Root {
     /// Namespace under which the root is stored.
     #[cbor(rename = "ns")]

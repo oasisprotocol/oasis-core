@@ -368,7 +368,7 @@ fn validate_avr_signature(
 
     // Convert our timestamp to something that can be used to check
     // certificate expiration.
-    let time = ASN1Time::from_timestamp(unix_time as i64);
+    let time = ASN1Time::from_timestamp(unix_time as i64)?;
 
     // Attestation Report Signing CA Certificate:
     //
@@ -454,9 +454,9 @@ fn extract_certificate_rsa_public_key(cert: &X509Certificate) -> Result<RsaPubli
         return Err(anyhow!("invalid certificate public key algorithm"));
     }
 
-    match RsaPublicKey::from_pkcs1_der(cert_spki.subject_public_key.data) {
+    match RsaPublicKey::from_pkcs1_der(&cert_spki.subject_public_key.data) {
         Ok(pk) => Ok(pk),
-        Err(err) => return Err(anyhow!("invalid certificate public key: {:?}", err)),
+        Err(err) => Err(anyhow!("invalid certificate public key: {:?}", err)),
     }
 }
 
@@ -470,7 +470,7 @@ fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RsaPubli
         .finalize();
 
     public_key
-        .verify(padding, &digest, cert.signature_value.data)
+        .verify(padding, &digest, &cert.signature_value.data)
         .is_ok()
 }
 
