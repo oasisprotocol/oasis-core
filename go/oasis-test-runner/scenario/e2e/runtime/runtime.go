@@ -248,13 +248,15 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
 			{Entity: 1, Runtimes: []int{1}},
-			{Entity: 1, Runtimes: []int{1}, RuntimeConfig: map[int]map[string]interface{}{
-				1: {
-					"core": map[string]interface{}{
-						"min_gas_price": 1, // Just to test support for runtime configuration.
+			{
+				Entity: 1, Runtimes: []int{1}, RuntimeConfig: map[int]map[string]interface{}{
+					1: {
+						"core": map[string]interface{}{
+							"min_gas_price": 1, // Just to test support for runtime configuration.
+						},
 					},
 				},
-			}},
+			},
 			{Entity: 1, Runtimes: []int{1}},
 		},
 		Sentries: []oasis.SentryFixture{},

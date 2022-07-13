@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
@@ -57,8 +58,9 @@ type ComputeCfg struct {
 
 	RuntimeProvisioner string
 
-	Runtimes      []int
-	RuntimeConfig map[int]map[string]interface{}
+	Runtimes          []int
+	RuntimeConfig     map[int]map[string]interface{}
+	RuntimeStatePaths map[int]string
 
 	SentryIndices []int
 
@@ -229,6 +231,15 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	}
 	if cfg.StorageBackend == "" {
 		cfg.StorageBackend = database.BackendNameBadgerDB
+	}
+	// Initialize runtime state paths.
+	for i, path := range cfg.RuntimeStatePaths {
+		stateDir := registry.GetRuntimeStateDir(host.DataDir(), net.Runtimes()[i].descriptor.ID)
+		net.logger.Info("copying runtime state", "from", path, "to", stateDir)
+		if err := common.CopyDir(path, stateDir); err != nil {
+			return nil, fmt.Errorf("oasis/compute: failed to copy runtime state: %w", err)
+		}
+		net.logger.Info("state copied", "from", path, "to", stateDir)
 	}
 
 	worker := &Compute{
