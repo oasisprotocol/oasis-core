@@ -155,6 +155,14 @@ func (bnd *Bundle) verifySgxSignature() error {
 	return nil
 }
 
+// ResetManifest removes the serialized manifest from the bundle so that it can be regenerated on
+// the next call to Write.
+//
+// This needs to be used after doing modifications to bundles.
+func (bnd *Bundle) ResetManifest() {
+	delete(bnd.Data, manifestName)
+}
+
 // Write serializes a runtime bundle to the on-disk representation.
 func (bnd *Bundle) Write(fn string) error {
 	// Ensure the bundle is well-formed.
