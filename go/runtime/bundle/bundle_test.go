@@ -64,6 +64,19 @@ func TestBundle(t *testing.T) {
 		require.EqualValues(t, bundle, bundle2, "opened bundle mismatch")
 	})
 
+	t.Run("ResetManifest", func(t *testing.T) {
+		bundle2, err := Open(bundleFn)
+		require.NoError(t, err, "Open")
+
+		err = bundle2.Write(bundleFn + ".copy")
+		require.Error(t, err, "bundle.Write should fail with existing manifest")
+
+		bundle2.ResetManifest()
+
+		err = bundle2.Write(bundleFn + ".copy")
+		require.NoError(t, err, "bundle.Write")
+	})
+
 	t.Run("Explode", func(t *testing.T) {
 		err := bundle.WriteExploded(tmpDir)
 		require.NoError(t, err, "WriteExploded")
