@@ -12,6 +12,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -64,8 +65,9 @@ type RuntimeCfg struct { // nolint: maligned
 	TEEHardware node.TEEHardware
 	MrSigner    *sgx.MrSigner
 
-	Deployments  []DeploymentCfg
-	GenesisRound uint64
+	Deployments      []DeploymentCfg
+	GenesisRound     uint64
+	GenesisStateRoot *hash.Hash
 
 	Executor     registry.ExecutorParameters
 	TxnScheduler registry.TxnSchedulerParameters
@@ -292,8 +294,16 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		Constraints:     cfg.Constraints,
 		Staking:         cfg.Staking,
 		GovernanceModel: cfg.GovernanceModel,
+		Genesis: registry.RuntimeGenesis{
+			Round: cfg.GenesisRound,
+		},
 	}
-	descriptor.Genesis.StateRoot.Empty()
+	switch {
+	case cfg.GenesisStateRoot == nil:
+		descriptor.Genesis.StateRoot.Empty()
+	default:
+		descriptor.Genesis.StateRoot = *cfg.GenesisStateRoot
+	}
 
 	rtIndex := len(net.runtimes)
 	rtDir, err := net.baseDir.NewSubDir(fmt.Sprintf("runtime-%s-%d", cfg.ID, rtIndex))

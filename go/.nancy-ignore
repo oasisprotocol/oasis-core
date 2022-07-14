@@ -1,0 +1,2 @@
+CVE-2022-30591 # quic-go resource exhaustion through 0.27.0, 0.27.1 imported, false positive?
+sonatype-2022-3945 # non-CVE vuln, updated in master

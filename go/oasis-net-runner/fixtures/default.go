@@ -1,16 +1,20 @@
 package fixtures
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/viper"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -19,6 +23,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
+	mkvsAPI "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
 )
 
 const (
@@ -32,6 +40,7 @@ const (
 	cfgRuntimeID               = "fixture.default.runtime.id"
 	cfgRuntimeBinary           = "fixture.default.runtime.binary"
 	cfgRuntimeVersion          = "fixture.default.runtime.version"
+	cfgRuntimeStatePath        = "fixture.default.runtime.state_path"
 	cfgRuntimeProvisioner      = "fixture.default.runtime.provisioner"
 	cfgRuntimeLoader           = "fixture.default.runtime.loader"
 	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
@@ -144,9 +153,9 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			}
 		}
 		fixture.ComputeWorkers = []oasis.ComputeWorkerFixture{
-			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
-			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
-			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner},
+			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner, RuntimeStatePaths: make(map[int]string)},
+			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner, RuntimeStatePaths: make(map[int]string)},
+			{Entity: 1, Runtimes: []int{}, RuntimeProvisioner: runtimeProvisioner, RuntimeStatePaths: make(map[int]string)},
 		}
 
 		var runtimeIDs []common.Namespace
@@ -172,6 +181,10 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		keymanagerIdx := -1
 		if usingKeymanager {
 			keymanagerIdx = 0
+		}
+		runtimeStatePaths := viper.GetStringSlice(cfgRuntimeStatePath)
+		if l1, l2 := len(runtimeStatePaths), len(runtimeIDs); l1 > 0 && l1 != l2 {
+			cmdCommon.EarlyLogAndExit(fmt.Errorf("missing runtime state paths: number of runtimes: %d, provided state paths: %d", l2, l1))
 		}
 
 		for i, rt := range runtimes {
@@ -221,10 +234,70 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				fixture.ComputeWorkers[j].Runtimes = append(fixture.ComputeWorkers[j].Runtimes, rtIndex)
 			}
 			fixture.Clients[0].Runtimes = append(fixture.Clients[0].Runtimes, rtIndex)
+
+			// Runtime state paths to use to initialize the runtime with.
+			if len(runtimeStatePaths) <= i {
+				continue
+			}
+			runtimeStatePath := runtimeStatePaths[i]
+			if runtimeStatePath == "" {
+				continue
+			}
+
+			// Set workers runtime state.
+			for j := range fixture.ComputeWorkers {
+				fixture.ComputeWorkers[j].RuntimeStatePaths[i] = runtimeStatePath
+			}
+
+			dbPath := filepath.Join(runtimeStatePath, database.DBFileBadgerDB)
+			_, err := os.Stat(dbPath)
+			if err != nil {
+				return nil, fmt.Errorf("runtime state path: %w", err)
+			}
+			db, err := badger.New(&mkvsAPI.Config{
+				DB:        dbPath,
+				Namespace: runtimeIDs[i],
+			})
+			if err != nil {
+				return nil, fmt.Errorf("opening state path: %w", err)
+			}
+
+			version, stateRoot, err := getLatestVersionAndStateRoot(db)
+			if err != nil {
+				return nil, fmt.Errorf("loading version and state root: %w", err)
+			}
+
+			// Set runtime genesis state.
+			fixture.Runtimes[i].GenesisRound = version
+			fixture.Runtimes[i].GenesisStateRoot = stateRoot
+
 		}
 	}
 
 	return fixture, nil
+}
+
+// Loads latest runtime version and state root from the NodeDB.
+func getLatestVersionAndStateRoot(db mkvsAPI.NodeDB) (uint64, *hash.Hash, error) {
+	// Get latest version.
+	dbVersion, exists := db.GetLatestVersion()
+	if !exists {
+		return 0, nil, fmt.Errorf("no version found in runtime state db: %v", dbVersion)
+	}
+	rts, err := db.GetRootsForVersion(context.Background(), dbVersion)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	// Get latest state root.
+	var stateRootHash hash.Hash
+	for _, r := range rts {
+		if r.Type == storage.RootTypeState {
+			stateRootHash = r.Hash
+		}
+	}
+
+	return dbVersion, &stateRootHash, nil
 }
 
 func init() {
@@ -238,6 +311,7 @@ func init() {
 	DefaultFixtureFlags.StringSlice(cfgRuntimeID, []string{"8000000000000000000000000000000000000000000000000000000000000000"}, "runtime ID")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeBinary, []string{"simple-keyvalue"}, "path to the runtime binary")
 	DefaultFixtureFlags.StringSlice(cfgRuntimeVersion, []string{"0.1.0"}, "runtime version to register")
+	DefaultFixtureFlags.StringSlice(cfgRuntimeStatePath, []string{""}, "runtime state path to initialize the runtime (and nodes) with")
 	DefaultFixtureFlags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
