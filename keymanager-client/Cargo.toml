@@ -8,7 +8,7 @@ edition = "2018"
 oasis-core-client = { path = "../client" }
 oasis-core-runtime = { path = "../runtime" }
 oasis-core-keymanager-api-common = { path = "../keymanager-api-common" }
-cbor = { version = "0.4.0", package = "oasis-cbor" }
+cbor = { version = "0.5.0", package = "oasis-cbor" }
 
 # Third party.
 futures = "0.3.17"
