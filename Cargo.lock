@@ -461,9 +461,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.10"
+version = "3.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69c5a7f9997be616e47f0577ee38c91decb33392c5be4866494f34cdf329a9aa"
+checksum = "ac2bd7a1eb07da9ac757c923f69373deb7bc2ba5efc951b873bcb5e693992dca"
 dependencies = [
  "atty",
  "bitflags",
@@ -1995,7 +1995,7 @@ name = "oasis-core-runtime-loader"
 version = "0.0.0"
 dependencies = [
  "aesm-client",
- "clap 3.2.10",
+ "clap 3.2.13",
  "enclave-runner",
  "failure",
  "futures 0.3.21",
@@ -2009,7 +2009,7 @@ version = "0.0.0"
 dependencies = [
  "ansi_term",
  "anyhow",
- "clap 3.2.10",
+ "clap 3.2.13",
  "serde",
  "thiserror",
  "toml",
