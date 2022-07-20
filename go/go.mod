@@ -46,7 +46,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.12.2
-	github.com/prometheus/common v0.34.0
+	github.com/prometheus/common v0.37.0
 	github.com/prometheus/procfs v0.7.3
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/spf13/cobra v1.4.0
@@ -62,7 +62,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd
-	google.golang.org/grpc v1.47.0
+	google.golang.org/grpc v1.48.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
 	google.golang.org/protobuf v1.28.0
 )
