@@ -13,7 +13,7 @@ cbor = { version = "0.4.0", package = "oasis-cbor" }
 # Third party.
 anyhow = "1.0"
 lazy_static = "1.3.0"
-lru = "0.7.7"
+lru = "0.7.8"
 io-context = "0.2.0"
 rand = "0.7.3"
 sgx-isa = { version = "0.3.3", features = ["sgxstd"] }
