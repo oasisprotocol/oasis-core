@@ -37,7 +37,8 @@ import (
 	"syscall"
 )
 
-func getOsVersion() (uint32, error) {
+// GetOsVersion returns the operating system version (major, minor, pl).
+func GetOsVersion() (uint32, error) {
 	var buf syscall.Utsname
 	err := syscall.Uname(&buf)
 	if err != nil {

@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	seccomp "github.com/seccomp/libseccomp-golang"
+
+	"github.com/oasisprotocol/oasis-core/go/common/dynlib"
 )
 
 // A list of syscalls allowed with any arguments.
@@ -355,6 +357,21 @@ func generateSeccompPolicy(out *os.File) error {
 		return err
 	}
 
+	// Handle clone3 if the kernel is new enough to support it.
+	osVersion, err := dynlib.GetOsVersion()
+	if err != nil {
+		return err
+	}
+	if osVersion >= 0o50300 { // "The clone3() system call first appeared in Linux 5.3.""
+		if err = handleClone3(filter); err != nil {
+			return err
+		}
+	}
+
+	return filter.ExportBPF(out)
+}
+
+func handleClone3(filter *seccomp.ScmpFilter) error {
 	// We need to handle the clone3 syscall in a special manner as there are several complications
 	// to its handling:
 	//
@@ -373,6 +390,5 @@ func generateSeccompPolicy(out *os.File) error {
 	if err != nil {
 		return err
 	}
-
-	return filter.ExportBPF(out)
+	return nil
 }
