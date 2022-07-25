@@ -40,6 +40,11 @@ func TestCache(t *testing.T) {
 
 	t.Logf("Test binary: %+v", fn)
 
+	v, err := GetOsVersion()
+	if err == nil {
+		t.Logf("OS version: %02x", v)
+	}
+
 	impls := []struct {
 		name string
 		ctor ctorFn
