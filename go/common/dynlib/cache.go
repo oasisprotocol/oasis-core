@@ -336,7 +336,7 @@ func LoadCache() (*Cache, error) {
 func loadCacheGlibc() (*Cache, error) {
 	const entrySz = 4 + 4 + 4 + 4 + 8
 
-	ourOsVersion, err := getOsVersion()
+	ourOsVersion, err := GetOsVersion()
 	if err != nil {
 		return nil, err
 	}
