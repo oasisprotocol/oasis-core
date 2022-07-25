@@ -24,6 +24,6 @@
 
 package dynlib
 
-func getOsVersion() (uint32, error) {
+func GetOsVersion() (uint32, error) {
 	return 0, errUnsupported
 }
