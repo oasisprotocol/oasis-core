@@ -12,6 +12,32 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.9 (2022-07-26)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- oasis-net-runner: support configuring runtime state and state root
+  ([#4843](https://github.com/oasisprotocol/oasis-core/issues/4843))
+
+### Bug Fixes
+
+- go/runtime/host/sandbox/process: Handle missing clone3
+  ([#4861](https://github.com/oasisprotocol/oasis-core/issues/4861))
+
+  This should fix seccomp filter generation failures on systems with
+  ancient kernel/userland pairs (RHEL8 and variants).
+
+### Internal Changes
+
+- go/common/sgx/sigstruct: Add support for offline signing
+  ([#4844](https://github.com/oasisprotocol/oasis-core/issues/4844))
+
 ## 22.1.8 (2022-06-28)
 
 | Protocol          | Version   |
