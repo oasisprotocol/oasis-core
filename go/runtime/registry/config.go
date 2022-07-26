@@ -143,6 +143,15 @@ func (m RuntimeMode) IsClientOnly() bool {
 	return false
 }
 
+// HasLocalStorage returns true iff the mode is one that has local storage.
+func (m RuntimeMode) HasLocalStorage() bool {
+	switch m {
+	case RuntimeModeClient, RuntimeModeCompute:
+		return true
+	}
+	return false
+}
+
 // RuntimeConfig is the node runtime configuration.
 type RuntimeConfig struct {
 	// Mode is the runtime mode for this node.

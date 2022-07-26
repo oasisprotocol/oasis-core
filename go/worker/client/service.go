@@ -104,7 +104,11 @@ func (s *service) CheckTx(ctx context.Context, request *api.CheckTxRequest) erro
 
 // Implements api.RuntimeClient.
 func (s *service) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
-	return s.w.commonWorker.Consensus.RootHash().WatchBlocks(ctx, runtimeID)
+	rt, err := s.w.commonWorker.RuntimeRegistry.GetRuntime(runtimeID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rt.History().WatchBlocks()
 }
 
 // Implements api.RuntimeClient.

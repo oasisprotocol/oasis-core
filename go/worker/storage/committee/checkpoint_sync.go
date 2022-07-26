@@ -306,7 +306,7 @@ func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask o
 		// Not for the right runtime.
 		return false
 	}
-	blk, err := n.commonNode.Runtime.History().GetBlock(n.ctx, cp.Root.Version)
+	blk, err := n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, cp.Root.Version)
 	if err != nil {
 		n.logger.Error("can't get block information for checkpoint, skipping", "err", err, "root", cp.Root)
 		return false

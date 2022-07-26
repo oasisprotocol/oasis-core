@@ -467,7 +467,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 			if !evRtID.Equal(&runtimeID) {
 				continue
 			}
-			if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, false); err != nil {
+			if err = sc.processFinalizedEvent(sc.ctx, height, *evRtID, &ev.Round, true); err != nil {
 				return 0, fmt.Errorf("failed to process finalized event: %w", err)
 			}
 			lastRound = ev.Round
@@ -476,7 +476,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 
 	if lastRound == api.RoundInvalid {
 		sc.logger.Debug("no new round reindexed, return latest known round")
-		switch blk, err := bh.GetBlock(sc.ctx, api.RoundLatest); err {
+		switch blk, err := bh.GetCommittedBlock(sc.ctx, api.RoundLatest); err {
 		case api.ErrNotFound:
 		case nil:
 			lastRound = blk.Header.Round
@@ -540,7 +540,7 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 		}
 
 		// Emit latest block.
-		if err := sc.processFinalizedEvent(ctx, rs.CurrentBlockHeight, tr.runtimeID, nil, true); err != nil {
+		if err := sc.processFinalizedEvent(ctx, rs.CurrentBlockHeight, tr.runtimeID, nil, false); err != nil {
 			sc.logger.Warn("failed to emit latest block",
 				"err", err,
 				"runtime_id", tr.runtimeID,
@@ -574,7 +574,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 		if sc.trackedRuntime[ev.RuntimeID] == nil {
 			continue
 		}
-		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round, true); err != nil {
+		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round, false); err != nil {
 			return fmt.Errorf("roothash: failed to process finalized event: %w", err)
 		}
 	}
@@ -587,7 +587,7 @@ func (sc *serviceClient) processFinalizedEvent(
 	height int64,
 	runtimeID common.Namespace,
 	round *uint64,
-	reindex bool,
+	isReindex bool,
 ) (err error) {
 	tr := sc.trackedRuntime[runtimeID]
 	if tr == nil {
@@ -652,7 +652,7 @@ func (sc *serviceClient) processFinalizedEvent(
 
 		// Perform reindex if required.
 		lastRound := api.RoundInvalid
-		if reindex && !tr.reindexDone {
+		if !isReindex && !tr.reindexDone {
 			// Note that we need to reindex up to the previous height as the current height is
 			// already being processed right now.
 			if lastRound, err = sc.reindexBlocks(height-1, tr.blockHistory); err != nil {
@@ -675,7 +675,7 @@ func (sc *serviceClient) processFinalizedEvent(
 				"round", blk.Header.Round,
 			)
 
-			err = tr.blockHistory.Commit(annBlk, roundResults)
+			err = tr.blockHistory.Commit(annBlk, roundResults, !isReindex)
 			if err != nil {
 				sc.logger.Error("failed to commit block to history keeper",
 					"err", err,
@@ -689,7 +689,7 @@ func (sc *serviceClient) processFinalizedEvent(
 	}
 
 	// Skip emitting events if we are reindexing.
-	if !reindex {
+	if isReindex {
 		return nil
 	}
 

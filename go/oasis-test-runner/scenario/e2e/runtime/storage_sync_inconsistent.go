@@ -73,19 +73,41 @@ func (sc *storageSyncInconsistentImpl) Fixture() (*oasis.NetworkFixture, error) 
 }
 
 func (sc *storageSyncInconsistentImpl) waitForSegment(ctx context.Context, worker *oasis.Compute, seg, offset int) error {
+	ctrl, err := oasis.NewController(worker.SocketPath())
+	if err != nil {
+		return err
+	}
+
 	round := uint64(seg*checkpointInterval + offset)
 	sc.Logger.Info("waiting for round", "round", round)
-	waitedRound, err := worker.WaitForRound(ctx, sc.runtimeID, round)
+	blkCh, sub, err := ctrl.RuntimeClient.WatchBlocks(ctx, sc.runtimeID)
 	if err != nil {
 		return fmt.Errorf("error waiting for round %d: %w", round, err)
 	}
-	if waitedRound > round {
-		return fmt.Errorf("compute worker was already ahead (at round %d instead of %d), increase the checkpointing interval",
-			waitedRound,
-			round,
-		)
+	defer sub.Close()
+
+	for {
+		select {
+		case annBlk, ok := <-blkCh:
+			if !ok {
+				return fmt.Errorf("runtime watch blocks channel closed unexpectedly")
+			}
+			sc.Logger.Info("received runtime block", "round_received", annBlk.Block.Header.Round, "waiting_for", round)
+
+			waitedRound := annBlk.Block.Header.Round
+			switch {
+			case waitedRound < round:
+				continue
+			case waitedRound > round:
+				return fmt.Errorf("compute worker was already ahead (at round %d instead of %d), increase the checkpointing interval", waitedRound, round)
+			default:
+				return nil
+
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("%w: while waiting for runtime block", context.Canceled)
+		}
 	}
-	return nil
 }
 
 func (sc *storageSyncInconsistentImpl) wipe(ctx context.Context, worker *oasis.Node) error {

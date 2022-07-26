@@ -42,15 +42,7 @@ func New(
 	registration *registration.Worker,
 	genesis genesis.Provider,
 ) (*Worker, error) {
-	var enabled bool
-	switch commonWorker.RuntimeRegistry.Mode() {
-	case runtimeRegistry.RuntimeModeCompute, runtimeRegistry.RuntimeModeClient:
-		// When configured in compute or stateful client mode, enable the storage worker.
-		enabled = true
-	default:
-		enabled = false
-	}
-
+	enabled := commonWorker.RuntimeRegistry.Mode().HasLocalStorage()
 	s := &Worker{
 		enabled:      enabled,
 		commonWorker: commonWorker,
@@ -132,7 +124,7 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 	if err != nil {
 		return err
 	}
-	commonNode.Runtime.RegisterStorage(newSyncedLocalStorage(node, localStorage))
+	commonNode.Runtime.RegisterStorage(localStorage)
 	commonNode.AddHooks(node)
 	w.runtimes[id] = node
 

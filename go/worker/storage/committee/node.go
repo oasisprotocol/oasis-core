@@ -56,10 +56,6 @@ const (
 	// it to stop advertising availability.
 	minimumRoundDelayForUnavailability = uint64(15)
 
-	// The number of rounds ahead of consensus that the worker will allow round waiters to wait.
-	// Trying to wait for rounds further in the future will return an error immediately.
-	roundWaitConsensusOffset = uint64(1)
-
 	// maxInFlightRounds is the maximum number of rounds that should be fetched before waiting
 	// for them to be applied.
 	maxInFlightRounds = 100
@@ -111,11 +107,6 @@ type finalizeResult struct {
 	err     error
 }
 
-type roundWaiter struct {
-	round uint64
-	ch    chan uint64
-}
-
 // Node watches blocks for storage changes.
 type Node struct { // nolint: maligned
 	commonNode *committee.Node
@@ -140,9 +131,8 @@ type Node struct { // nolint: maligned
 	checkpointSyncCfg    *CheckpointSyncConfig
 	checkpointSyncForced bool
 
-	syncedLock   sync.RWMutex
-	syncedState  blockSummary
-	roundWaiters []roundWaiter
+	syncedLock  sync.RWMutex
+	syncedState blockSummary
 
 	blockCh    *channels.InfiniteChannel
 	diffCh     chan *fetchedDiff
@@ -233,7 +223,7 @@ func NewNode(
 				}, nil
 			},
 			GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
-				blk, berr := commonNode.Runtime.History().GetBlock(ctx, version)
+				blk, berr := commonNode.Runtime.History().GetCommittedBlock(ctx, version)
 				if berr != nil {
 					return nil, berr
 				}
@@ -316,40 +306,6 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	return &api.Status{
 		LastFinalizedRound: n.syncedState.Round,
 	}, nil
-}
-
-func (n *Node) WaitForRound(round uint64, root *storageApi.Root) (<-chan uint64, error) {
-	retCh := make(chan uint64, 1)
-
-	if root != nil {
-		round = root.Version
-	}
-
-	consensusRound := roothashApi.RoundInvalid
-	n.commonNode.CrossNode.Lock()
-	if blk := n.commonNode.CurrentBlock; blk != nil {
-		consensusRound = blk.Header.Round
-	}
-	n.commonNode.CrossNode.Unlock()
-	if round > consensusRound+roundWaitConsensusOffset && !commonFlags.DebugDontBlameOasis() {
-		close(retCh)
-		return nil, storageApi.ErrVersionNotFound
-	}
-
-	n.syncedLock.Lock()
-	defer n.syncedLock.Unlock()
-
-	if round <= n.syncedState.Round || (root != nil && n.localStorage.NodeDB().HasRoot(*root)) {
-		retCh <- n.syncedState.Round
-		close(retCh)
-		return retCh, nil
-	}
-
-	n.roundWaiters = append(n.roundWaiters, roundWaiter{
-		round: round,
-		ch:    retCh,
-	})
-	return retCh, nil
 }
 
 func (n *Node) PauseCheckpointer(pause bool) error {
@@ -569,25 +525,16 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 	return nil
 }
 
-func (n *Node) flushSyncedState(summary *blockSummary) uint64 {
+func (n *Node) flushSyncedState(summary *blockSummary) (uint64, error) {
 	n.syncedLock.Lock()
 	defer n.syncedLock.Unlock()
 
 	n.syncedState = *summary
-
-	// Wake up any round waiters.
-	filtered := make([]roundWaiter, 0, len(n.roundWaiters))
-	for _, w := range n.roundWaiters {
-		if w.round <= n.syncedState.Round {
-			w.ch <- n.syncedState.Round
-			close(w.ch)
-		} else {
-			filtered = append(filtered, w)
-		}
+	if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.ctx, n.syncedState.Round); err != nil {
+		return 0, err
 	}
-	n.roundWaiters = filtered
 
-	return n.syncedState.Round
+	return n.syncedState.Round, nil
 }
 
 func (n *Node) watchQuit() {
@@ -785,11 +732,14 @@ func (n *Node) worker() { // nolint: gocyclo
 	// Determine last finalized storage version.
 	if version, dbNonEmpty := n.localStorage.NodeDB().GetLatestVersion(); dbNonEmpty {
 		var blk *block.Block
-		blk, err = n.commonNode.Runtime.History().GetBlock(n.ctx, version)
+		blk, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, version)
 		switch err {
 		case nil:
 			// Set last synced version to last finalized storage version.
-			n.flushSyncedState(summaryFromBlock(blk))
+			if _, err = n.flushSyncedState(summaryFromBlock(blk)); err != nil {
+				n.logger.Error("failed to flush synced state", "err", err)
+				return
+			}
 		default:
 			// Failed to fetch historic block. This is fine when the network just went through a
 			// dump/restore upgrade and we don't have any information before genesis. We treat the
@@ -847,7 +797,7 @@ func (n *Node) worker() { // nolint: gocyclo
 
 		// Check if we actually have information about that round. This assumes that any reindexing
 		// was already performed (the common node would not indicate being initialized otherwise).
-		_, err = n.commonNode.Runtime.History().GetBlock(n.ctx, iterativeSyncStart)
+		_, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, iterativeSyncStart)
 	SyncStartCheck:
 		switch {
 		case err == nil:
@@ -911,7 +861,13 @@ func (n *Node) worker() { // nolint: gocyclo
 						return
 					}
 				}
-				cachedLastRound = n.flushSyncedState(summaryFromBlock(earlyBlk))
+				cachedLastRound, err = n.flushSyncedState(summaryFromBlock(earlyBlk))
+				if err != nil {
+					n.logger.Error("failed to flush synced state",
+						"err", err,
+					)
+					return
+				}
 				// No need to force a checkpoint sync.
 				break SyncStartCheck
 			default:
@@ -997,7 +953,13 @@ func (n *Node) worker() { // nolint: gocyclo
 		if err != nil {
 			n.logger.Info("checkpoint sync failed", "err", err)
 		} else {
-			cachedLastRound = n.flushSyncedState(summary)
+			cachedLastRound, err = n.flushSyncedState(summary)
+			if err != nil {
+				n.logger.Error("failed to flush synced state",
+					"err", err,
+				)
+				return
+			}
 			lastFullyAppliedRound = cachedLastRound
 			n.logger.Info("checkpoint sync succeeded",
 				logging.LogEvent, LogEventCheckpointSyncSuccess,
@@ -1203,7 +1165,7 @@ mainLoop:
 					continue
 				}
 				var oldBlock *block.Block
-				oldBlock, err = n.commonNode.Runtime.History().GetBlock(n.ctx, i)
+				oldBlock, err = n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, i)
 				if err != nil {
 					n.logger.Error("can't get block for round",
 						"err", err,
@@ -1250,7 +1212,12 @@ mainLoop:
 			if finalized.err == nil {
 				// No further sync or out of order handling needed here, since
 				// only one finalize at a time is triggered (for round cachedLastRound+1)
-				cachedLastRound = n.flushSyncedState(finalized.summary)
+				cachedLastRound, err = n.flushSyncedState(finalized.summary)
+				if err != nil {
+					n.logger.Error("failed to flush synced state",
+						"err", err,
+					)
+				}
 				storageWorkerLastFullRound.With(n.getMetricLabels()).Set(float64(finalized.summary.Round))
 
 				// Check if we're far enough to reasonably register as available.

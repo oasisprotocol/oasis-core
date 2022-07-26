@@ -118,23 +118,6 @@ func (worker *Compute) GetClientAddress() string {
 	return fmt.Sprintf("127.0.0.1:%d", worker.clientPort)
 }
 
-// WaitForRound waits until the node syncs up to the given root.
-func (worker *Compute) WaitForRound(ctx context.Context, runtimeID common.Namespace, round uint64) (uint64, error) {
-	ctrl, err := NewController(worker.SocketPath())
-	if err != nil {
-		return 0, err
-	}
-	req := &workerStorage.WaitForRoundRequest{
-		RuntimeID: runtimeID,
-		Round:     round,
-	}
-	resp, err := ctrl.StorageWorker.WaitForRound(ctx, req)
-	if err != nil {
-		return 0, err
-	}
-	return resp.LastRound, nil
-}
-
 // PauseCheckpointer pauses or unpauses the storage worker's checkpointer.
 func (worker *Compute) PauseCheckpointer(ctx context.Context, runtimeID common.Namespace, pause bool) error {
 	ctrl, err := NewController(worker.SocketPath())
