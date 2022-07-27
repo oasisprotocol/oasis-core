@@ -362,7 +362,7 @@ func generateSeccompPolicy(out *os.File) error {
 	if err != nil {
 		return err
 	}
-	if osVersion >= 0o50300 { // "The clone3() system call first appeared in Linux 5.3.""
+	if osVersion >= 0x50300 { // "The clone3() system call first appeared in Linux 5.3.""
 		if err = handleClone3(filter); err != nil {
 			return err
 		}
