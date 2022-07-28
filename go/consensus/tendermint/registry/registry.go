@@ -218,6 +218,14 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return events, nil
 }
 
+func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	return q.ConsensusParameters(ctx)
+}
+
 // Implements api.ServiceClient.
 func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})

@@ -24,6 +24,7 @@ type Query interface {
 	Runtime(context.Context, common.Namespace) (*registry.Runtime, error)
 	Runtimes(ctx context.Context, includeSuspended bool) ([]*registry.Runtime, error)
 	Genesis(context.Context) (*registry.Genesis, error)
+	ConsensusParameters(context.Context) (*registry.ConsensusParameters, error)
 }
 
 // QueryFactory is the registry query factory.
@@ -111,6 +112,10 @@ func (rq *registryQuerier) Runtimes(ctx context.Context, includeSuspended bool) 
 		return rq.state.AllRuntimes(ctx)
 	}
 	return rq.state.Runtimes(ctx)
+}
+
+func (rq *registryQuerier) ConsensusParameters(ctx context.Context) (*registry.ConsensusParameters, error) {
+	return rq.state.ConsensusParameters(ctx)
 }
 
 func (app *registryApplication) QueryFactory() interface{} {

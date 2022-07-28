@@ -35,6 +35,8 @@ var (
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodGetEvents is the GetEvents method.
 	methodGetEvents = serviceName.NewMethod("GetEvents", int64(0))
+	// methodConsensusParameters is the ConsensusParameters method.
+	methodConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
 
 	// methodWatchEntities is the WatchEntities method.
 	methodWatchEntities = serviceName.NewMethod("WatchEntities", nil)
@@ -89,6 +91,10 @@ var (
 			{
 				MethodName: methodGetEvents.ShortName(),
 				Handler:    handlerGetEvents,
+			},
+			{
+				MethodName: methodConsensusParameters.ShortName(),
+				Handler:    handlerConsensusParameters,
 			},
 		},
 		Streams: []grpc.StreamDesc{
@@ -342,6 +348,29 @@ func handlerGetEvents(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetEvents(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerConsensusParameters(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).ConsensusParameters(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodConsensusParameters.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -685,6 +714,14 @@ func (c *registryClient) GetEvents(ctx context.Context, height int64) ([]*Event,
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *registryClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+	var rsp ConsensusParameters
+	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *registryClient) Cleanup() {

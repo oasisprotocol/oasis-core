@@ -218,6 +218,9 @@ type Backend interface {
 	// GetEvents returns the events at specified block height.
 	GetEvents(ctx context.Context, height int64) ([]*Event, error)
 
+	// ConsensusParameters returns the registry consensus parameters.
+	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
+
 	// Cleanup cleans up the registry backend.
 	Cleanup()
 }
