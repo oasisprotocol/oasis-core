@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.1.10 (2022-07-28)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.0.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/runtime/host: correct clone3 version threshold
+  ([#4867](https://github.com/oasisprotocol/oasis-core/issues/4867))
+
+  The threshold was too low and older kernels were mistakenly asked to resolve
+  'clone3.'
+
 ## 22.1.9 (2022-07-26)
 
 | Protocol          | Version   |
