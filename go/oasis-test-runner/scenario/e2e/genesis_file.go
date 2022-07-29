@@ -20,10 +20,10 @@ import (
 
 const (
 	// Parameters from https://docs.oasis.dev/general/oasis-network/network-parameters.
-	latestMainnetGenesisURL          = "https://github.com/oasisprotocol/mainnet-artifacts/releases/download/2021-04-28/genesis.json"
-	latestMainnetGenesisDocumentHash = "53852332637bacb61b91b6411ab4095168ba02a50be4c3f82448438826f23898"
+	latestMainnetGenesisURL          = "https://github.com/oasisprotocol/mainnet-artifacts/releases/download/2022-04-11/genesis.json"
+	latestMainnetGenesisDocumentHash = "b11b369e0da5bb230b220127f5e7b242d385ef8c6f54906243f30af63c815535"
 
-	latestMainnetNeedsUpgrade = true
+	latestMainnetNeedsUpgrade = false
 )
 
 // GenesisFile is the scenario for testing the correctness of marshalled genesis
@@ -110,49 +110,36 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("e2e/genesis-file: failed to download latest Mainnet genesis "+
 			"file at '%s': %w", latestMainnetGenesisURL, err)
 	}
-	if !latestMainnetNeedsUpgrade {
-		_, err = s.runGenesisCheckCmd(childEnv, latestMainnetGenesis)
-		expectedError := "genesis file is not in canonical form, see the diff on stderr"
-		switch {
-		case err == nil:
-			return fmt.Errorf("e2e/genesis-file: running genesis check for the latest Mainnet"+
-				" genesis file at '%s' should fail with '%s'",
-				latestMainnetGenesisURL, expectedError,
-			)
-		case !strings.Contains(err.Error(), expectedError):
-			return fmt.Errorf(
-				"e2e/genesis-file: running genesis check for the latest Mainnet genesis "+
-					"file should fail with an error containing: '%s' (actual error: %s)",
-				expectedError, err,
-			)
-		default:
-			s.Logger.Info("latest Mainnet genesis file is OK, but is not in canonical form")
-		}
-	}
 
 	// Convert latest Mainnet genesis file to canonical form and ensure its Genesis document's
 	// hash matches the authoritative one.
-	latestMainnetGenesisFixed := filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
-	if err = s.runFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
-		return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
-			"file at '%s': %w", latestMainnetGenesisURL, err)
+	var latestMainnetGenesisFixed string
+	if latestMainnetNeedsUpgrade {
+		// When upgrade is needed, run fix-genesis.
+		latestMainnetGenesisFixed = filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
+		if err = s.runFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
+			return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
+				"file at '%s': %w", latestMainnetGenesisURL, err)
+		}
+	} else {
+		latestMainnetGenesisFixed = latestMainnetGenesis
 	}
 	checkOut, err := s.runGenesisCheckCmd(childEnv, latestMainnetGenesisFixed)
 	switch {
 	case err != nil:
 		return fmt.Errorf("e2e/genesis-file: running genesis check for the latest Mainnet"+
-			" genesis file at '%s' converted to canonical form failed: %w",
+			" genesis file at '%s' failed: %w",
 			latestMainnetGenesisURL, err,
 		)
 	case !latestMainnetNeedsUpgrade && !strings.Contains(checkOut, latestMainnetGenesisDocumentHash):
 		return fmt.Errorf(
 			"e2e/genesis-file: running genesis check for the latest Mainnet genesis "+
-				"file converted to canonical form should return the correct "+
+				"file should return the correct "+
 				"genesis document's hash: '%s' (actual output: %s)",
 			latestMainnetGenesisDocumentHash, checkOut,
 		)
 	default:
-		s.Logger.Info("latest Mainnet genesis file converted to canonical form is OK")
+		s.Logger.Info("latest Mainnet genesis file is OK")
 	}
 
 	// Make sure a genesis file in an uncanonical form doesn't pass genesis check command and
