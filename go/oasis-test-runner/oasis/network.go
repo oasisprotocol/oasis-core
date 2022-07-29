@@ -608,6 +608,7 @@ func (net *Network) startOasisNode(
 	}
 	if len(subCmd) == 0 {
 		extraArgs = extraArgs.
+			debugAllowDebugEnclaves().
 			appendIASProxy(net.iasProxy).
 			tendermintDebugAddrBookLenient().
 			tendermintDebugAllowDuplicateIP().
