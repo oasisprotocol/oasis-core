@@ -212,6 +212,8 @@ docker-shell:
 	  --security-opt seccomp=unconfined \
 	  -v $(shell pwd):/code \
 	  -v $(shell pwd)/docker-shell-history.txt:/root/.bash_history \
+	  -e OASIS_UNSAFE_SKIP_AVR_VERIFY=1 \
+	  -e OASIS_UNSAFE_SKIP_KM_POLICY=1 \
 	  -w /code \
 	  oasisprotocol/oasis-core-dev:master \
 	  bash
