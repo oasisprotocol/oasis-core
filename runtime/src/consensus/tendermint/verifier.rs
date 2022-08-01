@@ -217,6 +217,7 @@ impl Verifier {
             .light_client
             .verify_to_target(height.try_into().unwrap(), &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
 
         let header = verified_block.signed_header.header;
         cache.last_trust_root.height = header.height.into();
@@ -230,6 +231,7 @@ impl Verifier {
             .light_client
             .verify_to_highest(&mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
 
         let state_root = state_root_from_header(&verified_block.signed_header);
         Ok(ConsensusState::from_protocol(
@@ -265,6 +267,7 @@ impl Verifier {
             .light_client
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
@@ -460,6 +463,7 @@ impl Verifier {
             .light_client
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
@@ -527,6 +531,23 @@ impl Verifier {
             .put(runtime_header.round, (state_root, state_epoch));
 
         Ok(state)
+    }
+
+    fn update_insecure_posix_time(&self, verified_block: &TMLightBlock) {
+        // Update untrusted time if ahead. This makes sure that the enclave's sense of time is
+        // synced with consensus sense of time based on the fact that consensus time is harder to
+        // fake than host operating system time.
+        time::update_insecure_posix_time(
+            verified_block
+                .signed_header
+                .header
+                .time
+                .duration_since(Time::unix_epoch())
+                .unwrap()
+                .as_secs()
+                .try_into()
+                .unwrap(),
+        );
     }
 
     fn trust(&self, cache: &mut Cache, header: ComputeResultsHeader) -> Result<(), Error> {
