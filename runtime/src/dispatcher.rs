@@ -490,6 +490,8 @@ impl Dispatcher {
                 state.header.clone(),
                 state.epoch,
             )?;
+            // Ensure the runtime is still ready to process requests.
+            protocol.ensure_initialized()?;
 
             let cache = cache_set.query(Root {
                 namespace: state.header.namespace,
@@ -583,6 +585,8 @@ impl Dispatcher {
             state.header.clone(),
             state.epoch,
         )?;
+        // Ensure the runtime is still ready to process requests.
+        protocol.ensure_initialized()?;
 
         let header = &state.header;
 

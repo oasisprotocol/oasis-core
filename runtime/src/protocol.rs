@@ -348,7 +348,7 @@ impl Protocol {
             }
             Body::RuntimeAbortRequest {} => {
                 info!(self.logger, "Received worker abort request");
-                self.can_handle_runtime_requests()?;
+                self.ensure_initialized()?;
                 self.dispatcher.abort_and_wait()?;
                 info!(self.logger, "Handled worker abort request");
                 Ok(Some(Body::RuntimeAbortResponse {}))
@@ -372,7 +372,7 @@ impl Protocol {
             | Body::RuntimeKeyManagerPolicyUpdateRequest { .. }
             | Body::RuntimeQueryRequest { .. }
             | Body::RuntimeConsensusSyncRequest { .. } => {
-                self.can_handle_runtime_requests()?;
+                self.ensure_initialized()?;
                 self.dispatcher.queue_request(ctx, id, request)?;
                 Ok(None)
             }
@@ -453,7 +453,8 @@ impl Protocol {
         })
     }
 
-    fn can_handle_runtime_requests(&self) -> anyhow::Result<()> {
+    /// Ensure that the runtime is ready to process requests and fail otherwise.
+    pub fn ensure_initialized(&self) -> anyhow::Result<()> {
         if self.host_info.lock().unwrap().is_none() {
             return Err(ProtocolError::HostInfoNotConfigured.into());
         }
