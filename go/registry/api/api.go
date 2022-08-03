@@ -202,7 +202,7 @@ type Backend interface {
 	WatchNodeList(context.Context) (<-chan *NodeList, pubsub.ClosableSubscription, error)
 
 	// GetRuntime gets a runtime by ID.
-	GetRuntime(context.Context, *NamespaceQuery) (*Runtime, error)
+	GetRuntime(context.Context, *GetRuntimeQuery) (*Runtime, error)
 
 	// GetRuntimes returns the registered Runtimes at the specified
 	// block height.
@@ -235,6 +235,13 @@ type IDQuery struct {
 type NamespaceQuery struct {
 	Height int64            `json:"height"`
 	ID     common.Namespace `json:"id"`
+}
+
+// GetRuntimeQuery is a registry query by namespace (Runtime ID).
+type GetRuntimeQuery struct {
+	Height           int64            `json:"height"`
+	ID               common.Namespace `json:"id"`
+	IncludeSuspended bool             `json:"include_suspended,omitempty"`
 }
 
 // GetRuntimesQuery is a registry get runtimes query.

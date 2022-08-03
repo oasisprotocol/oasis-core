@@ -28,9 +28,9 @@ var (
 	// methodGetNodes is the GetNodes method.
 	methodGetNodes = serviceName.NewMethod("GetNodes", int64(0))
 	// methodGetRuntime is the GetRuntime method.
-	methodGetRuntime = serviceName.NewMethod("GetRuntime", NamespaceQuery{})
+	methodGetRuntime = serviceName.NewMethod("GetRuntime", GetRuntimeQuery{})
 	// methodGetRuntimes is the GetRuntimes method.
-	methodGetRuntimes = serviceName.NewMethod("GetRuntimes", int64(0))
+	methodGetRuntimes = serviceName.NewMethod("GetRuntimes", GetRuntimesQuery{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodGetEvents is the GetEvents method.
@@ -266,7 +266,7 @@ func handlerGetRuntime(
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var query NamespaceQuery
+	var query GetRuntimeQuery
 	if err := dec(&query); err != nil {
 		return nil, err
 	}
@@ -278,7 +278,7 @@ func handlerGetRuntime(
 		FullMethod: methodGetRuntime.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetRuntime(ctx, req.(*NamespaceQuery))
+		return srv.(Backend).GetRuntime(ctx, req.(*GetRuntimeQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -649,7 +649,7 @@ func (c *registryClient) WatchNodeList(ctx context.Context) (<-chan *NodeList, p
 	return ch, sub, nil
 }
 
-func (c *registryClient) GetRuntime(ctx context.Context, query *NamespaceQuery) (*Runtime, error) {
+func (c *registryClient) GetRuntime(ctx context.Context, query *GetRuntimeQuery) (*Runtime, error) {
 	var rsp Runtime
 	if err := c.conn.Invoke(ctx, methodGetRuntime.FullName(), query, &rsp); err != nil {
 		return nil, err

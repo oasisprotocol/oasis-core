@@ -437,7 +437,7 @@ func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height 
 	}
 	for _, rt := range runtimes {
 		var runtime *registry.Runtime
-		runtime, err = q.registry.GetRuntime(ctx, &registry.NamespaceQuery{ID: rt.ID, Height: height})
+		runtime, err = q.registry.GetRuntime(ctx, &registry.GetRuntimeQuery{ID: rt.ID, Height: height})
 		if err != nil {
 			return fmt.Errorf("GetRuntime error at height %d: %w", height, err)
 		}
