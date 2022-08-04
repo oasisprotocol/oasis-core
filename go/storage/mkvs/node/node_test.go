@@ -145,3 +145,48 @@ func TestExtractInternalNode(t *testing.T) {
 	require.Equal(t, rightHash, exIntNode.Right.Hash, "extracted right pointer must have the same hash")
 	require.Equal(t, true, exIntNode.Right.Clean, "extracted right pointer must be clean")
 }
+
+func FuzzNode(f *testing.F) {
+	// Seed corpus.
+	leafNode := &LeafNode{
+		Key:   []byte("a golden key"),
+		Value: []byte("value"),
+	}
+	leafNode.UpdateHash()
+
+	rawLeafNodeFull, _ := leafNode.MarshalBinary()
+	rawLeafNodeCompact, _ := leafNode.CompactMarshalBinary()
+	f.Add(rawLeafNodeFull)
+	f.Add(rawLeafNodeCompact)
+
+	leftHash := hash.NewFromBytes([]byte("everyone move to the left"))
+	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
+	label := Key("abc")
+	labelBitLength := Depth(24)
+
+	intNode := &InternalNode{
+		Label:          label,
+		LabelBitLength: labelBitLength,
+		LeafNode:       &Pointer{Clean: true, Node: leafNode, Hash: leafNode.Hash},
+		Left:           &Pointer{Clean: true, Hash: leftHash},
+		Right:          &Pointer{Clean: true, Hash: rightHash},
+	}
+
+	rawIntNodeFull, _ := intNode.MarshalBinary()
+	rawIntNodeCompact, _ := intNode.CompactMarshalBinary()
+	f.Add(rawIntNodeFull)
+	f.Add(rawIntNodeCompact)
+
+	// Fuzzing.
+	f.Fuzz(func(t *testing.T, data []byte) {
+		n, err := UnmarshalBinary(data)
+		if err != nil {
+			return
+		}
+
+		_, err = n.CompactMarshalBinary()
+		if err != nil {
+			panic(err)
+		}
+	})
+}

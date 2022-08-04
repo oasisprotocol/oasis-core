@@ -176,20 +176,6 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  ###################################################
-  # Test that build-fuzz still works (only on master)
-  ###################################################
-  - label: Test fuzz builds
-    branches: master
-    command:
-      # TODO: Consider making this a part of the development Docker image.
-      - go get -u github.com/dvyukov/go-fuzz/go-fuzz github.com/dvyukov/go-fuzz/go-fuzz-build
-      - make -C go build-fuzz
-    retry:
-      <<: *retry_agent_failure
-    plugins:
-      <<: *docker_plugin
-
   #####################################
   # Test jobs requiring build artifacts
   #####################################
