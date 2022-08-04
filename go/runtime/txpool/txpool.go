@@ -362,6 +362,7 @@ func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
 	for _, q := range t.usableSources {
 		q.HandleTxsUsed(hashes)
 	}
+	t.logger.Info("spinach: HandleTxsUsed done", "hashes", hashes)
 
 	// todo: metrics
 	// pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.size()))

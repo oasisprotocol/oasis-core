@@ -89,6 +89,7 @@ func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 
 // HandleNewBlockLocked is guarded by CrossNode.
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
+	n.logger.Info("spinach: client node HandleNewBlockLocked, sending to checkCh")
 	// Queue block for checks.
 	n.checkCh.In() <- blk
 }
@@ -200,6 +201,7 @@ func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[has
 
 	var processed []hash.Hash
 	for txHash, tx := range matches {
+		n.logger.Info("spinach: client node checkBlock sending response to pendingTx ch", "tx_hash", txHash)
 		pTx := pending[txHash]
 		pTx.ch <- &api.SubmitTxResult{
 			Result: &api.SubmitTxMetaResponse{
@@ -214,6 +216,7 @@ func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[has
 	}
 
 	// Remove processed transactions from pool.
+	n.logger.Info("spinach: client node checkBlock calling HandleTxsUsed", "processed", processed)
 	n.commonNode.TxPool.HandleTxsUsed(processed)
 
 	return nil
@@ -261,6 +264,7 @@ func (n *Node) worker() {
 			pending[tx.txHash] = tx
 			continue
 		case blk := <-n.checkCh.Out():
+			n.logger.Info("spinach: client node worker, receiving from checkCh")
 			blocks = append(blocks, blk.(*block.Block))
 		case <-recheckCh:
 		}

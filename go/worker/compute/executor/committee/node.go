@@ -373,6 +373,7 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 				"io_root", header.IORoot,
 			)
 			// Remove processed transactions from queue.
+			n.logger.Info("spinach: executor node checkBlock calling HandleTxsUsed", "tx_hashes", state.txHashes)
 			n.commonNode.TxPool.HandleTxsUsed(state.txHashes)
 		}()
 	}

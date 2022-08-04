@@ -64,6 +64,7 @@ func (s *service) SubmitTxMeta(ctx context.Context, request *api.SubmitTxRequest
 			// The context we're working in was canceled, abort.
 			return nil, ctx.Err()
 		case resp, ok = <-respCh:
+			s.w.logger.Info("spinach: service SubmitTxMeta received response")
 			if !ok {
 				return nil, fmt.Errorf("client: channel closed unexpectedly")
 			}
