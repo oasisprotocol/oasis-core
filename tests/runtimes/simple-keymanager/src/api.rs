@@ -1,11 +1,8 @@
-#[cfg(target_env = "sgx")]
 use std::collections::HashSet;
 
 use oasis_core_keymanager_api_common::*;
-#[cfg(target_env = "sgx")]
 use oasis_core_runtime::common::crypto::signature::PrivateKey as OasisPrivateKey;
 
-#[cfg(target_env = "sgx")]
 pub fn trusted_policy_signers() -> TrustedPolicySigners {
     TrustedPolicySigners {
         signers: {
@@ -24,9 +21,4 @@ pub fn trusted_policy_signers() -> TrustedPolicySigners {
         },
         threshold: 2,
     }
-}
-
-#[cfg(not(target_env = "sgx"))]
-pub fn trusted_policy_signers() -> TrustedPolicySigners {
-    TrustedPolicySigners::default()
 }

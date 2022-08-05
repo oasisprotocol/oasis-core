@@ -85,10 +85,17 @@ impl RemoteClient {
         keys_cache_sizes: usize,
         signers: TrustedPolicySigners,
     ) -> Self {
+        // Skip policy checks iff both OASIS_UNSAFE_SKIP_KM_POLICY and
+        // OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES are set. The latter is there to ensure that this is a
+        // debug build that is inherently incompatible with non-debug builds.
+        let unsafe_skip_policy_checks = option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
+            && option_env!("OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES").is_some();
+
         // When using a non-empty policy signer set we set enclaves to an empty set so until we get
         // a policy we will not accept any enclave identities (as we don't know what they should
-        // be). When the policy signer set is empty (e.g. in tests) we allow any enclave.
-        let enclaves = if !signers.signers.is_empty() {
+        // be). When the policy signer set is empty or unsafe policy skip is enabled we allow any
+        // enclave.
+        let enclaves = if !signers.signers.is_empty() && !unsafe_skip_policy_checks {
             Some(HashSet::new())
         } else {
             None

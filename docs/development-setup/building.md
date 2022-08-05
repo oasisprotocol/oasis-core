@@ -14,6 +14,7 @@ the following in the top-level directory:
 ```
 export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
 export OASIS_UNSAFE_SKIP_KM_POLICY="1"
+export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
 make
 ```
 
