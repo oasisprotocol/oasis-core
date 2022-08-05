@@ -76,6 +76,8 @@ func New(
 		return w, nil
 	}
 
+	initMetrics()
+
 	for _, b64pk := range viper.GetStringSlice(CfgPrivatePeerPubKeys) {
 		pkBytes, err := base64.StdEncoding.DecodeString(b64pk)
 		if err != nil {
