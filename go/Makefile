@@ -95,57 +95,6 @@ force-test:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests in force mode...$(OFF)"
 	@$(MAKE) test GO_TEST_FLAGS=-count=1
 
-# Fuzzing.
-fuzz-targets := fuzz-consensus \
-	fuzz-storage \
-	fuzz-mkvs/Tree \
-	fuzz-mkvs/Proof \
-	fuzz-mkvs/Node
-
-define canned-fuzz-run
-@TARGETDIR=$(shell pwd)/$<; \
-WORKDIR=/tmp/oasis-node-$@; \
-if [ "$(FUZZ_NO_BUILD)" != "1" ]; then \
-	mkdir -p "$$WORKDIR"; \
-	pushd $$TARGETDIR >/dev/null; \
-		$(ECHO) "$(CYAN)*** Building fuzzer for $@...$(OFF)"; \
-		go get github.com/dvyukov/go-fuzz; \
-		go-fuzz-build -o $$WORKDIR/fuzz.zip || exit 1; \
-	popd >/dev/null; \
-fi; \
-if [ "$(FUZZ_BUILD_ONLY)" != "1" ]; then \
-	mkdir -p "$$WORKDIR"; \
-	cd "$$WORKDIR"; \
-	$(ECHO) "$(CYAN)*** Running fuzzer for $@...$(OFF)"; \
-	if [ "$(@D)" == "." ]; then \
-		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR || exit 1; \
-	else \
-		go-fuzz -bin=$$WORKDIR/fuzz.zip -workdir=$$WORKDIR -func Fuzz$(@F) || exit 1; \
-	fi; \
-fi;
-endef
-
-# Fuzz consensus transactions.
-fuzz-consensus: consensus/tendermint/fuzz/
-	$(canned-fuzz-run)
-# Fuzz general storage interface.
-fuzz-storage: storage/fuzz/ oasis-node
-	@mkdir -p /tmp/oasis-node-fuzz-storage/identity
-	@chmod 0700 /tmp/oasis-node-fuzz-storage/identity
-	@oasis-node/oasis-node identity init --datadir /tmp/oasis-node-fuzz-storage/identity
-	$(canned-fuzz-run)
-# Fuzz MKVS data structures.
-fuzz-mkvs/Tree: storage/mkvs/fuzz
-	$(canned-fuzz-run)
-fuzz-mkvs/Proof: storage/mkvs/fuzz
-	$(canned-fuzz-run)
-fuzz-mkvs/Node: storage/mkvs/fuzz
-	$(canned-fuzz-run)
-
-# Target that only builds all fuzzing infrastructure.
-build-fuzz: FUZZ_BUILD_ONLY=1
-build-fuzz: $(fuzz-targets)
-
 # Clean.
 clean:
 	@$(ECHO) "$(CYAN)*** Cleaning up Go...$(OFF)"
@@ -158,7 +107,6 @@ clean:
 	$(test-vectors-targets) \
 	fmt lint \
 	$(test-targets) test force-test \
-	$(fuzz-targets) build-fuzz \
 	clean all
 
 .FORCE:
