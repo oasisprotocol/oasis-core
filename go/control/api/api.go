@@ -19,6 +19,7 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	executorWorker "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
+	keymanagerWorker "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
@@ -73,6 +74,9 @@ type Status struct {
 
 	// Registration is the node's registration status.
 	Registration RegistrationStatus `json:"registration"`
+
+	// Keymanager is the node's key manager worker status in case this node is a key manager node.
+	Keymanager *keymanagerWorker.Status `json:"keymanager,omitempty"`
 
 	// PendingUpgrades are the node's pending upgrades.
 	PendingUpgrades []*upgrade.PendingUpgrade `json:"pending_upgrades"`
@@ -169,6 +173,9 @@ type ControlledNode interface {
 
 	// GetRuntimeStatus returns the node's current per-runtime status.
 	GetRuntimeStatus(ctx context.Context) (map[common.Namespace]RuntimeStatus, error)
+
+	// GetKeyManagerStatus returns the node's key manager worker status.
+	GetKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Status, error)
 
 	// GetPendingUpgrade returns the node's pending upgrades.
 	GetPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error)

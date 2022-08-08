@@ -394,6 +394,32 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
+func (w *Worker) addClientRuntimeWatcher(n common.Namespace, crw *clientRuntimeWatcher) {
+	w.Lock()
+	defer w.Unlock()
+
+	w.clientRuntimes[n] = crw
+}
+
+func (w *Worker) getClientRuntimeWatcher(n common.Namespace) *clientRuntimeWatcher {
+	w.RLock()
+	defer w.RUnlock()
+
+	return w.clientRuntimes[n]
+}
+
+func (w *Worker) getClientRuntimeWatchers() []*clientRuntimeWatcher {
+	w.RLock()
+	defer w.RUnlock()
+
+	crws := make([]*clientRuntimeWatcher, 0, len(w.clientRuntimes))
+	for _, crw := range w.clientRuntimes {
+		crws = append(crws, crw)
+	}
+
+	return crws
+}
+
 func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Status) error {
 	runtimeID := w.runtime.ID()
 	if status == nil || !status.IsInitialized {
@@ -402,7 +428,7 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 	if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&runtimeID) {
 		return nil
 	}
-	if w.clientRuntimes[rt.ID] != nil {
+	if w.getClientRuntimeWatcher(rt.ID) != nil {
 		return nil
 	}
 
@@ -449,7 +475,7 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 	crw.epochTransition()
 	go crw.worker()
 
-	w.clientRuntimes[rt.ID] = crw
+	w.addClientRuntimeWatcher(rt.ID, crw)
 
 	computeRuntimeCount.Inc()
 
@@ -556,8 +582,6 @@ func (w *Worker) worker() { // nolint: gocyclo
 
 	// Subscribe to runtime registrations in order to know which runtimes
 	// are using us as a key manager.
-	w.clientRuntimes = make(map[common.Namespace]*clientRuntimeWatcher)
-
 	rtCh, rtSub, err := w.commonWorker.Consensus.Registry().WatchRuntimes(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to watch runtimes",
@@ -727,7 +751,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 				continue
 			}
 		case <-epoCh:
-			for _, crw := range w.clientRuntimes {
+			for _, crw := range w.getClientRuntimeWatchers() {
 				crw.epochTransition()
 			}
 		case <-w.stopCh:
