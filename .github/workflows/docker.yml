@@ -71,7 +71,7 @@ jobs:
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
       - name: "Rebuild oasisprotocol/oasis-core-dev:${{ steps.determine_tag.outputs.tag }}"
-        uses: docker/build-push-action@v3.0.0
+        uses: docker/build-push-action@v3.1.1
         with:
           context: docker/oasis-core-dev
           file: docker/oasis-core-dev/Dockerfile
@@ -84,7 +84,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: "Rebuild oasisprotocol/oasis-core-ci:${{ steps.determine_tag.outputs.tag }}"
-        uses: docker/build-push-action@v3.0.0
+        uses: docker/build-push-action@v3.1.1
         with:
           context: docker/oasis-core-ci
           file: docker/oasis-core-ci/Dockerfile
@@ -98,7 +98,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: "Rebuild oasisprotocol/aesmd:${{ steps.determine_tag.outputs.tag }}"
-        uses: docker/build-push-action@v3.0.0
+        uses: docker/build-push-action@v3.1.1
         with:
           context: docker/aesmd
           file: docker/aesmd/Dockerfile
