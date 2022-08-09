@@ -512,6 +512,11 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, constraints []
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
 
+		// Use default from consensus parameters if policy is unset.
+		if teeCfg != nil {
+			sc.Policy = teeCfg.SGX.ApplyDefaultPolicy(sc.Policy)
+		}
+
 		// Verify the quote.
 		verifiedQuote, err := sa.Quote.Verify(sc.Policy, ts)
 		if err != nil {
