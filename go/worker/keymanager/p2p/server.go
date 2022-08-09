@@ -3,6 +3,8 @@ package p2p
 import (
 	"context"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
@@ -19,6 +21,8 @@ type service struct {
 }
 
 func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+	enclaveRPCCount.With(prometheus.Labels{"method": method}).Inc()
+
 	switch method {
 	case MethodCallEnclave:
 		var rq CallEnclaveRequest
@@ -44,5 +48,7 @@ func (s *service) handleCallEnclave(ctx context.Context, request *CallEnclaveReq
 
 // NewServer creates a new keymanager protocol server.
 func NewServer(runtimeID common.Namespace, km KeyManager) rpc.Server {
+	initMetrics()
+
 	return rpc.NewServer(runtimeID, KeyManagerProtocolID, KeyManagerProtocolVersion, &service{km})
 }

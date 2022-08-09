@@ -331,6 +331,8 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 		w.initTicker = nil
 	}
 
+	policyUpdateCount.Inc()
+
 	// Register as we are now ready to handle requests.
 	initOk = true
 	w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
@@ -448,6 +450,8 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 	go crw.worker()
 
 	w.clientRuntimes[rt.ID] = crw
+
+	computeRuntimeCount.Inc()
 
 	return nil
 }
