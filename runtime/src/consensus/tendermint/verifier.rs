@@ -43,13 +43,13 @@ use crate::{
         beacon::EpochTime,
         roothash::{ComputeResultsHeader, Header, HeaderType::EpochTransition},
         state::{
-            beacon::ImmutableState as BeaconState, registry::ImmutableState as RegistryState,
-            roothash::ImmutableState as RoothashState, ConsensusState,
+            beacon::ImmutableState as BeaconState, roothash::ImmutableState as RoothashState,
+            ConsensusState,
         },
         tendermint::{
             decode_light_block, state_root_from_header, LightBlockMeta, TENDERMINT_CONTEXT,
         },
-        verifier::{self, Error, TrustRoot},
+        verifier::{self, verify_state_freshness, Error, TrustRoot},
         LightBlock, HEIGHT_LATEST,
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
@@ -284,6 +284,20 @@ impl Verifier {
         Ok(untrusted_block)
     }
 
+    fn verify_freshness(
+        &self,
+        state: &ConsensusState,
+        node_id: &Option<PublicKey>,
+    ) -> Result<Option<PublicKey>, Error> {
+        let rak = if let Some(rak) = self.protocol.get_rak() {
+            rak
+        } else {
+            return Ok(None);
+        };
+
+        verify_state_freshness(state, &self.trust_root, rak, &self.runtime_version, node_id)
+    }
+
     fn verify(
         &self,
         cache: &mut Cache,
@@ -367,59 +381,7 @@ impl Verifier {
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            if let Some(rak) = self.protocol.get_rak() {
-                let registry_state = RegistryState::new(&state);
-
-                match cache.node_id {
-                    // Node ID is cached, query the node and check for matching RAK.
-                    Some(node_id) => {
-                        let node = registry_state
-                            .node(Context::background(), &node_id)
-                            .map_err(|err| {
-                                Error::VerificationFailed(anyhow!(
-                                    "failed to retrieve node from the registry: {}",
-                                    err
-                                ))
-                            })?;
-                        let node = node.ok_or_else(|| {
-                            Error::VerificationFailed(anyhow!(
-                                "own node ID '{}' not found in registry state",
-                                node_id,
-                            ))
-                        })?;
-                        if !node.has_tee(&rak, &runtime_header.namespace, &self.runtime_version) {
-                            return Err(Error::VerificationFailed(anyhow!(
-                                "own RAK not found in registry state"
-                            )));
-                        }
-                    }
-                    // Node ID not cached, need to scan all registry nodes.
-                    None => {
-                        let nodes = registry_state.nodes(Context::background()).map_err(|err| {
-                            Error::VerificationFailed(anyhow!(
-                                "failed to retrieve nodes from the registry: {}",
-                                err
-                            ))
-                        })?;
-                        let mut found_node: Option<PublicKey> = None;
-                        for node in nodes {
-                            if node.has_tee(&rak, &runtime_header.namespace, &self.runtime_version)
-                            {
-                                found_node = Some(node.id);
-                                break;
-                            }
-                        }
-                        if found_node.is_none() {
-                            return Err(Error::VerificationFailed(anyhow!(
-                                "own RAK not found in registry state",
-                            )));
-                        }
-
-                        // Cache node ID to avoid re-scanning.
-                        cache.node_id = found_node;
-                    }
-                }
-            }
+            cache.node_id = self.verify_freshness(&state, &cache.node_id)?;
         }
 
         // Cache verified runtime header.

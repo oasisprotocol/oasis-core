@@ -73,3 +73,22 @@ impl ImmutableMKVS for ConsensusState {
         Box::new(self.mkvs.iter(ctx))
     }
 }
+
+impl ImmutableMKVS for &ConsensusState {
+    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.mkvs.get(ctx, key)
+    }
+
+    fn prefetch_prefixes(
+        &self,
+        ctx: Context,
+        prefixes: &[crate::storage::mkvs::Prefix],
+        limit: u16,
+    ) -> Result<()> {
+        self.mkvs.prefetch_prefixes(ctx, prefixes, limit)
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn crate::storage::mkvs::Iterator + '_> {
+        Box::new(self.mkvs.iter(ctx))
+    }
+}
