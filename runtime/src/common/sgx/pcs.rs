@@ -122,7 +122,7 @@ impl QuotePolicy {
 }
 
 /// An attestation quote together with the TCB bundle required for its verification.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct QuoteBundle {
     #[cbor(rename = "quote")]
     pub quote: Vec<u8>,
@@ -337,7 +337,7 @@ impl quote::Quote3SignatureEcdsaP256Verifier for Verifier {
 }
 
 /// The TCB bundle contains all the required components to verify a quote's TCB.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct TCBBundle {
     #[cbor(rename = "tcb_info")]
     pub tcb_info: SignedTCBInfo,
@@ -393,6 +393,14 @@ pub struct SignedTCBInfo {
     #[serde(rename = "signature")]
     pub signature: String,
 }
+
+impl PartialEq for SignedTCBInfo {
+    fn eq(&self, other: &SignedTCBInfo) -> bool {
+        self.tcb_info.get() == other.tcb_info.get() && self.signature == other.signature
+    }
+}
+
+impl Eq for SignedTCBInfo {}
 
 fn open_signed_tcb<'a, T: serde::Deserialize<'a>>(
     data: &'a str,
@@ -662,6 +670,15 @@ pub struct SignedQEIdentity {
     #[serde(rename = "signature")]
     pub signature: String,
 }
+
+impl PartialEq for SignedQEIdentity {
+    fn eq(&self, other: &SignedQEIdentity) -> bool {
+        self.enclave_identity.get() == other.enclave_identity.get()
+            && self.signature == other.signature
+    }
+}
+
+impl Eq for SignedQEIdentity {}
 
 impl SignedQEIdentity {
     fn open(

@@ -53,7 +53,7 @@ impl EnclaveIdentity {
 }
 
 /// An unverified SGX remote attestation quote, depending on the attestation scheme.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub enum Quote {
     #[cbor(rename = "ias")]
     Ias(ias::AVR),

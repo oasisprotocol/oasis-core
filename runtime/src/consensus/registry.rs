@@ -16,6 +16,7 @@ use crate::{
         version::Version,
     },
     consensus::{beacon::EpochTime, scheduler, staking},
+    rak::RAK,
 };
 
 /// Represents the address of a TCP endpoint.
@@ -106,6 +107,28 @@ pub struct CapabilityTEE {
 
     /// Attestation.
     pub attestation: Vec<u8>,
+}
+
+impl CapabilityTEE {
+    /// Tries to decode the TEE-specific attestation.
+    pub fn try_decode_attestation<T>(&self) -> Result<T, cbor::DecodeError>
+    where
+        T: cbor::Decode,
+    {
+        cbor::from_slice_non_strict(&self.attestation)
+    }
+
+    /// Checks whether the TEE capability matches the given TEE identity.
+    pub fn matches(&self, rak: &RAK) -> bool {
+        match self.hardware {
+            TEEHardware::TEEHardwareInvalid => false,
+            TEEHardware::TEEHardwareIntelSGX => {
+                // Decode SGX attestation and check quote equality.
+                let attestation: SGXAttestation = self.try_decode_attestation().unwrap();
+                rak.matches(&self.rak, &attestation.quote())
+            }
+        }
+    }
 }
 
 /// Represents a node's capabilities.
@@ -224,8 +247,8 @@ pub struct Node {
 }
 
 impl Node {
-    /// Returns if the node has the provided RAK configured.
-    pub fn has_rak(&self, rak: &PublicKey, runtime_id: &Namespace, version: &Version) -> bool {
+    /// Checks whether the node has the provided TEE identity configured.
+    pub fn has_tee(&self, rak: &RAK, runtime_id: &Namespace, version: &Version) -> bool {
         if let Some(rts) = &self.runtimes {
             for rt in rts {
                 if runtime_id != &rt.id {
@@ -235,7 +258,7 @@ impl Node {
                     continue;
                 }
                 if let Some(tee) = &rt.capabilities.tee {
-                    if rak == &tee.rak {
+                    if tee.matches(rak) {
                         return true;
                     }
                 }
@@ -525,6 +548,16 @@ pub enum SGXAttestation {
     /// New V1 format that supports both IAS and PCS policies.
     #[cbor(rename = 1)]
     V1 { quote: sgx::Quote },
+}
+
+impl SGXAttestation {
+    /// SGX attestation quote.
+    pub fn quote(&self) -> sgx::Quote {
+        match self {
+            Self::V0(avr) => sgx::Quote::Ias(avr.clone()),
+            Self::V1 { quote } => quote.clone(),
+        }
+    }
 }
 
 /// TEE hardware implementation.

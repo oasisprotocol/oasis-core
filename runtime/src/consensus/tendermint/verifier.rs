@@ -367,7 +367,7 @@ impl Verifier {
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            if let Some(rak) = self.protocol.get_public_rak() {
+            if let Some(rak) = self.protocol.get_rak() {
                 let registry_state = RegistryState::new(&state);
 
                 match cache.node_id {
@@ -383,14 +383,13 @@ impl Verifier {
                             })?;
                         let node = node.ok_or_else(|| {
                             Error::VerificationFailed(anyhow!(
-                                "own node ID: '{}' not found in registry state",
+                                "own node ID '{}' not found in registry state",
                                 node_id,
                             ))
                         })?;
-                        if !node.has_rak(&rak, &runtime_header.namespace, &self.runtime_version) {
+                        if !node.has_tee(&rak, &runtime_header.namespace, &self.runtime_version) {
                             return Err(Error::VerificationFailed(anyhow!(
-                                "own RAK: '{}' not found in registry state",
-                                rak
+                                "own RAK not found in registry state"
                             )));
                         }
                     }
@@ -404,7 +403,7 @@ impl Verifier {
                         })?;
                         let mut found_node: Option<PublicKey> = None;
                         for node in nodes {
-                            if node.has_rak(&rak, &runtime_header.namespace, &self.runtime_version)
+                            if node.has_tee(&rak, &runtime_header.namespace, &self.runtime_version)
                             {
                                 found_node = Some(node.id);
                                 break;
@@ -412,8 +411,7 @@ impl Verifier {
                         }
                         if found_node.is_none() {
                             return Err(Error::VerificationFailed(anyhow!(
-                                "own RAK: '{}' not found in registry state",
-                                rak
+                                "own RAK not found in registry state",
                             )));
                         }
 

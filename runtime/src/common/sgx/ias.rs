@@ -169,7 +169,7 @@ impl QuoteBody {
 }
 
 /// Attestation verification report.
-#[derive(Debug, Default, Clone, cbor::Encode, cbor::Decode)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct AVR {
     pub body: Vec<u8>,
     pub signature: Vec<u8>,

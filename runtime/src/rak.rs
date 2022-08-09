@@ -1,5 +1,8 @@
 //! Runtime attestation key handling.
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::Result;
 use sgx_isa::Targetinfo;
@@ -54,6 +57,7 @@ struct Inner {
     quote: Option<Arc<Quote>>,
     quote_timestamp: Option<i64>,
     quote_policy: Option<QuotePolicy>,
+    known_quotes: VecDeque<Arc<Quote>>,
     #[allow(unused)]
     enclave_identity: Option<EnclaveIdentity>,
     #[allow(unused)]
@@ -82,6 +86,7 @@ impl Default for RAK {
                 quote: None,
                 quote_timestamp: None,
                 quote_policy: None,
+                known_quotes: Default::default(),
                 enclave_identity: EnclaveIdentity::current(),
                 target_info: None,
                 nonce: None,
@@ -229,9 +234,18 @@ impl RAK {
             }
         }
 
-        inner.quote = Some(Arc::new(quote));
+        let quote = Arc::new(quote);
+        inner.quote = Some(quote.clone());
         inner.quote_timestamp = Some(verified_quote.timestamp);
         inner.quote_policy = Some(policy);
+
+        // Keep around last two valid quotes to allow for transition as node registration does not
+        // happen immediately after a quote has been verified by the runtime.
+        inner.known_quotes.push_back(quote);
+        if inner.known_quotes.len() > 2 {
+            inner.known_quotes.pop_front();
+        }
+
         Ok(())
     }
 
@@ -281,6 +295,17 @@ impl RAK {
         }
 
         Ok(())
+    }
+
+    /// Checks whether the RAK matches another specified (RAK_pub, quote) pair.
+    pub fn matches(&self, rak: &PublicKey, quote: &Quote) -> bool {
+        // Check if public key matches.
+        if !self.public_key().map(|pk| &pk == rak).unwrap_or(false) {
+            return false;
+        }
+
+        let inner = self.inner.read().unwrap();
+        inner.known_quotes.iter().any(|q| &**q == quote)
     }
 }
 
