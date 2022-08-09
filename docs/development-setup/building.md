@@ -14,6 +14,7 @@ the following in the top-level directory:
 ```
 export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
 export OASIS_UNSAFE_SKIP_KM_POLICY="1"
+export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
 make
 ```
 
@@ -38,16 +39,13 @@ slightly different environmental variables set:
 
 ```
 export OASIS_UNSAFE_SKIP_AVR_VERIFY="1"
-export OASIS_UNSAFE_KM_POLICY_KEYS="1"
 export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES="1"
 make
 ```
 
-The AVR flag is there because we are running a node in a local development
+The AVR flag is there because we are running the node in a local development
 environment and we will not do any attestation with Intel's remote servers. The
-KM policy keys flag allows testing keys to be used while verifying the security
-policy of the node. TEE hardware flag denotes the trusted execution environment
-engine for running the Oasis node and the tests below.
+debug enclaves flag allows enclaves in debug mode to be used.
 
 To run an Oasis node under SGX make sure:
 

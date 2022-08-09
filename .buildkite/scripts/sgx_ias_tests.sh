@@ -14,11 +14,10 @@ set -x
 export GO_BUILD_E2E_COVERAGE=1
 # Ensure AVR verify is not skipped.
 unset OASIS_UNSAFE_SKIP_AVR_VERIFY
-export OASIS_TEE_HARDWARE=intel-sgx
-# Allow use of usnafe km policy keys.
-export OASIS_UNSAFE_KM_POLICY_KEYS=1
-# Allow debug encalves (tests are running against developemnt endpoint).
+# Allow debug enclaves (tests are running against developemnt endpoint).
 export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES=1
+# Use Intel SGX.
+export OASIS_TEE_HARDWARE=intel-sgx
 
 make all
 .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption
