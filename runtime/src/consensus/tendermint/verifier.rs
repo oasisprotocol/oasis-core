@@ -184,6 +184,25 @@ impl Default for Cache {
     }
 }
 
+impl Cache {
+    /// Latest known and verified consensus layer height.
+    fn latest_known_height(&self) -> u64 {
+        self.last_trust_root.height
+    }
+
+    /// Process a new verified consensus layer block and update the cache if needed.
+    fn update_verified_block(&mut self, verified_block: &TMLightBlock) {
+        let header = &verified_block.signed_header.header;
+        let height = header.height.into();
+
+        // Update the trust root if ahead.
+        if height > self.last_trust_root.height {
+            self.last_trust_root.height = height;
+            self.last_trust_root.hash = header.hash().to_string();
+        }
+    }
+}
+
 impl Verifier {
     /// Create a new Tendermint consensus layer verifier.
     pub fn new(protocol: Arc<Protocol>, trust_root: TrustRoot) -> Self {
@@ -208,7 +227,7 @@ impl Verifier {
     }
 
     fn sync(&self, cache: &mut Cache, instance: &mut Instance, height: u64) -> Result<(), Error> {
-        if height < cache.last_verified_height {
+        if height < cache.last_verified_height || height < cache.latest_known_height() {
             // Ignore requests for earlier heights.
             return Ok(());
         }
@@ -218,20 +237,22 @@ impl Verifier {
             .verify_to_target(height.try_into().unwrap(), &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
         self.update_insecure_posix_time(&verified_block);
-
-        let header = verified_block.signed_header.header;
-        cache.last_trust_root.height = header.height.into();
-        cache.last_trust_root.hash = header.hash().to_string();
+        cache.update_verified_block(&verified_block);
 
         Ok(())
     }
 
-    fn latest_consensus_state(&self, instance: &mut Instance) -> Result<ConsensusState, Error> {
+    fn latest_consensus_state(
+        &self,
+        cache: &Cache,
+        instance: &mut Instance,
+    ) -> Result<ConsensusState, Error> {
+        let height = cache.latest_known_height();
         let verified_block = instance
             .light_client
-            .verify_to_highest(&mut instance.state)
+            .verify_to_target(height.try_into().unwrap(), &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
-        self.update_insecure_posix_time(&verified_block);
+        // No need to update time as this has already been done once for this height.
 
         let state_root = state_root_from_header(&verified_block.signed_header);
         Ok(ConsensusState::from_protocol(
@@ -268,18 +289,14 @@ impl Verifier {
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
         self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
-        let header = verified_block.signed_header.header;
-        cache.last_verified_height = header.height.into();
-        if cache.last_verified_height > cache.last_trust_root.height {
-            cache.last_trust_root.height = header.height.into();
-            cache.last_trust_root.hash = header.hash().to_string();
-        }
+        cache.last_verified_height = verified_block.signed_header.header.height.into();
 
         Ok(untrusted_block)
     }
@@ -424,6 +441,7 @@ impl Verifier {
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
         self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
@@ -661,6 +679,20 @@ impl Verifier {
             ..Default::default()
         };
 
+        // Sync the verifier up to the latest block to make sure we are up to date before
+        // processing any requests.
+        let verified_block = instance
+            .light_client
+            .verify_to_highest(&mut instance.state)
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
+        self.save_trust_root(&untrusted_local_store, &cache);
+
+        info!(logger, "Consensus verifier synced";
+            "latest_height" => cache.latest_known_height(),
+        );
+
         // Start the command processing loop.
         loop {
             let command = self.command_receiver.recv().map_err(|_| Error::Internal)?;
@@ -700,7 +732,7 @@ impl Verifier {
                 }
                 Command::LatestState(sender) => {
                     sender
-                        .send(self.latest_consensus_state(&mut instance))
+                        .send(self.latest_consensus_state(&cache, &mut instance))
                         .map_err(|_| Error::Internal)?;
                 }
             }
