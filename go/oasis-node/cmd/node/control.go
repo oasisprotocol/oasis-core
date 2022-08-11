@@ -11,6 +11,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	keymanagerWorker "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -181,6 +182,14 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		runtimes[rt.ID()] = status
 	}
 	return runtimes, nil
+}
+
+// GetKeymanagerStatus implements control.ControlledNode.
+func (n *Node) GetKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Status, error) {
+	if n.KeymanagerWorker == nil || !n.KeymanagerWorker.Enabled() {
+		return nil, nil
+	}
+	return n.KeymanagerWorker.GetStatus(ctx)
 }
 
 // GetPendingUpgrades implements control.ControlledNode.

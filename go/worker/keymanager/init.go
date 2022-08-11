@@ -63,6 +63,7 @@ func New(
 		quitCh:              make(chan struct{}),
 		initCh:              make(chan struct{}),
 		initTickerCh:        nil,
+		clientRuntimes:      make(map[common.Namespace]*clientRuntimeWatcher),
 		accessList:          make(map[core.PeerID]map[common.Namespace]struct{}),
 		privatePeers:        make(map[core.PeerID]struct{}),
 		accessListByRuntime: make(map[common.Namespace][]core.PeerID),

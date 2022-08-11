@@ -98,6 +98,11 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 		return nil, fmt.Errorf("failed to get runtime status: %w", err)
 	}
 
+	kms, err := c.node.GetKeymanagerStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key manager worker status: %w", err)
+	}
+
 	pendingUpgrades, err := c.node.GetPendingUpgrades(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending upgrades: %w", err)
@@ -124,6 +129,7 @@ func (c *nodeController) GetStatus(ctx context.Context) (*control.Status, error)
 		},
 		Consensus:       *cs,
 		Runtimes:        runtimes,
+		Keymanager:      kms,
 		Registration:    *rs,
 		PendingUpgrades: pendingUpgrades,
 	}, nil
