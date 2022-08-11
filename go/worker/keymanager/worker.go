@@ -39,7 +39,8 @@ const (
 
 	// Make sure this always matches the appropriate method in
 	// `keymanager-runtime/src/methods.rs`.
-	getPublicKeyRequestMethod = "get_public_key"
+	getPublicKeyRequestMethod          = "get_public_key"
+	getPublicEphemeralKeyRequestMethod = "get_public_ephemeral_key"
 )
 
 var (
@@ -173,7 +174,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
 	switch frame.UntrustedPlaintext {
 	case "":
 		// Anyone can connect.
-	case getPublicKeyRequestMethod:
+	case getPublicKeyRequestMethod, getPublicEphemeralKeyRequestMethod:
 		// Anyone can get public keys.
 	default:
 		if _, privatePeered := w.privatePeers[peerID]; !privatePeered {

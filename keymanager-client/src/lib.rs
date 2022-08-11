@@ -9,6 +9,7 @@ use futures::future::BoxFuture;
 use io_context::Context;
 
 use oasis_core_keymanager_api_common::{self, KeyManagerError};
+use oasis_core_runtime::consensus::beacon::EpochTime;
 
 /// Key manager client interface.
 pub trait KeyManagerClient: Send + Sync {
@@ -17,7 +18,7 @@ pub trait KeyManagerClient: Send + Sync {
     /// This will make the client re-fetch the keys from the key manager.
     fn clear_cache(&self);
 
-    /// Get or create named key pair.
+    /// Get or create named long-term key pair.
     ///
     /// If the key does not yet exist, the key manager will generate one. If
     /// the key has already been cached locally, it will be retrieved from
@@ -28,11 +29,31 @@ pub trait KeyManagerClient: Send + Sync {
         key_pair_id: KeyPairId,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>>;
 
-    /// Get public key for a key pair id.
+    /// Get long-term public key for a key pair id.
     fn get_public_key(
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
+    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>>;
+
+    /// Get or create named ephemeral key pair for given epoch.
+    ///
+    /// If the key does not yet exist, the key manager will generate one. If
+    /// the key has already been cached locally, it will be retrieved from
+    /// cache.
+    fn get_or_create_ephemeral_keys(
+        &self,
+        ctx: Context,
+        key_pair_id: KeyPairId,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<KeyPair, KeyManagerError>>;
+
+    /// Get ephemeral public key for an epoch and a key pair id.
+    fn get_public_ephemeral_key(
+        &self,
+        ctx: Context,
+        key_pair_id: KeyPairId,
+        epoch: EpochTime,
     ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>>;
 
     /// Get a copy of the master secret for replication.
@@ -61,6 +82,24 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         key_pair_id: KeyPairId,
     ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
         KeyManagerClient::get_public_key(&**self, ctx, key_pair_id)
+    }
+
+    fn get_or_create_ephemeral_keys(
+        &self,
+        ctx: Context,
+        key_pair_id: KeyPairId,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
+        KeyManagerClient::get_or_create_ephemeral_keys(&**self, ctx, key_pair_id, epoch)
+    }
+
+    fn get_public_ephemeral_key(
+        &self,
+        ctx: Context,
+        key_pair_id: KeyPairId,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+        KeyManagerClient::get_public_ephemeral_key(&**self, ctx, key_pair_id, epoch)
     }
 
     fn replicate_master_secret(

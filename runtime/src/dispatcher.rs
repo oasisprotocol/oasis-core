@@ -335,6 +335,7 @@ impl Dispatcher {
                     &state.rpc_demux,
                     &state.rpc_dispatcher,
                     &state.protocol,
+                    &state.consensus_verifier,
                     ctx,
                     request,
                 )
@@ -342,8 +343,14 @@ impl Dispatcher {
             }
             Body::RuntimeLocalRPCCallRequest { request } => {
                 // Local RPC call.
-                self.dispatch_local_rpc(&state.rpc_dispatcher, &state.protocol, ctx, request)
-                    .await
+                self.dispatch_local_rpc(
+                    &state.rpc_dispatcher,
+                    &state.protocol,
+                    &state.consensus_verifier,
+                    ctx,
+                    request,
+                )
+                .await
             }
             Body::RuntimeExecuteTxBatchRequest {
                 mode,
@@ -810,6 +817,7 @@ impl Dispatcher {
         rpc_demux: &Arc<Mutex<RpcDemux>>,
         rpc_dispatcher: &Arc<RpcDispatcher>,
         protocol: &Arc<Protocol>,
+        consensus_verifier: &Arc<dyn Verifier>,
         ctx: Context,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
@@ -853,6 +861,7 @@ impl Dispatcher {
                     let ctx = ctx.freeze();
                     let rak = self.rak.clone();
                     let protocol = protocol.clone();
+                    let consensus_verifier = consensus_verifier.clone();
                     let rpc_dispatcher = rpc_dispatcher.clone();
 
                     let response = tokio::task::spawn_blocking(move || {
@@ -860,8 +869,13 @@ impl Dispatcher {
                             Context::create_child(&ctx),
                             protocol.clone(),
                         ));
-                        let rpc_ctx =
-                            RpcContext::new(ctx.clone(), rak, session_info, &untrusted_local);
+                        let rpc_ctx = RpcContext::new(
+                            ctx.clone(),
+                            rak,
+                            session_info,
+                            consensus_verifier,
+                            &untrusted_local,
+                        );
                         let response = rpc_dispatcher.dispatch(req, rpc_ctx);
                         RpcMessage::Response(response)
                     })
@@ -910,6 +924,7 @@ impl Dispatcher {
         self: &Arc<Self>,
         rpc_dispatcher: &Arc<RpcDispatcher>,
         protocol: &Arc<Protocol>,
+        consensus_verifier: &Arc<dyn Verifier>,
         ctx: Context,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
@@ -927,14 +942,20 @@ impl Dispatcher {
         let protocol = protocol.clone();
         let dispatcher = self.clone();
         let rpc_dispatcher = rpc_dispatcher.clone();
+        let consensus_verifier = consensus_verifier.clone();
 
         tokio::task::spawn_blocking(move || {
             let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
                 Context::create_child(&ctx),
                 protocol.clone(),
             ));
-            let rpc_ctx =
-                RpcContext::new(ctx.clone(), dispatcher.rak.clone(), None, &untrusted_local);
+            let rpc_ctx = RpcContext::new(
+                ctx.clone(),
+                dispatcher.rak.clone(),
+                None,
+                consensus_verifier,
+                &untrusted_local,
+            );
             let response = rpc_dispatcher.dispatch_local(req, rpc_ctx);
             let response = RpcMessage::Response(response);
 

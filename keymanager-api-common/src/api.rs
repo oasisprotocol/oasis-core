@@ -14,6 +14,7 @@ use oasis_core_runtime::{
         namespace::Namespace,
         sgx::EnclaveIdentity,
     },
+    consensus::beacon::EpochTime,
     impl_bytes,
 };
 
@@ -96,27 +97,49 @@ pub struct ReplicateResponse {
     pub master_secret: MasterSecret,
 }
 
-/// Request runtime/key pair id tuple.
+/// Long-term key request for private/public key generation and retrieval.
+///
+/// Long-term keys are runtime-scoped long-lived keys derived by the key manager
+/// from the master secret. They can be generated at any time.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct RequestIds {
+pub struct LongTermKeyRequest {
     /// Runtime ID.
     pub runtime_id: Namespace,
     /// Key pair ID.
     pub key_pair_id: KeyPairId,
 }
 
-impl RequestIds {
+impl LongTermKeyRequest {
     pub fn new(runtime_id: Namespace, key_pair_id: KeyPairId) -> Self {
         Self {
             runtime_id,
             key_pair_id,
         }
     }
+}
 
-    pub fn to_cache_key(&self) -> Vec<u8> {
-        let mut k = self.runtime_id.as_ref().to_vec();
-        k.extend_from_slice(self.key_pair_id.as_ref());
-        k
+/// Ephemeral key request for private/public key generation and retrieval.
+///
+/// Ephemeral keys are runtime-scoped short-lived keys derived by
+/// the key manager from the master secret. They can only be generated
+/// for the past few epochs relative to the consensus layer state.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct EphemeralKeyRequest {
+    /// Runtime ID.
+    pub runtime_id: Namespace,
+    /// Key pair ID.
+    pub key_pair_id: KeyPairId,
+    /// Epoch time.
+    pub epoch: EpochTime,
+}
+
+impl EphemeralKeyRequest {
+    pub fn new(runtime_id: Namespace, key_pair_id: KeyPairId, epoch: EpochTime) -> Self {
+        Self {
+            runtime_id,
+            key_pair_id,
+            epoch,
+        }
     }
 }
 
@@ -198,8 +221,10 @@ pub struct SignedPublicKey {
 pub enum KeyManagerError {
     #[error("client session is not authenticated")]
     NotAuthenticated,
-    #[error("client session authentication is invalid")]
-    InvalidAuthentication,
+    #[error("client is not authorized")]
+    NotAuthorized,
+    #[error("invalid epoch")]
+    InvalidEpoch,
     #[error("key manager is not initialized")]
     NotInitialized,
     #[error("key manager state corrupted")]
@@ -264,6 +289,10 @@ impl Default for TrustedPolicySigners {
 pub const METHOD_GET_OR_CREATE_KEYS: &str = "get_or_create_keys";
 /// Name of the `get_public_key` method.
 pub const METHOD_GET_PUBLIC_KEY: &str = "get_public_key";
+/// Name of the `get_or_create_ephemeral_keys` method.
+pub const METHOD_GET_OR_CREATE_EPHEMERAL_KEYS: &str = "get_or_create_ephemeral_keys";
+/// Name of the `get_public_ephemeral_key` method.
+pub const METHOD_GET_PUBLIC_EPHEMERAL_KEY: &str = "get_public_ephemeral_key";
 /// Name of the `replicate_master_secret` method.
 pub const METHOD_REPLICATE_MASTER_SECRET: &str = "replicate_master_secret";
 

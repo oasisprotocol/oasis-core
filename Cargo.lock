@@ -1922,6 +1922,7 @@ dependencies = [
  "oasis-core-keymanager-client",
  "oasis-core-runtime",
  "rand 0.7.3",
+ "rustc-hex",
  "sgx-isa 0.3.3",
  "sp800-185",
  "tiny-keccak 2.0.2",
@@ -2758,6 +2759,7 @@ dependencies = [
  "simple-keymanager",
  "thiserror",
  "tokio 1.19.2",
+ "x25519-dalek",
 ]
 
 [[package]]

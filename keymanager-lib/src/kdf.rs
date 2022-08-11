@@ -15,9 +15,9 @@ use x25519_dalek;
 use zeroize::Zeroize;
 
 use oasis_core_keymanager_api_common::{
-    InitRequest, InitResponse, KeyManagerError, KeyPair, MasterSecret, PrivateKey, PublicKey,
-    ReplicateResponse, RequestIds, SignedInitResponse, SignedPublicKey, StateKey,
-    INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
+    EphemeralKeyRequest, InitRequest, InitResponse, KeyManagerError, KeyPair, LongTermKeyRequest,
+    MasterSecret, PrivateKey, PublicKey, ReplicateResponse, SignedInitResponse, SignedPublicKey,
+    StateKey, INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
 };
 use oasis_core_keymanager_client::{KeyManagerClient, RemoteClient};
 use oasis_core_runtime::{
@@ -62,6 +62,20 @@ lazy_static! {
         }
     };
 
+    static ref EPHEMERAL_KDF_CUSTOM: &'static [u8] = {
+        match BUILD_INFO.is_secure {
+            true => b"ekiden-derive-ephemeral-secret",
+            false => b"ekiden-derive-ephemeral-secret-insecure",
+        }
+    };
+
+    static ref EPHEMERAL_XOF_CUSTOM: &'static [u8] = {
+        match BUILD_INFO.is_secure {
+            true => b"ekiden-derive-ephemeral-keys",
+            false => b"ekiden-derive-ephemeral-keys-insecure",
+        }
+    };
+
     static ref RUNTIME_CHECKSUM_CUSTOM: &'static [u8] = {
         match BUILD_INFO.is_secure {
             true => b"ekiden-checksum-master-secret",
@@ -77,6 +91,53 @@ const INSECURE_SIGNING_KEY_SEED: &str = "ekiden test key manager RAK seed";
 const MASTER_SECRET_STORAGE_KEY: &[u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
 const MASTER_SECRET_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal master secret v0";
+
+/// Key request interface for key derivation.
+pub trait KeyRequest {
+    /// A unique seed for secret derivation.
+    fn seed(&self) -> Vec<u8>;
+
+    /// Custom kdf parameter for secret derivation.
+    fn kdf_custom(&self) -> &[u8];
+
+    /// Custom xof parameter for private key derivation.
+    fn xof_custom(&self) -> &[u8];
+}
+
+impl KeyRequest for LongTermKeyRequest {
+    fn seed(&self) -> Vec<u8> {
+        // seed = runtimeID || keypairID
+        let mut s = self.runtime_id.as_ref().to_vec();
+        s.extend_from_slice(self.key_pair_id.as_ref());
+        s
+    }
+
+    fn kdf_custom(&self) -> &[u8] {
+        &RUNTIME_KDF_CUSTOM
+    }
+
+    fn xof_custom(&self) -> &[u8] {
+        &RUNTIME_KDF_CUSTOM
+    }
+}
+
+impl KeyRequest for EphemeralKeyRequest {
+    fn seed(&self) -> Vec<u8> {
+        // seed = runtimeID || keypairID || epoch
+        let mut s = self.runtime_id.as_ref().to_vec();
+        s.extend_from_slice(self.key_pair_id.as_ref());
+        s.extend_from_slice(&self.epoch.to_be_bytes());
+        s
+    }
+
+    fn kdf_custom(&self) -> &[u8] {
+        &EPHEMERAL_KDF_CUSTOM
+    }
+
+    fn xof_custom(&self) -> &[u8] {
+        &EPHEMERAL_XOF_CUSTOM
+    }
+}
 
 /// Kdf, which derives key manager keys from a master secret.
 pub struct Kdf {
@@ -101,14 +162,14 @@ impl Inner {
         self.cache.clear();
     }
 
-    fn derive_contract_key(&self, req: &RequestIds) -> Result<KeyPair> {
+    fn derive_key(&self, req: &impl KeyRequest) -> Result<KeyPair> {
         let checksum = self.get_checksum()?;
-        let mut contract_secret = self.derive_contract_secret(req)?;
+        let mut secret = self.derive_secret(req)?;
 
         // Note: The `name` parameter for cSHAKE is reserved for use by NIST.
-        let mut xof = CShake::new_cshake256(&[], &RUNTIME_XOF_CUSTOM);
-        xof.update(&contract_secret);
-        contract_secret.zeroize();
+        let mut xof = CShake::new_cshake256(&[], req.xof_custom());
+        xof.update(&secret);
+        secret.zeroize();
         let mut xof = xof.xof();
 
         // State (storage) key.
@@ -130,7 +191,7 @@ impl Inner {
         ))
     }
 
-    fn derive_contract_secret(&self, req: &RequestIds) -> Result<Vec<u8>> {
+    fn derive_secret(&self, req: &impl KeyRequest) -> Result<Vec<u8>> {
         let master_secret = match self.master_secret.as_ref() {
             Some(master_secret) => master_secret,
             None => return Err(KeyManagerError::NotInitialized.into()),
@@ -138,10 +199,9 @@ impl Inner {
 
         let mut k = [0u8; 32];
 
-        // KMAC256(master_secret, runtimeID || contractID, 32, "ekiden-derive-runtime-secret")
-        let mut f = KMac::new_kmac256(master_secret.as_ref(), &RUNTIME_KDF_CUSTOM);
-        f.update(req.runtime_id.as_ref());
-        f.update(req.key_pair_id.as_ref());
+        // KMAC256(master_secret, seed, 32, kdf_custom)
+        let mut f = KMac::new_kmac256(master_secret.as_ref(), req.kdf_custom());
+        f.update(&req.seed()[..]);
         f.finalize(&mut k);
 
         Ok(k.to_vec())
@@ -331,9 +391,9 @@ impl Kdf {
         })
     }
 
-    // Get or create keys.
-    pub fn get_or_create_keys(&self, req: &RequestIds) -> Result<KeyPair> {
-        let cache_key = req.to_cache_key();
+    /// Get or create keys.
+    pub fn get_or_create_keys(&self, req: &impl KeyRequest) -> Result<KeyPair> {
+        let cache_key = req.seed();
 
         // Check to see if the cached value exists.
         let mut inner = self.inner.write().unwrap();
@@ -341,16 +401,16 @@ impl Kdf {
             return Ok(keys.clone());
         };
 
-        let contract_key = inner.derive_contract_key(req)?;
-        inner.cache.put(cache_key, contract_key.clone());
+        let key = inner.derive_key(req)?;
+        inner.cache.put(cache_key, key.clone());
 
-        Ok(contract_key)
+        Ok(key)
     }
 
     /// Get the public part of the key.
-    pub fn get_public_key(&self, req: &RequestIds) -> Result<Option<PublicKey>> {
-        let contract_keys = self.get_or_create_keys(req)?;
-        Ok(Some(contract_keys.input_keypair.pk))
+    pub fn get_public_key(&self, req: &impl KeyRequest) -> Result<Option<PublicKey>> {
+        let keys = self.get_or_create_keys(req)?;
+        Ok(Some(keys.input_keypair.pk))
     }
 
     /// Signs the public key using the key manager key.
@@ -469,5 +529,324 @@ impl Kdf {
         seal_key.zeroize();
 
         d2
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lru::LruCache;
+    use rustc_hex::{FromHex, ToHex};
+    use std::{
+        collections::HashSet,
+        convert::TryInto,
+        sync::{Arc, RwLock},
+    };
+
+    use oasis_core_keymanager_api_common::{
+        EphemeralKeyRequest, KeyPairId, LongTermKeyRequest, MasterSecret, PublicKey,
+        PUBLIC_KEY_CONTEXT,
+    };
+    use oasis_core_runtime::common::{crypto::signature::PrivateKey, namespace::Namespace};
+
+    use super::{
+        Inner, KeyRequest, EPHEMERAL_KDF_CUSTOM, EPHEMERAL_XOF_CUSTOM, RUNTIME_KDF_CUSTOM,
+        RUNTIME_XOF_CUSTOM,
+    };
+    use crate::kdf::Kdf;
+
+    struct SimpleKeyRequest<'a> {
+        seed: &'a str,
+        kdf_custom: &'a [u8],
+        xof_custom: &'a [u8],
+    }
+
+    impl Default for SimpleKeyRequest<'_> {
+        fn default() -> Self {
+            Self {
+                seed: "8842befd88ea1952decf60f5c7430ee479b84a9b2472b2cc1fc796d35d5d71c3",
+                kdf_custom: b"kdf_custom",
+                xof_custom: b"xof_custom",
+            }
+        }
+    }
+
+    impl KeyRequest for SimpleKeyRequest<'_> {
+        fn seed(&self) -> Vec<u8> {
+            self.seed.from_hex().unwrap()
+        }
+
+        fn kdf_custom(&self) -> &[u8] {
+            self.kdf_custom
+        }
+
+        fn xof_custom(&self) -> &[u8] {
+            self.xof_custom
+        }
+    }
+
+    impl Default for Kdf {
+        fn default() -> Self {
+            Self {
+                inner: RwLock::new(Inner {
+                    master_secret: Some(MasterSecret([1u8; 32])),
+                    checksum: Some(vec![2u8; 32]),
+                    runtime_id: Some(Namespace([3u8; 32])),
+                    signer: Some(Arc::new(PrivateKey::from_bytes(vec![4u8; 32]))),
+                    cache: LruCache::new(1),
+                }),
+            }
+        }
+    }
+
+    #[test]
+    fn key_generation_is_deterministic() {
+        let kdf = Kdf::default();
+        let req = SimpleKeyRequest::default();
+
+        let sk1 = kdf
+            .get_or_create_keys(&req)
+            .expect("private key should be created");
+
+        let sk2 = kdf
+            .get_or_create_keys(&req)
+            .expect("private key should be created");
+
+        assert_eq!(sk1.input_keypair.sk.0, sk2.input_keypair.sk.0);
+        assert_eq!(sk1.input_keypair.pk.0, sk2.input_keypair.pk.0);
+    }
+
+    #[test]
+    fn private_keys_are_unique() {
+        let kdf = Kdf::default();
+        let mut req = SimpleKeyRequest::default();
+
+        let sk1 = kdf
+            .get_or_create_keys(&req)
+            .expect("private key should be created");
+
+        req.seed = "eeffe4ab608f4adad8b5168163ab95fab43a818321ad49fba897fcb435097099";
+        let sk2 = kdf
+            .get_or_create_keys(&req)
+            .expect("private key should be created");
+
+        assert_ne!(sk1.input_keypair.sk.0, sk2.input_keypair.sk.0);
+        assert_ne!(sk1.input_keypair.pk.0, sk2.input_keypair.pk.0);
+    }
+
+    #[test]
+    fn private_and_public_key_match() {
+        let kdf = Kdf::default();
+        let req = SimpleKeyRequest::default();
+
+        let sk = kdf
+            .get_or_create_keys(&req)
+            .expect("private key should be created");
+
+        let pk = kdf
+            .get_public_key(&req)
+            .unwrap()
+            .expect("public key should be fetched");
+
+        assert_eq!(sk.input_keypair.pk, pk);
+    }
+
+    #[test]
+    fn public_key_signature_is_valid() {
+        let kdf = Kdf::default();
+
+        let pk = PublicKey::from(vec![1u8; 32]);
+        let sig = kdf
+            .sign_public_key(pk)
+            .expect("public key should be signed");
+
+        let mut body = pk.as_ref().to_vec();
+        let checksum = kdf.inner.into_inner().unwrap().checksum.unwrap();
+        body.extend_from_slice(&checksum);
+
+        let pk = PrivateKey::from_bytes(vec![4u8; 32]).public_key();
+        sig.signature
+            .verify(&pk, &PUBLIC_KEY_CONTEXT, &body)
+            .expect("signature should be valid");
+    }
+
+    #[test]
+    fn master_secret_can_be_replicated() {
+        let kdf = Kdf::default();
+        let ms = kdf
+            .replicate_master_secret()
+            .expect("master secret should be replicated");
+
+        assert_eq!(
+            ms.master_secret.0,
+            kdf.inner.into_inner().unwrap().master_secret.unwrap().0
+        );
+    }
+
+    #[test]
+    fn requests_have_unique_customs() {
+        // All key requests must have unique customs otherwise they can
+        // derivate keys from the same KMac and/or CShake!!!
+        let runtime_req = LongTermKeyRequest::default();
+        let ephemeral_req = EphemeralKeyRequest::default();
+
+        assert_ne!(runtime_req.xof_custom(), ephemeral_req.xof_custom());
+        assert_ne!(runtime_req.kdf_custom(), ephemeral_req.kdf_custom());
+    }
+
+    #[test]
+    fn requests_generate_unique_seeds() {
+        // Default values.
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let key_pair_id = KeyPairId::from(vec![1u8; 32]);
+        let epoch = 1;
+
+        // LongTermKeyRequest's seed should depend on runtime_id and
+        // key_pair_id.
+        let req1 = LongTermKeyRequest {
+            runtime_id,
+            key_pair_id,
+        };
+        let mut req2 = req1.clone();
+        let mut req3 = req1.clone();
+        req2.runtime_id = Namespace::from(vec![2u8; 32]);
+        req3.key_pair_id = KeyPairId::from(vec![3u8; 32]);
+
+        let mut seeds = HashSet::new();
+        seeds.insert(req1.seed());
+        seeds.insert(req2.seed());
+        seeds.insert(req3.seed());
+
+        assert_eq!(seeds.len(), 3);
+
+        // EphemeralKeyRequest's seed should depend on runtime_id, key_pair_id
+        // and epoch.
+        let req1 = EphemeralKeyRequest {
+            epoch,
+            runtime_id,
+            key_pair_id,
+        };
+        let mut req2 = req1.clone();
+        let mut req3 = req1.clone();
+        let mut req4 = req1.clone();
+        req2.runtime_id = Namespace::from(vec![2u8; 32]);
+        req3.key_pair_id = KeyPairId::from(vec![3u8; 32]);
+        req4.epoch = 2;
+
+        let mut seeds = HashSet::new();
+        seeds.insert(req1.seed());
+        seeds.insert(req2.seed());
+        seeds.insert(req3.seed());
+        seeds.insert(req4.seed());
+
+        assert_eq!(seeds.len(), 4);
+    }
+
+    #[test]
+    fn vector_test() {
+        struct TestVector<'a> {
+            master_secret: &'a str,
+            seed: &'a str,
+            kdf_custom: &'a [u8],
+            xof_custom: &'a [u8],
+            sk: &'a str,
+            pk: &'a str,
+        }
+
+        let kdf_custom = b"54761365b5a007c2bd13cf880a8a58263f56bb7057f7548b7467e871f6f4bb1f";
+        let xof_custom = b"a0caee5ecac1a287f06ff8748cf37e809f049cf6866d668ecdbed3ce05b40f2c";
+
+        let vectors = vec![
+            // A random vector.
+            TestVector {
+                master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                seed: "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
+                kdf_custom: &RUNTIME_KDF_CUSTOM,
+                xof_custom: &RUNTIME_XOF_CUSTOM,
+                sk: "c818f97228a53b201e2afa383b64199c732c7ba1a67ac55ea2cb3b8fba367740",
+                pk: "fb99076f6a5a8c52bcf562cae5152d0410f47a615fc7bc4966dc9a4f477bd217",
+            },
+            // Different master secret.
+            TestVector {
+                master_secret: "54083e90f05860653161bc1575765b3311f6a55d1cab84919cb1e2b02c8351ec",
+                seed: "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
+                kdf_custom: &RUNTIME_KDF_CUSTOM,
+                xof_custom: &RUNTIME_XOF_CUSTOM,
+                sk: "b8092ab767ddc47cb56807d4d1fd0e66eae0b02e289d1e38d4dfa900619edc47",
+                pk: "6782329a12e821697f1d7cc44ba5644a2d81bd827fe09208549296be51da8b66",
+            },
+            // Different seed.
+            TestVector {
+                master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                seed: "6cc9f7dfe776c7e531331eaf5fd8717d638cae65a4ebb0d6f128b1873f0f9c22",
+                kdf_custom: &RUNTIME_KDF_CUSTOM,
+                xof_custom: &RUNTIME_XOF_CUSTOM,
+                sk: "f0d5bf36b424f7b168fa37e1a1407f191a260dda149d78676d4ca077b1e8614c",
+                pk: "9099b1e19c482927eb2785c77b34ef2c4b95f812e089e3b2cd6f2a0a743b7561",
+            },
+            // Different kdf custom.
+            TestVector {
+                master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                seed: "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
+                kdf_custom: &EPHEMERAL_KDF_CUSTOM,
+                xof_custom: &RUNTIME_XOF_CUSTOM,
+                sk: "18789f16d8a8fbd75f529f0a1de3e95469eb537c283dc66eb296a6681a46c066",
+                pk: "1aa3e6d86c0779afde8a367dbbb025538fb77e410624ece8b25a6be9e1a5170d",
+            },
+            // Different xof custom.
+            TestVector {
+                master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                seed: "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
+                kdf_custom: &RUNTIME_KDF_CUSTOM,
+                xof_custom: &EPHEMERAL_XOF_CUSTOM,
+                sk: "e0e6faa3172634c8fdc47554f0541c7141f7ddfe07333b0dab1801bb5dcd755e",
+                pk: "455f877b6c977c51580e947a5a2ae57b4b1ec0a379cf6509be07f10aa88df735",
+            },
+            // Another random vector.
+            TestVector {
+                master_secret: "b573fa13ec26d21a7a2b5117eb124dcab5883eb63ec0a5a9cc0b1d1948bcfc71",
+                seed: "774cbb9c1e8c634e7e136357d9994f65d72fc0e7d72c1e9ad766db1a74e0bb8c",
+                kdf_custom,
+                xof_custom,
+                sk: "70c077d8bd0c5c2be66d08fbacac4f1a996001883baaf62bd933e2f7de390e5f",
+                pk: "2d62567e9061a7cc64df3793fbee65c863862b8f0acc992e2a39e32757f2c743",
+            },
+        ];
+
+        // Values that don't effect key derivation.
+        let checksum = "100246b37912e916e71ff79982b2f62be892ddf1025cde84804f67e7f5713b75";
+        let runtime_id = "8000000000000000000000000000000000000000000000000000000000000000";
+        let signer = "08e35ef2b23fc2d27281117f8ad3fa0cb4d52e803a070ebb20e7ac9aa8d1f84a";
+
+        // Test all vectors.
+        for v in vectors {
+            let kdf = Kdf {
+                inner: RwLock::new(Inner {
+                    master_secret: Some(MasterSecret(
+                        v.master_secret
+                            .from_hex::<Vec<u8>>()
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                    )),
+                    checksum: Some(checksum.from_hex().unwrap()),
+                    runtime_id: Some(Namespace::from(runtime_id)),
+                    signer: Some(Arc::new(PrivateKey::from_bytes(signer.from_hex().unwrap()))),
+                    cache: LruCache::new(1),
+                }),
+            };
+
+            let req = SimpleKeyRequest {
+                seed: v.seed,
+                kdf_custom: v.kdf_custom,
+                xof_custom: v.xof_custom,
+            };
+
+            let sk = kdf
+                .get_or_create_keys(&req)
+                .expect("private key should be created");
+
+            assert_eq!(sk.input_keypair.sk.0.to_hex::<String>(), v.sk);
+            assert_eq!(sk.input_keypair.pk.0.to_hex::<String>(), v.pk);
+        }
     }
 }

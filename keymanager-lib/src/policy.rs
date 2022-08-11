@@ -110,17 +110,17 @@ impl Policy {
     pub fn may_get_or_create_keys(
         &self,
         remote_enclave: &EnclaveIdentity,
-        req: &RequestIds,
+        runtime_id: &Namespace,
     ) -> Result<()> {
         let inner = self.inner.read().unwrap();
         let policy = inner
             .policy
             .as_ref()
-            .ok_or(KeyManagerError::InvalidAuthentication)?;
+            .ok_or(KeyManagerError::NotAuthorized)?;
 
-        match policy.may_get_or_create_keys(remote_enclave, req) {
+        match policy.may_get_or_create_keys(remote_enclave, runtime_id) {
             true => Ok(()),
-            false => Err(KeyManagerError::InvalidAuthentication.into()),
+            false => Err(KeyManagerError::NotAuthorized.into()),
         }
     }
 
@@ -140,11 +140,11 @@ impl Policy {
         let policy = inner
             .policy
             .as_ref()
-            .ok_or(KeyManagerError::InvalidAuthentication)?;
+            .ok_or(KeyManagerError::NotAuthorized)?;
 
         match policy.may_replicate_master_secret(remote_enclave) {
             true => Ok(()),
-            false => Err(KeyManagerError::InvalidAuthentication.into()),
+            false => Err(KeyManagerError::NotAuthorized.into()),
         }
     }
 
@@ -243,8 +243,12 @@ impl CachedPolicy {
         Ok(cached_policy)
     }
 
-    fn may_get_or_create_keys(&self, remote_enclave: &EnclaveIdentity, req: &RequestIds) -> bool {
-        let may_query = match self.may_query.get(&req.runtime_id) {
+    fn may_get_or_create_keys(
+        &self,
+        remote_enclave: &EnclaveIdentity,
+        runtime_id: &Namespace,
+    ) -> bool {
+        let may_query = match self.may_query.get(runtime_id) {
             Some(may_query) => may_query,
             None => return false,
         };
