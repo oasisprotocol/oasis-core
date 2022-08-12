@@ -26,10 +26,8 @@ func TestRimQueue(t *testing.T) {
 	rq.HandleTxsUsed([]hash.Hash{txA.Hash})
 
 	tx := rq.GetTxByHash(txA.Hash)
-	require.True(t, ok, "get tx by hash a")
 	require.EqualValues(t, txA, tx, "get tx by hash a")
 	hashC := hash.NewFromBytes([]byte("c"))
 	tx = rq.GetTxByHash(hashC)
-	require.False(t, ok, "get tx by hash c")
 	require.Nil(t, tx, "get tx by hash c")
 }

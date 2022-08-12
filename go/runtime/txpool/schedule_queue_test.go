@@ -3,6 +3,7 @@ package txpool
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -11,7 +12,11 @@ import (
 )
 
 func newTestTransaction(data []byte, priority uint64) *MainQueueTransaction {
-	tx := newTransaction(data)
+	tx := newTransaction(TxQueueMeta{
+		Raw:       data,
+		Hash:      hash.NewFromBytes(data),
+		FirstSeen: time.Now(),
+	})
 	tx.setChecked(&protocol.CheckTxMetadata{
 		Priority: priority,
 	})
@@ -205,6 +210,6 @@ func TestScheduleQueueSender(t *testing.T) {
 	require.NoError(err, "Add")
 	require.Equal(1, queue.size())
 
-	queue.remove([]hash.Hash{tx.hash})
+	queue.remove([]hash.Hash{tx.TxQueueMeta.Hash})
 	require.Equal(0, queue.size())
 }

@@ -16,13 +16,10 @@ var (
 
 // MainQueueTransaction is a transaction and its metadata in the main queue.
 type MainQueueTransaction struct {
-	// tx represents the raw binary transaction data.
-	tx []byte
+	TxQueueMeta
 
 	// time is the timestamp when the transaction was first seen.
 	time time.Time
-	// hash is the cached transaction hash.
-	hash hash.Hash
 
 	// priority defines the transaction's priority as specified by the runtime.
 	priority uint64
@@ -33,32 +30,31 @@ type MainQueueTransaction struct {
 	senderSeq uint64
 }
 
-func newTransaction(tx []byte) *MainQueueTransaction {
+func newTransaction(tx TxQueueMeta) *MainQueueTransaction {
 	return &MainQueueTransaction{
-		tx:   tx,
-		time: time.Now(),
-		hash: hash.NewFromBytes(tx),
+		TxQueueMeta: tx,
+		time:        time.Now(),
 	}
 }
 
 // String returns a string representation of a transaction.
 func (tx *MainQueueTransaction) String() string {
-	return fmt.Sprintf("MainQueueTransaction{hash: %s, time: %s, priority: %d}", tx.hash, tx.time, tx.priority)
+	return fmt.Sprintf("MainQueueTransaction{hash: %s, time: %s, priority: %d}", tx.TxQueueMeta.Hash, tx.time, tx.priority)
 }
 
 // Raw returns the raw transaction data.
 func (tx *MainQueueTransaction) Raw() []byte {
-	return tx.tx
+	return tx.TxQueueMeta.Raw
 }
 
 // Size returns the size (in bytes) of the raw transaction data.
 func (tx *MainQueueTransaction) Size() int {
-	return len(tx.tx)
+	return len(tx.TxQueueMeta.Raw)
 }
 
 // Hash returns the hash of the transaction binary data.
 func (tx *MainQueueTransaction) Hash() hash.Hash {
-	return tx.hash
+	return tx.TxQueueMeta.Hash
 }
 
 // Time returns the time the transaction was first seen.
@@ -92,7 +88,7 @@ func (tx *MainQueueTransaction) setChecked(meta *protocol.CheckTxMetadata) {
 	// If the sender is empty (e.g. because the runtime does not support specifying a sender), we
 	// treat each transaction as having a unique sender. This is to allow backwards compatibility.
 	if len(tx.sender) == 0 {
-		tx.sender = string(tx.hash[:])
+		tx.sender = string(tx.TxQueueMeta.Hash[:])
 	}
 }
 
@@ -112,10 +108,7 @@ func (mq *mainQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
 	txMetas := mq.inner.getPrioritizedBatch(nil, countHint)
 	var txs []*TxQueueMeta
 	for _, txMeta := range txMetas {
-		txs = append(txs, &TxQueueMeta{
-			Raw:  txMeta.tx,
-			Hash: txMeta.hash,
-		})
+		txs = append(txs, &txMeta.TxQueueMeta)
 	}
 	return txs
 }
@@ -125,10 +118,7 @@ func (mq *mainQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
 	if txMetas[0] == nil {
 		return nil
 	}
-	return &TxQueueMeta{
-		Raw:  txMetas[0].tx,
-		Hash: txMetas[0].hash,
-	}
+	return &txMetas[0].TxQueueMeta
 }
 
 func (mq *mainQueue) HandleTxsUsed(hashes []hash.Hash) {
@@ -139,10 +129,7 @@ func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQu
 	txMetas := mq.inner.getPrioritizedBatch(offset, limit)
 	var txs []*TxQueueMeta
 	for _, txMeta := range txMetas {
-		txs = append(txs, &TxQueueMeta{
-			Raw:  txMeta.tx,
-			Hash: txMeta.hash,
-		})
+		txs = append(txs, &txMeta.TxQueueMeta)
 	}
 	return txs
 }
@@ -152,16 +139,13 @@ func (mq *mainQueue) TakeAll() []*TxQueueMeta {
 	mq.inner.clear()
 	var txs []*TxQueueMeta
 	for _, txMeta := range txMetas {
-		txs = append(txs, &TxQueueMeta{
-			Raw:  txMeta.tx,
-			Hash: txMeta.hash,
-		})
+		txs = append(txs, &txMeta.TxQueueMeta)
 	}
 	return txs
 }
 
 func (mq *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadata) error {
-	txMeta := newTransaction(tx.Raw)
+	txMeta := newTransaction(*tx)
 	txMeta.setChecked(meta)
 
 	return mq.inner.add(txMeta)
@@ -171,10 +155,7 @@ func (mq *mainQueue) GetTxsToPublish() []*TxQueueMeta {
 	txMetas := mq.inner.getAll()
 	var txs []*TxQueueMeta
 	for _, txMeta := range txMetas {
-		txs = append(txs, &TxQueueMeta{
-			Raw:  txMeta.tx,
-			Hash: txMeta.hash,
-		})
+		txs = append(txs, &txMeta.TxQueueMeta)
 	}
 	return txs
 }

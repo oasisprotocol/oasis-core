@@ -66,7 +66,7 @@ func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 		sq.removeLocked(etx.MainQueueTransaction)
 	}
 
-	sq.all[tx.hash] = tx
+	sq.all[tx.TxQueueMeta.Hash] = tx
 	sq.bySender[tx.sender] = tx
 	sq.byPriority.ReplaceOrInsert(priorityWrappedTx{tx})
 
@@ -74,7 +74,7 @@ func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 }
 
 func (sq *scheduleQueue) removeLocked(tx *MainQueueTransaction) {
-	delete(sq.all, tx.hash)
+	delete(sq.all, tx.TxQueueMeta.Hash)
 	delete(sq.bySender, tx.sender)
 	sq.byPriority.Delete(priorityWrappedTx{tx})
 }
@@ -114,7 +114,7 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 		tx := i.(priorityWrappedTx)
 
 		// Skip the offset item itself (if specified).
-		if tx.hash.Equal(offset) {
+		if tx.TxQueueMeta.Hash.Equal(offset) {
 			return true
 		}
 
