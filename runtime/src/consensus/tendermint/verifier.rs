@@ -343,6 +343,20 @@ impl Verifier {
             )));
         }
 
+        // If round has advanced make sure that consensus height has also advanced as a round can
+        // only be finalized in a subsequent consensus block. This is to avoid a situation where
+        // one would keep feeding the same consensus block for subsequent rounds.
+        //
+        // NOTE: This needs to happen before the call to verify_consensus_only which updates the
+        //       cache.last_verified_height field.
+        if runtime_header.round > cache.last_verified_round
+            && consensus_block.height <= cache.last_verified_height
+        {
+            return Err(Error::VerificationFailed(anyhow!(
+                "consensus height did not advance but runtime round did"
+            )));
+        }
+
         // Verify the consensus layer block first to obtain an authoritative state root.
         let consensus_block = self.verify_consensus_only(cache, instance, consensus_block)?;
         let state_root = consensus_block.get_state_root();
