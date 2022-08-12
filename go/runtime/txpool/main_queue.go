@@ -14,8 +14,8 @@ var (
 	_ RepublishableTransactionSource = (*mainQueue)(nil)
 )
 
-// Transaction is a transaction in the transaction pool.
-type Transaction struct {
+// MainQueueTransaction is a transaction and its metadata in the main queue.
+type MainQueueTransaction struct {
 	// tx represents the raw binary transaction data.
 	tx []byte
 
@@ -33,8 +33,8 @@ type Transaction struct {
 	senderSeq uint64
 }
 
-func newTransaction(tx []byte) *Transaction {
-	return &Transaction{
+func newTransaction(tx []byte) *MainQueueTransaction {
+	return &MainQueueTransaction{
 		tx:   tx,
 		time: time.Now(),
 		hash: hash.NewFromBytes(tx),
@@ -42,47 +42,47 @@ func newTransaction(tx []byte) *Transaction {
 }
 
 // String returns a string representation of a transaction.
-func (tx *Transaction) String() string {
-	return fmt.Sprintf("Transaction{hash: %s, time: %s, priority: %d}", tx.hash, tx.time, tx.priority)
+func (tx *MainQueueTransaction) String() string {
+	return fmt.Sprintf("MainQueueTransaction{hash: %s, time: %s, priority: %d}", tx.hash, tx.time, tx.priority)
 }
 
 // Raw returns the raw transaction data.
-func (tx *Transaction) Raw() []byte {
+func (tx *MainQueueTransaction) Raw() []byte {
 	return tx.tx
 }
 
 // Size returns the size (in bytes) of the raw transaction data.
-func (tx *Transaction) Size() int {
+func (tx *MainQueueTransaction) Size() int {
 	return len(tx.tx)
 }
 
 // Hash returns the hash of the transaction binary data.
-func (tx *Transaction) Hash() hash.Hash {
+func (tx *MainQueueTransaction) Hash() hash.Hash {
 	return tx.hash
 }
 
 // Time returns the time the transaction was first seen.
-func (tx *Transaction) Time() time.Time {
+func (tx *MainQueueTransaction) Time() time.Time {
 	return tx.time
 }
 
 // Priority returns the transaction priority.
-func (tx *Transaction) Priority() uint64 {
+func (tx *MainQueueTransaction) Priority() uint64 {
 	return tx.priority
 }
 
 // Sender returns the transaction sender.
-func (tx *Transaction) Sender() string {
+func (tx *MainQueueTransaction) Sender() string {
 	return tx.sender
 }
 
 // SenderSeq returns the per-sender sequence number.
-func (tx *Transaction) SenderSeq() uint64 {
+func (tx *MainQueueTransaction) SenderSeq() uint64 {
 	return tx.senderSeq
 }
 
 // setChecked populates transaction data retrieved from checks.
-func (tx *Transaction) setChecked(meta *protocol.CheckTxMetadata) {
+func (tx *MainQueueTransaction) setChecked(meta *protocol.CheckTxMetadata) {
 	if meta != nil {
 		tx.priority = meta.Priority
 		tx.sender = string(meta.Sender)

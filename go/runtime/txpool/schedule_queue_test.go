@@ -10,7 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
-func newTestTransaction(data []byte, priority uint64) *Transaction {
+func newTestTransaction(data []byte, priority uint64) *MainQueueTransaction {
 	tx := newTransaction(data)
 	tx.setChecked(&protocol.CheckTxMetadata{
 		Priority: priority,
@@ -66,7 +66,7 @@ func TestScheduleQueueRemoveTxBatch(t *testing.T) {
 	queue := newScheduleQueue(51)
 	queue.remove([]hash.Hash{})
 
-	for _, tx := range []*Transaction{
+	for _, tx := range []*MainQueueTransaction{
 		newTestTransaction([]byte("hello world"), 0),
 		newTestTransaction([]byte("one"), 0),
 		newTestTransaction([]byte("two"), 0),
@@ -96,7 +96,7 @@ func TestScheduleQueuePriority(t *testing.T) {
 
 	queue := newScheduleQueue(3)
 
-	txs := []*Transaction{
+	txs := []*MainQueueTransaction{
 		newTestTransaction(
 			[]byte("hello world 10"),
 			10,
@@ -117,7 +117,7 @@ func TestScheduleQueuePriority(t *testing.T) {
 	batch := queue.getPrioritizedBatch(nil, 2)
 	require.Len(batch, 2, "two transactions should be returned")
 	require.EqualValues(
-		[]*Transaction{
+		[]*MainQueueTransaction{
 			txs[2], // 20
 			txs[0], // 10
 		},
@@ -129,7 +129,7 @@ func TestScheduleQueuePriority(t *testing.T) {
 	batch = queue.getPrioritizedBatch(&offsetTx, 2)
 	require.Len(batch, 2, "two transactions should be returned")
 	require.EqualValues(
-		[]*Transaction{
+		[]*MainQueueTransaction{
 			txs[0], // 10
 			txs[1], // 5
 		},
@@ -152,7 +152,7 @@ func TestScheduleQueuePriority(t *testing.T) {
 	batch = queue.getPrioritizedBatch(nil, 3)
 	require.Len(batch, 3, "three transactions should be returned")
 	require.EqualValues(
-		[]*Transaction{
+		[]*MainQueueTransaction{
 			txs[2], // 20
 			txs[0], // 10
 			highTx, // 6

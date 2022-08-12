@@ -16,7 +16,7 @@ var (
 
 // priorityWrappedTx is a wrapped transaction for insertion into the priority B-Tree.
 type priorityWrappedTx struct {
-	*Transaction
+	*MainQueueTransaction
 }
 
 func (tx priorityWrappedTx) Less(other btree.Item) bool {
@@ -34,14 +34,14 @@ func (tx priorityWrappedTx) Less(other btree.Item) bool {
 type scheduleQueue struct {
 	l sync.Mutex
 
-	all        map[hash.Hash]*Transaction
-	bySender   map[string]*Transaction
+	all        map[hash.Hash]*MainQueueTransaction
+	bySender   map[string]*MainQueueTransaction
 	byPriority *btree.BTree
 
 	capacity int
 }
 
-func (sq *scheduleQueue) add(tx *Transaction) error {
+func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 	sq.l.Lock()
 	defer sq.l.Unlock()
 
@@ -63,7 +63,7 @@ func (sq *scheduleQueue) add(tx *Transaction) error {
 		if tx.priority <= etx.priority {
 			return ErrQueueFull
 		}
-		sq.removeLocked(etx.Transaction)
+		sq.removeLocked(etx.MainQueueTransaction)
 	}
 
 	sq.all[tx.hash] = tx
@@ -73,7 +73,7 @@ func (sq *scheduleQueue) add(tx *Transaction) error {
 	return nil
 }
 
-func (sq *scheduleQueue) removeLocked(tx *Transaction) {
+func (sq *scheduleQueue) removeLocked(tx *MainQueueTransaction) {
 	delete(sq.all, tx.hash)
 	delete(sq.bySender, tx.sender)
 	sq.byPriority.Delete(priorityWrappedTx{tx})
@@ -93,12 +93,12 @@ func (sq *scheduleQueue) remove(txHashes []hash.Hash) {
 	}
 }
 
-func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []*Transaction {
+func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []*MainQueueTransaction {
 	sq.l.Lock()
 	defer sq.l.Unlock()
 
 	var (
-		batch      []*Transaction
+		batch      []*MainQueueTransaction
 		offsetItem btree.Item
 	)
 	if offset != nil {
@@ -119,8 +119,8 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 		}
 
 		// Add the transaction to the batch.
-		batch = append(batch, tx.Transaction)
-		if uint32(len(batch)) >= limit { //nolint: gosimple
+		batch = append(batch, tx.MainQueueTransaction)
+		if uint32(len(batch)) >= limit { // nolint: gosimple
 			return false
 		}
 		return true
@@ -129,11 +129,11 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 	return batch
 }
 
-func (sq *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*Transaction, map[hash.Hash]int) {
+func (sq *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*MainQueueTransaction, map[hash.Hash]int) {
 	sq.l.Lock()
 	defer sq.l.Unlock()
 
-	result := make([]*Transaction, 0, len(batch))
+	result := make([]*MainQueueTransaction, 0, len(batch))
 	missing := make(map[hash.Hash]int)
 	for index, txHash := range batch {
 		if tx, ok := sq.all[txHash]; ok {
@@ -146,11 +146,11 @@ func (sq *scheduleQueue) getKnownBatch(batch []hash.Hash) ([]*Transaction, map[h
 	return result, missing
 }
 
-func (sq *scheduleQueue) getAll() []*Transaction {
+func (sq *scheduleQueue) getAll() []*MainQueueTransaction {
 	sq.l.Lock()
 	defer sq.l.Unlock()
 
-	result := make([]*Transaction, 0, len(sq.all))
+	result := make([]*MainQueueTransaction, 0, len(sq.all))
 	for _, tx := range sq.all {
 		result = append(result, tx)
 	}
@@ -168,15 +168,15 @@ func (sq *scheduleQueue) clear() {
 	sq.l.Lock()
 	defer sq.l.Unlock()
 
-	sq.all = make(map[hash.Hash]*Transaction)
-	sq.bySender = make(map[string]*Transaction)
+	sq.all = make(map[hash.Hash]*MainQueueTransaction)
+	sq.bySender = make(map[string]*MainQueueTransaction)
 	sq.byPriority.Clear(true)
 }
 
 func newScheduleQueue(capacity int) *scheduleQueue {
 	return &scheduleQueue{
-		all:        make(map[hash.Hash]*Transaction),
-		bySender:   make(map[string]*Transaction),
+		all:        make(map[hash.Hash]*MainQueueTransaction),
+		bySender:   make(map[string]*MainQueueTransaction),
 		byPriority: btree.New(2),
 		capacity:   capacity,
 	}
