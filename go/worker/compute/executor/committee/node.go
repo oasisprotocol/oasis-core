@@ -586,7 +586,7 @@ func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
 		return
 	}
 
-	// Ask the transaction pool  to get a batch of transactions for us and see if we should be
+	// Ask the transaction pool to get a batch of transactions for us and see if we should be
 	// proposing a new batch to other nodes.
 	batch := n.commonNode.TxPool.GetSchedulingSuggestion(rtInfo.Features.ScheduleControl.InitialBatchSize)
 	defer n.commonNode.TxPool.FinishScheduling()
