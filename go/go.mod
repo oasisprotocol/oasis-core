@@ -59,12 +59,12 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.21.0
-	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
+	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
 	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd
-	google.golang.org/grpc v1.47.0
-	google.golang.org/grpc/security/advancedtls v0.0.0-20200902210233-8630cac324bf
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/grpc v1.48.0
+	google.golang.org/grpc/security/advancedtls v0.0.0-20220809175018-7981af402b23
+	google.golang.org/protobuf v1.28.1
 )
 
 require (

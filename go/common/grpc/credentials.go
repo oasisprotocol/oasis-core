@@ -43,9 +43,11 @@ type ClientOptions struct {
 // NewClientCreds creates new client TLS transport credentials.
 func NewClientCreds(opts *ClientOptions) (credentials.TransportCredentials, error) {
 	return advancedtls.NewClientCreds(&advancedtls.ClientOptions{
-		Certificates:         opts.Certificates,
-		GetClientCertificate: opts.GetClientCertificate,
-		VType:                advancedtls.SkipVerification,
+		IdentityOptions: advancedtls.IdentityCertificateOptions{
+			Certificates:                     opts.Certificates,
+			GetIdentityCertificatesForClient: opts.GetClientCertificate,
+		},
+		VType: advancedtls.SkipVerification,
 		VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
 			var err error
 			keys := opts.ServerPubKeys
