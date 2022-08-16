@@ -10,9 +10,11 @@ linked on our website](https://oasisprotocol.org/security).
 We sketch out the general classification of the kinds of errors
 below. This is not intended to be an exhaustive list.
 
+<!-- markdownlint-disable line-length -->
 [Oasis Foundation]: https://oasisprotocol.org/
 [Oasis Core]: https://github.com/oasisprotocol/oasis-core
-[Oasis Network]: /general/oasis-network/overview
+[Oasis Network]: https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/overview.md
+<!-- markdownlint-enable line-length -->
 
 ## Specifications
 
