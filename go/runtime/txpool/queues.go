@@ -1,6 +1,8 @@
 package txpool
 
 import (
+	"time"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -9,6 +11,11 @@ import (
 type TxQueueMeta struct {
 	Raw  []byte
 	Hash hash.Hash
+	// FirstSeen is the timestamp when the transaction was first seen.
+	// We populate this in `submitTx`. Other forms of ingress (namely loading from roothash incoming messages and
+	// receiving from txSync) leave this in its default value. Transactions from those sources, however, only move
+	// through a limited area in the tx pool.
+	FirstSeen time.Time
 }
 
 // UsableTransactionSource is a place to retrieve txs that are "good enough." "Good enough" variously means CheckTx'd,

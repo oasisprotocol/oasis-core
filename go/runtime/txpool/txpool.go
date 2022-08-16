@@ -249,13 +249,10 @@ func (t *txPool) SubmitTxNoWait(ctx context.Context, tx []byte, meta *Transactio
 }
 
 func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMeta, notifyCh chan *protocol.CheckTxResult) error {
-	// todo: in the new design, we'll be submitting to the check queue first, which won't have "first seen time"
-	// metadata. seems like it could still work out, as checking is single threaded, so we can still preserve the
-	// original order when we finish checking and offer to the main queue
-
 	tx := &TxQueueMeta{
-		Raw:  rawTx,
-		Hash: hash.NewFromBytes(rawTx),
+		Raw:       rawTx,
+		Hash:      hash.NewFromBytes(rawTx),
+		FirstSeen: time.Now(),
 	}
 	// Skip recently seen transactions.
 	if _, seen := t.seenCache.Peek(tx.Hash); seen {

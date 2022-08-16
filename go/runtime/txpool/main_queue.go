@@ -18,9 +18,6 @@ var (
 type MainQueueTransaction struct {
 	TxQueueMeta
 
-	// time is the timestamp when the transaction was first seen.
-	time time.Time
-
 	// priority defines the transaction's priority as specified by the runtime.
 	priority uint64
 
@@ -33,13 +30,12 @@ type MainQueueTransaction struct {
 func newTransaction(tx TxQueueMeta) *MainQueueTransaction {
 	return &MainQueueTransaction{
 		TxQueueMeta: tx,
-		time:        time.Now(),
 	}
 }
 
 // String returns a string representation of a transaction.
 func (tx *MainQueueTransaction) String() string {
-	return fmt.Sprintf("MainQueueTransaction{hash: %s, time: %s, priority: %d}", tx.TxQueueMeta.Hash, tx.time, tx.priority)
+	return fmt.Sprintf("MainQueueTransaction{hash: %s, first_seen: %s, priority: %d}", tx.TxQueueMeta.Hash, tx.TxQueueMeta.FirstSeen, tx.priority)
 }
 
 // Raw returns the raw transaction data.
@@ -57,9 +53,9 @@ func (tx *MainQueueTransaction) Hash() hash.Hash {
 	return tx.TxQueueMeta.Hash
 }
 
-// Time returns the time the transaction was first seen.
-func (tx *MainQueueTransaction) Time() time.Time {
-	return tx.time
+// FirstSeen returns the time the transaction was first seen.
+func (tx *MainQueueTransaction) FirstSeen() time.Time {
+	return tx.TxQueueMeta.FirstSeen
 }
 
 // Priority returns the transaction priority.

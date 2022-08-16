@@ -28,7 +28,7 @@ func (tx priorityWrappedTx) Less(other btree.Item) bool {
 	}
 	// If transactions have same priority, sort by first seen time (earlier transactions are later
 	// in the queue as we are iterating over the queue in descending order).
-	return tx.time.After(tx2.time)
+	return tx.TxQueueMeta.FirstSeen.After(tx2.TxQueueMeta.FirstSeen)
 }
 
 type scheduleQueue struct {
