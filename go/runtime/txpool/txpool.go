@@ -596,6 +596,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 	t.logger.Debug("checked new transactions",
 		"num_txs", numNewTxs,
+		"accepted_txs", len(goodPcts),
 	)
 
 	// Queue checked transactions for scheduling.
