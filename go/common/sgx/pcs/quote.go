@@ -38,6 +38,9 @@ const (
 
 // QuotePolicy is the quote validity policy.
 type QuotePolicy struct {
+	// Disabled specifies whether PCS quotes are disabled and will always be rejected.
+	Disabled bool `json:"disabled,omitempty"`
+
 	// TCBValidityPeriod is the validity (in days) of the TCB collateral.
 	TCBValidityPeriod uint16 `json:"tcb_validity_period"`
 
@@ -118,6 +121,10 @@ func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.
 			TCBValidityPeriod:          30,
 			MinTCBEvaluationDataNumber: DefaultMinTCBEvaluationDataNumber,
 		}
+	}
+
+	if policy.Disabled {
+		return nil, fmt.Errorf("pcs/quote: PCS quotes are disabled by policy")
 	}
 
 	err := q.Signature.Verify(&q.Header, &q.ISVReport, ts, tcb, policy)

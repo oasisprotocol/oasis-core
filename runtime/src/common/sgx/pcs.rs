@@ -90,11 +90,17 @@ pub enum Error {
     DebugEnclave,
     #[error("production enclaves not allowed")]
     ProductionEnclave,
+    #[error("PCS quotes are disabled by policy")]
+    Disabled,
 }
 
 /// Quote validity policy.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct QuotePolicy {
+    /// Whether PCS quotes are disabled and will always be rejected.
+    #[cbor(optional)]
+    pub disabled: bool,
+
     /// Validity (in days) of the TCB collateral.
     pub tcb_validity_period: u16,
 
@@ -106,6 +112,7 @@ pub struct QuotePolicy {
 impl Default for QuotePolicy {
     fn default() -> Self {
         Self {
+            disabled: false,
             tcb_validity_period: 30,
             min_tcb_evaluation_data_number: DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER,
         }
@@ -115,6 +122,10 @@ impl Default for QuotePolicy {
 impl QuotePolicy {
     /// Whether the quote with timestamp `ts` is expired.
     pub fn is_expired(&self, now: i64, ts: i64) -> bool {
+        if self.disabled {
+            return true;
+        }
+
         now.checked_sub(ts)
             .map(|d| d > 60 * 60 * 24 * (self.tcb_validity_period as i64))
             .expect("quote timestamp is in the future") // This should never happen.
@@ -134,6 +145,10 @@ pub struct QuoteBundle {
 impl QuoteBundle {
     /// Verify the quote bundle.
     pub fn verify(&self, policy: &QuotePolicy, ts: DateTime<Utc>) -> Result<VerifiedQuote, Error> {
+        if policy.disabled {
+            return Err(Error::Disabled);
+        }
+
         // Parse the quote.
         let quote = quote::Quote::parse(&self.quote)
             .map_err(|err| Error::QuoteParseError(err.to_string()))?;

@@ -74,6 +74,9 @@ var (
 
 // QuotePolicy is the quote validity policy.
 type QuotePolicy struct {
+	// Disabled specifies whether IAS quotes are disabled and will always be rejected.
+	Disabled bool `json:"disabled,omitempty"`
+
 	// AllowedQuoteStatuses are the allowed quote statuses.
 	//
 	// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be specified.
@@ -199,6 +202,10 @@ type AVRBundle struct {
 // Open decodes and validates the AVR contained in the bundle, and returns
 // the Attestation Verification Report iff it is valid
 func (b *AVRBundle) Open(policy *QuotePolicy, trustRoots *x509.CertPool, ts time.Time) (*AttestationVerificationReport, error) {
+	if policy != nil && policy.Disabled {
+		return nil, fmt.Errorf("IAS quotes are disabled by policy")
+	}
+
 	avr, err := DecodeAVR(b.Body, b.Signature, b.CertificateChain, trustRoots, ts)
 	if err != nil {
 		return nil, err

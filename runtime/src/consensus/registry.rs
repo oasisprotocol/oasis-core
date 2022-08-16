@@ -528,6 +528,7 @@ impl SGXConstraints {
                 ..
             } => sgx::QuotePolicy {
                 ias: Some(sgx::ias::QuotePolicy {
+                    disabled: false,
                     allowed_quote_statuses: allowed_quote_statuses.clone(),
                 }),
                 ..Default::default()

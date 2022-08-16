@@ -55,6 +55,8 @@ enum AVRError {
     ExpiredCertificate,
     #[error("invalid signature")]
     InvalidSignature,
+    #[error("IAS quotes are disabled by policy")]
+    Disabled,
 }
 
 pub const QUOTE_CONTEXT_LEN: usize = 8;
@@ -118,6 +120,10 @@ lazy_static! {
 /// Quote validity policy.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct QuotePolicy {
+    /// Whether IAS quotes are disabled and will always be rejected.
+    #[cbor(optional)]
+    pub disabled: bool,
+
     /// Allowed quote statuses.
     ///
     /// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be
@@ -224,7 +230,11 @@ impl ParsedAVR {
 }
 
 /// Verify attestation report.
-pub fn verify(avr: &AVR) -> Result<VerifiedQuote> {
+pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
+    if policy.disabled {
+        return Err(AVRError::Disabled.into());
+    }
+
     let unsafe_skip_avr_verification = option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_some();
     let unsafe_lax_avr_verification = option_env!("OASIS_UNSAFE_LAX_AVR_VERIFY").is_some();
 

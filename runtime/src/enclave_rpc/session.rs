@@ -319,8 +319,8 @@ impl RAKBinding {
     /// Verify the quote that is part of the RAK binding.
     pub fn verify_quote(&self) -> Result<VerifiedQuote> {
         match self {
-            Self::V0 { ref avr, .. } => ias::verify(avr),
-            Self::V1 { ref quote, .. } => quote.verify(&Default::default()), // TODO: Add policy.
+            Self::V0 { ref avr, .. } => ias::verify(avr, &Default::default()), // TODO: Add policy.
+            Self::V1 { ref quote, .. } => quote.verify(&Default::default()),   // TODO: Add policy.
         }
     }
 }

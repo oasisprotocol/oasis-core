@@ -66,7 +66,7 @@ impl Quote {
     /// Verify the remote attestation quote.
     pub fn verify(&self, policy: &QuotePolicy) -> Result<VerifiedQuote> {
         let mut verified_quote = match self {
-            Quote::Ias(avr) => ias::verify(avr), // TODO: add policy
+            Quote::Ias(avr) => ias::verify(avr, &policy.ias.clone().unwrap_or_default()),
             Quote::Pcs(qb) => {
                 let now = Utc.timestamp(insecure_posix_time(), 0);
                 Ok(qb.verify(&policy.pcs.clone().unwrap_or_default(), now)?)
