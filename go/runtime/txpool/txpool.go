@@ -551,7 +551,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		}
 	}
 
-	numNewTxs := 0
+	newTxs := make([]*PendingCheckTransaction, 0, len(results))
 	goodPcts := make([]*PendingCheckTransaction, 0, len(results))
 	batchIndices := make([]int, 0, len(results))
 	for i, res := range results {
@@ -569,10 +569,6 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 			continue
 		}
 
-		if !batch[i].flags.isRecheck() {
-			numNewTxs++
-		}
-
 		if batch[i].dstQueue == nil {
 			notifySubmitter(i)
 			continue
@@ -580,7 +576,10 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 		// For any transactions that are to be queued, we defer notification until queued.
 
-		acceptedTransactions.With(t.getMetricLabels()).Inc()
+		if !batch[i].flags.isRecheck() {
+			acceptedTransactions.With(t.getMetricLabels()).Inc()
+			newTxs = append(newTxs, batch[i])
+		}
 		goodPcts = append(goodPcts, batch[i])
 		batchIndices = append(batchIndices, i)
 	}
@@ -595,7 +594,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	}
 
 	t.logger.Debug("checked new transactions",
-		"num_txs", numNewTxs,
+		"num_txs", len(newTxs),
 		"accepted_txs", len(goodPcts),
 	)
 
@@ -636,15 +635,14 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		}
 	}
 
-	if numNewTxs != 0 {
+	if len(newTxs) != 0 {
 		// Kick off publishing for any new txs.
 		t.republishCh.In() <- struct{}{}
-	}
 
-	// Notify subscribers that we have received new transactions.
-	// todo: this now broadcasts rechecked transactions too
-	t.checkTxNotifier.Broadcast(goodPcts)
-	t.schedulerNotifier.Broadcast(false)
+		// Notify subscribers that we have received new transactions.
+		t.checkTxNotifier.Broadcast(newTxs)
+		t.schedulerNotifier.Broadcast(false)
+	}
 
 	// todo: metrics
 	// pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.PendingScheduleSize()))
