@@ -55,12 +55,12 @@ different terminal:
 By default, Oasis node is configured with a 30-second epoch, so you may
 initially need to wait for the first epoch to pass before the test client will
 make any progress. For more information on writing your own client, see the
-[Oasis SDK](/oasis-sdk).
+[Oasis SDK](https://github.com/oasisprotocol/oasis-sdk).
 
 <!-- markdownlint-disable line-length -->
 [the default network fixture]: https://github.com/oasisprotocol/oasis-core/tree/master/go/oasis-net-runner/fixtures/default.go
 [simple-keyvalue example]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/runtimes/simple-keyvalue
-[Building a runtime]: /oasis-sdk/runtime/getting-started
+[Building a runtime]: https://github.com/oasisprotocol/oasis-sdk/blob/main/docs/runtime/getting-started.md
 <!-- markdownlint-enable line-length -->
 
 ## SGX Environment
