@@ -562,7 +562,18 @@ impl Verifier {
             // is still rejecting requests. This is the case because `start()` is called as part
             // of the RHP initialization itself (when handling a `RuntimeInfoRequest`).
             for retry in 1..=MAX_INITIALIZATION_RETRIES {
-                match self.run() {
+                // Handle panics by logging and aborting the runtime.
+                let result =
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run())) {
+                        Ok(result) => result,
+                        Err(_) => {
+                            error!(logger, "Consensus verifier aborted");
+                            std::process::abort();
+                        }
+                    };
+
+                // Handle failures.
+                match result {
                     Ok(_) => {}
                     Err(err @ Error::Builder(_)) | Err(err @ Error::TrustRootLoadingFailed) => {
                         error!(logger, "Consensus verifier failed to initialize, retrying";
@@ -572,16 +583,19 @@ impl Verifier {
                     }
                     Err(err) => {
                         // All other errors are fatal.
-                        error!(logger, "Consensus verifier terminated";
+                        error!(logger, "Consensus verifier terminated, aborting";
                             "err" => %err,
                         );
-                        return;
+                        std::process::abort();
                     }
                 }
 
                 // Retry to initialize the verifier.
                 std::thread::sleep(Duration::from_secs(1));
             }
+
+            error!(logger, "Failed to start consensus verifier, aborting");
+            std::process::abort();
         });
     }
 

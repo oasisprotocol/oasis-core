@@ -26,15 +26,26 @@ pub enum Error {
     #[error("trust root loading failed")]
     TrustRootLoadingFailed,
 
-    #[error("internal error")]
+    #[error("internal consensus verifier error")]
     Internal,
+}
+
+impl Error {
+    fn code(&self) -> u32 {
+        match self {
+            Error::Builder(_) => 1,
+            Error::VerificationFailed(_) => 2,
+            Error::TrustRootLoadingFailed => 3,
+            Error::Internal => 4,
+        }
+    }
 }
 
 impl From<Error> for types::Error {
     fn from(e: Error) -> Self {
         Self {
             module: "verifier".to_string(),
-            code: 1,
+            code: e.code(),
             message: e.to_string(),
         }
     }
