@@ -47,5 +47,6 @@ entity's [escrow account balance].
 [registered]: registry.md#register-node
 [`RoleValidator`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#RoleValidator
 [escrow account balance]: staking.md#escrow
-[genesis document]: /general/oasis-network/genesis-doc#committee-scheduler
+[genesis document]:
+  https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/genesis-doc.md#committee-scheduler
 <!-- markdownlint-enable line-length -->
