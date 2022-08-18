@@ -627,7 +627,14 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 
 	client := consensus.NewConsensusClient(conn)
 
-	doc, err := client.StateToGenesis(ctx, viper.GetInt64(cfgBlockHeight))
+	height, err := cmd.Flags().GetInt64(cfgBlockHeight)
+	if err != nil {
+		logger.Error("failed to read block height",
+			"err", err,
+		)
+		os.Exit(1)
+	}
+	doc, err := client.StateToGenesis(ctx, height)
 	if err != nil {
 		logger.Error("failed to generate genesis document",
 			"err", err,
