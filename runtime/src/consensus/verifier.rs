@@ -92,6 +92,14 @@ pub trait Verifier: Send + Sync {
     /// verification manually if needed.
     fn latest_state(&self) -> Result<ConsensusState, Error>;
 
+    /// Return the verified consensus layer state for a given height.
+    ///
+    /// # Warning
+    ///
+    /// The state is not verified to be fresh. Use `verify_state_freshness` to perform this
+    /// verification manually if needed.
+    fn state_at(&self, height: u64) -> Result<ConsensusState, Error>;
+
     /// Record the given (locally computed and thus verified) results header as trusted.
     fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error>;
 }
