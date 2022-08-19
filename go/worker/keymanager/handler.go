@@ -6,9 +6,12 @@ import (
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
@@ -26,6 +29,7 @@ type hostHandler struct {
 	w            *Worker
 	remoteClient *committeeCommon.KeyManagerClientWrapper
 	localStorage localstorage.LocalStorage
+	consensus    consensus.Backend
 }
 
 func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
@@ -42,6 +46,47 @@ func (h *hostHandler) Handle(ctx context.Context, body *protocol.Body) (*protoco
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
+	}
+	// Storage.
+	if body.HostStorageSyncRequest != nil {
+		rq := body.HostStorageSyncRequest
+
+		var rs syncer.ReadSyncer
+		switch rq.Endpoint {
+		case protocol.HostStorageEndpointConsensus:
+			// Consensus state storage.
+			rs = h.consensus.State()
+		default:
+			return nil, errEndpointNotSupported
+		}
+
+		var rsp *storage.ProofResponse
+		var err error
+		switch {
+		case rq.SyncGet != nil:
+			rsp, err = rs.SyncGet(ctx, rq.SyncGet)
+		case rq.SyncGetPrefixes != nil:
+			rsp, err = rs.SyncGetPrefixes(ctx, rq.SyncGetPrefixes)
+		case rq.SyncIterate != nil:
+			rsp, err = rs.SyncIterate(ctx, rq.SyncIterate)
+		default:
+			return nil, errMethodNotSupported
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		return &protocol.Body{HostStorageSyncResponse: &protocol.HostStorageSyncResponse{ProofResponse: rsp}}, nil
+	}
+	// Consensus light client.
+	if body.HostFetchConsensusBlockRequest != nil {
+		lb, err := h.consensus.GetLightBlock(ctx, int64(body.HostFetchConsensusBlockRequest.Height))
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostFetchConsensusBlockResponse: &protocol.HostFetchConsensusBlockResponse{
+			Block: *lb,
+		}}, nil
 	}
 	// RPC.
 	if body.HostRPCCallRequest != nil {
@@ -72,5 +117,6 @@ func newHostHandler(w *Worker, commonWorker *workerCommon.Worker, localStorage l
 		w:            w,
 		remoteClient: remoteClient,
 		localStorage: localStorage,
+		consensus:    commonWorker.Consensus,
 	}
 }

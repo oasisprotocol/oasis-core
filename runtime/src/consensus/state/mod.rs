@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::{
     protocol::Protocol,
     storage::mkvs::{sync::HostReadSyncer, ImmutableMKVS, Root, Tree},
-    types::HostStorageEndpoint,
+    types::{self, HostStorageEndpoint},
 };
 
 pub mod beacon;
@@ -20,6 +20,16 @@ pub mod staking;
 pub enum StateError {
     #[error("consensus state: unavailable/corrupted state")]
     Unavailable(#[from] Error),
+}
+
+impl From<StateError> for types::Error {
+    fn from(e: StateError) -> Self {
+        Self {
+            module: "consensus".to_string(),
+            code: 1,
+            message: e.to_string(),
+        }
+    }
 }
 
 /// Provides consensus state tree from the host.
@@ -46,6 +56,25 @@ impl ConsensusState {
 }
 
 impl ImmutableMKVS for ConsensusState {
+    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.mkvs.get(ctx, key)
+    }
+
+    fn prefetch_prefixes(
+        &self,
+        ctx: Context,
+        prefixes: &[crate::storage::mkvs::Prefix],
+        limit: u16,
+    ) -> Result<()> {
+        self.mkvs.prefetch_prefixes(ctx, prefixes, limit)
+    }
+
+    fn iter(&self, ctx: Context) -> Box<dyn crate::storage::mkvs::Iterator + '_> {
+        Box::new(self.mkvs.iter(ctx))
+    }
+}
+
+impl ImmutableMKVS for &ConsensusState {
     fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.mkvs.get(ctx, key)
     }

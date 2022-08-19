@@ -75,7 +75,7 @@ func (app *keymanagerApplication) updatePolicy(
 	nodes, _ := regState.Nodes(ctx)
 	registry.SortNodeList(nodes)
 	oldStatus.Policy = sigPol
-	newStatus := app.generateStatus(ctx, rt, oldStatus, nodes)
+	newStatus := app.generateStatus(ctx, rt, oldStatus, nodes, regParams)
 	if err := state.SetStatus(ctx, newStatus); err != nil {
 		panic(fmt.Errorf("failed to set keymanager status: %w", err))
 	}

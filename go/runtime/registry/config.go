@@ -303,6 +303,7 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 					LoaderPath:        sgxLoader,
 					IAS:               ias,
 					PCS:               pc,
+					Consensus:         consensus,
 					SandboxBinaryPath: sandboxBinary,
 					InsecureNoSandbox: insecureNoSandbox,
 				})

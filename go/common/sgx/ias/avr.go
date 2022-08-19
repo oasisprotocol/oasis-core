@@ -72,6 +72,17 @@ var (
 	mrSignerBlacklist = make(map[sgx.MrSigner]bool)
 )
 
+// QuotePolicy is the quote validity policy.
+type QuotePolicy struct {
+	// Disabled specifies whether IAS quotes are disabled and will always be rejected.
+	Disabled bool `json:"disabled,omitempty"`
+
+	// AllowedQuoteStatuses are the allowed quote statuses.
+	//
+	// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be specified.
+	AllowedQuoteStatuses []ISVEnclaveQuoteStatus `json:"allowed_quote_statuses,omitempty"`
+}
+
 // ISVEnclaveQuoteStatus is the status of an enclave quote.
 type ISVEnclaveQuoteStatus int
 
@@ -190,8 +201,22 @@ type AVRBundle struct {
 
 // Open decodes and validates the AVR contained in the bundle, and returns
 // the Attestation Verification Report iff it is valid
-func (b *AVRBundle) Open(trustRoots *x509.CertPool, ts time.Time) (*AttestationVerificationReport, error) {
-	return DecodeAVR(b.Body, b.Signature, b.CertificateChain, trustRoots, ts)
+func (b *AVRBundle) Open(policy *QuotePolicy, trustRoots *x509.CertPool, ts time.Time) (*AttestationVerificationReport, error) {
+	if policy != nil && policy.Disabled {
+		return nil, fmt.Errorf("IAS quotes are disabled by policy")
+	}
+
+	avr, err := DecodeAVR(b.Body, b.Signature, b.CertificateChain, trustRoots, ts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify against policy.
+	if !avr.quoteStatusAllowed(policy) {
+		return nil, fmt.Errorf("quote status not allowed by policy")
+	}
+
+	return avr, nil
 }
 
 // AttestationVerificationReport is a deserialized Attestation Verification
@@ -220,6 +245,29 @@ func (a *AttestationVerificationReport) Quote() (*Quote, error) {
 		return nil, err
 	}
 	return &quote, nil
+}
+
+func (a *AttestationVerificationReport) quoteStatusAllowed(policy *QuotePolicy) bool {
+	status := a.ISVEnclaveQuoteStatus
+
+	// Always allow "OK" and "SW_HARDENING_NEEDED".
+	if status == QuoteOK || status == QuoteSwHardeningNeeded {
+		return true
+	}
+
+	if policy == nil {
+		return false
+	}
+
+	// Search through the constraints to see if the AVR quote status is
+	// explicitly allowed.
+	for _, v := range policy.AllowedQuoteStatuses {
+		if v == status {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (a *AttestationVerificationReport) validate() error { // nolint: gocyclo

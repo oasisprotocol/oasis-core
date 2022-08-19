@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	CfgProxyAddress       = "ias.proxy.address"
-	CfgDebugSkipVerify    = "ias.debug.skip_verify"
-	CfgAllowDebugEnclaves = "ias.debug.allow_debug_enclaves"
+	CfgProxyAddress    = "ias.proxy.address"
+	CfgDebugSkipVerify = "ias.debug.skip_verify"
 )
 
 // Flags has the configuration flags.
@@ -31,11 +30,6 @@ func New(identity *identity.Identity) (api.Endpoint, error) {
 			logger.Warn("`ias.debug.skip_verify` set, AVR signature validation bypassed")
 			ias.SetSkipVerify()
 		}
-
-		if viper.GetBool(CfgAllowDebugEnclaves) {
-			logger.Warn("`ias.debug.allow_debug_enclaves` set, enclaves in debug mode will be allowed")
-			ias.SetAllowDebugEnclaves()
-		}
 	}
 
 	return client.New(
@@ -47,10 +41,8 @@ func New(identity *identity.Identity) (api.Endpoint, error) {
 func init() {
 	Flags.StringSlice(CfgProxyAddress, []string{}, "IAS proxy address of the form ID@HOST:PORT")
 	Flags.Bool(CfgDebugSkipVerify, false, "skip IAS AVR signature verification (UNSAFE)")
-	Flags.Bool(CfgAllowDebugEnclaves, false, "allow enclaves compiled in debug mode (UNSAFE)")
 
 	_ = Flags.MarkHidden(CfgDebugSkipVerify)
-	_ = Flags.MarkHidden(CfgAllowDebugEnclaves)
 
 	_ = viper.BindPFlags(Flags)
 }

@@ -510,9 +510,19 @@ func (r *Runtime) ActiveDeployment(now beacon.EpochTime) *VersionInfo {
 	return activeDeployment
 }
 
+// DeploymentForVersion returns the deployment corresponding to the passed version if it exists.
+func (r *Runtime) DeploymentForVersion(v version.Version) *VersionInfo {
+	for _, deployment := range r.Deployments {
+		if deployment.Version == v {
+			return deployment
+		}
+	}
+	return nil
+}
+
 // ValidateDeployments validates a runtime descriptor's Deployments field
 // at the specified epoch.
-func (r *Runtime) ValidateDeployments(now beacon.EpochTime) error {
+func (r *Runtime) ValidateDeployments(now beacon.EpochTime, teeCfg *node.TEEFeatures) error {
 	// The runtime descriptor's deployments field is considered valid
 	// if:
 	//  * There is at least one entry present.
@@ -580,6 +590,9 @@ func (r *Runtime) ValidateDeployments(now beacon.EpochTime) error {
 		case node.TEEHardwareIntelSGX:
 			var cs node.SGXConstraints
 			if err := cbor.Unmarshal(deployment.TEE, &cs); err != nil {
+				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
+			}
+			if err := cs.ValidateBasic(teeCfg); err != nil {
 				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
 			}
 			if len(cs.Enclaves) == 0 {

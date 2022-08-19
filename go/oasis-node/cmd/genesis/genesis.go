@@ -64,6 +64,7 @@ const (
 	CfgRegistryDebugAllowTestRuntimes        = "registry.debug.allow_test_runtimes"
 	cfgRegistryDebugBypassStake              = "registry.debug.bypass_stake" // nolint: gosec
 	cfgRegistryEnableRuntimeGovernanceModels = "registry.enable_runtime_governance_models"
+	CfgRegistryTEEFeaturesSGXPCS             = "registry.tee_features.sgx.pcs"
 
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
@@ -341,6 +342,14 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		Entities: make([]*entity.SignedEntity, 0, len(entities)),
 		Runtimes: make([]*registry.Runtime, 0, len(runtimes)),
 		Nodes:    make([]*node.MultiSignedNode, 0, len(nodes)),
+	}
+
+	if viper.GetBool(CfgRegistryTEEFeaturesSGXPCS) {
+		regSt.Parameters.TEEFeatures = &node.TEEFeatures{
+			SGX: node.TEEFeaturesSGX{
+				PCS: true,
+			},
+		}
 	}
 
 	for _, gmStr := range viper.GetStringSlice(cfgRegistryEnableRuntimeGovernanceModels) {
@@ -759,6 +768,7 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.StringSlice(cfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
+	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXPCS, true, "enable PCS support for SGX TEEs")
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)

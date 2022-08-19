@@ -7,7 +7,11 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -19,7 +23,7 @@ type teeStateEPID struct {
 	quoteType *cmnIAS.SignatureType
 }
 
-func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace) ([]byte, error) {
+func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error) {
 	qi, err := sp.aesm.InitQuote(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error while getting quote info from AESMD: %w", err)
@@ -39,6 +43,13 @@ func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID 
 }
 
 func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
+	// Check if new format of attestations is supported in the consensus layer and use it.
+	regParams, err := sp.consensus.Registry().ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine registry consensus parameters: %w", err)
+	}
+	supportsAttestationV1 := (regParams.TEEFeatures != nil && regParams.TEEFeatures.SGX.PCS)
+
 	// Update the SigRL (Not cached, knowing if revoked is important).
 	sigRL, err := sp.ias.GetSigRL(ctx, ep.epidGID)
 	if err != nil {
@@ -73,9 +84,15 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	avrBundle.CertificateChain = cbor.FixSliceForSerde(avrBundle.CertificateChain)
 	avrBundle.Signature = cbor.FixSliceForSerde(avrBundle.Signature)
 
+	// Prepare quote structure.
+	q := sgxQuote.Quote{
+		IAS: avrBundle,
+	}
+
 	_, err = conn.Call(
 		ctx,
 		&protocol.Body{
+			// TODO: Use RuntimeCapabilityTEERakQuoteRequest once all runtimes support it.
 			RuntimeCapabilityTEERakAvrRequest: &protocol.RuntimeCapabilityTEERakAvrRequest{
 				AVR: *avrBundle,
 			},
@@ -104,7 +121,18 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 
 		return nil, fmt.Errorf("error while configuring AVR: %w", err)
 	}
-	attestation := cbor.Marshal(avrBundle)
+
+	var attestation []byte
+	if supportsAttestationV1 {
+		// Use V1 attestation format.
+		attestation = cbor.Marshal(node.SGXAttestation{
+			Versioned: cbor.NewVersioned(node.LatestSGXAttestationVersion),
+			Quote:     q,
+		})
+	} else {
+		// Use V0 attestation format.
+		attestation = cbor.Marshal(avrBundle)
+	}
 
 	return attestation, nil
 }

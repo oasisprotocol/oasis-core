@@ -10,7 +10,7 @@ use crate::{
             signature::{PublicKey, Signature},
         },
         namespace::Namespace,
-        sgx::ias::AVR,
+        sgx::{ias::AVR, Quote},
         version::Version,
     },
     consensus::{
@@ -130,6 +130,10 @@ pub enum Body {
         avr: AVR,
     },
     RuntimeCapabilityTEERakAvrResponse {},
+    RuntimeCapabilityTEERakQuoteRequest {
+        quote: Quote,
+    },
+    RuntimeCapabilityTEERakQuoteResponse {},
     RuntimeRPCCallRequest {
         request: Vec<u8>,
     },

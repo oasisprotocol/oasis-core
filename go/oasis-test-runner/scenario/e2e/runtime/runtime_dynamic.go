@@ -287,7 +287,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Ensure that runtime got suspended.
 	sc.Logger.Info("checking that runtime got suspended")
-	_, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
+	_, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
 		Height: consensus.HeightLatest,
 		ID:     compRtDesc.ID,
 	})
@@ -393,7 +393,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	ensureRuntimesSuspended := func(suspended bool) error {
 		sc.Logger.Info("checking that runtimes got (un)suspended")
 		for _, rt := range sc.Net.Runtimes() {
-			_, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
+			_, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
 				Height: consensus.HeightLatest,
 				ID:     rt.ID(),
 			})

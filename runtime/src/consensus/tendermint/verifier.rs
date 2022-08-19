@@ -43,11 +43,13 @@ use crate::{
         beacon::EpochTime,
         roothash::{ComputeResultsHeader, Header, HeaderType::EpochTransition},
         state::{
-            beacon::ImmutableState as BeaconState, registry::ImmutableState as RegistryState,
-            roothash::ImmutableState as RoothashState, ConsensusState,
+            beacon::ImmutableState as BeaconState, roothash::ImmutableState as RoothashState,
+            ConsensusState,
         },
-        tendermint::{decode_light_block, LightBlockMeta, TENDERMINT_CONTEXT},
-        verifier::{self, Error, TrustRoot},
+        tendermint::{
+            decode_light_block, state_root_from_header, LightBlockMeta, TENDERMINT_CONTEXT,
+        },
+        verifier::{self, verify_state_freshness, Error, TrustRoot},
         LightBlock, HEIGHT_LATEST,
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
@@ -112,6 +114,25 @@ impl verifier::Verifier for NopVerifier {
         ))
     }
 
+    fn latest_state(&self) -> Result<ConsensusState, Error> {
+        let result = self
+            .protocol
+            .call_host(
+                Context::background(),
+                Body::HostFetchConsensusBlockRequest {
+                    height: HEIGHT_LATEST,
+                },
+            )
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        let block = match result {
+            Body::HostFetchConsensusBlockResponse { block } => block,
+            _ => return Err(Error::VerificationFailed(anyhow!("bad response from host"))),
+        };
+
+        self.unverified_state(block)
+    }
+
     fn trust(&self, _header: &ComputeResultsHeader) -> Result<(), Error> {
         Ok(())
     }
@@ -127,6 +148,7 @@ enum Command {
         bool,
     ),
     Trust(ComputeResultsHeader, channel::Sender<Result<(), Error>>),
+    LatestState(channel::Sender<Result<ConsensusState, Error>>),
 }
 
 /// Tendermint consensus layer verifier.
@@ -162,6 +184,25 @@ impl Default for Cache {
     }
 }
 
+impl Cache {
+    /// Latest known and verified consensus layer height.
+    fn latest_known_height(&self) -> u64 {
+        self.last_trust_root.height
+    }
+
+    /// Process a new verified consensus layer block and update the cache if needed.
+    fn update_verified_block(&mut self, verified_block: &TMLightBlock) {
+        let header = &verified_block.signed_header.header;
+        let height = header.height.into();
+
+        // Update the trust root if ahead.
+        if height > self.last_trust_root.height {
+            self.last_trust_root.height = height;
+            self.last_trust_root.hash = header.hash().to_string();
+        }
+    }
+}
+
 impl Verifier {
     /// Create a new Tendermint consensus layer verifier.
     pub fn new(protocol: Arc<Protocol>, trust_root: TrustRoot) -> Self {
@@ -186,7 +227,7 @@ impl Verifier {
     }
 
     fn sync(&self, cache: &mut Cache, instance: &mut Instance, height: u64) -> Result<(), Error> {
-        if height < cache.last_verified_height {
+        if height < cache.last_verified_height || height < cache.latest_known_height() {
             // Ignore requests for earlier heights.
             return Ok(());
         }
@@ -195,12 +236,29 @@ impl Verifier {
             .light_client
             .verify_to_target(height.try_into().unwrap(), &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
-
-        let header = verified_block.signed_header.header;
-        cache.last_trust_root.height = header.height.into();
-        cache.last_trust_root.hash = header.hash().to_string();
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
 
         Ok(())
+    }
+
+    fn latest_consensus_state(
+        &self,
+        cache: &Cache,
+        instance: &mut Instance,
+    ) -> Result<ConsensusState, Error> {
+        let height = cache.latest_known_height();
+        let verified_block = instance
+            .light_client
+            .verify_to_target(height.try_into().unwrap(), &mut instance.state)
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        // No need to update time as this has already been done once for this height.
+
+        let state_root = state_root_from_header(&verified_block.signed_header);
+        Ok(ConsensusState::from_protocol(
+            self.protocol.clone(),
+            state_root,
+        ))
     }
 
     fn verify_consensus_only(
@@ -230,20 +288,31 @@ impl Verifier {
             .light_client
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
-        let header = verified_block.signed_header.header;
-        cache.last_verified_height = header.height.into();
-        if cache.last_verified_height > cache.last_trust_root.height {
-            cache.last_trust_root.height = header.height.into();
-            cache.last_trust_root.hash = header.hash().to_string();
-        }
+        cache.last_verified_height = verified_block.signed_header.header.height.into();
 
         Ok(untrusted_block)
+    }
+
+    fn verify_freshness(
+        &self,
+        state: &ConsensusState,
+        node_id: &Option<PublicKey>,
+    ) -> Result<Option<PublicKey>, Error> {
+        let rak = if let Some(rak) = self.protocol.get_rak() {
+            rak
+        } else {
+            return Ok(None);
+        };
+
+        verify_state_freshness(state, &self.trust_root, rak, &self.runtime_version, node_id)
     }
 
     fn verify(
@@ -271,6 +340,20 @@ impl Verifier {
             // Ignore requests for earlier epochs.
             return Err(Error::VerificationFailed(anyhow!(
                 "epoch seems to have moved backwards"
+            )));
+        }
+
+        // If round has advanced make sure that consensus height has also advanced as a round can
+        // only be finalized in a subsequent consensus block. This is to avoid a situation where
+        // one would keep feeding the same consensus block for subsequent rounds.
+        //
+        // NOTE: This needs to happen before the call to verify_consensus_only which updates the
+        //       cache.last_verified_height field.
+        if runtime_header.round > cache.last_verified_round
+            && consensus_block.height <= cache.last_verified_height
+        {
+            return Err(Error::VerificationFailed(anyhow!(
+                "consensus height did not advance but runtime round did"
             )));
         }
 
@@ -329,61 +412,7 @@ impl Verifier {
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            if let Some(rak) = self.protocol.get_public_rak() {
-                let registry_state = RegistryState::new(&state);
-
-                match cache.node_id {
-                    // Node ID is cached, query the node and check for matching RAK.
-                    Some(node_id) => {
-                        let node = registry_state
-                            .node(Context::background(), &node_id)
-                            .map_err(|err| {
-                                Error::VerificationFailed(anyhow!(
-                                    "failed to retrieve node from the registry: {}",
-                                    err
-                                ))
-                            })?;
-                        let node = node.ok_or_else(|| {
-                            Error::VerificationFailed(anyhow!(
-                                "own node ID: '{}' not found in registry state",
-                                node_id,
-                            ))
-                        })?;
-                        if !node.has_rak(&rak, &runtime_header.namespace, &self.runtime_version) {
-                            return Err(Error::VerificationFailed(anyhow!(
-                                "own RAK: '{}' not found in registry state",
-                                rak
-                            )));
-                        }
-                    }
-                    // Node ID not cached, need to scan all registry nodes.
-                    None => {
-                        let nodes = registry_state.nodes(Context::background()).map_err(|err| {
-                            Error::VerificationFailed(anyhow!(
-                                "failed to retrieve nodes from the registry: {}",
-                                err
-                            ))
-                        })?;
-                        let mut found_node: Option<PublicKey> = None;
-                        for node in nodes {
-                            if node.has_rak(&rak, &runtime_header.namespace, &self.runtime_version)
-                            {
-                                found_node = Some(node.id);
-                                break;
-                            }
-                        }
-                        if found_node.is_none() {
-                            return Err(Error::VerificationFailed(anyhow!(
-                                "own RAK: '{}' not found in registry state",
-                                rak
-                            )));
-                        }
-
-                        // Cache node ID to avoid re-scanning.
-                        cache.node_id = found_node;
-                    }
-                }
-            }
+            cache.node_id = self.verify_freshness(&state, &cache.node_id)?;
         }
 
         // Cache verified runtime header.
@@ -425,6 +454,8 @@ impl Verifier {
             .light_client
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
@@ -494,6 +525,23 @@ impl Verifier {
         Ok(state)
     }
 
+    fn update_insecure_posix_time(&self, verified_block: &TMLightBlock) {
+        // Update untrusted time if ahead. This makes sure that the enclave's sense of time is
+        // synced with consensus sense of time based on the fact that consensus time is harder to
+        // fake than host operating system time.
+        time::update_insecure_posix_time(
+            verified_block
+                .signed_header
+                .header
+                .time
+                .duration_since(Time::unix_epoch())
+                .unwrap()
+                .as_secs()
+                .try_into()
+                .unwrap(),
+        );
+    }
+
     fn trust(&self, cache: &mut Cache, header: ComputeResultsHeader) -> Result<(), Error> {
         if let Some(state_root) = header.state_root {
             cache.verified_state_roots.put(header.round, state_root);
@@ -514,7 +562,18 @@ impl Verifier {
             // is still rejecting requests. This is the case because `start()` is called as part
             // of the RHP initialization itself (when handling a `RuntimeInfoRequest`).
             for retry in 1..=MAX_INITIALIZATION_RETRIES {
-                match self.run() {
+                // Handle panics by logging and aborting the runtime.
+                let result =
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run())) {
+                        Ok(result) => result,
+                        Err(_) => {
+                            error!(logger, "Consensus verifier aborted");
+                            std::process::abort();
+                        }
+                    };
+
+                // Handle failures.
+                match result {
                     Ok(_) => {}
                     Err(err @ Error::Builder(_)) | Err(err @ Error::TrustRootLoadingFailed) => {
                         error!(logger, "Consensus verifier failed to initialize, retrying";
@@ -524,16 +583,19 @@ impl Verifier {
                     }
                     Err(err) => {
                         // All other errors are fatal.
-                        error!(logger, "Consensus verifier terminated";
+                        error!(logger, "Consensus verifier terminated, aborting";
                             "err" => %err,
                         );
-                        return;
+                        std::process::abort();
                     }
                 }
 
                 // Retry to initialize the verifier.
                 std::thread::sleep(Duration::from_secs(1));
             }
+
+            error!(logger, "Failed to start consensus verifier, aborting");
+            std::process::abort();
         });
     }
 
@@ -645,6 +707,20 @@ impl Verifier {
             ..Default::default()
         };
 
+        // Sync the verifier up to the latest block to make sure we are up to date before
+        // processing any requests.
+        let verified_block = instance
+            .light_client
+            .verify_to_highest(&mut instance.state)
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
+        self.save_trust_root(&untrusted_local_store, &cache);
+
+        info!(logger, "Consensus verifier synced";
+            "latest_height" => cache.latest_known_height(),
+        );
+
         // Start the command processing loop.
         loop {
             let command = self.command_receiver.recv().map_err(|_| Error::Internal)?;
@@ -680,6 +756,11 @@ impl Verifier {
                 Command::Trust(header, sender) => {
                     sender
                         .send(self.trust(&mut cache, header))
+                        .map_err(|_| Error::Internal)?;
+                }
+                Command::LatestState(sender) => {
+                    sender
+                        .send(self.latest_consensus_state(&cache, &mut instance))
                         .map_err(|_| Error::Internal)?;
                 }
             }
@@ -761,6 +842,15 @@ impl verifier::Verifier for Handle {
         ))
     }
 
+    fn latest_state(&self) -> Result<ConsensusState, Error> {
+        let (sender, receiver) = channel::bounded(1);
+        self.command_sender
+            .send(Command::LatestState(sender))
+            .map_err(|_| Error::Internal)?;
+
+        receiver.recv().map_err(|_| Error::Internal)?
+    }
+
     fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
         let (sender, receiver) = channel::bounded(1);
         self.command_sender
@@ -821,14 +911,19 @@ impl components::io::Io for Io {
 
         // Fetch light block at height and height+1.
         let block = Io::fetch_light_block(self, height)?;
+        let height: u64 = block
+            .signed_header
+            .as_ref()
+            .ok_or_else(|| IoError::rpc(RpcError::server("missing signed header".to_string())))?
+            .header()
+            .height
+            .into();
         // NOTE: It seems that the requirement to fetch the next validator set is redundant and it
         //       should be handled at a higher layer of the light client.
         let next_block = Io::fetch_light_block(self, height + 1)?;
 
         Ok(TMLightBlock {
-            signed_header: block.signed_header.ok_or_else(|| {
-                IoError::rpc(RpcError::server("missing signed header".to_string()))
-            })?,
+            signed_header: block.signed_header.unwrap(), // Checked above.
             validators: block.validators,
             next_validators: next_block.validators,
             provider: PeerId::new([0; 20]),

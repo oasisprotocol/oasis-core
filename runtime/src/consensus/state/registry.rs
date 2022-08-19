@@ -9,8 +9,12 @@ use crate::{
             signature::{MultiSigned, PublicKey},
         },
         key_format::{KeyFormat, KeyFormatAtom},
+        namespace::Namespace,
     },
-    consensus::{registry::Node, state::StateError},
+    consensus::{
+        registry::{Node, Runtime},
+        state::StateError,
+    },
     key_format,
     storage::mkvs::ImmutableMKVS,
 };
@@ -28,6 +32,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 }
 
 key_format!(SignedNodeKeyFmt, 0x11, Hash);
+key_format!(RuntimeKeyFmt, 0x13, Hash);
+key_format!(SuspendedRuntimeKeyFmt, 0x18, Hash);
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     fn decode_node(&self, data: &[u8]) -> Result<Node, StateError> {
@@ -64,6 +70,40 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
         Ok(result)
     }
+
+    fn decode_runtime(&self, data: &[u8]) -> Result<Runtime, StateError> {
+        cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))
+    }
+
+    /// Looks up a specific runtime by its identifier.
+    ///
+    /// # Note
+    ///
+    /// This includes both non-suspended and suspended runtimes.
+    pub fn runtime(&self, ctx: Context, id: &Namespace) -> Result<Option<Runtime>, StateError> {
+        let ctx = ctx.freeze();
+        let h = Hash::digest_bytes(id.as_ref());
+
+        // Try non-suspended first.
+        match self
+            .mkvs
+            .get(Context::create_child(&ctx), &RuntimeKeyFmt(h).encode())
+        {
+            Ok(Some(b)) => Ok(Some(self.decode_runtime(&b)?)),
+            Ok(None) => {
+                // Also try suspended.
+                match self.mkvs.get(
+                    Context::create_child(&ctx),
+                    &SuspendedRuntimeKeyFmt(h).encode(),
+                ) {
+                    Ok(Some(b)) => Ok(Some(self.decode_runtime(&b)?)),
+                    Ok(None) => Ok(None),
+                    Err(err) => Err(StateError::Unavailable(anyhow!(err))),
+                }
+            }
+            Err(err) => Err(StateError::Unavailable(anyhow!(err))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -76,8 +116,8 @@ mod test {
             namespace::Namespace,
         },
         consensus::registry::{
-            Capabilities, CapabilityTEE, ConsensusInfo, Node, NodeRuntime, P2PInfo, TCPAddress,
-            TEEHardware, TLSAddress, TLSInfo, VRFInfo,
+            Capabilities, CapabilityTEE, ConsensusInfo, Node, NodeRuntime, P2PInfo, RuntimeKind,
+            TCPAddress, TEEHardware, TLSAddress, TLSInfo, VRFInfo, VersionInfo,
         },
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
@@ -99,7 +139,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("b84a7b8e22aae3a66484eea34b4bc9d74403e7af8aa41f701ba8d20a9c69c412"),
+            hash: Hash::from("9fd36f15cd4ff0b856de1606ddda9a08eeb14d73346b7b3a9e0f36e853b02a1e"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -199,5 +239,63 @@ mod test {
             )
             .expect("node query should work");
         assert_eq!(node, None);
+
+        let expected_runtimes = vec![
+            Runtime {
+                v: 3,
+                id: Namespace::from(
+                    "8000000000000000000000000000000000000000000000000000000000000010",
+                ),
+                entity_id: PublicKey::from(
+                    "761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531",
+                ),
+                kind: RuntimeKind::KindCompute,
+                tee_hardware: TEEHardware::TEEHardwareInvalid,
+                deployments: vec![
+                    VersionInfo {
+                        version: Version::from(321),
+                        valid_from: 42,
+                        ..Default::default()
+                    },
+                    VersionInfo {
+                        version: Version::from(320),
+                        valid_from: 10,
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            },
+            Runtime {
+                v: 3,
+                id: Namespace::from(
+                    "8000000000000000000000000000000000000000000000000000000000000011",
+                ),
+                entity_id: PublicKey::from(
+                    "761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531",
+                ),
+                kind: RuntimeKind::KindCompute,
+                tee_hardware: TEEHardware::TEEHardwareIntelSGX,
+                deployments: vec![
+                    VersionInfo {
+                        version: Version::from(123),
+                        valid_from: 42,
+                        tee: vec![1, 2, 3, 4, 5],
+                    },
+                    VersionInfo {
+                        version: Version::from(120),
+                        valid_from: 10,
+                        tee: vec![5, 4, 3, 2, 1],
+                    },
+                ],
+                ..Default::default()
+            },
+        ];
+
+        for rt in expected_runtimes {
+            let ext_rt = registry_state
+                .runtime(Context::create_child(&ctx), &rt.id)
+                .expect("runtime query should work");
+            assert_eq!(ext_rt, Some(rt));
+        }
     }
 }

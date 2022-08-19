@@ -317,7 +317,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	}
 
 	// Fetch current runtime descriptor.
-	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.NamespaceQuery{ID: g.runtime.ID(), Height: height})
+	runtime, err := g.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{ID: g.runtime.ID(), Height: height})
 	if err != nil {
 		return err
 	}

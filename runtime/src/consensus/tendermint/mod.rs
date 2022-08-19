@@ -28,6 +28,30 @@ pub fn decode_light_block(light_block: LightBlock) -> Result<LightBlockMeta> {
     LightBlockMeta::decode_vec(&light_block.meta).map_err(|e| anyhow!("{}", e))
 }
 
+/// Extract state root from the given signed block header.
+///
+/// # Panics
+///
+/// The signed header must be present and the application hash must be a valid Oasis Core
+/// application hash (state root hash).
+pub fn state_root_from_header(signed_header: &TMSignedHeader) -> Root {
+    let header = signed_header.header();
+    let height: u64 = header.height.into();
+    let hash: [u8; 32] = header
+        .app_hash
+        .value()
+        .as_slice()
+        .try_into()
+        .expect("invalid app hash");
+
+    Root {
+        namespace: Namespace::default(),
+        version: height - 1,
+        root_type: RootType::State,
+        hash: Hash(hash),
+    }
+}
+
 /// Tendermint light consensus block metadata.
 #[derive(Debug, Clone)]
 pub struct LightBlockMeta {
@@ -46,22 +70,9 @@ impl LightBlockMeta {
         let header = self
             .signed_header
             .as_ref()
-            .expect("signed header should be present")
-            .header();
-        let height: u64 = header.height.into();
-        let hash: [u8; 32] = header
-            .app_hash
-            .value()
-            .as_slice()
-            .try_into()
-            .expect("invalid app hash");
+            .expect("signed header should be present");
 
-        Root {
-            namespace: Namespace::default(),
-            version: height - 1,
-            root_type: RootType::State,
-            hash: Hash(hash),
-        }
+        state_root_from_header(header)
     }
 }
 

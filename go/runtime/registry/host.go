@@ -274,7 +274,7 @@ type runtimeHostNotifier struct {
 
 	started   bool
 	runtime   Runtime
-	host      host.Runtime
+	host      host.RichRuntime
 	consensus consensus.Backend
 
 	logger *logging.Logger
@@ -413,12 +413,8 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 			blk := rawBlk.(*consensus.Block)
 
 			// Notify the runtime that a new consensus layer block is available.
-			req := &protocol.Body{RuntimeConsensusSyncRequest: &protocol.RuntimeConsensusSyncRequest{
-				Height: uint64(blk.Height),
-			}}
-
 			ctx, cancel := context.WithTimeout(n.ctx, notifyTimeout)
-			_, err = n.host.Call(ctx, req)
+			err = n.host.ConsensusSync(ctx, uint64(blk.Height))
 			cancel()
 			if err != nil {
 				n.logger.Error("failed to notify runtime of a new consensus layer block",
@@ -459,14 +455,14 @@ func (n *runtimeHostNotifier) Stop() {
 func NewRuntimeHostNotifier(
 	ctx context.Context,
 	runtime Runtime,
-	host host.Runtime,
+	hostRt host.Runtime,
 	consensus consensus.Backend,
 ) protocol.Notifier {
 	return &runtimeHostNotifier{
 		ctx:       ctx,
 		stopCh:    make(chan struct{}),
 		runtime:   runtime,
-		host:      host,
+		host:      host.NewRichRuntime(hostRt),
 		consensus: consensus,
 		logger:    logging.GetLogger("runtime/registry/host"),
 	}

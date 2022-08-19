@@ -73,24 +73,41 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 
 	now := time.Unix(1652701082, 0)
-	tcbLevel, err := quote.Verify(now, &tcbBundle)
+	verifiedQuote, err := quote.Verify(nil, now, &tcbBundle)
 	require.NoError(err, "Verify quote signature")
-	require.Equal(StatusUpToDate, tcbLevel.Status)
+	require.EqualValues("9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e", verifiedQuote.Identity.MrEnclave.String())
+	require.EqualValues("4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459", verifiedQuote.Identity.MrSigner.String())
 
 	// Test X509 certificate not yet valid.
 	now2 := time.Unix(1052695757, 0)
-	_, err = quote.Verify(now2, &tcbBundle)
+	_, err = quote.Verify(nil, now2, &tcbBundle)
 	require.Error(err, "Quote verification should fail for PCK certificates not yet valid")
 
 	// Test TCB info not yet valid.
 	now3 := time.Unix(1652609357, 0)
-	_, err = quote.Verify(now3, &tcbBundle)
+	_, err = quote.Verify(nil, now3, &tcbBundle)
 	require.Error(err, "Quote verification should fail for TCB info not yet valid")
 
 	// Test TCB info expired.
 	now4 := time.Unix(1657879757, 0)
-	_, err = quote.Verify(now4, &tcbBundle)
+	_, err = quote.Verify(nil, now4, &tcbBundle)
 	require.Error(err, "Quote verification should fail for TCB info expired")
+
+	// Test alternate validity from quote policy.
+	now5 := time.Unix(1657879757, 0)
+	quotePolicy := &QuotePolicy{
+		TCBValidityPeriod: 90,
+	}
+	_, err = quote.Verify(quotePolicy, now5, &tcbBundle)
+	require.NoError(err, "Quote verification should succeed with longer validity period")
+
+	// Test minimum TCB evaluation data number.
+	quotePolicy = &QuotePolicy{
+		TCBValidityPeriod:          30,
+		MinTCBEvaluationDataNumber: 100,
+	}
+	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
+	require.Error(err, "Quote verification should fail for invalid TCB evaluation data number")
 
 	// Test TCB info certificates missing.
 	tcbBundle2 := TCBBundle{
@@ -98,7 +115,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 		QEIdentity:   qeIdentity,
 		Certificates: nil,
 	}
-	_, err = quote.Verify(now, &tcbBundle2)
+	_, err = quote.Verify(nil, now, &tcbBundle2)
 	require.Error(err, "Quote verification should fail for bad TCB info certificates")
 
 	// Test TCB info certificates bad.
@@ -110,7 +127,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 		QEIdentity:   qeIdentity,
 		Certificates: rawCertsBad,
 	}
-	_, err = quote.Verify(now, &tcbBundle3)
+	_, err = quote.Verify(nil, now, &tcbBundle3)
 	require.Error(err, "Quote verification should fail for bad TCB info certificates")
 
 	// Test invalid TCB info signature.
@@ -121,7 +138,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	tcbBundle4.TCBInfo.TCBInfo = append([]byte{}, tcbBundle.TCBInfo.TCBInfo[:]...)
 	tcbBundle4.TCBInfo.TCBInfo[16] = 'x'
-	_, err = quote.Verify(now, &tcbBundle4)
+	_, err = quote.Verify(nil, now, &tcbBundle4)
 	require.Error(err, "Quote verification should fail for bad TCB info signature")
 
 	// Test invalid QE identity signature.
@@ -132,7 +149,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	tcbBundle5.QEIdentity.EnclaveIdentity = append([]byte{}, tcbBundle.QEIdentity.EnclaveIdentity[:]...)
 	tcbBundle5.QEIdentity.EnclaveIdentity[22] = 'x'
-	_, err = quote.Verify(now, &tcbBundle5)
+	_, err = quote.Verify(nil, now, &tcbBundle5)
 	require.Error(err, "Quote verification should fail for bad QE identity signature")
 
 	// Test quote bundle.
@@ -141,18 +158,20 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 		TCB:   tcbBundle,
 	}
 
-	tcbLevel, err = quoteBundle.Verify(now)
+	verifiedQuote, err = quoteBundle.Verify(nil, now)
 	require.NoError(err, "Verify quote bundle")
-	require.Equal(StatusUpToDate, tcbLevel.Status)
+	require.EqualValues("9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e", verifiedQuote.Identity.MrEnclave.String())
+	require.EqualValues("4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459", verifiedQuote.Identity.MrSigner.String())
 
 	// Test quote bundle serialization round-trip.
 	rawQB := cbor.Marshal(quoteBundle)
 	var quoteBundle2 QuoteBundle
 	err = cbor.Unmarshal(rawQB, &quoteBundle2)
 	require.NoError(err, "QuoteBundle serialization should round-trip")
-	tcbLevel, err = quoteBundle2.Verify(now)
+	verifiedQuote, err = quoteBundle2.Verify(nil, now)
 	require.NoError(err, "Verify deserialized quote bundle")
-	require.Equal(StatusUpToDate, tcbLevel.Status)
+	require.EqualValues("9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e", verifiedQuote.Identity.MrEnclave.String())
+	require.EqualValues("4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459", verifiedQuote.Identity.MrSigner.String())
 }
 
 func TestQuoteECDSA_P256_EPPID(t *testing.T) {
@@ -196,8 +215,20 @@ func TestQuoteECDSA_P256_EPPID(t *testing.T) {
 	require.EqualValues(12, cd.PCESVN)
 	require.EqualValues(0, cd.PCEID)
 
-	_, err = quote.Verify(time.Now(), nil)
+	_, err = quote.Verify(nil, time.Now(), nil)
 	require.Error(err, "Verify quote signature (should fail for PPID auth)")
 }
 
-// TODO: Add fuzzing tests once we bump to Go 1.18.
+func FuzzQuoteUnmarshal(f *testing.F) {
+	// Seed corpus.
+	raw1, _ := ioutil.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
+	f.Add(raw1)
+	raw2, _ := ioutil.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
+	f.Add(raw2)
+
+	// Fuzzing.
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var quote Quote
+		_ = quote.UnmarshalBinary(data)
+	})
+}

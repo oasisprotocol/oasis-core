@@ -131,13 +131,13 @@ func (sc *serviceClient) WatchNodeList(ctx context.Context) (<-chan *api.NodeLis
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) GetRuntime(ctx context.Context, query *api.NamespaceQuery) (*api.Runtime, error) {
+func (sc *serviceClient) GetRuntime(ctx context.Context, query *api.GetRuntimeQuery) (*api.Runtime, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.Runtime(ctx, query.ID)
+	return q.Runtime(ctx, query.ID, query.IncludeSuspended)
 }
 
 func (sc *serviceClient) WatchRuntimes(ctx context.Context) (<-chan *api.Runtime, pubsub.ClosableSubscription, error) {
@@ -216,6 +216,14 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	return events, nil
+}
+
+func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+	return q.ConsensusParameters(ctx)
 }
 
 // Implements api.ServiceClient.

@@ -349,3 +349,84 @@ func TestVerifyRuntime(t *testing.T) {
 		}
 	}
 }
+
+func TestDeployments(t *testing.T) {
+	require := require.New(t)
+
+	var rt Runtime
+	require.Nil(rt.ActiveDeployment(0))
+
+	rt = Runtime{
+		Deployments: []*VersionInfo{
+			{
+				Version: version.Version{
+					Major: 0,
+					Minor: 1,
+					Patch: 0,
+				},
+				ValidFrom: 0,
+			},
+			{
+				Version: version.Version{
+					Major: 0,
+					Minor: 2,
+					Patch: 0,
+				},
+				ValidFrom: 10,
+			},
+			{
+				Version: version.Version{
+					Major: 0,
+					Minor: 3,
+					Patch: 0,
+				},
+				ValidFrom: 20,
+			},
+		},
+	}
+
+	ad := rt.ActiveDeployment(0)
+	require.EqualValues(1, ad.Version.Minor)
+	ad = rt.ActiveDeployment(1)
+	require.EqualValues(1, ad.Version.Minor)
+	ad = rt.ActiveDeployment(9)
+	require.EqualValues(1, ad.Version.Minor)
+	ad = rt.ActiveDeployment(10)
+	require.EqualValues(2, ad.Version.Minor)
+	ad = rt.ActiveDeployment(20)
+	require.EqualValues(3, ad.Version.Minor)
+	ad = rt.ActiveDeployment(50)
+	require.EqualValues(3, ad.Version.Minor)
+	ad = rt.ActiveDeployment(100)
+	require.EqualValues(3, ad.Version.Minor)
+	ad = rt.ActiveDeployment(1000)
+	require.EqualValues(3, ad.Version.Minor)
+
+	ad = rt.DeploymentForVersion(version.Version{
+		Major: 0,
+		Minor: 1,
+		Patch: 0,
+	})
+	require.EqualValues(0, ad.ValidFrom)
+
+	ad = rt.DeploymentForVersion(version.Version{
+		Major: 0,
+		Minor: 2,
+		Patch: 0,
+	})
+	require.EqualValues(10, ad.ValidFrom)
+
+	ad = rt.DeploymentForVersion(version.Version{
+		Major: 0,
+		Minor: 3,
+		Patch: 0,
+	})
+	require.EqualValues(20, ad.ValidFrom)
+
+	ad = rt.DeploymentForVersion(version.Version{
+		Major: 0,
+		Minor: 99,
+		Patch: 0,
+	})
+	require.Nil(ad)
+}

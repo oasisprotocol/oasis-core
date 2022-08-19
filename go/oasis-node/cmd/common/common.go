@@ -28,6 +28,8 @@ const (
 	// CfgDebugAllowTestKeys is the command line flag to enable the debug test
 	// keys.
 	CfgDebugAllowTestKeys = "debug.allow_test_keys"
+	// CfgDebugAllowDebugEnclaves is the command line flag to enable debug enclaves.
+	CfgDebugAllowDebugEnclaves = "debug.allow_debug_enclaves"
 
 	// CfgDebugRlimit is the command flag to set RLIMIT_NOFILE on launch.
 	CfgDebugRlimit = "debug.rlimit"
@@ -45,8 +47,7 @@ var (
 
 	rootLog = logging.GetLogger("oasis-node")
 
-	debugAllowTestKeysFlag = flag.NewFlagSet("", flag.ContinueOnError)
-	debugRlimitFlag        = flag.NewFlagSet("", flag.ContinueOnError)
+	debugFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	// RootFlags has the flags that are common across all commands.
 	RootFlags = flag.NewFlagSet("", flag.ContinueOnError)
@@ -96,6 +97,7 @@ func Init() error {
 		initDataDir,
 		initLogging,
 		initPublicKeyBlacklist,
+		initDebugEnclaves,
 		initRlimit,
 	}
 
@@ -118,21 +120,20 @@ func Logger() *logging.Logger {
 func init() {
 	initLoggingFlags()
 
-	debugAllowTestKeysFlag.Bool(CfgDebugAllowTestKeys, false, "allow test keys (UNSAFE)")
-	_ = debugAllowTestKeysFlag.MarkHidden(CfgDebugAllowTestKeys)
-	_ = viper.BindPFlags(debugAllowTestKeysFlag)
-
-	debugRlimitFlag.Uint64(CfgDebugRlimit, 0, "set RLIMIT_NOFILE")
-	_ = debugRlimitFlag.MarkHidden(CfgDebugRlimit)
-	_ = viper.BindPFlags(debugRlimitFlag)
+	debugFlags.Bool(CfgDebugAllowTestKeys, false, "allow test keys (UNSAFE)")
+	debugFlags.Bool(CfgDebugAllowDebugEnclaves, false, "allow debug enclaves (UNSAFE)")
+	debugFlags.Uint64(CfgDebugRlimit, 0, "set RLIMIT_NOFILE")
+	_ = debugFlags.MarkHidden(CfgDebugAllowTestKeys)
+	_ = debugFlags.MarkHidden(CfgDebugAllowDebugEnclaves)
+	_ = debugFlags.MarkHidden(CfgDebugRlimit)
+	_ = viper.BindPFlags(debugFlags)
 
 	RootFlags.StringVar(&cfgFile, CfgConfigFile, "", "config file")
 	RootFlags.String(CfgDataDir, "", "data directory")
 	_ = viper.BindPFlags(RootFlags)
 
 	RootFlags.AddFlagSet(loggingFlags)
-	RootFlags.AddFlagSet(debugAllowTestKeysFlag)
-	RootFlags.AddFlagSet(debugRlimitFlag)
+	RootFlags.AddFlagSet(debugFlags)
 	RootFlags.AddFlagSet(flags.DebugDontBlameOasisFlag)
 }
 
@@ -194,6 +195,15 @@ func initPublicKeyBlacklist() error {
 	signature.BuildPublicKeyBlacklist(allowTestKeys)
 	ias.BuildMrSignerBlacklist(allowTestKeys)
 	pcs.BuildMrSignerBlacklist(allowTestKeys)
+	return nil
+}
+
+func initDebugEnclaves() error {
+	if flags.DebugDontBlameOasis() && viper.GetBool(CfgDebugAllowDebugEnclaves) {
+		rootLog.Warn("`debug.allow_debug_enclaves` set, enclaves in debug mode will be allowed")
+		ias.SetAllowDebugEnclaves()
+		pcs.SetAllowDebugEnclaves()
+	}
 	return nil
 }
 

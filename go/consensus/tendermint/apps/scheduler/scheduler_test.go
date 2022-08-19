@@ -100,6 +100,8 @@ func TestElectCommittee(t *testing.T) {
 		Backend: beacon.BackendInsecure,
 	}
 
+	registryParameters := &registry.ConsensusParameters{}
+
 	rtID1 := common.NewTestNamespaceFromSeed([]byte("runtime 1"), 0)
 	rtID2 := common.NewTestNamespaceFromSeed([]byte("runtime 2"), 0)
 
@@ -788,6 +790,7 @@ func TestElectCommittee(t *testing.T) {
 			schedulerParameters,
 			beaconState,
 			beaconParameters,
+			registryParameters,
 			nil,
 			nil,
 			tc.validatorEntities,

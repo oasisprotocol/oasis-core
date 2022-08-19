@@ -112,7 +112,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 		// Ensure that runtime got suspended.
 		sc.Logger.Info("checking that runtime got suspended")
-		_, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
+		_, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
 			Height: consensus.HeightLatest,
 			ID:     fixture.Runtimes[1].ID,
 		})

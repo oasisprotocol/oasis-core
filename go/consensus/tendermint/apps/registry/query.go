@@ -21,9 +21,10 @@ type Query interface {
 	NodeByConsensusAddress(context.Context, []byte) (*node.Node, error)
 	NodeStatus(context.Context, signature.PublicKey) (*registry.NodeStatus, error)
 	Nodes(context.Context) ([]*node.Node, error)
-	Runtime(context.Context, common.Namespace) (*registry.Runtime, error)
+	Runtime(ctx context.Context, id common.Namespace, includeSuspended bool) (*registry.Runtime, error)
 	Runtimes(ctx context.Context, includeSuspended bool) ([]*registry.Runtime, error)
 	Genesis(context.Context) (*registry.Genesis, error)
+	ConsensusParameters(context.Context) (*registry.ConsensusParameters, error)
 }
 
 // QueryFactory is the registry query factory.
@@ -102,7 +103,10 @@ func (rq *registryQuerier) Nodes(ctx context.Context) ([]*node.Node, error) {
 	return filteredNodes, nil
 }
 
-func (rq *registryQuerier) Runtime(ctx context.Context, id common.Namespace) (*registry.Runtime, error) {
+func (rq *registryQuerier) Runtime(ctx context.Context, id common.Namespace, includeSuspended bool) (*registry.Runtime, error) {
+	if includeSuspended {
+		return rq.state.AnyRuntime(ctx, id)
+	}
 	return rq.state.Runtime(ctx, id)
 }
 
@@ -111,6 +115,10 @@ func (rq *registryQuerier) Runtimes(ctx context.Context, includeSuspended bool) 
 		return rq.state.AllRuntimes(ctx)
 	}
 	return rq.state.Runtimes(ctx)
+}
+
+func (rq *registryQuerier) ConsensusParameters(ctx context.Context) (*registry.ConsensusParameters, error) {
+	return rq.state.ConsensusParameters(ctx)
 }
 
 func (app *registryApplication) QueryFactory() interface{} {

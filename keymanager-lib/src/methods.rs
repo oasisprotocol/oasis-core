@@ -12,7 +12,7 @@ pub fn get_or_create_keys(req: &RequestIds, ctx: &mut RpcContext) -> Result<KeyP
     if !Policy::unsafe_skip() {
         let si = ctx.session_info.as_ref();
         let si = si.ok_or(KeyManagerError::NotAuthenticated)?;
-        let their_id = &si.authenticated_avr.identity;
+        let their_id = &si.verified_quote.identity;
 
         Policy::global().may_get_or_create_keys(their_id, req)?;
     }
@@ -39,7 +39,7 @@ pub fn replicate_master_secret(
     if !Policy::unsafe_skip() {
         let si = ctx.session_info.as_ref();
         let si = si.ok_or(KeyManagerError::NotAuthenticated)?;
-        let their_id = &si.authenticated_avr.identity;
+        let their_id = &si.verified_quote.identity;
 
         Policy::global().may_replicate_master_secret(their_id)?;
     }

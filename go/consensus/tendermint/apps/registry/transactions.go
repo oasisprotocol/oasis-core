@@ -675,7 +675,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	switch {
 	case existingRt != nil:
 		// Existing runtime, verify update.
-		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch)
+		err = registry.VerifyRuntimeUpdate(ctx.Logger(), existingRt, rt, epoch, params)
 	default:
 		// New runtime, verify new descriptor.
 		err = registry.VerifyRuntimeNew(ctx.Logger(), rt, epoch, params, ctx.IsInitChain())

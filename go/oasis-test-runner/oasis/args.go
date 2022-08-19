@@ -128,6 +128,13 @@ func (args *argBuilder) debugAllowTestKeys() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) debugAllowDebugEnclaves() *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name: cmdCommon.CfgDebugAllowDebugEnclaves,
+	})
+	return args
+}
+
 func (args *argBuilder) debugSetRlimit() *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   cmdCommon.CfgDebugRlimit,
@@ -675,7 +682,6 @@ func (args *argBuilder) appendIASProxy(iasProxy *iasProxy) *argBuilder {
 	if iasProxy != nil {
 		args.vec = append(args.vec, []Argument{
 			{ias.CfgProxyAddress, []string{fmt.Sprintf("%s@127.0.0.1:%d", iasProxy.tlsPublicKey, iasProxy.grpcPort)}, false},
-			{Name: ias.CfgAllowDebugEnclaves},
 		}...)
 		if iasProxy.mock {
 			args.vec = append(args.vec, Argument{Name: ias.CfgDebugSkipVerify})

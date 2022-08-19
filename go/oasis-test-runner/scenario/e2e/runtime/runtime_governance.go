@@ -304,7 +304,7 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 
 	// Verify that the descriptor was updated.
 	sc.Logger.Info("checking that the runtime descriptor was updated")
-	fetchedRT, err := sc.Net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
+	fetchedRT, err := sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
 		Height: consensus.HeightLatest,
 		ID:     rt.ID,
 	})
@@ -362,7 +362,7 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 
 	sc.Logger.Info("checking that the update didn't succeed")
 	// Check target runtime.
-	fetchedRT, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
+	fetchedRT, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
 		Height: consensus.HeightLatest,
 		ID:     otherRT.ID,
 	})
@@ -374,7 +374,7 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("update_runtime also worked for another runtime when it shouldn't")
 	}
 	// Check source runtime.
-	fetchedRT, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.NamespaceQuery{
+	fetchedRT, err = sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
 		Height: consensus.HeightLatest,
 		ID:     rt.ID,
 	})

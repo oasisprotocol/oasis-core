@@ -31,7 +31,23 @@ const (
 
 	// ppidDataLen is the PPID certification data length in bytes.
 	ppidDataLen = 404
+
+	// DefaultMinTCBEvaluationDataNumber is the default minimum TCB evaluation data number.
+	DefaultMinTCBEvaluationDataNumber = 12 // As of 2022-08-01.
 )
+
+// QuotePolicy is the quote validity policy.
+type QuotePolicy struct {
+	// Disabled specifies whether PCS quotes are disabled and will always be rejected.
+	Disabled bool `json:"disabled,omitempty"`
+
+	// TCBValidityPeriod is the validity (in days) of the TCB collateral.
+	TCBValidityPeriod uint16 `json:"tcb_validity_period"`
+
+	// MinTCBEvaluationDataNumber is the minimum TCB evaluation data number that is considered to be
+	// valid. TCB bundles containing smaller values will be invalid.
+	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number"`
+}
 
 // Quote is an enclave quote.
 type Quote struct {
@@ -84,7 +100,7 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 // Verify verifies the quote.
 //
 // In case of successful verification it returns the TCB level.
-func (q *Quote) Verify(ts time.Time, tcb *TCBBundle) (*TCBLevel, error) {
+func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.VerifiedQuote, error) {
 	if !bytes.Equal(q.Header.QEVendorID[:], QEVendorID_Intel) {
 		return nil, fmt.Errorf("pcs/quote: unsupported QE vendor: %X", q.Header.QEVendorID)
 	}
@@ -100,7 +116,29 @@ func (q *Quote) Verify(ts time.Time, tcb *TCBBundle) (*TCBLevel, error) {
 		return nil, fmt.Errorf("pcs/quote: disallowed debug/production enclave/mode combination")
 	}
 
-	return q.Signature.Verify(&q.Header, &q.ISVReport, ts, tcb)
+	if policy == nil {
+		policy = &QuotePolicy{
+			TCBValidityPeriod:          30,
+			MinTCBEvaluationDataNumber: DefaultMinTCBEvaluationDataNumber,
+		}
+	}
+
+	if policy.Disabled {
+		return nil, fmt.Errorf("pcs/quote: PCS quotes are disabled by policy")
+	}
+
+	err := q.Signature.Verify(&q.Header, &q.ISVReport, ts, tcb, policy)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sgx.VerifiedQuote{
+		ReportData: q.ISVReport.ReportData[:],
+		Identity: sgx.EnclaveIdentity{
+			MrEnclave: q.ISVReport.MRENCLAVE,
+			MrSigner:  q.ISVReport.MRSIGNER,
+		},
+	}, nil
 }
 
 // QuoteHeader is a quote header.
@@ -181,9 +219,13 @@ type QuoteSignature interface {
 	AttestationKeyType() AttestationKeyType
 
 	// Verify verifies the quote signature of the header and ISV report.
-	//
-	// In case of successful verification it returns the TCB level.
-	Verify(header *QuoteHeader, isvReport *ReportBody, ts time.Time, tcb *TCBBundle) (*TCBLevel, error)
+	Verify(
+		header *QuoteHeader,
+		isvReport *ReportBody,
+		ts time.Time,
+		tcb *TCBBundle,
+		policy *QuotePolicy,
+	) error
 }
 
 // QuoteSignatureECDSA_P256 is an ECDSA-P256 quote signature.
@@ -377,17 +419,23 @@ func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
 }
 
 // Verify verifies the quote signature.
-func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *ReportBody, ts time.Time, tcb *TCBBundle) (*TCBLevel, error) {
+func (qs *QuoteSignatureECDSA_P256) Verify(
+	header *QuoteHeader,
+	isvReport *ReportBody,
+	ts time.Time,
+	tcb *TCBBundle,
+	policy *QuotePolicy,
+) error {
 	// Verify PCK certificate chain and extract relevant information (e.g. public key and FMSPC).
 	pckInfo, err := qs.VerifyPCK(ts)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Verify QE report signature using PCK public key.
 	reportHash := sha256.Sum256(qs.QEReport.raw)
 	if !qs.QESignature.Verify(pckInfo.PublicKey, reportHash[:]) {
-		return nil, fmt.Errorf("pcs/quote: failed to verify QE report signature using PCK public key")
+		return fmt.Errorf("pcs/quote: failed to verify QE report signature using PCK public key")
 	}
 
 	// Verify QE report data. First 32 bytes MUST be:
@@ -399,27 +447,27 @@ func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *Repor
 	expectedHash := h.Sum(nil)
 
 	if !bytes.Equal(qs.QEReport.ReportData[:32], expectedHash) {
-		return nil, fmt.Errorf("pcs/quote: QE report data does not match expected value")
+		return fmt.Errorf("pcs/quote: QE report data does not match expected value")
 	}
 	var allZeros [32]byte
 	if !bytes.Equal(qs.QEReport.ReportData[32:], allZeros[:]) {
-		return nil, fmt.Errorf("pcs/quote: QE report data does not match expected value")
+		return fmt.Errorf("pcs/quote: QE report data does not match expected value")
 	}
 
 	// Verify TCB and QE identity.
 	if tcb == nil {
-		return nil, fmt.Errorf("pcs/quote: missing TCB bundle")
+		return fmt.Errorf("pcs/quote: missing TCB bundle")
 	}
-	tcbLevel, err := tcb.GetTCBLevel(ts, pckInfo.FMSPC, pckInfo.TCBCompSVN, pckInfo.PCESVN, &qs.QEReport)
+	err = tcb.VerifyTCBLevel(ts, policy, pckInfo.FMSPC, pckInfo.TCBCompSVN, pckInfo.PCESVN, &qs.QEReport)
 	if err != nil {
-		return nil, fmt.Errorf("pcs/quote: failed to get TCB level: %w", err)
+		return fmt.Errorf("pcs/quote: failed to get TCB level: %w", err)
 	}
 
 	// Verify quote header and ISV report body signature.
 	attPkWithTag := append([]byte{0x04}, qs.AttestationPublicKey[:]...) // Add SEC 1 tag (uncompressed).
 	x, y := elliptic.Unmarshal(elliptic.P256(), attPkWithTag)
 	if x == nil {
-		return nil, fmt.Errorf("pcs/quote: invalid attestation public key")
+		return fmt.Errorf("pcs/quote: invalid attestation public key")
 	}
 	attPk := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 
@@ -429,10 +477,10 @@ func (qs *QuoteSignatureECDSA_P256) Verify(header *QuoteHeader, isvReport *Repor
 	expectedHash = h.Sum(nil)
 
 	if !qs.Signature.Verify(&attPk, expectedHash) {
-		return nil, fmt.Errorf("pcs/quote: failed to verify quote signature")
+		return fmt.Errorf("pcs/quote: failed to verify quote signature")
 	}
 
-	return tcbLevel, nil
+	return nil
 }
 
 // SignatureECDSA_P256 is an ECDSA-P256 signature in the form r || s.

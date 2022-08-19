@@ -1836,9 +1836,9 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3aac2d3f302ff2c798290dcab1fc6b6bb3b0c3349590e3bc20dc003fb4896bd"
+checksum = "dae5d03ada3f2f496b1505477e91b32b9bccf1d21a8527a84b73567133c05165"
 dependencies = [
  "impl-trait-for-tuples",
  "oasis-cbor-derive",
@@ -1848,9 +1848,9 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor-derive"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed014924fce6fb5ac3800675a92fc90b94b5415aacc1d690c8ab47f6804f7521"
+checksum = "bfe7107f968c18b1f384d4d92d7f5a40b655c6ae1262954b3d552b140cef8391"
 dependencies = [
  "darling",
  "oasis-cbor-value",
@@ -1862,9 +1862,9 @@ dependencies = [
 
 [[package]]
 name = "oasis-cbor-value"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdad9546f1654987df1462e2f442eb7bf2471794ea220a33413698cf91b47783"
+checksum = "cbeffe8aae62d42a39195627a3f3741c0cb3679c0d3ebb87a724ceb4624374e0"
 
 [[package]]
 name = "oasis-core-client"

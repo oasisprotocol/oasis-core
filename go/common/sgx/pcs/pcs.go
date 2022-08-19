@@ -30,13 +30,13 @@ type QuoteBundle struct {
 
 // Verify verifies the quote bundle.
 //
-// In case of successful verification it returns the TCB level.
-func (bnd *QuoteBundle) Verify(ts time.Time) (*TCBLevel, error) {
+// In case of successful verification it returns the verified quote.
+func (bnd *QuoteBundle) Verify(policy *QuotePolicy, ts time.Time) (*sgx.VerifiedQuote, error) {
 	var quote Quote
 	if err := quote.UnmarshalBinary(bnd.Quote); err != nil {
 		return nil, err
 	}
-	return quote.Verify(ts, &bnd.TCB)
+	return quote.Verify(policy, ts, &bnd.TCB)
 }
 
 // SetAllowDebugEnclaves will enable running and communicating with enclaves with debug flag enabled

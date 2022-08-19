@@ -36,37 +36,49 @@ type TCBBundle struct {
 	Certificates []byte           `json:"certs"`
 }
 
-// GetTCBLevel fetches the TCB level corresponding to the passed SVN information.
-func (bnd *TCBBundle) GetTCBLevel(
+// VerifyTCBLevel verifies the TCB level corresponding to the passed SVN information.
+func (bnd *TCBBundle) VerifyTCBLevel(
 	ts time.Time,
+	policy *QuotePolicy,
 	fmspc []byte,
 	tcbCompSvn [16]int32,
 	pcesvn int32,
 	qe *ReportBody,
-) (*TCBLevel, error) {
+) error {
 	pk, err := bnd.getPublicKey(ts)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	tcbInfo, err := bnd.TCBInfo.open(ts, pk)
+	qeInfo, err := bnd.QEIdentity.open(ts, policy, pk)
 	if err != nil {
-		return nil, fmt.Errorf("pcs/tcb: invalid TCB info: %w", err)
+		return fmt.Errorf("pcs/tcb: invalid QE identity: %w", err)
+	}
+	if err = qeInfo.verify(qe); err != nil {
+		return err
+	}
+
+	tcbInfo, err := bnd.TCBInfo.open(ts, policy, pk)
+	if err != nil {
+		return fmt.Errorf("pcs/tcb: invalid TCB info: %w", err)
 	}
 	tcbLevel, err := tcbInfo.getTCBLevel(fmspc, tcbCompSvn, pcesvn)
 	if err != nil {
-		return nil, fmt.Errorf("pcs/tcb: failed to get TCB level: %w", err)
+		return fmt.Errorf("pcs/tcb: failed to get TCB level: %w", err)
 	}
 
-	qeInfo, err := bnd.QEIdentity.open(ts, pk)
-	if err != nil {
-		return nil, fmt.Errorf("pcs/tcb: invalid QE identity: %w", err)
-	}
-	if err = qeInfo.verify(qe); err != nil {
-		return nil, err
+	switch tcbLevel.Status {
+	case StatusUpToDate, StatusSWHardeningNeeded:
+		// These are ok.
+	default:
+		return &TCBOutOfDateError{
+			Kind:        TCBKindPlatform,
+			Status:      tcbLevel.Status,
+			AdvisoryIDs: tcbLevel.AdvisoryIDs,
+		}
 	}
 
-	return tcbLevel, nil
+	return nil
 }
 
 func (bnd *TCBBundle) getPublicKey(ts time.Time) (*ecdsa.PublicKey, error) {
@@ -135,7 +147,7 @@ type SignedTCBInfo struct {
 }
 
 // Open verifies the signature and unmarshals the inner TCB info.
-func (st *SignedTCBInfo) open(ts time.Time, pk *ecdsa.PublicKey) (*TCBInfo, error) {
+func (st *SignedTCBInfo) open(ts time.Time, policy *QuotePolicy, pk *ecdsa.PublicKey) (*TCBInfo, error) {
 	if err := verifyTCBSignature(st.TCBInfo, st.Signature, pk); err != nil {
 		return nil, err
 	}
@@ -144,7 +156,7 @@ func (st *SignedTCBInfo) open(ts time.Time, pk *ecdsa.PublicKey) (*TCBInfo, erro
 	if err := json.Unmarshal(st.TCBInfo, &tcbInfo); err != nil {
 		return nil, fmt.Errorf("pcs/tcb: malformed TCB info body: %w", err)
 	}
-	if err := tcbInfo.validate(ts); err != nil {
+	if err := tcbInfo.validate(ts, policy); err != nil {
 		return nil, err
 	}
 	return &tcbInfo, nil
@@ -158,33 +170,36 @@ type TCBInfo struct {
 	FMSPC                   string     `json:"fmspc"`
 	PCEID                   string     `json:"pceId"`
 	TCBType                 int        `json:"tcbType"`
-	TCBEvaluationDataNumber int        `json:"tcbEvaluationDataNumber"`
+	TCBEvaluationDataNumber uint32     `json:"tcbEvaluationDataNumber"`
 	TCBLevels               []TCBLevel `json:"tcbLevels"`
 }
 
-func (ti *TCBInfo) validate(ts time.Time) error {
+func (ti *TCBInfo) validate(ts time.Time, policy *QuotePolicy) error {
 	if ti.Version != requiredTCBInfoVersion {
 		return fmt.Errorf("pcs/tcb: unexpected TCB info version: %d", ti.Version)
 	}
 
 	// Validate TCB info is not expired/not yet valid based on current time.
 	var (
-		issueDate  time.Time
-		nextUpdate time.Time
-		err        error
+		issueDate time.Time
+		err       error
 	)
 	if issueDate, err = time.Parse(TimestampFormat, ti.IssueDate); err != nil {
 		return fmt.Errorf("pcs/tcb: invalid issue date: %w", err)
 	}
-	if nextUpdate, err = time.Parse(TimestampFormat, ti.NextUpdate); err != nil {
-		return fmt.Errorf("pcs/tcb: invalid issue date: %w", err)
+	if _, err = time.Parse(TimestampFormat, ti.NextUpdate); err != nil {
+		return fmt.Errorf("pcs/tcb: invalid next update date: %w", err)
 	}
 
 	if issueDate.After(ts) {
 		return fmt.Errorf("pcs/tcb: TCB info issue date in the future")
 	}
-	if nextUpdate.Before(ts) {
+	if ts.Sub(issueDate).Nanoseconds() > int64(policy.TCBValidityPeriod)*24*int64(time.Hour) {
 		return fmt.Errorf("pcs/tcb: TCB info expired")
+	}
+
+	if ti.TCBEvaluationDataNumber < policy.MinTCBEvaluationDataNumber {
+		return fmt.Errorf("pcs/tcb: invalid TCB evaluation data number")
 	}
 
 	return nil
@@ -222,6 +237,40 @@ func (ti *TCBInfo) getTCBLevel(
 	}
 
 	return matchedTCBLevel, nil
+}
+
+// TCBKind is the kind of the TCB.
+type TCBKind uint8
+
+const (
+	// TCBKindPlatform is the platform TCB kind (e.g. the CPU/microcode/config).
+	TCBKindPlatform = 0
+	// TCBKindEnclave is the enclave TCB kind (e.g. the QE).
+	TCBKindEnclave = 1
+)
+
+// String returns a string representation of the TCB kind.
+func (tk TCBKind) String() string {
+	switch tk {
+	case TCBKindPlatform:
+		return "platform"
+	case TCBKindEnclave:
+		return "QE"
+	default:
+		return "[unknown]"
+	}
+}
+
+// TCBOutOfDateError is an error saying that the TCB of the platform or enclave is out of date.
+type TCBOutOfDateError struct {
+	Kind        TCBKind
+	Status      TCBStatus
+	AdvisoryIDs []string
+}
+
+// Error returns the error message.
+func (tle *TCBOutOfDateError) Error() string {
+	return fmt.Sprintf("%s TCB is not up to date (likely needs upgrade): %s", tle.Kind, tle.Status)
 }
 
 // TCBLevel is a platform TCB level.
@@ -357,7 +406,7 @@ type SignedQEIdentity struct {
 }
 
 // Open verifies the signature and unmarshals the inner Quoting Enclave identity.
-func (sq *SignedQEIdentity) open(ts time.Time, pk *ecdsa.PublicKey) (*QEIdentity, error) {
+func (sq *SignedQEIdentity) open(ts time.Time, policy *QuotePolicy, pk *ecdsa.PublicKey) (*QEIdentity, error) {
 	if err := verifyTCBSignature(sq.EnclaveIdentity, sq.Signature, pk); err != nil {
 		return nil, err
 	}
@@ -366,7 +415,7 @@ func (sq *SignedQEIdentity) open(ts time.Time, pk *ecdsa.PublicKey) (*QEIdentity
 	if err := json.Unmarshal(sq.EnclaveIdentity, &qeIdentity); err != nil {
 		return nil, fmt.Errorf("pcs/tcb: malformed QE identity body: %w", err)
 	}
-	if err := qeIdentity.validate(ts); err != nil {
+	if err := qeIdentity.validate(ts, policy); err != nil {
 		return nil, err
 	}
 	return &qeIdentity, nil
@@ -378,7 +427,7 @@ type QEIdentity struct {
 	Version                 int               `json:"version"`
 	IssueDate               string            `json:"issueDate"`
 	NextUpdate              string            `json:"nextUpdate"`
-	TCBEvaluationDataNumber int               `json:"tcbEvaluationDataNumber"`
+	TCBEvaluationDataNumber uint32            `json:"tcbEvaluationDataNumber"`
 	MiscSelect              string            `json:"miscselect"`
 	MiscSelectMask          string            `json:"miscselectMask"`
 	Attributes              string            `json:"attributes"`
@@ -388,7 +437,7 @@ type QEIdentity struct {
 	TCBLevels               []EnclaveTCBLevel `json:"tcbLevels"`
 }
 
-func (qe *QEIdentity) validate(ts time.Time) error {
+func (qe *QEIdentity) validate(ts time.Time, policy *QuotePolicy) error {
 	if qe.ID != requiredQEID {
 		return fmt.Errorf("pcs/tcb: unexpected QE identity ID: %s", qe.ID)
 	}
@@ -398,22 +447,25 @@ func (qe *QEIdentity) validate(ts time.Time) error {
 
 	// Validate QE identity is not expired/not yet valid based on current time.
 	var (
-		issueDate  time.Time
-		nextUpdate time.Time
-		err        error
+		issueDate time.Time
+		err       error
 	)
 	if issueDate, err = time.Parse(TimestampFormat, qe.IssueDate); err != nil {
 		return fmt.Errorf("pcs/tcb: invalid issue date: %w", err)
 	}
-	if nextUpdate, err = time.Parse(TimestampFormat, qe.NextUpdate); err != nil {
-		return fmt.Errorf("pcs/tcb: invalid issue date: %w", err)
+	if _, err = time.Parse(TimestampFormat, qe.NextUpdate); err != nil {
+		return fmt.Errorf("pcs/tcb: invalid next update date: %w", err)
 	}
 
 	if issueDate.After(ts) {
 		return fmt.Errorf("pcs/tcb: QE identity issue date in the future")
 	}
-	if nextUpdate.Before(ts) {
+	if ts.Sub(issueDate).Nanoseconds() > int64(policy.TCBValidityPeriod)*24*int64(time.Hour) {
 		return fmt.Errorf("pcs/tcb: QE identity expired")
+	}
+
+	if qe.TCBEvaluationDataNumber < policy.MinTCBEvaluationDataNumber {
+		return fmt.Errorf("pcs/tcb: invalid QE evaluation data number")
 	}
 
 	return nil
@@ -505,7 +557,11 @@ func (qe *QEIdentity) verify(report *ReportBody) error {
 
 	// Ensure QE is up to date.
 	if matchedTCBLevel.Status != StatusUpToDate {
-		return fmt.Errorf("pcs/tcb: QE is not up to date: %s", matchedTCBLevel.Status)
+		return &TCBOutOfDateError{
+			Kind:        TCBKindEnclave,
+			Status:      matchedTCBLevel.Status,
+			AdvisoryIDs: matchedTCBLevel.AdvisoryIDs,
+		}
 	}
 
 	return nil

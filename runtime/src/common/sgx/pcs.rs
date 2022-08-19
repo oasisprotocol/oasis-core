@@ -2,7 +2,7 @@
 use std::ffi::CString;
 
 use byteorder::{ByteOrder, LittleEndian};
-use chrono::prelude::*;
+use chrono::{prelude::*, Duration};
 use dcap_ql::quote::{self, Quote3SignatureVerify};
 use mbedtls::{
     alloc::{Box as MbedtlsBox, List as MbedtlsList},
@@ -18,6 +18,7 @@ use super::{EnclaveIdentity, MrEnclave, MrSigner, VerifiedQuote};
 const REQUIRED_TCB_INFO_VERSION: u32 = 2;
 const REQUIRED_QE_ID: &str = "QE";
 const REQUIRED_QE_IDENTITY_VERSION: u32 = 2;
+const DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER: u32 = 12; // As of 2022-08-01.
 
 // Intel's PCS signing root certificate.
 const PCS_TRUST_ROOT_CERT: &str = r#"-----BEGIN CERTIFICATE-----
@@ -79,6 +80,8 @@ pub enum Error {
     TCBOutOfDate,
     #[error("TCB does not match the quote")]
     TCBMismatch,
+    #[error("TCB evaluation data number is invalid")]
+    TCBEvaluationDataNumberInvalid,
     #[error("QE report is malformed")]
     MalformedQEReport,
     #[error("report is malformed")]
@@ -87,10 +90,50 @@ pub enum Error {
     DebugEnclave,
     #[error("production enclaves not allowed")]
     ProductionEnclave,
+    #[error("PCS quotes are disabled by policy")]
+    Disabled,
+}
+
+/// Quote validity policy.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+pub struct QuotePolicy {
+    /// Whether PCS quotes are disabled and will always be rejected.
+    #[cbor(optional)]
+    pub disabled: bool,
+
+    /// Validity (in days) of the TCB collateral.
+    pub tcb_validity_period: u16,
+
+    /// Minimum TCB evaluation data number that is considered to be valid. TCB bundles containing
+    /// smaller values will be invalid.
+    pub min_tcb_evaluation_data_number: u32,
+}
+
+impl Default for QuotePolicy {
+    fn default() -> Self {
+        Self {
+            disabled: false,
+            tcb_validity_period: 30,
+            min_tcb_evaluation_data_number: DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER,
+        }
+    }
+}
+
+impl QuotePolicy {
+    /// Whether the quote with timestamp `ts` is expired.
+    pub fn is_expired(&self, now: i64, ts: i64) -> bool {
+        if self.disabled {
+            return true;
+        }
+
+        now.checked_sub(ts)
+            .map(|d| d > 60 * 60 * 24 * (self.tcb_validity_period as i64))
+            .expect("quote timestamp is in the future") // This should never happen.
+    }
 }
 
 /// An attestation quote together with the TCB bundle required for its verification.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct QuoteBundle {
     #[cbor(rename = "quote")]
     pub quote: Vec<u8>,
@@ -101,7 +144,11 @@ pub struct QuoteBundle {
 
 impl QuoteBundle {
     /// Verify the quote bundle.
-    pub fn verify(&self, ts: DateTime<Utc>) -> Result<VerifiedQuote, Error> {
+    pub fn verify(&self, policy: &QuotePolicy, ts: DateTime<Utc>) -> Result<VerifiedQuote, Error> {
+        if policy.disabled {
+            return Err(Error::Disabled);
+        }
+
         // Parse the quote.
         let quote = quote::Quote::parse(&self.quote)
             .map_err(|err| Error::QuoteParseError(err.to_string()))?;
@@ -123,9 +170,16 @@ impl QuoteBundle {
 
         // Verify TCB bundle and get TCB info and QE identity.
         let mut tcb_cert = self.tcb.verify_certificates(ts)?;
-        let tcb_info = self.tcb.tcb_info.open(ts, tcb_cert.public_key_mut())?;
-        let qe_identity = self.tcb.qe_identity.open(ts, tcb_cert.public_key_mut())?;
+        let qe_identity = self
+            .tcb
+            .qe_identity
+            .open(ts, policy, tcb_cert.public_key_mut())?;
+        let tcb_info = self
+            .tcb
+            .tcb_info
+            .open(ts, policy, tcb_cert.public_key_mut())?;
 
+        // We use the TCB info issue date as the timestamp.
         let timestamp = Utc
             .datetime_from_str(&tcb_info.issue_date, PCS_TS_FMT)
             .map_err(|err| Error::TCBParseError(err.into()))?
@@ -298,7 +352,7 @@ impl quote::Quote3SignatureEcdsaP256Verifier for Verifier {
 }
 
 /// The TCB bundle contains all the required components to verify a quote's TCB.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct TCBBundle {
     #[cbor(rename = "tcb_info")]
     pub tcb_info: SignedTCBInfo,
@@ -355,6 +409,14 @@ pub struct SignedTCBInfo {
     pub signature: String,
 }
 
+impl PartialEq for SignedTCBInfo {
+    fn eq(&self, other: &SignedTCBInfo) -> bool {
+        self.tcb_info.get() == other.tcb_info.get() && self.signature == other.signature
+    }
+}
+
+impl Eq for SignedTCBInfo {}
+
 fn open_signed_tcb<'a, T: serde::Deserialize<'a>>(
     data: &'a str,
     signature: &str,
@@ -390,9 +452,14 @@ fn open_signed_tcb<'a, T: serde::Deserialize<'a>>(
 }
 
 impl SignedTCBInfo {
-    fn open(&self, ts: DateTime<Utc>, pk: &mut mbedtls::pk::Pk) -> Result<TCBInfo, Error> {
+    fn open(
+        &self,
+        ts: DateTime<Utc>,
+        policy: &QuotePolicy,
+        pk: &mut mbedtls::pk::Pk,
+    ) -> Result<TCBInfo, Error> {
         let ti: TCBInfo = open_signed_tcb(self.tcb_info.get(), &self.signature, pk)?;
-        ti.validate(ts)?;
+        ti.validate(ts, policy)?;
 
         Ok(ti)
     }
@@ -427,7 +494,7 @@ pub struct TCBInfo {
 }
 
 impl TCBInfo {
-    fn validate(&self, ts: DateTime<Utc>) -> Result<(), Error> {
+    fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
         if self.version != REQUIRED_TCB_INFO_VERSION {
             return Err(Error::TCBParseError(anyhow::anyhow!(
                 "unexpected TCB info version"
@@ -438,14 +505,18 @@ impl TCBInfo {
         let issue_date = Utc
             .datetime_from_str(&self.issue_date, PCS_TS_FMT)
             .map_err(|err| Error::TCBParseError(err.into()))?;
-        let next_update = Utc
+        let _next_update = Utc
             .datetime_from_str(&self.next_update, PCS_TS_FMT)
             .map_err(|err| Error::TCBParseError(err.into()))?;
         if issue_date > ts {
             return Err(Error::TCBExpired);
         }
-        if next_update < ts {
+        if ts - issue_date > Duration::days(policy.tcb_validity_period.into()) {
             return Err(Error::TCBExpired);
+        }
+
+        if self.tcb_evaluation_data_number < policy.min_tcb_evaluation_data_number {
+            return Err(Error::TCBEvaluationDataNumberInvalid);
         }
 
         Ok(())
@@ -615,10 +686,24 @@ pub struct SignedQEIdentity {
     pub signature: String,
 }
 
+impl PartialEq for SignedQEIdentity {
+    fn eq(&self, other: &SignedQEIdentity) -> bool {
+        self.enclave_identity.get() == other.enclave_identity.get()
+            && self.signature == other.signature
+    }
+}
+
+impl Eq for SignedQEIdentity {}
+
 impl SignedQEIdentity {
-    fn open(&self, ts: DateTime<Utc>, pk: &mut mbedtls::pk::Pk) -> Result<QEIdentity, Error> {
+    fn open(
+        &self,
+        ts: DateTime<Utc>,
+        policy: &QuotePolicy,
+        pk: &mut mbedtls::pk::Pk,
+    ) -> Result<QEIdentity, Error> {
         let qe: QEIdentity = open_signed_tcb(self.enclave_identity.get(), &self.signature, pk)?;
-        qe.validate(ts)?;
+        qe.validate(ts, policy)?;
 
         Ok(qe)
     }
@@ -665,7 +750,7 @@ pub struct QEIdentity {
 }
 
 impl QEIdentity {
-    fn validate(&self, ts: DateTime<Utc>) -> Result<(), Error> {
+    fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
         if self.id != REQUIRED_QE_ID {
             return Err(Error::TCBParseError(anyhow::anyhow!("unexpected QE ID")));
         }
@@ -679,14 +764,18 @@ impl QEIdentity {
         let issue_date = Utc
             .datetime_from_str(&self.issue_date, PCS_TS_FMT)
             .map_err(|err| Error::TCBParseError(err.into()))?;
-        let next_update = Utc
+        let _next_update = Utc
             .datetime_from_str(&self.next_update, PCS_TS_FMT)
             .map_err(|err| Error::TCBParseError(err.into()))?;
         if issue_date > ts {
             return Err(Error::TCBExpired);
         }
-        if next_update < ts {
+        if ts - issue_date > Duration::days(policy.tcb_validity_period.into()) {
             return Err(Error::TCBExpired);
+        }
+
+        if self.tcb_evaluation_data_number < policy.min_tcb_evaluation_data_number {
+            return Err(Error::TCBEvaluationDataNumberInvalid);
         }
 
         Ok(())
@@ -832,9 +921,9 @@ mod tests {
             },
         };
 
-        let now = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(1652701082, 0), Utc);
+        let now = Utc.timestamp(1652701082, 0);
 
-        let verified_quote = qb.verify(now).unwrap();
+        let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
             verified_quote.identity.mr_signer,
             "4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459".into()
@@ -852,9 +941,9 @@ mod tests {
 
         let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
 
-        let now = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(1652701082, 0), Utc);
+        let now = Utc.timestamp(1652701082, 0);
 
-        let verified_quote = qb.verify(now).unwrap();
+        let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
             verified_quote.identity.mr_signer,
             "4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459".into()

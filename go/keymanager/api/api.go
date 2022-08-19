@@ -119,7 +119,13 @@ func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 
 // VerifyExtraInfo verifies and parses the per-node + per-runtime ExtraInfo
 // blob for a key manager.
-func VerifyExtraInfo(logger *logging.Logger, rt *registry.Runtime, nodeRt *node.Runtime, ts time.Time) (*InitResponse, error) {
+func VerifyExtraInfo(
+	logger *logging.Logger,
+	rt *registry.Runtime,
+	nodeRt *node.Runtime,
+	ts time.Time,
+	params *registry.ConsensusParameters,
+) (*InitResponse, error) {
 	var (
 		hw  node.TEEHardware
 		rak signature.PublicKey
@@ -133,7 +139,7 @@ func VerifyExtraInfo(logger *logging.Logger, rt *registry.Runtime, nodeRt *node.
 	}
 	if hw != rt.TEEHardware {
 		return nil, fmt.Errorf("keymanager: TEEHardware mismatch")
-	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeRt, rt, ts); err != nil {
+	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeRt, rt, params.TEEFeatures, ts); err != nil {
 		return nil, err
 	}
 	if nodeRt.ExtraInfo == nil {

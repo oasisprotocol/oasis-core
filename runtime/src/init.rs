@@ -1,5 +1,5 @@
 //! Runtime initialization.
-use std::{env, sync::Arc};
+use std::sync::Arc;
 
 use log;
 use slog::{error, info};
@@ -14,8 +14,9 @@ use crate::{
 
 /// Starts the runtime.
 pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
-    // Output backtraces.
-    env::set_var("RUST_BACKTRACE", "1");
+    // Output backtraces in debug builds.
+    #[cfg(debug_assertions)]
+    std::env::set_var("RUST_BACKTRACE", "1");
 
     // Initialize logging.
     init_logger(log::Level::Info);
@@ -31,7 +32,7 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     info!(logger, "Establishing connection with the worker host");
 
     #[cfg(not(target_env = "sgx"))]
-    let stream = match Stream::connect(env::var("OASIS_WORKER_HOST").unwrap_or_default()) {
+    let stream = match Stream::connect(std::env::var("OASIS_WORKER_HOST").unwrap_or_default()) {
         Err(error) => {
             error!(logger, "Failed to connect with the worker host"; "err" => %error);
             return;
