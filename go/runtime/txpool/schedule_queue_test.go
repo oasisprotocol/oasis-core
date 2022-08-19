@@ -13,9 +13,9 @@ import (
 
 func newTestTransaction(data []byte, priority uint64) *MainQueueTransaction {
 	tx := newTransaction(TxQueueMeta{
-		Raw:       data,
-		Hash:      hash.NewFromBytes(data),
-		FirstSeen: time.Now(),
+		raw:       data,
+		hash:      hash.NewFromBytes(data),
+		firstSeen: time.Now(),
 	})
 	tx.setChecked(&protocol.CheckTxMetadata{
 		Priority: priority,
@@ -210,6 +210,6 @@ func TestScheduleQueueSender(t *testing.T) {
 	require.NoError(err, "Add")
 	require.Equal(1, queue.size())
 
-	queue.remove([]hash.Hash{tx.TxQueueMeta.Hash})
+	queue.remove([]hash.Hash{tx.Hash()})
 	require.Equal(0, queue.size())
 }

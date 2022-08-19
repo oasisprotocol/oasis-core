@@ -701,7 +701,7 @@ func (n *Node) startRuntimeBatchSchedulingLocked(
 
 		initialBatch := make([][]byte, 0, len(batch))
 		for _, tx := range batch {
-			initialBatch = append(initialBatch, tx.Raw)
+			initialBatch = append(initialBatch, tx.Raw())
 		}
 
 		// Ask the runtime to execute the batch.

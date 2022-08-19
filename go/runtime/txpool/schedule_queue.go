@@ -28,7 +28,7 @@ func (tx priorityWrappedTx) Less(other btree.Item) bool {
 	}
 	// If transactions have same priority, sort by first seen time (earlier transactions are later
 	// in the queue as we are iterating over the queue in descending order).
-	return tx.TxQueueMeta.FirstSeen.After(tx2.TxQueueMeta.FirstSeen)
+	return tx.FirstSeen().After(tx2.FirstSeen())
 }
 
 type scheduleQueue struct {
@@ -66,7 +66,7 @@ func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 		sq.removeLocked(etx.MainQueueTransaction)
 	}
 
-	sq.all[tx.TxQueueMeta.Hash] = tx
+	sq.all[tx.Hash()] = tx
 	sq.bySender[tx.sender] = tx
 	sq.byPriority.ReplaceOrInsert(priorityWrappedTx{tx})
 
@@ -74,7 +74,7 @@ func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 }
 
 func (sq *scheduleQueue) removeLocked(tx *MainQueueTransaction) {
-	delete(sq.all, tx.TxQueueMeta.Hash)
+	delete(sq.all, tx.Hash())
 	delete(sq.bySender, tx.sender)
 	sq.byPriority.Delete(priorityWrappedTx{tx})
 }
@@ -114,7 +114,8 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 		tx := i.(priorityWrappedTx)
 
 		// Skip the offset item itself (if specified).
-		if tx.TxQueueMeta.Hash.Equal(offset) {
+		h := tx.Hash()
+		if h.Equal(offset) {
 			return true
 		}
 

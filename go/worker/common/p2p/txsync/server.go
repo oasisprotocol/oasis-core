@@ -44,7 +44,7 @@ func (s *service) handleGetTxs(ctx context.Context, request *GetTxsRequest) (*Ge
 		if tx == nil {
 			continue
 		}
-		rsp.Txs = append(rsp.Txs, tx.Raw)
+		rsp.Txs = append(rsp.Txs, tx.Raw())
 	}
 	return &rsp, nil
 }

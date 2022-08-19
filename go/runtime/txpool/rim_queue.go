@@ -42,8 +42,8 @@ func (rq *rimQueue) Load(inMsgs []*message.IncomingMessage) {
 	for _, msg := range inMsgs {
 		h := hash.NewFromBytes(msg.Data)
 		newTxs[h] = &TxQueueMeta{
-			Raw:  msg.Data,
-			Hash: h,
+			raw:  msg.Data,
+			hash: h,
 		}
 	}
 	rq.l.Lock()

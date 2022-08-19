@@ -70,7 +70,7 @@ func (n *Node) handleNewCheckedTransactions(txs []*txpool.PendingCheckTransactio
 	}
 
 	for _, tx := range txs {
-		delete(batch.missingTxs, tx.Hash)
+		delete(batch.missingTxs, tx.Hash())
 	}
 	if len(batch.missingTxs) == 0 {
 		// We have all transactions, signal the node to start processing the batch.

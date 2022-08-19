@@ -2,7 +2,6 @@ package txpool
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -35,27 +34,7 @@ func newTransaction(tx TxQueueMeta) *MainQueueTransaction {
 
 // String returns a string representation of a transaction.
 func (tx *MainQueueTransaction) String() string {
-	return fmt.Sprintf("MainQueueTransaction{hash: %s, first_seen: %s, priority: %d}", tx.TxQueueMeta.Hash, tx.TxQueueMeta.FirstSeen, tx.priority)
-}
-
-// Raw returns the raw transaction data.
-func (tx *MainQueueTransaction) Raw() []byte {
-	return tx.TxQueueMeta.Raw
-}
-
-// Size returns the size (in bytes) of the raw transaction data.
-func (tx *MainQueueTransaction) Size() int {
-	return len(tx.TxQueueMeta.Raw)
-}
-
-// Hash returns the hash of the transaction binary data.
-func (tx *MainQueueTransaction) Hash() hash.Hash {
-	return tx.TxQueueMeta.Hash
-}
-
-// FirstSeen returns the time the transaction was first seen.
-func (tx *MainQueueTransaction) FirstSeen() time.Time {
-	return tx.TxQueueMeta.FirstSeen
+	return fmt.Sprintf("MainQueueTransaction{hash: %s, first_seen: %s, priority: %d}", tx.Hash(), tx.FirstSeen(), tx.priority)
 }
 
 // Priority returns the transaction priority.
@@ -84,7 +63,8 @@ func (tx *MainQueueTransaction) setChecked(meta *protocol.CheckTxMetadata) {
 	// If the sender is empty (e.g. because the runtime does not support specifying a sender), we
 	// treat each transaction as having a unique sender. This is to allow backwards compatibility.
 	if len(tx.sender) == 0 {
-		tx.sender = string(tx.TxQueueMeta.Hash[:])
+		h := tx.Hash()
+		tx.sender = string(h[:])
 	}
 }
 

@@ -250,13 +250,13 @@ func (t *txPool) SubmitTxNoWait(ctx context.Context, tx []byte, meta *Transactio
 
 func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMeta, notifyCh chan *protocol.CheckTxResult) error {
 	tx := &TxQueueMeta{
-		Raw:       rawTx,
-		Hash:      hash.NewFromBytes(rawTx),
-		FirstSeen: time.Now(),
+		raw:       rawTx,
+		hash:      hash.NewFromBytes(rawTx),
+		firstSeen: time.Now(),
 	}
 	// Skip recently seen transactions.
-	if _, seen := t.seenCache.Peek(tx.Hash); seen {
-		t.logger.Debug("ignoring already seen transaction", "tx_hash", tx.Hash)
+	if _, seen := t.seenCache.Peek(tx.Hash()); seen {
+		t.logger.Debug("ignoring already seen transaction", "tx_hash", tx.Hash())
 		return fmt.Errorf("duplicate transaction")
 	}
 
@@ -278,13 +278,13 @@ func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 
 func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
 	t.logger.Debug("queuing transaction for check",
-		"tx", pct.Raw,
-		"tx_hash", pct.Hash,
+		"tx", pct.Raw(),
+		"tx_hash", pct.Hash(),
 		"recheck", pct.flags.isRecheck(),
 	)
 	if err := t.checkTxQueue.add(pct); err != nil {
 		t.logger.Warn("unable to queue transaction",
-			"tx_hash", pct.Hash,
+			"tx_hash", pct.Hash(),
 			"err", err,
 		)
 		return err
@@ -309,10 +309,10 @@ func (t *txPool) SubmitProposedBatch(batch [][]byte) {
 
 	for _, rawTx := range batch {
 		tx := &TxQueueMeta{
-			Raw:  rawTx,
-			Hash: hash.NewFromBytes(rawTx),
+			raw:  rawTx,
+			hash: hash.NewFromBytes(rawTx),
 		}
-		t.proposedTxs[tx.Hash] = tx
+		t.proposedTxs[tx.Hash()] = tx
 	}
 }
 
@@ -331,7 +331,7 @@ func (t *txPool) PromoteProposedBatch(batch []hash.Hash) {
 		if tx == nil {
 			continue
 		}
-		t.proposedTxs[tx.Hash] = tx
+		t.proposedTxs[tx.Hash()] = tx
 	}
 }
 
@@ -504,7 +504,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		// Check batch.
 		rawTxBatch := make([][]byte, 0, len(batch))
 		for _, pct := range batch {
-			rawTxBatch = append(rawTxBatch, pct.Raw)
+			rawTxBatch = append(rawTxBatch, pct.Raw())
 		}
 		return rr.CheckTx(checkCtx, bi.RuntimeBlock, bi.ConsensusBlock, bi.Epoch, bi.ActiveDescriptor.Executor.MaxMessages, rawTxBatch)
 	}()
@@ -559,8 +559,8 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		if !res.IsSuccess() {
 			rejectedTransactions.With(t.getMetricLabels()).Inc()
 			t.logger.Debug("check tx failed",
-				"tx", batch[i].Raw,
-				"tx_hash", batch[i].Hash,
+				"tx", batch[i].Raw(),
+				"tx_hash", batch[i].Hash(),
 				"result", res,
 				"recheck", batch[i].flags.isRecheck(),
 			)
@@ -604,7 +604,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		if err = pct.dstQueue.OfferChecked(pct.TxQueueMeta, results[batchIndices[i]].Meta); err != nil {
 			t.logger.Error("unable to queue transaction for scheduling",
 				"err", err,
-				"tx_hash", pct.Hash,
+				"tx_hash", pct.Hash(),
 			)
 
 			// Change the result into an error and notify submitter.
@@ -632,7 +632,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 			}
 			// Put cannot fail as seenCache's LRU capacity is not in bytes and the only case where it
 			// can error is if the capacity is in bytes and the value size is over capacity.
-			_ = t.seenCache.Put(pct.Hash, publishTime)
+			_ = t.seenCache.Put(pct.Hash(), publishTime)
 		}
 	}
 
@@ -773,7 +773,7 @@ func (t *txPool) republishWorker() {
 		var republishedCount int
 		nextPendingRepublish := republishInterval
 		for _, tx := range txs {
-			ts, seen := t.seenCache.Peek(tx.Hash)
+			ts, seen := t.seenCache.Peek(tx.Hash())
 			if seen {
 				sinceLast := time.Since(ts.(time.Time))
 				if sinceLast < republishInterval {
@@ -784,7 +784,7 @@ func (t *txPool) republishWorker() {
 				}
 			}
 
-			if err := t.txPublisher.PublishTx(ctx, tx.Raw); err != nil {
+			if err := t.txPublisher.PublishTx(ctx, tx.Raw()); err != nil {
 				t.logger.Warn("failed to publish transaction",
 					"err", err,
 					"tx", tx,
@@ -794,7 +794,7 @@ func (t *txPool) republishWorker() {
 			}
 
 			// Update publish timestamp.
-			_ = t.seenCache.Put(tx.Hash, time.Now())
+			_ = t.seenCache.Put(tx.Hash(), time.Now())
 
 			republishedCount++
 			if republishedCount > maxRepublishTxs {
@@ -861,7 +861,7 @@ func (t *txPool) recheck() {
 		if err != nil {
 			t.logger.Warn("failed to submit transaction for recheck",
 				"err", err,
-				"tx_hash", pct.Hash,
+				"tx_hash", pct.Hash(),
 			)
 		}
 	}

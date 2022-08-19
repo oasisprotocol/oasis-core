@@ -9,13 +9,33 @@ import (
 
 // TxQueueMeta stores some queuing-related metadata alongside a raw transaction.
 type TxQueueMeta struct {
-	Raw  []byte
-	Hash hash.Hash
-	// FirstSeen is the timestamp when the transaction was first seen.
+	raw  []byte
+	hash hash.Hash
+	// firstSeen is the timestamp when the transaction was first seen.
 	// We populate this in `submitTx`. Other forms of ingress (namely loading from roothash incoming messages and
 	// receiving from txSync) leave this in its default value. Transactions from those sources, however, only move
 	// through a limited area in the tx pool.
-	FirstSeen time.Time
+	firstSeen time.Time
+}
+
+// Raw returns the raw transaction data.
+func (t *TxQueueMeta) Raw() []byte {
+	return t.raw
+}
+
+// Size returns the size (in bytes) of the raw transaction data.
+func (t *TxQueueMeta) Size() int {
+	return len(t.Raw())
+}
+
+// Hash returns the hash of the transaction binary data.
+func (t *TxQueueMeta) Hash() hash.Hash {
+	return t.hash
+}
+
+// FirstSeen returns the time the transaction was first seen.
+func (t *TxQueueMeta) FirstSeen() time.Time {
+	return t.firstSeen
 }
 
 // UsableTransactionSource is a place to retrieve txs that are "good enough." "Good enough" variously means CheckTx'd,

@@ -64,7 +64,7 @@ func (lq *localQueue) HandleTxsUsed(hashes []hash.Hash) {
 		}
 		i := len(keptTxs)
 		keptTxs = append(keptTxs, tx)
-		lq.indexesByHash[tx.Hash] = i
+		lq.indexesByHash[tx.Hash()] = i
 	}
 	lq.txs = keptTxs
 }
@@ -81,7 +81,7 @@ func (lq *localQueue) TakeAll() []*TxQueueMeta {
 func (lq *localQueue) OfferChecked(tx *TxQueueMeta, _ *protocol.CheckTxMetadata) error {
 	lq.l.Lock()
 	defer lq.l.Unlock()
-	lq.indexesByHash[tx.Hash] = len(lq.txs)
+	lq.indexesByHash[tx.Hash()] = len(lq.txs)
 	lq.txs = append(lq.txs, tx)
 	return nil
 }

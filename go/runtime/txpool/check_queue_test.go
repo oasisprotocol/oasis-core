@@ -12,8 +12,8 @@ import (
 func newPendingTx(tx []byte) *PendingCheckTransaction {
 	return &PendingCheckTransaction{
 		TxQueueMeta: &TxQueueMeta{
-			Raw:  tx,
-			Hash: hash.NewFromBytes(tx),
+			raw:  tx,
+			hash: hash.NewFromBytes(tx),
 		},
 	}
 }
@@ -39,9 +39,9 @@ func TestCheckTxQueueBasic(t *testing.T) {
 	require.EqualValues(t, 10, len(batch), "Batch size")
 	require.EqualValues(t, 41, queue.size(), "Size")
 
-	require.EqualValues(t, batch[0].Raw, []byte("hello world"))
+	require.EqualValues(t, batch[0].Raw(), []byte("hello world"))
 	for i := 0; i < 9; i++ {
-		require.EqualValues(t, batch[i+1].Raw, []byte(fmt.Sprintf("call %d", i)))
+		require.EqualValues(t, batch[i+1].Raw(), []byte(fmt.Sprintf("call %d", i)))
 	}
 
 	queue.clear()

@@ -13,20 +13,20 @@ func TestRimQueue(t *testing.T) {
 	rq := newRimQueue()
 
 	rawA := []byte("a")
-	txA := &TxQueueMeta{Raw: rawA, Hash: hash.NewFromBytes(rawA)}
+	txA := &TxQueueMeta{raw: rawA, hash: hash.NewFromBytes(rawA)}
 	rq.Load([]*message.IncomingMessage{
 		{
 			ID:   1,
 			Data: rawA,
 		},
 	})
-	require.EqualValues(t, map[hash.Hash]*TxQueueMeta{txA.Hash: txA}, rq.txs, "after load")
+	require.EqualValues(t, map[hash.Hash]*TxQueueMeta{txA.Hash(): txA}, rq.txs, "after load")
 	require.Equal(t, 1, rq.size())
 
 	require.Nil(t, rq.GetSchedulingSuggestion(50), "get scheduling suggestion")
-	rq.HandleTxsUsed([]hash.Hash{txA.Hash})
+	rq.HandleTxsUsed([]hash.Hash{txA.Hash()})
 
-	tx := rq.GetTxByHash(txA.Hash)
+	tx := rq.GetTxByHash(txA.Hash())
 	require.EqualValues(t, txA, tx, "get tx by hash a")
 	hashC := hash.NewFromBytes([]byte("c"))
 	tx = rq.GetTxByHash(hashC)
