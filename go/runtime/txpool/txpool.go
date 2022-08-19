@@ -364,8 +364,8 @@ func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
 		q.HandleTxsUsed(hashes)
 	}
 
-	// todo: metrics
-	// pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.schedulerQueue.size()))
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.inner.size()))
+	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
 }
 
 func (t *txPool) GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int) {
@@ -432,6 +432,7 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 
 func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) error {
 	t.rimQueue.Load(inMsgs)
+	rimQueueSize.With(t.getMetricLabels()).Set(float64(t.rimQueue.size()))
 	return nil
 }
 
@@ -644,8 +645,8 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		t.schedulerNotifier.Broadcast(false)
 	}
 
-	// todo: metrics
-	// pendingScheduleSize.With(t.getMetricLabels()).Set(float64(t.PendingScheduleSize()))
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.inner.size()))
+	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
 }
 
 func (t *txPool) ensureInitialized() error {
@@ -847,6 +848,8 @@ func (t *txPool) recheck() {
 			results = append(results, notifyCh)
 		}
 	}
+	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.inner.size()))
+	localQueueSize.With(t.getMetricLabels()).Set(float64(t.localQueue.size()))
 
 	if len(pcts) == 0 {
 		return

@@ -14,10 +14,24 @@ var (
 		},
 		[]string{"runtime"},
 	)
-	pendingScheduleSize = prometheus.NewGaugeVec(
+	mainQueueSize = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "oasis_txpool_pending_schedule_size",
-			Help: "Size of the pending to be scheduled queue (number of entries).",
+			Help: "Size of the main schedulable queue (number of entries).",
+		},
+		[]string{"runtime"},
+	)
+	localQueueSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_txpool_local_queue_size",
+			Help: "Size of the local transactions schedulable queue (number of entries).",
+		},
+		[]string{"runtime"},
+	)
+	rimQueueSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "oasis_txpool_rim_queue_size",
+			Help: "Size of the roothash incoming message transactions schedulable queue (number of entries).",
 		},
 		[]string{"runtime"},
 	)
@@ -37,7 +51,9 @@ var (
 	)
 	txpoolCollectors = []prometheus.Collector{
 		pendingCheckSize,
-		pendingScheduleSize,
+		mainQueueSize,
+		localQueueSize,
+		rimQueueSize,
 		rejectedTransactions,
 		acceptedTransactions,
 	}

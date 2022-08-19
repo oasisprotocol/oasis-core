@@ -91,3 +91,9 @@ func (lq *localQueue) GetTxsToPublish() []*TxQueueMeta {
 	defer lq.l.Unlock()
 	return append([]*TxQueueMeta(nil), lq.txs...)
 }
+
+func (lq *localQueue) size() int {
+	lq.l.Lock()
+	defer lq.l.Unlock()
+	return len(lq.txs)
+}

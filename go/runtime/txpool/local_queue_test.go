@@ -21,6 +21,7 @@ func TestLocalQueueBasic(t *testing.T) {
 	rawB := []byte("b")
 	txB := &TxQueueMeta{Raw: rawB, Hash: hash.NewFromBytes(rawB)}
 	require.NoError(t, lq.OfferChecked(txB, &protocol.CheckTxMetadata{Priority: 5}), "offer checked a")
+	require.Equal(t, 2, lq.size())
 
 	// We should preserve the order. Publish in original order.
 	require.EqualValues(t, []*TxQueueMeta{txA, txB}, lq.GetTxsToPublish(), "get txs to publish")

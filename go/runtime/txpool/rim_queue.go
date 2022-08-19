@@ -50,3 +50,9 @@ func (rq *rimQueue) Load(inMsgs []*message.IncomingMessage) {
 	defer rq.l.Unlock()
 	rq.txs = newTxs
 }
+
+func (rq *rimQueue) size() int {
+	rq.l.Lock()
+	defer rq.l.Unlock()
+	return len(rq.txs)
+}

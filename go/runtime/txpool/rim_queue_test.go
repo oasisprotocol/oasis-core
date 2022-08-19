@@ -21,6 +21,7 @@ func TestRimQueue(t *testing.T) {
 		},
 	})
 	require.EqualValues(t, map[hash.Hash]*TxQueueMeta{txA.Hash: txA}, rq.txs, "after load")
+	require.Equal(t, 1, rq.size())
 
 	require.Nil(t, rq.GetSchedulingSuggestion(50), "get scheduling suggestion")
 	rq.HandleTxsUsed([]hash.Hash{txA.Hash})
