@@ -667,7 +667,7 @@ func (t *fullService) lazyInit() error {
 		switch dbCtx.ID {
 		case "state":
 			// Tendermint state database.
-			t.stateStore = tmstate.NewStore(db)
+			t.stateStore = tmstate.NewStore(db, tmstate.StoreOptions{})
 		case "blockstore":
 			// Tendermint blockstore database.
 			t.blockStoreDB = db
