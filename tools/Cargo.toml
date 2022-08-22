@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 thiserror = "1.0"
-serde = { version = "1.0.137", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 toml = "0.5.9"
 clap = "3.2.10"
 ansi_term = "0.12.1"
