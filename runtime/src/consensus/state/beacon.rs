@@ -4,16 +4,13 @@ use io_context::Context;
 
 use crate::{
     common::key_format::{KeyFormat, KeyFormatAtom},
-    consensus::{beacon::EpochTime, state::StateError},
+    consensus::{
+        beacon::{EpochTime, EpochTimeState},
+        state::StateError,
+    },
     key_format,
     storage::mkvs::ImmutableMKVS,
 };
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
-pub struct EpochTimeState {
-    pub epoch: EpochTime,
-    pub height: i64,
-}
 
 /// Consensus beacon state wrapper.
 pub struct ImmutableState<'a, T: ImmutableMKVS> {
@@ -33,13 +30,18 @@ key_format!(FutureEpochKeyFmt, 0x41, ());
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Returns the current epoch number.
     pub fn epoch(&self, ctx: Context) -> Result<EpochTime, StateError> {
+        self.epoch_state(ctx).map(|es| es.epoch)
+    }
+
+    /// Returns the current epoch state.
+    pub fn epoch_state(&self, ctx: Context) -> Result<EpochTimeState, StateError> {
         match self.mkvs.get(ctx, &CurrentEpochKeyFmt(()).encode()) {
             Ok(Some(b)) => {
                 let state: EpochTimeState =
                     cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))?;
-                Ok(state.epoch)
+                Ok(state)
             }
-            Ok(None) => Ok(EpochTime::default()),
+            Ok(None) => Ok(EpochTimeState::default()),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
         }
     }
@@ -99,6 +101,13 @@ mod test {
             .epoch(Context::create_child(&ctx))
             .expect("epoch query should work");
         assert_eq!(42u64, epoch, "expected epoch should match");
+
+        // Test current epoch state.
+        let epoch_state = beacon_state
+            .epoch_state(Context::create_child(&ctx))
+            .expect("epoch state query should work");
+        assert_eq!(42u64, epoch_state.epoch, "expected epoch should match");
+        assert_eq!(13i64, epoch_state.height, "expected height should match");
 
         // Test future epoch number.
         let epoch = beacon_state
