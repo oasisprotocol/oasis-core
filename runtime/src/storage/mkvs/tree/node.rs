@@ -223,7 +223,7 @@ impl PartialEq for NodePointer {
         if self.clean && other.clean {
             self.hash == other.hash
         } else {
-            self.node != None && self.node == other.node
+            self.node.is_some() && self.node == other.node
         }
     }
 }
