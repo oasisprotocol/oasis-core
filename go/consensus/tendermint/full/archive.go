@@ -206,7 +206,7 @@ func NewArchive(
 		return nil, err
 	}
 	stateDB = db.WithCloser(stateDB, srv.dbCloser)
-	srv.stateStore = state.NewStore(stateDB)
+	srv.stateStore = state.NewStore(stateDB, state.StoreOptions{})
 
 	tmGenDoc, err := api.GetTendermintGenesisDocument(genesisProvider)
 	if err != nil {
