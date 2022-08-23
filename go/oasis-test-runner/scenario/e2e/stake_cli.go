@@ -32,7 +32,7 @@ import (
 
 const (
 	// Init balance in the genesis block.
-	initBalance = 100_000_000_000
+	initBalance = 1_000_000_000_000_000
 
 	// Test transfer amount.
 	transferAmount = 1000
