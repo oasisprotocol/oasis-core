@@ -386,11 +386,13 @@ pub fn main_with_version(version: Version) {
     let trust_root = option_env!("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT").map(|height| {
         let hash = option_env!("OASIS_TESTS_CONSENSUS_TRUST_HASH").unwrap();
         let runtime_id = option_env!("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID").unwrap();
+        let chain_context = option_env!("OASIS_TESTS_CONSENSUS_TRUST_CHAIN_CONTEXT").unwrap();
 
         TrustRoot {
             height: height.parse::<u64>().unwrap(),
             hash: hash.to_string(),
             runtime_id: runtime_id.into(),
+            chain_context: chain_context.to_string(),
         }
     });
 

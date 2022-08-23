@@ -242,6 +242,15 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 			Block: *lb,
 		}}, nil
 	}
+	if body.HostFetchGenesisHeightRequest != nil {
+		doc, err := h.consensus.GetGenesisDocument(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostFetchGenesisHeightResponse: &protocol.HostFetchGenesisHeightResponse{
+			Height: uint64(doc.Height),
+		}}, nil
+	}
 	// Transaction pool.
 	if rq := body.HostFetchTxBatchRequest; rq != nil {
 		txPool, err := h.env.GetTxPool(ctx)

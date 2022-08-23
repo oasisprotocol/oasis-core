@@ -799,6 +799,8 @@ func RegisterScenarios() error {
 		HistoryReindex,
 		// TrustRoot test.
 		TrustRoot,
+		TrustRootChangeTest,
+		TrustRootChangeFailsTest,
 		// Archive node API test.
 		ArchiveAPI,
 	} {

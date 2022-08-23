@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -28,15 +27,23 @@ const (
 )
 
 // TrustRoot is the consensus trust root verification scenario.
-var TrustRoot scenario.Scenario = newTrustRootImpl()
+var TrustRoot scenario.Scenario = newTrustRootImpl("simple", BasicKVTestClient)
+
+type trustRoot struct {
+	height       string
+	hash         string
+	runtimeID    string
+	chainContext string
+}
 
 type trustRootImpl struct {
 	runtimeImpl
 }
 
-func newTrustRootImpl() *trustRootImpl {
+func newTrustRootImpl(name string, testClient TestClient) *trustRootImpl {
+	fullName := "trust-root/" + name
 	sc := &trustRootImpl{
-		runtimeImpl: *newRuntimeImpl("trust-root", BasicKVTestClient),
+		runtimeImpl: *newRuntimeImpl(fullName, testClient),
 	}
 
 	sc.Flags.String(cfgRuntimeSourceDir, "", "path to the runtime source base dir")
@@ -75,7 +82,45 @@ func (sc *trustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env) error {
+func (sc *trustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.Env, root trustRoot) (func() error, error) {
+	sc.Logger.Info("building runtime with embedded trust root",
+		"height", root.height,
+		"hash", root.hash,
+		"runtime_id", root.runtimeID,
+		"chain_context", root.chainContext,
+	)
+
+	// Determine the required directories for building the runtime with an embedded trust root.
+	buildDir, _ := sc.Flags.GetString(cfgRuntimeSourceDir)
+	targetDir, _ := sc.Flags.GetString(cfgRuntimeTargetDir)
+	if len(buildDir) == 0 || len(targetDir) == 0 {
+		return nil, fmt.Errorf("runtime build dir and/or target dir not configured")
+	}
+
+	// Build a new runtime with the given trust root embedded.
+	teeHardware, _ := sc.getTEEHardware()
+	builder := rust.NewBuilder(childEnv, teeHardware, trustRootRuntime, filepath.Join(buildDir, trustRootRuntime), targetDir)
+	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT", root.height)
+	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HASH", root.hash)
+	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID", root.runtimeID)
+	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_CHAIN_CONTEXT", root.chainContext)
+	if err := builder.Build(); err != nil {
+		return nil, fmt.Errorf("failed to build runtime '%s' with trust root: %w", trustRootRuntime, err)
+	}
+
+	rebuild := func() error {
+		sc.Logger.Info("rebuilding runtime without the embedded trust root")
+		builder.ResetEnv()
+		if buildErr := builder.Build(); buildErr != nil {
+			return fmt.Errorf("failed to build plain runtime '%s': %w", trustRootRuntime, buildErr)
+		}
+		return nil
+	}
+
+	return rebuild, nil
+}
+
+func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env) error {
 	// Nonce used for transactions (increase this by 1 after each transaction).
 	var nonce uint64
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
@@ -181,7 +226,40 @@ func (sc *trustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env)
 	return nil
 }
 
+func (sc *trustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Block, error) {
+	sc.Logger.Info("waiting for a block")
+
+	blockCh, blockSub, err := sc.Net.Controller().Consensus.WatchBlocks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer blockSub.Close()
+
+	var blk *consensus.Block
+	for i := 0; i < n; i++ {
+		select {
+		case blk = <-blockCh:
+		case <-ctx.Done():
+			return nil, fmt.Errorf("timed out waiting for blocks")
+		}
+	}
+
+	return blk, nil
+}
+
+func (sc *trustRootImpl) chainContext(ctx context.Context) (string, error) {
+	sc.Logger.Info("fetching consensus chain context")
+
+	cc, err := sc.Net.Controller().Consensus.GetChainContext(ctx)
+	if err != nil {
+		return "", err
+	}
+	return cc, nil
+}
+
 func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
+	ctx := context.Background()
+
 	// Determine the required directories for building the runtime with an embedded trust root.
 	buildDir, _ := sc.Flags.GetString(cfgRuntimeSourceDir)
 	targetDir, _ := sc.Flags.GetString(cfgRuntimeTargetDir)
@@ -194,57 +272,34 @@ func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
 	}
 
 	// Let the network run for 10 blocks to select a suitable trust root.
-	ctx := context.Background()
-	blockCh, blockSub, err := sc.Net.Controller().Consensus.WatchBlocks(ctx)
+	// Pick one block and use it as an embedded trust root.
+	block, err := sc.waitBlocks(ctx, 10)
 	if err != nil {
 		return err
 	}
-	defer blockSub.Close()
-
-	sc.Logger.Info("waiting for some blocks")
-	var blk *consensus.Block
-	for {
-		select {
-		case blk = <-blockCh:
-			if blk.Height < 10 {
-				continue
-			}
-		case <-time.After(30 * time.Second):
-			return fmt.Errorf("timed out waiting for blocks")
-		}
-
-		break
+	chainContext, err := sc.chainContext(ctx)
+	if err != nil {
+		return err
+	}
+	root := trustRoot{
+		height:       strconv.FormatInt(block.Height, 10),
+		hash:         block.Hash.Hex(),
+		runtimeID:    runtimeID.String(),
+		chainContext: chainContext,
 	}
 
-	sc.Logger.Info("got some blocks, building runtime with given trust root",
-		"trust_root_height", blk.Height,
-		"trust_root_hash", blk.Hash.Hex(),
-		"trust_root_runtime_id", runtimeID.String(),
-	)
-
-	// Build a new runtime with the given trust root embedded.
-	sc.Logger.Info("building new runtime with embedded trust root")
-
-	teeHardware, _ := sc.getTEEHardware()
-	builder := rust.NewBuilder(childEnv, teeHardware, trustRootRuntime, filepath.Join(buildDir, trustRootRuntime), targetDir)
-	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT", strconv.FormatInt(blk.Height, 10))
-	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HASH", blk.Hash.Hex())
-	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID", runtimeID.String())
-	if err = builder.Build(); err != nil {
-		return fmt.Errorf("failed to build runtime '%s' with trust root: %w", trustRootRuntime, err)
+	rebuild, err := sc.buildRuntimeBinary(ctx, childEnv, root)
+	if err != nil {
+		return err
 	}
 	defer func() {
-		// Make sure the binary is then rebuilt without the env vars set.
-		sc.Logger.Info("rebuilding runtime without the embedded trust root")
-		builder.ResetEnv()
-		if buildErr := builder.Build(); buildErr != nil {
-			err = fmt.Errorf("failed to build plain runtime '%s': %w (original error: %s)", trustRootRuntime, buildErr, err)
-			return
+		if err2 := rebuild(); err2 != nil {
+			err = fmt.Errorf("%w (original error: %s)", err2, err)
 		}
 	}()
 
 	// Now that the runtime is built, let's register it and start all the required workers.
-	if err = sc.registerRuntime(ctx, childEnv); err != nil {
+	if err = sc.registerRuntimes(ctx, childEnv); err != nil {
 		return err
 	}
 

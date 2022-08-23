@@ -238,6 +238,10 @@ pub enum Body {
         #[cbor(optional)]
         batch: Option<TxnBatch>,
     },
+    HostFetchGenesisHeightRequest {},
+    HostFetchGenesisHeightResponse {
+        height: u64,
+    },
 }
 
 impl Default for Body {
