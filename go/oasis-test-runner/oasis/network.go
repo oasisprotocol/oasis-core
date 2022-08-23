@@ -478,7 +478,7 @@ func (net *Network) Start() error { // nolint: gocyclo
 			continue
 		}
 
-		if net.controller, err = NewController(net.validators[0].SocketPath()); err != nil {
+		if net.controller, err = NewController(v.SocketPath()); err != nil {
 			net.logger.Error("failed to create controller",
 				"err", err,
 			)
@@ -493,7 +493,7 @@ func (net *Network) Start() error { // nolint: gocyclo
 			continue
 		}
 
-		if net.clientController, err = NewController(net.clients[0].SocketPath()); err != nil {
+		if net.clientController, err = NewController(v.SocketPath()); err != nil {
 			net.logger.Error("failed to create client controller",
 				"err", err,
 			)
