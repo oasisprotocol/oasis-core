@@ -100,6 +100,9 @@ pub trait Verifier: Send + Sync {
     /// verification manually if needed.
     fn state_at(&self, height: u64) -> Result<ConsensusState, Error>;
 
+    /// Return the latest known consensus layer height.
+    fn latest_height(&self) -> Result<u64, Error>;
+
     /// Record the given (locally computed and thus verified) results header as trusted.
     fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error>;
 }
