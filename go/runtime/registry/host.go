@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -240,6 +241,53 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*
 		}
 		return &protocol.Body{HostFetchConsensusBlockResponse: &protocol.HostFetchConsensusBlockResponse{
 			Block: *lb,
+		}}, nil
+	}
+	// Consensus events.
+	if body.HostFetchConsensusEventsRequest != nil {
+		var evs []*consensusResults.Event
+		switch rq := body.HostFetchConsensusEventsRequest; rq.Kind {
+		case protocol.EventKindStaking:
+			sevs, err := h.consensus.Staking().GetEvents(ctx, int64(rq.Height))
+			if err != nil {
+				return nil, err
+			}
+			evs = make([]*consensusResults.Event, 0, len(sevs))
+			for _, sev := range sevs {
+				evs = append(evs, &consensusResults.Event{Staking: sev})
+			}
+		case protocol.EventKindRegistry:
+			revs, err := h.consensus.Registry().GetEvents(ctx, int64(rq.Height))
+			if err != nil {
+				return nil, err
+			}
+			evs = make([]*consensusResults.Event, 0, len(revs))
+			for _, rev := range revs {
+				evs = append(evs, &consensusResults.Event{Registry: rev})
+			}
+		case protocol.EventKindRootHash:
+			revs, err := h.consensus.RootHash().GetEvents(ctx, int64(rq.Height))
+			if err != nil {
+				return nil, err
+			}
+			evs = make([]*consensusResults.Event, 0, len(revs))
+			for _, rev := range revs {
+				evs = append(evs, &consensusResults.Event{RootHash: rev})
+			}
+		case protocol.EventKindGovernance:
+			gevs, err := h.consensus.Governance().GetEvents(ctx, int64(rq.Height))
+			if err != nil {
+				return nil, err
+			}
+			evs = make([]*consensusResults.Event, 0, len(gevs))
+			for _, gev := range gevs {
+				evs = append(evs, &consensusResults.Event{Governance: gev})
+			}
+		default:
+			return nil, errMethodNotSupported
+		}
+		return &protocol.Body{HostFetchConsensusEventsResponse: &protocol.HostFetchConsensusEventsResponse{
+			Events: evs,
 		}}, nil
 	}
 	if body.HostFetchGenesisHeightRequest != nil {

@@ -1,4 +1,6 @@
 //! Trait for consensus layer verification.
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use io_context::Context;
 use thiserror::Error;
@@ -7,12 +9,12 @@ use super::{
     beacon::EpochTime,
     roothash::{ComputeResultsHeader, Header},
     state::{registry::ImmutableState as RegistryState, ConsensusState},
-    LightBlock,
+    Event, LightBlock,
 };
 use crate::{
     common::{crypto::signature::PublicKey, namespace::Namespace, version::Version},
     rak::RAK,
-    types,
+    types::{self, EventKind},
 };
 
 #[derive(Debug, Error)]
@@ -104,11 +106,67 @@ pub trait Verifier: Send + Sync {
     /// verification manually if needed.
     fn state_at(&self, height: u64) -> Result<ConsensusState, Error>;
 
+    /// Return the consensus layer events at the given height.
+    ///
+    /// # Warning
+    ///
+    /// Event integrity is currently not verified and it thus relies on replicated computation even
+    /// when using a TEE-enabled runtime.
+    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error>;
+
     /// Return the latest known consensus layer height.
     fn latest_height(&self) -> Result<u64, Error>;
 
     /// Record the given (locally computed and thus verified) results header as trusted.
     fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error>;
+}
+
+impl<T: ?Sized + Verifier> Verifier for Arc<T> {
+    fn sync(&self, height: u64) -> Result<(), Error> {
+        Verifier::sync(&**self, height)
+    }
+
+    fn verify(
+        &self,
+        consensus_block: LightBlock,
+        runtime_header: Header,
+        epoch: EpochTime,
+    ) -> Result<ConsensusState, Error> {
+        Verifier::verify(&**self, consensus_block, runtime_header, epoch)
+    }
+
+    fn verify_for_query(
+        &self,
+        consensus_block: LightBlock,
+        runtime_header: Header,
+        epoch: EpochTime,
+    ) -> Result<ConsensusState, Error> {
+        Verifier::verify_for_query(&**self, consensus_block, runtime_header, epoch)
+    }
+
+    fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
+        Verifier::unverified_state(&**self, consensus_block)
+    }
+
+    fn latest_state(&self) -> Result<ConsensusState, Error> {
+        Verifier::latest_state(&**self)
+    }
+
+    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
+        Verifier::state_at(&**self, height)
+    }
+
+    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
+        Verifier::events_at(&**self, height, kind)
+    }
+
+    fn latest_height(&self) -> Result<u64, Error> {
+        Verifier::latest_height(&**self)
+    }
+
+    fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
+        Verifier::trust(&**self, header)
+    }
 }
 
 /// Consensus layer trust root.

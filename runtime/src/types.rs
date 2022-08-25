@@ -14,6 +14,7 @@ use crate::{
         version::Version,
     },
     consensus::{
+        self,
         beacon::EpochTime,
         roothash::{self, Block, ComputeResultsHeader, Header},
         LightBlock,
@@ -229,6 +230,8 @@ pub enum Body {
     HostFetchConsensusBlockResponse {
         block: LightBlock,
     },
+    HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest),
+    HostFetchConsensusEventsResponse(HostFetchConsensusEventsResponse),
     HostFetchTxBatchRequest {
         #[cbor(optional)]
         offset: Option<Hash>,
@@ -367,6 +370,30 @@ pub struct CheckTxMetadata {
     pub sender: Vec<u8>,
     #[cbor(optional)]
     pub sender_seq: u64,
+}
+
+/// Consensus event kind.
+#[derive(Clone, Copy, Debug, cbor::Encode, cbor::Decode)]
+#[repr(u8)]
+pub enum EventKind {
+    Staking = 1,
+    Registry = 2,
+    RootHash = 3,
+    Governance = 4,
+}
+
+/// Request to host to fetch the consensus events for the given height.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[cbor(no_default)]
+pub struct HostFetchConsensusEventsRequest {
+    pub height: u64,
+    pub kind: EventKind,
+}
+
+/// Response from host fetching the consensus events for the given height.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct HostFetchConsensusEventsResponse {
+    pub events: Vec<consensus::Event>,
 }
 
 #[derive(Clone, Copy, Debug, cbor::Encode, cbor::Decode)]

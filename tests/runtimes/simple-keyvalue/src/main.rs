@@ -15,7 +15,7 @@ use oasis_core_runtime::{
     config::Config,
     consensus::{
         roothash::{IncomingMessage, Message},
-        verifier::TrustRoot,
+        verifier::{TrustRoot, Verifier},
     },
     dispatcher::{PostInitState, PreInitState},
     protocol::HostInfo,
@@ -44,6 +44,7 @@ pub struct Context<'a, 'core> {
     pub core: &'a mut TxnContext<'core>,
     pub host_info: &'a HostInfo,
     pub key_manager: &'a dyn KeyManagerClient,
+    pub consensus_verifier: &'a dyn Verifier,
     pub messages: Vec<Message>,
 }
 
@@ -90,13 +91,19 @@ impl<'a, 'b, 'core> TxContext<'a, 'b, 'core> {
 struct Dispatcher {
     host_info: HostInfo,
     key_manager: Arc<dyn KeyManagerClient>,
+    consensus_verifier: Arc<dyn Verifier>,
 }
 
 impl Dispatcher {
-    fn new(host_info: HostInfo, key_manager: Arc<dyn KeyManagerClient>) -> Self {
+    fn new(
+        host_info: HostInfo,
+        key_manager: Arc<dyn KeyManagerClient>,
+        consensus_verifier: Arc<dyn Verifier>,
+    ) -> Self {
         Self {
             host_info,
             key_manager,
+            consensus_verifier,
         }
     }
 
@@ -213,6 +220,7 @@ impl TxnDispatcher for Dispatcher {
             core: &mut ctx,
             host_info: &self.host_info,
             key_manager: &self.key_manager,
+            consensus_verifier: &self.consensus_verifier,
             messages: vec![],
         };
         let mut ctx = TxContext::new(&mut ctx, false);
@@ -246,6 +254,7 @@ impl TxnDispatcher for Dispatcher {
             core: &mut ctx,
             host_info: &self.host_info,
             key_manager: &self.key_manager,
+            consensus_verifier: &self.consensus_verifier,
             messages: vec![],
         };
 
@@ -267,6 +276,7 @@ impl TxnDispatcher for Dispatcher {
             core: &mut ctx,
             host_info: &self.host_info,
             key_manager: &self.key_manager,
+            consensus_verifier: &self.consensus_verifier,
             messages: vec![],
         };
 
@@ -303,6 +313,7 @@ impl TxnDispatcher for Dispatcher {
             core: &mut ctx,
             host_info: &self.host_info,
             key_manager: &self.key_manager,
+            consensus_verifier: &self.consensus_verifier,
             messages: vec![],
         };
 
@@ -375,7 +386,7 @@ pub fn main_with_version(version: Version) {
                     .expect("failed to update km client policy");
             })));
 
-        let dispatcher = Dispatcher::new(hi, km_client);
+        let dispatcher = Dispatcher::new(hi, km_client, state.consensus_verifier.clone());
 
         PostInitState {
             txn_dispatcher: Some(Box::new(dispatcher)),

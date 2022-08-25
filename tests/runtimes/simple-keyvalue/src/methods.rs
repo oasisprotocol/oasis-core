@@ -17,17 +17,18 @@ use oasis_core_runtime::{
         versioned::Versioned,
     },
     consensus::{
+        self,
         address::Address,
         registry::Runtime,
         roothash::{Message, RegistryMessage, StakingMessage},
         staking::{
-            Account, AddEscrowResult, Delegation, ReclaimEscrowResult, TransferResult,
+            self, Account, AddEscrowResult, Delegation, ReclaimEscrowResult, TransferResult,
             WithdrawResult,
         },
         state::staking::ImmutableState as StakingImmutableState,
     },
     storage::MKVS,
-    types::Error as RuntimeError,
+    types::{Error as RuntimeError, EventKind},
 };
 
 /// Implementation of the transaction methods supported by the test runtime.
@@ -466,9 +467,35 @@ impl BlockHandler {
                 }
 
                 Some(b"transfer") => {
-                    let _: TransferResult =
+                    let xfer: TransferResult =
                         cbor::from_value(ev.result.clone().expect("transfer result should exist"))
                             .expect("transfer result should deserialize correctly");
+
+                    // Test that we can query the corresponding transfer event.
+                    let mut height = ctx.core.consensus_state.height();
+                    let mut found = false;
+                    while height > 0 {
+                        let events = ctx
+                            .consensus_verifier
+                            .events_at(height, EventKind::Staking)
+                            .expect("should be able to query events");
+
+                        found = events.iter().any(|ev| {
+                            matches!(ev, consensus::Event::Staking(staking::Event {
+                            transfer: Some(staking::TransferEvent { from, to, amount }),
+                                ..
+                            }) if from == &xfer.from
+                                && to == &xfer.to
+                                && amount == &xfer.amount)
+                        });
+                        if found {
+                            break;
+                        }
+
+                        height -= 1;
+                    }
+
+                    assert!(found, "should find the corresponding transfer event");
                 }
 
                 Some(b"add_escrow") => {
