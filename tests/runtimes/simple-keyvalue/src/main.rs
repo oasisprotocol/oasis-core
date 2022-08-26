@@ -17,8 +17,8 @@ use oasis_core_runtime::{
         roothash::{IncomingMessage, Message},
         verifier::TrustRoot,
     },
+    dispatcher::{PostInitState, PreInitState},
     protocol::HostInfo,
-    rak::RAK,
     transaction::{
         dispatcher::{ExecuteBatchResult, ExecuteTxResult},
         tags::{Tag, Tags},
@@ -26,7 +26,7 @@ use oasis_core_runtime::{
         Context as TxnContext,
     },
     types::{CheckTxResult, Error as RuntimeError, FeatureScheduleControl, Features},
-    Protocol, RpcDemux, RpcDispatcher, TxnDispatcher,
+    TxnDispatcher,
 };
 use simple_keymanager::trusted_policy_signers;
 
@@ -349,35 +349,34 @@ impl TxnDispatcher for Dispatcher {
 
 pub fn main_with_version(version: Version) {
     // Initializer.
-    let init = |protocol: &Arc<Protocol>,
-                rak: &Arc<RAK>,
-                _rpc_demux: &mut RpcDemux,
-                rpc: &mut RpcDispatcher|
-     -> Option<Box<dyn TxnDispatcher>> {
-        let hi = protocol.get_host_info();
+    let init = |state: PreInitState<'_>| -> PostInitState {
+        let hi = state.protocol.get_host_info();
 
         // Create the key manager client.
         let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_runtime(
             hi.runtime_id,
-            protocol.clone(),
-            rak.clone(),
+            state.protocol.clone(),
+            state.rak.clone(),
             1024,
             trusted_policy_signers(),
         ));
 
-        #[cfg(not(target_env = "sgx"))]
-        let _ = rpc;
         #[cfg(target_env = "sgx")]
         let key_manager = km_client.clone();
         #[cfg(target_env = "sgx")]
-        rpc.set_keymanager_policy_update_handler(Some(Box::new(move |raw_signed_policy| {
-            key_manager
-                .set_policy(raw_signed_policy)
-                .expect("failed to update km client policy");
-        })));
+        state
+            .rpc_dispatcher
+            .set_keymanager_policy_update_handler(Some(Box::new(move |raw_signed_policy| {
+                key_manager
+                    .set_policy(raw_signed_policy)
+                    .expect("failed to update km client policy");
+            })));
 
         let dispatcher = Dispatcher::new(hi, km_client);
-        Some(Box::new(dispatcher))
+
+        PostInitState {
+            txn_dispatcher: Some(Box::new(dispatcher)),
+        }
     };
 
     // Determine test trust root based on build settings.

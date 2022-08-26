@@ -78,6 +78,21 @@ impl NopVerifier {
     pub fn new(protocol: Arc<Protocol>) -> Self {
         Self { protocol }
     }
+
+    fn fetch_light_block(&self, height: u64) -> Result<LightBlock, Error> {
+        let result = self
+            .protocol
+            .call_host(
+                Context::background(),
+                Body::HostFetchConsensusBlockRequest { height },
+            )
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        match result {
+            Body::HostFetchConsensusBlockResponse { block } => Ok(block),
+            _ => Err(Error::VerificationFailed(anyhow!("bad response from host"))),
+        }
+    }
 }
 
 impl verifier::Verifier for NopVerifier {
@@ -115,22 +130,16 @@ impl verifier::Verifier for NopVerifier {
     }
 
     fn latest_state(&self) -> Result<ConsensusState, Error> {
-        let result = self
-            .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusBlockRequest {
-                    height: HEIGHT_LATEST,
-                },
-            )
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        self.state_at(HEIGHT_LATEST)
+    }
 
-        let block = match result {
-            Body::HostFetchConsensusBlockResponse { block } => block,
-            _ => return Err(Error::VerificationFailed(anyhow!("bad response from host"))),
-        };
-
+    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
+        let block = self.fetch_light_block(height)?;
         self.unverified_state(block)
+    }
+
+    fn latest_height(&self) -> Result<u64, Error> {
+        Ok(self.fetch_light_block(HEIGHT_LATEST)?.height)
     }
 
     fn trust(&self, _header: &ComputeResultsHeader) -> Result<(), Error> {
@@ -149,6 +158,8 @@ enum Command {
     ),
     Trust(ComputeResultsHeader, channel::Sender<Result<(), Error>>),
     LatestState(channel::Sender<Result<ConsensusState, Error>>),
+    LatestHeight(channel::Sender<Result<u64, Error>>),
+    StateAt(u64, channel::Sender<Result<ConsensusState, Error>>),
 }
 
 /// Tendermint consensus layer verifier.
@@ -244,15 +255,29 @@ impl Verifier {
 
     fn latest_consensus_state(
         &self,
-        cache: &Cache,
+        cache: &mut Cache,
         instance: &mut Instance,
     ) -> Result<ConsensusState, Error> {
         let height = cache.latest_known_height();
+        self.consensus_state_at(cache, instance, height)
+    }
+
+    fn latest_consensus_height(&self, cache: &Cache) -> Result<u64, Error> {
+        Ok(cache.latest_known_height())
+    }
+
+    fn consensus_state_at(
+        &self,
+        cache: &mut Cache,
+        instance: &mut Instance,
+        height: u64,
+    ) -> Result<ConsensusState, Error> {
         let verified_block = instance
             .light_client
             .verify_to_target(height.try_into().unwrap(), &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
-        // No need to update time as this has already been done once for this height.
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(&verified_block);
 
         let state_root = state_root_from_header(&verified_block.signed_header);
         Ok(ConsensusState::from_protocol(
@@ -760,7 +785,17 @@ impl Verifier {
                 }
                 Command::LatestState(sender) => {
                     sender
-                        .send(self.latest_consensus_state(&cache, &mut instance))
+                        .send(self.latest_consensus_state(&mut cache, &mut instance))
+                        .map_err(|_| Error::Internal)?;
+                }
+                Command::StateAt(height, sender) => {
+                    sender
+                        .send(self.consensus_state_at(&mut cache, &mut instance, height))
+                        .map_err(|_| Error::Internal)?;
+                }
+                Command::LatestHeight(sender) => {
+                    sender
+                        .send(self.latest_consensus_height(&cache))
                         .map_err(|_| Error::Internal)?;
                 }
             }
@@ -846,6 +881,24 @@ impl verifier::Verifier for Handle {
         let (sender, receiver) = channel::bounded(1);
         self.command_sender
             .send(Command::LatestState(sender))
+            .map_err(|_| Error::Internal)?;
+
+        receiver.recv().map_err(|_| Error::Internal)?
+    }
+
+    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
+        let (sender, receiver) = channel::bounded(1);
+        self.command_sender
+            .send(Command::StateAt(height, sender))
+            .map_err(|_| Error::Internal)?;
+
+        receiver.recv().map_err(|_| Error::Internal)?
+    }
+
+    fn latest_height(&self) -> Result<u64, Error> {
+        let (sender, receiver) = channel::bounded(1);
+        self.command_sender
+            .send(Command::LatestHeight(sender))
             .map_err(|_| Error::Internal)?;
 
         receiver.recv().map_err(|_| Error::Internal)?

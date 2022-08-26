@@ -53,35 +53,37 @@ const BACKLOG_SIZE: usize = 1000;
 /// Interface for dispatcher initializers.
 pub trait Initializer: Send + Sync {
     /// Initializes the dispatcher(s).
-    fn init(
-        &self,
-        protocol: &Arc<Protocol>,
-        rak: &Arc<RAK>,
-        rpc_demux: &mut RpcDemux,
-        rpc_dispatcher: &mut RpcDispatcher,
-    ) -> Option<Box<dyn TxnDispatcher>>;
+    fn init(&self, state: PreInitState<'_>) -> PostInitState;
 }
 
 impl<F> Initializer for F
 where
-    F: Fn(
-            &Arc<Protocol>,
-            &Arc<RAK>,
-            &mut RpcDemux,
-            &mut RpcDispatcher,
-        ) -> Option<Box<dyn TxnDispatcher>>
-        + Send
-        + Sync,
+    F: Fn(PreInitState<'_>) -> PostInitState + Send + Sync,
 {
-    fn init(
-        &self,
-        protocol: &Arc<Protocol>,
-        rak: &Arc<RAK>,
-        rpc_demux: &mut RpcDemux,
-        rpc_dispatcher: &mut RpcDispatcher,
-    ) -> Option<Box<dyn TxnDispatcher>> {
-        (*self)(protocol, rak, rpc_demux, rpc_dispatcher)
+    fn init(&self, state: PreInitState<'_>) -> PostInitState {
+        (*self)(state)
     }
+}
+
+/// State available before initialization.
+pub struct PreInitState<'a> {
+    /// Protocol instance.
+    pub protocol: &'a Arc<Protocol>,
+    /// Runtime Attestation Key instance.
+    pub rak: &'a Arc<RAK>,
+    /// RPC demultiplexer instance.
+    pub rpc_demux: &'a mut RpcDemux,
+    /// RPC dispatcher instance.
+    pub rpc_dispatcher: &'a mut RpcDispatcher,
+    /// Consensus verifier instance.
+    pub consensus_verifier: &'a Arc<dyn Verifier>,
+}
+
+/// State returned by the initializer.
+#[derive(Default)]
+pub struct PostInitState {
+    /// Optional transaction dispatcher that should be used.
+    pub txn_dispatcher: Option<Box<dyn TxnDispatcher>>,
 }
 
 /// A guard that will abort the process if dropped while panicking.
@@ -247,16 +249,20 @@ impl Dispatcher {
         info!(self.logger, "Starting the runtime dispatcher");
         let mut rpc_demux = RpcDemux::new(self.rak.clone());
         let mut rpc_dispatcher = RpcDispatcher::default();
-        let mut txn_dispatcher: Box<dyn TxnDispatcher> = if let Some(txn) =
-            initializer.init(&protocol, &self.rak, &mut rpc_demux, &mut rpc_dispatcher)
-        {
-            txn
-        } else {
-            Box::new(TxnNoopDispatcher::default())
+        let consensus_verifier: Arc<dyn Verifier> = Arc::from(consensus_verifier);
+        let pre_init_state = PreInitState {
+            protocol: &protocol,
+            rak: &self.rak,
+            rpc_demux: &mut rpc_demux,
+            rpc_dispatcher: &mut rpc_dispatcher,
+            consensus_verifier: &consensus_verifier,
         };
+        let post_init_state = initializer.init(pre_init_state);
+        let mut txn_dispatcher = post_init_state
+            .txn_dispatcher
+            .unwrap_or_else(|| Box::new(TxnNoopDispatcher::default()));
         txn_dispatcher.set_abort_batch_flag(self.abort_batch.clone());
 
-        let consensus_verifier: Arc<dyn Verifier> = Arc::from(consensus_verifier);
         let state = State {
             protocol: protocol.clone(),
             consensus_verifier: consensus_verifier.clone(),
