@@ -36,6 +36,9 @@ const (
 	CfgRuntimePaths = "runtime.paths"
 	// CfgSandboxBinary configures the runtime sandbox binary location.
 	CfgSandboxBinary = "runtime.sandbox.binary"
+	// CfgRuntimeEnv sets the runtime environment. Setting an environment that does not
+	// agree with the runtime descriptor or system hardware will cause an error.
+	CfgRuntimeEnvironment = "runtime.environment"
 	// CfgRuntimeSGXLoader configures the runtime loader binary required for SGX runtimes.
 	//
 	// The same loader is used for all runtimes.
@@ -58,9 +61,6 @@ const (
 	// CfgDebugMockIDs configures mock runtime IDs for the purpose
 	// of testing.
 	CfgDebugMockIDs = "runtime.debug.mock_ids"
-	// CfgDebugForceELF forces the selection of the ELF image in runtime
-	// bundles even if a SGX image is present.
-	CfgDebugForceELF = "runtime.debug.force_elf"
 )
 
 // Flags has the configuration flags.
@@ -79,6 +79,17 @@ const (
 	// RuntimeProvisionerSandboxed is the name of the sandboxed runtime provisioner that executes
 	// runtimes as regular processes in a Linux namespaces/cgroups/SECCOMP sandbox.
 	RuntimeProvisionerSandboxed = "sandboxed"
+)
+
+const (
+	// RuntimeEnvironmentSGX specifies to run the runtime in SGX.
+	RuntimeEnvironmentSGX = "sgx"
+	// RuntimeEnvironmentELF specifies to run the runtime in the OS address space.
+	//
+	// Use of this runtime environment is only allowed if DebugDontBlameOasis flag is set.
+	RuntimeEnvironmentELF = "elf"
+	// RuntimeEnvironmentAuto specifies to run the runtime in the most appropriate location.
+	RuntimeEnvironmentAuto = "auto"
 )
 
 // RuntimeMode defines the behavior of runtime workers on this node.
@@ -190,7 +201,9 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 	// Check if any runtimes are configured to be hosted.
 	if viper.IsSet(CfgRuntimePaths) || (cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs)) {
-		forceNoSGX := cfg.Mode.IsClientOnly() || (cmdFlags.DebugDontBlameOasis() && viper.GetBool(CfgDebugForceELF))
+		runtimeEnv := viper.GetString(CfgRuntimeEnvironment)
+		forceNoSGX := (cfg.Mode.IsClientOnly() && runtimeEnv != RuntimeEnvironmentSGX) ||
+			(cmdFlags.DebugDontBlameOasis() && runtimeEnv == RuntimeEnvironmentELF)
 
 		var rh RuntimeHostConfig
 
@@ -252,6 +265,9 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 				// If no SGX is forced, remap to non-SGX.
 				if !forceNoSGX {
 					break
+				}
+				if runtimeEnv == RuntimeEnvironmentSGX {
+					return nil, fmt.Errorf("sgx runtime env requires setting the sgx loader")
 				}
 
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSandbox.New(hostSandbox.Config{
@@ -394,6 +410,7 @@ func init() {
 	Flags.StringSlice(CfgRuntimePaths, nil, "Paths to runtime resources (format: <path>,<path>,...)")
 	Flags.String(CfgSandboxBinary, "/usr/bin/bwrap", "Path to the sandbox binary (bubblewrap)")
 	Flags.String(CfgRuntimeSGXLoader, "", "(for SGX runtimes) Path to SGXS runtime loader binary")
+	Flags.String(CfgRuntimeEnvironment, "auto", "The runtime environment (sgx, elf, auto)")
 
 	Flags.String(CfgHistoryPrunerStrategy, history.PrunerStrategyNone, "History pruner strategy")
 	Flags.Duration(CfgHistoryPrunerInterval, 2*time.Minute, "History pruning interval")
@@ -402,9 +419,7 @@ func init() {
 	Flags.String(CfgRuntimeMode, string(RuntimeModeNone), "Runtime mode (none, compute, keymanager, client, client-stateless)")
 
 	Flags.StringSlice(CfgDebugMockIDs, nil, "Mock runtime IDs (format: <path>,<path>,...)")
-	Flags.Bool(CfgDebugForceELF, false, "Force the use of the ELF image over any TEE images")
 	_ = Flags.MarkHidden(CfgDebugMockIDs)
-	_ = Flags.MarkHidden(CfgDebugForceELF)
 
 	_ = viper.BindPFlags(Flags)
 }
