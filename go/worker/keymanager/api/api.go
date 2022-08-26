@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 
-	core "github.com/libp2p/go-libp2p-core"
+	"github.com/libp2p/go-libp2p/core"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 )

@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	core "github.com/libp2p/go-libp2p-core"
+	"github.com/libp2p/go-libp2p/core"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 

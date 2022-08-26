@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/cenkalti/backoff/v4"
-	core "github.com/libp2p/go-libp2p-core"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
 	manet "github.com/multiformats/go-multiaddr/net"
 

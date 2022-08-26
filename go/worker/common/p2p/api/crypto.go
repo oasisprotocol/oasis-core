@@ -3,8 +3,8 @@ package api
 import (
 	"errors"
 
-	libp2pCrypto "github.com/libp2p/go-libp2p-core/crypto"
-	libp2pCryptoPb "github.com/libp2p/go-libp2p-core/crypto/pb"
+	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
+	libp2pCryptoPb "github.com/libp2p/go-libp2p/core/crypto/pb"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
