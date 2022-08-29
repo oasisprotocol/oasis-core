@@ -63,7 +63,13 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		mrSigner = &sgx.FortanixDummyMrSigner
 	}
 
-	var stakingGenesis staking.Genesis
+	// Default staking genesis enables 16 allowances per account which matches the current
+	// mainnet and testnet setting.
+	stakingGenesis := staking.Genesis{
+		Parameters: staking.ConsensusParameters{
+			MaxAllowances: 16,
+		},
+	}
 	if genesis := viper.GetString(cfgStakingGenesis); genesis != "" {
 		var raw []byte
 		raw, err = ioutil.ReadFile(genesis)
