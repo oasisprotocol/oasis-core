@@ -17,6 +17,9 @@ const (
 	// AppName is the ABCI application name.
 	// Run before all other applications.
 	AppName string = "000_beacon"
+
+	// AppPriority is the base priority for the app's transactions.
+	AppPriority int64 = 100000
 )
 
 var (

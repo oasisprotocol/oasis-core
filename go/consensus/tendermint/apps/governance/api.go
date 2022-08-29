@@ -10,6 +10,9 @@ const (
 
 	// AppName is the ABCI application name.
 	AppName string = "300_governance"
+
+	// AppPriority is the base priority for the app's transactions.
+	AppPriority int64 = 25000
 )
 
 var (

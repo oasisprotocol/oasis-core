@@ -81,6 +81,8 @@ func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transa
 		return fmt.Errorf("beacon: failed to query consensus parameters: %w", err)
 	}
 
+	ctx.SetPriority(AppPriority)
+
 	return app.backend.ExecuteTx(ctx, state, params, tx)
 }
 

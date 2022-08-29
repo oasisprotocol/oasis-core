@@ -8,6 +8,9 @@ import (
 const (
 	// AppID is the unique application identifier.
 	AppID uint8 = 0x05
+
+	// AppPriority is the base priority for the app's transactions.
+	AppPriority int64 = 1000
 )
 
 var (

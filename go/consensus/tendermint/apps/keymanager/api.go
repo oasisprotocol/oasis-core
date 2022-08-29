@@ -9,6 +9,9 @@ const (
 
 	// AppName is the ABCI application name.
 	AppName string = "999_keymanager"
+
+	// AppPriority is the base priority for the app's transactions.
+	AppPriority int64 = 50000
 )
 
 var (

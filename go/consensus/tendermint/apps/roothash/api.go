@@ -17,6 +17,9 @@ const (
 
 	// AppName is the ABCI application name.
 	AppName string = "999_roothash"
+
+	// AppPriority is the base priority for the app's transactions.
+	AppPriority int64 = 15000
 )
 
 var (
