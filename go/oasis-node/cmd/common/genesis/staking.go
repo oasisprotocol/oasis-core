@@ -35,9 +35,9 @@ func (st *AppendableStakingState) AppendTo(doc *genesis.Document) error {
 		}
 		entAddr := staking.NewAddress(ent.ID)
 
-		// Ok then, we hold the world ransom for One Hundred Billion Dollars.
+		// Ok then, we hold the world ransom for One Million Billion Yen.
 		var q quantity.Quantity
-		if err = q.FromBigInt(big.NewInt(100000000000)); err != nil {
+		if err = q.FromBigInt(big.NewInt(1_000_000_000_000_000)); err != nil {
 			return fmt.Errorf("genesis/staking: failed to allocate test entity stake: %w", err)
 		}
 
