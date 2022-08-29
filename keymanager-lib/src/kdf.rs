@@ -292,6 +292,7 @@ impl Kdf {
                             rctx.runtime_id,
                             Policy::global().may_replicate_from(),
                             rctx.protocol.clone(),
+                            ctx.consensus_verifier.clone(),
                             ctx.rak.clone(),
                             1, // Not used, doesn't matter.
                         );
@@ -699,10 +700,12 @@ mod tests {
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let key_pair_id = KeyPairId::from(vec![1u8; 32]);
         let epoch = 1;
+        let height = None;
 
         // LongTermKeyRequest's seed should depend on runtime_id and
         // key_pair_id.
         let req1 = LongTermKeyRequest {
+            height,
             runtime_id,
             key_pair_id,
         };
@@ -721,6 +724,7 @@ mod tests {
         // EphemeralKeyRequest's seed should depend on runtime_id, key_pair_id
         // and epoch.
         let req1 = EphemeralKeyRequest {
+            height,
             epoch,
             runtime_id,
             key_pair_id,

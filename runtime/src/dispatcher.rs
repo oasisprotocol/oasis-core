@@ -126,7 +126,7 @@ struct TxDispatchState {
 /// State provided by the protocol upon successful initialization.
 struct ProtocolState {
     protocol: Arc<Protocol>,
-    consensus_verifier: Box<dyn Verifier>,
+    consensus_verifier: Arc<dyn Verifier>,
 }
 
 /// State held by the dispatcher, shared between all async tasks.
@@ -205,6 +205,7 @@ impl Dispatcher {
 
     /// Start the dispatcher.
     pub fn start(&self, protocol: Arc<Protocol>, consensus_verifier: Box<dyn Verifier>) {
+        let consensus_verifier = Arc::from(consensus_verifier);
         let mut s = self.state.lock().unwrap();
         *s = Some(ProtocolState {
             protocol,
@@ -249,7 +250,6 @@ impl Dispatcher {
         info!(self.logger, "Starting the runtime dispatcher");
         let mut rpc_demux = RpcDemux::new(self.rak.clone());
         let mut rpc_dispatcher = RpcDispatcher::default();
-        let consensus_verifier: Arc<dyn Verifier> = Arc::from(consensus_verifier);
         let pre_init_state = PreInitState {
             protocol: &protocol,
             rak: &self.rak,

@@ -358,6 +358,7 @@ pub fn main_with_version(version: Version) {
         let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_runtime(
             hi.runtime_id,
             state.protocol.clone(),
+            state.consensus_verifier.clone(),
             state.rak.clone(),
             1024,
             trusted_policy_signers(),

@@ -13,7 +13,7 @@ use oasis_core_client::RpcClient;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{namespace::Namespace, sgx::EnclaveIdentity},
-    consensus::beacon::EpochTime,
+    consensus::{beacon::EpochTime, verifier::Verifier},
     enclave_rpc::session,
     protocol::Protocol,
     rak::RAK,
@@ -29,6 +29,8 @@ struct Inner {
     runtime_id: Namespace,
     /// RPC client.
     rpc_client: RpcClient,
+    /// Consensus verifier.
+    consensus_verifier: Arc<dyn Verifier>,
     /// Local cache for the long-term and ephemeral private keys fetched from
     /// get_or_create_keys and get_or_create_ephemeral_keys KeyManager endpoints.
     private_key_cache: RwLock<LruCache<(KeyPairId, Option<EpochTime>), KeyPair>>,
@@ -43,11 +45,17 @@ pub struct RemoteClient {
 }
 
 impl RemoteClient {
-    fn new(runtime_id: Namespace, rpc_client: RpcClient, keys_cache_sizes: usize) -> Self {
+    fn new(
+        runtime_id: Namespace,
+        rpc_client: RpcClient,
+        consensus_verifier: Arc<dyn Verifier>,
+        keys_cache_sizes: usize,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 runtime_id,
                 rpc_client,
+                consensus_verifier,
                 private_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
                 public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
             }),
@@ -60,6 +68,7 @@ impl RemoteClient {
         runtime_id: Namespace,
         enclaves: Option<HashSet<EnclaveIdentity>>,
         protocol: Arc<Protocol>,
+        consensus_verifier: Arc<dyn Verifier>,
         rak: Arc<RAK>,
         keys_cache_sizes: usize,
     ) -> Self {
@@ -72,6 +81,7 @@ impl RemoteClient {
                 protocol,
                 KEY_MANAGER_ENDPOINT,
             ),
+            consensus_verifier,
             keys_cache_sizes,
         )
     }
@@ -84,6 +94,7 @@ impl RemoteClient {
     pub fn new_runtime(
         runtime_id: Namespace,
         protocol: Arc<Protocol>,
+        consensus_verifier: Arc<dyn Verifier>,
         rak: Arc<RAK>,
         keys_cache_sizes: usize,
         signers: TrustedPolicySigners,
@@ -111,6 +122,7 @@ impl RemoteClient {
             runtime_id,
             enclaves,
             protocol,
+            consensus_verifier,
             rak,
             keys_cache_sizes,
         )
@@ -154,12 +166,17 @@ impl KeyManagerClient for RemoteClient {
         // No entry in cache, fetch from key manager.
         let inner = self.inner.clone();
         Box::pin(async move {
+            let height = inner
+                .consensus_verifier
+                .latest_height()
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
             let keys: KeyPair = inner
                 .rpc_client
                 .call(
                     ctx,
                     METHOD_GET_OR_CREATE_KEYS,
-                    LongTermKeyRequest::new(inner.runtime_id, key_pair_id),
+                    LongTermKeyRequest::new(Some(height), inner.runtime_id, key_pair_id),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
@@ -185,12 +202,17 @@ impl KeyManagerClient for RemoteClient {
         // No entry in cache, fetch from key manager.
         let inner = self.inner.clone();
         Box::pin(async move {
+            let height = inner
+                .consensus_verifier
+                .latest_height()
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
             let key: Option<SignedPublicKey> = inner
                 .rpc_client
                 .call(
                     ctx,
                     METHOD_GET_PUBLIC_KEY,
-                    LongTermKeyRequest::new(inner.runtime_id, key_pair_id),
+                    LongTermKeyRequest::new(Some(height), inner.runtime_id, key_pair_id),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
@@ -222,12 +244,17 @@ impl KeyManagerClient for RemoteClient {
         // No entry in cache, fetch from key manager.
         let inner = self.inner.clone();
         Box::pin(async move {
+            let height = inner
+                .consensus_verifier
+                .latest_height()
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
             let keys: KeyPair = inner
                 .rpc_client
                 .call(
                     ctx,
                     METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
-                    EphemeralKeyRequest::new(inner.runtime_id, key_pair_id, epoch),
+                    EphemeralKeyRequest::new(Some(height), inner.runtime_id, key_pair_id, epoch),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
@@ -254,12 +281,17 @@ impl KeyManagerClient for RemoteClient {
         // No entry in cache, fetch from key manager.
         let inner = self.inner.clone();
         Box::pin(async move {
+            let height = inner
+                .consensus_verifier
+                .latest_height()
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
             let key: Option<SignedPublicKey> = inner
                 .rpc_client
                 .call(
                     ctx,
                     METHOD_GET_PUBLIC_EPHEMERAL_KEY,
-                    EphemeralKeyRequest::new(inner.runtime_id, key_pair_id, epoch),
+                    EphemeralKeyRequest::new(Some(height), inner.runtime_id, key_pair_id, epoch),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
@@ -283,9 +315,18 @@ impl KeyManagerClient for RemoteClient {
     ) -> BoxFuture<Result<Option<MasterSecret>, KeyManagerError>> {
         let inner = self.inner.clone();
         Box::pin(async move {
+            let height = inner
+                .consensus_verifier
+                .latest_height()
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
             let rsp: ReplicateResponse = inner
                 .rpc_client
-                .call(ctx, METHOD_REPLICATE_MASTER_SECRET, ReplicateRequest {})
+                .call(
+                    ctx,
+                    METHOD_REPLICATE_MASTER_SECRET,
+                    ReplicateRequest::new(Some(height)),
+                )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
             Ok(Some(rsp.master_secret))
