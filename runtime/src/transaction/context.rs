@@ -8,6 +8,7 @@ use crate::{
         beacon::EpochTime,
         roothash::{Header, RoundResults},
         state::ConsensusState,
+        LightBlock,
     },
     protocol::Protocol,
     storage::MKVS,
@@ -19,6 +20,8 @@ pub struct Context<'a> {
     pub io_ctx: Arc<IoContext>,
     /// Low-level access to the underlying Runtime Host Protocol.
     pub protocol: Arc<Protocol>,
+    /// Consensus light block.
+    pub consensus_block: &'a LightBlock,
     /// Consensus state tree.
     pub consensus_state: ConsensusState,
     /// Runtime state.
@@ -42,6 +45,7 @@ impl<'a> Context<'a> {
     pub fn new(
         io_ctx: Arc<IoContext>,
         protocol: Arc<Protocol>,
+        consensus_block: &'a LightBlock,
         consensus_state: ConsensusState,
         runtime_state: &'a mut dyn MKVS,
         header: &'a Header,
@@ -53,6 +57,7 @@ impl<'a> Context<'a> {
         Self {
             io_ctx,
             protocol,
+            consensus_block,
             consensus_state,
             runtime_state,
             header,
