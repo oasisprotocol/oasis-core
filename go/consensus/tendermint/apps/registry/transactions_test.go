@@ -505,3 +505,49 @@ func TestRegisterNode(t *testing.T) {
 		})
 	}
 }
+
+func TestProofFreshness(t *testing.T) {
+	require := requirePkg.New(t)
+
+	now := time.Unix(1580461674, 0)
+	cfg := abciAPI.MockApplicationStateConfig{}
+	appState := abciAPI.NewMockApplicationState(&cfg)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	var md abciAPI.NoopMessageDispatcher
+	app := registryApplication{appState, &md}
+	state := registryState.NewMutableState(ctx.State())
+
+	setTEEFeaturesFn := func(TEEFeatures *node.TEEFeatures) {
+		err := state.SetConsensusParameters(ctx, &registry.ConsensusParameters{
+			TEEFeatures: TEEFeatures,
+		})
+		require.NoError(err, "registry.SetConsensusParameters")
+	}
+
+	var blob [32]byte
+
+	t.Run("happy path", func(t *testing.T) {
+		setTEEFeaturesFn(&node.TEEFeatures{FreshnessProofs: true})
+
+		err := app.proveFreshness(ctx, state, blob)
+		require.NoError(err, "freshness proofs should succeed")
+	})
+
+	t.Run("not enabled", func(t *testing.T) {
+		// Freshness proofs disabled.
+		setTEEFeaturesFn(&node.TEEFeatures{FreshnessProofs: false})
+
+		err := app.proveFreshness(ctx, state, blob)
+		require.Error(err, "freshness proofs should not be enabled")
+		require.Equal(registry.ErrInvalidArgument, err)
+
+		// No TEE features.
+		setTEEFeaturesFn(nil)
+
+		err = app.proveFreshness(ctx, state, blob)
+		require.Error(err, "freshness proofs should not be enabled")
+		require.Equal(registry.ErrInvalidArgument, err)
+	})
+}

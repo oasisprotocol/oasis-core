@@ -75,6 +75,12 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 					registry.GovernanceEntity:  true,
 					registry.GovernanceRuntime: true,
 				},
+				TEEFeatures: &node.TEEFeatures{
+					SGX: node.TEEFeaturesSGX{
+						PCS: true,
+					},
+					FreshnessProofs: true,
+				},
 			},
 		},
 		Scheduler: scheduler.Genesis{
