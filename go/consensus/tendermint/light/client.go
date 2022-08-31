@@ -135,6 +135,11 @@ func (lc *lightClient) GetLightBlock(ctx context.Context, height int64) (*consen
 }
 
 // Implements consensus.LightClientBackend.
+func (lc *lightClient) GetLightBlockForState(ctx context.Context, height int64) (*consensus.LightBlock, error) {
+	return lc.getPrimary().GetLightBlockForState(ctx, height)
+}
+
+// Implements consensus.LightClientBackend.
 func (lc *lightClient) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, error) {
 	return lc.getPrimary().GetParameters(ctx, height)
 }
