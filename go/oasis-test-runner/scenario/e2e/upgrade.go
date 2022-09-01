@@ -98,6 +98,12 @@ func (n *upgradeTeePcsChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Co
 	if !registryParams.TEEFeatures.SGX.PCS {
 		return fmt.Errorf("PCS SGX TEE feature is disabled")
 	}
+	if !registryParams.TEEFeatures.FreshnessProofs {
+		return fmt.Errorf("freshness proofs TEE feature is disabled")
+	}
+	if registryParams.GasCosts[registry.GasOpProveFreshness] != registry.DefaultGasCosts[registry.GasOpProveFreshness] {
+		return fmt.Errorf("default gas cost for freshness proofs is not set")
+	}
 
 	return nil
 }

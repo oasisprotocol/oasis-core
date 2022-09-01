@@ -94,24 +94,25 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 		if err := cbor.Unmarshal(tx.Body, &sigEnt); err != nil {
 			return err
 		}
-
 		return app.registerEntity(ctx, state, &sigEnt)
+
 	case registry.MethodDeregisterEntity:
 		return app.deregisterEntity(ctx, state)
+
 	case registry.MethodRegisterNode:
 		var sigNode node.MultiSignedNode
 		if err := cbor.Unmarshal(tx.Body, &sigNode); err != nil {
 			return err
 		}
-
 		return app.registerNode(ctx, state, &sigNode)
+
 	case registry.MethodUnfreezeNode:
 		var unfreeze registry.UnfreezeNode
 		if err := cbor.Unmarshal(tx.Body, &unfreeze); err != nil {
 			return err
 		}
-
 		return app.unfreezeNode(ctx, state, &unfreeze)
+
 	case registry.MethodRegisterRuntime:
 		var rt registry.Runtime
 		if err := cbor.Unmarshal(tx.Body, &rt); err != nil {
@@ -121,6 +122,20 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 			return err
 		}
 		return nil
+
+	case registry.MethodProveFreshness:
+		var blob [32]byte
+		if err := cbor.Unmarshal(tx.Body, &blob); err != nil {
+			ctx.Logger().Error("ExecuteTx: failed to unmarshal blob for freshness proof",
+				"err", err,
+			)
+			return registry.ErrInvalidArgument
+		}
+		if err := app.proveFreshness(ctx, state, blob); err != nil {
+			return err
+		}
+		return nil
+
 	default:
 		return registry.ErrInvalidArgument
 	}

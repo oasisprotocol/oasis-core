@@ -787,3 +787,33 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 
 	return rt, nil
 }
+
+func (app *registryApplication) proveFreshness(
+	ctx *api.Context,
+	state *registryState.MutableState,
+	blob [32]byte,
+) error {
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("ProveFreshness: failed to fetch consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+
+	// Handle as a non-existing transaction to avoid breaking consensus before the activation
+	// proposal passes.
+	if params.TEEFeatures == nil || !params.TEEFeatures.FreshnessProofs {
+		return registry.ErrInvalidArgument
+	}
+
+	// Charge gas for this transaction.
+	if err = ctx.Gas().UseGas(1, registry.GasOpProveFreshness, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Intentionally ignoring the blob and not doing any processing or state changes as this method
+	// should always succeed.
+
+	return nil
+}

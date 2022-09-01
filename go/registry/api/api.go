@@ -130,6 +130,8 @@ var (
 	MethodUnfreezeNode = transaction.NewMethodName(ModuleName, "UnfreezeNode", UnfreezeNode{})
 	// MethodRegisterRuntime is the method name for registering runtimes.
 	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", Runtime{})
+	// MethodProveFreshness is the method name for freshness proofs.
+	MethodProveFreshness = transaction.NewMethodName(ModuleName, "ProveFreshness", Runtime{})
 
 	// Methods is the list of all methods supported by the registry backend.
 	Methods = []transaction.MethodName{
@@ -138,6 +140,7 @@ var (
 		MethodRegisterNode,
 		MethodUnfreezeNode,
 		MethodRegisterRuntime,
+		MethodProveFreshness,
 	}
 
 	// RuntimesRequiredRoles are the Node roles that require runtimes.
@@ -284,6 +287,11 @@ func NewUnfreezeNodeTx(nonce uint64, fee *transaction.Fee, unfreeze *UnfreezeNod
 // NewRegisterRuntimeTx creates a new register runtime transaction.
 func NewRegisterRuntimeTx(nonce uint64, fee *transaction.Fee, rt *Runtime) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodRegisterRuntime, rt)
+}
+
+// NewProveFreshnessTx creates a new prove freshness transaction.
+func NewProveFreshnessTx(nonce uint64, fee *transaction.Fee, blob [32]byte) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodProveFreshness, blob)
 }
 
 // EntityEvent is the event that is returned via WatchEntities to signify
@@ -1451,6 +1459,8 @@ const (
 	// GasOpUpdateKeyManager is the gas operation identifier for key manager
 	// policy updates costs.
 	GasOpUpdateKeyManager transaction.Op = "update_keymanager"
+	// GasOpProveFreshness is the gas operation identifier for freshness proofs.
+	GasOpProveFreshness transaction.Op = "prove_freshness"
 )
 
 // XXX: Define reasonable default gas costs.
@@ -1464,6 +1474,7 @@ var DefaultGasCosts = transaction.Costs{
 	GasOpRegisterRuntime:         1000,
 	GasOpRuntimeEpochMaintenance: 1000,
 	GasOpUpdateKeyManager:        1000,
+	GasOpProveFreshness:          1000,
 }
 
 const (

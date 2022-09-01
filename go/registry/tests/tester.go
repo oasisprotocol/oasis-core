@@ -66,6 +66,10 @@ func RegistryImplementationTests(t *testing.T, backend api.Backend, consensus co
 	})
 
 	testRegistryEntityNodes(t, backend, consensus, runtimeID, runtimeEWID, validatorEntityID)
+
+	t.Run("FreshnessProofs", func(t *testing.T) {
+		testFreshnessProofs(t, consensus)
+	})
 }
 
 // Add node's ID to node list if it's not already on it.
@@ -941,6 +945,18 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	return rtMapByName["WithoutKM"].ID, rtMapByName["EntityWhitelist"].ID
 }
 
+func testFreshnessProofs(t *testing.T, consensus consensusAPI.Backend) {
+	require := require.New(t)
+
+	// Generate one entity used for the test case.
+	entities, err := NewTestEntities(entityNodeSeed, 1)
+	require.NoError(err, "new test entities should be generated")
+
+	// Test freshness proofs.
+	err = entities[0].ProveFreshness(consensus)
+	require.NoError(err, "freshness proofs should succeed")
+}
+
 // EnsureRegistryClean enforces that the registry is in a clean state before running the registry tests.
 func EnsureRegistryClean(t *testing.T, backend api.Backend) {
 	registeredEntities, err := backend.GetEntities(context.Background(), consensusAPI.HeightLatest)
@@ -978,6 +994,11 @@ func (ent *TestEntity) Register(consensus consensusAPI.Backend, sigEnt *entity.S
 // Deregister attempts to deregister the entity.
 func (ent *TestEntity) Deregister(consensus consensusAPI.Backend) error {
 	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, ent.Signer, api.NewDeregisterEntityTx(0, nil))
+}
+
+// ProveFreshness attempts to prove freshness with zero value blob.
+func (ent *TestEntity) ProveFreshness(consensus consensusAPI.Backend) error {
+	return consensusAPI.SignAndSubmitTx(context.Background(), consensus, ent.Signer, api.NewProveFreshnessTx(0, nil, [32]byte{}))
 }
 
 // TestNode is a testing Node and some common pre-generated/signed blobs

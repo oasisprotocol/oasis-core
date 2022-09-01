@@ -6,6 +6,10 @@ import "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 type TEEFeatures struct {
 	// SGX contains the supported TEE features for Intel SGX.
 	SGX TEEFeaturesSGX `json:"sgx"`
+
+	// FreshnessProofs is a feature flag specifying whether ProveFreshness transactions are
+	// supported and processed, or ignored and handled as non-existing transactions.
+	FreshnessProofs bool `json:"freshness_proofs"`
 }
 
 // TEEFeaturesSGX are the supported Intel SGX-specific TEE features.

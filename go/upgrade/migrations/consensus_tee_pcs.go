@@ -6,6 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 const (
@@ -40,7 +41,11 @@ func (th *teePcsHandler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) 
 			SGX: node.TEEFeaturesSGX{
 				PCS: true,
 			},
+			FreshnessProofs: true,
 		}
+
+		// Configure the default gas cost for freshness proofs.
+		params.GasCosts[registry.GasOpProveFreshness] = registry.DefaultGasCosts[registry.GasOpProveFreshness]
 
 		if err = state.SetConsensusParameters(abciCtx, params); err != nil {
 			return fmt.Errorf("failed to update registry consensus parameters: %w", err)
