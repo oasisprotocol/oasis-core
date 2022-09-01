@@ -20,8 +20,8 @@ a subset of the consensus layer via the [Rosetta API].
 :::
 
 <!-- markdownlint-disable line-length -->
-[consensus]: ../consensus/index.md
-[runtime]: ../runtime/index.md
+[consensus]: ../consensus/README.md
+[runtime]: ../runtime/README.md
 [submit transactions]: ../consensus/transactions.md#submission
 [Oasis Core Rosetta Gateway]: https://github.com/oasisprotocol/oasis-core-rosetta-gateway
 [Rosetta API]: https://www.rosetta-api.org

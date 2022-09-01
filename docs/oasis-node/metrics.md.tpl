@@ -48,5 +48,5 @@ When `oasis-node` is configured to use [Tendermint][1] for BFT consensus, all
 Tendermint metrics are also reported. Consult
 [tendermint-core documentation][2] for a list of reported by Tendermint.
 
-[1]: ../consensus/index.md#tendermint
+[1]: ../consensus/README.md#tendermint
 [2]: https://docs.tendermint.com/master/nodes/metrics.html

@@ -9,7 +9,7 @@ transactions lives in [`go/consensus/api/transaction`]. For more information
 you can also check out the [consensus backend API documentation].
 
 <!-- markdownlint-disable line-length -->
-[consensus backend]: index.md
+[consensus backend]: README.md
 [`go/consensus/api/transaction`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/api/transaction/transaction.go
 [consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api/transaction?tab=doc
 <!-- markdownlint-enable line-length -->
@@ -107,7 +107,7 @@ consumed by execution.
 
 <!-- markdownlint-disable line-length -->
 [`EstimateGas`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc#ClientBackend.EstimateGas
-[backend-specific]: index.md
+[backend-specific]: README.md
 <!-- markdownlint-enable line-length -->
 
 ## Submission

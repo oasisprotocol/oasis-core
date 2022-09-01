@@ -6,7 +6,7 @@ of the [consensus layer] and its services.
 For more details about the actual genesis document's API, see
 [genesis API documentation].
 
-[consensus layer]: index.md
+[consensus layer]: README.md
 [genesis API documentation]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/genesis/api
 

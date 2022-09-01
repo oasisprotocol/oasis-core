@@ -60,7 +60,7 @@ make any progress. For more information on writing your own client, see the
 <!-- markdownlint-disable line-length -->
 [the default network fixture]: https://github.com/oasisprotocol/oasis-core/tree/master/go/oasis-net-runner/fixtures/default.go
 [simple-keyvalue example]: https://github.com/oasisprotocol/oasis-core/tree/master/tests/runtimes/simple-keyvalue
-[Building a runtime]: https://github.com/oasisprotocol/oasis-sdk/blob/main/docs/runtime/getting-started.md
+[Building a runtime]: https://github.com/oasisprotocol/oasis-sdk/blob/main/docs/runtime/README.md
 <!-- markdownlint-enable line-length -->
 
 ## SGX Environment
@@ -115,6 +115,6 @@ specifying additional options at startup. See the [Using the Development Docker
 Image] section for details.
 
 <!-- markdownlint-disable line-length -->
-[sandboxing]: ../runtime/index.md#runtimes
+[sandboxing]: ../runtime/README.md#runtimes
 [Using the Development Docker Image]: prerequisites.md#using-the-development-docker-image
 <!-- markdownlint-enable line-length -->

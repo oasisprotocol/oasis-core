@@ -72,7 +72,7 @@ There are currently three supported governance models:
 <!-- markdownlint-enable no-space-in-emphasis -->
 
 <!-- markdownlint-disable line-length -->
-[runtime]: ../../runtime/index.md
+[runtime]: ../../runtime/README.md
 [the `Runtime` structure]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime
 <!-- markdownlint-enable line-length -->
 
