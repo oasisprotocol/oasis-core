@@ -51,11 +51,21 @@ type Document struct {
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`
+
+	cachedHash *hash.Hash
 }
 
 // Hash returns the cryptographic hash of the encoded genesis document.
+//
+// Calling this method will cause the computed hash to be cached so make sure
+// that the document is not modified later.
 func (d *Document) Hash() hash.Hash {
-	return hash.NewFrom(d)
+	if d.cachedHash != nil {
+		return *d.cachedHash
+	}
+	h := hash.NewFrom(d)
+	d.cachedHash = &h
+	return h
 }
 
 // ChainContext returns a string that can be used as a chain domain separation
