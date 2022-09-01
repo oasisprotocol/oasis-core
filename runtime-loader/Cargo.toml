@@ -9,7 +9,7 @@ clap = "3.2.10"
 failure = "0.1.5"
 futures = { version = "0.3.17", features = ["compat", "io-compat"] }
 # NOTE: The version of tokio is constrained by what the upstream enclave-runner is using.
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.20", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aesm-client = { git = "https://github.com/fortanix/rust-sgx", rev = "998c34d158a69dd1af33f22587e8ae1c26ca6a27", features = ["sgxs"] }
