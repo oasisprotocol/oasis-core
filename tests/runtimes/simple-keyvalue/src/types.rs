@@ -41,6 +41,20 @@ pub struct KeyValue {
 }
 
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct Encrypt {
+    pub epoch: u64,
+    pub key_pair_id: String,
+    pub plaintext: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct Decrypt {
+    pub epoch: u64,
+    pub key_pair_id: String,
+    pub ciphertext: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Withdraw {
     pub withdraw: staking::Withdraw,
 }

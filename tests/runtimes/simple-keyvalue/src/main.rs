@@ -143,6 +143,8 @@ impl Dispatcher {
             "enc_insert" => Self::dispatch_call(ctx, tx.args, Methods::enc_insert),
             "enc_get" => Self::dispatch_call(ctx, tx.args, Methods::enc_get),
             "enc_remove" => Self::dispatch_call(ctx, tx.args, Methods::enc_remove),
+            "encrypt" => Self::dispatch_call(ctx, tx.args, Methods::encrypt),
+            "decrypt" => Self::dispatch_call(ctx, tx.args, Methods::decrypt),
             _ => Err("method not found".to_string()),
         }
     }

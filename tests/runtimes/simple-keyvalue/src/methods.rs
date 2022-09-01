@@ -1,14 +1,18 @@
 //! Test method implementations.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, convert::TryInto};
 
 use io_context::Context as IoContext;
+use x25519_dalek;
 
 use super::{crypto::EncryptionContext, types::*, Context, TxContext};
 use oasis_core_keymanager_client::KeyPairId;
 use oasis_core_runtime::{
     common::{
-        crypto::{hash::Hash, mrae::deoxysii::NONCE_SIZE},
+        crypto::{
+            hash::Hash,
+            mrae::deoxysii::{self, NONCE_SIZE},
+        },
         key_format::KeyFormat,
         versioned::Versioned,
     },
@@ -349,6 +353,94 @@ impl Methods {
             .map(String::from_utf8)
             .transpose()
             .map_err(|err| err.to_string())
+    }
+
+    /// ElGamal encryption.
+    pub fn encrypt(ctx: &mut TxContext, args: Encrypt) -> Result<Option<Vec<u8>>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        // Derive key pair ID based on the given ID.
+        let hash = Hash::digest_bytes(args.key_pair_id.as_bytes()).0;
+        let key_pair_id = KeyPairId::from(hash.as_ref());
+
+        // Fetch public key.
+        let io_ctx = IoContext::create_child(&ctx.parent.core.io_ctx);
+        let result =
+            ctx.parent
+                .key_manager
+                .get_public_ephemeral_key(io_ctx, key_pair_id, args.epoch);
+        let long_term_pk = tokio::runtime::Handle::current()
+            .block_on(result)
+            .map_err(|err| err.to_string())?
+            .ok_or("public ephemeral key not available")?;
+
+        // Generate ephemeral key. Not secure, but good enough for testing purposes.
+        let ephemeral_sk = x25519_dalek::StaticSecret::from(hash);
+        let ephemeral_pk = x25519_dalek::PublicKey::from(&ephemeral_sk);
+
+        // ElGamal encryption.
+        let ciphertext = deoxysii::box_seal(
+            &[0u8; NONCE_SIZE],
+            args.plaintext,
+            vec![],
+            &long_term_pk.key.0,
+            &ephemeral_sk.to_bytes(),
+        )
+        .map_err(|err| format!("failed to encrypt plaintext: {}", err))?;
+
+        // Return ephemeral_pk || ciphertext.
+        let mut c = ephemeral_pk.as_bytes().to_vec();
+        c.extend(ciphertext);
+
+        Ok(Some(c))
+    }
+
+    /// ElGamal decryption.
+    pub fn decrypt(ctx: &mut TxContext, args: Decrypt) -> Result<Option<Vec<u8>>, String> {
+        if ctx.is_check_only() {
+            return Ok(None);
+        }
+
+        // Derive key pair ID based on the given ID.
+        let hash = Hash::digest_bytes(args.key_pair_id.as_bytes()).0;
+        let key_pair_id = KeyPairId::from(hash.as_ref());
+
+        // Fetch private key.
+        let io_ctx = IoContext::create_child(&ctx.parent.core.io_ctx);
+        let result =
+            ctx.parent
+                .key_manager
+                .get_or_create_ephemeral_keys(io_ctx, key_pair_id, args.epoch);
+        let long_term_sk = tokio::runtime::Handle::current()
+            .block_on(result)
+            .map_err(|err| format!("private ephemeral key not available: {}", err))?;
+
+        // Decode ephemeral_pk || ciphertext.
+        let ephemeral_pk = args
+            .ciphertext
+            .get(0..32)
+            .ok_or("invalid ciphertext")?
+            .try_into()
+            .unwrap();
+        let ciphertext = args
+            .ciphertext
+            .get(32..)
+            .ok_or("invalid ciphertext")?
+            .to_vec();
+
+        // ElGamal decryption.
+        let plaintext = deoxysii::box_open(
+            &[0u8; NONCE_SIZE],
+            ciphertext,
+            vec![],
+            ephemeral_pk,
+            &long_term_sk.input_keypair.sk.0,
+        )
+        .map_err(|err| format!("failed to decrypt ciphertext: {}", err))?;
+
+        Ok(Some(plaintext))
     }
 }
 

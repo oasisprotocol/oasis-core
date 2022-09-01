@@ -13,6 +13,7 @@ use oasis_core_client::RpcClient;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{namespace::Namespace, sgx::EnclaveIdentity},
+    consensus::beacon::EpochTime,
     enclave_rpc::session,
     protocol::Protocol,
     rak::RAK,
@@ -28,10 +29,12 @@ struct Inner {
     runtime_id: Namespace,
     /// RPC client.
     rpc_client: RpcClient,
-    /// Local cache for the get_or_create_keys KeyManager endpoint.
-    get_or_create_secret_keys_cache: RwLock<LruCache<KeyPairId, KeyPair>>,
-    /// Local cache for the get_public_key KeyManager endpoint.
-    get_public_key_cache: RwLock<LruCache<KeyPairId, SignedPublicKey>>,
+    /// Local cache for the long-term and ephemeral private keys fetched from
+    /// get_or_create_keys and get_or_create_ephemeral_keys KeyManager endpoints.
+    private_key_cache: RwLock<LruCache<(KeyPairId, Option<EpochTime>), KeyPair>>,
+    /// Local cache for the long-term and ephemeral public keys fetched from
+    /// get_public_key and get_public_ephemeral_key KeyManager endpoints.
+    public_key_cache: RwLock<LruCache<(KeyPairId, Option<EpochTime>), SignedPublicKey>>,
 }
 
 /// A key manager client which talks to a remote key manager enclave.
@@ -45,8 +48,8 @@ impl RemoteClient {
             inner: Arc::new(Inner {
                 runtime_id,
                 rpc_client,
-                get_or_create_secret_keys_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
-                get_public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
+                private_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
+                public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
             }),
         }
     }
@@ -129,11 +132,11 @@ impl KeyManagerClient for RemoteClient {
     fn clear_cache(&self) {
         // We explicitly only take one lock at a time.
 
-        let mut cache = self.inner.get_or_create_secret_keys_cache.write().unwrap();
+        let mut cache = self.inner.private_key_cache.write().unwrap();
         cache.clear();
         drop(cache);
 
-        let mut cache = self.inner.get_public_key_cache.write().unwrap();
+        let mut cache = self.inner.public_key_cache.write().unwrap();
         cache.clear();
         drop(cache);
     }
@@ -143,8 +146,8 @@ impl KeyManagerClient for RemoteClient {
         ctx: Context,
         key_pair_id: KeyPairId,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
-        let mut cache = self.inner.get_or_create_secret_keys_cache.write().unwrap();
-        if let Some(keys) = cache.get(&key_pair_id) {
+        let mut cache = self.inner.private_key_cache.write().unwrap();
+        if let Some(keys) = cache.get(&(key_pair_id, None)) {
             return Box::pin(future::ok(keys.clone()));
         }
 
@@ -156,14 +159,14 @@ impl KeyManagerClient for RemoteClient {
                 .call(
                     ctx,
                     METHOD_GET_OR_CREATE_KEYS,
-                    RequestIds::new(inner.runtime_id, key_pair_id),
+                    LongTermKeyRequest::new(inner.runtime_id, key_pair_id),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
 
             // Cache key.
-            let mut cache = inner.get_or_create_secret_keys_cache.write().unwrap();
-            cache.put(key_pair_id, keys.clone());
+            let mut cache = inner.private_key_cache.write().unwrap();
+            cache.put((key_pair_id, None), keys.clone());
 
             Ok(keys)
         })
@@ -174,8 +177,8 @@ impl KeyManagerClient for RemoteClient {
         ctx: Context,
         key_pair_id: KeyPairId,
     ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
-        let mut cache = self.inner.get_public_key_cache.write().unwrap();
-        if let Some(key) = cache.get(&key_pair_id) {
+        let mut cache = self.inner.public_key_cache.write().unwrap();
+        if let Some(key) = cache.get(&(key_pair_id, None)) {
             return Box::pin(future::ok(Some(key.clone())));
         }
 
@@ -187,7 +190,7 @@ impl KeyManagerClient for RemoteClient {
                 .call(
                     ctx,
                     METHOD_GET_PUBLIC_KEY,
-                    RequestIds::new(inner.runtime_id, key_pair_id),
+                    LongTermKeyRequest::new(inner.runtime_id, key_pair_id),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
@@ -195,8 +198,77 @@ impl KeyManagerClient for RemoteClient {
             match key {
                 Some(key) => {
                     // Cache key.
-                    let mut cache = inner.get_public_key_cache.write().unwrap();
-                    cache.put(key_pair_id, key.clone());
+                    let mut cache = inner.public_key_cache.write().unwrap();
+                    cache.put((key_pair_id, None), key.clone());
+
+                    Ok(Some(key))
+                }
+                None => Ok(None),
+            }
+        })
+    }
+
+    fn get_or_create_ephemeral_keys(
+        &self,
+        ctx: Context,
+        key_pair_id: KeyPairId,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
+        let mut cache = self.inner.private_key_cache.write().unwrap();
+        if let Some(keys) = cache.get(&(key_pair_id, Some(epoch))) {
+            return Box::pin(future::ok(keys.clone()));
+        }
+
+        // No entry in cache, fetch from key manager.
+        let inner = self.inner.clone();
+        Box::pin(async move {
+            let keys: KeyPair = inner
+                .rpc_client
+                .call(
+                    ctx,
+                    METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
+                    EphemeralKeyRequest::new(inner.runtime_id, key_pair_id, epoch),
+                )
+                .await
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
+            // Cache key.
+            let mut cache = inner.private_key_cache.write().unwrap();
+            cache.put((key_pair_id, Some(epoch)), keys.clone());
+
+            Ok(keys)
+        })
+    }
+
+    fn get_public_ephemeral_key(
+        &self,
+        ctx: Context,
+        key_pair_id: KeyPairId,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+        let mut cache = self.inner.public_key_cache.write().unwrap();
+        if let Some(key) = cache.get(&(key_pair_id, Some(epoch))) {
+            return Box::pin(future::ok(Some(key.clone())));
+        }
+
+        // No entry in cache, fetch from key manager.
+        let inner = self.inner.clone();
+        Box::pin(async move {
+            let key: Option<SignedPublicKey> = inner
+                .rpc_client
+                .call(
+                    ctx,
+                    METHOD_GET_PUBLIC_EPHEMERAL_KEY,
+                    EphemeralKeyRequest::new(inner.runtime_id, key_pair_id, epoch),
+                )
+                .await
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
+            match key {
+                Some(key) => {
+                    // Cache key.
+                    let mut cache = inner.public_key_cache.write().unwrap();
+                    cache.put((key_pair_id, Some(epoch)), key.clone());
 
                     Ok(Some(key))
                 }

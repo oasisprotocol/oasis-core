@@ -46,6 +46,24 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
         state.rpc_dispatcher.add_method(
             RpcMethod::new(
                 RpcMethodDescriptor {
+                    name: METHOD_GET_OR_CREATE_EPHEMERAL_KEYS.to_string(),
+                },
+                methods::get_or_create_ephemeral_keys,
+            ),
+            false,
+        );
+        state.rpc_dispatcher.add_method(
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_GET_PUBLIC_EPHEMERAL_KEY.to_string(),
+                },
+                methods::get_public_ephemeral_key,
+            ),
+            false,
+        );
+        state.rpc_dispatcher.add_method(
+            RpcMethod::new(
+                RpcMethodDescriptor {
                     name: METHOD_REPLICATE_MASTER_SECRET.to_string(),
                 },
                 methods::replicate_master_secret,
