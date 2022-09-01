@@ -212,10 +212,10 @@ steps:
       - /tmp/e2e/**/runtime_genesis.json
     env:
       OASIS_E2E_COVERAGE: enable
-      # Since the trust-root scenario is tested in SGX mode (for which it is actually relevant) no need
-      # to also test it in non-SGX mode in CI. Also exclude txsource-multi-short so that we ensure it
-      # runs only on non-SGX agents.
-      OASIS_EXCLUDE_E2E: e2e/runtime/trust-root,e2e/runtime/txsource-multi-short
+      # Since the trust-root scenarios are tested in SGX mode (for which they are actually relevant)
+      # no need to also test them in non-SGX mode in CI. Also exclude txsource-multi-short so that
+      # we ensure it runs only on non-SGX agents.
+      OASIS_EXCLUDE_E2E: e2e/runtime/trust-root/simple,e2e/runtime/trust-root/change,e2e/runtime/trust-root/change-fails,e2e/runtime/txsource-multi-short
       TEST_BASE_DIR: /tmp
     retry:
       <<: *retry_agent_failure
@@ -255,6 +255,7 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     branches: "!master !stable/*"
+    parallelism: 2
     timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
@@ -263,7 +264,7 @@ steps:
       - export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"
       - export CC_x86_64_fortanix_unknown_sgx=clang-11
       # Only run runtime scenarios as others do not use SGX.
-      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root --scenario e2e/runtime/keymanager-key-generation
+      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-key-generation
     artifact_paths:
       - coverage-merged-e2e-*.txt
       - /tmp/e2e/**/*.log

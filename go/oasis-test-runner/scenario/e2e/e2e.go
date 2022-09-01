@@ -184,37 +184,91 @@ func (sc *E2E) GetExportedGenesisFiles(skipCompute bool) ([]string, error) {
 	return files, nil
 }
 
+// Flag for consensus state reset.
+const (
+	PreserveValidatorRuntimeStorage uint8 = iota
+	PreserveValidatorLocalStorage
+	ForceValidatorReset
+	PreserveComputeWorkerRuntimeStorage
+	PreserveComputeWorkerLocalStorage
+	ForceComputeWorkerReset
+	PreserveClientRuntimeStorage
+	PreserveClientLocalStorage
+	ForceClientReset
+	PreserveByzantineRuntimeStorage
+	PreserveByzantineLocalStorage
+	ForceByzantineReset
+	PreserveSentryRuntimeStorage
+	PreserveSentryLocalStorage
+	ForceSentryReset
+	PreserveKeymanagerRuntimeStorage
+	PreserveKeymanagerLocalStorage
+	ForceKeymanagerReset
+)
+
 // ResetConsensusState removes all consensus state, preserving runtime storage and node-local
-// storage databases.
-func (sc *E2E) ResetConsensusState(childEnv *env.Env) error {
+// storage databases unless specified with flags otherwise.
+func (sc *E2E) ResetConsensusState(childEnv *env.Env, flags map[uint8]bool) error {
+	if flags == nil {
+		flags = map[uint8]bool{
+			PreserveComputeWorkerRuntimeStorage: true,
+			PreserveKeymanagerLocalStorage:      true,
+		}
+	}
+
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 	for _, val := range sc.Net.Validators() {
-		if err := cli.UnsafeReset(val.DataDir(), false, false, false); err != nil {
+		if err := cli.UnsafeReset(
+			val.DataDir(),
+			flags[PreserveValidatorRuntimeStorage],
+			flags[PreserveValidatorLocalStorage],
+			flags[ForceValidatorReset],
+		); err != nil {
 			return err
 		}
 	}
 	for _, cw := range sc.Net.ComputeWorkers() {
-		if err := cli.UnsafeReset(cw.DataDir(), true, false, false); err != nil {
+		if err := cli.UnsafeReset(cw.DataDir(),
+			flags[PreserveComputeWorkerRuntimeStorage],
+			flags[PreserveComputeWorkerLocalStorage],
+			flags[ForceComputeWorkerReset],
+		); err != nil {
 			return err
 		}
 	}
 	for _, cl := range sc.Net.Clients() {
-		if err := cli.UnsafeReset(cl.DataDir(), false, false, false); err != nil {
+		if err := cli.UnsafeReset(cl.DataDir(),
+			flags[PreserveClientRuntimeStorage],
+			flags[PreserveClientLocalStorage],
+			flags[ForceClientReset],
+		); err != nil {
 			return err
 		}
 	}
 	for _, bz := range sc.Net.Byzantine() {
-		if err := cli.UnsafeReset(bz.DataDir(), false, false, false); err != nil {
+		if err := cli.UnsafeReset(bz.DataDir(),
+			flags[PreserveByzantineRuntimeStorage],
+			flags[PreserveByzantineLocalStorage],
+			flags[ForceByzantineReset],
+		); err != nil {
 			return err
 		}
 	}
 	for _, se := range sc.Net.Sentries() {
-		if err := cli.UnsafeReset(se.DataDir(), false, false, false); err != nil {
+		if err := cli.UnsafeReset(se.DataDir(),
+			flags[PreserveSentryRuntimeStorage],
+			flags[PreserveSentryLocalStorage],
+			flags[ForceSentryReset],
+		); err != nil {
 			return err
 		}
 	}
 	for _, kw := range sc.Net.Keymanagers() {
-		if err := cli.UnsafeReset(kw.DataDir(), false, true, false); err != nil {
+		if err := cli.UnsafeReset(kw.DataDir(),
+			flags[PreserveKeymanagerRuntimeStorage],
+			flags[PreserveKeymanagerLocalStorage],
+			flags[ForceKeymanagerReset],
+		); err != nil {
 			return err
 		}
 	}
@@ -228,6 +282,7 @@ func (sc *E2E) DumpRestoreNetwork(
 	fixture *oasis.NetworkFixture,
 	doDbDump bool,
 	genesisMapFn func(*genesis.Document),
+	resetFlags map[uint8]bool,
 ) error {
 	// Dump-restore network.
 	sc.Logger.Info("dumping network state",
@@ -272,8 +327,8 @@ func (sc *E2E) DumpRestoreNetwork(
 	}
 
 	// Reset all the state back to the vanilla state.
-	if err := sc.ResetConsensusState(childEnv); err != nil {
-		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendemint storage: %w", err)
+	if err := sc.ResetConsensusState(childEnv, resetFlags); err != nil {
+		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendermint storage: %w", err)
 	}
 
 	// Apply optional mapping function to the genesis document.

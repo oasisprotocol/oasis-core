@@ -13,24 +13,29 @@ use io_context::Context;
 use sgx_isa::Keypolicy;
 use slog::{error, info};
 use tendermint::{
-    block::CommitSig,
+    block::{CommitSig, Height},
     vote::{SignedVote, ValidatorIndex, Vote},
 };
 use tendermint_light_client::{
     builder::LightClientBuilder,
-    components::{self, verifier::PredicateVerifier},
+    components::{
+        self,
+        io::{AtHeight, IoError},
+        verifier::PredicateVerifier,
+    },
     light_client,
     operations::{ProdCommitValidator, ProdHasher, VotingPowerCalculator, VotingPowerTally},
     supervisor::Instance,
     types::{
         Commit, Hash as TMHash, LightBlock as TMLightBlock, PeerId, SignedHeader, Time,
-        TrustThreshold, ValidatorSet,
+        TrustThreshold, TrustedBlockState, ValidatorSet,
     },
-    verifier::{errors::VerificationError, predicates::ProdPredicates},
+    verifier::{
+        errors::VerificationError, predicates::ProdPredicates, Verdict, Verifier as TMVerifier,
+    },
 };
 use tendermint_rpc::error::Error as RpcError;
 
-use super::store::LruStore;
 use crate::{
     common::{
         crypto::{hash::Hash, signature::PublicKey},
@@ -49,7 +54,7 @@ use crate::{
         tendermint::{
             decode_light_block, state_root_from_header, LightBlockMeta, TENDERMINT_CONTEXT,
         },
-        verifier::{self, verify_state_freshness, Error, TrustRoot},
+        verifier::{self, verify_state_freshness, Error, TrustRoot, TrustedState},
         LightBlock, HEIGHT_LATEST,
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
@@ -57,16 +62,19 @@ use crate::{
     types::Body,
 };
 
+use super::{encode_light_block, store::LruStore};
+
 /// Maximum number of times to retry initialization.
 const MAX_INITIALIZATION_RETRIES: usize = 3;
-/// Storage key prefix under which the sealed trust root is stored in untrusted local storage.
+/// Storage key prefix under which the sealed trusted state is stored in
+/// the untrusted local storage.
 ///
 /// The actual key includes the MRENCLAVE to support upgrades.
-const TRUST_ROOT_STORAGE_KEY_PREFIX: &str = "tendermint.verifier.trust_root";
-/// Domain separation context for the trust root.
-const TRUST_ROOT_CONTEXT: &[u8] = b"oasis-core/verifier: trust root";
-/// Trust root save interval (in consensus blocks).
-const TRUST_ROOT_SAVE_INTERVAL: u64 = 128;
+const TRUSTED_STATE_STORAGE_KEY_PREFIX: &str = "tendermint.verifier.trusted_state";
+/// Domain separation context for the trusted state.
+const TRUSTED_STATE_CONTEXT: &[u8] = b"oasis-core/verifier: trusted state";
+/// Trusted state save interval (in consensus blocks).
+const TRUSTED_STATE_SAVE_INTERVAL: u64 = 128;
 
 /// A verifier which performs no verification.
 pub struct NopVerifier {
@@ -164,6 +172,7 @@ enum Command {
 
 /// Tendermint consensus layer verifier.
 pub struct Verifier {
+    logger: slog::Logger,
     protocol: Arc<Protocol>,
     runtime_version: Version,
     trust_root: TrustRoot,
@@ -175,19 +184,19 @@ struct Cache {
     last_verified_height: u64,
     last_verified_round: u64,
     last_verified_epoch: u64,
-    last_trust_root: TrustRoot,
+    last_verified_block: TMLightBlock,
     verified_state_roots: lru::LruCache<u64, Hash>,
     verified_state_roots_queries: lru::LruCache<u64, (Hash, u64)>,
     node_id: Option<PublicKey>,
 }
 
-impl Default for Cache {
-    fn default() -> Self {
+impl Cache {
+    fn new(verified_block: TMLightBlock) -> Self {
         Self {
             last_verified_height: 0,
             last_verified_round: 0,
             last_verified_epoch: 0,
-            last_trust_root: TrustRoot::default(),
+            last_verified_block: verified_block,
             verified_state_roots: lru::LruCache::new(128),
             verified_state_roots_queries: lru::LruCache::new(128),
             node_id: None,
@@ -198,18 +207,14 @@ impl Default for Cache {
 impl Cache {
     /// Latest known and verified consensus layer height.
     fn latest_known_height(&self) -> u64 {
-        self.last_trust_root.height
+        self.last_verified_block.signed_header.header.height.value()
     }
 
     /// Process a new verified consensus layer block and update the cache if needed.
-    fn update_verified_block(&mut self, verified_block: &TMLightBlock) {
-        let header = &verified_block.signed_header.header;
-        let height = header.height.into();
-
-        // Update the trust root if ahead.
-        if height > self.last_trust_root.height {
-            self.last_trust_root.height = height;
-            self.last_trust_root.hash = header.hash().to_string();
+    fn update_verified_block(&mut self, verified_block: TMLightBlock) {
+        let h = |b: &TMLightBlock| -> Height { b.signed_header.header.height };
+        if h(&verified_block) > h(&self.last_verified_block) {
+            self.last_verified_block = verified_block
         }
     }
 }
@@ -217,10 +222,12 @@ impl Cache {
 impl Verifier {
     /// Create a new Tendermint consensus layer verifier.
     pub fn new(protocol: Arc<Protocol>, trust_root: TrustRoot) -> Self {
+        let logger = get_logger("consensus/tendermint/verifier");
         let (command_sender, command_receiver) = channel::unbounded();
         let runtime_version = protocol.get_config().version;
 
         Self {
+            logger,
             protocol,
             runtime_version,
             trust_root,
@@ -248,7 +255,7 @@ impl Verifier {
             .verify_to_target(height.try_into().unwrap(), &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
         self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(&verified_block);
+        cache.update_verified_block(verified_block);
 
         Ok(())
     }
@@ -276,10 +283,11 @@ impl Verifier {
             .light_client
             .verify_to_target(height.try_into().unwrap(), &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(&verified_block);
-
         let state_root = state_root_from_header(&verified_block.signed_header);
+
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(verified_block);
+
         Ok(ConsensusState::from_protocol(
             self.protocol.clone(),
             state_root,
@@ -313,8 +321,6 @@ impl Verifier {
             .light_client
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
@@ -322,6 +328,8 @@ impl Verifier {
         }
 
         cache.last_verified_height = verified_block.signed_header.header.height.into();
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(verified_block);
 
         Ok(untrusted_block)
     }
@@ -479,13 +487,15 @@ impl Verifier {
             .light_client
             .verify_to_target(untrusted_header.header().height, &mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(&verified_block);
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
+
+        self.update_insecure_posix_time(&verified_block);
+        cache.update_verified_block(verified_block);
+
         let consensus_block = untrusted_block;
 
         let state =
@@ -600,7 +610,9 @@ impl Verifier {
                 // Handle failures.
                 match result {
                     Ok(_) => {}
-                    Err(err @ Error::Builder(_)) | Err(err @ Error::TrustRootLoadingFailed) => {
+                    Err(err @ Error::Builder(_))
+                    | Err(err @ Error::TrustedStateLoadingFailed)
+                    | Err(err @ Error::ChainContextTransitionFailed(_)) => {
                         error!(logger, "Consensus verifier failed to initialize, retrying";
                             "err" => %err,
                             "retry" => retry,
@@ -624,13 +636,13 @@ impl Verifier {
         });
     }
 
-    fn derive_trust_root_storage_key() -> Vec<u8> {
+    fn derive_trusted_state_storage_key() -> Vec<u8> {
         // Namespace storage key by MRENCLAVE as we can only unseal our own sealed data and we need
-        // to support upgrades. We assume that an upgrade will include an up-to-date trust root
+        // to support upgrades. We assume that an upgrade will include an up-to-date trusted state
         // anyway.
         format!(
             "{}.{:x}",
-            TRUST_ROOT_STORAGE_KEY_PREFIX,
+            TRUSTED_STATE_STORAGE_KEY_PREFIX,
             EnclaveIdentity::current()
                 .map(|eid| eid.mr_enclave)
                 .unwrap_or_default()
@@ -638,48 +650,67 @@ impl Verifier {
         .into_bytes()
     }
 
-    fn load_trust_root(
+    fn save_trusted_state(
         &self,
+        trusted_block: &TMLightBlock,
         untrusted_local_store: &ProtocolUntrustedLocalStorage,
-    ) -> Result<TrustRoot, Error> {
-        // Attempt to load the previously sealed trust root.
-        let untrusted_value = untrusted_local_store
-            .get(Self::derive_trust_root_storage_key())
-            .map_err(|_| Error::TrustRootLoadingFailed)?;
-        if untrusted_value.is_empty() {
-            // No previously stored trust root is available, use the embedded root.
-            return Ok(self.trust_root.clone());
-        }
-
-        // Unseal the sealed trust root.
-        let raw = seal::unseal(Keypolicy::MRENCLAVE, TRUST_ROOT_CONTEXT, &untrusted_value).unwrap();
-        let trust_root: TrustRoot = cbor::from_slice(&raw).expect("corrupted sealed trust root");
-
-        // Make sure that the loaded trust root is not older than the embedded root.
-        if trust_root.height <= self.trust_root.height {
-            return Ok(self.trust_root.clone());
-        }
-        Ok(trust_root)
-    }
-
-    fn save_trust_root(
-        &self,
-        untrusted_local_store: &ProtocolUntrustedLocalStorage,
-        cache: &Cache,
     ) {
-        // Serialize and seal the trust root.
-        let raw = cbor::to_vec(cache.last_trust_root.clone());
-        let sealed = seal::seal(Keypolicy::MRENCLAVE, TRUST_ROOT_CONTEXT, &raw);
+        // Build trusted state.
+        let trust_root = TrustRoot {
+            height: trusted_block.height().into(),
+            hash: trusted_block.signed_header.header.hash().to_string(),
+            runtime_id: self.trust_root.runtime_id,
+            chain_context: self.protocol.get_host_info().consensus_chain_context,
+        };
+        let lbm = LightBlockMeta {
+            signed_header: Some(trusted_block.signed_header.clone()),
+            validators: trusted_block.validators.clone(),
+        };
+        let trusted_block = Some(encode_light_block(&lbm).unwrap());
+        let trusted_state = TrustedState {
+            trust_root,
+            trusted_block,
+        };
 
-        // Store the trust root.
+        // Serialize and seal the trusted state.
+        let raw = cbor::to_vec(trusted_state);
+        let sealed = seal::seal(Keypolicy::MRENCLAVE, TRUSTED_STATE_CONTEXT, &raw);
+
+        // Store the trusted state.
         untrusted_local_store
-            .insert(Self::derive_trust_root_storage_key(), sealed)
+            .insert(Self::derive_trusted_state_storage_key(), sealed)
             .unwrap();
     }
 
-    fn run(&self) -> Result<(), Error> {
-        let logger = get_logger("consensus/tendermint/verifier");
+    fn load_trusted_state(
+        &self,
+        untrusted_local_store: &ProtocolUntrustedLocalStorage,
+    ) -> Result<TrustedState, Error> {
+        // Attempt to load the previously sealed trusted state.
+        let untrusted_value = untrusted_local_store
+            .get(Self::derive_trusted_state_storage_key())
+            .map_err(|_| Error::TrustedStateLoadingFailed)?;
+        if untrusted_value.is_empty() {
+            return Ok(TrustedState {
+                trust_root: self.trust_root.clone(),
+                trusted_block: None,
+            });
+        }
 
+        // Unseal the sealed trusted state.
+        let raw = seal::unseal(
+            Keypolicy::MRENCLAVE,
+            TRUSTED_STATE_CONTEXT,
+            &untrusted_value,
+        )
+        .unwrap();
+        let trusted_state: TrustedState =
+            cbor::from_slice(&raw).expect("corrupted sealed trusted state");
+
+        Ok(trusted_state)
+    }
+
+    fn run(&self) -> Result<(), Error> {
         // Create the untrusted local storage for storing the sealed latest trusted root.
         let untrusted_local_store =
             ProtocolUntrustedLocalStorage::new(Context::background(), self.protocol.clone());
@@ -695,23 +726,42 @@ impl Verifier {
 
         // NOTE: Peer identifier is irrelevant as the enclave is totally eclipsed.
         let peer_id = PeerId::new([0; 20]);
+        let clock = Box::new(InsecureClock);
+        let verifier = Box::new(PredicateVerifier::new(
+            ProdPredicates::default(),
+            DomSepVotingPowerCalculator,
+            ProdCommitValidator::default(),
+            ProdHasher::default(),
+        ));
+        let io = Box::new(Io::new(&self.protocol));
+
+        // Build a light client using the embedded trust root or trust root
+        // stored in the local store.
+        info!(self.logger, "Loading trusted state");
+        let trusted_state: TrustedState = self.load_trusted_state(&untrusted_local_store)?;
+
+        // Verify if we can trust light blocks from a new chain if the consensus
+        // chain context changes.
+        info!(self.logger, "Checking chain context change");
+        let trust_root = self.handle_chain_context_change(
+            trusted_state,
+            verifier.as_ref(),
+            clock.as_ref(),
+            io.as_ref(),
+        )?;
+
         let builder = LightClientBuilder::custom(
             peer_id,
             options,
             Box::new(LruStore::new(1024)),
-            Box::new(Io::new(&self.protocol)),
+            io,
             Box::new(ProdHasher),
-            Box::new(InsecureClock),
-            Box::new(PredicateVerifier::new(
-                ProdPredicates::default(),
-                DomSepVotingPowerCalculator,
-                ProdCommitValidator::default(),
-                ProdHasher::default(),
-            )),
+            clock,
+            verifier,
             Box::new(components::scheduler::basic_bisecting_schedule),
             Box::new(ProdPredicates),
         );
-        let trust_root = self.load_trust_root(&untrusted_local_store)?;
+
         let mut instance = builder
             .trust_primary_at(
                 trust_root.height.try_into().unwrap(),
@@ -720,17 +770,12 @@ impl Verifier {
             .map_err(|err| Error::Builder(err.into()))?
             .build();
 
-        info!(logger, "Consensus verifier initialized";
+        info!(self.logger, "Consensus verifier initialized";
             "trust_root_height" => trust_root.height,
             "trust_root_hash" => ?trust_root.hash,
             "trust_root_runtime_id" => ?trust_root.runtime_id,
+            "trust_root_chain_context" => ?trust_root.chain_context,
         );
-
-        let mut last_saved_trust_root_height = trust_root.height;
-        let mut cache = Cache {
-            last_trust_root: trust_root,
-            ..Default::default()
-        };
 
         // Sync the verifier up to the latest block to make sure we are up to date before
         // processing any requests.
@@ -738,11 +783,15 @@ impl Verifier {
             .light_client
             .verify_to_highest(&mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(&verified_block);
-        self.save_trust_root(&untrusted_local_store, &cache);
 
-        info!(logger, "Consensus verifier synced";
+        self.save_trusted_state(&verified_block, &untrusted_local_store);
+        self.update_insecure_posix_time(&verified_block);
+
+        let mut last_saved_verified_block_height =
+            verified_block.signed_header.header.height.value();
+        let mut cache = Cache::new(verified_block);
+
+        info!(self.logger, "Consensus verifier synced";
             "latest_height" => cache.latest_known_height(),
         );
 
@@ -800,14 +849,133 @@ impl Verifier {
                 }
             }
 
-            // Persist trusted root every once in a while.
-            if cache.last_trust_root.height - last_saved_trust_root_height
-                > TRUST_ROOT_SAVE_INTERVAL
-            {
-                self.save_trust_root(&untrusted_local_store, &cache);
-                last_saved_trust_root_height = cache.last_trust_root.height;
+            // Persist last verified block once in a while.
+            let last_height = cache.latest_known_height();
+            if last_height - last_saved_verified_block_height > TRUSTED_STATE_SAVE_INTERVAL {
+                self.save_trusted_state(&cache.last_verified_block, &untrusted_local_store);
+                last_saved_verified_block_height = last_height;
             }
         }
+    }
+
+    fn handle_chain_context_change(
+        &self,
+        trusted_state: TrustedState,
+        verifier: &impl TMVerifier,
+        clock: &impl components::clock::Clock,
+        io: &Io,
+    ) -> Result<TrustRoot, Error> {
+        let host_info = self.protocol.get_host_info();
+
+        // Nothing to handle.
+        if trusted_state.trust_root.chain_context == host_info.consensus_chain_context {
+            info!(self.logger, "Consensus chain context hasn't changed");
+            return Ok(trusted_state.trust_root);
+        }
+        info!(self.logger, "Consensus chain context has changed");
+
+        // Chain context transition cannot be done directly from the embedded
+        // trust root as we don't have access to the matching trusted light
+        // block which validator set we need to verify blocks from the new chain.
+        let trusted_block = trusted_state.trusted_block.ok_or_else(|| {
+            Error::ChainContextTransitionFailed(anyhow!(
+                "cannot transition from embedded trust root"
+            ))
+        })?;
+
+        // Fetch genesis block from the host and prepare untrusted state for
+        // verification. Since host cannot be trusted we need to verify if
+        // fetched height and block belong to the genesis.
+        let height = io
+            .fetch_genesis_height()
+            .map_err(|err| Error::ChainContextTransitionFailed(err.into()))?;
+        let height = AtHeight::At(height.try_into().unwrap());
+        let untrusted_block = components::io::Io::fetch_light_block(io, height)
+            .map_err(|err| Error::ChainContextTransitionFailed(err.into()))?;
+
+        if untrusted_block.signed_header.header.last_block_id.is_some() {
+            return Err(Error::ChainContextTransitionFailed(anyhow!(
+                "invalid genesis block"
+            )));
+        }
+
+        let untrusted = untrusted_block.as_untrusted_state();
+
+        // Prepare trusted state for verification. As we are using the verifier
+        // to verify the untrusted block and state transition, we must make
+        // sure that trusted and untrusted states don't belong to consecutive
+        // blocks as otherwise validator set hash will get verified also.
+        // Keeping heights at minimum distance of 2 will make sure that the
+        // verifier will check if there is enough overlap between the validator
+        // sets.
+        let lbm = decode_light_block(trusted_block).map_err(Error::ChainContextTransitionFailed)?;
+        let header = lbm.signed_header.unwrap().header;
+        let height = header.height;
+        let height = if height.increment() != untrusted.height() {
+            height
+        } else {
+            height
+                .value()
+                .checked_sub(1)
+                .ok_or_else(|| Error::ChainContextTransitionFailed(anyhow!("height underflow")))?
+                .try_into()
+                .unwrap()
+        };
+
+        let trusted = TrustedBlockState {
+            header_time: header.time,
+            height,
+            next_validators: &lbm.validators,
+            next_validators_hash: header.validators_hash,
+        };
+
+        // Verify the new block using +2/3 trust threshold rule.
+        let options = light_client::Options {
+            trust_threshold: TrustThreshold::TWO_THIRDS,
+            trusting_period: Duration::from_secs(3600 * 24 * 365 * 10), // 10 years
+            clock_drift: Duration::from_secs(60),
+        };
+        let now = clock.now();
+
+        let verdict = verifier.verify(untrusted, trusted, &options, now);
+
+        match verdict {
+            Verdict::Success => (),
+            Verdict::NotEnoughTrust(tally) => {
+                info!(
+                    self.logger,
+                    "Not enough trust to accept new chain context";
+                    "log_event" => "consensus/tendermint/verifier/chain_context/no_trust",
+                    "tally" => ?tally,
+                );
+                return Err(Error::ChainContextTransitionFailed(anyhow!(
+                    "not enough trust"
+                )));
+            }
+            Verdict::Invalid(e) => {
+                info!(
+                    self.logger,
+                    "Failed to accept new chain context";
+                    "log_event" => "consensus/tendermint/verifier/chain_context/failed",
+                    "error" => ?e,
+                );
+                return Err(Error::ChainContextTransitionFailed(anyhow!(
+                    "invalid genesis block"
+                )));
+            }
+        }
+
+        info!(self.logger, "Consensus chain context transition done");
+
+        let header = untrusted_block.signed_header.header;
+        let trust_root = TrustRoot {
+            height: header.height.into(),
+            hash: header.hash().to_string(),
+            runtime_id: self.trust_root.runtime_id,
+            chain_context: host_info.consensus_chain_context,
+        };
+
+        Ok(trust_root)
     }
 }
 
@@ -925,9 +1093,7 @@ impl Io {
         }
     }
 
-    fn fetch_light_block(&self, height: u64) -> Result<LightBlockMeta, components::io::IoError> {
-        use components::io::IoError;
-
+    fn fetch_light_block(&self, height: u64) -> Result<LightBlockMeta, IoError> {
         let result = self
             .protocol
             .call_host(
@@ -948,18 +1114,31 @@ impl Io {
 
         Ok(block)
     }
+
+    fn fetch_genesis_height(&self) -> Result<u64, IoError> {
+        let result = self
+            .protocol
+            .call_host(
+                Context::background(),
+                Body::HostFetchGenesisHeightRequest {},
+            )
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
+
+        // Extract genesis height from response.
+        let height = match result {
+            Body::HostFetchGenesisHeightResponse { height } => height,
+            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
+        };
+
+        Ok(height)
+    }
 }
 
 impl components::io::Io for Io {
-    fn fetch_light_block(
-        &self,
-        height: components::io::AtHeight,
-    ) -> Result<TMLightBlock, components::io::IoError> {
-        use components::io::IoError;
-
+    fn fetch_light_block(&self, height: AtHeight) -> Result<TMLightBlock, IoError> {
         let height = match height {
-            components::io::AtHeight::At(height) => height.into(),
-            components::io::AtHeight::Highest => HEIGHT_LATEST,
+            AtHeight::At(height) => height.into(),
+            AtHeight::Highest => HEIGHT_LATEST,
         };
 
         // Fetch light block at height and height+1.

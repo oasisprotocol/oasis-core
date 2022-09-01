@@ -23,8 +23,11 @@ pub enum Error {
     #[error("verification: {0}")]
     VerificationFailed(#[source] anyhow::Error),
 
-    #[error("trust root loading failed")]
-    TrustRootLoadingFailed,
+    #[error("trusted state loading failed")]
+    TrustedStateLoadingFailed,
+
+    #[error("consensus chain context transition failed: {0}")]
+    ChainContextTransitionFailed(#[source] anyhow::Error),
 
     #[error("internal consensus verifier error")]
     Internal,
@@ -35,8 +38,9 @@ impl Error {
         match self {
             Error::Builder(_) => 1,
             Error::VerificationFailed(_) => 2,
-            Error::TrustRootLoadingFailed => 3,
-            Error::Internal => 4,
+            Error::TrustedStateLoadingFailed => 3,
+            Error::ChainContextTransitionFailed(_) => 4,
+            Error::Internal => 5,
         }
     }
 }
@@ -116,6 +120,20 @@ pub struct TrustRoot {
     pub hash: String,
     /// Known runtime identifier.
     pub runtime_id: Namespace,
+    /// Known consensus chain context.
+    pub chain_context: String,
+}
+
+/// Trusted state containing trust root and trusted light block.
+#[derive(Debug, Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct TrustedState {
+    /// Trust root.
+    pub trust_root: TrustRoot,
+    /// Trusted light block.
+    ///
+    /// Optional as we don't want to force trusted state for embedded trust
+    /// root to have a matching trusted light block.
+    pub trusted_block: Option<LightBlock>,
 }
 
 /// Verify consensus layer state freshness based on our internal state.

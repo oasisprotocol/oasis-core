@@ -89,7 +89,7 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 	// Stop the network.
 	sc.Logger.Info("stopping the network")
 	sc.Net.Stop()
-	if err = sc.ResetConsensusState(childEnv); err != nil {
+	if err = sc.ResetConsensusState(childEnv, nil); err != nil {
 		return fmt.Errorf("failed to reset consensus state: %w", err)
 	}
 

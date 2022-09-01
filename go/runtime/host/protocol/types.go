@@ -107,6 +107,8 @@ type Body struct {
 	HostFetchConsensusBlockResponse *HostFetchConsensusBlockResponse `json:",omitempty"`
 	HostFetchTxBatchRequest         *HostFetchTxBatchRequest         `json:",omitempty"`
 	HostFetchTxBatchResponse        *HostFetchTxBatchResponse        `json:",omitempty"`
+	HostFetchGenesisHeightRequest   *HostFetchGenesisHeightRequest   `json:",omitempty"`
+	HostFetchGenesisHeightResponse  *HostFetchGenesisHeightResponse  `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -476,6 +478,14 @@ type HostFetchConsensusBlockRequest struct {
 // HostFetchConsensusBlockResponse is a response from host fetching the given consensus light block.
 type HostFetchConsensusBlockResponse struct {
 	Block consensus.LightBlock `json:"block"`
+}
+
+// HostFetchGenesisHeightRequest is a request to host to fetch the consensus genesis height.
+type HostFetchGenesisHeightRequest struct{}
+
+// HostFetchGenesisHeightResponse is a response from host fetching the consensus genesis height.
+type HostFetchGenesisHeightResponse struct {
+	Height uint64 `json:"height"`
 }
 
 // HostFetchTxBatchRequest is a request to host to fetch a further batch of transactions.

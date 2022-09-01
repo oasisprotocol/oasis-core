@@ -165,7 +165,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.DumpRestoreNetwork(childEnv, fixture, true, sc.mapGenesisDocumentFn); err != nil {
+	if err = sc.DumpRestoreNetwork(childEnv, fixture, true, sc.mapGenesisDocumentFn, nil); err != nil {
 		return err
 	}
 

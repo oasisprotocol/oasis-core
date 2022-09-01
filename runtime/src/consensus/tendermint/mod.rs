@@ -28,6 +28,21 @@ pub fn decode_light_block(light_block: LightBlock) -> Result<LightBlockMeta> {
     LightBlockMeta::decode_vec(&light_block.meta).map_err(|e| anyhow!("{}", e))
 }
 
+/// Encode the light block metadata to a Tendermint light block.
+pub fn encode_light_block(light_block_meta: &LightBlockMeta) -> Result<LightBlock> {
+    let height = u64::from(
+        light_block_meta
+            .signed_header
+            .as_ref()
+            .ok_or_else(|| anyhow!("signed header should be present"))?
+            .header
+            .height,
+    );
+    let meta = LightBlockMeta::encode_vec(light_block_meta).map_err(|e| anyhow!("{}", e))?;
+
+    Ok(LightBlock { height, meta })
+}
+
 /// Extract state root from the given signed block header.
 ///
 /// # Panics
