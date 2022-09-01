@@ -88,7 +88,14 @@ pub struct SignedInitResponse {
 /// Key manager replication request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct ReplicateRequest {
-    // Empty.
+    /// Latest trust root height.
+    pub height: Option<u64>,
+}
+
+impl ReplicateRequest {
+    pub fn new(height: Option<u64>) -> Self {
+        Self { height }
+    }
 }
 
 /// Key manager replication response.
@@ -103,6 +110,8 @@ pub struct ReplicateResponse {
 /// from the master secret. They can be generated at any time.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct LongTermKeyRequest {
+    /// Latest trust root height.
+    pub height: Option<u64>,
     /// Runtime ID.
     pub runtime_id: Namespace,
     /// Key pair ID.
@@ -110,8 +119,9 @@ pub struct LongTermKeyRequest {
 }
 
 impl LongTermKeyRequest {
-    pub fn new(runtime_id: Namespace, key_pair_id: KeyPairId) -> Self {
+    pub fn new(height: Option<u64>, runtime_id: Namespace, key_pair_id: KeyPairId) -> Self {
         Self {
+            height,
             runtime_id,
             key_pair_id,
         }
@@ -125,6 +135,8 @@ impl LongTermKeyRequest {
 /// for the past few epochs relative to the consensus layer state.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct EphemeralKeyRequest {
+    /// Latest trust root height.
+    pub height: Option<u64>,
     /// Runtime ID.
     pub runtime_id: Namespace,
     /// Key pair ID.
@@ -134,8 +146,14 @@ pub struct EphemeralKeyRequest {
 }
 
 impl EphemeralKeyRequest {
-    pub fn new(runtime_id: Namespace, key_pair_id: KeyPairId, epoch: EpochTime) -> Self {
+    pub fn new(
+        height: Option<u64>,
+        runtime_id: Namespace,
+        key_pair_id: KeyPairId,
+        epoch: EpochTime,
+    ) -> Self {
         Self {
+            height,
             runtime_id,
             key_pair_id,
             epoch,
@@ -225,6 +243,8 @@ pub enum KeyManagerError {
     NotAuthorized,
     #[error("invalid epoch")]
     InvalidEpoch,
+    #[error("height is not fresh")]
+    HeightNotFresh,
     #[error("key manager is not initialized")]
     NotInitialized,
     #[error("key manager state corrupted")]
