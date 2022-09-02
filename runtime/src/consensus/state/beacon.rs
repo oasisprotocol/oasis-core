@@ -48,13 +48,18 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
     /// Returns the future epoch number.
     pub fn future_epoch(&self, ctx: Context) -> Result<EpochTime, StateError> {
+        self.future_epoch_state(ctx).map(|es| es.epoch)
+    }
+
+    /// Returns the future epoch state.
+    pub fn future_epoch_state(&self, ctx: Context) -> Result<EpochTimeState, StateError> {
         match self.mkvs.get(ctx, &FutureEpochKeyFmt(()).encode()) {
             Ok(Some(b)) => {
                 let state: EpochTimeState =
                     cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))?;
-                Ok(state.epoch)
+                Ok(state)
             }
-            Ok(None) => Ok(EpochTime::default()),
+            Ok(None) => Ok(EpochTimeState::default()),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
         }
     }
@@ -114,5 +119,12 @@ mod test {
             .future_epoch(Context::create_child(&ctx))
             .expect("future epoch query should work");
         assert_eq!(43u64, epoch, "expected future epoch should match");
+
+        // Test future epoch state.
+        let epoch_state = beacon_state
+            .future_epoch_state(Context::create_child(&ctx))
+            .expect("future epoch state query should work");
+        assert_eq!(43u64, epoch_state.epoch, "expected epoch should match");
+        assert_eq!(15i64, epoch_state.height, "expected height should match");
     }
 }
