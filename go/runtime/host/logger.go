@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/go-kit/log"
+
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
@@ -77,7 +79,8 @@ func (w RuntimeLogWrapper) processLogLine(line []byte) {
 	// Interpret line as JSON.
 	var m map[string]interface{}
 	if err := json.Unmarshal(line, &m); err != nil {
-		w.logger.Warn("non-JSON log line from runtime", "log_line", string(line), "err", err)
+		// If not valid JSON, forward line as normal log message with local timestamp.
+		w.rtLogger("runtime").With("ts", log.DefaultTimestampUTC).Warn(string(line))
 		return
 	}
 
