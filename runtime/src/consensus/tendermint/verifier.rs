@@ -368,7 +368,13 @@ impl Verifier {
             return Ok(None);
         };
 
-        verify_state_freshness(state, &self.trust_root, rak, &self.runtime_version, node_id)
+        verify_state_freshness(
+            state,
+            rak,
+            &self.trust_root.runtime_id,
+            &self.runtime_version,
+            node_id,
+        )
     }
 
     fn verify(

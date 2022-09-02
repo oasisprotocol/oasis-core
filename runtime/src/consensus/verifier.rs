@@ -200,8 +200,8 @@ pub struct TrustedState {
 /// passed in order to optimize discovery for subsequent runs.
 pub fn verify_state_freshness(
     state: &ConsensusState,
-    trust_root: &TrustRoot,
     rak: &RAK,
+    runtime_id: &Namespace,
     version: &Version,
     node_id: &Option<PublicKey>,
 ) -> Result<Option<PublicKey>, Error> {
@@ -224,7 +224,7 @@ pub fn verify_state_freshness(
                     node_id,
                 ))
             })?;
-            if !node.has_tee(rak, &trust_root.runtime_id, version) {
+            if !node.has_tee(rak, runtime_id, version) {
                 return Err(Error::VerificationFailed(anyhow!(
                     "own RAK not found in registry state"
                 )));
@@ -242,7 +242,7 @@ pub fn verify_state_freshness(
             })?;
             let mut found_node: Option<PublicKey> = None;
             for node in nodes {
-                if node.has_tee(rak, &trust_root.runtime_id, version) {
+                if node.has_tee(rak, runtime_id, version) {
                     found_node = Some(node.id);
                     break;
                 }
