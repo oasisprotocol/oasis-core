@@ -164,7 +164,7 @@ type PrettyTransaction struct {
 	Body   interface{} `json:"body,omitempty"`
 }
 
-// SignedTransaction is a signed transaction.
+// SignedTransaction is a signed consensus transaction.
 type SignedTransaction struct {
 	signature.Signed
 }

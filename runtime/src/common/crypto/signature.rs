@@ -178,6 +178,16 @@ impl Signature {
     }
 }
 
+/// Blob signed with one public key.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct Signed {
+    /// Signed blob.
+    #[cbor(rename = "untrusted_raw_value")]
+    pub blob: Vec<u8>,
+    /// Signature over the blob.
+    pub signature: SignatureBundle,
+}
+
 /// Blob signed by multiple public keys.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct MultiSigned {
