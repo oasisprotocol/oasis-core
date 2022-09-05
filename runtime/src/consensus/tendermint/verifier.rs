@@ -10,10 +10,13 @@ use std::{
 use anyhow::anyhow;
 use crossbeam::channel;
 use io_context::Context;
+use rand::{rngs::OsRng, Rng};
 use sgx_isa::Keypolicy;
+use sha2::{Digest, Sha256};
 use slog::{error, info};
 use tendermint::{
     block::{CommitSig, Height},
+    merkle::HASH_SIZE,
     vote::{SignedVote, ValidatorIndex, Vote},
 };
 use tendermint_light_client::{
@@ -54,6 +57,7 @@ use crate::{
         tendermint::{
             decode_light_block, state_root_from_header, LightBlockMeta, TENDERMINT_CONTEXT,
         },
+        transaction::{SignedTransaction, Transaction, SIGNATURE_CONTEXT},
         verifier::{self, verify_state_freshness, Error, TrustRoot, TrustedState},
         Event, LightBlock, HEIGHT_LATEST,
     },
@@ -62,7 +66,7 @@ use crate::{
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
 };
 
-use super::{encode_light_block, store::LruStore};
+use super::{encode_light_block, merkle::Proof, store::LruStore};
 
 /// Maximum number of times to retry initialization.
 const MAX_INITIALIZATION_RETRIES: usize = 3;
@@ -75,6 +79,11 @@ const TRUSTED_STATE_STORAGE_KEY_PREFIX: &str = "tendermint.verifier.trusted_stat
 const TRUSTED_STATE_CONTEXT: &[u8] = b"oasis-core/verifier: trusted state";
 /// Trusted state save interval (in consensus blocks).
 const TRUSTED_STATE_SAVE_INTERVAL: u64 = 128;
+/// Size of nonce for prove freshness request.
+const NONCE_SIZE: usize = 32;
+
+/// Nonce for prove freshness request.
+type Nonce = [u8; NONCE_SIZE];
 
 /// A verifier which performs no verification.
 pub struct NopVerifier {
@@ -357,7 +366,8 @@ impl Verifier {
         Ok(untrusted_block)
     }
 
-    fn verify_freshness(
+    /// Verify state freshness using RAK and nonces.
+    fn verify_freshness_with_rak(
         &self,
         state: &ConsensusState,
         node_id: &Option<PublicKey>,
@@ -375,6 +385,99 @@ impl Verifier {
             &self.runtime_version,
             node_id,
         )
+    }
+
+    /// Verify state freshness using prove freshness transaction.
+    ///
+    /// Verification is done in three steps. In the first one, the verifier selects a unique nonce
+    /// and sends it to the host. The second step is done by the host, who prepares, signs and
+    /// submits a prove freshness transaction using the received nonce. Once transaction is included
+    /// in a block, the host replies with block's height, transaction details and a Merkle proof
+    /// that the transaction was included in the block. In the final step, the verifier verifies
+    /// the proof and accepts state as fresh iff verification succeeds.
+    fn verify_freshness_with_proof(&self, instance: &mut Instance) -> Result<(), Error> {
+        info!(
+            self.logger,
+            "Verifying state freshness using prove freshness transaction"
+        );
+
+        // Generate a random nonce for prove freshness transaction.
+        let mut rng = OsRng {};
+        let mut nonce = [0u8; NONCE_SIZE];
+        rng.fill(&mut nonce);
+
+        // Ask host for freshness proof.
+        let io = Io::new(&self.protocol);
+        let (signed_tx, height, merkle_proof) =
+            io.fetch_freshness_proof(&nonce).map_err(|err| {
+                Error::FreshnessVerificationFailed(anyhow!(
+                    "failed to fetch freshness proof: {}",
+                    err
+                ))
+            })?;
+
+        // Peek into the transaction to verify the nonce and the signature. No need to verify
+        // the name of the method though.
+        let tx: Transaction = cbor::from_slice(signed_tx.blob.as_slice()).map_err(|err| {
+            Error::FreshnessVerificationFailed(anyhow!(
+                "failed to decode prove freshness transaction: {}",
+                err
+            ))
+        })?;
+        let tx_nonce: Nonce = cbor::from_value(tx.body).map_err(|err| {
+            Error::FreshnessVerificationFailed(anyhow!("failed to decode nonce: {}", err))
+        })?;
+        match nonce.cmp(&tx_nonce) {
+            std::cmp::Ordering::Equal => (),
+            _ => return Err(Error::FreshnessVerificationFailed(anyhow!("invalid nonce"))),
+        }
+
+        let chain_context = self.protocol.get_host_info().consensus_chain_context;
+        let mut context = SIGNATURE_CONTEXT.to_vec();
+        context.extend(chain_context.as_bytes());
+        if !signed_tx.signature.verify(&context, &signed_tx.blob) {
+            return Err(Error::FreshnessVerificationFailed(anyhow!(
+                "failed to verify the signature"
+            )));
+        }
+
+        // Fetch the block in which the transaction was published.
+        let block = instance
+            .light_client
+            .verify_to_target(height.try_into().unwrap(), &mut instance.state)
+            .map_err(|err| {
+                Error::FreshnessVerificationFailed(anyhow!("failed to fetch the block: {}", err))
+            })?;
+
+        let header = block.signed_header.header;
+        if header.height.value() != height {
+            return Err(Error::VerificationFailed(anyhow!("invalid block")));
+        }
+
+        // Compute hash of the transaction and verify the proof.
+        let digest = Sha256::digest(&cbor::to_vec(signed_tx));
+        let mut tx_hash = [0u8; HASH_SIZE];
+        tx_hash.copy_from_slice(&digest);
+
+        let root_hash = header
+            .data_hash
+            .ok_or_else(|| Error::FreshnessVerificationFailed(anyhow!("root hash not found")))?;
+        let root_hash = match root_hash {
+            TMHash::Sha256(hash) => hash,
+            TMHash::None => {
+                return Err(Error::FreshnessVerificationFailed(anyhow!(
+                    "root hash not found"
+                )));
+            }
+        };
+
+        merkle_proof.verify(root_hash, tx_hash).map_err(|err| {
+            Error::FreshnessVerificationFailed(anyhow!("failed to verify the proof: {}", err))
+        })?;
+
+        info!(self.logger, "State freshness successfully verified");
+
+        Ok(())
     }
 
     fn verify(
@@ -478,7 +581,7 @@ impl Verifier {
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            cache.node_id = self.verify_freshness(&state, &cache.node_id)?;
+            cache.node_id = self.verify_freshness_with_rak(&state, &cache.node_id)?;
         }
 
         // Cache verified runtime header.
@@ -853,6 +956,13 @@ impl Verifier {
             "latest_height" => cache.latest_known_height(),
         );
 
+        // Verify state freshness with freshness proof. This step is required only for clients
+        // as executors and key managers verify freshness regularly using node registration
+        // (RAK with random nonces).
+        if self.protocol.get_config().freshness_proofs {
+            self.verify_freshness_with_proof(&mut instance)?;
+        };
+
         // Start the command processing loop.
         loop {
             let command = self.command_receiver.recv().map_err(|_| Error::Internal)?;
@@ -1204,6 +1314,33 @@ impl Io {
         };
 
         Ok(height)
+    }
+
+    fn fetch_freshness_proof(
+        &self,
+        nonce: &Nonce,
+    ) -> Result<(SignedTransaction, u64, Proof), IoError> {
+        let result = self
+            .protocol
+            .call_host(
+                Context::background(),
+                Body::HostProveFreshnessRequest {
+                    blob: nonce.to_vec(),
+                },
+            )
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
+
+        // Extract proof from response.
+        let (signed_tx, proof) = match result {
+            Body::HostProveFreshnessResponse { signed_tx, proof } => (signed_tx, proof),
+            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
+        };
+
+        // Decode raw proof as a Tendermint Merkle proof of inclusion.
+        let merkle_proof = cbor::from_slice(&proof.raw_proof)
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
+
+        Ok((signed_tx, proof.height, merkle_proof))
     }
 }
 

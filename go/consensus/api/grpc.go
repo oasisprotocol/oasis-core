@@ -26,6 +26,8 @@ var (
 
 	// methodSubmitTx is the SubmitTx method.
 	methodSubmitTx = serviceName.NewMethod("SubmitTx", transaction.SignedTransaction{})
+	// methodSubmitTxWithProof is the SubmitTxWithProof method.
+	methodSubmitTxWithProof = serviceName.NewMethod("SubmitTxWithProof", transaction.SignedTransaction{})
 	// methodStateToGenesis is the StateToGenesis method.
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodEstimateGas is the EstimateGas method.
@@ -77,6 +79,10 @@ var (
 			{
 				MethodName: methodSubmitTx.ShortName(),
 				Handler:    handlerSubmitTx,
+			},
+			{
+				MethodName: methodSubmitTxWithProof.ShortName(),
+				Handler:    handlerSubmitTxWithProof,
 			},
 			{
 				MethodName: methodStateToGenesis.ShortName(),
@@ -192,6 +198,29 @@ func handlerSubmitTx(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return nil, srv.(ClientBackend).SubmitTx(ctx, req.(*transaction.SignedTransaction))
+	}
+	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerSubmitTxWithProof(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	rq := new(transaction.SignedTransaction)
+	if err := dec(rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientBackend).SubmitTxWithProof(ctx, rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodSubmitTxWithProof.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).SubmitTxWithProof(ctx, req.(*transaction.SignedTransaction))
 	}
 	return interceptor(ctx, rq, info, handler)
 }
@@ -737,6 +766,14 @@ type consensusClient struct {
 
 func (c *consensusClient) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
 	return c.conn.Invoke(ctx, methodSubmitTx.FullName(), tx, nil)
+}
+
+func (c *consensusClient) SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error) {
+	var proof transaction.Proof
+	if err := c.conn.Invoke(ctx, methodSubmitTxWithProof.FullName(), tx, &proof); err != nil {
+		return nil, err
+	}
+	return &proof, nil
 }
 
 func (c *consensusClient) StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error) {

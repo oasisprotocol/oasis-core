@@ -202,6 +202,11 @@ func (srv *seedService) SubmitTx(ctx context.Context, tx *transaction.SignedTran
 }
 
 // Implements consensus.Backend.
+func (srv *seedService) SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error) {
+	return nil, consensus.ErrUnsupported
+}
+
+// Implements consensus.Backend.
 func (srv *seedService) StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error) {
 	return nil, consensus.ErrUnsupported
 }

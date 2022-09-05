@@ -17,6 +17,7 @@ use crate::{
         self,
         beacon::EpochTime,
         roothash::{self, Block, ComputeResultsHeader, Header},
+        transaction::{Proof, SignedTransaction},
         LightBlock,
     },
     enclave_rpc,
@@ -244,6 +245,13 @@ pub enum Body {
     HostFetchGenesisHeightRequest {},
     HostFetchGenesisHeightResponse {
         height: u64,
+    },
+    HostProveFreshnessRequest {
+        blob: Vec<u8>,
+    },
+    HostProveFreshnessResponse {
+        signed_tx: SignedTransaction,
+        proof: Proof,
     },
 }
 

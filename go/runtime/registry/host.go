@@ -10,6 +10,7 @@ import (
 	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -153,6 +154,9 @@ type RuntimeHostHandlerEnvironment interface {
 
 	// GetTxPool returns the transaction pool for this runtime.
 	GetTxPool(ctx context.Context) (txpool.TransactionPool, error)
+
+	// GetNodeIdentity returns the identity of a node running this runtime.
+	GetNodeIdentity(ctx context.Context) (*identity.Identity, error)
 }
 
 // RuntimeHostHandler is a runtime host handler suitable for compute runtimes. It provides the
@@ -330,6 +334,26 @@ func (h *runtimeHostHandler) handleHostFetchTxBatch(
 	return &protocol.HostFetchTxBatchResponse{Batch: raw}, nil
 }
 
+func (h *runtimeHostHandler) handleHostProveFreshness(
+	ctx context.Context,
+	rq *protocol.HostProveFreshnessRequest,
+) (*protocol.HostProveFreshnessResponse, error) {
+	identity, err := h.env.GetNodeIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tx := registry.NewProveFreshnessTx(0, nil, rq.Blob)
+	sigTx, proof, err := consensus.SignAndSubmitTxWithProof(ctx, h.consensus, identity.NodeSigner, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &protocol.HostProveFreshnessResponse{
+		SignedTx: sigTx,
+		Proof:    proof,
+	}, nil
+}
+
 // Implements protocol.Handler.
 func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*protocol.Body, error) {
 	var (
@@ -362,6 +386,9 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	case rq.HostFetchTxBatchRequest != nil:
 		// Transaction pool.
 		rsp.HostFetchTxBatchResponse, err = h.handleHostFetchTxBatch(ctx, rq.HostFetchTxBatchRequest)
+	case rq.HostProveFreshnessRequest != nil:
+		// Prove freshness.
+		rsp.HostProveFreshnessResponse, err = h.handleHostProveFreshness(ctx, rq.HostProveFreshnessRequest)
 	default:
 		err = errMethodNotSupported
 	}

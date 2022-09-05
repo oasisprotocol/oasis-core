@@ -345,3 +345,12 @@ func NewMethodName(module, method string, bodyType interface{}) MethodName {
 
 	return MethodName(name)
 }
+
+// Proof is a proof of transaction inclusion in a block.
+type Proof struct {
+	// Height is the block height at which the transaction was published.
+	Height int64 `json:"height"`
+
+	// RawProof is the actual raw proof.
+	RawProof []byte `json:"raw_proof"`
+}

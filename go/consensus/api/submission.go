@@ -64,6 +64,13 @@ type SubmissionManager interface {
 	//
 	// It also automatically handles retries in case the nonce was incorrectly estimated.
 	SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error
+
+	// SignAndSubmitTxWithProof populates the nonce and fee fields in the transaction, signs
+	// the transaction with the passed signer, submits it to consensus backend and creates
+	// a proof of inclusion.
+	//
+	// It also automatically handles retries in case the nonce was incorrectly estimated.
+	SignAndSubmitTxWithProof(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error)
 }
 
 type submissionManager struct {
@@ -124,7 +131,7 @@ func (m *submissionManager) EstimateGasAndSetFee(ctx context.Context, signer sig
 	return nil
 }
 
-func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction, withProof bool) (*transaction.SignedTransaction, *transaction.Proof, error) {
 	// Update transaction nonce.
 	var err error
 	signerAddr := staking.NewAddress(signer.Public())
@@ -134,14 +141,14 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 		if errors.Is(err, ErrNoCommittedBlocks) {
 			// No committed blocks available, retry submission.
 			m.logger.Debug("retrying transaction submission due to no committed blocks")
-			return err
+			return nil, nil, err
 		}
-		return backoff.Permanent(err)
+		return nil, nil, backoff.Permanent(err)
 	}
 
 	// Estimate the fee.
 	if err = m.EstimateGasAndSetFee(ctx, signer, tx); err != nil {
-		return fmt.Errorf("failed to estimate fee: %w", err)
+		return nil, nil, fmt.Errorf("failed to estimate fee: %w", err)
 	}
 
 	// Sign the transaction.
@@ -150,39 +157,68 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 		m.logger.Error("failed to sign transaction",
 			"err", err,
 		)
-		return backoff.Permanent(err)
+		return nil, nil, backoff.Permanent(err)
 	}
 
-	if err = m.backend.SubmitTx(ctx, sigTx); err != nil {
+	var proof *transaction.Proof
+	if withProof {
+		proof, err = m.backend.SubmitTxWithProof(ctx, sigTx)
+	} else {
+		err = m.backend.SubmitTx(ctx, sigTx)
+	}
+	if err != nil {
 		switch {
 		case errors.Is(err, transaction.ErrUpgradePending):
 			// Pending upgrade, retry submission.
 			m.logger.Debug("retrying transaction submission due to pending upgrade")
-			return err
+			return nil, nil, err
 		case errors.Is(err, transaction.ErrInvalidNonce):
 			// Invalid nonce, retry submission.
 			m.logger.Debug("retrying transaction submission due to invalid nonce",
 				"account_address", signerAddr,
 				"nonce", tx.Nonce,
 			)
-			return err
+			return nil, nil, err
 		default:
-			return backoff.Permanent(err)
+			return nil, nil, backoff.Permanent(err)
 		}
 	}
 
-	return nil
+	return sigTx, proof, nil
 }
 
-// Implements SubmissionManager.
-func (m *submissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+func (m *submissionManager) signAndSubmitTxWithRetry(ctx context.Context, signer signature.Signer, tx *transaction.Transaction, withProof bool) (*transaction.SignedTransaction, *transaction.Proof, error) {
 	sched := cmnBackoff.NewExponentialBackOff()
 	sched.MaxInterval = maxSubmissionRetryInterval
 	sched.MaxElapsedTime = maxSubmissionRetryElapsedTime
 
-	return backoff.Retry(func() error {
-		return m.signAndSubmitTx(ctx, signer, tx)
-	}, backoff.WithContext(sched, ctx))
+	var (
+		sigTx *transaction.SignedTransaction
+		proof *transaction.Proof
+	)
+
+	f := func() error {
+		var err error
+		sigTx, proof, err = m.signAndSubmitTx(ctx, signer, tx, withProof)
+		return err
+	}
+
+	if err := backoff.Retry(f, backoff.WithContext(sched, ctx)); err != nil {
+		return nil, nil, err
+	}
+
+	return sigTx, proof, nil
+}
+
+// Implements SubmissionManager.
+func (m *submissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+	_, _, err := m.signAndSubmitTxWithRetry(ctx, signer, tx, false)
+	return err
+}
+
+// Implements SubmissionManager.
+func (m *submissionManager) SignAndSubmitTxWithProof(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
+	return m.signAndSubmitTxWithRetry(ctx, signer, tx, true)
 }
 
 // NewSubmissionManager creates a new transaction submission manager.
@@ -209,6 +245,18 @@ func SignAndSubmitTx(ctx context.Context, backend Backend, signer signature.Sign
 	return backend.SubmissionManager().SignAndSubmitTx(ctx, signer, tx)
 }
 
+// SignAndSubmitTxWithProof is a helper function that signs and submits
+// a transaction to the consensus backend and creates a proof of inclusion.
+//
+// If the nonce is set to zero, it will be automatically filled in based on the
+// current consensus state.
+//
+// If the fee is set to nil, it will be automatically filled in based on gas
+// estimation and current gas price discovery.
+func SignAndSubmitTxWithProof(ctx context.Context, backend Backend, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
+	return backend.SubmissionManager().SignAndSubmitTxWithProof(ctx, signer, tx)
+}
+
 // NoOpSubmissionManager implements a submission manager that doesn't support submitting transactions.
 type NoOpSubmissionManager struct{}
 
@@ -225,4 +273,9 @@ func (m *NoOpSubmissionManager) EstimateGasAndSetFee(ctx context.Context, signer
 // SignAndSubmitTx implements SubmissionManager.
 func (m *NoOpSubmissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
 	return transaction.ErrMethodNotSupported
+}
+
+// SignAndSubmitTxWithProof implements SubmissionManager.
+func (m *NoOpSubmissionManager) SignAndSubmitTxWithProof(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
+	return nil, nil, transaction.ErrMethodNotSupported
 }

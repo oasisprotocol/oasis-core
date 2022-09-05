@@ -155,6 +155,10 @@ type ClientBackend interface {
 	// in a block. Use SubmitTxNoWait if you only need to broadcast the transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
 
+	// SubmitTxWithProof submits a signed consensus transaction, waits for the transaction to be
+	// included in a block and returns a proof of inclusion.
+	SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error)
+
 	// StateToGenesis returns the genesis state at the specified block height.
 	StateToGenesis(ctx context.Context, height int64) (*genesis.Document, error)
 

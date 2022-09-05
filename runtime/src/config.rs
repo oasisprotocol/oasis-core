@@ -15,6 +15,8 @@ pub struct Config {
     /// Whether storage state should be persisted between transaction check invocations. The state
     /// is invalidated on the next round.
     pub persist_check_tx_state: bool,
+    /// Whether TEE freshness is verified with freshness proofs.
+    pub freshness_proofs: bool,
 }
 
 /// Storage-related configuration.

@@ -35,3 +35,12 @@ pub type Gas = u64;
 
 /// Method name.
 pub type MethodName = String;
+
+/// Proof of transaction inclusion in a block.
+#[derive(Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct Proof {
+    /// Block height at which the transaction was published.
+    pub height: u64,
+    /// Actual raw proof.
+    pub raw_proof: Vec<u8>,
+}

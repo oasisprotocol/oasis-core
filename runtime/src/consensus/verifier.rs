@@ -31,6 +31,9 @@ pub enum Error {
     #[error("consensus chain context transition failed: {0}")]
     ChainContextTransitionFailed(#[source] anyhow::Error),
 
+    #[error("freshness verification: {0}")]
+    FreshnessVerificationFailed(#[source] anyhow::Error),
+
     #[error("internal consensus verifier error")]
     Internal,
 }
@@ -42,7 +45,8 @@ impl Error {
             Error::VerificationFailed(_) => 2,
             Error::TrustedStateLoadingFailed => 3,
             Error::ChainContextTransitionFailed(_) => 4,
-            Error::Internal => 5,
+            Error::FreshnessVerificationFailed(_) => 5,
+            Error::Internal => 6,
         }
     }
 }
