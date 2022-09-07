@@ -57,7 +57,7 @@ the parameter values that are used for the Oasis Network, see:
 
 <!-- markdownlint-disable line-length -->
 [Genesis File Overview]:
-  https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/genesis-doc.md
+  https://github.com/oasisprotocol/docs/blob/main/docs/node/genesis-doc.md
 <!-- markdownlint-enable line-length -->
 
 ### Canonical Form
