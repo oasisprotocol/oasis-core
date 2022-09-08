@@ -2,6 +2,7 @@
 
 pub mod address;
 pub mod beacon;
+pub mod keymanager;
 pub mod registry;
 pub mod roothash;
 pub mod scheduler;

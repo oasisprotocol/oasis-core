@@ -192,7 +192,7 @@ pub struct MultiSigned {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct SignatureBundle {
     /// Public key that produced the signature.
-    pub public_key: Option<PublicKey>,
+    pub public_key: PublicKey,
     /// Actual signature.
     pub signature: Signature,
 }

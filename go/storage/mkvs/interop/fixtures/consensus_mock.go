@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	beaconInterop "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state/interop"
+	keymanagerInterop "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state/interop"
 	registryInterop "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state/interop"
 	stakingInterop "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state/interop"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -40,6 +41,9 @@ func (c *consensusMock) Populate(ctx context.Context, ndb db.NodeDB) (*node.Root
 	}
 	if err = registryInterop.InitializeTestRegistryState(ctx, mkvsTree); err != nil {
 		return nil, fmt.Errorf("consensus-mock: failed to initialize registry state: %w", err)
+	}
+	if err = keymanagerInterop.InitializeTestKeyManagerState(ctx, mkvsTree); err != nil {
+		return nil, fmt.Errorf("consensus-mock: failed to initialize key manager state: %w", err)
 	}
 	_, testRoot.Hash, err = mkvsTree.Commit(ctx, common.Namespace{}, 1)
 	if err != nil {
