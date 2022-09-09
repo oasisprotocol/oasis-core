@@ -497,14 +497,11 @@ impl Dispatcher {
         let txn_dispatcher = txn_dispatcher.clone();
 
         tokio::task::spawn_blocking(move || {
-            // Verify consensus state and runtime state root integrity before executing the query.
-            let consensus_state = state.consensus_verifier.verify_for_query(
-                state.consensus_block,
-                state.header.clone(),
-                state.epoch,
-            )?;
-            // Ensure the runtime is still ready to process requests.
-            protocol.ensure_initialized()?;
+            // For queries we don't do any consensus layer integrity verification by default and it
+            // is up to the runtime to decide whether this is critical on a query-by-query basis.
+            let consensus_state = state
+                .consensus_verifier
+                .unverified_state(state.consensus_block.clone())?;
 
             let cache = cache_set.query(Root {
                 namespace: state.header.namespace,
@@ -518,6 +515,7 @@ impl Dispatcher {
             let txn_ctx = TxnContext::new(
                 ctx.freeze(),
                 protocol,
+                &state.consensus_block,
                 consensus_state,
                 &mut overlay,
                 &state.header,
@@ -546,7 +544,7 @@ impl Dispatcher {
         // For check-only we don't do any consensus layer integrity verification.
         let consensus_state = state
             .consensus_verifier
-            .unverified_state(state.consensus_block)?;
+            .unverified_state(state.consensus_block.clone())?;
 
         let mut cache = cache_set.check(Root {
             namespace: state.header.namespace,
@@ -559,6 +557,7 @@ impl Dispatcher {
         let txn_ctx = TxnContext::new(
             ctx.clone(),
             protocol.clone(),
+            &state.consensus_block,
             consensus_state,
             &mut overlay,
             &state.header,
@@ -594,7 +593,7 @@ impl Dispatcher {
     ) -> Result<Body, Error> {
         // Verify consensus state and runtime state root integrity before execution.
         let consensus_state = state.consensus_verifier.verify(
-            state.consensus_block,
+            state.consensus_block.clone(),
             state.header.clone(),
             state.epoch,
         )?;
@@ -614,6 +613,7 @@ impl Dispatcher {
         let txn_ctx = TxnContext::new(
             ctx.clone(),
             protocol,
+            &state.consensus_block,
             consensus_state,
             &mut overlay,
             header,

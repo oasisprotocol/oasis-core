@@ -14,6 +14,10 @@ use crate::{
 /// to process transactions.
 pub trait Dispatcher: Send + Sync {
     /// Execute the transactions in the given batch.
+    ///
+    /// # Consensus Layer State Integrity
+    ///
+    /// Before this method is invoked, consensus layer state integirty verification is performed.
     fn execute_batch(
         &self,
         ctx: Context,
@@ -25,6 +29,10 @@ pub trait Dispatcher: Send + Sync {
     ///
     /// The passed batch is an initial batch. In case the runtime needs additional items it should
     /// request them from the host.
+    ///
+    /// # Consensus Layer State Integrity
+    ///
+    /// Before this method is invoked, consensus layer state integirty verification is performed.
     fn schedule_and_execute_batch(
         &self,
         _ctx: Context,
@@ -39,6 +47,12 @@ pub trait Dispatcher: Send + Sync {
     }
 
     /// Check the transactions in the given batch for validity.
+    ///
+    /// # Consensus Layer State Integrity
+    ///
+    /// No consensus layer state integrity verification is performed for queries by default. The
+    /// runtime dispatcher implementation should perform integrity verification if needed on a
+    /// query-by-query basis.
     fn check_batch(
         &self,
         ctx: Context,
@@ -56,6 +70,12 @@ pub trait Dispatcher: Send + Sync {
     }
 
     /// Process a query.
+    ///
+    /// # Consensus Layer State Integrity
+    ///
+    /// No consensus layer state integrity verification is performed for queries by default. The
+    /// runtime dispatcher implementation should perform integrity verification if needed on a
+    /// query-by-query basis.
     fn query(&self, _ctx: Context, _method: &str, _args: Vec<u8>) -> Result<Vec<u8>, RuntimeError> {
         // Default implementation returns an error.
         Err(RuntimeError::new(

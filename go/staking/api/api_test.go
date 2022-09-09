@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 )
@@ -504,5 +505,153 @@ func TestReclaimEscrowResultsSerialization(t *testing.T) {
 		err := cbor.Unmarshal(enc, &dec)
 		require.NoError(err, "Unmarshal")
 		require.EqualValues(tc.rr, dec, "ReclaimEscrow serialization should round-trip")
+	}
+}
+
+func TestEventsSerialization(t *testing.T) {
+	require := require.New(t)
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr1 := NewAddress(pk1)
+	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr2 := NewAddress(pk2)
+	var txHash hash.Hash
+	txHash.Empty()
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/staking.rs.
+	for _, tc := range []struct {
+		ev             Event
+		expectedBase64 string
+	}{
+		{Event{}, "oWd0eF9oYXNoWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="},
+		{Event{Height: 42}, "omZoZWlnaHQYKmd0eF9oYXNoWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="},
+		{Event{Height: 42, TxHash: txHash}, "omZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg=="},
+
+		// Transfer.
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				Transfer: &TransferEvent{
+					From:   addr1,
+					To:     addr2,
+					Amount: mustInitQuantity(t, 100),
+				},
+			},
+			"o2ZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWemh0cmFuc2ZlcqNidG9VALkSOXiV5kcMUfq+zJ3cg/cK7YahZGZyb21VACByFDSJP2FsCYFI4s+fmePigm4TZmFtb3VudEFk",
+		},
+
+		// Burn.
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				Burn: &BurnEvent{
+					Owner:  addr1,
+					Amount: mustInitQuantity(t, 100),
+				},
+			},
+			"o2RidXJuomVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNmYW1vdW50QWRmaGVpZ2h0GCpndHhfaGFzaFggxnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
+		},
+
+		// Escrow.
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				Escrow: &EscrowEvent{
+					Add: &AddEscrowEvent{
+						Owner:     addr1,
+						Escrow:    addr2,
+						Amount:    mustInitQuantity(t, 100),
+						NewShares: mustInitQuantity(t, 50),
+					},
+				},
+			},
+			"o2Zlc2Nyb3ehY2FkZKRlb3duZXJVACByFDSJP2FsCYFI4s+fmePigm4TZmFtb3VudEFkZmVzY3Jvd1UAuRI5eJXmRwxR+r7MndyD9wrthqFqbmV3X3NoYXJlc0EyZmhlaWdodBgqZ3R4X2hhc2hYIMZyuNHvVu0oq4fDYixRFAab3TrXuPlzdJjQwB7O8JZ6",
+		},
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				Escrow: &EscrowEvent{
+					Take: &TakeEscrowEvent{
+						Owner:  addr1,
+						Amount: mustInitQuantity(t, 100),
+					},
+				},
+			},
+			"o2Zlc2Nyb3ehZHRha2WiZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZGZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg==",
+		},
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				Escrow: &EscrowEvent{
+					DebondingStart: &DebondingStartEscrowEvent{
+						Owner:           addr1,
+						Escrow:          addr2,
+						Amount:          mustInitQuantity(t, 100),
+						ActiveShares:    mustInitQuantity(t, 50),
+						DebondingShares: mustInitQuantity(t, 25),
+						DebondEndTime:   42,
+					},
+				},
+			},
+			"o2Zlc2Nyb3ehb2RlYm9uZGluZ19zdGFydKZlb3duZXJVACByFDSJP2FsCYFI4s+fmePigm4TZmFtb3VudEFkZmVzY3Jvd1UAuRI5eJXmRwxR+r7MndyD9wrthqFtYWN0aXZlX3NoYXJlc0Eyb2RlYm9uZF9lbmRfdGltZRgqcGRlYm9uZGluZ19zaGFyZXNBGWZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg==",
+		},
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				Escrow: &EscrowEvent{
+					Reclaim: &ReclaimEscrowEvent{
+						Owner:  addr1,
+						Escrow: addr2,
+						Amount: mustInitQuantity(t, 100),
+						Shares: mustInitQuantity(t, 25),
+					},
+				},
+			},
+			"o2Zlc2Nyb3ehZ3JlY2xhaW2kZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZGZlc2Nyb3dVALkSOXiV5kcMUfq+zJ3cg/cK7YahZnNoYXJlc0EZZmhlaWdodBgqZ3R4X2hhc2hYIMZyuNHvVu0oq4fDYixRFAab3TrXuPlzdJjQwB7O8JZ6",
+		},
+
+		// Allowance change.
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				AllowanceChange: &AllowanceChangeEvent{
+					Owner:        addr1,
+					Beneficiary:  addr2,
+					Allowance:    mustInitQuantity(t, 100),
+					Negative:     false,
+					AmountChange: mustInitQuantity(t, 50),
+				},
+			},
+			"o2ZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWenBhbGxvd2FuY2VfY2hhbmdlpGVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNpYWxsb3dhbmNlQWRrYmVuZWZpY2lhcnlVALkSOXiV5kcMUfq+zJ3cg/cK7YahbWFtb3VudF9jaGFuZ2VBMg==",
+		},
+		{
+			Event{
+				Height: 42,
+				TxHash: txHash,
+				AllowanceChange: &AllowanceChangeEvent{
+					Owner:        addr1,
+					Beneficiary:  addr2,
+					Allowance:    mustInitQuantity(t, 100),
+					Negative:     true,
+					AmountChange: mustInitQuantity(t, 50),
+				},
+			},
+			"o2ZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWenBhbGxvd2FuY2VfY2hhbmdlpWVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNobmVnYXRpdmX1aWFsbG93YW5jZUFka2JlbmVmaWNpYXJ5VQC5Ejl4leZHDFH6vsyd3IP3Cu2GoW1hbW91bnRfY2hhbmdlQTI=",
+		},
+	} {
+		enc := cbor.Marshal(tc.ev)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec Event
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.ev, dec, "Event serialization should round-trip")
 	}
 }

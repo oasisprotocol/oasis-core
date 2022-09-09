@@ -19,3 +19,11 @@ pub struct LightBlock {
     pub height: u64,
     pub meta: Vec<u8>,
 }
+
+/// An event emitted by the consensus layer.
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+pub enum Event {
+    #[cbor(rename = "staking")]
+    Staking(staking::Event),
+    // TODO: Add support for other kind of events.
+}

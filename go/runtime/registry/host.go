@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -162,114 +163,208 @@ type runtimeHostHandler struct {
 	consensus consensus.Backend
 }
 
-// Implements protocol.Handler.
-func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	// RPC.
-	if body.HostRPCCallRequest != nil {
-		switch body.HostRPCCallRequest.Endpoint {
-		case runtimeKeymanager.EnclaveRPCEndpoint:
-			// Call into the remote key manager.
-			kmCli, err := h.env.GetKeyManagerClient(ctx)
-			if err != nil {
-				return nil, err
-			}
-			res, err := kmCli.CallEnclave(ctx, body.HostRPCCallRequest.Request, body.HostRPCCallRequest.PeerFeedback)
-			if err != nil {
-				return nil, err
-			}
-			return &protocol.Body{HostRPCCallResponse: &protocol.HostRPCCallResponse{
-				Response: cbor.FixSliceForSerde(res),
-			}}, nil
-		default:
-			return nil, errEndpointNotSupported
-		}
-	}
-	// Storage.
-	if body.HostStorageSyncRequest != nil {
-		rq := body.HostStorageSyncRequest
-
-		var rs syncer.ReadSyncer
-		switch rq.Endpoint {
-		case protocol.HostStorageEndpointRuntime:
-			// Runtime storage.
-			rs = h.runtime.Storage()
-		case protocol.HostStorageEndpointConsensus:
-			// Consensus state storage.
-			rs = h.consensus.State()
-		default:
-			return nil, errEndpointNotSupported
-		}
-
-		var rsp *storage.ProofResponse
-		var err error
-		switch {
-		case rq.SyncGet != nil:
-			rsp, err = rs.SyncGet(ctx, rq.SyncGet)
-		case rq.SyncGetPrefixes != nil:
-			rsp, err = rs.SyncGetPrefixes(ctx, rq.SyncGetPrefixes)
-		case rq.SyncIterate != nil:
-			rsp, err = rs.SyncIterate(ctx, rq.SyncIterate)
-		default:
-			return nil, errMethodNotSupported
-		}
+func (h *runtimeHostHandler) handleHostRPCCall(
+	ctx context.Context,
+	request *protocol.HostRPCCallRequest,
+) (*protocol.Body, error) {
+	switch request.Endpoint {
+	case runtimeKeymanager.EnclaveRPCEndpoint:
+		// Call into the remote key manager.
+		kmCli, err := h.env.GetKeyManagerClient(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		return &protocol.Body{HostStorageSyncResponse: &protocol.HostStorageSyncResponse{ProofResponse: rsp}}, nil
+		res, err := kmCli.CallEnclave(ctx, request.Request, request.PeerFeedback)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.Body{HostRPCCallResponse: &protocol.HostRPCCallResponse{
+			Response: cbor.FixSliceForSerde(res),
+		}}, nil
+	default:
+		return nil, errEndpointNotSupported
 	}
-	// Local storage.
-	if body.HostLocalStorageGetRequest != nil {
+}
+
+func (h *runtimeHostHandler) handleHostStorageSync(
+	ctx context.Context,
+	request *protocol.HostStorageSyncRequest,
+) (*protocol.Body, error) {
+	var rs syncer.ReadSyncer
+	switch request.Endpoint {
+	case protocol.HostStorageEndpointRuntime:
+		// Runtime storage.
+		rs = h.runtime.Storage()
+	case protocol.HostStorageEndpointConsensus:
+		// Consensus state storage.
+		rs = h.consensus.State()
+	default:
+		return nil, errEndpointNotSupported
+	}
+
+	var rsp *storage.ProofResponse
+	var err error
+	switch {
+	case request.SyncGet != nil:
+		rsp, err = rs.SyncGet(ctx, request.SyncGet)
+	case request.SyncGetPrefixes != nil:
+		rsp, err = rs.SyncGetPrefixes(ctx, request.SyncGetPrefixes)
+	case request.SyncIterate != nil:
+		rsp, err = rs.SyncIterate(ctx, request.SyncIterate)
+	default:
+		return nil, errMethodNotSupported
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &protocol.Body{HostStorageSyncResponse: &protocol.HostStorageSyncResponse{ProofResponse: rsp}}, nil
+}
+
+func (h *runtimeHostHandler) handleHostLocalStorage(
+	ctx context.Context,
+	body *protocol.Body,
+) (*protocol.Body, error) {
+	switch {
+	case body.HostLocalStorageGetRequest != nil:
 		value, err := h.runtime.LocalStorage().Get(body.HostLocalStorageGetRequest.Key)
 		if err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageGetResponse: &protocol.HostLocalStorageGetResponse{Value: value}}, nil
-	}
-	if body.HostLocalStorageSetRequest != nil {
+	case body.HostLocalStorageSetRequest != nil:
 		if err := h.runtime.LocalStorage().Set(body.HostLocalStorageSetRequest.Key, body.HostLocalStorageSetRequest.Value); err != nil {
 			return nil, err
 		}
 		return &protocol.Body{HostLocalStorageSetResponse: &protocol.Empty{}}, nil
+	default:
+		return nil, errMethodNotSupported
 	}
-	// Consensus light client.
-	if body.HostFetchConsensusBlockRequest != nil {
-		lb, err := h.consensus.GetLightBlock(ctx, int64(body.HostFetchConsensusBlockRequest.Height))
+}
+
+func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
+	ctx context.Context,
+	request *protocol.HostFetchConsensusBlockRequest,
+) (*protocol.Body, error) {
+	lb, err := h.consensus.GetLightBlock(ctx, int64(request.Height))
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.Body{HostFetchConsensusBlockResponse: &protocol.HostFetchConsensusBlockResponse{
+		Block: *lb,
+	}}, nil
+}
+
+func (h *runtimeHostHandler) handleHostFetchConsensusEvents(
+	ctx context.Context,
+	request *protocol.HostFetchConsensusEventsRequest,
+) (*protocol.Body, error) {
+	var evs []*consensusResults.Event
+	switch request.Kind {
+	case protocol.EventKindStaking:
+		sevs, err := h.consensus.Staking().GetEvents(ctx, int64(request.Height))
 		if err != nil {
 			return nil, err
 		}
-		return &protocol.Body{HostFetchConsensusBlockResponse: &protocol.HostFetchConsensusBlockResponse{
-			Block: *lb,
-		}}, nil
-	}
-	if body.HostFetchGenesisHeightRequest != nil {
-		doc, err := h.consensus.GetGenesisDocument(ctx)
+		evs = make([]*consensusResults.Event, 0, len(sevs))
+		for _, sev := range sevs {
+			evs = append(evs, &consensusResults.Event{Staking: sev})
+		}
+	case protocol.EventKindRegistry:
+		revs, err := h.consensus.Registry().GetEvents(ctx, int64(request.Height))
 		if err != nil {
 			return nil, err
 		}
-		return &protocol.Body{HostFetchGenesisHeightResponse: &protocol.HostFetchGenesisHeightResponse{
-			Height: uint64(doc.Height),
-		}}, nil
-	}
-	// Transaction pool.
-	if rq := body.HostFetchTxBatchRequest; rq != nil {
-		txPool, err := h.env.GetTxPool(ctx)
+		evs = make([]*consensusResults.Event, 0, len(revs))
+		for _, rev := range revs {
+			evs = append(evs, &consensusResults.Event{Registry: rev})
+		}
+	case protocol.EventKindRootHash:
+		revs, err := h.consensus.RootHash().GetEvents(ctx, int64(request.Height))
 		if err != nil {
 			return nil, err
 		}
-
-		batch := txPool.GetSchedulingExtra(rq.Offset, rq.Limit)
-		raw := make([][]byte, 0, len(batch))
-		for _, tx := range batch {
-			raw = append(raw, tx.Raw())
+		evs = make([]*consensusResults.Event, 0, len(revs))
+		for _, rev := range revs {
+			evs = append(evs, &consensusResults.Event{RootHash: rev})
 		}
+	case protocol.EventKindGovernance:
+		gevs, err := h.consensus.Governance().GetEvents(ctx, int64(request.Height))
+		if err != nil {
+			return nil, err
+		}
+		evs = make([]*consensusResults.Event, 0, len(gevs))
+		for _, gev := range gevs {
+			evs = append(evs, &consensusResults.Event{Governance: gev})
+		}
+	default:
+		return nil, errMethodNotSupported
+	}
+	return &protocol.Body{HostFetchConsensusEventsResponse: &protocol.HostFetchConsensusEventsResponse{
+		Events: evs,
+	}}, nil
+}
 
-		return &protocol.Body{HostFetchTxBatchResponse: &protocol.HostFetchTxBatchResponse{
-			Batch: raw,
-		}}, nil
+func (h *runtimeHostHandler) handleHostFetchGenesisHeight(
+	ctx context.Context,
+	request *protocol.HostFetchGenesisHeightRequest,
+) (*protocol.Body, error) {
+	doc, err := h.consensus.GetGenesisDocument(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.Body{HostFetchGenesisHeightResponse: &protocol.HostFetchGenesisHeightResponse{
+		Height: uint64(doc.Height),
+	}}, nil
+}
+
+func (h *runtimeHostHandler) handleHostFetchTxBatch(
+	ctx context.Context,
+	request *protocol.HostFetchTxBatchRequest,
+) (*protocol.Body, error) {
+	txPool, err := h.env.GetTxPool(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, errMethodNotSupported
+	batch := txPool.GetSchedulingExtra(request.Offset, request.Limit)
+	raw := make([][]byte, 0, len(batch))
+	for _, tx := range batch {
+		raw = append(raw, tx.Raw())
+	}
+
+	return &protocol.Body{HostFetchTxBatchResponse: &protocol.HostFetchTxBatchResponse{
+		Batch: raw,
+	}}, nil
+}
+
+// Implements protocol.Handler.
+func (h *runtimeHostHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+	switch {
+	case body.HostRPCCallRequest != nil:
+		// RPC.
+		return h.handleHostRPCCall(ctx, body.HostRPCCallRequest)
+	case body.HostStorageSyncRequest != nil:
+		// Storage.
+		return h.handleHostStorageSync(ctx, body.HostStorageSyncRequest)
+	case body.HostLocalStorageGetRequest != nil, body.HostLocalStorageSetRequest != nil:
+		// Local storage.
+		return h.handleHostLocalStorage(ctx, body)
+	case body.HostFetchConsensusBlockRequest != nil:
+		// Consensus light client.
+		return h.handleHostFetchConsensusBlock(ctx, body.HostFetchConsensusBlockRequest)
+	case body.HostFetchConsensusEventsRequest != nil:
+		// Consensus events.
+		return h.handleHostFetchConsensusEvents(ctx, body.HostFetchConsensusEventsRequest)
+	case body.HostFetchGenesisHeightRequest != nil:
+		// Consensus genesis height.
+		return h.handleHostFetchGenesisHeight(ctx, body.HostFetchGenesisHeightRequest)
+	case body.HostFetchTxBatchRequest != nil:
+		// Transaction pool.
+		return h.handleHostFetchTxBatch(ctx, body.HostFetchTxBatchRequest)
+	default:
+		return nil, errMethodNotSupported
+	}
 }
 
 // runtimeHostNotifier is a runtime host notifier suitable for compute runtimes. It handles things

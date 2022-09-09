@@ -55,11 +55,11 @@ use crate::{
             decode_light_block, state_root_from_header, LightBlockMeta, TENDERMINT_CONTEXT,
         },
         verifier::{self, verify_state_freshness, Error, TrustRoot, TrustedState},
-        LightBlock, HEIGHT_LATEST,
+        Event, LightBlock, HEIGHT_LATEST,
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
     storage::KeyValue,
-    types::Body,
+    types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
 };
 
 use super::{encode_light_block, store::LruStore};
@@ -133,6 +133,7 @@ impl verifier::Verifier for NopVerifier {
         let state_root = untrusted_block.get_state_root();
         Ok(ConsensusState::from_protocol(
             self.protocol.clone(),
+            state_root.version + 1,
             state_root,
         ))
     }
@@ -144,6 +145,26 @@ impl verifier::Verifier for NopVerifier {
     fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
         let block = self.fetch_light_block(height)?;
         self.unverified_state(block)
+    }
+
+    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
+        let result = self
+            .protocol
+            .call_host(
+                Context::background(),
+                Body::HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest {
+                    height,
+                    kind,
+                }),
+            )
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        match result {
+            Body::HostFetchConsensusEventsResponse(HostFetchConsensusEventsResponse { events }) => {
+                Ok(events)
+            }
+            _ => Err(Error::VerificationFailed(anyhow!("bad response from host"))),
+        }
     }
 
     fn latest_height(&self) -> Result<u64, Error> {
@@ -168,6 +189,7 @@ enum Command {
     LatestState(channel::Sender<Result<ConsensusState, Error>>),
     LatestHeight(channel::Sender<Result<u64, Error>>),
     StateAt(u64, channel::Sender<Result<ConsensusState, Error>>),
+    EventsAt(u64, EventKind, channel::Sender<Result<Vec<Event>, Error>>),
 }
 
 /// Tendermint consensus layer verifier.
@@ -290,6 +312,7 @@ impl Verifier {
 
         Ok(ConsensusState::from_protocol(
             self.protocol.clone(),
+            state_root.version + 1,
             state_root,
         ))
     }
@@ -393,7 +416,11 @@ impl Verifier {
         // Verify the consensus layer block first to obtain an authoritative state root.
         let consensus_block = self.verify_consensus_only(cache, instance, consensus_block)?;
         let state_root = consensus_block.get_state_root();
-        let state = ConsensusState::from_protocol(self.protocol.clone(), state_root);
+        let state = ConsensusState::from_protocol(
+            self.protocol.clone(),
+            state_root.version + 1,
+            state_root,
+        );
 
         // Check if we have already verified this runtime header to avoid re-verification.
         if let Some(state_root) = cache.verified_state_roots.get(&runtime_header.round) {
@@ -498,8 +525,12 @@ impl Verifier {
 
         let consensus_block = untrusted_block;
 
-        let state =
-            ConsensusState::from_protocol(self.protocol.clone(), consensus_block.get_state_root());
+        let state_root = consensus_block.get_state_root();
+        let state = ConsensusState::from_protocol(
+            self.protocol.clone(),
+            state_root.version + 1,
+            state_root,
+        );
 
         // Check if we have already verified this runtime header to avoid re-verification.
         if let Some((state_root, state_epoch)) = cache
@@ -558,6 +589,27 @@ impl Verifier {
             .put(runtime_header.round, (state_root, state_epoch));
 
         Ok(state)
+    }
+
+    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
+        let result = self
+            .protocol
+            .call_host(
+                Context::background(),
+                Body::HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest {
+                    height,
+                    kind,
+                }),
+            )
+            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        // TODO: Perform event verification once this becomes possible.
+
+        match result {
+            Body::HostFetchConsensusEventsResponse(HostFetchConsensusEventsResponse { events }) => {
+                Ok(events)
+            }
+            _ => Err(Error::VerificationFailed(anyhow!("bad response from host"))),
+        }
     }
 
     fn update_insecure_posix_time(&self, verified_block: &TMLightBlock) {
@@ -847,6 +899,11 @@ impl Verifier {
                         .send(self.latest_consensus_height(&cache))
                         .map_err(|_| Error::Internal)?;
                 }
+                Command::EventsAt(height, kind, sender) => {
+                    sender
+                        .send(self.events_at(height, kind))
+                        .map_err(|_| Error::Internal)?;
+                }
             }
 
             // Persist last verified block once in a while.
@@ -1041,6 +1098,7 @@ impl verifier::Verifier for Handle {
         let state_root = untrusted_block.get_state_root();
         Ok(ConsensusState::from_protocol(
             self.protocol.clone(),
+            state_root.version + 1,
             state_root,
         ))
     }
@@ -1058,6 +1116,15 @@ impl verifier::Verifier for Handle {
         let (sender, receiver) = channel::bounded(1);
         self.command_sender
             .send(Command::StateAt(height, sender))
+            .map_err(|_| Error::Internal)?;
+
+        receiver.recv().map_err(|_| Error::Internal)?
+    }
+
+    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
+        let (sender, receiver) = channel::bounded(1);
+        self.command_sender
+            .send(Command::EventsAt(height, kind, sender))
             .map_err(|_| Error::Internal)?;
 
         receiver.recv().map_err(|_| Error::Internal)?

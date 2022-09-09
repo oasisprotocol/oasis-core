@@ -154,8 +154,8 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 		return nil, fmt.Errorf("client: failed to fetch annotated block from history: %w", err)
 	}
 
-	// Get consensus state at queried round + 1 (tendermint light clients are a block behind).
-	lb, err := n.commonNode.Consensus.GetLightBlock(ctx, annBlk.Height+1)
+	// Get consensus light block for state after executing block at given height.
+	lb, err := n.commonNode.Consensus.GetLightBlockForState(ctx, annBlk.Height)
 	if err != nil {
 		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", annBlk.Height, err)
 	}

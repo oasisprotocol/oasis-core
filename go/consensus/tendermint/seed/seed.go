@@ -247,6 +247,11 @@ func (srv *seedService) GetLightBlock(ctx context.Context, height int64) (*conse
 }
 
 // Implements consensus.Backend.
+func (srv *seedService) GetLightBlockForState(ctx context.Context, height int64) (*consensus.LightBlock, error) {
+	return nil, consensus.ErrUnsupported
+}
+
+// Implements consensus.Backend.
 func (srv *seedService) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, error) {
 	return nil, consensus.ErrUnsupported
 }

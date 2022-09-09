@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    common::quantity::Quantity,
+    common::{crypto::hash::Hash, quantity::Quantity},
     consensus::{address::Address, beacon::EpochTime},
 };
 
@@ -225,6 +225,93 @@ pub struct WithdrawResult {
     pub owner: Address,
     pub beneficiary: Address,
     pub allowance: Quantity,
+    pub amount_change: Quantity,
+}
+
+/// A staking-related event.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct Event {
+    #[cbor(optional)]
+    pub height: i64,
+    #[cbor(optional)]
+    pub tx_hash: Hash,
+
+    // TODO: Consider refactoring this to be an enum.
+    #[cbor(optional)]
+    pub transfer: Option<TransferEvent>,
+    #[cbor(optional)]
+    pub burn: Option<BurnEvent>,
+    #[cbor(optional)]
+    pub escrow: Option<EscrowEvent>,
+    #[cbor(optional)]
+    pub allowance_change: Option<AllowanceChangeEvent>,
+}
+
+/// Event emitted when stake is transferred, either by a call to Transfer or Withdraw.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct TransferEvent {
+    pub from: Address,
+    pub to: Address,
+    pub amount: Quantity,
+}
+
+/// Event emitted when stake is destroyed via a call to Burn.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct BurnEvent {
+    pub owner: Address,
+    pub amount: Quantity,
+}
+
+/// Escrow-related events.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub enum EscrowEvent {
+    /// Event emitted when stake is transferred into an escrow account.
+    #[cbor(rename = "add")]
+    Add {
+        owner: Address,
+        escrow: Address,
+        amount: Quantity,
+        new_shares: Quantity,
+    },
+
+    /// Event emitted when stake is taken from an escrow account (i.e. stake is slashed).
+    #[cbor(rename = "take")]
+    Take { owner: Address, amount: Quantity },
+
+    /// Event emitted when the debonding process has started and the given number of active shares
+    /// have been moved into the debonding pool and started debonding.
+    ///
+    /// Note that the given amount is valid at the time of debonding start and may not correspond to
+    /// the final debonded amount in case any escrowed stake is subject to slashing.
+    #[cbor(rename = "debonding_start")]
+    DebondingStart {
+        owner: Address,
+        escrow: Address,
+        amount: Quantity,
+        active_shares: Quantity,
+        debonding_shares: Quantity,
+        debond_end_time: EpochTime,
+    },
+
+    /// Event emitted when stake is reclaimed from an escrow account back into owner's general
+    /// account.
+    #[cbor(rename = "reclaim")]
+    Reclaim {
+        owner: Address,
+        escrow: Address,
+        amount: Quantity,
+        shares: Quantity,
+    },
+}
+
+/// Event emitted when allowance is changed for a beneficiary.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct AllowanceChangeEvent {
+    pub owner: Address,
+    pub beneficiary: Address,
+    pub allowance: Quantity,
+    #[cbor(optional)]
+    pub negative: bool,
     pub amount_change: Quantity,
 }
 
@@ -464,6 +551,163 @@ mod tests {
                 cbor::from_slice(&base64::decode(encoded_base64).unwrap())
                     .expect("reclaim escrow result should deserialize correctly");
             assert_eq!(dec, rr, "decoded result should match the expected value");
+        }
+    }
+
+    #[test]
+    fn test_consistent_events() {
+        let addr1 = Address::from_pk(&PublicKey::from(
+            "aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        ));
+        let addr2 = Address::from_pk(&PublicKey::from(
+            "bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        ));
+        let tx_hash = Hash::empty_hash();
+
+        let tcs = vec![
+            (
+                "oWd0eF9oYXNoWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+                Event::default(),
+            ),
+            (
+                "omZoZWlnaHQYKmd0eF9oYXNoWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+                Event {
+                    height: 42,
+                    ..Default::default()
+                },
+            ),
+            (
+                "omZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg==",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    ..Default::default()
+                },
+            ),
+
+            // Transfer.
+            (
+                "o2ZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWemh0cmFuc2ZlcqNidG9VALkSOXiV5kcMUfq+zJ3cg/cK7YahZGZyb21VACByFDSJP2FsCYFI4s+fmePigm4TZmFtb3VudEFk",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    transfer: Some(TransferEvent {
+                        from: addr1.clone(),
+                        to: addr2.clone(),
+                        amount: 100u32.into(),
+                    }),
+                    ..Default::default()
+                },
+            ),
+
+            // Burn.
+            (
+                "o2RidXJuomVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNmYW1vdW50QWRmaGVpZ2h0GCpndHhfaGFzaFggxnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    burn: Some(BurnEvent {
+                        owner: addr1.clone(),
+                        amount: 100u32.into(),
+                    }),
+                    ..Default::default()
+                },
+            ),
+
+            // Escrow.
+            (
+                "o2Zlc2Nyb3ehY2FkZKRlb3duZXJVACByFDSJP2FsCYFI4s+fmePigm4TZmFtb3VudEFkZmVzY3Jvd1UAuRI5eJXmRwxR+r7MndyD9wrthqFqbmV3X3NoYXJlc0EyZmhlaWdodBgqZ3R4X2hhc2hYIMZyuNHvVu0oq4fDYixRFAab3TrXuPlzdJjQwB7O8JZ6",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    escrow: Some(EscrowEvent::Add {
+                        owner: addr1.clone(),
+                        escrow: addr2.clone(),
+                        amount: 100u32.into(),
+                        new_shares: 50u32.into(),
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "o2Zlc2Nyb3ehZHRha2WiZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZGZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg==",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    escrow: Some(EscrowEvent::Take {
+                        owner: addr1.clone(),
+                        amount: 100u32.into(),
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "o2Zlc2Nyb3ehb2RlYm9uZGluZ19zdGFydKZlb3duZXJVACByFDSJP2FsCYFI4s+fmePigm4TZmFtb3VudEFkZmVzY3Jvd1UAuRI5eJXmRwxR+r7MndyD9wrthqFtYWN0aXZlX3NoYXJlc0Eyb2RlYm9uZF9lbmRfdGltZRgqcGRlYm9uZGluZ19zaGFyZXNBGWZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg==",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    escrow: Some(EscrowEvent::DebondingStart {
+                        owner: addr1.clone(),
+                        escrow: addr2.clone(),
+                        amount: 100u32.into(),
+                        active_shares: 50u32.into(),
+                        debonding_shares: 25u32.into(),
+                        debond_end_time: 42,
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "o2Zlc2Nyb3ehZ3JlY2xhaW2kZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZGZlc2Nyb3dVALkSOXiV5kcMUfq+zJ3cg/cK7YahZnNoYXJlc0EZZmhlaWdodBgqZ3R4X2hhc2hYIMZyuNHvVu0oq4fDYixRFAab3TrXuPlzdJjQwB7O8JZ6",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    escrow: Some(EscrowEvent::Reclaim {
+                        owner: addr1.clone(),
+                        escrow: addr2.clone(),
+                        amount: 100u32.into(),
+                        shares: 25u32.into(),
+                    }),
+                    ..Default::default()
+                },
+            ),
+
+            // Allowance change.
+            (
+                "o2ZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWenBhbGxvd2FuY2VfY2hhbmdlpGVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNpYWxsb3dhbmNlQWRrYmVuZWZpY2lhcnlVALkSOXiV5kcMUfq+zJ3cg/cK7YahbWFtb3VudF9jaGFuZ2VBMg==",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    allowance_change: Some(AllowanceChangeEvent {
+                        owner: addr1.clone(),
+                        beneficiary: addr2.clone(),
+                        allowance: 100u32.into(),
+                        negative: false,
+                        amount_change: 50u32.into(),
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "o2ZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWenBhbGxvd2FuY2VfY2hhbmdlpWVvd25lclUAIHIUNIk/YWwJgUjiz5+Z4+KCbhNobmVnYXRpdmX1aWFsbG93YW5jZUFka2JlbmVmaWNpYXJ5VQC5Ejl4leZHDFH6vsyd3IP3Cu2GoW1hbW91bnRfY2hhbmdlQTI=",
+                Event {
+                    height: 42,
+                    tx_hash,
+                    allowance_change: Some(AllowanceChangeEvent {
+                        owner: addr1.clone(),
+                        beneficiary: addr2.clone(),
+                        allowance: 100u32.into(),
+                        negative: true,
+                        amount_change: 50u32.into(),
+                    }),
+                    ..Default::default()
+                },
+            ),
+        ];
+        for (encoded_base64, ev) in tcs {
+            let dec: Event = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("event should deserialize correctly");
+            assert_eq!(dec, ev, "decoded event should match the expected value");
         }
     }
 }

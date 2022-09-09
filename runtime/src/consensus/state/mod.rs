@@ -34,24 +34,33 @@ impl From<StateError> for types::Error {
 
 /// Provides consensus state tree from the host.
 pub struct ConsensusState {
+    // An explicit height field is needed because the relationship between the underlying consensus
+    // height and the corresponding state root is a consensus backend implementation detail.
+    height: u64,
     mkvs: Tree,
 }
 
 impl ConsensusState {
     /// Creates a consensus state wrapping the provided tree.
-    pub fn new(tree: Tree) -> Self {
-        Self { mkvs: tree }
+    pub fn new(height: u64, tree: Tree) -> Self {
+        Self { height, mkvs: tree }
     }
 
     /// Creates consensus state using host protocol.
-    pub fn from_protocol(protocol: Arc<Protocol>, root: Root) -> Self {
+    pub fn from_protocol(protocol: Arc<Protocol>, height: u64, root: Root) -> Self {
         let read_syncer = HostReadSyncer::new(protocol, HostStorageEndpoint::Consensus);
         Self {
+            height,
             mkvs: Tree::builder()
                 .with_capacity(100_000, 10_000_000)
                 .with_root(root)
                 .build(Box::new(read_syncer)),
         }
+    }
+
+    /// Consensus layer height that this data is for.
+    pub fn height(&self) -> u64 {
+        self.height
     }
 }
 

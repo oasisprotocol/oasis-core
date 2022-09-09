@@ -10,7 +10,10 @@ use crate::{
         key_format::{KeyFormat, KeyFormatAtom},
         namespace::Namespace,
     },
-    consensus::{roothash::Error, state::StateError},
+    consensus::{
+        roothash::{Error, RoundResults},
+        state::StateError,
+    },
     key_format,
     storage::mkvs::ImmutableMKVS,
 };
@@ -28,6 +31,7 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 }
 
 key_format!(StateRootKeyFmt, 0x25, Hash);
+key_format!(LastRoundResultsKeyFmt, 0x27, Hash);
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Returns the state root for a specific runtime.
@@ -39,6 +43,20 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
             Ok(Some(b)) => Ok(Hash(b.try_into().map_err(|_| -> Error {
                 StateError::Unavailable(anyhow!("corrupted hash value")).into()
             })?)),
+            Ok(None) => Err(Error::InvalidRuntime(id)),
+            Err(err) => Err(StateError::Unavailable(anyhow!(err)).into()),
+        }
+    }
+
+    /// Returns the last round results for a specific runtime.
+    pub fn last_round_results(&self, ctx: Context, id: Namespace) -> Result<RoundResults, Error> {
+        match self.mkvs.get(
+            ctx,
+            &LastRoundResultsKeyFmt(Hash::digest_bytes(id.as_ref())).encode(),
+        ) {
+            Ok(Some(b)) => {
+                cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)).into())
+            }
             Ok(None) => Err(Error::InvalidRuntime(id)),
             Err(err) => Err(StateError::Unavailable(anyhow!(err)).into()),
         }

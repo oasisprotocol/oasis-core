@@ -9,7 +9,7 @@ use crate::{
         state::StateError,
     },
     key_format,
-    storage::mkvs::ImmutableMKVS,
+    storage::mkvs::{FallibleMKVS, ImmutableMKVS},
 };
 
 /// Consensus beacon state wrapper.
@@ -48,15 +48,53 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
     /// Returns the future epoch number.
     pub fn future_epoch(&self, ctx: Context) -> Result<EpochTime, StateError> {
+        self.future_epoch_state(ctx).map(|es| es.epoch)
+    }
+
+    /// Returns the future epoch state.
+    pub fn future_epoch_state(&self, ctx: Context) -> Result<EpochTimeState, StateError> {
         match self.mkvs.get(ctx, &FutureEpochKeyFmt(()).encode()) {
             Ok(Some(b)) => {
                 let state: EpochTimeState =
                     cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))?;
-                Ok(state.epoch)
+                Ok(state)
             }
-            Ok(None) => Ok(EpochTime::default()),
+            Ok(None) => Ok(EpochTimeState::default()),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
         }
+    }
+}
+
+/// Mutable consensus beacon state wrapper.
+pub struct MutableState;
+
+impl MutableState {
+    /// Set current epoch state.
+    pub fn set_epoch_state<S: FallibleMKVS>(
+        mkvs: &mut S,
+        ctx: Context,
+        epoch_state: EpochTimeState,
+    ) -> Result<(), StateError> {
+        mkvs.insert(
+            ctx,
+            &CurrentEpochKeyFmt(()).encode(),
+            &cbor::to_vec(epoch_state),
+        )?;
+        Ok(())
+    }
+
+    /// Set future epoch state.
+    pub fn set_future_epoch_state<S: FallibleMKVS>(
+        mkvs: &mut S,
+        ctx: Context,
+        epoch_state: EpochTimeState,
+    ) -> Result<(), StateError> {
+        mkvs.insert(
+            ctx,
+            &FutureEpochKeyFmt(()).encode(),
+            &cbor::to_vec(epoch_state),
+        )?;
+        Ok(())
     }
 }
 
@@ -68,11 +106,57 @@ mod test {
         common::crypto::hash::Hash,
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
+            sync::NoopReadSyncer,
             Root, RootType, Tree,
         },
     };
 
     use super::*;
+
+    #[test]
+    fn test_mutable_state() {
+        let mut mkvs = Tree::builder()
+            .with_root_type(RootType::State)
+            .build(Box::new(NoopReadSyncer));
+
+        let ctx = Arc::new(Context::background());
+
+        MutableState::set_epoch_state(
+            &mut mkvs,
+            Context::create_child(&ctx),
+            EpochTimeState {
+                epoch: 10,
+                height: 100,
+            },
+        )
+        .unwrap();
+
+        MutableState::set_future_epoch_state(
+            &mut mkvs,
+            Context::create_child(&ctx),
+            EpochTimeState {
+                epoch: 11,
+                height: 110,
+            },
+        )
+        .unwrap();
+
+        let beacon_state = ImmutableState::new(&mkvs);
+
+        // Test current epoch state.
+        let epoch_state = beacon_state
+            .epoch_state(Context::create_child(&ctx))
+            .expect("epoch state query should work");
+        assert_eq!(10u64, epoch_state.epoch, "expected epoch should match");
+        assert_eq!(100i64, epoch_state.height, "expected height should match");
+
+        // Test future epoch state.
+        let epoch_state = beacon_state
+            .future_epoch_state(Context::create_child(&ctx))
+            .expect("future epoch state query should work");
+        assert_eq!(11u64, epoch_state.epoch, "expected epoch should match");
+        assert_eq!(110i64, epoch_state.height, "expected height should match");
+    }
 
     #[test]
     fn test_beacon_state_interop() {
@@ -114,5 +198,12 @@ mod test {
             .future_epoch(Context::create_child(&ctx))
             .expect("future epoch query should work");
         assert_eq!(43u64, epoch, "expected future epoch should match");
+
+        // Test future epoch state.
+        let epoch_state = beacon_state
+            .future_epoch_state(Context::create_child(&ctx))
+            .expect("future epoch state query should work");
+        assert_eq!(43u64, epoch_state.epoch, "expected epoch should match");
+        assert_eq!(15i64, epoch_state.height, "expected height should match");
     }
 }

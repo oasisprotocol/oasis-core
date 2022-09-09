@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -95,20 +96,22 @@ type Body struct {
 	RuntimeConsensusSyncResponse          *Empty                                 `json:",omitempty"`
 
 	// Host interface.
-	HostRPCCallRequest              *HostRPCCallRequest              `json:",omitempty"`
-	HostRPCCallResponse             *HostRPCCallResponse             `json:",omitempty"`
-	HostStorageSyncRequest          *HostStorageSyncRequest          `json:",omitempty"`
-	HostStorageSyncResponse         *HostStorageSyncResponse         `json:",omitempty"`
-	HostLocalStorageGetRequest      *HostLocalStorageGetRequest      `json:",omitempty"`
-	HostLocalStorageGetResponse     *HostLocalStorageGetResponse     `json:",omitempty"`
-	HostLocalStorageSetRequest      *HostLocalStorageSetRequest      `json:",omitempty"`
-	HostLocalStorageSetResponse     *Empty                           `json:",omitempty"`
-	HostFetchConsensusBlockRequest  *HostFetchConsensusBlockRequest  `json:",omitempty"`
-	HostFetchConsensusBlockResponse *HostFetchConsensusBlockResponse `json:",omitempty"`
-	HostFetchTxBatchRequest         *HostFetchTxBatchRequest         `json:",omitempty"`
-	HostFetchTxBatchResponse        *HostFetchTxBatchResponse        `json:",omitempty"`
-	HostFetchGenesisHeightRequest   *HostFetchGenesisHeightRequest   `json:",omitempty"`
-	HostFetchGenesisHeightResponse  *HostFetchGenesisHeightResponse  `json:",omitempty"`
+	HostRPCCallRequest               *HostRPCCallRequest               `json:",omitempty"`
+	HostRPCCallResponse              *HostRPCCallResponse              `json:",omitempty"`
+	HostStorageSyncRequest           *HostStorageSyncRequest           `json:",omitempty"`
+	HostStorageSyncResponse          *HostStorageSyncResponse          `json:",omitempty"`
+	HostLocalStorageGetRequest       *HostLocalStorageGetRequest       `json:",omitempty"`
+	HostLocalStorageGetResponse      *HostLocalStorageGetResponse      `json:",omitempty"`
+	HostLocalStorageSetRequest       *HostLocalStorageSetRequest       `json:",omitempty"`
+	HostLocalStorageSetResponse      *Empty                            `json:",omitempty"`
+	HostFetchConsensusBlockRequest   *HostFetchConsensusBlockRequest   `json:",omitempty"`
+	HostFetchConsensusBlockResponse  *HostFetchConsensusBlockResponse  `json:",omitempty"`
+	HostFetchConsensusEventsRequest  *HostFetchConsensusEventsRequest  `json:",omitempty"`
+	HostFetchConsensusEventsResponse *HostFetchConsensusEventsResponse `json:",omitempty"`
+	HostFetchTxBatchRequest          *HostFetchTxBatchRequest          `json:",omitempty"`
+	HostFetchTxBatchResponse         *HostFetchTxBatchResponse         `json:",omitempty"`
+	HostFetchGenesisHeightRequest    *HostFetchGenesisHeightRequest    `json:",omitempty"`
+	HostFetchGenesisHeightResponse   *HostFetchGenesisHeightResponse   `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -478,6 +481,30 @@ type HostFetchConsensusBlockRequest struct {
 // HostFetchConsensusBlockResponse is a response from host fetching the given consensus light block.
 type HostFetchConsensusBlockResponse struct {
 	Block consensus.LightBlock `json:"block"`
+}
+
+// EventKind is the consensus event kind.
+type EventKind uint8
+
+// Supported consensus event kinds.
+const (
+	EventKindStaking    EventKind = 1
+	EventKindRegistry   EventKind = 2
+	EventKindRootHash   EventKind = 3
+	EventKindGovernance EventKind = 4
+)
+
+// HostFetchConsensusEventsRequest is a request to host to fetch the consensus events for the given
+// height.
+type HostFetchConsensusEventsRequest struct {
+	Height uint64    `json:"height"`
+	Kind   EventKind `json:"kind"`
+}
+
+// HostFetchConsensusEventsResponse is a response from host fetching the consensus events for the
+// given height.
+type HostFetchConsensusEventsResponse struct {
+	Events []*consensusResults.Event `json:"events,omitempty"`
 }
 
 // HostFetchGenesisHeightRequest is a request to host to fetch the consensus genesis height.
