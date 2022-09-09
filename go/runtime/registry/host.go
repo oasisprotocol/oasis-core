@@ -17,7 +17,6 @@ import (
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -146,9 +145,6 @@ var (
 
 // RuntimeHostHandlerEnvironment is the host environment interface.
 type RuntimeHostHandlerEnvironment interface {
-	// GetCurrentBlock returns the most recent runtime block.
-	GetCurrentBlock(ctx context.Context) (*block.Block, error)
-
 	// GetKeyManagerClient returns the key manager client for this runtime.
 	GetKeyManagerClient(ctx context.Context) (runtimeKeymanager.Client, error)
 
@@ -199,6 +195,10 @@ func (h *runtimeHostHandler) handleHostStorageSync(
 	case protocol.HostStorageEndpointRuntime:
 		// Runtime storage.
 		rs = h.runtime.Storage()
+		if rs == nil {
+			// May be unsupported for unmanaged runtimes like the key manager.
+			return nil, errEndpointNotSupported
+		}
 	case protocol.HostStorageEndpointConsensus:
 		// Consensus state storage.
 		rs = h.consensus.State()

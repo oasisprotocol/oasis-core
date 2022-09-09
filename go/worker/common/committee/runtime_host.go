@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
@@ -24,15 +23,6 @@ func (n *Node) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) pr
 
 type nodeEnvironment struct {
 	n *Node
-}
-
-// GetCurrentBlock implements RuntimeHostHandlerEnvironment.
-func (env *nodeEnvironment) GetCurrentBlock(ctx context.Context) (*block.Block, error) {
-	var blk *block.Block
-	env.n.CrossNode.Lock()
-	blk = env.n.CurrentBlock
-	env.n.CrossNode.Unlock()
-	return blk, nil
 }
 
 // GetKeyManagerClient implements RuntimeHostHandlerEnvironment.

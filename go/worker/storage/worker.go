@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -98,12 +97,7 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		}
 	}
 
-	path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, id)
-	if err != nil {
-		return err
-	}
-
-	localStorage, err := NewLocalBackend(path, id, commonNode.Identity)
+	localStorage, err := NewLocalBackend(commonNode.Runtime.DataDir(), id, commonNode.Identity)
 	if err != nil {
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}
