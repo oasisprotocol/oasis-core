@@ -101,6 +101,12 @@ func (n *upgradeTeePcsChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Co
 	if !registryParams.TEEFeatures.FreshnessProofs {
 		return fmt.Errorf("freshness proofs TEE feature is disabled")
 	}
+	if !registryParams.TEEFeatures.SGX.SignedAttestations {
+		return fmt.Errorf("signed attestations TEE feature is disabled")
+	}
+	if registryParams.TEEFeatures.SGX.DefaultMaxAttestationAge != 1200 {
+		return fmt.Errorf("default max attestation age is not set correctly")
+	}
 	if registryParams.GasCosts[registry.GasOpProveFreshness] != registry.DefaultGasCosts[registry.GasOpProveFreshness] {
 		return fmt.Errorf("default gas cost for freshness proofs is not set")
 	}

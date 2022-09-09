@@ -152,7 +152,7 @@ func initializeAndRegisterByzantineNode(
 
 	// Register node.
 	if viper.GetBool(CfgFakeSGX) {
-		if b.rak, b.capabilities, err = initFakeCapabilitiesSGX(); err != nil {
+		if b.rak, b.capabilities, err = initFakeCapabilitiesSGX(b.identity.NodeSigner.Public()); err != nil {
 			return nil, fmt.Errorf("initFakeCapabilitiesSGX: %w", err)
 		}
 	}

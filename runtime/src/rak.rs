@@ -5,8 +5,16 @@ use std::{
 };
 
 use anyhow::Result;
+#[cfg(target_env = "sgx")]
+use base64;
+#[cfg(target_env = "sgx")]
+use rand::{rngs::OsRng, Rng};
+#[cfg(target_env = "sgx")]
+use sgx_isa::Report;
 use sgx_isa::Targetinfo;
 use thiserror::Error;
+#[cfg(target_env = "sgx")]
+use tiny_keccak::{Hasher, TupleHash};
 
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 use crate::common::crypto::hash::Hash;
@@ -16,16 +24,12 @@ use crate::common::{
     time::insecure_posix_time,
 };
 
-#[cfg(target_env = "sgx")]
-use base64;
-#[cfg(target_env = "sgx")]
-use rand::{rngs::OsRng, Rng};
-#[cfg(target_env = "sgx")]
-use sgx_isa::Report;
-
 /// Context used for computing the RAK digest.
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 const RAK_HASH_CONTEXT: &[u8] = b"oasis-core/node: TEE RAK binding";
+#[cfg_attr(not(target_env = "sgx"), allow(unused))]
+/// Context used for deriving the nonce used in quotes.
+const QUOTE_NONCE_CONTEXT: &[u8] = b"oasis-core/node: TEE quote nonce";
 
 /// RAK-related error.
 #[derive(Error, Debug)]
@@ -63,7 +67,7 @@ struct Inner {
     #[allow(unused)]
     target_info: Option<Targetinfo>,
     #[allow(unused)]
-    nonce: Option<String>,
+    nonce: Option<[u8; 32]>,
 }
 
 /// Runtime attestation key.
@@ -104,20 +108,18 @@ impl RAK {
         Hash::digest_bytes(&message)
     }
 
-    /// Generate a random 32 character nonce, for anti-replay.
+    /// Generate a random 256-bit nonce, for anti-replay.
     #[cfg(target_env = "sgx")]
-    fn generate_nonce() -> String {
-        // Note: The IAS protocol specifies this as 32 characters, and
-        // it's passed around as a JSON string, so this uses 24 bytes
-        // of entropy, Base64 encoded.
-        //
-        // XXX/yawning: Whiten the output, exposing raw OsRng output
-        // to outside the enclave makes me uneasy.
+    fn generate_nonce() -> [u8; 32] {
         let mut rng = OsRng {};
-        let mut nonce_bytes = [0u8; 24]; // 24 bytes is 32 chars in Base64.
+        let mut nonce_bytes = [0u8; 32];
         rng.fill(&mut nonce_bytes);
 
-        base64::encode(&nonce_bytes)
+        let mut h = TupleHash::v256(QUOTE_NONCE_CONTEXT);
+        h.update(&nonce_bytes);
+        h.finalize(&mut nonce_bytes);
+
+        nonce_bytes
     }
 
     /// Get the SGX target info.
@@ -161,12 +163,16 @@ impl RAK {
 
         // Generate a new anti-replay nonce.
         let nonce = Self::generate_nonce();
+        // The derived nonce is only used in case IAS-based attestation is used
+        // as it is included in the outer AVR envelope. But given that the body
+        // also includes the nonce in our specific case, this is not relevant.
+        let quote_nonce = base64::encode(&nonce[..24]);
 
         // Generate report body.
         let report_body = Self::report_body_for_rak(&rak_pub);
         let mut report_data = [0; 64];
         report_data[0..32].copy_from_slice(report_body.as_ref());
-        report_data[32..64].copy_from_slice(nonce.as_bytes());
+        report_data[32..64].copy_from_slice(nonce.as_ref());
 
         let report = Report::for_target(&target_info, &report_data);
 
@@ -177,12 +183,12 @@ impl RAK {
         let mut inner = self.inner.write().unwrap();
         inner.nonce = Some(nonce.clone());
 
-        (rak_pub, report, nonce)
+        (rak_pub, report, quote_nonce)
     }
 
     /// Configure the remote attestation quote for RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn set_quote(&self, quote: Quote, policy: QuotePolicy) -> Result<()> {
+    pub(crate) fn set_quote(&self, quote: Quote, policy: QuotePolicy) -> Result<VerifiedQuote> {
         let rak_pub = self.public_key().expect("RAK must be configured");
 
         let mut inner = self.inner.write().unwrap();
@@ -201,7 +207,8 @@ impl RAK {
         inner.nonce = None;
 
         let verified_quote = quote.verify(&policy)?;
-        if expected_nonce.as_bytes() != verified_quote.nonce {
+        let nonce = &verified_quote.report_data[32..];
+        if expected_nonce.as_ref() != nonce {
             return Err(QuoteError::NonceMismatch.into());
         }
 
@@ -220,17 +227,12 @@ impl RAK {
         // Verify that the quote has H(RAK) in report body.
         Self::verify_binding(&verified_quote, &rak_pub)?;
 
-        // Verify that the quote's report also contains the nonce.
-        if verified_quote.nonce != &verified_quote.report_data[32..64] {
-            return Err(QuoteError::NonceMismatch.into());
-        }
-
         // If there is an existing quote that is dated more recently than
         // the one being set, silently ignore the update.
         if inner.quote.is_some() {
             let existing_timestamp = inner.quote_timestamp.unwrap();
             if existing_timestamp > verified_quote.timestamp {
-                return Ok(());
+                return Ok(verified_quote);
             }
         }
 
@@ -246,7 +248,7 @@ impl RAK {
             inner.known_quotes.pop_front();
         }
 
-        Ok(())
+        Ok(verified_quote)
     }
 
     /// Public part of RAK.

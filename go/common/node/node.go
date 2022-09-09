@@ -35,7 +35,21 @@ var (
 	// identity doesn't match the required values.
 	ErrBadEnclaveIdentity = errors.New("node: bad TEE enclave identity")
 
+	// ErrInvalidAttestationSignature is the error returned when the TEE attestation
+	// signature fails verification.
+	ErrInvalidAttestationSignature = errors.New("node: invalid TEE attestation signature")
+
+	// ErrAttestationNotFresh is the error returned when the TEE attestation is
+	// not fresh enough.
+	ErrAttestationNotFresh = errors.New("node: TEE attestation not fresh enough")
+	// ErrAttestationFromFuture is the error returned when the TEE attestation appears
+	// to be from the future.
+	ErrAttestationFromFuture = errors.New("node: TEE attestation from the future")
+
 	teeHashContext = []byte("oasis-core/node: TEE RAK binding")
+
+	// AttestationSignatureContext is the signature context used for TEE attestation signatures.
+	AttestationSignatureContext = signature.NewContext("oasis-core/node: TEE attestation signature")
 
 	_ prettyprint.PrettyPrinter = (*MultiSignedNode)(nil)
 )
@@ -480,18 +494,16 @@ type CapabilityTEE struct {
 	Attestation []byte `json:"attestation"`
 }
 
-// RAKHash computes the expected AVR report hash bound to a given public RAK.
-func RAKHash(rak signature.PublicKey) hash.Hash {
+// HashRAK computes the expected report data hash bound to a given public RAK.
+func HashRAK(rak signature.PublicKey) hash.Hash {
 	hData := make([]byte, 0, len(teeHashContext)+signature.PublicKeySize)
 	hData = append(hData, teeHashContext...)
 	hData = append(hData, rak[:]...)
 	return hash.NewFromBytes(hData)
 }
 
-// Verify verifies the node's TEE capabilities, at the provided timestamp.
-func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, constraints []byte) error {
-	rakHash := RAKHash(c.RAK)
-
+// Verify verifies the node's TEE capabilities, at the provided timestamp and height.
+func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64, constraints []byte, nodeID signature.PublicKey) error {
 	switch c.Hardware {
 	case TEEHardwareIntelSGX:
 		// Parse SGX remote attestation.
@@ -512,34 +524,7 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, constraints []
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
 
-		// Use default from consensus parameters if policy is unset.
-		if teeCfg != nil {
-			sc.Policy = teeCfg.SGX.ApplyDefaultPolicy(sc.Policy)
-		}
-
-		// Verify the quote.
-		verifiedQuote, err := sa.Quote.Verify(sc.Policy, ts)
-		if err != nil {
-			return err
-		}
-
-		// Ensure that the MRENCLAVE/MRSIGNER match what is specified
-		// in the TEE-specific constraints field.
-		if !sc.ContainsEnclave(verifiedQuote.Identity) {
-			return ErrBadEnclaveIdentity
-		}
-
-		// Ensure that the report data includes the hash of the node's RAK.
-		var avrRAKHash hash.Hash
-		_ = avrRAKHash.UnmarshalBinary(verifiedQuote.ReportData[:hash.Size])
-		if !rakHash.Equal(&avrRAKHash) {
-			return ErrRAKHashMismatch
-		}
-
-		// The last 32 bytes of the quote ReportData are deliberately
-		// ignored.
-
-		return nil
+		return sa.Verify(teeCfg, ts, height, &sc, c.RAK, nodeID)
 	default:
 		return ErrInvalidTEEHardware
 	}

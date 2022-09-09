@@ -1,12 +1,14 @@
 package node
 
 import (
+	"encoding/hex"
 	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
@@ -109,6 +111,16 @@ func TestSGXAttestationV1(t *testing.T) {
 
 	enc := cbor.Marshal(sa)
 	require.EqualValues(enc, raw, "serialization should round-trip")
+}
+
+func TestHashAttestation(t *testing.T) {
+	require := require.New(t)
+
+	var nodeID signature.PublicKey
+	_ = nodeID.UnmarshalHex("47aadd91516ac548decdb436fde957992610facc09ba2f850da0fe1b2be96119")
+	h := HashAttestation([]byte("foo bar"), nodeID, 42)
+	hHex := hex.EncodeToString(h)
+	require.EqualValues("0f01a5084bbf432427873cbce5f8c3bff76bc22b9d1e0674b852e43698abb195", hHex)
 }
 
 func FuzzSGXConstraints(f *testing.F) {

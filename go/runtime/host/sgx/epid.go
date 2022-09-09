@@ -89,7 +89,7 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 		IAS: avrBundle,
 	}
 
-	_, err = conn.Call(
+	rspBody, err := conn.Call(
 		ctx,
 		&protocol.Body{
 			// TODO: Use RuntimeCapabilityTEERakQuoteRequest once all runtimes support it.
@@ -125,9 +125,16 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	var attestation []byte
 	if supportsAttestationV1 {
 		// Use V1 attestation format.
+		rsp := rspBody.RuntimeCapabilityTEERakQuoteResponse
+		if rsp == nil {
+			return nil, fmt.Errorf("unexpected response from runtime")
+		}
+
 		attestation = cbor.Marshal(node.SGXAttestation{
 			Versioned: cbor.NewVersioned(node.LatestSGXAttestationVersion),
 			Quote:     q,
+			Height:    rsp.Height,
+			Signature: rsp.Signature,
 		})
 	} else {
 		// Use V0 attestation format.

@@ -135,7 +135,10 @@ pub enum Body {
     RuntimeCapabilityTEERakQuoteRequest {
         quote: Quote,
     },
-    RuntimeCapabilityTEERakQuoteResponse {},
+    RuntimeCapabilityTEERakQuoteResponse {
+        height: u64,
+        signature: Signature,
+    },
     RuntimeRPCCallRequest {
         request: Vec<u8>,
     },
@@ -252,6 +255,10 @@ pub enum Body {
     HostProveFreshnessResponse {
         signed_tx: SignedTransaction,
         proof: Proof,
+    },
+    HostIdentityRequest {},
+    HostIdentityResponse {
+        node_id: PublicKey,
     },
 }
 

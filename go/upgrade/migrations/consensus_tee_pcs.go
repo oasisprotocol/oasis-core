@@ -39,7 +39,9 @@ func (th *teePcsHandler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) 
 
 		params.TEEFeatures = &node.TEEFeatures{
 			SGX: node.TEEFeaturesSGX{
-				PCS: true,
+				PCS:                      true,
+				SignedAttestations:       true,
+				DefaultMaxAttestationAge: 1200, // ~2 hours at 6 sec per block.
 			},
 			FreshnessProofs: true,
 		}

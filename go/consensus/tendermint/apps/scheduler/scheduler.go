@@ -364,7 +364,13 @@ func (app *schedulerApplication) isSuitableExecutorWorker(
 			if nrt.Capabilities.TEE.Hardware != rt.TEEHardware {
 				return false
 			}
-			if err := nrt.Capabilities.TEE.Verify(registryParams.TEEFeatures, ctx.Now(), activeDeployment.TEE); err != nil {
+			if err := nrt.Capabilities.TEE.Verify(
+				registryParams.TEEFeatures,
+				ctx.Now(),
+				uint64(ctx.BlockHeight()),
+				activeDeployment.TEE,
+				n.node.ID,
+			); err != nil {
 				ctx.Logger().Warn("failed to verify node TEE attestaion",
 					"err", err,
 					"node_id", n.node.ID,

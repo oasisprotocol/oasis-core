@@ -78,7 +78,7 @@ type Body struct {
 	RuntimeCapabilityTEERakAvrRequest     *RuntimeCapabilityTEERakAvrRequest     `json:",omitempty"`
 	RuntimeCapabilityTEERakAvrResponse    *Empty                                 `json:",omitempty"`
 	RuntimeCapabilityTEERakQuoteRequest   *RuntimeCapabilityTEERakQuoteRequest   `json:",omitempty"`
-	RuntimeCapabilityTEERakQuoteResponse  *Empty                                 `json:",omitempty"`
+	RuntimeCapabilityTEERakQuoteResponse  *RuntimeCapabilityTEERakQuoteResponse  `json:",omitempty"`
 	RuntimeRPCCallRequest                 *RuntimeRPCCallRequest                 `json:",omitempty"`
 	RuntimeRPCCallResponse                *RuntimeRPCCallResponse                `json:",omitempty"`
 	RuntimeLocalRPCCallRequest            *RuntimeLocalRPCCallRequest            `json:",omitempty"`
@@ -115,6 +115,8 @@ type Body struct {
 	HostFetchGenesisHeightResponse   *HostFetchGenesisHeightResponse   `json:",omitempty"`
 	HostProveFreshnessRequest        *HostProveFreshnessRequest        `json:",omitempty"`
 	HostProveFreshnessResponse       *HostProveFreshnessResponse       `json:",omitempty"`
+	HostIdentityRequest              *HostIdentityRequest              `json:",omitempty"`
+	HostIdentityResponse             *HostIdentityResponse             `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -216,6 +218,15 @@ type RuntimeCapabilityTEERakAvrRequest struct {
 type RuntimeCapabilityTEERakQuoteRequest struct {
 	// Quote is the remote attestation quote.
 	Quote quote.Quote `json:"quote"`
+}
+
+// RuntimeCapabilityTEERakQuoteResponse is a worker RFC 0009 CapabilityTEE RAK quote setup response message body.
+type RuntimeCapabilityTEERakQuoteResponse struct {
+	// Height is the runtime's view of the consensus layer height at the time of attestation.
+	Height uint64 `json:"height"`
+
+	// Signature is the signature of the attestation by the enclave.
+	Signature signature.RawSignature `json:"signature"`
 }
 
 // RuntimeRPCCallRequest is a worker RPC call request message body.
@@ -545,4 +556,13 @@ type HostProveFreshnessResponse struct {
 	SignedTx *consensusTx.SignedTransaction `json:"signed_tx"`
 	// Proof of transaction inclusion in a block.
 	Proof *consensusTx.Proof `json:"proof"`
+}
+
+// HostIdentityRequest is a request to host to return its identity.
+type HostIdentityRequest struct{}
+
+// HostIdentityResponse is a response from host returning its identity.
+type HostIdentityResponse struct {
+	// NodeID is the host node identifier.
+	NodeID signature.PublicKey `json:"node_id"`
 }

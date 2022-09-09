@@ -19,6 +19,7 @@ import (
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck(
 	now time.Time,
+	height uint64,
 	baseEpoch beacon.EpochTime,
 	stakeLedger map[staking.Address]*staking.Account,
 	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
@@ -48,7 +49,7 @@ func (g *Genesis) SanityCheck(
 	}
 
 	// Check nodes.
-	nodeLookup, err := SanityCheckNodes(logger, &g.Parameters, g.Nodes, seenEntities, runtimesLookup, true, baseEpoch, now)
+	nodeLookup, err := SanityCheckNodes(logger, &g.Parameters, g.Nodes, seenEntities, runtimesLookup, true, baseEpoch, now, height)
 	if err != nil {
 		return err
 	}
@@ -165,6 +166,7 @@ func SanityCheckNodes(
 	isGenesis bool,
 	epoch beacon.EpochTime,
 	now time.Time,
+	height uint64,
 ) (NodeLookup, error) { // nolint: gocyclo
 
 	nodeLookup := &sanityCheckNodeLookup{
@@ -193,6 +195,7 @@ func SanityCheckNodes(
 			signedNode,
 			entity,
 			now,
+			height,
 			isGenesis,
 			true,
 			epoch,

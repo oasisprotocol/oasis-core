@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 )
 
 func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
@@ -35,13 +36,13 @@ func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
 // To also populate EnclaveIdentity in the Quote from
 // runtime.version.fake_enclave flag, this function requires viper to be
 // initialized and the flag registered first.
-func initFakeCapabilitiesSGX() (signature.Signer, *node.Capabilities, error) {
+func initFakeCapabilitiesSGX(nodeID signature.PublicKey) (signature.Signer, *node.Capabilities, error) {
 	// Get fake RAK.
 	fr, err := memorySigner.NewFactory().Generate(signature.SignerUnknown, rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
-	rakHash := node.RAKHash(fr.Public())
+	rakHash := node.HashRAK(fr.Public())
 
 	// Read EnclaveIdentity from cmd.
 	// Requires viper to be initialized before that!
@@ -81,13 +82,27 @@ func initFakeCapabilitiesSGX() (signature.Signer, *node.Capabilities, error) {
 		ISVEnclaveQuoteBody:   quoteBinary,
 	})
 
+	// Generate attestation signature.
+	h := node.HashAttestation(quote.Report.ReportData[:], nodeID, 1)
+	attestationSig, err := signature.Sign(fr, node.AttestationSignatureContext, h)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Populate TEE attribute.
 	fc := node.Capabilities{}
 	fc.TEE = &node.CapabilityTEE{
 		Hardware: node.TEEHardwareIntelSGX,
-		Attestation: cbor.Marshal(ias.AVRBundle{
-			Body: body,
-			// Everything we do is simulated, and we wouldn't be able to get a real signed AVR.
+		Attestation: cbor.Marshal(node.SGXAttestation{
+			Versioned: cbor.NewVersioned(node.LatestSGXAttestationVersion),
+			Quote: sgxQuote.Quote{
+				IAS: &ias.AVRBundle{
+					Body: body,
+					// Everything we do is simulated, and we wouldn't be able to get a real signed AVR.
+				},
+			},
+			Height:    1,
+			Signature: attestationSig.Signature,
 		}),
 		RAK: fr.Public(),
 	}

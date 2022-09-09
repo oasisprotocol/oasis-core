@@ -111,5 +111,4 @@ pub struct VerifiedQuote {
     pub report_data: Vec<u8>,
     pub identity: EnclaveIdentity,
     pub timestamp: i64,
-    pub nonce: Vec<u8>,
 }

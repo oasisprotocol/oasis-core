@@ -43,7 +43,7 @@ curve25519-dalek = "3.2.0"
 x25519-dalek = "1.1.0"
 ed25519-dalek = "1.0.1"
 deoxysii = "0.2.3"
-tiny-keccak = { version = "2.0.2", features = ["sha3"] }
+tiny-keccak = { version = "2.0.2", features = ["sha3", "tuple_hash"] }
 sp800-185 = "0.2.0"
 zeroize = "1.4"
 intrusive-collections = "0.9.4"

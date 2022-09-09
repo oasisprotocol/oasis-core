@@ -354,6 +354,20 @@ func (h *runtimeHostHandler) handleHostProveFreshness(
 	}, nil
 }
 
+func (h *runtimeHostHandler) handleHostIdentity(
+	ctx context.Context,
+	rq *protocol.HostIdentityRequest,
+) (*protocol.HostIdentityResponse, error) {
+	identity, err := h.env.GetNodeIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &protocol.HostIdentityResponse{
+		NodeID: identity.NodeSigner.Public(),
+	}, nil
+}
+
 // Implements protocol.Handler.
 func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*protocol.Body, error) {
 	var (
@@ -389,6 +403,9 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	case rq.HostProveFreshnessRequest != nil:
 		// Prove freshness.
 		rsp.HostProveFreshnessResponse, err = h.handleHostProveFreshness(ctx, rq.HostProveFreshnessRequest)
+	case rq.HostIdentityRequest != nil:
+		// Host identity.
+		rsp.HostIdentityResponse, err = h.handleHostIdentity(ctx, rq.HostIdentityRequest)
 	default:
 		err = errMethodNotSupported
 	}

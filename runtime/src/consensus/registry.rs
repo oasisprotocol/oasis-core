@@ -7,10 +7,14 @@
 use std::collections::BTreeMap;
 
 use num_traits::Zero;
+use tiny_keccak::{Hasher, TupleHash};
 
 use crate::{
     common::{
-        crypto::{hash::Hash, signature::PublicKey},
+        crypto::{
+            hash::Hash,
+            signature::{PublicKey, Signature},
+        },
         namespace::Namespace,
         quantity, sgx,
         version::Version,
@@ -18,6 +22,9 @@ use crate::{
     consensus::{beacon::EpochTime, scheduler, staking},
     rak::RAK,
 };
+
+/// Attestation signature context.
+pub const ATTESTATION_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/node: TEE attestation signature";
 
 /// Represents the address of a TCP endpoint.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
@@ -492,9 +499,11 @@ pub enum SGXConstraints {
     /// Old V0 format that only supported IAS policies.
     #[cbor(rename = 0, missing)]
     V0 {
+        /// The allowed MRENCLAVE/MRSIGNER pairs.
         #[cbor(optional)]
         enclaves: Vec<sgx::EnclaveIdentity>,
 
+        /// A set of allowed quote statuses.
         #[cbor(optional)]
         allowed_quote_statuses: Vec<i64>,
     },
@@ -502,11 +511,17 @@ pub enum SGXConstraints {
     /// New V1 format that supports both IAS and PCS policies.
     #[cbor(rename = 1)]
     V1 {
+        /// The allowed MRENCLAVE/MRSIGNER pairs.
         #[cbor(optional)]
         enclaves: Vec<sgx::EnclaveIdentity>,
 
+        /// The quote policy.
         #[cbor(optional)]
         policy: sgx::QuotePolicy,
+
+        /// The maximum attestation age (in blocks).
+        #[cbor(optional)]
+        max_attestation_age: u64,
     },
 }
 
@@ -548,7 +563,14 @@ pub enum SGXAttestation {
 
     /// New V1 format that supports both IAS and PCS policies.
     #[cbor(rename = 1)]
-    V1 { quote: sgx::Quote },
+    V1 {
+        /// An Intel SGX quote.
+        quote: sgx::Quote,
+        /// The runtime's view of the consensus layer height at the time of attestation.
+        height: u64,
+        /// The signature of the attestation by the enclave (RAK).
+        signature: Signature,
+    },
 }
 
 impl SGXAttestation {
@@ -556,8 +578,19 @@ impl SGXAttestation {
     pub fn quote(&self) -> sgx::Quote {
         match self {
             Self::V0(avr) => sgx::Quote::Ias(avr.clone()),
-            Self::V1 { quote } => quote.clone(),
+            Self::V1 { quote, .. } => quote.clone(),
         }
+    }
+
+    /// Hashes the required data that needs to be signed by RAK producing the attestation signature.
+    pub fn hash(report_data: &[u8], node_id: PublicKey, height: u64) -> [u8; 32] {
+        let mut h = TupleHash::v256(ATTESTATION_SIGNATURE_CONTEXT);
+        h.update(report_data);
+        h.update(node_id.as_ref());
+        h.update(&height.to_le_bytes());
+        let mut result = [0u8; 32];
+        h.finalize(&mut result);
+        result
     }
 }
 
@@ -668,6 +701,8 @@ pub struct RuntimeGenesis {
 #[cfg(test)]
 mod tests {
     use std::net::Ipv4Addr;
+
+    use rustc_hex::ToHex;
 
     use crate::common::quantity::Quantity;
 
@@ -987,5 +1022,18 @@ mod tests {
             patch: 0,
         });
         assert_eq!(ad, None);
+    }
+
+    #[test]
+    fn test_hash_attestation() {
+        let h = SGXAttestation::hash(
+            b"foo bar",
+            PublicKey::from("47aadd91516ac548decdb436fde957992610facc09ba2f850da0fe1b2be96119"),
+            42,
+        );
+        assert_eq!(
+            h.to_hex::<String>(),
+            "0f01a5084bbf432427873cbce5f8c3bff76bc22b9d1e0674b852e43698abb195"
+        );
     }
 }

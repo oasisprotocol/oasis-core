@@ -272,6 +272,7 @@ impl Dispatcher {
             txn_dispatcher: Arc::from(txn_dispatcher),
             attestation_handler: attestation::Handler::new(
                 self.rak.clone(),
+                protocol.clone(),
                 consensus_verifier,
                 protocol.get_runtime_id(),
                 protocol.get_config().version,

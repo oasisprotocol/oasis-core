@@ -476,6 +476,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	sigNode *node.MultiSignedNode,
 	entity *entity.Entity,
 	now time.Time,
+	height uint64,
 	isGenesis bool,
 	isSanityCheck bool,
 	epoch beacon.EpochTime,
@@ -597,7 +598,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 
 			// If the node indicates TEE support for any of it's runtimes,
 			// validate the attestation evidence.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, rt, regRt, params.TEEFeatures, now); err != nil && !isSanityCheck {
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height); err != nil && !isSanityCheck {
 				return nil, nil, err
 			}
 
@@ -783,10 +784,12 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 // VerifyNodeRuntimeEnclaveIDs verifies TEE-specific attributes of the node's runtime.
 func VerifyNodeRuntimeEnclaveIDs(
 	logger *logging.Logger,
+	nodeID signature.PublicKey,
 	rt *node.Runtime,
 	regRt *Runtime,
 	teeCfg *node.TEEFeatures,
 	ts time.Time,
+	height uint64,
 ) error {
 	// If no TEE available, do nothing.
 	if rt.Capabilities.TEE == nil {
@@ -810,7 +813,7 @@ func VerifyNodeRuntimeEnclaveIDs(
 			continue
 		}
 
-		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, rtVersionInfo.TEE); err != nil {
+		if err := rt.Capabilities.TEE.Verify(teeCfg, ts, height, rtVersionInfo.TEE, nodeID); err != nil {
 			logger.Error("VerifyNodeRuntimeEnclaveIDs: failed to validate attestation",
 				"runtime_id", rt.ID,
 				"ts", ts,

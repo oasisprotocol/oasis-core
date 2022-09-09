@@ -28,6 +28,7 @@ pub mod config;
 pub mod consensus;
 pub mod dispatcher;
 pub mod enclave_rpc;
+pub mod host;
 pub mod init;
 pub mod macros;
 pub mod protocol;
