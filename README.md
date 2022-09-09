@@ -54,7 +54,7 @@ Read our [Security](docs/SECURITY.md) document.
 
 See our [developer documentation index].
 
-[developer documentation index]: docs/index.md
+[developer documentation index]: docs/README.md
 
 ## Developing and Building the System
 

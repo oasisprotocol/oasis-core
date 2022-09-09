@@ -161,7 +161,7 @@ https://github.com/oasisprotocol/oasis-core/blob/master/README.md).
   * Anyone else with write permissions should be able to close the issue if not
     addressed within a week.
 
-[developer documentation]: docs/index.md
+[developer documentation]: docs/README.md
 
 ### Contributing Documentation
 

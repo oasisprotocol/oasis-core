@@ -9,7 +9,7 @@ state summaries the [consensus layer] also serves as the [registry] for node and
 runtime metadata, a [scheduler] that elects runtime compute committees and a
 coordinator for [key manager replication].
 
-[consensus layer]: ../consensus/index.md
+[consensus layer]: ../consensus/README.md
 [verifying and storing]: ../consensus/services/roothash.md
 [registry]: ../consensus/services/registry.md
 [scheduler]: ../consensus/services/scheduler.md
@@ -86,7 +86,7 @@ was performed _correctly_ and that state was _correctly stored_. How does the
 consensus layer actually know that?
 
 <!-- markdownlint-disable line-length -->
-[consensus layer services]: ../consensus/index.md
+[consensus layer services]: ../consensus/README.md
 [runtime identifier]: identifiers.md
 [register the runtime]: ../consensus/services/registry.md#register-runtime
 [nodes will register]: ../consensus/services/registry.md#register-node

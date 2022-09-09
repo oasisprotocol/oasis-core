@@ -11,7 +11,7 @@ local development network.
 [prerequisites]: prerequisites.md
 [build instructions]: building.md
 [`oasis-net-runner`]: oasis-net-runner.md
-[runtime documentation]: ../runtime/index.md
+[runtime documentation]: ../runtime/README.md
 
 ## Provision a Single Validator Node Network
 
@@ -285,7 +285,7 @@ will get [suspended] until nodes for the runtime register.
 
 In the next step we will setup and run a runtime node.
 
-[suspended]: ../runtime/index.md#suspending-runtimes
+[suspended]: ../runtime/README.md#suspending-runtimes
 
 ## Running a Runtime Node
 

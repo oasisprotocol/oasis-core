@@ -37,7 +37,7 @@ For details on how certificate verification is performed see
 
 <!-- markdownlint-disable line-length -->
 [registry service]: consensus/services/registry.md
-[consensus layer]: consensus/index.md
+[consensus layer]: consensus/README.md
 [signed node descriptor]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#Node
 [Ed25519 key pair]: crypto.md
 [the `VerifyCertificate` implementation]: https://github.com/oasisprotocol/oasis-core/tree/master/go/common/crypto/tls/verify.go

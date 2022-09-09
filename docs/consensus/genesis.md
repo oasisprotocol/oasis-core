@@ -6,7 +6,7 @@ of the [consensus layer] and its services.
 For more details about the actual genesis document's API, see
 [genesis API documentation].
 
-[consensus layer]: index.md
+[consensus layer]: README.md
 [genesis API documentation]:
   https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/genesis/api
 
@@ -57,7 +57,7 @@ the parameter values that are used for the Oasis Network, see:
 
 <!-- markdownlint-disable line-length -->
 [Genesis File Overview]:
-  https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/genesis-doc.md
+  https://github.com/oasisprotocol/docs/blob/main/docs/node/genesis-doc.md
 <!-- markdownlint-enable line-length -->
 
 ### Canonical Form

@@ -13,7 +13,7 @@ below. This is not intended to be an exhaustive list.
 <!-- markdownlint-disable line-length -->
 [Oasis Foundation]: https://oasisprotocol.org/
 [Oasis Core]: https://github.com/oasisprotocol/oasis-core
-[Oasis Network]: https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/overview.md
+[Oasis Network]: https://github.com/oasisprotocol/docs/blob/main/docs/general/oasis-network/README.md
 <!-- markdownlint-enable line-length -->
 
 ## Specifications

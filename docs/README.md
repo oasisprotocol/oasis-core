@@ -47,7 +47,7 @@ given point in time.
 See the following sections for more details on specific components and their
 implementations.
 
-* [Consensus Layer](consensus/index.md)
+* [Consensus Layer](consensus/README.md)
   * [Transactions](consensus/transactions.md)
   * Services
     * [Epoch Time](consensus/services/epochtime.md)
@@ -60,8 +60,8 @@ implementations.
     * [Key Manager](consensus/services/keymanager.md)
   * [Genesis Document](consensus/genesis.md)
   * [Transaction Test Vectors](consensus/test-vectors.md)
-* [Runtime Layer](runtime/index.md)
-  * [Operation Model](runtime/index.md#operation-model)
+* [Runtime Layer](runtime/README.md)
+  * [Operation Model](runtime/README.md#operation-model)
   * [Runtime Host Protocol](runtime/runtime-host-protocol.md)
   * [Identifiers](runtime/identifiers.md)
   * [Messages](runtime/messages.md)
