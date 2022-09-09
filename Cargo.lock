@@ -1867,19 +1867,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbeffe8aae62d42a39195627a3f3741c0cb3679c0d3ebb87a724ceb4624374e0"
 
 [[package]]
-name = "oasis-core-client"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "futures 0.3.21",
- "io-context",
- "oasis-cbor",
- "oasis-core-runtime",
- "thiserror",
- "tokio 1.20.1",
-]
-
-[[package]]
 name = "oasis-core-keymanager-api-common"
 version = "0.0.0"
 dependencies = [
@@ -1903,7 +1890,6 @@ dependencies = [
  "io-context",
  "lru",
  "oasis-cbor",
- "oasis-core-client",
  "oasis-core-keymanager-api-common",
  "oasis-core-runtime",
  "thiserror",
@@ -2751,7 +2737,6 @@ dependencies = [
  "byteorder",
  "io-context",
  "oasis-cbor",
- "oasis-core-client",
  "oasis-core-keymanager-api-common",
  "oasis-core-keymanager-client",
  "oasis-core-runtime",

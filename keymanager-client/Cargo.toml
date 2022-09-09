@@ -5,7 +5,6 @@ authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
 edition = "2018"
 
 [dependencies]
-oasis-core-client = { path = "../client" }
 oasis-core-runtime = { path = "../runtime" }
 oasis-core-keymanager-api-common = { path = "../keymanager-api-common" }
 cbor = { version = "0.5.0", package = "oasis-cbor" }

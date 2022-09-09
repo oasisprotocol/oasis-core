@@ -16,7 +16,7 @@ use io_context::Context;
 use thiserror::Error;
 use tokio;
 
-use oasis_core_runtime::{
+use crate::{
     cbor,
     common::sgx::EnclaveIdentity,
     enclave_rpc::{
@@ -377,7 +377,7 @@ mod test {
     use futures::future::{self, BoxFuture};
     use io_context::Context;
 
-    use oasis_core_runtime::{
+    use crate::{
         enclave_rpc::{demux::Demux, session, types},
         rak::RAK,
     };

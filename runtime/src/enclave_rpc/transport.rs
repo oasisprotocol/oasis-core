@@ -4,7 +4,9 @@ use anyhow::{anyhow, Error as AnyError};
 use futures::future::{self, BoxFuture};
 use io_context::Context;
 
-use oasis_core_runtime::{enclave_rpc::types, protocol::Protocol, types::Body};
+use crate::{types::Body, Protocol};
+
+use super::types;
 
 /// An EnclaveRPC transport.
 pub trait Transport: Send + Sync {

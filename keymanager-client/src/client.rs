@@ -9,12 +9,11 @@ use futures::future::{self, BoxFuture};
 use io_context::Context;
 use lru::LruCache;
 
-use oasis_core_client::RpcClient;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{namespace::Namespace, sgx::EnclaveIdentity},
     consensus::{beacon::EpochTime, keymanager::SignedPolicySGX, verifier::Verifier},
-    enclave_rpc::session,
+    enclave_rpc::{client::RpcClient, session},
     protocol::Protocol,
     rak::RAK,
 };
