@@ -14,12 +14,6 @@ use sp800_185::{CShake, KMac};
 use x25519_dalek;
 use zeroize::Zeroize;
 
-use oasis_core_keymanager_api_common::{
-    EphemeralKeyRequest, InitRequest, InitResponse, KeyManagerError, KeyPair, LongTermKeyRequest,
-    MasterSecret, PrivateKey, PublicKey, ReplicateResponse, SignedInitResponse, SignedPublicKey,
-    StateKey, INIT_RESPONSE_CONTEXT, PUBLIC_KEY_CONTEXT,
-};
-use oasis_core_keymanager_client::{KeyManagerClient, RemoteClient};
 use oasis_core_runtime::{
     common::{
         crypto::{
@@ -35,7 +29,22 @@ use oasis_core_runtime::{
     BUILD_INFO,
 };
 
-use crate::{context::Context as KmContext, policy::Policy};
+use crate::{
+    api::{
+        EphemeralKeyRequest, InitRequest, InitResponse, KeyManagerError, LongTermKeyRequest,
+        ReplicateResponse, SignedInitResponse,
+    },
+    client::{KeyManagerClient, RemoteClient},
+    crypto::{KeyPair, MasterSecret, PrivateKey, PublicKey, SignedPublicKey, StateKey},
+    policy::Policy,
+    runtime::context::Context as KmContext,
+};
+
+/// Context used for the init response signature.
+const INIT_RESPONSE_CONTEXT: &[u8] = b"oasis-core/keymanager: init response";
+
+/// Context used for the public key signature.
+const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 
 lazy_static! {
     // Global KDF object.
@@ -535,25 +544,26 @@ impl Kdf {
 
 #[cfg(test)]
 mod tests {
-    use lru::LruCache;
-    use rustc_hex::{FromHex, ToHex};
     use std::{
         collections::HashSet,
         convert::TryInto,
         sync::{Arc, RwLock},
     };
 
-    use oasis_core_keymanager_api_common::{
-        EphemeralKeyRequest, KeyPairId, LongTermKeyRequest, MasterSecret, PublicKey,
-        PUBLIC_KEY_CONTEXT,
-    };
+    use lru::LruCache;
+    use rustc_hex::{FromHex, ToHex};
+
     use oasis_core_runtime::common::{crypto::signature::PrivateKey, namespace::Namespace};
 
-    use super::{
-        Inner, KeyRequest, EPHEMERAL_KDF_CUSTOM, EPHEMERAL_XOF_CUSTOM, RUNTIME_KDF_CUSTOM,
-        RUNTIME_XOF_CUSTOM,
+    use crate::{
+        api::{EphemeralKeyRequest, LongTermKeyRequest},
+        crypto::{KeyPairId, MasterSecret, PublicKey},
     };
-    use crate::kdf::Kdf;
+
+    use super::{
+        Inner, Kdf, KeyRequest, EPHEMERAL_KDF_CUSTOM, EPHEMERAL_XOF_CUSTOM, PUBLIC_KEY_CONTEXT,
+        RUNTIME_KDF_CUSTOM, RUNTIME_XOF_CUSTOM,
+    };
 
     struct SimpleKeyRequest<'a> {
         seed: &'a str,

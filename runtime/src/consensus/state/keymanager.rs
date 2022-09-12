@@ -1,6 +1,4 @@
 //! Key manager state in the consensus layer.
-use std::default::Default;
-
 use anyhow::anyhow;
 use io_context::Context;
 

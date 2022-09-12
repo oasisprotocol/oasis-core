@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     dispatcher::{Initializer, PostInitState, PreInitState},
     enclave_rpc::{
@@ -9,7 +8,17 @@ use oasis_core_runtime::{
     },
 };
 
-use crate::{context, kdf::Kdf, methods, policy::Policy};
+use crate::{
+    api::{
+        InitRequest, SignedInitResponse, LOCAL_METHOD_INIT, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
+        METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
+        METHOD_REPLICATE_MASTER_SECRET,
+    },
+    crypto::kdf::Kdf,
+    policy::{set_trusted_policy_signers, Policy, TrustedPolicySigners},
+};
+
+use super::{context, methods};
 
 /// Initialize the Kdf.
 fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Result<SignedInitResponse> {

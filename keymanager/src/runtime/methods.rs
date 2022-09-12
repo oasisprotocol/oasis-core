@@ -1,12 +1,20 @@
 //! Methods exported to remote clients via EnclaveRPC.
-use crate::{kdf::Kdf, policy::Policy};
 use anyhow::Result;
 use io_context::Context;
-use oasis_core_keymanager_api_common::*;
+
 use oasis_core_runtime::{
     common::{namespace::Namespace, sgx::EnclaveIdentity},
     consensus::{beacon::EpochTime, state::beacon::ImmutableState as BeaconState},
     enclave_rpc::Context as RpcContext,
+};
+
+use crate::{
+    api::{
+        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateRequest,
+        ReplicateResponse,
+    },
+    crypto::{kdf::Kdf, KeyPair, SignedPublicKey},
+    policy::Policy,
 };
 
 /// Maximum age of an ephemeral key in the number of epochs.

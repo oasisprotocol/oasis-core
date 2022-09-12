@@ -1,15 +1,14 @@
-//! Key manager API common types and functions.
 use std::sync::{Mutex, Once};
 
+use anyhow::Result;
 use lazy_static::lazy_static;
 
-use oasis_core_runtime::consensus::keymanager::{PolicySGX, SignedPolicySGX};
+use oasis_core_runtime::{
+    self,
+    consensus::keymanager::{PolicySGX, SignedPolicySGX},
+};
 
-#[macro_use]
-pub mod api;
-
-// Re-exports.
-pub use api::*;
+use crate::{api::KeyManagerError, policy::TrustedPolicySigners};
 
 lazy_static! {
     /// Set of trusted policy signers.

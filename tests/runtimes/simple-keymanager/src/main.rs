@@ -1,4 +1,4 @@
-use oasis_core_keymanager_lib::keymanager::*;
+use oasis_core_keymanager::runtime::init::new_keymanager;
 use oasis_core_runtime::{common::version::Version, config::Config};
 
 mod api;

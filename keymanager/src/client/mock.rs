@@ -6,8 +6,13 @@ use futures::{
     TryFutureExt,
 };
 use io_context::Context;
-use oasis_core_keymanager_api_common::*;
+
 use oasis_core_runtime::{common::crypto::signature::Signature, consensus::beacon::EpochTime};
+
+use crate::{
+    api::KeyManagerError,
+    crypto::{KeyPair, KeyPairId, MasterSecret, SignedPublicKey},
+};
 
 use super::KeyManagerClient;
 

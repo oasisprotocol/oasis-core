@@ -22,8 +22,7 @@ threads = 6
 [dependencies]
 cbor = { version = "0.5.0", package = "oasis-cbor" }
 oasis-core-runtime = { path = "../../../runtime" }
-oasis-core-keymanager-client = { path = "../../../keymanager-client" }
-oasis-core-keymanager-api-common = { path = "../../../keymanager-api-common" }
+oasis-core-keymanager = { path = "../../../keymanager" }
 simple-keymanager = { path = "../simple-keymanager" }
 
 # Third party.

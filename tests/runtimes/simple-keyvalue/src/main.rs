@@ -9,7 +9,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use oasis_core_keymanager_client::KeyManagerClient;
+use oasis_core_keymanager::client::KeyManagerClient;
 use oasis_core_runtime::{
     common::{crypto::hash::Hash, version::Version},
     config::Config,
@@ -366,7 +366,7 @@ pub fn main_with_version(version: Version) {
         let hi = state.protocol.get_host_info();
 
         // Create the key manager client.
-        let km_client = Arc::new(oasis_core_keymanager_client::RemoteClient::new_runtime(
+        let km_client = Arc::new(oasis_core_keymanager::client::RemoteClient::new_runtime(
             hi.runtime_id,
             state.protocol.clone(),
             state.consensus_verifier.clone(),

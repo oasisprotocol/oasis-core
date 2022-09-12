@@ -2,9 +2,7 @@
 members = [
     "runtime",
     "runtime-loader",
-    "keymanager-client",
-    "keymanager-api-common",
-    "keymanager-lib",
+    "keymanager",
     "tools",
 
     # Test runtimes.

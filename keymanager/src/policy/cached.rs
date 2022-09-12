@@ -11,7 +11,6 @@ use lazy_static::lazy_static;
 use sgx_isa::Keypolicy;
 use tiny_keccak::{Hasher, Sha3};
 
-use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{
         namespace::Namespace,
@@ -28,11 +27,14 @@ use oasis_core_runtime::{
     storage::KeyValue,
 };
 
-use crate::context::Context as KmContext;
+use crate::{api::KeyManagerError, runtime::context::Context as KmContext};
+
+use super::verify_policy_and_trusted_signers;
 
 lazy_static! {
     static ref POLICY: Policy = Policy::new();
 }
+
 const POLICY_STORAGE_KEY: &[u8] = b"keymanager_policy";
 const POLICY_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal policy v0";
 

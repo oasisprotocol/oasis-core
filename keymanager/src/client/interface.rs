@@ -1,15 +1,15 @@
 //! Key manager client.
-
-pub mod client;
-pub mod mock;
-
 use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use io_context::Context;
 
-use oasis_core_keymanager_api_common::{self, KeyManagerError};
 use oasis_core_runtime::consensus::beacon::EpochTime;
+
+use crate::{
+    api::KeyManagerError,
+    crypto::{KeyPair, KeyPairId, MasterSecret, SignedPublicKey},
+};
 
 /// Key manager client interface.
 pub trait KeyManagerClient: Send + Sync {
@@ -109,6 +109,3 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         KeyManagerClient::replicate_master_secret(&**self, ctx)
     }
 }
-
-// Re-exports.
-pub use self::{client::RemoteClient, oasis_core_keymanager_api_common::*};

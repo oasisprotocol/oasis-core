@@ -9,13 +9,22 @@ use futures::future::{self, BoxFuture};
 use io_context::Context;
 use lru::LruCache;
 
-use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{namespace::Namespace, sgx::EnclaveIdentity},
     consensus::{beacon::EpochTime, keymanager::SignedPolicySGX, verifier::Verifier},
     enclave_rpc::{client::RpcClient, session},
     protocol::Protocol,
     rak::RAK,
+};
+
+use crate::{
+    api::{
+        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateRequest,
+        ReplicateResponse, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS, METHOD_GET_OR_CREATE_KEYS,
+        METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY, METHOD_REPLICATE_MASTER_SECRET,
+    },
+    crypto::{KeyPair, KeyPairId, MasterSecret, SignedPublicKey},
+    policy::{set_trusted_policy_signers, verify_policy_and_trusted_signers, TrustedPolicySigners},
 };
 
 use super::KeyManagerClient;
