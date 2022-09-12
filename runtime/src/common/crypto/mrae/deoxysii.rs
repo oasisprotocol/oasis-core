@@ -84,11 +84,34 @@ pub fn box_open(
 
 #[cfg(test)]
 mod tests {
+    extern crate hex;
     extern crate test;
-
     use self::test::{black_box, Bencher};
     use super::*;
+    use hex::FromHex;
     use rand::RngCore;
+
+    #[test]
+    fn test_drive_symmetric_key() {
+        // use the same test Hex string for golang at: oasis-core/go/common/crypto/mrae/deoxysii/asymmetric_test.go
+        let private_key_buffer = <[u8; 32]>::from_hex(
+            "c07b151fbc1e7a11dff926111188f8d872f62eba0396da97c0a24adb75161750",
+        )
+        .expect("derive private key from hex string");
+        let private_key = x25519_dalek::StaticSecret::from(private_key_buffer);
+        let public_key = x25519_dalek::PublicKey::from(&private_key);
+        let public_key_hex = hex::encode(public_key.to_bytes());
+        assert_eq!(
+            public_key_hex,
+            "3046db3fa70ce605457dc47c48837ebd8bd0a26abfde5994d033e1ced68e2576"
+        );
+        let shared = derive_symmetric_key(&public_key.to_bytes(), &private_key.to_bytes());
+        let shared_hex = hex::encode(shared);
+        assert_eq!(
+            shared_hex,
+            "e69ac21066a8c2284e8fdc690e579af4513547b9b31dd144792c1904b45cf586"
+        );
+    }
 
     #[test]
     fn test_mrae_asymmetric() {

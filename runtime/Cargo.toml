@@ -67,6 +67,7 @@ features = ["full"]
 
 [dev-dependencies]
 # For storage interoperability tests only.
+hex = "0.4"
 jsonrpc = { version = "0.12.1", features = ["simple_uds"] }
 tempfile = "3.3.0"
 
