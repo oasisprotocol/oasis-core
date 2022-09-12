@@ -31,6 +31,9 @@ pub enum Error {
     #[error("consensus chain context transition failed: {0}")]
     ChainContextTransitionFailed(#[source] anyhow::Error),
 
+    #[error("freshness verification: {0}")]
+    FreshnessVerificationFailed(#[source] anyhow::Error),
+
     #[error("internal consensus verifier error")]
     Internal,
 }
@@ -42,7 +45,8 @@ impl Error {
             Error::VerificationFailed(_) => 2,
             Error::TrustedStateLoadingFailed => 3,
             Error::ChainContextTransitionFailed(_) => 4,
-            Error::Internal => 5,
+            Error::FreshnessVerificationFailed(_) => 5,
+            Error::Internal => 6,
         }
     }
 }
@@ -200,8 +204,8 @@ pub struct TrustedState {
 /// passed in order to optimize discovery for subsequent runs.
 pub fn verify_state_freshness(
     state: &ConsensusState,
-    trust_root: &TrustRoot,
     rak: &RAK,
+    runtime_id: &Namespace,
     version: &Version,
     node_id: &Option<PublicKey>,
 ) -> Result<Option<PublicKey>, Error> {
@@ -224,7 +228,7 @@ pub fn verify_state_freshness(
                     node_id,
                 ))
             })?;
-            if !node.has_tee(rak, &trust_root.runtime_id, version) {
+            if !node.has_tee(rak, runtime_id, version) {
                 return Err(Error::VerificationFailed(anyhow!(
                     "own RAK not found in registry state"
                 )));
@@ -242,7 +246,7 @@ pub fn verify_state_freshness(
             })?;
             let mut found_node: Option<PublicKey> = None;
             for node in nodes {
-                if node.has_tee(rak, &trust_root.runtime_id, version) {
+                if node.has_tee(rak, runtime_id, version) {
                     found_node = Some(node.id);
                     break;
                 }

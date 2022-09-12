@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	consensusTx "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -112,6 +113,8 @@ type Body struct {
 	HostFetchTxBatchResponse         *HostFetchTxBatchResponse         `json:",omitempty"`
 	HostFetchGenesisHeightRequest    *HostFetchGenesisHeightRequest    `json:",omitempty"`
 	HostFetchGenesisHeightResponse   *HostFetchGenesisHeightResponse   `json:",omitempty"`
+	HostProveFreshnessRequest        *HostProveFreshnessRequest        `json:",omitempty"`
+	HostProveFreshnessResponse       *HostProveFreshnessResponse       `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -529,4 +532,17 @@ type HostFetchTxBatchRequest struct {
 type HostFetchTxBatchResponse struct {
 	// Batch is a batch of transactions.
 	Batch [][]byte `json:"batch,omitempty"`
+}
+
+// HostProveFreshnessRequest is a request to host to prove state freshness.
+type HostProveFreshnessRequest struct {
+	Blob [32]byte `json:"blob"`
+}
+
+// HostProveFreshnessResponse is a response from host proving state freshness.
+type HostProveFreshnessResponse struct {
+	// SignedTx is a signed prove freshness transaction.
+	SignedTx *consensusTx.SignedTransaction `json:"signed_tx"`
+	// Proof of transaction inclusion in a block.
+	Proof *consensusTx.Proof `json:"proof"`
 }

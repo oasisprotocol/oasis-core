@@ -3,6 +3,7 @@ package committee
 import (
 	"context"
 
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -42,6 +43,11 @@ func (env *nodeEnvironment) GetKeyManagerClient(ctx context.Context) (runtimeKey
 // GetTxPool implements RuntimeHostHandlerEnvironment.
 func (env *nodeEnvironment) GetTxPool(ctx context.Context) (txpool.TransactionPool, error) {
 	return env.n.TxPool, nil
+}
+
+// GetIdentity implements RuntimeHostHandlerEnvironment.
+func (env *nodeEnvironment) GetNodeIdentity(ctx context.Context) (*identity.Identity, error) {
+	return env.n.Identity, nil
 }
 
 // NewRuntimeHostHandler implements RuntimeHostHandlerFactory.

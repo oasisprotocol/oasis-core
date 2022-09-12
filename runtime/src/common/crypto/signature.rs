@@ -178,6 +178,16 @@ impl Signature {
     }
 }
 
+/// Blob signed with one public key.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct Signed {
+    /// Signed blob.
+    #[cbor(rename = "untrusted_raw_value")]
+    pub blob: Vec<u8>,
+    /// Signature over the blob.
+    pub signature: SignatureBundle,
+}
+
 /// Blob signed by multiple public keys.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct MultiSigned {
@@ -195,6 +205,16 @@ pub struct SignatureBundle {
     pub public_key: PublicKey,
     /// Actual signature.
     pub signature: Signature,
+}
+
+impl SignatureBundle {
+    /// Verify returns true iff the signature is valid over the given context
+    /// and message.
+    pub fn verify(&self, context: &[u8], message: &[u8]) -> bool {
+        self.signature
+            .verify(&self.public_key, context, message)
+            .is_ok()
+    }
 }
 
 /// A abstract signer.

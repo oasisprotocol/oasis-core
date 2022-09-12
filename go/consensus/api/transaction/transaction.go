@@ -164,7 +164,7 @@ type PrettyTransaction struct {
 	Body   interface{} `json:"body,omitempty"`
 }
 
-// SignedTransaction is a signed transaction.
+// SignedTransaction is a signed consensus transaction.
 type SignedTransaction struct {
 	signature.Signed
 }
@@ -344,4 +344,13 @@ func NewMethodName(module, method string, bodyType interface{}) MethodName {
 	registeredMethods.Store(name, bodyType)
 
 	return MethodName(name)
+}
+
+// Proof is a proof of transaction inclusion in a block.
+type Proof struct {
+	// Height is the block height at which the transaction was published.
+	Height int64 `json:"height"`
+
+	// RawProof is the actual raw proof.
+	RawProof []byte `json:"raw_proof"`
 }

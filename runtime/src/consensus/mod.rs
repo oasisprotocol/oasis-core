@@ -9,6 +9,7 @@ pub mod scheduler;
 pub mod staking;
 pub mod state;
 pub mod tendermint;
+pub mod transaction;
 pub mod verifier;
 
 /// The height that represents the most recent block height.

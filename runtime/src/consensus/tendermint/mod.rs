@@ -1,5 +1,6 @@
 //! Tendermint consensus layer backend.
 
+pub mod merkle;
 mod store;
 pub mod verifier;
 

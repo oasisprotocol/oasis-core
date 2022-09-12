@@ -764,6 +764,11 @@ func (n *commonNode) SubmitTx(ctx context.Context, tx *transaction.SignedTransac
 }
 
 // Implements consensusAPI.Backend.
+func (n *commonNode) SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error) {
+	return nil, consensusAPI.ErrUnsupported
+}
+
+// Implements consensusAPI.Backend.
 func (n *commonNode) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
 	return nil, consensusAPI.ErrUnsupported
 }

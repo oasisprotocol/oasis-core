@@ -28,6 +28,7 @@ const (
 	runtimeInitTimeout         = 1 * time.Second
 	runtimeExtendedInitTimeout = 120 * time.Second
 	runtimeInterruptTimeout    = 1 * time.Second
+	resetTickerTimeout         = 15 * time.Minute
 
 	bindHostSocketPath = "/host.sock"
 
@@ -418,13 +419,7 @@ func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 }
 
 func (r *sandboxedRuntime) manager() {
-	// Initialize a ticker channel for restarting the process. Initialize it with a closed channel
-	// so that the first time, the process will be restarted immediately.
 	var ticker *backoff.Ticker
-	var tickerCh <-chan time.Time
-	ch := make(chan time.Time)
-	tickerCh = ch
-	close(ch)
 
 	defer func() {
 		r.logger.Warn("terminating runtime")
@@ -454,41 +449,42 @@ func (r *sandboxedRuntime) manager() {
 	for {
 		// Make sure to restart the process if terminated.
 		if r.process == nil {
+			firstTickCh := make(chan struct{}, 1)
+			if ticker == nil {
+				// Initialize a ticker for restarting the process. We use a separate channel
+				// to restart the process immediately on the first run, as we don't want to wait
+				// for the first tick.
+				ticker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
+				firstTickCh <- struct{}{}
+				attempt = 0
+			}
+
 			select {
 			case <-r.stopCh:
 				r.logger.Warn("termination requested")
 				return
-			case <-tickerCh:
-				attempt++
-				r.logger.Info("starting runtime",
-					"attempt", attempt,
+			case <-firstTickCh:
+			case <-ticker.C:
+			}
+
+			attempt++
+			r.logger.Info("starting runtime",
+				"attempt", attempt,
+			)
+
+			if err := r.startProcess(); err != nil {
+				r.logger.Error("failed to start runtime",
+					"err", err,
 				)
 
-				if err := r.startProcess(); err != nil {
-					r.logger.Error("failed to start runtime",
-						"err", err,
-					)
+				// Notify subscribers that a runtime has failed to start.
+				r.notifier.Broadcast(&host.Event{
+					FailedToStart: &host.FailedToStartEvent{
+						Error: err,
+					},
+				})
 
-					// Notify subscribers that a runtime has failed to start.
-					r.notifier.Broadcast(&host.Event{
-						FailedToStart: &host.FailedToStartEvent{
-							Error: err,
-						},
-					})
-
-					if ticker == nil {
-						ticker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
-						tickerCh = ticker.C
-					}
-					continue
-				}
-
-				// Runtime started successfully.
-				if ticker != nil {
-					ticker.Stop()
-					ticker = nil
-				}
-				attempt = 0
+				continue
 			}
 		}
 
@@ -504,7 +500,6 @@ func (r *sandboxedRuntime) manager() {
 				r.logger.Error("received unknown request type",
 					"request_type", fmt.Sprintf("%T", rq),
 				)
-				continue
 			}
 		case <-r.stopCh:
 			r.logger.Warn("termination requested")
@@ -523,7 +518,13 @@ func (r *sandboxedRuntime) manager() {
 
 			// Notify subscribers that the runtime has stopped.
 			r.notifier.Broadcast(&host.Event{Stopped: &host.StoppedEvent{}})
-			continue
+		case <-time.After(resetTickerTimeout):
+			// Reset the ticker if things work smoothly. Otherwise, keep on using the old ticker as
+			// it can happen that the runtime constantly terminates after a successful start.
+			if ticker != nil {
+				ticker.Stop()
+				ticker = nil
+			}
 		}
 	}
 }

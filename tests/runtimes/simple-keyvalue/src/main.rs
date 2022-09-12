@@ -419,6 +419,7 @@ pub fn main_with_version(version: Version) {
                     initial_batch_size: MAX_BATCH_SIZE.try_into().unwrap(),
                 }),
             }),
+            freshness_proofs: true,
             ..Default::default()
         },
     );

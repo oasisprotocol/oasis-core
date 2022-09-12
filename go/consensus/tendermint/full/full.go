@@ -4,6 +4,7 @@ package full
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/spf13/viper"
 	tmabcitypes "github.com/tendermint/tendermint/abci/types"
 	tmconfig "github.com/tendermint/tendermint/config"
+	tmmerkle "github.com/tendermint/tendermint/crypto/merkle"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmlight "github.com/tendermint/tendermint/light"
 	tmmempool "github.com/tendermint/tendermint/mempool"
@@ -244,18 +246,56 @@ func (t *fullService) Mode() consensusAPI.Mode {
 
 // Implements consensusAPI.Backend.
 func (t *fullService) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
+	if _, err := t.submitTx(ctx, tx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Implements consensusAPI.Backend.
+func (t *fullService) SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error) {
+	data, err := t.submitTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	txs, err := t.GetTransactions(ctx, data.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	if data.Index >= uint32(len(txs)) {
+		return nil, fmt.Errorf("tendermint: invalid transaction index")
+	}
+
+	// Tendermint Merkle tree is computed over hashes and not over transactions.
+	hashes := make([][]byte, 0, len(txs))
+	for _, tx := range txs {
+		hash := sha256.Sum256(tx)
+		hashes = append(hashes, hash[:])
+	}
+
+	_, proofs := tmmerkle.ProofsFromByteSlices(hashes)
+
+	return &transaction.Proof{
+		Height:   data.Height,
+		RawProof: cbor.Marshal(proofs[data.Index]),
+	}, nil
+}
+
+func (t *fullService) submitTx(ctx context.Context, tx *transaction.SignedTransaction) (*tmtypes.EventDataTx, error) {
 	// Subscribe to the transaction being included in a block.
 	data := cbor.Marshal(tx)
 	query := tmtypes.EventQueryTxFor(data)
 	subID := t.newSubscriberID()
 	txSub, err := t.subscribe(subID, query)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if ptrSub, ok := txSub.(*tendermintPubsubBuffer).tmSubscription.(*tmpubsub.Subscription); ok && ptrSub == nil {
 		t.Logger.Debug("broadcastTx: service has shut down. Cancel our context to recover")
 		<-ctx.Done()
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	defer t.unsubscribe(subID, query) // nolint: errcheck
@@ -265,28 +305,29 @@ func (t *fullService) SubmitTx(ctx context.Context, tx *transaction.SignedTransa
 
 	recheckCh, recheckSub, err := t.mux.WatchInvalidatedTx(txHash)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer recheckSub.Close()
 
 	// First try to broadcast.
 	if err := t.broadcastTxRaw(data); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Wait for the transaction to be included in a block.
 	select {
 	case v := <-recheckCh:
-		return v
+		return nil, v
 	case v := <-txSub.Out():
-		if result := v.Data().(tmtypes.EventDataTx).Result; !result.IsOK() {
-			return errors.FromCode(result.GetCodespace(), result.GetCode(), result.GetLog())
+		data := v.Data().(tmtypes.EventDataTx)
+		if result := data.Result; !result.IsOK() {
+			return nil, errors.FromCode(result.GetCodespace(), result.GetCode(), result.GetLog())
 		}
-		return nil
+		return &data, nil
 	case <-txSub.Cancelled():
-		return context.Canceled
+		return nil, context.Canceled
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 }
 
