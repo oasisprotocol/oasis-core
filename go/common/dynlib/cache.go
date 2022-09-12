@@ -537,6 +537,7 @@ func archDepsMusl() (elf.Machine, []string, error) {
 			"/lib64",
 			"/usr/lib64",
 			"/usr/lib/x86_64-linux-gnu",
+			"/lib/x86_64-linux-gnu", // Devuan (and others)
 		}
 	default:
 		return elf.EM_NONE, nil, errUnsupported
