@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    default::Default,
-};
+use std::{collections::HashSet, default::Default, vec};
 
 use rand::{rngs::OsRng, Rng};
 use thiserror::Error;
@@ -10,11 +7,13 @@ use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
-        crypto::signature::{PublicKey as OasisPublicKey, Signature, SignatureBundle},
+        crypto::signature::{PublicKey as OasisPublicKey, Signature},
         namespace::Namespace,
-        sgx::EnclaveIdentity,
     },
-    consensus::beacon::EpochTime,
+    consensus::{
+        beacon::EpochTime,
+        keymanager::{PolicySGX, SignedPolicySGX},
+    },
     impl_bytes,
 };
 
@@ -255,36 +254,16 @@ pub enum KeyManagerError {
     PolicyRollback,
     #[error("policy alteration, without serial increment")]
     PolicyChanged,
-    #[error("policy is malformed or invalid")]
-    PolicyInvalid,
-    #[error("policy failed signature verification")]
-    PolicyInvalidSignature,
+    #[error("policy has invalid runtime")]
+    PolicyInvalidRuntime,
+    #[error("policy is malformed or invalid: {0}")]
+    PolicyInvalid(#[from] anyhow::Error),
     #[error("policy has insufficient signatures")]
     PolicyInsufficientSignatures,
+    #[error("policy hasn't been published")]
+    PolicyNotPublished,
     #[error(transparent)]
     Other(anyhow::Error),
-}
-
-/// Key manager access control policy.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-pub struct PolicySGX {
-    pub serial: u32,
-    pub id: Namespace,
-    pub enclaves: HashMap<EnclaveIdentity, EnclavePolicySGX>,
-}
-
-/// Per enclave key manager access control policy.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-pub struct EnclavePolicySGX {
-    pub may_query: HashMap<Namespace, Vec<EnclaveIdentity>>,
-    pub may_replicate: Vec<EnclaveIdentity>,
-}
-
-/// Signed key manager access control policy.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
-pub struct SignedPolicySGX {
-    pub policy: PolicySGX,
-    pub signatures: Vec<SignatureBundle>,
 }
 
 /// Set of trusted key manager policy signing keys.
@@ -305,6 +284,40 @@ impl Default for TrustedPolicySigners {
     }
 }
 
+impl TrustedPolicySigners {
+    /// Verify that policy has valid signatures and that enough of them are from trusted signers.
+    pub fn verify<'a>(
+        &self,
+        signed_policy: &'a SignedPolicySGX,
+    ) -> Result<&'a PolicySGX, KeyManagerError> {
+        let policy = signed_policy
+            .verify()
+            .map_err(|err| KeyManagerError::PolicyInvalid(err.into()))?;
+
+        self.verify_trusted_signers(signed_policy)?;
+
+        Ok(policy)
+    }
+
+    /// Verify that policy has enough signatures from trusted signers.
+    fn verify_trusted_signers(
+        &self,
+        signed_policy: &SignedPolicySGX,
+    ) -> Result<(), KeyManagerError> {
+        // Use set to remove duplicates.
+        let all: HashSet<_> = signed_policy
+            .signatures
+            .iter()
+            .map(|s| s.public_key)
+            .collect();
+        let trusted: HashSet<_> = self.signers.intersection(&all).collect();
+        if trusted.len() < self.threshold as usize {
+            return Err(KeyManagerError::PolicyInsufficientSignatures);
+        }
+        Ok(())
+    }
+}
+
 /// Name of the `get_or_create_keys` method.
 pub const METHOD_GET_OR_CREATE_KEYS: &str = "get_or_create_keys";
 /// Name of the `get_public_key` method.
@@ -318,3 +331,88 @@ pub const METHOD_REPLICATE_MASTER_SECRET: &str = "replicate_master_secret";
 
 /// Name of the `init` local method.
 pub const LOCAL_METHOD_INIT: &str = "init";
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashSet, iter::FromIterator};
+
+    use crypto::signature::{PublicKey as OasisPublicKey, SignatureBundle};
+    use oasis_core_runtime::{common::crypto, consensus::keymanager::SignedPolicySGX};
+
+    use crate::TrustedPolicySigners;
+
+    #[test]
+    fn test_trusted_policy_signers() {
+        // Prepare data for tests.
+        let public_keys = vec![
+            OasisPublicKey::from(
+                "af2c61c73142d1718fb51a7e151680ab4fea5ed0a95108e4e9d6719a6ef6186e",
+            ), // trusted
+            OasisPublicKey::from(
+                "2b87e78e941cccca2222dd30fca04dee45d7e652da907d607b0971422c1bde1f",
+            ), // trusted
+            OasisPublicKey::from(
+                "2c1378defc5a1d932c18c87008e6d33e6fcfed33312fa3224de4e3d7fcc3251c",
+            ), // trusted
+            OasisPublicKey::from(
+                "235ca1d91ed078a3568018bef563edfb3503afa6434dbdee8310ab6fe2df50a7",
+            ),
+            OasisPublicKey::from(
+                "17504048e11cbc8bc164785379f993f1a6934c3a9f10a78b178b59e85cd7c4c4",
+            ),
+        ];
+        let signatures = vec![
+            SignatureBundle {
+                public_key: public_keys[1], // trusted
+                ..Default::default()
+            },
+            SignatureBundle {
+                public_key: public_keys[2], // trusted
+                ..Default::default()
+            },
+            SignatureBundle {
+                public_key: public_keys[3],
+                ..Default::default()
+            },
+            SignatureBundle {
+                public_key: public_keys[4],
+                ..Default::default()
+            },
+        ];
+        let trusted_signers = TrustedPolicySigners {
+            signers: HashSet::from_iter(vec![public_keys[0], public_keys[1], public_keys[2]]),
+            threshold: 2,
+        };
+
+        // Happy path, enough trust (2/3).
+        let policy = SignedPolicySGX {
+            signatures: signatures[..].to_vec(),
+            ..Default::default()
+        };
+        trusted_signers
+            .verify_trusted_signers(&policy)
+            .expect("policy should be trusted");
+
+        // Not enough trust (1/3).
+        let policy = SignedPolicySGX {
+            signatures: signatures[1..].to_vec(),
+            ..Default::default()
+        };
+        trusted_signers
+            .verify_trusted_signers(&policy)
+            .expect_err("policy should not be trusted");
+
+        // Multiple signatures from the same signer.
+        let policy = SignedPolicySGX {
+            signatures: vec![
+                signatures[0].clone(),
+                signatures[0].clone(),
+                signatures[0].clone(),
+            ],
+            ..Default::default()
+        };
+        trusted_signers
+            .verify_trusted_signers(&policy)
+            .expect_err("policy should not be trusted");
+    }
+}

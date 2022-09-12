@@ -1,12 +1,9 @@
 //! Key manager API common types and functions.
-use std::{
-    collections::HashSet,
-    sync::{Mutex, Once},
-};
+use std::sync::{Mutex, Once};
 
 use lazy_static::lazy_static;
 
-use oasis_core_runtime::common::crypto::signature::PublicKey as OasisPublicKey;
+use oasis_core_runtime::consensus::keymanager::{PolicySGX, SignedPolicySGX};
 
 #[macro_use]
 pub mod api;
@@ -32,35 +29,10 @@ pub fn set_trusted_policy_signers(signers: TrustedPolicySigners) -> bool {
     true
 }
 
-const POLICY_SIGN_CONTEXT: &[u8] = b"oasis-core/keymanager: policy";
-
-impl SignedPolicySGX {
-    /// Verify the signatures and return the PolicySGX, if the signatures are correct.
-    pub fn verify(&self) -> Result<PolicySGX, KeyManagerError> {
-        // Verify the signatures.
-        let untrusted_policy_raw = cbor::to_vec(self.policy.clone());
-        let mut signers: HashSet<OasisPublicKey> = HashSet::new();
-        for sig in &self.signatures {
-            let public_key = match sig.public_key {
-                Some(public_key) => public_key,
-                None => return Err(KeyManagerError::PolicyInvalid),
-            };
-
-            sig.signature
-                .verify(&public_key, POLICY_SIGN_CONTEXT, &untrusted_policy_raw)
-                .map_err(|_| KeyManagerError::PolicyInvalidSignature)?;
-
-            signers.insert(public_key);
-        }
-
-        // Ensure that enough valid signatures from trusted signers are present.
-        let trusted_signers = TRUSTED_SIGNERS.lock().unwrap();
-        let signers: HashSet<_> = trusted_signers.signers.intersection(&signers).collect();
-        let multisig_threshold = trusted_signers.threshold;
-        if signers.len() < multisig_threshold as usize {
-            return Err(KeyManagerError::PolicyInsufficientSignatures);
-        }
-
-        Ok(self.policy.clone())
-    }
+/// Verify that policy has valid signatures and that enough of them are from the global set
+/// of trusted policy signers.
+pub fn verify_policy_and_trusted_signers(
+    signed_policy: &SignedPolicySGX,
+) -> Result<&PolicySGX, KeyManagerError> {
+    TRUSTED_SIGNERS.lock().unwrap().verify(signed_policy)
 }

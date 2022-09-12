@@ -13,7 +13,7 @@ use oasis_core_client::RpcClient;
 use oasis_core_keymanager_api_common::*;
 use oasis_core_runtime::{
     common::{namespace::Namespace, sgx::EnclaveIdentity},
-    consensus::{beacon::EpochTime, verifier::Verifier},
+    consensus::{beacon::EpochTime, keymanager::SignedPolicySGX, verifier::Verifier},
     enclave_rpc::session,
     protocol::Protocol,
     rak::RAK,
@@ -130,12 +130,14 @@ impl RemoteClient {
 
     /// Set client allowed enclaves from key manager policy.
     pub fn set_policy(&self, signed_policy_raw: Vec<u8>) -> Result<(), KeyManagerError> {
-        let untrusted_policy: SignedPolicySGX =
-            cbor::from_slice(&signed_policy_raw).map_err(|_| KeyManagerError::PolicyInvalid)?;
-        let policy = untrusted_policy.verify()?;
+        let untrusted_policy: SignedPolicySGX = cbor::from_slice(&signed_policy_raw)
+            .map_err(|err| KeyManagerError::PolicyInvalid(err.into()))?;
+        let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+
         let policies: HashSet<EnclaveIdentity> =
             HashSet::from_iter(policy.enclaves.keys().cloned());
         self.inner.rpc_client.update_enclaves(Some(policies));
+
         Ok(())
     }
 }

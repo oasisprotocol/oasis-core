@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
+use io_context::Context;
 use lazy_static::lazy_static;
 use sgx_isa::Keypolicy;
 use tiny_keccak::{Hasher, Sha3};
@@ -18,6 +19,9 @@ use oasis_core_runtime::{
             seal::{seal, unseal},
             EnclaveIdentity,
         },
+    },
+    consensus::{
+        keymanager::SignedPolicySGX, state::keymanager::ImmutableState as KeyManagerState,
     },
     enclave_rpc::Context as RpcContext,
     runtime_context,
@@ -64,6 +68,29 @@ impl Policy {
             return Ok(vec![]);
         }
 
+        // De-serialize the new policy, verify signatures.
+        let new_policy = CachedPolicy::parse(raw_policy)?;
+
+        // Ensure the new policy's runtime ID matches the current enclave's.
+        let rctx = runtime_context!(ctx, KmContext);
+        if rctx.runtime_id != new_policy.runtime_id {
+            return Err(KeyManagerError::PolicyInvalidRuntime.into());
+        }
+
+        // Ensure the new policy was published in the consensus layer.
+        let state = ctx.consensus_verifier.latest_state()?;
+        let km_state = KeyManagerState::new(&state);
+        let published_policy = km_state
+            .status(Context::create_child(&ctx.io_ctx), new_policy.runtime_id)?
+            .ok_or(KeyManagerError::PolicyNotPublished)?
+            .policy
+            .ok_or(KeyManagerError::PolicyNotPublished)?;
+        let untrusted_policy: SignedPolicySGX = cbor::from_slice(raw_policy)?;
+        if untrusted_policy != published_policy {
+            return Err(KeyManagerError::PolicyNotPublished.into());
+        }
+
+        // Lock as late as possible.
         let mut inner = self.inner.write().unwrap();
 
         // If there is no existing policy, attempt to load from local storage.
@@ -71,15 +98,6 @@ impl Policy {
             inner.policy.as_ref().cloned().unwrap_or_else(|| {
                 Self::load_policy(ctx.untrusted_local_storage).unwrap_or_default()
             });
-
-        // De-serialize the new policy, verify signatures.
-        let new_policy = CachedPolicy::parse(raw_policy)?;
-
-        // Ensure the new policy's runtime ID matches the current enclave's.
-        let rctx = runtime_context!(ctx, KmContext);
-        if rctx.runtime_id != new_policy.runtime_id {
-            return Err(KeyManagerError::PolicyInvalid.into());
-        }
 
         // Compare the new serial number with the old serial number, ensure
         // it is greater.
@@ -200,7 +218,7 @@ impl CachedPolicy {
     fn parse(raw: &[u8]) -> Result<Self> {
         // Parse out the signed policy.
         let untrusted_policy: SignedPolicySGX = cbor::from_slice(raw)?;
-        let policy = untrusted_policy.verify()?;
+        let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
 
         let mut cached_policy = Self::default();
         cached_policy.serial = policy.serial;
