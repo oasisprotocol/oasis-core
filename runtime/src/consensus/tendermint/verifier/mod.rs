@@ -45,7 +45,7 @@ use crate::{
         },
         transaction::{Transaction, SIGNATURE_CONTEXT},
         verifier::{self, verify_state_freshness, Error, TrustRoot, TrustedState},
-        Event, LightBlock,
+        Event, LightBlock, HEIGHT_LATEST,
     },
     protocol::Protocol,
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
@@ -125,19 +125,33 @@ impl Verifier {
         }
     }
 
+    fn verify_to_target(
+        &self,
+        height: u64,
+        cache: &mut Cache,
+        instance: &mut Instance,
+    ) -> Result<TMLightBlock, Error> {
+        let verified_block = match height {
+            HEIGHT_LATEST => instance.light_client.verify_to_highest(&mut instance.state),
+            _ => instance
+                .light_client
+                .verify_to_target(height.try_into().unwrap(), &mut instance.state),
+        }
+        .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        cache.update_verified_block(&verified_block);
+        self.update_insecure_posix_time(&verified_block);
+
+        Ok(verified_block)
+    }
+
     fn sync(&self, cache: &mut Cache, instance: &mut Instance, height: u64) -> Result<(), Error> {
-        if height < cache.last_verified_height || height < cache.latest_known_height() {
+        if height < cache.last_verified_height || height < cache.latest_known_height().unwrap_or(0)
+        {
             // Ignore requests for earlier heights.
             return Ok(());
         }
-
-        let verified_block = instance
-            .light_client
-            .verify_to_target(height.try_into().unwrap(), &mut instance.state)
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(verified_block);
-
+        self.verify_to_target(height, cache, instance)?;
         Ok(())
     }
 
@@ -146,12 +160,13 @@ impl Verifier {
         cache: &mut Cache,
         instance: &mut Instance,
     ) -> Result<ConsensusState, Error> {
-        let height = cache.latest_known_height();
+        let height = self.latest_consensus_height(cache)?;
         self.consensus_state_at(cache, instance, height)
     }
 
     fn latest_consensus_height(&self, cache: &Cache) -> Result<u64, Error> {
-        Ok(cache.latest_known_height())
+        let height = cache.latest_known_height().ok_or(Error::Internal)?;
+        Ok(height)
     }
 
     fn consensus_state_at(
@@ -160,14 +175,8 @@ impl Verifier {
         instance: &mut Instance,
         height: u64,
     ) -> Result<ConsensusState, Error> {
-        let verified_block = instance
-            .light_client
-            .verify_to_target(height.try_into().unwrap(), &mut instance.state)
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        let verified_block = self.verify_to_target(height, cache, instance)?;
         let state_root = state_root_from_header(&verified_block.signed_header);
-
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(verified_block);
 
         Ok(ConsensusState::from_protocol(
             self.protocol.clone(),
@@ -199,19 +208,15 @@ impl Verifier {
 
         // Verify up to the block at current height.
         // Only does forward verification and fails if height is lower than the last trust height.
-        let verified_block = instance
-            .light_client
-            .verify_to_target(untrusted_header.header().height, &mut instance.state)
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        let height = untrusted_header.header().height.value();
+        let verified_block = self.verify_to_target(height, cache, instance)?;
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
-        cache.last_verified_height = verified_block.signed_header.header.height.into();
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(verified_block);
+        cache.last_verified_height = height;
 
         Ok(untrusted_block)
     }
@@ -239,7 +244,11 @@ impl Verifier {
     /// in a block, the host replies with block's height, transaction details and a Merkle proof
     /// that the transaction was included in the block. In the final step, the verifier verifies
     /// the proof and accepts state as fresh iff verification succeeds.
-    fn verify_freshness_with_proof(&self, instance: &mut Instance) -> Result<(), Error> {
+    fn verify_freshness_with_proof(
+        &self,
+        instance: &mut Instance,
+        cache: &mut Cache,
+    ) -> Result<(), Error> {
         info!(
             self.logger,
             "Verifying state freshness using prove freshness transaction"
@@ -285,14 +294,13 @@ impl Verifier {
         }
 
         // Fetch the block in which the transaction was published.
-        let block = instance
-            .light_client
-            .verify_to_target(height.try_into().unwrap(), &mut instance.state)
+        let verified_block = self
+            .verify_to_target(height, cache, instance)
             .map_err(|err| {
                 Error::FreshnessVerificationFailed(anyhow!("failed to fetch the block: {}", err))
             })?;
 
-        let header = block.signed_header.header;
+        let header = verified_block.signed_header.header;
         if header.height.value() != height {
             return Err(Error::VerificationFailed(anyhow!("invalid block")));
         }
@@ -462,22 +470,15 @@ impl Verifier {
 
         // Verify up to the block at current height.
         // Only does forward verification and fails if height is lower than the last trust height.
-        let verified_block = instance
-            .light_client
-            .verify_to_target(untrusted_header.header().height, &mut instance.state)
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        let height = untrusted_header.header().height.value();
+        let verified_block = self.verify_to_target(height, cache, instance)?;
 
         // Validate passed consensus block.
         if untrusted_header != &verified_block.signed_header {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
-        self.update_insecure_posix_time(&verified_block);
-        cache.update_verified_block(verified_block);
-
-        let consensus_block = untrusted_block;
-
-        let state_root = consensus_block.get_state_root();
+        let state_root = untrusted_block.get_state_root();
         let state = ConsensusState::from_protocol(
             self.protocol.clone(),
             state_root.version + 1,
@@ -703,19 +704,16 @@ impl Verifier {
             "trust_root_chain_context" => ?trust_root.chain_context,
         );
 
+        let mut cache = Cache::default();
+
         // Sync the verifier up to the latest block to make sure we are up to date before
         // processing any requests.
-        let verified_block = instance
-            .light_client
-            .verify_to_highest(&mut instance.state)
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
+        let verified_block = self.verify_to_target(HEIGHT_LATEST, &mut cache, &mut instance)?;
 
         self.trusted_state_store.save(&verified_block);
-        self.update_insecure_posix_time(&verified_block);
 
         let mut last_saved_verified_block_height =
             verified_block.signed_header.header.height.value();
-        let mut cache = Cache::new(verified_block);
 
         info!(self.logger, "Consensus verifier synced";
             "latest_height" => cache.latest_known_height(),
@@ -725,7 +723,7 @@ impl Verifier {
         // as executors and key managers verify freshness regularly using node registration
         // (RAK with random nonces).
         if self.protocol.get_config().freshness_proofs {
-            self.verify_freshness_with_proof(&mut instance)?;
+            self.verify_freshness_with_proof(&mut instance, &mut cache)?;
         };
 
         // Start the command processing loop.
@@ -788,10 +786,12 @@ impl Verifier {
             }
 
             // Persist last verified block once in a while.
-            let last_height = cache.latest_known_height();
-            if last_height - last_saved_verified_block_height > TRUSTED_STATE_SAVE_INTERVAL {
-                self.trusted_state_store.save(&cache.last_verified_block);
-                last_saved_verified_block_height = last_height;
+            if let Some(last_verified_block) = cache.last_verified_block.as_ref() {
+                let last_height = last_verified_block.signed_header.header.height.into();
+                if last_height - last_saved_verified_block_height > TRUSTED_STATE_SAVE_INTERVAL {
+                    self.trusted_state_store.save(last_verified_block);
+                    last_saved_verified_block_height = last_height;
+                }
             }
         }
     }
