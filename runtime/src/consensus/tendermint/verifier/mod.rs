@@ -5,7 +5,6 @@ use anyhow::anyhow;
 use crossbeam::channel;
 use io_context::Context;
 use rand::{rngs::OsRng, Rng};
-use sgx_isa::Keypolicy;
 use sha2::{Digest, Sha256};
 use slog::{error, info};
 use tendermint::merkle::HASH_SIZE;
@@ -23,10 +22,7 @@ use tendermint_light_client::{
 
 use crate::{
     common::{
-        crypto::signature::PublicKey,
-        logger::get_logger,
-        sgx::{seal, EnclaveIdentity},
-        time,
+        crypto::signature::PublicKey, logger::get_logger, namespace::Namespace, time,
         version::Version,
     },
     consensus::{
@@ -37,11 +33,11 @@ use crate::{
             ConsensusState,
         },
         tendermint::{
-            decode_light_block, encode_light_block, state_root_from_header,
-            store::LruStore,
+            decode_light_block, state_root_from_header,
             verifier::{
                 clock::InsecureClock,
                 io::Io,
+                store::LruStore,
                 types::{Command, Nonce, NONCE_SIZE},
                 voting::DomSepVotingPowerCalculator,
             },
@@ -51,12 +47,11 @@ use crate::{
         verifier::{self, verify_state_freshness, Error, TrustRoot, TrustedState},
         Event, LightBlock,
     },
-    protocol::{Protocol, ProtocolUntrustedLocalStorage},
-    storage::KeyValue,
+    protocol::Protocol,
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
 };
 
-use self::{cache::Cache, handle::Handle};
+use self::{cache::Cache, handle::Handle, store::TrustedStateStore};
 
 // Modules.
 mod cache;
@@ -64,6 +59,7 @@ mod clock;
 mod handle;
 mod io;
 mod noop;
+mod store;
 mod types;
 mod voting;
 
@@ -72,13 +68,7 @@ pub use noop::NopVerifier;
 
 /// Maximum number of times to retry initialization.
 const MAX_INITIALIZATION_RETRIES: usize = 3;
-/// Storage key prefix under which the sealed trusted state is stored in
-/// the untrusted local storage.
-///
-/// The actual key includes the MRENCLAVE to support upgrades.
-const TRUSTED_STATE_STORAGE_KEY_PREFIX: &str = "tendermint.verifier.trusted_state";
-/// Domain separation context for the trusted state.
-const TRUSTED_STATE_CONTEXT: &[u8] = b"oasis-core/verifier: trusted state";
+
 /// Trusted state save interval (in consensus blocks).
 const TRUSTED_STATE_SAVE_INTERVAL: u64 = 128;
 
@@ -87,25 +77,43 @@ pub struct Verifier {
     logger: slog::Logger,
     protocol: Arc<Protocol>,
     runtime_version: Version,
+    runtime_id: Namespace,
+    chain_context: String,
     trust_root: TrustRoot,
     command_sender: channel::Sender<Command>,
     command_receiver: channel::Receiver<Command>,
+    trusted_state_store: TrustedStateStore,
 }
 
 impl Verifier {
     /// Create a new Tendermint consensus layer verifier.
-    pub fn new(protocol: Arc<Protocol>, trust_root: TrustRoot) -> Self {
+    pub fn new(
+        protocol: Arc<Protocol>,
+        trust_root: TrustRoot,
+        runtime_id: Namespace,
+        chain_context: String,
+    ) -> Self {
         let logger = get_logger("consensus/tendermint/verifier");
         let (command_sender, command_receiver) = channel::unbounded();
         let runtime_version = protocol.get_config().version;
+        let trusted_state_store =
+            TrustedStateStore::new(runtime_id, chain_context.clone(), protocol.clone());
+
+        assert_eq!(
+            trust_root.runtime_id, runtime_id,
+            "trust root must have the same runtime id"
+        );
 
         Self {
             logger,
             protocol,
             runtime_version,
+            runtime_id,
+            chain_context,
             trust_root,
             command_sender,
             command_receiver,
+            trusted_state_store,
         }
     }
 
@@ -220,13 +228,7 @@ impl Verifier {
             return Ok(None);
         };
 
-        verify_state_freshness(
-            state,
-            rak,
-            &self.trust_root.runtime_id,
-            &self.runtime_version,
-            node_id,
-        )
+        verify_state_freshness(state, rak, &self.runtime_id, &self.runtime_version, node_id)
     }
 
     /// Verify state freshness using prove freshness transaction.
@@ -274,9 +276,8 @@ impl Verifier {
             _ => return Err(Error::FreshnessVerificationFailed(anyhow!("invalid nonce"))),
         }
 
-        let chain_context = self.protocol.get_host_info().consensus_chain_context;
         let mut context = SIGNATURE_CONTEXT.to_vec();
-        context.extend(chain_context.as_bytes());
+        context.extend(self.chain_context.as_bytes());
         if !signed_tx.signature.verify(&context, &signed_tx.blob) {
             return Err(Error::FreshnessVerificationFailed(anyhow!(
                 "failed to verify the signature"
@@ -331,7 +332,7 @@ impl Verifier {
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
         // Verify runtime ID matches.
-        if runtime_header.namespace != self.trust_root.runtime_id {
+        if runtime_header.namespace != self.runtime_id {
             return Err(Error::VerificationFailed(anyhow!(
                 "header namespace does not match trusted runtime id"
             )));
@@ -386,7 +387,7 @@ impl Verifier {
         // Verify that the state root matches.
         let roothash_state = RoothashState::new(&state);
         let state_root = roothash_state
-            .state_root(Context::background(), self.trust_root.runtime_id)
+            .state_root(Context::background(), self.runtime_id)
             .map_err(|err| {
                 Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
             })?;
@@ -445,7 +446,7 @@ impl Verifier {
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
         // Verify runtime ID matches.
-        if runtime_header.namespace != self.trust_root.runtime_id {
+        if runtime_header.namespace != self.runtime_id {
             return Err(Error::VerificationFailed(anyhow!(
                 "header namespace does not match trusted runtime id"
             )));
@@ -499,7 +500,7 @@ impl Verifier {
         // Verify that the state root matches.
         let roothash_state = RoothashState::new(&state);
         let state_root = roothash_state
-            .state_root(Context::background(), self.trust_root.runtime_id)
+            .state_root(Context::background(), self.runtime_id)
             .map_err(|err| {
                 Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
             })?;
@@ -639,85 +640,7 @@ impl Verifier {
         });
     }
 
-    fn derive_trusted_state_storage_key() -> Vec<u8> {
-        // Namespace storage key by MRENCLAVE as we can only unseal our own sealed data and we need
-        // to support upgrades. We assume that an upgrade will include an up-to-date trusted state
-        // anyway.
-        format!(
-            "{}.{:x}",
-            TRUSTED_STATE_STORAGE_KEY_PREFIX,
-            EnclaveIdentity::current()
-                .map(|eid| eid.mr_enclave)
-                .unwrap_or_default()
-        )
-        .into_bytes()
-    }
-
-    fn save_trusted_state(
-        &self,
-        trusted_block: &TMLightBlock,
-        untrusted_local_store: &ProtocolUntrustedLocalStorage,
-    ) {
-        // Build trusted state.
-        let trust_root = TrustRoot {
-            height: trusted_block.height().into(),
-            hash: trusted_block.signed_header.header.hash().to_string(),
-            runtime_id: self.trust_root.runtime_id,
-            chain_context: self.protocol.get_host_info().consensus_chain_context,
-        };
-        let lbm = LightBlockMeta {
-            signed_header: Some(trusted_block.signed_header.clone()),
-            validators: trusted_block.validators.clone(),
-        };
-        let trusted_block = Some(encode_light_block(&lbm).unwrap());
-        let trusted_state = TrustedState {
-            trust_root,
-            trusted_block,
-        };
-
-        // Serialize and seal the trusted state.
-        let raw = cbor::to_vec(trusted_state);
-        let sealed = seal::seal(Keypolicy::MRENCLAVE, TRUSTED_STATE_CONTEXT, &raw);
-
-        // Store the trusted state.
-        untrusted_local_store
-            .insert(Self::derive_trusted_state_storage_key(), sealed)
-            .unwrap();
-    }
-
-    fn load_trusted_state(
-        &self,
-        untrusted_local_store: &ProtocolUntrustedLocalStorage,
-    ) -> Result<TrustedState, Error> {
-        // Attempt to load the previously sealed trusted state.
-        let untrusted_value = untrusted_local_store
-            .get(Self::derive_trusted_state_storage_key())
-            .map_err(|_| Error::TrustedStateLoadingFailed)?;
-        if untrusted_value.is_empty() {
-            return Ok(TrustedState {
-                trust_root: self.trust_root.clone(),
-                trusted_block: None,
-            });
-        }
-
-        // Unseal the sealed trusted state.
-        let raw = seal::unseal(
-            Keypolicy::MRENCLAVE,
-            TRUSTED_STATE_CONTEXT,
-            &untrusted_value,
-        )
-        .unwrap();
-        let trusted_state: TrustedState =
-            cbor::from_slice(&raw).expect("corrupted sealed trusted state");
-
-        Ok(trusted_state)
-    }
-
     fn run(&self) -> Result<(), Error> {
-        // Create the untrusted local storage for storing the sealed latest trusted root.
-        let untrusted_local_store =
-            ProtocolUntrustedLocalStorage::new(Context::background(), self.protocol.clone());
-
         // Create a new light client instance.
         let options = light_client::Options {
             trust_threshold: Default::default(),
@@ -741,7 +664,7 @@ impl Verifier {
         // Build a light client using the embedded trust root or trust root
         // stored in the local store.
         info!(self.logger, "Loading trusted state");
-        let trusted_state: TrustedState = self.load_trusted_state(&untrusted_local_store)?;
+        let trusted_state: TrustedState = self.trusted_state_store.load(&self.trust_root)?;
 
         // Verify if we can trust light blocks from a new chain if the consensus
         // chain context changes.
@@ -787,7 +710,7 @@ impl Verifier {
             .verify_to_highest(&mut instance.state)
             .map_err(|err| Error::VerificationFailed(err.into()))?;
 
-        self.save_trusted_state(&verified_block, &untrusted_local_store);
+        self.trusted_state_store.save(&verified_block);
         self.update_insecure_posix_time(&verified_block);
 
         let mut last_saved_verified_block_height =
@@ -867,7 +790,7 @@ impl Verifier {
             // Persist last verified block once in a while.
             let last_height = cache.latest_known_height();
             if last_height - last_saved_verified_block_height > TRUSTED_STATE_SAVE_INTERVAL {
-                self.save_trusted_state(&cache.last_verified_block, &untrusted_local_store);
+                self.trusted_state_store.save(&cache.last_verified_block);
                 last_saved_verified_block_height = last_height;
             }
         }
@@ -986,7 +909,7 @@ impl Verifier {
         let trust_root = TrustRoot {
             height: header.height.into(),
             hash: header.hash().to_string(),
-            runtime_id: self.trust_root.runtime_id,
+            runtime_id: self.runtime_id,
             chain_context: host_info.consensus_chain_context,
         };
 

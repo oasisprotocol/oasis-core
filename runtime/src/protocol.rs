@@ -413,28 +413,32 @@ impl Protocol {
         }
 
         // Create and start the consensus verifier.
-        let consensus_verifier: Box<dyn Verifier> = if let Some(ref trust_root) =
-            self.config.trust_root
-        {
-            // Make sure that the host environment matches the trust root.
-            if host_info.runtime_id != trust_root.runtime_id {
-                return Err(ProtocolError::InvalidRuntimeId(
-                    trust_root.runtime_id,
+        let consensus_verifier: Box<dyn Verifier> =
+            if let Some(ref trust_root) = self.config.trust_root {
+                // Make sure that the host environment matches the trust root.
+                if host_info.runtime_id != trust_root.runtime_id {
+                    return Err(ProtocolError::InvalidRuntimeId(
+                        trust_root.runtime_id,
+                        host_info.runtime_id,
+                    )
+                    .into());
+                }
+
+                // Create the Tendermint consensus layer verifier and spawn it in a separate thread.
+                let verifier = tendermint::verifier::Verifier::new(
+                    self.clone(),
+                    trust_root.clone(),
                     host_info.runtime_id,
-                )
-                .into());
-            }
+                    host_info.consensus_chain_context.clone(),
+                );
+                let handle = verifier.handle();
+                verifier.start();
 
-            // Create the Tendermint consensus layer verifier and spawn it in a separate thread.
-            let verifier = tendermint::verifier::Verifier::new(self.clone(), trust_root.clone());
-            let handle = verifier.handle();
-            verifier.start();
-
-            Box::new(handle)
-        } else {
-            // Create a no-op verifier.
-            Box::new(tendermint::verifier::NopVerifier::new(self.clone()))
-        };
+                Box::new(handle)
+            } else {
+                // Create a no-op verifier.
+                Box::new(tendermint::verifier::NopVerifier::new(self.clone()))
+            };
 
         // Configure the host environment info.
         *local_host_info = Some(HostInfo {
