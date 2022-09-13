@@ -1,11 +1,5 @@
 //! Tendermint consensus layer verification logic.
-use std::{
-    collections::HashSet,
-    convert::{TryFrom, TryInto},
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{convert::TryInto, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use crossbeam::channel;
@@ -14,34 +8,22 @@ use rand::{rngs::OsRng, Rng};
 use sgx_isa::Keypolicy;
 use sha2::{Digest, Sha256};
 use slog::{error, info};
-use tendermint::{
-    block::{CommitSig, Height},
-    merkle::HASH_SIZE,
-    vote::{SignedVote, ValidatorIndex, Vote},
-};
+use tendermint::merkle::HASH_SIZE;
 use tendermint_light_client::{
     builder::LightClientBuilder,
-    components::{
-        self,
-        io::{AtHeight, IoError},
-        verifier::PredicateVerifier,
-    },
+    components::{self, io::AtHeight, verifier::PredicateVerifier},
     light_client,
-    operations::{ProdCommitValidator, ProdHasher, VotingPowerCalculator, VotingPowerTally},
+    operations::{ProdCommitValidator, ProdHasher},
     supervisor::Instance,
     types::{
-        Commit, Hash as TMHash, LightBlock as TMLightBlock, PeerId, SignedHeader, Time,
-        TrustThreshold, TrustedBlockState, ValidatorSet,
+        Hash as TMHash, LightBlock as TMLightBlock, PeerId, Time, TrustThreshold, TrustedBlockState,
     },
-    verifier::{
-        errors::VerificationError, predicates::ProdPredicates, Verdict, Verifier as TMVerifier,
-    },
+    verifier::{predicates::ProdPredicates, Verdict, Verifier as TMVerifier},
 };
-use tendermint_rpc::error::Error as RpcError;
 
 use crate::{
     common::{
-        crypto::{hash::Hash, signature::PublicKey},
+        crypto::signature::PublicKey,
         logger::get_logger,
         sgx::{seal, EnclaveIdentity},
         time,
@@ -55,18 +37,38 @@ use crate::{
             ConsensusState,
         },
         tendermint::{
-            decode_light_block, state_root_from_header, LightBlockMeta, TENDERMINT_CONTEXT,
+            decode_light_block, encode_light_block, state_root_from_header,
+            store::LruStore,
+            verifier::{
+                clock::InsecureClock,
+                io::Io,
+                types::{Command, Nonce, NONCE_SIZE},
+                voting::DomSepVotingPowerCalculator,
+            },
+            LightBlockMeta,
         },
-        transaction::{SignedTransaction, Transaction, SIGNATURE_CONTEXT},
+        transaction::{Transaction, SIGNATURE_CONTEXT},
         verifier::{self, verify_state_freshness, Error, TrustRoot, TrustedState},
-        Event, LightBlock, HEIGHT_LATEST,
+        Event, LightBlock,
     },
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
     storage::KeyValue,
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
 };
 
-use super::{encode_light_block, merkle::Proof, store::LruStore};
+use self::{cache::Cache, handle::Handle};
+
+// Modules.
+mod cache;
+mod clock;
+mod handle;
+mod io;
+mod noop;
+mod types;
+mod voting;
+
+// Re-exports.
+pub use noop::NopVerifier;
 
 /// Maximum number of times to retry initialization.
 const MAX_INITIALIZATION_RETRIES: usize = 3;
@@ -79,127 +81,6 @@ const TRUSTED_STATE_STORAGE_KEY_PREFIX: &str = "tendermint.verifier.trusted_stat
 const TRUSTED_STATE_CONTEXT: &[u8] = b"oasis-core/verifier: trusted state";
 /// Trusted state save interval (in consensus blocks).
 const TRUSTED_STATE_SAVE_INTERVAL: u64 = 128;
-/// Size of nonce for prove freshness request.
-const NONCE_SIZE: usize = 32;
-
-/// Nonce for prove freshness request.
-type Nonce = [u8; NONCE_SIZE];
-
-/// A verifier which performs no verification.
-pub struct NopVerifier {
-    protocol: Arc<Protocol>,
-}
-
-impl NopVerifier {
-    /// Create a new non-verifying verifier.
-    pub fn new(protocol: Arc<Protocol>) -> Self {
-        Self { protocol }
-    }
-
-    fn fetch_light_block(&self, height: u64) -> Result<LightBlock, Error> {
-        let result = self
-            .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusBlockRequest { height },
-            )
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
-
-        match result {
-            Body::HostFetchConsensusBlockResponse { block } => Ok(block),
-            _ => Err(Error::VerificationFailed(anyhow!("bad response from host"))),
-        }
-    }
-}
-
-impl verifier::Verifier for NopVerifier {
-    fn sync(&self, _height: u64) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn verify(
-        &self,
-        consensus_block: LightBlock,
-        _runtime_header: Header,
-        _epoch: EpochTime,
-    ) -> Result<ConsensusState, Error> {
-        self.unverified_state(consensus_block)
-    }
-
-    fn verify_for_query(
-        &self,
-        consensus_block: LightBlock,
-        _runtime_header: Header,
-        _epoch: EpochTime,
-    ) -> Result<ConsensusState, Error> {
-        self.unverified_state(consensus_block)
-    }
-
-    fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
-        let untrusted_block =
-            decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
-        // NOTE: No actual verification is performed.
-        let state_root = untrusted_block.get_state_root();
-        Ok(ConsensusState::from_protocol(
-            self.protocol.clone(),
-            state_root.version + 1,
-            state_root,
-        ))
-    }
-
-    fn latest_state(&self) -> Result<ConsensusState, Error> {
-        self.state_at(HEIGHT_LATEST)
-    }
-
-    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
-        let block = self.fetch_light_block(height)?;
-        self.unverified_state(block)
-    }
-
-    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
-        let result = self
-            .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest {
-                    height,
-                    kind,
-                }),
-            )
-            .map_err(|err| Error::VerificationFailed(err.into()))?;
-
-        match result {
-            Body::HostFetchConsensusEventsResponse(HostFetchConsensusEventsResponse { events }) => {
-                Ok(events)
-            }
-            _ => Err(Error::VerificationFailed(anyhow!("bad response from host"))),
-        }
-    }
-
-    fn latest_height(&self) -> Result<u64, Error> {
-        Ok(self.fetch_light_block(HEIGHT_LATEST)?.height)
-    }
-
-    fn trust(&self, _header: &ComputeResultsHeader) -> Result<(), Error> {
-        Ok(())
-    }
-}
-
-enum Command {
-    Synchronize(u64, channel::Sender<Result<(), Error>>),
-    Verify(
-        LightBlock,
-        Header,
-        EpochTime,
-        channel::Sender<Result<ConsensusState, Error>>,
-        bool,
-    ),
-    Trust(ComputeResultsHeader, channel::Sender<Result<(), Error>>),
-    LatestState(channel::Sender<Result<ConsensusState, Error>>),
-    LatestHeight(channel::Sender<Result<u64, Error>>),
-    StateAt(u64, channel::Sender<Result<ConsensusState, Error>>),
-    EventsAt(u64, EventKind, channel::Sender<Result<Vec<Event>, Error>>),
-}
 
 /// Tendermint consensus layer verifier.
 pub struct Verifier {
@@ -209,45 +90,6 @@ pub struct Verifier {
     trust_root: TrustRoot,
     command_sender: channel::Sender<Command>,
     command_receiver: channel::Receiver<Command>,
-}
-
-struct Cache {
-    last_verified_height: u64,
-    last_verified_round: u64,
-    last_verified_epoch: u64,
-    last_verified_block: TMLightBlock,
-    verified_state_roots: lru::LruCache<u64, Hash>,
-    verified_state_roots_queries: lru::LruCache<u64, (Hash, u64)>,
-    node_id: Option<PublicKey>,
-}
-
-impl Cache {
-    fn new(verified_block: TMLightBlock) -> Self {
-        Self {
-            last_verified_height: 0,
-            last_verified_round: 0,
-            last_verified_epoch: 0,
-            last_verified_block: verified_block,
-            verified_state_roots: lru::LruCache::new(128),
-            verified_state_roots_queries: lru::LruCache::new(128),
-            node_id: None,
-        }
-    }
-}
-
-impl Cache {
-    /// Latest known and verified consensus layer height.
-    fn latest_known_height(&self) -> u64 {
-        self.last_verified_block.signed_header.header.height.value()
-    }
-
-    /// Process a new verified consensus layer block and update the cache if needed.
-    fn update_verified_block(&mut self, verified_block: TMLightBlock) {
-        let h = |b: &TMLightBlock| -> Height { b.signed_header.header.height };
-        if h(&verified_block) > h(&self.last_verified_block) {
-            self.last_verified_block = verified_block
-        }
-    }
 }
 
 impl Verifier {
@@ -1150,351 +992,4 @@ impl Verifier {
 
         Ok(trust_root)
     }
-}
-
-struct Handle {
-    protocol: Arc<Protocol>,
-    command_sender: channel::Sender<Command>,
-}
-
-impl verifier::Verifier for Handle {
-    fn sync(&self, height: u64) -> Result<(), Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::Synchronize(height, sender))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-
-    fn verify(
-        &self,
-        consensus_block: LightBlock,
-        runtime_header: Header,
-        epoch: EpochTime,
-    ) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::Verify(
-                consensus_block,
-                runtime_header,
-                epoch,
-                sender,
-                false,
-            ))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-
-    fn verify_for_query(
-        &self,
-        consensus_block: LightBlock,
-        runtime_header: Header,
-        epoch: EpochTime,
-    ) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::Verify(
-                consensus_block,
-                runtime_header,
-                epoch,
-                sender,
-                true,
-            ))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-
-    fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
-        let untrusted_block =
-            decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
-        // NOTE: No actual verification is performed.
-        let state_root = untrusted_block.get_state_root();
-        Ok(ConsensusState::from_protocol(
-            self.protocol.clone(),
-            state_root.version + 1,
-            state_root,
-        ))
-    }
-
-    fn latest_state(&self) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::LatestState(sender))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-
-    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::StateAt(height, sender))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-
-    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::EventsAt(height, kind, sender))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-
-    fn latest_height(&self) -> Result<u64, Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::LatestHeight(sender))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-
-    fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
-        let (sender, receiver) = channel::bounded(1);
-        self.command_sender
-            .send(Command::Trust(header.clone(), sender))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.recv().map_err(|_| Error::Internal)?
-    }
-}
-
-struct Io {
-    protocol: Arc<Protocol>,
-}
-
-impl Io {
-    fn new(protocol: &Arc<Protocol>) -> Self {
-        Self {
-            protocol: protocol.clone(),
-        }
-    }
-
-    fn fetch_light_block(&self, height: u64) -> Result<LightBlockMeta, IoError> {
-        let result = self
-            .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusBlockRequest { height },
-            )
-            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
-
-        // Extract generic light block from response.
-        let block = match result {
-            Body::HostFetchConsensusBlockResponse { block } => block,
-            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
-        };
-
-        // Decode block as a Tendermint light block.
-        let block = decode_light_block(block)
-            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
-
-        Ok(block)
-    }
-
-    fn fetch_genesis_height(&self) -> Result<u64, IoError> {
-        let result = self
-            .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchGenesisHeightRequest {},
-            )
-            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
-
-        // Extract genesis height from response.
-        let height = match result {
-            Body::HostFetchGenesisHeightResponse { height } => height,
-            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
-        };
-
-        Ok(height)
-    }
-
-    fn fetch_freshness_proof(
-        &self,
-        nonce: &Nonce,
-    ) -> Result<(SignedTransaction, u64, Proof), IoError> {
-        let result = self
-            .protocol
-            .call_host(
-                Context::background(),
-                Body::HostProveFreshnessRequest {
-                    blob: nonce.to_vec(),
-                },
-            )
-            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
-
-        // Extract proof from response.
-        let (signed_tx, proof) = match result {
-            Body::HostProveFreshnessResponse { signed_tx, proof } => (signed_tx, proof),
-            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
-        };
-
-        // Decode raw proof as a Tendermint Merkle proof of inclusion.
-        let merkle_proof = cbor::from_slice(&proof.raw_proof)
-            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
-
-        Ok((signed_tx, proof.height, merkle_proof))
-    }
-}
-
-impl components::io::Io for Io {
-    fn fetch_light_block(&self, height: AtHeight) -> Result<TMLightBlock, IoError> {
-        let height = match height {
-            AtHeight::At(height) => height.into(),
-            AtHeight::Highest => HEIGHT_LATEST,
-        };
-
-        // Fetch light block at height and height+1.
-        let block = Io::fetch_light_block(self, height)?;
-        let height: u64 = block
-            .signed_header
-            .as_ref()
-            .ok_or_else(|| IoError::rpc(RpcError::server("missing signed header".to_string())))?
-            .header()
-            .height
-            .into();
-        // NOTE: It seems that the requirement to fetch the next validator set is redundant and it
-        //       should be handled at a higher layer of the light client.
-        let next_block = Io::fetch_light_block(self, height + 1)?;
-
-        Ok(TMLightBlock {
-            signed_header: block.signed_header.unwrap(), // Checked above.
-            validators: block.validators,
-            next_validators: next_block.validators,
-            provider: PeerId::new([0; 20]),
-        })
-    }
-}
-
-struct InsecureClock;
-
-impl components::clock::Clock for InsecureClock {
-    fn now(&self) -> Time {
-        Time::from_unix_timestamp(time::insecure_posix_time(), 0).unwrap()
-    }
-}
-
-// Voting power calculator which uses Oasis Core's domain separation for verifying signatures.
-struct DomSepVotingPowerCalculator;
-
-impl VotingPowerCalculator for DomSepVotingPowerCalculator {
-    fn voting_power_in(
-        &self,
-        signed_header: &SignedHeader,
-        validator_set: &ValidatorSet,
-        trust_threshold: TrustThreshold,
-    ) -> Result<VotingPowerTally, VerificationError> {
-        let signatures = &signed_header.commit.signatures;
-
-        let mut tallied_voting_power = 0_u64;
-        let mut seen_validators = HashSet::new();
-
-        // Get non-absent votes from the signatures
-        let non_absent_votes = signatures.iter().enumerate().flat_map(|(idx, signature)| {
-            non_absent_vote(
-                signature,
-                ValidatorIndex::try_from(idx).unwrap(),
-                &signed_header.commit,
-            )
-            .map(|vote| (signature, vote))
-        });
-
-        for (signature, vote) in non_absent_votes {
-            // Ensure we only count a validator's power once
-            if seen_validators.contains(&vote.validator_address) {
-                return Err(VerificationError::duplicate_validator(
-                    vote.validator_address,
-                ));
-            } else {
-                seen_validators.insert(vote.validator_address);
-            }
-
-            let validator = match validator_set.validator(vote.validator_address) {
-                Some(validator) => validator,
-                None => continue, // Cannot find matching validator, so we skip the vote
-            };
-
-            let signed_vote =
-                SignedVote::from_vote(vote.clone(), signed_header.header.chain_id.clone())
-                    .ok_or_else(VerificationError::missing_signature)?;
-
-            // Check vote is valid
-            let sign_bytes = signed_vote.sign_bytes();
-            // Use Oasis Core domain separation scheme.
-            let sign_bytes = Hash::digest_bytes_list(&[TENDERMINT_CONTEXT, &sign_bytes]);
-            let power = validator.power();
-            validator
-                .verify_signature(sign_bytes.as_ref(), signed_vote.signature())
-                .map_err(|_| {
-                    VerificationError::invalid_signature(
-                        signed_vote.signature().as_bytes().to_vec(),
-                        Box::new(validator),
-                        sign_bytes.as_ref().into(),
-                    )
-                })?;
-
-            // If the vote is neither absent nor nil, tally its power
-            if signature.is_commit() {
-                tallied_voting_power += power;
-            } else {
-                // It's OK. We include stray signatures (~votes for nil)
-                // to measure validator availability.
-            }
-
-            // TODO: Break out of the loop when we have enough voting power.
-            // See https://github.com/informalsystems/tendermint-rs/issues/235
-        }
-
-        let voting_power = VotingPowerTally {
-            total: self.total_power_of(validator_set),
-            tallied: tallied_voting_power,
-            trust_threshold,
-        };
-
-        Ok(voting_power)
-    }
-}
-
-// Copied from tendermint-rs as it is not public.
-fn non_absent_vote(
-    commit_sig: &CommitSig,
-    validator_index: ValidatorIndex,
-    commit: &Commit,
-) -> Option<Vote> {
-    let (validator_address, timestamp, signature, block_id) = match commit_sig {
-        CommitSig::BlockIdFlagAbsent { .. } => return None,
-        CommitSig::BlockIdFlagCommit {
-            validator_address,
-            timestamp,
-            signature,
-        } => (
-            *validator_address,
-            *timestamp,
-            signature,
-            Some(commit.block_id),
-        ),
-        CommitSig::BlockIdFlagNil {
-            validator_address,
-            timestamp,
-            signature,
-        } => (*validator_address, *timestamp, signature, None),
-    };
-
-    Some(Vote {
-        vote_type: tendermint::vote::Type::Precommit,
-        height: commit.height,
-        round: commit.round,
-        block_id,
-        timestamp: Some(timestamp),
-        validator_address,
-        validator_index,
-        signature: signature.clone(),
-    })
 }
