@@ -150,7 +150,7 @@ As of this version, this is no longer allowed and attempting to run the
 
   See [metrics documentation] for descriptions of metrics.
 
-  [metrics documentation]: https://docs.oasis.dev/oasis-core/oasis-node/metrics
+  [metrics documentation]: https://docs.oasis.io/core/oasis-node/metrics
 
 - go/oasis-node/cmd: Allow using non local gRPC connections
   ([#4617](https://github.com/oasisprotocol/oasis-core/issues/4617))
@@ -714,7 +714,7 @@ As of this version, this is no longer allowed and attempting to run the
 - Migrate [Oasis Core Docs] to Docusaurus
   ([#4501](https://github.com/oasisprotocol/oasis-core/issues/4501))
 
-  [Oasis Core Docs]: https://docs.oasis.dev/oasis-core/
+  [Oasis Core Docs]: https://docs.oasis.io/core/
 
 ### Internal Changes
 

@@ -32,7 +32,7 @@ work around that and make the second (non-header) row also bold. -->
 [godev-badge]: https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white
 [godev-link]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go?tab=subdirectories
 [docusaurus-badge]: https://img.shields.io/badge/docusaurus-docs-007d9c?logo=read-the-docs&logoColor=white
-[docs-link]: https://docs.oasis.dev/oasis-core
+[docs-link]: https://docs.oasis.io/core
 <!-- markdownlint-enable line-length -->
 
 ## Note

@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	// Parameters from https://docs.oasis.dev/general/oasis-network/network-parameters.
+	// Parameters from https://docs.oasis.io/node/mainnet.
 	latestMainnetGenesisURL          = "https://github.com/oasisprotocol/mainnet-artifacts/releases/download/2022-04-11/genesis.json"
 	latestMainnetGenesisDocumentHash = "b11b369e0da5bb230b220127f5e7b242d385ef8c6f54906243f30af63c815535"
 

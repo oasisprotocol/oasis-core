@@ -1,7 +1,7 @@
 // Package version implements Oasis protocol and runtime versioning.
 //
 // For a more detailed explanation of Oasis Core's versioning, see:
-// https://docs.oasis.dev/oasis-core/processes/versioning.
+// https://docs.oasis.io/core/versioning.
 package version
 
 import (
