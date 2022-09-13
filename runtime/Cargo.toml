@@ -49,7 +49,7 @@ zeroize = "1.4"
 intrusive-collections = "0.9.4"
 sha2 = "0.9.9"
 hmac = "0.11.0"
-honggfuzz = "0.5.54"
+honggfuzz = "0.5.55"
 arbitrary = { version = "1.0.2", features = ["derive"] }
 num-bigint = "0.4"
 num-traits = "0.2.15"
