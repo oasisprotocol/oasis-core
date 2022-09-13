@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use oasis_core_keymanager_api_common::*;
+use oasis_core_keymanager::policy::TrustedPolicySigners;
 use oasis_core_runtime::common::crypto::signature::PrivateKey as OasisPrivateKey;
 
 pub fn trusted_policy_signers() -> TrustedPolicySigners {

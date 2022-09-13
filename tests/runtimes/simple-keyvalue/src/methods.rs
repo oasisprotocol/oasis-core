@@ -6,7 +6,7 @@ use io_context::Context as IoContext;
 use x25519_dalek;
 
 use super::{crypto::EncryptionContext, types::*, Context, TxContext};
-use oasis_core_keymanager_client::KeyPairId;
+use oasis_core_keymanager::crypto::KeyPairId;
 use oasis_core_runtime::{
     common::{
         crypto::{

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, default::Default};
+use std::collections::HashMap;
 
 use thiserror::Error;
 

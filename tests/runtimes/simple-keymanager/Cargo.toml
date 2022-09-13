@@ -21,8 +21,7 @@ threads = 6
 
 [dependencies]
 oasis-core-runtime = { path = "../../../runtime" }
-oasis-core-keymanager-lib = { path = "../../../keymanager-lib" }
-oasis-core-keymanager-api-common = { path = "../../../keymanager-api-common" }
+oasis-core-keymanager = { path = "../../../keymanager" }
 
 [build-dependencies]
 oasis-core-tools = { path = "../../../tools" }
