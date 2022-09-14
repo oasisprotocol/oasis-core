@@ -376,6 +376,8 @@ func (app *rootHashApplication) verifyRuntimeUpdate(ctx *tmapi.Context, rt *regi
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := roothashState.NewMutableState(ctx.State())
 
+	ctx.SetPriority(AppPriority)
+
 	switch tx.Method {
 	case roothash.MethodExecutorCommit:
 		var xc roothash.ExecutorCommit

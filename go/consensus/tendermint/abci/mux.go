@@ -710,6 +710,7 @@ func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 		Code:      types.CodeTypeOK,
 		GasWanted: int64(ctx.Gas().GasWanted()),
 		GasUsed:   int64(ctx.Gas().GasUsed()),
+		Priority:  ctx.GetPriority(),
 	}
 }
 

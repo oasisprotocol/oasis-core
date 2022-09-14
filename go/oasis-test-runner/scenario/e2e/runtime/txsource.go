@@ -10,11 +10,13 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -665,6 +667,78 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 			sc.Logger.Info("current consensus height",
 				"height", blk.Height,
 			)
+
+			//
+			// Check if the transactions are properly sorted by priority.
+			//
+
+			latestHeight := blk.Height
+
+			// Unfortunately, Tendermint doesn't store the priority anywhere,
+			// so we need to kludge this a bit.
+			priority := map[string]int64{
+				"beacon":     100000,
+				"keymanager": 50000,
+				"registry":   50000,
+				"governance": 25000,
+				"roothash":   15000,
+				"staking":    1000,
+			}
+
+			// Make sure that transactions at each height since our last check
+			// are properly sorted by their priority.
+			var h int64
+			for h = lastHeight; h < latestHeight; h++ {
+				// Fetch transactions.
+				txs, err := sc.Net.Controller().Consensus.GetTransactions(ctx, h)
+				if err != nil {
+					errCh <- err
+					return
+				}
+
+				priorities := make([]int64, 0, len(txs))
+
+				for _, rawtx := range txs {
+					// Decode transaction.
+					var sigTx transaction.SignedTransaction
+					if err = cbor.Unmarshal(rawtx, &sigTx); err != nil {
+						errCh <- fmt.Errorf("malformed transaction: %w", err)
+						return
+					}
+
+					var tx transaction.Transaction
+					if err = sigTx.Open(&tx); err != nil {
+						errCh <- fmt.Errorf("bad transaction signature: %w", err)
+						return
+					}
+
+					// Determine transaction's priority.
+					var pri int64
+					if tx.Method == "registry.RegisterNode" {
+						// This is currently the only special case.
+						pri = 60000
+					} else {
+						// Determine consensus app from the tx's method.
+						app := strings.Split(string(tx.Method), ".")[0]
+						if p, exists := priority[app]; exists {
+							pri = p
+						} else {
+							continue
+						}
+					}
+
+					priorities = append(priorities, pri)
+				}
+
+				// All priorities must be sorted from highest to lowest.
+				if !sort.SliceIsSorted(priorities, func(i, j int) bool {
+					return priorities[i] > priorities[j]
+				}) {
+					errCh <- fmt.Errorf("transactions at height %d are not sorted by priority", h)
+					return
+				}
+			}
+
 			lastHeight = blk.Height
 		}
 	}

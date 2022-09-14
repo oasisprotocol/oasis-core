@@ -65,6 +65,8 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 		"tx", tx,
 	)
 
+	ctx.SetPriority(AppPriority)
+
 	switch tx.Method {
 	case governance.MethodSubmitProposal:
 		var proposalContent governance.ProposalContent

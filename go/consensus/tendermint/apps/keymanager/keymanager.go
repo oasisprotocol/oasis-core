@@ -67,6 +67,8 @@ func (app *keymanagerApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg i
 func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
 	state := keymanagerState.NewMutableState(ctx.State())
 
+	ctx.SetPriority(AppPriority)
+
 	switch tx.Method {
 	case api.MethodUpdatePolicy:
 		var sigPol api.SignedPolicySGX

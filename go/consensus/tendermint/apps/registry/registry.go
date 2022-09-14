@@ -88,6 +88,8 @@ func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg inter
 func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := registryState.NewMutableState(ctx.State())
 
+	ctx.SetPriority(AppPriority)
+
 	switch tx.Method {
 	case registry.MethodRegisterEntity:
 		var sigEnt entity.SignedEntity
@@ -104,6 +106,7 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 		if err := cbor.Unmarshal(tx.Body, &sigNode); err != nil {
 			return err
 		}
+		ctx.SetPriority(AppPriority + 10000)
 		return app.registerNode(ctx, state, &sigNode)
 
 	case registry.MethodUnfreezeNode:

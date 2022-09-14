@@ -72,6 +72,7 @@ type Context struct { // nolint: maligned
 	data          interface{}
 	events        []types.Event
 	gasAccountant GasAccountant
+	priority      int64
 
 	txSigner      signature.PublicKey
 	callerAddress staking.Address
@@ -108,6 +109,7 @@ func NewContext(
 		mode:          mode,
 		currentTime:   currentTime,
 		gasAccountant: gasAccountant,
+		priority:      0,
 		appState:      appState,
 		state:         state,
 		blockHeight:   blockHeight,
@@ -401,6 +403,18 @@ func (c *Context) InitialHeight() int64 {
 // BlockHeight returns the current block height.
 func (c *Context) BlockHeight() int64 {
 	return c.blockHeight
+}
+
+// SetPriority sets the current priority.
+// Higher number means higher priority.
+func (c *Context) SetPriority(p int64) {
+	c.priority = p
+}
+
+// GetPriority returns the current priority.
+// Higher number means higher priority.
+func (c *Context) GetPriority() int64 {
+	return c.priority
 }
 
 // BlockContext returns the current block context.

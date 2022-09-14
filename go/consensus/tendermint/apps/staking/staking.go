@@ -141,6 +141,8 @@ func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interf
 func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
 	state := stakingState.NewMutableState(ctx.State())
 
+	ctx.SetPriority(AppPriority)
+
 	switch tx.Method {
 	case staking.MethodTransfer:
 		var xfer staking.Transfer
