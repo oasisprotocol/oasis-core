@@ -11,6 +11,7 @@ Core:
 * System packages:
   * [Bubblewrap] (at least version 0.3.3).
   * [GCC] (including C++ subpackage).
+  * [Clang] development package. (If you want to build a version after v22.1.9)
   * [Protobuf] compiler.
   * [GNU Make].
   * [CMake].
@@ -26,7 +27,7 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo dnf install bubblewrap gcc gcc-c++ protobuf-compiler make cmake openssl-devel libseccomp-devel pkg-config
+  sudo dnf install bubblewrap gcc gcc-c++ clang-devel protobuf-compiler make cmake openssl-devel libseccomp-devel pkg-config
   ```
   <!-- markdownlint-enable line-length -->
 
@@ -35,13 +36,16 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo apt install bubblewrap gcc g++ gcc-multilib protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
+  sudo apt install bubblewrap gcc g++ gcc-multilib libclang-dev protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
   ```
   <!-- markdownlint-enable line-length -->
 
 * [Go] (at least version 1.18.3).
 
   If your distribution provides a new-enough version of Go, just use that.
+
+  Please note that if you want to compile Oasis Core v22.1.9 or earlier,
+  then go 1.19 is not supported yet; you need to use 1.18.x.
 
   Otherwise:
   * install the Go version provided by your distribution,
@@ -221,6 +225,7 @@ where the code has been checked out.
 <!-- markdownlint-disable line-length -->
 [Bubblewrap]: https://github.com/projectatomic/bubblewrap
 [GCC]: http://gcc.gnu.org/
+[Clang]: https://clang.llvm.org/
 [Protobuf]: https://github.com/protocolbuffers/protobuf
 [GNU Make]: https://www.gnu.org/software/make/
 [CMake]: https://cmake.org/
