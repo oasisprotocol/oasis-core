@@ -11,14 +11,18 @@ use slog::Logger;
 
 #[cfg(target_env = "sgx")]
 use crate::{
+    common::crypto::signature::Signer,
     common::sgx::Quote,
-    consensus::registry::{SGXConstraints, TEEHardware},
+    consensus::registry::{
+        SGXAttestation, SGXConstraints, TEEHardware, ATTESTATION_SIGNATURE_CONTEXT,
+    },
     consensus::state::registry::ImmutableState as RegistryState,
     types::Body,
 };
 use crate::{
     common::{logger::get_logger, namespace::Namespace, version::Version},
     consensus::verifier::Verifier,
+    host::Host,
     rak::RAK,
 };
 
@@ -27,6 +31,8 @@ use crate::{
 pub struct Handler {
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     rak: Arc<RAK>,
+    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
+    host: Arc<dyn Host>,
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     consensus_verifier: Arc<dyn Verifier>,
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
@@ -41,12 +47,14 @@ impl Handler {
     /// Create a new instance of the attestation flow handler.
     pub fn new(
         rak: Arc<RAK>,
+        host: Arc<dyn Host>,
         consensus_verifier: Arc<dyn Verifier>,
         runtime_id: Namespace,
         version: Version,
     ) -> Self {
         Self {
             rak,
+            host,
             consensus_verifier,
             runtime_id,
             version,
@@ -123,8 +131,14 @@ impl Handler {
         };
 
         // Configure the quote and policy on the RAK.
-        self.rak.set_quote(quote, policy)?;
+        let verified_quote = self.rak.set_quote(quote, policy)?;
 
-        Ok(Body::RuntimeCapabilityTEERakQuoteResponse {})
+        // Sign the report data, latest verified consensus height and host node ID.
+        let height = consensus_state.height();
+        let node_id = self.host.identity()?;
+        let h = SGXAttestation::hash(&verified_quote.report_data, node_id, height);
+        let signature = self.rak.sign(ATTESTATION_SIGNATURE_CONTEXT, &h)?;
+
+        Ok(Body::RuntimeCapabilityTEERakQuoteResponse { height, signature })
     }
 }

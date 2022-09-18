@@ -18,27 +18,34 @@ type TEEFeaturesSGX struct {
 	// remote attestation is supported for Intel SGX-based TEEs.
 	PCS bool `json:"pcs"`
 
+	// SignedAttestations is a feature flag specifying whether attestations need to include an
+	// additional signature binding it to a specific node.
+	SignedAttestations bool `json:"signed_attestations,omitempty"`
+
 	// DefaultPolicy is the default quote policy.
 	DefaultPolicy *quote.Policy `json:"default_policy,omitempty"`
+
+	// DefaultMaxAttestationAge is the default maximum attestation age (in blocks).
+	DefaultMaxAttestationAge uint64 `json:"max_attestation_age,omitempty"`
 }
 
-// ApplyDefaultPolicy applies configured quote policy defaults to the given policy, returning the
-// new policy with defaults applied.
-//
-// In case no quote policy defaults are configured returns the policy unchanged.
-func (fs *TEEFeaturesSGX) ApplyDefaultPolicy(policy *quote.Policy) *quote.Policy {
-	if fs.DefaultPolicy == nil {
-		return policy
+// ApplyDefaultConstraints applies configured SGX constraint defaults to the given structure.
+func (fs *TEEFeaturesSGX) ApplyDefaultConstraints(sc *SGXConstraints) {
+	// Default policy.
+	if fs.DefaultPolicy != nil {
+		if sc.Policy == nil {
+			sc.Policy = &quote.Policy{}
+		}
+		if sc.Policy.IAS == nil {
+			sc.Policy.IAS = fs.DefaultPolicy.IAS
+		}
+		if sc.Policy.PCS == nil && fs.PCS {
+			sc.Policy.PCS = fs.DefaultPolicy.PCS
+		}
 	}
 
-	if policy == nil {
-		policy = &quote.Policy{}
+	// Default maximum attestation age.
+	if sc.MaxAttestationAge == 0 {
+		sc.MaxAttestationAge = fs.DefaultMaxAttestationAge
 	}
-	if policy.IAS == nil {
-		policy.IAS = fs.DefaultPolicy.IAS
-	}
-	if policy.PCS == nil && fs.PCS {
-		policy.PCS = fs.DefaultPolicy.PCS
-	}
-	return policy
 }

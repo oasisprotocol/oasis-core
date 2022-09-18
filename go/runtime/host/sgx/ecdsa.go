@@ -153,7 +153,7 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 	}
 
 	// Call the runtime with the quote and TCB bundle.
-	_, err = conn.Call(
+	rspBody, err := conn.Call(
 		ctx,
 		&protocol.Body{
 			RuntimeCapabilityTEERakQuoteRequest: &protocol.RuntimeCapabilityTEERakQuoteRequest{
@@ -164,9 +164,15 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 	if err != nil {
 		return nil, fmt.Errorf("error while configuring quote: %w", err)
 	}
+	rsp := rspBody.RuntimeCapabilityTEERakQuoteResponse
+	if rsp == nil {
+		return nil, fmt.Errorf("unexpected response from runtime")
+	}
 
 	return cbor.Marshal(node.SGXAttestation{
 		Versioned: cbor.NewVersioned(node.LatestSGXAttestationVersion),
 		Quote:     q,
+		Height:    rsp.Height,
+		Signature: rsp.Signature,
 	}), nil
 }

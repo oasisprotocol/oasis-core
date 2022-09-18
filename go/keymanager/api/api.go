@@ -121,9 +121,11 @@ func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 // blob for a key manager.
 func VerifyExtraInfo(
 	logger *logging.Logger,
+	nodeID signature.PublicKey,
 	rt *registry.Runtime,
 	nodeRt *node.Runtime,
 	ts time.Time,
+	height uint64,
 	params *registry.ConsensusParameters,
 ) (*InitResponse, error) {
 	var (
@@ -139,7 +141,7 @@ func VerifyExtraInfo(
 	}
 	if hw != rt.TEEHardware {
 		return nil, fmt.Errorf("keymanager: TEEHardware mismatch")
-	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeRt, rt, params.TEEFeatures, ts); err != nil {
+	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeID, nodeRt, rt, params.TEEFeatures, ts, height); err != nil {
 		return nil, err
 	}
 	if nodeRt.ExtraInfo == nil {

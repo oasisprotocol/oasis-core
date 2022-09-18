@@ -205,6 +205,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		sigNode,
 		untrustedEntity,
 		ctx.Now(),
+		uint64(ctx.BlockHeight()),
 		ctx.IsInitChain(),
 		false,
 		epoch,

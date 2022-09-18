@@ -74,8 +74,7 @@ type Worker struct { // nolint: maligned
 	initTicker   *backoff.Ticker
 	initTickerCh <-chan time.Time
 
-	runtime            runtimeRegistry.Runtime
-	runtimeHostHandler protocol.Handler
+	runtime runtimeRegistry.Runtime
 
 	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
 
@@ -139,21 +138,6 @@ func (w *Worker) Cleanup() {
 // service requests and registered with the consensus layer.
 func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
-}
-
-// GetRuntime implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) GetRuntime() runtimeRegistry.Runtime {
-	return w.runtime
-}
-
-// NewRuntimeHostNotifier implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier {
-	return &protocol.NoOpNotifier{}
-}
-
-// NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
-	return w.runtimeHostHandler
 }
 
 func (w *Worker) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {

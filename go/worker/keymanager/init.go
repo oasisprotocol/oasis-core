@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
@@ -100,16 +99,7 @@ func New(
 		return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
 	}
 
-	// Create local storage for the key manager.
-	path, err := runtimeRegistry.EnsureRuntimeStateDir(dataDir, runtimeID)
-	if err != nil {
-		return nil, fmt.Errorf("worker/keymanager: failed to ensure runtime state directory: %w", err)
-	}
-	localStorage, err := localstorage.New(path, runtimeRegistry.LocalStorageFile, runtimeID)
-	if err != nil {
-		return nil, fmt.Errorf("worker/keymanager: cannot create local storage: %w", err)
-	}
-
+	var err error
 	w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, runtimeID)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create role provider: %w", err)
@@ -122,8 +112,6 @@ func New(
 	if numVers := len(w.runtime.HostVersions()); numVers != 1 {
 		return nil, fmt.Errorf("worker/keymanager: expected a single runtime version (got %d)", numVers)
 	}
-
-	w.runtimeHostHandler = newHostHandler(w, commonWorker, localStorage)
 
 	// Prepare the runtime host node helpers.
 	w.RuntimeHostNode, err = runtimeRegistry.NewRuntimeHostNode(w)

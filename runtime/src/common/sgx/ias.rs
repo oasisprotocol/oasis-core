@@ -41,8 +41,6 @@ enum AVRError {
     MissingQuoteStatus,
     #[error("AVR did not contain quote body")]
     MissingQuoteBody,
-    #[error("AVR did not contain nonce")]
-    MissingNonce,
     #[error("failed to parse quote")]
     MalformedQuote,
     #[error("unable to find exactly 2 certificates")]
@@ -220,13 +218,6 @@ impl ParsedAVR {
         };
         parse_avr_timestamp(timestamp)
     }
-
-    pub(crate) fn nonce(&self) -> Result<String> {
-        match self.body["nonce"].as_str() {
-            Some(nonce) => Ok(nonce.to_string()),
-            None => Err(AVRError::MissingNonce.into()),
-        }
-    }
 }
 
 /// Verify attestation report.
@@ -259,8 +250,6 @@ pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
     if !timestamp_is_fresh(timestamp_now, timestamp) {
         return Err(AVRError::TimestampOutOfRange.into());
     }
-
-    let nonce = avr_body.nonce()?;
 
     let quote_status = avr_body.isv_enclave_quote_status()?;
     match quote_status.as_str() {
@@ -315,7 +304,6 @@ pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
             mr_signer: MrSigner::from(quote_body.report_body.mrsigner.to_vec()),
         },
         timestamp,
-        nonce: nonce.into_bytes(),
     })
 }
 

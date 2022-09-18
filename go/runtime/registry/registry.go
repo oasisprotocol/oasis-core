@@ -72,6 +72,9 @@ type Runtime interface {
 	// Mode returns the configured behavior of runtime workers on this node.
 	Mode() RuntimeMode
 
+	// DataDir returns the runtime-specific data directory.
+	DataDir() string
+
 	// RegistryDescriptor waits for the runtime to be registered and
 	// then returns its registry descriptor.
 	RegistryDescriptor(ctx context.Context) (*registry.Runtime, error)
@@ -118,6 +121,7 @@ type runtime struct { // nolint: maligned
 	sync.RWMutex
 
 	id                   common.Namespace
+	dataDir              string
 	mode                 RuntimeMode
 	registryDescriptor   *registry.Runtime
 	activeDescriptor     *registry.Runtime
@@ -149,6 +153,10 @@ func (r *runtime) ID() common.Namespace {
 
 func (r *runtime) Mode() RuntimeMode {
 	return r.mode
+}
+
+func (r *runtime) DataDir() string {
+	return r.dataDir
 }
 
 func (r *runtime) RegistryDescriptor(ctx context.Context) (*registry.Runtime, error) {
@@ -277,7 +285,9 @@ func (r *runtime) stop() {
 		r.storage.Cleanup()
 	}
 	// Close history keeper.
-	r.history.Close()
+	if r.history != nil {
+		r.history.Close()
+	}
 }
 
 func (r *runtime) updateActiveDescriptor(ctx context.Context) bool {
@@ -439,7 +449,7 @@ func (r *runtimeRegistry) Runtimes() []Runtime {
 }
 
 func (r *runtimeRegistry) NewUnmanagedRuntime(ctx context.Context, runtimeID common.Namespace) (Runtime, error) {
-	return newRuntime(ctx, runtimeID, r.cfg, r.consensus, r.logger)
+	return newRuntime(ctx, r.dataDir, runtimeID, r.cfg, r.consensus, r.logger)
 }
 
 func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error {
@@ -494,39 +504,24 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 		return fmt.Errorf("runtime/registry: runtime already registered: %s", id)
 	}
 
-	path, err := EnsureRuntimeStateDir(r.dataDir, id)
+	rt, err := newRuntime(ctx, r.dataDir, id, r.cfg, r.consensus, r.logger)
 	if err != nil {
 		return err
 	}
-
-	rt, err := newRuntime(ctx, id, r.cfg, r.consensus, r.logger)
-	if err != nil {
-		return err
-	}
+	defer func() {
+		if rerr != nil {
+			rt.stop()
+		}
+	}()
 	rt.managed = true
 
 	// Create runtime history keeper.
 	// NOTE: Archive node won't commit any new blocks, so disable waiting for storage sync commits.
-	history, err := history.New(path, id, &r.cfg.History, r.cfg.Mode.HasLocalStorage() && r.consensus.Mode() != consensus.ModeArchive)
+	haveLocalStorageWorker := r.cfg.Mode.HasLocalStorage() && r.consensus.Mode() != consensus.ModeArchive
+	history, err := history.New(rt.dataDir, id, &r.cfg.History, haveLocalStorageWorker)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
 	}
-	defer func() {
-		if rerr != nil {
-			history.Close()
-		}
-	}()
-
-	// Create runtime-specific local storage backend.
-	localStorage, err := localstorage.New(path, LocalStorageFile, id)
-	if err != nil {
-		return fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", id, err)
-	}
-	defer func() {
-		if rerr != nil {
-			localStorage.Stop()
-		}
-	}()
 
 	// Create runtime-specific storage backend.
 	var ns common.Namespace
@@ -537,7 +532,6 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 		return fmt.Errorf("runtime/registry: cannot track runtime %s: %w", id, err)
 	}
 
-	rt.localStorage = localStorage
 	rt.history = history
 	r.runtimes[id] = rt
 
@@ -546,17 +540,32 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 
 func newRuntime(
 	ctx context.Context,
+	dataDir string,
 	id common.Namespace,
 	cfg *RuntimeConfig,
 	consensus consensus.Backend,
 	logger *logging.Logger,
 ) (*runtime, error) {
+	// Ensure runtime state directory exists.
+	rtDataDir, err := EnsureRuntimeStateDir(dataDir, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create runtime-specific local storage backend.
+	localStorage, err := localstorage.New(rtDataDir, LocalStorageFile, id)
+	if err != nil {
+		return nil, fmt.Errorf("runtime/registry: cannot create local storage for runtime %s: %w", id, err)
+	}
+
 	watchCtx, cancel := context.WithCancel(ctx)
 
 	rt := &runtime{
 		id:                         id,
+		dataDir:                    rtDataDir,
 		mode:                       cfg.Mode,
 		consensus:                  consensus,
+		localStorage:               localStorage,
 		cancelCtx:                  cancel,
 		registryDescriptorCh:       make(chan struct{}),
 		registryDescriptorNotifier: pubsub.NewBroker(true),

@@ -30,7 +30,7 @@ func (d *Document) SanityCheck() error {
 	}
 	epoch := d.Beacon.Base // Note: d.Height has no easy connection to the epoch.
 
-	if err := d.Registry.SanityCheck(d.Time, epoch, d.Staking.Ledger, d.Staking.Parameters.Thresholds, pkBlacklist); err != nil {
+	if err := d.Registry.SanityCheck(d.Time, uint64(d.Height), epoch, d.Staking.Ledger, d.Staking.Parameters.Thresholds, pkBlacklist); err != nil {
 		return err
 	}
 	if err := d.RootHash.SanityCheck(); err != nil {

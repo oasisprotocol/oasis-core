@@ -10,15 +10,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 )
 
-func TestTEEFeaturesSGXApplyDefaultPolicy(t *testing.T) {
+func TestTEEFeaturesSGXApplyDefaultConstraints(t *testing.T) {
 	require := require.New(t)
 
 	tf := TEEFeaturesSGX{
 		PCS: true,
 	}
+	sc := SGXConstraints{}
 
-	policy := tf.ApplyDefaultPolicy(nil)
-	require.Nil(policy, "policy should remain nil when no default policy is configured")
+	tf.ApplyDefaultConstraints(&sc)
+	require.Nil(sc.Policy, "policy should remain nil when no default policy is configured")
 
 	defaultIasPolicy := &ias.QuotePolicy{}
 	defaultPcsPolicy := &pcs.QuotePolicy{
@@ -32,23 +33,30 @@ func TestTEEFeaturesSGXApplyDefaultPolicy(t *testing.T) {
 			IAS: defaultIasPolicy,
 			PCS: defaultPcsPolicy,
 		},
+		DefaultMaxAttestationAge: 100,
 	}
+	sc = SGXConstraints{}
 
-	policy = tf.ApplyDefaultPolicy(nil)
-	require.NotNil(policy, "a default policy should be used")
-	require.EqualValues(defaultIasPolicy, policy.IAS)
-	require.EqualValues(defaultPcsPolicy, policy.PCS)
+	tf.ApplyDefaultConstraints(&sc)
+	require.NotNil(sc.Policy, "a default policy should be used")
+	require.EqualValues(defaultIasPolicy, sc.Policy.IAS)
+	require.EqualValues(defaultPcsPolicy, sc.Policy.PCS)
+	require.EqualValues(100, sc.MaxAttestationAge)
 
 	existingPcsPolicy := &pcs.QuotePolicy{
 		TCBValidityPeriod:          20,
 		MinTCBEvaluationDataNumber: 1,
 	}
 
-	policy = tf.ApplyDefaultPolicy(&quote.Policy{
-		PCS: existingPcsPolicy,
-	})
-	require.EqualValues(defaultIasPolicy, policy.IAS)
-	require.EqualValues(existingPcsPolicy, policy.PCS)
+	sc = SGXConstraints{
+		Policy: &quote.Policy{
+			PCS: existingPcsPolicy,
+		},
+	}
+
+	tf.ApplyDefaultConstraints(&sc)
+	require.EqualValues(defaultIasPolicy, sc.Policy.IAS)
+	require.EqualValues(existingPcsPolicy, sc.Policy.PCS)
 
 	tf = TEEFeaturesSGX{
 		PCS: false,
@@ -57,9 +65,10 @@ func TestTEEFeaturesSGXApplyDefaultPolicy(t *testing.T) {
 			PCS: defaultPcsPolicy,
 		},
 	}
+	sc = SGXConstraints{}
 
-	policy = tf.ApplyDefaultPolicy(nil)
-	require.NotNil(policy, "a default policy should be used")
-	require.EqualValues(defaultIasPolicy, policy.IAS)
-	require.Nil(policy.PCS, "PCS policy should remain unset when PCS is disabled")
+	tf.ApplyDefaultConstraints(&sc)
+	require.NotNil(sc.Policy, "a default policy should be used")
+	require.EqualValues(defaultIasPolicy, sc.Policy.IAS)
+	require.Nil(sc.Policy.PCS, "PCS policy should remain unset when PCS is disabled")
 }

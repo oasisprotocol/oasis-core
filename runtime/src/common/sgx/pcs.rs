@@ -224,18 +224,13 @@ impl QuoteBundle {
             return Err(Error::ProductionEnclave);
         }
 
-        let report_data = report_body.reportdata.to_vec();
-        // The last 32 bytes of the report data (for runtime enclaves) is the nonce.
-        let nonce = report_data[32..].to_vec();
-
         Ok(VerifiedQuote {
-            report_data,
+            report_data: report_body.reportdata.to_vec(),
             identity: EnclaveIdentity {
                 mr_enclave: MrEnclave::from(report_body.mrenclave.to_vec()),
                 mr_signer: MrSigner::from(report_body.mrsigner.to_vec()),
             },
             timestamp,
-            nonce,
         })
     }
 }
