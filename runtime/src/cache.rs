@@ -1,6 +1,7 @@
 //! In-memory cache of trees.
 use std::{
     cell::RefCell,
+    num::NonZeroUsize,
     rc::Rc,
     sync::{Arc, Mutex, MutexGuard},
 };
@@ -13,7 +14,7 @@ use crate::{
 };
 
 thread_local! {
-    static QUERY_CACHE: RefCell<lru::LruCache<u64, Rc<RefCell<Cache>>>> = RefCell::new(lru::LruCache::new(10));
+    static QUERY_CACHE: RefCell<lru::LruCache<u64, Rc<RefCell<Cache>>>> = RefCell::new(lru::LruCache::new(NonZeroUsize::new(10).unwrap()));
 }
 
 /// A set of storage tree caches, one for each storage operation:

@@ -1,5 +1,8 @@
 //! An in-memory LRU store for the light client.
-use std::sync::{Mutex, MutexGuard};
+use std::{
+    num::NonZeroUsize,
+    sync::{Mutex, MutexGuard},
+};
 
 use tendermint_light_client::{
     store::LightStore,
@@ -40,10 +43,10 @@ impl LruStore {
     pub fn new(capacity: usize) -> Self {
         Self {
             inner: Mutex::new(Inner {
-                unverified: lru::LruCache::new(capacity),
-                verified: lru::LruCache::new(capacity),
-                trusted: lru::LruCache::new(capacity),
-                failed: lru::LruCache::new(capacity),
+                unverified: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
+                verified: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
+                trusted: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
+                failed: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
             }),
         }
     }

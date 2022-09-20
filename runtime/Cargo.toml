@@ -13,16 +13,15 @@ slog = "2.7.0"
 slog-json = "2.6.0"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
-serde = { version = "1.0.137", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 serde_json = { version = "1.0.81", features = ["raw_value"] }
 lazy_static = "1.3.0"
 crossbeam = "0.8.1"
 byteorder = "1.4.3"
 anyhow = "1.0"
 thiserror = "1.0"
-sgx-isa = { version = "0.3.3", features = ["sgxstd"] }
-# TODO: Switch back to crates.io once new package is published.
-dcap-ql = { git = "https://github.com/fortanix/rust-sgx", rev = "998c34d158a69dd1af33f22587e8ae1c26ca6a27", default-features = false, features = ["verify"] }
+sgx-isa = { version = "0.4.0", features = ["sgxstd"] }
+dcap-ql = { version = "0.3.4", default-features = false, features = ["verify"] }
 mbedtls = "0.8.1"
 yasna = { version = "0.5.0", features = ["num-bigint"] }
 bincode = "1.3.3"
@@ -49,7 +48,7 @@ zeroize = "1.4"
 intrusive-collections = "0.9.4"
 sha2 = "0.9.9"
 hmac = "0.11.0"
-honggfuzz = "0.5.54"
+honggfuzz = "0.5.55"
 arbitrary = { version = "1.0.2", features = ["derive"] }
 num-bigint = "0.4"
 num-traits = "0.2.15"
@@ -57,9 +56,9 @@ bech32 = "0.9.0"
 impl-trait-for-tuples = "0.2.1"
 x509-parser = "0.14.0"
 oid-registry = "0.6.0"
-rsa = "0.5.0"
+rsa = "0.6.1"
 base64-serde = "0.6.1"
-lru = "0.7.7"
+lru = "0.8.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
 version = "1"

@@ -1,6 +1,7 @@
 //! Key Derivation Function.
 use std::{
     convert::TryInto,
+    num::NonZeroUsize,
     sync::{Arc, RwLock},
 };
 
@@ -232,7 +233,7 @@ impl Kdf {
                 checksum: None,
                 runtime_id: None,
                 signer: None,
-                cache: LruCache::new(1024),
+                cache: LruCache::new(NonZeroUsize::new(1024).unwrap()),
             }),
         }
     }
@@ -547,6 +548,7 @@ mod tests {
     use std::{
         collections::HashSet,
         convert::TryInto,
+        num::NonZeroUsize,
         sync::{Arc, RwLock},
     };
 
@@ -603,7 +605,7 @@ mod tests {
                     checksum: Some(vec![2u8; 32]),
                     runtime_id: Some(Namespace([3u8; 32])),
                     signer: Some(Arc::new(PrivateKey::from_bytes(vec![4u8; 32]))),
-                    cache: LruCache::new(1),
+                    cache: LruCache::new(NonZeroUsize::new(1).unwrap()),
                 }),
             }
         }
@@ -845,7 +847,7 @@ mod tests {
                     checksum: Some(checksum.from_hex().unwrap()),
                     runtime_id: Some(Namespace::from(runtime_id)),
                     signer: Some(Arc::new(PrivateKey::from_bytes(signer.from_hex().unwrap()))),
-                    cache: LruCache::new(1),
+                    cache: LruCache::new(NonZeroUsize::new(1).unwrap()),
                 }),
             };
 

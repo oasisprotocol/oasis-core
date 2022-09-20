@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use tendermint::block::Height;
 use tendermint_light_client::types::LightBlock as TMLightBlock;
 
@@ -40,8 +42,8 @@ impl Default for Cache {
             last_verified_round: 0,
             last_verified_epoch: 0,
             last_verified_block: None,
-            verified_state_roots: lru::LruCache::new(128),
-            verified_state_roots_queries: lru::LruCache::new(128),
+            verified_state_roots: lru::LruCache::new(NonZeroUsize::new(128).unwrap()),
+            verified_state_roots_queries: lru::LruCache::new(NonZeroUsize::new(128).unwrap()),
             node_id: None,
         }
     }
