@@ -2,6 +2,7 @@
 use std::{
     collections::HashSet,
     iter::FromIterator,
+    num::NonZeroUsize,
     sync::{Arc, RwLock},
 };
 
@@ -64,8 +65,12 @@ impl RemoteClient {
                 runtime_id,
                 rpc_client,
                 consensus_verifier,
-                private_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
-                public_key_cache: RwLock::new(LruCache::new(keys_cache_sizes)),
+                private_key_cache: RwLock::new(LruCache::new(
+                    NonZeroUsize::new(keys_cache_sizes).unwrap(),
+                )),
+                public_key_cache: RwLock::new(LruCache::new(
+                    NonZeroUsize::new(keys_cache_sizes).unwrap(),
+                )),
             }),
         }
     }

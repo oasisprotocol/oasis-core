@@ -8,7 +8,7 @@ use chrono::prelude::*;
 use lazy_static::lazy_static;
 use oid_registry::{OID_PKCS1_RSAENCRYPTION, OID_PKCS1_SHA256WITHRSA};
 use percent_encoding;
-use rsa::{padding::PaddingScheme, pkcs1::FromRsaPublicKey, Hash, PublicKey, RsaPublicKey};
+use rsa::{padding::PaddingScheme, pkcs1::DecodeRsaPublicKey, Hash, PublicKey, RsaPublicKey};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
 use sha2::{Digest, Sha256};

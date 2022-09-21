@@ -100,8 +100,8 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  cargo +nightly install --git https://github.com/fortanix/rust-sgx --rev 998c34d158a69dd1af33f22587e8ae1c26ca6a27 fortanix-sgx-tools
-  cargo +nightly install --git https://github.com/fortanix/rust-sgx --rev 998c34d158a69dd1af33f22587e8ae1c26ca6a27 sgxs-tools
+  cargo +nightly install fortanix-sgx-tools
+  cargo +nightly install sgxs-tools
   ```
   <!-- markdownlint-enable line-length -->
 
