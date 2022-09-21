@@ -16,7 +16,7 @@ slog-stdlog = "4.1.0"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = { version = "1.0.81", features = ["raw_value"] }
 lazy_static = "1.3.0"
-crossbeam = "0.8.1"
+crossbeam = "0.8.2"
 byteorder = "1.4.3"
 anyhow = "1.0"
 thiserror = "1.0"
@@ -32,16 +32,16 @@ base64 = "0.13.0"
 rustc-hex = "2.0.1"
 rand = "0.7.3"
 futures = "0.3.17"
-tokio = { version = "~1.20", features = ["rt", "sync"] }
-tendermint = "0.23.7"
-tendermint-proto = "0.23.7"
-tendermint-light-client = { version = "0.23.7", default-features = false }
-tendermint-rpc = { version = "0.23.7", default-features = false }
+tokio = { version = "~1.21.1", features = ["rt", "sync"] }
+tendermint = "0.23.9"
+tendermint-proto = "0.23.9"
+tendermint-light-client = { version = "0.23.9", default-features = false }
+tendermint-rpc = { version = "0.23.9", default-features = false }
 io-context = "0.2.0"
 curve25519-dalek = "3.2.0"
 x25519-dalek = "1.1.0"
 ed25519-dalek = "1.0.1"
-deoxysii = "0.2.3"
+deoxysii = "0.2.4"
 tiny-keccak = { version = "2.0.2", features = ["sha3", "tuple_hash"] }
 sp800-185 = "0.2.0"
 zeroize = "1.4"
@@ -52,7 +52,7 @@ honggfuzz = "0.5.55"
 arbitrary = { version = "1.0.2", features = ["derive"] }
 num-bigint = "0.4"
 num-traits = "0.2.15"
-bech32 = "0.9.0"
+bech32 = "0.9.1"
 impl-trait-for-tuples = "0.2.1"
 x509-parser = "0.14.0"
 oid-registry = "0.6.0"
@@ -66,7 +66,7 @@ features = ["full"]
 
 [dev-dependencies]
 # For storage interoperability tests only.
-jsonrpc = { version = "0.12.1", features = ["simple_uds"] }
+jsonrpc = { version = "0.13.0", features = ["simple_uds"] }
 tempfile = "3.3.0"
 
 [[bin]]
