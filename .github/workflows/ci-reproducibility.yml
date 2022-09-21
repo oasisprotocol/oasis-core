@@ -37,10 +37,10 @@ jobs:
           # NOTE: We make a git checkout to a unique directory for each build to
           # catch reproducibility issues with code in different local paths.
           path: build${{ matrix.build_number }}
-      - name: Set up Go 1.17
+      - name: Set up Go 1.18
         uses: actions/setup-go@v3
         with:
-          go-version: "1.17.x"
+          go-version: "1.18.x"
       - name: Set up Rust
         working-directory: build${{ matrix.build_number }}
         run: rustup show
