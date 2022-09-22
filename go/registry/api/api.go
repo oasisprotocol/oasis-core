@@ -522,7 +522,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	// Descriptors will always be signed by the node identity key.
 	var expectedSigners []signature.PublicKey
 	if !sigNode.MultiSigned.IsSignedBy(n.ID) {
-		logger.Error("RegisterNode: registration not signed by node identity",
+		logger.Debug("RegisterNode: registration not signed by node identity",
 			"signed_node", sigNode,
 			"node", n,
 		)
@@ -530,7 +530,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 	expectedSigners = append(expectedSigners, n.ID)
 	if !entity.HasNode(n.ID) && (!isSanityCheck || isGenesis) {
-		logger.Error("RegisterNode: node public key not found in entity's node list",
+		logger.Debug("RegisterNode: node public key not found in entity's node list",
 			"signed_node", sigNode,
 			"node", n,
 		)

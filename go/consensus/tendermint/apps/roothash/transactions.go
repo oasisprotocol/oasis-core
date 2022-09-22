@@ -87,7 +87,7 @@ func (app *rootHashApplication) executorProposerTimeout(
 
 	// Ensure request is valid.
 	if err = rtState.ExecutorPool.CheckProposerTimeout(ctx, rtState.CurrentBlock, nl, ctx.TxSigner(), rpt.Round); err != nil {
-		ctx.Logger().Error("failed requesting proposer round timeout",
+		ctx.Logger().Debug("failed requesting proposer round timeout",
 			"err", err,
 			"round", rtState.CurrentBlock.Header.Round,
 			"request", rpt,
@@ -96,7 +96,7 @@ func (app *rootHashApplication) executorProposerTimeout(
 	}
 
 	// Timeout triggered by executor node, emit empty error block.
-	ctx.Logger().Error("proposer round timeout",
+	ctx.Logger().Debug("proposer round timeout",
 		"round", rpt.Round,
 		"err", err,
 		logging.LogEvent, roothash.LogEventRoundFailed,
@@ -157,7 +157,7 @@ func (app *rootHashApplication) executorCommit(
 			&commit, // nolint: gosec
 			msgGasAccountant,
 		); err != nil {
-			ctx.Logger().Error("failed to add compute commitment to round",
+			ctx.Logger().Debug("failed to add compute commitment to round",
 				"err", err,
 				"round", rtState.CurrentBlock.Header.Round,
 			)
