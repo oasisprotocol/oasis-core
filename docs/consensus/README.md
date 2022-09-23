@@ -72,7 +72,7 @@ The Tendermint consensus backend is split into two major parts:
 
 1. The second part is the **query and transaction submission glue** that makes
    it easy to interact with the ABCI application, presenting everything via the
-   Oasis Core Consensus interface.
+   Oasis Core consensus interface.
 
 <!-- markdownlint-disable line-length -->
 [`go/consensus/tendermint`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
