@@ -764,7 +764,7 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 	}
 
 	// Something else went wrong, emit empty error block.
-	ctx.Logger().Error("round failed",
+	ctx.Logger().Debug("round failed",
 		"round", round,
 		"err", err,
 		logging.LogEvent, roothash.LogEventRoundFailed,

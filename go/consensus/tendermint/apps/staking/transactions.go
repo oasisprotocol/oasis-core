@@ -76,7 +76,7 @@ func (app *stakingApplication) transfer(ctx *api.Context, state *stakingState.Mu
 			return nil, fmt.Errorf("failed to fetch account: %w", err)
 		}
 		if err = quantity.Move(&to.General.Balance, &from.General.Balance, &xfer.Amount); err != nil {
-			ctx.Logger().Error("Transfer: failed to move balance",
+			ctx.Logger().Debug("Transfer: failed to move balance",
 				"err", err,
 				"from", fromAddr,
 				"to", xfer.To,
@@ -275,7 +275,7 @@ func (app *stakingApplication) addEscrow(ctx *api.Context, state *stakingState.M
 
 	obtainedShares, err := to.Escrow.Active.Deposit(&delegation.Shares, &from.General.Balance, &escrow.Amount)
 	if err != nil {
-		ctx.Logger().Error("AddEscrow: failed to escrow stake",
+		ctx.Logger().Debug("AddEscrow: failed to escrow stake",
 			"err", err,
 			"from", fromAddr,
 			"to", escrow.Account,
@@ -412,7 +412,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	var baseUnits quantity.Quantity
 
 	if err = from.Escrow.Active.Withdraw(&baseUnits, &delegation.Shares, &reclaim.Shares); err != nil {
-		ctx.Logger().Error("ReclaimEscrow: failed to redeem escrow shares",
+		ctx.Logger().Debug("ReclaimEscrow: failed to redeem escrow shares",
 			"err", err,
 			"to", toAddr,
 			"from", reclaim.Account,
@@ -424,7 +424,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 
 	var debondingShares *quantity.Quantity
 	if debondingShares, err = from.Escrow.Debonding.Deposit(&deb.Shares, &baseUnits, stakeAmount); err != nil {
-		ctx.Logger().Error("ReclaimEscrow: failed to debond shares",
+		ctx.Logger().Debug("ReclaimEscrow: failed to debond shares",
 			"err", err,
 			"to", toAddr,
 			"from", reclaim.Account,
@@ -435,7 +435,7 @@ func (app *stakingApplication) reclaimEscrow(ctx *api.Context, state *stakingSta
 	}
 
 	if !baseUnits.IsZero() {
-		ctx.Logger().Error("ReclaimEscrow: inconsistency in transferring stake from active escrow to debonding",
+		ctx.Logger().Debug("ReclaimEscrow: inconsistency in transferring stake from active escrow to debonding",
 			"remaining_base_units", baseUnits,
 		)
 		return nil, staking.ErrInvalidArgument
