@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -47,6 +48,7 @@ const (
 	cfgTEEHardware             = "fixture.default.tee_hardware"
 	cfgInitialHeight           = "fixture.default.initial_height"
 	cfgStakingGenesis          = "fixture.default.staking_genesis"
+	cfgGenesis                 = "fixture.default.genesis"
 )
 
 var keymanagerID common.Namespace
@@ -61,24 +63,6 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 	var mrSigner *sgx.MrSigner
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &sgx.FortanixDummyMrSigner
-	}
-
-	// Default staking genesis enables 16 allowances per account which matches the current
-	// mainnet and testnet setting.
-	stakingGenesis := staking.Genesis{
-		Parameters: staking.ConsensusParameters{
-			MaxAllowances: 16,
-		},
-	}
-	if genesis := viper.GetString(cfgStakingGenesis); genesis != "" {
-		var raw []byte
-		raw, err = ioutil.ReadFile(genesis)
-		if err != nil {
-			return nil, fmt.Errorf("loading staking genesis file: %w", err)
-		}
-		if err = json.Unmarshal(raw, &stakingGenesis); err != nil {
-			return nil, fmt.Errorf("loading staking genesis: %w", err)
-		}
 	}
 
 	fixture := &oasis.NetworkFixture{
@@ -104,7 +88,6 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			},
 			DeterministicIdentities: viper.GetBool(cfgDeterministicIdentities),
 			FundEntities:            viper.GetBool(cfgFundEntities),
-			StakingGenesis:          &stakingGenesis,
 		},
 		Entities: []oasis.EntityCfg{
 			{IsDebugTestEntity: true},
@@ -116,6 +99,41 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 	}
 	if viper.GetBool(cfgEpochtimeMock) {
 		fixture.Network.SetMockEpoch()
+	}
+
+	genesis := genesis.Document{}
+
+	if genesisFile := viper.GetString(cfgGenesis); genesisFile != "" {
+		var raw []byte
+		raw, err = ioutil.ReadFile(genesisFile)
+		if err != nil {
+			return nil, fmt.Errorf("loading genesis file: %w", err)
+		}
+		if err = json.Unmarshal(raw, &genesis); err != nil {
+			return nil, fmt.Errorf("loading genesis: %w", err)
+		}
+
+		fixture.Network.GenesisFile = genesisFile
+	}
+
+	// Default staking genesis enables 16 allowances per account which matches the current
+	// mainnet and testnet setting.
+	stakingGenesis := staking.Genesis{
+		Parameters: staking.ConsensusParameters{
+			MaxAllowances: 16,
+		},
+	}
+	if stakingGenesisFile := viper.GetString(cfgStakingGenesis); stakingGenesisFile != "" {
+		var raw []byte
+		raw, err = ioutil.ReadFile(stakingGenesisFile)
+		if err != nil {
+			return nil, fmt.Errorf("loading staking genesis file: %w", err)
+		}
+		if err = json.Unmarshal(raw, &stakingGenesis); err != nil {
+			return nil, fmt.Errorf("loading staking genesis: %w", err)
+		}
+
+		fixture.Network.StakingGenesis = &stakingGenesis
 	}
 
 	for i := 0; i < viper.GetInt(cfgNumEntities); i++ {
@@ -324,6 +342,7 @@ func init() {
 	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
 	DefaultFixtureFlags.Int64(cfgInitialHeight, 1, "initial block height")
 	DefaultFixtureFlags.String(cfgStakingGenesis, "", "path to the staking genesis to use")
+	DefaultFixtureFlags.String(cfgGenesis, "", "path to the genesis to use")
 
 	_ = viper.BindPFlags(DefaultFixtureFlags)
 
