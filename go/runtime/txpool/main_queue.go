@@ -24,6 +24,9 @@ type MainQueueTransaction struct {
 	sender string
 	// senderSeq is a per-sender sequence number as specified by the runtime.
 	senderSeq uint64
+	// senderStateSeq is the current (as of when the check was performed) sequence number of the
+	// sender stored in runtime state.
+	senderStateSeq uint64
 }
 
 func newTransaction(tx TxQueueMeta) *MainQueueTransaction {
@@ -58,6 +61,7 @@ func (tx *MainQueueTransaction) setChecked(meta *protocol.CheckTxMetadata) {
 		tx.priority = meta.Priority
 		tx.sender = string(meta.Sender)
 		tx.senderSeq = meta.SenderSeq
+		tx.senderStateSeq = meta.SenderStateSeq
 	}
 
 	// If the sender is empty (e.g. because the runtime does not support specifying a sender), we

@@ -385,6 +385,8 @@ pub struct CheckTxMetadata {
     pub sender: Vec<u8>,
     #[cbor(optional)]
     pub sender_seq: u64,
+    #[cbor(optional)]
+    pub sender_state_seq: u64,
 }
 
 /// Consensus event kind.
