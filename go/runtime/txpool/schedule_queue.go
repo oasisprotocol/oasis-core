@@ -46,9 +46,9 @@ func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 	defer sq.l.Unlock()
 
 	// If a transaction from the same sender already exists, we accept a new transaction only if it
-	// has a higher priority.
+	// has a higher priority or if the old transaction is no longer valid based on sequence numbers.
 	if etx, exists := sq.bySender[tx.sender]; exists {
-		if tx.priority <= etx.priority {
+		if etx.senderSeq >= tx.senderStateSeq && tx.priority <= etx.priority {
 			return ErrReplacementTxPriorityTooLow
 		}
 

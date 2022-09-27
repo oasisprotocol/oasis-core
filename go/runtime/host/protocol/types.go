@@ -289,6 +289,9 @@ type CheckTxMetadata struct {
 	Sender []byte `json:"sender,omitempty"`
 	// SenderSeq is the per-sender sequence number of the transaction.
 	SenderSeq uint64 `json:"sender_seq,omitempty"`
+	// SenderStateSeq is the current sequence number of the sender stored in runtime state. This
+	// sequence number must be lower than or equal to SenderSeq.
+	SenderStateSeq uint64 `json:"sender_state_seq,omitempty"`
 
 	// Fields below are deprecated to avoid breaking protocol changes. They may be removed once
 	// all runtimes stop sending those fields.
