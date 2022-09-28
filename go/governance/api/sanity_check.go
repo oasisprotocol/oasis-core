@@ -33,6 +33,20 @@ func (p *ConsensusParameters) SanityCheck() error {
 	return nil
 }
 
+// SanityCheck performs a sanity check on the consensus parameter changes.
+func (c *ConsensusParameterChanges) SanityCheck() error {
+	if c.GasCosts == nil &&
+		c.MinProposalDeposit == nil &&
+		c.VotingPeriod == nil &&
+		c.StakeThreshold == nil &&
+		c.UpgradeMinEpochDiff == nil &&
+		c.UpgradeCancelMinEpochDiff == nil &&
+		c.EnableChangeParametersProposal == nil {
+		return fmt.Errorf("consensus parameter changes should not be empty")
+	}
+	return nil
+}
+
 // SanityCheckProposals sanity checks proposals.
 func SanityCheckProposals(proposals []*Proposal, epoch beacon.EpochTime, governanceDeposit *quantity.Quantity) error {
 	activeProposalDeposits := quantity.NewFromUint64(0)

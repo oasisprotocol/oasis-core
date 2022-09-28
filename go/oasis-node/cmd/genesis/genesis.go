@@ -77,11 +77,12 @@ const (
 	CfgSchedulerDebugAllowWeakAlpha    = "scheduler.debug.allow_weak_alpha"
 
 	// Governance config flags.
-	CfgGovernanceMinProposalDeposit        = "governance.min_proposal_deposit"
-	CfgGovernanceStakeThreshold            = "governance.stake_threshold"
-	CfgGovernanceUpgradeCancelMinEpochDiff = "governance.upgrade_cancel_min_epoch_diff"
-	CfgGovernanceUpgradeMinEpochDiff       = "governance.upgrade_min_epoch_diff"
-	CfgGovernanceVotingPeriod              = "governance.voting_period"
+	CfgGovernanceMinProposalDeposit             = "governance.min_proposal_deposit"
+	CfgGovernanceStakeThreshold                 = "governance.stake_threshold"
+	CfgGovernanceUpgradeCancelMinEpochDiff      = "governance.upgrade_cancel_min_epoch_diff"
+	CfgGovernanceUpgradeMinEpochDiff            = "governance.upgrade_min_epoch_diff"
+	CfgGovernanceVotingPeriod                   = "governance.voting_period"
+	CfgGovernanceEnableChangeParametersProposal = "governance.enable_change_parameters_proposal"
 
 	// Beacon config flags.
 	CfgBeaconBackend                    = "beacon.backend"
@@ -241,12 +242,13 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	doc.Governance = governance.Genesis{
 		Parameters: governance.ConsensusParameters{
-			GasCosts:                  governance.DefaultGasCosts, // TODO: configurable.
-			MinProposalDeposit:        *quantity.NewFromUint64(viper.GetUint64(CfgGovernanceMinProposalDeposit)),
-			StakeThreshold:            uint8(viper.GetInt(CfgGovernanceStakeThreshold)),
-			UpgradeCancelMinEpochDiff: beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeCancelMinEpochDiff)),
-			UpgradeMinEpochDiff:       beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeMinEpochDiff)),
-			VotingPeriod:              beacon.EpochTime(viper.GetUint64(CfgGovernanceVotingPeriod)),
+			GasCosts:                       governance.DefaultGasCosts, // TODO: configurable.
+			MinProposalDeposit:             *quantity.NewFromUint64(viper.GetUint64(CfgGovernanceMinProposalDeposit)),
+			StakeThreshold:                 uint8(viper.GetInt(CfgGovernanceStakeThreshold)),
+			UpgradeCancelMinEpochDiff:      beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeCancelMinEpochDiff)),
+			UpgradeMinEpochDiff:            beacon.EpochTime(viper.GetUint64(CfgGovernanceUpgradeMinEpochDiff)),
+			VotingPeriod:                   beacon.EpochTime(viper.GetUint64(CfgGovernanceVotingPeriod)),
+			EnableChangeParametersProposal: viper.GetBool(CfgGovernanceEnableChangeParametersProposal),
 		},
 	}
 
@@ -815,6 +817,7 @@ func init() {
 	initGenesisFlags.Uint64(CfgGovernanceUpgradeCancelMinEpochDiff, 300, "minimum number of epochs in advance for canceling proposals")
 	initGenesisFlags.Uint64(CfgGovernanceUpgradeMinEpochDiff, 300, "minimum number of epochs the upgrade needs to be scheduled in advance")
 	initGenesisFlags.Uint64(CfgGovernanceVotingPeriod, 100, "voting period (in epochs)")
+	initGenesisFlags.Bool(CfgGovernanceEnableChangeParametersProposal, true, "enable change parameters proposals")
 
 	// Beacon config flags.
 	initGenesisFlags.String(CfgBeaconBackend, "insecure", "beacon backend")

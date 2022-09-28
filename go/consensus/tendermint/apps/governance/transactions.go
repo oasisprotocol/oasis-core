@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -41,6 +42,11 @@ func (app *governanceApplication) submitProposal(
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
+
+	// To not violate the consensus, change parameters proposals should be ignored when disabled.
+	if proposalContent.ChangeParameters != nil && !params.EnableChangeParametersProposal {
+		return governance.ErrInvalidArgument
 	}
 
 	// Charge gas for this transaction.
@@ -105,7 +111,7 @@ func (app *governanceApplication) submitProposal(
 
 	case proposalContent.CancelUpgrade != nil:
 		cancelUpgrade := proposalContent.CancelUpgrade
-		// Check if the cancelation upgrade exists.
+		// Check if the cancellation upgrade exists.
 		var upgrade *governance.UpgradeProposal
 		upgrade, err = state.PendingUpgradeProposal(ctx, cancelUpgrade.ProposalID)
 		switch err {
@@ -124,10 +130,29 @@ func (app *governanceApplication) submitProposal(
 			return err
 		}
 
-		// Ensure upgrade descriptor is far enough in future so that cancelation is still allowed.
+		// Ensure upgrade descriptor is far enough in future so that cancellation is still allowed.
 		if upgrade.Descriptor.Epoch < params.UpgradeCancelMinEpochDiff+epoch {
 			return governance.ErrUpgradeTooSoon
 		}
+
+	case proposalContent.ChangeParameters != nil:
+		// Notify other interested applications to validate the parameter changes.
+		var res interface{}
+		res, err = app.md.Publish(ctx, governanceApi.MessageValidateParameterChanges, proposalContent.ChangeParameters)
+		if err != nil {
+			ctx.Logger().Debug("governance: failed to dispatch validate parameter changes message",
+				"err", err,
+			)
+			return err
+		}
+		// Exactly one module should be interested in the proposed changes. If no one is,
+		// the proposal is rejected as not being supported.
+		if res == nil {
+			ctx.Logger().Debug("governance: no module interested in change parameters proposal")
+			return governance.ErrInvalidArgument
+		}
+	default:
+		return governance.ErrInvalidArgument
 	}
 
 	// Deposit proposal funds.

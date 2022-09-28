@@ -93,11 +93,12 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 		},
 		Governance: governance.Genesis{
 			Parameters: governance.ConsensusParameters{
-				StakeThreshold:            90,
-				UpgradeCancelMinEpochDiff: 20,
-				UpgradeMinEpochDiff:       20,
-				VotingPeriod:              10,
-				MinProposalDeposit:        *quantity.NewFromUint64(100),
+				StakeThreshold:                 90,
+				UpgradeCancelMinEpochDiff:      20,
+				UpgradeMinEpochDiff:            20,
+				VotingPeriod:                   10,
+				MinProposalDeposit:             *quantity.NewFromUint64(100),
+				EnableChangeParametersProposal: true,
 			},
 		},
 		RootHash: roothash.Genesis{

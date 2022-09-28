@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -13,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // ModuleName is a unique module name for the scheduler module.
@@ -288,6 +286,26 @@ type ConsensusParameters struct {
 	DebugAllowWeakAlpha bool `json:"debug_allow_weak_alpha,omitempty"`
 }
 
+// ConsensusParameterChanges are allowed scheduler consensus parameter changes.
+type ConsensusParameterChanges struct {
+	// MinValidators is the new minimum number of validators.
+	MinValidators *int `json:"min_validators"`
+
+	// MaxValidators is the new maximum number of validators.
+	MaxValidators *int `json:"max_validators"`
+}
+
+// Apply applies changes to the given consensus parameters.
+func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
+	if c.MinValidators != nil {
+		params.MinValidators = *c.MinValidators
+	}
+	if c.MaxValidators != nil {
+		params.MaxValidators = *c.MaxValidators
+	}
+	return nil
+}
+
 // ForceElectCommitteeRole is the committee kind/role that a force-elected
 // node is elected as.
 type ForceElectCommitteeRole struct {
@@ -307,29 +325,6 @@ func (fe *ForceElectCommitteeRole) HasRole(role Role) bool {
 		}
 	}
 	return false
-}
-
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
-	unsafeFlags := g.Parameters.DebugBypassStake || g.Parameters.DebugAllowWeakAlpha || g.Parameters.DebugForceElect != nil
-	if unsafeFlags && !flags.DebugDontBlameOasis() {
-		return fmt.Errorf("scheduler: sanity check failed: one or more unsafe debug flags set")
-	}
-
-	if !g.Parameters.DebugBypassStake {
-		supplyPower, err := VotingPowerFromStake(stakingTotalSupply)
-		if err != nil {
-			return fmt.Errorf("scheduler: sanity check failed: total supply would break voting power computation: %w", err)
-		}
-		// I've been advised not to import implementation details.
-		// Instead, here's our own number that satisfies all current implementations' limits.
-		maxTotalVotingPower := int64(math.MaxInt64) / 8
-		if supplyPower > maxTotalVotingPower {
-			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, maxTotalVotingPower)
-		}
-	}
-
-	return nil
 }
 
 // ElectedEvent is the elected committee kind event.

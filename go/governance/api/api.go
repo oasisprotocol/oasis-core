@@ -2,11 +2,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"reflect"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/prettyprint"
@@ -54,28 +57,45 @@ var (
 	_ prettyprint.PrettyPrinter = (*ProposalContent)(nil)
 	_ prettyprint.PrettyPrinter = (*UpgradeProposal)(nil)
 	_ prettyprint.PrettyPrinter = (*CancelUpgradeProposal)(nil)
+	_ prettyprint.PrettyPrinter = (*ChangeParametersProposal)(nil)
 	_ prettyprint.PrettyPrinter = (*ProposalVote)(nil)
 )
 
 // ProposalContent is a consensus layer governance proposal content.
 type ProposalContent struct {
-	Upgrade       *UpgradeProposal       `json:"upgrade,omitempty"`
-	CancelUpgrade *CancelUpgradeProposal `json:"cancel_upgrade,omitempty"`
+	Upgrade          *UpgradeProposal          `json:"upgrade,omitempty"`
+	CancelUpgrade    *CancelUpgradeProposal    `json:"cancel_upgrade,omitempty"`
+	ChangeParameters *ChangeParametersProposal `json:"change_parameters,omitempty"`
 }
 
 // ValidateBasic performs basic proposal content validity checks.
 func (p *ProposalContent) ValidateBasic() error {
+	numProposals := 0
+	values := reflect.ValueOf(*p)
+	for i := 0; i < values.NumField(); i++ {
+		if !values.Field(i).IsNil() {
+			numProposals++
+		}
+	}
+
 	switch {
-	case p.Upgrade != nil && p.CancelUpgrade != nil:
+	case numProposals > 1:
 		return fmt.Errorf("proposal content has multiple fields set")
 	case p.Upgrade != nil:
-		return p.Upgrade.ValidateBasic()
+		if err := p.Upgrade.ValidateBasic(); err != nil {
+			return fmt.Errorf("upgrade proposal validation failed: %w", err)
+		}
 	case p.CancelUpgrade != nil:
 		// No validation at this time.
-		return nil
+	case p.ChangeParameters != nil:
+		if err := p.ChangeParameters.ValidateBasic(); err != nil {
+			return fmt.Errorf("change parameters proposal validation failed: %w", err)
+		}
 	default:
 		return fmt.Errorf("proposal content has no fields set")
 	}
+
+	return nil
 }
 
 // Equals checks if proposal contents are equal.
@@ -83,14 +103,22 @@ func (p *ProposalContent) ValidateBasic() error {
 // Note: this assumes valid proposals where each proposals will have
 // exactly one field set.
 func (p *ProposalContent) Equals(other *ProposalContent) bool {
-	switch {
-	case p.CancelUpgrade != nil && other.CancelUpgrade != nil:
-		return p.CancelUpgrade.ProposalID == other.CancelUpgrade.ProposalID
-	case p.Upgrade != nil && other.Upgrade != nil:
-		return p.Upgrade.Descriptor.Equals(&other.Upgrade.Descriptor)
-	default:
+	if p == other {
+		return true
+	}
+	if p == nil || other == nil {
 		return false
 	}
+	if !p.Upgrade.Equals(other.Upgrade) {
+		return false
+	}
+	if !p.CancelUpgrade.Equals(other.CancelUpgrade) {
+		return false
+	}
+	if !p.ChangeParameters.Equals(other.ChangeParameters) {
+		return false
+	}
+	return true
 }
 
 // PrettyPrint writes a pretty-printed representation of ProposalContent to the
@@ -119,6 +147,20 @@ type UpgradeProposal struct {
 	upgrade.Descriptor
 }
 
+// Equals checks if upgrade proposals are equal.
+func (u *UpgradeProposal) Equals(other *UpgradeProposal) bool {
+	if u == other {
+		return true
+	}
+	if u == nil || other == nil {
+		return false
+	}
+	if !u.Descriptor.Equals(&other.Descriptor) {
+		return false
+	}
+	return true
+}
+
 // PrettyPrint writes a pretty-printed representation of UpgradeProposal to the
 // given writer.
 func (u UpgradeProposal) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
@@ -137,6 +179,20 @@ type CancelUpgradeProposal struct {
 	ProposalID uint64 `json:"proposal_id"`
 }
 
+// Equals checks if cancel upgrade proposals are equal.
+func (cu *CancelUpgradeProposal) Equals(other *CancelUpgradeProposal) bool {
+	if cu == other {
+		return true
+	}
+	if cu == nil || other == nil {
+		return false
+	}
+	if cu.ProposalID != other.ProposalID {
+		return false
+	}
+	return true
+}
+
 // PrettyPrint writes a pretty-printed representation of CancelUpgradeProposal
 // to the given writer.
 func (cu CancelUpgradeProposal) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
@@ -147,6 +203,55 @@ func (cu CancelUpgradeProposal) PrettyPrint(ctx context.Context, prefix string, 
 // for pretty printing.
 func (cu CancelUpgradeProposal) PrettyType() (interface{}, error) {
 	return cu, nil
+}
+
+// ChangeParametersProposal is a consensus change parameters proposal.
+type ChangeParametersProposal struct {
+	// Module identifies the consensus backend module to which changes should be applied.
+	Module string `json:"module"`
+	// Changes are consensus parameter changes that should be applied to the module.
+	Changes cbor.RawMessage `json:"changes"`
+}
+
+// Equals checks if change parameters proposals are equal.
+func (p *ChangeParametersProposal) Equals(other *ChangeParametersProposal) bool {
+	if p == other {
+		return true
+	}
+	if p == nil || other == nil {
+		return false
+	}
+	if p.Module != other.Module {
+		return false
+	}
+	if !bytes.Equal(p.Changes, other.Changes) {
+		return false
+	}
+	return true
+}
+
+// PrettyPrint writes a pretty-printed representation of ChangeParametersProposal to the given
+// writer.
+func (p *ChangeParametersProposal) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	fmt.Fprintf(w, "%sModule: %s\n", prefix, p.Module)
+	fmt.Fprintf(w, "%sChanges: %v\n", prefix, p.Changes)
+}
+
+// PrettyType returns a representation of ChangeParametersProposal that can be used for pretty
+// printing.
+func (p *ChangeParametersProposal) PrettyType() (interface{}, error) {
+	return p, nil
+}
+
+// ValidateBasic performs a basic validation on the change parameters proposal.
+func (p *ChangeParametersProposal) ValidateBasic() error {
+	if len(p.Module) == 0 {
+		return fmt.Errorf("invalid module name: name should not be empty")
+	}
+	if len(p.Changes) == 0 {
+		return fmt.Errorf("invalid parameter changes: changes should not be empty")
+	}
+	return nil
 }
 
 // ProposalVote is a vote for a proposal.
@@ -256,6 +361,60 @@ type ConsensusParameters struct {
 	// UpgradeCancelMinEpochDiff is the minimum number of epochs between the current
 	// epoch and the proposed upgrade epoch for the upgrade cancellation proposal to be valid.
 	UpgradeCancelMinEpochDiff beacon.EpochTime `json:"upgrade_cancel_min_epoch_diff,omitempty"`
+
+	// EnableChangeParametersProposal is true iff change parameters proposals are allowed.
+	EnableChangeParametersProposal bool `json:"enable_change_parameters_proposal,omitempty"`
+}
+
+// ConsensusParameterChanges are allowed governance consensus parameter changes.
+type ConsensusParameterChanges struct {
+	// GasCosts are the new gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// MinProposalDeposit is the new minimal proposal deposit.
+	MinProposalDeposit *quantity.Quantity `json:"min_proposal_deposit,omitempty"`
+
+	// VotingPeriod is the new voting period.
+	VotingPeriod *beacon.EpochTime `json:"voting_period,omitempty"`
+
+	// StakeThreshold is the new stake threshold.
+	StakeThreshold *uint8 `json:"stake_threshold,omitempty"`
+
+	// UpgradeMinEpochDiff is the new minimal epoch difference between two pending upgrades.
+	UpgradeMinEpochDiff *beacon.EpochTime `json:"upgrade_min_epoch_diff,omitempty"`
+
+	// UpgradeCancelMinEpochDiff is the new minimal epoch difference for the upgrade cancellation
+	// proposal to be valid.
+	UpgradeCancelMinEpochDiff *beacon.EpochTime `json:"upgrade_cancel_min_epoch_diff,omitempty"`
+
+	// EnableChangeParametersProposal is the new enable change parameters proposal flag.
+	EnableChangeParametersProposal *bool `json:"enable_change_parameters_proposal,omitempty"`
+}
+
+// Apply applies changes to the given consensus parameters.
+func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
+	if c.GasCosts != nil {
+		params.GasCosts = c.GasCosts
+	}
+	if c.MinProposalDeposit != nil {
+		params.MinProposalDeposit = *c.MinProposalDeposit
+	}
+	if c.VotingPeriod != nil {
+		params.VotingPeriod = *c.VotingPeriod
+	}
+	if c.StakeThreshold != nil {
+		params.StakeThreshold = *c.StakeThreshold
+	}
+	if c.UpgradeMinEpochDiff != nil {
+		params.UpgradeMinEpochDiff = *c.UpgradeMinEpochDiff
+	}
+	if c.UpgradeCancelMinEpochDiff != nil {
+		params.UpgradeCancelMinEpochDiff = *c.UpgradeCancelMinEpochDiff
+	}
+	if c.EnableChangeParametersProposal != nil {
+		params.EnableChangeParametersProposal = *c.EnableChangeParametersProposal
+	}
+	return nil
 }
 
 // Event signifies a governance event, returned via GetEvents.

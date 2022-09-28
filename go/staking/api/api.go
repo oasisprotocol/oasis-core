@@ -1137,6 +1137,92 @@ type ConsensusParameters struct { // nolint: maligned
 	RewardFactorBlockProposed quantity.Quantity `json:"reward_factor_block_proposed"`
 }
 
+// ConsensusParameterChanges are allowed staking consensus parameter changes.
+type ConsensusParameterChanges struct {
+	// DebondingInterval is the new debonding interval.
+	DebondingInterval *beacon.EpochTime `json:"debonding_interval,omitempty"`
+
+	// GasCosts are the new gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// MinDelegationAmount is the new minimum delegation amount.
+	MinDelegationAmount *quantity.Quantity `json:"min_delegation"`
+	// MinTransferAmount is the new minimum transfer amount.
+	MinTransferAmount *quantity.Quantity `json:"min_transfer"`
+	// MinTransactBalance is the new minimum transact balance.
+	MinTransactBalance *quantity.Quantity `json:"min_transact_balance"`
+
+	// DisableTransfers is the new disable transfers flag.
+	DisableTransfers *bool `json:"disable_transfers,omitempty"`
+	// DisableDelegation is the new disable delegation flag.
+	DisableDelegation *bool `json:"disable_delegation,omitempty"`
+
+	// AllowEscrowMessages is the new allow escrow messages flag.
+	AllowEscrowMessages *bool `json:"allow_escrow_messages,omitempty"`
+
+	// MaxAllowances is the new maximum number of allowances.
+	MaxAllowances *uint32 `json:"max_allowances,omitempty"`
+
+	// FeeSplitWeightPropose is the new propose fee split weight.
+	FeeSplitWeightPropose *quantity.Quantity `json:"fee_split_weight_propose"`
+	// FeeSplitWeightVote is the new vote fee split weight.
+	FeeSplitWeightVote *quantity.Quantity `json:"fee_split_weight_vote"`
+	// FeeSplitWeightNextPropose is the new next propose fee split weight.
+	FeeSplitWeightNextPropose *quantity.Quantity `json:"fee_split_weight_next_propose"`
+
+	// RewardFactorEpochSigned is the new epoch signed reward factor.
+	RewardFactorEpochSigned *quantity.Quantity `json:"reward_factor_epoch_signed"`
+	// RewardFactorBlockProposed is the new block proposed reward factor.
+	RewardFactorBlockProposed *quantity.Quantity `json:"reward_factor_block_proposed"`
+}
+
+// Apply applies changes to the given consensus parameters.
+func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
+	if c.DebondingInterval != nil {
+		params.DebondingInterval = *c.DebondingInterval
+	}
+	if c.GasCosts != nil {
+		params.GasCosts = c.GasCosts
+	}
+	if c.MinDelegationAmount != nil {
+		params.MinDelegationAmount = *c.MinDelegationAmount
+	}
+	if c.MinTransferAmount != nil {
+		params.MinTransferAmount = *c.MinTransferAmount
+	}
+	if c.MinTransactBalance != nil {
+		params.MinTransactBalance = *c.MinTransactBalance
+	}
+	if c.DisableTransfers != nil {
+		params.DisableTransfers = *c.DisableTransfers
+	}
+	if c.DisableDelegation != nil {
+		params.DisableDelegation = *c.DisableDelegation
+	}
+	if c.AllowEscrowMessages != nil {
+		params.AllowEscrowMessages = *c.AllowEscrowMessages
+	}
+	if c.MaxAllowances != nil {
+		params.MaxAllowances = *c.MaxAllowances
+	}
+	if c.FeeSplitWeightPropose != nil {
+		params.FeeSplitWeightPropose = *c.FeeSplitWeightPropose
+	}
+	if c.FeeSplitWeightVote != nil {
+		params.FeeSplitWeightVote = *c.FeeSplitWeightVote
+	}
+	if c.FeeSplitWeightNextPropose != nil {
+		params.FeeSplitWeightNextPropose = *c.FeeSplitWeightNextPropose
+	}
+	if c.RewardFactorEpochSigned != nil {
+		params.RewardFactorEpochSigned = *c.RewardFactorEpochSigned
+	}
+	if c.RewardFactorBlockProposed != nil {
+		params.RewardFactorBlockProposed = *c.RewardFactorBlockProposed
+	}
+	return nil
+}
+
 const (
 	// GasOpTransfer is the gas operation identifier for transfer.
 	GasOpTransfer transaction.Op = "transfer"

@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
@@ -55,6 +56,8 @@ func (app *registryApplication) OnRegister(state api.ApplicationState, md api.Me
 
 	// Subscribe to messages emitted by other apps.
 	md.Subscribe(roothashApi.RuntimeMessageRegistry, app)
+	md.Subscribe(governanceApi.MessageChangeParameters, app)
+	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
 func (app *registryApplication) OnCleanup() {
@@ -69,17 +72,23 @@ func (app *registryApplication) BeginBlock(ctx *api.Context, request types.Reque
 }
 
 func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
-	state := registryState.NewMutableState(ctx.State())
-
 	switch kind {
 	case roothashApi.RuntimeMessageRegistry:
 		m := msg.(*message.RegistryMessage)
 		switch {
 		case m.UpdateRuntime != nil:
+			state := registryState.NewMutableState(ctx.State())
 			return app.registerRuntime(ctx, state, m.UpdateRuntime)
 		default:
 			return nil, registry.ErrInvalidArgument
 		}
+	case governanceApi.MessageValidateParameterChanges:
+		// A change parameters proposal is about to be submitted. Validate changes.
+		return app.changeParameters(ctx, msg, false)
+	case governanceApi.MessageChangeParameters:
+		// A change parameters proposal has just been accepted and closed. Validate and apply
+		// changes.
+		return app.changeParameters(ctx, msg, true)
 	default:
 		return nil, registry.ErrInvalidArgument
 	}

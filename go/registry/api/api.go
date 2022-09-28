@@ -1408,7 +1408,7 @@ type Genesis struct {
 // ConsensusParameters are the registry consensus parameters.
 type ConsensusParameters struct {
 	// DebugAllowUnroutableAddresses is true iff node registration should
-	// allow unroutable addreses.
+	// allow unroutable addresses.
 	DebugAllowUnroutableAddresses bool `json:"debug_allow_unroutable_addresses,omitempty"`
 
 	// DebugAllowTestRuntimes is true iff test runtimes should be allowed to
@@ -1427,7 +1427,7 @@ type ConsensusParameters struct {
 	// disabled outside of the genesis block.
 	DisableRuntimeRegistration bool `json:"disable_runtime_registration,omitempty"`
 
-	// DisableRuntimeRegistration is true iff key manager runtime registration should be
+	// DisableKeyManagerRuntimeRegistration is true iff key manager runtime registration should be
 	// disabled outside of the genesis block.
 	DisableKeyManagerRuntimeRegistration bool `json:"disable_km_runtime_registration,omitempty"`
 
@@ -1443,6 +1443,50 @@ type ConsensusParameters struct {
 
 	// TEEFeatures contains the configuration of supported TEE features.
 	TEEFeatures *node.TEEFeatures `json:"tee_features,omitempty"`
+}
+
+// ConsensusParameterChanges are allowed registry consensus parameter changes.
+type ConsensusParameterChanges struct {
+	// DisableRuntimeRegistration is the new disable runtime registration flag.
+	DisableRuntimeRegistration *bool `json:"disable_runtime_registration,omitempty"`
+
+	// DisableKeyManagerRuntimeRegistration the new disable key manager runtime registration flag.
+	DisableKeyManagerRuntimeRegistration *bool `json:"disable_km_runtime_registration,omitempty"`
+
+	// GasCosts are the new gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// MaxNodeExpiration is the maximum node expiration.
+	MaxNodeExpiration *uint64 `json:"max_node_expiration,omitempty"`
+
+	// EnableRuntimeGovernanceModels are the new enabled runtime governance models.
+	EnableRuntimeGovernanceModels map[RuntimeGovernanceModel]bool `json:"enable_runtime_governance_models,omitempty"`
+
+	// TEEFeatures are the new TEE features.
+	TEEFeatures **node.TEEFeatures `json:"tee_features,omitempty"`
+}
+
+// Apply applies changes to the given consensus parameters.
+func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
+	if c.DisableRuntimeRegistration != nil {
+		params.DisableRuntimeRegistration = *c.DisableRuntimeRegistration
+	}
+	if c.DisableKeyManagerRuntimeRegistration != nil {
+		params.DisableKeyManagerRuntimeRegistration = *c.DisableKeyManagerRuntimeRegistration
+	}
+	if c.GasCosts != nil {
+		params.GasCosts = c.GasCosts
+	}
+	if c.MaxNodeExpiration != nil {
+		params.MaxNodeExpiration = *c.MaxNodeExpiration
+	}
+	if c.EnableRuntimeGovernanceModels != nil {
+		params.EnableRuntimeGovernanceModels = c.EnableRuntimeGovernanceModels
+	}
+	if c.TEEFeatures != nil {
+		params.TEEFeatures = *c.TEEFeatures
+	}
+	return nil
 }
 
 const (

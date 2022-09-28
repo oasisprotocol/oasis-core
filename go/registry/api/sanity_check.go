@@ -16,6 +16,32 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
+// SanityCheck performs a sanity check on the consensus parameters.
+func (p *ConsensusParameters) SanityCheck() error {
+	if !flags.DebugDontBlameOasis() {
+		if p.DebugAllowUnroutableAddresses || p.DebugBypassStake || p.DebugDeployImmediately {
+			return fmt.Errorf("one or more unsafe debug flags set")
+		}
+		if p.MaxNodeExpiration == 0 {
+			return fmt.Errorf("maximum node expiration not specified")
+		}
+	}
+	return nil
+}
+
+// SanityCheck performs a sanity check on the consensus parameter changes.
+func (c *ConsensusParameterChanges) SanityCheck() error {
+	if c.DisableRuntimeRegistration == nil &&
+		c.DisableKeyManagerRuntimeRegistration == nil &&
+		c.GasCosts == nil &&
+		c.MaxNodeExpiration == nil &&
+		c.EnableRuntimeGovernanceModels == nil &&
+		c.TEEFeatures == nil {
+		return fmt.Errorf("consensus parameter changes should not be empty")
+	}
+	return nil
+}
+
 // SanityCheck does basic sanity checking on the genesis state.
 func (g *Genesis) SanityCheck(
 	now time.Time,
@@ -27,13 +53,8 @@ func (g *Genesis) SanityCheck(
 ) error {
 	logger := logging.GetLogger("genesis/sanity-check")
 
-	if !flags.DebugDontBlameOasis() {
-		if g.Parameters.DebugAllowUnroutableAddresses || g.Parameters.DebugBypassStake || g.Parameters.DebugDeployImmediately {
-			return fmt.Errorf("registry: sanity check failed: one or more unsafe debug flags set")
-		}
-		if g.Parameters.MaxNodeExpiration == 0 {
-			return fmt.Errorf("registry: sanity check failed: maximum node expiration not specified")
-		}
+	if err := g.Parameters.SanityCheck(); err != nil {
+		return fmt.Errorf("registry: sanity check failed: %w", err)
 	}
 
 	// Check entities.

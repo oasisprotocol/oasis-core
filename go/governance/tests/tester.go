@@ -31,8 +31,7 @@ var (
 
 // governanceTestsState holds the current state of governance tests.
 type governanceTestsState struct {
-	submittedProposalID uint64
-	proposalCloseEpoch  beacon.EpochTime
+	proposal *api.Proposal
 
 	submitterBalance *quantity.Quantity
 
@@ -81,14 +80,25 @@ func GovernanceImplementationTests(
 		require.NoError(state.submitterBalance.Sub(state.validatorEscrow), "Sub")
 	}
 
+	// Query state.
+	_, err = backend.StateToGenesis(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "StateToGenesis")
+
+	// Assert empty governance deposits.
+	assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, consensusAPI.HeightLatest, quantity.NewQuantity())
+
+	// Run multiple sub-tests. The order of execution is important as bad votes are tested before
+	// an upgrade proposal is closed.
 	for _, tc := range []struct {
 		n  string
 		fn func(*testing.T, api.Backend, consensusAPI.Backend, *governanceTestsState)
 	}{
-		{"Proposals", testProposals},
-		{"TestVotes", testVotes},
-		{"TestProposalClose", testProposalClose},
-		{"TestCancelProposalUpgrade", testCancelProposalUpgrade},
+		{"TestBadProposals", testBadProposals},
+		{"TestUpgradeProposalSubmit", testUpgradeProposalSubmit},
+		{"TestBadVotes", testBadVotes},
+		{"TestUpgradeProposalVoteAndClose", testUpgradeProposalVoteAndClose},
+		{"TestCancelUpgradeProposal", testCancelUpgradeProposal},
+		{"TestChangeParametersProposal", testChangeParametersProposal},
 	} {
 		t.Run(tc.n, func(t *testing.T) { tc.fn(t, backend, consensus, state) })
 	}
@@ -108,35 +118,14 @@ func assertAccountBalance(
 	require.EqualValues(expectedBalance, &acc.General.Balance, "account should have expected balance")
 }
 
-func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testBadProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
-
-	// Query consensus parameters.
-	params, err := backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
-	require.NoError(err, "ConsensusParameters")
-
-	// Query state.
-	_, err = backend.StateToGenesis(ctx, consensusAPI.HeightLatest)
-	require.NoError(err, "StateToGenesis")
-
-	// Assert empty governance deposits.
-	assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, consensusAPI.HeightLatest, quantity.NewQuantity())
-
-	// Query current epoch.
-	beacon := consensus.Beacon()
-	currentEpoch, err := beacon.GetEpoch(ctx, consensusAPI.HeightLatest)
-	require.NoError(err, "GetEpoch")
-
-	// Start watching governance events.
-	ch, sub, err := backend.WatchEvents(ctx)
-	require.NoError(err, "WatchEvents")
-	defer sub.Close()
 
 	// Create an invalid proposal.
 	proposal := &api.ProposalContent{}
 	tx := api.NewSubmitProposalTx(0, nil, proposal)
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
+	err := consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
 	require.Equal(api.ErrInvalidArgument, err, "SubmitProposalTx")
 
 	// Bad cancel proposal.
@@ -147,8 +136,45 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
 	require.Equal(api.ErrNoSuchProposal, err, "SubmitProposalTx")
 
-	// Good proposal.
+	// Bad change parameters proposal.
 	proposal = &api.ProposalContent{
+		ChangeParameters: &api.ChangeParametersProposal{},
+	}
+	tx = api.NewSubmitProposalTx(0, nil, proposal)
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
+	require.Equal(api.ErrInvalidArgument, err, "SubmitProposalTx")
+}
+
+func testBadVotes(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	// Create an invalid vote.
+	vote := &api.ProposalVote{ID: 9999, Vote: api.VoteYes}
+	tx := api.NewCastVoteTx(0, nil, vote)
+	err := consensusAPI.SignAndSubmitTx(ctx, consensus, testState.validatorSigner, tx)
+	require.Equal(api.ErrNoSuchProposal, err, "CastVoteTx")
+
+	// Good vote.
+	vote = &api.ProposalVote{ID: testState.proposal.ID, Vote: api.VoteYes}
+	tx = api.NewCastVoteTx(0, nil, vote)
+
+	// Submit a good vote with an invalid signer (not a validator).
+	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
+	require.Equal(api.ErrNotEligible, err, "CastVoteTx")
+}
+
+func testUpgradeProposalSubmit(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	// Query current epoch.
+	beacon := consensus.Beacon()
+	currentEpoch, err := beacon.GetEpoch(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "GetEpoch")
+
+	// Prepare an upgrade proposal.
+	content := &api.ProposalContent{
 		Upgrade: &api.UpgradeProposal{
 			Descriptor: upgrade.Descriptor{
 				Versioned: cbor.NewVersioned(upgrade.LatestDescriptorVersion),
@@ -158,207 +184,119 @@ func testProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Bac
 			},
 		},
 	}
-	tx = api.NewSubmitProposalTx(0, nil, proposal)
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
-	require.NoError(err, "SubmitProposalTx")
 
-	for {
-		select {
-		case ev := <-ch:
-			if ev.ProposalSubmitted == nil {
-				continue
-			}
-			pID := ev.ProposalSubmitted.ID
-
-			var p *api.Proposal
-			p, err = backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: pID})
-			require.NoError(err, "Proposal query")
-
-			// Skip if this is not the proposal we submitted earlier.
-			if p.Content.Upgrade == nil || !p.Content.Upgrade.Descriptor.Equals(&proposal.Upgrade.Descriptor) {
-				continue
-			}
-
-			require.EqualValues(proposal.Upgrade.Handler, p.Content.Upgrade.Handler, "expected proposal received")
-			require.EqualValues(submitterAddr, p.Submitter, "proposal submitter should be correct")
-
-			testState.submittedProposalID = pID
-			testState.proposalCloseEpoch = p.ClosesAt
-
-			// Active proposals should return the proposal.
-			var activeProposals []*api.Proposal
-			activeProposals, err = backend.ActiveProposals(ctx, consensusAPI.HeightLatest)
-			require.NoError(err, "ActiveProposals")
-			require.Len(activeProposals, 1, "one active proposal should be returned")
-			require.EqualValues(p, activeProposals[0], "expected proposal should be returned")
-
-			var evs []*api.Event
-			evs, err = backend.GetEvents(ctx, ev.Height)
-			require.NoError(err, "GetEvents")
-			require.Len(evs, 1, "one event should be returned")
-			require.EqualValues(ev, evs[0], "queried event should match")
-
-			// Assert governace deposit was made.
-			assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, ev.Height, &params.MinProposalDeposit)
-			expected := testState.submitterBalance.Clone()
-			require.NoError(expected.Sub(&params.MinProposalDeposit), "Sub")
-			assertAccountBalance(t, consensus, submitterAddr, ev.Height, expected)
-
-			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive proposal submitted event")
-		}
-	}
+	// Submit the proposal but don't close it yet as we would like to test the bad votes also.
+	submitProposal(t, content, backend, consensus, testState)
 }
 
-func testVotes(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testUpgradeProposalVoteAndClose(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
-	entAddr := staking.NewAddress(testState.validatorEntity.ID)
+	// Close the proposal.
+	voteAndCloseProposal(t, backend, consensus, testState)
 
-	ch, sub, err := backend.WatchEvents(ctx)
-	require.NoError(err, "WatchEvents")
-	defer sub.Close()
-
-	// Create an invalid vote.
-	vote := &api.ProposalVote{ID: 9999, Vote: api.VoteYes}
-	tx := api.NewCastVoteTx(0, nil, vote)
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, testState.validatorSigner, tx)
-	require.Equal(api.ErrNoSuchProposal, err, "CastVoteTx")
-
-	// Good vote.
-	vote = &api.ProposalVote{ID: testState.submittedProposalID, Vote: api.VoteYes}
-	tx = api.NewCastVoteTx(0, nil, vote)
-
-	// Submit a good vote with an invalid signer (not a validator).
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
-	require.Equal(api.ErrNotEligible, err, "CastVoteTx")
-
-	// Submit the vote with a validator.
-	tx = api.NewCastVoteTx(0, nil, vote)
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, testState.validatorSigner, tx)
-	require.NoError(err, "CastVoteTx")
-
-	for {
-		select {
-		case ev := <-ch:
-			if ev.Vote == nil {
-				continue
-			}
-			if ev.Vote.ID != testState.submittedProposalID {
-				continue
-			}
-			vote := ev.Vote
-			require.EqualValues(api.VoteYes, vote.Vote, "vote should be a VoteYes vote")
-			require.EqualValues(entAddr, vote.Submitter, "vote submitter should be correct")
-
-			// Query vote.
-			votes, err := backend.Votes(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.submittedProposalID})
-			require.NoError(err, "Votes query")
-			require.Len(votes, 1, "one vote should be cast")
-			require.EqualValues(vote.Vote, votes[0].Vote, "vote event should be equal to the queried vote")
-			require.EqualValues(vote.Submitter, votes[0].Voter, "vote event should be equal to the queried vote")
-
-			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive proposal vote event")
-		}
-	}
+	// Verify that there is one pending upgrade.
+	pendingUpgrade, err := backend.PendingUpgrades(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "PendingUpgrades")
+	require.Equal(1, len(pendingUpgrade), "There should be one pending upgrade")
 }
 
-func testProposalClose(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testCancelUpgradeProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
-	ch, sub, err := backend.WatchEvents(ctx)
-	require.NoError(err, "WatchEvents")
-	defer sub.Close()
-
-	// Transition to the voting close epoch.
-	timeSource := consensus.Beacon().(beacon.SetableBackend)
-	currentEpoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
-	require.NoError(err, "GetEpoch")
-	beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(testState.proposalCloseEpoch.AbsDiff(currentEpoch)))
-
-	for {
-		select {
-		case ev := <-ch:
-			if ev.ProposalFinalized == nil {
-				continue
-			}
-			if ev.ProposalFinalized.ID != testState.submittedProposalID {
-				continue
-			}
-			require.EqualValues(api.StatePassed, ev.ProposalFinalized.State, "proposal should pass")
-
-			proposal, err := backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.submittedProposalID})
-			require.NoError(err, "Proposal query")
-
-			require.EqualValues(api.StatePassed, proposal.State, "proposal should pass")
-			require.EqualValues(map[api.Vote]quantity.Quantity{
-				api.VoteYes: *testState.validatorEscrow,
-			}, proposal.Results, "proposal results should match")
-
-			pendingUpgrade, err := backend.PendingUpgrades(ctx, consensusAPI.HeightLatest)
-			require.NoError(err, "PendingUpgrades")
-			require.Len(pendingUpgrade, 1, "one upgrade should be pending")
-			require.EqualValues(&proposal.Content.Upgrade.Descriptor, pendingUpgrade[0], "pending upgrade should match")
-
-			// Assert governance deposit was reclaimed.
-			assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, ev.Height, quantity.NewFromUint64(0))
-			assertAccountBalance(t, consensus, submitterAddr, ev.Height, testState.submitterBalance)
-
-			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive event")
-		}
+	// Prepare a cancel upgrade proposal.
+	content := &api.ProposalContent{
+		CancelUpgrade: &api.CancelUpgradeProposal{ProposalID: testState.proposal.ID},
 	}
+
+	// Submit the proposal.
+	submitProposal(t, content, backend, consensus, testState)
+	voteAndCloseProposal(t, backend, consensus, testState)
+
+	// Verify that there are no more pending upgrades.
+	pendingUpgrade, err := backend.PendingUpgrades(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "PendingUpgrades")
+	require.Empty(pendingUpgrade, "no pending upgrades should remain")
+
+	// Test proposals query.
+	proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "Proposals query")
+	require.True(len(proposals) > 1, "At least two proposals should exist")
 }
 
-func testCancelProposalUpgrade(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testChangeParametersProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
+	// Ensure changes were applied.
 	params, err := backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "ConsensusParameters")
 
+	// Prepare a change parameters proposal. Incrementing UpgradeMinEpochDiff parameter should
+	// be safe and should not mess with other tests.
+	upgradeMinEpochDiff := params.UpgradeMinEpochDiff + 1
+	content := &api.ProposalContent{
+		ChangeParameters: &api.ChangeParametersProposal{
+			Module: api.ModuleName,
+			Changes: cbor.Marshal(api.ConsensusParameterChanges{
+				UpgradeMinEpochDiff: &upgradeMinEpochDiff,
+			}),
+		},
+	}
+
+	// Submit the proposal.
+	submitProposal(t, content, backend, consensus, testState)
+	voteAndCloseProposal(t, backend, consensus, testState)
+
+	// Ensure changes were applied.
+	params, err = backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "ConsensusParameters")
+	require.Equal(upgradeMinEpochDiff, params.UpgradeMinEpochDiff, "UpgradeMinEpochDiff parameter should change")
+
+	// Test proposals query.
+	proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "Proposals query")
+	require.True(len(proposals) > 2, "At least three proposals should exist")
+}
+
+func submitProposal(t *testing.T, content *api.ProposalContent, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	// Start watching events before doing any serious work.
 	ch, sub, err := backend.WatchEvents(ctx)
 	require.NoError(err, "WatchEvents")
 	defer sub.Close()
 
-	cancelProposalContent := &api.ProposalContent{
-		CancelUpgrade: &api.CancelUpgradeProposal{ProposalID: testState.submittedProposalID},
-	}
-	tx := api.NewSubmitProposalTx(0, nil, cancelProposalContent)
+	// Fetch parameters to get min proposal deposit.
+	params, err := backend.ConsensusParameters(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "ConsensusParameters")
+
+	// Submit the proposal content.
+	tx := api.NewSubmitProposalTx(0, nil, content)
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, submitterSigner, tx)
 	require.NoError(err, "SubmitProposalTx")
 
-	var cancelProposal *api.Proposal
+	var ev *api.Event
+	var proposal *api.Proposal
 
 WaitForSubmittedProposal:
 	for {
 		select {
-		case ev := <-ch:
+		case ev = <-ch:
 			if ev.ProposalSubmitted == nil {
 				continue
 			}
 
-			var p *api.Proposal
-			p, err = backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: ev.ProposalSubmitted.ID})
+			proposal, err = backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: ev.ProposalSubmitted.ID})
 			require.NoError(err, "Proposal query")
-			// Skip if this is not the cancel proposal we submitted earlier.
-			if p.Content.CancelUpgrade == nil || p.Content.CancelUpgrade.ProposalID != testState.submittedProposalID {
+
+			// Skip if this is not the proposal content we submitted earlier.
+			if !proposal.Content.Equals(content) {
 				continue
 			}
-
-			cancelProposal = p
-
-			// Ensure governance deposit was made.
-			assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, ev.Height, &params.MinProposalDeposit)
-			expected := testState.submitterBalance.Clone()
-			require.NoError(expected.Sub(&params.MinProposalDeposit), "Sub")
-			assertAccountBalance(t, consensus, submitterAddr, ev.Height, expected)
 
 			break WaitForSubmittedProposal
 		case <-time.After(recvTimeout):
@@ -366,20 +304,58 @@ WaitForSubmittedProposal:
 		}
 	}
 
+	// Validate the proposal.
+	require.EqualValues(submitterAddr, proposal.Submitter, "proposal submitter should be correct")
+
+	// Active proposals should return the proposal.
+	var activeProposals []*api.Proposal
+	activeProposals, err = backend.ActiveProposals(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "ActiveProposals")
+	require.Len(activeProposals, 1, "one active proposal should be returned")
+	require.EqualValues(proposal, activeProposals[0], "expected proposal should be returned")
+
+	// Backend events should contain the event.
+	var evs []*api.Event
+	evs, err = backend.GetEvents(ctx, ev.Height)
+	require.NoError(err, "GetEvents")
+	require.Len(evs, 1, "one event should be returned")
+	require.EqualValues(ev, evs[0], "queried event should match")
+
+	// Ensure governance deposit was made.
+	assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, ev.Height, &params.MinProposalDeposit)
+	expected := testState.submitterBalance.Clone()
+	require.NoError(expected.Sub(&params.MinProposalDeposit), "Sub")
+	assertAccountBalance(t, consensus, submitterAddr, ev.Height, expected)
+
+	// Save for other tests.
+	testState.proposal = proposal
+}
+
+func voteAndCloseProposal(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	// Start watching events before doing any serious work.
+	ch, sub, err := backend.WatchEvents(ctx)
+	require.NoError(err, "WatchEvents")
+	defer sub.Close()
+
 	// Vote for the submitted cancel proposal.
-	vote := &api.ProposalVote{ID: cancelProposal.ID, Vote: api.VoteYes}
-	tx = api.NewCastVoteTx(0, nil, vote)
+	vote := &api.ProposalVote{ID: testState.proposal.ID, Vote: api.VoteYes}
+	tx := api.NewCastVoteTx(0, nil, vote)
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, testState.validatorSigner, tx)
 	require.NoError(err, "CastVoteTx")
+
+	var ev *api.Event
 
 WaitForSubmittedVote:
 	for {
 		select {
-		case ev := <-ch:
+		case ev = <-ch:
 			if ev.Vote == nil {
 				continue
 			}
-			if ev.Vote.ID != cancelProposal.ID {
+			if ev.Vote.ID != testState.proposal.ID {
 				continue
 			}
 			break WaitForSubmittedVote
@@ -388,47 +364,60 @@ WaitForSubmittedVote:
 		}
 	}
 
+	// Validate the vote.
+	entAddr := staking.NewAddress(testState.validatorEntity.ID)
+	require.EqualValues(api.VoteYes, ev.Vote.Vote, "vote should be a VoteYes vote")
+	require.EqualValues(entAddr, ev.Vote.Submitter, "vote submitter should be correct")
+
+	// Query vote.
+	votes, err := backend.Votes(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.proposal.ID})
+	require.NoError(err, "Votes query")
+	require.Len(votes, 1, "one vote should be cast")
+	require.EqualValues(ev.Vote.Vote, votes[0].Vote, "vote event should be equal to the queried vote")
+	require.EqualValues(ev.Vote.Submitter, votes[0].Voter, "vote event should be equal to the queried vote")
+
 	// Transition to the voting close epoch.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	currentEpoch, err := timeSource.GetEpoch(ctx, consensusAPI.HeightLatest)
 	require.NoError(err, "GetEpoch")
-	beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(cancelProposal.ClosesAt.AbsDiff(currentEpoch)))
+	beaconTests.MustAdvanceEpochMulti(t, timeSource, consensus.Registry(), uint64(testState.proposal.ClosesAt.AbsDiff(currentEpoch)))
 
-	// Ensure pending upgrade was removed.
+	var proposal *api.Proposal
+
+WaitForProposalToBeFinalized:
 	for {
 		select {
-		case ev := <-ch:
+		case ev = <-ch:
 			if ev.ProposalFinalized == nil {
 				continue
 			}
-			if ev.ProposalFinalized.ID != cancelProposal.ID {
+			if ev.ProposalFinalized.ID != testState.proposal.ID {
 				continue
 			}
+
 			require.EqualValues(api.StatePassed, ev.ProposalFinalized.State, "proposal should pass")
 
-			proposal, err := backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.submittedProposalID})
+			proposal, err = backend.Proposal(ctx, &api.ProposalQuery{Height: consensusAPI.HeightLatest, ProposalID: testState.proposal.ID})
 			require.NoError(err, "Proposal query")
 
-			require.EqualValues(api.StatePassed, proposal.State, "proposal should pass")
-			require.EqualValues(map[api.Vote]quantity.Quantity{
-				api.VoteYes: *testState.validatorEscrow,
-			}, proposal.Results, "proposal results should match")
-
-			pendingUpgrade, err := backend.PendingUpgrades(ctx, consensusAPI.HeightLatest)
-			require.NoError(err, "PendingUpgrades")
-			require.Empty(pendingUpgrade, "no pending upgrades should remain")
-
-			// Assert governance deposit was reclaimed.
-			assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, consensusAPI.HeightLatest, quantity.NewQuantity())
-			assertAccountBalance(t, consensus, submitterAddr, ev.Height, testState.submitterBalance)
-
-			// Test proposals query.
-			proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
-			require.NoError(err, "Proposals query")
-			require.True(len(proposals) > 1, "At least two proposals should exist")
-			return
+			break WaitForProposalToBeFinalized
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive event")
 		}
 	}
+
+	// Validate the proposal.
+	require.EqualValues(api.StatePassed, proposal.State, "proposal should pass")
+	require.EqualValues(map[api.Vote]quantity.Quantity{
+		api.VoteYes: *testState.validatorEscrow,
+	}, proposal.Results, "proposal results should match")
+
+	// Assert governance deposit was reclaimed.
+	assertAccountBalance(t, consensus, staking.GovernanceDepositsAddress, consensusAPI.HeightLatest, quantity.NewQuantity())
+	assertAccountBalance(t, consensus, submitterAddr, ev.Height, testState.submitterBalance)
+
+	// Test proposals query.
+	proposals, err := backend.Proposals(ctx, consensusAPI.HeightLatest)
+	require.NoError(err, "Proposals query")
+	require.True(len(proposals) > 0, "At least one proposals should exist")
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -49,6 +50,8 @@ func (app *stakingApplication) OnRegister(state api.ApplicationState, md api.Mes
 
 	// Subscribe to messages emitted by other apps.
 	md.Subscribe(roothashApi.RuntimeMessageStaking, app)
+	md.Subscribe(governanceApi.MessageChangeParameters, app)
+	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
 func (app *stakingApplication) OnCleanup() {
@@ -116,10 +119,9 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 }
 
 func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
-	state := stakingState.NewMutableState(ctx.State())
-
 	switch kind {
 	case roothashApi.RuntimeMessageStaking:
+		state := stakingState.NewMutableState(ctx.State())
 		m := msg.(*message.StakingMessage)
 		switch {
 		case m.Transfer != nil:
@@ -133,6 +135,13 @@ func (app *stakingApplication) ExecuteMessage(ctx *api.Context, kind, msg interf
 		default:
 			return nil, staking.ErrInvalidArgument
 		}
+	case governanceApi.MessageValidateParameterChanges:
+		// A change parameters proposal is about to be submitted. Validate changes.
+		return app.changeParameters(ctx, msg, false)
+	case governanceApi.MessageChangeParameters:
+		// A change parameters proposal has just been accepted and closed. Validate and apply
+		// changes.
+		return app.changeParameters(ctx, msg, true)
 	default:
 		return nil, staking.ErrInvalidArgument
 	}

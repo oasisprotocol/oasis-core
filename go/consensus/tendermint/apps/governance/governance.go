@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -26,6 +27,7 @@ var _ api.Application = (*governanceApplication)(nil)
 
 type governanceApplication struct {
 	state api.ApplicationState
+	md    api.MessageDispatcher
 }
 
 func (app *governanceApplication) Name() string {
@@ -50,9 +52,12 @@ func (app *governanceApplication) Dependencies() []string {
 
 func (app *governanceApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
+	app.md = md
 
 	// Subscribe to messages emitted by other apps.
 	md.Subscribe(api.MessageStateSyncCompleted, app)
+	md.Subscribe(governanceApi.MessageChangeParameters, app)
+	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
 func (app *governanceApplication) OnCleanup() {
@@ -71,13 +76,19 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 	case governance.MethodSubmitProposal:
 		var proposalContent governance.ProposalContent
 		if err := cbor.Unmarshal(tx.Body, &proposalContent); err != nil {
-			return err
+			ctx.Logger().Debug("governance: failed to unmarshal proposal content",
+				"err", err,
+			)
+			return governance.ErrInvalidArgument
 		}
 		return app.submitProposal(ctx, state, &proposalContent)
 	case governance.MethodCastVote:
 		var proposalVote governance.ProposalVote
 		if err := cbor.Unmarshal(tx.Body, &proposalVote); err != nil {
-			return err
+			ctx.Logger().Debug("governance: failed to unmarshal proposal vote",
+				"err", err,
+			)
+			return governance.ErrInvalidArgument
 		}
 		return app.castVote(ctx, state, &proposalVote)
 	default:
@@ -86,32 +97,16 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 }
 
 func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
-	state := governanceState.NewMutableState(ctx.State())
-
 	switch kind {
 	case api.MessageStateSyncCompleted:
-		// State sync has just completed, check whether there are any pending upgrades to make
-		// sure we don't miss them after the sync.
-		pendingUpgrades, err := state.PendingUpgrades(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("tendermint/governance: couldn't get pending upgrades: %w", err)
-		}
-
-		// Apply all pending upgrades locally.
-		if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
-			for _, pu := range pendingUpgrades {
-				switch err = upgrader.SubmitDescriptor(ctx, pu); err {
-				case nil, upgrade.ErrAlreadyPending:
-				default:
-					ctx.Logger().Error("failed to locally apply the upgrade descriptor",
-						"err", err,
-						"descriptor", pu,
-					)
-				}
-			}
-		}
-		// No execute message results at this time.
-		return nil, nil
+		return app.completeStateSync(ctx)
+	case governanceApi.MessageValidateParameterChanges:
+		// A change parameters proposal is about to be submitted. Validate changes.
+		return app.changeParameters(ctx, msg, false)
+	case governanceApi.MessageChangeParameters:
+		// A change parameters proposal has just been accepted and closed. Validate and apply
+		// changes.
+		return app.changeParameters(ctx, msg, true)
 	default:
 		return nil, governance.ErrInvalidArgument
 	}
@@ -262,6 +257,36 @@ func (app *governanceApplication) executeProposal(ctx *api.Context, state *gover
 					"descriptor", upgradeProposal.Descriptor,
 				)
 			}
+		}
+	case proposal.Content.ChangeParameters != nil:
+		// To not violate the consensus, change parameters proposals should be ignored when
+		// disabled.
+		params, err := state.ConsensusParameters(ctx)
+		if err != nil {
+			ctx.Logger().Error("failed to query consensus parameters",
+				"err", err,
+			)
+			return governance.ErrInvalidArgument
+		}
+		if !params.EnableChangeParametersProposal {
+			ctx.Logger().Debug("change parameters proposals are disabled")
+			return governance.ErrInvalidArgument
+		}
+
+		// Notify other interested applications about the change parameters proposal.
+		res, err := app.md.Publish(ctx, governanceApi.MessageChangeParameters, proposal.Content.ChangeParameters)
+		if err != nil {
+			ctx.Logger().Debug("failed to dispatch change parameters proposal message",
+				"err", err,
+			)
+			return err
+		}
+
+		// Exactly one module should apply the proposed changes. If no one does, the proposal
+		// is rejected as not being supported.
+		if res == nil {
+			ctx.Logger().Debug("governance: no module applied change parameters proposal")
+			return governance.ErrInvalidArgument
 		}
 	default:
 		return governance.ErrInvalidArgument

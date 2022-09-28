@@ -744,6 +744,7 @@ func (net *Network) MakeGenesis() error {
 			"--" + genesis.CfgGovernanceUpgradeCancelMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeCancelMinEpochDiff), 10),
 			"--" + genesis.CfgGovernanceUpgradeMinEpochDiff, strconv.FormatUint(uint64(cfg.UpgradeMinEpochDiff), 10),
 			"--" + genesis.CfgGovernanceVotingPeriod, strconv.FormatUint(uint64(cfg.VotingPeriod), 10),
+			"--" + genesis.CfgGovernanceEnableChangeParametersProposal, strconv.FormatBool(cfg.EnableChangeParametersProposal),
 		}...)
 	}
 	if cfg := net.cfg.RoothashParameters; cfg != nil {

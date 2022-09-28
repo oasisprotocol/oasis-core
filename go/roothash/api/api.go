@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -17,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -569,6 +567,38 @@ type ConsensusParameters struct {
 	MaxEvidenceAge uint64 `json:"max_evidence_age"`
 }
 
+// ConsensusParameterChanges are allowed roothash consensus parameter changes.
+type ConsensusParameterChanges struct {
+	// GasCosts are the new gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+
+	// MaxRuntimeMessages is the new maximum number of emitted runtime messages.
+	MaxRuntimeMessages *uint32 `json:"max_runtime_messages"`
+
+	// MaxInRuntimeMessages is the new maximum number of incoming queued runtime messages.
+	MaxInRuntimeMessages *uint32 `json:"max_in_runtime_messages"`
+
+	// MaxEvidenceAge is the new maximum evidence age.
+	MaxEvidenceAge *uint64 `json:"max_evidence_age"`
+}
+
+// Apply applies changes to the given consensus parameters.
+func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
+	if c.GasCosts != nil {
+		params.GasCosts = c.GasCosts
+	}
+	if c.MaxRuntimeMessages != nil {
+		params.MaxRuntimeMessages = *c.MaxRuntimeMessages
+	}
+	if c.MaxInRuntimeMessages != nil {
+		params.MaxInRuntimeMessages = *c.MaxInRuntimeMessages
+	}
+	if c.MaxEvidenceAge != nil {
+		params.MaxEvidenceAge = *c.MaxEvidenceAge
+	}
+	return nil
+}
+
 const (
 	// GasOpComputeCommit is the gas operation identifier for compute commits.
 	GasOpComputeCommit transaction.Op = "compute_commit"
@@ -591,34 +621,6 @@ var DefaultGasCosts = transaction.Costs{
 	GasOpProposerTimeout: 1000,
 	GasOpEvidence:        1000,
 	GasOpSubmitMsg:       1000,
-}
-
-// SanityCheckBlocks examines the blocks table.
-func SanityCheckBlocks(blocks map[common.Namespace]*block.Block) error {
-	for _, blk := range blocks {
-		hdr := blk.Header
-
-		if hdr.Timestamp > block.Timestamp(time.Now().Unix()+61*60) {
-			return fmt.Errorf("roothash: sanity check failed: block header timestamp is more than 1h1m in the future")
-		}
-	}
-	return nil
-}
-
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
-	unsafeFlags := g.Parameters.DebugDoNotSuspendRuntimes || g.Parameters.DebugBypassStake
-	if unsafeFlags && !flags.DebugDontBlameOasis() {
-		return fmt.Errorf("roothash: sanity check failed: one or more unsafe debug flags set")
-	}
-
-	// Check blocks.
-	for _, rtg := range g.RuntimeStates {
-		if err := rtg.SanityCheck(true); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // VerifyRuntimeParameters verifies whether the runtime parameters are valid in the context of the

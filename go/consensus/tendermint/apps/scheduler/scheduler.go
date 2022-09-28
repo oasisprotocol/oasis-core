@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
+	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	schedulerApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/api"
@@ -71,6 +72,10 @@ func (app *schedulerApplication) Dependencies() []string {
 func (app *schedulerApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
 	app.md = md
+
+	// Subscribe to messages emitted by other apps.
+	md.Subscribe(governanceApi.MessageChangeParameters, app)
+	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
 func (app *schedulerApplication) OnCleanup() {}
@@ -249,7 +254,17 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.Requ
 }
 
 func (app *schedulerApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
-	return nil, fmt.Errorf("scheduler: unexpected message")
+	switch kind {
+	case governanceApi.MessageValidateParameterChanges:
+		// A change parameters proposal is about to be submitted. Validate changes.
+		return app.changeParameters(ctx, msg, false)
+	case governanceApi.MessageChangeParameters:
+		// A change parameters proposal has just been accepted and closed. Validate and apply
+		// changes.
+		return app.changeParameters(ctx, msg, true)
+	default:
+		return nil, fmt.Errorf("tendermint/scheduler: unexpected message")
+	}
 }
 
 func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
