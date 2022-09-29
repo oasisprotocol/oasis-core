@@ -382,6 +382,11 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, p process.Process, conn
 
 // Implements host.Provisioner.
 func (s *sgxProvisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Runtime, error) {
+	// Make sure to return an error early if the SGX runtime loader is not configured.
+	if s.cfg.LoaderPath == "" {
+		return nil, fmt.Errorf("SGX loader binary path is not configured")
+	}
+
 	return s.sandbox.NewRuntime(ctx, cfg)
 }
 
