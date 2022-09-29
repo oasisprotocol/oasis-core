@@ -33,6 +33,9 @@ const (
 	abortTimeout = 5 * time.Second
 	// maxRepublishTxs is the maximum amount of transactions to republish.
 	maxRepublishTxs = 32
+	// newBlockPublishDelay is the time to wait to publish any newly checked transactions after
+	// receiving a new block. It should be roughly the block propagation delay.
+	newBlockPublishDelay = 200 * time.Millisecond
 )
 
 // Config is the transaction pool configuration.
@@ -202,9 +205,10 @@ type txPool struct {
 	proposedTxsLock sync.Mutex
 	proposedTxs     map[hash.Hash]*TxQueueMeta
 
-	blockInfoLock    sync.Mutex
-	blockInfo        *BlockInfo
-	lastRecheckRound uint64
+	blockInfoLock      sync.Mutex
+	blockInfo          *BlockInfo
+	lastBlockProcessed time.Time
+	lastRecheckRound   uint64
 
 	republishCh *channels.RingChannel
 }
@@ -420,6 +424,7 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 	}
 
 	t.blockInfo = bi
+	t.lastBlockProcessed = time.Now()
 
 	// Trigger transaction rechecks if needed.
 	if (bi.RuntimeBlock.Header.Round - t.lastRecheckRound) > t.cfg.RecheckInterval {
@@ -465,20 +470,20 @@ func (t *txPool) PendingCheckSize() int {
 	return t.checkTxQueue.size()
 }
 
-func (t *txPool) getCurrentBlockInfo() (*BlockInfo, error) {
+func (t *txPool) getCurrentBlockInfo() (*BlockInfo, time.Time, error) {
 	t.blockInfoLock.Lock()
 	defer t.blockInfoLock.Unlock()
 
 	if t.blockInfo == nil {
-		return nil, fmt.Errorf("no current block available")
+		return nil, time.Time{}, fmt.Errorf("no current block available")
 	}
-	return t.blockInfo, nil
+	return t.blockInfo, t.lastBlockProcessed, nil
 }
 
 // checkTxBatch requests the runtime to check the validity of a transaction batch.
 // Transactions that pass the check are queued for scheduling.
 func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
-	bi, err := t.getCurrentBlockInfo()
+	bi, lastBlockProcessed, err := t.getCurrentBlockInfo()
 	if err != nil {
 		t.logger.Warn("failed to get current block info, unable to check transactions",
 			"err", err,
@@ -637,8 +642,12 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	}
 
 	if len(newTxs) != 0 {
-		// Kick off publishing for any new txs.
-		t.republishCh.In() <- struct{}{}
+		// Kick off publishing for any new txs after waiting for block publish delay based on when
+		// we received the block that we just used to check the transaction batch.
+		go func() {
+			time.Sleep(time.Until(lastBlockProcessed.Add(newBlockPublishDelay)))
+			t.republishCh.In() <- struct{}{}
+		}()
 
 		// Notify subscribers that we have received new transactions.
 		t.checkTxNotifier.Broadcast(newTxs)
