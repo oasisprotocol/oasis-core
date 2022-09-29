@@ -254,13 +254,14 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 			fallthrough
 		case RuntimeProvisionerSandboxed:
+			// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
 			if !insecureNoSandbox {
 				if _, err = os.Stat(sandboxBinary); err != nil {
 					return nil, fmt.Errorf("failed to stat sandbox binary: %w", err)
 				}
 			}
 
-			// Sandboxed provisioner, can be used with no TEE or with Intel SGX.
+			// Configure the non-TEE provisioner.
 			rh.Provisioners[node.TEEHardwareInvalid], err = hostSandbox.New(hostSandbox.Config{
 				HostInfo:          hostInfo,
 				InsecureNoSandbox: insecureNoSandbox,
@@ -270,16 +271,10 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 				return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
 			}
 
-			switch sgxLoader := viper.GetString(CfgRuntimeSGXLoader); sgxLoader {
-			case "":
-				// If no SGX is forced, remap to non-SGX.
-				if !forceNoSGX {
-					break
-				}
-				if runtimeEnv == RuntimeEnvironmentSGX {
-					return nil, fmt.Errorf("sgx runtime env requires setting the sgx loader")
-				}
-
+			// Configure the Intel SGX provisioner.
+			switch sgxLoader := viper.GetString(CfgRuntimeSGXLoader); {
+			case forceNoSGX:
+				// Remap SGX to non-SGX when forced to do so.
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSandbox.New(hostSandbox.Config{
 					HostInfo:          hostInfo,
 					InsecureNoSandbox: insecureNoSandbox,
@@ -288,6 +283,12 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 				if err != nil {
 					return nil, fmt.Errorf("failed to create runtime provisioner: %w", err)
 				}
+			case sgxLoader == "" && runtimeEnv == RuntimeEnvironmentSGX:
+				// SGX environment is forced, but we don't have the needed loader.
+				return nil, fmt.Errorf("SGX runtime environment requires setting the SGX loader")
+			case sgxLoader == "":
+				// SGX may be needed, but we don't have a loader configured.
+				break
 			default:
 				// Configure the provided SGX loader.
 				var pc pcs.Client
