@@ -2,31 +2,42 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	keymanagerWorker "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
-var (
-	_ control.ControlledNode = (*Node)(nil)
-	_ registration.Delegate  = (*Node)(nil)
-)
+// Assert that the node implements NodeController interface.
+var _ control.NodeController = (*Node)(nil)
 
-// RegistrationStopped implements registration.Delegate.
-func (n *Node) RegistrationStopped() {
-	n.Stop()
+// RequestShutdown implements control.NodeController.
+func (n *Node) RequestShutdown(ctx context.Context, wait bool) error {
+	ch, err := n.requestShutdown()
+	if err != nil {
+		return err
+	}
+	if wait {
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return nil
 }
 
-// RequestShutdown implements control.ControlledNode.
-func (n *Node) RequestShutdown() (<-chan struct{}, error) {
+func (n *Node) requestShutdown() (<-chan struct{}, error) {
 	if n.RegistrationWorker == nil {
 		// In case there is no registration worker, we can just trigger an immediate shutdown.
 		ch := make(chan struct{})
@@ -47,32 +58,134 @@ func (n *Node) RequestShutdown() (<-chan struct{}, error) {
 	return n.RegistrationWorker.Quit(), nil
 }
 
-// Ready implements control.ControlledNode.
-func (n *Node) Ready() <-chan struct{} {
-	return n.readyCh
+// WaitReady implements control.NodeController.
+func (n *Node) WaitReady(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-n.readyCh:
+		return nil
+	}
 }
 
-// GetIdentity implements control.ControlledNode.
-func (n *Node) GetIdentity() *identity.Identity {
+// IsReady implements control.NodeController.
+func (n *Node) IsReady(ctx context.Context) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-n.readyCh:
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+// WaitSync implements control.NodeController.
+func (n *Node) WaitSync(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-n.Consensus.Synced():
+		return nil
+	}
+}
+
+// IsSynced implements control.NodeController.
+func (n *Node) IsSynced(ctx context.Context) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-n.Consensus.Synced():
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+// UpgradeBinary implements control.NodeController.
+func (n *Node) UpgradeBinary(ctx context.Context, descriptor *upgrade.Descriptor) error {
+	return n.Upgrader.SubmitDescriptor(ctx, descriptor)
+}
+
+// CancelUpgrade implements control.NodeController.
+func (n *Node) CancelUpgrade(ctx context.Context, descriptor *upgrade.Descriptor) error {
+	return n.Upgrader.CancelUpgrade(ctx, descriptor)
+}
+
+func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
+	cs, err := n.getConsensusStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get consensus status: %w", err)
+	}
+
+	rs, err := n.getRegistrationStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registration status: %w", err)
+	}
+
+	runtimes, err := n.getRuntimeStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get runtime status: %w", err)
+	}
+
+	kms, err := n.getKeymanagerStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key manager worker status: %w", err)
+	}
+
+	pendingUpgrades, err := n.getPendingUpgrades(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending upgrades: %w", err)
+	}
+
+	ident := n.getIdentity()
+
+	var ds *control.DebugStatus
+	if debugEnabled := cmdFlags.DebugDontBlameOasis(); debugEnabled {
+		ds = &control.DebugStatus{
+			Enabled:   debugEnabled,
+			AllowRoot: cmdFlags.DebugAllowRoot(),
+		}
+	}
+
+	return &control.Status{
+		SoftwareVersion: version.SoftwareVersion,
+		Debug:           ds,
+		Identity: control.IdentityStatus{
+			Node:      ident.NodeSigner.Public(),
+			P2P:       ident.P2PSigner.Public(),
+			Consensus: ident.ConsensusSigner.Public(),
+			TLS:       ident.GetTLSPubKeys(),
+		},
+		Consensus:       cs,
+		Runtimes:        runtimes,
+		Keymanager:      kms,
+		Registration:    rs,
+		PendingUpgrades: pendingUpgrades,
+	}, nil
+}
+
+// GetIdentity implements control.NodeController.
+func (n *Node) getIdentity() *identity.Identity {
 	return n.Identity
 }
 
-// GetRegistrationStatus implements control.ControlledNode.
-func (n *Node) GetRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
+// GetConsensusStatus implements control.NodeController.
+func (n *Node) getConsensusStatus(ctx context.Context) (*consensus.Status, error) {
+	return n.Consensus.GetStatus(ctx)
+}
+
+// GetRegistrationStatus implements control.NodeController.
+func (n *Node) getRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
 	if n.RegistrationWorker == nil {
 		return &control.RegistrationStatus{}, nil
 	}
 	return n.RegistrationWorker.GetRegistrationStatus(ctx)
 }
 
-// GetRuntimeStatus implements control.ControlledNode.
-func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]control.RuntimeStatus, error) {
+// GetRuntimeStatus implements control.NodeController.
+func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]control.RuntimeStatus, error) {
 	runtimes := make(map[common.Namespace]control.RuntimeStatus)
-
-	// Seed node doesn't have a runtime registry.
-	if n.RuntimeRegistry == nil {
-		return runtimes, nil
-	}
 
 	for _, rt := range n.RuntimeRegistry.Runtimes() {
 		var status control.RuntimeStatus
@@ -184,15 +297,15 @@ func (n *Node) GetRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 	return runtimes, nil
 }
 
-// GetKeymanagerStatus implements control.ControlledNode.
-func (n *Node) GetKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Status, error) {
+// GetKeymanagerStatus implements control.NodeController.
+func (n *Node) getKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Status, error) {
 	if n.KeymanagerWorker == nil || !n.KeymanagerWorker.Enabled() {
 		return nil, nil
 	}
 	return n.KeymanagerWorker.GetStatus(ctx)
 }
 
-// GetPendingUpgrades implements control.ControlledNode.
-func (n *Node) GetPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error) {
+// GetPendingUpgrades implements control.NodeController.
+func (n *Node) getPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error) {
 	return n.Upgrader.PendingUpgrades(ctx)
 }

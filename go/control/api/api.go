@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -22,6 +21,12 @@ import (
 	keymanagerWorker "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
+
+// ModuleName is the module name for the controller service.
+const ModuleName = "control"
+
+// ErrNotImplemented is the error raised when the node does not support the required functionality.
+var ErrNotImplemented = errors.New(ModuleName, 1, "control: not implemented")
 
 // NodeController is a node controller interface.
 type NodeController interface {
@@ -67,19 +72,22 @@ type Status struct {
 	Identity IdentityStatus `json:"identity"`
 
 	// Consensus is the status overview of the consensus layer.
-	Consensus consensus.Status `json:"consensus"`
+	Consensus *consensus.Status `json:"consensus,omitempty"`
 
 	// Runtimes is the status overview for each runtime supported by the node.
 	Runtimes map[common.Namespace]RuntimeStatus `json:"runtimes,omitempty"`
 
 	// Registration is the node's registration status.
-	Registration RegistrationStatus `json:"registration"`
+	Registration *RegistrationStatus `json:"registration,omitempty"`
 
-	// Keymanager is the node's key manager worker status in case this node is a key manager node.
+	// Keymanager is the node's key manager worker status if the node is a key manager node.
 	Keymanager *keymanagerWorker.Status `json:"keymanager,omitempty"`
 
 	// PendingUpgrades are the node's pending upgrades.
 	PendingUpgrades []*upgrade.PendingUpgrade `json:"pending_upgrades,omitempty"`
+
+	// Seed is the seed node status if the node is a seed node.
+	Seed *SeedStatus `json:"seed,omitempty"`
 }
 
 // DebugStatus is the current node debug status, listing the various node
@@ -157,28 +165,16 @@ type RuntimeStatus struct {
 	Storage *storageWorker.Status `json:"storage,omitempty"`
 }
 
-// ControlledNode is an internal interface that the controlled oasis-node must provide.
-type ControlledNode interface {
-	// RequestShutdown is the method called by the control server to trigger node shutdown.
-	RequestShutdown() (<-chan struct{}, error)
+// SeedStatus is the status of the seed node.
+type SeedStatus struct {
+	// ChainContext is the chain domain separation context.
+	ChainContext string `json:"chain_context"`
 
-	// Ready returns a channel that is closed once node is ready.
-	Ready() <-chan struct{}
+	// Addresses is a list of configured external consensus addresses.
+	Addresses []node.ConsensusAddress `json:"addresses"`
 
-	// GetIdentity returns the node's identity.
-	GetIdentity() *identity.Identity
-
-	// GetRegistrationStatus returns the node's current registration status.
-	GetRegistrationStatus(ctx context.Context) (*RegistrationStatus, error)
-
-	// GetRuntimeStatus returns the node's current per-runtime status.
-	GetRuntimeStatus(ctx context.Context) (map[common.Namespace]RuntimeStatus, error)
-
-	// GetKeyManagerStatus returns the node's key manager worker status.
-	GetKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Status, error)
-
-	// GetPendingUpgrade returns the node's pending upgrades.
-	GetPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error)
+	// NodePeers is a list of peers that are connected to the node.
+	NodePeers []string `json:"node_peers"`
 }
 
 // DebugModuleName is the module name for the debug controller service.

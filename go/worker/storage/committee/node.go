@@ -1231,7 +1231,7 @@ mainLoop:
 				// This is a cant-happen situation and there's no useful way
 				// to recover from it. Just request a node shutdown and stop fussing
 				// since, from this point onwards, syncing is effectively blocked.
-				_, _ = n.commonNode.HostNode.RequestShutdown()
+				_ = n.commonNode.HostNode.RequestShutdown(n.ctx, false)
 			}
 
 		case <-n.ctx.Done():

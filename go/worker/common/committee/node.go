@@ -155,7 +155,7 @@ type Node struct {
 
 	Runtime runtimeRegistry.Runtime
 
-	HostNode control.ControlledNode
+	HostNode control.NodeController
 
 	Identity         *identity.Identity
 	KeyManager       keymanager.Backend
@@ -855,7 +855,7 @@ func (n *Node) metricsWorker() {
 }
 
 func NewNode(
-	hostNode control.ControlledNode,
+	hostNode control.NodeController,
 	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
 	keymanager keymanager.Backend,

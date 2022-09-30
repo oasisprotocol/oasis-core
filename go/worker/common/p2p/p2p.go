@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +21,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -372,35 +370,23 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 	persistentPeers := make(map[core.PeerID]bool)
 	persistentPeersAI := []peer.AddrInfo{}
 	for _, pp := range viper.GetStringSlice(CfgP2PPersistentPeers) {
-		// The persistent peer addresses are in the format P2Ppubkey@IP:port,
+		// The persistent peer addresses are in the format pubkey@IP:port,
 		// because we use a similar format elsewhere and it's easier for users
 		// to understand than a multiaddr.
 
-		if strings.Count(pp, "@") != 1 || strings.Count(pp, ":") != 1 {
-			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer address (expected P2Ppubkey@IP:port)")
+		var addr node.ConsensusAddress
+		if grr := addr.UnmarshalText([]byte(pp)); grr != nil {
+			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer address (expected pubkey@IP:port): %w", grr)
 		}
 
-		pkaddr := strings.Split(pp, "@")
-		pubkey := pkaddr[0]
-		addr := pkaddr[1]
-
-		var pk signature.PublicKey
-		if grr := pk.UnmarshalText([]byte(pubkey)); grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer address: cannot unmarshal P2P public key (%s): %w", pubkey, grr)
-		}
-		pid, grr := api.PublicKeyToPeerID(pk)
+		pid, grr := api.PublicKeyToPeerID(addr.ID)
 		if grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: invalid persistent peer public key (%s): %w", pubkey, grr)
+			return nil, fmt.Errorf("worker/common/p2p: invalid persistent peer public key (%s): %w", addr.ID, grr)
 		}
 
-		ip, port, grr := net.SplitHostPort(addr)
+		ma, grr := addr.Address.MultiAddress()
 		if grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer IP address and/or port (%s): %w", addr, grr)
-		}
-
-		ma, grr := multiaddr.NewMultiaddr("/ip4/" + ip + "/tcp/" + port)
-		if grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer IP address and/or port (%s): %w", addr, grr)
+			return nil, fmt.Errorf("worker/common/p2p: failed to convert persistent peer address to multi address (%s): %w", addr, grr)
 		}
 
 		if _, exists := persistentPeers[pid]; exists {

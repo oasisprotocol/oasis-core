@@ -13,7 +13,6 @@ func TestConsensusMode(t *testing.T) {
 	for _, k := range []Mode{
 		ModeArchive,
 		ModeFull,
-		ModeSeed,
 	} {
 		enc, err := k.MarshalText()
 		require.NoError(err, "MarshalText")

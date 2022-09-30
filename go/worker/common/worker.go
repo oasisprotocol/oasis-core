@@ -25,7 +25,7 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	HostNode          control.ControlledNode
+	HostNode          control.NodeController
 	DataDir           string
 	Identity          *identity.Identity
 	Consensus         consensus.Backend
@@ -187,7 +187,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 func newWorker(
 	ctx context.Context,
 	cancelCtx context.CancelFunc,
-	hostNode control.ControlledNode,
+	hostNode control.NodeController,
 	dataDir string,
 	identity *identity.Identity,
 	consensus consensus.Backend,
@@ -247,7 +247,7 @@ func newWorker(
 
 // New creates a new worker.
 func New(
-	hostNode control.ControlledNode,
+	hostNode control.NodeController,
 	dataDir string,
 	identity *identity.Identity,
 	consensus consensus.Backend,

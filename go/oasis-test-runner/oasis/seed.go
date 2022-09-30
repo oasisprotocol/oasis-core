@@ -5,7 +5,6 @@ import (
 
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 )
 
 // SeedCfg is the Oasis seed node configuration.
@@ -21,7 +20,6 @@ type Seed struct { // nolint: maligned
 
 	disableAddrBookFromGenesis bool
 
-	tmAddress     string
 	consensusPort uint16
 }
 
@@ -41,7 +39,7 @@ func (seed *Seed) AddArgs(args *argBuilder) error {
 		workerCertificateRotation(true).
 		tendermintCoreAddress(seed.consensusPort).
 		appendSeedNodes(otherSeeds).
-		tendermintSeedMode()
+		seedMode()
 
 	if seed.disableAddrBookFromGenesis {
 		args.tendermintSeedDisableAddrBookFromGenesis()
@@ -69,12 +67,11 @@ func (net *Network) NewSeed(cfg *SeedCfg) (*Seed, error) {
 	if err != nil {
 		return nil, fmt.Errorf("oasis/seed: failed to provision seed identity: %w", err)
 	}
-	seedP2PPublicKey := seedIdentity.P2PSigner.Public()
+	host.p2pSigner = seedIdentity.P2PSigner.Public()
 
 	seedNode := &Seed{
 		Node:                       host,
 		disableAddrBookFromGenesis: cfg.DisableAddrBookFromGenesis,
-		tmAddress:                  crypto.PublicKeyToTendermint(&seedP2PPublicKey).Address().String(),
 		consensusPort:              host.getProvisionedPort(nodePortConsensus),
 	}
 	net.seeds = append(net.seeds, seedNode)

@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	kmCmd "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
@@ -156,7 +155,6 @@ type Keymanager struct { // nolint: maligned
 	runtimeProvisioner string
 
 	sentryPubKey     signature.PublicKey
-	tmAddress        string
 	consensusPort    uint16
 	workerClientPort uint16
 	p2pPort          uint16
@@ -336,7 +334,6 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		policy:             cfg.Policy,
 		runtimeProvisioner: cfg.RuntimeProvisioner,
 		sentryIndices:      cfg.SentryIndices,
-		tmAddress:          crypto.PublicKeyToTendermint(&host.p2pSigner).Address().String(),
 		sentryPubKey:       sentryPubKey,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		workerClientPort:   host.getProvisionedPort(nodePortClient),

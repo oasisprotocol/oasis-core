@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdRegNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/node"
 )
@@ -21,7 +20,6 @@ type Validator struct {
 
 	sentries []*Sentry
 
-	tmAddress     string
 	sentryPubKey  signature.PublicKey
 	consensusPort uint16
 	clientPort    uint16
@@ -146,7 +144,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("oasis/validator: failed to provision node identity: %w", err)
 	}
-	val.tmAddress = crypto.PublicKeyToTendermint(&host.p2pSigner).Address().String()
 
 	// Sentry client cert.
 	pk, ok := host.sentryCert.PublicKey.(ed25519.PublicKey)

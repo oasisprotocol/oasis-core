@@ -51,6 +51,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -80,8 +81,8 @@ const (
 	CfgP2PPersistenPeersMaxDialPeriod = "consensus.tendermint.p2p.persistent_peers_max_dial_period"
 	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
 	CfgP2PDisablePeerExchange = "consensus.tendermint.p2p.disable_peer_exchange"
-	// CfgP2PUnconditionalPeerIDs configures tendermint's unconditional peer(s).
-	CfgP2PUnconditionalPeerIDs = "consensus.tendermint.p2p.unconditional_peer_ids"
+	// CfgP2PUnconditionalPeer configures tendermint's unconditional peer(s).
+	CfgP2PUnconditionalPeer = "consensus.tendermint.p2p.unconditional_peer"
 
 	// CfgDebugUnsafeReplayRecoverCorruptedWAL enables the debug and unsafe
 	// automatic corrupted WAL recovery during replay.
@@ -555,7 +556,7 @@ func (t *fullService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Su
 	return typedCh, sub, nil
 }
 
-func (t *fullService) lazyInit() error {
+func (t *fullService) lazyInit() error { // nolint: gocyclo
 	if t.initialized() {
 		return nil
 	}
@@ -600,6 +601,24 @@ func (t *fullService) lazyInit() error {
 		return err
 	}
 
+	// Convert addresses and public keys to Tendermint form.
+	persistentPeers, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(CfgP2PPersistentPeer))
+	if err != nil {
+		return fmt.Errorf("tendermint: failed to convert persistent peer addresses: %w", err)
+	}
+	seeds, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(flags.CfgP2PSeeds))
+	if err != nil {
+		return fmt.Errorf("tendermint: failed to convert seed addresses: %w", err)
+	}
+	sentryUpstreamAddrs, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(CfgSentryUpstreamAddress))
+	if err != nil {
+		return fmt.Errorf("tendermint: failed to convert sentry upstream addresses: %w", err)
+	}
+	unconditionalPeers, err := tmcommon.PublicKeysToTendermint(viper.GetStringSlice(CfgP2PUnconditionalPeer))
+	if err != nil {
+		return fmt.Errorf("tendermint: failed to convert unconditional peer public keys: %w", err)
+	}
+
 	// Create Tendermint node.
 	tenderConfig := tmconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
@@ -622,32 +641,19 @@ func (t *fullService) lazyInit() error {
 	tenderConfig.P2P.MaxNumOutboundPeers = viper.GetInt(tmcommon.CfgP2PMaxNumOutboundPeers)
 	tenderConfig.P2P.SendRate = viper.GetInt64(tmcommon.CfgP2PSendRate)
 	tenderConfig.P2P.RecvRate = viper.GetInt64(tmcommon.CfgP2PRecvRate)
-	// Persistent peers need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
-	// uses a case sensitive string comparison to validate public keys.
-	// Since persistent peers is expected to be in comma-delimited ID@host:port format,
-	// lowercasing the whole string is ok.
-	tenderConfig.P2P.PersistentPeers = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PPersistentPeer), ","))
+	tenderConfig.P2P.PersistentPeers = strings.Join(persistentPeers, ",")
 	tenderConfig.P2P.PersistentPeersMaxDialPeriod = viper.GetDuration(CfgP2PPersistenPeersMaxDialPeriod)
-	// Unconditional peer IDs need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
-	// uses a case sensitive string comparison to validate public keys.
-	// Since persistent peers is expected to be in comma-delimited ID format,
-	// lowercasing the whole string is ok.
-	tenderConfig.P2P.UnconditionalPeerIDs = strings.ToLower(strings.Join(viper.GetStringSlice(CfgP2PUnconditionalPeerIDs), ","))
-	// Seed Ids need to be lowercase as p2p/transport.go:MultiplexTransport.upgrade()
-	// uses a case sensitive string comparison to validate public keys.
-	// Since Seeds is expected to be in comma-delimited ID@host:port format,
-	// lowercasing the whole string is ok.
-	tenderConfig.P2P.Seeds = strings.ToLower(strings.Join(viper.GetStringSlice(tmcommon.CfgP2PSeed), ","))
+	tenderConfig.P2P.UnconditionalPeerIDs = strings.Join(unconditionalPeers, ",")
+	tenderConfig.P2P.Seeds = strings.Join(seeds, ",")
 	tenderConfig.P2P.AddrBookStrict = !(viper.GetBool(tmcommon.CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
 	tenderConfig.P2P.AllowDuplicateIP = viper.GetBool(tmcommon.CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
 	tenderConfig.RPC.ListenAddress = ""
 
-	sentryUpstreamAddrs := viper.GetStringSlice(CfgSentryUpstreamAddress)
 	if len(sentryUpstreamAddrs) > 0 {
 		t.Logger.Info("Acting as a tendermint sentry", "addrs", sentryUpstreamAddrs)
 
 		// Append upstream addresses to persistent, private and unconditional peers.
-		tenderConfig.P2P.PersistentPeers += "," + strings.ToLower(strings.Join(sentryUpstreamAddrs, ","))
+		tenderConfig.P2P.PersistentPeers += "," + strings.Join(sentryUpstreamAddrs, ",")
 
 		var sentryUpstreamIDs []string
 		for _, addr := range sentryUpstreamAddrs {
@@ -658,10 +664,7 @@ func (t *fullService) lazyInit() error {
 			sentryUpstreamIDs = append(sentryUpstreamIDs, parts[0])
 		}
 
-		// Convert upstream node IDs to lowercase (like other IDs) since
-		// Tendermint stores them in a map and uses a case sensitive string
-		// comparison to check ID equality.
-		sentryUpstreamIDsStr := strings.ToLower(strings.Join(sentryUpstreamIDs, ","))
+		sentryUpstreamIDsStr := strings.Join(sentryUpstreamIDs, ",")
 		tenderConfig.P2P.PrivatePeerIDs += "," + sentryUpstreamIDsStr
 		tenderConfig.P2P.UnconditionalPeerIDs += "," + sentryUpstreamIDsStr
 	}
@@ -1004,9 +1007,9 @@ func init() {
 	Flags.Duration(CfgABCIPruneInterval, 2*time.Minute, "ABCI state pruning interval")
 	Flags.Bool(CfgCheckpointerDisabled, false, "Disable the ABCI state checkpointer")
 	Flags.Duration(CfgCheckpointerCheckInterval, 1*time.Minute, "ABCI state checkpointer check interval")
-	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form ID@ip:port")
-	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form ID@ip:port")
-	Flags.StringSlice(CfgP2PUnconditionalPeerIDs, []string{}, "Tendermint unconditional peer IDs")
+	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form pubkey@IP:port")
+	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form pubkey@IP:port")
+	Flags.StringSlice(CfgP2PUnconditionalPeer, []string{}, "Tendermint unconditional peer(s) public keys")
 	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
 	Flags.Duration(CfgP2PPersistenPeersMaxDialPeriod, 0*time.Second, "Tendermint max timeout when redialing a persistent peer (default: unlimited)")
 	Flags.Uint64(CfgMinGasPrice, 0, "minimum gas price")
