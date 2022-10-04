@@ -116,6 +116,12 @@ type Descriptor struct { // nolint: maligned
 
 // Equals compares descriptors for equality.
 func (d *Descriptor) Equals(other *Descriptor) bool {
+	if d == other {
+		return true
+	}
+	if d == nil || other == nil {
+		return false
+	}
 	if d.V != other.V {
 		return false
 	}

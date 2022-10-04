@@ -14,10 +14,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -204,7 +208,7 @@ func (g *governanceWorkload) submitCancelUpgradeProposal(descriptor *upgrade.Des
 	}
 	var proposal *governance.Proposal
 	for _, p := range ps {
-		if p.Content.Upgrade != nil && p.Content.Upgrade.Equals(descriptor) {
+		if p.Content.Upgrade != nil && p.Content.Upgrade.Descriptor.Equals(descriptor) {
 			proposal = p
 			break
 		}
@@ -277,6 +281,156 @@ OUTER:
 	}
 }
 
+func (g *governanceWorkload) doChangeParametersProposal() error { // nolint: gocyclo
+	var (
+		shouldFail bool
+		module     string
+		changes    cbor.RawMessage
+	)
+
+	switch g.rng.Intn(7) {
+	case 0:
+		var pc governance.ConsensusParameterChanges
+		if g.rng.Intn(2) == 0 {
+			stakeThreshold := 67 + uint8(g.rng.Intn(34))
+			pc.StakeThreshold = &stakeThreshold
+		}
+		if g.rng.Intn(2) == 0 {
+			upgradeCancelMinEpochDiff := beacon.EpochTime(300 + g.rng.Int63n(100))
+			pc.UpgradeCancelMinEpochDiff = &upgradeCancelMinEpochDiff
+		}
+		if g.rng.Intn(2) == 0 {
+			upgradeMinEpochDiff := beacon.EpochTime(300 + g.rng.Int63n(100))
+			pc.UpgradeMinEpochDiff = &upgradeMinEpochDiff
+		}
+		if g.rng.Intn(2) == 0 {
+			votingPeriod := beacon.EpochTime(100 + g.rng.Int63n(100))
+			pc.VotingPeriod = &votingPeriod
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.MinProposalDeposit = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(100)))
+		}
+		shouldFail = pc.SanityCheck() != nil
+		module = governance.ModuleName
+		changes = cbor.Marshal(pc)
+	case 1:
+		var pc staking.ConsensusParameterChanges
+		if g.rng.Intn(2) == 0 {
+			debondingInterval := beacon.EpochTime(1 + g.rng.Int63n(10))
+			pc.DebondingInterval = &debondingInterval
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.MinDelegationAmount = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.MinTransferAmount = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.MinTransactBalance = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		if g.rng.Intn(2) == 0 {
+			maxAllowances := 20 + uint32(g.rng.Int31n(20))
+			pc.MaxAllowances = &maxAllowances
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.FeeSplitWeightVote = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.FeeSplitWeightNextPropose = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.FeeSplitWeightPropose = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.RewardFactorEpochSigned = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.RewardFactorBlockProposed = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		}
+		shouldFail = pc.SanityCheck() != nil
+		module = staking.ModuleName
+		changes = cbor.Marshal(pc)
+	case 2:
+		var pc roothash.ConsensusParameterChanges
+		if g.rng.Intn(2) == 0 {
+			maxRuntimeMessages := 1 + uint32(g.rng.Int31n(10))
+			pc.MaxRuntimeMessages = &maxRuntimeMessages
+		}
+		if g.rng.Intn(2) == 0 {
+			maxInRuntimeMessages := 1 + uint32(g.rng.Int31n(10))
+			pc.MaxInRuntimeMessages = &maxInRuntimeMessages
+		}
+		shouldFail = pc.SanityCheck() != nil
+		module = roothash.ModuleName
+		changes = cbor.Marshal(pc)
+	case 3:
+		var pc registry.ConsensusParameterChanges
+		if g.rng.Intn(2) == 0 {
+			disableRuntimeRegistration := g.rng.Intn(2) == 0
+			pc.DisableRuntimeRegistration = &disableRuntimeRegistration
+		}
+		if g.rng.Intn(2) == 0 {
+			disableKeyManagerRuntimeRegistration := g.rng.Intn(2) == 0
+			pc.DisableKeyManagerRuntimeRegistration = &disableKeyManagerRuntimeRegistration
+		}
+		if g.rng.Intn(2) == 0 {
+			maxNodeExpiration := 1 + uint64(g.rng.Int63n(10))
+			pc.MaxNodeExpiration = &maxNodeExpiration
+		}
+		if g.rng.Intn(2) == 0 {
+			pc.EnableRuntimeGovernanceModels = map[registry.RuntimeGovernanceModel]bool{
+				registry.GovernanceEntity:  g.rng.Intn(2) == 0,
+				registry.GovernanceRuntime: g.rng.Intn(2) == 0,
+			}
+		}
+		if g.rng.Intn(2) == 0 {
+			features := &node.TEEFeatures{
+				SGX: node.TEEFeaturesSGX{
+					PCS: g.rng.Intn(2) == 0,
+				},
+				FreshnessProofs: g.rng.Intn(2) == 0,
+			}
+			pc.TEEFeatures = &features
+		}
+		shouldFail = pc.SanityCheck() != nil
+		module = registry.ModuleName
+		changes = cbor.Marshal(pc)
+	case 4:
+		var pc scheduler.ConsensusParameterChanges
+		if g.rng.Intn(2) == 0 {
+			minValidators := 1 + g.rng.Intn(2)
+			pc.MinValidators = &minValidators
+		}
+		if g.rng.Intn(2) == 0 {
+			maxValidators := 10 + g.rng.Intn(91)
+			pc.MaxValidators = &maxValidators
+		}
+		shouldFail = pc.SanityCheck() != nil
+		module = scheduler.ModuleName
+		changes = cbor.Marshal(pc)
+	case 5:
+		shouldFail = true
+		module = governance.ModuleName
+		changes = cbor.Marshal(cbor.Marshal(governance.ConsensusParameterChanges{}))
+	case 6:
+		shouldFail = true
+		module = "module"
+		changes = cbor.Marshal("changes")
+	default:
+		return fmt.Errorf("unimplemented")
+	}
+
+	proposalContent := &governance.ProposalContent{
+		ChangeParameters: &governance.ChangeParametersProposal{
+			Module:  module,
+			Changes: changes,
+		},
+	}
+
+	_, err := g.submitProposalContent(proposalContent, shouldFail)
+	return err
+}
+
 func (g *governanceWorkload) submitVote(voter signature.Signer, proposalID uint64, vote governance.Vote) error {
 	tx := governance.NewCastVoteTx(0, nil, &governance.ProposalVote{
 		ID:   proposalID,
@@ -330,7 +484,7 @@ func (g *governanceWorkload) doGovernanceVote() error {
 		}
 	}
 	if proposerIdx == -1 {
-		return fmt.Errorf("invalid propopsal submitter: %v", proposal.Submitter)
+		return fmt.Errorf("invalid proposal submitter: %v", proposal.Submitter)
 	}
 	var vote governance.Vote
 	switch {
@@ -462,16 +616,20 @@ func (g *governanceWorkload) Run(
 			}
 		}
 
-		switch rng.Intn(3) {
+		switch rng.Intn(5) {
 		case 0:
 			if err = g.doUpgradeProposal(); err != nil {
-				return fmt.Errorf("submitting governance proposal: %w", err)
+				return fmt.Errorf("submitting governance upgrade proposal: %w", err)
 			}
 		case 1:
 			if err = g.doCancelUpgradeProposal(); err != nil {
-				return fmt.Errorf("submitting cancel governance upgrade proposal: %w", err)
+				return fmt.Errorf("submitting governance cancel upgrade proposal: %w", err)
 			}
 		case 2:
+			if err = g.doChangeParametersProposal(); err != nil {
+				return fmt.Errorf("submitting governance change parameters proposal: %w", err)
+			}
+		case 3, 4:
 			if err = g.doGovernanceVote(); err != nil {
 				return fmt.Errorf("submitting governance vote: %w", err)
 			}

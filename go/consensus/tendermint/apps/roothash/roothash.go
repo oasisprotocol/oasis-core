@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	registryApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
@@ -69,6 +70,8 @@ func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmap
 	md.Subscribe(registryApi.MessageRuntimeResumed, app)
 	md.Subscribe(roothashApi.RuntimeMessageNoop, app)
 	md.Subscribe(schedulerApi.MessageBeforeSchedule, app)
+	md.Subscribe(governanceApi.MessageChangeParameters, app)
+	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
 }
 
 func (app *rootHashApplication) OnCleanup() {
@@ -333,30 +336,14 @@ func (app *rootHashApplication) ExecuteMessage(ctx *tmapi.Context, kind, msg int
 	case schedulerApi.MessageBeforeSchedule:
 		// Scheduler is about to perform scheduling. Process liveness statistics to make sure they
 		// get taken into account for the next election.
-		epoch := msg.(beacon.EpochTime)
-
-		ctx.Logger().Debug("processing liveness statistics before scheduling",
-			"epoch", epoch,
-		)
-
-		state := roothashState.NewMutableState(ctx.State())
-		regState := registryState.NewMutableState(ctx.State())
-		runtimes, _ := regState.Runtimes(ctx)
-
-		for _, rt := range runtimes {
-			if !rt.IsCompute() {
-				continue
-			}
-
-			rtState, err := state.RuntimeState(ctx, rt.ID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to fetch runtime state: %w", err)
-			}
-			if err = processLivenessStatistics(ctx, epoch, rtState); err != nil {
-				return nil, fmt.Errorf("failed to process liveness statistics for %s: %w", rt.ID, err)
-			}
-		}
-		return nil, nil
+		return app.doBeforeSchedule(ctx, msg)
+	case governanceApi.MessageValidateParameterChanges:
+		// A change parameters proposal is about to be submitted. Validate changes.
+		return app.changeParameters(ctx, msg, false)
+	case governanceApi.MessageChangeParameters:
+		// A change parameters proposal has just been accepted and closed. Validate and apply
+		// changes.
+		return app.changeParameters(ctx, msg, true)
 	default:
 		return nil, roothash.ErrInvalidArgument
 	}

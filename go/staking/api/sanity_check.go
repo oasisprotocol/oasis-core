@@ -40,6 +40,27 @@ func (p *ConsensusParameters) SanityCheck() error {
 	return nil
 }
 
+// SanityCheck performs a sanity check on the consensus parameter changes.
+func (c *ConsensusParameterChanges) SanityCheck() error {
+	if c.DebondingInterval == nil &&
+		c.GasCosts == nil &&
+		c.MinDelegationAmount == nil &&
+		c.MinTransferAmount == nil &&
+		c.MinTransactBalance == nil &&
+		c.DisableTransfers == nil &&
+		c.DisableDelegation == nil &&
+		c.AllowEscrowMessages == nil &&
+		c.MaxAllowances == nil &&
+		c.FeeSplitWeightPropose == nil &&
+		c.FeeSplitWeightVote == nil &&
+		c.FeeSplitWeightNextPropose == nil &&
+		c.RewardFactorEpochSigned == nil &&
+		c.RewardFactorBlockProposed == nil {
+		return fmt.Errorf("consensus parameter changes should not be empty")
+	}
+	return nil
+}
+
 // SanityCheckAccount examines an account's balances.
 // Adds the balances to a running total `total`.
 func SanityCheckAccount(

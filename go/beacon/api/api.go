@@ -3,11 +3,9 @@ package api
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 const (
@@ -131,7 +129,7 @@ type ConsensusParameters struct {
 	// InsecureParameters are the beacon parameters for the insecure backend.
 	InsecureParameters *InsecureParameters `json:"insecure_parameters,omitempty"`
 
-	// VRFParamenters are the beacon parameters for the VRF backend.
+	// VRFParameters are the beacon parameters for the VRF backend.
 	VRFParameters *VRFParameters `json:"vrf_parameters,omitempty"`
 }
 
@@ -139,52 +137,6 @@ type ConsensusParameters struct {
 type InsecureParameters struct {
 	// Interval is the epoch interval (in blocks).
 	Interval int64 `json:"interval,omitempty"`
-}
-
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
-	switch g.Parameters.Backend {
-	case BackendInsecure:
-		params := g.Parameters.InsecureParameters
-		if params == nil {
-			return fmt.Errorf("beacon: sanity check failed: insecure backend not configured")
-		}
-
-		if params.Interval <= 0 && !g.Parameters.DebugMockBackend {
-			return fmt.Errorf("beacon: sanity check failed: epoch interval must be > 0")
-		}
-	case BackendVRF:
-		params := g.Parameters.VRFParameters
-		if params == nil {
-			return fmt.Errorf("beacon: sanity check failed: VRF backend not configured")
-		}
-
-		if params.AlphaHighQualityThreshold == 0 {
-			return fmt.Errorf("beacon: sanity check failed: alpha threshold must be > 0")
-		}
-		if params.Interval <= 0 {
-			return fmt.Errorf("beacon: sanity check failed: epoch interval must be > 0")
-		}
-		if params.ProofSubmissionDelay <= 0 {
-			return fmt.Errorf("beacon: sanity check failed: submission delay must be > 0")
-		}
-		if params.ProofSubmissionDelay >= params.Interval {
-			return fmt.Errorf("beacon: sanity check failed: submission delay must be < epoch interval")
-		}
-	default:
-		return fmt.Errorf("beacon: sanity check failed: unknown backend: '%s'", g.Parameters.Backend)
-	}
-
-	unsafeFlags := g.Parameters.DebugMockBackend
-	if unsafeFlags && !flags.DebugDontBlameOasis() {
-		return fmt.Errorf("beacon: sanity check failed: one or more unsafe debug flags set")
-	}
-
-	if g.Base == EpochInvalid {
-		return fmt.Errorf("beacon: sanity check failed: starting epoch is invalid")
-	}
-
-	return nil
 }
 
 // EpochEvent is the epoch event.
