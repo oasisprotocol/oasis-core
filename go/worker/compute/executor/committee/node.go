@@ -1545,6 +1545,19 @@ func (n *Node) worker() {
 	// We are initialized.
 	close(n.initCh)
 
+	// Update availability once keymanager client initializes.
+	go func() {
+		select {
+		case <-n.stopCh:
+			n.logger.Info("termination requested")
+			return
+		case <-n.commonNode.KeyManagerClient.Initialized():
+			n.commonNode.CrossNode.Lock()
+			n.nudgeAvailabilityLocked(false)
+			n.commonNode.CrossNode.Unlock()
+		}
+	}()
+
 	for {
 		// Check if we are currently processing a batch. In this case, we also
 		// need to select over the result channel.
@@ -1572,11 +1585,6 @@ func (n *Node) worker() {
 		case txs := <-txCh:
 			// Check any queued transactions.
 			n.handleNewCheckedTransactions(txs)
-		case <-n.commonNode.KeyManagerClient.Initialized():
-			// Key manager client has been initialized, update availability if needed.
-			n.commonNode.CrossNode.Lock()
-			n.nudgeAvailabilityLocked(false)
-			n.commonNode.CrossNode.Unlock()
 		case <-n.reselect:
 			// Recalculate select set.
 		}
