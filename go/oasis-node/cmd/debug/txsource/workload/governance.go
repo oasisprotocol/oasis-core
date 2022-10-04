@@ -14,8 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -288,122 +286,151 @@ func (g *governanceWorkload) doChangeParametersProposal() error { // nolint: goc
 		changes    cbor.RawMessage
 	)
 
+	randBool := func() bool {
+		return g.rng.Intn(2) == 0
+	}
+
 	switch g.rng.Intn(7) {
 	case 0:
+		params, err := g.consensus.Governance().ConsensusParameters(g.ctx, consensus.HeightLatest)
+		if err != nil {
+			return err
+		}
 		var pc governance.ConsensusParameterChanges
-		if g.rng.Intn(2) == 0 {
-			stakeThreshold := 67 + uint8(g.rng.Intn(34))
-			pc.StakeThreshold = &stakeThreshold
+		if randBool() {
+			pc.StakeThreshold = &params.StakeThreshold
 		}
-		if g.rng.Intn(2) == 0 {
-			upgradeCancelMinEpochDiff := beacon.EpochTime(300 + g.rng.Int63n(100))
-			pc.UpgradeCancelMinEpochDiff = &upgradeCancelMinEpochDiff
+		if randBool() {
+			pc.UpgradeCancelMinEpochDiff = &params.UpgradeCancelMinEpochDiff
 		}
-		if g.rng.Intn(2) == 0 {
-			upgradeMinEpochDiff := beacon.EpochTime(300 + g.rng.Int63n(100))
-			pc.UpgradeMinEpochDiff = &upgradeMinEpochDiff
+		if randBool() {
+			pc.UpgradeMinEpochDiff = &params.UpgradeMinEpochDiff
 		}
-		if g.rng.Intn(2) == 0 {
-			votingPeriod := beacon.EpochTime(100 + g.rng.Int63n(100))
-			pc.VotingPeriod = &votingPeriod
+		if randBool() {
+			pc.VotingPeriod = &params.VotingPeriod
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.MinProposalDeposit = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(100)))
+		if randBool() {
+			pc.MinProposalDeposit = &params.MinProposalDeposit
+		}
+		if randBool() {
+			pc.EnableChangeParametersProposal = &params.EnableChangeParametersProposal
+		}
+		if randBool() {
+			pc.GasCosts = params.GasCosts
 		}
 		shouldFail = pc.SanityCheck() != nil
 		module = governance.ModuleName
 		changes = cbor.Marshal(pc)
 	case 1:
+		params, err := g.consensus.Staking().ConsensusParameters(g.ctx, consensus.HeightLatest)
+		if err != nil {
+			return err
+		}
 		var pc staking.ConsensusParameterChanges
-		if g.rng.Intn(2) == 0 {
-			debondingInterval := beacon.EpochTime(1 + g.rng.Int63n(10))
-			pc.DebondingInterval = &debondingInterval
+		if randBool() {
+			pc.DebondingInterval = &params.DebondingInterval
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.MinDelegationAmount = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.GasCosts = params.GasCosts
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.MinTransferAmount = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.MinDelegationAmount = &params.MinDelegationAmount
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.MinTransactBalance = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.MinTransferAmount = &params.MinTransferAmount
 		}
-		if g.rng.Intn(2) == 0 {
-			maxAllowances := 20 + uint32(g.rng.Int31n(20))
-			pc.MaxAllowances = &maxAllowances
+		if randBool() {
+			pc.MinTransactBalance = &params.MinTransactBalance
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.FeeSplitWeightVote = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.DisableTransfers = &params.DisableTransfers
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.FeeSplitWeightNextPropose = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.DisableDelegation = &params.DisableDelegation
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.FeeSplitWeightPropose = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.AllowEscrowMessages = &params.AllowEscrowMessages
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.RewardFactorEpochSigned = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.MaxAllowances = &params.MaxAllowances
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.RewardFactorBlockProposed = quantity.NewFromUint64(1 + uint64(g.rng.Int63n(10)))
+		if randBool() {
+			pc.FeeSplitWeightVote = &params.FeeSplitWeightVote
+		}
+		if randBool() {
+			pc.FeeSplitWeightNextPropose = &params.FeeSplitWeightNextPropose
+		}
+		if randBool() {
+			pc.FeeSplitWeightPropose = &params.FeeSplitWeightPropose
+		}
+		if randBool() {
+			pc.RewardFactorEpochSigned = &params.RewardFactorEpochSigned
+		}
+		if randBool() {
+			pc.RewardFactorBlockProposed = &params.RewardFactorBlockProposed
 		}
 		shouldFail = pc.SanityCheck() != nil
 		module = staking.ModuleName
 		changes = cbor.Marshal(pc)
 	case 2:
-		var pc roothash.ConsensusParameterChanges
-		if g.rng.Intn(2) == 0 {
-			maxRuntimeMessages := 1 + uint32(g.rng.Int31n(10))
-			pc.MaxRuntimeMessages = &maxRuntimeMessages
+		params, err := g.consensus.RootHash().ConsensusParameters(g.ctx, consensus.HeightLatest)
+		if err != nil {
+			return err
 		}
-		if g.rng.Intn(2) == 0 {
-			maxInRuntimeMessages := 1 + uint32(g.rng.Int31n(10))
-			pc.MaxInRuntimeMessages = &maxInRuntimeMessages
+		var pc roothash.ConsensusParameterChanges
+		if randBool() {
+			pc.GasCosts = params.GasCosts
+		}
+		if randBool() {
+			pc.MaxRuntimeMessages = &params.MaxRuntimeMessages
+		}
+		if randBool() {
+			pc.MaxInRuntimeMessages = &params.MaxInRuntimeMessages
+		}
+		if randBool() {
+			pc.MaxEvidenceAge = &params.MaxEvidenceAge
 		}
 		shouldFail = pc.SanityCheck() != nil
 		module = roothash.ModuleName
 		changes = cbor.Marshal(pc)
 	case 3:
+		params, err := g.consensus.Registry().ConsensusParameters(g.ctx, consensus.HeightLatest)
+		if err != nil {
+			return err
+		}
 		var pc registry.ConsensusParameterChanges
-		if g.rng.Intn(2) == 0 {
-			disableRuntimeRegistration := g.rng.Intn(2) == 0
-			pc.DisableRuntimeRegistration = &disableRuntimeRegistration
+		if randBool() {
+			pc.DisableRuntimeRegistration = &params.DisableRuntimeRegistration
 		}
-		if g.rng.Intn(2) == 0 {
-			disableKeyManagerRuntimeRegistration := g.rng.Intn(2) == 0
-			pc.DisableKeyManagerRuntimeRegistration = &disableKeyManagerRuntimeRegistration
+		if randBool() {
+			pc.DisableKeyManagerRuntimeRegistration = &params.DisableKeyManagerRuntimeRegistration
 		}
-		if g.rng.Intn(2) == 0 {
-			maxNodeExpiration := 1 + uint64(g.rng.Int63n(10))
-			pc.MaxNodeExpiration = &maxNodeExpiration
+		if randBool() {
+			pc.GasCosts = params.GasCosts
 		}
-		if g.rng.Intn(2) == 0 {
-			pc.EnableRuntimeGovernanceModels = map[registry.RuntimeGovernanceModel]bool{
-				registry.GovernanceEntity:  g.rng.Intn(2) == 0,
-				registry.GovernanceRuntime: g.rng.Intn(2) == 0,
-			}
+		if randBool() {
+			pc.MaxNodeExpiration = &params.MaxNodeExpiration
 		}
-		if g.rng.Intn(2) == 0 {
-			features := &node.TEEFeatures{
-				SGX: node.TEEFeaturesSGX{
-					PCS: g.rng.Intn(2) == 0,
-				},
-				FreshnessProofs: g.rng.Intn(2) == 0,
-			}
-			pc.TEEFeatures = &features
+		if randBool() {
+			pc.EnableRuntimeGovernanceModels = params.EnableRuntimeGovernanceModels
+		}
+		if randBool() {
+			pc.TEEFeatures = &params.TEEFeatures
 		}
 		shouldFail = pc.SanityCheck() != nil
 		module = registry.ModuleName
 		changes = cbor.Marshal(pc)
 	case 4:
-		var pc scheduler.ConsensusParameterChanges
-		if g.rng.Intn(2) == 0 {
-			minValidators := 1 + g.rng.Intn(2)
-			pc.MinValidators = &minValidators
+		params, err := g.consensus.Scheduler().ConsensusParameters(g.ctx, consensus.HeightLatest)
+		if err != nil {
+			return err
 		}
-		if g.rng.Intn(2) == 0 {
-			maxValidators := 10 + g.rng.Intn(91)
-			pc.MaxValidators = &maxValidators
+		var pc scheduler.ConsensusParameterChanges
+		if randBool() {
+			pc.MinValidators = &params.MinValidators
+		}
+		if randBool() {
+			pc.MaxValidators = &params.MaxValidators
 		}
 		shouldFail = pc.SanityCheck() != nil
 		module = scheduler.ModuleName
