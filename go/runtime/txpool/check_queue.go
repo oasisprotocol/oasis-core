@@ -10,7 +10,7 @@ import (
 type checkTxQueue struct {
 	l sync.Mutex
 
-	txs *deque.Deque
+	txs *deque.Deque[*PendingCheckTransaction]
 
 	maxSize      int
 	maxBatchSize int
@@ -56,7 +56,7 @@ func (cq *checkTxQueue) pop() []*PendingCheckTransaction {
 		}
 
 		tx := cq.txs.PopFront()
-		batch = append(batch, tx.(*PendingCheckTransaction))
+		batch = append(batch, tx)
 	}
 
 	return batch
@@ -78,7 +78,7 @@ func (cq *checkTxQueue) clear() {
 
 func newCheckTxQueue(maxSize, maxBatchSize int) *checkTxQueue {
 	return &checkTxQueue{
-		txs:          deque.New(0, 512),
+		txs:          deque.New[*PendingCheckTransaction](0, 512),
 		maxSize:      maxSize,
 		maxBatchSize: maxBatchSize,
 	}

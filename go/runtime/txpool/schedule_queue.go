@@ -14,15 +14,19 @@ var (
 	ErrQueueFull                   = errors.New("txpool: schedule queue is full")
 )
 
-// priorityWrappedTx is a wrapped transaction for insertion into the priority B-Tree.
-type priorityWrappedTx struct {
-	*MainQueueTransaction
-}
+// priorityLessFunc is a comparison function for ordering transactions by priority.
+func priorityLessFunc(tx, tx2 *MainQueueTransaction) bool {
+	switch {
+	case tx == tx2:
+		return false
+	case tx == nil:
+		return false // nil is last (descending order).
+	case tx2 == nil:
+		return true // nil is last (descending order).
+	}
 
-func (tx priorityWrappedTx) Less(other btree.Item) bool {
 	// We are iterating over the queue in descending order, so we want higher priority transactions
 	// to be later in the queue.
-	tx2 := other.(priorityWrappedTx)
 	if p1, p2 := tx.priority, tx2.priority; p1 != p2 {
 		return p1 < p2
 	}
@@ -36,7 +40,7 @@ type scheduleQueue struct {
 
 	all        map[hash.Hash]*MainQueueTransaction
 	bySender   map[string]*MainQueueTransaction
-	byPriority *btree.BTree
+	byPriority *btree.BTreeG[*MainQueueTransaction]
 
 	capacity int
 }
@@ -59,16 +63,16 @@ func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 	// If the queue is full, we accept a new transaction only if it has a higher priority.
 	if len(sq.all) >= sq.capacity {
 		// Attempt eviction.
-		etx := sq.byPriority.Min().(priorityWrappedTx)
+		etx, _ := sq.byPriority.Min()
 		if tx.priority <= etx.priority {
 			return ErrQueueFull
 		}
-		sq.removeLocked(etx.MainQueueTransaction)
+		sq.removeLocked(etx)
 	}
 
 	sq.all[tx.Hash()] = tx
 	sq.bySender[tx.sender] = tx
-	sq.byPriority.ReplaceOrInsert(priorityWrappedTx{tx})
+	sq.byPriority.ReplaceOrInsert(tx)
 
 	return nil
 }
@@ -76,7 +80,7 @@ func (sq *scheduleQueue) add(tx *MainQueueTransaction) error {
 func (sq *scheduleQueue) removeLocked(tx *MainQueueTransaction) {
 	delete(sq.all, tx.Hash())
 	delete(sq.bySender, tx.sender)
-	sq.byPriority.Delete(priorityWrappedTx{tx})
+	sq.byPriority.Delete(tx)
 }
 
 func (sq *scheduleQueue) remove(txHashes []hash.Hash) {
@@ -99,7 +103,7 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 
 	var (
 		batch      []*MainQueueTransaction
-		offsetItem btree.Item
+		offsetItem *MainQueueTransaction
 	)
 	if offset != nil {
 		offsetTx, exists := sq.all[*offset]
@@ -107,12 +111,10 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 			// Offset does not exist so no items will be matched anyway.
 			return nil
 		}
-		offsetItem = priorityWrappedTx{offsetTx}
+		offsetItem = offsetTx
 	}
 
-	sq.byPriority.DescendLessOrEqual(offsetItem, func(i btree.Item) bool {
-		tx := i.(priorityWrappedTx)
-
+	sq.byPriority.DescendLessOrEqual(offsetItem, func(tx *MainQueueTransaction) bool {
 		// Skip the offset item itself (if specified).
 		h := tx.Hash()
 		if h.Equal(offset) {
@@ -120,7 +122,7 @@ func (sq *scheduleQueue) getPrioritizedBatch(offset *hash.Hash, limit uint32) []
 		}
 
 		// Add the transaction to the batch.
-		batch = append(batch, tx.MainQueueTransaction)
+		batch = append(batch, tx)
 		if uint32(len(batch)) >= limit { // nolint: gosimple
 			return false
 		}
@@ -178,7 +180,7 @@ func newScheduleQueue(capacity int) *scheduleQueue {
 	return &scheduleQueue{
 		all:        make(map[hash.Hash]*MainQueueTransaction),
 		bySender:   make(map[string]*MainQueueTransaction),
-		byPriority: btree.New(2),
+		byPriority: btree.NewG[*MainQueueTransaction](2, priorityLessFunc),
 		capacity:   capacity,
 	}
 }
