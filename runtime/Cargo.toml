@@ -46,7 +46,7 @@ tiny-keccak = { version = "2.0.2", features = ["sha3", "tuple_hash"] }
 sp800-185 = "0.2.0"
 zeroize = "1.4"
 intrusive-collections = "0.9.4"
-sha2 = "0.9.9"
+sha2 = "0.10.6"
 hmac = "0.11.0"
 honggfuzz = "0.5.55"
 arbitrary = { version = "1.1.6", features = ["derive"] }

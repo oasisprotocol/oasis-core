@@ -1927,7 +1927,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sgx-isa",
- "sha2 0.9.9",
+ "sha2 0.10.6",
  "slog",
  "slog-json",
  "slog-scope",
