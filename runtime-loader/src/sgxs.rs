@@ -6,11 +6,11 @@ use std::{
 };
 
 use aesm_client::AesmClient;
+use anyhow::{anyhow, Result};
 use enclave_runner::{
     usercalls::{AsyncStream, UsercallExtension},
     EnclaveBuilder,
 };
-use failure::{format_err, Fallible};
 use futures::future::FutureExt;
 use sgxs_loaders::isgx::Device as IsgxDevice;
 use tokio::net::UnixStream;
@@ -24,8 +24,10 @@ struct HostService {
 }
 
 impl HostService {
-    fn new(host_socket: String) -> HostService {
-        HostService { host_socket }
+    fn new(host_socket: &str) -> HostService {
+        HostService {
+            host_socket: host_socket.to_owned(),
+        }
     }
 }
 
@@ -58,16 +60,11 @@ pub struct SgxsLoader;
 impl Loader for SgxsLoader {
     fn run(
         &self,
-        filename: String,
+        filename: &str,
         signature_filename: Option<&str>,
-        host_socket: String,
-    ) -> Fallible<()> {
-        let sig = match signature_filename {
-            Some(f) => f,
-            None => {
-                return Err(format_err!("signature file is required"));
-            }
-        };
+        host_socket: &str,
+    ) -> Result<()> {
+        let sig = signature_filename.ok_or_else(|| anyhow!("signature file is required"))?;
 
         // Spawn the SGX enclave.
         let mut device = IsgxDevice::new()?
@@ -77,8 +74,10 @@ impl Loader for SgxsLoader {
         let mut enclave_builder = EnclaveBuilder::new(filename.as_ref());
         enclave_builder.signature(sig)?;
         enclave_builder.usercall_extension(HostService::new(host_socket));
-        let enclave = enclave_builder.build(&mut device)?;
+        let enclave = enclave_builder
+            .build(&mut device)
+            .map_err(|err| anyhow!("{}", err))?;
 
-        enclave.run()
+        enclave.run().map_err(|err| anyhow!("{}", err))
     }
 }
