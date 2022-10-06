@@ -50,6 +50,7 @@ fn real_main() -> Result<()> {
             clap::Command::new("elf2sgxs").arg(
                 Arg::new("release")
                     .long("release")
+                    .action(clap::ArgAction::SetTrue)
                     .help("Use release build artifacts"),
             ),
         )
@@ -73,7 +74,7 @@ fn real_main() -> Result<()> {
     // Build target directory.
     let mut target_path = package_root.target_path();
     target_path.push(TARGET_TRIPLE);
-    if matches.is_present("release") {
+    if matches.get_flag("release") {
         target_path.push("release");
     } else {
         target_path.push("debug");

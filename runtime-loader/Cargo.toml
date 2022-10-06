@@ -5,8 +5,8 @@ authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
 edition = "2018"
 
 [dependencies]
-clap = "3.2.22"
-failure = "0.1.5"
+clap = "4.0.10"
+anyhow = "1.0"
 futures = { version = "0.3.17", features = ["compat", "io-compat"] }
 # NOTE: The version of tokio is constrained by what the upstream enclave-runner is using.
 tokio = { version = "0.2", features = ["full"] }

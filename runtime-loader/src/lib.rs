@@ -1,23 +1,21 @@
 //! Oasis runtime loader.
 
-pub mod elf;
 #[cfg(target_os = "linux")]
 pub mod sgxs;
 
-use failure::Fallible;
+use anyhow::Result;
 
 /// Runtime loader.
 pub trait Loader {
     /// Load and run the specified runtime.
     fn run(
         &self,
-        filename: String,
+        filename: &str,
         signature_filename: Option<&str>,
-        host_socket: String,
-    ) -> Fallible<()>;
+        host_socket: &str,
+    ) -> Result<()>;
 }
 
 // Re-exports.
-pub use elf::ElfLoader;
 #[cfg(target_os = "linux")]
 pub use sgxs::SgxsLoader;

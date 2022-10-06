@@ -2,63 +2,54 @@ use std::path::Path;
 
 use clap::{Arg, Command};
 
+use oasis_core_runtime_loader::Loader;
 #[cfg(target_os = "linux")]
 use oasis_core_runtime_loader::SgxsLoader;
-use oasis_core_runtime_loader::{ElfLoader, Loader};
 
 fn main() {
-    let matches = Command::new("Oasis runtime loader")
+    let matches = Command::new("Oasis Core Runtime Loader")
         .arg(
             Arg::new("type")
                 .long("type")
                 .help("Runtime type")
-                .possible_values(&["sgxs", "elf"])
-                .takes_value(true)
+                .value_parser(["sgxs"])
                 .default_value("sgxs"),
         )
         .arg(
             Arg::new("runtime")
                 .value_name("RUNTIME")
                 .help("Runtime filename")
-                .takes_value(true)
                 .required(true),
         )
         .arg(
             Arg::new("signature")
                 .long("signature")
-                .help("Signature filename")
-                .takes_value(true),
+                .help("Signature filename"),
         )
-        .arg(
-            Arg::new("host-socket")
-                .long("host-socket")
-                .takes_value(true)
-                .required(true),
-        )
+        .arg(Arg::new("host-socket").long("host-socket").required(true))
         .get_matches();
 
     // Check if passed runtime exists.
-    let filename = matches.value_of("runtime").unwrap().to_owned();
+    let filename = matches.get_one::<String>("runtime").unwrap();
     assert!(
-        Path::new(&filename).exists(),
+        Path::new(filename).exists(),
         "Could not find runtime: {}",
         filename
     );
 
     // Decode arguments.
-    let host_socket = matches
-        .value_of_t::<String>("host-socket")
-        .unwrap_or_else(|e| e.exit());
-    let mode = matches.value_of("type").unwrap();
-    let signature = matches.value_of("signature");
+    let host_socket = matches.get_one::<String>("host-socket").unwrap();
+    let mode = matches.get_one::<String>("type").unwrap();
+    let signature = matches
+        .get_one::<String>("signature")
+        .map(|sig| sig.as_ref());
 
     // Create appropriate loader and run the runtime.
-    let loader: Box<dyn Loader> = match mode {
+    let loader: Box<dyn Loader> = match mode.as_ref() {
         #[cfg(target_os = "linux")]
         "sgxs" => Box::new(SgxsLoader),
         #[cfg(not(target_os = "linux"))]
         "sgxs" => panic!("SGXS loader is only supported on Linux"),
-        "elf" => Box::new(ElfLoader),
         _ => panic!("Invalid runtime type specified"),
     };
     loader
