@@ -181,9 +181,14 @@ func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof 
 		return nil, errors.New("verifier: empty proof")
 	}
 
-	_, rootNode, err := pv.verifyProof(ctx, proof, 0)
+	idx, rootNode, err := pv.verifyProof(ctx, proof, 0)
 	if err != nil {
 		return nil, err
+	}
+	// Make sure that all of the entries in the proof have been used. The returned index should
+	// point to just beyond the last element.
+	if idx != len(proof.Entries) {
+		return nil, fmt.Errorf("verifier: unused entries in proof")
 	}
 	rootNodeHash := rootNode.GetHash()
 	if rootNodeHash.IsEmpty() {

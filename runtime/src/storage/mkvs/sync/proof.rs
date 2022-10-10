@@ -82,7 +82,12 @@ impl ProofVerifier {
             return Err(anyhow!("verifier: empty proof"));
         }
 
-        let (_, root_node) = self._verify_proof(proof, 0)?;
+        let (idx, root_node) = self._verify_proof(proof, 0)?;
+        // Make sure that all of the entries in the proof have been used. The returned index should
+        // point to just beyond the last element.
+        if idx != proof.entries.len() {
+            return Err(anyhow!("verifier: unused entries in proof"));
+        }
         let root_hash = root_node.borrow().hash;
         if root_hash != root {
             return Err(anyhow!(
@@ -238,5 +243,32 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
             result.is_err(),
             "verify proof should fail with invalid proof"
         );
+    }
+
+    #[test]
+    fn test_proof_extra_nodes() {
+        let test_vector_proof = base64::decode(
+            "omdlbnRyaWVzhUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlWCECpsJnkjOnIgc4+\
+yfvpsqCcIYHh5eld1hNMWTT7arAfHFYIQLhNTLWRbks1RBf52ulnlOTO+7D5EZNMYFzTx8U46sCnm51bnRydXN0ZWRfcm9vdFggWeZ8L9wIuOEN0Iu2\
+uO/mFPzJZey4liX5fxf4fwcQRhM=",
+        ).unwrap();
+        let test_vector_root_hash =
+            "59e67c2fdc08b8e10dd08bb6b8efe614fcc965ecb89625f97f17f87f07104613";
+
+        // Proof should decode.
+        let mut proof: Proof =
+            cbor::from_slice(&test_vector_proof).expect("proof should deserialize");
+        let root_hash = Hash::from(test_vector_root_hash);
+
+        // Proof should verify.
+        let pv = ProofVerifier;
+        pv.verify_proof(Context::background(), root_hash, &proof)
+            .expect("verify proof should not fail with a valid proof");
+
+        // Duplicate some nodes and add them to the end.
+        proof.entries.push(proof.entries[0].clone());
+
+        pv.verify_proof(Context::background(), root_hash, &proof)
+            .expect_err("proof with extra data should fail to validate");
     }
 }
