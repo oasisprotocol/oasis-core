@@ -70,7 +70,7 @@ type Status struct {
 	Consensus consensus.Status `json:"consensus"`
 
 	// Runtimes is the status overview for each runtime supported by the node.
-	Runtimes map[common.Namespace]RuntimeStatus `json:"runtimes"`
+	Runtimes map[common.Namespace]RuntimeStatus `json:"runtimes,omitempty"`
 
 	// Registration is the node's registration status.
 	Registration RegistrationStatus `json:"registration"`
@@ -79,7 +79,7 @@ type Status struct {
 	Keymanager *keymanagerWorker.Status `json:"keymanager,omitempty"`
 
 	// PendingUpgrades are the node's pending upgrades.
-	PendingUpgrades []*upgrade.PendingUpgrade `json:"pending_upgrades"`
+	PendingUpgrades []*upgrade.PendingUpgrade `json:"pending_upgrades,omitempty"`
 }
 
 // DebugStatus is the current node debug status, listing the various node
