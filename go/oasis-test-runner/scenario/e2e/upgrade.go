@@ -80,13 +80,13 @@ func (n *noOpUpgradeChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Cont
 	return nil
 }
 
-type upgradeTeePcsChecker struct{}
+type upgradeV61Checker struct{}
 
-func (n *upgradeTeePcsChecker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (n *upgradeV61Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
 	return nil
 }
 
-func (n *upgradeTeePcsChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (n *upgradeV61Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
 	// Check updated registry parameters.
 	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -111,6 +111,15 @@ func (n *upgradeTeePcsChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Co
 		return fmt.Errorf("default gas cost for freshness proofs is not set")
 	}
 
+	// Check updated governance parameters.
+	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get governance consensus parameters: %w", err)
+	}
+	if !govParams.EnableChangeParametersProposal {
+		return fmt.Errorf("change parameters proposal is disabled")
+	}
+
 	return nil
 }
 
@@ -119,8 +128,8 @@ var (
 	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
 	// NodeUpgradeMaxAllowances is the node upgrade max allowances scenario.
 	NodeUpgradeMaxAllowances scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusMaxAllowances16Handler, &noOpUpgradeChecker{})
-	// NodeUpgradeTEEPCS is the node consensus TEE PCS enablement scenario.
-	NodeUpgradeTEEPCS scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusTEEPCSHandler, &upgradeTeePcsChecker{})
+	// NodeUpgradeV61 is the node consensus V61 migration scenario.
+	NodeUpgradeV61 scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusV61, &upgradeV61Checker{})
 	// NodeUpgradeEmpty is the empty node upgrade scenario.
 	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{})
 

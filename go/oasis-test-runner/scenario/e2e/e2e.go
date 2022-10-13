@@ -466,7 +466,7 @@ func RegisterScenarios() error {
 		// Node upgrade tests.
 		NodeUpgradeDummy,
 		NodeUpgradeMaxAllowances,
-		NodeUpgradeTEEPCS,
+		NodeUpgradeV61,
 		NodeUpgradeEmpty,
 		NodeUpgradeCancel,
 		// Debonding entries from genesis test.
