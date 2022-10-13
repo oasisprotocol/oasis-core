@@ -12,6 +12,462 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2 (2022-10-13)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Removals and Breaking Changes
+
+- go/staking/grpc: rename misnamed GovernanceDeposits method
+  ([#4652](https://github.com/oasisprotocol/oasis-core/issues/4652))
+
+- go/runtime: Mandate the use of runtime schedule control
+  ([#4665](https://github.com/oasisprotocol/oasis-core/issues/4665))
+
+  Runtimes that do not support the schedule control feature will no longer work
+  with executor nodes.
+
+### Features
+
+- Add support for PCS attestation
+  ([#4806](https://github.com/oasisprotocol/oasis-core/issues/4806),
+   [#4789](https://github.com/oasisprotocol/oasis-core/issues/4789),
+   [#4720](https://github.com/oasisprotocol/oasis-core/issues/4720),
+   [#4752](https://github.com/oasisprotocol/oasis-core/issues/4752))
+
+- go/governance: Add change parameters proposal
+  ([#4938](https://github.com/oasisprotocol/oasis-core/issues/4938))
+
+  Introducing a new governance proposal for changing consensus parameters.
+  Until now, this was possible only with an upgrade governance proposal
+  which was not very efficient.
+
+- Add archive mode support
+  ([#4539](https://github.com/oasisprotocol/oasis-core/issues/4539))
+
+  Node started in archive mode only serves existing consensus and runtime
+  states. The node has all unneeded consensus and P2P functionality disabled so
+  it wont participate in the network. Archive mode can be set using the
+  `consensus.tendermint.mode` setting.
+
+- go/control: Show the debug option statuses in the control output
+  ([#4634](https://github.com/oasisprotocol/oasis-core/issues/4634))
+
+- runtime: Make persistent transaction check state configurable
+  ([#4640](https://github.com/oasisprotocol/oasis-core/issues/4640))
+
+- go/runtime/txpool: Limit outstanding transactions per sender
+  ([#4665](https://github.com/oasisprotocol/oasis-core/issues/4665))
+
+- go/control/status: Add fields for quick overview of node status
+  ([#4669](https://github.com/oasisprotocol/oasis-core/issues/4669))
+
+- go/worker/storage: Make checkpoint sync peer selection smarter
+  ([#4671](https://github.com/oasisprotocol/oasis-core/issues/4671))
+
+- runtime: verify epoch in dispatcher using consensus verifier
+  ([#4677](https://github.com/oasisprotocol/oasis-core/issues/4677))
+
+- go/worker/compute: Ensure trust root is verified before registering
+  ([#4678](https://github.com/oasisprotocol/oasis-core/issues/4678))
+
+- go/worker/compute: Start batch resolution early for backup worker
+  ([#4679](https://github.com/oasisprotocol/oasis-core/issues/4679))
+
+- go/runtime/txpool: Add roothash incoming messages' data as transactions
+  ([#4681](https://github.com/oasisprotocol/oasis-core/issues/4681))
+
+  Roothash incoming messages can provide a piece of data for the runtime.
+  With this change, the data is now treated as a transaction.
+
+  Along with this change, we're splitting the txpool into multiple queues.
+  The transactions collected from roothash incoming messages go in a special
+  queue that does not undergo checking or broadcasting.
+
+  We also make another queue for a node's own transactions, so that a proposer
+  can prioritize its own transactions.
+
+- go/worker/registration: add node status metrics
+  ([#4686](https://github.com/oasisprotocol/oasis-core/issues/4686))
+
+- runtime: Enable dispatcher to verify state integrity for queries
+  ([#4694](https://github.com/oasisprotocol/oasis-core/issues/4694),
+   [#4830](https://github.com/oasisprotocol/oasis-core/issues/4830),
+   [#4904](https://github.com/oasisprotocol/oasis-core/issues/4904))
+
+- go/worker/common/p2p: Add support for persistent and blocked peers
+  ([#4713](https://github.com/oasisprotocol/oasis-core/issues/4713))
+
+- go/worker/common: Properly handle dynamic key manager configuration
+  ([#4715](https://github.com/oasisprotocol/oasis-core/issues/4715))
+
+  Since the runtime can go from having no key manager configured to having one,
+  the worker node should handle this correctly.
+
+- go/runtime/txpool: Add txpool metric for rejected runtime transactions
+  ([#4724](https://github.com/oasisprotocol/oasis-core/issues/4724))
+
+- runtime: Verify RAK in consensus state when serving requests
+  ([#4741](https://github.com/oasisprotocol/oasis-core/issues/4741))
+
+- runtime: Add support for reporting EnclaveRPC peer feedback
+  ([#4757](https://github.com/oasisprotocol/oasis-core/issues/4757))
+
+  This makes EnclaveRPC more robust as the higher-level layer in the
+  runtime can trigger peer replacement on high level errors.
+
+- archive-mode: disable runtime P2P if archive mode is used
+  ([#4775](https://github.com/oasisprotocol/oasis-core/issues/4775))
+
+- go/consensus/tendermint: Add `consensus.tendermint.halt_height`
+  ([#4793](https://github.com/oasisprotocol/oasis-core/issues/4793))
+
+  This is equivalent to the cosmos `halt-height` option, to be used to
+  bring a node down gracefully at a specific height.
+
+- net-runner: Add --fixture.default.runtime.version flag
+  ([#4813](https://github.com/oasisprotocol/oasis-core/issues/4813))
+
+- go/oasis-node: allow km to have private peers
+  ([#4821](https://github.com/oasisprotocol/oasis-core/issues/4821))
+
+- go/runtime/registry: allow client nodes to run sgx runtimes
+  ([#4832](https://github.com/oasisprotocol/oasis-core/issues/4832))
+
+  Client nodes can now run runtimes in SGX, which enables them to execute
+  signed queries if peered with a keymanager.
+
+- go/worker/keymanager: Add key manager worker metrics
+  ([#4877](https://github.com/oasisprotocol/oasis-core/issues/4877))
+
+  The following metrics were added:
+
+  - oasis_worker_keymanager_compute_runtime_count
+
+  - oasis_worker_keymanager_enclave_rpc_count
+
+  - oasis_worker_keymanager_policy_update_count
+
+- go/control/status: Add key manager worker status to node status
+  ([#4883](https://github.com/oasisprotocol/oasis-core/issues/4883))
+
+- keymanager: Add support for ephemeral keys
+  ([#4888](https://github.com/oasisprotocol/oasis-core/issues/4888))
+
+- oasis-net-runner: Set default max_allowances, increase test account balance
+  ([#4902](https://github.com/oasisprotocol/oasis-core/issues/4902))
+
+  The max_allowances staking setting in the default oasis-net-runner fixture has
+  been changed from 0 to 16 matching the testnet and mainnet setting. This
+  enables the allowance transactions locally which are required for doing
+  deposits to runtimes.
+
+  The initial balance of the default test account generated by the
+  oasis-net-runner was increased from 100 tokens to 1 million. This makes the
+  account directly suitable for deploying and running confidential smart
+  contracts (e.g. on the local Cipher instance) with more realistic transaction
+  fees.
+
+- runtime/consensus/verifier: Support trust root consensus layer upgrades
+  ([#4903](https://github.com/oasisprotocol/oasis-core/issues/4903))
+
+- runtime: Support consensus event queries
+  ([#4904](https://github.com/oasisprotocol/oasis-core/issues/4904))
+
+- keymanager: Validate latest trust root height in key manager requests
+  ([#4910](https://github.com/oasisprotocol/oasis-core/issues/4910))
+
+- registry: Add ProveFreshness consensus layer transaction
+  ([#4916](https://github.com/oasisprotocol/oasis-core/issues/4916))
+
+  Introducing new transaction that accepts a fixed-size binary blob of 32 bytes
+  and always succeeds without doing any processing or state changes. Transaction
+  is needed for client node TEE freshness verification and enabled via
+  freshness_proofs parameter located in tee_features consensus parameter group.
+
+- runtime: Add client node TEE freshness verification
+  ([#4922](https://github.com/oasisprotocol/oasis-core/issues/4922))
+
+- keymanager: Verify that policy was published in the consensus layer
+  ([#4925](https://github.com/oasisprotocol/oasis-core/issues/4925))
+
+- Bind TEE attestations to nodes and enforce freshness
+  ([#4926](https://github.com/oasisprotocol/oasis-core/issues/4926))
+
+- go/genesis: Cache computed genesis document hash
+  ([#4919](https://github.com/oasisprotocol/oasis-core/issues/4919))
+
+- go/oasis-node/cmd: unsafe-reset preserve local storage by default
+  ([#4700](https://github.com/oasisprotocol/oasis-core/issues/4700))
+
+- go/oasis-node/cmd: unsafe-reset check datadir validity
+  ([#4702](https://github.com/oasisprotocol/oasis-core/issues/4702))
+
+- runtime: Emit runtime logs as oasis-node logs
+  ([#4709](https://github.com/oasisprotocol/oasis-core/issues/4709),
+   [#4924](https://github.com/oasisprotocol/oasis-core/issues/4924))
+
+  Previously, runtime logs used a slightly different format.
+  Also, they were written to stdout in a manner that was not
+  synchronized with node logs, so the two sets of logs
+  sometimes intertwined mid-line. Those annoyances are gone,
+  plus runtime logs are now annotated with the runtime ID.
+
+### Bug Fixes
+
+- go/worker/compute: Always include resolved transactions
+  ([#4633](https://github.com/oasisprotocol/oasis-core/issues/4633))
+
+- go/runtime/txpool: Fix crash on early access
+  ([#4638](https://github.com/oasisprotocol/oasis-core/issues/4638))
+
+- go/worker/compute: Improve proposed transaction handling
+  ([#4640](https://github.com/oasisprotocol/oasis-core/issues/4640))
+
+- go/runtime/host: Always emit StoppedEvent on stop
+  ([#4647](https://github.com/oasisprotocol/oasis-core/issues/4647))
+
+  Previously the StoppedEvent was only emitted in case the runtime was
+  previously running. In case multihost was performing a version switch when a
+  runtime was not yet started, this resulted in a deadlock.
+
+- go/worker/common/p2p: Make sure P2P stops before service cleanup runs
+  ([#4650](https://github.com/oasisprotocol/oasis-core/issues/4650))
+
+  Otherwise this may result in a crash during shutdown when P2P requests are
+  processed while database is already closed.
+
+- go/oasis-node/cmd/control: Fix runtime-stats arg
+  ([#4659](https://github.com/oasisprotocol/oasis-core/issues/4659))
+
+- Fix waiting for deregister event on `RequestShutdown`
+  ([#4662](https://github.com/oasisprotocol/oasis-core/issues/4662))
+
+- go/worker/compute: Only advertise active version for TEE runtimes
+  ([#4683](https://github.com/oasisprotocol/oasis-core/issues/4683))
+
+  Previously this caused additional downtime on upgrades due to capability
+  updates not being allowed.
+
+- go/runtime/host/sandbox: Properly handle clone3 in seccomp policy
+  ([#4687](https://github.com/oasisprotocol/oasis-core/issues/4687),
+   [#4861](https://github.com/oasisprotocol/oasis-core/issues/4861),
+   [#4867](https://github.com/oasisprotocol/oasis-core/issues/4867))
+
+  We need to handle the clone3 syscall in a special manner as there are
+  several complications to its handling:
+
+  - Newer glibc versions will try clone3 first and if they see EPERM they
+    will instantly fail making the program unable to spawn threads.
+
+  - The clone3 syscall is much more complex than clone and so we can't
+    simply inspect its flags as we do for clone.
+
+  Therefore we need to reject the syscall with ENOSYS, causing fallback to
+  clone.
+
+- go/runtime/config: report error if SGX loader required but not configured
+  ([#4710](https://github.com/oasisprotocol/oasis-core/issues/4710))
+
+- go/worker/keymanager: Fix crash on capability TEE updates
+  ([#4725](https://github.com/oasisprotocol/oasis-core/issues/4725))
+
+- go/worker/registration: Only register once epoch is known
+  ([#4726](https://github.com/oasisprotocol/oasis-core/issues/4726))
+
+- go/runtime/registry: Refresh key manager policy on runtime changes
+  ([#4729](https://github.com/oasisprotocol/oasis-core/issues/4729))
+
+  Since the runtime can change dynamically (due to version upgrades), we
+  need to make sure that we notify the new runtime as well.
+
+- go/runtime/config: fix SGX provisioner check for runtimes without SGX
+  ([#4734](https://github.com/oasisprotocol/oasis-core/issues/4734))
+
+  This fixes a bug in `22.1.5` where an SGX provisioner was required even for
+  non-SGX runtimes.
+
+- runtime/common/version: fix from u64 conversion
+  ([#4741](https://github.com/oasisprotocol/oasis-core/issues/4741))
+
+- go/common/quantity: Avoid side-effects on errors
+  ([#4790](https://github.com/oasisprotocol/oasis-core/issues/4790))
+
+- net-runner: Fix regression introduced in #4564
+  ([#4808](https://github.com/oasisprotocol/oasis-core/issues/4808))
+
+  Fix the missing Deployments field when oasis-net-runner generating the genesis
+  state and no key manager is provided.
+
+- go/registry/api/runtime: ensure no nil deployments in ValidateDeployments
+  ([#4822](https://github.com/oasisprotocol/oasis-core/issues/4822))
+
+- go/registry/api: ensure no nil runtimes in VerifyRegisterNodeArgs
+  ([#4822](https://github.com/oasisprotocol/oasis-core/issues/4822))
+
+- go/consensus/tendermint: Make sure DBs are only closed during cleanup
+  ([#4823](https://github.com/oasisprotocol/oasis-core/issues/4823))
+
+- go/oasis-node/cmd/genesis: Fix reading of height argument when dumping state
+  ([#4892](https://github.com/oasisprotocol/oasis-core/issues/4892))
+
+  Command line argument for block height was mistakenly read from an invalid
+  source, which caused all state dumps to be made at height 0 (the most recent
+  block height).
+
+- go/runtime/txpool: Add block propagation delay before tx publish
+  ([#4959](https://github.com/oasisprotocol/oasis-core/issues/4959))
+
+- go/runtime: Fix configuring the SGX-based provisioner
+  ([#4960](https://github.com/oasisprotocol/oasis-core/issues/4960))
+
+  Previously there was an edge case when the SGX loader was configured and
+  remapping to non-SGX was forced (e.g. on client nodes). This would result in
+  an invalid SGX configuration that resulted in a strange error message about a
+  missing SIGSTRUCT.
+
+  This has now been changed so that remapping happens independent of whether an
+  SGX loader is configured or not.
+
+- go/worker/compute: Only process keymanager client initialization once
+  ([#4962](https://github.com/oasisprotocol/oasis-core/issues/4962))
+
+### Documentation Improvements
+
+- Document `gcc-multilib` dependency for Ubuntu/Debian systems
+  ([#4475](https://github.com/oasisprotocol/oasis-core/issues/4475))
+
+  It is needed for building `oasis-core-runtime`.
+
+- doc: Replace community slack links with discord
+  ([#4751](https://github.com/oasisprotocol/oasis-core/issues/4751))
+
+- doc: Migrate ADRs to oasisprotocol/adrs repo
+  ([#4770](https://github.com/oasisprotocol/oasis-core/issues/4770))
+
+### Internal Changes
+
+- oasis-net-runner: support configuring runtime state and state root
+  ([#4843](https://github.com/oasisprotocol/oasis-core/issues/4843))
+
+- go/worker/common/p2p/rpc: Add support for per-call peer limits
+  ([#4671](https://github.com/oasisprotocol/oasis-core/issues/4671))
+
+- docker: Add oasisprotocol/aesmd Docker image
+  ([#4690](https://github.com/oasisprotocol/oasis-core/issues/4690))
+
+- runtime: Bump tendermint-rs, x509-parser and oid-registry
+  ([#4706](https://github.com/oasisprotocol/oasis-core/issues/4706))
+
+- ci: Build OpenSSL statically for Oasis Core releases
+  ([#4707](https://github.com/oasisprotocol/oasis-core/issues/4707))
+
+  This makes sure that oasis-core-loader is more portable between
+  distributions.
+
+- go/common/sgx/aesm: Add support for newer methods
+  ([#4711](https://github.com/oasisprotocol/oasis-core/issues/4711))
+
+- rust-toolchain: Migrate to TOML version of rust-toolchain
+  ([#4727](https://github.com/oasisprotocol/oasis-core/issues/4727))
+
+- go/common/node/address: use custom type instead of `net.TCPAddr`
+  ([#4744](https://github.com/oasisprotocol/oasis-core/issues/4744))
+
+- go: Bump go-libp2p to 0.23.2
+  ([#4765](https://github.com/oasisprotocol/oasis-core/issues/4765),
+   [#4782](https://github.com/oasisprotocol/oasis-core/issues/4782),
+   [#4906](https://github.com/oasisprotocol/oasis-core/issues/4906),
+   [#4944](https://github.com/oasisprotocol/oasis-core/issues/4944))
+
+- go: Bump viper to 1.12.0
+  ([#4766](https://github.com/oasisprotocol/oasis-core/issues/4766))
+
+- go/oasis-test-runner/fixture: support configuring runtime messages
+  ([#4769](https://github.com/oasisprotocol/oasis-core/issues/4769))
+
+- runtime: Bump oasis-cbor to 0.5.0
+  ([#4784](https://github.com/oasisprotocol/oasis-core/issues/4784),
+   [#4835](https://github.com/oasisprotocol/oasis-core/issues/4835))
+
+- go/oasis-test-runner/byzantine: Add primary+backup liveness test
+  ([#4799](https://github.com/oasisprotocol/oasis-core/issues/4799))
+
+- Bump Go to 1.18.3
+  ([#4820](https://github.com/oasisprotocol/oasis-core/issues/4820))
+
+- go/runtime/host: Make sure runtime-reported version matches bundle
+  ([#4825](https://github.com/oasisprotocol/oasis-core/issues/4825))
+
+- go: remove synced storage wrapper
+  ([#4837](https://github.com/oasisprotocol/oasis-core/issues/4837))
+
+- go/common/sgx/sigstruct: Add support for offline signing
+  ([#4844](https://github.com/oasisprotocol/oasis-core/issues/4844))
+
+- go: Drop go-fuzz in favor of Go 1.18 fuzzing support
+  ([#4875](https://github.com/oasisprotocol/oasis-core/issues/4875))
+
+- keymanager-client: Skip policy when OASIS_UNSAFE_SKIP_KM_POLICY is set
+  ([#4878](https://github.com/oasisprotocol/oasis-core/issues/4878))
+
+- go/common/grpc: advancedtls options moved to IdentityOptions
+  ([#4886](https://github.com/oasisprotocol/oasis-core/issues/4886))
+
+- runtime: Refactor dispatcher initializer and expose consensus_verifier
+  ([#4893](https://github.com/oasisprotocol/oasis-core/issues/4893))
+
+- runtime: Add state_at to consensus Verifier trait
+  ([#4893](https://github.com/oasisprotocol/oasis-core/issues/4893))
+
+  This allows fetching historic consensus layer state in addition to the
+  latest state.
+
+- Bump Rust toolchain to 2022-08-22
+  ([#4896](https://github.com/oasisprotocol/oasis-core/issues/4896))
+
+- runtime: Add epoch_state query and EPOCH_INVALID constant
+  ([#4897](https://github.com/oasisprotocol/oasis-core/issues/4897))
+
+- go: Bump Tendermint to v0.34.21
+  ([#4899](https://github.com/oasisprotocol/oasis-core/issues/4899))
+
+- go: Add consensus transaction prioritization
+  ([#4911](https://github.com/oasisprotocol/oasis-core/issues/4911))
+
+- go/worker/keymanager: Use common runtime host handler
+  ([#4926](https://github.com/oasisprotocol/oasis-core/issues/4926))
+
+- Bump tokio to 1.20.x
+  ([#4928](https://github.com/oasisprotocol/oasis-core/issues/4928))
+
+- keymanager: Refactor and reorganize runtime-related crates
+  ([#4930](https://github.com/oasisprotocol/oasis-core/issues/4930))
+
+- runtime/consensus/tendermint/verifier: Refactor verifier
+  ([#4934](https://github.com/oasisprotocol/oasis-core/issues/4934))
+
+- runtime: Add current sender sequence number to CheckTxMeta
+  ([#4956](https://github.com/oasisprotocol/oasis-core/issues/4956))
+
+- runtime-loader: Remove unused ELF loader
+  ([#4969](https://github.com/oasisprotocol/oasis-core/issues/4969))
+
+- mkvs/proof: Make sure that all entries in the proof have been used
+  ([#4973](https://github.com/oasisprotocol/oasis-core/issues/4973))
+
+  Note that this does not impact verification correctness as only visited
+  nodes are part of the proof computation and the verified tree returned
+  by the verifier.
+
+  But in case future code may want to do something with raw entries of a
+  verified proof this removes a possible footgun where unverified entries
+  could be considered.
+
 ## 22.1 (2022-04-01)
 
 | Protocol          | Version   |
