@@ -71,7 +71,7 @@ pub const PROTOCOL_VERSION: Version = Version {
 // Version of the consensus protocol runtime code works with. This version MUST
 // be compatible with the one supported by the worker host.
 pub const CONSENSUS_VERSION: Version = Version {
-    major: 6,
+    major: 7,
     minor: 0,
     patch: 0,
 };
