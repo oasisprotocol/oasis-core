@@ -7,6 +7,8 @@ import (
 	"net"
 	"strings"
 
+	"github.com/multiformats/go-multiaddr"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
@@ -104,6 +106,20 @@ func (a Address) String() string {
 		return net.JoinHostPort(ip+"%"+a.Zone, fmt.Sprintf("%d", a.Port))
 	}
 	return net.JoinHostPort(ip, fmt.Sprintf("%d", a.Port))
+}
+
+// MultiAddressStr returns a multi address string representation of the address.
+func (a Address) MultiAddressStr() string {
+	version := 4
+	if p4 := a.IP.To4(); len(p4) != net.IPv4len {
+		version = 6
+	}
+	return fmt.Sprintf("/ip%d/%s/tcp/%d", version, a.IP, a.Port)
+}
+
+// MultiAddress returns a multi address representation of the address.
+func (a Address) MultiAddress() (multiaddr.Multiaddr, error) {
+	return multiaddr.NewMultiaddr(a.MultiAddressStr())
 }
 
 // ConsensusAddress represents a Tendermint consensus address that includes an

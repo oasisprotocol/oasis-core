@@ -3,6 +3,7 @@ package oasis
 import (
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,8 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
-	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
+	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
@@ -28,6 +28,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
@@ -191,6 +192,14 @@ func (args *argBuilder) consensusValidator() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) seedMode() *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name:   node.CfgMode,
+		Values: []string{node.ModeSeed},
+	})
+	return args
+}
+
 func (args *argBuilder) tendermintMinGasPrice(price uint64) *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   tendermintFull.CfgMinGasPrice,
@@ -252,14 +261,6 @@ func (args *argBuilder) tendermintSentryUpstreamAddress(addrs []string) *argBuil
 func (args *argBuilder) tendermintDisablePeerExchange() *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name: tendermintFull.CfgP2PDisablePeerExchange,
-	})
-	return args
-}
-
-func (args *argBuilder) tendermintSeedMode() *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:   tendermint.CfgMode,
-		Values: []string{consensusAPI.ModeSeed.String()},
 	})
 	return args
 }
@@ -550,7 +551,14 @@ func (args *argBuilder) addSentries(sentries []*Sentry) *argBuilder {
 func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) *argBuilder {
 	var addrs, sentryPubKeys []string
 	for _, val := range validators {
-		addrs = append(addrs, fmt.Sprintf("%s@127.0.0.1:%d", val.tmAddress, val.consensusPort))
+		addr := commonNode.ConsensusAddress{
+			ID: val.p2pSigner,
+			Address: commonNode.Address{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: int64(val.consensusPort),
+			},
+		}
+		addrs = append(addrs, addr.String())
 		key, _ := val.sentryPubKey.MarshalText()
 		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
@@ -560,9 +568,16 @@ func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) 
 func (args *argBuilder) addSentryComputeWorkers(computeWorkers []*Compute) *argBuilder {
 	var addrs, ids, tmAddrs, sentryPubKeys []string
 	for _, computeWorker := range computeWorkers {
+		addr := commonNode.ConsensusAddress{
+			ID: computeWorker.p2pSigner,
+			Address: commonNode.Address{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: int64(computeWorker.consensusPort),
+			},
+		}
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", computeWorker.clientPort))
 		ids = append(ids, computeWorker.NodeID.String())
-		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", computeWorker.tmAddress, computeWorker.consensusPort))
+		tmAddrs = append(tmAddrs, addr.String())
 		key, _ := computeWorker.sentryPubKey.MarshalText()
 		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
@@ -575,9 +590,16 @@ func (args *argBuilder) addSentryComputeWorkers(computeWorkers []*Compute) *argB
 func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanager) *argBuilder {
 	var addrs, ids, tmAddrs, sentryPubKeys []string
 	for _, keymanager := range keymanagerWorkers {
+		addr := commonNode.ConsensusAddress{
+			ID: keymanager.p2pSigner,
+			Address: commonNode.Address{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: int64(keymanager.consensusPort),
+			},
+		}
 		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", keymanager.workerClientPort))
 		ids = append(ids, keymanager.NodeID.String())
-		tmAddrs = append(tmAddrs, fmt.Sprintf("%s@127.0.0.1:%d", keymanager.tmAddress, keymanager.consensusPort))
+		tmAddrs = append(tmAddrs, addr.String())
 		key, _ := keymanager.sentryPubKey.MarshalText()
 		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
@@ -589,9 +611,16 @@ func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanag
 
 func (args *argBuilder) appendSeedNodes(seeds []*Seed) *argBuilder {
 	for _, seed := range seeds {
+		addr := commonNode.ConsensusAddress{
+			ID: seed.p2pSigner,
+			Address: commonNode.Address{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: int64(seed.consensusPort),
+			},
+		}
 		args.vec = append(args.vec, Argument{
-			Name:        tendermintCommon.CfgP2PSeed,
-			Values:      []string{fmt.Sprintf("%s@127.0.0.1:%d", seed.tmAddress, seed.consensusPort)},
+			Name:        flags.CfgP2PSeeds,
+			Values:      []string{addr.String()},
 			MultiValued: true,
 		})
 	}

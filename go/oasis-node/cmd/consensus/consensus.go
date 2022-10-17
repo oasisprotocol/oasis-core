@@ -50,7 +50,7 @@ var (
 
 	estimateGasCmd = &cobra.Command{
 		Use:   "estimate_gas",
-		Short: "Estimate how much gas a transactionw will use",
+		Short: "Estimate how much gas a transaction will use",
 		Run:   doEstimateGas,
 	}
 

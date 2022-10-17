@@ -11,7 +11,6 @@ import (
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/seed"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -38,8 +37,8 @@ func New(
 	upgrader upgradeAPI.Backend,
 	genesisProvider genesisAPI.Provider,
 ) (consensusAPI.Backend, error) {
-	var mode consensusAPI.Mode
-	if err := mode.UnmarshalText([]byte(viper.GetString(CfgMode))); err != nil {
+	mode, err := Mode()
+	if err != nil {
 		return nil, err
 	}
 
@@ -47,9 +46,6 @@ func New(
 	case consensusAPI.ModeFull:
 		// Full node.
 		return full.New(ctx, dataDir, identity, upgrader, genesisProvider)
-	case consensusAPI.ModeSeed:
-		// Seed-only node.
-		return seed.New(dataDir, identity, genesisProvider)
 	case consensusAPI.ModeArchive:
 		// Archive node.
 		return full.NewArchive(ctx, dataDir, identity, genesisProvider)
@@ -59,7 +55,7 @@ func New(
 }
 
 func init() {
-	Flags.String(CfgMode, consensusAPI.ModeFull.String(), "tendermint mode (full, seed, archive)")
+	Flags.String(CfgMode, consensusAPI.ModeFull.String(), "tendermint mode (full, archive)")
 
 	_ = viper.BindPFlags(Flags)
 	Flags.AddFlagSet(common.Flags)

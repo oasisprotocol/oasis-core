@@ -43,8 +43,6 @@ type Mode string
 const (
 	// ModeFull is the name of the full node consensus mode.
 	ModeFull Mode = "full"
-	// ModeSeed is the name of the seed-only node consensus mode.
-	ModeSeed Mode = "seed"
 	// ModeArchive is the name of the archive node consensus mode.
 	ModeArchive Mode = "archive"
 )
@@ -54,8 +52,6 @@ func (m Mode) MarshalText() ([]byte, error) {
 	switch m {
 	case ModeFull:
 		return []byte(ModeFull.String()), nil
-	case ModeSeed:
-		return []byte(ModeSeed.String()), nil
 	case ModeArchive:
 		return []byte(ModeArchive.String()), nil
 	default:
@@ -68,8 +64,6 @@ func (m *Mode) UnmarshalText(text []byte) error {
 	switch string(text) {
 	case ModeFull.String():
 		*m = ModeFull
-	case ModeSeed.String():
-		*m = ModeSeed
 	case ModeArchive.String():
 		*m = ModeArchive
 	default:
@@ -83,8 +77,6 @@ func (m Mode) String() string {
 	switch m {
 	case ModeFull:
 		return string(ModeFull)
-	case ModeSeed:
-		return string(ModeSeed)
 	case ModeArchive:
 		return string(ModeArchive)
 	default:

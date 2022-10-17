@@ -11,10 +11,8 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
@@ -43,7 +41,6 @@ type Compute struct { // nolint: maligned
 	checkpointCheckInterval time.Duration
 
 	sentryPubKey  signature.PublicKey
-	tmAddress     string
 	consensusPort uint16
 	clientPort    uint16
 	p2pPort       uint16
@@ -147,7 +144,7 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 		tendermintRecoverCorruptedWAL(worker.consensus.TendermintRecoverCorruptedWAL).
 		workerClientPort(worker.clientPort).
 		workerP2pPort(worker.p2pPort).
-		runtimeMode(runtimeRegistry.RuntimeModeCompute).
+		runtimeMode(registry.RuntimeModeCompute).
 		runtimeProvisioner(worker.runtimeProvisioner).
 		runtimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
 		storageBackend(worker.storageBackend).
@@ -207,10 +204,10 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 
 	// Setup defaults.
 	if cfg.RuntimeProvisioner == "" {
-		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
+		cfg.RuntimeProvisioner = registry.RuntimeProvisionerSandboxed
 	}
 	if isNoSandbox() {
-		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerUnconfined
+		cfg.RuntimeProvisioner = registry.RuntimeProvisionerUnconfined
 	}
 	if cfg.StorageBackend == "" {
 		cfg.StorageBackend = database.BackendNameBadgerDB
@@ -234,7 +231,6 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		checkpointSyncDisabled:  cfg.CheckpointSyncDisabled,
 		checkpointCheckInterval: cfg.CheckpointCheckInterval,
 		sentryPubKey:            sentryPubKey,
-		tmAddress:               crypto.PublicKeyToTendermint(&host.p2pSigner).Address().String(),
 		runtimeProvisioner:      cfg.RuntimeProvisioner,
 		consensusPort:           host.getProvisionedPort(nodePortConsensus),
 		clientPort:              host.getProvisionedPort(nodePortClient),
