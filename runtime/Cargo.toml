@@ -31,7 +31,7 @@ chrono = "0.4.19"
 base64 = "0.13.0"
 rustc-hex = "2.0.1"
 rand = "0.7.3"
-futures = "0.3.17"
+futures = "0.3.25"
 tokio = { version = "~1.21.1", features = ["rt", "sync"] }
 tendermint = "0.25.0"
 tendermint-proto = "0.25.0"

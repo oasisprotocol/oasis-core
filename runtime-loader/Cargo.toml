@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 clap = "4.0.10"
 anyhow = "1.0"
-futures = { version = "0.3.17", features = ["compat", "io-compat"] }
+futures = { version = "0.3.25", features = ["compat", "io-compat"] }
 # NOTE: The version of tokio is constrained by what the upstream enclave-runner is using.
 tokio = { version = "0.2", features = ["full"] }
 
