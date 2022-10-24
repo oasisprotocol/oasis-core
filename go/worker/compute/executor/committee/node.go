@@ -17,6 +17,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
+	"github.com/oasisprotocol/oasis-core/go/p2p/txsync"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -27,9 +30,6 @@ import (
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
-	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 

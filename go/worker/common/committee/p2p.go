@@ -7,9 +7,9 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
-	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
 )
 
 type txMsgHandler struct {

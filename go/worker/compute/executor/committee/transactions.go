@@ -9,9 +9,9 @@ import (
 
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/p2p/txsync"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
 
 // Guarded by n.commonNode.CrossNode.

@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	errCryptoNotSupported = errors.New("worker/common/p2p: crypto op not supported")
+	errCryptoNotSupported = errors.New("p2p: crypto op not supported")
 
 	libp2pContext = signature.NewContext("oasis-core/worker: libp2p")
 )

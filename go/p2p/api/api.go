@@ -13,7 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 // TopicKind is the gossipsub topic kind.

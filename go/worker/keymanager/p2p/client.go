@@ -11,9 +11,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 )
 
 // Client is a keymanager protocol client.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 // KeyManager is the keymanager service interface.

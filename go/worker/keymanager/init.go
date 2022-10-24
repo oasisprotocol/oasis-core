@@ -16,9 +16,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	p2pAPI "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )

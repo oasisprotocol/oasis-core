@@ -13,10 +13,10 @@ import (
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/sentry/policywatcher"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
-	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
 )
 
 // Worker is a garbage bag with lower level services and common runtime objects.

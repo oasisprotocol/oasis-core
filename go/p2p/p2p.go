@@ -27,10 +27,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 )
 
 const (
@@ -247,18 +247,18 @@ func (p *p2p) RegisterHandler(runtimeID common.Namespace, kind api.TopicKind, ha
 	}
 
 	if topics[kind] != nil {
-		panic(fmt.Sprintf("worker/common/p2p: handler for topic kind '%s' already registered", kind))
+		panic(fmt.Sprintf("p2p: handler for topic kind '%s' already registered", kind))
 	}
 
 	topicID, h, err := newTopicHandler(p, runtimeID, kind, handler)
 	if err != nil {
-		panic(fmt.Sprintf("worker/common/p2p: failed to initialize topic handler: %s", err))
+		panic(fmt.Sprintf("p2p: failed to initialize topic handler: %s", err))
 	}
 	topics[kind] = h
 	_ = p.pubsub.RegisterTopicValidator(
 		topicID,
 		h.topicMessageValidator,
-		pubsub.WithValidatorConcurrency(viper.GetInt(CfgP2PValidateConcurrency)),
+		pubsub.WithValidatorConcurrency(viper.GetInt(CfgGossipsubValidateConcurrency)),
 	)
 
 	p.logger.Debug("registered new topic handler",
@@ -316,11 +316,11 @@ func messageIdFn(pmsg *pb.Message) string { // nolint: revive
 // New creates a new P2P node.
 func New(identity *identity.Identity, consensus consensus.Backend) (api.Service, error) {
 	// Instantiate the libp2p host.
-	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(cfgP2pAddresses))
+	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgRegistrationAddresses))
 	if err != nil {
 		return nil, err
 	}
-	port := uint16(viper.GetInt(CfgP2pPort))
+	port := uint16(viper.GetInt(CfgHostPort))
 
 	var registerAddresses []multiaddr.Multiaddr
 	for _, addr := range addresses {
@@ -337,56 +337,56 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 	)
 
 	// Set up a connection manager so we can limit the number of connections.
-	low := int(viper.GetUint32(CfgP2PMaxNumPeers))
+	low := int(viper.GetUint32(CfgConnMgrMaxNumPeers))
 	cm, err := connmgr.NewConnManager(
 		low,
 		low+peersHighWatermarkDelta,
-		connmgr.WithGracePeriod(viper.GetDuration(CfgP2PPeerGracePeriod)),
+		connmgr.WithGracePeriod(viper.GetDuration(CfgConnMgrPeerGracePeriod)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("worker/common/p2p: failed to create connection manager: %w", err)
+		return nil, fmt.Errorf("p2p: failed to create connection manager: %w", err)
 	}
 
 	// Set up a connection gater.
 	cg, err := conngater.NewBasicConnectionGater(nil)
 	if err != nil {
-		return nil, fmt.Errorf("worker/common/p2p: failed to create connection gater: %w", err)
+		return nil, fmt.Errorf("p2p: failed to create connection gater: %w", err)
 	}
 
 	// Block peers specified in the blacklist.
-	blacklist := viper.GetStringSlice(CfgP2PBlockedPeerIPs)
+	blacklist := viper.GetStringSlice(CfgConnGaterBlockedPeerIPs)
 	for _, blockedIP := range blacklist {
 		parsedIP := net.ParseIP(blockedIP)
 		if parsedIP == nil {
-			return nil, fmt.Errorf("worker/common/p2p: malformed blocked IP: %s", blockedIP)
+			return nil, fmt.Errorf("p2p: malformed blocked IP: %s", blockedIP)
 		}
 
 		if grr := cg.BlockAddr(parsedIP); grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: failed to block IP (%s): %w", blockedIP, err)
+			return nil, fmt.Errorf("p2p: failed to block IP (%s): %w", blockedIP, err)
 		}
 	}
 
 	// Maintain persistent peers.
 	persistentPeers := make(map[core.PeerID]bool)
 	persistentPeersAI := []peer.AddrInfo{}
-	for _, pp := range viper.GetStringSlice(CfgP2PPersistentPeers) {
+	for _, pp := range viper.GetStringSlice(CfgConnMgrPersistentPeers) {
 		// The persistent peer addresses are in the format pubkey@IP:port,
 		// because we use a similar format elsewhere and it's easier for users
 		// to understand than a multiaddr.
 
 		var addr node.ConsensusAddress
 		if grr := addr.UnmarshalText([]byte(pp)); grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: malformed persistent peer address (expected pubkey@IP:port): %w", grr)
+			return nil, fmt.Errorf("p2p: malformed persistent peer address (expected pubkey@IP:port): %w", grr)
 		}
 
 		pid, grr := api.PublicKeyToPeerID(addr.ID)
 		if grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: invalid persistent peer public key (%s): %w", addr.ID, grr)
+			return nil, fmt.Errorf("p2p: invalid persistent peer public key (%s): %w", addr.ID, grr)
 		}
 
 		ma, grr := addr.Address.MultiAddress()
 		if grr != nil {
-			return nil, fmt.Errorf("worker/common/p2p: failed to convert persistent peer address to multi address (%s): %w", addr, grr)
+			return nil, fmt.Errorf("p2p: failed to convert persistent peer address to multi address (%s): %w", addr, grr)
 		}
 
 		if _, exists := persistentPeers[pid]; exists {
@@ -418,7 +418,7 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 		libp2p.ConnectionGater(cg),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p host: %w", err)
+		return nil, fmt.Errorf("p2p: failed to initialize libp2p host: %w", err)
 	}
 
 	// Initialize the gossipsub router.
@@ -430,9 +430,9 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 		pubsub.WithStrictSignatureVerification(true),
 		pubsub.WithFloodPublish(true),
 		pubsub.WithPeerExchange(true),
-		pubsub.WithPeerOutboundQueueSize(viper.GetInt(CfgP2PPeerOutboundQueueSize)),
-		pubsub.WithValidateQueueSize(viper.GetInt(CfgP2PValidateQueueSize)),
-		pubsub.WithValidateThrottle(viper.GetInt(CfgP2PValidateThrottle)),
+		pubsub.WithPeerOutboundQueueSize(viper.GetInt(CfgGossipsubPeerOutboundQueueSize)),
+		pubsub.WithValidateQueueSize(viper.GetInt(CfgGossipsubValidateQueueSize)),
+		pubsub.WithValidateThrottle(viper.GetInt(CfgGossipsubValidateThrottle)),
 		pubsub.WithMessageIdFn(messageIdFn),
 		pubsub.WithDirectPeers(persistentPeersAI),
 		pubsub.WithSeenMessagesTTL(seenMessagesTTL),
@@ -440,14 +440,14 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 	if err != nil {
 		ctxCancel()
 		_ = host.Close()
-		return nil, fmt.Errorf("worker/common/p2p: failed to initialize libp2p gossipsub: %w", err)
+		return nil, fmt.Errorf("p2p: failed to initialize libp2p gossipsub: %w", err)
 	}
 
 	chainContext, err := consensus.GetChainContext(ctx)
 	if err != nil {
 		ctxCancel()
 		_ = host.Close()
-		return nil, fmt.Errorf("worker/common/p2p: failed to get consensus chain context: %w", err)
+		return nil, fmt.Errorf("p2p: failed to get consensus chain context: %w", err)
 	}
 
 	p := &p2p{
@@ -459,7 +459,7 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 		pubsub:            pubsub,
 		registerAddresses: registerAddresses,
 		topics:            make(map[common.Namespace]map[api.TopicKind]*topicHandler),
-		logger:            logging.GetLogger("worker/common/p2p"),
+		logger:            logging.GetLogger("p2p"),
 	}
 
 	p.logger.Info("p2p host initialized",

@@ -29,9 +29,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -363,7 +363,7 @@ func (args *argBuilder) workerSentryGrpcClientPort(port uint16) *argBuilder {
 
 func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, Argument{
-		Name:   p2p.CfgP2pPort,
+		Name:   p2p.CfgHostPort,
 		Values: []string{strconv.Itoa(int(port))},
 	})
 	return args
@@ -619,7 +619,7 @@ func (args *argBuilder) appendSeedNodes(seeds []*Seed) *argBuilder {
 			},
 		}
 		args.vec = append(args.vec, Argument{
-			Name:        flags.CfgP2PSeeds,
+			Name:        p2p.CfgSeeds,
 			Values:      []string{addr.String()},
 			MultiValued: true,
 		})
