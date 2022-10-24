@@ -455,6 +455,12 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	status.Status = consensusAPI.StatusStateSyncing
 	status.Mode = consensusAPI.ModeFull
 
+	status.P2P = &consensusAPI.P2PStatus{}
+	status.P2P.PubKey = t.identity.P2PSigner.Public()
+	if status.P2P.Addresses, err = t.GetAddresses(); err != nil {
+		return nil, err
+	}
+
 	if t.started() {
 		// Check if node is synced.
 		select {
@@ -472,7 +478,9 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 			p := string(tmpeer.ID()) + "@" + tmpeer.RemoteAddr().String()
 			peers = append(peers, p)
 		}
-		status.NodePeers = peers
+
+		status.P2P.Peers = peers
+		status.P2P.PeerID = string(t.node.NodeInfo().ID())
 	}
 
 	return status, nil

@@ -46,6 +46,11 @@ func (p *nopP2P) Quit() <-chan struct{} {
 }
 
 // Implements api.Service.
+func (p *nopP2P) GetStatus() *api.Status {
+	return nil
+}
+
+// Implements api.Service.
 func (p *nopP2P) Addresses() []node.Address {
 	return nil
 }

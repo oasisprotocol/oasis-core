@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	block "github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -86,6 +87,9 @@ type Status struct {
 	// PendingUpgrades are the node's pending upgrades.
 	PendingUpgrades []*upgrade.PendingUpgrade `json:"pending_upgrades,omitempty"`
 
+	// P2P is the P2P status of the node.
+	P2P *p2p.Status `json:"p2p,omitempty"`
+
 	// Seed is the seed node status if the node is a seed node.
 	Seed *SeedStatus `json:"seed,omitempty"`
 }
@@ -107,9 +111,6 @@ type DebugStatus struct {
 type IdentityStatus struct {
 	// Node is the node identity public key.
 	Node signature.PublicKey `json:"node"`
-
-	// P2P is the public key used for p2p communication.
-	P2P signature.PublicKey `json:"p2p"`
 
 	// Consensus is the consensus public key.
 	Consensus signature.PublicKey `json:"consensus"`

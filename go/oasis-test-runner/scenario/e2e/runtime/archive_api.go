@@ -92,8 +92,8 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	if status.Consensus.LatestHeight == int64(0) {
 		return fmt.Errorf("archive node latest height should not be 0")
 	}
-	if len(status.Consensus.NodePeers) != 0 {
-		return fmt.Errorf("archive should not have any peers")
+	if status.Consensus.P2P != nil {
+		return fmt.Errorf("archive should not be included in the P2P network")
 	}
 	if p := status.PendingUpgrades; len(p) != 0 {
 		return fmt.Errorf("unexpected pending upgrades: %v", p)

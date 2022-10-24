@@ -62,7 +62,6 @@ func (n *SeedNode) GetStatus(ctx context.Context) (*control.Status, error) {
 
 	identity := control.IdentityStatus{
 		Node:      n.identity.NodeSigner.Public(),
-		P2P:       n.identity.P2PSigner.Public(),
 		Consensus: n.identity.ConsensusSigner.Public(),
 		TLS:       n.identity.GetTLSPubKeys(),
 	}

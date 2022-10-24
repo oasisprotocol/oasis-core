@@ -314,9 +314,6 @@ type Status struct { // nolint: maligned
 	// Features are the indicated consensus backend features.
 	Features FeatureMask `json:"features"`
 
-	// NodePeers is a list of node's peers.
-	NodePeers []string `json:"node_peers"`
-
 	// LatestHeight is the height of the latest block.
 	LatestHeight int64 `json:"latest_height"`
 	// LatestHash is the hash of the latest block.
@@ -343,6 +340,24 @@ type Status struct { // nolint: maligned
 
 	// IsValidator returns whether the current node is part of the validator set.
 	IsValidator bool `json:"is_validator"`
+
+	// P2P is the P2P status of the node.
+	P2P *P2PStatus `json:"p2p,omitempty"`
+}
+
+// P2PStatus is the P2P status of a node.
+type P2PStatus struct {
+	// PubKey is the public key used for consensus P2P communication.
+	PubKey signature.PublicKey `json:"pub_key"`
+
+	// PeerID is the peer ID derived by hashing peer's public key.
+	PeerID string `json:"peer_id"`
+
+	// Addresses is a list of configured P2P addresses used when registering the node.
+	Addresses []node.ConsensusAddress `json:"addresses"`
+
+	// Peers is a list of node's peers.
+	Peers []string `json:"peers"`
 }
 
 // Backend is an interface that a consensus backend must provide.
