@@ -142,6 +142,10 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 	if err = consensusAddr.FromIP(net.ParseIP("127.0.0.1"), 9999); err != nil { // Irrelevant address, as this is a single node network.
 		return nil, err
 	}
+	var p2pAddr node.Address
+	if err = p2pAddr.FromIP(net.ParseIP("127.0.0.1"), 9998); err != nil { // Irrelevant address, as this is a single node network.
+		return nil, err
+	}
 	n := &node.Node{
 		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:         identity.NodeSigner.Public(),
@@ -152,7 +156,8 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 			NextPubKey: nextPubKey,
 		},
 		P2P: node.P2PInfo{
-			ID: identity.P2PSigner.Public(),
+			ID:        identity.P2PSigner.Public(),
+			Addresses: []node.Address{p2pAddr},
 		},
 		Consensus: node.ConsensusInfo{
 			ID: identity.ConsensusSigner.Public(),

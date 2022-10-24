@@ -212,6 +212,11 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		}
 		n.P2P.Addresses = append(n.P2P.Addresses, addr)
 	}
+	if len(n.P2P.Addresses) == 0 {
+		logger.Error("all nodes require at least 1 P2P address")
+		os.Exit(1)
+	}
+
 	if n.HasRoles(maskCommitteeMember) && (len(n.TLS.Addresses) == 0 || len(n.P2P.Addresses) == 0) {
 		logger.Error("nodes that are committee members require at least 1 TLS and 1 P2P address")
 		os.Exit(1)

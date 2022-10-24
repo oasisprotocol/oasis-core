@@ -163,6 +163,8 @@ var (
 	// P2PAddressRequiredRoles are the Node roles that require P2P Address.
 	P2PAddressRequiredRoles = node.RoleComputeWorker |
 		node.RoleKeyManager |
+		node.RoleValidator |
+		node.RoleConsensusRPC |
 		node.RoleStorageRPC
 )
 
@@ -712,9 +714,21 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 	expectedSigners = append(expectedSigners, n.P2P.ID)
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
+	switch isGenesis {
+	case true:
+		// Allow legacy descriptor with optional p2p address for validator and
+		// consensus RPC nodes.
+		if n.HasRoles(node.RoleValidator | node.RoleConsensusRPC) {
+			p2pAddressRequired = false
+		}
+	case false:
+		// All new (re)registrations will require a p2p address for all nodes,
+		// and will reject descriptors otherwise.
+	}
+
 	if err := verifyAddresses(params, p2pAddressRequired, n.P2P.Addresses); err != nil {
 		addrs, _ := json.Marshal(n.P2P.Addresses)
-		logger.Error("RegisterNode: missing/invald P2P addresses",
+		logger.Error("RegisterNode: missing/invalid P2P addresses",
 			"node", n,
 			"p2p_addrs", addrs,
 		)
