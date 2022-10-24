@@ -221,7 +221,7 @@ func (l *grpcLogAdapter) unaryClientLogger(ctx context.Context,
 		l.reqLogger.Debug("request",
 			"method", method,
 			"req_seq", seq,
-			"req", req,
+			"req", fmt.Sprintf("%+v", req),
 		)
 	}
 
@@ -242,7 +242,8 @@ func (l *grpcLogAdapter) unaryClientLogger(ctx context.Context,
 		l.reqLogger.Error("request failed",
 			"method", method,
 			"req_seq", seq,
-			"rsp", rsp,
+			"req", fmt.Sprintf("%+v", req),
+			"rsp", fmt.Sprintf("%+v", rsp),
 			"err", err,
 		)
 		return err
