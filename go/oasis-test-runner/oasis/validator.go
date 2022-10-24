@@ -23,6 +23,7 @@ type Validator struct {
 	sentryPubKey  signature.PublicKey
 	consensusPort uint16
 	clientPort    uint16
+	p2pPort       uint16
 
 	disableCertRotation bool
 }
@@ -84,6 +85,7 @@ func (val *Validator) AddArgs(args *argBuilder) error {
 		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
 		tendermintPrune(val.consensus.PruneNumKept, val.consensus.PruneInterval).
 		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL).
+		workerP2pPort(val.p2pPort).
 		configureDebugCrashPoints(val.crashPointsProbability).
 		tendermintSupplementarySanity(val.supplementarySanityInterval).
 		appendNetwork(val.net).
@@ -116,6 +118,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		sentries:            cfg.Sentries,
 		consensusPort:       host.getProvisionedPort(nodePortConsensus),
 		clientPort:          host.getProvisionedPort(nodePortClient),
+		p2pPort:             host.getProvisionedPort(nodePortP2P),
 		disableCertRotation: cfg.DisableCertRotation,
 	}
 
@@ -126,16 +129,21 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 			var consensusAddr node.ConsensusAddress
 			consensusAddr.ID = sentry.p2pPublicKey
 			if err = consensusAddr.Address.FromIP(localhost, sentry.consensusPort); err != nil {
-				return nil, fmt.Errorf("oasis/validator: failed to parse IP address: %w", err)
+				return nil, fmt.Errorf("oasis/validator: failed to parse sentry IP address: %w", err)
 			}
 			consensusAddrs = append(consensusAddrs, &consensusAddr)
 		}
 	} else {
 		var consensusAddr node.Address
 		if err = consensusAddr.FromIP(localhost, val.consensusPort); err != nil {
-			return nil, fmt.Errorf("oasis/validator: failed to parse IP address: %w", err)
+			return nil, fmt.Errorf("oasis/validator: failed to parse consensus IP address: %w", err)
 		}
 		consensusAddrs = append(consensusAddrs, &consensusAddr)
+	}
+
+	var p2pAddr node.Address
+	if err = p2pAddr.FromIP(localhost, val.p2pPort); err != nil {
+		return nil, fmt.Errorf("oasis/validator: failed to parse P2P IP address: %w", err)
 	}
 
 	// Load node's identity, so that we can pass the validator's Tendermint
@@ -160,6 +168,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		"--" + cmdRegNode.CfgExpiration, "1",
 		"--" + cmdRegNode.CfgRole, "validator",
 		"--" + cmdRegNode.CfgEntityID, cfg.Entity.ID().String(),
+		"--" + cmdRegNode.CfgP2PAddress, p2pAddr.String(),
 	}
 	for _, v := range consensusAddrs {
 		args = append(args, []string{"--" + cmdRegNode.CfgConsensusAddress, v.String()}...)

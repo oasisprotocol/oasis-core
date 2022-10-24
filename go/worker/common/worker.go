@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
-	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -35,7 +34,6 @@ type Worker struct {
 	IAS               ias.Endpoint
 	KeyManager        keymanagerApi.Backend
 	RuntimeRegistry   runtimeRegistry.Registry
-	GenesisDoc        *genesis.Document
 
 	runtimes map[common.Namespace]*committee.Node
 
@@ -198,7 +196,6 @@ func newWorker(
 	keyManager keymanagerApi.Backend,
 	rtRegistry runtimeRegistry.Registry,
 	cfg Config,
-	genesisDoc *genesis.Document,
 ) (*Worker, error) {
 	var enabled bool
 	switch rtRegistry.Mode() {
@@ -222,7 +219,6 @@ func newWorker(
 		IAS:               ias,
 		KeyManager:        keyManager,
 		RuntimeRegistry:   rtRegistry,
-		GenesisDoc:        genesisDoc,
 		runtimes:          make(map[common.Namespace]*committee.Node),
 		ctx:               ctx,
 		cancelCtx:         cancelCtx,
@@ -255,7 +251,6 @@ func New(
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
-	genesisDoc *genesis.Document,
 ) (*Worker, error) {
 	cfg, err := NewConfig()
 	if err != nil {
@@ -290,6 +285,5 @@ func New(
 		keyManager,
 		runtimeRegistry,
 		*cfg,
-		genesisDoc,
 	)
 }

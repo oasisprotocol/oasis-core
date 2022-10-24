@@ -230,24 +230,6 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.RegisterCleanupOnly(n.RuntimeRegistry, "runtime registry")
 
-	// Initialize the P2P worker if any runtime mode is configured.
-	// Since the P2P layer does not have a separate Start method and starts
-	// listening immediately when created, make sure that we don't start it if
-	// it is not needed.
-	switch {
-	case n.RuntimeRegistry.Mode() != runtimeRegistry.RuntimeModeNone && n.Consensus.Mode() != consensusAPI.ModeArchive:
-		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
-			p2p.DebugForceAllowUnroutableAddresses()
-		}
-		n.P2P, err = p2p.New(n.Identity, n.Consensus)
-		if err != nil {
-			return err
-		}
-	default:
-		n.P2P = p2p.NewNop()
-	}
-	n.svcMgr.Register(n.P2P)
-
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		n,
@@ -258,7 +240,6 @@ func (n *Node) initRuntimeWorkers() error {
 		n.IAS,
 		n.Consensus.KeyManager(),
 		n.RuntimeRegistry,
-		genesisDoc,
 	)
 	if err != nil {
 		n.logger.Error("failed to initialize common worker",
@@ -506,6 +487,11 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 
+	genesisDoc, err := node.Genesis.GetGenesisDocument()
+	if err != nil {
+		return nil, err
+	}
+
 	// Configure a directory for the node to work in.
 	dataDir, err := configureDataDir(logger)
 	if err != nil {
@@ -589,6 +575,22 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 	node.svcMgr.Register(node.Consensus)
 	consensusAPI.RegisterService(node.grpcInternal.Server(), node.Consensus)
+
+	// Initialize P2P network. Since libp2p host starts listening immediately when created, make
+	// sure that we don't start it if it is not needed.
+	switch {
+	case node.Consensus.Mode() != consensusAPI.ModeArchive:
+		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
+			p2p.DebugForceAllowUnroutableAddresses()
+		}
+		node.P2P, err = p2p.New(node.Identity, node.Consensus)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		node.P2P = p2p.NewNop()
+	}
+	node.svcMgr.Register(node.P2P)
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.
