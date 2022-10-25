@@ -341,6 +341,25 @@ func (g *Genesis) SanityCheck(now beacon.EpochTime) error { // nolint: gocyclo
 		}
 	}
 
+	// The burn address is actually "unused" for reasonable definitions of "unused".
+	if ba := g.Ledger[BurnAddress]; ba != nil {
+		if !ba.General.Balance.IsZero() {
+			return fmt.Errorf(
+				"staking: sanity check failed: burn address has non-zero balance: %v", ba.General.Balance,
+			)
+		}
+		if ba.General.Nonce != 0 {
+			return fmt.Errorf(
+				"staking: sanity check failed: burn address has non-zero nonce: %v", ba.General.Nonce,
+			)
+		}
+		if len(ba.General.Allowances) != 0 {
+			return fmt.Errorf(
+				"staking: sanity check failed: burn address has non-empty allowances",
+			)
+		}
+	}
+
 	// Check the above two invariants for each account as well.
 	for addr, acct := range g.Ledger {
 		if err := SanityCheckAccountShares(addr, acct, g.Delegations[addr], g.DebondingDelegations[addr]); err != nil {

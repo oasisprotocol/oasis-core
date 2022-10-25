@@ -71,3 +71,22 @@ func TestRuntimeAddress(t *testing.T) {
 	addrPk1 := NewAddress(pk1)
 	require.NotEqualValues(addr1, addrPk1, "runtime addresses should be separated from staking addresses")
 }
+
+func TestInternal(t *testing.T) {
+	for _, v := range []struct {
+		n       string
+		addrStr string // Invariant
+
+		addr Address
+	}{
+		{"CommonPoolAddress", "oasis1qrmufhkkyyf79s5za2r8yga9gnk4t446dcy3a5zm", CommonPoolAddress},
+		{"FeeAccumulatorAddress", "oasis1qqnv3peudzvekhulf8v3ht29z4cthkhy7gkxmph5", FeeAccumulatorAddress},
+		{"GovernanceDepositsAddress", "oasis1qp65laz8zsa9a305wxeslpnkh9x4dv2h2qhjz0ec", GovernanceDepositsAddress},
+		{"BurnAddress", "oasis1qzq8u7xs328puu2jy524w3fygzs63rv3u5967970", BurnAddress},
+	} {
+		require.Equal(t, v.addrStr, v.addr.String(), "%s changed value", v.n)
+		require.False(t, v.addr.IsValid(), "%s should be invalid", v.n)
+		require.True(t, v.addr.IsReserved(), "%s should be reserved", v.n)
+		t.Logf("%s - %s", v.n, v.addr)
+	}
+}

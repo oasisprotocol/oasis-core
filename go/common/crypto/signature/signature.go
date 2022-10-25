@@ -17,8 +17,10 @@ import (
 	"os"
 	"sync"
 
+	"github.com/oasisprotocol/curve25519-voi/curve"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519/extra/cache"
+	"github.com/oasisprotocol/curve25519-voi/primitives/h2c"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -647,6 +649,20 @@ func NewPublicKey(hex string) (pk PublicKey) {
 	if err := pk.UnmarshalHex(hex); err != nil {
 		panic(err)
 	}
+	return
+}
+
+// HashToPublicKey creates a public key via h2c from the given domain separator
+// and message.  The private key of the returned public key is unknown.
+func HashToPublicKey(dst, message []byte) (pk PublicKey) {
+	point, err := h2c.Edwards25519_XMD_SHA512_ELL2_RO(dst, message)
+	if err != nil {
+		panic(err)
+	}
+
+	var aCompressed curve.CompressedEdwardsY
+	aCompressed.SetEdwardsPoint(point)
+	copy(pk[:], aCompressed[:])
 	return
 }
 
