@@ -51,9 +51,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -606,7 +606,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	if err != nil {
 		return fmt.Errorf("tendermint: failed to convert persistent peer addresses: %w", err)
 	}
-	seeds, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(flags.CfgP2PSeeds))
+	seeds, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(p2p.CfgSeeds))
 	if err != nil {
 		return fmt.Errorf("tendermint: failed to convert seed addresses: %w", err)
 	}

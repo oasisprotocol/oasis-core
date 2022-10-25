@@ -14,9 +14,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -50,7 +50,6 @@ func init() {
 	Flags.AddFlagSet(flags.DebugTestEntityFlags)
 	Flags.AddFlagSet(flags.DebugAllowRootFlag)
 	Flags.AddFlagSet(flags.ConsensusValidatorFlag)
-	Flags.AddFlagSet(flags.P2PFlags)
 	Flags.AddFlagSet(flags.GenesisFileFlags)
 
 	// Backend initialization flags.

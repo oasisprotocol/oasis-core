@@ -8,8 +8,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
-	p2pAPI "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 )
 
 type p2pReqRes struct {

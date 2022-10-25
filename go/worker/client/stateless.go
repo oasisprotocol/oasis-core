@@ -5,9 +5,9 @@ import (
 	"io"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
 	storagePub "github.com/oasisprotocol/oasis-core/go/worker/storage/p2p/pub"
 )
 

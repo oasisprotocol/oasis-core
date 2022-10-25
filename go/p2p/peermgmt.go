@@ -22,7 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 )
 
 const connectionRefreshInterval = 5 * time.Second
@@ -127,7 +127,7 @@ func (mgr *PeerManager) SetNodes(nodes []*node.Node) {
 func (mgr *PeerManager) UpdateNode(node *node.Node) error {
 	peerID, err := api.PublicKeyToPeerID(node.P2P.ID)
 	if err != nil {
-		return fmt.Errorf("worker/common/p2p/peermgr: failed to get peer ID from public key: %w", err)
+		return fmt.Errorf("p2p/peermgr: failed to get peer ID from public key: %w", err)
 	}
 	defer mgr.initOnce.Do(func() {
 		close(mgr.initCh)
@@ -311,7 +311,7 @@ func (mgr *PeerManager) watchRegistryNodes(consensus consensus.Backend) {
 				}
 				mgr.logger.Debug("peer manager counted connected peers", "num_connected_peers", connected)
 
-				if float64(connected)/float64(len(mgr.peers)) < viper.GetFloat64(CfgP2PConnectednessLowWater) {
+				if float64(connected)/float64(len(mgr.peers)) < viper.GetFloat64(CfgPeerMgrConnectednessLowWater) {
 					mgr.logger.Info("connected peer ratio below set low water mark, trying to reconnect",
 						"counted", connected,
 						"known", len(mgr.peers),
@@ -344,7 +344,7 @@ func newPeerManager(ctx context.Context, host core.Host, cg *conngater.BasicConn
 		importantPeers:  make(map[api.ImportanceKind]map[common.Namespace]map[core.PeerID]bool),
 		persistentPeers: persistentPeers,
 		initCh:          make(chan struct{}),
-		logger:          logging.GetLogger("worker/common/p2p/peermgr"),
+		logger:          logging.GetLogger("p2p/peermgr"),
 	}
 
 	go mgr.watchRegistryNodes(consensus)

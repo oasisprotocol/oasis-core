@@ -5,7 +5,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 // Client is a transaction sync protocol client.

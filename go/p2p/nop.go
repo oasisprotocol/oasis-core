@@ -9,8 +9,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 // nopP2P is a no-op peer-to-peer node that does not propagate anything.

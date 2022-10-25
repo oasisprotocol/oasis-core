@@ -14,8 +14,8 @@ import (
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
-	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
+	"github.com/oasisprotocol/oasis-core/go/p2p/api"
+	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
 )
 
 const (
@@ -207,7 +207,7 @@ func (h *topicHandler) tryPublishing(rawMsg []byte) error {
 		case h.pendingQueue <- &rawMessage{rawMsg}:
 			return nil
 		default:
-			return fmt.Errorf("worker/common/p2p: message queue overflow, libp2p still not initialized")
+			return fmt.Errorf("p2p: message queue overflow, libp2p still not initialized")
 		}
 	}
 
@@ -252,7 +252,7 @@ func newTopicHandler(p *p2p, runtimeID common.Namespace, kind api.TopicKind, han
 	topicID := p.topicIDForRuntime(runtimeID, kind)
 	topic, err := p.pubsub.Join(topicID) // Note: Disallows duplicates.
 	if err != nil {
-		return "", nil, fmt.Errorf("worker/common/p2p: failed to join topic '%s': %w", topicID, err)
+		return "", nil, fmt.Errorf("p2p: failed to join topic '%s': %w", topicID, err)
 	}
 
 	h := &topicHandler{
@@ -262,7 +262,7 @@ func newTopicHandler(p *p2p, runtimeID common.Namespace, kind api.TopicKind, han
 		host:         p.host,
 		handler:      handler,
 		pendingQueue: make(chan *rawMessage, rawMsgQueueSize),
-		logger:       logging.GetLogger("worker/common/p2p/" + topicID),
+		logger:       logging.GetLogger("p2p/" + topicID),
 	}
 	if h.cancelRelay, err = h.topic.Relay(); err != nil {
 		// Well, ok, fine.  This should NEVER happen, but try to back out
@@ -272,7 +272,7 @@ func newTopicHandler(p *p2p, runtimeID common.Namespace, kind api.TopicKind, han
 		)
 		_ = topic.Close()
 
-		return "", nil, fmt.Errorf("worker/common/p2p: failed to relay topic '%s': %w", topicID, err)
+		return "", nil, fmt.Errorf("p2p: failed to relay topic '%s': %w", topicID, err)
 	}
 
 	go h.pendingMessagesWorker()

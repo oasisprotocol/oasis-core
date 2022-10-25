@@ -7,8 +7,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	p2p "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/api"
-	p2pError "github.com/oasisprotocol/oasis-core/go/worker/common/p2p/error"
+	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
 )
 
 type committeeMsgHandler struct {

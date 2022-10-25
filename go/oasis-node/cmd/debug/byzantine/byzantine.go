@@ -18,11 +18,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
@@ -311,7 +311,6 @@ func init() {
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugDontBlameOasisFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugTestEntityFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugAllowRootFlag)
-	byzantineCmd.PersistentFlags().AddFlagSet(flags.P2PFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(grpc.ServerLocalFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(grpc.ServerTCPFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(p2p.Flags)

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 // Client is a storage pub protocol client.

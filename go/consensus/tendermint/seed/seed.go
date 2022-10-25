@@ -10,7 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/p2p"
+	tmp2p "github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
 	"github.com/tendermint/tendermint/types"
 	tmversion "github.com/tendermint/tendermint/version"
@@ -23,8 +23,8 @@ import (
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -49,10 +49,10 @@ type Service struct {
 
 	doc *genesis.Document
 
-	addr      *p2p.NetAddress
-	transport *p2p.MultiplexTransport
+	addr      *tmp2p.NetAddress
+	transport *tmp2p.MultiplexTransport
 	addrBook  pex.AddrBook
-	p2pSwitch *p2p.Switch
+	p2pSwitch *tmp2p.Switch
 
 	stopOnce sync.Once
 	quitCh   chan struct{}
@@ -154,7 +154,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 		return nil, fmt.Errorf("tendermint/seed: failed to initialize data dir: %w", err)
 	}
 
-	tmSeeds, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(flags.CfgP2PSeeds))
+	tmSeeds, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(p2p.CfgSeeds))
 	if err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to convert seed addresses: %w", err)
 	}
@@ -170,7 +170,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	p2pCfg.AddrBookStrict = !(viper.GetBool(tmcommon.CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
 	p2pCfg.AllowDuplicateIP = viper.GetBool(tmcommon.CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
 
-	nodeKey := &p2p.NodeKey{PrivKey: crypto.SignerToTendermint(identity.P2PSigner)}
+	nodeKey := &tmp2p.NodeKey{PrivKey: crypto.SignerToTendermint(identity.P2PSigner)}
 
 	doc, err := genesisProvider.GetGenesisDocument()
 	if err != nil {
@@ -178,8 +178,8 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	}
 	srv.doc = doc
 
-	nodeInfo := p2p.DefaultNodeInfo{
-		ProtocolVersion: p2p.NewProtocolVersion(
+	nodeInfo := tmp2p.DefaultNodeInfo{
+		ProtocolVersion: tmp2p.NewProtocolVersion(
 			tmversion.P2PProtocol,
 			tmversion.BlockProtocol,
 			version.TendermintAppVersion,
@@ -194,10 +194,10 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 
 	// Carve out all of the services.
 	logger := tmcommon.NewLogAdapter(!viper.GetBool(tmcommon.CfgLogDebug))
-	if srv.addr, err = p2p.NewNetAddressString(p2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
+	if srv.addr, err = tmp2p.NewNetAddressString(tmp2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to create seed address: %w", err)
 	}
-	srv.transport = p2p.NewMultiplexTransport(nodeInfo, *nodeKey, p2p.MConnConfig(p2pCfg))
+	srv.transport = tmp2p.NewMultiplexTransport(nodeInfo, *nodeKey, tmp2p.MConnConfig(p2pCfg))
 
 	addrBookPath := filepath.Join(seedDataDir, tmcommon.ConfigDir, "addrbook.json")
 	srv.addrBook = pex.NewAddrBook(addrBookPath, p2pCfg.AddrBookStrict)
@@ -227,7 +227,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	})
 	pexReactor.SetLogger(logger.With("module", "pex"))
 
-	srv.p2pSwitch = p2p.NewSwitch(p2pCfg, srv.transport)
+	srv.p2pSwitch = tmp2p.NewSwitch(p2pCfg, srv.transport)
 	srv.p2pSwitch.SetLogger(logger.With("module", "switch"))
 	srv.p2pSwitch.SetNodeKey(nodeKey)
 	srv.p2pSwitch.SetAddrBook(srv.addrBook)
@@ -237,11 +237,11 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	return srv, nil
 }
 
-func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, ourAddr *p2p.NetAddress) error {
+func populateAddrBookFromGenesis(addrBook tmp2p.AddrBook, doc *genesis.Document, ourAddr *tmp2p.NetAddress) error {
 	logger := logging.GetLogger("consensus/tendermint/seed")
 
 	// Convert to a representation suitable for address book population.
-	var addrs []*p2p.NetAddress
+	var addrs []*tmp2p.NetAddress
 	for _, v := range doc.Registry.Nodes {
 		var openedNode node.Node
 		if err := v.Open(registry.RegisterGenesisNodeSignatureContext, &openedNode); err != nil {
@@ -252,7 +252,7 @@ func populateAddrBookFromGenesis(addrBook p2p.AddrBook, doc *genesis.Document, o
 			continue
 		}
 
-		var tmvAddr *p2p.NetAddress
+		var tmvAddr *tmp2p.NetAddress
 		tmvAddr, err := api.NodeToP2PAddr(&openedNode)
 		if err != nil {
 			logger.Error("failed to reformat genesis validator address",

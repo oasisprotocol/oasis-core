@@ -351,9 +351,8 @@ production setting as they may result in node compromise.
 
 :::info
 
-When running a runtime node in a production setting, the
-`worker.p2p.addresses` and `worker.client.addresses` flags need to be configured
-as well.
+When running a runtime node in a production setting, the `p2p.addresses` flag
+needs to be configured as well.
 
 :::
 

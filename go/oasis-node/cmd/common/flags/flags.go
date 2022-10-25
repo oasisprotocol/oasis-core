@@ -21,8 +21,6 @@ const (
 	CfgGenesisFile = "genesis.file"
 	// CfgConsensusValidator is the flag used to opt-in to being a validator.
 	CfgConsensusValidator = "consensus.validator"
-	// CfgP2PSeeds configures seed node(s).
-	CfgP2PSeeds = "p2p.seeds"
 
 	cfgVerbose = "verbose"
 	cfgForce   = "force"
@@ -51,8 +49,7 @@ var (
 
 	// ConsensusValidatorFlag has the consensus validator flag.
 	ConsensusValidatorFlag = flag.NewFlagSet("", flag.ContinueOnError)
-	// P2PFlags has the P2P flags.
-	P2PFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	// DebugDontBlameOasisFlag has the "don't blame oasis" flag.
 	DebugDontBlameOasisFlag = flag.NewFlagSet("", flag.ContinueOnError)
 
@@ -116,8 +113,6 @@ func init() {
 
 	ConsensusValidatorFlag.Bool(CfgConsensusValidator, false, "node is a consensus validator")
 
-	P2PFlags.StringSlice(CfgP2PSeeds, []string{}, "seed node(s) of the form pubkey@IP:port")
-
 	DebugTestEntityFlags.Bool(CfgDebugTestEntity, false, "use the test entity (UNSAFE)")
 	_ = DebugTestEntityFlags.MarkHidden(CfgDebugTestEntity)
 
@@ -140,7 +135,6 @@ func init() {
 		DebugAllowRootFlag,
 		GenesisFileFlags,
 		ConsensusValidatorFlag,
-		P2PFlags,
 		DebugDontBlameOasisFlag,
 		DryRunFlag,
 		AssumeYesFlag,
