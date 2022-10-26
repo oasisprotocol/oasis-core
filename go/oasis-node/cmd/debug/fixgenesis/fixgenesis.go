@@ -3,6 +3,7 @@ package fixgenesis
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -36,6 +38,8 @@ var (
 	newGenesisFlag = flag.NewFlagSet("", flag.ContinueOnError)
 
 	logger = logging.GetLogger("cmd/debug/fix-genesis")
+
+	errOldNodeDesc = errors.New("deprecated node descriptor")
 )
 
 func doFixGenesis(cmd *cobra.Command, args []string) {
@@ -104,6 +108,46 @@ func doFixGenesis(cmd *cobra.Command, args []string) {
 	}
 }
 
+type oldNodeDesc struct {
+	cbor.Versioned
+	ID              signature.PublicKey `json:"id"`
+	EntityID        signature.PublicKey `json:"entity_id"`
+	Expiration      uint64              `json:"expiration"`
+	TLS             node.TLSInfo        `json:"tls"`
+	P2P             node.P2PInfo        `json:"p2p"`
+	Consensus       node.ConsensusInfo  `json:"consensus"`
+	VRF             *node.VRFInfo       `json:"vrf,omitempty"`
+	Runtimes        []*node.Runtime     `json:"runtimes"`
+	Roles           node.RolesMask      `json:"roles"`
+	SoftwareVersion string              `json:"software_version,omitempty"`
+
+	// The CBOR decoder is extra strict and will complain if this is
+	// not defined, as it was removed.
+	DeprecatedBeacon cbor.RawMessage `json:"beacon,omitempty"`
+}
+
+func openSignedNode(context signature.Context, sn *node.MultiSignedNode) (*node.Node, error) {
+	var (
+		node node.Node
+		err  error
+	)
+	if err = sn.Open(registry.RegisterGenesisNodeSignatureContext, &node); err == nil {
+		return &node, nil
+	}
+
+	// See if it's puking because `DeprecatedBeacon` was removed.
+	var oldNode oldNodeDesc
+	if errErr := sn.MultiSigned.Open(registry.RegisterGenesisNodeSignatureContext, &oldNode); errErr == nil {
+		logger.Warn("removing node as descriptor format is deprecated",
+			"entity_id", oldNode.EntityID,
+			"node_id", oldNode.ID,
+		)
+		return nil, errOldNodeDesc
+	}
+
+	return nil, fmt.Errorf("unable to open signed node: %w", err) // Original error
+}
+
 func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 	// Create the new genesis document template.
 	newDoc := oldDoc
@@ -142,11 +186,15 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 		entities = append(entities, &entity)
 	}
 	for _, sigNode := range oldDoc.Registry.Nodes {
-		var node node.Node
-		if err = sigNode.Open(registry.RegisterGenesisNodeSignatureContext, &node); err != nil {
-			return nil, fmt.Errorf("unable to open signed node: %w", err)
+		var node *node.Node
+		node, err = openSignedNode(registry.RegisterGenesisNodeSignatureContext, sigNode)
+		if err != nil {
+			if errors.Is(err, errOldNodeDesc) {
+				continue
+			}
+			return nil, err
 		}
-		nodes = append(nodes, &node)
+		nodes = append(nodes, node)
 	}
 	runtimes = append(runtimes, newDoc.Registry.Runtimes...)
 	runtimes = append(runtimes, newDoc.Registry.SuspendedRuntimes...)
@@ -166,7 +214,7 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 	entityMap := make(map[signature.PublicKey]*entity.Entity)
 	for _, sigEntity := range oldDoc.Registry.Entities {
 		var entity entity.Entity
-		if err := sigEntity.Open(registry.RegisterEntitySignatureContext, &entity); err != nil {
+		if err = sigEntity.Open(registry.RegisterEntitySignatureContext, &entity); err != nil {
 			return nil, fmt.Errorf("unable to open signed entity: %w", err)
 		}
 		addr := staking.NewAddress(entity.ID)
@@ -180,7 +228,7 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 			continue
 		}
 
-		if err := escrowAcc.CheckStakeClaims(newDoc.Staking.Parameters.Thresholds); err != nil {
+		if err = escrowAcc.CheckStakeClaims(newDoc.Staking.Parameters.Thresholds); err != nil {
 			logger.Warn("removing entity not passing stake claims",
 				"entity_id", entity.ID,
 				"err", err,
@@ -193,9 +241,13 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 	}
 NodeLoop:
 	for _, sigNode := range oldDoc.Registry.Nodes {
-		var node node.Node
-		if err := sigNode.Open(registry.RegisterGenesisNodeSignatureContext, &node); err != nil {
-			return nil, fmt.Errorf("unable to open signed node: %w", err)
+		var node *node.Node
+		node, err = openSignedNode(registry.RegisterGenesisNodeSignatureContext, sigNode)
+		if err != nil {
+			if errors.Is(err, errOldNodeDesc) {
+				continue
+			}
+			return nil, err
 		}
 		if ent := removedEntities[node.EntityID]; ent != nil {
 			logger.Warn("removing node as owning entity doesn't pass stake claims",
