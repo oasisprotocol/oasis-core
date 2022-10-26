@@ -262,6 +262,15 @@ func (impl *backendVRF) doProveTx(
 	params *beacon.ConsensusParameters,
 	tx *transaction.Transaction,
 ) error {
+	if err := ctx.Gas().UseGas(1, beacon.GasOpVRFProve, params.VRFParameters.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	vrfState, err := state.VRFState(ctx)
 	if err != nil {
 		return fmt.Errorf("beacon: failed to get VRF state: %w", err)
@@ -321,10 +330,6 @@ func (impl *backendVRF) doProveTx(
 
 	if ctx.IsCheckOnly() {
 		return nil
-	}
-
-	if err = ctx.Gas().UseGas(1, beacon.GasOpVRFProve, params.VRFParameters.GasCosts); err != nil {
-		return err
 	}
 
 	// Fresh proof, store pi.
