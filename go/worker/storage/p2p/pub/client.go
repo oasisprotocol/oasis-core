@@ -54,6 +54,6 @@ func (c *client) Iterate(ctx context.Context, request *IterateRequest) (*ProofRe
 // NewClient creates a new storage pub protocol client.
 func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
 	return &client{
-		rc: rpc.NewClient(p2p, runtimeID, StoragePubProtocolID, StoragePubProtocolVersion),
+		rc: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, StoragePubProtocolID, StoragePubProtocolVersion)),
 	}
 }

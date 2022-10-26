@@ -335,7 +335,7 @@ func NewPeerManager(p2p P2P, protocolID protocol.ID, stickyPeers bool) PeerManag
 		peers:        make(map[core.PeerID]*peerStats),
 		ignoredPeers: make(map[core.PeerID]bool),
 		stickyPeers:  stickyPeers,
-		logger: logging.GetLogger("worker/common/p2p/rpc/peermgr").With(
+		logger: logging.GetLogger("p2p/rpc/peermgr").With(
 			"protocol_id", protocolID,
 		),
 	}

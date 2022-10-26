@@ -12,11 +12,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 )
 
@@ -220,7 +218,6 @@ type client struct {
 
 	host       core.Host
 	protocolID protocol.ID
-	runtimeID  common.Namespace
 
 	opts *ClientOptions
 
@@ -509,9 +506,7 @@ func (c *client) sendRequestAndDecodeResponse(
 }
 
 // NewClient creates a new RPC client for the given protocol.
-func NewClient(p2p P2P, runtimeID common.Namespace, protocolID string, version version.Version, opts ...ClientOption) Client {
-	pid := NewRuntimeProtocolID(runtimeID, protocolID, version)
-
+func NewClient(p2p P2P, protocolID protocol.ID, opts ...ClientOption) Client {
 	var co ClientOptions
 	for _, opt := range opts {
 		opt(&co)
@@ -522,14 +517,10 @@ func NewClient(p2p P2P, runtimeID common.Namespace, protocolID string, version v
 		return &nopClient{&nopPeerManager{}}
 	}
 	return &client{
-		PeerManager: NewPeerManager(p2p, pid, co.stickyPeers),
+		PeerManager: NewPeerManager(p2p, protocolID, co.stickyPeers),
 		host:        p2p.GetHost(),
-		protocolID:  pid,
-		runtimeID:   runtimeID,
+		protocolID:  protocolID,
 		opts:        &co,
-		logger: logging.GetLogger("worker/common/p2p/rpc/client").With(
-			"protocol", protocolID,
-			"runtime_id", runtimeID,
-		),
+		logger:      logging.GetLogger("p2p/rpc/client").With("protocol", protocolID),
 	}
 }

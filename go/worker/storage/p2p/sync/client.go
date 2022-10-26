@@ -114,7 +114,7 @@ func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
 		// Use two separate clients for the same protocol. This is to make sure that peers are
 		// scored differently between the two use cases (syncing diffs vs. syncing checkpoints). We
 		// could consider separating this into two protocols in the future.
-		rcDiff:        rpc.NewClient(p2p, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion),
-		rcCheckpoints: rpc.NewClient(p2p, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion),
+		rcDiff:        rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)),
+		rcCheckpoints: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)),
 	}
 }

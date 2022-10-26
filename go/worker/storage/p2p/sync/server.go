@@ -104,5 +104,5 @@ func (s *service) handleGetCheckpointChunk(ctx context.Context, request *GetChec
 
 // NewServer creates a new storage sync protocol server.
 func NewServer(runtimeID common.Namespace, backend storage.Backend) rpc.Server {
-	return rpc.NewServer(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion, &service{backend})
+	return rpc.NewServer(rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion), &service{backend})
 }

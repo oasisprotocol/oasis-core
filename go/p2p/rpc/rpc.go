@@ -23,6 +23,11 @@ type P2P interface {
 	GetHost() core.Host
 }
 
+// NewProtocolID generates a protocol identifier for a consensus P2P protocol.
+func NewProtocolID(protocolID string, version version.Version) protocol.ID {
+	return protocol.ID(fmt.Sprintf("/oasis/%s/%s", protocolID, version.MaskNonMajor()))
+}
+
 // NewRuntimeProtocolID generates a protocol identifier for a protocol supported for a specific
 // runtime. This makes it so that one doesn't need additional checks to ensure that a peer supports
 // the given protocol for the given runtime.

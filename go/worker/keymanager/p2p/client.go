@@ -167,7 +167,7 @@ func NewClient(p2p p2p.Service, consensus consensus.Backend, keymanagerID common
 	go nt.trackKeymanagerNodes()
 
 	return &client{
-		rc: rpc.NewClient(p2p, keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion,
+		rc: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion),
 			rpc.WithStickyPeers(true),
 			rpc.WithPeerFilter(nt),
 		),
