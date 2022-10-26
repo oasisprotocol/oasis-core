@@ -583,7 +583,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
 		}
-		node.P2P, err = p2p.New(node.Identity, node.Consensus)
+		node.P2P, err = p2p.New(node.Identity, node.Consensus, node.commonStore)
 		if err != nil {
 			return nil, err
 		}
@@ -591,6 +591,13 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		node.P2P = p2p.NewNop()
 	}
 	node.svcMgr.Register(node.P2P)
+
+	if err = node.P2P.Start(); err != nil {
+		logger.Error("failed to start P2P service",
+			"err", err,
+		)
+		return nil, err
+	}
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.

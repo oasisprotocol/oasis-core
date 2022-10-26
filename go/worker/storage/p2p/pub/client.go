@@ -7,6 +7,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
+const (
+	// minProtocolPeers is the minimum number of peers from the registry we want to have connected
+	// for StoragePub protocol.
+	minProtocolPeers = 5
+
+	// totalProtocolPeers is the number of peers we want to have connected for StoragePub protocol.
+	totalProtocolPeers = 10
+)
+
 // Client is a storage pub protocol client.
 type Client interface {
 	// Get fetches a single key and returns the corresponding proof.
@@ -56,8 +65,10 @@ func (c *client) Iterate(ctx context.Context, request *IterateRequest) (*ProofRe
 func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
 	pid := rpc.NewRuntimeProtocolID(runtimeID, StoragePubProtocolID, StoragePubProtocolVersion)
 	mgr := rpc.NewPeerManager(p2p, pid)
-	rc := rpc.NewClient(p2p.GetHost(), pid)
+	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)
+
+	p2p.RegisterProtocol(pid, minProtocolPeers, totalProtocolPeers)
 
 	return &client{
 		rc:  rc,

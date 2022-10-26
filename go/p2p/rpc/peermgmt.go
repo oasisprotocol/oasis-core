@@ -403,7 +403,7 @@ func (mgr *peerManager) isPeerAcceptable(peerID core.PeerID) bool {
 
 // NewPeerManager creates a new peer manager for the given protocol.
 func NewPeerManager(p2p P2P, protocolID protocol.ID, opts ...PeerManagerOption) PeerManager {
-	if p2p.GetHost() == nil {
+	if p2p.Host() == nil {
 		// No P2P service, use the no-op peer manager.
 		return &nopPeerManager{}
 	}
@@ -415,7 +415,7 @@ func NewPeerManager(p2p P2P, protocolID protocol.ID, opts ...PeerManagerOption) 
 
 	mgr := &peerManager{
 		p2p:          p2p,
-		host:         p2p.GetHost(),
+		host:         p2p.Host(),
 		protocolID:   protocolID,
 		peers:        make(map[core.PeerID]*peerStats),
 		ignoredPeers: make(map[core.PeerID]bool),

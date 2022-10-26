@@ -11,6 +11,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
+const (
+	// minProtocolPeers is the minimum number of peers from the registry we want to have connected
+	// for StorageSync protocol.
+	minProtocolPeers = 5
+
+	// totalProtocolPeers is the number of peers we want to have connected for StorageSync protocol.
+	totalProtocolPeers = 10
+)
+
 // Client is a storage sync protocol client.
 type Client interface {
 	// GetDiff requests a write log of entries that must be applied to get from the first given root
@@ -121,13 +130,15 @@ func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
 	// could consider separating this into two protocols in the future.
 	pid := rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
 
-	rcC := rpc.NewClient(p2p.GetHost(), pid)
+	rcC := rpc.NewClient(p2p.Host(), pid)
 	mgrC := rpc.NewPeerManager(p2p, pid)
 	rcC.RegisterListener(mgrC)
 
-	rcD := rpc.NewClient(p2p.GetHost(), pid)
+	rcD := rpc.NewClient(p2p.Host(), pid)
 	mgrD := rpc.NewPeerManager(p2p, pid)
 	rcD.RegisterListener(mgrD)
+
+	p2p.RegisterProtocol(pid, minProtocolPeers, totalProtocolPeers)
 
 	return &client{
 		rcC:  rcC,

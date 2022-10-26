@@ -26,9 +26,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
@@ -42,6 +44,13 @@ const (
 	// seenMessagesTTL is the amount of time pubsub messages will be remembered as seen and any
 	// duplicates will be dropped before propagation.
 	seenMessagesTTL = 120 * time.Second
+
+	// minTopicPeers is the minimum number of peers from the registry we want to have connected
+	// for a topic.
+	minTopicPeers = 10
+
+	// totalTopicPeers is the number of peers we want to have connected for a topic.
+	totalTopicPeers = 20
 )
 
 // messageIdContext is the domain separation context for computing message identifier hashes.
@@ -57,8 +66,8 @@ func DebugForceAllowUnroutableAddresses() {
 // p2p is a peer-to-peer node using libp2p.
 type p2p struct {
 	sync.RWMutex
-	*PeerManager
 
+	ctx       context.Context
 	ctxCancel context.CancelFunc
 	quitCh    chan struct{}
 
@@ -67,6 +76,9 @@ type p2p struct {
 
 	host   core.Host
 	pubsub *pubsub.PubSub
+
+	gater   *conngater.BasicConnectionGater
+	peerMgr *peermgmt.PeerManager
 
 	registerAddresses []multiaddr.Multiaddr
 	topics            map[common.Namespace]map[api.TopicKind]*topicHandler
@@ -85,15 +97,31 @@ func (p *p2p) Name() string {
 
 // Implements api.Service.
 func (p *p2p) Start() error {
-	// Unfortunately libp2p starts everything on construction.
+	// Unfortunately, we cannot start the host as libp2p starts everything on construction.
+	// However, we can start everything else.
+	p.peerMgr.Start()
 	return nil
 }
 
 // Implements api.Service.
 func (p *p2p) Stop() {
+	defer close(p.quitCh)
+
 	p.ctxCancel()
-	_ = p.host.Close() // This blocks until the host stops.
-	close(p.quitCh)
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		p.peerMgr.Stop() // This blocks until the manager stops.
+	}()
+
+	go func() {
+		defer wg.Done()
+		_ = p.host.Close() // This blocks until the host stops.
+	}()
 }
 
 // Implements api.Service.
@@ -103,12 +131,24 @@ func (p *p2p) Quit() <-chan struct{} {
 
 // Implements api.Service.
 func (p *p2p) GetStatus() *api.Status {
+	protocols := make(map[core.ProtocolID]int)
+	for _, protocol := range p.peerMgr.Protocols() {
+		protocols[protocol] = p.peerMgr.NumProtocolPeers(protocol)
+	}
+
+	topics := make(map[string]int)
+	for _, topic := range p.peerMgr.Topics() {
+		topics[topic] = p.peerMgr.NumTopicPeers(topic)
+	}
+
 	return &api.Status{
 		PubKey:         p.signer.Public(),
 		PeerID:         p.host.ID(),
 		Addresses:      p.Addresses(),
 		NumPeers:       len(p.host.Network().Peers()),
 		NumConnections: len(p.host.Network().Conns()),
+		Protocols:      protocols,
+		Topics:         topics,
 	}
 }
 
@@ -148,8 +188,8 @@ func (p *p2p) Addresses() []node.Address {
 
 // Implements api.Service.
 func (p *p2p) Peers(runtimeID common.Namespace) []string {
-	allPeers := p.pubsub.ListPeers(p.topicIDForRuntime(runtimeID, api.TopicKindCommittee))
-	allPeers = append(allPeers, p.pubsub.ListPeers(p.topicIDForRuntime(runtimeID, api.TopicKindTx))...)
+	allPeers := p.pubsub.ListPeers(api.NewTopicIDForRuntime(p.chainContext, runtimeID, api.TopicKindCommittee))
+	allPeers = append(allPeers, p.pubsub.ListPeers(api.NewTopicIDForRuntime(p.chainContext, runtimeID, api.TopicKindTx))...)
 
 	var peers []string
 	peerMap := make(map[core.PeerID]bool)
@@ -263,7 +303,9 @@ func (p *p2p) RegisterHandler(runtimeID common.Namespace, kind api.TopicKind, ha
 		panic(fmt.Sprintf("p2p: handler for topic kind '%s' already registered", kind))
 	}
 
-	topicID, h, err := newTopicHandler(p, runtimeID, kind, handler)
+	topicID := api.NewTopicIDForRuntime(p.chainContext, runtimeID, kind)
+
+	h, err := newTopicHandler(p, topicID, handler)
 	if err != nil {
 		panic(fmt.Sprintf("p2p: failed to initialize topic handler: %s", err))
 	}
@@ -278,15 +320,8 @@ func (p *p2p) RegisterHandler(runtimeID common.Namespace, kind api.TopicKind, ha
 		"runtime_id", runtimeID,
 		"kind", kind,
 	)
-}
 
-func (p *p2p) topicIDForRuntime(runtimeID common.Namespace, kind api.TopicKind) string {
-	return fmt.Sprintf("%s/%d/%s/%s",
-		p.chainContext,
-		version.RuntimeCommitteeProtocol.Major,
-		runtimeID.String(),
-		kind,
-	)
+	p.peerMgr.RegisterTopic(topicID, minTopicPeers, totalTopicPeers)
 }
 
 // Implements api.Service.
@@ -296,12 +331,23 @@ func (p *p2p) BlockPeer(peerID core.PeerID) {
 	)
 
 	p.pubsub.BlacklistPeer(peerID)
-	p.PeerManager.blockPeer(peerID)
+	_ = p.gater.BlockPeer(peerID)
+	_ = p.host.Network().ClosePeer(peerID)
 }
 
 // Implements api.Service.
-func (p *p2p) GetHost() core.Host {
+func (p *p2p) RegisterProtocol(pid core.ProtocolID, min int, total int) {
+	p.peerMgr.RegisterProtocol(pid, min, total)
+}
+
+// Implements api.Service.
+func (p *p2p) Host() core.Host {
 	return p.host
+}
+
+// Implements api.Service.
+func (p *p2p) PeerManager() api.PeerManager {
+	return p.peerMgr
 }
 
 // Implements api.Service.
@@ -327,7 +373,7 @@ func messageIdFn(pmsg *pb.Message) string { // nolint: revive
 }
 
 // New creates a new P2P node.
-func New(identity *identity.Identity, consensus consensus.Backend) (api.Service, error) {
+func New(identity *identity.Identity, consensus consensus.Backend, store *persistent.CommonStore) (api.Service, error) {
 	// Instantiate the libp2p host.
 	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgRegistrationAddresses))
 	if err != nil {
@@ -463,13 +509,17 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 		return nil, fmt.Errorf("p2p: failed to get consensus chain context: %w", err)
 	}
 
+	mgr := peermgmt.NewPeerManager(host, cg, pubsub, consensus, chainContext, store)
+
 	p := &p2p{
-		PeerManager:       newPeerManager(ctx, host, cg, consensus, persistentPeers),
+		ctx:               ctx,
 		ctxCancel:         ctxCancel,
 		quitCh:            make(chan struct{}),
 		chainContext:      chainContext,
 		signer:            identity.P2PSigner,
 		host:              host,
+		gater:             cg,
+		peerMgr:           mgr,
 		pubsub:            pubsub,
 		registerAddresses: registerAddresses,
 		topics:            make(map[common.Namespace]map[api.TopicKind]*topicHandler),

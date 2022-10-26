@@ -18,7 +18,6 @@ import (
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
-	"github.com/oasisprotocol/oasis-core/go/p2p/txsync"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -26,6 +25,7 @@ import (
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
+	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
 
 const periodicMetricsInterval = 60 * time.Second
@@ -350,7 +350,11 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 
 	// Mark all executor nodes in the current committee as important.
 	if ec := epoch.GetExecutorCommittee(); ec != nil {
-		n.P2P.SetNodeImportance(p2pAPI.ImportantNodeCompute, n.Runtime.ID(), ec.Peers)
+		if pm := n.P2P.PeerManager(); pm != nil {
+			if pids, err := p2pAPI.PublicKeyMapToPeerIDs(ec.Peers); err == nil {
+				pm.PeerTagger().SetPeerImportance(p2pAPI.ImportantNodeCompute, n.Runtime.ID(), pids)
+			}
+		}
 	}
 
 	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))

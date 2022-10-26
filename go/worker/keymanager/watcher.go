@@ -84,7 +84,11 @@ func (knw *kmNodeWatcher) watchNodes() {
 		}
 
 		knw.w.setAccessList(knw.w.runtime.ID(), nodes)
-		knw.w.commonWorker.P2P.SetNodeImportance(p2p.ImportantNodeKeyManager, knw.w.runtime.ID(), peers)
+		if pm := knw.w.commonWorker.P2P.PeerManager(); pm != nil {
+			if pids, err := p2p.PublicKeyMapToPeerIDs(peers); err == nil {
+				pm.PeerTagger().SetPeerImportance(p2p.ImportantNodeKeyManager, knw.w.runtime.ID(), pids)
+			}
+		}
 	}
 }
 

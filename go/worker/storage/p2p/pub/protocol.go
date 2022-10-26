@@ -1,7 +1,12 @@
 package pub
 
 import (
+	"github.com/libp2p/go-libp2p/core"
+
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -37,3 +42,20 @@ const (
 
 // IterateRequest is an Iterate request.
 type IterateRequest = syncer.IterateRequest
+
+func init() {
+	peermgmt.RegisterNodeHandler(&peermgmt.NodeHandlerBundle{
+		ProtocolsFn: func(n *node.Node, chainContext string) []core.ProtocolID {
+			if !n.HasRoles(node.RoleStorageRPC) {
+				return []core.ProtocolID{}
+			}
+
+			protocols := make([]core.ProtocolID, len(n.Runtimes))
+			for i, rt := range n.Runtimes {
+				protocols[i] = rpc.NewRuntimeProtocolID(rt.ID, StoragePubProtocolID, StoragePubProtocolVersion)
+			}
+
+			return protocols
+		},
+	})
+}

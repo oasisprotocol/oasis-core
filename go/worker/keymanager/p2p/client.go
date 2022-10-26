@@ -16,6 +16,15 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
+const (
+	// minProtocolPeers is the minimum number of peers from the registry we want to have connected
+	// for KeyManager protocol.
+	minProtocolPeers = 5
+
+	// totalProtocolPeers is the number of peers we want to have connected for KeyManager protocol.
+	totalProtocolPeers = 5
+)
+
 // Client is a keymanager protocol client.
 type Client interface {
 	// CallEnclave calls a key manager enclave with the provided data.
@@ -137,7 +146,11 @@ func (nt *nodeTracker) trackKeymanagerNodes() {
 			peerKeys[node.P2P.ID] = true
 		}
 		// Mark key manager nodes as important.
-		nt.p2p.SetNodeImportance(p2p.ImportantNodeKeyManager, nt.keymanagerID, peerKeys)
+		if pm := nt.p2p.PeerManager(); pm != nil {
+			if pids, err := p2p.PublicKeyMapToPeerIDs(peerKeys); err == nil {
+				pm.PeerTagger().SetPeerImportance(p2p.ImportantNodeKeyManager, nt.keymanagerID, pids)
+			}
+		}
 		nt.Unlock()
 
 		// Signal initialization completed.
@@ -168,8 +181,10 @@ func NewClient(p2p p2p.Service, consensus consensus.Backend, keymanagerID common
 
 	pid := rpc.NewRuntimeProtocolID(keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion)
 	mgr := rpc.NewPeerManager(p2p, pid, rpc.WithStickyPeers(true), rpc.WithPeerFilter(nt))
-	rc := rpc.NewClient(p2p.GetHost(), pid)
+	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)
+
+	p2p.RegisterProtocol(pid, minProtocolPeers, totalProtocolPeers)
 
 	return &client{
 		rc:  rc,

@@ -3,7 +3,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core"
@@ -43,6 +42,12 @@ type Status struct {
 
 	// NumConnections is the number of peer connections.
 	NumConnections int `json:"num_connections"`
+
+	// Protocols is a set of registered protocols together with the number of connected peers.
+	Protocols map[core.ProtocolID]int `json:"protocols"`
+
+	// Topics is a set of registered topics together with the number of connected peers.
+	Topics map[string]int `json:"topics"`
 }
 
 // Service is a P2P node service interface.
@@ -70,8 +75,14 @@ type Service interface {
 	// BlockPeer blocks a specific peer from being used by the local node.
 	BlockPeer(peerID core.PeerID)
 
-	// GetHost returns the P2P host.
-	GetHost() core.Host
+	// Host returns the P2P host.
+	Host() core.Host
+
+	// PeerManager returns the P2P peer manager.
+	PeerManager() PeerManager
+
+	// RegisterProtocol starts tracking and managing peers that support the given protocol.
+	RegisterProtocol(p core.ProtocolID, min int, total int)
 
 	// RegisterProtocolServer registers a protocol server for the given protocol.
 	RegisterProtocolServer(srv rpc.Server)
@@ -80,11 +91,6 @@ type Service interface {
 	// the caller when publishing the same message. If Publish is called for the same message more
 	// quickly, the message may be dropped and not published.
 	GetMinRepublishInterval() time.Duration
-
-	// SetNodeImportance configures node importance for the given set of nodes.
-	//
-	// This makes it less likely for those nodes to be pruned.
-	SetNodeImportance(kind ImportanceKind, runtimeID common.Namespace, p2pIDs map[signature.PublicKey]bool)
 }
 
 // Handler is a handler for P2P messages.
@@ -105,49 +111,29 @@ type Handler interface {
 	HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error
 }
 
-// PublicKeyToPeerID converts a public key to a peer identifier.
-func PublicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
-	pubKey, err := publicKeyToPubKey(pk)
-	if err != nil {
-		return "", err
-	}
+// PeerManager is an interface for managing peers in the P2P network.
+type PeerManager interface {
+	// PeerRegistry returns the peer registry.
+	PeerRegistry() PeerRegistry
 
-	id, err := peer.IDFromPublicKey(pubKey)
-	if err != nil {
-		return "", err
-	}
-
-	return id, nil
+	// PeerTagger returns the peer tagger.
+	PeerTagger() PeerTagger
 }
 
-const peerTagImportancePrefix = "oasis-core/importance"
+// PeerRegistry is an interface for accessing peer information from the registry.
+type PeerRegistry interface {
+	// Initialized returns a channel that will be closed once the first node refresh event from
+	// the registry is received.
+	Initialized() <-chan struct{}
 
-// ImportanceKind is the node importance kind.
-type ImportanceKind uint8
-
-const (
-	ImportantNodeCompute    = 1
-	ImportantNodeKeyManager = 2
-)
-
-// Tag returns the connection manager tag associated with the given importance kind.
-func (ik ImportanceKind) Tag(runtimeID common.Namespace) string {
-	switch ik {
-	case ImportantNodeCompute:
-		return peerTagImportancePrefix + "/compute/" + runtimeID.String()
-	case ImportantNodeKeyManager:
-		return peerTagImportancePrefix + "/keymanager/" + runtimeID.String()
-	default:
-		panic(fmt.Errorf("unsupported tag: %d", ik))
-	}
+	// NumPeers returns the number of registered peers.
+	NumPeers() int
 }
 
-// TagValue returns the connection manager tag value associated with the given importance kind.
-func (ik ImportanceKind) TagValue() int {
-	switch ik {
-	case ImportantNodeCompute, ImportantNodeKeyManager:
-		return 1000
-	default:
-		panic(fmt.Errorf("unsupported tag: %d", ik))
-	}
+// PeerTagger is an interface for tagging important peers.
+type PeerTagger interface {
+	// SetPeerImportance configures peer importance for the given list of peers.
+	//
+	// This makes it less likely for those peers to be pruned.
+	SetPeerImportance(kind ImportanceKind, runtimeID common.Namespace, pids []peer.ID)
 }

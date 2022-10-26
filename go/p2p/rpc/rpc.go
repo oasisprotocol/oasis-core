@@ -19,8 +19,11 @@ type P2P interface {
 	// BlockPeer blocks a specific peer from being used by the local node.
 	BlockPeer(peerID core.PeerID)
 
-	// GetHost returns the P2P host.
-	GetHost() core.Host
+	// RegisterProtocol starts tracking and managing peers that support given protocol.
+	RegisterProtocol(p core.ProtocolID, min int, total int)
+
+	// Host returns the P2P host.
+	Host() core.Host
 }
 
 // NewProtocolID generates a protocol identifier for a consensus P2P protocol.
