@@ -72,6 +72,6 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 // NewClient creates a new transaction sync protocol client.
 func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
 	return &client{
-		rc: rpc.NewClient(p2p, runtimeID, TxSyncProtocolID, TxSyncProtocolVersion),
+		rc: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, TxSyncProtocolID, TxSyncProtocolVersion)),
 	}
 }

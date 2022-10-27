@@ -7,11 +7,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
 const (
@@ -38,7 +36,6 @@ type Server interface {
 type server struct {
 	Service
 
-	runtimeID  common.Namespace
 	protocolID protocol.ID
 
 	logger *logging.Logger
@@ -106,16 +103,10 @@ func (s *server) HandleStream(stream network.Stream) {
 }
 
 // NewServer creates a new RPC server for the given protocol.
-func NewServer(runtimeID common.Namespace, protocolID string, version version.Version, srv Service) Server {
-	pid := NewRuntimeProtocolID(runtimeID, protocolID, version)
-
+func NewServer(protocolID protocol.ID, srv Service) Server {
 	return &server{
 		Service:    srv,
-		runtimeID:  runtimeID,
-		protocolID: pid,
-		logger: logging.GetLogger("worker/common/p2p/rpc/server").With(
-			"protocol", protocolID,
-			"runtime_id", runtimeID,
-		),
+		protocolID: protocolID,
+		logger:     logging.GetLogger("p2p/rpc/server").With("protocol", protocolID),
 	}
 }

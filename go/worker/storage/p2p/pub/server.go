@@ -43,5 +43,5 @@ func (s *service) HandleRequest(ctx context.Context, method string, body cbor.Ra
 
 // NewServer creates a new storage pub protocol server.
 func NewServer(runtimeID common.Namespace, backend storage.Backend) rpc.Server {
-	return rpc.NewServer(runtimeID, StoragePubProtocolID, StoragePubProtocolVersion, &service{backend})
+	return rpc.NewServer(rpc.NewRuntimeProtocolID(runtimeID, StoragePubProtocolID, StoragePubProtocolVersion), &service{backend})
 }

@@ -51,5 +51,5 @@ func (s *service) handleGetTxs(ctx context.Context, request *GetTxsRequest) (*Ge
 
 // NewServer creates a new transaction sync protocol server.
 func NewServer(runtimeID common.Namespace, txPool txpool.TransactionPool) rpc.Server {
-	return rpc.NewServer(runtimeID, TxSyncProtocolID, TxSyncProtocolVersion, &service{txPool})
+	return rpc.NewServer(rpc.NewRuntimeProtocolID(runtimeID, TxSyncProtocolID, TxSyncProtocolVersion), &service{txPool})
 }

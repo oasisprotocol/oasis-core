@@ -50,5 +50,5 @@ func (s *service) handleCallEnclave(ctx context.Context, request *CallEnclaveReq
 func NewServer(runtimeID common.Namespace, km KeyManager) rpc.Server {
 	initMetrics()
 
-	return rpc.NewServer(runtimeID, KeyManagerProtocolID, KeyManagerProtocolVersion, &service{km})
+	return rpc.NewServer(rpc.NewRuntimeProtocolID(runtimeID, KeyManagerProtocolID, KeyManagerProtocolVersion), &service{km})
 }
