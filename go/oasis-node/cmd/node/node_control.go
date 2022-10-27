@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -112,6 +112,7 @@ func (n *Node) CancelUpgrade(ctx context.Context, descriptor *upgrade.Descriptor
 	return n.Upgrader.CancelUpgrade(ctx, descriptor)
 }
 
+// GetStatus implements control.NodeController.
 func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 	cs, err := n.getConsensusStatus(ctx)
 	if err != nil {
@@ -138,7 +139,9 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		return nil, fmt.Errorf("failed to get pending upgrades: %w", err)
 	}
 
-	ident := n.getIdentity()
+	ident := n.getIdentityStatus()
+
+	p2p := n.getP2PStatus()
 
 	var ds *control.DebugStatus
 	if debugEnabled := cmdFlags.DebugDontBlameOasis(); debugEnabled {
@@ -151,31 +154,28 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
 		Debug:           ds,
-		Identity: control.IdentityStatus{
-			Node:      ident.NodeSigner.Public(),
-			P2P:       ident.P2PSigner.Public(),
-			Consensus: ident.ConsensusSigner.Public(),
-			TLS:       ident.GetTLSPubKeys(),
-		},
+		Identity:        ident,
 		Consensus:       cs,
 		Runtimes:        runtimes,
 		Keymanager:      kms,
 		Registration:    rs,
 		PendingUpgrades: pendingUpgrades,
+		P2P:             p2p,
 	}, nil
 }
 
-// GetIdentity implements control.NodeController.
-func (n *Node) getIdentity() *identity.Identity {
-	return n.Identity
+func (n *Node) getIdentityStatus() control.IdentityStatus {
+	return control.IdentityStatus{
+		Node:      n.Identity.NodeSigner.Public(),
+		Consensus: n.Identity.ConsensusSigner.Public(),
+		TLS:       n.Identity.GetTLSPubKeys(),
+	}
 }
 
-// GetConsensusStatus implements control.NodeController.
 func (n *Node) getConsensusStatus(ctx context.Context) (*consensus.Status, error) {
 	return n.Consensus.GetStatus(ctx)
 }
 
-// GetRegistrationStatus implements control.NodeController.
 func (n *Node) getRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
 	if n.RegistrationWorker == nil {
 		return &control.RegistrationStatus{}, nil
@@ -183,7 +183,6 @@ func (n *Node) getRegistrationStatus(ctx context.Context) (*control.Registration
 	return n.RegistrationWorker.GetRegistrationStatus(ctx)
 }
 
-// GetRuntimeStatus implements control.NodeController.
 func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]control.RuntimeStatus, error) {
 	runtimes := make(map[common.Namespace]control.RuntimeStatus)
 
@@ -297,7 +296,6 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 	return runtimes, nil
 }
 
-// GetKeymanagerStatus implements control.NodeController.
 func (n *Node) getKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Status, error) {
 	if n.KeymanagerWorker == nil || !n.KeymanagerWorker.Enabled() {
 		return nil, nil
@@ -305,7 +303,10 @@ func (n *Node) getKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Statu
 	return n.KeymanagerWorker.GetStatus(ctx)
 }
 
-// GetPendingUpgrades implements control.NodeController.
 func (n *Node) getPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error) {
 	return n.Upgrader.PendingUpgrades(ctx)
+}
+
+func (n *Node) getP2PStatus() *p2p.Status {
+	return n.P2P.GetStatus()
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -62,6 +63,7 @@ type p2p struct {
 	quitCh    chan struct{}
 
 	chainContext string
+	signer       signature.Signer
 
 	host   core.Host
 	pubsub *pubsub.PubSub
@@ -97,6 +99,17 @@ func (p *p2p) Stop() {
 // Implements api.Service.
 func (p *p2p) Quit() <-chan struct{} {
 	return p.quitCh
+}
+
+// Implements api.Service.
+func (p *p2p) GetStatus() *api.Status {
+	return &api.Status{
+		PubKey:         p.signer.Public(),
+		PeerID:         p.host.ID(),
+		Addresses:      p.Addresses(),
+		NumPeers:       len(p.host.Network().Peers()),
+		NumConnections: len(p.host.Network().Conns()),
+	}
 }
 
 // Implements api.Service.
@@ -455,6 +468,7 @@ func New(identity *identity.Identity, consensus consensus.Backend) (api.Service,
 		ctxCancel:         ctxCancel,
 		quitCh:            make(chan struct{}),
 		chainContext:      chainContext,
+		signer:            identity.P2PSigner,
 		host:              host,
 		pubsub:            pubsub,
 		registerAddresses: registerAddresses,

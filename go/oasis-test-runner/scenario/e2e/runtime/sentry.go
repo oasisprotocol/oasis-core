@@ -345,7 +345,7 @@ func loadSentryNodeInfo(s *oasis.Sentry) (*oasis.Sentry, string, string, signatu
 }
 
 func consensusTendermintAddrs(status *control.Status) (consensusPeers []string) {
-	for _, np := range status.Consensus.NodePeers {
+	for _, np := range status.Consensus.P2P.Peers {
 		consensusPeers = append(consensusPeers, strings.Split(np, "@")[0])
 	}
 	return

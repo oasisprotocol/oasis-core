@@ -27,9 +27,30 @@ const (
 	TopicKindTx TopicKind = "tx"
 )
 
+// Status is the P2P status of a node.
+type Status struct {
+	// PubKey is the public key used for P2P communication.
+	PubKey signature.PublicKey `json:"pub_key"`
+
+	// PeerID is the peer ID derived by hashing peer's public key.
+	PeerID peer.ID `json:"peer_id"`
+
+	// Addresses is a list of configured P2P addresses used when registering the node.
+	Addresses []node.Address `json:"addresses"`
+
+	// NumPeers is the number of connected peers.
+	NumPeers int `json:"num_peers"`
+
+	// NumConnections is the number of peer connections.
+	NumConnections int `json:"num_connections"`
+}
+
 // Service is a P2P node service interface.
 type Service interface {
 	service.BackgroundService
+
+	// GetStatus returns the P2P status of the node.
+	GetStatus() *Status
 
 	// Addresses returns the P2P addresses of the node.
 	Addresses() []node.Address
