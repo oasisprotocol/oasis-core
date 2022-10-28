@@ -32,6 +32,64 @@ const (
 	globalInvAlpha = 25
 )
 
+// PeerManagerOptions are peer manager options.
+type PeerManagerOptions struct {
+	peerFilter  PeerFilter
+	stickyPeers bool
+}
+
+// PeerManagerOption is a peer manager option setter.
+type PeerManagerOption func(opts *PeerManagerOptions)
+
+// PeerFilter is a peer filtering interface.
+type PeerFilter interface {
+	// IsPeerAcceptable checks whether the given peer should be used.
+	IsPeerAcceptable(peerID core.PeerID) bool
+}
+
+// WithPeerFilter configures peer filtering.
+//
+// When set, only peers accepted by the filter will be returned.
+func WithPeerFilter(filter PeerFilter) PeerManagerOption {
+	return func(opts *PeerManagerOptions) {
+		opts.peerFilter = filter
+	}
+}
+
+// WithStickyPeers configures the sticky peers feature.
+//
+// When enabled, the last successful peer will be stuck and reused on subsequent selections
+// of the best peers until the peer is deemed bad.
+func WithStickyPeers(enabled bool) PeerManagerOption {
+	return func(opts *PeerManagerOptions) {
+		opts.stickyPeers = enabled
+	}
+}
+
+// BestPeersOptions are per-call options.
+type BestPeersOptions struct {
+	limitPeers map[core.PeerID]struct{}
+}
+
+// NewBestPeersOptions creates options using default and given values.
+func NewBestPeersOptions(opts ...BestPeersOption) *BestPeersOptions {
+	bpo := BestPeersOptions{}
+	for _, opt := range opts {
+		opt(&bpo)
+	}
+	return &bpo
+}
+
+// BestPeersOption is a per-call option setter.
+type BestPeersOption func(opts *BestPeersOptions)
+
+// WithLimitPeers configures the peers that the call should be limited to.
+func WithLimitPeers(peers map[core.PeerID]struct{}) BestPeersOption {
+	return func(opts *BestPeersOptions) {
+		opts.limitPeers = peers
+	}
+}
+
 // PeerManager is an interface for keeping track of peer statistics in order to guide peer selection
 // when performing RPC requests.
 type PeerManager interface {
@@ -56,7 +114,7 @@ type PeerManager interface {
 
 	// GetBestPeers returns a set of peers sorted by the probability that they will be able to
 	// answer our requests the fastest with some randomization.
-	GetBestPeers() []core.PeerID
+	GetBestPeers(opts ...BestPeersOption) []core.PeerID
 }
 
 type peerStats struct {
@@ -95,10 +153,11 @@ type peerManager struct {
 	peers        map[core.PeerID]*peerStats
 	ignoredPeers map[core.PeerID]bool
 
-	stickyPeers bool
-	stickyPeer  core.PeerID
+	stickyPeer core.PeerID
 
 	avgRequestLatency time.Duration
+
+	opts *PeerManagerOptions
 
 	logger *logging.Logger
 }
@@ -161,7 +220,7 @@ func (mgr *peerManager) RecordSuccess(peerID core.PeerID, latency time.Duration)
 
 	mgr.host.ConnManager().TagPeer(peerID, string(mgr.protocolID), SuccessConnManagerPeerTagValue)
 
-	if mgr.stickyPeers {
+	if mgr.opts.stickyPeers {
 		mgr.stickyPeer = peerID
 	}
 }
@@ -190,7 +249,7 @@ func (mgr *peerManager) RecordBadPeer(peerID core.PeerID) {
 }
 
 func (mgr *peerManager) unstickPeerLocked(peerID core.PeerID) {
-	if !mgr.stickyPeers {
+	if !mgr.opts.stickyPeers {
 		return
 	}
 
@@ -199,14 +258,24 @@ func (mgr *peerManager) unstickPeerLocked(peerID core.PeerID) {
 	}
 }
 
-func (mgr *peerManager) GetBestPeers() []core.PeerID {
+func (mgr *peerManager) GetBestPeers(opts ...BestPeersOption) []core.PeerID {
 	mgr.Lock()
 	defer mgr.Unlock()
 
-	// Start by including all peers.
+	o := NewBestPeersOptions(opts...)
+
+	// Start by including peers that are acceptable and in the limited set.
 	var haveStickyPeer bool
 	peers := make([]core.PeerID, 0, len(mgr.peers))
 	for peer := range mgr.peers {
+		if !mgr.isPeerAcceptable(peer) {
+			continue
+		}
+		if o.limitPeers != nil {
+			if _, exists := o.limitPeers[peer]; !exists {
+				continue
+			}
+		}
 		if mgr.stickyPeer == peer {
 			// Do not include the sticky peer so we can prepend it later.
 			haveStickyPeer = true
@@ -324,19 +393,33 @@ func (mgr *peerManager) peerProtocolWatcher() {
 	}
 }
 
+func (mgr *peerManager) isPeerAcceptable(peerID core.PeerID) bool {
+	if mgr.opts.peerFilter == nil {
+		return true
+	}
+
+	return mgr.opts.peerFilter.IsPeerAcceptable(peerID)
+}
+
 // NewPeerManager creates a new peer manager for the given protocol.
-func NewPeerManager(p2p P2P, protocolID protocol.ID, stickyPeers bool) PeerManager {
+func NewPeerManager(p2p P2P, protocolID protocol.ID, opts ...PeerManagerOption) PeerManager {
 	if p2p.GetHost() == nil {
-		// No P2P service, use the no-op peer manager
+		// No P2P service, use the no-op peer manager.
 		return &nopPeerManager{}
 	}
+
+	var pmo PeerManagerOptions
+	for _, opt := range opts {
+		opt(&pmo)
+	}
+
 	mgr := &peerManager{
 		p2p:          p2p,
 		host:         p2p.GetHost(),
 		protocolID:   protocolID,
 		peers:        make(map[core.PeerID]*peerStats),
 		ignoredPeers: make(map[core.PeerID]bool),
-		stickyPeers:  stickyPeers,
+		opts:         &pmo,
 		logger: logging.GetLogger("p2p/rpc/peermgr").With(
 			"protocol_id", protocolID,
 		),

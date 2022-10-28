@@ -15,7 +15,7 @@ func (*nopPeerManager) AddPeer(peerID peer.ID) {
 }
 
 // Implements PeerManager.
-func (*nopPeerManager) GetBestPeers() []peer.ID {
+func (*nopPeerManager) GetBestPeers(opts ...BestPeersOption) []peer.ID {
 	return nil
 }
 
@@ -35,13 +35,12 @@ func (*nopPeerManager) RecordSuccess(peerID peer.ID, latency time.Duration) {
 func (*nopPeerManager) RemovePeer(peerID peer.ID) {
 }
 
-type nopClient struct {
-	*nopPeerManager
-}
+type nopClient struct{}
 
 // Implements Client.
 func (c *nopClient) Call(
 	ctx context.Context,
+	peers []peer.ID,
 	method string,
 	body, rsp interface{},
 	maxPeerResponseTime time.Duration,
@@ -53,6 +52,7 @@ func (c *nopClient) Call(
 // Implements Client.
 func (c *nopClient) CallMulti(
 	ctx context.Context,
+	peers []peer.ID,
 	method string,
 	body, rspTyp interface{},
 	maxPeerResponseTime time.Duration,
@@ -61,3 +61,9 @@ func (c *nopClient) CallMulti(
 ) ([]interface{}, []PeerFeedback, error) {
 	return nil, nil, fmt.Errorf("unsupported: p2p is disabled")
 }
+
+// Implements Client.
+func (c *nopClient) RegisterListener(l ClientListener) {}
+
+// Implements Client.
+func (c *nopClient) UnregisterListener(l ClientListener) {}

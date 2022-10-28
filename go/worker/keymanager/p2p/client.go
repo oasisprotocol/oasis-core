@@ -29,13 +29,14 @@ type Client interface {
 }
 
 type client struct {
-	rc rpc.Client
-	nt *nodeTracker
+	rc  rpc.Client
+	mgr rpc.PeerManager
+	nt  *nodeTracker
 }
 
 func (c *client) CallEnclave(ctx context.Context, request *CallEnclaveRequest) (*CallEnclaveResponse, rpc.PeerFeedback, error) {
 	var rsp CallEnclaveResponse
-	pf, err := c.rc.Call(ctx, MethodCallEnclave, request, &rsp, MaxCallEnclaveResponseTime,
+	pf, err := c.rc.Call(ctx, c.mgr.GetBestPeers(), MethodCallEnclave, request, &rsp, MaxCallEnclaveResponseTime,
 		rpc.WithMaxRetries(MaxCallEnclaveRetries),
 		rpc.WithRetryInterval(CallEnclaveRetryInterval),
 	)
@@ -166,11 +167,14 @@ func NewClient(p2p p2p.Service, consensus consensus.Backend, keymanagerID common
 	}
 	go nt.trackKeymanagerNodes()
 
+	pid := rpc.NewRuntimeProtocolID(keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion)
+	mgr := rpc.NewPeerManager(p2p, pid, rpc.WithStickyPeers(true), rpc.WithPeerFilter(nt))
+	rc := rpc.NewClient(p2p.GetHost(), pid)
+	rc.RegisterListener(mgr)
+
 	return &client{
-		rc: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion),
-			rpc.WithStickyPeers(true),
-			rpc.WithPeerFilter(nt),
-		),
-		nt: nt,
+		rc:  rc,
+		mgr: mgr,
+		nt:  nt,
 	}
 }

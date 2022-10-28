@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 
+	"github.com/libp2p/go-libp2p/core"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
@@ -35,13 +37,15 @@ type Checkpoint struct {
 }
 
 type client struct {
-	rcDiff        rpc.Client
-	rcCheckpoints rpc.Client
+	rcC  rpc.Client
+	rcD  rpc.Client
+	mgrC rpc.PeerManager
+	mgrD rpc.PeerManager
 }
 
 func (c *client) GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiffResponse, rpc.PeerFeedback, error) {
 	var rsp GetDiffResponse
-	pf, err := c.rcDiff.Call(ctx, MethodGetDiff, request, &rsp, MaxGetDiffResponseTime)
+	pf, err := c.rcD.Call(ctx, c.mgrD.GetBestPeers(), MethodGetDiff, request, &rsp, MaxGetDiffResponseTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -50,7 +54,7 @@ func (c *client) GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiff
 
 func (c *client) GetCheckpoints(ctx context.Context, request *GetCheckpointsRequest) ([]*Checkpoint, error) {
 	var rsp GetCheckpointsResponse
-	rsps, pfs, err := c.rcCheckpoints.CallMulti(ctx, MethodGetCheckpoints, request, rsp,
+	rsps, pfs, err := c.rcC.CallMulti(ctx, c.mgrC.GetBestPeers(), MethodGetCheckpoints, request, rsp,
 		MaxGetCheckpointsResponseTime,
 		MaxGetCheckpointsParallelRequests,
 	)
@@ -90,17 +94,20 @@ func (c *client) GetCheckpointChunk(
 	request *GetCheckpointChunkRequest,
 	cp *Checkpoint,
 ) (*GetCheckpointChunkResponse, rpc.PeerFeedback, error) {
-	var opts []rpc.CallOption
+	var opts []rpc.BestPeersOption
 	// When a checkpoint is passed, we limit requests to only those peers that actually advertised
 	// having the checkpoint in question to avoid needless requests.
 	if cp != nil {
-		opts = append(opts, rpc.WithLimitPeers(cp.Peers))
+		peers := make(map[core.PeerID]struct{})
+		for _, pf := range cp.Peers {
+			peers[pf.PeerID()] = struct{}{}
+		}
+		opts = append(opts, rpc.WithLimitPeers(peers))
 	}
 
 	var rsp GetCheckpointChunkResponse
-	pf, err := c.rcCheckpoints.Call(ctx, MethodGetCheckpointChunk, request, &rsp,
+	pf, err := c.rcC.Call(ctx, c.mgrC.GetBestPeers(opts...), MethodGetCheckpointChunk, request, &rsp,
 		MaxGetCheckpointChunkResponseTime,
-		opts...,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -110,11 +117,23 @@ func (c *client) GetCheckpointChunk(
 
 // NewClient creates a new storage sync protocol client.
 func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
+	// Use two separate clients and managers for the same protocol. This is to make sure that peers
+	// are scored differently between the two use cases (syncing diffs vs. syncing checkpoints). We
+	// could consider separating this into two protocols in the future.
+	pid := rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+
+	rcC := rpc.NewClient(p2p.GetHost(), pid)
+	mgrC := rpc.NewPeerManager(p2p, pid)
+	rcC.RegisterListener(mgrC)
+
+	rcD := rpc.NewClient(p2p.GetHost(), pid)
+	mgrD := rpc.NewPeerManager(p2p, pid)
+	rcD.RegisterListener(mgrD)
+
 	return &client{
-		// Use two separate clients for the same protocol. This is to make sure that peers are
-		// scored differently between the two use cases (syncing diffs vs. syncing checkpoints). We
-		// could consider separating this into two protocols in the future.
-		rcDiff:        rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)),
-		rcCheckpoints: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)),
+		rcC:  rcC,
+		rcD:  rcD,
+		mgrC: mgrC,
+		mgrD: mgrD,
 	}
 }
