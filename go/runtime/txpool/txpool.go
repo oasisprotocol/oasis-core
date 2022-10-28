@@ -32,10 +32,15 @@ const (
 	// abortTimeout is the maximum time the runtime can spend aborting.
 	abortTimeout = 5 * time.Second
 	// maxRepublishTxs is the maximum amount of transactions to republish.
-	maxRepublishTxs = 32
+	maxRepublishTxs = 128
 	// newBlockPublishDelay is the time to wait to publish any newly checked transactions after
 	// receiving a new block. It should be roughly the block propagation delay.
 	newBlockPublishDelay = 200 * time.Millisecond
+
+	// republishLimitReinvokeTimeout is the timeout to the next republish worker invocation in
+	// case when the maxRepublishTxs limit is reached. This should be much shorter than the
+	// RepublishInterval.
+	republishLimitReinvokeTimeout = 1 * time.Second
 )
 
 // Config is the transaction pool configuration.
@@ -806,7 +811,10 @@ func (t *txPool) republishWorker() {
 			_ = t.seenCache.Put(tx.Hash(), time.Now())
 
 			republishedCount++
-			if republishedCount > maxRepublishTxs {
+			if republishedCount >= maxRepublishTxs {
+				// If the limit of max republish transactions has been reached
+				// republish again sooner.
+				nextPendingRepublish = republishLimitReinvokeTimeout
 				break
 			}
 		}
