@@ -250,7 +250,10 @@ func (c *checkpointer) maybeCheckpoint(ctx context.Context, version uint64, para
 		}
 	}
 
-	// Garbage collect old checkpoints.
+	// Garbage collect old checkpoints, first making sure that genesis checkpoint is excluded.
+	if len(cpVersions) > 0 && cpVersions[0] == params.InitialVersion {
+		cpVersions = cpVersions[1:]
+	}
 	if int(params.NumKept) < len(cpVersions) {
 		c.logger.Info("performing checkpoint garbage collection",
 			"num_checkpoints", len(cpVersions),
