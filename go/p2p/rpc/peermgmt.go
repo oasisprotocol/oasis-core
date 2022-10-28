@@ -119,6 +119,7 @@ func (mgr *peerManager) AddPeer(peerID core.PeerID) {
 
 	mgr.logger.Debug("added new peer",
 		"peer_id", peerID,
+		"num_peers", len(mgr.peers),
 	)
 }
 
@@ -134,6 +135,7 @@ func (mgr *peerManager) RemovePeer(peerID core.PeerID) {
 
 	mgr.logger.Debug("removed peer",
 		"peer_id", peerID,
+		"num_peers", len(mgr.peers),
 	)
 }
 
