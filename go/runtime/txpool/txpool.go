@@ -32,7 +32,7 @@ const (
 	// abortTimeout is the maximum time the runtime can spend aborting.
 	abortTimeout = 5 * time.Second
 	// maxRepublishTxs is the maximum amount of transactions to republish.
-	maxRepublishTxs = 32
+	maxRepublishTxs = 128
 	// newBlockPublishDelay is the time to wait to publish any newly checked transactions after
 	// receiving a new block. It should be roughly the block propagation delay.
 	newBlockPublishDelay = 200 * time.Millisecond
