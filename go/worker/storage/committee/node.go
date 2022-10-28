@@ -911,6 +911,11 @@ func (n *Node) worker() { // nolint: gocyclo
 	//
 	// - We haven't synced anything yet and checkpoint sync is not disabled.
 	//
+	// If checkpoint sync is disabled but sync has been forced (e.g. because the state at genesis
+	// is non-empty), we must request to sync the checkpoint at genesis as otherwise we will jump
+	// to a later state which may not be desired given that checkpoint sync has been explicitly
+	// disabled via config.
+	//
 	if (isInitialStartup && !n.checkpointSyncCfg.Disabled) || n.checkpointSyncForced {
 		var (
 			summary *blockSummary
@@ -918,7 +923,7 @@ func (n *Node) worker() { // nolint: gocyclo
 		)
 	CheckpointSyncRetry:
 		for {
-			summary, err = n.syncCheckpoints(genesisBlock.Header.Round)
+			summary, err = n.syncCheckpoints(genesisBlock.Header.Round, n.checkpointSyncCfg.Disabled)
 			if err == nil {
 				break
 			}
