@@ -331,7 +331,7 @@ func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask o
 	return false
 }
 
-func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
+func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*blockSummary, error) {
 	// Store roots and round info for checkpoints that finished syncing.
 	// Round and namespace info will get overwritten as rounds are skipped
 	// for errors, driven by remainingRoots.
@@ -341,6 +341,17 @@ func (n *Node) syncCheckpoints(genesisRound uint64) (*blockSummary, error) {
 	cps, err := n.getCheckpointList()
 	if err != nil {
 		return nil, fmt.Errorf("can't get checkpoint list from peers: %w", err)
+	}
+
+	// If we only want the genesis checkpoint, filter it out.
+	if wantOnlyGenesis && len(cps) > 0 {
+		var filteredCps []*storageSync.Checkpoint
+		for _, cp := range cps {
+			if cp.Root.Version == genesisRound {
+				filteredCps = append(filteredCps, cp)
+			}
+		}
+		cps = filteredCps
 	}
 
 	// Try all the checkpoints now, from most recent backwards.
