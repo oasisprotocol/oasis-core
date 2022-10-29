@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -99,6 +98,17 @@ type CallOptions struct {
 	validationFn  ValidationFunc
 }
 
+// NewCallOptions creates options using default and given values.
+func NewCallOptions(opts ...CallOption) *CallOptions {
+	co := CallOptions{
+		retryInterval: DefaultCallRetryInterval,
+	}
+	for _, opt := range opts {
+		opt(&co)
+	}
+	return &co
+}
+
 // CallOption is a per-call option setter.
 type CallOption func(opts *CallOptions)
 
@@ -136,6 +146,15 @@ type CallMultiOptions struct {
 	aggregateFn AggregateFunc
 }
 
+// NewCallMultiOptions creates options using default and given values.
+func NewCallMultiOptions(opts ...CallMultiOption) *CallMultiOptions {
+	var co CallMultiOptions
+	for _, opt := range opts {
+		opt(&co)
+	}
+	return &co
+}
+
 // CallMultiOption is a per-multicall option setter.
 type CallMultiOption func(opts *CallMultiOptions)
 
@@ -160,16 +179,31 @@ type ClientListener interface {
 
 // Client is an RPC client for a given protocol.
 type Client interface {
-	// Call attempts to route the given RPC method call to one of the peers in the list in
-	// a sequential order. It's up to the caller to prioritize peers and to provide only
-	// connected peers that support the protocol.
+	// Call attempts to route the given RPC method call to the given peer. It's up to the caller
+	// to provide only connected peers that support the protocol.
 	//
 	// On success it returns a PeerFeedback instance that should be used by the caller to provide
 	// deferred feedback on whether the peer is any good or not. This will help guide later choices
 	// when routing calls.
 	Call(
 		ctx context.Context,
-		peers []peer.ID,
+		peer core.PeerID,
+		method string,
+		body, rsp interface{},
+		maxPeerResponseTime time.Duration,
+		opts ...CallOption,
+	) (PeerFeedback, error)
+
+	// CallOne attempts to route the given RPC method call to one of the peers in the list in
+	// a sequential order. It's up to the caller to prioritize peers and to provide only
+	// connected peers that support the protocol.
+	//
+	// On success it returns a PeerFeedback instance that should be used by the caller to provide
+	// deferred feedback on whether the peer is any good or not. This will help guide later choices
+	// when routing calls.
+	CallOne(
+		ctx context.Context,
+		peers []core.PeerID,
 		method string,
 		body, rsp interface{},
 		maxPeerResponseTime time.Duration,
@@ -183,7 +217,7 @@ type Client interface {
 	// It returns all successfully retrieved results and their corresponding PeerFeedback instances.
 	CallMulti(
 		ctx context.Context,
-		peers []peer.ID,
+		peers []core.PeerID,
 		method string,
 		body, rspTyp interface{},
 		maxPeerResponseTime time.Duration,
@@ -214,7 +248,18 @@ type client struct {
 
 func (c *client) Call(
 	ctx context.Context,
-	peers []peer.ID,
+	peer core.PeerID,
+	method string,
+	body, rsp interface{},
+	maxPeerResponseTime time.Duration,
+	opts ...CallOption,
+) (PeerFeedback, error) {
+	return c.CallOne(ctx, []core.PeerID{peer}, method, body, rsp, maxPeerResponseTime, opts...)
+}
+
+func (c *client) CallOne(
+	ctx context.Context,
+	peers []core.PeerID,
 	method string,
 	body, rsp interface{},
 	maxPeerResponseTime time.Duration,
@@ -222,12 +267,7 @@ func (c *client) Call(
 ) (PeerFeedback, error) {
 	c.logger.Debug("call", "method", method)
 
-	co := CallOptions{
-		retryInterval: DefaultCallRetryInterval,
-	}
-	for _, opt := range opts {
-		opt(&co)
-	}
+	co := NewCallOptions(opts...)
 
 	// Prepare the request.
 	request := Request{
@@ -245,7 +285,7 @@ func (c *client) Call(
 			)
 
 			var err error
-			pf, err = c.call(ctx, peer, &request, rsp, maxPeerResponseTime)
+			pf, err = c.timeCall(ctx, peer, &request, rsp, maxPeerResponseTime)
 			if err != nil {
 				continue
 			}
@@ -271,20 +311,14 @@ func (c *client) Call(
 		return fmt.Errorf("call failed on all peers")
 	}
 
-	var err error
-	if co.maxRetries > 0 {
-		retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(co.retryInterval), co.maxRetries)
-		err = backoff.Retry(tryPeers, backoff.WithContext(retry, ctx))
-	} else {
-		err = tryPeers()
-	}
+	err := retryFn(ctx, tryPeers, co.maxRetries, co.retryInterval)
 
 	return pf, err
 }
 
 func (c *client) CallMulti(
 	ctx context.Context,
-	peers []peer.ID,
+	peers []core.PeerID,
 	method string,
 	body, rspTyp interface{},
 	maxPeerResponseTime time.Duration,
@@ -293,10 +327,7 @@ func (c *client) CallMulti(
 ) ([]interface{}, []PeerFeedback, error) {
 	c.logger.Debug("call multiple", "method", method)
 
-	var co CallMultiOptions
-	for _, opt := range opts {
-		opt(&co)
-	}
+	co := NewCallMultiOptions(opts...)
 
 	// Prepare the request.
 	request := Request{
@@ -338,7 +369,7 @@ func (c *client) CallMulti(
 			}
 
 			rsp := reflect.New(reflect.TypeOf(rspTyp)).Interface()
-			pf, err := c.call(peerCtx, peer, &request, rsp, maxPeerResponseTime)
+			pf, err := c.timeCall(peerCtx, peer, &request, rsp, maxPeerResponseTime)
 			ch.In() <- &result{rsp, pf, err}
 		})
 	}
@@ -380,42 +411,35 @@ func (c *client) CallMulti(
 	return rsps, pfs, nil
 }
 
-func (c *client) call(
+func (c *client) timeCall(
 	ctx context.Context,
 	peerID core.PeerID,
 	request *Request,
 	rsp interface{},
 	maxPeerResponseTime time.Duration,
 ) (PeerFeedback, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
+	start := time.Now()
+	err := c.call(ctx, peerID, request, rsp, maxPeerResponseTime)
+	latency := time.Since(start)
 
-	startTime := time.Now()
-
-	err := c.sendRequestAndDecodeResponse(ctx, peerID, request, rsp, maxPeerResponseTime)
 	if err != nil {
+		c.recordFailure(peerID, latency)
+
 		c.logger.Debug("failed to call method",
 			"err", err,
 			"method", request.Method,
 			"peer_id", peerID,
 		)
-
-		c.recordFailure(peerID, time.Since(startTime))
-		return nil, err
 	}
 
-	pf := &peerFeedback{
+	return &peerFeedback{
 		client:  c,
 		peerID:  peerID,
-		latency: time.Since(startTime),
-	}
-	return pf, nil
+		latency: latency,
+	}, err
 }
 
-func (c *client) sendRequestAndDecodeResponse(
+func (c *client) call(
 	ctx context.Context,
 	peerID core.PeerID,
 	request *Request,
@@ -431,7 +455,13 @@ func (c *client) sendRequestAndDecodeResponse(
 	if err != nil {
 		return fmt.Errorf("failed to open stream: %w", err)
 	}
-	defer stream.Close()
+	defer func() {
+		if err = stream.Close(); err != nil {
+			c.logger.Debug("failed to close stream",
+				"err", err,
+			)
+		}
+	}()
 
 	codec := cbor.NewMessageCodec(stream, codecModuleName)
 
@@ -509,6 +539,15 @@ func (c *client) recordBadPeer(peerID core.PeerID) {
 	for l := range c.listeners.m {
 		l.RecordBadPeer(peerID)
 	}
+}
+
+func retryFn(ctx context.Context, fn func() error, maxRetries uint64, retryInterval time.Duration) error {
+	if maxRetries == 0 {
+		return fn()
+	}
+
+	retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
+	return backoff.Retry(fn, backoff.WithContext(retry, ctx))
 }
 
 // NewClient creates a new RPC client for the given protocol.

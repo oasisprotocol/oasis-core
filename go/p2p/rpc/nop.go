@@ -40,6 +40,18 @@ type nopClient struct{}
 // Implements Client.
 func (c *nopClient) Call(
 	ctx context.Context,
+	peer peer.ID,
+	method string,
+	body, rsp interface{},
+	maxPeerResponseTime time.Duration,
+	opts ...CallOption,
+) (PeerFeedback, error) {
+	return nil, fmt.Errorf("unsupported: p2p is disabled")
+}
+
+// Implements Client.
+func (c *nopClient) CallOne(
+	ctx context.Context,
 	peers []peer.ID,
 	method string,
 	body, rsp interface{},

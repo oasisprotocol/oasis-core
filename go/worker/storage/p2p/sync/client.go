@@ -45,7 +45,7 @@ type client struct {
 
 func (c *client) GetDiff(ctx context.Context, request *GetDiffRequest) (*GetDiffResponse, rpc.PeerFeedback, error) {
 	var rsp GetDiffResponse
-	pf, err := c.rcD.Call(ctx, c.mgrD.GetBestPeers(), MethodGetDiff, request, &rsp, MaxGetDiffResponseTime)
+	pf, err := c.rcD.CallOne(ctx, c.mgrD.GetBestPeers(), MethodGetDiff, request, &rsp, MaxGetDiffResponseTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,7 +106,7 @@ func (c *client) GetCheckpointChunk(
 	}
 
 	var rsp GetCheckpointChunkResponse
-	pf, err := c.rcC.Call(ctx, c.mgrC.GetBestPeers(opts...), MethodGetCheckpointChunk, request, &rsp,
+	pf, err := c.rcC.CallOne(ctx, c.mgrC.GetBestPeers(opts...), MethodGetCheckpointChunk, request, &rsp,
 		MaxGetCheckpointChunkResponseTime,
 	)
 	if err != nil {
