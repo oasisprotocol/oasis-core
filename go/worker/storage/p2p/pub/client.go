@@ -27,7 +27,7 @@ type client struct {
 
 func (c *client) Get(ctx context.Context, request *GetRequest) (*ProofResponse, rpc.PeerFeedback, error) {
 	var rsp ProofResponse
-	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodGet, request, &rsp, MaxGetResponseTime)
+	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodGet, request, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -36,7 +36,7 @@ func (c *client) Get(ctx context.Context, request *GetRequest) (*ProofResponse, 
 
 func (c *client) GetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, rpc.PeerFeedback, error) {
 	var rsp ProofResponse
-	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodGetPrefixes, request, &rsp, MaxGetPrefixesResponseTime)
+	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodGetPrefixes, request, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -45,7 +45,7 @@ func (c *client) GetPrefixes(ctx context.Context, request *GetPrefixesRequest) (
 
 func (c *client) Iterate(ctx context.Context, request *IterateRequest) (*ProofResponse, rpc.PeerFeedback, error) {
 	var rsp ProofResponse
-	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodIterate, request, &rsp, MaxIterateResponseTime)
+	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodIterate, request, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}

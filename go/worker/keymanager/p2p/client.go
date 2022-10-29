@@ -36,9 +36,8 @@ type client struct {
 
 func (c *client) CallEnclave(ctx context.Context, request *CallEnclaveRequest) (*CallEnclaveResponse, rpc.PeerFeedback, error) {
 	var rsp CallEnclaveResponse
-	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodCallEnclave, request, &rsp, MaxCallEnclaveResponseTime,
+	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodCallEnclave, request, &rsp,
 		rpc.WithMaxRetries(MaxCallEnclaveRetries),
-		rpc.WithRetryInterval(CallEnclaveRetryInterval),
 	)
 	if err != nil {
 		return nil, nil, err

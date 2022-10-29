@@ -1,8 +1,6 @@
 package p2p
 
 import (
-	"time"
-
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
@@ -14,10 +12,8 @@ var KeyManagerProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
 
 // Constants related to the GetDiff method.
 const (
-	MethodCallEnclave          = "CallEnclave"
-	MaxCallEnclaveResponseTime = 5 * time.Second
-	MaxCallEnclaveRetries      = 15
-	CallEnclaveRetryInterval   = 1 * time.Second
+	MethodCallEnclave     = "CallEnclave"
+	MaxCallEnclaveRetries = 15
 )
 
 // CallEnclaveRequest is a CallEnclave request.

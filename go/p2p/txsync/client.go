@@ -31,7 +31,7 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 	resultTxMap := make(map[hash.Hash][]byte)
 
 	var rsp GetTxsResponse
-	_, _, err := c.rc.CallMulti(ctx, c.mgr.GetBestPeers(), MethodGetTxs, request, rsp, MaxGetTxsResponseTime, MaxGetTxsParallelRequests,
+	_, _, err := c.rc.CallMulti(ctx, c.mgr.GetBestPeers(), MethodGetTxs, request, rsp,
 		rpc.WithAggregateFn(func(rawRsp interface{}, pf rpc.PeerFeedback) bool {
 			rsp := rawRsp.(*GetTxsResponse)
 

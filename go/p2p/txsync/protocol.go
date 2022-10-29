@@ -1,8 +1,6 @@
 package txsync
 
 import (
-	"time"
-
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
@@ -15,10 +13,8 @@ var TxSyncProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
 
 // Constants related to the GetTxs method.
 const (
-	MethodGetTxs              = "GetTxs"
-	MaxGetTxsResponseTime     = 5 * time.Second
-	MaxGetTxsCount            = 128
-	MaxGetTxsParallelRequests = 5
+	MethodGetTxs   = "GetTxs"
+	MaxGetTxsCount = 128
 )
 
 // GetTxsRequest is a GetTxs request.

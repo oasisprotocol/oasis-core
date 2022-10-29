@@ -23,10 +23,15 @@ import (
 const (
 	// RequestWriteDeadline is the maximum amount of time that can be spent on writing a request.
 	RequestWriteDeadline = 5 * time.Second
+	// RequestReadDeadline is the maximum amount of time that can be spent on reading a request.
+	RequestReadDeadline = 5 * time.Second
 	// DefaultCallRetryInterval is the default call retry interval for calls which explicitly enable
 	// retries by setting the WithMaxRetries option to a non-zero value. It can be overridden by
 	// using the WithRetryInterval call option.
 	DefaultCallRetryInterval = 1 * time.Second
+	// DefaultParallelRequests is the default number of parallel requests that can be mande
+	// when calling multiple peers.
+	DefaultParallelRequests = 5
 )
 
 // PeerFeedback is an interface for providing deferred peer feedback after an outcome is known.
@@ -93,15 +98,17 @@ type ValidationFunc func(pf PeerFeedback) error
 
 // CallOptions are per-call options.
 type CallOptions struct {
-	retryInterval time.Duration
-	maxRetries    uint64
-	validationFn  ValidationFunc
+	maxPeerResponseTime time.Duration
+	retryInterval       time.Duration
+	maxRetries          uint64
+	validationFn        ValidationFunc
 }
 
 // NewCallOptions creates options using default and given values.
 func NewCallOptions(opts ...CallOption) *CallOptions {
 	co := CallOptions{
-		retryInterval: DefaultCallRetryInterval,
+		maxPeerResponseTime: RequestReadDeadline,
+		retryInterval:       DefaultCallRetryInterval,
 	}
 	for _, opt := range opts {
 		opt(&co)
@@ -111,6 +118,13 @@ func NewCallOptions(opts ...CallOption) *CallOptions {
 
 // CallOption is a per-call option setter.
 type CallOption func(opts *CallOptions)
+
+// WithMaxPeerResponseTime configures the maximum response time for a peer.
+func WithMaxPeerResponseTime(d time.Duration) CallOption {
+	return func(opts *CallOptions) {
+		opts.maxPeerResponseTime = d
+	}
+}
 
 // WithMaxRetries configures the maximum number of retries to use for the call.
 func WithMaxRetries(maxRetries uint64) CallOption {
@@ -141,14 +155,19 @@ func WithValidationFn(fn ValidationFunc) CallOption {
 // client will continue to call other peers. If it returns false, processing will stop.
 type AggregateFunc func(rsp interface{}, pf PeerFeedback) bool
 
-// CallMultiOptions are per-multicall options
+// CallMultiOptions are per-multicall options.
 type CallMultiOptions struct {
-	aggregateFn AggregateFunc
+	maxPeerResponseTime time.Duration
+	maxParallelRequests uint
+	aggregateFn         AggregateFunc
 }
 
 // NewCallMultiOptions creates options using default and given values.
 func NewCallMultiOptions(opts ...CallMultiOption) *CallMultiOptions {
-	var co CallMultiOptions
+	co := CallMultiOptions{
+		maxPeerResponseTime: RequestReadDeadline,
+		maxParallelRequests: DefaultParallelRequests,
+	}
 	for _, opt := range opts {
 		opt(&co)
 	}
@@ -157,6 +176,20 @@ func NewCallMultiOptions(opts ...CallMultiOption) *CallMultiOptions {
 
 // CallMultiOption is a per-multicall option setter.
 type CallMultiOption func(opts *CallMultiOptions)
+
+// WithMaxPeerResponseTimeMulti configures the maximum response time for a peer.
+func WithMaxPeerResponseTimeMulti(d time.Duration) CallMultiOption {
+	return func(opts *CallMultiOptions) {
+		opts.maxPeerResponseTime = d
+	}
+}
+
+// WithMaxParallelRequests configures the maximum number of parallel requests to make.
+func WithMaxParallelRequests(n uint) CallMultiOption {
+	return func(opts *CallMultiOptions) {
+		opts.maxParallelRequests = n
+	}
+}
 
 // WithAggregateFn configures the response aggregation function to use.
 func WithAggregateFn(fn AggregateFunc) CallMultiOption {
@@ -190,7 +223,6 @@ type Client interface {
 		peer core.PeerID,
 		method string,
 		body, rsp interface{},
-		maxPeerResponseTime time.Duration,
 		opts ...CallOption,
 	) (PeerFeedback, error)
 
@@ -206,7 +238,6 @@ type Client interface {
 		peers []core.PeerID,
 		method string,
 		body, rsp interface{},
-		maxPeerResponseTime time.Duration,
 		opts ...CallOption,
 	) (PeerFeedback, error)
 
@@ -220,8 +251,6 @@ type Client interface {
 		peers []core.PeerID,
 		method string,
 		body, rspTyp interface{},
-		maxPeerResponseTime time.Duration,
-		maxParallelRequests uint,
 		opts ...CallMultiOption,
 	) ([]interface{}, []PeerFeedback, error)
 
@@ -251,10 +280,9 @@ func (c *client) Call(
 	peer core.PeerID,
 	method string,
 	body, rsp interface{},
-	maxPeerResponseTime time.Duration,
 	opts ...CallOption,
 ) (PeerFeedback, error) {
-	return c.CallOne(ctx, []core.PeerID{peer}, method, body, rsp, maxPeerResponseTime, opts...)
+	return c.CallOne(ctx, []core.PeerID{peer}, method, body, rsp, opts...)
 }
 
 func (c *client) CallOne(
@@ -262,7 +290,6 @@ func (c *client) CallOne(
 	peers []core.PeerID,
 	method string,
 	body, rsp interface{},
-	maxPeerResponseTime time.Duration,
 	opts ...CallOption,
 ) (PeerFeedback, error) {
 	c.logger.Debug("call", "method", method)
@@ -285,7 +312,7 @@ func (c *client) CallOne(
 			)
 
 			var err error
-			pf, err = c.timeCall(ctx, peer, &request, rsp, maxPeerResponseTime)
+			pf, err = c.timeCall(ctx, peer, &request, rsp, co.maxPeerResponseTime)
 			if err != nil {
 				continue
 			}
@@ -321,8 +348,6 @@ func (c *client) CallMulti(
 	peers []core.PeerID,
 	method string,
 	body, rspTyp interface{},
-	maxPeerResponseTime time.Duration,
-	maxParallelRequests uint,
 	opts ...CallMultiOption,
 ) ([]interface{}, []PeerFeedback, error) {
 	c.logger.Debug("call multiple", "method", method)
@@ -337,7 +362,7 @@ func (c *client) CallMulti(
 
 	// Create a worker pool.
 	pool := workerpool.New("p2p/rpc")
-	pool.Resize(maxParallelRequests)
+	pool.Resize(co.maxParallelRequests)
 	defer pool.Stop()
 
 	// Create a subcontext so we abort further requests if we are done early.
@@ -348,7 +373,6 @@ func (c *client) CallMulti(
 	type result struct {
 		rsp interface{}
 		pf  PeerFeedback
-		err error
 	}
 	var resultChs []channels.SimpleOutChannel
 
@@ -369,8 +393,13 @@ func (c *client) CallMulti(
 			}
 
 			rsp := reflect.New(reflect.TypeOf(rspTyp)).Interface()
-			pf, err := c.timeCall(peerCtx, peer, &request, rsp, maxPeerResponseTime)
-			ch.In() <- &result{rsp, pf, err}
+			pf, err := c.timeCall(peerCtx, peer, &request, rsp, co.maxPeerResponseTime)
+			if err != nil {
+				// Ignore failed results.
+				return
+			}
+
+			ch.In() <- &result{rsp, pf}
 		})
 	}
 
@@ -387,11 +416,6 @@ func (c *client) CallMulti(
 	)
 	for r := range resultCh.Out() {
 		result := r.(*result)
-
-		// Ignore failed results.
-		if result.err != nil {
-			continue
-		}
 
 		rsps = append(rsps, result.rsp)
 		pfs = append(pfs, result.pf)

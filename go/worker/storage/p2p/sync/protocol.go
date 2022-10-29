@@ -34,9 +34,7 @@ type GetDiffResponse struct {
 
 // Constants related to the GetCheckpoints method.
 const (
-	MethodGetCheckpoints              = "GetCheckpoints"
-	MaxGetCheckpointsResponseTime     = 5 * time.Second
-	MaxGetCheckpointsParallelRequests = 5
+	MethodGetCheckpoints = "GetCheckpoints"
 )
 
 // GetCheckpointsRequest is a GetCheckpoints request.
