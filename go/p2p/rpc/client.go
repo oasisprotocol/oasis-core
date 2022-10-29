@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/eapache/channels"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -373,18 +372,16 @@ func (c *client) CallMulti(
 	type result struct {
 		rsp interface{}
 		pf  PeerFeedback
+		err error
 	}
-	var resultChs []channels.SimpleOutChannel
+
+	// Prepare a non-blocking channel for workers to push their results.
+	resultCh := make(chan result, len(peers))
 
 	for _, peer := range peers {
 		peer := peer // Make sure goroutine below operates on the right instance.
 
-		ch := channels.NewNativeChannel(channels.BufferCap(1))
-		resultChs = append(resultChs, ch)
-
 		pool.Submit(func() {
-			defer close(ch)
-
 			// Abort early in case we are done.
 			select {
 			case <-peerCtx.Done():
@@ -394,36 +391,37 @@ func (c *client) CallMulti(
 
 			rsp := reflect.New(reflect.TypeOf(rspTyp)).Interface()
 			pf, err := c.timeCall(peerCtx, peer, &request, rsp, co.maxPeerResponseTime)
-			if err != nil {
-				// Ignore failed results.
-				return
-			}
 
-			ch.In() <- &result{rsp, pf}
+			resultCh <- result{rsp, pf, err}
 		})
 	}
-
-	if len(resultChs) == 0 {
-		return nil, nil, nil
-	}
-	resultCh := channels.NewNativeChannel(channels.None)
-	channels.Multiplex(resultCh, resultChs...)
 
 	// Gather results.
 	var (
 		rsps []interface{}
 		pfs  []PeerFeedback
 	)
-	for r := range resultCh.Out() {
-		result := r.(*result)
 
-		rsps = append(rsps, result.rsp)
-		pfs = append(pfs, result.pf)
-
-		if co.aggregateFn != nil {
-			if !co.aggregateFn(result.rsp, result.pf) {
+loop:
+	for i := 0; i < len(peers); i++ {
+		select {
+		case result := <-resultCh:
+			// Ignore failed results.
+			if result.err != nil {
 				break
 			}
+
+			rsps = append(rsps, result.rsp)
+			pfs = append(pfs, result.pf)
+
+			if co.aggregateFn != nil {
+				if !co.aggregateFn(result.rsp, result.pf) {
+					break loop
+				}
+			}
+
+		case <-peerCtx.Done():
+			break loop
 		}
 	}
 
@@ -447,7 +445,10 @@ func (c *client) timeCall(
 	latency := time.Since(start)
 
 	if err != nil {
-		c.recordFailure(peerID, latency)
+		// If the caller canceled the context we should not degrade the peer.
+		if !errors.Is(err, context.Canceled) {
+			c.recordFailure(peerID, latency)
+		}
 
 		c.logger.Debug("failed to call method",
 			"err", err,
