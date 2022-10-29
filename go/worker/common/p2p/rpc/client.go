@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/eapache/channels"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -356,19 +355,22 @@ func (c *client) CallMulti(
 		pf  PeerFeedback
 		err error
 	}
-	var resultChs []channels.SimpleOutChannel
-	for _, peer := range c.GetBestPeers() {
+
+	// Get the best peers already ordered.
+	peers := c.GetBestPeers()
+
+	// Prepare a non-blocking channel for workers to push their results.
+	resultCh := make(chan result, len(peers))
+
+	acceptable := 0
+	for _, peer := range peers {
 		peer := peer // Make sure goroutine below operates on the right instance.
 		if !c.isPeerAcceptable(peer) {
 			continue
 		}
-
-		ch := channels.NewNativeChannel(channels.BufferCap(1))
-		resultChs = append(resultChs, ch)
+		acceptable++
 
 		pool.Submit(func() {
-			defer close(ch)
-
 			// Abort early in case we are done.
 			select {
 			case <-peerCtx.Done():
@@ -378,36 +380,40 @@ func (c *client) CallMulti(
 
 			rsp := reflect.New(reflect.TypeOf(rspTyp)).Interface()
 			pf, err := c.call(peerCtx, peer, &request, rsp, maxPeerResponseTime)
-			ch.In() <- &result{rsp, pf, err}
+			resultCh <- result{rsp, pf, err}
 		})
 	}
 
-	if len(resultChs) == 0 {
+	if acceptable == 0 {
 		return nil, nil, nil
 	}
-	resultCh := channels.NewNativeChannel(channels.None)
-	channels.Multiplex(resultCh, resultChs...)
 
 	// Gather results.
 	var (
 		rsps []interface{}
 		pfs  []PeerFeedback
 	)
-	for r := range resultCh.Out() {
-		result := r.(*result)
 
-		// Ignore failed results.
-		if result.err != nil {
-			continue
-		}
-
-		rsps = append(rsps, result.rsp)
-		pfs = append(pfs, result.pf)
-
-		if co.aggregateFn != nil {
-			if !co.aggregateFn(result.rsp, result.pf) {
+loop:
+	for i := 0; i < acceptable; i++ {
+		select {
+		case result := <-resultCh:
+			// Ignore failed results.
+			if result.err != nil {
 				break
 			}
+
+			rsps = append(rsps, result.rsp)
+			pfs = append(pfs, result.pf)
+
+			if co.aggregateFn != nil {
+				if !co.aggregateFn(result.rsp, result.pf) {
+					break loop
+				}
+			}
+
+		case <-peerCtx.Done():
+			break loop
 		}
 	}
 
@@ -441,8 +447,10 @@ func (c *client) call(
 			"method", request.Method,
 			"peer_id", peerID,
 		)
-
-		c.RecordFailure(peerID, time.Since(startTime))
+		// If the caller canceled the context we should not degrade the peer.
+		if !errors.Is(err, context.Canceled) {
+			c.RecordFailure(peerID, time.Since(startTime))
+		}
 		return nil, err
 	}
 
