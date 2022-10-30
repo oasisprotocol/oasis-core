@@ -206,14 +206,14 @@ func (n *Node) getStatusStateLocked() api.StatusState {
 	if atomic.LoadUint32(&n.keymanagerAvailable) == 0 {
 		return api.StatusStateWaitingKeymanager
 	}
-	if atomic.LoadUint32(&n.hostedRuntimeProvisioned) == 0 {
-		return api.StatusStateWaitingHostedRuntime
-	}
 	if atomic.LoadUint32(&n.historyReindexingDone) == 0 {
 		return api.StatusStateWaitingHistoryReindex
 	}
 	if atomic.LoadUint32(&n.workersInitialized) == 0 {
 		return api.StatusStateWaitingWorkersInit
+	}
+	if atomic.LoadUint32(&n.hostedRuntimeProvisioned) == 0 {
+		return api.StatusStateWaitingHostedRuntime
 	}
 	// If resumeCh exists the runtime is suspended (safe to check since the cross node lock should be held).
 	if n.resumeCh != nil {

@@ -358,6 +358,7 @@ func (c *client) CallMulti(
 	}
 	var resultChs []channels.SimpleOutChannel
 	for _, peer := range c.GetBestPeers() {
+		peer := peer // Make sure goroutine below operates on the right instance.
 		if !c.isPeerAcceptable(peer) {
 			continue
 		}
