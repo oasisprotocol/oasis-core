@@ -79,6 +79,10 @@ func (p *Pool) Stop() {
 	p.stopOnce.Do(func() {
 		close(p.stopCh)
 	})
+
+	for range p.jobCh.Out() {
+		// Clear the channel to close all go routines and prevent memory leaks.
+	}
 }
 
 // Quit returns a channel that will be closed when the pool stops.
