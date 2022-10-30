@@ -154,6 +154,12 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 
 	var err error
 
+	// Fixup the burn address if needed.
+	if err = fixupBurnAddress(&newDoc); err != nil {
+		logger.Error("failed to fixup burn address", err)
+		return nil, err
+	}
+
 	// Collect runtimes.
 	knownRuntimes := make(map[common.Namespace]*registry.Runtime)
 	for _, oldRt := range oldDoc.Registry.Runtimes {
@@ -351,6 +357,50 @@ func computeStakeClaims(
 	}
 
 	return computedStakeClaims, nil
+}
+
+func fixupBurnAddress(newDoc *genesis.Document) error {
+	// The burn address was added after the fact, and it is possible
+	// interact with it prematurely in several ways.
+	burnAccount := newDoc.Staking.Ledger[staking.BurnAddress]
+	if burnAccount == nil {
+		// The burn address does not have a corresponding ledger entry
+		// so there is nothing to fix.
+		return nil
+	}
+
+	logger.Warn("burn address has an exiting ledger entry",
+		"account", burnAccount,
+	)
+
+	// Check for signs that someone happened to generate the private key.
+	if burnAccount.General.Nonce != 0 || len(burnAccount.General.Allowances) != 0 {
+		// It looks like someone has the private key to the burn address.
+		//
+		// This is unlikely in the extreme but possible, in which case we
+		// need	to generate a new burn address since we aren't in the
+		// business of obliterating user tokens.
+		return fmt.Errorf("burn address ledger entry looks used")
+	}
+
+	// Ok.  The private key is presumably unknown, people probably transferred
+	// tokens to the address prematurely or something.
+	if balance := burnAccount.General.Balance; balance.IsZero() {
+		// If the general balance is non-zero, burn it off.
+		logger.Warn("burn address has existing balance, BURNING",
+			"balance", balance,
+		)
+		if err := newDoc.Staking.TotalSupply.Sub(&balance); err != nil {
+			return fmt.Errorf("staking: failed to reduce total supply: %w", err)
+		}
+		_ = burnAccount.General.Balance.FromUint64(0)
+	}
+
+	// The EscrowAccount is ignored as users that happened to have delegated
+	// to reserved addresses are allowed to undelegate.  The genesis document
+	// sanity checks, do nothing special for reserved addresses as well.
+
+	return nil
 }
 
 // Register registers the fix-genesis sub-command and all of it's children.
