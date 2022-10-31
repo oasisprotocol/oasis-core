@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/eapache/channels"
 	"github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
@@ -21,10 +22,15 @@ import (
 const (
 	// RequestWriteDeadline is the maximum amount of time that can be spent on writing a request.
 	RequestWriteDeadline = 5 * time.Second
+	// RequestReadDeadline is the maximum amount of time that can be spent on reading a request.
+	RequestReadDeadline = 5 * time.Second
 	// DefaultCallRetryInterval is the default call retry interval for calls which explicitly enable
 	// retries by setting the WithMaxRetries option to a non-zero value. It can be overridden by
 	// using the WithRetryInterval call option.
 	DefaultCallRetryInterval = 1 * time.Second
+	// DefaultParallelRequests is the default number of parallel requests that can be mande
+	// when calling multiple peers.
+	DefaultParallelRequests = 5
 )
 
 // PeerFeedback is an interface for providing deferred peer feedback after an outcome is known.
@@ -39,24 +45,31 @@ type PeerFeedback interface {
 	//
 	// The peer will be ignored during peer selection.
 	RecordBadPeer()
+
+	// PeerID returns the id of the peer.
+	PeerID() core.PeerID
 }
 
 type peerFeedback struct {
-	mgr     PeerManager
+	client  *client
 	peerID  core.PeerID
 	latency time.Duration
 }
 
 func (pf *peerFeedback) RecordSuccess() {
-	pf.mgr.RecordSuccess(pf.peerID, pf.latency)
+	pf.client.recordSuccess(pf.peerID, pf.latency)
 }
 
 func (pf *peerFeedback) RecordFailure() {
-	pf.mgr.RecordFailure(pf.peerID, pf.latency)
+	pf.client.recordFailure(pf.peerID, pf.latency)
 }
 
 func (pf *peerFeedback) RecordBadPeer() {
-	pf.mgr.RecordBadPeer(pf.peerID)
+	pf.client.recordBadPeer(pf.peerID)
+}
+
+func (pf *peerFeedback) PeerID() core.PeerID {
+	return pf.peerID
 }
 
 type nopPeerFeedback struct{}
@@ -70,43 +83,13 @@ func (pf *nopPeerFeedback) RecordFailure() {
 func (pf *nopPeerFeedback) RecordBadPeer() {
 }
 
+func (pf *nopPeerFeedback) PeerID() core.PeerID {
+	return ""
+}
+
 // NewNopPeerFeedback creates a no-op peer feedback instance.
 func NewNopPeerFeedback() PeerFeedback {
 	return &nopPeerFeedback{}
-}
-
-// ClientOptions are client options.
-type ClientOptions struct {
-	stickyPeers bool
-	peerFilter  PeerFilter
-}
-
-// ClientOption is a client option setter.
-type ClientOption func(opts *ClientOptions)
-
-// WithStickyPeers configures the sticky peers feature.
-//
-// When enabled, the last successful peer will be stuck and will be reused on subsequent calls until
-// the peer is deemed bad by the received peer feedback.
-func WithStickyPeers(enabled bool) ClientOption {
-	return func(opts *ClientOptions) {
-		opts.stickyPeers = enabled
-	}
-}
-
-// PeerFilter is a peer filtering interface.
-type PeerFilter interface {
-	// IsPeerAcceptable checks whether the given peer should be used.
-	IsPeerAcceptable(peerID core.PeerID) bool
-}
-
-// WithPeerFilter configures peer filtering.
-//
-// When set, only peers accepted by the filter will be used for calls.
-func WithPeerFilter(filter PeerFilter) ClientOption {
-	return func(opts *ClientOptions) {
-		opts.peerFilter = filter
-	}
 }
 
 // ValidationFunc is a call response validation function.
@@ -114,14 +97,33 @@ type ValidationFunc func(pf PeerFeedback) error
 
 // CallOptions are per-call options.
 type CallOptions struct {
-	retryInterval time.Duration
-	maxRetries    uint64
-	validationFn  ValidationFunc
-	limitPeers    map[core.PeerID]struct{}
+	maxPeerResponseTime time.Duration
+	retryInterval       time.Duration
+	maxRetries          uint64
+	validationFn        ValidationFunc
+}
+
+// NewCallOptions creates options using default and given values.
+func NewCallOptions(opts ...CallOption) *CallOptions {
+	co := CallOptions{
+		maxPeerResponseTime: RequestReadDeadline,
+		retryInterval:       DefaultCallRetryInterval,
+	}
+	for _, opt := range opts {
+		opt(&co)
+	}
+	return &co
 }
 
 // CallOption is a per-call option setter.
 type CallOption func(opts *CallOptions)
+
+// WithMaxPeerResponseTime configures the maximum response time for a peer.
+func WithMaxPeerResponseTime(d time.Duration) CallOption {
+	return func(opts *CallOptions) {
+		opts.maxPeerResponseTime = d
+	}
+}
 
 // WithMaxRetries configures the maximum number of retries to use for the call.
 func WithMaxRetries(maxRetries uint64) CallOption {
@@ -146,33 +148,47 @@ func WithValidationFn(fn ValidationFunc) CallOption {
 	}
 }
 
-// WithLimitPeers configures the peers that the call should be limited to.
-func WithLimitPeers(peers []PeerFeedback) CallOption {
-	return func(opts *CallOptions) {
-		opts.limitPeers = make(map[core.PeerID]struct{})
-		for _, peer := range peers {
-			pf, ok := peer.(*peerFeedback)
-			if !ok {
-				continue
-			}
-			opts.limitPeers[pf.peerID] = struct{}{}
-		}
-	}
-}
-
 // AggregateFunc returns a result aggregation function.
 //
 // The function is passed the response and PeerFeedback instance. If the function returns true, the
 // client will continue to call other peers. If it returns false, processing will stop.
 type AggregateFunc func(rsp interface{}, pf PeerFeedback) bool
 
-// CallMultiOptions are per-multicall options
+// CallMultiOptions are per-multicall options.
 type CallMultiOptions struct {
-	aggregateFn AggregateFunc
+	maxPeerResponseTime time.Duration
+	maxParallelRequests uint
+	aggregateFn         AggregateFunc
+}
+
+// NewCallMultiOptions creates options using default and given values.
+func NewCallMultiOptions(opts ...CallMultiOption) *CallMultiOptions {
+	co := CallMultiOptions{
+		maxPeerResponseTime: RequestReadDeadline,
+		maxParallelRequests: DefaultParallelRequests,
+	}
+	for _, opt := range opts {
+		opt(&co)
+	}
+	return &co
 }
 
 // CallMultiOption is a per-multicall option setter.
 type CallMultiOption func(opts *CallMultiOptions)
+
+// WithMaxPeerResponseTimeMulti configures the maximum response time for a peer.
+func WithMaxPeerResponseTimeMulti(d time.Duration) CallMultiOption {
+	return func(opts *CallMultiOptions) {
+		opts.maxPeerResponseTime = d
+	}
+}
+
+// WithMaxParallelRequests configures the maximum number of parallel requests to make.
+func WithMaxParallelRequests(n uint) CallMultiOption {
+	return func(opts *CallMultiOptions) {
+		opts.maxParallelRequests = n
+	}
+}
 
 // WithAggregateFn configures the response aggregation function to use.
 func WithAggregateFn(fn AggregateFunc) CallMultiOption {
@@ -181,88 +197,103 @@ func WithAggregateFn(fn AggregateFunc) CallMultiOption {
 	}
 }
 
+// ClientListener is an interface for an object wishing to receive notifications from the client.
+type ClientListener interface {
+	// RecordSuccess is called on a successful protocol interaction with a peer.
+	RecordSuccess(peerID core.PeerID, latency time.Duration)
+
+	// RecordFailure is called on an unsuccessful protocol interaction with a peer.
+	RecordFailure(peerID core.PeerID, latency time.Duration)
+
+	// RecordBadPeer is called when a malicious protocol interaction with a peer is detected.
+	RecordBadPeer(peerID core.PeerID)
+}
+
 // Client is an RPC client for a given protocol.
 type Client interface {
-	PeerManager
-
-	// Call attempts to route the given RPC method call to one of the peers that supports the
-	// protocol based on past experience with the peers.
+	// Call attempts to route the given RPC method call to the given peer. It's up to the caller
+	// to provide only connected peers that support the protocol.
 	//
 	// On success it returns a PeerFeedback instance that should be used by the caller to provide
 	// deferred feedback on whether the peer is any good or not. This will help guide later choices
 	// when routing calls.
 	Call(
 		ctx context.Context,
+		peer core.PeerID,
 		method string,
 		body, rsp interface{},
-		maxPeerResponseTime time.Duration,
 		opts ...CallOption,
 	) (PeerFeedback, error)
 
-	// CallMulti routes the given RPC method call to multiple peers that support the protocol based
-	// on past experience with the peers.
+	// CallOne attempts to route the given RPC method call to one of the peers in the list in
+	// a sequential order. It's up to the caller to prioritize peers and to provide only
+	// connected peers that support the protocol.
+	//
+	// On success it returns a PeerFeedback instance that should be used by the caller to provide
+	// deferred feedback on whether the peer is any good or not. This will help guide later choices
+	// when routing calls.
+	CallOne(
+		ctx context.Context,
+		peers []core.PeerID,
+		method string,
+		body, rsp interface{},
+		opts ...CallOption,
+	) (PeerFeedback, error)
+
+	// CallMulti routes the given RPC method call to multiple (possibly all) peers in the list in
+	// a sequential order. It's up to the caller to prioritize peers and use only peers that support
+	// the protocol.
 	//
 	// It returns all successfully retrieved results and their corresponding PeerFeedback instances.
 	CallMulti(
 		ctx context.Context,
+		peers []core.PeerID,
 		method string,
 		body, rspTyp interface{},
-		maxPeerResponseTime time.Duration,
-		maxParallelRequests uint,
 		opts ...CallMultiOption,
 	) ([]interface{}, []PeerFeedback, error)
+
+	// RegisterListener subscribes the listener to the client notification events.
+	// If the listener is already registered this is a noop operation.
+	RegisterListener(l ClientListener)
+
+	// UnregisterListener unsubscribes the listener from the client notification events.
+	// If the listener is not registered this is a noop operation.
+	UnregisterListener(l ClientListener)
 }
 
 type client struct {
-	PeerManager
-
 	host       core.Host
 	protocolID protocol.ID
 
-	opts *ClientOptions
+	listeners struct {
+		sync.RWMutex
+		m map[ClientListener]struct{}
+	}
 
 	logger *logging.Logger
 }
 
-func (c *client) isPeerAcceptable(peerID core.PeerID) bool {
-	if c.opts.peerFilter == nil {
-		return true
-	}
-
-	return c.opts.peerFilter.IsPeerAcceptable(peerID)
-}
-
-func (c *client) getFilteredBestPeers(limit map[core.PeerID]struct{}) []core.PeerID {
-	var peers []core.PeerID
-	for _, peer := range c.GetBestPeers() {
-		if !c.isPeerAcceptable(peer) {
-			continue
-		}
-		if limit != nil {
-			if _, exists := limit[peer]; !exists {
-				continue
-			}
-		}
-		peers = append(peers, peer)
-	}
-	return peers
-}
-
 func (c *client) Call(
 	ctx context.Context,
+	peer core.PeerID,
 	method string,
 	body, rsp interface{},
-	maxPeerResponseTime time.Duration,
+	opts ...CallOption,
+) (PeerFeedback, error) {
+	return c.CallOne(ctx, []core.PeerID{peer}, method, body, rsp, opts...)
+}
+
+func (c *client) CallOne(
+	ctx context.Context,
+	peers []core.PeerID,
+	method string,
+	body, rsp interface{},
 	opts ...CallOption,
 ) (PeerFeedback, error) {
 	c.logger.Debug("call", "method", method)
 
-	co := CallOptions{
-		retryInterval: DefaultCallRetryInterval,
-	}
-	for _, opt := range opts {
-		opt(&co)
-	}
+	co := NewCallOptions(opts...)
 
 	// Prepare the request.
 	request := Request{
@@ -272,15 +303,15 @@ func (c *client) Call(
 
 	var pf PeerFeedback
 	tryPeers := func() error {
-		// Iterate through the prioritized list of peers and attempt to execute the request.
-		for _, peer := range c.getFilteredBestPeers(co.limitPeers) {
+		// Iterate through the list of peers and attempt to execute the request.
+		for _, peer := range peers {
 			c.logger.Debug("trying peer",
 				"method", method,
 				"peer_id", peer,
 			)
 
 			var err error
-			pf, err = c.call(ctx, peer, &request, rsp, maxPeerResponseTime)
+			pf, err = c.timeCall(ctx, peer, &request, rsp, co.maxPeerResponseTime)
 			if err != nil {
 				continue
 			}
@@ -306,31 +337,21 @@ func (c *client) Call(
 		return fmt.Errorf("call failed on all peers")
 	}
 
-	var err error
-	if co.maxRetries > 0 {
-		retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(co.retryInterval), co.maxRetries)
-		err = backoff.Retry(tryPeers, backoff.WithContext(retry, ctx))
-	} else {
-		err = tryPeers()
-	}
+	err := retryFn(ctx, tryPeers, co.maxRetries, co.retryInterval)
 
 	return pf, err
 }
 
 func (c *client) CallMulti(
 	ctx context.Context,
+	peers []core.PeerID,
 	method string,
 	body, rspTyp interface{},
-	maxPeerResponseTime time.Duration,
-	maxParallelRequests uint,
 	opts ...CallMultiOption,
 ) ([]interface{}, []PeerFeedback, error) {
 	c.logger.Debug("call multiple", "method", method)
 
-	var co CallMultiOptions
-	for _, opt := range opts {
-		opt(&co)
-	}
+	co := NewCallMultiOptions(opts...)
 
 	// Prepare the request.
 	request := Request{
@@ -340,7 +361,7 @@ func (c *client) CallMulti(
 
 	// Create a worker pool.
 	pool := workerpool.New("p2p/rpc")
-	pool.Resize(maxParallelRequests)
+	pool.Resize(co.maxParallelRequests)
 	defer pool.Stop()
 
 	// Create a subcontext so we abort further requests if we are done early.
@@ -353,19 +374,14 @@ func (c *client) CallMulti(
 		pf  PeerFeedback
 		err error
 	}
-	var resultChs []channels.SimpleOutChannel
-	for _, peer := range c.GetBestPeers() {
-		peer := peer // Make sure goroutine below operates on the right instance.
-		if !c.isPeerAcceptable(peer) {
-			continue
-		}
 
-		ch := channels.NewNativeChannel(channels.BufferCap(1))
-		resultChs = append(resultChs, ch)
+	// Prepare a non-blocking channel for workers to push their results.
+	resultCh := make(chan result, len(peers))
+
+	for _, peer := range peers {
+		peer := peer // Make sure goroutine below operates on the right instance.
 
 		pool.Submit(func() {
-			defer close(ch)
-
 			// Abort early in case we are done.
 			select {
 			case <-peerCtx.Done():
@@ -374,37 +390,38 @@ func (c *client) CallMulti(
 			}
 
 			rsp := reflect.New(reflect.TypeOf(rspTyp)).Interface()
-			pf, err := c.call(peerCtx, peer, &request, rsp, maxPeerResponseTime)
-			ch.In() <- &result{rsp, pf, err}
+			pf, err := c.timeCall(peerCtx, peer, &request, rsp, co.maxPeerResponseTime)
+
+			resultCh <- result{rsp, pf, err}
 		})
 	}
-
-	if len(resultChs) == 0 {
-		return nil, nil, nil
-	}
-	resultCh := channels.NewNativeChannel(channels.None)
-	channels.Multiplex(resultCh, resultChs...)
 
 	// Gather results.
 	var (
 		rsps []interface{}
 		pfs  []PeerFeedback
 	)
-	for r := range resultCh.Out() {
-		result := r.(*result)
 
-		// Ignore failed results.
-		if result.err != nil {
-			continue
-		}
-
-		rsps = append(rsps, result.rsp)
-		pfs = append(pfs, result.pf)
-
-		if co.aggregateFn != nil {
-			if !co.aggregateFn(result.rsp, result.pf) {
+loop:
+	for i := 0; i < len(peers); i++ {
+		select {
+		case result := <-resultCh:
+			// Ignore failed results.
+			if result.err != nil {
 				break
 			}
+
+			rsps = append(rsps, result.rsp)
+			pfs = append(pfs, result.pf)
+
+			if co.aggregateFn != nil {
+				if !co.aggregateFn(result.rsp, result.pf) {
+					break loop
+				}
+			}
+
+		case <-peerCtx.Done():
+			break loop
 		}
 	}
 
@@ -416,42 +433,38 @@ func (c *client) CallMulti(
 	return rsps, pfs, nil
 }
 
-func (c *client) call(
+func (c *client) timeCall(
 	ctx context.Context,
 	peerID core.PeerID,
 	request *Request,
 	rsp interface{},
 	maxPeerResponseTime time.Duration,
 ) (PeerFeedback, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
+	start := time.Now()
+	err := c.call(ctx, peerID, request, rsp, maxPeerResponseTime)
+	latency := time.Since(start)
 
-	startTime := time.Now()
-
-	err := c.sendRequestAndDecodeResponse(ctx, peerID, request, rsp, maxPeerResponseTime)
 	if err != nil {
+		// If the caller canceled the context we should not degrade the peer.
+		if !errors.Is(err, context.Canceled) {
+			c.recordFailure(peerID, latency)
+		}
+
 		c.logger.Debug("failed to call method",
 			"err", err,
 			"method", request.Method,
 			"peer_id", peerID,
 		)
-
-		c.RecordFailure(peerID, time.Since(startTime))
-		return nil, err
 	}
 
-	pf := &peerFeedback{
-		mgr:     c.PeerManager,
+	return &peerFeedback{
+		client:  c,
 		peerID:  peerID,
-		latency: time.Since(startTime),
-	}
-	return pf, nil
+		latency: latency,
+	}, err
 }
 
-func (c *client) sendRequestAndDecodeResponse(
+func (c *client) call(
 	ctx context.Context,
 	peerID core.PeerID,
 	request *Request,
@@ -467,7 +480,13 @@ func (c *client) sendRequestAndDecodeResponse(
 	if err != nil {
 		return fmt.Errorf("failed to open stream: %w", err)
 	}
-	defer stream.Close()
+	defer func() {
+		if err = stream.Close(); err != nil {
+			c.logger.Debug("failed to close stream",
+				"err", err,
+			)
+		}
+	}()
 
 	codec := cbor.NewMessageCodec(stream, codecModuleName)
 
@@ -506,22 +525,72 @@ func (c *client) sendRequestAndDecodeResponse(
 	return nil
 }
 
-// NewClient creates a new RPC client for the given protocol.
-func NewClient(p2p P2P, protocolID protocol.ID, opts ...ClientOption) Client {
-	var co ClientOptions
-	for _, opt := range opts {
-		opt(&co)
+func (c *client) RegisterListener(l ClientListener) {
+	c.listeners.Lock()
+	defer c.listeners.Unlock()
+
+	c.listeners.m[l] = struct{}{}
+}
+
+func (c *client) UnregisterListener(l ClientListener) {
+	c.listeners.Lock()
+	defer c.listeners.Unlock()
+
+	delete(c.listeners.m, l)
+}
+
+func (c *client) recordSuccess(peerID core.PeerID, latency time.Duration) {
+	c.listeners.RLock()
+	defer c.listeners.RUnlock()
+
+	for l := range c.listeners.m {
+		l.RecordSuccess(peerID, latency)
+	}
+}
+
+func (c *client) recordFailure(peerID core.PeerID, latency time.Duration) {
+	c.listeners.RLock()
+	defer c.listeners.RUnlock()
+
+	for l := range c.listeners.m {
+		l.RecordFailure(peerID, latency)
+	}
+}
+
+func (c *client) recordBadPeer(peerID core.PeerID) {
+	c.listeners.RLock()
+	defer c.listeners.RUnlock()
+
+	for l := range c.listeners.m {
+		l.RecordBadPeer(peerID)
+	}
+}
+
+func retryFn(ctx context.Context, fn func() error, maxRetries uint64, retryInterval time.Duration) error {
+	if maxRetries == 0 {
+		return fn()
 	}
 
-	if p2p.GetHost() == nil {
+	retry := backoff.WithMaxRetries(backoff.NewConstantBackOff(retryInterval), maxRetries)
+	return backoff.Retry(fn, backoff.WithContext(retry, ctx))
+}
+
+// NewClient creates a new RPC client for the given protocol.
+func NewClient(h host.Host, p protocol.ID) Client {
+	if h == nil {
 		// No P2P service, use the no-op client.
-		return &nopClient{&nopPeerManager{}}
+		return &nopClient{}
 	}
+
 	return &client{
-		PeerManager: NewPeerManager(p2p, protocolID, co.stickyPeers),
-		host:        p2p.GetHost(),
-		protocolID:  protocolID,
-		opts:        &co,
-		logger:      logging.GetLogger("p2p/rpc/client").With("protocol", protocolID),
+		host:       h,
+		protocolID: p,
+		listeners: struct {
+			sync.RWMutex
+			m map[ClientListener]struct{}
+		}{
+			m: make(map[ClientListener]struct{}),
+		},
+		logger: logging.GetLogger("p2p/rpc/client").With("protocol", p),
 	}
 }

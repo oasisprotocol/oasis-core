@@ -21,12 +21,13 @@ type Client interface {
 }
 
 type client struct {
-	rc rpc.Client
+	rc  rpc.Client
+	mgr rpc.PeerManager
 }
 
 func (c *client) Get(ctx context.Context, request *GetRequest) (*ProofResponse, rpc.PeerFeedback, error) {
 	var rsp ProofResponse
-	pf, err := c.rc.Call(ctx, MethodGet, request, &rsp, MaxGetResponseTime)
+	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodGet, request, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -35,7 +36,7 @@ func (c *client) Get(ctx context.Context, request *GetRequest) (*ProofResponse, 
 
 func (c *client) GetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, rpc.PeerFeedback, error) {
 	var rsp ProofResponse
-	pf, err := c.rc.Call(ctx, MethodGetPrefixes, request, &rsp, MaxGetPrefixesResponseTime)
+	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodGetPrefixes, request, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -44,7 +45,7 @@ func (c *client) GetPrefixes(ctx context.Context, request *GetPrefixesRequest) (
 
 func (c *client) Iterate(ctx context.Context, request *IterateRequest) (*ProofResponse, rpc.PeerFeedback, error) {
 	var rsp ProofResponse
-	pf, err := c.rc.Call(ctx, MethodIterate, request, &rsp, MaxIterateResponseTime)
+	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(), MethodIterate, request, &rsp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -53,7 +54,13 @@ func (c *client) Iterate(ctx context.Context, request *IterateRequest) (*ProofRe
 
 // NewClient creates a new storage pub protocol client.
 func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
+	pid := rpc.NewRuntimeProtocolID(runtimeID, StoragePubProtocolID, StoragePubProtocolVersion)
+	mgr := rpc.NewPeerManager(p2p, pid)
+	rc := rpc.NewClient(p2p.GetHost(), pid)
+	rc.RegisterListener(mgr)
+
 	return &client{
-		rc: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, StoragePubProtocolID, StoragePubProtocolVersion)),
+		rc:  rc,
+		mgr: mgr,
 	}
 }

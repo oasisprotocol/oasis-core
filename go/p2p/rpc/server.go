@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	RequestReadDeadline   = 5 * time.Second
 	RequestHandleTimeout  = 60 * time.Second
 	ResponseWriteDeadline = 60 * time.Second
 )

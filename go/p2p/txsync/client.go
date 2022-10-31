@@ -15,7 +15,8 @@ type Client interface {
 }
 
 type client struct {
-	rc rpc.Client
+	rc  rpc.Client
+	mgr rpc.PeerManager
 }
 
 func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsResponse, error) {
@@ -30,7 +31,7 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 	resultTxMap := make(map[hash.Hash][]byte)
 
 	var rsp GetTxsResponse
-	_, _, err := c.rc.CallMulti(ctx, MethodGetTxs, request, rsp, MaxGetTxsResponseTime, MaxGetTxsParallelRequests,
+	_, _, err := c.rc.CallMulti(ctx, c.mgr.GetBestPeers(), MethodGetTxs, request, rsp,
 		rpc.WithAggregateFn(func(rawRsp interface{}, pf rpc.PeerFeedback) bool {
 			rsp := rawRsp.(*GetTxsResponse)
 
@@ -71,7 +72,13 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 
 // NewClient creates a new transaction sync protocol client.
 func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
+	pid := rpc.NewRuntimeProtocolID(runtimeID, TxSyncProtocolID, TxSyncProtocolVersion)
+	mgr := rpc.NewPeerManager(p2p, pid)
+	rc := rpc.NewClient(p2p.GetHost(), pid)
+	rc.RegisterListener(mgr)
+
 	return &client{
-		rc: rpc.NewClient(p2p, rpc.NewRuntimeProtocolID(runtimeID, TxSyncProtocolID, TxSyncProtocolVersion)),
+		rc:  rc,
+		mgr: mgr,
 	}
 }
