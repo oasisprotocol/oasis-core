@@ -163,7 +163,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		VRF: &node.VRFInfo{
 			ID: nodeIdentity.VRFSigner.Public(),
 		},
-		SoftwareVersion: version.SoftwareVersion,
+		SoftwareVersion: node.SoftwareVersion(version.SoftwareVersion),
 	}
 	if n.Roles, err = argsToRolesMask(); err != nil {
 		logger.Error("failed to parse node roles mask",

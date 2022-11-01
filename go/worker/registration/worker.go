@@ -1001,7 +1001,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 		VRF: &node.VRFInfo{
 			ID: w.identity.VRFSigner.Public(),
 		},
-		SoftwareVersion: version.SoftwareVersion,
+		SoftwareVersion: node.SoftwareVersion(version.SoftwareVersion),
 	}
 
 	if err := hook(&nodeDesc); err != nil {

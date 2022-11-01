@@ -62,6 +62,8 @@ const (
 	// Minimum and maximum descriptor versions that are allowed.
 	minNodeDescriptorVersion = 1
 	maxNodeDescriptorVersion = LatestNodeDescriptorVersion
+
+	nodeSoftwareVersionMaxLength = 128
 )
 
 // Node represents public connectivity information about an Oasis node.
@@ -99,7 +101,18 @@ type Node struct { // nolint: maligned
 	Roles RolesMask `json:"roles"`
 
 	// SoftwareVersion is the node's oasis-node software version.
-	SoftwareVersion string `json:"software_version,omitempty"`
+	SoftwareVersion SoftwareVersion `json:"software_version,omitempty"`
+}
+
+// SoftwareVersion is the node's oasis-node software version.
+type SoftwareVersion string
+
+// ValidateBasic performs basic software version validity checks.
+func (sw SoftwareVersion) ValidateBasic() error {
+	if l := len(sw); l > nodeSoftwareVersionMaxLength {
+		return fmt.Errorf("malformed node software version: value too big (max length: %d, length: %d)", nodeSoftwareVersionMaxLength, l)
+	}
+	return nil
 }
 
 // RolesMask is Oasis node roles bitmask.
@@ -274,6 +287,11 @@ func (n *Node) ValidateBasic(strictVersion bool) error {
 				maxNodeDescriptorVersion,
 			)
 		}
+	}
+
+	// Validate software version.
+	if err := n.SoftwareVersion.ValidateBasic(); err != nil {
+		return err
 	}
 
 	// Make sure that a node has at least one valid role.
