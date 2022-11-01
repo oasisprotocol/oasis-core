@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/base64"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -309,4 +310,17 @@ func TestNodeDeserialization(t *testing.T) {
 		require.NoError(err, "Unmarshal")
 		require.EqualValues(tc.expectedNode, dec, "Node serialization should round-trip")
 	}
+}
+
+func TestNodeSoftwareVersion(t *testing.T) {
+	require := require.New(t)
+
+	sw := SoftwareVersion("")
+	require.NoError(sw.ValidateBasic(), "empty software version is allowed")
+
+	sw = SoftwareVersion(version.SoftwareVersion)
+	require.NoError(sw.ValidateBasic(), "software version is allowed")
+
+	sw = SoftwareVersion(strings.Repeat("a", 1000))
+	require.Error(sw.ValidateBasic(), "invalid software version")
 }

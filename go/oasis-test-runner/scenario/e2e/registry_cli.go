@@ -430,7 +430,7 @@ func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node
 			},
 		},
 		Roles:           node.RoleValidator,
-		SoftwareVersion: version.SoftwareVersion,
+		SoftwareVersion: node.SoftwareVersion(version.SoftwareVersion),
 	}
 	_ = testNode.Runtimes[0].ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 
