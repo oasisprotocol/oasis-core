@@ -295,14 +295,14 @@ func (s *ImmutableState) DelegationsTo(
 	defer it.Close()
 
 	delegations := make(map[staking.Address]*staking.Delegation)
-	for it.Seek(delegationKeyFmt.Encode()); it.Valid(); it.Next() {
+	for it.Seek(delegationKeyFmt.Encode(destAddr)); it.Valid(); it.Next() {
 		var escrowAddr staking.Address
 		var delegatorAddr staking.Address
 		if !delegationKeyFmt.Decode(it.Key(), &escrowAddr, &delegatorAddr) {
 			break
 		}
 		if !escrowAddr.Equal(destAddr) {
-			continue
+			break
 		}
 
 		var del staking.Delegation
