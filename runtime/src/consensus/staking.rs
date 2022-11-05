@@ -276,7 +276,13 @@ pub enum EscrowEvent {
 
     /// Event emitted when stake is taken from an escrow account (i.e. stake is slashed).
     #[cbor(rename = "take")]
-    Take { owner: Address, amount: Quantity },
+    Take {
+        owner: Address,
+        // The sum of amounts slashed from active and debonding escrow balances.
+        amount: Quantity,
+        // The amount slashed from the debonding escrow balance.
+        debonding_amount: Quantity,
+    },
 
     /// Event emitted when the debonding process has started and the given number of active shares
     /// have been moved into the debonding pool and started debonding.
@@ -630,13 +636,14 @@ mod tests {
                 },
             ),
             (
-                "o2Zlc2Nyb3ehZHRha2WiZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZGZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg==",
+                "o2Zlc2Nyb3ehZHRha2WjZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZHBkZWJvbmRpbmdfYW1vdW50QRRmaGVpZ2h0GCpndHhfaGFzaFggxnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
                 Event {
                     height: 42,
                     tx_hash,
                     escrow: Some(EscrowEvent::Take {
                         owner: addr1.clone(),
                         amount: 100u32.into(),
+                        debonding_amount: 20u32.into()
                     }),
                     ..Default::default()
                 },
