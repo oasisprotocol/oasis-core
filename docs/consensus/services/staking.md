@@ -649,15 +649,19 @@ slashed for whatever reason.
 
 ```golang
 type TakeEscrowEvent struct {
-  Owner  Address           `json:"owner"`
-  Amount quantity.Quantity `json:"amount"`
+  Owner  Address                    `json:"owner"`
+  Amount quantity.Quantity          `json:"amount"`
+  DebondingAmount quantity.Quantity `json:"debonding_amount"`
 }
 ```
 
 **Fields:**
 
 * `owner` contains the address of the account escrow has been taken from.
-* `amount` contains the amount (in base units) taken.
+* `amount` contains the total amount (in base units) taken. The debonding and
+  active escrow balances are slashed in equal proportions.
+* `debonding_amount` contains the amount (in base units) taken from just the
+  debonding escrow balance.
 
 #### Reclaim Escrow Event
 
