@@ -3,6 +3,7 @@ package state
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -341,12 +342,33 @@ func TestRewardAndSlash(t *testing.T) {
 	escrowAccount, err = s.Account(ctx, escrowAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
+	require.Equal(mustInitQuantity(t, 100), escrowAccount.Escrow.Debonding.Balance, "reward late epoch - escrow debonding escrow")
 
+	ctx = appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	// Slash 40 base units
 	slashed, err := s.SlashEscrow(ctx, escrowAddr, mustInitQuantityP(t, 40))
 	require.NoError(err, "slash escrow")
 	require.False(slashed.IsZero(), "slashed nonzero")
 
-	// Loss of 40 base units.
+	// Slashing should emit the correct event.
+	evs = ctx.GetEvents()
+	require.Len(evs, 1, fmt.Sprintf("slashing should emit 1 event; got %d: %+v", len(evs), evs))
+	ev := evs[0]
+	require.Equal(abciAPI.EventTypeForApp(AppName), ev.Type, "slash event should be staking events")
+	require.Len(ev.Attributes, 1, "slash event should have a single attribute")
+	require.Equal(ev.Attributes[0].Key, []byte("take_escrow"), "event should be a slashing event")
+	var v staking.TakeEscrowEvent
+	err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+	require.NoError(err, "malformed take escrow event")
+	require.Equal(v, staking.TakeEscrowEvent{
+		Owner:           escrowAddr,
+		Amount:          mustInitQuantity(t, 40),
+		DebondingAmount: mustInitQuantity(t, 10),
+	}, "slash event should be correct")
+
+	// Loss of 40 base units should be reflected in balances.
 	delegatorAccount, err = s.Account(ctx, delegatorAddr)
 	require.NoError(err, "Account")
 	require.Equal(mustInitQuantity(t, 100), delegatorAccount.General.Balance, "slash - delegator general")

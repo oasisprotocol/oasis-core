@@ -725,7 +725,8 @@ func (s *MutableState) SlashEscrow(
 	fromAddr staking.Address,
 	amount *quantity.Quantity,
 ) (*quantity.Quantity, error) {
-	var slashed quantity.Quantity
+	var activeSlashed quantity.Quantity
+	var debondingSlashed quantity.Quantity
 
 	commonPool, err := s.CommonPool(ctx)
 	if err != nil {
@@ -743,20 +744,23 @@ func (s *MutableState) SlashEscrow(
 	if err = total.Add(&from.Escrow.Debonding.Balance); err != nil {
 		return nil, fmt.Errorf("tendermint/staking: account total balance: %w", err)
 	}
-	if err = slashPool(&slashed, &from.Escrow.Active, amount, total); err != nil {
+	if err = slashPool(&activeSlashed, &from.Escrow.Active, amount, total); err != nil {
 		return nil, fmt.Errorf("tendermint/staking: failed slashing active escrow: %w", err)
 	}
-	if err = slashPool(&slashed, &from.Escrow.Debonding, amount, total); err != nil {
+	if err = slashPool(&debondingSlashed, &from.Escrow.Debonding, amount, total); err != nil {
 		return nil, fmt.Errorf("tendermint/staking: failed slashing debonding escrow: %w", err)
 	}
+
+	totalSlashed := activeSlashed.Clone()
+	if err = totalSlashed.Add(&debondingSlashed); err != nil {
+		return nil, fmt.Errorf("tendermint/staking: failed totalling slashed amounts: %w", err)
+	}
 	// Nothing was slashed.
-	if slashed.IsZero() {
-		return &slashed, nil
+	if totalSlashed.IsZero() {
+		return totalSlashed, nil
 	}
 
-	totalSlashed := slashed.Clone()
-
-	if err = quantity.Move(commonPool, &slashed, totalSlashed); err != nil {
+	if err = quantity.Move(commonPool, totalSlashed.Clone(), totalSlashed); err != nil {
 		return nil, fmt.Errorf("tendermint/staking: failed moving stake to common pool: %w", err)
 	}
 
@@ -769,8 +773,9 @@ func (s *MutableState) SlashEscrow(
 
 	if !ctx.IsCheckOnly() {
 		ctx.EmitEvent(abciAPI.NewEventBuilder(AppName).TypedAttribute(&staking.TakeEscrowEvent{
-			Owner:  fromAddr,
-			Amount: *totalSlashed,
+			Owner:           fromAddr,
+			Amount:          *totalSlashed,
+			DebondingAmount: debondingSlashed,
 		}))
 	}
 

@@ -260,8 +260,11 @@ func (e *AddEscrowEvent) EventKind() string {
 // TakeEscrowEvent is the event emitted when stake is taken from an escrow
 // account (i.e. stake is slashed).
 type TakeEscrowEvent struct {
-	Owner  Address           `json:"owner"`
+	Owner Address `json:"owner"`
+	// The sum of amounts slashed from active and debonding escrow balances.
 	Amount quantity.Quantity `json:"amount"`
+	// The amount slashed from debonding escrow balances.
+	DebondingAmount quantity.Quantity `json:"debonding_amount"`
 }
 
 // EventKind returns a string representation of this event's kind.

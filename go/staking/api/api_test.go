@@ -576,12 +576,13 @@ func TestEventsSerialization(t *testing.T) {
 				TxHash: txHash,
 				Escrow: &EscrowEvent{
 					Take: &TakeEscrowEvent{
-						Owner:  addr1,
-						Amount: mustInitQuantity(t, 100),
+						Owner:           addr1,
+						Amount:          mustInitQuantity(t, 100),
+						DebondingAmount: mustInitQuantity(t, 20),
 					},
 				},
 			},
-			"o2Zlc2Nyb3ehZHRha2WiZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZGZoZWlnaHQYKmd0eF9oYXNoWCDGcrjR71btKKuHw2IsURQGm90617j5c3SY0MAezvCWeg==",
+			"o2Zlc2Nyb3ehZHRha2WjZW93bmVyVQAgchQ0iT9hbAmBSOLPn5nj4oJuE2ZhbW91bnRBZHBkZWJvbmRpbmdfYW1vdW50QRRmaGVpZ2h0GCpndHhfaGFzaFggxnK40e9W7Sirh8NiLFEUBpvdOte4+XN0mNDAHs7wlno=",
 		},
 		{
 			Event{
