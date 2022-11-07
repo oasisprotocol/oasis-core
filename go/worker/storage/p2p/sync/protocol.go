@@ -3,8 +3,13 @@ package sync
 import (
 	"time"
 
+	"github.com/libp2p/go-libp2p/core"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
@@ -64,4 +69,21 @@ type GetCheckpointChunkRequest struct {
 // GetCheckpointChunkResponse is a respose to a GetCheckpointChunk request.
 type GetCheckpointChunkResponse struct {
 	Chunk []byte `json:"chunk,omitempty"`
+}
+
+func init() {
+	peermgmt.RegisterNodeHandler(&peermgmt.NodeHandlerBundle{
+		ProtocolsFn: func(n *node.Node, chainContext string) []core.ProtocolID {
+			if !n.HasRoles(node.RoleComputeWorker | node.RoleStorageRPC) {
+				return []core.ProtocolID{}
+			}
+
+			protocols := make([]core.ProtocolID, len(n.Runtimes))
+			for i, rt := range n.Runtimes {
+				protocols[i] = rpc.NewRuntimeProtocolID(rt.ID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+			}
+
+			return protocols
+		},
+	})
 }

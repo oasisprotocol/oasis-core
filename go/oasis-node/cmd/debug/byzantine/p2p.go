@@ -96,7 +96,7 @@ func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, runtimeI
 	}
 
 	var err error
-	ph.service, err = p2p.New(id, ht.service)
+	ph.service, err = p2p.New(id, ht.service, nil)
 	if err != nil {
 		return fmt.Errorf("P2P service New: %w", err)
 	}

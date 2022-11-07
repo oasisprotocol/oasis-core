@@ -10,12 +10,13 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
+	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
 )
 
 const (
@@ -216,7 +217,8 @@ func (h *topicHandler) tryPublishing(rawMsg []byte) error {
 
 // pendingMessagesWorker handles retrying for P2P messages when there are no connected peers.
 func (h *topicHandler) pendingMessagesWorker() {
-	mgrInitCh := h.p2p.PeerManager.Initialized()
+	registry := h.p2p.PeerManager().PeerRegistry()
+	mgrInitCh := registry.Initialized()
 	for {
 		var msg *rawMessage
 
@@ -227,13 +229,13 @@ func (h *topicHandler) pendingMessagesWorker() {
 		}
 
 	WaitLoop:
-		for mgrInitCh != nil || (len(h.topic.ListPeers()) == 0 && len(h.p2p.PeerManager.KnownPeers()) > 0) {
+		for mgrInitCh != nil || (len(h.topic.ListPeers()) == 0 && registry.NumPeers() > 0) {
 			select {
 			case <-h.ctx.Done():
 				return
 			case <-mgrInitCh:
 				mgrInitCh = nil
-				if len(h.p2p.PeerManager.KnownPeers()) == 0 {
+				if registry.NumPeers() == 0 {
 					break WaitLoop
 				}
 			case <-time.After(1 * time.Second):
@@ -248,11 +250,10 @@ func (h *topicHandler) pendingMessagesWorker() {
 	}
 }
 
-func newTopicHandler(p *p2p, runtimeID common.Namespace, kind api.TopicKind, handler api.Handler) (string, *topicHandler, error) {
-	topicID := p.topicIDForRuntime(runtimeID, kind)
+func newTopicHandler(p *p2p, topicID string, handler api.Handler) (*topicHandler, error) {
 	topic, err := p.pubsub.Join(topicID) // Note: Disallows duplicates.
 	if err != nil {
-		return "", nil, fmt.Errorf("p2p: failed to join topic '%s': %w", topicID, err)
+		return nil, fmt.Errorf("p2p: failed to join topic '%s': %w", topicID, err)
 	}
 
 	h := &topicHandler{
@@ -272,11 +273,11 @@ func newTopicHandler(p *p2p, runtimeID common.Namespace, kind api.TopicKind, han
 		)
 		_ = topic.Close()
 
-		return "", nil, fmt.Errorf("p2p: failed to relay topic '%s': %w", topicID, err)
+		return nil, fmt.Errorf("p2p: failed to relay topic '%s': %w", topicID, err)
 	}
 
 	go h.pendingMessagesWorker()
-	return topicID, h, nil
+	return h, nil
 }
 
 func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
@@ -285,4 +286,22 @@ func peerIDToPublicKey(peerID core.PeerID) (signature.PublicKey, error) {
 		return signature.PublicKey{}, err
 	}
 	return api.PubKeyToPublicKey(pk)
+}
+
+func init() {
+	peermgmt.RegisterNodeHandler(&peermgmt.NodeHandlerBundle{
+		TopicsFn: func(n *node.Node, chainContext string) []string {
+			if !n.HasRoles(node.RoleComputeWorker) {
+				return []string{}
+			}
+
+			topics := make([]string, 2*len(n.Runtimes))
+			for i, rt := range n.Runtimes {
+				topics[2*i] = api.NewTopicIDForRuntime(chainContext, rt.ID, api.TopicKindCommittee)
+				topics[2*i+1] = api.NewTopicIDForRuntime(chainContext, rt.ID, api.TopicKindTx)
+			}
+
+			return topics
+		},
+	})
 }

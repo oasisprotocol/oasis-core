@@ -7,7 +7,6 @@ import (
 	"github.com/libp2p/go-libp2p/core"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
@@ -15,10 +14,6 @@ import (
 
 // nopP2P is a no-op peer-to-peer node that does not propagate anything.
 type nopP2P struct{}
-
-// Implements api.Service.
-func (*nopP2P) SetNodeImportance(kind api.ImportanceKind, runtimeID common.Namespace, p2pIDs map[signature.PublicKey]bool) {
-}
 
 // Implements api.Service.
 func (p *nopP2P) Cleanup() {
@@ -77,8 +72,17 @@ func (p *nopP2P) BlockPeer(peerID core.PeerID) {
 }
 
 // Implements api.Service.
-func (p *nopP2P) GetHost() core.Host {
+func (p *nopP2P) Host() core.Host {
 	return nil
+}
+
+// Implements api.Service.
+func (p *nopP2P) PeerManager() api.PeerManager {
+	return nil
+}
+
+// Implements api.Service.
+func (p *nopP2P) RegisterProtocol(pid core.ProtocolID, min int, total int) {
 }
 
 // Implements api.Service.

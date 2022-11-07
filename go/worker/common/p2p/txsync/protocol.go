@@ -1,8 +1,13 @@
 package txsync
 
 import (
+	"github.com/libp2p/go-libp2p/core"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 // TxSyncProtocolID is a unique protocol identifier for the transaction sync protocol.
@@ -25,4 +30,21 @@ type GetTxsRequest struct {
 // GetTxsResponse is a response to a GetTxs request.
 type GetTxsResponse struct {
 	Txs [][]byte `json:"txs,omitempty"`
+}
+
+func init() {
+	peermgmt.RegisterNodeHandler(&peermgmt.NodeHandlerBundle{
+		ProtocolsFn: func(n *node.Node, chainContext string) []core.ProtocolID {
+			if !n.HasRoles(node.RoleComputeWorker) {
+				return []core.ProtocolID{}
+			}
+
+			protocols := make([]core.ProtocolID, len(n.Runtimes))
+			for i, rt := range n.Runtimes {
+				protocols[i] = rpc.NewRuntimeProtocolID(rt.ID, TxSyncProtocolID, TxSyncProtocolVersion)
+			}
+
+			return protocols
+		},
+	})
 }

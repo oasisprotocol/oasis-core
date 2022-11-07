@@ -8,6 +8,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
+const (
+	// minProtocolPeers is the minimum number of peers from the registry we want to have connected
+	// for TxSync protocol.
+	minProtocolPeers = 20
+
+	// totalProtocolPeers is the number of peers we want to have connected for TxSync protocol.
+	totalProtocolPeers = 40
+)
+
 // Client is a transaction sync protocol client.
 type Client interface {
 	// GetTxs queries peers for transaction data.
@@ -74,8 +83,10 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
 	pid := rpc.NewRuntimeProtocolID(runtimeID, TxSyncProtocolID, TxSyncProtocolVersion)
 	mgr := rpc.NewPeerManager(p2p, pid)
-	rc := rpc.NewClient(p2p.GetHost(), pid)
+	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)
+
+	p2p.RegisterProtocol(pid, minProtocolPeers, totalProtocolPeers)
 
 	return &client{
 		rc:  rc,
