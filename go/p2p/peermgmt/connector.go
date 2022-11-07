@@ -6,14 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
@@ -32,32 +30,6 @@ type peerConn struct {
 	doneCh    chan struct{}
 }
 
-type peerBackOff struct {
-	backoff *backoff.ExponentialBackOff
-	next    time.Time
-}
-
-func newPeerBackOff(next time.Time) *peerBackOff {
-	bo := cmnBackoff.NewExponentialBackOff()
-	bo.InitialInterval = connectBackOffInitialInterval
-	bo.MaxInterval = connectBackOffMaxInterval
-	bo.Reset()
-
-	return &peerBackOff{
-		backoff: bo,
-		next:    next,
-	}
-}
-
-func (b *peerBackOff) extend() {
-	b.next = time.Now().Add(b.backoff.NextBackOff())
-}
-
-func (b *peerBackOff) reset() {
-	b.backoff.Reset()
-	b.next = time.Now()
-}
-
 type peerConnector struct {
 	logger *logging.Logger
 
@@ -66,7 +38,7 @@ type peerConnector struct {
 
 	mu       sync.Mutex
 	ongoing  map[core.PeerID]*peerConn
-	backoffs map[core.PeerID]*peerBackOff
+	backoffs map[core.PeerID]*backOff
 }
 
 func newPeerConnector(h host.Host, g connmgr.ConnectionGater) *peerConnector {
@@ -77,7 +49,7 @@ func newPeerConnector(h host.Host, g connmgr.ConnectionGater) *peerConnector {
 		host:     h,
 		gater:    g,
 		ongoing:  make(map[core.PeerID]*peerConn),
-		backoffs: make(map[core.PeerID]*peerBackOff),
+		backoffs: make(map[core.PeerID]*backOff),
 	}
 }
 
@@ -86,8 +58,8 @@ func newPeerConnector(h host.Host, g connmgr.ConnectionGater) *peerConnector {
 //
 // Note that at the end more than max number of peers from the given list can be connected as some
 // of them might already be connected prior the method call or connected via some other means.
-func (c *peerConnector) connectMany(ctx context.Context, peers []*peer.AddrInfo, max int) {
-	if max <= 0 || len(peers) == 0 {
+func (c *peerConnector) connectMany(ctx context.Context, peersCh <-chan peer.AddrInfo, max int) {
+	if max <= 0 {
 		return
 	}
 
@@ -101,8 +73,23 @@ func (c *peerConnector) connectMany(ctx context.Context, peers []*peer.AddrInfo,
 		ticketCh <- false
 	}
 
-	var connected bool
-	for _, info := range peers {
+	var (
+		ok        bool
+		connected bool
+		info      peer.AddrInfo
+	)
+
+	for {
+		select {
+		case info, ok = <-peersCh:
+		case <-ctx.Done():
+			return
+		}
+
+		if !ok {
+			return
+		}
+
 		for {
 			// Wait for a ticket/failed connection.
 			select {
@@ -111,7 +98,7 @@ func (c *peerConnector) connectMany(ctx context.Context, peers []*peer.AddrInfo,
 				return
 			}
 
-			// We got a ticket. Connect to a next peer if the peer holding it failed to connect.
+			// We got a ticket. Connect to the next peer if the peer holding it failed to connect.
 			// Otherwise wait for another one unless there are no more tickets available.
 			if !connected {
 				break
@@ -125,7 +112,7 @@ func (c *peerConnector) connectMany(ctx context.Context, peers []*peer.AddrInfo,
 
 		// Connect in the background.
 		wg.Add(1)
-		go func(info *peer.AddrInfo) {
+		go func(info peer.AddrInfo) {
 			defer wg.Done()
 			ticketCh <- c.connectOne(ctx, info)
 		}(info)
@@ -133,7 +120,7 @@ func (c *peerConnector) connectMany(ctx context.Context, peers []*peer.AddrInfo,
 }
 
 // connectOne tries to connect to the given peer allowing only one connection attempt at a time.
-func (c *peerConnector) connectOne(ctx context.Context, info *peer.AddrInfo) bool {
+func (c *peerConnector) connectOne(ctx context.Context, info peer.AddrInfo) bool {
 	// Allow only one connection at a time.
 	c.mu.Lock()
 	req, ok := c.ongoing[info.ID]
@@ -165,7 +152,7 @@ func (c *peerConnector) connectOne(ctx context.Context, info *peer.AddrInfo) boo
 }
 
 // connect tries to connect to the given peer.
-func (c *peerConnector) connect(ctx context.Context, info *peer.AddrInfo) bool {
+func (c *peerConnector) connect(ctx context.Context, info peer.AddrInfo) bool {
 	if info.ID == c.host.ID() {
 		return false
 	}
@@ -203,7 +190,7 @@ func (c *peerConnector) connect(ctx context.Context, info *peer.AddrInfo) bool {
 
 	// Finally, connect. No need to add timeout to the context as this is
 	// already done in the libp2p package.
-	if err := c.host.Connect(ctx, *info); err != nil {
+	if err := c.host.Connect(ctx, info); err != nil {
 		c.logger.Debug("failed to connect to peer",
 			"err", err,
 			"peer_id", info.ID,
@@ -230,11 +217,11 @@ func (c *peerConnector) checkBackOff(p core.PeerID) bool {
 
 	bo, ok := c.backoffs[p]
 	if !ok {
-		bo = newPeerBackOff(now)
+		bo = newBackOff(now, connectBackOffInitialInterval, connectBackOffMaxInterval)
 		c.backoffs[p] = bo
 	}
 
-	return !now.Before(bo.next)
+	return bo.check(now)
 }
 
 func (c *peerConnector) extendBackOff(p core.PeerID) {

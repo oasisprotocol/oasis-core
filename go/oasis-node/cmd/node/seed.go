@@ -1,11 +1,13 @@
 package node
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	tmSeed "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/seed"
 	controlApi "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -13,6 +15,8 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p"
+	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 )
 
 // SeedNode is the Oasis seed node service.
@@ -21,6 +25,8 @@ type SeedNode struct {
 
 	stopOnce sync.Once
 
+	commonStore *persistent.CommonStore
+
 	svcMgr       *background.ServiceManager
 	grpcInternal *grpc.Server
 
@@ -28,6 +34,7 @@ type SeedNode struct {
 	identity *identity.Identity
 
 	tendermintSeed *tmSeed.Service
+	libp2pSeed     api.SeedService
 }
 
 // Wait waits for the node to gracefully terminate. Callers MUST
@@ -96,6 +103,15 @@ func NewSeedNode() (node *SeedNode, err error) {
 		return nil, err
 	}
 
+	// Open the common node store.
+	node.commonStore, err = persistent.NewCommonStore(dataDir)
+	if err != nil {
+		logger.Error("failed to open common node store",
+			"err", err,
+		)
+		return nil, err
+	}
+
 	// Generate or load the node's identity.
 	node.identity, err = loadOrGenerateIdentity(dataDir, node.logger)
 	if err != nil {
@@ -115,15 +131,36 @@ func NewSeedNode() (node *SeedNode, err error) {
 	// Register the node as a node controller.
 	controlApi.RegisterService(node.grpcInternal.Server(), node)
 
-	// Initialize and start services.
+	// Initialize and start the Tendermint seed.
 	node.tendermintSeed, err = tmSeed.New(dataDir, node.identity, node.genesis)
 	if err != nil {
 		return nil, err
 	}
 	node.svcMgr.Register(node.tendermintSeed)
 
-	if err := node.tendermintSeed.Start(); err != nil {
+	if err = node.tendermintSeed.Start(); err != nil {
 		node.logger.Error("failed to start tendermint seed",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Initialize and start the libp2p seed.
+	var seedCfg p2p.SeedConfig
+	if err = seedCfg.Load(); err != nil {
+		return nil, fmt.Errorf("failed to load libp2p seed config: %w", err)
+	}
+	seedCfg.Signer = node.identity.P2PSigner
+	seedCfg.CommonStore = node.commonStore
+
+	node.libp2pSeed, err = p2p.NewSeedNode(&seedCfg)
+	if err != nil {
+		return nil, err
+	}
+	node.svcMgr.Register(node.libp2pSeed)
+
+	if err := node.libp2pSeed.Start(); err != nil {
+		node.logger.Error("failed to start libp2p seed",
 			"err", err,
 		)
 		return nil, err

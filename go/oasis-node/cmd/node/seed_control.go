@@ -49,14 +49,21 @@ func (n *SeedNode) CancelUpgrade(ctx context.Context, descriptor *upgrade.Descri
 
 // GetStatus implements control.NodeController.
 func (n *SeedNode) GetStatus(ctx context.Context) (*control.Status, error) {
-	addresses, err := n.tendermintSeed.GetAddresses()
+	tmAddresses, err := n.tendermintSeed.GetAddresses()
 	if err != nil {
 		return nil, err
 	}
+	libAddresses := n.libp2pSeed.Addresses()
+
+	addresses := make([]string, 0)
+	for _, addr := range tmAddresses {
+		addresses = append(addresses, addr.String())
+	}
+	addresses = append(addresses, libAddresses...)
 
 	seedStatus := control.SeedStatus{
 		ChainContext: n.tendermintSeed.GetChainContext(),
-		NodePeers:    n.tendermintSeed.GetPeers(),
+		NodePeers:    append(n.tendermintSeed.GetPeers(), n.libp2pSeed.Peers()...),
 		Addresses:    addresses,
 	}
 

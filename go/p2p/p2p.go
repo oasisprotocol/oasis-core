@@ -8,13 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
-	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/spf13/viper"
@@ -27,9 +26,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/discovery/bootstrap"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
@@ -208,7 +207,11 @@ func (p *p2p) Peers(runtimeID common.Namespace) []string {
 			addrs = reachableAddrs
 		}
 
-		peers = append(peers, fmt.Sprintf("%s/p2p/%s", addrs[0].String(), peerID.Pretty()))
+		info := peer.AddrInfo{
+			ID:    peerID,
+			Addrs: addrs[:1],
+		}
+		peers = append(peers, api.AddrInfoToString(info)[0])
 	}
 	return peers
 }
@@ -350,108 +353,14 @@ func messageIdFn(pmsg *pb.Message) string { // nolint: revive
 
 // New creates a new P2P node.
 func New(identity *identity.Identity, consensus consensus.Backend, store *persistent.CommonStore) (api.Service, error) {
-	// Instantiate the libp2p host.
-	addresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgRegistrationAddresses))
-	if err != nil {
-		return nil, err
-	}
-	port := uint16(viper.GetInt(CfgHostPort))
-
-	var registerAddresses []multiaddr.Multiaddr
-	for _, addr := range addresses {
-		var mAddr multiaddr.Multiaddr
-		mAddr, err = manet.FromNetAddr(addr.ToTCPAddr())
-		if err != nil {
-			return nil, err
-		}
-		registerAddresses = append(registerAddresses, mAddr)
-	}
-
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(
-		fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port),
-	)
-
-	// Set up a connection manager so we can limit the number of connections.
-	low := int(viper.GetUint32(CfgConnMgrMaxNumPeers))
-	cm, err := connmgr.NewConnManager(
-		low,
-		low+peersHighWatermarkDelta,
-		connmgr.WithGracePeriod(viper.GetDuration(CfgConnMgrPeerGracePeriod)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("p2p: failed to create connection manager: %w", err)
-	}
-
-	// Set up a connection gater.
-	cg, err := conngater.NewBasicConnectionGater(nil)
-	if err != nil {
-		return nil, fmt.Errorf("p2p: failed to create connection gater: %w", err)
-	}
-
-	// Block peers specified in the blacklist.
-	blacklist := viper.GetStringSlice(CfgConnGaterBlockedPeerIPs)
-	for _, blockedIP := range blacklist {
-		parsedIP := net.ParseIP(blockedIP)
-		if parsedIP == nil {
-			return nil, fmt.Errorf("p2p: malformed blocked IP: %s", blockedIP)
-		}
-
-		if grr := cg.BlockAddr(parsedIP); grr != nil {
-			return nil, fmt.Errorf("p2p: failed to block IP (%s): %w", blockedIP, err)
-		}
-	}
-
-	// Maintain persistent peers.
-	persistentPeers := make(map[core.PeerID]bool)
-	persistentPeersAI := []peer.AddrInfo{}
-	for _, pp := range viper.GetStringSlice(CfgConnMgrPersistentPeers) {
-		// The persistent peer addresses are in the format pubkey@IP:port,
-		// because we use a similar format elsewhere and it's easier for users
-		// to understand than a multiaddr.
-
-		var addr node.ConsensusAddress
-		if grr := addr.UnmarshalText([]byte(pp)); grr != nil {
-			return nil, fmt.Errorf("p2p: malformed persistent peer address (expected pubkey@IP:port): %w", grr)
-		}
-
-		pid, grr := api.PublicKeyToPeerID(addr.ID)
-		if grr != nil {
-			return nil, fmt.Errorf("p2p: invalid persistent peer public key (%s): %w", addr.ID, grr)
-		}
-
-		ma, grr := addr.Address.MultiAddress()
-		if grr != nil {
-			return nil, fmt.Errorf("p2p: failed to convert persistent peer address to multi address (%s): %w", addr, grr)
-		}
-
-		if _, exists := persistentPeers[pid]; exists {
-			// If we already have this peer ID, append to its addresses.
-			for _, p := range persistentPeersAI {
-				if p.ID == pid {
-					p.Addrs = append(p.Addrs, ma)
-					break
-				}
-			}
-		} else {
-			// Fresh entry.
-			ai := peer.AddrInfo{
-				ID:    pid,
-				Addrs: []multiaddr.Multiaddr{ma},
-			}
-			persistentPeersAI = append(persistentPeersAI, ai)
-		}
-		persistentPeers[pid] = true
-		cm.Protect(pid, "")
+	var cfg Config
+	if err := cfg.Load(); err != nil {
+		return nil, fmt.Errorf("p2p: failed to load peer config: %w", err)
 	}
 
 	// Create the P2P host.
-	host, err := libp2p.New(
-		libp2p.UserAgent(fmt.Sprintf("oasis-core/%s", version.SoftwareVersion)),
-		libp2p.ListenAddrs(sourceMultiAddr),
-		libp2p.Identity(api.SignerToPrivKey(identity.P2PSigner)),
-		libp2p.ConnectionManager(cm),
-		libp2p.ConnectionGater(cg),
-	)
+	cfg.HostConfig.Signer = identity.P2PSigner
+	host, cg, err := NewHost(&cfg.HostConfig)
 	if err != nil {
 		return nil, fmt.Errorf("p2p: failed to initialize libp2p host: %w", err)
 	}
@@ -465,11 +374,11 @@ func New(identity *identity.Identity, consensus consensus.Backend, store *persis
 		pubsub.WithStrictSignatureVerification(true),
 		pubsub.WithFloodPublish(true),
 		pubsub.WithPeerExchange(true),
-		pubsub.WithPeerOutboundQueueSize(viper.GetInt(CfgGossipsubPeerOutboundQueueSize)),
-		pubsub.WithValidateQueueSize(viper.GetInt(CfgGossipsubValidateQueueSize)),
-		pubsub.WithValidateThrottle(viper.GetInt(CfgGossipsubValidateThrottle)),
+		pubsub.WithPeerOutboundQueueSize(cfg.PeerOutboundQueueSize),
+		pubsub.WithValidateQueueSize(cfg.ValidateQueueSize),
+		pubsub.WithValidateThrottle(cfg.ValidateThrottle),
 		pubsub.WithMessageIdFn(messageIdFn),
-		pubsub.WithDirectPeers(persistentPeersAI),
+		pubsub.WithDirectPeers(cfg.PersistentPeers),
 		pubsub.WithSeenMessagesTTL(seenMessagesTTL),
 	)
 	if err != nil {
@@ -485,7 +394,21 @@ func New(identity *identity.Identity, consensus consensus.Backend, store *persis
 		return nil, fmt.Errorf("p2p: failed to get consensus chain context: %w", err)
 	}
 
-	mgr := peermgmt.NewPeerManager(host, cg, pubsub, consensus, chainContext, store)
+	// Initialize the peer manager.
+	opts := make([]peermgmt.PeerManagerOption, 0, 1)
+
+	if cfg.BootstrapDiscoveryConfig.Enable {
+		seeds := make([]discovery.Discovery, 0, len(cfg.Seeds))
+		for i := range cfg.Seeds {
+			seed := bootstrap.NewClient(host, cfg.Seeds[i],
+				bootstrap.WithRetentionPeriod(cfg.RetentionPeriod),
+			)
+			seeds = append(seeds, seed)
+		}
+		opts = append(opts, peermgmt.WithBootstrapDiscovery(seeds))
+	}
+
+	mgr := peermgmt.NewPeerManager(host, cg, pubsub, consensus, chainContext, store, opts...)
 
 	p := &p2p{
 		ctx:               ctx,
@@ -497,7 +420,7 @@ func New(identity *identity.Identity, consensus consensus.Backend, store *persis
 		gater:             cg,
 		peerMgr:           mgr,
 		pubsub:            pubsub,
-		registerAddresses: registerAddresses,
+		registerAddresses: cfg.Addresses,
 		topics:            make(map[string]*topicHandler),
 		logger:            logging.GetLogger("p2p"),
 	}
@@ -506,11 +429,104 @@ func New(identity *identity.Identity, consensus consensus.Backend, store *persis
 		"address", fmt.Sprintf("%+v", host.Addrs()),
 	)
 
-	if len(blacklist) > 0 {
+	if len(cfg.BlockedPeers) > 0 {
 		p.logger.Info("p2p blacklist initialized",
-			"num_blocked_peers", len(blacklist),
+			"num_blocked_peers", len(cfg.BlockedPeers),
 		)
 	}
 
 	return p, nil
+}
+
+// Config describes a set of P2P settings for a peer.
+type Config struct {
+	Addresses []multiaddr.Multiaddr
+
+	HostConfig
+	GossipSubConfig
+	BootstrapDiscoveryConfig
+}
+
+// Load loads P2P configuration.
+func (cfg *Config) Load() error {
+	rawAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgRegistrationAddresses))
+	if err != nil {
+		return fmt.Errorf("failed to parse address list: %w", err)
+	}
+	var addresses []multiaddr.Multiaddr
+	for _, addr := range rawAddresses {
+		var mAddr multiaddr.Multiaddr
+		mAddr, err = manet.FromNetAddr(addr.ToTCPAddr())
+		if err != nil {
+			return fmt.Errorf("failed to convert address to multiaddress: %w", err)
+		}
+		addresses = append(addresses, mAddr)
+	}
+
+	var hostCfg HostConfig
+	if err := hostCfg.Load(); err != nil {
+		return fmt.Errorf("failed to load host config: %w", err)
+	}
+
+	var gossipSubCfg GossipSubConfig
+	if err := gossipSubCfg.Load(); err != nil {
+		return fmt.Errorf("failed to load gossipsub config: %w", err)
+	}
+
+	var bootstrapCfg BootstrapDiscoveryConfig
+	if err := bootstrapCfg.Load(); err != nil {
+		return fmt.Errorf("failed to load bootstrap config: %w", err)
+	}
+
+	cfg.Addresses = addresses
+	cfg.HostConfig = hostCfg
+	cfg.GossipSubConfig = gossipSubCfg
+	cfg.BootstrapDiscoveryConfig = bootstrapCfg
+
+	return nil
+}
+
+// GossipSubConfig describes a set of settings for a gossip pubsub.
+type GossipSubConfig struct {
+	PeerOutboundQueueSize int
+	ValidateQueueSize     int
+	ValidateThrottle      int
+
+	PersistentPeers []peer.AddrInfo
+}
+
+// Load loads gossipsub configuration.
+func (cfg *GossipSubConfig) Load() error {
+	persistentPeers, err := api.AddrInfosFromConsensusAddrs(viper.GetStringSlice(CfgConnMgrPersistentPeers))
+	if err != nil {
+		return fmt.Errorf("failed to convert persistent peers' addresses: %w", err)
+	}
+
+	cfg.PeerOutboundQueueSize = viper.GetInt(CfgGossipsubPeerOutboundQueueSize)
+	cfg.ValidateQueueSize = viper.GetInt(CfgGossipsubValidateQueueSize)
+	cfg.ValidateThrottle = viper.GetInt(CfgGossipsubValidateThrottle)
+	cfg.PersistentPeers = persistentPeers
+
+	return nil
+}
+
+// BootstrapDiscoveryConfig describes a set of settings for a discovery.
+type BootstrapDiscoveryConfig struct {
+	Enable          bool
+	Seeds           []peer.AddrInfo
+	RetentionPeriod time.Duration
+}
+
+// Load loads bootstrap discovery configuration.
+func (cfg *BootstrapDiscoveryConfig) Load() error {
+	seeds, err := api.AddrInfosFromConsensusAddrs(viper.GetStringSlice(CfgSeeds))
+	if err != nil {
+		return fmt.Errorf("failed to convert seeds' addresses: %w", err)
+	}
+
+	cfg.Seeds = seeds
+	cfg.Enable = viper.GetBool(CfgBootstrapEnable)
+	cfg.RetentionPeriod = viper.GetDuration(CfgBootstrapRetentionPeriod)
+
+	return nil
 }

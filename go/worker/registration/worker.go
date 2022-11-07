@@ -1210,13 +1210,7 @@ func New(
 ) (*Worker, error) {
 	logger := logging.GetLogger("worker/registration")
 
-	serviceStore, err := store.GetServiceStore(DBBucketName)
-	if err != nil {
-		logger.Error("can't get registration worker store bucket",
-			"err", err,
-		)
-		return nil, err
-	}
+	serviceStore := store.GetServiceStore(DBBucketName)
 
 	entityID, registrationSigner, err := GetRegistrationSigner(logger, dataDir, identity)
 	if err != nil {

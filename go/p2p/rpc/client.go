@@ -10,7 +10,6 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -473,7 +472,7 @@ func (c *client) call(
 ) error {
 	// Attempt to open stream to the given peer.
 	stream, err := c.host.NewStream(
-		network.WithNoDial(ctx, "should already have connection"),
+		ctx,
 		peerID,
 		c.protocolID,
 	)

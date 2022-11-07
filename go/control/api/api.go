@@ -171,8 +171,8 @@ type SeedStatus struct {
 	// ChainContext is the chain domain separation context.
 	ChainContext string `json:"chain_context"`
 
-	// Addresses is a list of configured external consensus addresses.
-	Addresses []node.ConsensusAddress `json:"addresses"`
+	// Addresses is a list of seed node's addresses.
+	Addresses []string `json:"addresses"`
 
 	// NodePeers is a list of peers that are connected to the node.
 	NodePeers []string `json:"node_peers"`

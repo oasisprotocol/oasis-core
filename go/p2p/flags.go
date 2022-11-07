@@ -41,6 +41,11 @@ const (
 
 	// CfgSeeds configures seed node(s).
 	CfgSeeds = "p2p.seeds"
+
+	// CfgBootstrapEnable enables bootstrap discovery protocol.
+	CfgBootstrapEnable = "p2p.discovery.bootstrap.enable"
+	// CfgBootstrapRetentionPeriod is the retention period for peers discovered through seed nodes.
+	CfgBootstrapRetentionPeriod = "p2p.discovery.bootstrap.retention_period"
 )
 
 // Flags has the configuration flags.
@@ -59,6 +64,8 @@ func init() {
 	Flags.StringSlice(CfgConnGaterBlockedPeerIPs, []string{}, "List of blocked peer IPs")
 	Flags.StringSlice(CfgConnMgrPersistentPeers, []string{}, "List of persistent peer node addresses in format P2Ppubkey@IP:port")
 	Flags.StringSlice(CfgSeeds, []string{}, "Seed node(s) of the form pubkey@IP:port")
+	Flags.Bool(CfgBootstrapEnable, true, "Enable bootstrap discovery protocol")
+	Flags.Duration(CfgBootstrapRetentionPeriod, time.Hour, "Retention period for peers discovered through seed nodes")
 
 	_ = viper.BindPFlags(Flags)
 }
