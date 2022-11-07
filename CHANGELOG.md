@@ -12,6 +12,68 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.1 (2022-11-05)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- go/consensus/tendermint/apps/staking: Reduce DelegationsTo scanning
+  ([#5011](https://github.com/oasisprotocol/oasis-core/issues/5011))
+
+### Bug Fixes
+
+- go/runtime/txpool: republish sooner if republish limit is reached
+  ([#5003](https://github.com/oasisprotocol/oasis-core/issues/5003))
+
+  This fixes a case where a part of a batch of transaction would take a long
+  time to be published in case there are no new transactions being submitted.
+
+- go/worker/common: Reorder state determination checks
+  ([#5005](https://github.com/oasisprotocol/oasis-core/issues/5005))
+
+  Otherwise the shown state would be misleading, e.g. showing that it is
+  waiting for runtime host being provisioned while it is actually blocked
+  in initialization like storage sync.
+
+- go/p2p/rpc: Fix multi call dispatch to different peers
+  ([#5005](https://github.com/oasisprotocol/oasis-core/issues/5005))
+
+- go/storage/mkvs/checkpoint: Exclude initial version when pruning
+  ([#5005](https://github.com/oasisprotocol/oasis-core/issues/5005))
+
+- go/worker/storage: Fix case when checkpoint sync disabled but forced
+  ([#5005](https://github.com/oasisprotocol/oasis-core/issues/5005))
+
+  If checkpoint sync is disabled but sync has been forced (e.g. because
+  the state at genesis is non-empty), we must request to sync the
+  checkpoint at genesis as otherwise we will jump to a later state which
+  may not be desired given that checkpoint sync has been explicitly
+  disabled via config.
+
+- go/p2p/rpc: Fix peer grading when context is canceled
+  ([#5007](https://github.com/oasisprotocol/oasis-core/issues/5007))
+
+  When method `CallMulti` finishes early, the requests in progress are canceled
+  and unfairly recorded as failed.
+
+- go/p2p/rpc: Fix memory leak when RPC multi call finishes early
+  ([#5007](https://github.com/oasisprotocol/oasis-core/issues/5007))
+
+  When method `CallMulti` finishes early, the result channel is never cleared.
+  Therefore, the channel never closes and leaves one go routine hanging.
+
+- go/common/workerpool: Fix memory leak when workerpool is stopped early
+  ([#5008](https://github.com/oasisprotocol/oasis-core/issues/5008))
+
+  When workerpool si stopped, the job channel might still contain jobs which
+  haven't been processed. Therefore, the channel never closes and leaves one
+  go routine hanging.
+
 ## 22.2 (2022-10-13)
 
 | Protocol          | Version   |
