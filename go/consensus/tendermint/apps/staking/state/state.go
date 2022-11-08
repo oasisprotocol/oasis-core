@@ -383,7 +383,7 @@ func (s *ImmutableState) DebondingDelegationsFor(
 			break
 		}
 		if !decDelegatorAddr.Equal(delegatorAddr) {
-			continue
+			break
 		}
 
 		var deb staking.DebondingDelegation
