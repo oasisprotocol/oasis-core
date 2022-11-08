@@ -76,6 +76,14 @@ pub const CONSENSUS_VERSION: Version = Version {
     patch: 0,
 };
 
+/// Protocol versions.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct ProtocolVersions {
+    pub consensus_protocol: Version,
+    pub runtime_host_protocol: Version,
+    pub runtime_committee_protocol: Version,
+}
+
 #[cfg(test)]
 mod test {
     use super::Version;

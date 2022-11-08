@@ -12,4 +12,7 @@ var (
 
 	// RuntimeMessageRegistry is the message kind used when dispatching Registry runtime messages.
 	RuntimeMessageRegistry = messageKind(2)
+
+	// RuntimeMessageGovernance is the message kind used when dispatching Governance runtime messages.
+	RuntimeMessageGovernance = messageKind(3)
 )

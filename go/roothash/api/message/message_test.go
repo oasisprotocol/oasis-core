@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -40,6 +41,22 @@ func TestMessageHash(t *testing.T) {
 			},
 		}}}}, "ac8ff938607f234f0db60dc2e81897f50c3918cc51998c633a0f3f2b98374db1"},
 		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "67da1da17b12c398d4dec165480df73c244740f8fb876f59a76cd29e30056b6d"},
+		{[]Message{
+			{
+				Governance: &GovernanceMessage{
+					CastVote: &api.ProposalVote{ID: 32, Vote: api.VoteYes},
+				},
+			},
+		}, "f45e26eb8ace807ad5bd02966cde1f012d1d978d4cbddd59e9bfd742dcf39b90"},
+		{[]Message{
+			{
+				Governance: &GovernanceMessage{
+					SubmitProposal: &api.ProposalContent{
+						CancelUpgrade: &api.CancelUpgradeProposal{ProposalID: 32},
+					},
+				},
+			},
+		}, "03312ddb5c41a30fbd29fb91cf6bf26d58073996f89657ca4f3b3a43a98bfd0b"},
 	} {
 		var h hash.Hash
 		err := h.UnmarshalHex(tc.expectedHash)
@@ -65,6 +82,9 @@ func TestMessageValidateBasic(t *testing.T) {
 		{"RegistryNoFieldsSet", Message{Registry: &RegistryMessage{}}, false},
 		{"RegistryInvalid", Message{Registry: &RegistryMessage{UpdateRuntime: nil}}, false},
 		{"ValidRegistry", Message{Registry: &RegistryMessage{UpdateRuntime: &registry.Runtime{}}}, true},
+		{"GovernanceNoFieldsSet", Message{Governance: &GovernanceMessage{}}, false},
+		{"GovernanceInvalid", Message{Governance: &GovernanceMessage{CastVote: &api.ProposalVote{}, SubmitProposal: &api.ProposalContent{}}}, false},
+		{"GovernanceValid", Message{Governance: &GovernanceMessage{CastVote: &api.ProposalVote{}}}, true},
 	} {
 		err := tc.msg.ValidateBasic()
 		if tc.valid {

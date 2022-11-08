@@ -6,14 +6,16 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // Message is a message that can be sent by a runtime.
 type Message struct {
-	Staking  *StakingMessage  `json:"staking,omitempty"`
-	Registry *RegistryMessage `json:"registry,omitempty"`
+	Staking    *StakingMessage    `json:"staking,omitempty"`
+	Registry   *RegistryMessage   `json:"registry,omitempty"`
+	Governance *GovernanceMessage `json:"governance,omitempty"`
 }
 
 // ValidateBasic performs basic validation of the runtime message.
@@ -23,6 +25,8 @@ func (m *Message) ValidateBasic() error {
 		return m.Staking.ValidateBasic()
 	case m.Registry != nil:
 		return m.Registry.ValidateBasic()
+	case m.Governance != nil:
+		return m.Governance.ValidateBasic()
 	default:
 		return fmt.Errorf("runtime message has no fields set")
 	}
@@ -95,5 +99,29 @@ func (rm *RegistryMessage) ValidateBasic() error {
 		return nil
 	default:
 		return fmt.Errorf("registry runtime message has no fields set")
+	}
+}
+
+// GovernanceMessage is a governance message that allows a runtime to perform governance operations.
+type GovernanceMessage struct {
+	cbor.Versioned
+
+	CastVote       *governance.ProposalVote    `json:"cast_vote,omitempty"`
+	SubmitProposal *governance.ProposalContent `json:"submit_proposal,omitempty"`
+}
+
+// ValidateBasic performs basic validation of a governance message.
+func (gm *GovernanceMessage) ValidateBasic() error {
+	switch {
+	case gm.CastVote != nil && gm.SubmitProposal != nil:
+		return fmt.Errorf("governance runtime message has multiple fields set")
+	case gm.SubmitProposal != nil:
+		// No extra validation validation at this time.
+		return nil
+	case gm.CastVote != nil:
+		// No extra validation validation at this time.
+		return nil
+	default:
+		return fmt.Errorf("governance runtime message has no fields set")
 	}
 }

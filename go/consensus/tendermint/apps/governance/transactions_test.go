@@ -239,7 +239,7 @@ func TestSubmitProposal(t *testing.T) {
 		governanceDepositsBefore, err = stakeState.GovernanceDeposits(txCtx)
 		require.NoError(err, "GovernanceDeposits()")
 
-		err = app.submitProposal(txCtx, state, tc.proposalContent)
+		_, err = app.submitProposal(txCtx, state, tc.proposalContent)
 		if tc.err != nil {
 			require.True(errors.Is(err, tc.err), tc.msg)
 			continue

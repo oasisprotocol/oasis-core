@@ -14,11 +14,13 @@ import (
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	schedulerapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -55,6 +57,7 @@ func (app *governanceApplication) OnRegister(state api.ApplicationState, md api.
 	app.md = md
 
 	// Subscribe to messages emitted by other apps.
+	md.Subscribe(roothashApi.RuntimeMessageGovernance, app)
 	md.Subscribe(api.MessageStateSyncCompleted, app)
 	md.Subscribe(governanceApi.MessageChangeParameters, app)
 	md.Subscribe(governanceApi.MessageValidateParameterChanges, app)
@@ -81,7 +84,8 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 			)
 			return governance.ErrInvalidArgument
 		}
-		return app.submitProposal(ctx, state, &proposalContent)
+		_, err := app.submitProposal(ctx, state, &proposalContent)
+		return err
 	case governance.MethodCastVote:
 		var proposalVote governance.ProposalVote
 		if err := cbor.Unmarshal(tx.Body, &proposalVote); err != nil {
@@ -98,6 +102,18 @@ func (app *governanceApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tr
 
 func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
 	switch kind {
+	case roothashApi.RuntimeMessageGovernance:
+		m := msg.(*message.GovernanceMessage)
+		switch {
+		case m.CastVote != nil:
+			state := governanceState.NewMutableState(ctx.State())
+			return nil, app.castVote(ctx, state, m.CastVote)
+		case m.SubmitProposal != nil:
+			state := governanceState.NewMutableState(ctx.State())
+			return app.submitProposal(ctx, state, m.SubmitProposal)
+		default:
+			return nil, governance.ErrInvalidArgument
+		}
 	case api.MessageStateSyncCompleted:
 		return app.completeStateSync(ctx)
 	case governanceApi.MessageValidateParameterChanges:
