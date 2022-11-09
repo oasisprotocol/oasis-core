@@ -1,10 +1,9 @@
 package governance
 
 import (
-	"errors"
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
@@ -13,6 +12,7 @@ import (
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
+	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -244,28 +244,49 @@ func (app *governanceApplication) castVote(
 	default:
 		return fmt.Errorf("governance: failed to query entity: %w", err)
 	}
+
+	// Load current validator sets.
 	schedulerState := schedulerState.NewMutableState(ctx.State())
 	currentValidators, err := schedulerState.CurrentValidators(ctx)
 	if err != nil {
 		return fmt.Errorf("governance: failed to query current validators: %w", err)
 	}
-	// Submitter is eligible if any of its nodes is part of the current validator committee.
+	currentValidatorsByNodeID := make(map[signature.PublicKey]*schedulerAPI.Validator, len(currentValidators))
+	for _, v := range currentValidators {
+		currentValidatorsByNodeID[v.ID] = v
+	}
+
+	// Submitter is eligible if any of its nodes are a current validator.
 	var eligible bool
 	for _, nID := range submitterEntity.Nodes {
-		var node *node.Node
-		node, err = registryState.Node(ctx, nID)
-		if err != nil {
-			// Node not being registered is non-fatal.
-			if errors.Is(err, registryAPI.ErrNoSuchNode) {
-				continue
-			}
-			return fmt.Errorf("governance: failed to query entity node: %w", err)
-		}
-		if _, ok := currentValidators[node.Consensus.ID]; ok {
+		if _, ok := currentValidatorsByNodeID[nID]; ok {
 			eligible = true
 			break
 		}
 	}
+	// Or if the submitter is a delegator to a current validator.
+	if !eligible {
+		// Validators map by entity address.
+		currentValidatorsByEntityAddress := make(map[stakingAPI.Address]*schedulerAPI.Validator, len(currentValidators))
+		for _, v := range currentValidators {
+			currentValidatorsByEntityAddress[stakingAPI.NewAddress(v.EntityID)] = v
+		}
+		// Query delegations.
+		stakingState := stakingState.NewMutableState(ctx.State())
+		var delegs map[stakingAPI.Address]*stakingAPI.Delegation
+		delegs, err = stakingState.DelegationsFor(ctx, submitterAddr)
+		if err != nil {
+			return fmt.Errorf("governance: failed to query submitter delegations: %w", err)
+		}
+		// Check if submitter delegates to any validator entity.
+		for d := range delegs {
+			if _, ok := currentValidatorsByEntityAddress[d]; ok {
+				eligible = true
+				break
+			}
+		}
+	}
+
 	if !eligible {
 		ctx.Logger().Debug("governance: submitter not eligible to vote",
 			"submitter", ctx.TxSigner(),

@@ -30,7 +30,10 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-const numTestAccounts = 5
+const (
+	numValidators = 4
+	numDelegators = 2
+)
 
 var testAccountsStake = quantity.NewFromUint64(100)
 
@@ -39,18 +42,18 @@ func initValidatorsEscrowState(
 	stakingState *stakingState.MutableState,
 	registryState *registryState.MutableState,
 	schedulerState *schedulerState.MutableState,
-) ([]signature.Signer, []staking.Address, map[staking.Address]*quantity.Quantity) {
+) ([]signature.Signer, []staking.Address, map[staking.Address]*staking.SharePool) {
 	require := require.New(t)
 	var err error
 	ctx := context.Background()
 
-	expectedValidatorsEscrow := make(map[staking.Address]*quantity.Quantity)
+	expectedValidatorsEscrow := make(map[staking.Address]*staking.SharePool)
 	addresses := []staking.Address{}
 	signers := []signature.Signer{}
 
 	// Prepare some entities and nodes.
 	validatorSet := make(map[signature.PublicKey]*scheduler.Validator)
-	for i := 0; i < numTestAccounts; i++ {
+	for i := 0; i < numValidators+numDelegators+1; i++ {
 		nodeSigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus/tendermint/apps/governance: node signer: %d", i))
 		entitySigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus/tendermint/apps/governance: entity signer: %d", i))
 		signers = append(signers, entitySigner)
@@ -64,6 +67,8 @@ func initValidatorsEscrowState(
 		require.NoError(entErr, "SignEntity")
 		err = registryState.SetEntity(ctx, &ent, sigEnt)
 		require.NoError(err, "SetEntity")
+		addr := staking.NewAddress(entitySigner.Public())
+		addresses = append(addresses, addr)
 
 		nod := &node.Node{
 			Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
@@ -76,16 +81,51 @@ func initValidatorsEscrowState(
 		err = registryState.SetNode(ctx, nil, nod, sigNode)
 		require.NoError(err, "SetNode")
 
-		// Set all but first node as a validator
-		if i > 0 {
+		switch {
+		case i < numValidators:
+			// First `numValidator` nodes are validators.
 			validatorSet[nod.Consensus.ID] = &scheduler.Validator{
 				ID:          nodeSigner.Public(),
 				EntityID:    nod.EntityID,
 				VotingPower: 1,
 			}
+
+			// Setup entity escrow.
+			// Configure a balance.
+			sp := staking.SharePool{
+				TotalShares: *quantity.NewFromUint64(100),
+				Balance:     *testAccountsStake,
+			}
+			err = stakingState.SetAccount(ctx, addr, &staking.Account{
+				Escrow: staking.EscrowAccount{
+					Active: sp,
+				},
+			})
+			require.NoError(err, "SetAccount")
+			expectedValidatorsEscrow[addr] = &sp
+
+			require.NoError(stakingState.SetDelegation(ctx, addr, addr, &staking.Delegation{
+				Shares: *quantity.NewFromUint64(100),
+			}), "SetDelegation")
+		case i == numValidators+numDelegators:
+			// Last node has no delegations.
+		default:
+			// i > numValidator && i < numValidator+numDelegator are delegators to the first validator.
+
+			// Delegate to first validator.
+			acc, aerr := stakingState.Account(ctx, addresses[0])
+			require.NoError(aerr, "Account")
+			require.NoError(acc.Escrow.Active.TotalShares.Add(quantity.NewFromUint64(100)))
+			expectedValidatorsEscrow[addresses[0]] = &acc.Escrow.Active
+			require.NoError(stakingState.SetAccount(ctx, addresses[0], acc), "SetAccount")
+
+			require.NoError(stakingState.SetDelegation(ctx, addr, addresses[0], &staking.Delegation{
+				Shares: *quantity.NewFromUint64(100),
+			}), "SetDelegation")
 		}
-		// Register two validators for last node (shouldn't affect expected validator entities escrow).
-		if i == numTestAccounts-1 {
+
+		// Register two nodes for last validator (shouldn't affect expected validator entities escrow).
+		if i == numValidators-1 {
 			nodeSigner2 := memorySigner.NewTestSigner(fmt.Sprintf("consensus/tendermint/apps/governance: node signer2: %d", i))
 			node2 := &node.Node{
 				Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
@@ -103,26 +143,6 @@ func initValidatorsEscrowState(
 				VotingPower: 1,
 			}
 		}
-
-		// Setup entity escrow.
-		// Configure a balance.
-		addr := staking.NewAddress(entitySigner.Public())
-		err = stakingState.SetAccount(ctx, addr, &staking.Account{
-			Escrow: staking.EscrowAccount{
-				Active: staking.SharePool{
-					TotalShares: *quantity.NewFromUint64(100),
-					Balance:     *testAccountsStake,
-				},
-			},
-		})
-		require.NoError(err, "SetAccount")
-		addresses = append(addresses, addr)
-
-		// Update expected values.
-		if i > 0 {
-			// First node is not in the validator set.
-			expectedValidatorsEscrow[addr] = testAccountsStake
-		}
 	}
 	err = schedulerState.PutCurrentValidators(ctx, validatorSet)
 	require.NoError(err, "PutCurrentValidators")
@@ -134,11 +154,8 @@ func TestValidatorsEscrow(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	numAccounts := 5
-
-	// Each account has same amount escrowed. First account is not in validator committee.
 	expectedTotalStake := testAccountsStake.Clone()
-	err = expectedTotalStake.Mul(quantity.NewFromUint64(uint64(numAccounts - 1)))
+	err = expectedTotalStake.Mul(quantity.NewFromUint64(uint64(numValidators)))
 	require.NoError(err, "Mul")
 
 	// Setup state.
@@ -153,10 +170,7 @@ func TestValidatorsEscrow(t *testing.T) {
 	_, _, expectedValidatorsEscrow := initValidatorsEscrowState(t, stakeState, registryState, schedulerState)
 
 	// Test validatorsEscrow.
-	app := &governanceApplication{
-		state: appState,
-	}
-	totalStake, validatorsEscrow, err := app.validatorsEscrow(ctx, stakeState, registryState, schedulerState)
+	totalStake, validatorsEscrow, err := validatorsEscrow(ctx, stakeState.ImmutableState, schedulerState.ImmutableState)
 	require.NoError(err, "app.validatorsEscrow()")
 	require.EqualValues(expectedTotalStake, totalStake, "total stake should match expected")
 	require.EqualValues(expectedValidatorsEscrow, validatorsEscrow, "validators escrow should match expected")
@@ -172,6 +186,7 @@ func TestCloseProposal(t *testing.T) {
 	defer ctx.Close()
 
 	// Setup staking state.
+	stakingState := stakingState.NewMutableState(ctx.State())
 	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr1 := staking.NewAddress(pk1)
 	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
@@ -180,6 +195,27 @@ func TestCloseProposal(t *testing.T) {
 	addr3 := staking.NewAddress(pk3)
 	pk4 := signature.NewPublicKey("dddfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr4 := staking.NewAddress(pk4)
+	pk5 := signature.NewPublicKey("eeefffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr5 := staking.NewAddress(pk5)
+	pk6 := signature.NewPublicKey("aabfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr6 := staking.NewAddress(pk6)
+	pk7 := signature.NewPublicKey("aacfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	addr7 := staking.NewAddress(pk7)
+
+	// Delegations setup.
+	// Validators.
+	require.NoError(stakingState.SetDelegation(ctx, addr1, addr1, &staking.Delegation{Shares: *quantity.NewFromUint64(4)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr1, addr3, &staking.Delegation{Shares: *quantity.NewFromUint64(12)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr2, addr2, &staking.Delegation{Shares: *quantity.NewFromUint64(60)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr3, addr3, &staking.Delegation{Shares: *quantity.NewFromUint64(35)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr3, addr1, &staking.Delegation{Shares: *quantity.NewFromUint64(50)}))
+	// Delegators.
+	require.NoError(stakingState.SetDelegation(ctx, addr4, addr4, &staking.Delegation{Shares: *quantity.NewFromUint64(5)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr5, addr1, &staking.Delegation{Shares: *quantity.NewFromUint64(6)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr6, addr6, &staking.Delegation{Shares: *quantity.NewFromUint64(100)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr6, addr7, &staking.Delegation{Shares: *quantity.NewFromUint64(200)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr6, addr1, &staking.Delegation{Shares: *quantity.NewFromUint64(1)}))
+	require.NoError(stakingState.SetDelegation(ctx, addr7, addr7, &staking.Delegation{Shares: *quantity.NewFromUint64(10)}))
 
 	// Setup governance state.
 	state := governanceState.NewMutableState(ctx.State())
@@ -197,17 +233,36 @@ func TestCloseProposal(t *testing.T) {
 		VotingPeriod:              beacon.EpochTime(50),
 	}
 
-	baseValidatorEntitiesEscrow := map[staking.Address]*quantity.Quantity{
-		addr1: quantity.NewFromUint64(5),
-		addr2: quantity.NewFromUint64(60),
-		addr3: quantity.NewFromUint64(35),
+	baseValidatorEntitiesEscrow := map[staking.Address]*staking.SharePool{
+		addr1: {
+			Balance: *quantity.NewFromUint64(100),
+			// Shares:
+			// - addr1: 4
+			// - addr3: 50
+			// - addr5: 6
+			// - addr6: 1
+			TotalShares: *quantity.NewFromUint64(61),
+		},
+		addr2: {
+			Balance: *quantity.NewFromUint64(60),
+			// Shares:
+			// - addr2: 60
+			TotalShares: *quantity.NewFromUint64(60),
+		},
+		addr3: {
+			Balance: *quantity.NewFromUint64(35),
+			// Shares:
+			// - addr1: 12
+			// - addr3: 35
+			TotalShares: *quantity.NewFromUint64(47),
+		},
 	}
 
 	for _, tc := range []struct {
 		msg                     string
 		params                  *governance.ConsensusParameters
 		totalVotingStake        *quantity.Quantity
-		validatorEntitiesEscrow map[staking.Address]*quantity.Quantity
+		validatorEntitiesEscrow map[staking.Address]*staking.SharePool
 		proposal                *governance.Proposal
 		votes                   []*governance.VoteEntry
 		expectedState           governance.ProposalState
@@ -217,7 +272,7 @@ func TestCloseProposal(t *testing.T) {
 		{
 			"should be rejected with no votes",
 			baseConsParams,
-			quantity.NewFromUint64(100),
+			quantity.NewFromUint64(195),
 			baseValidatorEntitiesEscrow,
 			&governance.Proposal{
 				ID:    1,
@@ -231,7 +286,7 @@ func TestCloseProposal(t *testing.T) {
 		{
 			"should be rejected with majority no votes",
 			baseConsParams,
-			quantity.NewFromUint64(100),
+			quantity.NewFromUint64(195),
 			baseValidatorEntitiesEscrow,
 			&governance.Proposal{
 				ID:    2,
@@ -246,13 +301,13 @@ func TestCloseProposal(t *testing.T) {
 			governance.StateRejected,
 			1, // addr4 - is invalid vote as it's not part of the 'baseValidatorEntitiesEscrow'.
 			map[governance.Vote]quantity.Quantity{
-				governance.VoteNo: *quantity.NewFromUint64(100),
+				governance.VoteNo: *quantity.NewFromUint64(195),
 			},
 		},
 		{
 			"should be rejected if quorum not reached",
 			baseConsParams,
-			quantity.NewFromUint64(100),
+			quantity.NewFromUint64(195),
 			baseValidatorEntitiesEscrow,
 			&governance.Proposal{
 				ID:    3,
@@ -264,13 +319,13 @@ func TestCloseProposal(t *testing.T) {
 			governance.StateRejected,
 			0,
 			map[governance.Vote]quantity.Quantity{
-				governance.VoteYes: *quantity.NewFromUint64(5),
+				governance.VoteYes: *quantity.NewFromUint64(100 + 8), // 100 + 8 (shares in addr3).
 			},
 		},
 		{
 			"should be rejected if threshold not reached",
 			baseConsParams,
-			quantity.NewFromUint64(100),
+			quantity.NewFromUint64(195),
 			baseValidatorEntitiesEscrow,
 			&governance.Proposal{
 				ID:    4,
@@ -284,29 +339,98 @@ func TestCloseProposal(t *testing.T) {
 			governance.StateRejected,
 			0,
 			map[governance.Vote]quantity.Quantity{
-				governance.VoteYes: *quantity.NewFromUint64(40),
+				governance.VoteYes: *quantity.NewFromUint64(100 + 35), // 100% of addr1 shares + 100% addr3 shares.
 				governance.VoteNo:  *quantity.NewFromUint64(60),
 			},
 		},
 		{
-			"should pass",
+			"should be rejected if threshold not reached (validator + delegator)",
 			baseConsParams,
-			quantity.NewFromUint64(100),
+			quantity.NewFromUint64(195),
 			baseValidatorEntitiesEscrow,
 			&governance.Proposal{
 				ID:    5,
 				State: governance.StateActive,
 			},
 			[]*governance.VoteEntry{
+				{Voter: addr1, Vote: governance.VoteYes},
+				{Voter: addr3, Vote: governance.VoteNo},
+			},
+			governance.StateRejected,
+			0,
+			map[governance.Vote]quantity.Quantity{
+				governance.VoteYes: *quantity.NewFromUint64(18 + 8),  // 11 shares of addr1 + 12 shares of addr3.
+				governance.VoteNo:  *quantity.NewFromUint64(26 + 81), // 35 shares of addr3 + 50 shares of addr1.
+			},
+		},
+		{
+			"should pass",
+			baseConsParams,
+			quantity.NewFromUint64(195),
+			baseValidatorEntitiesEscrow,
+			&governance.Proposal{
+				ID:    6,
+				State: governance.StateActive,
+			},
+			[]*governance.VoteEntry{
 				{Voter: addr1, Vote: governance.VoteNo},
 				{Voter: addr2, Vote: governance.VoteYes},
 				{Voter: addr3, Vote: governance.VoteYes},
+				{Voter: addr5, Vote: governance.VoteYes},
 			},
 			governance.StatePassed,
 			0,
 			map[governance.Vote]quantity.Quantity{
-				governance.VoteYes: *quantity.NewFromUint64(95),
-				governance.VoteNo:  *quantity.NewFromUint64(5),
+				governance.VoteNo:  *quantity.NewFromUint64(8 + 8),        // 5 shares of addr1 + 12 shares of addr3.
+				governance.VoteYes: *quantity.NewFromUint64(60 + 26 + 91), // 60 shares of addr2 + 35 shares of addr3 + 56 shares of addr1.
+			},
+		},
+		{
+			"delegator override should work",
+			baseConsParams,
+			quantity.NewFromUint64(195),
+			baseValidatorEntitiesEscrow,
+			&governance.Proposal{
+				ID:    7,
+				State: governance.StateActive,
+			},
+			[]*governance.VoteEntry{
+				{Voter: addr1, Vote: governance.VoteNo},
+				{Voter: addr2, Vote: governance.VoteYes},
+				{Voter: addr3, Vote: governance.VoteYes},
+				{Voter: addr4, Vote: governance.VoteNo},
+				{Voter: addr5, Vote: governance.VoteYes},
+				{Voter: addr6, Vote: governance.VoteAbstain},
+			},
+			governance.StatePassed,
+			1,
+			map[governance.Vote]quantity.Quantity{
+				governance.VoteYes:     *quantity.NewFromUint64(60 + 26 + 91), // 60 shares of addr2 + 35 shares of addr3 + 56 shares of addr1.
+				governance.VoteNo:      *quantity.NewFromUint64(6 + 8),        // 4 shares of addr1 + 12 shares of addr3.
+				governance.VoteAbstain: *quantity.NewFromUint64(1),            // 1 share of addr1.
+			},
+		},
+		{
+			"delegator override should work if validator doesn't vote",
+			baseConsParams,
+			quantity.NewFromUint64(195),
+			baseValidatorEntitiesEscrow,
+			&governance.Proposal{
+				ID:    8,
+				State: governance.StateActive,
+			},
+			[]*governance.VoteEntry{
+				{Voter: addr2, Vote: governance.VoteYes},
+				{Voter: addr3, Vote: governance.VoteYes},
+				{Voter: addr4, Vote: governance.VoteNo},
+				{Voter: addr5, Vote: governance.VoteYes},
+				{Voter: addr6, Vote: governance.VoteAbstain},
+			},
+			governance.StatePassed,
+			1,
+			map[governance.Vote]quantity.Quantity{
+				governance.VoteYes:     *quantity.NewFromUint64(60 + 35 + 91), // 60 shares of addr2 + 47 shares of addr3 + 56 shares of addr1.
+				governance.VoteAbstain: *quantity.NewFromUint64(1),            // 1 share of addr1.
 			},
 		},
 	} {
@@ -318,7 +442,7 @@ func TestCloseProposal(t *testing.T) {
 			require.NoError(err, "SetVote()")
 		}
 
-		err = app.closeProposal(ctx, state, *tc.totalVotingStake, tc.validatorEntitiesEscrow, tc.proposal)
+		err = app.closeProposal(ctx, state, stakingState.ImmutableState, *tc.totalVotingStake, tc.validatorEntitiesEscrow, tc.proposal)
 		require.NoError(err, tc.msg)
 
 		require.EqualValues(tc.expectedState, tc.proposal.State, tc.msg)

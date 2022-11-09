@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -28,6 +29,7 @@ import (
 const NameGovernance = "governance"
 
 var (
+	numDelegatorEntities = 3
 
 	// Governance is the governance workload.
 	Governance = &governanceWorkload{
@@ -73,6 +75,7 @@ type governanceWorkload struct {
 	ensureYesVote map[uint64]bool
 
 	validatorEntities []signature.Signer
+	delegatorEntities []signature.Signer
 }
 
 func (g *governanceWorkload) ensureUpgradeCanceled(upgrade *upgrade.Descriptor) error {
@@ -83,6 +86,11 @@ func (g *governanceWorkload) ensureUpgradeCanceled(upgrade *upgrade.Descriptor) 
 	g.ensureYesVote[proposalID] = true
 	// Vote for the submitted proposal.
 	for _, v := range g.validatorEntities {
+		if err := g.submitVote(v, proposalID, governance.VoteYes); err != nil {
+			return err
+		}
+	}
+	for _, v := range g.delegatorEntities {
 		if err := g.submitVote(v, proposalID, governance.VoteYes); err != nil {
 			return err
 		}
@@ -527,7 +535,13 @@ func (g *governanceWorkload) doGovernanceVote() error {
 		vote = governance.VoteAbstain
 	}
 
-	return g.submitVote(g.validatorEntities[g.rng.Intn(len(g.validatorEntities))], proposal.ID, vote)
+	idx := g.rng.Intn(len(g.delegatorEntities) + len(g.validatorEntities))
+	switch {
+	case idx < len(g.delegatorEntities):
+		return g.submitVote(g.delegatorEntities[g.rng.Intn(len(g.delegatorEntities))], proposal.ID, vote)
+	default:
+		return g.submitVote(g.validatorEntities[g.rng.Intn(len(g.validatorEntities))], proposal.ID, vote)
+	}
 }
 
 func (g *governanceWorkload) checkEpochTransition() (bool, error) {
@@ -574,12 +588,35 @@ func (g *governanceWorkload) Run(
 		return fmt.Errorf("workload requires validator entities")
 	}
 
+	// Create delegator entities, delegating to validator at idx 0.
+	fac := memorySigner.NewFactory()
+	g.delegatorEntities = make([]signature.Signer, 0, numDelegatorEntities)
+	for i := 0; i < numDelegatorEntities; i++ {
+		var signer signature.Signer
+		signer, err = fac.Generate(signature.SignerEntity, rng)
+		if err != nil {
+			return fmt.Errorf("memory signer factory generate delegator account: %w", err)
+		}
+		if err = g.TransferFunds(
+			g.ctx,
+			fundingAccount,
+			staking.NewAddress(signer.Public()),
+			uint64(20_000),
+		); err != nil {
+			return fmt.Errorf("account funding failure: %w", err)
+		}
+		// Delegate to validator.
+		if err = g.EscrowFunds(g.ctx, signer, staking.NewAddress(g.validatorEntities[0].Public()), quantity.NewFromUint64(10_000)); err != nil {
+			return fmt.Errorf("account escrow failure: %w", err)
+		}
+		g.delegatorEntities = append(g.delegatorEntities, signer)
+	}
+
 	g.proposerAccounts = make([]*struct {
 		signer  signature.Signer
 		address staking.Address
 		nonce   uint64
 	}, numProposerAccounts)
-	fac := memorySigner.NewFactory()
 	for i := range g.proposerAccounts {
 		var signer signature.Signer
 		signer, err = fac.Generate(signature.SignerEntity, rng)
