@@ -158,7 +158,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 		return
 	}
 
-	cbc := newComputeBatchContext(runtimeID)
+	cbc := newComputeBatchContext(b.chainContext, runtimeID)
 	switch isTxScheduler {
 	case true:
 		// If we are the transaction scheduler, we wait for transactions and schedule them.

@@ -21,11 +21,12 @@ import (
 type KeyManagerClientWrapper struct {
 	l sync.Mutex
 
-	id        *common.Namespace
-	p2p       p2p.Service
-	consensus consensus.Backend
-	cli       keymanagerP2P.Client
-	logger    *logging.Logger
+	id           *common.Namespace
+	p2p          p2p.Service
+	consensus    consensus.Backend
+	chainContext string
+	cli          keymanagerP2P.Client
+	logger       *logging.Logger
 
 	lastPeerFeedback rpc.PeerFeedback
 }
@@ -66,7 +67,7 @@ func (km *KeyManagerClientWrapper) SetKeyManagerID(id *common.Namespace) {
 	}
 
 	if id != nil {
-		km.cli = keymanagerP2P.NewClient(km.p2p, km.consensus, *id)
+		km.cli = keymanagerP2P.NewClient(km.p2p, km.consensus, km.chainContext, *id)
 	}
 
 	km.lastPeerFeedback = nil
@@ -128,10 +129,11 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 }
 
 // NewKeyManagerClientWrapper creates a new key manager client wrapper.
-func NewKeyManagerClientWrapper(p2p p2p.Service, consensus consensus.Backend, logger *logging.Logger) *KeyManagerClientWrapper {
+func NewKeyManagerClientWrapper(p2p p2p.Service, consensus consensus.Backend, chainContext string, logger *logging.Logger) *KeyManagerClientWrapper {
 	return &KeyManagerClientWrapper{
-		p2p:       p2p,
-		consensus: consensus,
-		logger:    logger,
+		p2p:          p2p,
+		consensus:    consensus,
+		chainContext: chainContext,
+		logger:       logger,
 	}
 }

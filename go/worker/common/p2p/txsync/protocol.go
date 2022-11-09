@@ -7,14 +7,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 )
 
 // TxSyncProtocolID is a unique protocol identifier for the transaction sync protocol.
 const TxSyncProtocolID = "txsync"
 
 // TxSyncProtocolVersion is the supported version of the transaction sync protocol.
-var TxSyncProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
+var TxSyncProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
 
 // Constants related to the GetTxs method.
 const (
@@ -41,7 +41,7 @@ func init() {
 
 			protocols := make([]core.ProtocolID, len(n.Runtimes))
 			for i, rt := range n.Runtimes {
-				protocols[i] = rpc.NewRuntimeProtocolID(rt.ID, TxSyncProtocolID, TxSyncProtocolVersion)
+				protocols[i] = protocol.NewRuntimeProtocolID(chainContext, rt.ID, TxSyncProtocolID, TxSyncProtocolVersion)
 			}
 
 			return protocols

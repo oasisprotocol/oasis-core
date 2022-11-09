@@ -6,14 +6,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 )
 
 // KeyManagerProtocolID is a unique protocol identifier for the keymanager protocol.
 const KeyManagerProtocolID = "keymanager"
 
 // KeyManagerProtocolVersion is the supported version of the keymanager protocol.
-var KeyManagerProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
+var KeyManagerProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
 
 // Constants related to the GetDiff method.
 const (
@@ -40,7 +40,7 @@ func init() {
 
 			protocols := make([]core.ProtocolID, len(n.Runtimes))
 			for i, rt := range n.Runtimes {
-				protocols[i] = rpc.NewRuntimeProtocolID(rt.ID, KeyManagerProtocolID, KeyManagerProtocolVersion)
+				protocols[i] = protocol.NewRuntimeProtocolID(chainContext, rt.ID, KeyManagerProtocolID, KeyManagerProtocolVersion)
 			}
 
 			return protocols

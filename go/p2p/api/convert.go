@@ -1,14 +1,10 @@
 package api
 
 import (
-	"fmt"
-
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
 // PublicKeyToPeerID converts a public key to a peer identifier.
@@ -37,14 +33,4 @@ func PublicKeyMapToPeerIDs(pks map[signature.PublicKey]bool) ([]core.PeerID, err
 		ids = append(ids, id)
 	}
 	return ids, nil
-}
-
-// NewTopicIDForRuntime constructs topic id from the given parameters.
-func NewTopicIDForRuntime(chainContext string, runtimeID common.Namespace, kind TopicKind) string {
-	return fmt.Sprintf("%s/%d/%s/%s",
-		chainContext,
-		version.RuntimeCommitteeProtocol.Major,
-		runtimeID.String(),
-		kind,
-	)
 }

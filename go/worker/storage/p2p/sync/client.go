@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
@@ -124,11 +125,11 @@ func (c *client) GetCheckpointChunk(
 }
 
 // NewClient creates a new storage sync protocol client.
-func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
+func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
 	// Use two separate clients and managers for the same protocol. This is to make sure that peers
 	// are scored differently between the two use cases (syncing diffs vs. syncing checkpoints). We
 	// could consider separating this into two protocols in the future.
-	pid := rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion)
 
 	rcC := rpc.NewClient(p2p.Host(), pid)
 	mgrC := rpc.NewPeerManager(p2p, pid)

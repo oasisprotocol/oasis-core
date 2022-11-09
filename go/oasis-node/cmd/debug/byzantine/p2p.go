@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/p2p"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 )
 
 type p2pReqRes struct {
@@ -90,7 +91,7 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signatur
 	return <-responseCh
 }
 
-func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, runtimeID common.Namespace) error {
+func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, chainContext string, runtimeID common.Namespace) error {
 	if ph.service != nil {
 		return fmt.Errorf("P2P service already started")
 	}
@@ -101,8 +102,11 @@ func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, runtimeI
 		return fmt.Errorf("P2P service New: %w", err)
 	}
 
-	ph.service.RegisterHandler(runtimeID, p2pAPI.TopicKindTx, &txMsgHandler{ph})
-	ph.service.RegisterHandler(runtimeID, p2pAPI.TopicKindCommittee, &committeeMsgHandler{ph})
+	txTopic := protocol.NewTopicKindTxID(chainContext, runtimeID)
+	ph.service.RegisterHandler(txTopic, &txMsgHandler{ph})
+
+	committeeTopic := protocol.NewTopicKindCommitteeID(chainContext, runtimeID)
+	ph.service.RegisterHandler(committeeTopic, &committeeMsgHandler{ph})
 
 	return nil
 }

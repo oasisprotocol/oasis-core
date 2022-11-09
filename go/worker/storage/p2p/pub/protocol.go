@@ -6,7 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
@@ -14,7 +14,7 @@ import (
 const StoragePubProtocolID = "storagepub"
 
 // StoragePubProtocolVersion is the supported version of the storage pub protocol.
-var StoragePubProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
+var StoragePubProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
 
 // Constants related to the Get method.
 const (
@@ -52,7 +52,7 @@ func init() {
 
 			protocols := make([]core.ProtocolID, len(n.Runtimes))
 			for i, rt := range n.Runtimes {
-				protocols[i] = rpc.NewRuntimeProtocolID(rt.ID, StoragePubProtocolID, StoragePubProtocolVersion)
+				protocols[i] = protocol.NewRuntimeProtocolID(chainContext, rt.ID, StoragePubProtocolID, StoragePubProtocolVersion)
 			}
 
 			return protocols

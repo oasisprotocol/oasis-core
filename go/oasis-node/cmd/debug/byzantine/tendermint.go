@@ -7,16 +7,20 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
-	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
+	"github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 )
 
 type honestTendermint struct {
 	service consensus.Backend
+
+	genesis api.Provider
 }
 
-func newHonestTendermint() *honestTendermint {
-	return &honestTendermint{}
+func newHonestTendermint(genesis api.Provider) *honestTendermint {
+	return &honestTendermint{
+		genesis: genesis,
+	}
 }
 
 func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
@@ -24,20 +28,8 @@ func (ht *honestTendermint) start(id *identity.Identity, dataDir string) error {
 		return fmt.Errorf("honest Tendermint service already started")
 	}
 
-	genesis, err := genesis.DefaultFileProvider()
-	if err != nil {
-		return fmt.Errorf("genesis DefaultFileProvider: %w", err)
-	}
-
-	// Retrieve the genesis document and use it to configure the ChainID for
-	// signature domain separation. We do this as early as possible.
-	genesisDoc, err := genesis.GetGenesisDocument()
-	if err != nil {
-		return err
-	}
-	genesisDoc.SetChainContext()
-
-	ht.service, err = tendermint.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), genesis)
+	var err error
+	ht.service, err = tendermint.New(context.Background(), dataDir, id, upgrade.NewDummyUpgradeManager(), ht.genesis)
 	if err != nil {
 		return fmt.Errorf("tendermint New: %w", err)
 	}

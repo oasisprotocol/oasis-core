@@ -56,15 +56,11 @@ func (p *nopP2P) Peers(runtimeID common.Namespace) []string {
 }
 
 // Implements api.Service.
-func (p *nopP2P) PublishCommittee(ctx context.Context, runtimeID common.Namespace, msg *api.CommitteeMessage) {
+func (p *nopP2P) Publish(ctx context.Context, topic string, msg interface{}) {
 }
 
 // Implements api.Service.
-func (p *nopP2P) PublishTx(ctx context.Context, runtimeID common.Namespace, msg api.TxMessage) {
-}
-
-// Implements api.Service.
-func (p *nopP2P) RegisterHandler(runtimeID common.Namespace, kind api.TopicKind, handler api.Handler) {
+func (p *nopP2P) RegisterHandler(topic string, handler api.Handler) {
 }
 
 // Implements api.Service.

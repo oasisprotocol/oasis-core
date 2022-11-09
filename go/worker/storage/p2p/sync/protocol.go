@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
@@ -18,7 +18,7 @@ import (
 const StorageSyncProtocolID = "storagesync"
 
 // StorageSyncProtocolVersion is the supported version of the storage sync protocol.
-var StorageSyncProtocolVersion = version.Version{Major: 1, Minor: 0, Patch: 0}
+var StorageSyncProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
 
 // Constants related to the GetDiff method.
 const (
@@ -80,7 +80,7 @@ func init() {
 
 			protocols := make([]core.ProtocolID, len(n.Runtimes))
 			for i, rt := range n.Runtimes {
-				protocols[i] = rpc.NewRuntimeProtocolID(rt.ID, StorageSyncProtocolID, StorageSyncProtocolVersion)
+				protocols[i] = protocol.NewRuntimeProtocolID(chainContext, rt.ID, StorageSyncProtocolID, StorageSyncProtocolVersion)
 			}
 
 			return protocols

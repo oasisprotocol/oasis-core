@@ -37,7 +37,6 @@ var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // New constructs a new key manager worker.
 func New(
-	dataDir string,
 	commonWorker *workerCommon.Worker,
 	ias ias.Endpoint,
 	r *registration.Worker,
@@ -120,7 +119,7 @@ func New(
 	}
 
 	// Register keymanager service.
-	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(runtimeID, w))
+	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, runtimeID, w))
 
 	return w, nil
 }

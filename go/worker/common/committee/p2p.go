@@ -63,7 +63,7 @@ func (h *txMsgHandler) HandleMessage(ctx context.Context, peerID signature.Publi
 
 // PublishTx publishes a transaction via P2P gossipsub.
 func (n *Node) PublishTx(ctx context.Context, tx []byte) error {
-	n.P2P.PublishTx(ctx, n.Runtime.ID(), tx)
+	n.P2P.Publish(ctx, n.txTopic, tx)
 	return nil
 }
 

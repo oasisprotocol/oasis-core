@@ -3,13 +3,8 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/libp2p/go-libp2p/core"
-	"github.com/libp2p/go-libp2p/core/protocol"
-
-	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 )
 
 const codecModuleName = "p2p/rpc"
@@ -24,18 +19,6 @@ type P2P interface {
 
 	// Host returns the P2P host.
 	Host() core.Host
-}
-
-// NewProtocolID generates a protocol identifier for a consensus P2P protocol.
-func NewProtocolID(protocolID string, version version.Version) protocol.ID {
-	return protocol.ID(fmt.Sprintf("/oasis/%s/%s", protocolID, version.MaskNonMajor()))
-}
-
-// NewRuntimeProtocolID generates a protocol identifier for a protocol supported for a specific
-// runtime. This makes it so that one doesn't need additional checks to ensure that a peer supports
-// the given protocol for the given runtime.
-func NewRuntimeProtocolID(runtimeID common.Namespace, protocolID string, version version.Version) protocol.ID {
-	return protocol.ID(fmt.Sprintf("/oasis/%s/%s/%s", protocolID, runtimeID.Hex(), version.MaskNonMajor()))
 }
 
 // contextKeyPeerID is the context key used for storing the peer ID.
