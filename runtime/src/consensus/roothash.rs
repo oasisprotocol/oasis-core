@@ -13,7 +13,7 @@ use crate::{
         quantity::Quantity,
         versioned::Versioned,
     },
-    consensus::{address::Address, registry, staking, state::StateError},
+    consensus::{address::Address, governance, registry, staking, state::StateError},
 };
 
 /// Errors emitted by the roothash module.
@@ -64,13 +64,16 @@ impl Default for HeaderType {
 }
 
 /// A message that can be emitted by the runtime to be processed by the consensus layer.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub enum Message {
     #[cbor(rename = "staking")]
     Staking(Versioned<StakingMessage>),
 
     #[cbor(rename = "registry")]
     Registry(Versioned<RegistryMessage>),
+
+    #[cbor(rename = "governance")]
+    Governance(Versioned<GovernanceMessage>),
 }
 
 impl Message {
@@ -103,6 +106,14 @@ pub enum StakingMessage {
 pub enum RegistryMessage {
     #[cbor(rename = "update_runtime")]
     UpdateRuntime(registry::Runtime),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub enum GovernanceMessage {
+    #[cbor(rename = "cast_vote")]
+    CastVote(governance::ProposalVote),
+    #[cbor(rename = "submit_proposal")]
+    SubmitProposal(governance::ProposalContent),
 }
 
 /// Result of a message being processed by the consensus layer.
@@ -442,6 +453,26 @@ mod tests {
                     RegistryMessage::UpdateRuntime(rt),
                 ))],
                 "67da1da17b12c398d4dec165480df73c244740f8fb876f59a76cd29e30056b6d",
+            ),
+            (
+                vec![Message::Governance(Versioned::new(
+                    0,
+                    GovernanceMessage::CastVote(governance::ProposalVote {
+                        id: 32,
+                        vote: governance::Vote::Yes,
+                    }),
+                ))],
+                "f45e26eb8ace807ad5bd02966cde1f012d1d978d4cbddd59e9bfd742dcf39b90",
+            ),
+            (
+                vec![Message::Governance(Versioned::new(
+                    0,
+                    GovernanceMessage::SubmitProposal(governance::ProposalContent {
+                        cancel_upgrade: Some(governance::CancelUpgradeProposal { proposal_id: 32 }),
+                        ..Default::default()
+                    }),
+                ))],
+                "03312ddb5c41a30fbd29fb91cf6bf26d58073996f89657ca4f3b3a43a98bfd0b",
             ),
         ];
         for (msgs, expected_hash) in tcs {

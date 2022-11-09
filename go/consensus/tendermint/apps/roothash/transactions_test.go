@@ -23,6 +23,8 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
+	"github.com/oasisprotocol/oasis-core/go/governance/api"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -46,11 +48,13 @@ func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}
 	}
 
 	gasCosts := transaction.Costs{
-		staking.GasOpTransfer:         1000,
-		staking.GasOpWithdraw:         2000,
-		staking.GasOpAddEscrow:        2000,
-		staking.GasOpReclaimEscrow:    2000,
-		registry.GasOpRegisterRuntime: 3000,
+		staking.GasOpTransfer:          1000,
+		staking.GasOpWithdraw:          2000,
+		staking.GasOpAddEscrow:         2000,
+		staking.GasOpReclaimEscrow:     2000,
+		registry.GasOpRegisterRuntime:  3000,
+		governance.GasOpCastVote:       1000,
+		governance.GasOpSubmitProposal: 2000,
 	}
 
 	switch kind {
@@ -90,6 +94,22 @@ func (nd *testMsgDispatcher) Publish(ctx *abciAPI.Context, kind, msg interface{}
 			return nil, nil
 		default:
 			return nil, registry.ErrInvalidArgument
+		}
+	case roothashApi.RuntimeMessageGovernance:
+		m := msg.(*message.GovernanceMessage)
+		switch {
+		case m.CastVote != nil:
+			if err := ctx.Gas().UseGas(1, governance.GasOpCastVote, gasCosts); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		case m.SubmitProposal != nil:
+			if err := ctx.Gas().UseGas(1, governance.GasOpSubmitProposal, gasCosts); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		default:
+			return nil, governance.ErrInvalidArgument
 		}
 	default:
 		return nil, staking.ErrInvalidArgument
@@ -178,6 +198,10 @@ func TestMessagesGasEstimation(t *testing.T) {
 		{Staking: &message.StakingMessage{ReclaimEscrow: &staking.ReclaimEscrow{}}},
 		// Each update_runtime message costs 3000 gas.
 		{Registry: &message.RegistryMessage{UpdateRuntime: &registry.Runtime{}}},
+		// Each cast vote message costs 1000 gas.
+		{Governance: &message.GovernanceMessage{CastVote: &api.ProposalVote{}}},
+		// Each submit proposal message costs 2000 gas.
+		{Governance: &message.GovernanceMessage{SubmitProposal: &api.ProposalContent{}}},
 	}
 	msgsHash := message.MessagesHash(msgs)
 
@@ -210,7 +234,7 @@ func TestMessagesGasEstimation(t *testing.T) {
 
 	err = app.executorCommit(ctx, roothashState, cc)
 	require.NoError(err, "ExecutorCommit")
-	require.EqualValues(12000, ctx.Gas().GasUsed(), "gas amount should be correct")
+	require.EqualValues(15000, ctx.Gas().GasUsed(), "gas amount should be correct")
 }
 
 func TestEvidence(t *testing.T) {

@@ -21,7 +21,7 @@ func (app *governanceApplication) submitProposal(
 	ctx *api.Context,
 	state *governanceState.MutableState,
 	proposalContent *governance.ProposalContent,
-) error {
+) (*governance.Proposal, error) {
 	ctx.Logger().Debug("governance: submit proposal tx",
 		"proposal_content", proposalContent,
 	)
@@ -32,37 +32,37 @@ func (app *governanceApplication) submitProposal(
 			"content", proposalContent,
 			"err", err,
 		)
-		return governance.ErrInvalidArgument
+		return nil, governance.ErrInvalidArgument
 	}
 
 	if ctx.IsCheckOnly() {
-		return nil
+		return nil, nil
 	}
 
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
+		return nil, fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
 
 	// To not violate the consensus, change parameters proposals should be ignored when disabled.
 	if proposalContent.ChangeParameters != nil && !params.EnableChangeParametersProposal {
-		return governance.ErrInvalidArgument
+		return nil, governance.ErrInvalidArgument
 	}
 
 	// Charge gas for this transaction.
 	if err = ctx.Gas().UseGas(1, governance.GasOpSubmitProposal, params.GasCosts); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Load submitter account.
 	submitterAddr := stakingAPI.NewAddress(ctx.TxSigner())
 	if !submitterAddr.IsValid() {
-		return stakingAPI.ErrForbidden
+		return nil, stakingAPI.ErrForbidden
 	}
 	stakingState := stakingState.NewMutableState(ctx.State())
 	submitter, err := stakingState.Account(ctx, submitterAddr)
 	if err != nil {
-		return fmt.Errorf("governance: failed to fetch account: %w", err)
+		return nil, fmt.Errorf("governance: failed to fetch account: %w", err)
 	}
 
 	// Check if submitter has enough balance for proposal deposit.
@@ -71,7 +71,7 @@ func (app *governanceApplication) submitProposal(
 			"submitter", submitterAddr,
 			"min_proposal_deposit", params.MinProposalDeposit,
 		)
-		return stakingAPI.ErrInsufficientBalance
+		return nil, stakingAPI.ErrInsufficientBalance
 	}
 
 	epoch, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
@@ -79,7 +79,7 @@ func (app *governanceApplication) submitProposal(
 		ctx.Logger().Error("governance: failed to get epoch",
 			"err", err,
 		)
-		return err
+		return nil, err
 	}
 
 	switch {
@@ -93,7 +93,7 @@ func (app *governanceApplication) submitProposal(
 				"upgrade_min_epoch_diff", params.UpgradeMinEpochDiff,
 				"current_epoch", epoch,
 			)
-			return governance.ErrUpgradeTooSoon
+			return nil, governance.ErrUpgradeTooSoon
 		}
 
 		// Upgrade is only allowed at the upgrade epoch if there is no pending
@@ -101,11 +101,11 @@ func (app *governanceApplication) submitProposal(
 		var upgrades []*upgradeAPI.Descriptor
 		upgrades, err = state.PendingUpgrades(ctx)
 		if err != nil {
-			return fmt.Errorf("governance: failed to fetch pending upgrades :%w", err)
+			return nil, fmt.Errorf("governance: failed to fetch pending upgrades :%w", err)
 		}
 		for _, pu := range upgrades {
 			if pu.Epoch.AbsDiff(upgrade.Descriptor.Epoch) < params.UpgradeMinEpochDiff {
-				return fmt.Errorf("upgrade already scheduled at epoch: %v: %w", pu.Epoch, governance.ErrUpgradeAlreadyPending)
+				return nil, fmt.Errorf("upgrade already scheduled at epoch: %v: %w", pu.Epoch, governance.ErrUpgradeAlreadyPending)
 			}
 		}
 
@@ -121,18 +121,18 @@ func (app *governanceApplication) submitProposal(
 				"proposal_id", cancelUpgrade.ProposalID,
 				"err", err,
 			)
-			return err
+			return nil, err
 		default:
 			ctx.Logger().Error("governance: error loading proposal",
 				"proposal_id", cancelUpgrade.ProposalID,
 				"err", err,
 			)
-			return err
+			return nil, err
 		}
 
 		// Ensure upgrade descriptor is far enough in future so that cancellation is still allowed.
 		if upgrade.Descriptor.Epoch < params.UpgradeCancelMinEpochDiff+epoch {
-			return governance.ErrUpgradeTooSoon
+			return nil, governance.ErrUpgradeTooSoon
 		}
 
 	case proposalContent.ChangeParameters != nil:
@@ -143,16 +143,16 @@ func (app *governanceApplication) submitProposal(
 			ctx.Logger().Debug("governance: failed to dispatch validate parameter changes message",
 				"err", err,
 			)
-			return err
+			return nil, err
 		}
 		// Exactly one module should be interested in the proposed changes. If no one is,
 		// the proposal is rejected as not being supported.
 		if res == nil {
 			ctx.Logger().Debug("governance: no module interested in change parameters proposal")
-			return governance.ErrInvalidArgument
+			return nil, governance.ErrInvalidArgument
 		}
 	default:
-		return governance.ErrInvalidArgument
+		return nil, governance.ErrInvalidArgument
 	}
 
 	// Deposit proposal funds.
@@ -166,7 +166,7 @@ func (app *governanceApplication) submitProposal(
 			"submitter", submitterAddr,
 			"deposit", &params.MinProposalDeposit,
 		)
-		return fmt.Errorf("governance: failed to deposit governance: %w", err)
+		return nil, fmt.Errorf("governance: failed to deposit governance: %w", err)
 	}
 
 	// Load the next proposal identifier.
@@ -175,13 +175,13 @@ func (app *governanceApplication) submitProposal(
 		ctx.Logger().Error("governance: failed to get next proposal identifier",
 			"err", err,
 		)
-		return fmt.Errorf("governance: failed to get next proposal identifier: %w", err)
+		return nil, fmt.Errorf("governance: failed to get next proposal identifier: %w", err)
 	}
 	if err := state.SetNextProposalIdentifier(ctx, id+1); err != nil {
 		ctx.Logger().Error("governance: failed to set next proposal identifier",
 			"err", err,
 		)
-		return fmt.Errorf("governance: failed to set next proposal identifier: %w", err)
+		return nil, fmt.Errorf("governance: failed to set next proposal identifier: %w", err)
 	}
 	// Create the proposal.
 	proposal := &governance.Proposal{
@@ -197,7 +197,7 @@ func (app *governanceApplication) submitProposal(
 		ctx.Logger().Error("governance: failed to set active proposal",
 			"err", err,
 		)
-		return fmt.Errorf("governance: failed to set active proposal: %w", err)
+		return nil, fmt.Errorf("governance: failed to set active proposal: %w", err)
 	}
 
 	// Emit events.
@@ -207,7 +207,7 @@ func (app *governanceApplication) submitProposal(
 		Submitter: proposal.Submitter,
 	}))
 
-	return nil
+	return proposal, nil
 }
 
 func (app *governanceApplication) castVote(
