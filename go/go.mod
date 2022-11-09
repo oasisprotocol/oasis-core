@@ -37,7 +37,7 @@ require (
 	github.com/hashicorp/go-plugin v1.4.5
 	github.com/hpcloud/tail v1.0.0
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/libp2p/go-libp2p v0.23.2
+	github.com/libp2p/go-libp2p v0.23.4
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
 	github.com/multiformats/go-multiaddr v0.7.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20221003100820-41fad3beba17
