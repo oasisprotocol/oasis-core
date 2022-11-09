@@ -67,6 +67,12 @@ var (
 	// Value is a CBOR-serialized quantity.
 	governanceDepositsKeyFmt = keyformat.New(0x59)
 
+	// delegationKeyReverseFmt is the key format used for reverse mapping of
+	// delegations (delegator address, escrow address).
+	//
+	// Value is CBOR-serialized delegation.
+	delegationKeyReverseFmt = keyformat.New(0x5A, &staking.Address{}, &staking.Address{})
+
 	logger = logging.GetLogger("tendermint/staking")
 )
 
@@ -264,14 +270,14 @@ func (s *ImmutableState) DelegationsFor(
 	defer it.Close()
 
 	delegations := make(map[staking.Address]*staking.Delegation)
-	for it.Seek(delegationKeyFmt.Encode()); it.Valid(); it.Next() {
+	for it.Seek(delegationKeyReverseFmt.Encode(delegatorAddr)); it.Valid(); it.Next() {
 		var escrowAddr staking.Address
 		var decDelegatorAddr staking.Address
-		if !delegationKeyFmt.Decode(it.Key(), &escrowAddr, &decDelegatorAddr) {
+		if !delegationKeyReverseFmt.Decode(it.Key(), &decDelegatorAddr, &escrowAddr) {
 			break
 		}
 		if !decDelegatorAddr.Equal(delegatorAddr) {
-			continue
+			break
 		}
 
 		var del staking.Delegation
@@ -601,11 +607,18 @@ func (s *MutableState) SetDelegation(
 ) error {
 	// Remove delegation if there are no more shares in it.
 	if d.Shares.IsZero() {
-		err := s.ms.Remove(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr))
+		if err := s.ms.Remove(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr)); err != nil {
+			return abciAPI.UnavailableStateError(err)
+		}
+
+		err := s.ms.Remove(ctx, delegationKeyReverseFmt.Encode(&delegatorAddr, &escrowAddr))
 		return abciAPI.UnavailableStateError(err)
 	}
 
-	err := s.ms.Insert(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr), cbor.Marshal(d))
+	if err := s.ms.Insert(ctx, delegationKeyFmt.Encode(&escrowAddr, &delegatorAddr), cbor.Marshal(d)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+	err := s.ms.Insert(ctx, delegationKeyReverseFmt.Encode(&delegatorAddr, &escrowAddr), cbor.Marshal(d))
 	return abciAPI.UnavailableStateError(err)
 }
 
