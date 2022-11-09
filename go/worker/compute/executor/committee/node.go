@@ -19,6 +19,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
+	p2pProtocol "github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -120,6 +121,8 @@ type Node struct { // nolint: maligned
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
 	roleProvider registration.RoleProvider
+
+	committeeTopic string
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -665,7 +668,7 @@ func (n *Node) schedulerCreateProposalLocked(ctx context.Context, inputRoot hash
 		"batch_size", len(txHashes),
 	)
 
-	n.commonNode.P2P.PublishCommittee(ctx, n.commonNode.Runtime.ID(), &p2p.CommitteeMessage{
+	n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
 		Epoch:    n.commonNode.CurrentEpoch,
 		Proposal: proposal,
 	})
@@ -1601,19 +1604,22 @@ func NewNode(
 		prometheus.MustRegister(nodeCollectors...)
 	})
 
+	committeeTopic := p2pProtocol.NewTopicKindCommitteeID(commonNode.ChainContext, commonNode.Runtime.ID())
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
 		commonNode:       commonNode,
 		commonCfg:        commonCfg,
 		roleProvider:     roleProvider,
+		committeeTopic:   committeeTopic,
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),
 		quitCh:           make(chan struct{}),
 		initCh:           make(chan struct{}),
 		state:            StateNotReady{},
-		txSync:           txsync.NewClient(commonNode.P2P, commonNode.Runtime.ID()),
+		txSync:           txsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID()),
 		stateTransitions: pubsub.NewBroker(false),
 		reselect:         make(chan struct{}, 1),
 		logger:           logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
@@ -1623,7 +1629,7 @@ func NewNode(
 	commonNode.Runtime.History().Pruner().RegisterHandler(&pruneHandler{commonNode: commonNode})
 
 	// Register committee message handler.
-	commonNode.P2P.RegisterHandler(commonNode.Runtime.ID(), p2p.TopicKindCommittee, &committeeMsgHandler{n})
+	commonNode.P2P.RegisterHandler(committeeTopic, &committeeMsgHandler{n})
 
 	return n, nil
 }

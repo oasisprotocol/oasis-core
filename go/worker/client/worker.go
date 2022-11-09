@@ -132,7 +132,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 
 	// If we are running in stateless client mode, register remote storage.
 	if w.commonWorker.RuntimeRegistry.Mode() == runtimeRegistry.RuntimeModeClientStateless {
-		commonNode.Runtime.RegisterStorage(NewStatelessStorage(commonNode.P2P, id))
+		commonNode.Runtime.RegisterStorage(NewStatelessStorage(commonNode.P2P, w.commonWorker.ChainContext, id))
 	}
 
 	commonNode.AddHooks(node)

@@ -63,14 +63,11 @@ type Service interface {
 	// Peers returns a list of connected P2P peers for the given runtime.
 	Peers(runtimeID common.Namespace) []string
 
-	// PublishCommittee publishes a committee message.
-	PublishCommittee(ctx context.Context, runtimeID common.Namespace, msg *CommitteeMessage)
-
-	// PublishTx publishes a transaction message.
-	PublishTx(ctx context.Context, runtimeID common.Namespace, msg TxMessage)
+	// Publish publishes the given message to the given topic.
+	Publish(ctx context.Context, topic string, msg interface{})
 
 	// RegisterHandler registers a message handler for the specified runtime and topic kind.
-	RegisterHandler(runtimeID common.Namespace, kind TopicKind, handler Handler)
+	RegisterHandler(topic string, handler Handler)
 
 	// BlockPeer blocks a specific peer from being used by the local node.
 	BlockPeer(peerID core.PeerID)

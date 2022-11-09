@@ -66,6 +66,9 @@ type Node struct {
 
 	Consensus consensusAPI.Backend
 
+	dataDir      string
+	chainContext string
+
 	Upgrader upgradeAPI.Backend
 	Genesis  genesisAPI.Provider
 	Identity *identity.Identity
@@ -205,8 +208,6 @@ func (n *Node) startRuntimeServices() error {
 }
 
 func (n *Node) initRuntimeWorkers() error {
-	dataDir := cmdCommon.DataDir()
-
 	var err error
 
 	genesisDoc, err := n.Genesis.GetGenesisDocument()
@@ -224,7 +225,7 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 
 	// Initialize the node's runtime registry.
-	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, cmdCommon.DataDir(), n.Consensus, n.IAS)
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, n.dataDir, n.Consensus, n.IAS)
 	if err != nil {
 		return err
 	}
@@ -233,7 +234,8 @@ func (n *Node) initRuntimeWorkers() error {
 	// Initialize the common worker.
 	n.CommonWorker, err = workerCommon.New(
 		n,
-		dataDir,
+		n.dataDir,
+		n.chainContext,
 		n.Identity,
 		n.Consensus,
 		n.P2P,
@@ -254,7 +256,7 @@ func (n *Node) initRuntimeWorkers() error {
 
 	// Initialize the registration worker.
 	n.RegistrationWorker, err = registration.New(
-		dataDir,
+		n.dataDir,
 		n.Consensus.Beacon(),
 		n.Consensus.Registry(),
 		n.Identity,
@@ -302,7 +304,6 @@ func (n *Node) initRuntimeWorkers() error {
 
 	// Initialize the key manager worker.
 	n.KeymanagerWorker, err = workerKeymanager.New(
-		dataDir,
 		n.CommonWorker,
 		n.IAS,
 		n.RegistrationWorker,
@@ -424,7 +425,7 @@ func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch beacon.
 		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)
 	}
 
-	exportsDir := filepath.Join(cmdCommon.DataDir(), exportsSubDir)
+	exportsDir := filepath.Join(n.dataDir, exportsSubDir)
 
 	if err := common.Mkdir(exportsDir); err != nil {
 		return fmt.Errorf("dumpGenesis: failed to create exports dir: %w", err)
@@ -492,14 +493,16 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 
+	node.chainContext = genesisDoc.ChainContext()
+
 	// Configure a directory for the node to work in.
-	dataDir, err := configureDataDir(logger)
+	node.dataDir, err = configureDataDir(logger)
 	if err != nil {
 		return nil, err
 	}
 
 	// Generate or load the node's identity.
-	node.Identity, err = loadOrGenerateIdentity(dataDir, logger)
+	node.Identity, err = loadOrGenerateIdentity(node.dataDir, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +534,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	controlAPI.RegisterService(node.grpcInternal.Server(), node)
 
 	// Open the common node store.
-	node.commonStore, err = persistent.NewCommonStore(dataDir)
+	node.commonStore, err = persistent.NewCommonStore(node.dataDir)
 	if err != nil {
 		logger.Error("failed to open common node store",
 			"err", err,
@@ -548,7 +551,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 	isArchive := tmMode == consensusAPI.ModeArchive
-	node.Upgrader, err = upgrade.New(node.commonStore, cmdCommon.DataDir(), !isArchive)
+	node.Upgrader, err = upgrade.New(node.commonStore, node.dataDir, !isArchive)
 	if err != nil {
 		logger.Error("failed to initialize upgrade backend",
 			"err", err,
@@ -566,7 +569,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize Tendermint consensus backend.
-	node.Consensus, err = tendermint.New(node.svcMgr.Ctx, dataDir, node.Identity, node.Upgrader, node.Genesis)
+	node.Consensus, err = tendermint.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, node.Genesis)
 	if err != nil {
 		logger.Error("failed to initialize tendermint service",
 			"err", err,

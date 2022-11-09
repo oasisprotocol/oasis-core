@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -25,6 +26,8 @@ import (
 
 type byzantine struct {
 	logger *logging.Logger
+
+	chainContext string
 
 	identity *identity.Identity
 
@@ -124,15 +127,31 @@ func initializeAndRegisterByzantineNode(
 		"id", b.identity.NodeSigner.Public(),
 	)
 
+	// Initialize the genesis provider.
+	genesis, err := genesis.DefaultFileProvider()
+	if err != nil {
+		return nil, fmt.Errorf("genesis DefaultFileProvider: %w", err)
+	}
+
+	// Retrieve the genesis document and use it to configure the ChainID for
+	// signature domain separation. We do this as early as possible.
+	genesisDoc, err := genesis.GetGenesisDocument()
+	if err != nil {
+		return nil, err
+	}
+	genesisDoc.SetChainContext()
+
+	b.chainContext = genesisDoc.ChainContext()
+
 	// Setup tendermint.
-	b.tendermint = newHonestTendermint()
+	b.tendermint = newHonestTendermint(genesis)
 	if err = b.tendermint.start(b.identity, cmdCommon.DataDir()); err != nil {
 		return nil, fmt.Errorf("node tendermint start failed: %w", err)
 	}
 
 	// Setup P2P.
 	b.p2p = newP2PHandle()
-	if err = b.p2p.start(b.tendermint, b.identity, b.runtimeID); err != nil {
+	if err = b.p2p.start(b.tendermint, b.identity, b.chainContext, b.runtimeID); err != nil {
 		return nil, fmt.Errorf("P2P start failed: %w", err)
 	}
 
@@ -141,7 +160,7 @@ func initializeAndRegisterByzantineNode(
 	if err != nil {
 		return nil, fmt.Errorf("initializing storage node failed: %w", err)
 	}
-	b.p2p.service.RegisterProtocolServer(storageP2P.NewServer(b.runtimeID, storage))
+	b.p2p.service.RegisterProtocolServer(storageP2P.NewServer(b.chainContext, b.runtimeID, storage))
 	b.storage = storage
 
 	// Wait for activation epoch.
@@ -214,7 +233,7 @@ func initializeAndRegisterByzantineNode(
 	b.logger.Debug("executor tx scheduler role ok")
 
 	// Create a stateless storage client.
-	b.storageClient = client.NewStatelessStorage(b.p2p.service, b.runtimeID)
+	b.storageClient = client.NewStatelessStorage(b.p2p.service, b.chainContext, b.runtimeID)
 
 	return b, nil
 }

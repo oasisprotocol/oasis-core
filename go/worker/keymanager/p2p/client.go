@@ -12,6 +12,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -167,7 +168,7 @@ func (nt *nodeTracker) trackKeymanagerNodes() {
 }
 
 // NewClient creates a new keymanager protocol client.
-func NewClient(p2p p2p.Service, consensus consensus.Backend, keymanagerID common.Namespace) Client {
+func NewClient(p2p p2p.Service, consensus consensus.Backend, chainContext string, keymanagerID common.Namespace) Client {
 	// Create a peer filter as we want the client to only talk to known key manager nodes.
 	nt := &nodeTracker{
 		p2p:          p2p,
@@ -179,7 +180,7 @@ func NewClient(p2p p2p.Service, consensus consensus.Backend, keymanagerID common
 	}
 	go nt.trackKeymanagerNodes()
 
-	pid := rpc.NewRuntimeProtocolID(keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion)
+	pid := protocol.NewRuntimeProtocolID(chainContext, keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion)
 	mgr := rpc.NewPeerManager(p2p, pid, rpc.WithStickyPeers(true), rpc.WithPeerFilter(nt))
 	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)

@@ -46,7 +46,7 @@ func (env *workerEnvironment) GetNodeIdentity(ctx context.Context) (*identity.Id
 
 // NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
-	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.logger)
+	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)
 	runtimeID := w.runtime.ID()
 	kmCli.SetKeyManagerID(&runtimeID)
 

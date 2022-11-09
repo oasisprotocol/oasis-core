@@ -53,8 +53,8 @@ func (s *statelessStorage) Initialized() <-chan struct{} {
 
 // NewStatelessStorage creates a stateless storage backend that uses the P2P transport and the
 // storagepub protocol to query storage state.
-func NewStatelessStorage(p2p rpc.P2P, runtimeID common.Namespace) storage.Backend {
+func NewStatelessStorage(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) storage.Backend {
 	return &statelessStorage{
-		rpc: storagePub.NewClient(p2p, runtimeID),
+		rpc: storagePub.NewClient(p2p, chainContext, runtimeID),
 	}
 }

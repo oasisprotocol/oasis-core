@@ -5,6 +5,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -80,8 +81,8 @@ func (c *client) GetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsRes
 }
 
 // NewClient creates a new transaction sync protocol client.
-func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
-	pid := rpc.NewRuntimeProtocolID(runtimeID, TxSyncProtocolID, TxSyncProtocolVersion)
+func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
+	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, TxSyncProtocolID, TxSyncProtocolVersion)
 	mgr := rpc.NewPeerManager(p2p, pid)
 	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)

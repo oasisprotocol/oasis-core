@@ -26,6 +26,7 @@ type Worker struct {
 
 	HostNode          control.NodeController
 	DataDir           string
+	ChainContext      string
 	Identity          *identity.Identity
 	Consensus         consensus.Backend
 	Grpc              *grpc.Server
@@ -162,6 +163,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 	)
 
 	node, err := committee.NewNode(
+		w.ChainContext,
 		w.HostNode,
 		runtime,
 		w.Identity,
@@ -187,6 +189,7 @@ func newWorker(
 	cancelCtx context.CancelFunc,
 	hostNode control.NodeController,
 	dataDir string,
+	chainContext string,
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	grpc *grpc.Server,
@@ -211,6 +214,7 @@ func newWorker(
 		cfg:               cfg,
 		HostNode:          hostNode,
 		DataDir:           dataDir,
+		ChainContext:      chainContext,
 		Identity:          identity,
 		Consensus:         consensus,
 		Grpc:              grpc,
@@ -245,6 +249,7 @@ func newWorker(
 func New(
 	hostNode control.NodeController,
 	dataDir string,
+	chainContext string,
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	p2p p2p.Service,
@@ -276,6 +281,7 @@ func New(
 		cancelCtx,
 		hostNode,
 		dataDir,
+		chainContext,
 		identity,
 		consensus,
 		grpc,

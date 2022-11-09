@@ -18,6 +18,7 @@ import (
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -153,6 +154,8 @@ type NodeHooks interface {
 type Node struct {
 	*runtimeRegistry.RuntimeHostNode
 
+	ChainContext string
+
 	Runtime runtimeRegistry.Runtime
 
 	HostNode control.NodeController
@@ -164,6 +167,8 @@ type Node struct {
 	Group            *Group
 	P2P              p2pAPI.Service
 	TxPool           txpool.TransactionPool
+
+	txTopic string
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
@@ -859,6 +864,7 @@ func (n *Node) metricsWorker() {
 }
 
 func NewNode(
+	chainContext string,
 	hostNode control.NodeController,
 	runtime runtimeRegistry.Runtime,
 	identity *identity.Identity,
@@ -880,24 +886,28 @@ func NewNode(
 		return nil, err
 	}
 
+	txTopic := protocol.NewTopicKindTxID(chainContext, runtime.ID())
+
 	n := &Node{
-		HostNode:   hostNode,
-		Runtime:    runtime,
-		Identity:   identity,
-		KeyManager: keymanager,
-		Consensus:  consensus,
-		Group:      group,
-		P2P:        p2pHost,
-		ctx:        ctx,
-		cancelCtx:  cancel,
-		stopCh:     make(chan struct{}),
-		quitCh:     make(chan struct{}),
-		initCh:     make(chan struct{}),
-		logger:     logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
+		ChainContext: chainContext,
+		HostNode:     hostNode,
+		Runtime:      runtime,
+		Identity:     identity,
+		KeyManager:   keymanager,
+		Consensus:    consensus,
+		Group:        group,
+		P2P:          p2pHost,
+		txTopic:      txTopic,
+		ctx:          ctx,
+		cancelCtx:    cancel,
+		stopCh:       make(chan struct{}),
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		logger:       logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
 	// Prepare the key manager client wrapper.
-	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, n.logger)
+	n.KeyManagerClient = NewKeyManagerClientWrapper(p2pHost, consensus, chainContext, n.logger)
 
 	// Prepare the runtime host node helpers.
 	rhn, err := runtimeRegistry.NewRuntimeHostNode(n)
@@ -914,9 +924,10 @@ func NewNode(
 	n.TxPool = txPool
 
 	// Register transaction message handler as that is something that all workers must handle.
-	p2pHost.RegisterHandler(runtime.ID(), p2pAPI.TopicKindTx, &txMsgHandler{n})
+	p2pHost.RegisterHandler(txTopic, &txMsgHandler{n})
+
 	// Register transaction sync service.
-	p2pHost.RegisterProtocolServer(txsync.NewServer(runtime.ID(), txPool))
+	p2pHost.RegisterProtocolServer(txsync.NewServer(chainContext, runtime.ID(), txPool))
 
 	return n, nil
 }

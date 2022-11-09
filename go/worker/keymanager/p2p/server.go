@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -47,8 +48,8 @@ func (s *service) handleCallEnclave(ctx context.Context, request *CallEnclaveReq
 }
 
 // NewServer creates a new keymanager protocol server.
-func NewServer(runtimeID common.Namespace, km KeyManager) rpc.Server {
+func NewServer(chainContext string, runtimeID common.Namespace, km KeyManager) rpc.Server {
 	initMetrics()
 
-	return rpc.NewServer(rpc.NewRuntimeProtocolID(runtimeID, KeyManagerProtocolID, KeyManagerProtocolVersion), &service{km})
+	return rpc.NewServer(protocol.NewRuntimeProtocolID(chainContext, runtimeID, KeyManagerProtocolID, KeyManagerProtocolVersion), &service{km})
 }

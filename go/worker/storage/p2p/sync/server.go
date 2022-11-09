@@ -6,6 +6,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -103,6 +104,6 @@ func (s *service) handleGetCheckpointChunk(ctx context.Context, request *GetChec
 }
 
 // NewServer creates a new storage sync protocol server.
-func NewServer(runtimeID common.Namespace, backend storage.Backend) rpc.Server {
-	return rpc.NewServer(rpc.NewRuntimeProtocolID(runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion), &service{backend})
+func NewServer(chainContext string, runtimeID common.Namespace, backend storage.Backend) rpc.Server {
+	return rpc.NewServer(protocol.NewRuntimeProtocolID(chainContext, runtimeID, StorageSyncProtocolID, StorageSyncProtocolVersion), &service{backend})
 }

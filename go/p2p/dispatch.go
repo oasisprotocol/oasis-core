@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 )
 
 const (
@@ -297,8 +298,8 @@ func init() {
 
 			topics := make([]string, 2*len(n.Runtimes))
 			for i, rt := range n.Runtimes {
-				topics[2*i] = api.NewTopicIDForRuntime(chainContext, rt.ID, api.TopicKindCommittee)
-				topics[2*i+1] = api.NewTopicIDForRuntime(chainContext, rt.ID, api.TopicKindTx)
+				topics[2*i] = protocol.NewTopicKindCommitteeID(chainContext, rt.ID)
+				topics[2*i+1] = protocol.NewTopicKindTxID(chainContext, rt.ID)
 			}
 
 			return topics

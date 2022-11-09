@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
@@ -62,8 +63,8 @@ func (c *client) Iterate(ctx context.Context, request *IterateRequest) (*ProofRe
 }
 
 // NewClient creates a new storage pub protocol client.
-func NewClient(p2p rpc.P2P, runtimeID common.Namespace) Client {
-	pid := rpc.NewRuntimeProtocolID(runtimeID, StoragePubProtocolID, StoragePubProtocolVersion)
+func NewClient(p2p rpc.P2P, chainContext string, runtimeID common.Namespace) Client {
+	pid := protocol.NewRuntimeProtocolID(chainContext, runtimeID, StoragePubProtocolID, StoragePubProtocolVersion)
 	mgr := rpc.NewPeerManager(p2p, pid)
 	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)

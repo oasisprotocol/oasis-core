@@ -31,6 +31,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/configparser"
@@ -81,7 +82,7 @@ type p2p struct {
 	peerMgr *peermgmt.PeerManager
 
 	registerAddresses []multiaddr.Multiaddr
-	topics            map[common.Namespace]map[api.TopicKind]*topicHandler
+	topics            map[string]*topicHandler
 
 	logger *logging.Logger
 }
@@ -188,8 +189,8 @@ func (p *p2p) Addresses() []node.Address {
 
 // Implements api.Service.
 func (p *p2p) Peers(runtimeID common.Namespace) []string {
-	allPeers := p.pubsub.ListPeers(api.NewTopicIDForRuntime(p.chainContext, runtimeID, api.TopicKindCommittee))
-	allPeers = append(allPeers, p.pubsub.ListPeers(api.NewTopicIDForRuntime(p.chainContext, runtimeID, api.TopicKindTx))...)
+	allPeers := p.pubsub.ListPeers(protocol.NewTopicKindCommitteeID(p.chainContext, runtimeID))
+	allPeers = append(allPeers, p.pubsub.ListPeers(protocol.NewTopicKindTxID(p.chainContext, runtimeID))...)
 
 	var peers []string
 	peerMap := make(map[core.PeerID]bool)
@@ -242,26 +243,17 @@ func filterGloballyReachableAddresses(addrs []multiaddr.Multiaddr) []multiaddr.M
 	return ret
 }
 
-func (p *p2p) publish(ctx context.Context, runtimeID common.Namespace, kind api.TopicKind, msg interface{}) {
+// Implements api.Service.
+func (p *p2p) Publish(ctx context.Context, topic string, msg interface{}) {
 	rawMsg := cbor.Marshal(msg)
 
 	p.RLock()
 	defer p.RUnlock()
 
-	topics := p.topics[runtimeID]
-	if topics == nil {
-		p.logger.Error("attempted to publish message for unknown runtime ID",
-			"runtime_id", runtimeID,
-			"kind", kind,
-		)
-		return
-	}
-
-	h := topics[kind]
+	h := p.topics[topic]
 	if h == nil {
-		p.logger.Error("attempted to publish message for unsupported topic kind",
-			"runtime_id", runtimeID,
-			"kind", kind,
+		p.logger.Error("attempted to publish message for unsupported topic",
+			"topic", topic,
 		)
 		return
 	}
@@ -273,55 +265,37 @@ func (p *p2p) publish(ctx context.Context, runtimeID common.Namespace, kind api.
 	}
 
 	p.logger.Debug("published message",
-		"runtime_id", runtimeID,
-		"kind", kind,
+		"topic", topic,
 	)
 }
 
 // Implements api.Service.
-func (p *p2p) PublishCommittee(ctx context.Context, runtimeID common.Namespace, msg *api.CommitteeMessage) {
-	p.publish(ctx, runtimeID, api.TopicKindCommittee, msg)
-}
+func (p *p2p) RegisterHandler(topic string, handler api.Handler) {
+	protocol.ValidateTopicID(topic)
 
-// Implements api.Service.
-func (p *p2p) PublishTx(ctx context.Context, runtimeID common.Namespace, msg api.TxMessage) {
-	p.publish(ctx, runtimeID, api.TopicKindTx, msg)
-}
-
-// Implements api.Service.
-func (p *p2p) RegisterHandler(runtimeID common.Namespace, kind api.TopicKind, handler api.Handler) {
 	p.Lock()
 	defer p.Unlock()
 
-	topics := p.topics[runtimeID]
-	if topics == nil {
-		topics = make(map[api.TopicKind]*topicHandler)
-		p.topics[runtimeID] = topics
+	if _, ok := p.topics[topic]; ok {
+		panic(fmt.Sprintf("p2p: handler for topic '%s' already registered", topic))
 	}
 
-	if topics[kind] != nil {
-		panic(fmt.Sprintf("p2p: handler for topic kind '%s' already registered", kind))
-	}
-
-	topicID := api.NewTopicIDForRuntime(p.chainContext, runtimeID, kind)
-
-	h, err := newTopicHandler(p, topicID, handler)
+	h, err := newTopicHandler(p, topic, handler)
 	if err != nil {
 		panic(fmt.Sprintf("p2p: failed to initialize topic handler: %s", err))
 	}
-	topics[kind] = h
+	p.topics[topic] = h
 	_ = p.pubsub.RegisterTopicValidator(
-		topicID,
+		topic,
 		h.topicMessageValidator,
 		pubsub.WithValidatorConcurrency(viper.GetInt(CfgGossipsubValidateConcurrency)),
 	)
 
 	p.logger.Debug("registered new topic handler",
-		"runtime_id", runtimeID,
-		"kind", kind,
+		"topic", topic,
 	)
 
-	p.peerMgr.RegisterTopic(topicID, minTopicPeers, totalTopicPeers)
+	p.peerMgr.RegisterTopic(topic, minTopicPeers, totalTopicPeers)
 }
 
 // Implements api.Service.
@@ -352,6 +326,8 @@ func (p *p2p) PeerManager() api.PeerManager {
 
 // Implements api.Service.
 func (p *p2p) RegisterProtocolServer(srv rpc.Server) {
+	protocol.ValidateProtocolID(srv.Protocol())
+
 	p.host.SetStreamHandler(srv.Protocol(), srv.HandleStream)
 
 	p.logger.Info("registered protocol server",
@@ -522,7 +498,7 @@ func New(identity *identity.Identity, consensus consensus.Backend, store *persis
 		peerMgr:           mgr,
 		pubsub:            pubsub,
 		registerAddresses: registerAddresses,
-		topics:            make(map[common.Namespace]map[api.TopicKind]*topicHandler),
+		topics:            make(map[string]*topicHandler),
 		logger:            logging.GetLogger("p2p"),
 	}
 

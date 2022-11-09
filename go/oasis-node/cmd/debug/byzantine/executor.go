@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
@@ -24,7 +25,8 @@ import (
 )
 
 type computeBatchContext struct {
-	runtimeID common.Namespace
+	chainContext string
+	runtimeID    common.Namespace
 
 	proposal *commitment.Proposal
 
@@ -40,9 +42,10 @@ type computeBatchContext struct {
 	commit *commitment.ExecutorCommitment
 }
 
-func newComputeBatchContext(runtimeID common.Namespace) *computeBatchContext {
+func newComputeBatchContext(chainContext string, runtimeID common.Namespace) *computeBatchContext {
 	return &computeBatchContext{
-		runtimeID: runtimeID,
+		chainContext: chainContext,
+		runtimeID:    runtimeID,
 	}
 }
 
@@ -83,14 +86,12 @@ func (cbc *computeBatchContext) publishProposal(
 		panic("no prepared proposal")
 	}
 
-	p2pH.service.PublishCommittee(
-		ctx,
-		cbc.runtimeID,
-		&p2p.CommitteeMessage{
-			Epoch:    epoch,
-			Proposal: cbc.proposal,
-		},
-	)
+	committeeTopic := protocol.NewTopicKindCommitteeID(cbc.chainContext, cbc.runtimeID)
+
+	p2pH.service.Publish(ctx, committeeTopic, &p2p.CommitteeMessage{
+		Epoch:    epoch,
+		Proposal: cbc.proposal,
+	})
 }
 
 func (cbc *computeBatchContext) prepareProposal(
