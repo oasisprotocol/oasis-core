@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 oasis-core-runtime = { path = "../runtime" }
-cbor = { version = "0.5.0", package = "oasis-cbor" }
+cbor = { version = "0.5.1", package = "oasis-cbor" }
 
 # Third party.
 anyhow = "1.0"
