@@ -47,6 +47,10 @@ type QuotePolicy struct {
 	// MinTCBEvaluationDataNumber is the minimum TCB evaluation data number that is considered to be
 	// valid. TCB bundles containing smaller values will be invalid.
 	MinTCBEvaluationDataNumber uint32 `json:"min_tcb_evaluation_data_number"`
+
+	// FMSPCBlacklist is a list of hexadecimal encoded FMSPCs specifying which processor
+	// packages and platform instances are blocked.
+	FMSPCBlacklist []string `json:"fmspc_blacklist,omitempty"`
 }
 
 // Quote is an enclave quote.
@@ -120,6 +124,7 @@ func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.
 		policy = &QuotePolicy{
 			TCBValidityPeriod:          30,
 			MinTCBEvaluationDataNumber: DefaultMinTCBEvaluationDataNumber,
+			FMSPCBlacklist:             []string{},
 		}
 	}
 
@@ -458,9 +463,9 @@ func (qs *QuoteSignatureECDSA_P256) Verify(
 	if tcb == nil {
 		return fmt.Errorf("pcs/quote: missing TCB bundle")
 	}
-	err = tcb.VerifyTCBLevel(ts, policy, pckInfo.FMSPC, pckInfo.TCBCompSVN, pckInfo.PCESVN, &qs.QEReport)
+	err = tcb.Verify(ts, policy, pckInfo.FMSPC, pckInfo.TCBCompSVN, pckInfo.PCESVN, &qs.QEReport)
 	if err != nil {
-		return fmt.Errorf("pcs/quote: failed to get TCB level: %w", err)
+		return fmt.Errorf("pcs/quote: failed to verify TCB bundle: %w", err)
 	}
 
 	// Verify quote header and ISV report body signature.

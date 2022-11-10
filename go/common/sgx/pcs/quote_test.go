@@ -109,6 +109,14 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
 	require.Error(err, "Quote verification should fail for invalid TCB evaluation data number")
 
+	// Test blacklisted FMSPC.
+	quotePolicy = &QuotePolicy{
+		TCBValidityPeriod: 90,
+		FMSPCBlacklist:    []string{"00606A000000"},
+	}
+	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
+	require.Error(err, "Quote verification should fail for blacklisted FMSPCs")
+
 	// Test TCB info certificates missing.
 	tcbBundle2 := TCBBundle{
 		TCBInfo:      tcbInfo,

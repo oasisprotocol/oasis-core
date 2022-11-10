@@ -36,8 +36,8 @@ type TCBBundle struct {
 	Certificates []byte           `json:"certs"`
 }
 
-// VerifyTCBLevel verifies the TCB level corresponding to the passed SVN information.
-func (bnd *TCBBundle) VerifyTCBLevel(
+// Verify verifies the TCB info and the QE identity corresponding to the passed SVN information.
+func (bnd *TCBBundle) Verify(
 	ts time.Time,
 	policy *QuotePolicy,
 	fmspc []byte,
@@ -49,7 +49,24 @@ func (bnd *TCBBundle) VerifyTCBLevel(
 	if err != nil {
 		return err
 	}
+	err = bnd.verifyQEIdentity(ts, pk, policy, qe)
+	if err != nil {
+		return fmt.Errorf("pcs/tcb: failed to verify QE identity: %w", err)
+	}
+	err = bnd.verifyTCBInfo(ts, pk, policy, fmspc, tcbCompSvn, pcesvn)
+	if err != nil {
+		return fmt.Errorf("pcs/tcb: failed to verify TCB info: %w", err)
+	}
+	return nil
+}
 
+// verifyQEIdentity verifies the QE identity.
+func (bnd *TCBBundle) verifyQEIdentity(
+	ts time.Time,
+	pk *ecdsa.PublicKey,
+	policy *QuotePolicy,
+	qe *ReportBody,
+) error {
 	qeInfo, err := bnd.QEIdentity.open(ts, policy, pk)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: invalid QE identity: %w", err)
@@ -58,24 +75,29 @@ func (bnd *TCBBundle) VerifyTCBLevel(
 		return err
 	}
 
+	return nil
+}
+
+// verifyTCBInfo verifies the TCB level and the FMSPC.
+func (bnd *TCBBundle) verifyTCBInfo(
+	ts time.Time,
+	pk *ecdsa.PublicKey,
+	policy *QuotePolicy,
+	fmspc []byte,
+	tcbCompSvn [16]int32,
+	pcesvn int32,
+) error {
 	tcbInfo, err := bnd.TCBInfo.open(ts, policy, pk)
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: invalid TCB info: %w", err)
 	}
-	tcbLevel, err := tcbInfo.getTCBLevel(fmspc, tcbCompSvn, pcesvn)
+	err = tcbInfo.validateFMSPC(fmspc)
 	if err != nil {
-		return fmt.Errorf("pcs/tcb: failed to get TCB level: %w", err)
+		return fmt.Errorf("pcs/tcb: failed to validate FMSPC: %w", err)
 	}
-
-	switch tcbLevel.Status {
-	case StatusUpToDate, StatusSWHardeningNeeded:
-		// These are ok.
-	default:
-		return &TCBOutOfDateError{
-			Kind:        TCBKindPlatform,
-			Status:      tcbLevel.Status,
-			AdvisoryIDs: tcbLevel.AdvisoryIDs,
-		}
+	err = tcbInfo.validateTCBLevel(tcbCompSvn, pcesvn)
+	if err != nil {
+		return fmt.Errorf("pcs/tcb: failed to validate TCB level: %w", err)
 	}
 
 	return nil
@@ -202,23 +224,56 @@ func (ti *TCBInfo) validate(ts time.Time, policy *QuotePolicy) error {
 		return fmt.Errorf("pcs/tcb: invalid TCB evaluation data number")
 	}
 
+	// Validate FMSPC not blacklisted.
+	for _, blocked := range policy.FMSPCBlacklist {
+		if blocked == ti.FMSPC {
+			return fmt.Errorf("pcs/tcb: blacklisted FMSPC")
+		}
+	}
+
+	return nil
+}
+
+func (ti *TCBInfo) validateFMSPC(fmspc []byte) error {
+	// Validate FMSPC matches.
+	expectedFmspc, err := hex.DecodeString(ti.FMSPC)
+	if err != nil {
+		return fmt.Errorf("pcs/tcb: malformed FMSPC: %w", err)
+	}
+	if !bytes.Equal(fmspc, expectedFmspc) {
+		return fmt.Errorf("pcs/tcb: FMSPC: mismatch (expected: %X got: %X)", expectedFmspc, fmspc)
+	}
+
+	return nil
+}
+
+func (ti *TCBInfo) validateTCBLevel(
+	tcbCompSvn [16]int32,
+	pcesvn int32,
+) error {
+	tcbLevel, err := ti.getTCBLevel(tcbCompSvn, pcesvn)
+	if err != nil {
+		return fmt.Errorf("pcs/tcb: failed to get TCB level: %w", err)
+	}
+
+	switch tcbLevel.Status {
+	case StatusUpToDate, StatusSWHardeningNeeded:
+		// These are ok.
+	default:
+		return &TCBOutOfDateError{
+			Kind:        TCBKindPlatform,
+			Status:      tcbLevel.Status,
+			AdvisoryIDs: tcbLevel.AdvisoryIDs,
+		}
+	}
+
 	return nil
 }
 
 func (ti *TCBInfo) getTCBLevel(
-	fmspc []byte,
 	tcbCompSvn [16]int32,
 	pcesvn int32,
 ) (*TCBLevel, error) {
-	// Validate FMSPC matches.
-	expectedFmspc, err := hex.DecodeString(ti.FMSPC)
-	if err != nil {
-		return nil, fmt.Errorf("pcs/tcb: malformed FMSPC: %w", err)
-	}
-	if !bytes.Equal(fmspc, expectedFmspc) {
-		return nil, fmt.Errorf("pcs/tcb: FMSPC mismatch (expected: %X got: %X)", expectedFmspc, fmspc)
-	}
-
 	// Find first matching TCB level.
 	var matchedTCBLevel *TCBLevel
 	for i, tcbLevel := range ti.TCBLevels {
