@@ -8,7 +8,6 @@ import (
 	"fmt"
 	goHash "hash"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -350,7 +349,7 @@ func (sc *Scenario) DumpRestoreNetwork(
 		if err != nil {
 			return fmt.Errorf("failed to marshal updated genesis document: %w", err)
 		}
-		if err = ioutil.WriteFile(dumpPath, buf, 0o600); err != nil {
+		if err = os.WriteFile(dumpPath, buf, 0o600); err != nil {
 			return fmt.Errorf("failed to write updated genesis document: %w", err)
 		}
 	}

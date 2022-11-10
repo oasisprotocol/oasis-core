@@ -4,7 +4,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -264,7 +263,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		)
 		os.Exit(1)
 	}
-	if err = ioutil.WriteFile(filepath.Join(dataDir, NodeGenesisFilename), prettySigned, 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(dataDir, NodeGenesisFilename), prettySigned, 0o600); err != nil {
 		logger.Error("failed to write signed node genesis registration",
 			"err", err,
 		)

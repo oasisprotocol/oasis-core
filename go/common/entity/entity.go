@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -143,7 +143,7 @@ func (e *Entity) Save(baseDir string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(entityPath, b, fileMode)
+	return os.WriteFile(entityPath, b, fileMode)
 }
 
 // Load loads an existing entity from disk.
@@ -173,7 +173,7 @@ func Load(baseDir string, signerFactory signature.SignerFactory) (*Entity, signa
 // LoadDescriptor loads an existing entity from disk, without loading the signer.
 // Note: This takes the path to the descriptor rather than a base directory.
 func LoadDescriptor(f string) (*Entity, error) {
-	rawEnt, err := ioutil.ReadFile(f)
+	rawEnt, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err
 	}

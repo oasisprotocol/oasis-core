@@ -3,7 +3,6 @@ package env
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,7 +55,7 @@ func (d *Dir) Init(cmd *cobra.Command) error {
 		// command's `Use` field.
 		var err error
 		splitUse := strings.Split(cmd.Use, " ")
-		if d.dir, err = ioutil.TempDir(d.dir, splitUse[0]); err != nil {
+		if d.dir, err = os.MkdirTemp(d.dir, splitUse[0]); err != nil {
 			return fmt.Errorf("env: failed to create default base directory: %w", err)
 		}
 	}

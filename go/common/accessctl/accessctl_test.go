@@ -2,7 +2,6 @@ package accessctl
 
 import (
 	"crypto/x509"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -58,7 +57,7 @@ func TestPolicy(t *testing.T) {
 func TestSubjectFromCertificate(t *testing.T) {
 	require := require.New(t)
 
-	dataDir, err := ioutil.TempDir("", "oasis-storage-grpc-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-storage-grpc-test_")
 	require.NoError(err, "Failed to create a temporary directory")
 	defer os.RemoveAll(dataDir)
 

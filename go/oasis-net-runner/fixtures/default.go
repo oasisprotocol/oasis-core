@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -81,7 +80,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) { // nolint: gocyclo
 	}
 	if genesis := viper.GetString(cfgStakingGenesis); genesis != "" {
 		var raw []byte
-		raw, err = ioutil.ReadFile(genesis)
+		raw, err = os.ReadFile(genesis)
 		if err != nil {
 			return nil, fmt.Errorf("loading staking genesis file: %w", err)
 		}

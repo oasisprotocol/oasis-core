@@ -7,7 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -40,8 +40,8 @@ func TestSigstruct(t *testing.T) {
 	sigstruct, err := builder.Sign(privateKey)
 	require.NoError(err, "Sigstruct.New")
 
-	expected, err := ioutil.ReadFile("../testdata/sig1.sigstruct.bin")
-	require.NoError(err, "ioutil.ReadFile(sig1.sigstruct.bin)")
+	expected, err := os.ReadFile("../testdata/sig1.sigstruct.bin")
+	require.NoError(err, "os.ReadFile(sig1.sigstruct.bin)")
 	require.Equal(expected, sigstruct, "SIGSTRUCT should match Fortanix's")
 
 	extractedPublicKey, derivedBuilder, err := Verify(sigstruct)
@@ -63,7 +63,7 @@ func TestSigstruct(t *testing.T) {
 }
 
 func loadTestPrivateKey() (*rsa.PrivateKey, error) {
-	rawPEM, err := ioutil.ReadFile("../testdata/sig1.key.pem")
+	rawPEM, err := os.ReadFile("../testdata/sig1.key.pem")
 	if err != nil {
 		return nil, err
 	}

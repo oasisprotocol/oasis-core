@@ -275,8 +275,7 @@ func (sa *SGXAttestation) verifyAttestationSignature(
 // HashAttestation hashes the required data that needs to be signed by RAK producing the attestation
 // signature. The hash is computed as follows:
 //
-//   TupleHash[AttestationSignatureContext](reportData, nodeID, height)
-//
+//	TupleHash[AttestationSignatureContext](reportData, nodeID, height)
 func HashAttestation(reportData []byte, nodeID signature.PublicKey, height uint64) []byte {
 	h := tuplehash.New256(32, []byte(AttestationSignatureContext))
 	_, _ = h.Write(reportData)

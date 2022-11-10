@@ -54,7 +54,8 @@ func (c *concurrenySafeSource) Seed(seed int64) {
 // Borrowed from https://github.com/cenkalti/backoff.
 
 // GetRandomValueFromInterval returns a random value from the following interval:
-// 	[currentInterval - randomizationFactor * currentInterval, currentInterval + randomizationFactor * currentInterval].
+//
+//	[currentInterval - randomizationFactor * currentInterval, currentInterval + randomizationFactor * currentInterval].
 func GetRandomValueFromInterval(randomizationFactor, random float64, currentInterval time.Duration) time.Duration {
 	delta := randomizationFactor * float64(currentInterval)
 	minInterval := float64(currentInterval) - delta

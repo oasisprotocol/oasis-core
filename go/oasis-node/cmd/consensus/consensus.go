@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -76,7 +75,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, consensus.ClientBackend) {
 }
 
 func loadTx() *transaction.SignedTransaction {
-	rawTx, err := ioutil.ReadFile(viper.GetString(cmdConsensus.CfgTxFile))
+	rawTx, err := os.ReadFile(viper.GetString(cmdConsensus.CfgTxFile))
 	if err != nil {
 		logger.Error("failed to read raw serialized transaction",
 			"err", err,
@@ -96,7 +95,7 @@ func loadTx() *transaction.SignedTransaction {
 }
 
 func loadUnsignedTx() *transaction.Transaction {
-	rawUnsignedTx, err := ioutil.ReadFile(viper.GetString(cmdConsensus.CfgTxFile))
+	rawUnsignedTx, err := os.ReadFile(viper.GetString(cmdConsensus.CfgTxFile))
 	if err != nil {
 		logger.Error("failed to read raw serialized unsigned transaction",
 			"err", err,

@@ -1,7 +1,6 @@
 package database
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,7 +38,7 @@ func doTestImpl(t *testing.T, backend string) {
 		err error
 	)
 
-	cfg.DB, err = ioutil.TempDir("", "oasis-storage-database-test")
+	cfg.DB, err = os.MkdirTemp("", "oasis-storage-database-test")
 	require.NoError(err, "TempDir()")
 	defer os.RemoveAll(cfg.DB)
 

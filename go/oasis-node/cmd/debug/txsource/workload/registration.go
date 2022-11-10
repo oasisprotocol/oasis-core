@@ -3,9 +3,9 @@ package workload
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -232,7 +232,7 @@ func (r *registration) Run( // nolint: gocyclo
 
 		// Generate entity node identities.
 		for j := 0; j < registryNumNodesPerEntity; j++ {
-			dataDir, err := ioutil.TempDir(nodeIdentitiesDir, "node_")
+			dataDir, err := os.MkdirTemp(nodeIdentitiesDir, "node_")
 			if err != nil {
 				return fmt.Errorf("failed to create a temporary directory: %w", err)
 			}

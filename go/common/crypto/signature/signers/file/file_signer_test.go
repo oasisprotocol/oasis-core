@@ -2,7 +2,6 @@ package file
 
 import (
 	"crypto/rand"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,7 +17,7 @@ func TestFileSigner(t *testing.T) {
 	var zeroSigner Signer
 	var zeroPubKey signature.PublicKey
 
-	tmpDir, err := ioutil.TempDir("", "oasis-signature-test")
+	tmpDir, err := os.MkdirTemp("", "oasis-signature-test")
 	require.NoError(err, "TempDir()")
 	defer os.RemoveAll(tmpDir)
 
@@ -59,7 +58,7 @@ func TestStaticEntropy(t *testing.T) {
 	var zeroSigner Signer
 	var zeroEntropy [StaticEntropySize]byte
 
-	tmpDir, err := ioutil.TempDir("", "oasis-signature-test")
+	tmpDir, err := os.MkdirTemp("", "oasis-signature-test")
 	require.NoError(err, "TempDir()")
 	defer os.RemoveAll(tmpDir)
 

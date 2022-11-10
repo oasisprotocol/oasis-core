@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -471,7 +470,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 
 		// Check, if node genesis file was correctly written.
 		var b []byte
-		if b, err = ioutil.ReadFile(filepath.Join(dataDir, cmdRegNode.NodeGenesisFilename)); err != nil {
+		if b, err = os.ReadFile(filepath.Join(dataDir, cmdRegNode.NodeGenesisFilename)); err != nil {
 			return nil, fmt.Errorf("failed to open node genesis file: %w", err)
 		}
 

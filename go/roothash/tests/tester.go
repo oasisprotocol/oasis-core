@@ -4,7 +4,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"testing"
@@ -275,7 +274,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	s.refreshCommittees(t, consensus)
 	rt, executorCommittee := s.rt, s.executorCommittee
 
-	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-storage-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 

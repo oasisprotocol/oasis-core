@@ -3,7 +3,6 @@ package history
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -23,7 +22,7 @@ func TestHistory(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a new random temporary directory under /tmp.
-	dataDir, err := ioutil.TempDir("", "oasis-runtime-history-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
@@ -204,7 +203,7 @@ func TestWatchBlocks(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a new random temporary directory under /tmp.
-	dataDir, err := ioutil.TempDir("", "oasis-runtime-history-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
@@ -244,7 +243,7 @@ func TestWatchBlocks(t *testing.T) {
 	testWatchBlocks(t, history, 10)
 
 	// Test history without local storage.
-	dataDir2, err := ioutil.TempDir("", "oasis-runtime-history-test_")
+	dataDir2, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir2)
 	history, err = New(dataDir2, runtimeID, NewDefaultConfig(), false)
@@ -300,7 +299,7 @@ func TestHistoryPrune(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a new random temporary directory under /tmp.
-	dataDir, err := ioutil.TempDir("", "oasis-runtime-history-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
@@ -409,7 +408,7 @@ func TestHistoryPruneError(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a new random temporary directory under /tmp.
-	dataDir, err := ioutil.TempDir("", "oasis-runtime-history-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-runtime-history-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 

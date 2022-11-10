@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,7 +17,7 @@ import (
 // MakeConsensusEquivocationEvidence creates consensus evidence of equivocation.
 func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.Block, genesis *genesis.Document, totalVotingPower, votingPower int64) (*consensus.Evidence, error) {
 	// Create empty directory for private validator metadata.
-	tmpDir, err := ioutil.TempDir("", "oasis-slash-test")
+	tmpDir, err := os.MkdirTemp("", "oasis-slash-test")
 	if err != nil {
 		return nil, err
 	}

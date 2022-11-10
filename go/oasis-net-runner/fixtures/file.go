@@ -3,7 +3,7 @@ package fixtures
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/spf13/viper"
 
@@ -17,7 +17,7 @@ const (
 // newFixtureFromFile parses given JSON file and creates new fixture object from it.
 func newFixtureFromFile(path string) (*oasis.NetworkFixture, error) {
 	f := oasis.NetworkFixture{}
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("newFixtureFromFile: failed to open fixture file: %w", err)
 	}

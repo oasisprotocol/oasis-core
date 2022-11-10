@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 	"sync"
@@ -168,7 +168,7 @@ type nodeUpgradeImpl struct {
 
 func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string, error) {
 	filePath := path.Join(sc.Net.BasePath(), "upgrade-"+name+".json")
-	if err := ioutil.WriteFile(filePath, content, 0o644); err != nil { //nolint: gosec
+	if err := os.WriteFile(filePath, content, 0o644); err != nil { //nolint: gosec
 		sc.Logger.Error("can't write descriptor to network directory",
 			"err", err,
 			"name", name,

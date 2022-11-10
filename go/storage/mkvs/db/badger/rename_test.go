@@ -1,7 +1,6 @@
 package badger
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -18,7 +17,7 @@ func TestRenameNamespace(t *testing.T) {
 	dstNs := common.NewTestNamespaceFromSeed([]byte("badger node db test ns 2"), 0)
 
 	// Create a new random temporary directory under /tmp.
-	dir, err := ioutil.TempDir("", "mkvs.test.badger")
+	dir, err := os.MkdirTemp("", "mkvs.test.badger")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 

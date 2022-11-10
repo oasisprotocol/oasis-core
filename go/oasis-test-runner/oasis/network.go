@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -582,7 +582,7 @@ func GenerateDeterministicNodeKeys(dir *env.Dir, rawSeed string, roles []signatu
 // This function is used to obtain shorter socket path than the one in datadir since that one might
 // be too long for unix socket path.
 func (net *Network) generateTempSocketPath(prefix string) string {
-	f, err := ioutil.TempFile(env.GetRootDir().String(), fmt.Sprintf("%s-internal-*.sock", prefix))
+	f, err := os.CreateTemp(env.GetRootDir().String(), fmt.Sprintf("%s-internal-*.sock", prefix))
 	if err != nil {
 		return ""
 	}
@@ -823,7 +823,7 @@ func (net *Network) MakeGenesis() error {
 			)
 			return fmt.Errorf("oasis: failed to serialize staking genesis file: %w", err)
 		}
-		if err = ioutil.WriteFile(path, b, 0o600); err != nil {
+		if err = os.WriteFile(path, b, 0o600); err != nil {
 			net.logger.Error("failed to write staking genesis file",
 				"err", err,
 			)

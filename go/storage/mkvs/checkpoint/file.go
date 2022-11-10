@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -49,7 +48,7 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 	}()
 
 	// Check if the checkpoint already exists and just return the existing metadata in this case.
-	data, err := ioutil.ReadFile(filepath.Join(checkpointDir, checkpointMetadataFile))
+	data, err := os.ReadFile(filepath.Join(checkpointDir, checkpointMetadataFile))
 	if err == nil {
 		var existing Metadata
 		if err = cbor.Unmarshal(data, &existing); err != nil {
@@ -98,7 +97,7 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 		Chunks:  chunks,
 	}
 
-	if err = ioutil.WriteFile(filepath.Join(checkpointDir, checkpointMetadataFile), cbor.Marshal(meta), 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(checkpointDir, checkpointMetadataFile), cbor.Marshal(meta), 0o600); err != nil {
 		return nil, fmt.Errorf("checkpoint: failed to create checkpoint metadata: %w", err)
 	}
 	return meta, nil
@@ -123,7 +122,7 @@ func (fc *fileCreator) GetCheckpoints(ctx context.Context, request *GetCheckpoin
 
 	var cps []*Metadata
 	for _, m := range matches {
-		data, err := ioutil.ReadFile(m)
+		data, err := os.ReadFile(m)
 		if err != nil {
 			return nil, fmt.Errorf("checkpoint: failed to read checkpoint metadata at %s: %w", m, err)
 		}
@@ -150,7 +149,7 @@ func (fc *fileCreator) GetCheckpoint(ctx context.Context, version uint16, root n
 		root.Hash.String(),
 		checkpointMetadataFile,
 	)
-	data, err := ioutil.ReadFile(checkpointFilename)
+	data, err := os.ReadFile(checkpointFilename)
 	if err != nil {
 		return nil, ErrCheckpointNotFound
 	}
