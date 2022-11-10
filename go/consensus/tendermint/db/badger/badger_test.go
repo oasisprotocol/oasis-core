@@ -1,7 +1,6 @@
 package badger
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +12,7 @@ import (
 
 func TestBadgerTendermintDB(t *testing.T) {
 	// Create a temporary directory to store the test database.
-	tmpDir, err := ioutil.TempDir("", "oasis-go-tendermint-db-test")
+	tmpDir, err := os.MkdirTemp("", "oasis-go-tendermint-db-test")
 	require.NoError(t, err, "Failed to create temporary directory.")
 	defer os.RemoveAll(tmpDir)
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -154,7 +153,7 @@ func newTestNode(t *testing.T) *testNode {
 
 	require := require.New(t)
 
-	dataDir, err := ioutil.TempDir("", "oasis-node-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-node-test_")
 	require.NoError(err, "create data dir")
 
 	signerFactory, err := fileSigner.NewFactory(dataDir, signature.SignerEntity)
@@ -328,7 +327,7 @@ func testBeacon(t *testing.T, node *testNode) {
 }
 
 func testStorage(t *testing.T, node *testNode) {
-	dataDir, err := ioutil.TempDir("", "oasis-storage-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-storage-test_")
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 

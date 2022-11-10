@@ -8,7 +8,6 @@ import (
 	"go/parser"
 	"go/token"
 	"html"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -97,7 +96,7 @@ func printMarkdown(metrics map[string]Metric) {
 		return
 	}
 
-	md, err := ioutil.ReadFile(viper.GetString(CfgMarkdownTplFile))
+	md, err := os.ReadFile(viper.GetString(CfgMarkdownTplFile))
 	if err != nil {
 		panic(err)
 	}
@@ -163,11 +162,13 @@ func doExtractMetrics(cmd *cobra.Command, args []string) {
 //
 // ```
 // rhpLatency = prometheus.NewSummaryVec(
-//   prometheus.SummaryOpts{
-//     Name: "oasis_rhp_latency",
-//     Help: "Runtime Host call latency (seconds).",
-//   },
-//   []string{"call"},
+//
+//	prometheus.SummaryOpts{
+//	  Name: "oasis_rhp_latency",
+//	  Help: "Runtime Host call latency (seconds).",
+//	},
+//	[]string{"call"},
+//
 // )
 // ```
 //
@@ -177,10 +178,12 @@ func doExtractMetrics(cmd *cobra.Command, args []string) {
 // const MetricCPUUTimeSeconds = "oasis_node_cpu_utime_seconds"
 // ...
 // utimeGauge = prometheus.NewGauge(
-//		prometheus.GaugeOpts{
-//			Name: MetricCPUUTimeSeconds,
-//			Help: "CPU user time spent by worker as reported by /proc/<PID>/stat (seconds).",
-//		},
+//
+//	prometheus.GaugeOpts{
+//		Name: MetricCPUUTimeSeconds,
+//		Help: "CPU user time spent by worker as reported by /proc/<PID>/stat (seconds).",
+//	},
+//
 // )
 // ```
 func checkNewPrometheusMetric(f *token.FileSet, n ast.Node) (m Metric, ok bool) {

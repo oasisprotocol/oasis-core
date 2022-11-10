@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"testing"
@@ -198,7 +197,7 @@ func TestMultipartRestore(t *testing.T) {
 		return func(t *testing.T) {
 			require := require.New(t)
 
-			dir, err := ioutil.TempDir("", "oasis-storage-database-test")
+			dir, err := os.MkdirTemp("", "oasis-storage-database-test")
 			require.NoError(err, "TempDir()")
 			defer os.RemoveAll(dir)
 
@@ -328,7 +327,7 @@ func TestReadOnlyBatch(t *testing.T) {
 
 	// No way to initialize a readonly-database, so it needs to be created rw first.
 	// This means we need persistence.
-	dir, err := ioutil.TempDir("", "oasis-storage-database-test")
+	dir, err := os.MkdirTemp("", "oasis-storage-database-test")
 	require.NoError(err, "TempDir()")
 	defer os.RemoveAll(dir)
 

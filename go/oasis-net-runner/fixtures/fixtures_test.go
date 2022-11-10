@@ -1,7 +1,7 @@
 package fixtures
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,7 +30,7 @@ func TestCustomFixture(t *testing.T) {
 
 	data, err := DumpFixture(f)
 	require.Nil(t, err)
-	tmpFile, _ := ioutil.TempFile("", "oasis-net-runner-customfixture.*.json")
+	tmpFile, _ := os.CreateTemp("", "oasis-net-runner-customfixture.*.json")
 	path := tmpFile.Name()
 	_, _ = tmpFile.Write(data)
 	tmpFile.Close()

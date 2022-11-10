@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/golang/snappy"
 
@@ -97,7 +96,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 			decodeErr = fmt.Errorf("failed to decode chunk: %w", err)
 
 			// Read everything until EOF so we can verify the overall chunk integrity.
-			_, _ = io.Copy(ioutil.Discard, tr)
+			_, _ = io.Copy(io.Discard, tr)
 			break
 		}
 

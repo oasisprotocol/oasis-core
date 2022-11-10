@@ -2,7 +2,7 @@ package pcs
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -15,7 +15,7 @@ import (
 func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require := require.New(t)
 
-	rawQuote, err := ioutil.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
+	rawQuote, err := os.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
 	require.NoError(err, "Read test vector")
 
 	var quote Quote
@@ -51,11 +51,11 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require.Len(cd.CertificateChain, 3)
 
 	// Prepare TCB bundle needed for verification.
-	rawTCBInfo, err := ioutil.ReadFile("testdata/tcb_fmspc_00606A000000.json") // From PCS response.
+	rawTCBInfo, err := os.ReadFile("testdata/tcb_fmspc_00606A000000.json") // From PCS response.
 	require.NoError(err, "Read test vector")
-	rawCerts, err := ioutil.ReadFile("testdata/tcb_fmspc_00606A000000_certs.pem") // From SGX-TCB-Info-Issuer-Chain header.
+	rawCerts, err := os.ReadFile("testdata/tcb_fmspc_00606A000000_certs.pem") // From SGX-TCB-Info-Issuer-Chain header.
 	require.NoError(err, "Read test vector")
-	rawQEIdentity, err := ioutil.ReadFile("testdata/qe_identity.json") // From PCS response.
+	rawQEIdentity, err := os.ReadFile("testdata/qe_identity.json") // From PCS response.
 	require.NoError(err, "Read test vector")
 
 	var tcbInfo SignedTCBInfo
@@ -119,7 +119,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require.Error(err, "Quote verification should fail for bad TCB info certificates")
 
 	// Test TCB info certificates bad.
-	rawCertsBad, err := ioutil.ReadFile("testdata/tcb_fmspc_00606A000000_certs_bad.pem")
+	rawCertsBad, err := os.ReadFile("testdata/tcb_fmspc_00606A000000_certs_bad.pem")
 	require.NoError(err, "Read test vector")
 
 	tcbBundle3 := TCBBundle{
@@ -177,7 +177,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 func TestQuoteECDSA_P256_EPPID(t *testing.T) {
 	require := require.New(t)
 
-	rawQuote, err := ioutil.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
+	rawQuote, err := os.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
 	require.NoError(err, "Read test vector")
 
 	var quote Quote
@@ -221,9 +221,9 @@ func TestQuoteECDSA_P256_EPPID(t *testing.T) {
 
 func FuzzQuoteUnmarshal(f *testing.F) {
 	// Seed corpus.
-	raw1, _ := ioutil.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
+	raw1, _ := os.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
 	f.Add(raw1)
-	raw2, _ := ioutil.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
+	raw2, _ := os.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
 	f.Add(raw2)
 
 	// Fuzzing.

@@ -31,7 +31,7 @@ func UnsafeFortanixDummyKey() *rsa.PrivateKey {
 // Fortanix Rust SGX SDK's enclave-runner, converted to
 // PEM format from the DER representation via:
 //
-//  openssl rsa -in dummy.priv.der -inform der -out /tmp/dummy.priv.pem
+//	openssl rsa -in dummy.priv.der -inform der -out /tmp/dummy.priv.pem
 //
 // Bug reports of any kind regarding the existence of this private
 // key in the git repository (especially those sent to our bug bounty

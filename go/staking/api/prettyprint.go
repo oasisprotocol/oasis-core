@@ -24,10 +24,10 @@ func PrettyPrintCommissionRatePercentage(rateNumerator quantity.Quantity) string
 }
 
 // PrettyPrintCommissionScheduleIndexInfixes returns two infixes:
-// - indexInfix holds the infix to use to pretty print the given commission
-//   schedule rate (bound) index
-// - emptyInfix holds the infix to use to pretty print an empty string of an
-//   equivalent length
+//   - indexInfix holds the infix to use to pretty print the given commission
+//     schedule rate (bound) index
+//   - emptyInfix holds the infix to use to pretty print an empty string of an
+//     equivalent length
 func PrettyPrintCommissionScheduleIndexInfixes(ctx context.Context) (indexInfix, emptyInfix string) {
 	index, ok := ctx.Value(prettyprint.ContextKeyCommissionScheduleIndex).(int)
 	if ok {

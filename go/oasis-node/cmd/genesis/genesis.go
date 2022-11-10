@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"strconv"
@@ -320,7 +319,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 		)
 		return
 	}
-	if err := ioutil.WriteFile(f, canonJSON, 0o600); err != nil {
+	if err := os.WriteFile(f, canonJSON, 0o600); err != nil {
 		logger.Error("failed to write genesis file",
 			"err", err,
 		)
@@ -391,7 +390,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	}
 
 	loadSignedEntity := func(fn string) (*entity.SignedEntity, *entity.Entity, error) {
-		b, err := ioutil.ReadFile(fn)
+		b, err := os.ReadFile(fn)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -454,7 +453,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	}
 
 	for _, v := range runtimes {
-		b, err := ioutil.ReadFile(v)
+		b, err := os.ReadFile(v)
 		if err != nil {
 			l.Error("failed to load genesis runtime registration",
 				"err", err,
@@ -476,7 +475,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	}
 
 	for _, v := range nodes {
-		b, err := ioutil.ReadFile(v)
+		b, err := os.ReadFile(v)
 		if err != nil {
 			l.Error("failed to load genesis node registration",
 				"err", err,
@@ -519,7 +518,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 	}
 
 	for _, v := range exports {
-		b, err := ioutil.ReadFile(v)
+		b, err := os.ReadFile(v)
 		if err != nil {
 			l.Error("failed to load genesis roothash runtime states",
 				"err", err,
@@ -561,7 +560,7 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 	var kmSt keymanager.Genesis
 
 	for _, v := range statuses {
-		b, err := ioutil.ReadFile(v)
+		b, err := os.ReadFile(v)
 		if err != nil {
 			l.Error("failed to load genesis key manager status",
 				"err", err,
@@ -706,7 +705,7 @@ func doCheckGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	// Load genesis file to check if it is in the canonical form.
-	actualGenesis, err := ioutil.ReadFile(filename)
+	actualGenesis, err := os.ReadFile(filename)
 	if err != nil {
 		logger.Error("failed to read genesis file:", "err", err)
 		os.Exit(1)

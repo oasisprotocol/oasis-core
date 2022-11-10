@@ -2,7 +2,6 @@ package peermgmt
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -38,7 +37,7 @@ func (s *BackupTestSuite) SetupSuite() {
 	require := require.New(s.T())
 
 	var err error
-	s.dir, err = ioutil.TempDir("", "oasis-p2p-backup-test_")
+	s.dir, err = os.MkdirTemp("", "oasis-p2p-backup-test_")
 	require.NoError(err, "TempDir failed")
 
 	s.store, err = persistent.NewCommonStore(s.dir)

@@ -3,7 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -31,7 +31,7 @@ func (r *RegistryHelpers) GenerateRegisterRuntimeTx(
 	// Save runtime descriptor into a temp file.
 	rtDescPath := filepath.Join(baseDir, fmt.Sprintf("registry_runtime_register_descriptor-%s.json", runtime.ID))
 	rtDescStr, _ := json.Marshal(runtime)
-	if err := ioutil.WriteFile(rtDescPath, rtDescStr, 0o600); err != nil {
+	if err := os.WriteFile(rtDescPath, rtDescStr, 0o600); err != nil {
 		return fmt.Errorf("failed to write runtime descriptor to file: %w", err)
 	}
 

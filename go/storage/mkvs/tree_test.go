@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -2070,7 +2069,7 @@ func testIncompatibleDB(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 }
 
 func testSpecialCaseFromJSON(t *testing.T, ndb db.NodeDB, fixture string) {
-	data, err := ioutil.ReadFile(filepath.Join("testdata", fixture))
+	data, err := os.ReadFile(filepath.Join("testdata", fixture))
 	require.NoError(t, err, "failed to read the fixture file")
 
 	var ops mkvsTests.TestVector
@@ -2270,7 +2269,7 @@ func testBackend(
 func TestBadgerBackend(t *testing.T) {
 	testBackend(t, func(t *testing.T) (NodeDBFactory, func()) {
 		// Create a new random temporary directory under /tmp.
-		dir, err := ioutil.TempDir("", "mkvs.test.badger")
+		dir, err := os.MkdirTemp("", "mkvs.test.badger")
 		require.NoError(t, err, "TempDir")
 
 		// Create a Badger-backed Node DB factory.
@@ -2327,7 +2326,7 @@ func benchmarkInsertBatch(b *testing.B, numValues int, commit bool) {
 	ctx := context.Background()
 
 	for n := 0; n < b.N; n++ {
-		dir, err := ioutil.TempDir("", "mkvs.bench.badgerdb")
+		dir, err := os.MkdirTemp("", "mkvs.bench.badgerdb")
 		require.NoError(b, err, "TempDir")
 		defer os.RemoveAll(dir)
 		ndb, err := badgerDb.New(&db.Config{

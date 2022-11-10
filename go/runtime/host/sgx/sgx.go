@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -151,7 +150,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte,
 		err         error
 	)
 
-	if sgxs, err = ioutil.ReadFile(rtCfg.Bundle.Path); err != nil {
+	if sgxs, err = os.ReadFile(rtCfg.Bundle.Path); err != nil {
 		return nil, nil, fmt.Errorf("failed to load enclave: %w", err)
 	}
 	if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {
@@ -165,7 +164,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte,
 	}
 
 	if rtExtra.SignaturePath != "" {
-		sig, err = ioutil.ReadFile(rtExtra.SignaturePath)
+		sig, err = os.ReadFile(rtExtra.SignaturePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to load SIGSTRUCT: %w", err)
 		}

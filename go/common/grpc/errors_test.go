@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -166,7 +165,7 @@ func TestErrorMapping(t *testing.T) {
 	require := require.New(t)
 
 	// Generate temporary filename for the socket.
-	f, err := ioutil.TempFile("", "oasis-grpc-error-test-socket")
+	f, err := os.CreateTemp("", "oasis-grpc-error-test-socket")
 	require.NoError(err, "TempFile")
 	// Remove the file as we only need the name.
 	f.Close()

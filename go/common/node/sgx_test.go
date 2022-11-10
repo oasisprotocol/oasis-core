@@ -2,7 +2,7 @@ package node
 
 import (
 	"encoding/hex"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,7 +18,7 @@ import (
 func TestSGXConstraintsV0(t *testing.T) {
 	require := require.New(t)
 
-	raw, err := ioutil.ReadFile("testdata/sgx_constraints_v0.bin")
+	raw, err := os.ReadFile("testdata/sgx_constraints_v0.bin")
 	require.NoError(err, "Read test vector")
 
 	var sc SGXConstraints
@@ -69,7 +69,7 @@ func TestSGXConstraintsV1(t *testing.T) {
 func TestSGXAttestationV0(t *testing.T) {
 	require := require.New(t)
 
-	raw, err := ioutil.ReadFile("testdata/sgx_attestation_v0.bin")
+	raw, err := os.ReadFile("testdata/sgx_attestation_v0.bin")
 	require.NoError(err, "Read test vector")
 
 	var sa SGXAttestation
@@ -96,7 +96,7 @@ func TestSGXAttestationV1(t *testing.T) {
 	err = sa.ValidateBasic(&TEEFeatures{SGX: TEEFeaturesSGX{PCS: true}})
 	require.NoError(err, "ValidateBasic V1 SGX attestation")
 
-	raw, err := ioutil.ReadFile("testdata/sgx_attestation_v1.bin")
+	raw, err := os.ReadFile("testdata/sgx_attestation_v1.bin")
 	require.NoError(err, "Read test vector")
 
 	err = cbor.Unmarshal(raw, &sa)
@@ -125,11 +125,11 @@ func TestHashAttestation(t *testing.T) {
 
 func FuzzSGXConstraints(f *testing.F) {
 	// Add some V0 constraints.
-	raw, err := ioutil.ReadFile("testdata/sgx_constraints_v0.bin")
+	raw, err := os.ReadFile("testdata/sgx_constraints_v0.bin")
 	require.NoError(f, err)
 	f.Add(raw)
 	// Add some V1 constraints.
-	raw, err = ioutil.ReadFile("testdata/sgx_constraints_v1.bin")
+	raw, err = os.ReadFile("testdata/sgx_constraints_v1.bin")
 	require.NoError(f, err)
 	f.Add(raw)
 
@@ -150,11 +150,11 @@ func FuzzSGXConstraints(f *testing.F) {
 
 func FuzzSGXAttestation(f *testing.F) {
 	// Add some V0 attestations.
-	raw, err := ioutil.ReadFile("testdata/sgx_attestation_v0.bin")
+	raw, err := os.ReadFile("testdata/sgx_attestation_v0.bin")
 	require.NoError(f, err)
 	f.Add(raw)
 	// Add some V1 attestations.
-	raw, err = ioutil.ReadFile("testdata/sgx_attestation_v1.bin")
+	raw, err = os.ReadFile("testdata/sgx_attestation_v1.bin")
 	require.NoError(f, err)
 	f.Add(raw)
 

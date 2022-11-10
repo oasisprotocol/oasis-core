@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -86,7 +85,7 @@ func (s *PeerManagerTestSuite) SetupTest() {
 	gater, err := conngater.NewBasicConnectionGater(nil)
 	require.NoError(err, "NewBasicConnectionGater failed")
 
-	s.dir, err = ioutil.TempDir("", "oasis-p2p-peer-manager-test_")
+	s.dir, err = os.MkdirTemp("", "oasis-p2p-peer-manager-test_")
 	require.NoError(err, "TempDir failed")
 
 	pubsub, err := pubsub.NewGossipSub(context.Background(), s.host)

@@ -4,7 +4,7 @@ package file
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -32,7 +32,7 @@ func DefaultFileProvider() (api.Provider, error) {
 func NewFileProvider(filename string) (api.Provider, error) {
 	logger := logging.GetLogger("genesis/file").With("filename", filename)
 
-	raw, err := ioutil.ReadFile(filename)
+	raw, err := os.ReadFile(filename)
 	if err != nil {
 		logger.Warn("failed to open genesis document",
 			"err", err,

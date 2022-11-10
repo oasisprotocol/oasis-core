@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -107,7 +106,7 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundl
 	}
 	tcbBundle.Certificates = []byte(rawCerts)
 
-	rawTCBInfo, err := ioutil.ReadAll(rsp.Body)
+	rawTCBInfo, err := io.ReadAll(rsp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("pcs: failed to read TCB info response body: %w", err)
 	}
@@ -123,7 +122,7 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundl
 	}
 	defer rsp.Body.Close()
 
-	rawQEIdentity, err := ioutil.ReadAll(rsp.Body)
+	rawQEIdentity, err := io.ReadAll(rsp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("pcs: failed to read QE identity response body: %w", err)
 	}

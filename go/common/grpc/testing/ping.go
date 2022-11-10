@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -60,7 +59,7 @@ var (
 func CreateCertificate(t *testing.T) (*tls.Certificate, *x509.Certificate) {
 	require := require.New(t)
 
-	dataDir, err := ioutil.TempDir("", "oasis-common-grpc-test_")
+	dataDir, err := os.MkdirTemp("", "oasis-common-grpc-test_")
 	require.NoError(err, "Failed to create a temporary directory")
 	defer os.RemoveAll(dataDir)
 
