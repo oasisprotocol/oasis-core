@@ -4,7 +4,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -108,7 +108,7 @@ func (d *Document) WriteFileJSON(filename string) error {
 		return err
 	}
 
-	if err = ioutil.WriteFile(filename, canonJSON, filePerm); err != nil {
+	if err = os.WriteFile(filename, canonJSON, filePerm); err != nil {
 		return fmt.Errorf("WriteFileJSON: failed to write genesis file: %w", err)
 	}
 	return nil

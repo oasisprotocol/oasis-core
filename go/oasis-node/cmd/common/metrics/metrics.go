@@ -137,7 +137,7 @@ func newPullService(ctx context.Context) (service.BackgroundService, error) {
 		BaseBackgroundService: svc,
 		ctx:                   ctx,
 		ln:                    ln,
-		s:                     &http.Server{Handler: promhttp.Handler()},
+		s:                     &http.Server{Handler: promhttp.Handler(), ReadTimeout: 5 * time.Second},
 		errCh:                 make(chan error),
 		rsvc:                  newResourceService(viper.GetDuration(CfgMetricsInterval)),
 	}, nil

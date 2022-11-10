@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -108,7 +108,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return fmt.Errorf("json.Marshal(descriptor): %w", err)
 	}
-	if err = ioutil.WriteFile(filePath, desc, 0o644); err != nil { //nolint: gosec
+	if err = os.WriteFile(filePath, desc, 0o644); err != nil { //nolint: gosec
 		return fmt.Errorf("can't write descriptor to network directory: %w", err)
 	}
 

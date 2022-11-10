@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -77,7 +76,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	genesis := cmdConsensus.InitGenesis()
 	cmdConsensus.AssertTxFileOK()
 
-	fileBytes, err := ioutil.ReadFile(viper.GetString(CfgRuntimeDescriptor))
+	fileBytes, err := os.ReadFile(viper.GetString(CfgRuntimeDescriptor))
 	if err != nil {
 		logger.Error("failed to read runtime descriptor",
 			"err", err,

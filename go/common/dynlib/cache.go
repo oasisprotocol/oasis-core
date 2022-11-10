@@ -28,7 +28,6 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -345,7 +344,7 @@ func loadCacheGlibc() (*Cache, error) {
 	c := new(Cache)
 	c.store = make(map[string]cacheEntries)
 
-	b, err := ioutil.ReadFile(ldSoCache)
+	b, err := os.ReadFile(ldSoCache)
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +466,7 @@ func loadCacheFallback() (*Cache, error) {
 	}
 
 	for _, path := range searchPaths {
-		fis, err := ioutil.ReadDir(path)
+		fis, err := os.ReadDir(path)
 		if err != nil {
 			debugf("dynlib: failed to read directory '%v': %v", path, err)
 			continue
@@ -544,7 +543,7 @@ func archDepsMusl() (elf.Machine, []string, error) {
 	}
 
 	// Try to load `/etc/ld-musl-{LDSO_ARCH}.path`.
-	b, err := ioutil.ReadFile(pathFile)
+	b, err := os.ReadFile(pathFile)
 	switch err {
 	case nil:
 		return machine, strings.FieldsFunc(string(b), func(c rune) bool {

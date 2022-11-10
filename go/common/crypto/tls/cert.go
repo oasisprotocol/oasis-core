@@ -9,7 +9,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"time"
@@ -86,11 +85,11 @@ func Generate(commonName string) (*tls.Certificate, error) {
 
 // Load loads a TLS certificate and private key.
 func Load(certPath, keyPath string) (*tls.Certificate, error) {
-	keyPEM, err := ioutil.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err // So os.IsNotExist(err) works.
 	}
-	certPEM, err := ioutil.ReadFile(certPath)
+	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, err // So os.IsNotExist(err) works.
 	}
@@ -99,7 +98,7 @@ func Load(certPath, keyPath string) (*tls.Certificate, error) {
 
 // LoadFromKey loads a private key and regenerates the whole certificate from it.
 func LoadFromKey(keyPath, commonName string) (*tls.Certificate, error) {
-	keyPEM, err := ioutil.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +132,7 @@ func ImportPEM(certPEM, keyPEM []byte) (*tls.Certificate, error) {
 
 // LoadCertificate loads a TLS certificate.
 func LoadCertificate(certPath string) (*tls.Certificate, error) {
-	certPEM, err := ioutil.ReadFile(certPath)
+	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, err // So os.IsNotExist(err) works.
 	}
@@ -172,11 +171,11 @@ func Save(certPath, keyPath string, cert *tls.Certificate) error {
 		return err
 	}
 
-	if err = ioutil.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+	if err = os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return fmt.Errorf("tls: failed to write private key: %w", err)
 	}
 
-	if err = ioutil.WriteFile(certPath, certPEM, 0o644); err != nil { // nolint: gosec
+	if err = os.WriteFile(certPath, certPEM, 0o644); err != nil { // nolint: gosec
 		return fmt.Errorf("tls: failed to write certificate: %w", err)
 	}
 
@@ -189,7 +188,7 @@ func SaveKey(keyPath string, cert *tls.Certificate) error {
 	if err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+	if err = os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return fmt.Errorf("tls: failed to write private key: %w", err)
 	}
 	return nil

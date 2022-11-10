@@ -4,7 +4,6 @@ package sandbox
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -207,7 +206,7 @@ func (r *sandboxedRuntime) EmitEvent(ev *host.Event) {
 
 func (r *sandboxedRuntime) startProcess() (err error) {
 	// Create a temporary directory.
-	runtimeDir, err := ioutil.TempDir("", "oasis-runtime")
+	runtimeDir, err := os.MkdirTemp("", "oasis-runtime")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary directory: %w", err)
 	}

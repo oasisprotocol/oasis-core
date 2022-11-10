@@ -19,8 +19,8 @@ type jobDescriptor struct {
 // Pool is a pool of goroutine workers.
 //
 // Notes:
-//  * The pool is always constructed with one active worker goroutine.
-//  * Once closed, it can not be used anymore.
+//   - The pool is always constructed with one active worker goroutine.
+//   - Once closed, it can not be used anymore.
 type Pool struct { // nolint: maligned
 	lock        sync.Mutex
 	workerGroup sync.WaitGroup

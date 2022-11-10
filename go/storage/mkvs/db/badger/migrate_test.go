@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -534,7 +533,7 @@ func prettyPrintDBV5(ndb api.NodeDB) { // nolint: deadcode, unused
 }
 
 func readDump(t *testing.T, ndb api.NodeDB, caseName string) (tc testCase) { // nolint: deadcode, unused
-	data, err := ioutil.ReadFile(filepath.Join("testdata", caseName))
+	data, err := os.ReadFile(filepath.Join("testdata", caseName))
 	require.NoError(t, err, "ReadFile")
 	err = json.Unmarshal(data, &tc)
 	require.NoError(t, err, "Unmarshal")
@@ -579,7 +578,7 @@ func dumpDB(ndb api.NodeDB, caseName string, tc testCase) { // nolint: deadcode,
 	}
 	if caseName != "" {
 		marshalled, _ := json.MarshalIndent(tc, "", "\t")
-		_ = ioutil.WriteFile(filepath.Join("testdata", caseName), marshalled, os.FileMode(0o666))
+		_ = os.WriteFile(filepath.Join("testdata", caseName), marshalled, os.FileMode(0o666))
 	}
 }
 

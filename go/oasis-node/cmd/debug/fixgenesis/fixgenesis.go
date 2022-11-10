@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -49,7 +48,7 @@ func doFixGenesis(cmd *cobra.Command, args []string) {
 
 	// Load the old genesis document.
 	f := flags.GenesisFile()
-	raw, err := ioutil.ReadFile(f)
+	raw, err := os.ReadFile(f)
 	if err != nil {
 		logger.Error("failed to open genesis file",
 			"err", err,

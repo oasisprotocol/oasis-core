@@ -5,7 +5,7 @@ import (
 	"container/list"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -240,7 +240,7 @@ func (env *Env) WriteScenarioInfo() error {
 	if err != nil {
 		return err
 	}
-	if err = ioutil.WriteFile(filepath.Join(env.Dir(), "scenario_info.json"), b, 0o644); err != nil { // nolint: gosec
+	if err = os.WriteFile(filepath.Join(env.Dir(), "scenario_info.json"), b, 0o644); err != nil { // nolint: gosec
 		return err
 	}
 

@@ -161,9 +161,9 @@ func (agg *Aggregate) Stop() {
 }
 
 // SetVersion sets the active runtime version.  This routine will:
-//  - Do nothing if the active version is already the requested version.
-//  - Unconditionally tear down the currently active version (via Stop()).
-//  - Start the newly active version if it exists.
+//   - Do nothing if the active version is already the requested version.
+//   - Unconditionally tear down the currently active version (via Stop()).
+//   - Start the newly active version if it exists.
 func (agg *Aggregate) SetVersion(ctx context.Context, version version.Version) error {
 	agg.l.Lock()
 	defer agg.l.Unlock()

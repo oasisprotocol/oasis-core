@@ -1,7 +1,6 @@
 package persistent
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -9,7 +8,7 @@ import (
 )
 
 func TestPersistent(t *testing.T) {
-	dir, err := ioutil.TempDir("", "oasis-core-unittests")
+	dir, err := os.MkdirTemp("", "oasis-core-unittests")
 	assert.NoError(t, err)
 	defer os.RemoveAll(dir)
 

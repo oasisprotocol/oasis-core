@@ -17,7 +17,6 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - deadcode
     - depguard
     - errcheck
     - exportloopref
@@ -36,11 +35,9 @@ linters:
     - revive
     - rowserrcheck
     - staticcheck
-    - structcheck
     - typecheck
     - unconvert
     - unused
-    - varcheck
 
 run:
   skip-dirs:

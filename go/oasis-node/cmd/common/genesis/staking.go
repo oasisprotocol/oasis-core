@@ -5,8 +5,8 @@ package genesis
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -130,7 +130,7 @@ func NewAppendableStakingStateFromFile(path string) (*AppendableStakingState, er
 		return nil, err
 	}
 
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("genesis/staking: failed to load staking genesis state: %w", err)
 	}

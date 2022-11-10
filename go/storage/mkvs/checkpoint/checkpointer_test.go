@@ -3,7 +3,6 @@ package checkpoint
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,7 +27,7 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 	ctx := context.Background()
 
 	// Initialize a database.
-	dir, err := ioutil.TempDir("", "mkvs.checkpointer")
+	dir, err := os.MkdirTemp("", "mkvs.checkpointer")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 

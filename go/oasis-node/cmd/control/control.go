@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -209,7 +208,7 @@ func doUpgradeBinary(cmd *cobra.Command, args []string) {
 	conn, client := DoConnect(cmd)
 	defer conn.Close()
 
-	descriptorBytes, err := ioutil.ReadFile(args[0])
+	descriptorBytes, err := os.ReadFile(args[0])
 	if err != nil {
 		logger.Error("failed to read upgrade descriptor",
 			"err", err,
@@ -249,7 +248,7 @@ func doCancelUpgrade(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	descriptorBytes, err := ioutil.ReadFile(args[0])
+	descriptorBytes, err := os.ReadFile(args[0])
 	if err != nil {
 		logger.Error("failed to read upgrade descriptor",
 			"err", err,

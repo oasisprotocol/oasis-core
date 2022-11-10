@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -123,7 +122,7 @@ func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signatur
 	if err != nil {
 		return nil, err
 	}
-	if err = ioutil.WriteFile(fn, buf, filePerm); err != nil {
+	if err = os.WriteFile(fn, buf, filePerm); err != nil {
 		return nil, err
 	}
 
@@ -149,7 +148,7 @@ func (fac *Factory) generateStaticEntropy(fn string, signer *Signer, rng io.Read
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filepath.Join(fac.dataDir, fn), buf, filePerm)
+	return os.WriteFile(filepath.Join(fac.dataDir, fn), buf, filePerm)
 }
 
 // Load will load the private key corresponding to the role, and return a Signer
@@ -187,7 +186,7 @@ func (fac *Factory) loadPEM(fn string) ([]byte, error) {
 		return nil, fmt.Errorf("signature/signer/file: invalid PEM file permissions %o on %s", fi.Mode(), fn)
 	}
 
-	return ioutil.ReadAll(f)
+	return io.ReadAll(f)
 }
 
 func (fac *Factory) doLoad(fn string, role signature.SignerRole) (signature.Signer, error) {
