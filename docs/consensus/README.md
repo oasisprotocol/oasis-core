@@ -172,6 +172,6 @@ application multiplexer mentioned above.
 
 <!-- markdownlint-disable line-length -->
 [serialized signed Oasis Core transaction]: transactions.md
-[Tendermint transaction]: https://docs.tendermint.com/v0.35/tendermint-core/using-tendermint.html#transactions
+[Tendermint transaction]: https://docs.tendermint.com/main/tendermint-core/using-tendermint.html#transactions
 [mempool]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#mempool-connection
 <!-- markdownlint-enable line-length -->
