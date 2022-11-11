@@ -40,6 +40,7 @@ pub struct SignedInitResponse {
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct ReplicateRequest {
     /// Latest trust root height.
+    #[cbor(optional)]
     pub height: Option<u64>,
 }
 

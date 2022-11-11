@@ -330,7 +330,7 @@ impl KeyManagerClient for RemoteClient {
     ) -> BoxFuture<Result<Option<MasterSecret>, KeyManagerError>> {
         let inner = self.inner.clone();
         Box::pin(async move {
-            let height = inner
+            let _height = inner
                 .consensus_verifier
                 .latest_height()
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
@@ -340,7 +340,7 @@ impl KeyManagerClient for RemoteClient {
                 .call(
                     ctx,
                     METHOD_REPLICATE_MASTER_SECRET,
-                    ReplicateRequest::new(Some(height)),
+                    ReplicateRequest::new(None), // XXX: Add this back once everything is upgraded.
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
