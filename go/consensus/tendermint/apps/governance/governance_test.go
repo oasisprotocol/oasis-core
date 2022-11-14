@@ -25,6 +25,7 @@ import (
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -48,7 +49,7 @@ func initValidatorsEscrowState(
 	signers := []signature.Signer{}
 
 	// Prepare some entities and nodes.
-	validatorSet := make(map[signature.PublicKey]int64)
+	validatorSet := make(map[signature.PublicKey]*scheduler.Validator)
 	for i := 0; i < numTestAccounts; i++ {
 		nodeSigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus/tendermint/apps/governance: node signer: %d", i))
 		entitySigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus/tendermint/apps/governance: entity signer: %d", i))
@@ -77,7 +78,11 @@ func initValidatorsEscrowState(
 
 		// Set all but first node as a validator
 		if i > 0 {
-			validatorSet[nodeSigner.Public()] = 1
+			validatorSet[nod.Consensus.ID] = &scheduler.Validator{
+				ID:          nodeSigner.Public(),
+				EntityID:    nod.EntityID,
+				VotingPower: 1,
+			}
 		}
 		// Register two validators for last node (shouldn't affect expected validator entities escrow).
 		if i == numTestAccounts-1 {
@@ -92,7 +97,11 @@ func initValidatorsEscrowState(
 			require.NoError(nErr2, "MultiSignNode")
 			err = registryState.SetNode(ctx, nil, node2, sigNode2)
 			require.NoError(err, "SetNode")
-			validatorSet[nodeSigner2.Public()] = 1
+			validatorSet[node2.Consensus.ID] = &scheduler.Validator{
+				ID:          nodeSigner2.Public(),
+				EntityID:    node2.EntityID,
+				VotingPower: 1,
+			}
 		}
 
 		// Setup entity escrow.

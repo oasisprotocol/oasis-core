@@ -24,16 +24,24 @@ import (
 
 func TestDiffValidators(t *testing.T) {
 	logger := logging.GetLogger("TestDiffValidators")
-	powerOne := map[signature.PublicKey]int64{
-		{}: 1,
+	powerOne := map[signature.PublicKey]*scheduler.Validator{
+		{}: {
+			ID:          signature.PublicKey{},
+			EntityID:    signature.PublicKey{},
+			VotingPower: 1,
+		},
 	}
-	powerTwo := map[signature.PublicKey]int64{
-		{}: 2,
+	powerTwo := map[signature.PublicKey]*scheduler.Validator{
+		{}: {
+			ID:          signature.PublicKey{},
+			EntityID:    signature.PublicKey{},
+			VotingPower: 2,
+		},
 	}
 	for _, tt := range []struct {
 		msg     string
-		current map[signature.PublicKey]int64
-		pending map[signature.PublicKey]int64
+		current map[signature.PublicKey]*scheduler.Validator
+		pending map[signature.PublicKey]*scheduler.Validator
 		result  []types.ValidatorUpdate
 	}{
 		{

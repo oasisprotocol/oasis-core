@@ -59,7 +59,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 
 	// Assemble the list of the tendermint genesis validators, and do some
 	// sanity checking.
-	currentValidators := make(map[signature.PublicKey]int64)
+	currentValidators := make(map[signature.PublicKey]*scheduler.Validator)
 	for _, v := range req.Validators {
 		tmPk := v.GetPubKey()
 		pk := tmPk.GetEd25519()
@@ -144,7 +144,11 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 		ctx.Logger().Debug("adding validator to current validator set",
 			"id", id,
 		)
-		currentValidators[n.Consensus.ID] = v.Power
+		currentValidators[n.Consensus.ID] = &scheduler.Validator{
+			ID:          n.ID,
+			EntityID:    n.EntityID,
+			VotingPower: v.Power,
+		}
 	}
 
 	// TODO/security: Enforce genesis validator staking thresholds.

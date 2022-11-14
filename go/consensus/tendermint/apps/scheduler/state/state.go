@@ -21,12 +21,12 @@ var (
 	// validatorsCurrentKeyFmt is the key format used for the current set of
 	// validators.
 	//
-	// Value is CBOR-serialized map of validator public keys to voting power.
+	// Value is CBOR-serialized map of validator node consensus public keys to validator entries.
 	validatorsCurrentKeyFmt = keyformat.New(0x61)
 	// validatorsPendingKeyFmt is the key format used for the pending set of
 	// validators.
 	//
-	// Value is CBOR-serialized map of validator public keys to voting power.
+	// Value is CBOR-serialized map of validator node consensus public keys to validator entries.
 	validatorsPendingKeyFmt = keyformat.New(0x62)
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
@@ -113,7 +113,7 @@ func (s *ImmutableState) KindsCommittees(ctx context.Context, kinds []api.Commit
 }
 
 // CurrentValidators returns a list of current validators.
-func (s *ImmutableState) CurrentValidators(ctx context.Context) (map[signature.PublicKey]int64, error) {
+func (s *ImmutableState) CurrentValidators(ctx context.Context) (map[signature.PublicKey]*api.Validator, error) {
 	raw, err := s.is.Get(ctx, validatorsCurrentKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
@@ -122,7 +122,7 @@ func (s *ImmutableState) CurrentValidators(ctx context.Context) (map[signature.P
 		return nil, nil
 	}
 
-	var validators map[signature.PublicKey]int64
+	var validators map[signature.PublicKey]*api.Validator
 	if err = cbor.Unmarshal(raw, &validators); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -130,7 +130,7 @@ func (s *ImmutableState) CurrentValidators(ctx context.Context) (map[signature.P
 }
 
 // PendingValidators returns a list of pending validators.
-func (s *ImmutableState) PendingValidators(ctx context.Context) (map[signature.PublicKey]int64, error) {
+func (s *ImmutableState) PendingValidators(ctx context.Context) (map[signature.PublicKey]*api.Validator, error) {
 	raw, err := s.is.Get(ctx, validatorsPendingKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
@@ -139,7 +139,7 @@ func (s *ImmutableState) PendingValidators(ctx context.Context) (map[signature.P
 		return nil, nil
 	}
 
-	var validators map[signature.PublicKey]int64
+	var validators map[signature.PublicKey]*api.Validator
 	if err = cbor.Unmarshal(raw, &validators); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -192,13 +192,13 @@ func (s *MutableState) DropCommittee(ctx context.Context, kind api.CommitteeKind
 }
 
 // PutCurrentValidators stores the current set of validators.
-func (s *MutableState) PutCurrentValidators(ctx context.Context, validators map[signature.PublicKey]int64) error {
+func (s *MutableState) PutCurrentValidators(ctx context.Context, validators map[signature.PublicKey]*api.Validator) error {
 	err := s.ms.Insert(ctx, validatorsCurrentKeyFmt.Encode(), cbor.Marshal(validators))
 	return abciAPI.UnavailableStateError(err)
 }
 
 // PutPendingValidators stores the pending set of validators.
-func (s *MutableState) PutPendingValidators(ctx context.Context, validators map[signature.PublicKey]int64) error {
+func (s *MutableState) PutPendingValidators(ctx context.Context, validators map[signature.PublicKey]*api.Validator) error {
 	if validators == nil {
 		err := s.ms.Remove(ctx, validatorsPendingKeyFmt.Encode())
 		return abciAPI.UnavailableStateError(err)
