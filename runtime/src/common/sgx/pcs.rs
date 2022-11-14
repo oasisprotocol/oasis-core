@@ -82,6 +82,8 @@ pub enum Error {
     TCBMismatch,
     #[error("TCB evaluation data number is invalid")]
     TCBEvaluationDataNumberInvalid,
+    #[error("FMSPC is blacklisted")]
+    BlacklistedFMSPC,
     #[error("QE report is malformed")]
     MalformedQEReport,
     #[error("report is malformed")]
@@ -107,6 +109,11 @@ pub struct QuotePolicy {
     /// Minimum TCB evaluation data number that is considered to be valid. TCB bundles containing
     /// smaller values will be invalid.
     pub min_tcb_evaluation_data_number: u32,
+
+    /// A list of hexadecimal encoded FMSPCs specifying which processor packages and platform
+    /// instances are blocked.
+    #[cbor(optional)]
+    pub fmspc_blacklist: Vec<String>,
 }
 
 impl Default for QuotePolicy {
@@ -115,6 +122,7 @@ impl Default for QuotePolicy {
             disabled: false,
             tcb_validity_period: 30,
             min_tcb_evaluation_data_number: DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER,
+            fmspc_blacklist: Vec::new(),
         }
     }
 }
@@ -512,6 +520,15 @@ impl TCBInfo {
 
         if self.tcb_evaluation_data_number < policy.min_tcb_evaluation_data_number {
             return Err(Error::TCBEvaluationDataNumberInvalid);
+        }
+
+        // Validate FMSPC not blacklisted.
+        let blocked = policy
+            .fmspc_blacklist
+            .iter()
+            .any(|blocked| blocked == &self.fmspc);
+        if blocked {
+            return Err(Error::BlacklistedFMSPC);
         }
 
         Ok(())
@@ -947,5 +964,22 @@ mod tests {
             verified_quote.identity.mr_enclave,
             "9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e".into()
         );
+    }
+
+    #[test]
+    fn test_quote_blacklisted_fmscp() {
+        // From Go implementation.
+        const RAW_QUOTE_BUNDLE: &[u8] = include_bytes!("../../../testdata/pcs_quote_bundle.cbor");
+
+        let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
+
+        let now = Utc.timestamp(1652701082, 0);
+        let policy = &QuotePolicy {
+            fmspc_blacklist: vec!["00606A000000".to_string()],
+            ..Default::default()
+        };
+
+        qb.verify(policy, now)
+            .expect_err("quote verification should fail for blacklisted FMSPCs");
     }
 }
