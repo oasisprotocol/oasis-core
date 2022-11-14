@@ -80,13 +80,13 @@ func (n *noOpUpgradeChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Cont
 	return nil
 }
 
-type upgradeV61Checker struct{}
+type upgradeV62Checker struct{}
 
-func (n *upgradeV61Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (n *upgradeV62Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
 	return nil
 }
 
-func (n *upgradeV61Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (n *upgradeV62Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
 	// Check updated registry parameters.
 	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -110,6 +110,9 @@ func (n *upgradeV61Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	if registryParams.GasCosts[registry.GasOpProveFreshness] != registry.DefaultGasCosts[registry.GasOpProveFreshness] {
 		return fmt.Errorf("default gas cost for freshness proofs is not set")
 	}
+	if registryParams.MaxRuntimeDeployments != 5 {
+		return fmt.Errorf("maximum number of runtime deployments is not set correctly")
+	}
 
 	// Check updated governance parameters.
 	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
@@ -128,8 +131,8 @@ var (
 	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
 	// NodeUpgradeMaxAllowances is the node upgrade max allowances scenario.
 	NodeUpgradeMaxAllowances scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusMaxAllowances16Handler, &noOpUpgradeChecker{})
-	// NodeUpgradeV61 is the node consensus V61 migration scenario.
-	NodeUpgradeV61 scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusV61, &upgradeV61Checker{})
+	// NodeUpgradeV62 is the node consensus V61 migration scenario.
+	NodeUpgradeV62 scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusV62, &upgradeV62Checker{})
 	// NodeUpgradeEmpty is the empty node upgrade scenario.
 	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{})
 
