@@ -151,7 +151,7 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 		if err != nil {
 			return fmt.Errorf("Account(): %w", err)
 		}
-		err = staking.SanityCheckAccount(&total, parameters, now, addr, acct)
+		err = staking.SanityCheckAccount(&total, parameters, now, addr, acct, totalSupply)
 		if err != nil {
 			return fmt.Errorf("SanityCheckAccount %s: %w", addr, err)
 		}

@@ -159,6 +159,17 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 		return nil, err
 	}
 
+	// Fix allowance if needed.
+	for addr, acc := range newDoc.Staking.Ledger {
+		for bene, allow := range acc.General.Allowances {
+			if allow.Cmp(&newDoc.Staking.TotalSupply) > 0 {
+				// Cap the maximum allowance to total supply.
+				logger.Warn("limiting allowance to total supply", "address", addr, "beneficiary", bene, "old_amount", allow, "updated_amount", newDoc.Staking.TotalSupply)
+				acc.General.Allowances[bene] = newDoc.Staking.TotalSupply
+			}
+		}
+	}
+
 	// Collect runtimes.
 	knownRuntimes := make(map[common.Namespace]*registry.Runtime)
 	for _, oldRt := range oldDoc.Registry.Runtimes {

@@ -740,6 +740,19 @@ func TestGenesisSanityCheck(t *testing.T) {
 	}
 	require.Error(d.SanityCheck(), "invalid debonding delegation should be rejected")
 
+	d = testDoc()
+	allowance := d.Staking.TotalSupply
+	d.Staking.Ledger[testAcc1Address].General.Allowances = map[staking.Address]quantity.Quantity{
+		testAcc2Address: allowance,
+	}
+	require.NoError(d.SanityCheck(), "valid allowance should be allowed")
+
+	require.NoError(allowance.Add(quantity.NewFromUint64(1)))
+	d.Staking.Ledger[testAcc1Address].General.Allowances = map[staking.Address]quantity.Quantity{
+		testAcc2Address: allowance,
+	}
+	require.Error(d.SanityCheck(), "allowance greater than total supply should be rejected")
+
 	// Test governance sanity checks.
 	d = testDoc()
 	d.Governance.Parameters.StakeThreshold = 1

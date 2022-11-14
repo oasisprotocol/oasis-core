@@ -69,6 +69,7 @@ func SanityCheckAccount(
 	now beacon.EpochTime,
 	addr Address,
 	acct *Account,
+	totalSupply *quantity.Quantity,
 ) error {
 	if !addr.IsValid() {
 		return fmt.Errorf("staking: sanity check failed: account has invalid address: %s", addr)
@@ -108,6 +109,9 @@ func SanityCheckAccount(
 		}
 		if !allowance.IsValid() {
 			return fmt.Errorf("staking: sanity check failed: account %s allowance is invalid for beneficiary %s", addr, beneficiary)
+		}
+		if allowance.Cmp(totalSupply) > 0 {
+			return fmt.Errorf("staking: sanity check failed: account %s allowance is greater than total supply for beneficiary %s", addr, beneficiary)
 		}
 	}
 
@@ -293,7 +297,7 @@ func (g *Genesis) SanityCheck(now beacon.EpochTime) error { // nolint: gocyclo
 	// Check all commission schedules.
 	var total quantity.Quantity
 	for addr, acct := range g.Ledger {
-		err := SanityCheckAccount(&total, &g.Parameters, now, addr, acct)
+		err := SanityCheckAccount(&total, &g.Parameters, now, addr, acct, &g.TotalSupply)
 		if err != nil {
 			return err
 		}

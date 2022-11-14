@@ -147,6 +147,8 @@ func TestAllow(t *testing.T) {
 	reservedPK := signature.NewPublicKey("badaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	reservedAddr := staking.NewReservedAddress(reservedPK)
 
+	require.NoError(stakeState.SetTotalSupply(ctx, quantity.NewFromUint64(1_000)), "SetTotalSupply")
+
 	for _, tc := range []struct {
 		msg               string
 		params            *staking.ConsensusParameters
@@ -272,6 +274,19 @@ func TestAllow(t *testing.T) {
 				AmountChange: *quantity.NewFromUint64(10),
 			},
 			staking.ErrTooManyAllowances,
+			0,
+		},
+		{
+			"should fail if allowance amount is too large",
+			&staking.ConsensusParameters{
+				MaxAllowances: 1,
+			},
+			pk1,
+			&staking.Allow{
+				Beneficiary:  addr3,
+				AmountChange: *quantity.NewFromUint64(100_000),
+			},
+			staking.ErrAllowanceGreaterThanSupply,
 			0,
 		},
 	} {
