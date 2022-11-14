@@ -417,6 +417,9 @@ func (g *governanceWorkload) doChangeParametersProposal() error { // nolint: goc
 		if randBool() {
 			pc.TEEFeatures = &params.TEEFeatures
 		}
+		if randBool() {
+			pc.MaxRuntimeDeployments = &params.MaxRuntimeDeployments
+		}
 		shouldFail = pc.SanityCheck() != nil
 		module = registry.ModuleName
 		changes = cbor.Marshal(pc)
