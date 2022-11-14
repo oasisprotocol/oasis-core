@@ -11,21 +11,21 @@ import (
 )
 
 const (
-	// ConsensusV61 is the name of the upgrade that enables multiple features added in Oasis Core
+	// ConsensusV62 is the name of the upgrade that enables multiple features added in Oasis Core
 	// version 22.2.x, specifically PCS support for Intel SGX, remote attestation binding to node
 	// identities and client freshness proofs.
-	ConsensusV61 = "consensus-v61"
+	ConsensusV62 = "consensus-v62"
 )
 
-var _ Handler = (*v61Handler)(nil)
+var _ Handler = (*v62Handler)(nil)
 
-type v61Handler struct{}
+type v62Handler struct{}
 
-func (th *v61Handler) StartupUpgrade(ctx *Context) error {
+func (th *v62Handler) StartupUpgrade(ctx *Context) error {
 	return nil
 }
 
-func (th *v61Handler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) error {
+func (th *v62Handler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:
@@ -53,6 +53,9 @@ func (th *v61Handler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) err
 		// Configure the default gas cost for freshness proofs.
 		regParams.GasCosts[registry.GasOpProveFreshness] = registry.DefaultGasCosts[registry.GasOpProveFreshness]
 
+		// Configure maximum number of runtime deployments.
+		regParams.MaxRuntimeDeployments = 5
+
 		if err = regState.SetConsensusParameters(abciCtx, regParams); err != nil {
 			return fmt.Errorf("failed to update registry consensus parameters: %w", err)
 		}
@@ -77,5 +80,5 @@ func (th *v61Handler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) err
 }
 
 func init() {
-	Register(ConsensusV61, &v61Handler{})
+	Register(ConsensusV62, &v62Handler{})
 }

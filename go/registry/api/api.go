@@ -1133,7 +1133,7 @@ func VerifyRuntime( // nolint: gocyclo
 
 	// Validate the deployments.  This also handles validating that the
 	// appropriate TEE configuration is present in each deployment.
-	if err := rt.ValidateDeployments(now, params.TEEFeatures); err != nil {
+	if err := rt.ValidateDeployments(now, params); err != nil {
 		logger.Error("RegisterRuntime: invalid deployments",
 			"runtime_id", rt.ID,
 			"err", err,
@@ -1302,7 +1302,7 @@ func VerifyRuntimeUpdate(
 
 	// Validate the deployments.
 	activeDeployment := currentRt.ActiveDeployment(now)
-	if err := currentRt.ValidateDeployments(now, params.TEEFeatures); err != nil {
+	if err := currentRt.ValidateDeployments(now, params); err != nil {
 		// Invariant violation, this should NEVER happen.
 		logger.Error("RegisterRuntime: malformed deployments present in state",
 			"runtime_id", currentRt.ID,
@@ -1316,7 +1316,7 @@ func VerifyRuntimeUpdate(
 	}
 
 	newActiveDeployment := newRt.ActiveDeployment(now)
-	if err := newRt.ValidateDeployments(now, params.TEEFeatures); err != nil {
+	if err := newRt.ValidateDeployments(now, params); err != nil {
 		logger.Error("RegisterRuntime: malformed deployments",
 			"runtime_id", currentRt.ID,
 			"err", err,
@@ -1444,6 +1444,9 @@ type ConsensusParameters struct {
 
 	// TEEFeatures contains the configuration of supported TEE features.
 	TEEFeatures *node.TEEFeatures `json:"tee_features,omitempty"`
+
+	// MaxRuntimeDeployments is the maximum number of runtime deployments.
+	MaxRuntimeDeployments uint8 `json:"max_runtime_deployments,omitempty"`
 }
 
 // ConsensusParameterChanges are allowed registry consensus parameter changes.
@@ -1465,6 +1468,9 @@ type ConsensusParameterChanges struct {
 
 	// TEEFeatures are the new TEE features.
 	TEEFeatures **node.TEEFeatures `json:"tee_features,omitempty"`
+
+	// MaxRuntimeDeployments is the new maximum number of runtime deployments.
+	MaxRuntimeDeployments *uint8 `json:"max_runtime_deployments,omitempty"`
 }
 
 // Apply applies changes to the given consensus parameters.
@@ -1486,6 +1492,9 @@ func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
 	}
 	if c.TEEFeatures != nil {
 		params.TEEFeatures = *c.TEEFeatures
+	}
+	if c.MaxRuntimeDeployments != nil {
+		params.MaxRuntimeDeployments = *c.MaxRuntimeDeployments
 	}
 	return nil
 }
