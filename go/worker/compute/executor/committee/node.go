@@ -1275,6 +1275,17 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 			return
 		}
 
+		// Make sure that the runtime has synced this consensus block.
+		if rt := n.commonNode.GetHostedRuntime(); rt != nil {
+			err := rt.ConsensusSync(n.roundCtx, uint64(ev.Height))
+			if err != nil {
+				n.logger.Warn("failed to ask the runtime to sync the latest consensus block",
+					"err", err,
+					"height", ev.Height,
+				)
+			}
+		}
+
 		var state StateWaitingForEvent
 		switch s := n.state.(type) {
 		case StateWaitingForBatch:

@@ -400,11 +400,27 @@ impl Verifier {
                 Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
             })?;
         if runtime_header.state_root != state_root {
-            return Err(Error::VerificationFailed(anyhow!(
-                "state root mismatch (expected: {} got: {})",
-                state_root,
-                runtime_header.state_root
-            )));
+            // It could happen that the runtime did not process any previous rounds (e.g. due to
+            // being a backup node or recently restarting). In this case the state could be out of
+            // date (due to Tendermint's state finalization delay) so we should try to use the
+            // latest state for verification.
+            let latest_state = self.latest_consensus_state(cache, instance)?;
+            let latest_roothash_state = RoothashState::new(&latest_state);
+            let latest_state_root = latest_roothash_state
+                .state_root(Context::background(), self.runtime_id)
+                .map_err(|err| {
+                    Error::VerificationFailed(anyhow!(
+                        "failed to retrieve trusted state root: {}",
+                        err
+                    ))
+                })?;
+            if runtime_header.state_root != latest_state_root {
+                return Err(Error::VerificationFailed(anyhow!(
+                    "state root mismatch (expected: {} got: {})",
+                    latest_state_root,
+                    runtime_header.state_root
+                )));
+            }
         }
 
         // Verify that the epoch matches.
