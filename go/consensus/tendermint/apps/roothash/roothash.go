@@ -369,28 +369,28 @@ func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Tr
 	case roothash.MethodExecutorCommit:
 		var xc roothash.ExecutorCommit
 		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
-			return err
+			return roothash.ErrInvalidArgument
 		}
 
 		return app.executorCommit(ctx, state, &xc)
 	case roothash.MethodExecutorProposerTimeout:
 		var xc roothash.ExecutorProposerTimeoutRequest
 		if err := cbor.Unmarshal(tx.Body, &xc); err != nil {
-			return err
+			return roothash.ErrInvalidArgument
 		}
 
 		return app.executorProposerTimeout(ctx, state, &xc)
 	case roothash.MethodEvidence:
 		var ev roothash.Evidence
 		if err := cbor.Unmarshal(tx.Body, &ev); err != nil {
-			return err
+			return roothash.ErrInvalidArgument
 		}
 
 		return app.submitEvidence(ctx, state, &ev)
 	case roothash.MethodSubmitMsg:
 		var msg roothash.SubmitMsg
 		if err := cbor.Unmarshal(tx.Body, &msg); err != nil {
-			return err
+			return roothash.ErrInvalidArgument
 		}
 
 		return app.submitMsg(ctx, state, &msg)

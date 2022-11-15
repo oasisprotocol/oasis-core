@@ -156,7 +156,7 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	case staking.MethodTransfer:
 		var xfer staking.Transfer
 		if err := cbor.Unmarshal(tx.Body, &xfer); err != nil {
-			return err
+			return staking.ErrInvalidArgument
 		}
 
 		_, err := app.transfer(ctx, state, &xfer)
@@ -164,14 +164,14 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	case staking.MethodBurn:
 		var burn staking.Burn
 		if err := cbor.Unmarshal(tx.Body, &burn); err != nil {
-			return err
+			return staking.ErrInvalidArgument
 		}
 
 		return app.burn(ctx, state, &burn)
 	case staking.MethodAddEscrow:
 		var escrow staking.Escrow
 		if err := cbor.Unmarshal(tx.Body, &escrow); err != nil {
-			return err
+			return staking.ErrInvalidArgument
 		}
 
 		_, err := app.addEscrow(ctx, state, &escrow)
@@ -179,7 +179,7 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	case staking.MethodReclaimEscrow:
 		var reclaim staking.ReclaimEscrow
 		if err := cbor.Unmarshal(tx.Body, &reclaim); err != nil {
-			return err
+			return staking.ErrInvalidArgument
 		}
 
 		_, err := app.reclaimEscrow(ctx, state, &reclaim)
@@ -187,21 +187,21 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	case staking.MethodAmendCommissionSchedule:
 		var amend staking.AmendCommissionSchedule
 		if err := cbor.Unmarshal(tx.Body, &amend); err != nil {
-			return err
+			return staking.ErrInvalidArgument
 		}
 
 		return app.amendCommissionSchedule(ctx, state, &amend)
 	case staking.MethodAllow:
 		var allow staking.Allow
 		if err := cbor.Unmarshal(tx.Body, &allow); err != nil {
-			return err
+			return staking.ErrInvalidArgument
 		}
 
 		return app.allow(ctx, state, &allow)
 	case staking.MethodWithdraw:
 		var withdraw staking.Withdraw
 		if err := cbor.Unmarshal(tx.Body, &withdraw); err != nil {
-			return err
+			return staking.ErrInvalidArgument
 		}
 
 		_, err := app.withdraw(ctx, state, &withdraw)

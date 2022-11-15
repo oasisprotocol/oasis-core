@@ -27,9 +27,12 @@ const (
 )
 
 var (
+	// ErrInvalidArgument is the error returned on malformed arguments.
+	ErrInvalidArgument = errors.New(ModuleName, 1, "keymanager: invalid argument")
+
 	// ErrNoSuchStatus is the error returned when a key manager status does not
 	// exist.
-	ErrNoSuchStatus = errors.New(ModuleName, 1, "keymanager: no such status")
+	ErrNoSuchStatus = errors.New(ModuleName, 2, "keymanager: no such status")
 
 	// MethodUpdatePolicy is the method name for policy updates.
 	MethodUpdatePolicy = transaction.NewMethodName(ModuleName, "UpdatePolicy", SignedPolicySGX{})

@@ -25,9 +25,14 @@ const (
 	BackendVRF = "vrf"
 )
 
-// ErrBeaconNotAvailable is the error returned when a beacon is not
-// available for the requested height for any reason.
-var ErrBeaconNotAvailable = errors.New(ModuleName, 1, "beacon: random beacon not available")
+var (
+	// ErrInvalidArgument is the error returned on malformed argument(s).
+	ErrInvalidArgument = errors.New(ModuleName, 1, "beacon: invalid argument")
+
+	// ErrBeaconNotAvailable is the error returned when a beacon is not
+	// available for the requested height for any reason.
+	ErrBeaconNotAvailable = errors.New(ModuleName, 2, "beacon: random beacon not available")
+)
 
 // EpochTime is the number of intervals (epochs) since a fixed instant
 // in time/block height (epoch date/height).

@@ -297,7 +297,7 @@ func (impl *backendVRF) doProveTx(
 	// Deserialize the tx.
 	var proveTx beacon.VRFProve
 	if err = cbor.Unmarshal(tx.Body, &proveTx); err != nil {
-		return fmt.Errorf("beacon: failed to deserialize prove tx: %w", err)
+		return beacon.ErrInvalidArgument
 	}
 	if proveTx.Epoch != vrfState.Epoch {
 		return fmt.Errorf("beacon: proof for invalid epoch: %d", proveTx.Epoch)
