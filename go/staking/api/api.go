@@ -66,6 +66,10 @@ var (
 	// below the minimum allowed amount.
 	ErrBalanceTooLow = errors.New(ModuleName, 10, "staking: balance too low")
 
+	// ErrAllowanceGreaterThanSupply is the error returned when the allowance amount exceeds the
+	// total supply value.
+	ErrAllowanceGreaterThanSupply = errors.New(ModuleName, 11, "staking: allowance greater than total supply")
+
 	// MethodTransfer is the method name for transfers.
 	MethodTransfer = transaction.NewMethodName(ModuleName, "Transfer", Transfer{})
 	// MethodBurn is the method name for burns.

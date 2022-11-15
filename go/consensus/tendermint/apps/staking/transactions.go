@@ -643,6 +643,16 @@ func (app *stakingApplication) allow(
 			return fmt.Errorf("failed to subtract allowance: %w", err)
 		}
 	}
+
+	// Fail if the new allowance is greater than total supply.
+	totalSupply, err := state.TotalSupply(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load total supply: %w", err)
+	}
+	if allowance.Cmp(totalSupply) > 0 {
+		return staking.ErrAllowanceGreaterThanSupply
+	}
+
 	if allowance.IsZero() {
 		// In case the new allowance is equal to zero, remove it.
 		delete(acct.General.Allowances, allow.Beneficiary)
