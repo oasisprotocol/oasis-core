@@ -73,7 +73,7 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 	case api.MethodUpdatePolicy:
 		var sigPol api.SignedPolicySGX
 		if err := cbor.Unmarshal(tx.Body, &sigPol); err != nil {
-			return err
+			return api.ErrInvalidArgument
 		}
 		return app.updatePolicy(ctx, state, &sigPol)
 	default:

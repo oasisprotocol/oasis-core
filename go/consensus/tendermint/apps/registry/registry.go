@@ -103,7 +103,7 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	case registry.MethodRegisterEntity:
 		var sigEnt entity.SignedEntity
 		if err := cbor.Unmarshal(tx.Body, &sigEnt); err != nil {
-			return err
+			return registry.ErrInvalidArgument
 		}
 		return app.registerEntity(ctx, state, &sigEnt)
 
@@ -113,7 +113,7 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	case registry.MethodRegisterNode:
 		var sigNode node.MultiSignedNode
 		if err := cbor.Unmarshal(tx.Body, &sigNode); err != nil {
-			return err
+			return registry.ErrInvalidArgument
 		}
 		ctx.SetPriority(AppPriority + 10000)
 		return app.registerNode(ctx, state, &sigNode)
@@ -121,14 +121,14 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	case registry.MethodUnfreezeNode:
 		var unfreeze registry.UnfreezeNode
 		if err := cbor.Unmarshal(tx.Body, &unfreeze); err != nil {
-			return err
+			return registry.ErrInvalidArgument
 		}
 		return app.unfreezeNode(ctx, state, &unfreeze)
 
 	case registry.MethodRegisterRuntime:
 		var rt registry.Runtime
 		if err := cbor.Unmarshal(tx.Body, &rt); err != nil {
-			return err
+			return registry.ErrInvalidArgument
 		}
 		if _, err := app.registerRuntime(ctx, state, &rt); err != nil {
 			return err
