@@ -522,24 +522,22 @@ func (r *Runtime) DeploymentForVersion(v version.Version) *VersionInfo {
 
 // ValidateDeployments validates a runtime descriptor's Deployments field
 // at the specified epoch.
-func (r *Runtime) ValidateDeployments(now beacon.EpochTime, teeCfg *node.TEEFeatures) error {
+func (r *Runtime) ValidateDeployments(now beacon.EpochTime, params *ConsensusParameters) error {
 	// The runtime descriptor's deployments field is considered valid
 	// if:
 	//  * There is at least one entry present.
 	//  * All of the entries are well-formed.
-	//  * There is at most 2 entries:
-	//     * One expired, one active
-	//     * One active
-	//     * One active, one future
-	//    While it is possible to express expired/active/future
-	//    this is disallowed, and the expired descriptor must
-	//    be pruned to deploy an upgrade.
+	//  * There is at most max(2, params.MaxRuntimeDeployments) entries:
 	//  * The versions field increases as versions are deployed.
 
 	if len(r.Deployments) == 0 {
 		return fmt.Errorf("%w: no deployments", ErrInvalidArgument)
 	}
-	if len(r.Deployments) > 2 {
+	maxRuntimeDeployments := uint8(2) // We must allow at least two deployments.
+	if params.MaxRuntimeDeployments > maxRuntimeDeployments {
+		maxRuntimeDeployments = params.MaxRuntimeDeployments
+	}
+	if len(r.Deployments) > int(maxRuntimeDeployments) {
 		return fmt.Errorf("%w: too many deployments", ErrInvalidArgument)
 	}
 	// Ensure no nil deployments.
@@ -592,7 +590,7 @@ func (r *Runtime) ValidateDeployments(now beacon.EpochTime, teeCfg *node.TEEFeat
 			if err := cbor.Unmarshal(deployment.TEE, &cs); err != nil {
 				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
 			}
-			if err := cs.ValidateBasic(teeCfg); err != nil {
+			if err := cs.ValidateBasic(params.TEEFeatures); err != nil {
 				return fmt.Errorf("%w: invalid SGX TEE constraints", ErrInvalidArgument)
 			}
 			if len(cs.Enclaves) == 0 {
