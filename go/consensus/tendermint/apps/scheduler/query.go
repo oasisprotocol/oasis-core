@@ -51,24 +51,8 @@ func (sq *schedulerQuerier) Validators(ctx context.Context) ([]*scheduler.Valida
 	}
 
 	ret := make([]*scheduler.Validator, 0, len(vals))
-	for v, power := range vals {
-		// The validator list uses consensus addresses, so convert them
-		// to node identifiers.
-		//
-		// This is probably better than switching the scheduler to use
-		// node identifiers for validators, because user queries are
-		// likely more infrequent than all the business of actually
-		// scheduling...
-		node, err := sq.regState.NodeBySubKey(ctx, v)
-		if err != nil {
-			// Should NEVER happen.
-			return nil, err
-		}
-
-		ret = append(ret, &scheduler.Validator{
-			ID:          node.ID,
-			VotingPower: power,
-		})
+	for _, v := range vals {
+		ret = append(ret, v)
 	}
 
 	return ret, nil

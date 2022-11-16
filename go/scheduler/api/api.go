@@ -208,6 +208,9 @@ type Validator struct {
 	// ID is the validator Oasis node identifier.
 	ID signature.PublicKey `json:"id"`
 
+	// EntityID is the validator entity identifier.
+	EntityID signature.PublicKey `json:"entity_id"`
+
 	// VotingPower is the validator's consensus voting power.
 	VotingPower int64 `json:"voting_power"`
 }

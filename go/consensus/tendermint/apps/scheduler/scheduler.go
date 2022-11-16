@@ -271,7 +271,7 @@ func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tra
 	return fmt.Errorf("tendermint/scheduler: unexpected transaction")
 }
 
-func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]int64) []types.ValidatorUpdate {
+func diffValidators(logger *logging.Logger, current, pending map[signature.PublicKey]*scheduler.Validator) []types.ValidatorUpdate {
 	var updates []types.ValidatorUpdate
 	for v := range current {
 		if _, ok := pending[v]; !ok {
@@ -284,8 +284,8 @@ func diffValidators(logger *logging.Logger, current, pending map[signature.Publi
 		}
 	}
 
-	for v, newPower := range pending {
-		if curPower, ok := current[v]; ok && curPower == newPower {
+	for v, new := range pending {
+		if curr, ok := current[v]; ok && curr.VotingPower == new.VotingPower {
 			logger.Debug("keeping existing validator in the validator set",
 				"id", v,
 			)
@@ -294,9 +294,9 @@ func diffValidators(logger *logging.Logger, current, pending map[signature.Publi
 		// We're adding this validator or changing its power.
 		logger.Debug("upserting validator to validator set",
 			"id", v,
-			"power", newPower,
+			"power", new.VotingPower,
 		)
-		updates = append(updates, api.PublicKeyToValidatorUpdate(v, newPower))
+		updates = append(updates, api.PublicKeyToValidatorUpdate(v, new.VotingPower))
 	}
 	return updates
 }
@@ -506,7 +506,7 @@ func (app *schedulerApplication) electValidators(
 	// Go down the list of entities running nodes by stake, picking one node
 	// to act as a validator till the maximum is reached.
 	validatorEntities := make(map[staking.Address]bool)
-	newValidators := make(map[signature.PublicKey]int64)
+	newValidators := make(map[signature.PublicKey]*scheduler.Validator)
 electLoop:
 	for _, entAddr := range sortedEntities {
 		nodes := entityNodesMap[entAddr]
@@ -547,7 +547,11 @@ electLoop:
 			}
 
 			validatorEntities[entAddr] = true
-			newValidators[n.Consensus.ID] = power
+			newValidators[n.Consensus.ID] = &scheduler.Validator{
+				ID:          n.ID,
+				EntityID:    n.EntityID,
+				VotingPower: power,
+			}
 			if len(newValidators) >= params.MaxValidators {
 				break electLoop
 			}
