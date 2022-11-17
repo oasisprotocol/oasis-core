@@ -12,6 +12,35 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.2 (2022-11-17)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- registry: Add MaxRuntimeDeployments parameter
+  ([#5049](https://github.com/oasisprotocol/oasis-core/issues/5049))
+
+### Bug Fixes
+
+- keymanager: Fix replication backwards compatibility
+  ([#5044](https://github.com/oasisprotocol/oasis-core/issues/5044))
+
+- runtime: Properly handle state root verification on backup nodes
+  ([#5053](https://github.com/oasisprotocol/oasis-core/issues/5053))
+
+### Internal Changes
+
+- go: Ignore CVE-2022-44797 until tendermint uses newer btcd
+  ([#5024](https://github.com/oasisprotocol/oasis-core/issues/5024))
+
+- runtime: Bump oasis-cbor to 0.5.1
+  ([#5035](https://github.com/oasisprotocol/oasis-core/issues/5035))
+
 ## 22.2.1 (2022-11-05)
 
 | Protocol          | Version   |
