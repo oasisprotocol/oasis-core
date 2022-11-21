@@ -72,10 +72,15 @@ func (app *keymanagerApplication) updatePolicy(
 	// TODO: It would be possible to update the cohort on each
 	// node-reregistration, but I'm not sure how often the policy
 	// will get updated.
+	epoch, err := app.state.GetCurrentEpoch(ctx)
+	if err != nil {
+		return err
+	}
+
 	nodes, _ := regState.Nodes(ctx)
 	registry.SortNodeList(nodes)
 	oldStatus.Policy = sigPol
-	newStatus := app.generateStatus(ctx, rt, oldStatus, nodes, regParams)
+	newStatus := app.generateStatus(ctx, rt, oldStatus, nodes, regParams, epoch)
 	if err := state.SetStatus(ctx, newStatus); err != nil {
 		panic(fmt.Errorf("failed to set keymanager status: %w", err))
 	}
