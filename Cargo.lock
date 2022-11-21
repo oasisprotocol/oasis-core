@@ -1939,7 +1939,7 @@ dependencies = [
  "sp800-185",
  "thiserror",
  "tiny-keccak 2.0.2",
- "tokio 1.21.2",
+ "tokio 1.22.0",
  "x25519-dalek",
  "zeroize",
 ]
@@ -1997,7 +1997,7 @@ dependencies = [
  "tendermint-rpc",
  "thiserror",
  "tiny-keccak 2.0.2",
- "tokio 1.21.2",
+ "tokio 1.22.0",
  "x25519-dalek",
  "x509-parser",
  "yasna 0.5.0",
@@ -2014,7 +2014,7 @@ dependencies = [
  "enclave-runner",
  "futures 0.3.25",
  "sgxs-loaders",
- "tokio 0.2.25",
+ "tokio 1.22.0",
 ]
 
 [[package]]
@@ -2765,7 +2765,7 @@ dependencies = [
  "oasis-core-tools",
  "simple-keymanager",
  "thiserror",
- "tokio 1.21.2",
+ "tokio 1.22.0",
  "x25519-dalek",
 ]
 
@@ -3213,9 +3213,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.21.2"
+version = "1.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9e03c497dc955702ba729190dc4aac6f2a0ce97f913e5b1b5912fc5039d9099"
+checksum = "d76ce4a75fb488c605c54bf610f221cea8b0dafb53333c1a67e8ee199dcd2ae3"
 dependencies = [
  "autocfg",
  "bytes 1.2.1",
