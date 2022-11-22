@@ -212,7 +212,7 @@ impl Verifier {
         let verified_block = self.verify_to_target(height, cache, instance)?;
 
         // Validate passed consensus block.
-        if untrusted_header != &verified_block.signed_header {
+        if untrusted_header.header() != verified_block.signed_header.header() {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
@@ -490,7 +490,7 @@ impl Verifier {
         let verified_block = self.verify_to_target(height, cache, instance)?;
 
         // Validate passed consensus block.
-        if untrusted_header != &verified_block.signed_header {
+        if untrusted_header.header() != verified_block.signed_header.header() {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
