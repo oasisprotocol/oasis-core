@@ -164,7 +164,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 			return fmt.Errorf("failed to query key manager status: %w", err)
 		}
 
-		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes, params)
+		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes, params, epoch)
 		if forceEmit || !bytes.Equal(cbor.Marshal(oldStatus), cbor.Marshal(newStatus)) {
 			ctx.Logger().Debug("status updated",
 				"id", newStatus.ID,
@@ -201,6 +201,7 @@ func (app *keymanagerApplication) generateStatus(
 	oldStatus *api.Status,
 	nodes []*node.Node,
 	params *registry.ConsensusParameters,
+	epoch beacon.EpochTime,
 ) *api.Status {
 	status := &api.Status{
 		ID:            kmrt.ID,
@@ -217,6 +218,9 @@ func (app *keymanagerApplication) generateStatus(
 	policyHash := sha3.Sum256(rawPolicy)
 
 	for _, n := range nodes {
+		if n.IsExpired(uint64(epoch)) {
+			continue
+		}
 		if !n.HasRoles(node.RoleKeyManager) {
 			continue
 		}
