@@ -160,12 +160,12 @@ func Register(parentCmd *cobra.Command) {
 		listCmd,
 	} {
 		runtimeCmd.AddCommand(v)
-	}
 
-	for _, v := range []*cobra.Command{
-		registerCmd,
-	} {
-		v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
+		for _, v := range []*cobra.Command{
+			registerCmd,
+		} {
+			v.Flags().AddFlagSet(cmdFlags.DebugTestEntityFlags)
+		}
 	}
 
 	listCmd.Flags().AddFlagSet(cmdGrpc.ClientFlags)

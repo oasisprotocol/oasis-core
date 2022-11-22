@@ -2,8 +2,10 @@ package oasis
 
 import (
 	"fmt"
+	"strconv"
 
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/config"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
 const (
@@ -15,7 +17,7 @@ type Client struct {
 	*Node
 
 	runtimes           []int
-	runtimeProvisioner string
+	runtimeProvisioner runtimeConfig.RuntimeProvisioner
 	runtimeConfig      map[int]map[string]interface{}
 
 	consensusPort uint16
@@ -27,34 +29,39 @@ type ClientCfg struct {
 	NodeCfg
 
 	Runtimes           []int
-	RuntimeProvisioner string
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
 	RuntimeConfig      map[int]map[string]interface{}
 }
 
 func (client *Client) AddArgs(args *argBuilder) error {
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		debugEnableProfiling(client.Node.pprofPort).
-		runtimeProvisioner(client.runtimeProvisioner).
-		tendermintPrune(client.consensus.PruneNumKept, client.consensus.PruneInterval).
-		tendermintRecoverCorruptedWAL(client.consensus.TendermintRecoverCorruptedWAL).
-		tendermintCoreAddress(client.consensusPort).
-		appendNetwork(client.net).
-		appendSeedNodes(client.net.seeds).
-		workerP2pPort(client.p2pPort).
-		tendermintSupplementarySanity(client.supplementarySanityInterval)
-
-	if len(client.runtimes) > 0 {
-		args.runtimeMode(runtimeRegistry.RuntimeModeClientStateless)
-	}
+	args.appendNetwork(client.net)
 
 	for _, idx := range client.runtimes {
 		v := client.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
 		client.addHostedRuntime(v, client.runtimeConfig[idx])
 	}
+
+	return nil
+}
+
+func (client *Client) ModifyConfig() error {
+	client.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(client.consensusPort))
+	client.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(client.consensusPort))
+
+	if client.supplementarySanityInterval > 0 {
+		client.Config.Consensus.SupplementarySanity.Enabled = true
+		client.Config.Consensus.SupplementarySanity.Interval = client.supplementarySanityInterval
+	}
+
+	client.Config.P2P.Port = client.p2pPort
+
+	if len(client.runtimes) > 0 {
+		client.Config.Mode = config.ModeStatelessClient
+		client.Config.Runtime.Provisioner = client.runtimeProvisioner
+	}
+
+	client.AddSeedNodesToConfig()
 
 	return nil
 }
@@ -68,10 +75,10 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	}
 
 	if cfg.RuntimeProvisioner == "" {
-		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
+		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
 	if isNoSandbox() {
-		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerUnconfined
+		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerUnconfined
 	}
 
 	// Pre-provision the node identity so that we can identify the entity.

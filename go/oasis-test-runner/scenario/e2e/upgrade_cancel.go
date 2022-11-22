@@ -114,7 +114,6 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 
 	submitArgs := []string{
 		"control", "upgrade-binary",
-		"--log.level", "debug",
 		"--wait",
 		"--address", "unix:" + val.SocketPath(),
 		filePath,
@@ -130,7 +129,6 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	// Now cancel the upgrade.
 	cancelArgs := []string{
 		"control", "cancel-upgrade",
-		"--log.level", "debug",
 		"--wait",
 		"--address", "unix:" + val.SocketPath(),
 		filePath,

@@ -22,9 +22,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
-	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
 	tmTestGenesis "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests/genesis"
 	consensusTests "github.com/oasisprotocol/oasis-core/go/consensus/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -38,22 +37,18 @@ import (
 	roothashTests "github.com/oasisprotocol/oasis-core/go/roothash/tests"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	clientTests "github.com/oasisprotocol/oasis-core/go/runtime/client/tests"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	schedulerTests "github.com/oasisprotocol/oasis-core/go/scheduler/tests"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 	storageTests "github.com/oasisprotocol/oasis-core/go/storage/tests"
-	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	executorCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 	executorWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/tests"
 	storageWorker "github.com/oasisprotocol/oasis-core/go/worker/storage"
 	storageWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/storage/tests"
-)
-
-const (
-	workerClientPort = "9010"
 )
 
 var (
@@ -63,19 +58,7 @@ var (
 		key   string
 		value interface{}
 	}{
-		{"log.level.default", "DEBUG"},
-		{"log.format", "JSON"},
-		{cmdCommonFlags.CfgConsensusValidator, true},
 		{cmdCommonFlags.CfgDebugDontBlameOasis, true},
-		{cmdCommonFlags.CfgDebugAllowRoot, true},
-		{storageWorker.CfgBackend, "badger"},
-		{runtimeRegistry.CfgRuntimeMode, string(runtimeRegistry.RuntimeModeCompute)},
-		{runtimeRegistry.CfgRuntimeProvisioner, runtimeRegistry.RuntimeProvisionerMock},
-		{workerCommon.CfgClientPort, workerClientPort},
-		{storageWorker.CfgWorkerPublicRPCEnabled, true},
-		{tendermintCommon.CfgCoreListenAddress, "tcp://0.0.0.0:27565"},
-		{tendermintFull.CfgSupplementarySanityEnabled, true},
-		{tendermintFull.CfgSupplementarySanityInterval, 1},
 		{cmdCommon.CfgDebugAllowTestKeys, true},
 	}
 
@@ -149,6 +132,20 @@ func (n *testNode) Stop() {
 func newTestNode(t *testing.T) *testNode {
 	initConfigOnce.Do(func() {
 		cmdCommon.InitConfig()
+
+		config.GlobalConfig.Common.Log.Level = make(map[string]string)
+		config.GlobalConfig.Common.Log.Level["default"] = "debug"
+		config.GlobalConfig.Common.Log.Format = "json"
+
+		config.GlobalConfig.Consensus.Validator = true
+		config.GlobalConfig.Common.Debug.AllowRoot = true
+		config.GlobalConfig.Mode = config.ModeCompute
+		config.GlobalConfig.Runtime.Provisioner = runtimeConfig.RuntimeProvisionerMock
+		config.GlobalConfig.Storage.Backend = "badger"
+		config.GlobalConfig.Storage.PublicRPCEnabled = true
+		config.GlobalConfig.Consensus.ListenAddress = "tcp://0.0.0.0:27565"
+		config.GlobalConfig.Consensus.SupplementarySanity.Enabled = true
+		config.GlobalConfig.Consensus.SupplementarySanity.Interval = 1
 	})
 
 	require := require.New(t)
@@ -161,12 +158,13 @@ func newTestNode(t *testing.T) *testNode {
 	entity, entitySigner, err := entity.Generate(dataDir, signerFactory, nil)
 	require.NoError(err, "create test entity")
 
-	viper.Set("datadir", dataDir)
-	viper.Set("log.file", filepath.Join(dataDir, "test-node.log"))
+	config.GlobalConfig.Registration.Entity = filepath.Join(dataDir, "entity.json")
+
+	config.GlobalConfig.Common.DataDir = dataDir
+	config.GlobalConfig.Common.Log.File = filepath.Join(dataDir, "test-node.log")
 	viper.Set(runtimeRegistry.CfgDebugMockIDs, []string{
 		testRuntimeID.String(),
 	})
-	viper.Set("worker.registration.entity", filepath.Join(dataDir, "entity.json"))
 	for _, kv := range testNodeStaticConfig {
 		viper.Set(kv.key, kv.value)
 	}

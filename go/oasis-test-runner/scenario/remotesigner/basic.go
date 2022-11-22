@@ -9,7 +9,6 @@ import (
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	remoteSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/remote"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tls"
-	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -45,7 +44,7 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 		"init",
 		serverBinary,
 		[]string{
-			"--" + cmdCommon.CfgDataDir, childEnv.Dir(),
+			"--datadir", childEnv.Dir(),
 			"init",
 		},
 	); err != nil {
@@ -71,7 +70,7 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 		"init_client",
 		serverBinary,
 		[]string{
-			"--" + cmdCommon.CfgDataDir, childEnv.Dir(),
+			"--datadir", childEnv.Dir(),
 			"init_client",
 		},
 	); err != nil {
@@ -90,7 +89,7 @@ func (sc *basicImpl) Run(childEnv *env.Env) error {
 		"server",
 		serverBinary,
 		[]string{
-			"--" + cmdCommon.CfgDataDir, childEnv.Dir(),
+			"--datadir", childEnv.Dir(),
 			"--client.certificate", filepath.Join(childEnv.Dir(), "remote_signer_client_cert.pem"),
 		},
 		lw,

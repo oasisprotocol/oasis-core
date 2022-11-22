@@ -14,16 +14,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
-	"github.com/oasisprotocol/oasis-core/go/p2p"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
-	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 const (
@@ -310,10 +307,6 @@ func init() {
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugDontBlameOasisFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugTestEntityFlags)
-	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugAllowRootFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(grpc.ServerLocalFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(grpc.ServerTCPFlags)
-	byzantineCmd.PersistentFlags().AddFlagSet(p2p.Flags)
-	byzantineCmd.PersistentFlags().AddFlagSet(tendermint.Flags)
-	byzantineCmd.PersistentFlags().AddFlagSet(registration.Flags)
 }

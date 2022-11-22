@@ -315,7 +315,7 @@ func (sc *E2E) DumpRestoreNetwork(
 		args = []string{
 			"debug", "storage", "export",
 			"--genesis.file", dumpPath,
-			"--datadir", sc.Net.ComputeWorkers()[0].DataDir(),
+			"--config", sc.Net.ComputeWorkers()[0].ConfigFile(),
 			"--storage.export.dir", filepath.Join(childEnv.Dir(), "storage_dumps"),
 			"--debug.dont_blame_oasis",
 			"--debug.allow_test_keys",
@@ -394,7 +394,7 @@ func (sc *E2E) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, ex
 	dbDumpPath := filepath.Join(childEnv.Dir(), "debug_dump.json")
 	args := []string{
 		"debug", "dumpdb",
-		"--datadir", sc.Net.Validators()[0].DataDir(),
+		"--config", sc.Net.Validators()[0].ConfigFile(),
 		"-g", sc.Net.GenesisPath(),
 		"--dump.version", fmt.Sprintf("%d", exportedDoc.Height),
 		"--dump.output", dbDumpPath,

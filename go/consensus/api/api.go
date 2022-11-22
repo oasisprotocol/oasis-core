@@ -39,53 +39,6 @@ const (
 	HeightLatest int64 = 0
 )
 
-// Mode is the consensus node mode.
-type Mode string
-
-const (
-	// ModeFull is the name of the full node consensus mode.
-	ModeFull Mode = "full"
-	// ModeArchive is the name of the archive node consensus mode.
-	ModeArchive Mode = "archive"
-)
-
-// MarshalText encodes a Mode into text form.
-func (m Mode) MarshalText() ([]byte, error) {
-	switch m {
-	case ModeFull:
-		return []byte(ModeFull.String()), nil
-	case ModeArchive:
-		return []byte(ModeArchive.String()), nil
-	default:
-		return nil, fmt.Errorf("invalid mode: %s", string(m))
-	}
-}
-
-// UnmarshalText decodes a text marshaled consensus mode.
-func (m *Mode) UnmarshalText(text []byte) error {
-	switch string(text) {
-	case ModeFull.String():
-		*m = ModeFull
-	case ModeArchive.String():
-		*m = ModeArchive
-	default:
-		return fmt.Errorf("invalid consensus mode: %s", string(text))
-	}
-	return nil
-}
-
-// String returns a string representation of the mode.
-func (m Mode) String() string {
-	switch m {
-	case ModeFull:
-		return string(ModeFull)
-	case ModeArchive:
-		return string(ModeArchive)
-	default:
-		return fmt.Sprintf("[unknown consensus mode: %s]", string(m))
-	}
-}
-
 var (
 	// ErrNoCommittedBlocks is the error returned when there are no committed
 	// blocks and as such no state can be queried.
@@ -119,6 +72,9 @@ const (
 	// FeatureFullNode indicates that the consensus backend is independently fully verifying all
 	// consensus-layer blocks.
 	FeatureFullNode FeatureMask = 1 << 1
+
+	// FeatureArchiveNode indicates that the node is an archive node.
+	FeatureArchiveNode FeatureMask = 1 << 2
 )
 
 // String returns a string representation of the consensus backend feature bitmask.
@@ -129,6 +85,9 @@ func (m FeatureMask) String() string {
 	}
 	if m&FeatureFullNode != 0 {
 		ret = append(ret, "full node")
+	}
+	if m&FeatureArchiveNode != 0 {
+		ret = append(ret, "archive node")
 	}
 
 	return strings.Join(ret, ",")
@@ -334,8 +293,6 @@ type Status struct { // nolint: maligned
 	Version version.Version `json:"version"`
 	// Backend is the consensus backend identifier.
 	Backend string `json:"backend"`
-	// Mode is the consensus mode identifier.
-	Mode Mode `json:"mode"`
 	// Features are the indicated consensus backend features.
 	Features FeatureMask `json:"features"`
 
@@ -389,9 +346,6 @@ type P2PStatus struct {
 type Backend interface {
 	service.BackgroundService
 	ServicesBackend
-
-	// Mode returns the configured consensus mode.
-	Mode() Mode
 
 	// SupportedFeatures returns the features supported by this consensus backend.
 	SupportedFeatures() FeatureMask

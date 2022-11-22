@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 )
@@ -75,7 +74,7 @@ func New(env *env.Env, factory Factory, logger *logging.Logger) *Helpers {
 // UnsafeReset launches the unsafe-reset subcommand, clearing all consensus and (optionally)
 // runtime state.
 func (h *Helpers) UnsafeReset(dataDir string, preserveRuntimeStorage, preserveLocalStorage, force bool) error {
-	args := []string{"unsafe-reset", "--" + cmdCommon.CfgDataDir, dataDir}
+	args := []string{"unsafe-reset", "--" + cmdNode.CfgDataDir, dataDir}
 	if !preserveRuntimeStorage {
 		args = append(args, "--"+cmdNode.CfgPreserveMKVSDatabase+"=false")
 	}

@@ -99,7 +99,6 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	sc.Logger.Info("requesting node shutdown")
 	args := []string{
 		"control", "shutdown",
-		"--log.level", "debug",
 		"--address", "unix:" + computeWorker.SocketPath(),
 	}
 	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-shutdown", sc.Net.Config().NodeBinary, args); err != nil {
@@ -128,7 +127,6 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	sc.Logger.Info("requesting client node shutdown")
 	args = []string{
 		"control", "shutdown",
-		"--log.level", "debug",
 		"--address", "unix:" + clientNode.SocketPath(),
 	}
 	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-shutdown", sc.Net.Config().NodeBinary, args); err != nil {
@@ -216,7 +214,6 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	sc.Logger.Info("requesting node shutdown")
 	args = []string{
 		"control", "shutdown",
-		"--log.level", "debug",
 		"--address", "unix:" + computeWorker.SocketPath(),
 	}
 	if err = cli.RunSubCommand(childEnv, sc.Logger, "control-shutdown", sc.Net.Config().NodeBinary, args); err != nil {

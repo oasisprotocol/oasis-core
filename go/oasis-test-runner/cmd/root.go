@@ -625,7 +625,6 @@ func init() {
 		}
 
 		viper.Set(nodeFlags.CfgDebugDontBlameOasis, true)
-		viper.Set(nodeFlags.CfgDebugAllowRoot, true)
 		viper.Set(nodeCommon.CfgDebugAllowTestKeys, true)
 	})
 }

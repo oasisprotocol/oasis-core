@@ -86,8 +86,8 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	if err != nil {
 		return fmt.Errorf("failed to get status for node: %w", err)
 	}
-	if status.Consensus.Mode != consensusAPI.ModeArchive {
-		return fmt.Errorf("archive node consensus mode not archive, got: '%s'", status.Consensus.Mode)
+	if !status.Consensus.Features.Has(consensusAPI.FeatureArchiveNode) {
+		return fmt.Errorf("archive node lacks archive feature, got: '%s'", status.Consensus.Features.String())
 	}
 	if status.Consensus.LatestHeight == int64(0) {
 		return fmt.Errorf("archive node latest height should not be 0")
@@ -385,7 +385,7 @@ func (sc *archiveAPI) Run(childEnv *env.Env) error {
 	}
 
 	// Convert compute 0 into an archive node.
-	sc.Logger.Info("converting comptue worker 0 into an archive node")
+	sc.Logger.Info("converting compute worker 0 into an archive node")
 	if err = sc.Net.ComputeWorkers()[0].Stop(); err != nil {
 		return fmt.Errorf("stopping compute worker: %w", err)
 	}

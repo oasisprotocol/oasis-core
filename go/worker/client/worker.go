@@ -5,8 +5,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/worker/client/committee"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -131,7 +131,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	}
 
 	// If we are running in stateless client mode, register remote storage.
-	if w.commonWorker.RuntimeRegistry.Mode() == runtimeRegistry.RuntimeModeClientStateless {
+	if config.GlobalConfig.Mode == config.ModeStatelessClient {
 		commonNode.Runtime.RegisterStorage(NewStatelessStorage(commonNode.P2P, w.commonWorker.ChainContext, id))
 	}
 
@@ -148,9 +148,15 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 // New creates a new runtime client worker.
 func New(grpcInternal *grpc.Server, commonWorker *workerCommon.Worker) (*Worker, error) {
 	var enabled bool
-	switch commonWorker.RuntimeRegistry.Mode() {
-	case runtimeRegistry.RuntimeModeNone, runtimeRegistry.RuntimeModeKeymanager:
+	switch config.GlobalConfig.Mode {
+	case config.ModeValidator, config.ModeSeed, config.ModeKeyManager:
 		enabled = false
+	case config.ModeArchive:
+		if len(commonWorker.GetRuntimes()) > 0 {
+			enabled = true
+		} else {
+			enabled = false
+		}
 	default:
 		// When configured in one of the runtime modes, enable the client worker.
 		enabled = true

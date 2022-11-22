@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -40,9 +41,6 @@ var ErrRuntimeHostNotConfigured = errors.New("runtime/registry: runtime host not
 
 // Registry is the running node's runtime registry interface.
 type Registry interface {
-	// Mode returns the configured behavior of runtime workers on this node.
-	Mode() RuntimeMode
-
 	// GetRuntime returns the per-runtime interface if the runtime is supported.
 	GetRuntime(runtimeID common.Namespace) (Runtime, error)
 
@@ -68,9 +66,6 @@ type Registry interface {
 type Runtime interface {
 	// ID is the runtime identifier.
 	ID() common.Namespace
-
-	// Mode returns the configured behavior of runtime workers on this node.
-	Mode() RuntimeMode
 
 	// DataDir returns the runtime-specific data directory.
 	DataDir() string
@@ -122,7 +117,6 @@ type runtime struct { // nolint: maligned
 
 	id                   common.Namespace
 	dataDir              string
-	mode                 RuntimeMode
 	registryDescriptor   *registry.Runtime
 	activeDescriptor     *registry.Runtime
 	activeDescriptorHash hash.Hash
@@ -149,10 +143,6 @@ type runtime struct { // nolint: maligned
 
 func (r *runtime) ID() common.Namespace {
 	return r.id
-}
-
-func (r *runtime) Mode() RuntimeMode {
-	return r.mode
 }
 
 func (r *runtime) DataDir() string {
@@ -422,10 +412,6 @@ type runtimeRegistry struct {
 	runtimes map[common.Namespace]*runtime
 }
 
-func (r *runtimeRegistry) Mode() RuntimeMode {
-	return r.cfg.Mode
-}
-
 func (r *runtimeRegistry) GetRuntime(runtimeID common.Namespace) (Runtime, error) {
 	r.RLock()
 	defer r.RUnlock()
@@ -517,7 +503,7 @@ func (r *runtimeRegistry) addSupportedRuntime(ctx context.Context, id common.Nam
 
 	// Create runtime history keeper.
 	// NOTE: Archive node won't commit any new blocks, so disable waiting for storage sync commits.
-	haveLocalStorageWorker := r.cfg.Mode.HasLocalStorage() && r.consensus.Mode() != consensus.ModeArchive
+	haveLocalStorageWorker := config.GlobalConfig.Mode.HasLocalStorage() && config.GlobalConfig.Mode != config.ModeArchive
 	history, err := history.New(rt.dataDir, id, &r.cfg.History, haveLocalStorageWorker)
 	if err != nil {
 		return fmt.Errorf("runtime/registry: cannot create block history for runtime %s: %w", id, err)
@@ -563,7 +549,6 @@ func newRuntime(
 	rt := &runtime{
 		id:                         id,
 		dataDir:                    rtDataDir,
-		mode:                       cfg.Mode,
 		consensus:                  consensus,
 		localStorage:               localStorage,
 		cancelCtx:                  cancel,
@@ -597,15 +582,6 @@ func New(ctx context.Context, dataDir string, consensus consensus.Backend, ias i
 		cfg:       cfg,
 		consensus: consensus,
 		runtimes:  make(map[common.Namespace]*runtime),
-	}
-
-	switch cfg.Mode {
-	case RuntimeModeNone:
-		r.logger.Info("runtime support is disabled")
-	default:
-		r.logger.Info("runtime support is enabled",
-			"mode", cfg.Mode,
-		)
 	}
 
 	for _, id := range cfg.Runtimes() {

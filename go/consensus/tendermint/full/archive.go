@@ -20,6 +20,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
@@ -102,8 +103,8 @@ func (srv *archiveService) Synced() <-chan struct{} {
 }
 
 // Implements consensusAPI.Backend.
-func (srv *archiveService) Mode() consensusAPI.Mode {
-	return consensusAPI.ModeArchive
+func (srv *archiveService) SupportedFeatures() consensusAPI.FeatureMask {
+	return consensusAPI.FeatureServices | consensusAPI.FeatureArchiveNode
 }
 
 // Implements consensusAPI.Backend.
@@ -113,7 +114,6 @@ func (srv *archiveService) GetStatus(ctx context.Context) (*consensusAPI.Status,
 		return nil, err
 	}
 	status.Status = consensusAPI.StatusStateReady
-	status.Mode = consensusAPI.ModeArchive
 
 	return status, nil
 }
@@ -180,7 +180,7 @@ func NewArchive(
 	}
 
 	// Setup needed tendermint services.
-	logger := tmcommon.NewLogAdapter(!viper.GetBool(tmcommon.CfgLogDebug))
+	logger := tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)
 	srv.abciClient = abcicli.NewLocalClient(new(tmsync.Mutex), srv.mux.Mux())
 
 	dbProvider, err := db.GetProvider()

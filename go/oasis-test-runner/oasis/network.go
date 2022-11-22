@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -27,6 +28,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -596,23 +598,49 @@ func (net *Network) startOasisNode(
 	node.Lock()
 	defer node.Unlock()
 
+	// First, validate the configuration.
+	if err := node.Config.Validate(); err != nil {
+		return fmt.Errorf("configuration validation failure: %w", err)
+	}
+
 	// Make a deep copy as we will be modifying the arguments.
 	initialExtraArgs := extraArgs.clone()
+	cfgFile := node.ConfigFile()
+
+	// The easiest way to do a deep copy of the Config struct is to serialize
+	// and then deserialize it.
+	var cfg config.Config
+	origConfigYaml, err := yaml.Marshal(&node.Config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal original config: %w", err)
+	}
+	if err = yaml.Unmarshal(origConfigYaml, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal original config: %w", err)
+	}
+
+	cfg.Common.DataDir = node.DataDir()
+	cfg.Common.Log.Level = make(map[string]string)
+	cfg.Common.Log.Level["default"] = "debug"
+	cfg.Common.Log.Format = "json"
+	cfg.Common.Log.File = nodeLogPath(node.dir)
 
 	baseArgs := []string{
-		"--" + cmdCommon.CfgDataDir, node.dir.String(),
-		"--log.level", "debug",
-		"--log.format", "json",
-		"--log.file", nodeLogPath(node.dir),
+		"--" + cmdCommon.CfgConfigFile, cfgFile,
 		"--genesis.file", net.GenesisPath(),
 	}
 	if len(subCmd) == 0 {
-		extraArgs = extraArgs.
-			debugAllowDebugEnclaves().
-			appendIASProxy(net.iasProxy).
-			tendermintDebugAddrBookLenient().
-			tendermintDebugAllowDuplicateIP().
-			tendermintUpgradeStopDelay(10 * time.Second)
+		if net.iasProxy != nil {
+			cfg.IAS.ProxyAddress = []string{fmt.Sprintf("%s@127.0.0.1:%d", net.iasProxy.tlsPublicKey, net.iasProxy.grpcPort)}
+			if net.iasProxy.mock {
+				cfg.IAS.DebugSkipVerify = true
+			}
+		}
+
+		cfg.Consensus.Debug.P2PAddrBookLenient = true
+		cfg.Consensus.Debug.P2PAllowDuplicateIP = true
+		cfg.Consensus.UpgradeStopDelay = 10 * time.Second
+
+		extraArgs = extraArgs.debugAllowDebugEnclaves()
 	}
 	if net.cfg.UseShortGrpcSocketPaths {
 		// Keep the socket, if it was already generated!
@@ -623,10 +651,9 @@ func (net *Network) startOasisNode(
 		extraArgs = extraArgs.grpcDebugGrpcInternalSocketPath(node.customGrpcSocketPath)
 	}
 	if node.consensusStateSync != nil {
-		extraArgs = extraArgs.tendermintStateSync(
-			node.consensusStateSync.TrustHeight,
-			node.consensusStateSync.TrustHash,
-		)
+		cfg.Consensus.StateSync.Enabled = true
+		cfg.Consensus.StateSync.TrustHeight = node.consensusStateSync.TrustHeight
+		cfg.Consensus.StateSync.TrustHash = node.consensusStateSync.TrustHash
 	}
 	if viper.IsSet(metrics.CfgMetricsAddr) {
 		extraArgs = extraArgs.appendNodeMetrics(node)
@@ -648,6 +675,15 @@ func (net *Network) startOasisNode(
 	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = w
 	cmd.Stderr = w
+
+	// Write config to file.
+	cfgString, err := yaml.Marshal(&cfg)
+	if err != nil {
+		return fmt.Errorf("oasis: failed to marshal config file: %w", err)
+	}
+	if err = os.WriteFile(cfgFile, cfgString, 0o600); err != nil {
+		return fmt.Errorf("oasis: failed to write config file '%s': %w", cfgFile, err)
+	}
 
 	net.logger.Info("launching Oasis node",
 		"args", strings.Join(args, " "),

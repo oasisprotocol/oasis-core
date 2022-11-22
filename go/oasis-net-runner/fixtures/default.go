@@ -21,6 +21,7 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
@@ -121,7 +122,11 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 		fixture.Entities = append(fixture.Entities, oasis.EntityCfg{})
 	}
 
-	runtimeProvisioner := viper.GetString(cfgRuntimeProvisioner)
+	runtimeProvisionerRaw := []byte(viper.GetString(cfgRuntimeProvisioner))
+	var runtimeProvisioner runtimeConfig.RuntimeProvisioner
+	if err = runtimeProvisioner.UnmarshalText(runtimeProvisionerRaw); err != nil {
+		return nil, err
+	}
 
 	// Always run a client node.
 	fixture.Clients = []oasis.ClientFixture{{

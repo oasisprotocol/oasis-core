@@ -3,13 +3,12 @@ package storage
 import (
 	"fmt"
 
-	"github.com/spf13/viper"
-
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
@@ -41,7 +40,11 @@ func New(
 	registration *registration.Worker,
 	genesis genesis.Provider,
 ) (*Worker, error) {
-	enabled := commonWorker.RuntimeRegistry.Mode().HasLocalStorage()
+	enabled := config.GlobalConfig.Mode.HasLocalStorage()
+	if config.GlobalConfig.Mode == config.ModeArchive && len(commonWorker.GetRuntimes()) > 0 {
+		enabled = true
+	}
+
 	s := &Worker{
 		enabled:      enabled,
 		commonWorker: commonWorker,
@@ -57,12 +60,12 @@ func New(
 	}
 
 	s.fetchPool = workerpool.New("storage_fetch")
-	s.fetchPool.Resize(viper.GetUint(cfgWorkerFetcherCount))
+	s.fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 
 	var checkpointerCfg *checkpoint.CheckpointerConfig
-	if viper.GetBool(CfgWorkerCheckpointerEnabled) {
+	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		checkpointerCfg = &checkpoint.CheckpointerConfig{
-			CheckInterval: viper.GetDuration(CfgWorkerCheckpointCheckInterval),
+			CheckInterval: config.GlobalConfig.Storage.Checkpointer.CheckInterval,
 		}
 	}
 
@@ -90,7 +93,7 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}
 	var rpRPC registration.RoleProvider
-	if viper.GetBool(CfgWorkerPublicRPCEnabled) {
+	if config.GlobalConfig.Storage.PublicRPCEnabled {
 		rpRPC, err = w.registration.NewRuntimeRoleProvider(node.RoleStorageRPC, id)
 		if err != nil {
 			return fmt.Errorf("failed to create rpc role provider: %w", err)
@@ -111,8 +114,8 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		localStorage,
 		checkpointerCfg,
 		&committee.CheckpointSyncConfig{
-			Disabled:          viper.GetBool(CfgWorkerCheckpointSyncDisabled),
-			ChunkFetcherCount: viper.GetUint(cfgWorkerFetcherCount),
+			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
+			ChunkFetcherCount: config.GlobalConfig.Storage.FetcherCount,
 		},
 	)
 	if err != nil {

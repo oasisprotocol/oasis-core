@@ -8,12 +8,13 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	kmCmd "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
 const (
@@ -152,12 +153,11 @@ type Keymanager struct { // nolint: maligned
 
 	runtime            *Runtime
 	policy             *KeymanagerPolicy
-	runtimeProvisioner string
+	runtimeProvisioner runtimeConfig.RuntimeProvisioner
 
-	sentryPubKey     signature.PublicKey
-	consensusPort    uint16
-	workerClientPort uint16
-	p2pPort          uint16
+	sentryPubKey  signature.PublicKey
+	consensusPort uint16
+	p2pPort       uint16
 
 	mayGenerate bool
 
@@ -172,7 +172,7 @@ type KeymanagerCfg struct {
 
 	Runtime            *Runtime
 	Policy             *KeymanagerPolicy
-	RuntimeProvisioner string
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
 
 	// PrivatePeerPubKeys is a list of base64-encoded libp2p public keys of peers who may call non-public methods.
 	PrivatePeerPubKeys []string
@@ -251,44 +251,58 @@ func (km *Keymanager) toGenesisArgs() []string {
 }
 
 func (km *Keymanager) AddArgs(args *argBuilder) error {
+	args.
+		configureDebugCrashPoints(km.crashPointsProbability).
+		appendNetwork(km.net)
+
+	if km.entity.isDebugTestEntity {
+		args.appendDebugTestEntity()
+	}
+
+	return nil
+}
+
+func (km *Keymanager) ModifyConfig() error {
+	km.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(km.consensusPort))
+	km.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(km.consensusPort))
+
+	if km.supplementarySanityInterval > 0 {
+		km.Config.Consensus.SupplementarySanity.Enabled = true
+		km.Config.Consensus.SupplementarySanity.Interval = km.supplementarySanityInterval
+	}
+
+	km.Config.P2P.Port = km.p2pPort
+
+	if !km.entity.isDebugTestEntity {
+		dir := km.entity.dir.String()
+		km.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+	}
+
+	km.Config.Registration.RotateCerts = 1
+
+	km.Config.Mode = config.ModeKeyManager
+	km.Config.Runtime.Provisioner = km.runtimeProvisioner
+	km.Config.Runtime.SGXLoader = km.net.cfg.RuntimeSGXLoaderBinary
+	km.Config.Runtime.Paths = append(km.Config.Runtime.Paths, km.runtime.BundlePaths()...)
+
+	km.Config.Keymanager.RuntimeID = km.runtime.ID().String()
+	km.Config.Keymanager.PrivatePeerPubKeys = km.privatePeerPubKeys
+
+	if km.mayGenerate {
+		km.Config.Keymanager.MayGenerate = true
+	}
+
+	// Sentry configuration.
 	sentries, err := resolveSentries(km.net, km.sentryIndices)
 	if err != nil {
 		return err
 	}
 
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		debugEnableProfiling(km.Node.pprofPort).
-		workerCertificateRotation(true).
-		tendermintCoreAddress(km.consensusPort).
-		tendermintSubmissionGasPrice(km.consensus.SubmissionGasPrice).
-		tendermintPrune(km.consensus.PruneNumKept, km.consensus.PruneInterval).
-		tendermintRecoverCorruptedWAL(km.consensus.TendermintRecoverCorruptedWAL).
-		workerClientPort(km.workerClientPort).
-		workerP2pPort(km.p2pPort).
-		runtimeMode(runtimeRegistry.RuntimeModeKeymanager).
-		runtimeProvisioner(km.runtimeProvisioner).
-		runtimeSGXLoader(km.net.cfg.RuntimeSGXLoaderBinary).
-		runtimePath(km.runtime).
-		workerKeymanagerRuntimeID(km.runtime.ID()).
-		workerKeymanagerPrivatePeerPubKeys(km.privatePeerPubKeys).
-		configureDebugCrashPoints(km.crashPointsProbability).
-		tendermintSupplementarySanity(km.supplementarySanityInterval).
-		appendNetwork(km.net).
-		appendEntity(km.entity)
-
-	if km.mayGenerate {
-		args.workerKeymanagerMayGenerate()
-	}
-
-	// Sentry configuration.
 	if len(sentries) > 0 {
-		args.addSentries(sentries).
-			tendermintDisablePeerExchange()
+		km.Config.Consensus.P2P.DisablePeerExchange = true
+		km.AddSentriesToConfig(sentries)
 	} else {
-		args.appendSeedNodes(km.net.seeds)
+		km.AddSeedNodesToConfig()
 	}
 
 	return nil
@@ -322,10 +336,10 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	}
 
 	if cfg.RuntimeProvisioner == "" {
-		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerSandboxed
+		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
 	if isNoSandbox() {
-		cfg.RuntimeProvisioner = runtimeRegistry.RuntimeProvisionerUnconfined
+		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerUnconfined
 	}
 
 	km := &Keymanager{
@@ -336,7 +350,6 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		sentryIndices:      cfg.SentryIndices,
 		sentryPubKey:       sentryPubKey,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
-		workerClientPort:   host.getProvisionedPort(nodePortClient),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 		mayGenerate:        len(net.keymanagers) == 0,
 		privatePeerPubKeys: cfg.PrivatePeerPubKeys,

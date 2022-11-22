@@ -5,7 +5,7 @@ import (
 
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdId "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -52,7 +52,7 @@ func (sc *identityCLIImpl) Run(childEnv *env.Env) error {
 	// Provision node's identity.
 	args := []string{
 		"identity", "init",
-		"--" + common.CfgDataDir, sc.dataDir,
+		"--" + cmdId.CfgDataDir, sc.dataDir,
 	}
 	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
 	if err := cli.RunSubCommand(childEnv, sc.Logger, "identity-init", nodeBinary, args); err != nil {
@@ -103,7 +103,7 @@ func (sc *identityCLIImpl) showTLSPubkey(childEnv *env.Env, sentry bool) error {
 
 	args := []string{
 		"identity", subCmd,
-		"--" + common.CfgDataDir, sc.dataDir,
+		"--" + cmdId.CfgDataDir, sc.dataDir,
 	}
 	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
 	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, subCmd, nodeBinary, args); err != nil {
@@ -118,7 +118,7 @@ func (sc *identityCLIImpl) tendermintShowAddress(childEnv *env.Env, addrName str
 
 	args := []string{
 		"identity", "tendermint", subCmd,
-		"--" + common.CfgDataDir, sc.dataDir,
+		"--" + cmdId.CfgDataDir, sc.dataDir,
 	}
 	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
 	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, subCmd, nodeBinary, args); err != nil {

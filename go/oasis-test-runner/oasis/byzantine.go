@@ -2,6 +2,8 @@ package oasis
 
 import (
 	"fmt"
+	"path/filepath"
+	"strconv"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -40,19 +42,11 @@ type ByzantineCfg struct {
 }
 
 func (worker *Byzantine) AddArgs(args *argBuilder) error {
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		debugEnableProfiling(worker.Node.pprofPort).
-		tendermintDebugAllowDuplicateIP().
-		tendermintCoreAddress(worker.consensusPort).
-		tendermintDebugAddrBookLenient().
-		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
-		workerP2pPort(worker.p2pPort).
-		appendSeedNodes(worker.net.seeds).
-		appendEntity(worker.entity).
-		byzantineActivationEpoch(worker.activationEpoch)
+	args.byzantineActivationEpoch(worker.activationEpoch)
+
+	if worker.entity.isDebugTestEntity {
+		args.appendDebugTestEntity()
+	}
 
 	if worker.runtime > 0 {
 		args.byzantineRuntimeID(worker.net.runtimes[worker.runtime].ID())
@@ -64,6 +58,25 @@ func (worker *Byzantine) AddArgs(args *argBuilder) error {
 		}
 	}
 	args.vec = append(args.vec, worker.extraArgs...)
+
+	return nil
+}
+
+func (worker *Byzantine) ModifyConfig() error {
+	worker.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(worker.consensusPort))
+	worker.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(worker.consensusPort))
+
+	worker.Config.Consensus.Debug.P2PAllowDuplicateIP = true
+	worker.Config.Consensus.Debug.P2PAddrBookLenient = true
+
+	worker.Config.P2P.Port = worker.p2pPort
+
+	worker.AddSeedNodesToConfig()
+
+	if !worker.entity.isDebugTestEntity {
+		dir := worker.entity.dir.String()
+		worker.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+	}
 
 	return nil
 }

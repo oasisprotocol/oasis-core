@@ -6,10 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
-	"time"
 
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	tmlight "github.com/tendermint/tendermint/light"
 	tmlightprovider "github.com/tendermint/tendermint/light/provider"
 	tmlightstore "github.com/tendermint/tendermint/light/store"
@@ -20,8 +17,8 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	tendermintAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
@@ -40,13 +37,7 @@ const (
 	// lcMaxRetryAttempts is the number of retry attempts the tendermint light client does,
 	// before switching the primary provider.
 	lcMaxRetryAttempts = 5
-
-	// CfgConsensusLightClientTrustPeriod is the light client trust period.
-	CfgConsensusLightClientTrustPeriod = "consensus.tendermint.light_client.trust_period"
 )
-
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type client struct {
 	ctx context.Context
@@ -56,7 +47,7 @@ type client struct {
 	logger *logging.Logger
 
 	genesis   *genesisAPI.Document
-	consensus consensusAPI.Backend
+	consensus consensus.Backend
 	p2p       rpc.P2P
 
 	store tmlightstore.Store
@@ -190,7 +181,7 @@ func (c *client) worker() {
 	}
 
 	// Store latest block into trust store.
-	if err = trustLocalBlock(c.ctx, consensusAPI.HeightLatest); err != nil {
+	if err = trustLocalBlock(c.ctx, consensus.HeightLatest); err != nil {
 		c.logger.Error("failed to store last retained block into trust store", "err", err)
 		return
 	}
@@ -211,12 +202,12 @@ func (c *client) worker() {
 	}
 	tmc, err := tmlight.NewClientFromTrustedStore(
 		tmChainID,
-		viper.GetDuration(CfgConsensusLightClientTrustPeriod),
+		config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 		providers[0],  // Primary provider.
 		providers[1:], // Witnesses.
 		c.store,
 		tmlight.MaxRetryAttempts(lcMaxRetryAttempts),
-		tmlight.Logger(common.NewLogAdapter(!viper.GetBool(common.CfgLogDebug))),
+		tmlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
 		tmlight.DisableProviderRemoval(),
 	)
 	if err != nil {
@@ -240,7 +231,7 @@ func (c *client) worker() {
 		case <-c.ctx.Done():
 			return
 		case <-ch:
-			if err = trustLocalBlock(c.ctx, consensusAPI.HeightLatest); err != nil {
+			if err = trustLocalBlock(c.ctx, consensus.HeightLatest); err != nil {
 				c.logger.Error("failed to store light block into trust store", "err", err)
 				continue
 			}
@@ -320,7 +311,7 @@ func (c *client) GetVerifiedParameters(ctx context.Context, height int64) (*tmpr
 // New creates a new tendermint light client service backed by the local full node.
 //
 // This light client is initialized with a trusted blocks obtained from the local consensus backend.
-func New(ctx context.Context, dataDir string, genesis *genesisAPI.Document, consensus consensusAPI.Backend, p2p rpc.P2P) (api.ClientService, error) {
+func New(ctx context.Context, dataDir string, genesis *genesisAPI.Document, c consensus.Backend, p2p rpc.P2P) (api.ClientService, error) {
 	tdb, err := db.New(filepath.Join(dataDir, dbName), false)
 	if err != nil {
 		return nil, err
@@ -329,18 +320,14 @@ func New(ctx context.Context, dataDir string, genesis *genesisAPI.Document, cons
 
 	return &client{
 		ctx:       ctx,
-		enabled:   consensus.Mode() == consensusAPI.ModeFull,
+		enabled:   c.SupportedFeatures().Has(consensus.FeatureFullNode),
 		logger:    logging.GetLogger("consensus/tendermint/light"),
 		genesis:   genesis,
-		consensus: consensus,
+		consensus: c,
 		p2p:       p2p,
 		store:     store,
 		initCh:    make(chan struct{}),
 		stopCh:    make(chan struct{}),
 		quitCh:    make(chan struct{}),
 	}, nil
-}
-
-func init() {
-	Flags.Duration(CfgConsensusLightClientTrustPeriod, 24*time.Hour, "light client: trust period")
 }

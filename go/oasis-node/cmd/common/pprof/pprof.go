@@ -13,17 +13,9 @@ import (
 
 	runtimePprof "runtime/pprof"
 
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
-
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/config"
 )
-
-// CfgPprofBind enables profiling endpoint at the given address.
-const CfgPprofBind = "pprof.bind"
-
-// Flags has the flags used by the pprof service.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 type pprofService struct {
 	service.BaseBackgroundService
@@ -126,7 +118,7 @@ func (p *pprofService) Cleanup() {
 
 // New constructs a new pprof service.
 func New(ctx context.Context) (service.BackgroundService, error) {
-	address := viper.GetString(CfgPprofBind)
+	address := config.GlobalConfig.Pprof.BindAddress
 
 	return &pprofService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("pprof"),
@@ -134,10 +126,4 @@ func New(ctx context.Context) (service.BackgroundService, error) {
 		ctx:                   ctx,
 		errCh:                 make(chan error),
 	}, nil
-}
-
-func init() {
-	Flags.String(CfgPprofBind, "", "enable profiling endpoint at given address")
-
-	_ = viper.BindPFlags(Flags)
 }

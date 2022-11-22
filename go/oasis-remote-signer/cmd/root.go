@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdBackground "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
@@ -28,6 +29,8 @@ import (
 )
 
 const (
+	CfgDataDir = "datadir"
+
 	cfgClientCertificate = "client.certificate"
 
 	// clientCommonName is the common name on the client TLS certificates.
@@ -67,7 +70,11 @@ func Execute() {
 }
 
 func ensureDataDir() (string, error) {
-	dataDir := cmdCommon.DataDir()
+	if config.GlobalConfig.Common.DataDir != "" {
+		return config.GlobalConfig.Common.DataDir, nil
+	}
+
+	dataDir := viper.GetString(CfgDataDir)
 	if dataDir == "" {
 		return "", fmt.Errorf("remote-signer: datadir is mandatory")
 	}
@@ -215,6 +222,9 @@ func init() {
 	cmdCommon.SetBasicVersionTemplate(rootCmd)
 
 	_ = viper.BindPFlags(cmdCommon.RootFlags)
+
+	rootCmd.PersistentFlags().String(CfgDataDir, "", "data directory")
+	_ = viper.BindPFlag(CfgDataDir, rootCmd.PersistentFlags().Lookup(CfgDataDir))
 
 	rootFlags.String(cfgClientCertificate, "client_cert.pem", "client TLS certificate (REQUIRED)")
 	_ = viper.BindPFlags(rootFlags)

@@ -7,7 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
@@ -173,8 +173,8 @@ func New(
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	var enabled bool
-	switch commonWorker.RuntimeRegistry.Mode() {
-	case runtimeRegistry.RuntimeModeCompute:
+	switch config.GlobalConfig.Mode {
+	case config.ModeCompute:
 		// When configured in compute mode, enable the executor worker.
 		enabled = true
 	default:

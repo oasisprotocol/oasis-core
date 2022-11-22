@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -269,7 +270,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 		}
 
 		// Take storage into account for last retained round.
-		if rt.Mode().HasLocalStorage() {
+		if config.GlobalConfig.Mode.HasLocalStorage() {
 			lsb, ok := rt.Storage().(storage.LocalBackend)
 			switch ok {
 			case false:

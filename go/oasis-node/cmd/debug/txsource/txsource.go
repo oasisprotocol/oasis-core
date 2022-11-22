@@ -17,6 +17,7 @@ import (
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -45,6 +46,10 @@ var (
 
 func doRun(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
+
+	config.GlobalConfig.Common.Log.Level = make(map[string]string)
+	config.GlobalConfig.Common.Log.Level["default"] = "debug"
+	config.GlobalConfig.Common.Log.Format = "json"
 
 	if err := common.Init(); err != nil {
 		common.EarlyLogAndExit(err)

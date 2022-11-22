@@ -4,10 +4,15 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	netPkg "net"
+	"os"
 	"path/filepath"
+	"strconv"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdRegNode "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry/node"
 )
@@ -22,7 +27,6 @@ type Validator struct {
 
 	sentryPubKey  signature.PublicKey
 	consensusPort uint16
-	clientPort    uint16
 	p2pPort       uint16
 
 	disableCertRotation bool
@@ -67,35 +71,47 @@ func (val *Validator) ExportsPath() string {
 	return nodeExportsPath(val.dir)
 }
 
-// ExternalGRPCAddress returns the address of the node's external gRPC server.
-func (val *Validator) ExternalGRPCAddress() string {
-	return fmt.Sprintf("127.0.0.1:%d", val.clientPort)
+func (val *Validator) AddArgs(args *argBuilder) error {
+	args.
+		configureDebugCrashPoints(val.crashPointsProbability).
+		appendNetwork(val.net)
+
+	if val.entity.isDebugTestEntity {
+		args.appendDebugTestEntity()
+	}
+
+	return nil
 }
 
-func (val *Validator) AddArgs(args *argBuilder) error {
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		debugEnableProfiling(val.Node.pprofPort).
-		workerCertificateRotation(!val.disableCertRotation).
-		consensusValidator().
-		tendermintCoreAddress(val.consensusPort).
-		tendermintMinGasPrice(val.consensus.MinGasPrice).
-		tendermintSubmissionGasPrice(val.consensus.SubmissionGasPrice).
-		tendermintPrune(val.consensus.PruneNumKept, val.consensus.PruneInterval).
-		tendermintRecoverCorruptedWAL(val.consensus.TendermintRecoverCorruptedWAL).
-		workerP2pPort(val.p2pPort).
-		configureDebugCrashPoints(val.crashPointsProbability).
-		tendermintSupplementarySanity(val.supplementarySanityInterval).
-		appendNetwork(val.net).
-		appendEntity(val.entity)
+func (val *Validator) ModifyConfig() error {
+	val.Config.Consensus.Validator = true
+
+	val.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(val.consensusPort))
+	val.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(val.consensusPort))
+
+	if val.supplementarySanityInterval > 0 {
+		val.Config.Consensus.SupplementarySanity.Enabled = true
+		val.Config.Consensus.SupplementarySanity.Interval = val.supplementarySanityInterval
+	}
+
+	val.Config.P2P.Port = val.p2pPort
+
+	if !val.entity.isDebugTestEntity {
+		dir := val.entity.dir.String()
+		val.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+	}
+
+	if val.disableCertRotation {
+		val.Config.Registration.RotateCerts = 0
+	} else {
+		val.Config.Registration.RotateCerts = 1
+	}
 
 	if len(val.sentries) > 0 {
-		args.addSentries(val.sentries).
-			tendermintDisablePeerExchange()
+		val.Config.Consensus.P2P.DisablePeerExchange = true
+		val.AddSentriesToConfig(val.sentries)
 	} else {
-		args.appendSeedNodes(val.net.seeds)
+		val.AddSeedNodesToConfig()
 	}
 
 	return nil
@@ -113,7 +129,6 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		Node:                host,
 		sentries:            cfg.Sentries,
 		consensusPort:       host.getProvisionedPort(nodePortConsensus),
-		clientPort:          host.getProvisionedPort(nodePortClient),
 		p2pPort:             host.getProvisionedPort(nodePortP2P),
 		disableCertRotation: cfg.DisableCertRotation,
 	}
@@ -158,9 +173,22 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		return nil, fmt.Errorf("oasis/validator: sentry client public key unmarshal failure: %w", err)
 	}
 
+	// Write a dummy config file with just the data dir to make init happy.
+	// (It will get overwritten with the proper config before the node is started.)
+	cfgFile := filepath.Join(val.DataDir(), "config.yaml")
+	defCfg := config.DefaultConfig()
+	defCfg.Common.DataDir = val.DataDir()
+	cfgString, err := yaml.Marshal(&defCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config file: %w", err)
+	}
+	if err = os.WriteFile(cfgFile, cfgString, 0o600); err != nil {
+		return nil, fmt.Errorf("failed to write config file '%s': %w", cfgFile, err)
+	}
+
 	args := []string{
 		"registry", "node", "init",
-		"--" + cmdCommon.CfgDataDir, val.dir.String(),
+		"--" + cmdCommon.CfgConfigFile, val.ConfigFile(),
 		"--" + cmdRegNode.CfgExpiration, "1",
 		"--" + cmdRegNode.CfgRole, "validator",
 		"--" + cmdRegNode.CfgEntityID, cfg.Entity.ID().String(),

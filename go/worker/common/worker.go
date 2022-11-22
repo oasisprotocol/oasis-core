@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
@@ -167,7 +168,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.Consensus,
 		w.LightClient,
 		w.P2P,
-		&w.cfg.TxPool,
+		w.cfg.TxPool,
 	)
 	if err != nil {
 		return err
@@ -197,9 +198,15 @@ func newWorker(
 	cfg Config,
 ) (*Worker, error) {
 	var enabled bool
-	switch rtRegistry.Mode() {
-	case runtimeRegistry.RuntimeModeNone:
+	switch config.GlobalConfig.Mode {
+	case config.ModeValidator, config.ModeSeed:
 		enabled = false
+	case config.ModeArchive:
+		if len(rtRegistry.Runtimes()) > 0 {
+			enabled = true
+		} else {
+			enabled = false
+		}
 	default:
 		// When configured in runtime mode, enable the common worker.
 		enabled = true

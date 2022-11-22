@@ -2,9 +2,11 @@ package oasis
 
 import (
 	"fmt"
+	"strconv"
 
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	"github.com/oasisprotocol/oasis-core/go/config"
 )
 
 // SeedCfg is the Oasis seed node configuration.
@@ -25,27 +27,24 @@ type Seed struct { // nolint: maligned
 }
 
 func (seed *Seed) AddArgs(args *argBuilder) error {
-	otherSeeds := []*Seed{}
-	for _, s := range seed.net.seeds {
-		if s.Name == seed.Name {
-			continue
-		}
-		otherSeeds = append(otherSeeds, s)
-	}
+	return nil
+}
 
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		workerCertificateRotation(true).
-		tendermintCoreAddress(seed.consensusPort).
-		workerP2pPort(seed.libp2pSeedPort).
-		appendSeedNodes(otherSeeds).
-		seedMode()
+func (seed *Seed) ModifyConfig() error {
+	seed.Config.Mode = config.ModeSeed
+
+	seed.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(seed.consensusPort))
+	seed.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(seed.consensusPort))
 
 	if seed.disableAddrBookFromGenesis {
-		args.tendermintSeedDisableAddrBookFromGenesis()
+		seed.Config.Consensus.Debug.DisableAddrBookFromGenesis = true
 	}
+
+	seed.Config.P2P.Port = seed.libp2pSeedPort
+
+	seed.Config.Registration.RotateCerts = 1
+
+	seed.AddSeedNodesToConfigExcept(seed.Name)
 
 	return nil
 }

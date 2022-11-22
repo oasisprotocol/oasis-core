@@ -25,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
+	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/p2p/txsync"
 )
@@ -873,7 +874,7 @@ func NewNode(
 	consensus consensus.Backend,
 	lightClient consensus.LightClient,
 	p2pHost p2pAPI.Service,
-	txPoolCfg *txpool.Config,
+	txPoolCfg tpConfig.Config,
 ) (*Node, error) {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
