@@ -15,8 +15,7 @@ func TestPersistent(t *testing.T) {
 	common, err := NewCommonStore(dir)
 	assert.NoError(t, err, "NewCommonStore")
 
-	svc, err := common.GetServiceStore("persistent_test")
-	assert.NoError(t, err, "GetServiceStore")
+	svc := common.GetServiceStore("persistent_test")
 
 	key := []byte("foo")
 	val := "bar"

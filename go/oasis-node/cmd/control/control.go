@@ -186,13 +186,7 @@ func doClearDeregister(cmd *cobra.Command, args []string) {
 	}
 	defer commonStore.Close()
 
-	serviceStore, err := commonStore.GetServiceStore(registration.DBBucketName)
-	if err != nil {
-		logger.Error("failed to get registration worker service store",
-			"err", err,
-		)
-		os.Exit(1)
-	}
+	serviceStore := commonStore.GetServiceStore(registration.DBBucketName)
 
 	if err = registration.SetForcedDeregister(serviceStore, false); err != nil {
 		logger.Error("failed to clear persisted forced-deregister",

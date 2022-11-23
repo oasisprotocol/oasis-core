@@ -373,11 +373,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err != nil {
 		return fmt.Errorf("can't open upgraded node's persistent store: %w", err)
 	}
-	svcStore, err := store.GetServiceStore("upgrade")
-	if err != nil {
-		store.Close()
-		return fmt.Errorf("can't open upgraded node's upgrade module storage: %w", err)
-	}
+	svcStore := store.GetServiceStore("upgrade")
 	if err = svcStore.Delete([]byte("descriptors")); err != nil {
 		svcStore.Close()
 		store.Close()

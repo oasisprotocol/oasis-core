@@ -611,16 +611,24 @@ func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanag
 
 func (args *argBuilder) appendSeedNodes(seeds []*Seed) *argBuilder {
 	for _, seed := range seeds {
-		addr := commonNode.ConsensusAddress{
+		tendermintSeed := commonNode.ConsensusAddress{
 			ID: seed.p2pSigner,
 			Address: commonNode.Address{
 				IP:   net.ParseIP("127.0.0.1"),
 				Port: int64(seed.consensusPort),
 			},
 		}
+		libp2pSeed := commonNode.ConsensusAddress{
+			ID: seed.p2pSigner,
+			Address: commonNode.Address{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: int64(seed.libp2pSeedPort),
+			},
+		}
+		seeds := []string{tendermintSeed.String(), libp2pSeed.String()}
 		args.vec = append(args.vec, Argument{
 			Name:        p2p.CfgSeeds,
-			Values:      []string{addr.String()},
+			Values:      []string{strings.Join(seeds, ",")},
 			MultiValued: true,
 		})
 	}

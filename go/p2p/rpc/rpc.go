@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/libp2p/go-libp2p/core"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const codecModuleName = "p2p/rpc"
@@ -21,16 +22,25 @@ type P2P interface {
 	Host() core.Host
 }
 
-// contextKeyPeerID is the context key used for storing the peer ID.
-type contextKeyPeerID struct{}
+// contextKeyPeerAddrInfo is the context key used for storing the peer addr info.
+type contextKeyPeerAddrInfo struct{}
 
-// WithPeerID creates a new context with the peer ID value set.
-func WithPeerID(parent context.Context, peerID core.PeerID) context.Context {
-	return context.WithValue(parent, contextKeyPeerID{}, peerID)
+// WithPeerAddrInfo creates a new context with the peer addr info value set.
+func WithPeerAddrInfo(parent context.Context, peerAddrInfo peer.AddrInfo) context.Context {
+	return context.WithValue(parent, contextKeyPeerAddrInfo{}, peerAddrInfo)
 }
 
 // PeerIDFromContext looks up the peer ID value in the given context.
 func PeerIDFromContext(ctx context.Context) (core.PeerID, bool) {
-	peerID, ok := ctx.Value(contextKeyPeerID{}).(core.PeerID)
-	return peerID, ok
+	peerAddrInfo, ok := ctx.Value(contextKeyPeerAddrInfo{}).(peer.AddrInfo)
+	if !ok {
+		return "", false
+	}
+	return peerAddrInfo.ID, true
+}
+
+// PeerAddrInfoFromContext looks up the peer addr info value in the given context.
+func PeerAddrInfoFromContext(ctx context.Context) (peer.AddrInfo, bool) {
+	peerAddrInfo, ok := ctx.Value(contextKeyPeerAddrInfo{}).(peer.AddrInfo)
+	return peerAddrInfo, ok
 }

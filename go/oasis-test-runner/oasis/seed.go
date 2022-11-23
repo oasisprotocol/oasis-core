@@ -20,7 +20,8 @@ type Seed struct { // nolint: maligned
 
 	disableAddrBookFromGenesis bool
 
-	consensusPort uint16
+	consensusPort  uint16
+	libp2pSeedPort uint16
 }
 
 func (seed *Seed) AddArgs(args *argBuilder) error {
@@ -38,6 +39,7 @@ func (seed *Seed) AddArgs(args *argBuilder) error {
 		debugSetRlimit().
 		workerCertificateRotation(true).
 		tendermintCoreAddress(seed.consensusPort).
+		workerP2pPort(seed.libp2pSeedPort).
 		appendSeedNodes(otherSeeds).
 		seedMode()
 
@@ -73,6 +75,7 @@ func (net *Network) NewSeed(cfg *SeedCfg) (*Seed, error) {
 		Node:                       host,
 		disableAddrBookFromGenesis: cfg.DisableAddrBookFromGenesis,
 		consensusPort:              host.getProvisionedPort(nodePortConsensus),
+		libp2pSeedPort:             host.getProvisionedPort(nodePortP2PSeed),
 	}
 	net.seeds = append(net.seeds, seedNode)
 	host.features = append(host.features, seedNode)

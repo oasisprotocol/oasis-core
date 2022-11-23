@@ -40,12 +40,11 @@ func (cs *CommonStore) Close() {
 }
 
 // GetServiceStore returns a handle to a per-service bucket for the given service.
-func (cs *CommonStore) GetServiceStore(name string) (*ServiceStore, error) {
-	ss := &ServiceStore{
+func (cs *CommonStore) GetServiceStore(name string) *ServiceStore {
+	return &ServiceStore{
 		store: cs,
 		name:  []byte(name),
 	}
-	return ss, nil
 }
 
 // NewCommonStore opens the default common node storage and returns a handle.

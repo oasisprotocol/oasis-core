@@ -49,6 +49,7 @@ const (
 	nodePortConsensus = "consensus"
 	nodePortClient    = "client"
 	nodePortP2P       = "p2p"
+	nodePortP2PSeed   = "p2p-seed"
 	nodePortPprof     = "pprof"
 )
 

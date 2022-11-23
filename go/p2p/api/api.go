@@ -134,3 +134,14 @@ type PeerTagger interface {
 	// This makes it less likely for those peers to be pruned.
 	SetPeerImportance(kind ImportanceKind, runtimeID common.Namespace, pids []peer.ID)
 }
+
+// SeedService is a P2P node service interface.
+type SeedService interface {
+	service.BackgroundService
+
+	// Addresses returns the listen addresses of the host.
+	Addresses() []string
+
+	// Peers returns a list of peers located in the peer store.
+	Peers() []string
+}

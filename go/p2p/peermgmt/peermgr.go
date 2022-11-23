@@ -9,6 +9,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/connmgr"
+	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -17,13 +18,32 @@ import (
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/backup"
 )
 
 const (
 	// monitorInterval is the time interval between checks for whether more peers have to be
 	// connected.
 	monitorInterval = time.Second
+
+	// maxRestoredPeers is the maximum number of peers connected on startup from the backup.
+	maxRestoredPeers = 100
 )
+
+// PeerManagerOptions are peer manager options.
+type PeerManagerOptions struct {
+	seeds []discovery.Discovery
+}
+
+// PeerManagerOption is a peer manager option setter.
+type PeerManagerOption func(opts *PeerManagerOptions)
+
+// WithBootstrapDiscovery configures bootstrap discovery.
+func WithBootstrapDiscovery(seeds []discovery.Discovery) PeerManagerOption {
+	return func(opts *PeerManagerOptions) {
+		opts.seeds = seeds
+	}
+}
 
 type watermark struct {
 	// min is the minimum number of peers from the registry we want to have connected.
@@ -45,6 +65,7 @@ type PeerManager struct {
 	pubsub *pubsub.PubSub
 
 	registry  *peerRegistry
+	discovery *peerDiscovery
 	connector *peerConnector
 	tagger    *peerTagger
 	backup    *peerstoreBackup
@@ -64,9 +85,16 @@ func NewPeerManager(
 	consensus consensus.Backend,
 	chainContext string,
 	cs *persistent.CommonStore,
+	opts ...PeerManagerOption,
 ) *PeerManager {
+	pmo := PeerManagerOptions{}
+	for _, opt := range opts {
+		opt(&pmo)
+	}
+
 	l := logging.GetLogger("p2p/peer-manager")
 	cm := h.ConnManager()
+	cstore := backup.NewCommonStoreBackend(cs, peerstoreBucketName, peerstoreBucketKey)
 
 	return &PeerManager{
 		logger:    l,
@@ -75,7 +103,8 @@ func NewPeerManager(
 		registry:  newPeerRegistry(consensus, chainContext),
 		connector: newPeerConnector(h, g),
 		tagger:    newPeerTagger(cm),
-		backup:    newPeerstoreBackup(h, cs),
+		backup:    newPeerstoreBackup(h.Peerstore(), cstore),
+		discovery: newPeerDiscovery(pmo.seeds),
 		protocols: make(map[core.ProtocolID]*watermark),
 		topics:    make(map[string]*watermark),
 		startOne:  cmSync.NewOne(),
@@ -164,6 +193,7 @@ func (m *PeerManager) RegisterProtocol(p core.ProtocolID, min int, total int) {
 	}
 
 	m.protocols[p] = &watermark{min, total}
+	m.discovery.startAdvertising(string(p))
 
 	m.logger.Debug("protocol registered",
 		"protocol", p,
@@ -192,6 +222,7 @@ func (m *PeerManager) RegisterTopic(topic string, min int, total int) {
 	}
 
 	m.topics[topic] = &watermark{min, total}
+	m.discovery.startAdvertising(topic)
 
 	m.logger.Debug("topic registered",
 		"topic", topic,
@@ -211,6 +242,7 @@ func (m *PeerManager) UnregisterProtocol(p core.ProtocolID) {
 	}
 
 	delete(m.protocols, p)
+	m.discovery.stopAdvertising(string(p))
 
 	m.logger.Debug("protocol unregistered",
 		"protocol", p,
@@ -228,6 +260,7 @@ func (m *PeerManager) UnregisterTopic(topic string) {
 	}
 
 	delete(m.topics, topic)
+	m.discovery.stopAdvertising(topic)
 
 	m.logger.Debug("topic unregistered",
 		"topic", topic,
@@ -242,17 +275,20 @@ func (m *PeerManager) run(ctx context.Context) {
 	m.registry.start()
 	defer m.registry.stop()
 
+	m.discovery.start()
+	defer m.discovery.stop()
+
 	// Connect to peers from the backup in the background.
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	restoreCtx, restoreCancel := context.WithCancel(ctx)
-	defer restoreCancel()
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.backup.restore(restoreCtx, m.connector)
+		if err := m.backup.restore(ctx); err != nil {
+			return
+		}
+		m.connectRestoredPeers(ctx)
 	}()
 
 	// Main loop.
@@ -262,6 +298,7 @@ func (m *PeerManager) run(ctx context.Context) {
 		select {
 		case <-monitorTicker.C:
 			m.connectRegisteredPeers(ctx)
+			m.connectDiscoveredPeers(ctx)
 
 		case <-ctx.Done():
 			return
@@ -269,82 +306,104 @@ func (m *PeerManager) run(ctx context.Context) {
 	}
 }
 
+// connectRestoredPeers connects to a random subset of peers that were restored from the backup
+// and added to the peerstore.
+func (m *PeerManager) connectRestoredPeers(ctx context.Context) {
+	m.logger.Debug("connecting to restored peer")
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	peerCh := make(chan peer.AddrInfo)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(peerCh)
+
+		store := m.host.Peerstore()
+		peers := store.PeersWithAddrs()
+		for _, i := range rand.Perm(len(peers)) {
+			select {
+			case peerCh <- store.PeerInfo(peers[i]):
+			case <-doneCh:
+				return
+			}
+		}
+	}()
+
+	m.connector.connectMany(ctx, peerCh, maxRestoredPeers)
+}
+
 // connectRegisteredPeers checks if there are enough connections to registered peers
 // for any protocol and topic and connects to new ones if needed.
 func (m *PeerManager) connectRegisteredPeers(ctx context.Context) {
+	m.connectPeers(ctx, true)
+}
+
+// connectDiscoveredPeers checks if there are enough connections for any protocol and topic
+// and connects to new ones if needed.
+func (m *PeerManager) connectDiscoveredPeers(ctx context.Context) {
+	m.connectPeers(ctx, false)
+}
+
+func (m *PeerManager) connectPeers(ctx context.Context, registered bool) {
+	// At the end cancel all discoveries.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	var wg sync.WaitGroup
 	defer wg.Wait()
+
+	connectPeers := func(peerCh <-chan peer.AddrInfo, limit int) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			m.connector.connectMany(ctx, peerCh, limit)
+		}()
+	}
+
+	var (
+		peerCh <-chan peer.AddrInfo
+		limit  int
+	)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for p, d := range m.protocols {
-		registered := m.registry.protocolPeersInfo(p)
-		connected := m.protocolPeers(p)
-		limit := d.min
+		connected := m.NumProtocolPeers(p)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			m.connect(ctx, registered, connected, limit)
-		}()
+		switch registered {
+		case true:
+			peerCh = m.registry.findProtocolPeers(ctx, p)
+			limit = d.min - connected
+		default:
+			peerCh = m.discovery.findPeers(ctx, string(p))
+			limit = d.total - connected
+		}
+
+		connectPeers(peerCh, limit)
 	}
 
 	for t, d := range m.topics {
-		registered := m.registry.topicPeersInfo(t)
-		connected := m.topicPeers(t)
-		limit := d.min
+		connected := m.NumTopicPeers(t)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			m.connect(ctx, registered, connected, limit)
-		}()
-	}
-}
+		switch registered {
+		case true:
+			peerCh = m.registry.findTopicPeers(ctx, t)
+			limit = d.min - connected
 
-func (m *PeerManager) protocolPeers(p core.ProtocolID) map[core.PeerID]struct{} {
-	peers := make(map[core.PeerID]struct{})
-	for _, peer := range m.host.Network().Peers() {
-		if m.supportsProtocol(peer, p) {
-			peers[peer] = struct{}{}
+		default:
+			peerCh = m.discovery.findPeers(ctx, t)
+			limit = d.total - connected
 		}
+
+		connectPeers(peerCh, limit)
 	}
-
-	return peers
-}
-
-func (m *PeerManager) topicPeers(topic string) map[core.PeerID]struct{} {
-	peers := make(map[core.PeerID]struct{})
-	for _, peer := range m.pubsub.ListPeers(topic) {
-		peers[peer] = struct{}{}
-	}
-
-	return peers
-}
-
-func (m *PeerManager) connect(ctx context.Context, addrs []*peer.AddrInfo, connected map[core.PeerID]struct{}, max int) {
-	// Put disconnected peers to the front, so that we don't need to create another array.
-	next := 0
-	last := len(addrs) - 1
-	for next <= last {
-		if _, ok := connected[addrs[next].ID]; !ok {
-			next++
-			continue
-		}
-		addrs[next], addrs[last] = addrs[last], addrs[next]
-		last--
-		max--
-	}
-
-	// Shuffle disconnected and connect to few of them.
-	disc := addrs[0 : last+1]
-
-	rand.Shuffle(len(disc), func(i, j int) {
-		disc[i], disc[j] = disc[j], disc[i]
-	})
-
-	m.connector.connectMany(ctx, disc, max)
 }
 
 func (m *PeerManager) supportsProtocol(p core.PeerID, protocol core.ProtocolID) bool {

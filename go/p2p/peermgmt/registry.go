@@ -23,9 +23,9 @@ type peerRegistry struct {
 	chainContext string
 
 	mu            sync.Mutex
-	peers         map[core.PeerID]*peer.AddrInfo
-	protocolPeers map[core.ProtocolID]map[core.PeerID]*peer.AddrInfo
-	topicPeers    map[string]map[core.PeerID]*peer.AddrInfo
+	peers         map[core.PeerID]peer.AddrInfo
+	protocolPeers map[core.ProtocolID]map[core.PeerID]struct{}
+	topicPeers    map[string]map[core.PeerID]struct{}
 
 	initCh   chan struct{}
 	initOnce sync.Once
@@ -40,9 +40,9 @@ func newPeerRegistry(c consensus.Backend, chainContext string) *peerRegistry {
 		logger:        l,
 		consensus:     c,
 		chainContext:  chainContext,
-		peers:         make(map[core.PeerID]*peer.AddrInfo),
-		protocolPeers: make(map[core.ProtocolID]map[core.PeerID]*peer.AddrInfo),
-		topicPeers:    make(map[string]map[core.PeerID]*peer.AddrInfo),
+		peers:         make(map[core.PeerID]peer.AddrInfo),
+		protocolPeers: make(map[core.ProtocolID]map[core.PeerID]struct{}),
+		topicPeers:    make(map[string]map[core.PeerID]struct{}),
 		initCh:        make(chan struct{}),
 		startOne:      cmSync.NewOne(),
 	}
@@ -61,30 +61,55 @@ func (r *peerRegistry) NumPeers() int {
 	return len(r.peers)
 }
 
-func (r *peerRegistry) protocolPeersInfo(p core.ProtocolID) []*peer.AddrInfo {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	pp := r.protocolPeers[p]
-	peers := make([]*peer.AddrInfo, 0, len(pp))
-	for _, peer := range pp {
-		peers = append(peers, peer)
+func (r *peerRegistry) findProtocolPeers(ctx context.Context, p core.ProtocolID) <-chan peer.AddrInfo {
+	getPeerMap := func() map[peer.ID]struct{} {
+		return r.protocolPeers[p]
 	}
 
-	return peers
+	return r.findPeers(ctx, getPeerMap)
 }
 
-func (r *peerRegistry) topicPeersInfo(topic string) []*peer.AddrInfo {
+func (r *peerRegistry) findTopicPeers(ctx context.Context, topic string) <-chan peer.AddrInfo {
+	getPeerMap := func() map[peer.ID]struct{} {
+		return r.topicPeers[topic]
+	}
+
+	return r.findPeers(ctx, getPeerMap)
+}
+
+func (r *peerRegistry) findPeers(ctx context.Context, getPeerMap func() map[peer.ID]struct{}) <-chan peer.AddrInfo {
+	peerCh := make(chan peer.AddrInfo)
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	tp := r.topicPeers[topic]
-	peers := make([]*peer.AddrInfo, 0, len(tp))
-	for _, peer := range tp {
+	peerMap := getPeerMap()
+	peers := make([]peer.ID, 0, len(peerMap))
+	for peer := range peerMap {
 		peers = append(peers, peer)
 	}
 
-	return peers
+	go func() {
+		defer close(peerCh)
+
+		for _, peer := range peers {
+			r.mu.Lock()
+			addr, ok := r.peers[peer]
+			r.mu.Unlock()
+
+			if !ok {
+				continue
+			}
+
+			select {
+			case peerCh <- addr:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return peerCh
 }
 
 // start starts watching the registry for node changes and assigns nodes to protocols and topics
@@ -153,7 +178,7 @@ func (r *peerRegistry) handleNodes(nodes []*node.Node, reset bool) {
 	})
 
 	type peerData struct {
-		info      *peer.AddrInfo
+		info      peer.AddrInfo
 		protocols map[core.ProtocolID]struct{}
 		topics    map[string]struct{}
 	}
@@ -171,7 +196,7 @@ func (r *peerRegistry) handleNodes(nodes []*node.Node, reset bool) {
 
 		protocols, topics := r.inspectNode(n)
 
-		peers[info.ID] = &peerData{info, protocols, topics}
+		peers[info.ID] = &peerData{*info, protocols, topics}
 	}
 
 	r.mu.Lock()
@@ -179,9 +204,9 @@ func (r *peerRegistry) handleNodes(nodes []*node.Node, reset bool) {
 
 	// Remove previous state.
 	if reset {
-		r.peers = make(map[core.PeerID]*peer.AddrInfo)
-		r.protocolPeers = make(map[core.ProtocolID]map[core.PeerID]*peer.AddrInfo)
-		r.topicPeers = make(map[string]map[core.PeerID]*peer.AddrInfo)
+		r.peers = make(map[core.PeerID]peer.AddrInfo)
+		r.protocolPeers = make(map[core.ProtocolID]map[core.PeerID]struct{})
+		r.topicPeers = make(map[string]map[core.PeerID]struct{})
 	}
 
 	// Add/update new peers.
@@ -198,18 +223,18 @@ func (r *peerRegistry) handleNodes(nodes []*node.Node, reset bool) {
 		for protocol := range data.protocols {
 			peers, ok := r.protocolPeers[protocol]
 			if !ok {
-				peers = make(map[core.PeerID]*peer.AddrInfo)
+				peers = make(map[core.PeerID]struct{})
 				r.protocolPeers[protocol] = peers
 			}
-			peers[p] = data.info
+			peers[p] = struct{}{}
 		}
 		for topic := range data.topics {
 			peers, ok := r.topicPeers[topic]
 			if !ok {
-				peers = make(map[core.PeerID]*peer.AddrInfo)
+				peers = make(map[core.PeerID]struct{})
 				r.topicPeers[topic] = peers
 			}
-			peers[p] = data.info
+			peers[p] = struct{}{}
 		}
 
 		// Update the address, as it might have changed.

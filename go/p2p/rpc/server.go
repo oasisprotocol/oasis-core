@@ -4,7 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -61,13 +63,19 @@ func (s *server) HandleStream(stream network.Stream) {
 	}
 	_ = stream.SetReadDeadline(time.Time{})
 
-	logger.Debug("receieved request",
+	logger.Debug("received request",
 		"method", request.Method,
 	)
 
+	// Get peer's addr info.
+	addr := peer.AddrInfo{
+		ID:    stream.Conn().RemotePeer(),
+		Addrs: []core.Multiaddr{stream.Conn().RemoteMultiaddr()},
+	}
+
 	// Handle request.
 	ctx, cancel := context.WithTimeout(context.Background(), RequestHandleTimeout)
-	ctx = WithPeerID(ctx, stream.Conn().RemotePeer())
+	ctx = WithPeerAddrInfo(ctx, addr)
 	rsp, err := s.HandleRequest(ctx, request.Method, request.Body)
 	cancel()
 

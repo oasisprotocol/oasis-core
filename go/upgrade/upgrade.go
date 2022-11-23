@@ -318,10 +318,8 @@ func (u *upgradeManager) Close() {
 // pending upgrade descriptors; if this node is not the one intended to be run according
 // to the loaded descriptor, New will return an error.
 func New(store *persistent.CommonStore, dataDir string, checkStatus bool) (api.Backend, error) {
-	svcStore, err := store.GetServiceStore(api.ModuleName)
-	if err != nil {
-		return nil, err
-	}
+	svcStore := store.GetServiceStore(api.ModuleName)
+
 	upgrader := &upgradeManager{
 		store:   svcStore,
 		dataDir: dataDir,

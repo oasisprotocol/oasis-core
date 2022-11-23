@@ -21,9 +21,9 @@ type ConnectorTestSuite struct {
 
 	peers []host.Host
 
-	all     []*peer.AddrInfo
-	allowed []*peer.AddrInfo
-	blocked []*peer.AddrInfo
+	all     []peer.AddrInfo
+	allowed []peer.AddrInfo
+	blocked []peer.AddrInfo
 
 	connector *peerConnector
 }
@@ -48,13 +48,13 @@ func (s *ConnectorTestSuite) SetupTest() {
 		require.NoError(err, "newTestHost failed")
 	}
 
-	s.all = make([]*peer.AddrInfo, 0, len(s.peers))
+	s.all = make([]peer.AddrInfo, 0, len(s.peers))
 	for _, p := range s.peers {
 		info := peer.AddrInfo{
 			ID:    p.ID(),
 			Addrs: p.Addrs(),
 		}
-		s.all = append(s.all, &info)
+		s.all = append(s.all, info)
 	}
 
 	// A gater which blocks first few peers.
@@ -101,7 +101,7 @@ func (s *ConnectorTestSuite) TestConnect() {
 
 	s.Run("Empty address", func() {
 		info := peer.AddrInfo{}
-		connected := s.connector.connect(ctx, &info)
+		connected := s.connector.connect(ctx, info)
 		require.False(connected)
 
 		require.Equal(0, len(s.host.Network().Peers()))
@@ -112,7 +112,7 @@ func (s *ConnectorTestSuite) TestConnect() {
 			ID:    s.host.ID(),
 			Addrs: s.host.Addrs(),
 		}
-		connected := s.connector.connect(ctx, &info)
+		connected := s.connector.connect(ctx, info)
 		require.False(connected)
 
 		require.Equal(0, len(s.host.Network().Peers()))
@@ -154,14 +154,23 @@ func (s *ConnectorTestSuite) TestConnectMany() {
 	time.Sleep(time.Second)
 	require := require.New(s.T())
 
+	sendToCh := func(peers []peer.AddrInfo) <-chan peer.AddrInfo {
+		peerCh := make(chan peer.AddrInfo, len(peers))
+		for _, addr := range peers {
+			peerCh <- addr
+		}
+		close(peerCh)
+		return peerCh
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("No peers", func() {
-		s.connector.connectMany(ctx, nil, 1000)
+		s.connector.connectMany(ctx, sendToCh(nil), 1000)
 		require.Equal(0, len(s.host.Network().Peers()))
 
-		s.connector.connectMany(ctx, s.allowed, -1)
+		s.connector.connectMany(ctx, sendToCh(s.allowed), -1)
 		require.Equal(0, len(s.host.Network().Peers()))
 	})
 
@@ -169,17 +178,17 @@ func (s *ConnectorTestSuite) TestConnectMany() {
 		ctx2, cancel2 := context.WithCancel(ctx)
 		cancel2()
 
-		s.connector.connectMany(ctx2, s.all, 1)
+		s.connector.connectMany(ctx2, sendToCh(s.all), 1)
 		require.Equal(0, len(s.host.Network().Peers()))
 	})
 
 	s.Run("Happy path - limited", func() {
-		s.connector.connectMany(ctx, s.all, 2)
+		s.connector.connectMany(ctx, sendToCh(s.all), 2)
 		require.Equal(2, len(s.host.Network().Peers()))
 	})
 
 	s.Run("Happy path - unlimited", func() {
-		s.connector.connectMany(ctx, s.all, 100)
+		s.connector.connectMany(ctx, sendToCh(s.all), 100)
 		require.Equal(len(s.allowed), len(s.host.Network().Peers()))
 	})
 }
