@@ -12,6 +12,29 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.3 (2022-11-23)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- runtime/consensus/tendermint/verifier: Correctly compare headers
+  ([#5068](https://github.com/oasisprotocol/oasis-core/issues/5068))
+
+  Since the store may have an earlier (non-canonical, but valid) version
+  of the block available, we need to only compare the actual header and
+  not the commits/signatures.
+
+  This is because it can happen that during the immediate sync the light
+  block does not yet contain all of the commits (but only just enough to
+  be valid, e.g. 2/3+) and this gets stored in the light block store.
+  Later on (e.g. during a query) the presented light block may have the
+  full set of commits.
+
 ## 22.2.2 (2022-11-17)
 
 | Protocol          | Version   |
