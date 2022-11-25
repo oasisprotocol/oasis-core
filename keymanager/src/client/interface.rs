@@ -34,7 +34,7 @@ pub trait KeyManagerClient: Send + Sync {
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>>;
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>>;
 
     /// Get or create named ephemeral key pair for given epoch.
     ///
@@ -54,7 +54,7 @@ pub trait KeyManagerClient: Send + Sync {
         ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>>;
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>>;
 
     /// Get a copy of the master secret for replication.
     fn replicate_master_secret(
@@ -80,7 +80,7 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         KeyManagerClient::get_public_key(&**self, ctx, key_pair_id)
     }
 
@@ -98,7 +98,7 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         KeyManagerClient::get_public_ephemeral_key(&**self, ctx, key_pair_id, epoch)
     }
 

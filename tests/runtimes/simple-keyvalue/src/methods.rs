@@ -374,8 +374,7 @@ impl Methods {
                 .get_public_ephemeral_key(io_ctx, key_pair_id, args.epoch);
         let long_term_pk = tokio::runtime::Handle::current()
             .block_on(result)
-            .map_err(|err| err.to_string())?
-            .ok_or("public ephemeral key not available")?;
+            .map_err(|err| err.to_string())?;
 
         // Generate ephemeral key. Not secure, but good enough for testing purposes.
         let ephemeral_sk = x25519_dalek::StaticSecret::from(hash);

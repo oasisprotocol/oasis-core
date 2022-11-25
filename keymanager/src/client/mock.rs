@@ -52,13 +52,13 @@ impl KeyManagerClient for MockClient {
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         Box::pin(self.get_or_create_keys(ctx, key_pair_id).and_then(|ck| {
-            future::ok(Some(SignedPublicKey {
+            future::ok(SignedPublicKey {
                 key: ck.input_keypair.pk,
                 checksum: vec![],
                 signature: Signature::default(),
-            }))
+            })
         }))
     }
 
@@ -82,15 +82,15 @@ impl KeyManagerClient for MockClient {
         ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         Box::pin(
             self.get_or_create_ephemeral_keys(ctx, key_pair_id, epoch)
                 .and_then(|ck| {
-                    future::ok(Some(SignedPublicKey {
+                    future::ok(SignedPublicKey {
                         key: ck.input_keypair.pk,
                         checksum: vec![],
                         signature: Signature::default(),
-                    }))
+                    })
                 }),
         )
     }
