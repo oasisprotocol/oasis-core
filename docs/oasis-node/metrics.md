@@ -125,4 +125,4 @@ Tendermint metrics are also reported. Consult
 [tendermint-core documentation][2] for a list of reported by Tendermint.
 
 [1]: ../consensus/README.md#tendermint
-[2]: https://docs.tendermint.com/master/nodes/metrics.html
+[2]: https://docs.tendermint.com/main/tendermint-core/metrics.html
