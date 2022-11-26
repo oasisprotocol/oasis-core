@@ -331,8 +331,8 @@ func TestCastVote(t *testing.T) {
 			func() {},
 		},
 		{
-			"should fail with if submitter not a validator",
-			signers[0].Public(),
+			"should not be eligible if submitter is not a validator or a delegator",
+			signers[numDelegators+numValidators].Public(),
 			&governance.ProposalVote{
 				ID:   p1.ID,
 				Vote: governance.VoteYes,
@@ -358,7 +358,7 @@ func TestCastVote(t *testing.T) {
 			func() {},
 		},
 		{
-			"should work",
+			"should work for validator",
 			signers[1].Public(),
 			&governance.ProposalVote{
 				ID:   p1.ID,
@@ -413,6 +413,30 @@ func TestCastVote(t *testing.T) {
 					}
 					require.EqualValues(governance.VoteAbstain, v.Vote, "vote should match submitted vote")
 					require.EqualValues(addresses[2], v.Voter, "vote should match submitted vote")
+					return
+				}
+				t.Fatal("expected vote not found")
+			},
+		},
+		{
+			"should work for a delegator to a validator",
+			signers[numValidators].Public(),
+			&governance.ProposalVote{
+				ID:   p1.ID,
+				Vote: governance.VoteNo,
+			},
+			nil,
+			func() {
+				// Ensure vote exists.
+				var votes []*governance.VoteEntry
+				votes, err = state.Votes(ctx, p1.ID)
+				require.NoError(err, "Votes()")
+				require.Len(votes, 3, "three votes should exist")
+				for _, v := range votes {
+					if v.Vote != governance.VoteNo {
+						continue
+					}
+					require.EqualValues(addresses[numValidators], v.Voter, "vote should match submitted vote")
 					return
 				}
 				t.Fatal("expected vote not found")

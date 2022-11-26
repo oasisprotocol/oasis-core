@@ -1,19 +1,18 @@
 package governance
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/tendermint/tendermint/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
-	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash/api"
 	schedulerapp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler/state"
@@ -317,41 +316,36 @@ func (app *governanceApplication) executeProposal(ctx *api.Context, state *gover
 	return nil
 }
 
-func (app *governanceApplication) validatorsEscrow(
-	ctx *api.Context,
-	stakingState *stakingState.MutableState,
-	registryState *registryState.MutableState,
-	schedulerState *schedulerState.MutableState,
-) (*quantity.Quantity, map[stakingAPI.Address]*quantity.Quantity, error) {
+func validatorsEscrow(
+	ctx context.Context,
+	stakingState *stakingState.ImmutableState,
+	schedulerState *schedulerState.ImmutableState,
+) (*quantity.Quantity, map[stakingAPI.Address]*stakingAPI.SharePool, error) {
 	currentValidators, err := schedulerState.CurrentValidators(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query current validators: %w", err)
 	}
 
 	totalVotingStake := quantity.NewQuantity()
-	validatorEntitiesEscrow := make(map[stakingAPI.Address]*quantity.Quantity)
+	validatorEntitiesEscrow := make(map[stakingAPI.Address]*stakingAPI.SharePool)
 
-	for valID := range currentValidators {
-		var node *node.Node
-		node, err = registryState.NodeBySubKey(ctx, valID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query validator node: %w", err)
-		}
-		entityAddr := stakingAPI.NewAddress(node.EntityID)
-
-		var escrow *quantity.Quantity
-		escrow, err = stakingState.EscrowBalance(ctx, entityAddr)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query validator escrow: %w", err)
-		}
+	for _, validator := range currentValidators {
+		entityAddr := stakingAPI.NewAddress(validator.EntityID)
 
 		// If there are multiple nodes in the validator set belonging to the same entity,
 		// only count the entity escrow once.
 		if validatorEntitiesEscrow[entityAddr] != nil {
 			continue
 		}
-		validatorEntitiesEscrow[entityAddr] = escrow
-		if err := totalVotingStake.Add(escrow); err != nil {
+
+		var account *stakingAPI.Account
+		account, err = stakingState.Account(ctx, entityAddr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to query validator account: %w", err)
+		}
+
+		validatorEntitiesEscrow[entityAddr] = &account.Escrow.Active
+		if err := totalVotingStake.Add(&account.Escrow.Active.Balance); err != nil {
 			return nil, nil, fmt.Errorf("failed to add to totalVotingStake: %w", err)
 		}
 	}
@@ -364,8 +358,9 @@ func (app *governanceApplication) validatorsEscrow(
 func (app *governanceApplication) closeProposal(
 	ctx *api.Context,
 	state *governanceState.MutableState,
+	stakingState *stakingState.ImmutableState,
 	totalVotingStake quantity.Quantity,
-	validatorEntitiesEscrow map[stakingAPI.Address]*quantity.Quantity,
+	validatorEntitiesPool map[stakingAPI.Address]*stakingAPI.SharePool,
 	proposal *governance.Proposal,
 ) error {
 	params, err := state.ConsensusParameters(ctx)
@@ -373,7 +368,6 @@ func (app *governanceApplication) closeProposal(
 		return fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
 
-	proposal.Results = make(map[governance.Vote]quantity.Quantity)
 	votes, err := state.Votes(ctx, proposal.ID)
 	if err != nil {
 		return fmt.Errorf("failed to query votes: %w", err)
@@ -382,24 +376,96 @@ func (app *governanceApplication) closeProposal(
 	ctx.Logger().Debug("tallying votes",
 		"proposal", proposal,
 		"total_voting_stake", totalVotingStake,
-		"validator_entities_escrow", validatorEntitiesEscrow,
+		"validator_entities_pool", validatorEntitiesPool,
 		"votes", votes,
 	)
-	// Tally the votes.
+	validatorVotes := make(map[stakingAPI.Address]*governance.Vote)
+	validatorVoteShares := make(map[stakingAPI.Address]map[governance.Vote]quantity.Quantity)
+	for validator := range validatorEntitiesPool {
+		validatorVoteShares[validator] = make(map[governance.Vote]quantity.Quantity)
+	}
+
+	// Tally the validator votes.
 	for _, vote := range votes {
-		escrow, ok := validatorEntitiesEscrow[vote.Voter]
+		escrow, ok := validatorEntitiesPool[vote.Voter]
 		if !ok {
-			// Voter not in current validator set - invalid vote.
-			proposal.InvalidVotes++
+			// Skip non-validator votes.
 			continue
 		}
-
-		currentVotes := proposal.Results[vote.Vote]
-		newVotes := escrow.Clone()
-		if err := newVotes.Add(&currentVotes); err != nil {
-			return fmt.Errorf("failed to add votes: %w", err)
+		validatorVotes[vote.Voter] = &vote.Vote
+		if err = addShares(validatorVoteShares[vote.Voter], vote.Vote, escrow.TotalShares); err != nil {
+			return fmt.Errorf("failed to add shares: %w", err)
 		}
-		proposal.Results[vote.Vote] = *newVotes
+	}
+
+	// Tally delegator votes.
+	for _, vote := range votes {
+		// Fetch outgoing delegations.
+		delegations, err := stakingState.DelegationsFor(ctx, vote.Voter)
+		if err != nil {
+			ctx.Logger().Error("failed to fetch delegations for",
+				"delegator", vote.Voter,
+				"err", err,
+			)
+			return fmt.Errorf("failed to fetch delegations: %w", err)
+		}
+		var delegationToValidator bool
+		for to, delegation := range delegations {
+			if _, ok := validatorEntitiesPool[to]; !ok {
+				continue
+			}
+			delegationToValidator = true
+			validatorVote := validatorVotes[to]
+			if validatorVote == &vote.Vote {
+				// Vote matches the delegated validator vote.
+				continue
+			}
+
+			// Deduct shares from the validators shares.
+			if validatorVote != nil {
+				if err := subShares(validatorVoteShares[to], *validatorVote, delegation.Shares); err != nil {
+					return fmt.Errorf("failed to sub votes: %w", err)
+				}
+			}
+
+			// Add shares to the voters vote.
+			if err := addShares(validatorVoteShares[to], vote.Vote, delegation.Shares); err != nil {
+				return fmt.Errorf("failed to add votes: %w", err)
+			}
+		}
+		if !delegationToValidator {
+			proposal.InvalidVotes++
+		}
+	}
+
+	// Finalize the voting results - convert votes in shares into results in stake.
+	proposal.Results = make(map[governance.Vote]quantity.Quantity)
+	for validator, votes := range validatorVoteShares {
+		validatorPool, ok := validatorEntitiesPool[validator]
+		if !ok {
+			// This should NEVER happen.
+			panic("governance: missing validator pool")
+		}
+		for vote, shares := range votes {
+			// Compute stake from shares.
+			escrow, err := validatorPool.StakeForShares(shares.Clone())
+			if err != nil {
+				ctx.Logger().Error("failed to compute stake from shares for",
+					"share_pool", validatorPool,
+					"validator", validator,
+					"err", err,
+				)
+				return fmt.Errorf("failed to compute stake from shares: %w", err)
+
+			}
+
+			// Add stake to vote.
+			currentVotes := proposal.Results[vote]
+			if err := currentVotes.Add(escrow); err != nil {
+				return fmt.Errorf("failed to add votes: %w", err)
+			}
+			proposal.Results[vote] = currentVotes
+		}
 	}
 
 	ctx.Logger().Debug("close proposal",
@@ -412,6 +478,26 @@ func (app *governanceApplication) closeProposal(
 		return err
 	}
 
+	return nil
+}
+
+func addShares(validatorVoteShares map[governance.Vote]quantity.Quantity, vote governance.Vote, amount quantity.Quantity) error {
+	amt := amount.Clone()
+	currShares := validatorVoteShares[vote]
+	if err := amt.Add(&currShares); err != nil {
+		return fmt.Errorf("failed to add votes: %w", err)
+	}
+	validatorVoteShares[vote] = *amt
+	return nil
+}
+
+func subShares(validatorVoteShares map[governance.Vote]quantity.Quantity, vote governance.Vote, amount quantity.Quantity) error {
+	amt := amount.Clone()
+	currShares := validatorVoteShares[vote]
+	if err := currShares.Sub(amt); err != nil {
+		return fmt.Errorf("failed to sub votes: %w", err)
+	}
+	validatorVoteShares[vote] = currShares
 	return nil
 }
 
@@ -454,11 +540,10 @@ func (app *governanceApplication) EndBlock(ctx *api.Context, request types.Reque
 
 	// Prepare validator set entities state.
 	stakingState := stakingState.NewMutableState(ctx.State())
-	totalVotingStake, validatorEntitiesEscrow, err := app.validatorsEscrow(
+	totalVotingStake, validatorEntitiesEscrow, err := validatorsEscrow(
 		ctx,
-		stakingState,
-		registryState.NewMutableState(ctx.State()),
-		schedulerState.NewMutableState(ctx.State()),
+		stakingState.ImmutableState,
+		schedulerState.NewMutableState(ctx.State()).ImmutableState,
 	)
 	if err != nil {
 		return types.ResponseEndBlock{}, fmt.Errorf("consensus/governance: failed to compute validators escrow: %w", err)
@@ -475,6 +560,7 @@ func (app *governanceApplication) EndBlock(ctx *api.Context, request types.Reque
 		if err = app.closeProposal(
 			ctx,
 			state,
+			stakingState.ImmutableState,
 			*totalVotingStake,
 			validatorEntitiesEscrow,
 			proposal,

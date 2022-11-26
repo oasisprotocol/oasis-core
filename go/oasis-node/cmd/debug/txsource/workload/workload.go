@@ -151,6 +151,26 @@ func (bw *BaseWorkload) TransferFundsQty(ctx context.Context, from signature.Sig
 	return nil
 }
 
+// EscrowFunds escrows from one account to the other.
+func (bw *BaseWorkload) EscrowFunds(ctx context.Context, from signature.Signer, to staking.Address, amount *quantity.Quantity) error {
+	tx := staking.NewAddEscrowTx(0, nil, &staking.Escrow{
+		Account: to,
+		Amount:  *amount,
+	})
+
+	submitCtx, cancel := context.WithTimeout(ctx, maxSubmissionRetryElapsedTime)
+	defer cancel()
+	if err := bw.sm.SignAndSubmitTx(submitCtx, from, tx); err != nil {
+		bw.Logger.Error("failed to submit transaction",
+			"err", err,
+			"tx", tx,
+			"tx_caller", from.Public(),
+		)
+		return fmt.Errorf("failed to submit transaction: %w", err)
+	}
+	return nil
+}
+
 // NewBaseWorkload creates a new BaseWorkload.
 func NewBaseWorkload(name string) BaseWorkload {
 	return BaseWorkload{
