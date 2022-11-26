@@ -207,7 +207,6 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 		trustHash      string
 	)
 	for _, v := range sc.Net.Validators() {
-		var ctrl *oasis.Controller
 		ctrl, err = oasis.NewController(v.SocketPath())
 		if err != nil {
 			return fmt.Errorf("failed to create controller for validator %s: %w", v.Name, err)
@@ -251,6 +250,34 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	}
 	if err = lateWorker.WaitReady(ctx); err != nil {
 		return fmt.Errorf("error waiting for second late compute worker to become ready: %w", err)
+	}
+
+	ctrl, err = oasis.NewController(lateWorker.SocketPath())
+	if err != nil {
+		return err
+	}
+
+	// Ensure GetStatus Runtime LastRetainedRound takes storage into account.
+	blk, err = ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
+		RuntimeID: runtimeID,
+		Round:     runtimeClient.RoundLatest,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get latest block: %w", err)
+	}
+	// Determine latest checkpoint.
+	lastCheckpoint = (blk.Header.Round / rt.Storage.CheckpointInterval) * rt.Storage.CheckpointInterval
+	sc.Logger.Info("determined last expected checkpoint round",
+		"round", lastCheckpoint,
+	)
+
+	status, err := ctrl.GetStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("error getting status for second late compute worker: %w", err)
+	}
+
+	if lr := status.Runtimes[runtimeID].LastRetainedRound; lr < lastCheckpoint {
+		return fmt.Errorf("last retained round (%d) below last checkpoint (%d)", lr, lastCheckpoint)
 	}
 
 	// Wait a bit to give the logger in the node time to sync; the message has already been

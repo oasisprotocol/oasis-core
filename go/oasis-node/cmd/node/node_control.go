@@ -258,6 +258,35 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			)
 		}
 
+		// Take storage into account for last retained round.
+		if rt.Mode().HasLocalStorage() {
+			lsb, ok := rt.Storage().(storage.LocalBackend)
+			switch ok {
+			case false:
+				n.logger.Error("local storage backend expected",
+					"runtime_id", rt.ID(),
+				)
+			default:
+				// Update last retained round if storage earliest round is higher.
+				if earliest := lsb.NodeDB().GetEarliestVersion(); earliest > status.LastRetainedRound {
+					blk, err = rt.History().GetBlock(ctx, earliest)
+					switch err {
+					case nil:
+						status.LastRetainedRound = blk.Header.Round
+						status.LastRetainedHash = blk.Header.EncodedHash()
+					default:
+						n.logger.Error("failed to fetch runtime block",
+							"err", err,
+							"round", earliest,
+							"runtime_id", rt.ID(),
+						)
+					}
+
+				}
+
+			}
+		}
+
 		// Fetch common committee worker status.
 		if rtNode := n.CommonWorker.GetRuntime(rt.ID()); rtNode != nil {
 			status.Committee, err = rtNode.GetStatus(ctx)
