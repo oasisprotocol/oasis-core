@@ -70,5 +70,7 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		ClientRuntimes: rts,
 		AccessList:     al,
 		PrivatePeers:   ps,
+		Policy:         w.policy,
+		PolicyChecksum: w.policyChecksum,
 	}, nil
 }

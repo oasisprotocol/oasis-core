@@ -87,6 +87,9 @@ type Worker struct { // nolint: maligned
 	enclaveStatus *api.SignedInitResponse
 	backend       api.Backend
 
+	policy         *api.SignedPolicySGX
+	policyChecksum []byte
+
 	enabled     bool
 	mayGenerate bool
 }
@@ -338,11 +341,13 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 		return nil
 	})
 
-	// Cache the key manager enclave status.
+	// Cache the key manager enclave status and the currently active policy.
 	w.Lock()
 	defer w.Unlock()
 
 	w.enclaveStatus = &signedInitResp
+	w.policy = status.Policy
+	w.policyChecksum = signedInitResp.InitResponse.PolicyChecksum
 
 	return nil
 }
