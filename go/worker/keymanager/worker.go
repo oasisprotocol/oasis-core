@@ -82,11 +82,12 @@ type Worker struct { // nolint: maligned
 	accessListByRuntime map[common.Namespace][]core.PeerID
 	privatePeers        map[core.PeerID]struct{}
 
-	commonWorker  *workerCommon.Worker
-	roleProvider  registration.RoleProvider
-	enclaveStatus *api.SignedInitResponse
-	backend       api.Backend
+	commonWorker *workerCommon.Worker
+	roleProvider registration.RoleProvider
+	backend      api.Backend
 
+	globalStatus   *api.Status
+	enclaveStatus  *api.SignedInitResponse
 	policy         *api.SignedPolicySGX
 	policyChecksum []byte
 
@@ -384,6 +385,13 @@ func extractMessageResponsePayload(raw []byte) ([]byte, error) {
 	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
+func (w *Worker) setStatus(status *api.Status) {
+	w.Lock()
+	defer w.Unlock()
+
+	w.globalStatus = status
+}
+
 func (w *Worker) addClientRuntimeWatcher(n common.Namespace, crw *clientRuntimeWatcher) {
 	w.Lock()
 	defer w.Unlock()
@@ -645,6 +653,9 @@ func (w *Worker) worker() { // nolint: gocyclo
 			}
 
 			w.logger.Info("received key manager status update")
+
+			// Cache the latest status.
+			w.setStatus(status)
 
 			// Check if this is the first update and we need to initialize the
 			// worker host.

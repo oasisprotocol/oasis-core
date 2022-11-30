@@ -35,12 +35,6 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		ss = api.StatusStateStarting
 	}
 
-	var rid *common.Namespace
-	if w.runtime != nil {
-		id := w.runtime.ID()
-		rid = &id
-	}
-
 	ps := make([]peer.ID, 0, len(w.privatePeers))
 	for p := range w.privatePeers {
 		ps = append(ps, p)
@@ -63,14 +57,19 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		al = append(al, ral)
 	}
 
-	return &api.Status{
+	gs := w.globalStatus
+	ws := api.WorkerStatus{
 		Status:         ss,
 		MayGenerate:    w.mayGenerate,
-		RuntimeID:      rid,
 		ClientRuntimes: rts,
 		AccessList:     al,
 		PrivatePeers:   ps,
 		Policy:         w.policy,
 		PolicyChecksum: w.policyChecksum,
+	}
+
+	return &api.Status{
+		GlobalStatus: gs,
+		WorkerStatus: ws,
 	}, nil
 }
