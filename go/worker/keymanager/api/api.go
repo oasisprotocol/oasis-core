@@ -81,8 +81,17 @@ type RuntimeAccessList struct {
 	Peers []core.PeerID `json:"peers"`
 }
 
-// Status is the key manager worker status.
+// Status is the key manager global and worker status.
 type Status struct {
+	// GlobalStatus is the global key manager committee status.
+	GlobalStatus *api.Status `json:"global"`
+
+	// WorkerStatus is the key manager worker status.
+	WorkerStatus WorkerStatus `json:"worker"`
+}
+
+// WorkerStatus is the key manager worker status.
+type WorkerStatus struct {
 	// Status is a concise status of the key manager worker.
 	Status StatusState `json:"status"`
 
@@ -100,7 +109,7 @@ type Status struct {
 	PrivatePeers []core.PeerID `json:"private_peers"`
 
 	// Policy is the key manager policy.
-	Policy *api.SignedPolicySGX `json:"signed_policy"`
+	Policy *api.SignedPolicySGX `json:"policy"`
 	// PolicyChecksum is the checksum of the key manager policy.
 	PolicyChecksum []byte `json:"policy_checksum"`
 }
