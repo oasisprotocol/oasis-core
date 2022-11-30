@@ -6,6 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p/core"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 )
 
 // StatusState is the concise status state of the key manager worker.
@@ -97,4 +98,9 @@ type Status struct {
 	AccessList []RuntimeAccessList `json:"access_list"`
 	// PrivatePeers is a list of peers that are always allowed to call protected methods.
 	PrivatePeers []core.PeerID `json:"private_peers"`
+
+	// Policy is the key manager policy.
+	Policy *api.SignedPolicySGX `json:"signed_policy"`
+	// PolicyChecksum is the checksum of the key manager policy.
+	PolicyChecksum []byte `json:"policy_checksum"`
 }
