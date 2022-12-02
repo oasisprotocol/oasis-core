@@ -6,7 +6,11 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 )
+
+var errUnsupported = fmt.Errorf("unsupported: p2p is disabled")
 
 type nopPeerManager struct{}
 
@@ -35,6 +39,11 @@ func (*nopPeerManager) RecordSuccess(peerID peer.ID, latency time.Duration) {
 func (*nopPeerManager) RemovePeer(peerID peer.ID) {
 }
 
+// Implements PeersUpdates.
+func (*nopPeerManager) WatchUpdates() (<-chan *PeerUpdate, pubsub.ClosableSubscription, error) {
+	return nil, nil, errUnsupported
+}
+
 type nopClient struct{}
 
 // Implements Client.
@@ -45,7 +54,7 @@ func (c *nopClient) Call(
 	body, rsp interface{},
 	opts ...CallOption,
 ) (PeerFeedback, error) {
-	return nil, fmt.Errorf("unsupported: p2p is disabled")
+	return nil, errUnsupported
 }
 
 // Implements Client.
@@ -56,7 +65,7 @@ func (c *nopClient) CallOne(
 	body, rsp interface{},
 	opts ...CallOption,
 ) (PeerFeedback, error) {
-	return nil, fmt.Errorf("unsupported: p2p is disabled")
+	return nil, errUnsupported
 }
 
 // Implements Client.
@@ -67,7 +76,7 @@ func (c *nopClient) CallMulti(
 	body, rspTyp interface{},
 	opts ...CallMultiOption,
 ) ([]interface{}, []PeerFeedback, error) {
-	return nil, nil, fmt.Errorf("unsupported: p2p is disabled")
+	return nil, nil, errUnsupported
 }
 
 // Implements Client.

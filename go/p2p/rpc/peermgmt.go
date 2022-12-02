@@ -14,6 +14,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 )
 
 const (
@@ -115,6 +116,26 @@ type PeerManager interface {
 	// GetBestPeers returns a set of peers sorted by the probability that they will be able to
 	// answer our requests the fastest with some randomization.
 	GetBestPeers(opts ...BestPeersOption) []core.PeerID
+
+	// WatchUpdates returns a channel that produces a stream of messages on peer updates.
+	WatchUpdates() (<-chan *PeerUpdate, pubsub.ClosableSubscription, error)
+}
+
+// PeerUpdate is a peer update event.
+type PeerUpdate struct {
+	ID core.PeerID
+
+	PeerAdded   *PeerAdded
+	PeerRemoved *PeerRemoved
+}
+
+// PeerAdded is an event emitted when a new peer is added.
+type PeerAdded struct{}
+
+// PeerRemoved is an event emitted when a peer is removed.
+type PeerRemoved struct {
+	// BadPeer indicates that the peer was removed due to being recorded as a bad peer.
+	BadPeer bool
 }
 
 type peerStats struct {
@@ -150,8 +171,9 @@ type peerManager struct {
 	host       core.Host
 	protocolID protocol.ID
 
-	peers        map[core.PeerID]*peerStats
-	ignoredPeers map[core.PeerID]bool
+	peerUpdatesNotifier *pubsub.Broker
+	peers               map[core.PeerID]*peerStats
+	ignoredPeers        map[core.PeerID]bool
 
 	stickyPeer core.PeerID
 
@@ -180,6 +202,7 @@ func (mgr *peerManager) AddPeer(peerID core.PeerID) {
 		"peer_id", peerID,
 		"num_peers", len(mgr.peers),
 	)
+	mgr.peerUpdatesNotifier.Broadcast(&PeerUpdate{ID: peerID, PeerAdded: &PeerAdded{}})
 }
 
 func (mgr *peerManager) RemovePeer(peerID core.PeerID) {
@@ -196,6 +219,7 @@ func (mgr *peerManager) RemovePeer(peerID core.PeerID) {
 		"peer_id", peerID,
 		"num_peers", len(mgr.peers),
 	)
+	mgr.peerUpdatesNotifier.Broadcast(&PeerUpdate{ID: peerID, PeerRemoved: &PeerRemoved{}})
 }
 
 func (mgr *peerManager) RecordSuccess(peerID core.PeerID, latency time.Duration) {
@@ -244,8 +268,14 @@ func (mgr *peerManager) RecordBadPeer(peerID core.PeerID) {
 
 	mgr.p2p.BlockPeer(peerID)
 	mgr.ignoredPeers[peerID] = true
+
+	if _, exists := mgr.peers[peerID]; !exists {
+		return
+	}
+
 	delete(mgr.peers, peerID)
 	mgr.unstickPeerLocked(peerID)
+	mgr.peerUpdatesNotifier.Broadcast(&PeerUpdate{ID: peerID, PeerRemoved: &PeerRemoved{BadPeer: true}})
 }
 
 func (mgr *peerManager) unstickPeerLocked(peerID core.PeerID) {
@@ -256,6 +286,14 @@ func (mgr *peerManager) unstickPeerLocked(peerID core.PeerID) {
 	if mgr.stickyPeer == peerID {
 		mgr.stickyPeer = ""
 	}
+}
+
+func (mgr *peerManager) WatchUpdates() (<-chan *PeerUpdate, pubsub.ClosableSubscription, error) {
+	typedCh := make(chan *PeerUpdate)
+	sub := mgr.peerUpdatesNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub, nil
 }
 
 func (mgr *peerManager) GetBestPeers(opts ...BestPeersOption) []core.PeerID {
@@ -414,12 +452,13 @@ func NewPeerManager(p2p P2P, protocolID protocol.ID, opts ...PeerManagerOption) 
 	}
 
 	mgr := &peerManager{
-		p2p:          p2p,
-		host:         p2p.Host(),
-		protocolID:   protocolID,
-		peers:        make(map[core.PeerID]*peerStats),
-		ignoredPeers: make(map[core.PeerID]bool),
-		opts:         &pmo,
+		p2p:                 p2p,
+		host:                p2p.Host(),
+		protocolID:          protocolID,
+		peerUpdatesNotifier: pubsub.NewBroker(false),
+		peers:               make(map[core.PeerID]*peerStats),
+		ignoredPeers:        make(map[core.PeerID]bool),
+		opts:                &pmo,
 		logger: logging.GetLogger("p2p/rpc/peermgr").With(
 			"protocol_id", protocolID,
 		),
