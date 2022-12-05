@@ -9,6 +9,7 @@ import (
 
 	"github.com/eapache/channels"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -444,10 +445,66 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 	}
 	defer dscSub.Close()
 
+	var (
+		kmRtID *common.Namespace
+		done   bool
+	)
+
+	for !done {
+		done = func() bool {
+			// Start watching key manager policy updates.
+			var wg sync.WaitGroup
+			defer wg.Wait()
+
+			ctx, cancel := context.WithCancel(n.ctx)
+			defer cancel()
+
+			wg.Add(1)
+			go func(kmRtID *common.Namespace) {
+				defer wg.Done()
+				n.watchKmPolicyUpdates(ctx, kmRtID)
+			}(kmRtID)
+
+			// Restart the updater if the runtime changes the key manager. This should happen
+			// at most once as runtimes are not allowed to change the manager once set.
+			for {
+				select {
+				case <-n.ctx.Done():
+					n.logger.Debug("context canceled")
+					return true
+				case <-n.stopCh:
+					n.logger.Debug("termination requested")
+					return true
+				case rtDsc := <-dscCh:
+					n.logger.Debug("got registry descriptor update")
+
+					if rtDsc.Kind != registry.KindCompute {
+						return true
+					}
+
+					if kmRtID.Equal(rtDsc.KeyManager) {
+						break
+					}
+
+					kmRtID = rtDsc.KeyManager
+					return false
+				}
+			}
+		}()
+	}
+}
+
+func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *common.Namespace) {
+	// No need to watch anything if key manager is not set.
+	if kmRtID == nil {
+		return
+	}
+
+	n.logger.Debug("watching key manager policy updates", "keymanager", kmRtID)
+
 	// Subscribe to key manager status updates.
 	stCh, stSub := n.consensus.KeyManager().WatchStatuses()
 	defer stSub.Close()
-	n.logger.Debug("watching policy updates")
 
 	// Subscribe to runtime host events.
 	evCh, evSub, err := n.host.WatchEvents(n.ctx)
@@ -459,76 +516,51 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 	}
 	defer evSub.Close()
 
-	var (
-		rtDsc *registry.Runtime
-		st    *keymanager.Status
-	)
+	var st *keymanager.Status
+
 	for {
 		select {
-		case <-n.ctx.Done():
-			n.logger.Debug("context canceled")
+		case <-ctx.Done():
 			return
-		case <-n.stopCh:
-			n.logger.Debug("termination requested")
-			return
-		case rtDsc = <-dscCh:
-			n.logger.Debug("got registry descriptor update")
-
-			// Ignore updates if key manager is not needed.
-			if rtDsc.KeyManager == nil {
-				n.logger.Debug("no key manager needed for this runtime")
-				continue
-			}
-
-			var err error
-			st, err = n.consensus.KeyManager().GetStatus(n.ctx, &registry.NamespaceQuery{
-				Height: consensus.HeightLatest,
-				ID:     *rtDsc.KeyManager,
-			})
-			if err != nil {
-				n.logger.Warn("failed to fetch key manager status",
-					"err", err,
-				)
-				continue
-			}
 		case newSt := <-stCh:
-			// Ignore status updates if key manager is not yet known (is nil)
-			// or if the status update is for a different key manager.
-			if rtDsc == nil || !newSt.ID.Equal(rtDsc.KeyManager) {
+			// Ignore status updates for a different key manager.
+			if !newSt.ID.Equal(kmRtID) {
 				continue
 			}
 			st = newSt
+			n.updateKeyManagerPolicy(ctx, st.Policy)
 		case ev := <-evCh:
 			// Runtime host changes, make sure to update the policy if runtime is restarted.
 			if ev.Started == nil && ev.Updated == nil {
 				continue
 			}
+			// Make sure that we actually have a policy.
+			if st != nil {
+				n.updateKeyManagerPolicy(ctx, st.Policy)
+			}
 		}
-
-		// Make sure that we actually have a policy.
-		if st == nil {
-			continue
-		}
-
-		// Update key manager policy.
-		n.logger.Debug("got policy update", "status", st)
-
-		raw := cbor.Marshal(st.Policy)
-		req := &protocol.Body{RuntimeKeyManagerPolicyUpdateRequest: &protocol.RuntimeKeyManagerPolicyUpdateRequest{
-			SignedPolicyRaw: raw,
-		}}
-
-		ctx, cancel := context.WithTimeout(n.ctx, notifyTimeout)
-		response, err := n.host.Call(ctx, req)
-		cancel()
-		if err != nil {
-			n.logger.Error("failed dispatching key manager policy update to runtime",
-				"err", err,
-			)
-			continue
-		}
-		n.logger.Debug("key manager policy updated dispatched", "response", response)
 	}
+}
+
+func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *keymanager.SignedPolicySGX) {
+	n.logger.Debug("got key manager policy update", "policy", policy)
+
+	raw := cbor.Marshal(policy)
+	req := &protocol.Body{RuntimeKeyManagerPolicyUpdateRequest: &protocol.RuntimeKeyManagerPolicyUpdateRequest{
+		SignedPolicyRaw: raw,
+	}}
+
+	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
+	defer cancel()
+
+	if _, err := n.host.Call(ctx, req); err != nil {
+		n.logger.Error("failed dispatching key manager policy update to runtime",
+			"err", err,
+		)
+		return
+	}
+
+	n.logger.Debug("key manager policy update dispatched")
 }
 
 func (n *runtimeHostNotifier) watchConsensusLightBlocks() {

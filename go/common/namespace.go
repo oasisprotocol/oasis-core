@@ -105,7 +105,10 @@ func (n *Namespace) UnmarshalBase64(text []byte) error {
 
 // Equal compares vs another namespace for equality.
 func (n *Namespace) Equal(cmp *Namespace) bool {
-	if cmp == nil {
+	if n == cmp {
+		return true
+	}
+	if n == nil || cmp == nil {
 		return false
 	}
 	return bytes.Equal(n[:], cmp[:])
