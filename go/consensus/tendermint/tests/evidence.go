@@ -10,6 +10,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
@@ -63,7 +64,7 @@ func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.
 			Hash:  []byte("partshashpartshashpartshashpart2"),
 		},
 	}
-	chainID := genesis.ChainContext()[:tmtypes.MaxChainIDLen]
+	chainID := api.TendermintChainID(genesis.ChainContext())
 
 	ev := &tmtypes.DuplicateVoteEvidence{
 		Timestamp:        blk.Time,

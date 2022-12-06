@@ -43,7 +43,6 @@ import (
 	workerClient "github.com/oasisprotocol/oasis-core/go/worker/client"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor"
-	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
@@ -64,7 +63,8 @@ type Node struct {
 
 	commonStore *persistent.CommonStore
 
-	Consensus consensusAPI.Backend
+	Consensus   consensusAPI.Backend
+	LightClient consensusAPI.LightService
 
 	dataDir      string
 	chainContext string
@@ -85,7 +85,6 @@ type Node struct {
 	P2P                p2pAPI.Service
 	RegistrationWorker *registration.Worker
 	KeymanagerWorker   *workerKeymanager.Worker
-	ConsensusWorker    *workerConsensusRPC.Worker
 	BeaconWorker       *workerBeacon.Worker
 	readyCh            chan struct{}
 
@@ -238,6 +237,7 @@ func (n *Node) initRuntimeWorkers() error {
 		n.chainContext,
 		n.Identity,
 		n.Consensus,
+		n.LightClient,
 		n.P2P,
 		n.IAS,
 		n.Consensus.KeyManager(),
@@ -347,13 +347,6 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 	n.svcMgr.Register(n.SentryWorker)
 
-	// Initialize the public consensus services worker.
-	n.ConsensusWorker, err = workerConsensusRPC.New(n.CommonWorker, n.RegistrationWorker)
-	if err != nil {
-		return err
-	}
-	n.svcMgr.Register(n.ConsensusWorker)
-
 	return nil
 }
 
@@ -396,21 +389,6 @@ func (n *Node) startRuntimeWorkers() error {
 	// Start the sentry worker.
 	if err := n.SentryWorker.Start(); err != nil {
 		return err
-	}
-
-	// Start the public consensus services worker.
-	if err := n.ConsensusWorker.Start(); err != nil {
-		return fmt.Errorf("consensus worker: %w", err)
-	}
-
-	// Only start the external gRPC server if needed.
-	if n.ConsensusWorker.Enabled() {
-		if err := n.CommonWorker.Grpc.Start(); err != nil {
-			n.logger.Error("failed to start external gRPC server",
-				"err", err,
-			)
-			return err
-		}
 	}
 
 	// Close readyCh once all workers and runtimes are initialized.
@@ -590,6 +568,9 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		if err != nil {
 			return nil, err
 		}
+		if err = node.Consensus.RegisterP2PService(node.P2P); err != nil {
+			return nil, err
+		}
 	default:
 		node.P2P = p2p.NewNop()
 	}
@@ -601,6 +582,16 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		)
 		return nil, err
 	}
+
+	// Initialize Tendermint light client.
+	node.LightClient, err = tendermint.NewLightClient(node.svcMgr.Ctx, node.dataDir, genesisDoc, node.Consensus, node.P2P)
+	if err != nil {
+		logger.Error("failed to initialize tendermint light client service",
+			"err", err,
+		)
+		return nil, err
+	}
+	node.svcMgr.Register(node.LightClient)
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.
@@ -632,6 +623,14 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Start the consensus backend service.
 	if err = node.Consensus.Start(); err != nil {
 		logger.Error("failed to start consensus backend service",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	// Start the consensus light client service.
+	if err = node.LightClient.Start(); err != nil {
+		logger.Error("failed to start consensus light client service",
 			"err", err,
 		)
 		return nil, err

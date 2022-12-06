@@ -32,7 +32,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
@@ -281,7 +280,6 @@ func (args *argBuilder) tendermintDebugAllowDuplicateIP() *argBuilder {
 }
 
 func (args *argBuilder) tendermintStateSync(
-	consensusNodes []string,
 	trustHeight uint64,
 	trustHash string,
 ) *argBuilder {
@@ -290,9 +288,6 @@ func (args *argBuilder) tendermintStateSync(
 		{tendermintFull.CfgConsensusStateSyncTrustHeight, []string{strconv.FormatUint(trustHeight, 10)}, false},
 		{tendermintFull.CfgConsensusStateSyncTrustHash, []string{trustHash}, false},
 	}...)
-	for _, address := range consensusNodes {
-		args.vec = append(args.vec, Argument{tendermintFull.CfgConsensusStateSyncConsensusNode, []string{address}, true})
-	}
 	return args
 }
 
@@ -519,11 +514,6 @@ func (args *argBuilder) workerCertificateRotation(enabled bool) *argBuilder {
 		arg.Values = []string{"1"}
 	}
 	args.vec = append(args.vec, arg)
-	return args
-}
-
-func (args *argBuilder) workerConsensusRPCEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: workerConsensusRPC.CfgWorkerEnabled})
 	return args
 }
 

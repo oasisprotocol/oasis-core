@@ -11,7 +11,7 @@ replace (
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
 	github.com/spf13/cast => github.com/oasisprotocol/cast v0.0.0-20220606122631-eba453e69641
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.23-oasis1
+	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.23-oasis2
 
 	// Required because of https://github.com/libp2p/go-libp2p-pubsub/issues/467.
 	github.com/whyrusleeping/timecache => github.com/oasisprotocol/timecache v0.0.0-20220102191729-558b1c931038

@@ -624,7 +624,6 @@ func (net *Network) startOasisNode(
 	}
 	if node.consensusStateSync != nil {
 		extraArgs = extraArgs.tendermintStateSync(
-			node.consensusStateSync.ConsensusNodes,
 			node.consensusStateSync.TrustHeight,
 			node.consensusStateSync.TrustHash,
 		)
@@ -665,6 +664,7 @@ func (net *Network) startOasisNode(
 
 		cmdErr := <-doneCh
 		net.logger.Debug("node terminated",
+			"node", node.Name,
 			"err", cmdErr,
 		)
 

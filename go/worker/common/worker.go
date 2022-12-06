@@ -29,6 +29,7 @@ type Worker struct {
 	ChainContext      string
 	Identity          *identity.Identity
 	Consensus         consensus.Backend
+	LightClient       consensus.LightClient
 	Grpc              *grpc.Server
 	GrpcPolicyWatcher policyAPI.PolicyWatcher
 	P2P               p2p.Service
@@ -169,6 +170,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.Identity,
 		w.KeyManager,
 		w.Consensus,
+		w.LightClient,
 		w.P2P,
 		&w.cfg.TxPool,
 	)
@@ -192,6 +194,7 @@ func newWorker(
 	chainContext string,
 	identity *identity.Identity,
 	consensus consensus.Backend,
+	lightClient consensus.LightClient,
 	grpc *grpc.Server,
 	grpcPolicyWatcher policyAPI.PolicyWatcher,
 	p2p p2p.Service,
@@ -217,6 +220,7 @@ func newWorker(
 		ChainContext:      chainContext,
 		Identity:          identity,
 		Consensus:         consensus,
+		LightClient:       lightClient,
 		Grpc:              grpc,
 		GrpcPolicyWatcher: grpcPolicyWatcher,
 		P2P:               p2p,
@@ -252,6 +256,7 @@ func New(
 	chainContext string,
 	identity *identity.Identity,
 	consensus consensus.Backend,
+	lightClient consensus.LightClient,
 	p2p p2p.Service,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
@@ -284,6 +289,7 @@ func New(
 		chainContext,
 		identity,
 		consensus,
+		lightClient,
 		grpc,
 		grpcPolicyWatcher,
 		p2p,

@@ -119,7 +119,7 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 	evCfg.MaxAgeDuration = time.Duration(evCfg.MaxAgeNumBlocks) * (d.Consensus.Parameters.TimeoutCommit + 1*time.Second)
 
 	doc := tmtypes.GenesisDoc{
-		ChainID:       d.ChainContext()[:tmtypes.MaxChainIDLen],
+		ChainID:       TendermintChainID(d.ChainContext()),
 		GenesisTime:   d.Time,
 		InitialHeight: d.Height,
 		ConsensusParams: &tmproto.ConsensusParams{

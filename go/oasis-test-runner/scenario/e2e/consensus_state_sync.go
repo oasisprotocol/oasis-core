@@ -6,7 +6,6 @@ import (
 	"time"
 
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -46,8 +45,7 @@ func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 			NodeFixture: oasis.NodeFixture{
 				NoAutoStart: true,
 			},
-			Entity:    1,
-			Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true},
+			Entity: 1,
 			LogWatcherHandlerFactories: []log.WatcherHandlerFactory{
 				oasis.LogEventABCIStateSyncComplete(),
 			},
@@ -102,46 +100,11 @@ func (sc *consensusStateSyncImpl) Run(childEnv *env.Env) error {
 	// The last validator configured by the fixture is the one that is stopped and will sync.
 	lastValidator := len(sc.Net.Validators()) - 1
 
-	// Get the TLS public key from the validators (all except the last one).
-	var consensusNodes []string
-	for _, v := range sc.Net.Validators()[:lastValidator] {
-		var ctrl *oasis.Controller
-		ctrl, err = oasis.NewController(v.SocketPath())
-		if err != nil {
-			return fmt.Errorf("failed to create controller for validator %s: %w", v.Name, err)
-		}
-
-		var status *control.Status
-		status, err = ctrl.GetStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get status for validator %s: %w", v.Name, err)
-		}
-		if status.Consensus.Status != consensus.StatusStateReady {
-			return fmt.Errorf("validator %s not ready", v.Name)
-		}
-
-		if status.Registration.Descriptor == nil {
-			return fmt.Errorf("validator %s has not registered", v.Name)
-		}
-		if len(status.Registration.Descriptor.TLS.Addresses) == 0 {
-			return fmt.Errorf("validator %s has no TLS addresses", v.Name)
-		}
-
-		var rawAddress []byte
-		tlsAddress := status.Registration.Descriptor.TLS.Addresses[0]
-		rawAddress, err = tlsAddress.MarshalText()
-		if err != nil {
-			return fmt.Errorf("failed to marshal TLS address: %w", err)
-		}
-		consensusNodes = append(consensusNodes, string(rawAddress))
-	}
-
 	// Configure state sync for the consensus validator.
 	val := sc.Net.Validators()[lastValidator]
 	val.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
-		ConsensusNodes: consensusNodes,
-		TrustHeight:    uint64(blk.Height),
-		TrustHash:      blk.Hash.Hex(),
+		TrustHeight: uint64(blk.Height),
+		TrustHash:   blk.Hash.Hex(),
 	})
 
 	if err = val.Start(); err != nil {

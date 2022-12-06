@@ -53,7 +53,7 @@ func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// be possible to run this configuration as the VRF backend
 	// currently requires multiple validators.
 	f.Validators = []oasis.ValidatorFixture{
-		{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true, SupplementarySanityInterval: 1}},
+		{Entity: 1, Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1}},
 	}
 	f.Network.SetInsecureBeacon()
 
