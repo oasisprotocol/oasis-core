@@ -199,10 +199,10 @@ impl Policy {
     fn save_raw_policy(untrusted_local: &dyn KeyValue, raw_policy: &[u8]) {
         let ciphertext = seal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, raw_policy);
 
-        // Persist the encrypted master secret.
+        // Persist the encrypted policy.
         untrusted_local
             .insert(POLICY_STORAGE_KEY.to_vec(), ciphertext)
-            .expect("failed to persist master secret");
+            .expect("failed to persist policy");
     }
 }
 
