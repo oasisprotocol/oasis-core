@@ -54,13 +54,17 @@ enum QuoteError {
     MrSignerMismatch,
     #[error("quote nonce mismatch")]
     NonceMismatch,
+    #[error("quote policy not set")]
+    QuotePolicyNotSet,
+    #[error("quote policy already set")]
+    QuotePolicyAlreadySet,
 }
 
 struct Inner {
     private_key: Option<PrivateKey>,
     quote: Option<Arc<Quote>>,
     quote_timestamp: Option<i64>,
-    quote_policy: Option<QuotePolicy>,
+    quote_policy: Option<Arc<QuotePolicy>>,
     known_quotes: VecDeque<Arc<Quote>>,
     #[allow(unused)]
     enclave_identity: Option<EnclaveIdentity>,
@@ -188,7 +192,7 @@ impl RAK {
 
     /// Configure the remote attestation quote for RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn set_quote(&self, quote: Quote, policy: QuotePolicy) -> Result<VerifiedQuote> {
+    pub(crate) fn set_quote(&self, quote: Quote) -> Result<VerifiedQuote> {
         let rak_pub = self.public_key().expect("RAK must be configured");
 
         let mut inner = self.inner.write().unwrap();
@@ -206,7 +210,11 @@ impl RAK {
         // that failed.
         inner.nonce = None;
 
-        let verified_quote = quote.verify(&policy)?;
+        let policy = inner
+            .quote_policy
+            .as_ref()
+            .ok_or(QuoteError::QuotePolicyNotSet)?;
+        let verified_quote = quote.verify(policy)?;
         let nonce = &verified_quote.report_data[32..];
         if expected_nonce.as_ref() != nonce {
             return Err(QuoteError::NonceMismatch.into());
@@ -239,7 +247,6 @@ impl RAK {
         let quote = Arc::new(quote);
         inner.quote = Some(quote.clone());
         inner.quote_timestamp = Some(verified_quote.timestamp);
-        inner.quote_policy = Some(policy);
 
         // Keep around last two valid quotes to allow for transition as node registration does not
         // happen immediately after a quote has been verified by the runtime.
@@ -249,6 +256,18 @@ impl RAK {
         }
 
         Ok(verified_quote)
+    }
+
+    /// Configure the runtime quote policy.
+    #[cfg(target_env = "sgx")]
+    pub(crate) fn set_quote_policy(&self, policy: QuotePolicy) -> Result<()> {
+        let mut inner = self.inner.write().unwrap();
+        if inner.quote_policy.is_some() {
+            return Err(QuoteError::QuotePolicyAlreadySet.into());
+        }
+        inner.quote_policy = Some(Arc::new(policy));
+
+        Ok(())
     }
 
     /// Public part of RAK.
@@ -285,6 +304,16 @@ impl RAK {
         }
 
         inner.quote.clone()
+    }
+
+    /// Runtime quote policy.
+    ///
+    /// This method may return `None` in the case where the enclave is not
+    /// running on SGX hardware or if the quote policy has not yet been
+    /// fetched from the consensus layer.
+    pub fn quote_policy(&self) -> Option<Arc<QuotePolicy>> {
+        let inner = self.inner.read().unwrap();
+        inner.quote_policy.clone()
     }
 
     /// Verify a provided RAK binding.
