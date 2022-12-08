@@ -42,6 +42,7 @@ type serviceClient struct {
 	nodeNotifier     *pubsub.Broker
 	nodeListNotifier *pubsub.Broker
 	runtimeNotifier  *pubsub.Broker
+	eventNotifier    *pubsub.Broker
 }
 
 // NodeListEpochInternalEvent is the per-epoch node list event.
@@ -218,6 +219,15 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return events, nil
 }
 
+// WatchEvents implements api.Backend.
+func (sc *serviceClient) WatchEvents(ctx context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+	typedCh := make(chan *api.Event)
+	sub := sc.eventNotifier.Subscribe()
+	sub.Unwrap(typedCh)
+
+	return typedCh, sub, nil
+}
+
 func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) (*api.ConsensusParameters, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
@@ -259,9 +269,10 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 		if ev.NodeEvent != nil {
 			sc.nodeNotifier.Broadcast(ev.NodeEvent)
 		}
-		if ev.RuntimeEvent != nil {
-			sc.runtimeNotifier.Broadcast(ev.RuntimeEvent.Runtime)
+		if ev.RuntimeStartedEvent != nil {
+			sc.runtimeNotifier.Broadcast(ev.RuntimeStartedEvent.Runtime)
 		}
+		sc.eventNotifier.Broadcast(ev)
 	}
 
 	return nil
@@ -298,15 +309,24 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.NodeListEpochEvent{}):
 				// Node list epoch event (value is ignored).
 				nodeListEvents = append(nodeListEvents, &NodeListEpochInternalEvent{Height: height})
-			case eventsAPI.IsAttributeKind(key, &api.RuntimeEvent{}):
-				// Runtime registered event.
-				var e api.RuntimeEvent
+			case eventsAPI.IsAttributeKind(key, &api.RuntimeStartedEvent{}):
+				// Runtime started event.
+				var e api.RuntimeStartedEvent
 				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Runtime event: %w", err))
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeStarted event: %w", err))
 					continue
 				}
 
-				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeEvent: &e})
+				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeStartedEvent: &e})
+			case eventsAPI.IsAttributeKind(key, &api.RuntimeSuspendedEvent{}):
+				// Runtime suspended event.
+				var e api.RuntimeSuspendedEvent
+				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeSuspended event: %w", err))
+					continue
+				}
+
+				events = append(events, &api.Event{Height: height, TxHash: txHash, RuntimeSuspendedEvent: &e})
 			case eventsAPI.IsAttributeKind(key, &api.EntityEvent{}):
 				// Entity event.
 				var e api.EntityEvent
@@ -372,6 +392,7 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 		querier:        a.QueryFactory().(*app.QueryFactory),
 		entityNotifier: pubsub.NewBroker(false),
 		nodeNotifier:   pubsub.NewBroker(false),
+		eventNotifier:  pubsub.NewBroker(false),
 	}
 	sc.nodeListNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		wr := ch.In()

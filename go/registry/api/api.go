@@ -223,6 +223,9 @@ type Backend interface {
 	// GetEvents returns the events at specified block height.
 	GetEvents(ctx context.Context, height int64) ([]*Event, error)
 
+	// WatchEvents returns a channel that produces a stream of Events.
+	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
+
 	// ConsensusParameters returns the registry consensus parameters.
 	ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error)
 
@@ -320,14 +323,26 @@ func (e *NodeEvent) EventKind() string {
 	return "node"
 }
 
-// RuntimeEvent signifies new runtime registration.
-type RuntimeEvent struct {
+// RuntimeStartedEvent signifies a runtime started event.
+//
+// Emitted when a new runtime is started or a previously suspended runtime is resumed.
+type RuntimeStartedEvent struct {
 	Runtime *Runtime `json:"runtime"`
 }
 
 // EventKind returns a string representation of this event's kind.
-func (e *RuntimeEvent) EventKind() string {
-	return "runtime"
+func (e *RuntimeStartedEvent) EventKind() string {
+	return "runtime_started"
+}
+
+// RuntimeSuspendedEvent signifies a runtime was suspended.
+type RuntimeSuspendedEvent struct {
+	RuntimeID common.Namespace `json:"runtime_id"`
+}
+
+// EventKind returns a string representation of this event's kind.
+func (e *RuntimeSuspendedEvent) EventKind() string {
+	return "runtime_suspended"
 }
 
 // NodeUnfrozenEvent signifies when node becomes unfrozen.
@@ -366,10 +381,11 @@ type Event struct {
 	Height int64     `json:"height,omitempty"`
 	TxHash hash.Hash `json:"tx_hash,omitempty"`
 
-	RuntimeEvent      *RuntimeEvent      `json:"runtime,omitempty"`
-	EntityEvent       *EntityEvent       `json:"entity,omitempty"`
-	NodeEvent         *NodeEvent         `json:"node,omitempty"`
-	NodeUnfrozenEvent *NodeUnfrozenEvent `json:"node_unfrozen,omitempty"`
+	RuntimeStartedEvent   *RuntimeStartedEvent   `json:"runtime_started,omitempty"`
+	RuntimeSuspendedEvent *RuntimeSuspendedEvent `json:"runtime_suspended,omitempty"`
+	EntityEvent           *EntityEvent           `json:"entity,omitempty"`
+	NodeEvent             *NodeEvent             `json:"node,omitempty"`
+	NodeUnfrozenEvent     *NodeUnfrozenEvent     `json:"node_unfrozen,omitempty"`
 }
 
 // NodeList is a per-epoch immutable node list.

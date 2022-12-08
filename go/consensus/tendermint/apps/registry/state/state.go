@@ -10,10 +10,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+)
+
+const (
+	// AppName is the ABCI application name.
+	AppName = "200_registry"
 )
 
 var (
@@ -661,13 +667,17 @@ func (s *MutableState) SetRuntime(ctx context.Context, rt *registry.Runtime, sus
 }
 
 // SuspendRuntime marks a runtime as suspended.
-func (s *MutableState) SuspendRuntime(ctx context.Context, id common.Namespace) error {
+func (s *MutableState) SuspendRuntime(ctx *abciAPI.Context, id common.Namespace) error {
 	data, err := s.ms.RemoveExisting(ctx, runtimeKeyFmt.Encode(&id))
 	if err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
 	if data == nil {
 		return registry.ErrNoSuchRuntime
+	}
+
+	if !ctx.IsCheckOnly() {
+		ctx.EmitEvent(api.NewEventBuilder(AppName).TypedAttribute(&registry.RuntimeSuspendedEvent{RuntimeID: id}))
 	}
 	err = s.ms.Insert(ctx, suspendedRuntimeKeyFmt.Encode(&id), data)
 	return abciAPI.UnavailableStateError(err)

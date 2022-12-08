@@ -46,6 +46,8 @@ var (
 	methodWatchNodeList = serviceName.NewMethod("WatchNodeList", nil)
 	// methodWatchRuntimes is the WatchRuntimes method.
 	methodWatchRuntimes = serviceName.NewMethod("WatchRuntimes", nil)
+	// methodWatchEvents is the WatchEvents method.
+	methodWatchEvents = serviceName.NewMethod("WatchEvents", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -116,6 +118,11 @@ var (
 			{
 				StreamName:    methodWatchRuntimes.ShortName(),
 				Handler:       handlerWatchRuntimes,
+				ServerStreams: true,
+			},
+			{
+				StreamName:    methodWatchEvents.ShortName(),
+				Handler:       handlerWatchEvents,
 				ServerStreams: true,
 			},
 		},
@@ -487,6 +494,33 @@ func handlerWatchRuntimes(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
+func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
+	if err := stream.RecvMsg(nil); err != nil {
+		return err
+	}
+
+	ctx := stream.Context()
+	ch, sub, err := srv.(Backend).WatchEvents(ctx)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := stream.SendMsg(ev); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 // RegisterService registers a new registry backend service with the given gRPC server.
 func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
@@ -714,6 +748,41 @@ func (c *registryClient) GetEvents(ctx context.Context, height int64) ([]*Event,
 		return nil, err
 	}
 	return rsp, nil
+}
+
+func (c *registryClient) WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error) {
+	ctx, sub := pubsub.NewContextSubscription(ctx)
+
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[0], methodWatchEvents.FullName())
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = stream.SendMsg(nil); err != nil {
+		return nil, nil, err
+	}
+	if err = stream.CloseSend(); err != nil {
+		return nil, nil, err
+	}
+
+	ch := make(chan *Event)
+	go func() {
+		defer close(ch)
+
+		for {
+			var ev Event
+			if serr := stream.RecvMsg(&ev); serr != nil {
+				return
+			}
+
+			select {
+			case ch <- &ev:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return ch, sub, nil
 }
 
 func (c *registryClient) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {

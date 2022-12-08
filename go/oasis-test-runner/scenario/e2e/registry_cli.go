@@ -698,9 +698,32 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 		return fmt.Errorf("runtime %s does not match the test one. registry one: %s, test one: %s", testRuntime.ID.String(), rtStr, testRuntimeStr)
 	}
 
+	eventsCh, sub, err := sc.Net.Controller().Registry.WatchEvents(ctx)
+	if err == nil {
+		return err
+	}
+	defer sub.Close()
+
 	// Wait for runtime to suspend.
 	if err = sc.Net.Controller().SetEpoch(ctx, 1); err != nil {
 		return fmt.Errorf("failed to set epoch to %d: %w", 1, err)
+	}
+
+	// Ensure runtime suspended event is received.
+OUTER:
+	for {
+		select {
+		case evt := <-eventsCh:
+			if evt.RuntimeSuspendedEvent == nil {
+				continue
+			}
+			if !rt.ID.Equal(&evt.RuntimeSuspendedEvent.RuntimeID) {
+				continue
+			}
+			break OUTER
+		case <-time.After(10 * time.Second):
+			return fmt.Errorf("failed to receive runtime suspended event for: %s", rtStr)
+		}
 	}
 
 	// List runtimes.

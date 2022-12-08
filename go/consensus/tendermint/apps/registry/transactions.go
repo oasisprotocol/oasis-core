@@ -515,7 +515,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 				return err
 			}
 
-			ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.RuntimeEvent{Runtime: rt}))
+			ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.RuntimeStartedEvent{Runtime: rt}))
 		case registry.ErrNoSuchRuntime:
 			// Runtime was not suspended.
 		default:
@@ -783,7 +783,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 			"runtime", rt,
 		)
 
-		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.RuntimeEvent{Runtime: rt}))
+		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.RuntimeStartedEvent{Runtime: rt}))
 	}
 
 	return rt, nil
