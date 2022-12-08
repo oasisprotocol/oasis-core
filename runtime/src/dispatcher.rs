@@ -22,6 +22,7 @@ use crate::{
             signature::{Signature, Signer},
         },
         logger::get_logger,
+        sgx::QuotePolicy,
     },
     consensus::{
         beacon::EpochTime,
@@ -452,6 +453,12 @@ impl Dispatcher {
             Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
                 // Key manager policy update local RPC call.
                 self.handle_km_policy_update(ctx, state, signed_policy_raw)
+            }
+            Body::RuntimeKeyManagerQuotePolicyUpdateRequest {
+                policy: quote_policy,
+            } => {
+                // Key manager quote policy update local RPC call.
+                self.handle_km_quote_policy_update(ctx, state, quote_policy)
             }
             Body::RuntimeConsensusSyncRequest { height } => state
                 .consensus_verifier
@@ -1008,5 +1015,39 @@ impl Dispatcher {
         debug!(self.logger, "KM policy update request complete");
 
         Ok(Body::RuntimeKeyManagerPolicyUpdateResponse {})
+    }
+
+    fn handle_km_quote_policy_update(
+        &self,
+        ctx: Context,
+        state: State,
+        quote_policy: QuotePolicy,
+    ) -> Result<Body, Error> {
+        // Make sure to abort the process on panic during quote policy processing as that indicates
+        // a serious problem and should make sure to clean up the process.
+        let _guard = AbortOnPanic;
+
+        debug!(self.logger, "Received km quote policy update request");
+
+        // Verify and decode the policy.
+        let ctx = ctx.freeze();
+        let runtime_id = state.protocol.get_host_info().runtime_id;
+        let key_manager = state
+            .policy_verifier
+            .key_manager(ctx.clone(), &runtime_id, true)?;
+        let policy = state.policy_verifier.verify_quote_policy(
+            ctx,
+            quote_policy,
+            &key_manager,
+            None,
+            false,
+        )?;
+
+        // Dispatch the local RPC call.
+        state.rpc_dispatcher.handle_km_quote_policy_update(policy);
+
+        debug!(self.logger, "KM quote policy update request complete");
+
+        Ok(Body::RuntimeKeyManagerQuotePolicyUpdateResponse {})
     }
 }

@@ -9,7 +9,7 @@ use super::types::Message;
 use crate::{
     common::{
         crypto::signature::{PublicKey, Signature, Signer},
-        sgx::{ias, EnclaveIdentity, Quote, VerifiedQuote},
+        sgx::{ias, EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
     },
     rak::RAK,
 };
@@ -30,6 +30,8 @@ enum SessionError {
     Closed,
     #[error("mismatched enclave identity")]
     MismatchedEnclaveIdentity,
+    #[error("missing quote policy")]
+    MissingQuotePolicy,
 }
 
 /// Information about a session.
@@ -50,6 +52,7 @@ pub struct Session {
     local_static_pub: Vec<u8>,
     rak: Option<Arc<RAK>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
+    policy: Option<Arc<QuotePolicy>>,
     info: Option<Arc<SessionInfo>>,
     state: State,
     buf: Vec<u8>,
@@ -61,11 +64,13 @@ impl Session {
         local_static_pub: Vec<u8>,
         rak: Option<Arc<RAK>>,
         remote_enclaves: Option<HashSet<EnclaveIdentity>>,
+        policy: Option<Arc<QuotePolicy>>,
     ) -> Self {
         Self {
             local_static_pub,
             rak,
             remote_enclaves,
+            policy,
             info: None,
             state: State::Handshake1(handshake_state),
             buf: vec![0u8; 65535],
@@ -218,8 +223,13 @@ impl Session {
             return Ok(None);
         }
 
+        let policy = self
+            .policy
+            .as_ref()
+            .ok_or(SessionError::MissingQuotePolicy)?;
+
         let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
-        let verified_quote = rak_binding.verify(&self.remote_enclaves, remote_static)?;
+        let verified_quote = rak_binding.verify(remote_static, &self.remote_enclaves, policy)?;
 
         Ok(Some(Arc::new(SessionInfo {
             rak_binding,
@@ -294,10 +304,11 @@ impl RAKBinding {
     /// Verify the RAK binding.
     pub fn verify(
         &self,
-        remote_enclaves: &Option<HashSet<EnclaveIdentity>>,
         remote_static: &[u8],
+        remote_enclaves: &Option<HashSet<EnclaveIdentity>>,
+        policy: &QuotePolicy,
     ) -> Result<VerifiedQuote> {
-        let verified_quote = self.verify_quote()?;
+        let verified_quote = self.verify_quote(policy)?;
 
         // Verify MRENCLAVE/MRSIGNER.
         if let Some(ref remote_enclaves) = remote_enclaves {
@@ -317,10 +328,10 @@ impl RAKBinding {
     }
 
     /// Verify the quote that is part of the RAK binding.
-    pub fn verify_quote(&self) -> Result<VerifiedQuote> {
+    pub fn verify_quote(&self, policy: &QuotePolicy) -> Result<VerifiedQuote> {
         match self {
-            Self::V0 { ref avr, .. } => ias::verify(avr, &Default::default()), // TODO: Add policy.
-            Self::V1 { ref quote, .. } => quote.verify(&Default::default()),   // TODO: Add policy.
+            Self::V0 { ref avr, .. } => ias::verify(avr, &policy.ias.clone().unwrap_or_default()),
+            Self::V1 { ref quote, .. } => quote.verify(policy),
         }
     }
 }
@@ -330,6 +341,7 @@ impl RAKBinding {
 pub struct Builder {
     rak: Option<Arc<RAK>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
+    policy: Option<Arc<QuotePolicy>>,
 }
 
 impl Builder {
@@ -340,8 +352,13 @@ impl Builder {
 
     /// Enable remote enclave identity verification.
     pub fn remote_enclaves(mut self, enclaves: Option<HashSet<EnclaveIdentity>>) -> Self {
-        // TODO: Also add quote_policy argument.
         self.remote_enclaves = enclaves;
+        self
+    }
+
+    /// Configure quote policy used for remote quote verification.
+    pub fn quote_policy(mut self, policy: Option<Arc<QuotePolicy>>) -> Self {
+        self.policy = policy;
         self
     }
 
@@ -351,6 +368,7 @@ impl Builder {
         self
     }
 
+    #[allow(clippy::type_complexity)]
     fn build<'a>(
         mut self,
     ) -> (
@@ -358,32 +376,34 @@ impl Builder {
         snow::Keypair,
         Option<Arc<RAK>>,
         Option<HashSet<EnclaveIdentity>>,
+        Option<Arc<QuotePolicy>>,
     ) {
         let noise_builder = snow::Builder::new(NOISE_PATTERN.parse().unwrap());
         let rak = self.rak.take();
         let remote_enclaves = self.remote_enclaves.take();
+        let quote_policy = self.policy.take();
         let keypair = noise_builder.generate_keypair().unwrap();
 
-        (noise_builder, keypair, rak, remote_enclaves)
+        (noise_builder, keypair, rak, remote_enclaves, quote_policy)
     }
 
     /// Build initiator session.
     pub fn build_initiator(self) -> Session {
-        let (builder, keypair, rak, enclaves) = self.build();
+        let (builder, keypair, rak, enclaves, policy) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_initiator()
             .unwrap();
-        Session::new(session, keypair.public, rak, enclaves)
+        Session::new(session, keypair.public, rak, enclaves, policy)
     }
 
     /// Build responder session.
     pub fn build_responder(self) -> Session {
-        let (builder, keypair, rak, enclaves) = self.build();
+        let (builder, keypair, rak, enclaves, policy) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_responder()
             .unwrap();
-        Session::new(session, keypair.public, rak, enclaves)
+        Session::new(session, keypair.public, rak, enclaves, policy)
     }
 }

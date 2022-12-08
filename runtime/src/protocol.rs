@@ -380,6 +380,7 @@ impl Protocol {
             | Body::RuntimeCheckTxBatchRequest { .. }
             | Body::RuntimeExecuteTxBatchRequest { .. }
             | Body::RuntimeKeyManagerPolicyUpdateRequest { .. }
+            | Body::RuntimeKeyManagerQuotePolicyUpdateRequest { .. }
             | Body::RuntimeQueryRequest { .. }
             | Body::RuntimeConsensusSyncRequest { .. } => {
                 self.ensure_initialized()?;

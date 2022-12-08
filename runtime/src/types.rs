@@ -10,7 +10,7 @@ use crate::{
             signature::{PublicKey, Signature},
         },
         namespace::Namespace,
-        sgx::{ias::AVR, Quote},
+        sgx::{ias::AVR, Quote, QuotePolicy},
         version::Version,
     },
     consensus::{
@@ -187,6 +187,10 @@ pub enum Body {
         signed_policy_raw: Vec<u8>,
     },
     RuntimeKeyManagerPolicyUpdateResponse {},
+    RuntimeKeyManagerQuotePolicyUpdateRequest {
+        policy: QuotePolicy,
+    },
+    RuntimeKeyManagerQuotePolicyUpdateResponse {},
     RuntimeQueryRequest {
         consensus_block: LightBlock,
         header: Header,

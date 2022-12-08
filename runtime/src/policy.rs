@@ -104,6 +104,30 @@ impl PolicyVerifier {
         Ok(policy)
     }
 
+    /// Verify that runtime's quote policy has been published in the consensus layer.
+    pub fn verify_quote_policy(
+        &self,
+        ctx: Arc<Context>,
+        policy: QuotePolicy,
+        runtime_id: &Namespace,
+        version: Option<Version>,
+        use_latest_state: bool,
+    ) -> Result<QuotePolicy> {
+        let published_policy = self.quote_policy(ctx, runtime_id, version, use_latest_state)?;
+
+        if policy != published_policy {
+            debug!(
+                self.logger,
+                "quote policy mismatch";
+                "untrusted" => ?policy,
+                "published" => ?published_policy,
+            );
+            return Err(PolicyVerifierError::PolicyNotPublished.into());
+        }
+
+        Ok(published_policy)
+    }
+
     /// Fetch key manager's policy from the latest verified consensus layer state.
     pub fn key_manager_policy(
         &self,

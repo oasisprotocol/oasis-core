@@ -11,7 +11,10 @@ use io_context::Context;
 use lru::LruCache;
 
 use oasis_core_runtime::{
-    common::{namespace::Namespace, sgx::EnclaveIdentity},
+    common::{
+        namespace::Namespace,
+        sgx::{EnclaveIdentity, QuotePolicy},
+    },
     consensus::{beacon::EpochTime, keymanager::SignedPolicySGX, verifier::Verifier},
     enclave_rpc::{client::RpcClient, session},
     protocol::Protocol,
@@ -76,10 +79,11 @@ impl RemoteClient {
     }
 
     /// Create a new key manager client with runtime-internal transport and explicit key manager
-    /// enclave identities.
-    pub fn new_runtime_with_enclave_identities(
+    /// enclave identities and quote policy.
+    pub fn new_runtime_with_enclaves_and_policy(
         runtime_id: Namespace,
         enclaves: Option<HashSet<EnclaveIdentity>>,
+        policy: Option<Arc<QuotePolicy>>,
         protocol: Arc<Protocol>,
         consensus_verifier: Arc<dyn Verifier>,
         rak: Arc<RAK>,
@@ -90,6 +94,7 @@ impl RemoteClient {
             RpcClient::new_runtime(
                 session::Builder::default()
                     .remote_enclaves(enclaves)
+                    .quote_policy(policy)
                     .local_rak(rak),
                 protocol,
                 KEY_MANAGER_ENDPOINT,
@@ -101,9 +106,10 @@ impl RemoteClient {
 
     /// Create a new key manager client with runtime-internal transport.
     ///
-    /// Using this method valid enclave identities won't be preset and should be obtained via the
-    /// worker-host protocol and updated with the set_policy method. In case the signer set is
-    /// non-empty, session establishment will fail until the initial policies will be updated.
+    /// Using this method valid enclave identities and quote policy won't be preset and should
+    /// be obtained via the runtime-host protocol and updated with the `set_policy` and
+    /// `set_quote_policy` methods. In case the signer set is non-empty, session establishment
+    /// will fail until the initial policies will be updated.
     pub fn new_runtime(
         runtime_id: Namespace,
         protocol: Arc<Protocol>,
@@ -128,12 +134,17 @@ impl RemoteClient {
             None
         };
 
+        // Key manager's quote policy should be obtained via the runtime-host protocol. Until then,
+        // all quote verifications will fail with a missing quote policy error.
+        let policy = None;
+
         // Configure trusted policy signers.
         set_trusted_policy_signers(signers);
 
-        Self::new_runtime_with_enclave_identities(
+        Self::new_runtime_with_enclaves_and_policy(
             runtime_id,
             enclaves,
+            policy,
             protocol,
             consensus_verifier,
             rak,
@@ -150,6 +161,11 @@ impl RemoteClient {
         self.inner.rpc_client.update_enclaves(Some(policies));
 
         Ok(())
+    }
+
+    /// Set key manager's quote policy.
+    pub fn set_quote_policy(&self, policy: QuotePolicy) {
+        self.inner.rpc_client.update_quote_policy(policy);
     }
 }
 

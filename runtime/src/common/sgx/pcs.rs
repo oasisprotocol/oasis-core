@@ -97,7 +97,7 @@ pub enum Error {
 }
 
 /// Quote validity policy.
-#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct QuotePolicy {
     /// Whether PCS quotes are disabled and will always be rejected.
     #[cbor(optional)]

@@ -648,6 +648,12 @@ type VersionInfo struct {
 
 // Equal compares vs another VersionInfo for equality.
 func (vi *VersionInfo) Equal(cmp *VersionInfo) bool {
+	if vi == cmp {
+		return true
+	}
+	if vi == nil || cmp == nil {
+		return false
+	}
 	if vi.Version.ToU64() != cmp.Version.ToU64() {
 		return false
 	}

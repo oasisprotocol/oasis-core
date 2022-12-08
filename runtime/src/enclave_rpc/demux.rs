@@ -135,6 +135,7 @@ impl Demux {
             // Create a new session.
             if self.sessions.len() < self.max_concurrent_sessions {
                 let mut session = Builder::default()
+                    .quote_policy(self.rak.quote_policy())
                     .local_rak(self.rak.clone())
                     .build_responder();
                 let result = match session.process_data(frame.payload, writer).map(|m| {

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use thiserror::Error;
 
-use crate::consensus::keymanager::SignedPolicySGX;
+use crate::{common::sgx::QuotePolicy, consensus::keymanager::SignedPolicySGX};
 
 use super::{
     context::Context,
@@ -127,6 +127,8 @@ impl Method {
 
 /// Key manager policy update handler callback.
 pub type KeyManagerPolicyHandler = dyn Fn(SignedPolicySGX) + Send + Sync;
+/// Key manager quote policy update handler callback.
+pub type KeyManagerQuotePolicyHandler = dyn Fn(QuotePolicy) + Send + Sync;
 
 /// RPC call dispatcher.
 #[derive(Default)]
@@ -137,6 +139,8 @@ pub struct Dispatcher {
     local_methods: HashMap<String, Method>,
     /// Registered key manager policy handler.
     km_policy_handler: Option<Box<KeyManagerPolicyHandler>>,
+    /// Registered key manager quote policy handler.
+    km_quote_policy_handler: Option<Box<KeyManagerQuotePolicyHandler>>,
     /// Registered context initializer.
     ctx_initializer: Option<Box<dyn ContextInitializer + Send + Sync>>,
 }
@@ -217,11 +221,26 @@ impl Dispatcher {
         }
     }
 
+    /// Handle key manager quote policy update.
+    pub fn handle_km_quote_policy_update(&self, policy: QuotePolicy) {
+        if let Some(handler) = self.km_quote_policy_handler.as_ref() {
+            handler(policy)
+        }
+    }
+
     /// Update key manager policy update handler.
     pub fn set_keymanager_policy_update_handler(
         &mut self,
         f: Option<Box<KeyManagerPolicyHandler>>,
     ) {
         self.km_policy_handler = f;
+    }
+
+    /// Update key manager quote policy update handler.
+    pub fn set_keymanager_quote_policy_update_handler(
+        &mut self,
+        f: Option<Box<KeyManagerQuotePolicyHandler>>,
+    ) {
+        self.km_quote_policy_handler = f;
     }
 }

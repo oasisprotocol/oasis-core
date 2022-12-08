@@ -96,7 +96,7 @@ impl Quote {
 }
 
 /// Quote validity policy.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct QuotePolicy {
     #[cbor(rename = "ias")]
     pub ias: Option<ias::QuotePolicy>,
