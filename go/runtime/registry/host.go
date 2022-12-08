@@ -491,12 +491,13 @@ func (n *runtimeHostNotifier) watchPolicyUpdates() {
 				)
 				continue
 			}
-		case st = <-stCh:
+		case newSt := <-stCh:
 			// Ignore status updates if key manager is not yet known (is nil)
 			// or if the status update is for a different key manager.
-			if rtDsc == nil || !st.ID.Equal(rtDsc.KeyManager) {
+			if rtDsc == nil || !newSt.ID.Equal(rtDsc.KeyManager) {
 				continue
 			}
+			st = newSt
 		case ev := <-evCh:
 			// Runtime host changes, make sure to update the policy if runtime is restarted.
 			if ev.Started == nil && ev.Updated == nil {
