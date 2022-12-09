@@ -142,9 +142,7 @@ impl RemoteClient {
     }
 
     /// Set client allowed enclaves from key manager policy.
-    pub fn set_policy(&self, signed_policy_raw: Vec<u8>) -> Result<(), KeyManagerError> {
-        let untrusted_policy: SignedPolicySGX = cbor::from_slice(&signed_policy_raw)
-            .map_err(|err| KeyManagerError::PolicyInvalid(err.into()))?;
+    pub fn set_policy(&self, untrusted_policy: SignedPolicySGX) -> Result<(), KeyManagerError> {
         let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
 
         let policies: HashSet<EnclaveIdentity> =

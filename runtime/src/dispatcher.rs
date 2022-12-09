@@ -9,7 +9,7 @@ use std::{
     thread,
 };
 
-use anyhow::Result as AnyResult;
+use anyhow::{anyhow, Result as AnyResult};
 use io_context::Context;
 use slog::{debug, error, info, warn, Logger};
 use tokio::sync::mpsc;
@@ -35,6 +35,7 @@ use crate::{
         types::{Message as RpcMessage, Request as RpcRequest},
         Context as RpcContext,
     },
+    policy::PolicyVerifier,
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
     rak::RAK,
     storage::mkvs::{sync::NoopReadSyncer, OverlayTree, Root, RootType},
@@ -140,6 +141,7 @@ struct State {
     txn_dispatcher: Arc<dyn TxnDispatcher>,
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     attestation_handler: attestation::Handler,
+    policy_verifier: Arc<PolicyVerifier>,
     cache_set: cache::CacheSet,
 }
 
@@ -273,10 +275,11 @@ impl Dispatcher {
             attestation_handler: attestation::Handler::new(
                 self.rak.clone(),
                 protocol.clone(),
-                consensus_verifier,
+                consensus_verifier.clone(),
                 protocol.get_runtime_id(),
                 protocol.get_config().version,
             ),
+            policy_verifier: Arc::new(PolicyVerifier::new(consensus_verifier)),
             cache_set: cache::CacheSet::new(protocol.clone()),
         };
 
@@ -447,8 +450,8 @@ impl Dispatcher {
 
             // Other requests.
             Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
-                // KeyManager policy update local RPC call.
-                self.handle_km_policy_update(&state.rpc_dispatcher, ctx, signed_policy_raw)
+                // Key manager policy update local RPC call.
+                self.handle_km_policy_update(ctx, state, signed_policy_raw)
             }
             Body::RuntimeConsensusSyncRequest { height } => state
                 .consensus_verifier
@@ -973,8 +976,8 @@ impl Dispatcher {
 
     fn handle_km_policy_update(
         &self,
-        rpc_dispatcher: &RpcDispatcher,
-        _ctx: Context,
+        ctx: Context,
+        state: State,
         signed_policy_raw: Vec<u8>,
     ) -> Result<Body, Error> {
         // Make sure to abort the process on panic during policy processing as that indicates a
@@ -982,7 +985,26 @@ impl Dispatcher {
         let _guard = AbortOnPanic;
 
         debug!(self.logger, "Received km policy update request");
-        rpc_dispatcher.handle_km_policy_update(signed_policy_raw);
+
+        // Verify and decode the policy.
+        let ctx = ctx.freeze();
+        let runtime_id = state.protocol.get_host_info().runtime_id;
+        let key_manager = state
+            .policy_verifier
+            .key_manager(ctx.clone(), &runtime_id, true)?;
+        let untrusted_policy = cbor::from_slice(&signed_policy_raw).map_err(|err| anyhow!(err))?;
+        let published_policy = state.policy_verifier.verify_key_manager_policy(
+            ctx,
+            untrusted_policy,
+            key_manager,
+            false,
+        )?;
+
+        // Dispatch the local RPC call.
+        state
+            .rpc_dispatcher
+            .handle_km_policy_update(published_policy);
+
         debug!(self.logger, "KM policy update request complete");
 
         Ok(Body::RuntimeKeyManagerPolicyUpdateResponse {})

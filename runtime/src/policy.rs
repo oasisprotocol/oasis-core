@@ -34,6 +34,8 @@ pub enum PolicyVerifierError {
     PolicyNotPublished,
     #[error("configured runtime hardware mismatch")]
     HardwareMismatch,
+    #[error("runtime doesn't use key manager")]
+    NoKeyManager,
 }
 
 /// Consensus policy verifier.
@@ -148,5 +150,29 @@ impl PolicyVerifier {
         }
 
         Ok(published_policy)
+    }
+
+    /// Fetch runtime's key manager.
+    pub fn key_manager(
+        &self,
+        ctx: Arc<Context>,
+        runtime_id: &Namespace,
+        use_latest_state: bool,
+    ) -> Result<Namespace> {
+        let consensus_state = if use_latest_state {
+            self.consensus_verifier.latest_state()?
+        } else {
+            self.consensus_verifier.state_at(HEIGHT_LATEST)?
+        };
+
+        let registry_state = RegistryState::new(&consensus_state);
+        let runtime = registry_state
+            .runtime(Context::create_child(&ctx), runtime_id)?
+            .ok_or(PolicyVerifierError::MissingRuntimeDescriptor)?;
+        let key_manager = runtime
+            .key_manager
+            .ok_or(PolicyVerifierError::NoKeyManager)?;
+
+        Ok(key_manager)
     }
 }

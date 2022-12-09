@@ -380,9 +380,9 @@ pub fn main_with_version(version: Version) {
         #[cfg(target_env = "sgx")]
         state
             .rpc_dispatcher
-            .set_keymanager_policy_update_handler(Some(Box::new(move |raw_signed_policy| {
+            .set_keymanager_policy_update_handler(Some(Box::new(move |policy| {
                 key_manager
-                    .set_policy(raw_signed_policy)
+                    .set_policy(policy)
                     .expect("failed to update km client policy");
             })));
 

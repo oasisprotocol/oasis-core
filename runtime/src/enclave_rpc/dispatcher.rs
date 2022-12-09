@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use anyhow::Result;
 use thiserror::Error;
 
+use crate::consensus::keymanager::SignedPolicySGX;
+
 use super::{
     context::Context,
     types::{Body, Request, Response},
@@ -124,7 +126,7 @@ impl Method {
 }
 
 /// Key manager policy update handler callback.
-pub type KeyManagerPolicyHandler = dyn Fn(Vec<u8>) + Send + Sync;
+pub type KeyManagerPolicyHandler = dyn Fn(SignedPolicySGX) + Send + Sync;
 
 /// RPC call dispatcher.
 #[derive(Default)]
@@ -209,9 +211,9 @@ impl Dispatcher {
     }
 
     /// Handle key manager policy update.
-    pub fn handle_km_policy_update(&self, signed_policy_raw: Vec<u8>) {
+    pub fn handle_km_policy_update(&self, policy: SignedPolicySGX) {
         if let Some(handler) = self.km_policy_handler.as_ref() {
-            handler(signed_policy_raw)
+            handler(policy)
         }
     }
 
