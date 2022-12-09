@@ -274,6 +274,38 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		}
 	}
 
+	registyCh, sub, err := sc.Net.Controller().Registry.WatchEvents(ctx)
+	defer sub.Close()
+	ensureRuntimeEvents := func(suspended bool) error {
+		// Ensure expected suspended/started event is received.
+		for {
+			select {
+			case evt := <-registyCh:
+				sc.Logger.Debug("received event", "event", evt)
+				switch suspended {
+				case true:
+					if evt.RuntimeSuspendedEvent == nil {
+						continue
+					}
+					if !compRtDesc.ID.Equal(&evt.RuntimeSuspendedEvent.RuntimeID) {
+						continue
+					}
+					return nil
+				default:
+					if evt.RuntimeStartedEvent == nil {
+						continue
+					}
+					if !compRtDesc.ID.Equal(&evt.RuntimeStartedEvent.Runtime.ID) {
+						continue
+					}
+					return nil
+				}
+			case <-time.After(10 * time.Second):
+				return fmt.Errorf("failed to receive runtime event for: %s (suspended: %t)", compRtDesc.ID, suspended)
+			}
+		}
+	}
+
 	// Epoch transitions so nodes expire.
 	sc.Logger.Info("performing epoch transitions so nodes expire")
 	for i := 0; i < 3; i++ {
@@ -298,6 +330,9 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		// Runtime is suspended.
 	default:
 		return fmt.Errorf("unexpected error while fetching runtime: %w", err)
+	}
+	if err = ensureRuntimeEvents(true); err != nil {
+		return err
 	}
 
 	// Start runtime nodes, make sure they register.
@@ -416,6 +451,9 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err = ensureRuntimesSuspended(true); err != nil {
 		return err
 	}
+	if err = ensureRuntimeEvents(true); err != nil {
+		return err
+	}
 
 	// Restart nodes to test that the nodes will re-register although
 	// the runtime is suspended.
@@ -471,6 +509,9 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Now runtimes should no longer be suspended.
 	if err = ensureRuntimesSuspended(false); err != nil {
+		return err
+	}
+	if err = ensureRuntimeEvents(false); err != nil {
 		return err
 	}
 

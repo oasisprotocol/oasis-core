@@ -91,6 +91,24 @@ func addToNodeList(nodes []signature.PublicKey, node signature.PublicKey) []sign
 	return retNodes
 }
 
+// Ensures that the expected event is received on the channel.
+//
+// Events not matching the filter predicate are skipped.
+func ensureExpectedEvent(t *testing.T, ch <-chan *api.Event, expected *api.Event, filter func(*api.Event) bool) {
+	for {
+		select {
+		case evt := <-ch:
+			if !filter(evt) {
+				continue
+			}
+			require.EqualValues(t, expected, evt, "Watched event should match previously received event")
+			return
+		case <-time.After(recvTimeout):
+			t.Fatalf("failed to receive expected event: %v", expected)
+		}
+	}
+}
+
 func testRegistryEntityNodes( // nolint: gocyclo
 	t *testing.T,
 	backend api.Backend,
@@ -173,6 +191,10 @@ func testRegistryEntityNodes( // nolint: gocyclo
 	whitelistedNodes = append(whitelistedNodes, ent3nodes[0])
 	nonWhitelistedNodes = append(nonWhitelistedNodes, ent3nodes[1])
 
+	eventsCh, eventsSub, err := backend.WatchEvents(context.Background())
+	require.NoError(t, err, "WatchEvents")
+	defer eventsSub.Close()
+
 	t.Run("EntityRegistration", func(t *testing.T) {
 		require := require.New(t)
 
@@ -194,18 +216,26 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				// Make sure that GetEvents also returns the registration event.
 				evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
-				var gotIt bool
+				var receivedEvt *api.Event
 				for _, evt := range evts {
 					if evt.EntityEvent != nil {
 						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && evt.EntityEvent.IsRegistration {
 							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
-							gotIt = true
+							receivedEvt = evt
 							break
 						}
 					}
 				}
-				require.EqualValues(true, gotIt, "GetEvents should return entity registration event")
+				require.NotNil(receivedEvt, "GetEvents should return entity registration event")
+
+				// Make sure that WatchEvents also returns the registration event.
+				ensureExpectedEvent(t, eventsCh, receivedEvt, func(e *api.Event) bool {
+					if e.EntityEvent == nil {
+						return false
+					}
+					return receivedEvt.EntityEvent.Entity.ID.Equal(e.EntityEvent.Entity.ID) && e.EntityEvent.IsRegistration
+				})
 			case <-time.After(recvTimeout):
 				t.Fatalf("failed to receive entity registration event")
 			}
@@ -274,18 +304,26 @@ func testRegistryEntityNodes( // nolint: gocyclo
 					// Make sure that GetEvents also returns the registration event.
 					evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 					require.NoError(grr, "GetEvents")
-					var gotIt bool
+					var receivedEvt *api.Event
 					for _, evt := range evts {
 						if evt.NodeEvent != nil {
 							if evt.NodeEvent.Node.ID.Equal(tn.Node.ID) && evt.NodeEvent.IsRegistration {
 								require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 								require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
-								gotIt = true
+								receivedEvt = evt
 								break
 							}
 						}
 					}
-					require.EqualValues(true, gotIt, "GetEvents should return node registration event")
+					require.NotNil(receivedEvt, "GetEvents should return node registration event")
+
+					// Make sure that WatchEvents also returns the registration event.
+					ensureExpectedEvent(t, eventsCh, receivedEvt, func(e *api.Event) bool {
+						if e.NodeEvent == nil {
+							return false
+						}
+						return receivedEvt.NodeEvent.Node.ID.Equal(e.NodeEvent.Node.ID) && e.NodeEvent.IsRegistration
+					})
 				case <-time.After(recvTimeout):
 					t.Fatalf("failed to receive node registration event")
 				}
@@ -447,18 +485,26 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				// Make sure that GetEvents also returns the deregistration event.
 				evts, grr := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(grr, "GetEvents")
-				var gotIt bool
+				var receivedEvt *api.Event
 				for _, evt := range evts {
 					if evt.NodeEvent != nil {
 						if evt.NodeEvent.Node.ID.Equal(ev.Node.ID) && !evt.NodeEvent.IsRegistration {
 							require.True(evt.TxHash.IsEmpty(), "Node expiration event hash should be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
-							gotIt = true
+							receivedEvt = evt
 							break
 						}
 					}
 				}
-				require.EqualValues(true, gotIt, "GetEvents should return node deregistration event")
+				require.NotNil(receivedEvt, "GetEvents should return node deregistration event")
+
+				// Make sure that WatchEvents also returns the deregistration event.
+				ensureExpectedEvent(t, eventsCh, receivedEvt, func(e *api.Event) bool {
+					if e.NodeEvent == nil {
+						return false
+					}
+					return receivedEvt.NodeEvent.Node.ID.Equal(e.NodeEvent.Node.ID) && !e.NodeEvent.IsRegistration
+				})
 			case <-time.After(recvTimeout):
 				t.Fatalf("failed to receive node deregistration event")
 			}
@@ -524,18 +570,26 @@ func testRegistryEntityNodes( // nolint: gocyclo
 			// Make sure that GetEvents also returns the deregistration event.
 			evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 			require.NoError(err, "GetEvents")
-			var gotIt bool
+			var receivedEvt *api.Event
 			for _, evt := range evts {
 				if evt.EntityEvent != nil {
 					if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
 						require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 						require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
-						gotIt = true
+						receivedEvt = evt
 						break
 					}
 				}
 			}
-			require.EqualValues(true, gotIt, "GetEvents should return entity deregistration event")
+			require.NotNil(receivedEvt, "GetEvents should return entity deregistration event")
+
+			// Make sure that WatchEvents also returns the deregistration event.
+			ensureExpectedEvent(t, eventsCh, receivedEvt, func(e *api.Event) bool {
+				if e.EntityEvent == nil {
+					return false
+				}
+				return receivedEvt.EntityEvent.Entity.ID.Equal(e.EntityEvent.Entity.ID) && !e.EntityEvent.IsRegistration
+			})
 		case <-time.After(recvTimeout):
 			t.Fatalf("failed to receive entity deregistration event")
 		}
@@ -563,18 +617,26 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				// Make sure that GetEvents also returns the deregistration event.
 				evts, err := backend.GetEvents(ctx, consensusAPI.HeightLatest)
 				require.NoError(err, "GetEvents")
-				var gotIt bool
+				var receivedEvt *api.Event
 				for _, evt := range evts {
 					if evt.EntityEvent != nil {
 						if evt.EntityEvent.Entity.ID.Equal(ev.Entity.ID) && !evt.EntityEvent.IsRegistration {
 							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
-							gotIt = true
+							receivedEvt = evt
 							break
 						}
 					}
 				}
-				require.EqualValues(true, gotIt, "GetEvents should return entity deregistration event")
+				require.NotNil(receivedEvt, "GetEvents should return entity deregistration event")
+
+				// Make sure that WatchEvents also returns the deregistration event.
+				ensureExpectedEvent(t, eventsCh, receivedEvt, func(e *api.Event) bool {
+					if e.EntityEvent == nil {
+						return false
+					}
+					return receivedEvt.EntityEvent.Entity.ID.Equal(e.EntityEvent.Entity.ID) && !e.EntityEvent.IsRegistration
+				})
 			case <-time.After(recvTimeout):
 				t.Fatalf("failed to receive entity deregistration event")
 			}
@@ -1529,6 +1591,10 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 	require.NoError(err, "WatchRuntimes")
 	defer sub.Close()
 
+	eventsCh, eventsSub, err := backend.WatchEvents(context.Background())
+	require.NoError(err, "WatchEvents")
+	defer eventsSub.Close()
+
 	tx := api.NewRegisterRuntimeTx(0, nil, rt.Runtime)
 	err = consensusAPI.SignAndSubmitTx(context.Background(), consensus, rt.Signer, tx)
 	require.NoError(err, "RegisterRuntime")
@@ -1551,19 +1617,26 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 				// Make sure that GetEvents also returns the registration event.
 				evts, err := backend.GetEvents(context.Background(), consensusAPI.HeightLatest)
 				require.NoError(err, "GetEvents")
-				var gotIt bool
+				var receivedEvt *api.Event
 				for _, evt := range evts {
-					if evt.RuntimeEvent != nil {
-						if evt.RuntimeEvent.Runtime.ID.Equal(&v.ID) {
+					if evt.RuntimeStartedEvent != nil {
+						if evt.RuntimeStartedEvent.Runtime.ID.Equal(&v.ID) {
 							require.False(evt.TxHash.IsEmpty(), "Event transaction hash should not be empty")
 							require.Greater(evt.Height, int64(0), "Event height should be greater than zero")
-							gotIt = true
+							receivedEvt = evt
 							break
 						}
 					}
 				}
-				require.EqualValues(true, gotIt, "GetEvents should return runtime registration event")
+				require.NotNil(receivedEvt, "GetEvents should return runtime registration event")
 
+				// Make sure that WatchEvents also returns the registration event.
+				ensureExpectedEvent(t, eventsCh, receivedEvt, func(e *api.Event) bool {
+					if e.RuntimeStartedEvent == nil {
+						return false
+					}
+					return receivedEvt.RuntimeStartedEvent.Runtime.ID.Equal(&e.RuntimeStartedEvent.Runtime.ID)
+				})
 				return
 			}
 			seen++

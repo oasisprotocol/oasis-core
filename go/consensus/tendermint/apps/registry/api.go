@@ -2,6 +2,7 @@ package registry
 
 import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
 )
 
 const (
@@ -9,7 +10,7 @@ const (
 	AppID uint8 = 0x01
 
 	// AppName is the ABCI application name.
-	AppName string = "200_registry"
+	AppName string = state.AppName
 
 	// AppPriority is the base priority for the app's transactions.
 	AppPriority int64 = 50000
