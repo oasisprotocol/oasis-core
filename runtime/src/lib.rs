@@ -31,6 +31,7 @@ pub mod enclave_rpc;
 pub mod host;
 pub mod init;
 pub mod macros;
+pub mod policy;
 pub mod protocol;
 pub mod rak;
 pub mod storage;

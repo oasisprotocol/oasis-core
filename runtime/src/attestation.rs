@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 #[cfg(target_env = "sgx")]
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 #[cfg(target_env = "sgx")]
 use io_context::Context;
 #[cfg(target_env = "sgx")]
@@ -11,12 +11,9 @@ use slog::Logger;
 
 #[cfg(target_env = "sgx")]
 use crate::{
-    common::crypto::signature::Signer,
-    common::sgx::Quote,
-    consensus::registry::{
-        SGXAttestation, SGXConstraints, TEEHardware, ATTESTATION_SIGNATURE_CONTEXT,
-    },
-    consensus::state::registry::ImmutableState as RegistryState,
+    common::{crypto::signature::Signer, sgx::Quote},
+    consensus::registry::{SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
+    policy::PolicyVerifier,
     types::Body,
 };
 use crate::{
@@ -109,24 +106,14 @@ impl Handler {
 
             // Obtain current quote policy from (verified) consensus state.
             let ctx = ctx.freeze();
-            let consensus_state = self.consensus_verifier.latest_state()?;
-            let registry_state = RegistryState::new(&consensus_state);
-            let runtime = registry_state
-                .runtime(Context::create_child(&ctx), &self.runtime_id)?
-                .ok_or(anyhow!("missing runtime descriptor"))?;
-            let ad = runtime
-                .deployment_for_version(self.version)
-                .ok_or(anyhow!("no corresponding runtime deployment"))?;
-
-            let policy = match runtime.tee_hardware {
-                TEEHardware::TEEHardwareIntelSGX => {
-                    let sc: SGXConstraints = ad
-                        .try_decode_tee()
-                        .map_err(|_| anyhow!("bad TEE constraints"))?;
-                    sc.policy()
-                }
-                _ => bail!("configured runtime hardware mismatch"),
-            };
+            let consensus_verifier = self.consensus_verifier.clone();
+            let version = Some(self.version);
+            let policy = PolicyVerifier::new(consensus_verifier).quote_policy(
+                ctx,
+                &self.runtime_id,
+                version,
+                true,
+            )?;
 
             self.rak.set_quote_policy(policy)?;
         }

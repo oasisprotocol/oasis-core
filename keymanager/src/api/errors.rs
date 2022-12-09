@@ -27,8 +27,6 @@ pub enum KeyManagerError {
     PolicyInvalid(#[from] anyhow::Error),
     #[error("policy has insufficient signatures")]
     PolicyInsufficientSignatures,
-    #[error("policy hasn't been published")]
-    PolicyNotPublished,
     #[error(transparent)]
     Other(anyhow::Error),
 }

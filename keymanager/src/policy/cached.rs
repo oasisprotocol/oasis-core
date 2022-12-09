@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::Result;
-use io_context::Context;
 use lazy_static::lazy_static;
 use sgx_isa::Keypolicy;
 use tiny_keccak::{Hasher, Sha3};
@@ -19,10 +18,9 @@ use oasis_core_runtime::{
             EnclaveIdentity,
         },
     },
-    consensus::{
-        keymanager::SignedPolicySGX, state::keymanager::ImmutableState as KeyManagerState,
-    },
+    consensus::keymanager::SignedPolicySGX,
     enclave_rpc::Context as RpcContext,
+    policy::PolicyVerifier,
     runtime_context,
     storage::KeyValue,
 };
@@ -64,33 +62,27 @@ impl Policy {
     }
 
     /// Initialize (or update) the policy state.
-    pub fn init(&self, ctx: &mut RpcContext, raw_policy: &[u8]) -> Result<Vec<u8>> {
+    pub fn init(&self, ctx: &mut RpcContext, policy_raw: &[u8]) -> Result<Vec<u8>> {
         // If this is an insecure build, don't bother trying to apply any policy.
         if Self::unsafe_skip() {
             return Ok(vec![]);
         }
 
-        // De-serialize the new policy, verify signatures.
-        let new_policy = CachedPolicy::parse(raw_policy)?;
-
         // Ensure the new policy's runtime ID matches the current enclave's.
         let rctx = runtime_context!(ctx, KmContext);
-        if rctx.runtime_id != new_policy.runtime_id {
-            return Err(KeyManagerError::PolicyInvalidRuntime.into());
-        }
+        let key_manager = rctx.runtime_id;
 
-        // Ensure the new policy was published in the consensus layer.
-        let state = ctx.consensus_verifier.latest_state()?;
-        let km_state = KeyManagerState::new(&state);
-        let published_policy = km_state
-            .status(Context::create_child(&ctx.io_ctx), new_policy.runtime_id)?
-            .ok_or(KeyManagerError::PolicyNotPublished)?
-            .policy
-            .ok_or(KeyManagerError::PolicyNotPublished)?;
-        let untrusted_policy: SignedPolicySGX = cbor::from_slice(raw_policy)?;
-        if untrusted_policy != published_policy {
-            return Err(KeyManagerError::PolicyNotPublished.into());
-        }
+        // De-serialize the new policy, verify runtime ID and signatures.
+        let ioctx = ctx.io_ctx.clone();
+        let consensus_verifier = ctx.consensus_verifier.clone();
+        let untrusted_policy = cbor::from_slice(policy_raw)?;
+        let published_policy = PolicyVerifier::new(consensus_verifier).verify_key_manager_policy(
+            ioctx,
+            untrusted_policy,
+            key_manager,
+            false,
+        )?;
+        let new_policy = CachedPolicy::parse(published_policy, policy_raw)?;
 
         // Lock as late as possible.
         let mut inner = self.inner.write().unwrap();
@@ -115,7 +107,7 @@ impl Policy {
             }
             Ordering::Less => {
                 // Persist then apply the new policy.
-                Self::save_raw_policy(ctx.untrusted_local_storage, raw_policy);
+                Self::save_raw_policy(ctx.untrusted_local_storage, policy_raw);
                 let new_checksum = new_policy.checksum.clone();
                 inner.policy = Some(new_policy);
 
@@ -192,7 +184,7 @@ impl Policy {
 
         unseal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, &ciphertext).map(|plaintext| {
             // Deserialization failures are fatal, because it is state corruption.
-            CachedPolicy::parse(&plaintext).expect("failed to deserialize persisted policy")
+            CachedPolicy::parse_raw(&plaintext).expect("failed to deserialize persisted policy")
         })
     }
 
@@ -217,9 +209,12 @@ struct CachedPolicy {
 }
 
 impl CachedPolicy {
-    fn parse(raw: &[u8]) -> Result<Self> {
-        // Parse out the signed policy.
+    fn parse_raw(raw: &[u8]) -> Result<Self> {
         let untrusted_policy: SignedPolicySGX = cbor::from_slice(raw)?;
+        Self::parse(untrusted_policy, raw)
+    }
+
+    fn parse(untrusted_policy: SignedPolicySGX, raw: &[u8]) -> Result<Self> {
         let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
 
         let mut cached_policy = Self::default();
