@@ -11,7 +11,7 @@ use std::{
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
 use io_context::Context;
-use slog::{error, info, warn, Logger};
+use slog::{debug, error, info, warn, Logger};
 use thiserror::Error;
 
 use crate::{
@@ -264,7 +264,15 @@ impl Protocol {
         let mut buffer = vec![0; length];
         reader.read_exact(&mut buffer)?;
 
-        Ok(cbor::from_slice(&buffer)?)
+        let message = cbor::from_slice(&buffer)
+            .map_err(|error| {
+                warn!(self.logger, "Failed to decode message"; "err" => %error);
+                debug!(self.logger, "Malformed message"; "bytes" => ?buffer);
+                error
+            })
+            .unwrap_or_default();
+
+        Ok(message)
     }
 
     fn write_message(&self, message: Message) -> anyhow::Result<()> {
