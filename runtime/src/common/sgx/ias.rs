@@ -116,7 +116,7 @@ lazy_static! {
 }
 
 /// Quote validity policy.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct QuotePolicy {
     /// Whether IAS quotes are disabled and will always be rejected.
     #[cbor(optional)]

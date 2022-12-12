@@ -192,7 +192,7 @@ func (agg *Aggregate) SetVersion(ctx context.Context, version version.Version) e
 			return nil
 		}
 
-		// Otherwise tear it dow.
+		// Otherwise tear it down.
 		agg.stopActiveLocked()
 	}
 

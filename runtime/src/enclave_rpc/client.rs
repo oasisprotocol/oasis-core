@@ -1,6 +1,7 @@
 //! Enclave RPC client.
 use std::{
     collections::HashSet,
+    mem,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -18,7 +19,7 @@ use tokio;
 
 use crate::{
     cbor,
-    common::sgx::EnclaveIdentity,
+    common::sgx::{EnclaveIdentity, QuotePolicy},
     enclave_rpc::{
         session::{Builder, Session},
         types,
@@ -356,13 +357,20 @@ impl RpcClient {
         }
     }
 
-    /// Update session enclaves if changed.
+    /// Update allowed remote enclave identities.
+    ///
+    /// Useful if the key manager's policy has changed.
     pub fn update_enclaves(&self, enclaves: Option<HashSet<EnclaveIdentity>>) {
         let mut session = self.inner.session.lock().unwrap();
-        if session.builder.get_remote_enclaves() != &enclaves {
-            session.builder = session.builder.clone().remote_enclaves(enclaves);
-            session.reset();
-        }
+        session.builder = mem::take(&mut session.builder).remote_enclaves(enclaves);
+        session.reset();
+    }
+
+    /// Update key manager's quote policy.
+    pub fn update_quote_policy(&self, policy: QuotePolicy) {
+        let mut session = self.inner.session.lock().unwrap();
+        session.builder = mem::take(&mut session.builder).quote_policy(Some(Arc::new(policy)));
+        session.reset();
     }
 }
 

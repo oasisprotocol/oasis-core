@@ -298,9 +298,10 @@ impl Kdf {
 
                         let rctx = runtime_context!(ctx, KmContext);
 
-                        let km_client = RemoteClient::new_runtime_with_enclave_identities(
+                        let km_client = RemoteClient::new_runtime_with_enclaves_and_policy(
                             rctx.runtime_id,
                             Policy::global().may_replicate_from(),
+                            ctx.rak.quote_policy(),
                             rctx.protocol.clone(),
                             ctx.consensus_verifier.clone(),
                             ctx.rak.clone(),

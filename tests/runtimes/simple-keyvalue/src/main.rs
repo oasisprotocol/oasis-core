@@ -376,15 +376,23 @@ pub fn main_with_version(version: Version) {
         ));
 
         #[cfg(target_env = "sgx")]
-        let key_manager = km_client.clone();
-        #[cfg(target_env = "sgx")]
-        state
-            .rpc_dispatcher
-            .set_keymanager_policy_update_handler(Some(Box::new(move |raw_signed_policy| {
-                key_manager
-                    .set_policy(raw_signed_policy)
-                    .expect("failed to update km client policy");
-            })));
+        {
+            let key_manager = km_client.clone();
+            state
+                .rpc_dispatcher
+                .set_keymanager_policy_update_handler(Some(Box::new(move |policy| {
+                    key_manager
+                        .set_policy(policy)
+                        .expect("failed to update km client policy");
+                })));
+
+            let key_manager = km_client.clone();
+            state
+                .rpc_dispatcher
+                .set_keymanager_quote_policy_update_handler(Some(Box::new(move |policy| {
+                    key_manager.set_quote_policy(policy);
+                })));
+        }
 
         let dispatcher = Dispatcher::new(hi, km_client, state.consensus_verifier.clone());
 
@@ -418,6 +426,7 @@ pub fn main_with_version(version: Version) {
                 schedule_control: Some(FeatureScheduleControl {
                     initial_batch_size: MAX_BATCH_SIZE.try_into().unwrap(),
                 }),
+                ..Default::default()
             }),
             freshness_proofs: true,
             ..Default::default()
