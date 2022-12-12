@@ -171,6 +171,9 @@ type RuntimeInfoRequest struct {
 type Features struct {
 	// ScheduleControl is the schedule control feature.
 	ScheduleControl *FeatureScheduleControl `json:"schedule_control,omitempty"`
+	// KeyManagerQuotePolicyUpdates is a feature specifying that the runtime supports updating
+	// key manager's quote policy.
+	KeyManagerQuotePolicyUpdates bool `json:"key_manager_quote_policy_updates,omitempty"`
 }
 
 // HasScheduleControl returns true when the runtime supports the schedule control feature.

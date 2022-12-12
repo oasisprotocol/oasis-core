@@ -426,6 +426,7 @@ pub fn main_with_version(version: Version) {
                 schedule_control: Some(FeatureScheduleControl {
                     initial_batch_size: MAX_BATCH_SIZE.try_into().unwrap(),
                 }),
+                ..Default::default()
             }),
             freshness_proofs: true,
             ..Default::default()

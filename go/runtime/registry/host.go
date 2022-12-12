@@ -528,6 +528,15 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	}
 	defer evSub.Close()
 
+	// Fetch runtime info so that we know which features the runtime supports.
+	rtInfo, err := n.host.GetInfo(ctx)
+	if err != nil {
+		n.logger.Error("failed to fetch runtime info",
+			"err", err,
+		)
+		return
+	}
+
 	var (
 		st *keymanager.Status
 		sc *node.SGXConstraints
@@ -547,6 +556,11 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 
 			n.updateKeyManagerPolicy(ctx, st.Policy)
 		case epoch := <-epoCh:
+			// Skip quote policy updates if the runtime doesn't support them.
+			if !rtInfo.Features.KeyManagerQuotePolicyUpdates {
+				continue
+			}
+
 			// Check if the key manager was redeployed, as that is when a new quote policy might
 			// take effect.
 			dsc, err := n.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{

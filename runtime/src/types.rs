@@ -320,11 +320,23 @@ pub struct RuntimeInfoRequest {
 }
 
 /// Set of supported runtime features.
-#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 pub struct Features {
     /// Schedule control feature.
     #[cbor(optional)]
     pub schedule_control: Option<FeatureScheduleControl>,
+    /// A feature specifying that the runtime supports updating key manager's quote policy.
+    #[cbor(optional)]
+    pub key_manager_quote_policy_updates: bool,
+}
+
+impl Default for Features {
+    fn default() -> Self {
+        Self {
+            schedule_control: None,
+            key_manager_quote_policy_updates: true,
+        }
+    }
 }
 
 /// A feature specifying that the runtime supports controlling the scheduling of batches. This means
