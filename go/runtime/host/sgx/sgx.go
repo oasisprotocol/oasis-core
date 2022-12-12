@@ -193,7 +193,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte,
 func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
 	// Different versions of Intel SGX drivers provide different names for
 	// the SGX device.  Autodetect which one actually exists.
-	sgxDevices := []string{"/dev/sgx", "/dev/sgx/enclave", "/dev/sgx_enclave", "/dev/isgx"}
+	sgxDevices := []string{"/dev/sgx_enclave", "/dev/sgx/enclave", "/dev/sgx", "/dev/isgx"}
 	for _, dev := range sgxDevices {
 		fi, err := os.Stat(dev)
 		if err != nil {
