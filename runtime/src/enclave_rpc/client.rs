@@ -43,6 +43,8 @@ pub enum RpcClientError {
     ExpectedCloseMessage(types::Message),
     #[error("transport error")]
     Transport,
+    #[error("unsupported RPC kind")]
+    UnsupportedRpcKind,
     #[error("client dropped")]
     Dropped,
     #[error("decode error: {0}")]
@@ -54,6 +56,7 @@ pub enum RpcClientError {
 type SendqRequest = (
     Arc<Context>,
     types::Request,
+    types::Kind,
     oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
     usize,
 );
@@ -124,12 +127,42 @@ impl RpcClient {
         Self::new(Box::new(RuntimeTransport::new(protocol, endpoint)), builder)
     }
 
-    /// Call a remote method.
-    pub async fn call<C, O>(
+    /// Call a remote method using an encrypted and authenticated Noise session.
+    pub async fn secure_call<C, O>(
         &self,
         ctx: Context,
         method: &'static str,
         args: C,
+    ) -> Result<O, RpcClientError>
+    where
+        C: cbor::Encode,
+        O: cbor::Decode + Send + 'static,
+    {
+        self.call(ctx, method, args, types::Kind::NoiseSession)
+            .await
+    }
+
+    /// Call a remote method over an insecure channel where messages are sent in plain text.
+    pub async fn insecure_call<C, O>(
+        &self,
+        ctx: Context,
+        method: &'static str,
+        args: C,
+    ) -> Result<O, RpcClientError>
+    where
+        C: cbor::Encode,
+        O: cbor::Decode + Send + 'static,
+    {
+        self.call(ctx, method, args, types::Kind::InsecureQuery)
+            .await
+    }
+
+    async fn call<C, O>(
+        &self,
+        ctx: Context,
+        method: &'static str,
+        args: C,
+        kind: types::Kind,
     ) -> Result<O, RpcClientError>
     where
         C: cbor::Encode,
@@ -140,7 +173,7 @@ impl RpcClient {
             args: cbor::to_value(args),
         };
 
-        let (pfid, response) = self.execute_call(ctx, request).await?;
+        let (pfid, response) = self.execute_call(ctx, request, kind).await?;
         let result = match response.body {
             types::Body::Success(value) => cbor::from_value(value).map_err(Into::into),
             types::Body::Error(error) => Err(RpcClientError::CallFailed(error)),
@@ -160,6 +193,7 @@ impl RpcClient {
         &self,
         ctx: Context,
         request: types::Request,
+        kind: types::Kind,
     ) -> Result<(u64, types::Response), RpcClientError> {
         // Spawn a new controller if we haven't spawned one yet.
         if self
@@ -178,15 +212,33 @@ impl RpcClient {
             let inner = self.inner.clone();
 
             tokio::spawn(async move {
-                while let Some((ctx, request, rsp_tx, retries)) = rx.next().await {
+                while let Some((ctx, request, kind, rsp_tx, retries)) = rx.next().await {
                     let result = async {
-                        // Attempt to establish a connection. This will not do anything in case the
-                        // session has already been established.
-                        Self::connect(inner.clone(), Context::create_child(&ctx)).await?;
+                        match kind {
+                            types::Kind::NoiseSession => {
+                                // Attempt to establish a connection. This will not do anything in case the
+                                // session has already been established.
+                                Self::connect(inner.clone(), Context::create_child(&ctx)).await?;
 
-                        // Perform the call.
-                        Self::call_raw(inner.clone(), Context::create_child(&ctx), request.clone())
-                            .await
+                                // Perform the call.
+                                Self::secure_call_raw(
+                                    inner.clone(),
+                                    Context::create_child(&ctx),
+                                    request.clone(),
+                                )
+                                .await
+                            }
+                            types::Kind::InsecureQuery => {
+                                // Perform the call.
+                                Self::insecure_call_raw(
+                                    inner.clone(),
+                                    Context::create_child(&ctx),
+                                    request.clone(),
+                                )
+                                .await
+                            }
+                            _ => Err(RpcClientError::UnsupportedRpcKind),
+                        }
                     }
                     .await;
 
@@ -215,7 +267,7 @@ impl RpcClient {
                             let _ = inner
                                 .sendq
                                 .clone()
-                                .send((ctx, request, rsp_tx, retries + 1))
+                                .send((ctx, request, kind, rsp_tx, retries + 1))
                                 .await;
                         }
                     }
@@ -231,7 +283,7 @@ impl RpcClient {
         self.inner
             .sendq
             .clone()
-            .send((ctx.freeze(), request, rsp_tx, 0))
+            .send((ctx.freeze(), request, kind, rsp_tx, 0))
             .await
             .map_err(|_| RpcClientError::Dropped)?;
 
@@ -262,7 +314,7 @@ impl RpcClient {
 
         let data = inner
             .transport
-            .write_message(ctx, session_id, buffer, String::new())
+            .write_noise_session(ctx, session_id, buffer, String::new())
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -279,7 +331,7 @@ impl RpcClient {
         let ctx = Context::create_child(&fctx);
         inner
             .transport
-            .write_message(ctx, session_id, buffer, String::new())
+            .write_noise_session(ctx, session_id, buffer, String::new())
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -291,6 +343,9 @@ impl RpcClient {
         let session_id;
         {
             let mut session = inner.session.lock().unwrap();
+            if !session.inner.is_connected() {
+                return Ok(());
+            }
             session
                 .inner
                 .write_message(types::Message::Close, &mut buffer)
@@ -301,7 +356,7 @@ impl RpcClient {
         let ctx = Context::background();
         let data = inner
             .transport
-            .write_message(ctx, session_id, buffer, String::new())
+            .write_noise_session(ctx, session_id, buffer, String::new())
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -321,7 +376,7 @@ impl RpcClient {
         }
     }
 
-    async fn call_raw(
+    async fn secure_call_raw(
         inner: Arc<Inner>,
         ctx: Context,
         request: types::Request,
@@ -341,7 +396,7 @@ impl RpcClient {
 
         let data = inner
             .transport
-            .write_message(ctx, session_id, buffer, method)
+            .write_noise_session(ctx, session_id, buffer, method)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -355,6 +410,20 @@ impl RpcClient {
             types::Message::Response(rsp) => Ok(rsp),
             msg => Err(RpcClientError::ExpectedResponseMessage(msg)),
         }
+    }
+
+    async fn insecure_call_raw(
+        inner: Arc<Inner>,
+        ctx: Context,
+        request: types::Request,
+    ) -> Result<types::Response, RpcClientError> {
+        let data = inner
+            .transport
+            .write_insecure_query(ctx, cbor::to_vec(request))
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        cbor::from_slice(&data).map_err(RpcClientError::DecodeError)
     }
 
     /// Update allowed remote enclave identities.
@@ -439,7 +508,8 @@ mod test {
         fn write_message_impl(
             &self,
             _ctx: Context,
-            data: Vec<u8>,
+            request: Vec<u8>,
+            kind: types::Kind,
         ) -> BoxFuture<Result<Vec<u8>, anyhow::Error>> {
             let pf = {
                 let mut pf = self.peer_feedback.lock().unwrap();
@@ -464,30 +534,44 @@ mod test {
 
             let mut demux = self.demux.lock().unwrap();
 
-            // Deliver directly to the multiplexer.
-            let mut buffer = Vec::new();
-            match demux.process_frame(data, &mut buffer) {
-                Err(err) => Box::pin(future::err(err)),
-                Ok(Some((session_id, _session_info, message, _untrusted_plaintext))) => {
-                    // Message, process and write reply.
-                    let body = match message {
-                        types::Message::Request(rq) => {
-                            // Just echo back what was given.
-                            types::Body::Success(rq.args)
-                        }
-                        _ => panic!("unhandled message type"),
-                    };
-                    let response = types::Message::Response(types::Response { body });
-
+            match kind {
+                types::Kind::NoiseSession => {
+                    // Deliver directly to the multiplexer.
                     let mut buffer = Vec::new();
-                    match demux.write_message(session_id, response, &mut buffer) {
-                        Ok(_) => Box::pin(future::ok(buffer)),
-                        Err(error) => Box::pin(future::err(error)),
+                    match demux.process_frame(request, &mut buffer) {
+                        Err(err) => Box::pin(future::err(err)),
+                        Ok(Some((session_id, _session_info, message, _untrusted_plaintext))) => {
+                            // Message, process and write reply.
+                            let body = match message {
+                                types::Message::Request(rq) => {
+                                    // Just echo back what was given.
+                                    types::Body::Success(rq.args)
+                                }
+                                _ => panic!("unhandled message type"),
+                            };
+                            let response = types::Message::Response(types::Response { body });
+
+                            let mut buffer = Vec::new();
+                            match demux.write_message(session_id, response, &mut buffer) {
+                                Ok(_) => Box::pin(future::ok(buffer)),
+                                Err(error) => Box::pin(future::err(error)),
+                            }
+                        }
+                        Ok(None) => {
+                            // Handshake.
+                            Box::pin(future::ok(buffer))
+                        }
                     }
                 }
-                Ok(None) => {
-                    // Handshake.
-                    Box::pin(future::ok(buffer))
+                types::Kind::InsecureQuery => {
+                    // Just echo back what was given.
+                    let rq: types::Request = cbor::from_slice(&request).unwrap();
+                    let body = types::Body::Success(rq.args);
+                    let response = types::Response { body };
+                    return Box::pin(future::ok(cbor::to_vec(response)));
+                }
+                types::Kind::LocalQuery => {
+                    panic!("unhandled RPC kind")
                 }
             }
         }
@@ -515,11 +599,11 @@ mod test {
         let builder = session::Builder::default();
         let client = RpcClient::new(Box::new(transport.clone()), builder);
 
-        // Basic call.
+        // Basic secure call.
         let result: u64 = rt
-            .block_on(client.call(Context::background(), "test", 42))
+            .block_on(client.secure_call(Context::background(), "test", 42))
             .unwrap();
-        assert_eq!(result, 42, "call should work");
+        assert_eq!(result, 42, "secure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
@@ -534,9 +618,9 @@ mod test {
         transport.reset();
 
         let result: u64 = rt
-            .block_on(client.call(Context::background(), "test", 43))
+            .block_on(client.secure_call(Context::background(), "test", 43))
             .unwrap();
-        assert_eq!(result, 43, "call should work");
+        assert_eq!(result, 43, "secure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
@@ -553,9 +637,9 @@ mod test {
         transport.induce_transport_error();
 
         let result: u64 = rt
-            .block_on(client.call(Context::background(), "test", 44))
+            .block_on(client.secure_call(Context::background(), "test", 44))
             .unwrap();
-        assert_eq!(result, 44, "call should work");
+        assert_eq!(result, 44, "secure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),
             vec![
@@ -564,6 +648,35 @@ mod test {
                 (2, None),                               // New handshake.
                 (2, None),                               // New handshake.
                 (2, Some(types::PeerFeedback::Success)), // Handled call.
+            ]
+        );
+
+        // Basic insecure call.
+        let result: u64 = rt
+            .block_on(client.insecure_call(Context::background(), "test", 45))
+            .unwrap();
+        assert_eq!(result, 45, "insecure call should work");
+        assert_eq!(
+            transport.take_peer_feedback_history(),
+            vec![
+                (2, Some(types::PeerFeedback::Success)), // Previous handled call.
+                (2, Some(types::PeerFeedback::Success)), // Handled call.
+            ]
+        );
+
+        // Induce a single transport error and make sure we can still get a response.
+        transport.induce_transport_error();
+
+        let result: u64 = rt
+            .block_on(client.insecure_call(Context::background(), "test", 46))
+            .unwrap();
+        assert_eq!(result, 46, "insecure call should work");
+        assert_eq!(
+            transport.take_peer_feedback_history(),
+            vec![
+                (2, Some(types::PeerFeedback::Success)), // Previous handled call.
+                (3, Some(types::PeerFeedback::Failure)), // Failed call due to induced error.
+                (3, Some(types::PeerFeedback::Success)), // Handled call.
             ]
         );
     }

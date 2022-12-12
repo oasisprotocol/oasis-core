@@ -19,6 +19,25 @@ impl SessionID {
     }
 }
 
+/// RPC call kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[cbor(with_default)]
+#[repr(u8)]
+pub enum Kind {
+    /// A secure RPC call using an encrypted and authenticated Noise session.
+    NoiseSession = 0,
+    /// An insecure RPC call where messages are sent in plain text.
+    InsecureQuery = 1,
+    /// A local RPC call.
+    LocalQuery = 2,
+}
+
+impl Default for Kind {
+    fn default() -> Self {
+        Self::NoiseSession
+    }
+}
+
 /// Frame.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Frame {

@@ -202,7 +202,7 @@ impl KeyManagerClient for RemoteClient {
 
             let keys: KeyPair = inner
                 .rpc_client
-                .call(
+                .secure_call(
                     ctx,
                     METHOD_GET_OR_CREATE_KEYS,
                     LongTermKeyRequest::new(Some(height), inner.runtime_id, key_pair_id),
@@ -238,7 +238,7 @@ impl KeyManagerClient for RemoteClient {
 
             let key: SignedPublicKey = inner
                 .rpc_client
-                .call(
+                .secure_call(
                     ctx,
                     METHOD_GET_PUBLIC_KEY,
                     LongTermKeyRequest::new(Some(height), inner.runtime_id, key_pair_id),
@@ -275,7 +275,7 @@ impl KeyManagerClient for RemoteClient {
 
             let keys: KeyPair = inner
                 .rpc_client
-                .call(
+                .secure_call(
                     ctx,
                     METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
                     EphemeralKeyRequest::new(Some(height), inner.runtime_id, key_pair_id, epoch),
@@ -312,7 +312,7 @@ impl KeyManagerClient for RemoteClient {
 
             let key: SignedPublicKey = inner
                 .rpc_client
-                .call(
+                .secure_call(
                     ctx,
                     METHOD_GET_PUBLIC_EPHEMERAL_KEY,
                     EphemeralKeyRequest::new(Some(height), inner.runtime_id, key_pair_id, epoch),
@@ -341,7 +341,7 @@ impl KeyManagerClient for RemoteClient {
 
             let rsp: ReplicateResponse = inner
                 .rpc_client
-                .call(
+                .secure_call(
                     ctx,
                     METHOD_REPLICATE_MASTER_SECRET,
                     ReplicateRequest::new(Some(height)),

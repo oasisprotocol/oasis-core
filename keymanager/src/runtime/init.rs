@@ -4,6 +4,7 @@ use oasis_core_runtime::{
     dispatcher::{Initializer, PostInitState, PreInitState},
     enclave_rpc::{
         dispatcher::{Method as RpcMethod, MethodDescriptor as RpcMethodDescriptor},
+        types::Kind as RpcKind,
         Context as RpcContext,
     },
 };
@@ -34,62 +35,50 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
         set_trusted_policy_signers(signers.clone());
 
         // Register RPC methods exposed via EnclaveRPC to remote clients.
-        state.rpc_dispatcher.add_method(
-            RpcMethod::new(
-                RpcMethodDescriptor {
-                    name: METHOD_GET_OR_CREATE_KEYS.to_string(),
-                },
-                methods::get_or_create_keys,
-            ),
-            false,
-        );
-        state.rpc_dispatcher.add_method(
-            RpcMethod::new(
-                RpcMethodDescriptor {
-                    name: METHOD_GET_PUBLIC_KEY.to_string(),
-                },
-                methods::get_public_key,
-            ),
-            false,
-        );
-        state.rpc_dispatcher.add_method(
-            RpcMethod::new(
-                RpcMethodDescriptor {
-                    name: METHOD_GET_OR_CREATE_EPHEMERAL_KEYS.to_string(),
-                },
-                methods::get_or_create_ephemeral_keys,
-            ),
-            false,
-        );
-        state.rpc_dispatcher.add_method(
-            RpcMethod::new(
-                RpcMethodDescriptor {
-                    name: METHOD_GET_PUBLIC_EPHEMERAL_KEY.to_string(),
-                },
-                methods::get_public_ephemeral_key,
-            ),
-            false,
-        );
-        state.rpc_dispatcher.add_method(
-            RpcMethod::new(
-                RpcMethodDescriptor {
-                    name: METHOD_REPLICATE_MASTER_SECRET.to_string(),
-                },
-                methods::replicate_master_secret,
-            ),
-            false,
-        );
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: METHOD_GET_OR_CREATE_KEYS.to_string(),
+                kind: RpcKind::NoiseSession,
+            },
+            methods::get_or_create_keys,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: METHOD_GET_PUBLIC_KEY.to_string(),
+                kind: RpcKind::InsecureQuery,
+            },
+            methods::get_public_key,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: METHOD_GET_OR_CREATE_EPHEMERAL_KEYS.to_string(),
+                kind: RpcKind::NoiseSession,
+            },
+            methods::get_or_create_ephemeral_keys,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: METHOD_GET_PUBLIC_EPHEMERAL_KEY.to_string(),
+                kind: RpcKind::InsecureQuery,
+            },
+            methods::get_public_ephemeral_key,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: METHOD_REPLICATE_MASTER_SECRET.to_string(),
+                kind: RpcKind::NoiseSession,
+            },
+            methods::replicate_master_secret,
+        ));
 
         // Register local methods, for use by the node key manager component.
-        state.rpc_dispatcher.add_method(
-            RpcMethod::new(
-                RpcMethodDescriptor {
-                    name: LOCAL_METHOD_INIT.to_string(),
-                },
-                init_kdf,
-            ),
-            true,
-        );
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: LOCAL_METHOD_INIT.to_string(),
+                kind: RpcKind::LocalQuery,
+            },
+            init_kdf,
+        ));
 
         let runtime_id = state.protocol.get_runtime_id();
         let protocol = state.protocol.clone(); // Shut up the borrow checker.

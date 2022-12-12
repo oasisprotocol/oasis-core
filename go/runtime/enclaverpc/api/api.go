@@ -1,6 +1,16 @@
 // Package api defines the EnclaveRPC interface.
 package api
 
+// Kind is the RPC call kind.
+type Kind uint8
+
+// Supported RPC call kinds.
+const (
+	KindNoiseSession  Kind = 0
+	KindInsecureQuery Kind = 1
+	KindLocalQuery    Kind = 2
+)
+
 // Frame is an EnclaveRPC frame.
 //
 // It is the Go analog of the Rust RPC frame defined in runtime/src/enclave_rpc/types.rs.

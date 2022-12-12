@@ -10,7 +10,7 @@ use super::types;
 
 /// An EnclaveRPC transport.
 pub trait Transport: Send + Sync {
-    fn write_message(
+    fn write_noise_session(
         &self,
         ctx: Context,
         session_id: types::SessionID,
@@ -24,13 +24,22 @@ pub trait Transport: Send + Sync {
             payload: data,
         };
 
-        self.write_message_impl(ctx, cbor::to_vec(frame))
+        self.write_message_impl(ctx, cbor::to_vec(frame), types::Kind::NoiseSession)
+    }
+
+    fn write_insecure_query(
+        &self,
+        ctx: Context,
+        data: Vec<u8>,
+    ) -> BoxFuture<Result<Vec<u8>, AnyError>> {
+        self.write_message_impl(ctx, data, types::Kind::InsecureQuery)
     }
 
     fn write_message_impl(
         &self,
         ctx: Context,
         data: Vec<u8>,
+        kind: types::Kind,
     ) -> BoxFuture<Result<Vec<u8>, AnyError>>;
 
     fn set_peer_feedback(&self, _pfid: u64, _peer_feedback: Option<types::PeerFeedback>) {
@@ -67,6 +76,7 @@ impl Transport for RuntimeTransport {
         &self,
         ctx: Context,
         data: Vec<u8>,
+        kind: types::Kind,
     ) -> BoxFuture<Result<Vec<u8>, AnyError>> {
         let peer_feedback = {
             let mut pf = self.peer_feedback.lock().unwrap();
@@ -89,6 +99,7 @@ impl Transport for RuntimeTransport {
             Body::HostRPCCallRequest {
                 endpoint: self.endpoint.clone(),
                 request: data,
+                kind,
                 peer_feedback,
             },
         );
