@@ -34,16 +34,14 @@ pub fn get_or_create_keys(req: &LongTermKeyRequest, ctx: &mut RpcContext) -> Res
 }
 
 /// See `Kdf::get_public_key`.
-pub fn get_public_key(
-    req: &LongTermKeyRequest,
-    _ctx: &mut RpcContext,
-) -> Result<Option<SignedPublicKey>> {
+pub fn get_public_key(req: &LongTermKeyRequest, _ctx: &mut RpcContext) -> Result<SignedPublicKey> {
     // No authentication or authorization.
     // Absolutely anyone is allowed to query public long-term keys.
 
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req)?;
-    pk.map_or(Ok(None), |pk| Ok(Some(kdf.sign_public_key(pk)?)))
+    let sig = kdf.sign_public_key(pk)?;
+    Ok(sig)
 }
 
 /// See `Kdf::get_or_create_keys`.
@@ -62,14 +60,15 @@ pub fn get_or_create_ephemeral_keys(
 pub fn get_public_ephemeral_key(
     req: &EphemeralKeyRequest,
     ctx: &mut RpcContext,
-) -> Result<Option<SignedPublicKey>> {
+) -> Result<SignedPublicKey> {
     // No authentication or authorization.
     // Absolutely anyone is allowed to query public ephemeral keys.
     validate_epoch(req.epoch, ctx)?;
 
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req)?;
-    pk.map_or(Ok(None), |pk| Ok(Some(kdf.sign_public_key(pk)?)))
+    let sig = kdf.sign_public_key(pk)?;
+    Ok(sig)
 }
 
 /// See `Kdf::replicate_master_secret`.

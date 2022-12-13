@@ -222,10 +222,10 @@ impl KeyManagerClient for RemoteClient {
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         let mut cache = self.inner.public_key_cache.write().unwrap();
         if let Some(key) = cache.get(&(key_pair_id, None)) {
-            return Box::pin(future::ok(Some(key.clone())));
+            return Box::pin(future::ok(key.clone()));
         }
 
         // No entry in cache, fetch from key manager.
@@ -236,7 +236,7 @@ impl KeyManagerClient for RemoteClient {
                 .latest_height()
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let key: Option<SignedPublicKey> = inner
+            let key: SignedPublicKey = inner
                 .rpc_client
                 .call(
                     ctx,
@@ -246,16 +246,11 @@ impl KeyManagerClient for RemoteClient {
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            match key {
-                Some(key) => {
-                    // Cache key.
-                    let mut cache = inner.public_key_cache.write().unwrap();
-                    cache.put((key_pair_id, None), key.clone());
+            // Cache key.
+            let mut cache = inner.public_key_cache.write().unwrap();
+            cache.put((key_pair_id, None), key.clone());
 
-                    Ok(Some(key))
-                }
-                None => Ok(None),
-            }
+            Ok(key)
         })
     }
 
@@ -301,10 +296,10 @@ impl KeyManagerClient for RemoteClient {
         ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<Option<SignedPublicKey>, KeyManagerError>> {
+    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         let mut cache = self.inner.public_key_cache.write().unwrap();
         if let Some(key) = cache.get(&(key_pair_id, Some(epoch))) {
-            return Box::pin(future::ok(Some(key.clone())));
+            return Box::pin(future::ok(key.clone()));
         }
 
         // No entry in cache, fetch from key manager.
@@ -315,7 +310,7 @@ impl KeyManagerClient for RemoteClient {
                 .latest_height()
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let key: Option<SignedPublicKey> = inner
+            let key: SignedPublicKey = inner
                 .rpc_client
                 .call(
                     ctx,
@@ -325,16 +320,11 @@ impl KeyManagerClient for RemoteClient {
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            match key {
-                Some(key) => {
-                    // Cache key.
-                    let mut cache = inner.public_key_cache.write().unwrap();
-                    cache.put((key_pair_id, Some(epoch)), key.clone());
+            // Cache key.
+            let mut cache = inner.public_key_cache.write().unwrap();
+            cache.put((key_pair_id, Some(epoch)), key.clone());
 
-                    Ok(Some(key))
-                }
-                None => Ok(None),
-            }
+            Ok(key)
         })
     }
 

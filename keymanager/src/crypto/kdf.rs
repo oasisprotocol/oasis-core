@@ -420,9 +420,9 @@ impl Kdf {
     }
 
     /// Get the public part of the key.
-    pub fn get_public_key(&self, req: &impl KeyRequest) -> Result<Option<PublicKey>> {
+    pub fn get_public_key(&self, req: &impl KeyRequest) -> Result<PublicKey> {
         let keys = self.get_or_create_keys(req)?;
-        Ok(Some(keys.input_keypair.pk))
+        Ok(keys.input_keypair.pk)
     }
 
     /// Signs the public key using the key manager key.
@@ -656,10 +656,7 @@ mod tests {
             .get_or_create_keys(&req)
             .expect("private key should be created");
 
-        let pk = kdf
-            .get_public_key(&req)
-            .unwrap()
-            .expect("public key should be fetched");
+        let pk = kdf.get_public_key(&req).unwrap();
 
         assert_eq!(sk.input_keypair.pk, pk);
     }
