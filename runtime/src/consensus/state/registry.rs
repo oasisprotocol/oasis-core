@@ -108,7 +108,7 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use std::{net::Ipv4Addr, sync::Arc};
+    use std::sync::Arc;
 
     use crate::{
         common::{
@@ -117,7 +117,7 @@ mod test {
         },
         consensus::registry::{
             Capabilities, CapabilityTEE, ConsensusInfo, Node, NodeRuntime, P2PInfo, RuntimeKind,
-            TCPAddress, TEEHardware, TLSAddress, TLSInfo, VRFInfo, VersionInfo,
+            TEEHardware, TLSInfo, VRFInfo, VersionInfo,
         },
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
@@ -139,7 +139,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("8f6760fe2b547a823f71df7510272d3c932874e6dc5cc6e2df0588bad917e90f"),
+            hash: Hash::from("e5b7e884e3233444ddce993426c25b80ca9bcb323388ec1308e50a7bd816084a"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -162,30 +162,21 @@ mod test {
 
         let expected_nodes = vec![
                 Node{
-                    v: 2,
+                    v: 3,
                     id: PublicKey::from("43e5aaee54c768867718837ef4f6a6161e0615da0fcf8da394e5c8b7a0d54c18"),
                     entity_id: PublicKey::from("761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531"),
                     expiration: 32,
                     ..Default::default()
                 },
                 Node{
-                    v: 2,
+                    v: 3,
                     id: PublicKey::from("f43c3559658f76b85d0630f56dc75d603807ac60be0ca3aada66799289066758"),
                     entity_id: PublicKey::from("761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531"),
                     expiration: 32,
                     tls: TLSInfo{
                         pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
                         next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
-                        addresses: Some(vec![
-                            TLSAddress{
-                                pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
-                                address: TCPAddress{
-                                    ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(),
-                                    port: 1111,
-                                    ..Default::default()
-                                },
-                            },
-                        ]),
+                        ..Default::default()
                     },
                     p2p: P2PInfo{
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),

@@ -249,7 +249,6 @@ func (n *Node) initRuntimeWorkers() error {
 		)
 		return err
 	}
-	n.svcMgr.Register(n.CommonWorker.Grpc)
 	n.svcMgr.Register(n.CommonWorker)
 
 	workerCommonCfg := n.CommonWorker.GetConfig()

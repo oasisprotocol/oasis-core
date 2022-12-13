@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/base64"
+	"net"
 	"strings"
 	"testing"
 
@@ -28,12 +29,9 @@ func TestRolesMask(t *testing.T) {
 		{"compute", 1, true, true, ""},
 		{"key-manager", 4, true, true, ""},
 		{"validator", 8, true, true, ""},
-		{"consensus-rpc", 16, true, true, ""},
 		{"storage-rpc", 32, true, true, ""},
 		// Valid multiple roles.
 		{"compute,validator", 9, true, true, ""},
-		{"compute,validator,consensus-rpc", 25, true, true, ""},
-		{"validator,consensus-rpc", 24, true, true, ""},
 		{"compute,storage-rpc", 33, true, true, ""},
 
 		// Invalid - extra spaces.
@@ -49,7 +47,6 @@ func TestRolesMask(t *testing.T) {
 		{"compute,compute", 8, false, false, "node: duplicate role: 'compute'"},
 		{"key-manager,key-manager", 8, false, false, "node: duplicate role: 'key-manager'"},
 		{"validator,validator", 8, false, false, "node: duplicate role: 'validator'"},
-		{"consensus-rpc,consensus-rpc", 8, false, false, "node: duplicate role: 'consensus-rpc'"},
 		{"storage-rpc,storage-rpc", 8, false, false, "node: duplicate role: 'storage-rpc'"},
 		{"compute,storage-rpc,compute", 1, false, false, "node: duplicate role: 'compute'"},
 	}
@@ -133,37 +130,48 @@ func TestReservedRoles(t *testing.T) {
 	require.Error(err, "ValidateBasic should fail for empty roles")
 }
 
-func TestNodeDescriptorV1(t *testing.T) {
+func TestNodeDescriptorV2(t *testing.T) {
 	require := require.New(t)
 
 	v1 := Node{
-		Versioned: cbor.NewVersioned(1),
-		Roles:     RoleComputeWorker | roleReserved2,
+		Versioned: cbor.NewVersioned(2),
+		Roles:     RoleComputeWorker | roleReserved3,
 	}
-	raw := cbor.Marshal(v1)
+	require.Error(v1.ValidateBasic(false), "V1 descriptors should not be allowed anymore")
 
-	var v2 Node
-	err := cbor.Unmarshal(raw, &v2)
+	v2 := nodeV2{
+		Versioned: cbor.NewVersioned(2),
+		Roles:     RoleComputeWorker | roleReserved3,
+		TLS: nodeV2TLSInfo{
+			PubKey:              signature.PublicKey{},
+			NextPubKey:          signature.PublicKey{},
+			DeprecatedAddresses: []TLSAddress{{PubKey: signature.PublicKey{}, Address: Address{IP: net.IPv4(127, 0, 0, 1), Port: 9000}}},
+		},
+	}
+	raw := cbor.Marshal(v2)
+
+	var v3 Node
+	err := cbor.Unmarshal(raw, &v3)
 	require.NoError(err, "cbor.Unmarshal")
 
-	err = v2.ValidateBasic(false)
+	err = v3.ValidateBasic(false)
 	require.NoError(err, "ValidateBasic")
-	require.True(v2.HasRoles(RoleComputeWorker))
-	require.False(v2.HasRoles(roleReserved2))
+	require.True(v3.HasRoles(RoleComputeWorker))
+	require.False(v3.HasRoles(roleReserved3))
 
-	v1 = Node{
-		Versioned: cbor.NewVersioned(1),
+	v2 = nodeV2{
+		Versioned: cbor.NewVersioned(2),
 		Roles:     RoleComputeWorker,
 	}
-	raw = cbor.Marshal(v1)
+	raw = cbor.Marshal(v2)
 
-	err = cbor.Unmarshal(raw, &v2)
+	err = cbor.Unmarshal(raw, &v3)
 	require.NoError(err, "cbor.Unmarshal")
 
-	err = v2.ValidateBasic(false)
+	err = v3.ValidateBasic(false)
 	require.NoError(err, "ValidateBasic")
-	require.True(v2.HasRoles(RoleComputeWorker))
-	require.False(v2.HasRoles(roleReserved2))
+	require.True(v3.HasRoles(RoleComputeWorker))
+	require.False(v3.HasRoles(roleReserved2))
 }
 
 func TestNodeSerialization(t *testing.T) {
@@ -181,7 +189,7 @@ func TestNodeSerialization(t *testing.T) {
 		node           Node
 		expectedBase64 string
 	}{
-		{Node{Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion)}, "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA=="},
+		{Node{Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion)}, "qWF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVz9mljb25zZW5zdXOiYmlkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGlhZGRyZXNzZXP2aWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABqZXhwaXJhdGlvbgA="},
 	} {
 		enc := cbor.Marshal(tc.node)
 		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
@@ -190,6 +198,117 @@ func TestNodeSerialization(t *testing.T) {
 		err := cbor.Unmarshal(enc, &dec)
 		require.NoError(err, "Unmarshal")
 		require.EqualValues(tc.node, dec, "Node serialization should round-trip")
+	}
+}
+
+func TestNodeForTestSerializationV2(t *testing.T) {
+	require := require.New(t)
+
+	var runtimeID common.Namespace
+	require.NoError(runtimeID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000010"), "runtime id")
+	var runtimeID2 common.Namespace
+	require.NoError(runtimeID2.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000011"), "runtime id 2")
+
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/registry.rs.
+	for _, tc := range []struct {
+		node           nodeV2
+		expectedBase64 string
+	}{
+		{
+			nodeV2{Versioned: cbor.NewVersioned(2)},
+			"qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==",
+		},
+		{
+			nodeV2{
+				Versioned: cbor.NewVersioned(2),
+				TLS: nodeV2TLSInfo{
+					PubKey:              signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+					NextPubKey:          signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+					DeprecatedAddresses: []TLSAddress{},
+				},
+			},
+			"qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4BsbmV4dF9wdWJfa2V5WCD/////////////////////////////////////////82Vyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==",
+		},
+		{
+			nodeV2{
+				Versioned: cbor.NewVersioned(2),
+				TLS: nodeV2TLSInfo{
+					PubKey:     signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+					NextPubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+					DeprecatedAddresses: []TLSAddress{
+						{
+							PubKey:  signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+							Address: Address{IP: net.IPv4(127, 0, 0, 1), Port: 123},
+						},
+						{
+							PubKey:  signature.NewPublicKey("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc4"),
+							Address: Address{IP: net.IPv4(192, 168, 1, 1), Port: 4000},
+						},
+						{
+							PubKey:  signature.NewPublicKey("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd4"),
+							Address: Address{IP: net.IPv4(234, 100, 99, 88), Port: 8000},
+						},
+					},
+				},
+			},
+			"qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4OiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0omdhZGRyZXNzo2JJUFAAAAAAAAAAAAAA///AqAEBZFBvcnQZD6BkWm9uZWBncHViX2tleVgg/////////////////////////////////////////8SiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//+pkY1hkUG9ydBkfQGRab25lYGdwdWJfa2V5WCD/////////////////////////////////////////1GxuZXh0X3B1Yl9rZXlYIP/////////////////////////////////////////zZXJvbGVzAGhydW50aW1lc/ZpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
+		},
+		{
+			nodeV2{
+				Versioned:  cbor.NewVersioned(2),
+				ID:         signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+				EntityID:   signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+				Expiration: 32,
+				TLS: nodeV2TLSInfo{
+					PubKey:     signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+					NextPubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+					DeprecatedAddresses: []TLSAddress{
+						{
+							PubKey:  signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+							Address: Address{IP: net.IPv4(127, 0, 0, 1), Port: 123},
+						},
+					},
+				},
+				P2P: P2PInfo{
+					ID: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
+				},
+				Consensus: ConsensusInfo{
+					ID:        signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
+					Addresses: []ConsensusAddress{},
+				},
+				VRF: &VRFInfo{
+					ID: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
+				},
+				Runtimes: []*Runtime{
+					{
+						ID:      runtimeID,
+						Version: version.FromU64(321),
+					},
+					{
+						ID:      runtimeID2,
+						Version: version.FromU64(123),
+						Capabilities: Capabilities{TEE: &CapabilityTEE{
+							Hardware:    TEEHardwareIntelSGX,
+							RAK:         signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+							Attestation: []byte{0, 1, 2, 3, 4, 5},
+						}},
+						ExtraInfo: []byte{5, 3, 2, 1},
+					},
+				},
+			},
+			"qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0bG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaNjcmFrWCD/////////////////////////////////////////+GhoYXJkd2FyZQFrYXR0ZXN0YXRpb25GAAECAwQFaWNvbnNlbnN1c6JiaWRYIP/////////////////////////////////////////2aWFkZHJlc3Nlc4BpZW50aXR5X2lkWCD/////////////////////////////////////////8WpleHBpcmF0aW9uGCA=",
+		},
+	} {
+		enc := cbor.Marshal(tc.node)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec Node
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Deserialization into Node v3 should work")
+
+		var t map[string]interface{}
+		err = cbor.Unmarshal(enc, &t)
+		require.NoError(err, "Unamarshal inter")
 	}
 }
 
@@ -208,7 +327,7 @@ func TestNodeForTestSerialization(t *testing.T) {
 	}{
 		{
 			Node{Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion)},
-			"qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==",
+			"qWF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVz9mljb25zZW5zdXOiYmlkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGlhZGRyZXNzZXP2aWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABqZXhwaXJhdGlvbgA=",
 		},
 		{
 			Node{
@@ -247,7 +366,7 @@ func TestNodeForTestSerialization(t *testing.T) {
 					},
 				},
 			},
-			"qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBkEV2Rab25lYGdwdWJfa2V5WCD/////////////////////////////////////////9GxuZXh0X3B1Yl9rZXlYIP/////////////////////////////////////////zY3ZyZqFiaWRYIP/////////////////////////////////////////3ZXJvbGVzAGhydW50aW1lc4KkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEGd2ZXJzaW9uoWVwYXRjaBkBQWpleHRyYV9pbmZv9mxjYXBhYmlsaXRpZXOgpGJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFndmVyc2lvbqFlcGF0Y2gYe2pleHRyYV9pbmZvRAUDAgFsY2FwYWJpbGl0aWVzoWN0ZWWjY3Jha1gg//////////////////////////////////////////hoaGFyZHdhcmUBa2F0dGVzdGF0aW9uRgABAgMEBWljb25zZW5zdXOiYmlkWCD/////////////////////////////////////////9mlhZGRyZXNzZXOAaWVudGl0eV9pZFgg//////////////////////////////////////////FqZXhwaXJhdGlvbhgg",
+			"qmF2A2JpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIP/////////////////////////////////////////ybG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaNjcmFrWCD/////////////////////////////////////////+GhoYXJkd2FyZQFrYXR0ZXN0YXRpb25GAAECAwQFaWNvbnNlbnN1c6JiaWRYIP/////////////////////////////////////////2aWFkZHJlc3Nlc4BpZW50aXR5X2lkWCD/////////////////////////////////////////8WpleHBpcmF0aW9uGCA=",
 		},
 	} {
 		enc := cbor.Marshal(tc.node)
@@ -276,11 +395,11 @@ func TestNodeDeserialization(t *testing.T) {
 		expectedNode Node
 	}{
 		{
-			"qmF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAHBzb2Z0d2FyZV92ZXJzaW9u9g==",
+			"qWF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVz9mljb25zZW5zdXOiYmlkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGlhZGRyZXNzZXP2aWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABqZXhwaXJhdGlvbgA=",
 			Node{Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion)},
 		},
 		{
-			"qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXOBomJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBndmVyc2lvbvZpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
+			"qWF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVzgaRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26gamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6BpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
 			Node{
 				Versioned: cbor.NewVersioned(LatestNodeDescriptorVersion),
 				Runtimes: []*Runtime{

@@ -171,7 +171,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 			"err", err,
 			"signed_node", sigNode,
 		)
-		return err
+		return fmt.Errorf("%v: %w", err, registry.ErrInvalidArgument)
 	}
 	untrustedEntity, err := state.Entity(ctx, untrustedNode.EntityID)
 	if err != nil {

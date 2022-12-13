@@ -131,43 +131,16 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 					PubKey: nodeTLSSigner.Public(),
 				},
 				P2P: node.P2PInfo{
-					ID:        nodeP2PSigner.Public(),
-					Addresses: []node.Address{{IP: net.IPv4(127, 0, 0, 1), Port: 9002}},
-				},
-				VRF: &node.VRFInfo{
-					ID: nodeVRFSigner.Public(),
-				},
-				Roles:      node.RoleConsensusRPC,
-				Expiration: 11,
-			},
-			ErrInvalidArgument,
-			"invalid consensus RPC node (missing TLS address)",
-		},
-		{
-			node.Node{
-				Versioned: cbor.NewVersioned(2),
-				ID:        nodeSigner.Public(),
-				EntityID:  entityID1,
-				Consensus: node.ConsensusInfo{
-					ID: nodeConsensusSigner.Public(),
-					Addresses: []node.ConsensusAddress{
-						{ID: nodeConsensusSigner.Public(), Address: node.Address{IP: net.IPv4(127, 0, 0, 1), Port: 9000}},
-					},
-				},
-				TLS: node.TLSInfo{
-					PubKey: nodeTLSSigner.Public(),
-				},
-				P2P: node.P2PInfo{
 					ID: nodeP2PSigner.Public(),
 				},
 				VRF: &node.VRFInfo{
 					ID: nodeVRFSigner.Public(),
 				},
-				Roles:      node.RoleConsensusRPC,
+				Roles:      node.RoleValidator,
 				Expiration: 11,
 			},
 			ErrInvalidArgument,
-			"invalid consensus RPC node (missing P2P address)",
+			"invalid consensus validator node (missing P2P address)",
 		},
 		{
 			node.Node{
@@ -190,11 +163,11 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 				VRF: &node.VRFInfo{
 					ID: nodeVRFSigner.Public(),
 				},
-				Roles:      node.RoleConsensusRPC,
+				Roles:      node.RoleValidator,
 				Expiration: 11,
 			},
 			nil,
-			"valid consensus RPC node",
+			"valid consensus validator node",
 		},
 		{
 			node.Node{

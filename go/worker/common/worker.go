@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -28,7 +27,6 @@ type Worker struct {
 	Identity        *identity.Identity
 	Consensus       consensus.Backend
 	LightClient     consensus.LightClient
-	Grpc            *grpc.Server
 	P2P             p2p.Service
 	IAS             ias.Endpoint
 	KeyManager      keymanagerApi.Backend
@@ -192,7 +190,6 @@ func newWorker(
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	lightClient consensus.LightClient,
-	grpc *grpc.Server,
 	p2p p2p.Service,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
@@ -217,7 +214,6 @@ func newWorker(
 		Identity:        identity,
 		Consensus:       consensus,
 		LightClient:     lightClient,
-		Grpc:            grpc,
 		P2P:             p2p,
 		IAS:             ias,
 		KeyManager:      keyManager,
@@ -262,17 +258,6 @@ func New(
 		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
 	}
 
-	// Create externally-accessible gRPC server.
-	serverConfig := &grpc.ServerConfig{
-		Name:     "external",
-		Port:     cfg.ClientPort,
-		Identity: identity,
-	}
-	grpc, err := grpc.NewServer(serverConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
 	return newWorker(
@@ -284,7 +269,6 @@ func New(
 		identity,
 		consensus,
 		lightClient,
-		grpc,
 		p2p,
 		ias,
 		keyManager,

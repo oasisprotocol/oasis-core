@@ -735,14 +735,12 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 								MaxNodes: map[node.RolesMask]uint16{
 									node.RoleComputeWorker: 2,
 									node.RoleStorageRPC:    2,
-									node.RoleConsensusRPC:  2,
 								},
 							},
 							nodeEntities[3].Entity.ID: {
 								MaxNodes: map[node.RolesMask]uint16{
 									node.RoleComputeWorker: 1,
 									node.RoleStorageRPC:    1,
-									node.RoleConsensusRPC:  1,
 								},
 							},
 						},
@@ -1147,7 +1145,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 
 		var role node.RolesMask
 		if i < nCompute {
-			role = node.RoleComputeWorker | node.RoleStorageRPC | node.RoleConsensusRPC
+			role = node.RoleComputeWorker | node.RoleStorageRPC
 		}
 
 		nod.Node = &node.Node{
@@ -1179,84 +1177,54 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		// Append node's ID to entity's list of nodes, so we can register it.
 		ent.Entity.Nodes = append(ent.Entity.Nodes, nod.Node.ID)
 
+		var invNode node.Node
+		var invNodeReg invalidNodeRegistration
 		// Add a registration with no P2P addresses.
 		if nod.Node.Roles&node.RoleComputeWorker != 0 {
-			invalid1 := &invalidNodeRegistration{
+			invNodeReg = invalidNodeRegistration{
 				descr: "register committee node without P2P addresses",
 			}
-			invNode1 := *nod.Node
-			invNode1.P2P.Addresses = nil
-			invalid1.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode1)
+			invNode = *nod.Node
+			invNode.P2P.Addresses = nil
+			invNodeReg.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode)
 			if err != nil {
 				return nil, err
 			}
-			nod.invalidBefore = append(nod.invalidBefore, invalid1)
+			nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 		}
-
-		// Add a registration with no TLS addresses.
-		invalid2 := &invalidNodeRegistration{
-			descr: "register node without TLS addresses",
-		}
-		invNode2 := *nod.Node
-		invalid2.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode2)
-		if err != nil {
-			return nil, err
-		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid2)
-
-		// Add a registration with no TLS public key.
-		invalid3 := &invalidNodeRegistration{
-			descr: "register node without TLS public key",
-		}
-		invNode3 := *nod.Node
-		invNode3.TLS.PubKey = signature.PublicKey{}
-		invalid3.signed, err = node.MultiSignNode(
-			[]signature.Signer{
-				nodeIdentity.NodeSigner,
-				nodeIdentity.P2PSigner,
-				nodeIdentity.ConsensusSigner,
-				nodeIdentity.VRFSigner,
-			},
-			api.RegisterNodeSignatureContext,
-			&invNode3,
-		)
-		if err != nil {
-			return nil, err
-		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid3)
 
 		// Add a registration without any roles.
-		invalid4 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node without roles",
 		}
-		invNode4 := *nod.Node
-		invNode4.Roles = 0
-		invalid4.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode4)
+		invNode = *nod.Node
+		invNode.Roles = 0
+		invNodeReg.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid4)
+		nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 
 		// Add a registration with reserved roles.
-		invalid5 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node with reserved roles",
 		}
-		invNode5 := *nod.Node
-		invNode5.Roles = 0xFFFFFFFF
-		invalid5.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode5)
+		invNode = *nod.Node
+		invNode.Roles = 0xFFFFFFFF
+		invNodeReg.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid5)
+		nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 
 		// Add a registration without a P2P ID.
 		if nod.Node.Roles&node.RoleComputeWorker != 0 {
-			invalid6 := &invalidNodeRegistration{
+			invNodeReg = invalidNodeRegistration{
 				descr: "register node without a valid p2p id",
 			}
-			invNode6 := *nod.Node
-			invNode6.P2P.ID = signature.PublicKey{}
-			invalid6.signed, err = node.MultiSignNode(
+			invNode = *nod.Node
+			invNode.P2P.ID = signature.PublicKey{}
+			invNodeReg.signed, err = node.MultiSignNode(
 				[]signature.Signer{
 					nodeIdentity.NodeSigner,
 					nodeIdentity.ConsensusSigner,
@@ -1264,64 +1232,64 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 					nodeIdentity.GetTLSSigner(),
 				},
 				api.RegisterNodeSignatureContext,
-				&invNode6,
+				&invNode,
 			)
 			if err != nil {
 				return nil, err
 			}
-			nod.invalidBefore = append(nod.invalidBefore, invalid6)
+			nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 		}
 
 		// Add a registration without any runtimes.
 		if nod.Node.Roles&node.RoleComputeWorker != 0 {
-			invalid7 := &invalidNodeRegistration{
+			invNodeReg = invalidNodeRegistration{
 				descr: "register node without runtimes",
 			}
-			invNode7 := *nod.Node
-			invNode7.Runtimes = nil
-			invalid7.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode7)
+			invNode = *nod.Node
+			invNode.Runtimes = nil
+			invNodeReg.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode)
 			if err != nil {
 				return nil, err
 			}
-			nod.invalidBefore = append(nod.invalidBefore, invalid7)
+			nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 		}
 
 		// Add a registration with invalid runtimes.
-		invalid8 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node with invalid runtimes",
 		}
-		invNode8 := *nod.Node
-		invNode8.Runtimes = []*node.Runtime{{ID: publicKeyToNamespace(ent.Signer.Public(), false)}}
-		invalid8.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode8)
+		invNode = *nod.Node
+		invNode.Runtimes = []*node.Runtime{{ID: publicKeyToNamespace(ent.Signer.Public(), false)}}
+		invNodeReg.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid8)
+		nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 
 		// Add a registration with invalid consensus address.
-		invalid9 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node with invalid consensus address",
 		}
-		invNode9 := *nod.Node
-		invNode9.Consensus.Addresses = []node.ConsensusAddress{
+		invNode = *nod.Node
+		invNode.Consensus.Addresses = []node.ConsensusAddress{
 			{
 				ID:      invalidPK,
 				Address: addr,
 			},
 		}
-		invalid9.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode9)
+		invNodeReg.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid9)
+		nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 
 		// Add a registration with same consensus and P2P IDs.
-		invalid10 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node with same consensus and p2p IDs",
 		}
-		invNode10 := *nod.Node
-		invNode10.Consensus.ID = invNode10.P2P.ID
-		invalid10.signed, err = node.MultiSignNode(
+		invNode = *nod.Node
+		invNode.Consensus.ID = invNode.P2P.ID
+		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
 				nodeIdentity.P2PSigner,
@@ -1329,22 +1297,22 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				nodeIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
-			&invNode10,
+			&invNode,
 		)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid10)
+		nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 
 		// Add a registration with duplicate P2P ID.
-		invalid11 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node with duplicate p2p id",
 		}
-		invNode11 := *nod.Node
-		invNode11.ID = invalidIdentity.NodeSigner.Public()
-		invNode11.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode11.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
-		invalid11.signed, err = node.MultiSignNode(
+		invNode = *nod.Node
+		invNode.ID = invalidIdentity.NodeSigner.Public()
+		invNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
+		invNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
+		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
 				invalidIdentity.ConsensusSigner,
@@ -1353,22 +1321,22 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				invalidIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
-			&invNode11,
+			&invNode,
 		)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidAfter = append(nod.invalidAfter, invalid11)
+		nod.invalidAfter = append(nod.invalidAfter, &invNodeReg)
 
 		// Add a registration with duplicate consensus ID.
-		invalid12 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node with duplicate consensus id",
 		}
-		invNode12 := *nod.Node
-		invNode12.ID = invalidIdentity.NodeSigner.Public()
-		invNode12.P2P.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode12.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
-		invalid12.signed, err = node.MultiSignNode(
+		invNode = *nod.Node
+		invNode.ID = invalidIdentity.NodeSigner.Public()
+		invNode.P2P.ID = invalidIdentity.ConsensusSigner.Public()
+		invNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
+		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
 				nodeIdentity.ConsensusSigner,
@@ -1377,22 +1345,22 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				invalidIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
-			&invNode12,
+			&invNode,
 		)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidAfter = append(nod.invalidAfter, invalid12)
+		nod.invalidAfter = append(nod.invalidAfter, &invNodeReg)
 
 		// Add a registration with duplicate public keys.
-		invalid13 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "register node with duplicate public keys",
 		}
-		invNode13 := *nod.Node
-		invNode13.ID = invalidIdentity.NodeSigner.Public()
-		invNode13.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode13.P2P.ID = invalidIdentity.ConsensusSigner.Public()
-		invalid13.signed, err = node.MultiSignNode(
+		invNode = *nod.Node
+		invNode.ID = invalidIdentity.NodeSigner.Public()
+		invNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
+		invNode.P2P.ID = invalidIdentity.ConsensusSigner.Public()
+		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
 				invalidIdentity.ConsensusSigner,
@@ -1401,12 +1369,12 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				nodeIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
-			&invNode13,
+			&invNode,
 		)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidAfter = append(nod.invalidAfter, invalid13)
+		nod.invalidAfter = append(nod.invalidAfter, &invNodeReg)
 
 		// Add another Re-Registration with different address field and more runtimes.
 		moreRuntimes := append([]*node.Runtime(nil), runtimes...)
@@ -1454,7 +1422,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		}
 
 		// Add invalid Re-Registration with different runtimes.
-		invalid14 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "Re-registering a node with different runtimes should fail",
 		}
 		testRuntimeSigner := memorySigner.NewTestSigner("invalid-registration-runtime-seed")
@@ -1477,7 +1445,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 			ID: invalidIdentity.VRFSigner.Public(),
 		}
 		newNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
-		invalid14.signed, err = node.MultiSignNode(
+		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
 				invalidIdentity.ConsensusSigner,
@@ -1491,15 +1459,15 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidReReg = append(nod.invalidReReg, invalid14)
+		nod.invalidReReg = append(nod.invalidReReg, &invNodeReg)
 
 		// Add a registration with an old version.
-		invalid15 := &invalidNodeRegistration{
+		invNodeReg = invalidNodeRegistration{
 			descr: "Registering with an old descriptor should fail",
 		}
-		invNode15 := *nod.Node
-		invNode15.Versioned.V = 0
-		invalid15.signed, err = node.MultiSignNode(
+		invNode = *nod.Node
+		invNode.Versioned.V = 0
+		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
 				nodeIdentity.ConsensusSigner,
@@ -1508,12 +1476,12 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				nodeIdentity.GetTLSSigner(),
 			},
 			api.RegisterNodeSignatureContext,
-			&invNode15,
+			&invNode,
 		)
 		if err != nil {
 			return nil, err
 		}
-		nod.invalidBefore = append(nod.invalidBefore, invalid15)
+		nod.invalidBefore = append(nod.invalidBefore, &invNodeReg)
 
 		nodes = append(nodes, &nod)
 	}

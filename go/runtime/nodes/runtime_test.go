@@ -15,11 +15,6 @@ func TestTagsForRoleMask(t *testing.T) {
 			tagForRole(node.RoleComputeWorker),
 			tagForRole(node.RoleKeyManager),
 		},
-		node.RoleComputeWorker | node.RoleKeyManager | node.RoleConsensusRPC: {
-			tagForRole(node.RoleComputeWorker),
-			tagForRole(node.RoleKeyManager),
-			tagForRole(node.RoleConsensusRPC),
-		},
 	}
 
 	for tc, expected := range cases {

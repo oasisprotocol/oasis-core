@@ -59,8 +59,8 @@ pub struct TLSInfo {
     /// Public key that will be used for establishing connections after certificate rotation (if enabled).
     pub next_pub_key: PublicKey,
 
-    /// List of addresses at which the node can be reached.
-    pub addresses: Option<Vec<TLSAddress>>,
+    #[cbor(rename = "addresses", optional)]
+    pub _deprecated_addresses: Option<Vec<TLSAddress>>,
 }
 
 /// Node's P2P information.
@@ -182,13 +182,16 @@ impl RolesMask {
     /// Validator role.
     pub const ROLE_VALIDATOR: RolesMask = RolesMask(1 << 3);
     /// Public consensus RPC services worker role.
-    pub const ROLE_CONSENSUS_RPC: RolesMask = RolesMask(1 << 4);
+    pub const ROLE_RESERVED_3: RolesMask = RolesMask(1 << 4);
     /// Public storage RPC services worker role.
     pub const ROLE_STORAGE_RPC: RolesMask = RolesMask(1 << 5);
 
     // Bits of the Oasis node roles bitmask that are reserved and must not be used.
-    pub const ROLES_RESERVED: RolesMask =
-        RolesMask(u32::MAX & !((Self::ROLE_STORAGE_RPC.0 << 1) - 1) | Self::ROLE_RESERVED_2.0);
+    pub const ROLES_RESERVED: RolesMask = RolesMask(
+        u32::MAX & !((Self::ROLE_STORAGE_RPC.0 << 1) - 1)
+            | Self::ROLE_RESERVED_2.0
+            | Self::ROLE_RESERVED_3.0,
+    );
 }
 
 impl PartialOrd for RolesMask {
@@ -844,30 +847,21 @@ mod tests {
         // NOTE: These tests MUST be synced with go/common/node/node_test.go.
         let tcs = vec![
             (
-                "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==",
-                Node{v: 2, ..Default::default()},
+                "qWF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVz9mljb25zZW5zdXOiYmlkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGlhZGRyZXNzZXP2aWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABqZXhwaXJhdGlvbgA=",
+                Node{v: 3, ..Default::default()},
                 true,
             ),
 			(
-                "qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBkEV2Rab25lYGdwdWJfa2V5WCD/////////////////////////////////////////9GxuZXh0X3B1Yl9rZXlYIP/////////////////////////////////////////zY3ZyZqFiaWRYIP/////////////////////////////////////////3ZXJvbGVzAGhydW50aW1lc4KkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEGd2ZXJzaW9uoWVwYXRjaBkBQWpleHRyYV9pbmZv9mxjYXBhYmlsaXRpZXOgpGJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFndmVyc2lvbqFlcGF0Y2gYe2pleHRyYV9pbmZvRAUDAgFsY2FwYWJpbGl0aWVzoWN0ZWWjY3Jha1gg//////////////////////////////////////////hoaGFyZHdhcmUBa2F0dGVzdGF0aW9uRgABAgMEBWljb25zZW5zdXOiYmlkWCD/////////////////////////////////////////9mlhZGRyZXNzZXOAaWVudGl0eV9pZFgg//////////////////////////////////////////FqZXhwaXJhdGlvbhgg",
+                "qmF2A2JpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIP/////////////////////////////////////////ybG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaNjcmFrWCD/////////////////////////////////////////+GhoYXJkd2FyZQFrYXR0ZXN0YXRpb25GAAECAwQFaWNvbnNlbnN1c6JiaWRYIP/////////////////////////////////////////2aWFkZHJlc3Nlc4BpZW50aXR5X2lkWCD/////////////////////////////////////////8WpleHBpcmF0aW9uGCA=",
                 Node{
-                    v: 2,
+                    v: 3,
                     id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
                     entity_id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
                     expiration: 32,
                     tls: TLSInfo{
                         pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
                         next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
-                        addresses: Some(vec![
-                            TLSAddress{
-                                pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
-                                address: TCPAddress{
-                                    ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(),
-                                    port: 1111,
-                                    ..Default::default()
-                                },
-                            },
-                        ]),
+                        ..Default::default()
                     },
                     p2p: P2PInfo{
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
@@ -904,14 +898,9 @@ mod tests {
                 true,
             ),
             (
-                "qmF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAHBzb2Z0d2FyZV92ZXJzaW9u9g==",
-                Node{v: 2, ..Default::default()},
-                false,
-            ),
-            (
-                "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXOBomJpZFgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBndmVyc2lvbvZpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
+                "qWF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVzgaRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26gamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6BpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
                 Node{
-                    v: 2,
+                    v: 3,
                     runtimes: Some(vec![
                         NodeRuntime{
                             id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),
@@ -934,6 +923,109 @@ mod tests {
                 let ser = base64::encode(cbor::to_vec(dec));
                 assert_eq!(ser, encoded_base64, "node should serialize correctly");
             }
+        }
+    }
+
+    #[test]
+    fn test_deserialize_node_v2() {
+        // NOTE: These tests MUST be synced with go/common/node/node_test.go.
+        let tcs = vec![
+            (
+                "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZsbmV4dF9wdWJfa2V5WCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGVyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==",
+                Node{v: 2, ..Default::default()},
+            ),
+            (
+                "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4BsbmV4dF9wdWJfa2V5WCD/////////////////////////////////////////82Vyb2xlcwBocnVudGltZXP2aWNvbnNlbnN1c6JiaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaWFkZHJlc3Nlc/ZpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGpleHBpcmF0aW9uAA==",
+                Node{
+                    v: 2,
+                    tls: TLSInfo{
+                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        _deprecated_addresses: Some(vec![]),
+                    },
+                    ..Default::default()
+                },
+            ),
+            (
+                "qWF2AmJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4OiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0omdhZGRyZXNzo2JJUFAAAAAAAAAAAAAA///AqAEBZFBvcnQZD6BkWm9uZWBncHViX2tleVgg/////////////////////////////////////////8SiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//+pkY1hkUG9ydBkfQGRab25lYGdwdWJfa2V5WCD/////////////////////////////////////////1GxuZXh0X3B1Yl9rZXlYIP/////////////////////////////////////////zZXJvbGVzAGhydW50aW1lc/ZpY29uc2Vuc3VzomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAamV4cGlyYXRpb24A",
+                Node{
+                    v: 2,
+                    tls: TLSInfo{
+                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        _deprecated_addresses: Some(vec![
+                            TLSAddress{
+                                pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+                                address: TCPAddress { ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(), port: 123, ..Default::default() }
+                            },
+                            TLSAddress{
+                                pub_key: PublicKey::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc4"),
+                                address: TCPAddress { ip: Ipv4Addr::new(192, 168, 1, 1).to_ipv6_mapped().octets().to_vec(), port: 4000, ..Default::default() }
+                            },
+                            TLSAddress{
+                                pub_key: PublicKey::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd4"),
+                                address: TCPAddress { ip: Ipv4Addr::new(234, 100, 99, 88).to_ipv6_mapped().octets().to_vec(), port: 8000, ..Default::default() }
+                            },
+
+                            ])
+                    },
+                    ..Default::default()
+                },
+            ),
+            (
+                "qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0bG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaNjcmFrWCD/////////////////////////////////////////+GhoYXJkd2FyZQFrYXR0ZXN0YXRpb25GAAECAwQFaWNvbnNlbnN1c6JiaWRYIP/////////////////////////////////////////2aWFkZHJlc3Nlc4BpZW50aXR5X2lkWCD/////////////////////////////////////////8WpleHBpcmF0aW9uGCA=",
+                Node{
+                    v: 2,
+                    id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+                    entity_id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+                    expiration: 32,
+                    tls: TLSInfo{
+                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        _deprecated_addresses: Some(vec![TLSAddress{
+                                pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+                                address: TCPAddress { ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(), port: 123, ..Default::default() }
+                            }])
+                    },
+                    p2p: P2PInfo{
+                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
+                        ..Default::default()
+                    },
+                    consensus: ConsensusInfo{
+                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
+                        addresses: Some(Vec::new()),
+                    },
+                    vrf: Some(VRFInfo{
+                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
+                    }),
+                    runtimes: Some(vec![
+                        NodeRuntime{
+                            id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),
+                            version: Version::from(321u64),
+                            ..Default::default()
+                        },
+                        NodeRuntime{
+                            id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000011"),
+                            version: Version::from(123),
+                            capabilities: Capabilities{
+                               tee: Some(CapabilityTEE{
+                                   hardware: TEEHardware::TEEHardwareIntelSGX,
+                                    rak: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+                                    attestation: vec![0, 1,2,3,4,5],
+                               }),
+                            },
+                            extra_info: Some(vec![5,3,2,1]),
+                        },
+                    ]),
+                    ..Default::default()
+                },
+            ),
+        ];
+        for (encoded_base64, node) in tcs {
+            println!("{:?}", node);
+            let dec: Node = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("node should deserialize correctly");
+            assert_eq!(dec, node, "decoded node should match the expected value");
         }
     }
 

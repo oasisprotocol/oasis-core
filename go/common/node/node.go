@@ -57,10 +57,10 @@ var (
 const (
 	// LatestNodeDescriptorVersion is the latest node descriptor version that should be used for all
 	// new descriptors. Using earlier versions may be rejected.
-	LatestNodeDescriptorVersion = 2
+	LatestNodeDescriptorVersion = 3
 
 	// Minimum and maximum descriptor versions that are allowed.
-	minNodeDescriptorVersion = 1
+	minNodeDescriptorVersion = 2
 	maxNodeDescriptorVersion = LatestNodeDescriptorVersion
 
 	nodeSoftwareVersionMaxLength = 128
@@ -104,6 +104,62 @@ type Node struct { // nolint: maligned
 	SoftwareVersion SoftwareVersion `json:"software_version,omitempty"`
 }
 
+// nodeV2 represents (to be deprecated) V2 version of node descriptors.
+// TODO: remove after networks are upgraded and no V2 descriptors exist.
+type nodeV2 struct { // nolint: maligned
+	cbor.Versioned
+
+	// ID is the public key identifying the node.
+	ID signature.PublicKey `json:"id"`
+
+	// EntityID is the public key identifying the Entity controlling
+	// the node.
+	EntityID signature.PublicKey `json:"entity_id"`
+
+	// Expiration is the epoch in which this node's commitment expires.
+	Expiration uint64 `json:"expiration"`
+
+	// TLS contains information for connecting to this node via TLS.
+	TLS nodeV2TLSInfo `json:"tls"`
+
+	// P2P contains information for connecting to this node via P2P.
+	P2P P2PInfo `json:"p2p"`
+
+	// Consensus contains information for connecting to this node as a
+	// consensus member.
+	Consensus ConsensusInfo `json:"consensus"`
+
+	// VRF contains information for this node's participation in VRF
+	// based elections.
+	VRF *VRFInfo `json:"vrf,omitempty"`
+
+	// Runtimes are the node's runtimes.
+	Runtimes []*Runtime `json:"runtimes"`
+
+	// Roles is a bitmask representing the node roles.
+	Roles RolesMask `json:"roles"`
+
+	// SoftwareVersion is the node's oasis-node software version.
+	SoftwareVersion SoftwareVersion `json:"software_version,omitempty"`
+}
+
+// ToV3 returns the V3 representation of the V2 node descriptor.
+func (nv2 *nodeV2) ToV3() *Node {
+	return &Node{
+		Versioned:       cbor.NewVersioned(3),
+		ID:              nv2.ID,
+		EntityID:        nv2.EntityID,
+		Expiration:      nv2.Expiration,
+		P2P:             nv2.P2P,
+		Consensus:       nv2.Consensus,
+		VRF:             nv2.VRF,
+		Runtimes:        nv2.Runtimes,
+		SoftwareVersion: nv2.SoftwareVersion,
+		Roles:           nv2.Roles & ^roleReserved3,                                      // Clear consensus-rpc role.
+		TLS:             TLSInfo{PubKey: nv2.TLS.PubKey, NextPubKey: nv2.TLS.NextPubKey}, // Migrate to new TLS Info.
+	}
+}
+
 // SoftwareVersion is the node's oasis-node software version.
 type SoftwareVersion string
 
@@ -127,21 +183,20 @@ const (
 	RoleKeyManager RolesMask = 1 << 2
 	// RoleValidator is the validator role.
 	RoleValidator RolesMask = 1 << 3
-	// RoleConsensusRPC is the public consensus RPC services worker role.
-	RoleConsensusRPC RolesMask = 1 << 4
+	// roleReserved3 is the reserved role (consensus-rpc role in v2 descriptors).
+	roleReserved3 RolesMask = 1 << 4
 	// RoleStorageRPC is the public storage RPC services worker role.
 	RoleStorageRPC RolesMask = 1 << 5
 
 	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
-	RoleReserved RolesMask = ((1<<32)-1) & ^((RoleStorageRPC<<1)-1) | roleReserved2
+	RoleReserved RolesMask = ((1<<32)-1) & ^((RoleStorageRPC<<1)-1) | roleReserved2 | roleReserved3
 
 	// Human friendly role names:
 
 	RoleComputeWorkerName = "compute"
 	RoleKeyManagerName    = "key-manager"
 	RoleValidatorName     = "validator"
-	RoleConsensusRPCName  = "consensus-rpc"
 	RoleStorageRPCName    = "storage-rpc"
 
 	rolesMaskStringSep = ","
@@ -153,7 +208,6 @@ func Roles() (roles []RolesMask) {
 		RoleComputeWorker,
 		RoleKeyManager,
 		RoleValidator,
-		RoleConsensusRPC,
 		RoleStorageRPC,
 	}
 }
@@ -178,9 +232,6 @@ func (m RolesMask) String() string {
 	}
 	if m&RoleValidator != 0 {
 		ret = append(ret, RoleValidatorName)
-	}
-	if m&RoleConsensusRPC != 0 {
-		ret = append(ret, RoleConsensusRPCName)
 	}
 	if m&RoleStorageRPC != 0 {
 		ret = append(ret, RoleStorageRPCName)
@@ -222,11 +273,6 @@ func (m *RolesMask) UnmarshalText(text []byte) error {
 				return err
 			}
 			*m |= RoleValidator
-		case RoleConsensusRPCName:
-			if err := checkDuplicateRole(RoleConsensusRPC, *m); err != nil {
-				return err
-			}
-			*m |= RoleConsensusRPC
 		case RoleStorageRPCName:
 			if err := checkDuplicateRole(RoleStorageRPC, *m); err != nil {
 				return err
@@ -239,7 +285,7 @@ func (m *RolesMask) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// UnmarshalCBOR is a custom deserializer that handles both v1 and v2 Node structures.
+// UnmarshalCBOR is a custom deserializer that handles both V2 and V3 Node descriptors.
 func (n *Node) UnmarshalCBOR(data []byte) error {
 	// Determine Entity structure version.
 	v, err := cbor.GetVersion(data)
@@ -247,21 +293,19 @@ func (n *Node) UnmarshalCBOR(data []byte) error {
 		return err
 	}
 	switch v {
-	case 1:
-		// Old version had an extra supported role (the storage role).
-		type nv2 Node
-		if err := cbor.Unmarshal(data, (*nv2)(n)); err != nil {
+	case 2:
+		// Version 2 has an extra supported role (consensus-rpc) and TLS addresses.
+		var nv2 nodeV2
+		if err := cbor.Unmarshal(data, &nv2); err != nil {
 			return err
 		}
 
-		// Convert into new format.
-		n.Versioned = cbor.NewVersioned(2)
-		n.Roles = n.Roles & ^roleReserved2 // Clear old storage role.
+		*n = *nv2.ToV3()
 		return nil
-	case 2:
+	case 3:
 		// New version, call the default unmarshaler.
-		type nv2 Node
-		return cbor.Unmarshal(data, (*nv2)(n))
+		type nv3 Node
+		return cbor.Unmarshal(data, (*nv3)(n))
 	default:
 		return fmt.Errorf("invalid node descriptor version: %d", v)
 	}
@@ -393,6 +437,20 @@ type TLSInfo struct {
 	// NextPubKey is the public key that will be used for establishing TLS connections after
 	// certificate rotation (if enabled).
 	NextPubKey signature.PublicKey `json:"next_pub_key,omitempty"`
+}
+
+// nodeV2TLSInfo is TLSInfo used in version 2 node descriptors.
+type nodeV2TLSInfo struct {
+	// PubKey is the public key used for establishing TLS connections.
+	PubKey signature.PublicKey `json:"pub_key"`
+
+	// NextPubKey is the public key that will be used for establishing TLS connections after
+	// certificate rotation (if enabled).
+	NextPubKey signature.PublicKey `json:"next_pub_key,omitempty"`
+
+	// DeprecatedAddresses contains information about node's TLS addresses, which were used
+	// in previous versions of oasis-core and removed in V3.
+	DeprecatedAddresses []TLSAddress `json:"addresses"`
 }
 
 // Equal compares vs another TLSInfo for equality.
