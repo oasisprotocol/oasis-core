@@ -157,9 +157,6 @@ var (
 	// ConsensusAddressRequiredRoles are the Node roles that require Consensus Address.
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
-	// TLSAddressRequiredRoles are the Node roles that require TLS Address.
-	TLSAddressRequiredRoles = node.RoleConsensusRPC
-
 	// P2PAddressRequiredRoles are the Node roles that require P2P Address.
 	P2PAddressRequiredRoles = node.RoleComputeWorker |
 		node.RoleKeyManager |
@@ -681,15 +678,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 			"node", n,
 		)
 		return nil, nil, fmt.Errorf("%w: invalid TLS public key", ErrInvalidArgument)
-	}
-	tlsAddressRequired := n.HasRoles(TLSAddressRequiredRoles)
-	if err := verifyAddresses(params, tlsAddressRequired, n.TLS.Addresses); err != nil {
-		addrs, _ := json.Marshal(n.TLS.Addresses)
-		logger.Error("RegisterNode: missing/invalid committee addresses",
-			"node", n,
-			"committee_addrs", addrs,
-		)
-		return nil, nil, err
 	}
 
 	if !sigNode.MultiSigned.IsSignedBy(n.TLS.PubKey) {

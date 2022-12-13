@@ -353,7 +353,7 @@ func (sc *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeDataDir
 }
 
 // newTestNode returns a test node instance given the entityID.
-func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node, []string, []string, []string, error) {
+func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node, []string, []string, error) {
 	// Addresses.
 	testAddresses := []node.Address{
 		{
@@ -390,30 +390,13 @@ func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node
 		testConsensusAddressesStr = append(testConsensusAddressesStr, a.String())
 	}
 
-	// TLS addresses.
-	testTLSAddresses := []node.TLSAddress{
-		{
-			PubKey:  signature.PublicKey{}, // Public key is generated afterwards.
-			Address: testAddresses[0],
-		},
-		{
-			PubKey:  signature.PublicKey{}, // PublicKey is generated afterwards.
-			Address: testAddresses[1],
-		},
-	}
-	testTLSAddressesStr := []string{}
-	for _, a := range testTLSAddresses {
-		testTLSAddressesStr = append(testTLSAddressesStr, a.String())
-	}
-
 	testNode := node.Node{
 		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:         signature.PublicKey{}, // ID is generated afterwards.
 		EntityID:   entityID,
 		Expiration: 42,
 		TLS: node.TLSInfo{
-			PubKey:    signature.PublicKey{}, // Public key is generated afterwards.
-			Addresses: testTLSAddresses,
+			PubKey: signature.PublicKey{}, // Public key is generated afterwards.
 		},
 		P2P: node.P2PInfo{
 			ID:        signature.PublicKey{}, // ID is generated afterwards.
@@ -433,7 +416,7 @@ func (sc *registryCLIImpl) newTestNode(entityID signature.PublicKey) (*node.Node
 	}
 	_ = testNode.Runtimes[0].ID.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000")
 
-	return &testNode, testAddressesStr, testConsensusAddressesStr, testTLSAddressesStr, nil
+	return &testNode, testAddressesStr, testConsensusAddressesStr, nil
 }
 
 // initNode very "thoroughly" initializes new node and returns its instance.
@@ -441,7 +424,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	sc.Logger.Info("initializing new node")
 
 	// testNode will be our fixture for testing the CLI.
-	testNode, testAddressesStr, testConsensusAddressesStr, testTLSAddressesStr, err := sc.newTestNode(ent.ID)
+	testNode, testAddressesStr, testConsensusAddressesStr, err := sc.newTestNode(ent.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +433,6 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	runInitNode := func() (*node.Node, error) {
 		args := []string{
 			"registry", "node", "init",
-			"--" + cmdRegNode.CfgTLSAddress, strings.Join(testTLSAddressesStr, ","),
 			"--" + cmdRegNode.CfgConsensusAddress, strings.Join(testConsensusAddressesStr, ","),
 			"--" + cmdRegNode.CfgEntityID, testNode.EntityID.String(),
 			"--" + cmdRegNode.CfgExpiration, strconv.FormatUint(testNode.Expiration, 10),
@@ -513,9 +495,6 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	testNode.P2P.ID = n.P2P.ID
 	testNode.Consensus.ID = n.Consensus.ID
 	testNode.VRF = n.VRF
-	for idx := range testNode.TLS.Addresses {
-		testNode.TLS.Addresses[idx].PubKey = n.TLS.PubKey
-	}
 
 	// Export both original and imported node to JSON and compare them.
 	nStr, _ := json.Marshal(n)
@@ -536,9 +515,6 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	// TLS keys are regenerated each time, so replace them with new ones.
 	testNode.TLS.PubKey = n.TLS.PubKey
 	testNode.TLS.NextPubKey = n.TLS.NextPubKey
-	for idx := range testNode.TLS.Addresses {
-		testNode.TLS.Addresses[idx].PubKey = n.TLS.PubKey
-	}
 	testNodeStr, _ = json.Marshal(testNode)
 
 	nStr, _ = json.Marshal(n)

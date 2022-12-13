@@ -72,7 +72,7 @@ type Node struct {
 	Upgrader upgradeAPI.Backend
 	Genesis  genesisAPI.Provider
 	Identity *identity.Identity
-	Sentry   sentryAPI.LocalBackend
+	Sentry   sentryAPI.Backend
 	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry

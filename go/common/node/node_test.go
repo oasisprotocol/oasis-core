@@ -2,7 +2,6 @@ package node
 
 import (
 	"encoding/base64"
-	"net"
 	"strings"
 	"testing"
 
@@ -220,15 +219,6 @@ func TestNodeForTestSerialization(t *testing.T) {
 				TLS: TLSInfo{
 					PubKey:     signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
 					NextPubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
-					Addresses: []TLSAddress{
-						{
-							PubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
-							Address: Address{
-								IP:   net.IPv4(127, 0, 0, 1),
-								Port: 1111,
-							},
-						},
-					},
 				},
 				P2P: P2PInfo{
 					ID: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),

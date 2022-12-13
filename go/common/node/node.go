@@ -393,9 +393,6 @@ type TLSInfo struct {
 	// NextPubKey is the public key that will be used for establishing TLS connections after
 	// certificate rotation (if enabled).
 	NextPubKey signature.PublicKey `json:"next_pub_key,omitempty"`
-
-	// Addresses is the list of addresses at which the node can be reached.
-	Addresses []TLSAddress `json:"addresses"`
 }
 
 // Equal compares vs another TLSInfo for equality.
@@ -406,15 +403,6 @@ func (t *TLSInfo) Equal(other *TLSInfo) bool {
 
 	if !t.NextPubKey.Equal(other.NextPubKey) {
 		return false
-	}
-
-	if len(t.Addresses) != len(other.Addresses) {
-		return false
-	}
-	for i, ca := range t.Addresses {
-		if !ca.Equal(&other.Addresses[i]) {
-			return false
-		}
 	}
 
 	return true

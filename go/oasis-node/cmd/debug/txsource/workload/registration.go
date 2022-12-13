@@ -109,12 +109,6 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 		Roles:      availableRoles[rng.Intn(len(availableRoles))],
 		TLS: node.TLSInfo{
 			PubKey: nodeIdentity.GetTLSSigner().Public(),
-			Addresses: []node.TLSAddress{
-				{
-					PubKey:  nodeIdentity.GetTLSSigner().Public(),
-					Address: nodeAddr,
-				},
-			},
 		},
 		P2P: node.P2PInfo{
 			ID: nodeIdentity.P2PSigner.Public(),

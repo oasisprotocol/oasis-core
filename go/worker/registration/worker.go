@@ -231,40 +231,6 @@ func DebugForceAllowUnroutableAddresses() {
 }
 
 func (w *Worker) registrationLoop() { // nolint: gocyclo
-	// If we have any sentry nodes, let them know about our TLS certs.
-	if len(w.sentryAddresses) > 0 {
-		pubKeys := w.identity.GetTLSPubKeys()
-		for _, sentryAddr := range w.sentryAddresses {
-			var pushRetries int
-			pushCerts := func() error {
-				w.logger.Debug("attempting to push certs",
-					"retries", pushRetries,
-				)
-				pushRetries++
-				client, err := sentryClient.New(sentryAddr, w.identity)
-				if err != nil {
-					return err
-				}
-				defer client.Close()
-
-				err = client.SetUpstreamTLSPubKeys(w.ctx, pubKeys)
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-
-			sched := backoff.WithMaxRetries(backoff.NewConstantBackOff(1*time.Second), 60)
-			err := backoff.Retry(pushCerts, backoff.WithContext(sched, w.ctx))
-			if err != nil {
-				w.logger.Error("unable to push upstream TLS certificates to sentry node",
-					"err", err,
-					"sentry_address", sentryAddr,
-				)
-			}
-		}
-	}
-
 	// Delay node registration till after the consensus service has
 	// finished initial synchronization if applicable.
 	var (
@@ -915,62 +881,6 @@ func (w *Worker) gatherConsensusAddresses(sentryConsensusAddrs []node.ConsensusA
 	return validatedAddrs, nil
 }
 
-func (w *Worker) gatherTLSAddresses(sentryTLSAddrs []node.TLSAddress) ([]node.TLSAddress, error) {
-	var tlsAddresses []node.TLSAddress
-
-	switch len(w.sentryAddresses) > 0 {
-	// If sentry nodes are used, use sentry addresses.
-	case true:
-		tlsAddresses = sentryTLSAddrs
-	// Otherwise gather TLS addresses.
-	case false:
-		addrs, err := w.workerCommonCfg.GetNodeAddresses()
-		if err != nil {
-			return nil, fmt.Errorf("worker/registration: failed to register node: unable to get node addresses: %w", err)
-		}
-		for _, addr := range addrs {
-			tlsAddresses = append(tlsAddresses, node.TLSAddress{
-				PubKey:  w.identity.GetTLSSigner().Public(),
-				Address: addr,
-			})
-			// Make sure to also include the certificate that will be valid
-			// in the next epoch, so that the node remains reachable.
-			if nextSigner := w.identity.GetNextTLSSigner(); nextSigner != nil {
-				tlsAddresses = append(tlsAddresses, node.TLSAddress{
-					PubKey:  nextSigner.Public(),
-					Address: addr,
-				})
-			}
-		}
-	}
-
-	// Filter out any potentially invalid addresses.
-	var validatedAddrs []node.TLSAddress
-	for _, addr := range tlsAddresses {
-		if !addr.PubKey.IsValid() {
-			w.logger.Error("worker/registration: skipping node address due to invalid public key",
-				"addr", addr,
-			)
-			continue
-		}
-
-		if err := registry.VerifyAddress(addr.Address, allowUnroutableAddresses); err != nil {
-			w.logger.Error("worker/registration: skipping node address due to invalid address",
-				"addr", addr,
-				"err", err,
-			)
-			continue
-		}
-		validatedAddrs = append(validatedAddrs, addr)
-	}
-
-	if len(validatedAddrs) == 0 {
-		return nil, fmt.Errorf("worker/registration: node has no valid TLS addresses")
-	}
-
-	return validatedAddrs, nil
-}
-
 func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) error {
 	identityPublic := w.identity.NodeSigner.Public()
 	w.logger.Info("performing node (re-)registration",
@@ -1017,11 +927,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 		return fmt.Errorf("registration: no runtimes provided while runtimes are required")
 	}
 
-	var sentryConsensusAddrs []node.ConsensusAddress
-	var sentryTLSAddrs []node.TLSAddress
-	if len(w.sentryAddresses) > 0 {
-		sentryConsensusAddrs, sentryTLSAddrs = w.querySentries()
-	}
+	sentryConsensusAddrs := w.querySentries()
 
 	// Add Consensus Addresses if required.
 	if nodeDesc.HasRoles(registry.ConsensusAddressRequiredRoles) {
@@ -1030,15 +936,6 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 			return fmt.Errorf("error gathering consensus addresses: %w", err)
 		}
 		nodeDesc.Consensus.Addresses = addrs
-	}
-
-	// Add TLS Addresses if required.
-	if nodeDesc.HasRoles(registry.TLSAddressRequiredRoles) {
-		addrs, err := w.gatherTLSAddresses(sentryTLSAddrs)
-		if err != nil {
-			return fmt.Errorf("error gathering TLS addresses: %w", err)
-		}
-		nodeDesc.TLS.Addresses = addrs
 	}
 
 	// Add P2P Addresses if required.
@@ -1086,12 +983,10 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 	return nil
 }
 
-func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.TLSAddress) {
+func (w *Worker) querySentries() []node.ConsensusAddress {
 	var consensusAddrs []node.ConsensusAddress
-	var tlsAddrs []node.TLSAddress
 	var err error
 
-	pubKeys := w.identity.GetTLSPubKeys()
 	for _, sentryAddr := range w.sentryAddresses {
 		var client *sentryClient.Client
 		client, err = sentryClient.New(sentryAddr, w.identity)
@@ -1113,18 +1008,7 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.TLSAddress) {
 			)
 			continue
 		}
-
-		// Keep sentries updated with our latest TLS certificates.
-		err = client.SetUpstreamTLSPubKeys(w.ctx, pubKeys)
-		if err != nil {
-			w.logger.Warn("failed to provide upstream TLS certificates to sentry node",
-				"err", err,
-				"sentry_address", sentryAddr,
-			)
-		}
-
 		consensusAddrs = append(consensusAddrs, sentryAddresses.Consensus...)
-		tlsAddrs = append(tlsAddrs, sentryAddresses.TLS...)
 	}
 
 	if len(consensusAddrs) == 0 {
@@ -1132,13 +1016,8 @@ func (w *Worker) querySentries() ([]node.ConsensusAddress, []node.TLSAddress) {
 			"sentry_addresses", w.sentryAddresses,
 		)
 	}
-	if len(tlsAddrs) == 0 {
-		w.logger.Error("failed to obtain any TLS address from the configured sentry nodes",
-			"sentry_addresses", w.sentryAddresses,
-		)
-	}
 
-	return consensusAddrs, tlsAddrs
+	return consensusAddrs
 }
 
 // RequestDeregistration requests that the node not register itself in the next epoch.

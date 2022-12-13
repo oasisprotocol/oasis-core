@@ -33,22 +33,13 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 		}
 	}
 
-	var tlsAddresses []node.TLSAddress
-	for _, addr := range addresses {
-		tlsAddresses = append(tlsAddresses, node.TLSAddress{
-			PubKey:  id.GetTLSSigner().Public(),
-			Address: addr,
-		})
-	}
-
 	nodeDesc := &node.Node{
 		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:         id.NodeSigner.Public(),
 		EntityID:   entityID,
 		Expiration: 1000,
 		TLS: node.TLSInfo{
-			PubKey:    id.GetTLSSigner().Public(),
-			Addresses: tlsAddresses,
+			PubKey: id.GetTLSSigner().Public(),
 		},
 		P2P: node.P2PInfo{
 			ID:        id.P2PSigner.Public(),

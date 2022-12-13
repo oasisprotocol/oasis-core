@@ -156,12 +156,6 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 				},
 				TLS: node.TLSInfo{
 					PubKey: nodeTLSSigner.Public(),
-					Addresses: []node.TLSAddress{
-						{
-							PubKey:  nodeTLSSigner.Public(),
-							Address: node.Address{IP: net.IPv4(127, 0, 0, 2), Port: 9001},
-						},
-					},
 				},
 				P2P: node.P2PInfo{
 					ID: nodeP2PSigner.Public(),
@@ -188,12 +182,6 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 				},
 				TLS: node.TLSInfo{
 					PubKey: nodeTLSSigner.Public(),
-					Addresses: []node.TLSAddress{
-						{
-							PubKey:  nodeTLSSigner.Public(),
-							Address: node.Address{IP: net.IPv4(127, 0, 0, 2), Port: 9001},
-						},
-					},
 				},
 				P2P: node.P2PInfo{
 					ID:        nodeP2PSigner.Public(),
@@ -221,12 +209,6 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 				},
 				TLS: node.TLSInfo{
 					PubKey: nodeTLSSigner.Public(),
-					Addresses: []node.TLSAddress{
-						{
-							PubKey:  nodeTLSSigner.Public(),
-							Address: node.Address{IP: net.IPv4(127, 0, 0, 2), Port: 9001},
-						},
-					},
 				},
 				P2P: node.P2PInfo{
 					ID:        nodeP2PSigner.Public(),

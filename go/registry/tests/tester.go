@@ -1170,12 +1170,6 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		nod.Node.Consensus.ID = nodeIdentity.ConsensusSigner.Public()
 		// Generate dummy TLS certificate.
 		nod.Node.TLS.PubKey = nodeIdentity.GetTLSSigner().Public()
-		nod.Node.TLS.Addresses = []node.TLSAddress{
-			{
-				PubKey:  nod.Node.TLS.PubKey,
-				Address: addr,
-			},
-		}
 
 		nod.SignedRegistration, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {
@@ -1204,7 +1198,6 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 			descr: "register node without TLS addresses",
 		}
 		invNode2 := *nod.Node
-		invNode2.TLS.Addresses = nil
 		invalid2.signed, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, &invNode2)
 		if err != nil {
 			return nil, err
@@ -1454,7 +1447,6 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		nod.UpdatedNode.P2P.ID = nod.Node.P2P.ID
 		nod.UpdatedNode.P2P.Addresses = append(nod.UpdatedNode.P2P.Addresses, addr)
 		nod.UpdatedNode.TLS.PubKey = nod.Node.TLS.PubKey
-		nod.UpdatedNode.TLS.Addresses = nod.Node.TLS.Addresses
 		nod.UpdatedNode.Consensus.ID = nod.Node.Consensus.ID // This should remain the same or we'll get "node update not allowed".
 		nod.SignedValidReRegistration, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, nod.UpdatedNode)
 		if err != nil {
