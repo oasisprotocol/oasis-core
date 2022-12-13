@@ -97,10 +97,6 @@ func (val *Validator) AddArgs(args *argBuilder) error {
 	} else {
 		args.appendSeedNodes(val.net.seeds)
 	}
-	if val.consensus.EnableConsensusRPCWorker {
-		args.workerClientPort(val.clientPort).
-			workerConsensusRPCEnabled()
-	}
 
 	return nil
 }

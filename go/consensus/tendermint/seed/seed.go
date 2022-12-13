@@ -12,7 +12,6 @@ import (
 	"github.com/tendermint/tendermint/config"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
-	"github.com/tendermint/tendermint/types"
 	tmversion "github.com/tendermint/tendermint/version"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -186,7 +185,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 		),
 		DefaultNodeID: nodeKey.ID(),
 		ListenAddr:    viper.GetString(tmcommon.CfgCoreListenAddress),
-		Network:       doc.ChainContext()[:types.MaxChainIDLen],
+		Network:       api.TendermintChainID(doc.ChainContext()),
 		Version:       tmversion.TMCoreSemVer,
 		Channels:      []byte{pex.PexChannel},
 		Moniker:       "oasis-seed-" + identity.P2PSigner.Public().String(),

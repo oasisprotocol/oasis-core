@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	control "github.com/oasisprotocol/oasis-core/go/control/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -200,49 +200,16 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 
 	sc.Logger.Info("running second late compute worker")
 
-	// Get the TLS public key from the validators.
-	var (
-		consensusNodes []string
-		trustHeight    uint64
-		trustHash      string
-	)
-	for _, v := range sc.Net.Validators() {
-		ctrl, err = oasis.NewController(v.SocketPath())
-		if err != nil {
-			return fmt.Errorf("failed to create controller for validator %s: %w", v.Name, err)
-		}
-
-		var status *control.Status
-		status, err = ctrl.GetStatus(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get status for validator %s: %w", v.Name, err)
-		}
-
-		if status.Registration.Descriptor == nil {
-			return fmt.Errorf("validator %s has not registered", v.Name)
-		}
-		if len(status.Registration.Descriptor.TLS.Addresses) == 0 {
-			return fmt.Errorf("validator %s has no TLS addresses", v.Name)
-		}
-
-		var rawAddress []byte
-		tlsAddress := status.Registration.Descriptor.TLS.Addresses[0]
-		rawAddress, err = tlsAddress.MarshalText()
-		if err != nil {
-			return fmt.Errorf("failed to marshal TLS address: %w", err)
-		}
-		consensusNodes = append(consensusNodes, string(rawAddress))
-
-		trustHeight = uint64(status.Consensus.LatestHeight)
-		trustHash = status.Consensus.LatestHash.Hex()
+	latest, err := sc.Net.Controller().Consensus.GetBlock(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("failed to fetch latest block: %w", err)
 	}
 
 	// Configure state sync for the last compute node.
 	lateWorker = sc.Net.ComputeWorkers()[4]
 	lateWorker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
-		ConsensusNodes: consensusNodes,
-		TrustHeight:    trustHeight,
-		TrustHash:      trustHash,
+		TrustHeight: uint64(latest.Height),
+		TrustHash:   latest.Hash.Hex(),
 	})
 
 	if err = lateWorker.Start(); err != nil {

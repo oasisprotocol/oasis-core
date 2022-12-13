@@ -38,22 +38,23 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/random"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
+	lightP2P "github.com/oasisprotocol/oasis-core/go/consensus/p2p/light"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
+	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/p2p"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
@@ -98,9 +99,6 @@ const (
 
 	// CfgConsensusStateSyncEnabled enabled consensus state sync.
 	CfgConsensusStateSyncEnabled = "consensus.tendermint.state_sync.enabled"
-	// CfgConsensusStateSyncConsensusNode specifies nodes exposing public consensus services which
-	// are used to sync a light client.
-	CfgConsensusStateSyncConsensusNode = "consensus.tendermint.state_sync.consensus_node"
 	// CfgConsensusStateSyncTrustPeriod is the light client trust period.
 	CfgConsensusStateSyncTrustPeriod = "consensus.tendermint.state_sync.trust_period"
 	// CfgConsensusStateSyncTrustHeight is the known trusted height for the light client.
@@ -142,6 +140,8 @@ var (
 type fullService struct { // nolint: maligned
 	sync.Mutex
 	*commonNode
+
+	p2p p2pAPI.Service
 
 	upgrader      upgradeAPI.Backend
 	node          *tmnode.Node
@@ -251,6 +251,11 @@ func (t *fullService) SubmitTx(ctx context.Context, tx *transaction.SignedTransa
 		return err
 	}
 	return nil
+}
+
+// Implements consensusAPI.Backend.
+func (t *fullService) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
+	return t.broadcastTxRaw(cbor.Marshal(tx))
 }
 
 // Implements consensusAPI.Backend.
@@ -529,6 +534,21 @@ func (t *fullService) GetNextBlockState(ctx context.Context) (*consensusAPI.Next
 }
 
 // Implements consensusAPI.Backend.
+func (t *fullService) RegisterP2PService(p2p p2pAPI.Service) error {
+	t.Lock()
+	defer t.Unlock()
+	if t.p2p != nil {
+		return fmt.Errorf("p2p service already registered")
+	}
+	t.p2p = p2p
+
+	// Register consensus protocol server.
+	t.p2p.RegisterProtocolServer(lightP2P.NewServer(t.p2p, t.genesis.ChainContext(), t))
+
+	return nil
+}
+
+// Implements consensusAPI.Backend.
 func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
 	ch, sub, err := t.WatchTendermintBlocks()
 	if err != nil {
@@ -730,40 +750,6 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		return db, nil
 	}
 
-	// Configure state sync if enabled.
-	var stateProvider tmstatesync.StateProvider
-	if viper.GetBool(CfgConsensusStateSyncEnabled) {
-		t.Logger.Info("state sync enabled")
-
-		// Enable state sync in the configuration.
-		tenderConfig.StateSync.Enable = true
-		tenderConfig.StateSync.TrustHash = viper.GetString(CfgConsensusStateSyncTrustHash)
-
-		// Create new state sync state provider.
-		cfg := light.ClientConfig{
-			GenesisDocument: tmGenDoc,
-			TrustOptions: tmlight.TrustOptions{
-				Period: viper.GetDuration(CfgConsensusStateSyncTrustPeriod),
-				Height: int64(viper.GetUint64(CfgConsensusStateSyncTrustHeight)),
-				Hash:   tenderConfig.StateSync.TrustHashBytes(),
-			},
-		}
-		for _, rawAddr := range viper.GetStringSlice(CfgConsensusStateSyncConsensusNode) {
-			var addr node.TLSAddress
-			if err = addr.UnmarshalText([]byte(rawAddr)); err != nil {
-				return fmt.Errorf("failed to parse state sync consensus node address (%s): %w", rawAddr, err)
-			}
-
-			cfg.ConsensusNodes = append(cfg.ConsensusNodes, addr)
-		}
-		if stateProvider, err = newStateProvider(t.ctx, cfg); err != nil {
-			t.Logger.Error("failed to create state sync state provider",
-				"err", err,
-			)
-			return fmt.Errorf("failed to create state sync state provider: %w", err)
-		}
-	}
-
 	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
 	// initialization, instead of t.node.Start().  This is a problem
 	// because at the time that lazyInit() is called, none of the ABCI
@@ -784,6 +770,40 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 				}
 			}
 		}()
+
+		// Configure state sync if enabled.
+		var stateProvider tmstatesync.StateProvider
+		if viper.GetBool(CfgConsensusStateSyncEnabled) {
+			t.Logger.Info("state sync enabled")
+
+			t.Lock()
+			if t.p2p == nil {
+				t.Unlock()
+				t.Logger.Info("failed to create state sync client", "err", "p2p disabled")
+				return fmt.Errorf("failed to create state sync client: p2p disabled")
+			}
+			t.Unlock()
+
+			// Enable state sync in the configuration.
+			tenderConfig.StateSync.Enable = true
+			tenderConfig.StateSync.TrustHash = viper.GetString(CfgConsensusStateSyncTrustHash)
+
+			// Create new state sync state provider.
+			cfg := lightAPI.ClientConfig{
+				GenesisDocument: tmGenDoc,
+				TrustOptions: tmlight.TrustOptions{
+					Period: viper.GetDuration(CfgConsensusStateSyncTrustPeriod),
+					Height: int64(viper.GetUint64(CfgConsensusStateSyncTrustHeight)),
+					Hash:   tenderConfig.StateSync.TrustHashBytes(),
+				},
+			}
+			if stateProvider, err = newStateProvider(t.ctx, t.genesis.ChainContext(), cfg, t.p2p); err != nil {
+				t.Logger.Error("failed to create state sync state provider",
+					"err", err,
+				)
+				return fmt.Errorf("failed to create state sync state provider: %w", err)
+			}
+		}
 
 		t.node, err = tmnode.NewNode(tenderConfig,
 			tendermintPV,
@@ -1030,7 +1050,6 @@ func init() {
 
 	// State sync.
 	Flags.Bool(CfgConsensusStateSyncEnabled, false, "enable state sync")
-	Flags.StringSlice(CfgConsensusStateSyncConsensusNode, []string{}, "state sync: consensus node to use for syncing the light client")
 	Flags.Duration(CfgConsensusStateSyncTrustPeriod, 24*time.Hour, "state sync: light client trust period")
 	Flags.Uint64(CfgConsensusStateSyncTrustHeight, 0, "state sync: light client trusted height")
 	Flags.String(CfgConsensusStateSyncTrustHash, "", "state sync: light client trusted consensus header hash")

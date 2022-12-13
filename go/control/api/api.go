@@ -75,6 +75,9 @@ type Status struct {
 	// Consensus is the status overview of the consensus layer.
 	Consensus *consensus.Status `json:"consensus,omitempty"`
 
+	// LightClient is the status overview of the light client service.
+	LightClient *consensus.LightClientStatus `json:"light_client,omitempty"`
+
 	// Runtimes is the status overview for each runtime supported by the node.
 	Runtimes map[common.Namespace]RuntimeStatus `json:"runtimes,omitempty"`
 

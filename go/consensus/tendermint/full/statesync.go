@@ -12,12 +12,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
+	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 )
 
 type stateProvider struct {
 	sync.Mutex
 
-	lc              light.Client
+	lc              lightAPI.Client
 	genesisDocument *tmtypes.GenesisDoc
 
 	logger *logging.Logger
@@ -104,8 +106,8 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (tmstate.Stat
 	return state, nil
 }
 
-func newStateProvider(ctx context.Context, cfg light.ClientConfig) (tmstatesync.StateProvider, error) {
-	lc, err := light.NewClient(ctx, cfg)
+func newStateProvider(ctx context.Context, chainContext string, cfg lightAPI.ClientConfig, p2p rpc.P2P) (tmstatesync.StateProvider, error) {
+	lc, err := light.NewInternalClient(ctx, chainContext, p2p, cfg)
 	if err != nil {
 		return nil, err
 	}

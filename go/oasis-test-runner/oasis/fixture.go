@@ -136,9 +136,6 @@ type ConsensusFixture struct { // nolint: maligned
 	// TendermintRecoverCorruptedWAL enables automatic recovery of corrupted Tendermint's WAL.
 	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`
 
-	// EnableConsensusRPCWorker enables the public consensus RPC services worker.
-	EnableConsensusRPCWorker bool `json:"enable_consensusrpc_worker,omitempty"`
-
 	// SupplementarySanityInterval configures the sanity check application.
 	SupplementarySanityInterval uint64 `json:"supplementary_sanity_interval,omitempty"`
 

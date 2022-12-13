@@ -11,7 +11,10 @@ import (
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light"
+	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
@@ -52,6 +55,11 @@ func New(
 	default:
 		return nil, fmt.Errorf("tendermint: unsupported mode: %s", mode)
 	}
+}
+
+// NewLightClient creates a new Tendermint light client service.
+func NewLightClient(ctx context.Context, dataDir string, genesis *genesisAPI.Document, consensus consensusAPI.Backend, p2p rpc.P2P) (lightAPI.ClientService, error) {
+	return light.New(ctx, dataDir, genesis, consensus, p2p)
 }
 
 func init() {

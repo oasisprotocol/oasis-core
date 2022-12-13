@@ -21,12 +21,14 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
 const (
@@ -137,15 +139,17 @@ func (m FeatureMask) Has(f FeatureMask) bool {
 	return m&f != 0
 }
 
-// ClientBackend is a limited consensus interface used by clients that connect to the local full
-// node. This is separate from light clients which use the LightClientBackend interface.
+// ClientBackend is a consensus interface used by clients that connect to the local full node.
 type ClientBackend interface {
-	LightClientBackend
 	TransactionAuthHandler
 
 	// SubmitTx submits a signed consensus transaction and waits for the transaction to be included
 	// in a block. Use SubmitTxNoWait if you only need to broadcast the transaction.
 	SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error
+
+	// SubmitTxNoWait submits a signed consensus transaction, but does not wait for the transaction
+	// to be included in a block. Use SubmitTx if you need to wait for execution.
+	SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error
 
 	// SubmitTxWithProof submits a signed consensus transaction, waits for the transaction to be
 	// included in a block and returns a proof of inclusion.
@@ -159,6 +163,27 @@ type ClientBackend interface {
 
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)
+
+	// GetLightBlock returns a light version of the consensus layer block that can be used for light
+	// client verification.
+	GetLightBlock(ctx context.Context, height int64) (*LightBlock, error)
+
+	// GetLightBlockForState returns a light block for the state as of executing the consensus layer
+	// block at the specified height. Note that the height of the returned block may differ
+	// depending on consensus layer implementation details.
+	//
+	// In case light block for the given height is not yet available, it returns ErrVersionNotFound.
+	GetLightBlockForState(ctx context.Context, height int64) (*LightBlock, error)
+
+	// State returns a MKVS read syncer that can be used to read consensus state from a remote node
+	// and verify it against the trusted local root.
+	State() syncer.ReadSyncer
+
+	// GetParameters returns the consensus parameters for a specific height.
+	GetParameters(ctx context.Context, height int64) (*Parameters, error)
+
+	// SubmitEvidence submits evidence of misbehavior.
+	SubmitEvidence(ctx context.Context, evidence *Evidence) error
 
 	// GetTransactions returns a list of all transactions contained within a
 	// consensus block at a specific height.
@@ -385,6 +410,9 @@ type Backend interface {
 	//
 	// This may be nil in case checkpoints are disabled.
 	Checkpointer() checkpoint.Checkpointer
+
+	// RegisterP2PService registers the P2P service used for light client state sync.
+	RegisterP2PService(p2pAPI.Service) error
 }
 
 // HaltHook is a function that gets called when consensus needs to halt for some reason.

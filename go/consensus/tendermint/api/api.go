@@ -374,3 +374,8 @@ type messageKind uint8
 // MessageStateSyncCompleted is the message kind for when the node successfully performs a state
 // sync. The message itself is nil.
 var MessageStateSyncCompleted = messageKind(0)
+
+// TendermintChainID returns the Tendermint chain ID computed from chain context.
+func TendermintChainID(chainContext string) string {
+	return chainContext[:tmtypes.MaxChainIDLen]
+}

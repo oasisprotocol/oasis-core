@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/p2p"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
-	workerConsensusRPC "github.com/oasisprotocol/oasis-core/go/worker/consensusrpc"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
@@ -68,7 +67,6 @@ func init() {
 		workerCommon.Flags,
 		workerStorage.Flags,
 		workerSentry.Flags,
-		workerConsensusRPC.Flags,
 		crash.InitFlags(),
 	} {
 		Flags.AddFlagSet(v)

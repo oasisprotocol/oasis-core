@@ -105,9 +105,9 @@ func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 			{},
 		},
 		Validators: []oasis.ValidatorFixture{
-			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true, SupplementarySanityInterval: 1}},
-			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
-			{Entity: 1, Consensus: oasis.ConsensusFixture{EnableConsensusRPCWorker: true}},
+			{Entity: 1, Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1}},
+			{Entity: 1},
+			{Entity: 1},
 		},
 		Seeds: []oasis.SeedFixture{{}},
 	}, nil

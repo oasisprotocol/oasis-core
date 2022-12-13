@@ -119,6 +119,11 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		return nil, fmt.Errorf("failed to get consensus status: %w", err)
 	}
 
+	lcs, err := n.getLightClientStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get light client status: %w", err)
+	}
+
 	rs, err := n.getRegistrationStatus(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get registration status: %w", err)
@@ -156,6 +161,7 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		Debug:           ds,
 		Identity:        ident,
 		Consensus:       cs,
+		LightClient:     lcs,
 		Runtimes:        runtimes,
 		Keymanager:      kms,
 		Registration:    rs,
@@ -174,6 +180,10 @@ func (n *Node) getIdentityStatus() control.IdentityStatus {
 
 func (n *Node) getConsensusStatus(ctx context.Context) (*consensus.Status, error) {
 	return n.Consensus.GetStatus(ctx)
+}
+
+func (n *Node) getLightClientStatus(ctx context.Context) (*consensus.LightClientStatus, error) {
+	return n.LightClient.GetStatus(ctx)
 }
 
 func (n *Node) getRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {

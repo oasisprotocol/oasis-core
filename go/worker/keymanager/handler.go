@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
@@ -42,6 +43,14 @@ func (env *workerEnvironment) GetTxPool(ctx context.Context) (txpool.Transaction
 // GetIdentity implements RuntimeHostHandlerEnvironment.
 func (env *workerEnvironment) GetNodeIdentity(ctx context.Context) (*identity.Identity, error) {
 	return env.w.commonWorker.Identity, nil
+}
+
+// GetIdentity implements RuntimeHostHandlerEnvironment.
+func (env *workerEnvironment) GetLightClient() (consensusAPI.LightClient, error) {
+	if env.w.commonWorker.LightClient == nil {
+		return nil, fmt.Errorf("no light client available")
+	}
+	return env.w.commonWorker.LightClient, nil
 }
 
 // NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
