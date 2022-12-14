@@ -37,6 +37,11 @@ func (p *ConsensusParameters) SanityCheck() error {
 		return fmt.Errorf("fee split proportions are all zero")
 	}
 
+	// MinCommissionRate bound.
+	if p.CommissionScheduleRules.MinCommissionRate.Cmp(CommissionRateDenominator) > 0 {
+		return fmt.Errorf("minimum commission %v/%v over unity", p.CommissionScheduleRules, CommissionRateDenominator)
+	}
+
 	return nil
 }
 
@@ -47,6 +52,7 @@ func (c *ConsensusParameterChanges) SanityCheck() error {
 		c.MinDelegationAmount == nil &&
 		c.MinTransferAmount == nil &&
 		c.MinTransactBalance == nil &&
+		c.MinCommissionRate == nil &&
 		c.DisableTransfers == nil &&
 		c.DisableDelegation == nil &&
 		c.AllowEscrowMessages == nil &&
@@ -96,7 +102,7 @@ func SanityCheckAccount(
 	_ = total.Add(&acct.Escrow.Debonding.Balance)
 
 	commissionScheduleShallowCopy := acct.Escrow.CommissionSchedule
-	if err := commissionScheduleShallowCopy.PruneAndValidateForGenesis(&parameters.CommissionScheduleRules, now); err != nil {
+	if err := commissionScheduleShallowCopy.PruneAndValidate(&parameters.CommissionScheduleRules, now); err != nil {
 		return fmt.Errorf(
 			"staking: sanity check failed: commission schedule for account %s is invalid: %+v",
 			addr, err,

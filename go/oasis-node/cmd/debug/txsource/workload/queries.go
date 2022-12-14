@@ -518,7 +518,8 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 	// Make sure total supply matches sum of all balances and fees.
 	var accSum, totalSum quantity.Quantity
 	for _, addr := range addresses {
-		acc, err := q.staking.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: height})
+		var acc *staking.Account
+		acc, err = q.staking.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: height})
 		if err != nil {
 			q.logger.Error("error querying account",
 				"height", height,
@@ -532,7 +533,8 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		_ = accSum.Add(&acc.Escrow.Debonding.Balance)
 
 		for beneficiary, allowance := range acc.General.Allowances {
-			aw, err := q.staking.Allowance(ctx, &staking.AllowanceQuery{
+			var aw *quantity.Quantity
+			aw, err = q.staking.Allowance(ctx, &staking.AllowanceQuery{
 				Height:      height,
 				Owner:       addr,
 				Beneficiary: beneficiary,
@@ -578,10 +580,33 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 		return fmt.Errorf("staking total supply mismatch")
 	}
 
+	// Commission schedule addresses.
+	// Ensure accounts returned do not have an empty commission schedule.
+	commAddrs, err := q.staking.CommissionScheduleAddresses(ctx, height)
+	if err != nil {
+		return fmt.Errorf("CommissionScheduleAddresses: %w", err)
+	}
+	for _, addr := range commAddrs {
+		var acc *staking.Account
+		acc, err = q.staking.Account(ctx, &staking.OwnerQuery{Owner: addr, Height: height})
+		if err != nil {
+			q.logger.Error("error querying account",
+				"height", height,
+				"address", addr,
+				"err", err,
+			)
+			return fmt.Errorf("staking.Account: %w", err)
+		}
+		if acc.Escrow.CommissionSchedule.IsEmpty() {
+			return fmt.Errorf("empty commission schedule for account: %s at height :%d", addr, height)
+		}
+
+	}
+
 	// Events.
-	_, grr := q.staking.GetEvents(ctx, height)
-	if grr != nil {
-		return fmt.Errorf("GetEvents error at height %d: %w", height, grr)
+	_, err = q.staking.GetEvents(ctx, height)
+	if err != nil {
+		return fmt.Errorf("GetEvents error at height %d: %w", height, err)
 	}
 
 	q.logger.Debug("done staking queries",

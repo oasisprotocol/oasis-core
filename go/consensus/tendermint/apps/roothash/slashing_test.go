@@ -167,11 +167,15 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
 	defer ctx.Close()
 
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
+
+	require.NoError(stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
+		MinDelegationAmount: *quantity.NewFromUint64(0),
+	}), "SetConsensusParameters")
 
 	runtime := &registry.Runtime{
 		Staking: registry.RuntimeStakingParameters{

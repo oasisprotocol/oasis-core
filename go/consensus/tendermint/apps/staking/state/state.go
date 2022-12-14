@@ -73,6 +73,12 @@ var (
 	// Value is CBOR-serialized delegation.
 	delegationKeyReverseFmt = keyformat.New(0x5A, &staking.Address{}, &staking.Address{})
 
+	// commissionScheduleAddressesKeyFmt is the key format used for index of addresses
+	// with non empty commission schedule.
+	//
+	// Value is empty.
+	commissionScheduleAddressesKeyFmt = keyformat.New(0x5B, &staking.Address{})
+
 	logger = logging.GetLogger("tendermint/staking")
 )
 
@@ -170,6 +176,26 @@ func (s *ImmutableState) Addresses(ctx context.Context) ([]staking.Address, erro
 	for it.Seek(accountKeyFmt.Encode()); it.Valid(); it.Next() {
 		var addr staking.Address
 		if !accountKeyFmt.Decode(it.Key(), &addr) {
+			break
+		}
+
+		addresses = append(addresses, addr)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
+	return addresses, nil
+}
+
+// CommissionScheduleAddresses returns addresses that have a non empty commission schedule configured.
+func (s *ImmutableState) CommissionScheduleAddresses(ctx context.Context) ([]staking.Address, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	var addresses []staking.Address
+	for it.Seek(commissionScheduleAddressesKeyFmt.Encode()); it.Valid(); it.Next() {
+		var addr staking.Address
+		if !commissionScheduleAddressesKeyFmt.Decode(it.Key(), &addr) {
 			break
 		}
 
@@ -575,8 +601,18 @@ type MutableState struct {
 }
 
 func (s *MutableState) SetAccount(ctx context.Context, addr staking.Address, account *staking.Account) error {
-	err := s.ms.Insert(ctx, accountKeyFmt.Encode(&addr), cbor.Marshal(account))
-	return abciAPI.UnavailableStateError(err)
+	// Update account.
+	if err := s.ms.Insert(ctx, accountKeyFmt.Encode(&addr), cbor.Marshal(account)); err != nil {
+		return abciAPI.UnavailableStateError(err)
+	}
+
+	// Update commission schedule index.
+	switch account.Escrow.CommissionSchedule.IsEmpty() {
+	case true:
+		return abciAPI.UnavailableStateError(s.ms.Remove(ctx, commissionScheduleAddressesKeyFmt.Encode(addr)))
+	default:
+		return abciAPI.UnavailableStateError(s.ms.Insert(ctx, commissionScheduleAddressesKeyFmt.Encode(addr), []byte{}))
+	}
 }
 
 func (s *MutableState) SetTotalSupply(ctx context.Context, q *quantity.Quantity) error {
@@ -854,6 +890,33 @@ func (s *MutableState) Transfer(ctx *abciAPI.Context, fromAddr, toAddr staking.A
 	return nil
 }
 
+// Computes commission for a given rate and total amount. Returns the commission and the remaining amount.
+func (s *MutableState) computeCommission(ctx context.Context, rate *quantity.Quantity, total *quantity.Quantity) (*quantity.Quantity, *quantity.Quantity, error) {
+	if rate == nil {
+		var params *staking.ConsensusParameters
+		params, err := s.ConsensusParameters(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("tendermint/staking: failed to query consensus parameters: %w", err)
+		}
+		rate = &params.CommissionScheduleRules.MinCommissionRate
+	}
+	com := total.Clone()
+	remaining := total.Clone()
+	// Multiply first.
+	if err := com.Mul(rate); err != nil {
+		return nil, nil, fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
+	}
+	if err := com.Quo(staking.CommissionRateDenominator); err != nil {
+		return nil, nil, fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
+	}
+
+	if err := remaining.Sub(com); err != nil {
+		return nil, nil, fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
+	}
+
+	return com, remaining, nil
+}
+
 // TransferFromCommon transfers up to the amount from the global common pool
 // to the general balance of the account, returning true iff the
 // amount transferred is > 0.
@@ -903,19 +966,9 @@ func (s *MutableState) TransferFromCommon(
 			}
 
 			rate := to.Escrow.CommissionSchedule.CurrentRate(epoch)
-			if rate != nil {
-				com = transferred.Clone()
-				// Multiply first.
-				if err = com.Mul(rate); err != nil {
-					return false, fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
-				}
-				if err = com.Quo(staking.CommissionRateDenominator); err != nil {
-					return false, fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
-				}
-
-				if err = transferred.Sub(com); err != nil {
-					return false, fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
-				}
+			com, transferred, err = s.computeCommission(ctx, rate, transferred)
+			if err != nil {
+				return false, err
 			}
 
 			// Escrow everything except the commission (increases value of all shares).
@@ -1166,21 +1219,11 @@ func (s *MutableState) AddRewards(
 			continue
 		}
 
-		var com *quantity.Quantity
 		rate := ent.Escrow.CommissionSchedule.CurrentRate(time)
-		if rate != nil {
-			com = q.Clone()
-			// Multiply first.
-			if err = com.Mul(rate); err != nil {
-				return fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
-			}
-			if err = com.Quo(staking.CommissionRateDenominator); err != nil {
-				return fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
-			}
-
-			if err = q.Sub(com); err != nil {
-				return fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
-			}
+		var com *quantity.Quantity
+		com, q, err = s.computeCommission(ctx, rate, q)
+		if err != nil {
+			return err
 		}
 
 		if !q.IsZero() {
@@ -1306,21 +1349,10 @@ func (s *MutableState) AddRewardSingleAttenuated(
 		return nil
 	}
 
-	var com *quantity.Quantity
 	rate := acct.Escrow.CommissionSchedule.CurrentRate(time)
-	if rate != nil {
-		com = q.Clone()
-		// Multiply first.
-		if err = com.Mul(rate); err != nil {
-			return fmt.Errorf("tendermint/staking: failed multiplying by commission rate: %w", err)
-		}
-		if err = com.Quo(staking.CommissionRateDenominator); err != nil {
-			return fmt.Errorf("tendermint/staking: failed dividing by commission rate denominator: %w", err)
-		}
-
-		if err = q.Sub(com); err != nil {
-			return fmt.Errorf("tendermint/staking: failed subtracting commission: %w", err)
-		}
+	com, q, err := s.computeCommission(ctx, rate, q)
+	if err != nil {
+		return err
 	}
 
 	if !q.IsZero() {

@@ -377,6 +377,9 @@ func (g *governanceWorkload) doChangeParametersProposal() error { // nolint: goc
 		if randBool() {
 			pc.RewardFactorBlockProposed = &params.RewardFactorBlockProposed
 		}
+		if randBool() {
+			pc.MinCommissionRate = &params.CommissionScheduleRules.MinCommissionRate
+		}
 		shouldFail = pc.SanityCheck() != nil
 		module = staking.ModuleName
 		changes = cbor.Marshal(pc)

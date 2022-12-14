@@ -487,6 +487,8 @@ func RegisterScenarios() error {
 		ByzantineVRFBeaconMissing,
 		// Minimum transact balance test.
 		MinTransactBalance,
+		// Consensus governance update parameters tests.
+		ChangeParametersMinCommissionRate,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

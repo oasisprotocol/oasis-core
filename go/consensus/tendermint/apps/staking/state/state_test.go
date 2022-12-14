@@ -219,7 +219,7 @@ func TestRewardAndSlash(t *testing.T) {
 			},
 		},
 	}
-	err = escrowAccount.Escrow.CommissionSchedule.PruneAndValidateForGenesis(
+	err = escrowAccount.Escrow.CommissionSchedule.PruneAndValidate(
 		&staking.CommissionScheduleRules{
 			RateChangeInterval: 10,
 			RateBoundLead:      30,
@@ -549,6 +549,94 @@ func TestProposalDeposits(t *testing.T) {
 	require.EqualValues(t, *quantity.NewFromUint64(200), acc2.General.Balance, "governance deposit should be reclaimed")
 }
 
+func TestComputeCommission(t *testing.T) {
+	require := require.New(t)
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer ctx.Close()
+	s := NewMutableState(ctx.State())
+
+	// Prepare state.
+	ctxEB := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctxEB.Close()
+
+	for _, tc := range []struct {
+		rate               int64
+		total              int64
+		expectedCommission int64
+		expectedRemaining  int64
+		minCommissionRate  int64
+		msg                string
+	}{
+		{
+			rate:               0,
+			total:              100,
+			expectedCommission: 0,
+			expectedRemaining:  100,
+			minCommissionRate:  0,
+			msg:                "zero rate",
+		},
+		{
+			rate:               100,
+			total:              100,
+			expectedCommission: 100,
+			expectedRemaining:  0,
+			minCommissionRate:  0,
+			msg:                "100% rate",
+		},
+		{
+			rate:               50,
+			total:              1000,
+			expectedCommission: 500,
+			expectedRemaining:  500,
+			minCommissionRate:  0,
+			msg:                "50% rate",
+		},
+		{
+			rate:               10,
+			total:              10_000,
+			expectedCommission: 1000,
+			expectedRemaining:  9000,
+			minCommissionRate:  0,
+			msg:                "10% rate",
+		},
+		{
+			rate:               -1,
+			total:              100,
+			expectedCommission: 10,
+			expectedRemaining:  90,
+			minCommissionRate:  10,
+			msg:                "zero rate (min commission rate 10%)",
+		},
+	} {
+		// Prepare state.
+		minCommissionRate := mustInitQuantity(t, tc.minCommissionRate)
+		require.NoError(minCommissionRate.Mul(staking.CommissionRateDenominator))
+		require.NoError(minCommissionRate.Quo(mustInitQuantityP(t, 100)))
+		require.NoError(s.SetConsensusParameters(ctxEB, &staking.ConsensusParameters{
+			CommissionScheduleRules: staking.CommissionScheduleRules{
+				MinCommissionRate: minCommissionRate,
+			},
+		}), "SetConsensusParameters")
+
+		// Prepare rate.
+		var rate *quantity.Quantity
+		if tc.rate > -1 {
+			rate = mustInitQuantityP(t, tc.rate)
+			require.NoError(rate.Mul(staking.CommissionRateDenominator))
+			require.NoError(rate.Quo(mustInitQuantityP(t, 100)))
+		}
+
+		// Compute commission.
+		commission, remaining, err := s.computeCommission(ctx, rate, mustInitQuantityP(t, tc.total))
+		require.NoError(err, tc.msg+": computeCommission")
+		require.EqualValues(0, mustInitQuantityP(t, tc.expectedCommission).Cmp(commission), tc.msg+": expected commission")
+		require.EqualValues(0, mustInitQuantityP(t, tc.expectedRemaining).Cmp(remaining), tc.msg+": expected remaining")
+	}
+}
+
 func TestTransferFromCommon(t *testing.T) {
 	require := require.New(t)
 
@@ -563,6 +651,14 @@ func TestTransferFromCommon(t *testing.T) {
 	addr1 := staking.NewAddress(pk1)
 	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr2 := staking.NewAddress(pk2)
+
+	ctxEB := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctxEB.Close()
+	require.NoError(s.SetConsensusParameters(ctxEB, &staking.ConsensusParameters{
+		CommissionScheduleRules: staking.CommissionScheduleRules{
+			MinCommissionRate: mustInitQuantity(t, 0),
+		},
+	}), "SetConsensusParameters")
 
 	err := s.SetCommonPool(ctx, quantity.NewFromUint64(1000))
 	require.NoError(err, "SetCommonPool")
@@ -603,6 +699,24 @@ func TestTransferFromCommon(t *testing.T) {
 	require.NoError(err, "Delegation")
 	require.EqualValues(*quantity.NewFromUint64(100), dg.Shares, "shares should stay the same")
 
+	// Transfer with escrow (existing self-delegation and min-commission parameter set).
+	require.NoError(s.SetConsensusParameters(ctxEB, &staking.ConsensusParameters{
+		CommissionScheduleRules: staking.CommissionScheduleRules{
+			MinCommissionRate: mustInitQuantity(t, 10_000), // 10%
+		},
+	}), "SetConsensusParameters")
+	ok, err = s.TransferFromCommon(ctx, addr2, quantity.NewFromUint64(100), true)
+	require.NoError(err, "TransferFromCommon with escrow (existing self-delegation and min-commission parameter set)")
+	require.True(ok, "TransferFromCommon should succeed")
+
+	acc2, err = s.Account(ctx, addr2)
+	require.NoError(err, "Account")
+	require.EqualValues(*quantity.NewFromUint64(0), acc2.General.Balance, "nothing should be in general balance")
+	require.EqualValues(*quantity.NewFromUint64(300), acc2.Escrow.Active.Balance, "amount should be escrowed")
+	dg, err = s.Delegation(ctx, addr2, addr2)
+	require.NoError(err, "Delegation")
+	require.EqualValues(*quantity.NewFromUint64(103), dg.Shares, "10% of amount should go towards increasing self-delegation")
+
 	// Transfer with escrow (existing self-delegation and commission).
 	acc2.Escrow.CommissionSchedule = staking.CommissionSchedule{
 		Rates: []staking.CommissionRateStep{{
@@ -625,10 +739,10 @@ func TestTransferFromCommon(t *testing.T) {
 	acc2, err = s.Account(ctx, addr2)
 	require.NoError(err, "Account")
 	require.EqualValues(*quantity.NewFromUint64(0), acc2.General.Balance, "nothing should be in general balance")
-	require.EqualValues(*quantity.NewFromUint64(300), acc2.Escrow.Active.Balance, "amount should be escrowed")
+	require.EqualValues(*quantity.NewFromUint64(400), acc2.Escrow.Active.Balance, "amount should be escrowed")
 	dg, err = s.Delegation(ctx, addr2, addr2)
 	require.NoError(err, "Delegation")
-	require.EqualValues(*quantity.NewFromUint64(107), dg.Shares, "20%% of amount should go towards increasing self-delegation")
+	require.EqualValues(*quantity.NewFromUint64(108), dg.Shares, "20% of amount should go towards increasing self-delegation")
 
 	// Transfer with escrow (other delegations and commission).
 	var dg2 staking.Delegation
@@ -647,7 +761,7 @@ func TestTransferFromCommon(t *testing.T) {
 	require.EqualValues(*quantity.NewFromUint64(900), acc2.Escrow.Active.Balance, "remaining amount should be escrowed")
 	dg, err = s.Delegation(ctx, addr2, addr2)
 	require.NoError(err, "Delegation")
-	require.EqualValues(*quantity.NewFromUint64(123), dg.Shares, "20%% of amount should go towards increasing self-delegation")
+	require.EqualValues(*quantity.NewFromUint64(121), dg.Shares, "20% of amount should go towards increasing self-delegation")
 
 	acc1, err = s.Account(ctx, addr1)
 	require.NoError(err, "Account")
@@ -768,4 +882,52 @@ func TestTransfer(t *testing.T) {
 	require.ErrorIs(err, staking.ErrBalanceTooLow, "Transfer leaving below min transact balance in source")
 	err = s.Transfer(ctx, addr1, addr3, quantity.NewFromUint64(49))
 	require.ErrorIs(err, staking.ErrBalanceTooLow, "Transfer giving below min transact balance to dest")
+}
+
+func TestCommissionScheduleAccounts(t *testing.T) {
+	require := require.New(t)
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	defer ctx.Close()
+	s := NewMutableState(ctx.State())
+
+	fac := memorySigner.NewFactory()
+	// Generate accounts.
+	acc1Signer, err := fac.Generate(signature.SignerEntity, rand.Reader)
+	require.NoError(err, "generating account signer")
+	acc1Addr := staking.NewAddress(acc1Signer.Public())
+	acc2Signer, err := fac.Generate(signature.SignerEntity, rand.Reader)
+	require.NoError(err, "generating account signer")
+	acc2Addr := staking.NewAddress(acc2Signer.Public())
+	acc3Signer, err := fac.Generate(signature.SignerEntity, rand.Reader)
+	require.NoError(err, "generating account signer")
+	acc3Addr := staking.NewAddress(acc3Signer.Public())
+	acc4Signer, err := fac.Generate(signature.SignerEntity, rand.Reader)
+	require.NoError(err, "generating account signer")
+	acc4Addr := staking.NewAddress(acc4Signer.Public())
+
+	require.NoError(s.SetAccount(ctx, acc1Addr, &staking.Account{Escrow: staking.EscrowAccount{
+		CommissionSchedule: staking.CommissionSchedule{
+			Rates: []staking.CommissionRateStep{{Start: 100, Rate: mustInitQuantity(t, 100_000)}},
+		},
+	}}))
+	require.NoError(s.SetAccount(ctx, acc2Addr, &staking.Account{}))
+	require.NoError(s.SetAccount(ctx, acc3Addr, &staking.Account{Escrow: staking.EscrowAccount{
+		CommissionSchedule: staking.CommissionSchedule{
+			Rates: []staking.CommissionRateStep{{Start: 50, Rate: mustInitQuantity(t, 50_000)}},
+		},
+	}}))
+	require.NoError(s.SetAccount(ctx, acc4Addr, &staking.Account{Escrow: staking.EscrowAccount{
+		CommissionSchedule: staking.CommissionSchedule{
+			Rates: []staking.CommissionRateStep{{Start: 200, Rate: mustInitQuantity(t, 500_000)}},
+		},
+	}}))
+	require.NoError(s.SetAccount(ctx, acc3Addr, &staking.Account{}))
+
+	// Query final state.
+	addrs, err := s.CommissionScheduleAddresses(ctx)
+	require.NoError(err, "CommissionScheduleAddresses")
+	require.ElementsMatch([]staking.Address{acc1Addr, acc4Addr}, addrs, "expected addresses should be returned")
 }

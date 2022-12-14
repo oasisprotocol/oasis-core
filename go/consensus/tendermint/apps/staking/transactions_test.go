@@ -1059,3 +1059,67 @@ func TestBurn(t *testing.T) {
 		require.ErrorIs(err, tc.err, tc.msg)
 	}
 }
+
+func TestAmendCommissionSchedule(t *testing.T) {
+	require := require.New(t)
+	var err error
+
+	now := time.Unix(1580461674, 0)
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	stakeState := stakingState.NewMutableState(ctx.State())
+
+	err = stakeState.SetConsensusParameters(ctx, &staking.ConsensusParameters{
+		Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+			staking.KindEntity:        *quantity.NewFromUint64(10),
+			staking.KindNodeValidator: *quantity.NewFromUint64(100),
+		},
+		CommissionScheduleRules: staking.CommissionScheduleRules{
+			MaxRateSteps:       5,
+			MaxBoundSteps:      5,
+			RateChangeInterval: 1,
+		},
+	})
+	require.NoError(err, "setting staking consensus parameters should not error")
+
+	app := &stakingApplication{
+		state: appState,
+	}
+
+	txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	defer txCtx.Close()
+
+	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	pk1Addr := staking.NewAddress(pk1)
+	txCtx.SetTxSigner(pk1)
+
+	amendment := &staking.AmendCommissionSchedule{Amendment: staking.CommissionSchedule{
+		Rates:  []staking.CommissionRateStep{{Start: 100, Rate: *quantity.NewFromUint64(50_000)}},
+		Bounds: []staking.CommissionRateBoundStep{{Start: 100, RateMin: *quantity.NewFromUint64(0), RateMax: *quantity.NewFromUint64(100_000)}},
+	}}
+
+	// Try amending commission schedule for address without any stake.
+	err = app.amendCommissionSchedule(txCtx, stakeState, amendment)
+	require.ErrorIs(err, staking.ErrInsufficientStake, "amending commission schedule for address without enough stake should fail")
+
+	// Add some but not enough stake to the address.
+	require.NoError(stakeState.SetAccount(ctx, pk1Addr, &staking.Account{Escrow: staking.EscrowAccount{
+		Active: staking.SharePool{
+			Balance:     *quantity.NewFromUint64(50),
+			TotalShares: *quantity.NewFromUint64(100),
+		},
+	}}))
+	err = app.amendCommissionSchedule(txCtx, stakeState, amendment)
+	require.ErrorIs(err, staking.ErrInsufficientStake, "amending commission schedule for address without enough stake should fail")
+
+	// Add enough stake to the address.
+	require.NoError(stakeState.SetAccount(ctx, pk1Addr, &staking.Account{Escrow: staking.EscrowAccount{
+		Active: staking.SharePool{
+			Balance:     *quantity.NewFromUint64(110),
+			TotalShares: *quantity.NewFromUint64(100),
+		},
+	}}))
+	require.NoError(app.amendCommissionSchedule(txCtx, stakeState, amendment), "amending commission schedule for address with enough stake should work")
+}

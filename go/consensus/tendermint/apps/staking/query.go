@@ -19,6 +19,7 @@ type Query interface {
 	Threshold(context.Context, staking.ThresholdKind) (*quantity.Quantity, error)
 	DebondingInterval(context.Context) (beacon.EpochTime, error)
 	Addresses(context.Context) ([]staking.Address, error)
+	CommissionScheduleAddresses(context.Context) ([]staking.Address, error)
 	Account(context.Context, staking.Address) (*staking.Account, error)
 	DelegationsFor(context.Context, staking.Address) (map[staking.Address]*staking.Delegation, error)
 	DelegationInfosFor(context.Context, staking.Address) (map[staking.Address]*staking.DelegationInfo, error)
@@ -83,6 +84,10 @@ func (sq *stakingQuerier) DebondingInterval(ctx context.Context) (beacon.EpochTi
 
 func (sq *stakingQuerier) Addresses(ctx context.Context) ([]staking.Address, error) {
 	return sq.state.Addresses(ctx)
+}
+
+func (sq *stakingQuerier) CommissionScheduleAddresses(ctx context.Context) ([]staking.Address, error) {
+	return sq.state.CommissionScheduleAddresses(ctx)
 }
 
 func (sq *stakingQuerier) Account(ctx context.Context, addr staking.Address) (*staking.Account, error) {

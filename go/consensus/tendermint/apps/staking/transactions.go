@@ -568,6 +568,23 @@ func (app *stakingApplication) amendCommissionSchedule(
 		return fmt.Errorf("failed to fetch account: %w", err)
 	}
 
+	// To prevent bloating the commission schedule state the schedule can only be set for
+	// entities with enough stake to actually register a validator.
+	entityThreshold := params.Thresholds[staking.KindEntity]
+	validatorThreshold := params.Thresholds[staking.KindNodeValidator]
+	requiredStake := entityThreshold.Clone()
+	if err = requiredStake.Add(&validatorThreshold); err != nil {
+		return err
+	}
+	if from.Escrow.Active.Balance.Cmp(requiredStake) < 0 {
+		ctx.Logger().Debug("AmendCommissionSchedule: insufficient stake to update commission schedule",
+			"from", fromAddr,
+			"escrow", from.Escrow.Active.Balance,
+			"required", requiredStake,
+		)
+		return staking.ErrInsufficientStake
+	}
+
 	if err = from.Escrow.CommissionSchedule.AmendAndPruneAndValidate(&amendCommissionSchedule.Amendment, &params.CommissionScheduleRules, epoch); err != nil {
 		ctx.Logger().Debug("AmendCommissionSchedule: amendment not acceptable",
 			"err", err,

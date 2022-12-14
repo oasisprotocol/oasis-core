@@ -139,6 +139,10 @@ type Backend interface {
 	// or escrow balance.
 	Addresses(ctx context.Context, height int64) ([]Address, error)
 
+	// CommissionScheduleAddresses returns the addresses of all accounts with
+	// non-empty commission schedule.
+	CommissionScheduleAddresses(ctx context.Context, height int64) ([]Address, error)
+
 	// Account returns the account descriptor for the given account.
 	Account(ctx context.Context, query *OwnerQuery) (*Account, error)
 
@@ -1138,6 +1142,8 @@ type ConsensusParameterChanges struct {
 	MinTransferAmount *quantity.Quantity `json:"min_transfer"`
 	// MinTransactBalance is the new minimum transact balance.
 	MinTransactBalance *quantity.Quantity `json:"min_transact_balance"`
+	// MinCommissionRate is the new minimum commission rate.
+	MinCommissionRate *quantity.Quantity `json:"min_commission_rate"`
 
 	// DisableTransfers is the new disable transfers flag.
 	DisableTransfers *bool `json:"disable_transfers,omitempty"`
@@ -1179,6 +1185,9 @@ func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
 	}
 	if c.MinTransactBalance != nil {
 		params.MinTransactBalance = *c.MinTransactBalance
+	}
+	if c.MinCommissionRate != nil {
+		params.CommissionScheduleRules.MinCommissionRate = *c.MinCommissionRate
 	}
 	if c.DisableTransfers != nil {
 		params.DisableTransfers = *c.DisableTransfers
