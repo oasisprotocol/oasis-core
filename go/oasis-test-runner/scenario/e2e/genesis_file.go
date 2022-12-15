@@ -1,7 +1,10 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,11 +21,13 @@ import (
 )
 
 const (
-	// Parameters from https://docs.oasis.io/node/mainnet.
-	latestMainnetGenesisURL          = "https://github.com/oasisprotocol/mainnet-artifacts/releases/download/2022-04-11/genesis.json"
-	latestMainnetGenesisDocumentHash = "b11b369e0da5bb230b220127f5e7b242d385ef8c6f54906243f30af63c815535"
+	// Mainnet genesis dump at height: 11645601.
+	genesisURL    = "https://oasis-artifacts.s3.us-east-2.amazonaws.com/genesis_mainnet_dump_11645601.json"
+	genesisSHA256 = "16386902d822227d0ba1e011ab84a754a48c61457e06240986f9c00e84895459"
 
-	latestMainnetNeedsUpgrade = true
+	genesisNeedsUpgrade = true
+	// Only relevant if genesis file doesn't need upgrade.
+	genesisDocumentHash = "b11b369e0da5bb230b220127f5e7b242d385ef8c6f54906243f30af63c815535"
 )
 
 // GenesisFile is the scenario for testing the correctness of marshalled genesis
@@ -105,20 +110,20 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 
 	// Check if the latest Mainnet genesis file passes genesis check.
 	latestMainnetGenesis := filepath.Join(childEnv.Dir(), "genesis_mainnet.json")
-	if err = s.downloadLatestMainnetGenesisFile(childEnv, latestMainnetGenesis); err != nil {
+	if err = s.downloadGenesisFile(childEnv, latestMainnetGenesis); err != nil {
 		return fmt.Errorf("e2e/genesis-file: failed to download latest Mainnet genesis "+
-			"file at '%s': %w", latestMainnetGenesisURL, err)
+			"file at '%s': %w", genesisURL, err)
 	}
 
 	// Convert latest Mainnet genesis file to canonical form and ensure its Genesis document's
 	// hash matches the authoritative one.
 	var latestMainnetGenesisFixed string
-	if latestMainnetNeedsUpgrade {
+	if genesisNeedsUpgrade {
 		// When upgrade is needed, run fix-genesis.
 		latestMainnetGenesisFixed = filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
 		if err = s.runFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
 			return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
-				"file at '%s': %w", latestMainnetGenesisURL, err)
+				"file at '%s': %w", genesisURL, err)
 		}
 	} else {
 		latestMainnetGenesisFixed = latestMainnetGenesis
@@ -128,14 +133,14 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 	case err != nil:
 		return fmt.Errorf("e2e/genesis-file: running genesis check for the latest Mainnet"+
 			" genesis file at '%s' failed: %w",
-			latestMainnetGenesisURL, err,
+			genesisURL, err,
 		)
-	case !latestMainnetNeedsUpgrade && !strings.Contains(checkOut, latestMainnetGenesisDocumentHash):
+	case !genesisNeedsUpgrade && !strings.Contains(checkOut, genesisDocumentHash):
 		return fmt.Errorf(
 			"e2e/genesis-file: running genesis check for the latest Mainnet genesis "+
 				"file should return the correct "+
 				"genesis document's hash: '%s' (actual output: %s)",
-			latestMainnetGenesisDocumentHash, checkOut,
+			genesisDocumentHash, checkOut,
 		)
 	default:
 		s.Logger.Info("latest Mainnet genesis file is OK")
@@ -197,25 +202,39 @@ func (s *genesisFileImpl) runFixGenesisCmd(childEnv *env.Env, genesisFilePath, f
 	return nil
 }
 
-func (s *genesisFileImpl) downloadLatestMainnetGenesisFile(childEnv *env.Env, latestMainnetGenesisFilePath string) error {
+func (s *genesisFileImpl) downloadGenesisFile(childEnv *env.Env, path string) error {
 	// Get the data.
-	resp, err := http.Get(latestMainnetGenesisURL)
+	resp, err := http.Get(genesisURL)
 	if err != nil {
 		return fmt.Errorf("failed to download genesis file: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Create the file.
-	out, err := os.Create(latestMainnetGenesisFilePath)
+	outf, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create genesis file: %w", err)
 	}
-	defer out.Close()
+	defer outf.Close()
+
+	// Also compute the hash.
+	outh := sha256.New()
+	out := io.MultiWriter(outf, outh)
 
 	// Write the body to the file.
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to copy genesis file: %w", err)
+	}
+
+	// Ensure the file hash matches.
+	h := outh.Sum(nil)
+	expected, err := hex.DecodeString(genesisSHA256)
+	if err != nil {
+		return fmt.Errorf("invalid expected hash '%s': %w", expected, err)
+	}
+	if !bytes.Equal(h, expected) {
+		return fmt.Errorf("invalid genesis file hash: got: '%x', expected: '%x'", h, expected)
 	}
 	return nil
 }

@@ -32,7 +32,6 @@ import (
 const (
 	CfgEntityID         = "node.entity_id"
 	CfgExpiration       = "node.expiration"
-	CfgTLSAddress       = "node.tls_address"
 	CfgP2PAddress       = "node.p2p_address"
 	CfgConsensusAddress = "node.consensus_address"
 	CfgRole             = "node.role"
@@ -184,22 +183,6 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		n.Runtimes = append(n.Runtimes, runtime)
 	}
 
-	for _, v := range viper.GetStringSlice(CfgTLSAddress) {
-		var tlsAddr node.TLSAddress
-		if tlsAddrErr := tlsAddr.UnmarshalText([]byte(v)); tlsAddrErr != nil {
-			if addrErr := tlsAddr.Address.UnmarshalText([]byte(v)); addrErr != nil {
-				logger.Error("failed to parse node's TLS address",
-					"addrErr", addrErr,
-					"tlsAddrErr", tlsAddrErr,
-					"addr", v,
-				)
-				os.Exit(1)
-			}
-			tlsAddr.PubKey = n.TLS.PubKey
-		}
-		n.TLS.Addresses = append(n.TLS.Addresses, tlsAddr)
-	}
-
 	for _, v := range viper.GetStringSlice(CfgP2PAddress) {
 		var addr node.Address
 		if err = addr.UnmarshalText([]byte(v)); err != nil {
@@ -216,8 +199,8 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		os.Exit(1)
 	}
 
-	if n.HasRoles(maskCommitteeMember) && (len(n.TLS.Addresses) == 0 || len(n.P2P.Addresses) == 0) {
-		logger.Error("nodes that are committee members require at least 1 TLS and 1 P2P address")
+	if n.HasRoles(maskCommitteeMember) && len(n.P2P.Addresses) == 0 {
+		logger.Error("nodes that are committee members require at least 1 P2P address")
 		os.Exit(1)
 	}
 
@@ -407,7 +390,6 @@ func Register(parentCmd *cobra.Command) {
 func init() {
 	flags.String(CfgEntityID, "", "Entity ID that controls this node")
 	flags.Uint64(CfgExpiration, 0, "Epoch that the node registration should expire")
-	flags.StringSlice(CfgTLSAddress, nil, "Address(es) the node can be reached over TLS of the form [PubKey@]ip:port (where PubKey@ part is optional and represents base64 encoded node TLS public key)")
 	flags.StringSlice(CfgP2PAddress, nil, "Address(es) the node can be reached over the P2P transport")
 	flags.StringSlice(CfgConsensusAddress, nil, "Address(es) the node can be reached as a consensus member of the form [ID@]ip:port (where the ID@ part is optional and ID represents the node's public key)")
 	flags.StringSlice(CfgRole, nil, "Role(s) of the node.  Supported values are \"compute-worker\", \"storage-worker\", \"transaction-scheduler\", \"key-manager\", \"merge-worker\", and \"validator\"")

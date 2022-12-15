@@ -157,14 +157,10 @@ var (
 	// ConsensusAddressRequiredRoles are the Node roles that require Consensus Address.
 	ConsensusAddressRequiredRoles = node.RoleValidator
 
-	// TLSAddressRequiredRoles are the Node roles that require TLS Address.
-	TLSAddressRequiredRoles = node.RoleConsensusRPC
-
 	// P2PAddressRequiredRoles are the Node roles that require P2P Address.
 	P2PAddressRequiredRoles = node.RoleComputeWorker |
 		node.RoleKeyManager |
 		node.RoleValidator |
-		node.RoleConsensusRPC |
 		node.RoleStorageRPC
 )
 
@@ -682,15 +678,6 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		)
 		return nil, nil, fmt.Errorf("%w: invalid TLS public key", ErrInvalidArgument)
 	}
-	tlsAddressRequired := n.HasRoles(TLSAddressRequiredRoles)
-	if err := verifyAddresses(params, tlsAddressRequired, n.TLS.Addresses); err != nil {
-		addrs, _ := json.Marshal(n.TLS.Addresses)
-		logger.Error("RegisterNode: missing/invalid committee addresses",
-			"node", n,
-			"committee_addrs", addrs,
-		)
-		return nil, nil, err
-	}
 
 	if !sigNode.MultiSigned.IsSignedBy(n.TLS.PubKey) {
 		logger.Error("RegisterNode: not signed by TLS certificate key",
@@ -719,9 +706,8 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
 	switch isGenesis {
 	case true:
-		// Allow legacy descriptor with optional p2p address for validator and
-		// consensus RPC nodes.
-		if n.HasRoles(node.RoleValidator | node.RoleConsensusRPC) {
+		// Allow legacy descriptor with optional p2p address for validator.
+		if n.HasRoles(node.RoleValidator) {
 			p2pAddressRequired = false
 		}
 	case false:
@@ -875,18 +861,6 @@ func verifyAddresses(params *ConsensusParameters, addressRequired bool, addresse
 		for _, v := range addrs {
 			if !v.ID.IsValid() {
 				return fmt.Errorf("%w: consensus address ID invalid", ErrInvalidArgument)
-			}
-			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
-				return err
-			}
-		}
-	case []node.TLSAddress:
-		if len(addrs) == 0 && addressRequired {
-			return fmt.Errorf("%w: missing TLS address", ErrInvalidArgument)
-		}
-		for _, v := range addrs {
-			if !v.PubKey.IsValid() {
-				return fmt.Errorf("%w: TLS address public key invalid", ErrInvalidArgument)
 			}
 			if err := VerifyAddress(v.Address, params.DebugAllowUnroutableAddresses); err != nil {
 				return err

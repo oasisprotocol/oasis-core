@@ -72,7 +72,7 @@ type Node struct {
 	Upgrader upgradeAPI.Backend
 	Genesis  genesisAPI.Provider
 	Identity *identity.Identity
-	Sentry   sentryAPI.LocalBackend
+	Sentry   sentryAPI.Backend
 	IAS      iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
@@ -249,7 +249,6 @@ func (n *Node) initRuntimeWorkers() error {
 		)
 		return err
 	}
-	n.svcMgr.Register(n.CommonWorker.Grpc)
 	n.svcMgr.Register(n.CommonWorker)
 
 	workerCommonCfg := n.CommonWorker.GetConfig()

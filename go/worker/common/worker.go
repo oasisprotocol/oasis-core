@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/grpc"
-	policyAPI "github.com/oasisprotocol/oasis-core/go/common/grpc/policy/api"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -15,7 +13,6 @@ import (
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	"github.com/oasisprotocol/oasis-core/go/sentry/policywatcher"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
@@ -24,18 +21,16 @@ type Worker struct {
 	enabled bool
 	cfg     Config
 
-	HostNode          control.NodeController
-	DataDir           string
-	ChainContext      string
-	Identity          *identity.Identity
-	Consensus         consensus.Backend
-	LightClient       consensus.LightClient
-	Grpc              *grpc.Server
-	GrpcPolicyWatcher policyAPI.PolicyWatcher
-	P2P               p2p.Service
-	IAS               ias.Endpoint
-	KeyManager        keymanagerApi.Backend
-	RuntimeRegistry   runtimeRegistry.Registry
+	HostNode        control.NodeController
+	DataDir         string
+	ChainContext    string
+	Identity        *identity.Identity
+	Consensus       consensus.Backend
+	LightClient     consensus.LightClient
+	P2P             p2p.Service
+	IAS             ias.Endpoint
+	KeyManager      keymanagerApi.Backend
+	RuntimeRegistry runtimeRegistry.Registry
 
 	runtimes map[common.Namespace]*committee.Node
 
@@ -195,8 +190,6 @@ func newWorker(
 	identity *identity.Identity,
 	consensus consensus.Backend,
 	lightClient consensus.LightClient,
-	grpc *grpc.Server,
-	grpcPolicyWatcher policyAPI.PolicyWatcher,
 	p2p p2p.Service,
 	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
@@ -213,26 +206,24 @@ func newWorker(
 	}
 
 	w := &Worker{
-		enabled:           enabled,
-		cfg:               cfg,
-		HostNode:          hostNode,
-		DataDir:           dataDir,
-		ChainContext:      chainContext,
-		Identity:          identity,
-		Consensus:         consensus,
-		LightClient:       lightClient,
-		Grpc:              grpc,
-		GrpcPolicyWatcher: grpcPolicyWatcher,
-		P2P:               p2p,
-		IAS:               ias,
-		KeyManager:        keyManager,
-		RuntimeRegistry:   rtRegistry,
-		runtimes:          make(map[common.Namespace]*committee.Node),
-		ctx:               ctx,
-		cancelCtx:         cancelCtx,
-		quitCh:            make(chan struct{}),
-		initCh:            make(chan struct{}),
-		logger:            logging.GetLogger("worker/common"),
+		enabled:         enabled,
+		cfg:             cfg,
+		HostNode:        hostNode,
+		DataDir:         dataDir,
+		ChainContext:    chainContext,
+		Identity:        identity,
+		Consensus:       consensus,
+		LightClient:     lightClient,
+		P2P:             p2p,
+		IAS:             ias,
+		KeyManager:      keyManager,
+		RuntimeRegistry: rtRegistry,
+		runtimes:        make(map[common.Namespace]*committee.Node),
+		ctx:             ctx,
+		cancelCtx:       cancelCtx,
+		quitCh:          make(chan struct{}),
+		initCh:          make(chan struct{}),
+		logger:          logging.GetLogger("worker/common"),
 	}
 
 	if !enabled {
@@ -267,19 +258,7 @@ func New(
 		return nil, fmt.Errorf("worker/common: failed to initialize config: %w", err)
 	}
 
-	// Create externally-accessible gRPC server.
-	serverConfig := &grpc.ServerConfig{
-		Name:     "external",
-		Port:     cfg.ClientPort,
-		Identity: identity,
-	}
-	grpc, err := grpc.NewServer(serverConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	ctx, cancelCtx := context.WithCancel(context.Background())
-	grpcPolicyWatcher := policywatcher.New(ctx, cfg.SentryAddresses, identity)
 
 	return newWorker(
 		ctx,
@@ -290,8 +269,6 @@ func New(
 		identity,
 		consensus,
 		lightClient,
-		grpc,
-		grpcPolicyWatcher,
 		p2p,
 		ias,
 		keyManager,

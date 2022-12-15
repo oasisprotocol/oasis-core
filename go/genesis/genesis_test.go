@@ -251,9 +251,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 		Roles:      node.RoleValidator,
 		TLS: node.TLSInfo{
 			PubKey: nodeTLSSigner.Public(),
-			Addresses: []node.TLSAddress{
-				{PubKey: nodeTLSSigner.Public(), Address: testAddress},
-			},
 		},
 		P2P: node.P2PInfo{
 			ID:        nodeP2PSigner.Public(),

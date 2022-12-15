@@ -35,7 +35,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 	workerSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry"
-	workerGrpcSentry "github.com/oasisprotocol/oasis-core/go/worker/sentry/grpc"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
@@ -337,25 +336,6 @@ func (args *argBuilder) workerCommonSentryAddresses(addrs []string) *argBuilder 
 	return args
 }
 
-func (args *argBuilder) workerSentryGrpcClientAddress(addrs []string) *argBuilder {
-	for _, addr := range addrs {
-		args.vec = append(args.vec, Argument{
-			Name:        workerGrpcSentry.CfgClientAddresses,
-			Values:      []string{addr},
-			MultiValued: true,
-		})
-	}
-	return args
-}
-
-func (args *argBuilder) workerSentryGrpcClientPort(port uint16) *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:   workerGrpcSentry.CfgClientPort,
-		Values: []string{strconv.Itoa(int(port))},
-	})
-	return args
-}
-
 func (args *argBuilder) workerP2pPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   p2p.CfgHostPort,
@@ -425,33 +405,6 @@ func (args *argBuilder) workerKeymanagerPrivatePeerPubKeys(peerPKs []string) *ar
 
 func (args *argBuilder) workerSentryEnabled() *argBuilder {
 	args.vec = append(args.vec, Argument{Name: workerSentry.CfgEnabled})
-	return args
-}
-
-func (args *argBuilder) workerGrpcSentryEnabled() *argBuilder {
-	args.vec = append(args.vec, Argument{Name: workerGrpcSentry.CfgEnabled})
-	return args
-}
-
-func (args *argBuilder) grpcSentryUpstreamAddresses(addrs []string) *argBuilder {
-	for _, addr := range addrs {
-		args.vec = append(args.vec, Argument{
-			Name:        workerGrpcSentry.CfgUpstreamAddress,
-			Values:      []string{addr},
-			MultiValued: true,
-		})
-	}
-	return args
-}
-
-func (args *argBuilder) grpcSentryUpstreamIDs(ids []string) *argBuilder {
-	for _, id := range ids {
-		args.vec = append(args.vec, Argument{
-			Name:        workerGrpcSentry.CfgUpstreamID,
-			Values:      []string{id},
-			MultiValued: true,
-		})
-	}
 	return args
 }
 
@@ -556,7 +509,7 @@ func (args *argBuilder) addValidatorsAsSentryUpstreams(validators []*Validator) 
 }
 
 func (args *argBuilder) addSentryComputeWorkers(computeWorkers []*Compute) *argBuilder {
-	var addrs, ids, tmAddrs, sentryPubKeys []string
+	var tmAddrs, sentryPubKeys []string
 	for _, computeWorker := range computeWorkers {
 		addr := commonNode.ConsensusAddress{
 			ID: computeWorker.p2pSigner,
@@ -565,20 +518,17 @@ func (args *argBuilder) addSentryComputeWorkers(computeWorkers []*Compute) *argB
 				Port: int64(computeWorker.consensusPort),
 			},
 		}
-		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", computeWorker.clientPort))
-		ids = append(ids, computeWorker.NodeID.String())
 		tmAddrs = append(tmAddrs, addr.String())
 		key, _ := computeWorker.sentryPubKey.MarshalText()
 		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
-	return args.grpcSentryUpstreamAddresses(addrs).
-		grpcSentryUpstreamIDs(ids).
+	return args.
 		tendermintSentryUpstreamAddress(tmAddrs).
 		workerSentryUpstreamTLSKeys(sentryPubKeys)
 }
 
 func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanager) *argBuilder {
-	var addrs, ids, tmAddrs, sentryPubKeys []string
+	var tmAddrs, sentryPubKeys []string
 	for _, keymanager := range keymanagerWorkers {
 		addr := commonNode.ConsensusAddress{
 			ID: keymanager.p2pSigner,
@@ -587,14 +537,11 @@ func (args *argBuilder) addSentryKeymanagerWorkers(keymanagerWorkers []*Keymanag
 				Port: int64(keymanager.consensusPort),
 			},
 		}
-		addrs = append(addrs, fmt.Sprintf("127.0.0.1:%d", keymanager.workerClientPort))
-		ids = append(ids, keymanager.NodeID.String())
 		tmAddrs = append(tmAddrs, addr.String())
 		key, _ := keymanager.sentryPubKey.MarshalText()
 		sentryPubKeys = append(sentryPubKeys, string(key))
 	}
-	return args.grpcSentryUpstreamAddresses(addrs).
-		grpcSentryUpstreamIDs(ids).
+	return args.
 		tendermintSentryUpstreamAddress(tmAddrs).
 		workerSentryUpstreamTLSKeys(sentryPubKeys)
 }

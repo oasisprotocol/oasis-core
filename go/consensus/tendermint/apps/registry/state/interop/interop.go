@@ -3,7 +3,6 @@ package interop
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -58,15 +57,6 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 				TLS: node.TLSInfo{
 					PubKey:     signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
 					NextPubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
-					Addresses: []node.TLSAddress{
-						{
-							PubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
-							Address: node.Address{
-								IP:   net.IPv4(127, 0, 0, 1),
-								Port: 1111,
-							},
-						},
-					},
 				},
 				P2P: node.P2PInfo{
 					ID:        signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),

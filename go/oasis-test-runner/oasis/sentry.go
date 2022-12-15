@@ -84,23 +84,14 @@ func (sentry *Sentry) AddArgs(args *argBuilder) error {
 		configureDebugCrashPoints(sentry.crashPointsProbability).
 		tendermintSupplementarySanity(sentry.supplementarySanityInterval).
 		appendNetwork(sentry.net).
-		appendSeedNodes(sentry.net.seeds).
-		internalSocketAddress(sentry.net.validators[0].SocketPath())
+		appendSeedNodes(sentry.net.seeds)
 
 	if len(validators) > 0 {
 		args.addValidatorsAsSentryUpstreams(validators)
 	}
-
-	if len(computeWorkers) > 0 || len(keymanagerWorkers) > 0 {
-		args.workerGrpcSentryEnabled().
-			workerSentryGrpcClientAddress([]string{fmt.Sprintf("127.0.0.1:%d", sentry.sentryPort)}).
-			workerSentryGrpcClientPort(sentry.sentryPort)
-	}
-
 	if len(computeWorkers) > 0 {
 		args.addSentryComputeWorkers(computeWorkers)
 	}
-
 	if len(keymanagerWorkers) > 0 {
 		args.addSentryKeymanagerWorkers(keymanagerWorkers)
 	}
