@@ -15,7 +15,7 @@ import (
 func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require := require.New(t)
 
-	rawQuote, err := os.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
+	rawQuote, err := os.ReadFile("testdata/quote_v3_ecdsa_p256_pck_chain.bin")
 	require.NoError(err, "Read test vector")
 
 	var quote Quote
@@ -51,11 +51,11 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require.Len(cd.CertificateChain, 3)
 
 	// Prepare TCB bundle needed for verification.
-	rawTCBInfo, err := os.ReadFile("testdata/tcb_fmspc_00606A000000.json") // From PCS response.
+	rawTCBInfo, err := os.ReadFile("testdata/tcb_info_v2_fmspc_00606A000000.json") // From PCS V3 response.
 	require.NoError(err, "Read test vector")
-	rawCerts, err := os.ReadFile("testdata/tcb_fmspc_00606A000000_certs.pem") // From SGX-TCB-Info-Issuer-Chain header.
+	rawCerts, err := os.ReadFile("testdata/tcb_info_v2_fmspc_00606A000000_certs.pem") // From PCS V3 response (SGX-TCB-Info-Issuer-Chain header).
 	require.NoError(err, "Read test vector")
-	rawQEIdentity, err := os.ReadFile("testdata/qe_identity.json") // From PCS response.
+	rawQEIdentity, err := os.ReadFile("testdata/qe_identity_v2.json") // From PCS V3 response.
 	require.NoError(err, "Read test vector")
 
 	var tcbInfo SignedTCBInfo
@@ -82,16 +82,19 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	now2 := time.Unix(1052695757, 0)
 	_, err = quote.Verify(nil, now2, &tcbBundle)
 	require.Error(err, "Quote verification should fail for PCK certificates not yet valid")
+	require.ErrorContains(err, "pcs/quote: failed to verify PCK certificate chain: x509: certificate has expired or is not yet valid")
 
 	// Test TCB info not yet valid.
 	now3 := time.Unix(1652609357, 0)
 	_, err = quote.Verify(nil, now3, &tcbBundle)
 	require.Error(err, "Quote verification should fail for TCB info not yet valid")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: QE identity issue date in the future")
 
 	// Test TCB info expired.
 	now4 := time.Unix(1657879757, 0)
 	_, err = quote.Verify(nil, now4, &tcbBundle)
 	require.Error(err, "Quote verification should fail for TCB info expired")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: QE identity expired")
 
 	// Test alternate validity from quote policy.
 	now5 := time.Unix(1657879757, 0)
@@ -108,6 +111,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
 	require.Error(err, "Quote verification should fail for invalid TCB evaluation data number")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: invalid QE evaluation data number")
 
 	// Test blacklisted FMSPC.
 	quotePolicy = &QuotePolicy{
@@ -116,6 +120,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
 	require.Error(err, "Quote verification should fail for blacklisted FMSPCs")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify TCB info: pcs/tcb: invalid TCB info: pcs/tcb: blacklisted FMSPC")
 
 	// Test TCB info certificates missing.
 	tcbBundle2 := TCBBundle{
@@ -125,9 +130,10 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(nil, now, &tcbBundle2)
 	require.Error(err, "Quote verification should fail for bad TCB info certificates")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: unexpected certificate chain length: 0")
 
 	// Test TCB info certificates bad.
-	rawCertsBad, err := os.ReadFile("testdata/tcb_fmspc_00606A000000_certs_bad.pem")
+	rawCertsBad, err := os.ReadFile("testdata/tcb_info_v2_fmspc_00606A000000_certs_bad.pem")
 	require.NoError(err, "Read test vector")
 
 	tcbBundle3 := TCBBundle{
@@ -137,6 +143,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(nil, now, &tcbBundle3)
 	require.Error(err, "Quote verification should fail for bad TCB info certificates")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: TCB signature verification failed")
 
 	// Test invalid TCB info signature.
 	tcbBundle4 := TCBBundle{
@@ -148,6 +155,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	tcbBundle4.TCBInfo.TCBInfo[16] = 'x'
 	_, err = quote.Verify(nil, now, &tcbBundle4)
 	require.Error(err, "Quote verification should fail for bad TCB info signature")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify TCB info: pcs/tcb: invalid TCB info: pcs/tcb: TCB signature verification failed")
 
 	// Test invalid QE identity signature.
 	tcbBundle5 := TCBBundle{
@@ -159,6 +167,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	tcbBundle5.QEIdentity.EnclaveIdentity[22] = 'x'
 	_, err = quote.Verify(nil, now, &tcbBundle5)
 	require.Error(err, "Quote verification should fail for bad QE identity signature")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: TCB signature verification failed")
 
 	// Test quote bundle.
 	quoteBundle := QuoteBundle{
@@ -185,7 +194,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 func TestQuoteECDSA_P256_EPPID(t *testing.T) {
 	require := require.New(t)
 
-	rawQuote, err := os.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
+	rawQuote, err := os.ReadFile("testdata/quote_v3_ecdsa_p256_eppid.bin")
 	require.NoError(err, "Read test vector")
 
 	var quote Quote
@@ -229,9 +238,9 @@ func TestQuoteECDSA_P256_EPPID(t *testing.T) {
 
 func FuzzQuoteUnmarshal(f *testing.F) {
 	// Seed corpus.
-	raw1, _ := os.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
+	raw1, _ := os.ReadFile("testdata/quote_v3_ecdsa_p256_pck_chain.bin")
 	f.Add(raw1)
-	raw2, _ := os.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
+	raw2, _ := os.ReadFile("testdata/quote_v3_ecdsa_p256_eppid.bin")
 	f.Add(raw2)
 
 	// Fuzzing.

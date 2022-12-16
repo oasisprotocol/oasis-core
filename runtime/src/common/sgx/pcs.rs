@@ -918,11 +918,12 @@ mod tests {
     #[test]
     fn test_quote_ecdsa_p256_pck_certificatechain() {
         const RAW_QUOTE: &[u8] =
-            include_bytes!("../../../testdata/quotev3_ecdsa_p256_pck_chain.bin");
-        const RAW_TCB_INFO: &[u8] = include_bytes!("../../../testdata/tcb_fmspc_00606A000000.json"); // From PCS response.
+            include_bytes!("../../../testdata/quote_v3_ecdsa_p256_pck_chain.bin");
+        const RAW_TCB_INFO: &[u8] =
+            include_bytes!("../../../testdata/tcb_info_v2_fmspc_00606A000000.json"); // From PCS V3 response.
         const RAW_CERTS: &[u8] =
-            include_bytes!("../../../testdata/tcb_fmspc_00606A000000_certs.pem"); // From SGX-TCB-Info-Issuer-Chain header.
-        const RAW_QE_IDENTITY: &[u8] = include_bytes!("../../../testdata/qe_identity.json"); // From PCS response.
+            include_bytes!("../../../testdata/tcb_info_v2_fmspc_00606A000000_certs.pem"); // From PCS V3 response (SGX-TCB-Info-Issuer-Chain header).
+        const RAW_QE_IDENTITY: &[u8] = include_bytes!("../../../testdata/qe_identity_v2.json"); // From PCS V3 response.
 
         let qb = QuoteBundle {
             quote: RAW_QUOTE.to_owned(),
