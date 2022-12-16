@@ -54,6 +54,11 @@ func (app *governanceApplication) submitProposal(
 		return nil, err
 	}
 
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil, nil
+	}
+
 	// Load submitter account.
 	submitterAddr := stakingAPI.NewAddress(ctx.TxSigner())
 	if !submitterAddr.IsValid() {
@@ -227,6 +232,11 @@ func (app *governanceApplication) castVote(
 	// Charge gas for this transaction.
 	if err = ctx.Gas().UseGas(1, governance.GasOpCastVote, params.GasCosts); err != nil {
 		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
 	}
 
 	submitterAddr := stakingAPI.NewAddress(ctx.TxSigner())
