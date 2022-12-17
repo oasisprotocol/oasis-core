@@ -45,6 +45,11 @@ func (app *registryApplication) registerEntity(
 		return err
 	}
 
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Make sure the signer of the transaction matches the signer of the entity.
 	// NOTE: If this is invoked during InitChain then there is no actual transaction
 	//       and thus no transaction signer so we must skip this check.
@@ -97,6 +102,11 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 	}
 	if err = ctx.Gas().UseGas(1, registry.GasOpDeregisterEntity, params.GasCosts); err != nil {
 		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
 	}
 
 	id := ctx.TxSigner()
@@ -560,6 +570,11 @@ func (app *registryApplication) unfreezeNode(
 		return err
 	}
 
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Fetch node descriptor.
 	node, err := state.Node(ctx, unfreeze.NodeID)
 	if err != nil {
@@ -652,6 +667,11 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 	// Charge gas for this transaction.
 	if err = ctx.Gas().UseGas(1, registry.GasOpRegisterRuntime, params.GasCosts); err != nil {
 		return nil, err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil, nil
 	}
 
 	// Make sure the runtime doesn't exist yet.

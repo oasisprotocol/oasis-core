@@ -61,6 +61,11 @@ func (app *keymanagerApplication) updatePolicy(
 		return err
 	}
 
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Ok, as far as we can tell the new policy is valid, apply it.
 	//
 	// Note: The key manager cohort responsible for servicing this ID
