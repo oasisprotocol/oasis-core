@@ -169,7 +169,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("e5b7e884e3233444ddce993426c25b80ca9bcb323388ec1308e50a7bd816084a"),
+            hash: Hash::from("00653d0a677ec3d058bce7889ca824f7d8d74db44fcaf966ef6d155794f9208d"),
             ..Default::default()
         };
         let mkvs = Tree::builder()

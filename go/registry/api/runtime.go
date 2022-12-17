@@ -599,6 +599,11 @@ func (r *Runtime) ValidateDeployments(now beacon.EpochTime, params *ConsensusPar
 		default:
 			return fmt.Errorf("%w: invalid TEE hardware", ErrInvalidArgument)
 		}
+
+		// BundleChecksum should be a SHA256 hash if present.
+		if len(deployment.BundleChecksum) > 0 && len(deployment.BundleChecksum) != 32 {
+			return fmt.Errorf("%w: invalid bundle checksum", ErrInvalidArgument)
+		}
 	}
 	if numFuture > 1 {
 		return fmt.Errorf("%w: more than one future deployment", ErrInvalidArgument)
@@ -644,6 +649,9 @@ type VersionInfo struct {
 	// TEE is the enclave version information, in an enclave provider specific
 	// format if any.
 	TEE []byte `json:"tee,omitempty"`
+
+	// BundleChecksum is the SHA256 hash of the runtime bundle (optional).
+	BundleChecksum []byte `json:"bundle_checksum,omitempty"`
 }
 
 // Equal compares vs another VersionInfo for equality.
@@ -661,6 +669,9 @@ func (vi *VersionInfo) Equal(cmp *VersionInfo) bool {
 		return false
 	}
 	if !bytes.Equal(vi.TEE, cmp.TEE) {
+		return false
+	}
+	if !bytes.Equal(vi.BundleChecksum, cmp.BundleChecksum) {
 		return false
 	}
 	return true
