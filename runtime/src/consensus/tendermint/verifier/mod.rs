@@ -33,7 +33,7 @@ use crate::{
             ConsensusState,
         },
         tendermint::{
-            decode_light_block, state_root_from_header,
+            chain_id, decode_light_block, state_root_from_header,
             verifier::{
                 clock::InsecureClock,
                 io::Io,
@@ -881,6 +881,8 @@ impl Verifier {
             height,
             next_validators: &lbm.validators,
             next_validators_hash: header.validators_hash,
+            // We need to use the target chain ID as we know it has changed.
+            chain_id: &chain_id(&host_info.consensus_chain_context),
         };
 
         // Verify the new block using +2/3 trust threshold rule.

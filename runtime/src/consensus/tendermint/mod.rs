@@ -7,7 +7,7 @@ use std::convert::{TryFrom, TryInto};
 
 use anyhow::{anyhow, Result};
 use tendermint::{
-    block::signed_header::SignedHeader as TMSignedHeader, validator::Set as TMValidatorSet,
+    block::signed_header::SignedHeader as TMSignedHeader, chain, validator::Set as TMValidatorSet,
 };
 use tendermint_proto::{types::LightBlock as RawLightBlock, Protobuf};
 
@@ -22,6 +22,11 @@ pub const BACKEND_NAME: &str = "tendermint";
 
 /// The domain separation context used by Oasis Core for Tendermint cryptography.
 pub const TENDERMINT_CONTEXT: &[u8] = b"oasis-core/tendermint";
+
+/// Convert an Oasis Core chain context into a Tendermint chain ID.
+pub fn chain_id(chain_context: &str) -> chain::Id {
+    chain_context[..chain::id::MAX_LENGTH].try_into().unwrap()
+}
 
 /// Decode the light block metadata as a Tendermint light block.
 pub fn decode_light_block(light_block: LightBlock) -> Result<LightBlockMeta> {
@@ -54,8 +59,7 @@ pub fn state_root_from_header(signed_header: &TMSignedHeader) -> Root {
     let height: u64 = header.height.into();
     let hash: [u8; 32] = header
         .app_hash
-        .value()
-        .as_slice()
+        .as_bytes()
         .try_into()
         .expect("invalid app hash");
 
