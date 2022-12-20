@@ -615,6 +615,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		DisableCheckpointer:       viper.GetBool(CfgCheckpointerDisabled),
 		CheckpointerCheckInterval: viper.GetDuration(CfgCheckpointerCheckInterval),
 		InitialHeight:             uint64(t.genesis.Height),
+		ChainContext:              t.genesis.ChainContext(),
 	}
 	t.mux, err = abci.NewApplicationServer(t.ctx, t.upgrader, appConfig)
 	if err != nil {
