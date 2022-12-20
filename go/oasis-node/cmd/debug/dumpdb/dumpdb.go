@@ -110,6 +110,7 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 			MemoryOnlyStorage:   false,
 			ReadOnlyStorage:     viper.GetBool(cfgDumpReadOnlyDB),
 			DisableCheckpointer: true,
+			ChainContext:        oldDoc.ChainContext(),
 		},
 	)
 	if err != nil {

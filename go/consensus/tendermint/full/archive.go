@@ -172,6 +172,7 @@ func NewArchive(
 		// ReadOnly should actually be preferable for archive but there is a badger issue with read-only:
 		// https://discuss.dgraph.io/t/read-only-log-truncate-required-to-run-db/16444/2
 		ReadOnlyStorage: false,
+		ChainContext:    srv.genesis.ChainContext(),
 	}
 	srv.mux, err = abci.NewApplicationServer(srv.ctx, nil, appConfig)
 	if err != nil {

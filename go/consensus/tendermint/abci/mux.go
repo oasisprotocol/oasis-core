@@ -88,6 +88,9 @@ type ApplicationConfig struct { // nolint: maligned
 
 	// InitialHeight is the height of the initial block.
 	InitialHeight uint64
+
+	// ChainContext is the chain context for the network.
+	ChainContext string
 }
 
 // ApplicationServer implements a tendermint ABCI application + socket server,
@@ -1188,6 +1191,20 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 	state, err := newApplicationState(ctx, upgrader, cfg)
 	if err != nil {
 		return nil, err
+	}
+
+	// Ensure that if state is initialized it matches the genesis file. There could be a discrepancy
+	// in case someone copied over the state from one network but is using a genesis file from
+	// another.
+	chainContext, err := state.deliverTxTree.Get(ctx, []byte(StateKeyGenesisDigest))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch chain context from state: %w", err)
+	}
+	if len(chainContext) > 0 && string(chainContext) != cfg.ChainContext {
+		return nil, fmt.Errorf("state chain context does not match genesis file (genesis: %s state: %s)",
+			cfg.ChainContext,
+			string(chainContext),
+		)
 	}
 
 	mux := &abciMux{
