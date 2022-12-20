@@ -22,11 +22,11 @@ const (
 	pcsAPISubscriptionKeyHeader = "Ocp-Apim-Subscription-Key"
 	pcsAPITimeout               = 10 * time.Second
 	pcsAPIBaseURL               = "https://api.trustedservices.intel.com/sgx"
-	pcsAPIGetPCKCertificatePath = "/certification/v3/pckcert"
-	pcsAPIGetRevocationListPath = "/certification/v3/pckcrl"
-	pcsAPIGetTCBInfoPath        = "/certification/v3/tcb"
-	pcsAPIGetQEIdentityPath     = "/certification/v3/qe/identity"
-	pcsAPICertChainHeader       = "SGX-TCB-Info-Issuer-Chain"
+	pcsAPIGetPCKCertificatePath = "/certification/v4/pckcert"
+	pcsAPIGetRevocationListPath = "/certification/v4/pckcrl"
+	pcsAPIGetTCBInfoPath        = "/certification/v4/tcb"
+	pcsAPIGetQEIdentityPath     = "/certification/v4/qe/identity"
+	pcsAPICertChainHeader       = "TCB-Info-Issuer-Chain"
 )
 
 // HTTPClientConfig is the Intel SGX PCS client configuration.

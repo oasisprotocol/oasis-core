@@ -15,7 +15,8 @@ use sgx_isa::{AttributesFlags, Report};
 use super::{EnclaveIdentity, MrEnclave, MrSigner, VerifiedQuote};
 
 // Required values of various TCB fields.
-const REQUIRED_TCB_INFO_VERSION: u32 = 2;
+const REQUIRED_TCB_INFO_ID: &str = "SGX";
+const REQUIRED_TCB_INFO_VERSION: u32 = 3;
 const REQUIRED_QE_ID: &str = "QE";
 const REQUIRED_QE_IDENTITY_VERSION: u32 = 2;
 const DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER: u32 = 12; // As of 2022-08-01.
@@ -471,6 +472,9 @@ impl SignedTCBInfo {
 /// TCB info body.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct TCBInfo {
+    #[serde(rename = "id")]
+    pub id: String,
+
     #[serde(rename = "version")]
     pub version: u32,
 
@@ -492,12 +496,21 @@ pub struct TCBInfo {
     #[serde(rename = "tcbEvaluationDataNumber")]
     pub tcb_evaluation_data_number: u32,
 
+    #[serde(default, rename = "tdxModule")]
+    pub tdx_module: TDXModule,
+
     #[serde(rename = "tcbLevels")]
     pub tcb_levels: Vec<TCBLevel>,
 }
 
 impl TCBInfo {
     fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
+        if self.id != REQUIRED_TCB_INFO_ID {
+            return Err(Error::TCBParseError(anyhow::anyhow!(
+                "unexpected TCB info identifier"
+            )));
+        }
+
         if self.version != REQUIRED_TCB_INFO_VERSION {
             return Err(Error::TCBParseError(anyhow::anyhow!(
                 "unexpected TCB info version"
@@ -561,6 +574,19 @@ impl TCBInfo {
     }
 }
 
+/// A representation of the properties of Intel’s TDX SEAM module.
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+pub struct TDXModule {
+    #[serde(rename = "mrsigner")]
+    pub mr_signer: String,
+
+    #[serde(rename = "attributes")]
+    pub attributes: [u8; 8],
+
+    #[serde(rename = "attributesMask")]
+    pub attributes_mask: [u8; 8],
+}
+
 /// A platform TCB level.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct TCBLevel {
@@ -583,29 +609,9 @@ impl TCBLevel {
         //    16) with the corresponding values in the TCB Level. If all SGX TCB Comp SVNs in the
         //    certificate are greater or equal to the corresponding values in TCB Level, go to b,
         //    otherwise move to the next item on TCB Levels list.
-        for (i, svn) in [
-            self.tcb.comp01svn,
-            self.tcb.comp02svn,
-            self.tcb.comp03svn,
-            self.tcb.comp04svn,
-            self.tcb.comp05svn,
-            self.tcb.comp06svn,
-            self.tcb.comp07svn,
-            self.tcb.comp08svn,
-            self.tcb.comp09svn,
-            self.tcb.comp10svn,
-            self.tcb.comp11svn,
-            self.tcb.comp12svn,
-            self.tcb.comp13svn,
-            self.tcb.comp14svn,
-            self.tcb.comp15svn,
-            self.tcb.comp16svn,
-        ]
-        .iter()
-        .enumerate()
-        {
+        for (i, comp) in self.tcb.sgx_components.iter().enumerate() {
             // At least one SVN is lower, no match.
-            if tcb_comp_svn[i] < *svn {
+            if tcb_comp_svn[i] < comp.svn {
                 return false;
             }
         }
@@ -628,38 +634,24 @@ pub struct TCBVersions {
     #[serde(rename = "pcesvn")]
     pub pcesvn: u32,
 
-    #[serde(rename = "sgxtcbcomp01svn")]
-    pub comp01svn: u32,
-    #[serde(rename = "sgxtcbcomp02svn")]
-    pub comp02svn: u32,
-    #[serde(rename = "sgxtcbcomp03svn")]
-    pub comp03svn: u32,
-    #[serde(rename = "sgxtcbcomp04svn")]
-    pub comp04svn: u32,
-    #[serde(rename = "sgxtcbcomp05svn")]
-    pub comp05svn: u32,
-    #[serde(rename = "sgxtcbcomp06svn")]
-    pub comp06svn: u32,
-    #[serde(rename = "sgxtcbcomp07svn")]
-    pub comp07svn: u32,
-    #[serde(rename = "sgxtcbcomp08svn")]
-    pub comp08svn: u32,
-    #[serde(rename = "sgxtcbcomp09svn")]
-    pub comp09svn: u32,
-    #[serde(rename = "sgxtcbcomp10svn")]
-    pub comp10svn: u32,
-    #[serde(rename = "sgxtcbcomp11svn")]
-    pub comp11svn: u32,
-    #[serde(rename = "sgxtcbcomp12svn")]
-    pub comp12svn: u32,
-    #[serde(rename = "sgxtcbcomp13svn")]
-    pub comp13svn: u32,
-    #[serde(rename = "sgxtcbcomp14svn")]
-    pub comp14svn: u32,
-    #[serde(rename = "sgxtcbcomp15svn")]
-    pub comp15svn: u32,
-    #[serde(rename = "sgxtcbcomp16svn")]
-    pub comp16svn: u32,
+    #[serde(rename = "sgxtcbcomponents")]
+    pub sgx_components: [TCBComponent; 16],
+
+    #[serde(default, rename = "tdxtcbcomponents")]
+    pub tdx_components: [TCBComponent; 16],
+}
+
+/// A TCB component.
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+pub struct TCBComponent {
+    #[serde(rename = "svn")]
+    pub svn: u32,
+
+    #[serde(default, rename = "category")]
+    pub category: String,
+
+    #[serde(default, rename = "type")]
+    pub tcb_comp_type: String,
 }
 
 /// TCB status.
@@ -759,6 +751,9 @@ pub struct QEIdentity {
 
     #[serde(rename = "tcbLevels")]
     pub tcb_levels: Vec<EnclaveTCBLevel>,
+
+    #[serde(default, rename = "advisoryIDs")]
+    pub advisory_ids: Vec<String>,
 }
 
 impl QEIdentity {
@@ -918,11 +913,12 @@ mod tests {
     #[test]
     fn test_quote_ecdsa_p256_pck_certificatechain() {
         const RAW_QUOTE: &[u8] =
-            include_bytes!("../../../testdata/quotev3_ecdsa_p256_pck_chain.bin");
-        const RAW_TCB_INFO: &[u8] = include_bytes!("../../../testdata/tcb_fmspc_00606A000000.json"); // From PCS response.
+            include_bytes!("../../../testdata/quote_v3_ecdsa_p256_pck_chain.bin");
+        const RAW_TCB_INFO: &[u8] =
+            include_bytes!("../../../testdata/tcb_info_v3_fmspc_00606A000000.json"); // From PCS V4 response.
         const RAW_CERTS: &[u8] =
-            include_bytes!("../../../testdata/tcb_fmspc_00606A000000_certs.pem"); // From SGX-TCB-Info-Issuer-Chain header.
-        const RAW_QE_IDENTITY: &[u8] = include_bytes!("../../../testdata/qe_identity.json"); // From PCS response.
+            include_bytes!("../../../testdata/tcb_info_v3_fmspc_00606A000000_certs.pem"); // From PCS V4 response (TCB-Info-Issuer-Chain header).
+        const RAW_QE_IDENTITY: &[u8] = include_bytes!("../../../testdata/qe_identity_v2.json"); // From PCS V4 response.
 
         let qb = QuoteBundle {
             quote: RAW_QUOTE.to_owned(),
@@ -933,16 +929,16 @@ mod tests {
             },
         };
 
-        let now = Utc.timestamp(1652701082, 0);
+        let now = Utc.timestamp(1671497404, 0);
 
         let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
             verified_quote.identity.mr_signer,
-            "4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459".into()
+            "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a".into()
         );
         assert_eq!(
             verified_quote.identity.mr_enclave,
-            "9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e".into()
+            "68823bc62f409ee33a32ea270cfe45d4b19a6fb3c8570d7bc186cbe062398e8f".into()
         );
     }
 
@@ -953,16 +949,16 @@ mod tests {
 
         let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
 
-        let now = Utc.timestamp(1652701082, 0);
+        let now = Utc.timestamp(1671497404, 0);
 
         let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
             verified_quote.identity.mr_signer,
-            "4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459".into()
+            "9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a".into()
         );
         assert_eq!(
             verified_quote.identity.mr_enclave,
-            "9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e".into()
+            "68823bc62f409ee33a32ea270cfe45d4b19a6fb3c8570d7bc186cbe062398e8f".into()
         );
     }
 
@@ -973,7 +969,7 @@ mod tests {
 
         let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
 
-        let now = Utc.timestamp(1652701082, 0);
+        let now = Utc.timestamp(1671497404, 0);
         let policy = &QuotePolicy {
             fmspc_blacklist: vec!["00606A000000".to_string()],
             ..Default::default()

@@ -15,7 +15,7 @@ import (
 func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require := require.New(t)
 
-	rawQuote, err := os.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
+	rawQuote, err := os.ReadFile("testdata/quote_v3_ecdsa_p256_pck_chain.bin")
 	require.NoError(err, "Read test vector")
 
 	var quote Quote
@@ -24,25 +24,25 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 
 	// Validate quote header.
 	require.EqualValues(3, quote.Header.Version)
-	require.EqualValues(7, quote.Header.QESVN)
-	require.EqualValues(12, quote.Header.PCESVN)
+	require.EqualValues(9, quote.Header.QESVN)
+	require.EqualValues(13, quote.Header.PCESVN)
 	require.EqualValues(QEVendorID_Intel, quote.Header.QEVendorID[:])
 
 	// Validate ISV report.
-	require.EqualValues([]byte{5, 5, 12, 12, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}, quote.ISVReport.CPUSVN[:])
+	require.EqualValues([]byte{8, 9, 14, 13, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}, quote.ISVReport.CPUSVN[:])
 	require.EqualValues(0, quote.ISVReport.MiscSelect)
 	require.EqualValues(sgx.AttributeInit|sgx.AttributeMode64Bit, quote.ISVReport.Attributes.Flags)
 	require.EqualValues(3, quote.ISVReport.Attributes.Xfrm)
-	require.EqualValues("9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e", quote.ISVReport.MRENCLAVE.String())
-	require.EqualValues("4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459", quote.ISVReport.MRSIGNER.String())
+	require.EqualValues("68823bc62f409ee33a32ea270cfe45d4b19a6fb3c8570d7bc186cbe062398e8f", quote.ISVReport.MRENCLAVE.String())
+	require.EqualValues("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a", quote.ISVReport.MRSIGNER.String())
 	require.EqualValues(0, quote.ISVReport.ISVProdID)
 	require.EqualValues(0, quote.ISVReport.ISVSVN)
-	require.EqualValues([]byte{40, 70, 22, 193, 254, 244, 193, 12, 227, 221, 176, 206, 20, 9, 124, 124, 204, 247, 205, 137, 173, 0, 101, 51, 97, 62, 66, 75, 27, 209, 53, 129, 110, 106, 90, 82, 54, 76, 68, 47, 98, 51, 80, 100, 74, 118, 49, 84, 73, 90, 65, 53, 114, 117, 53, 65, 109, 52, 56, 80, 69, 80, 88, 111}, quote.ISVReport.ReportData[:])
+	require.EqualValues([]byte{2, 106, 105, 206, 217, 108, 62, 2, 149, 209, 109, 107, 56, 142, 5, 122, 19, 122, 20, 49, 150, 113, 102, 42, 88, 68, 199, 71, 47, 60, 98, 174, 14, 61, 63, 153, 183, 125, 216, 155, 15, 193, 67, 108, 79, 233, 104, 40, 57, 26, 82, 88, 138, 15, 136, 52, 85, 161, 139, 143, 88, 114, 227, 240}, quote.ISVReport.ReportData[:])
 
 	// Validate quote signature.
 	require.EqualValues(AttestationKeyECDSA_P256, quote.Signature.AttestationKeyType())
 	qs := quote.Signature.(*QuoteSignatureECDSA_P256)
-	require.EqualValues([]byte{5, 5, 12, 12, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}, qs.QEReport.CPUSVN[:])
+	require.EqualValues([]byte{8, 9, 14, 13, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}, qs.QEReport.CPUSVN[:])
 	require.EqualValues(0, qs.QEReport.MiscSelect)
 	require.EqualValues(sgx.AttributeInit|sgx.AttributeMode64Bit|sgx.AttributeProvisionKey, qs.QEReport.Attributes.Flags)
 	require.EqualValues(231, qs.QEReport.Attributes.Xfrm)
@@ -51,11 +51,11 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require.Len(cd.CertificateChain, 3)
 
 	// Prepare TCB bundle needed for verification.
-	rawTCBInfo, err := os.ReadFile("testdata/tcb_fmspc_00606A000000.json") // From PCS response.
+	rawTCBInfo, err := os.ReadFile("testdata/tcb_info_v3_fmspc_00606A000000.json") // From PCS V4 response.
 	require.NoError(err, "Read test vector")
-	rawCerts, err := os.ReadFile("testdata/tcb_fmspc_00606A000000_certs.pem") // From SGX-TCB-Info-Issuer-Chain header.
+	rawCerts, err := os.ReadFile("testdata/tcb_info_v3_fmspc_00606A000000_certs.pem") // From PCS V4 response (TCB-Info-Issuer-Chain header).
 	require.NoError(err, "Read test vector")
-	rawQEIdentity, err := os.ReadFile("testdata/qe_identity.json") // From PCS response.
+	rawQEIdentity, err := os.ReadFile("testdata/qe_identity_v2.json") // From PCS V4 response.
 	require.NoError(err, "Read test vector")
 
 	var tcbInfo SignedTCBInfo
@@ -72,29 +72,38 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 		Certificates: rawCerts,
 	}
 
-	now := time.Unix(1652701082, 0)
+	now := time.Unix(1671497404, 0)
 	verifiedQuote, err := quote.Verify(nil, now, &tcbBundle)
 	require.NoError(err, "Verify quote signature")
-	require.EqualValues("9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e", verifiedQuote.Identity.MrEnclave.String())
-	require.EqualValues("4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459", verifiedQuote.Identity.MrSigner.String())
+	require.EqualValues("68823bc62f409ee33a32ea270cfe45d4b19a6fb3c8570d7bc186cbe062398e8f", verifiedQuote.Identity.MrEnclave.String())
+	require.EqualValues("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a", verifiedQuote.Identity.MrSigner.String())
 
-	// Test X509 certificate not yet valid.
-	now2 := time.Unix(1052695757, 0)
-	_, err = quote.Verify(nil, now2, &tcbBundle)
+	// Test X509 certificate has expired (not after 1891163521).
+	now2a := time.Unix(1891163522, 0)
+	_, err = quote.Verify(nil, now2a, &tcbBundle)
+	require.Error(err, "Quote verification should fail for expired PCK certificates")
+	require.ErrorContains(err, "pcs/quote: failed to verify PCK certificate chain: x509: certificate has expired or is not yet valid")
+
+	// Test X509 certificate not yet valid (not before 1670238721).
+	now2b := time.Unix(1670238720, 0)
+	_, err = quote.Verify(nil, now2b, &tcbBundle)
 	require.Error(err, "Quote verification should fail for PCK certificates not yet valid")
+	require.ErrorContains(err, "pcs/quote: failed to verify PCK certificate chain: x509: certificate has expired or is not yet valid")
 
-	// Test TCB info not yet valid.
-	now3 := time.Unix(1652609357, 0)
+	// Test TCB info not yet valid (qe identity issue date 1671194736).
+	now3 := time.Unix(1671194735, 0)
 	_, err = quote.Verify(nil, now3, &tcbBundle)
 	require.Error(err, "Quote verification should fail for TCB info not yet valid")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: QE identity issue date in the future")
 
-	// Test TCB info expired.
-	now4 := time.Unix(1657879757, 0)
+	// Test TCB info expired (qe identity issue date 1671194736 + validity period 30 * 24 * 60 * 60 = 1673786736).
+	now4 := time.Unix(1673786737, 0)
 	_, err = quote.Verify(nil, now4, &tcbBundle)
 	require.Error(err, "Quote verification should fail for TCB info expired")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: QE identity expired")
 
 	// Test alternate validity from quote policy.
-	now5 := time.Unix(1657879757, 0)
+	now5 := time.Unix(1673786737, 0)
 	quotePolicy := &QuotePolicy{
 		TCBValidityPeriod: 90,
 	}
@@ -108,6 +117,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
 	require.Error(err, "Quote verification should fail for invalid TCB evaluation data number")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: invalid QE evaluation data number")
 
 	// Test blacklisted FMSPC.
 	quotePolicy = &QuotePolicy{
@@ -116,6 +126,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(quotePolicy, now, &tcbBundle)
 	require.Error(err, "Quote verification should fail for blacklisted FMSPCs")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify TCB info: pcs/tcb: invalid TCB info: pcs/tcb: blacklisted FMSPC")
 
 	// Test TCB info certificates missing.
 	tcbBundle2 := TCBBundle{
@@ -125,9 +136,10 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(nil, now, &tcbBundle2)
 	require.Error(err, "Quote verification should fail for bad TCB info certificates")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: unexpected certificate chain length: 0")
 
 	// Test TCB info certificates bad.
-	rawCertsBad, err := os.ReadFile("testdata/tcb_fmspc_00606A000000_certs_bad.pem")
+	rawCertsBad, err := os.ReadFile("testdata/tcb_info_v3_fmspc_00606A000000_certs_bad.pem")
 	require.NoError(err, "Read test vector")
 
 	tcbBundle3 := TCBBundle{
@@ -137,6 +149,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	}
 	_, err = quote.Verify(nil, now, &tcbBundle3)
 	require.Error(err, "Quote verification should fail for bad TCB info certificates")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: TCB signature verification failed")
 
 	// Test invalid TCB info signature.
 	tcbBundle4 := TCBBundle{
@@ -148,6 +161,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	tcbBundle4.TCBInfo.TCBInfo[16] = 'x'
 	_, err = quote.Verify(nil, now, &tcbBundle4)
 	require.Error(err, "Quote verification should fail for bad TCB info signature")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify TCB info: pcs/tcb: invalid TCB info: pcs/tcb: TCB signature verification failed")
 
 	// Test invalid QE identity signature.
 	tcbBundle5 := TCBBundle{
@@ -159,6 +173,7 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	tcbBundle5.QEIdentity.EnclaveIdentity[22] = 'x'
 	_, err = quote.Verify(nil, now, &tcbBundle5)
 	require.Error(err, "Quote verification should fail for bad QE identity signature")
+	require.ErrorContains(err, "pcs/quote: failed to verify TCB bundle: pcs/tcb: failed to verify QE identity: pcs/tcb: invalid QE identity: pcs/tcb: TCB signature verification failed")
 
 	// Test quote bundle.
 	quoteBundle := QuoteBundle{
@@ -168,8 +183,8 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 
 	verifiedQuote, err = quoteBundle.Verify(nil, now)
 	require.NoError(err, "Verify quote bundle")
-	require.EqualValues("9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e", verifiedQuote.Identity.MrEnclave.String())
-	require.EqualValues("4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459", verifiedQuote.Identity.MrSigner.String())
+	require.EqualValues("68823bc62f409ee33a32ea270cfe45d4b19a6fb3c8570d7bc186cbe062398e8f", verifiedQuote.Identity.MrEnclave.String())
+	require.EqualValues("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a", verifiedQuote.Identity.MrSigner.String())
 
 	// Test quote bundle serialization round-trip.
 	rawQB := cbor.Marshal(quoteBundle)
@@ -178,14 +193,14 @@ func TestQuoteECDSA_P256_PCK_CertificateChain(t *testing.T) {
 	require.NoError(err, "QuoteBundle serialization should round-trip")
 	verifiedQuote, err = quoteBundle2.Verify(nil, now)
 	require.NoError(err, "Verify deserialized quote bundle")
-	require.EqualValues("9479d8eddfd7b1b700319419551dc340f688c2ef519a5e18657ecf32981dbd9e", verifiedQuote.Identity.MrEnclave.String())
-	require.EqualValues("4025dab7ebda1fbecc4e3637606e021214d0f41c6d0422fd378b2a8b88818459", verifiedQuote.Identity.MrSigner.String())
+	require.EqualValues("68823bc62f409ee33a32ea270cfe45d4b19a6fb3c8570d7bc186cbe062398e8f", verifiedQuote.Identity.MrEnclave.String())
+	require.EqualValues("9affcfae47b848ec2caf1c49b4b283531e1cc425f93582b36806e52a43d78d1a", verifiedQuote.Identity.MrSigner.String())
 }
 
 func TestQuoteECDSA_P256_EPPID(t *testing.T) {
 	require := require.New(t)
 
-	rawQuote, err := os.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
+	rawQuote, err := os.ReadFile("testdata/quote_v3_ecdsa_p256_eppid.bin")
 	require.NoError(err, "Read test vector")
 
 	var quote Quote
@@ -229,9 +244,9 @@ func TestQuoteECDSA_P256_EPPID(t *testing.T) {
 
 func FuzzQuoteUnmarshal(f *testing.F) {
 	// Seed corpus.
-	raw1, _ := os.ReadFile("testdata/quotev3_ecdsa_p256_pck_chain.bin")
+	raw1, _ := os.ReadFile("testdata/quote_v3_ecdsa_p256_pck_chain.bin")
 	f.Add(raw1)
-	raw2, _ := os.ReadFile("testdata/quotev3_ecdsa_p256_eppid.bin")
+	raw2, _ := os.ReadFile("testdata/quote_v3_ecdsa_p256_eppid.bin")
 	f.Add(raw2)
 
 	// Fuzzing.
