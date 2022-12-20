@@ -106,7 +106,7 @@ readLoop:
 	return m.UnmarshalBinary(sum)
 }
 
-// FromSgxsBytes dervies a MrEnclave from a byte slice containing a `.sgxs`
+// FromSgxsBytes derives a MrEnclave from a byte slice containing a `.sgxs`
 // file.
 func (m *MrEnclave) FromSgxsBytes(data []byte) error {
 	sum := sha256.Sum256(data)

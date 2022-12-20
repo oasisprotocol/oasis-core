@@ -73,6 +73,11 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 	}
 	offset += quoteHeaderLen
 
+	// Support only SGX, as TDX is not needed.
+	if q.Header.TEEType != teeTypeSGX {
+		return fmt.Errorf("pcs/quote: unsupported TEE type: %X", q.Header.TEEType)
+	}
+
 	// ISV Report.
 	if err := q.ISVReport.UnmarshalBinary(data[offset : offset+reportBodyLen]); err != nil {
 		return err
@@ -105,6 +110,10 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 //
 // In case of successful verification it returns the TCB level.
 func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.VerifiedQuote, error) {
+	if q.Header.TEEType != teeTypeSGX {
+		return nil, fmt.Errorf("pcs/quote: unsupported TEE type: %X", q.Header.TEEType)
+	}
+
 	if !bytes.Equal(q.Header.QEVendorID[:], QEVendorID_Intel) {
 		return nil, fmt.Errorf("pcs/quote: unsupported QE vendor: %X", q.Header.QEVendorID)
 	}
@@ -149,6 +158,7 @@ func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.
 // QuoteHeader is a quote header.
 type QuoteHeader struct {
 	Version    uint16
+	TEEType    uint32
 	QESVN      uint16
 	PCESVN     uint16
 	QEVendorID [16]byte
@@ -170,6 +180,12 @@ func (qh *QuoteHeader) UnmarshalBinary(data []byte) error {
 	}
 
 	qh.attestationKeyType = AttestationKeyType(binary.LittleEndian.Uint16(data[2:]))
+
+	qh.TEEType = binary.LittleEndian.Uint32(data[4:])
+	if qh.TEEType != teeTypeSGX {
+		return fmt.Errorf("pcs/quote: unsupported TEE type: %X", qh.TEEType)
+	}
+
 	qh.QESVN = binary.LittleEndian.Uint16(data[8:])
 	qh.PCESVN = binary.LittleEndian.Uint16(data[10:])
 	copy(qh.QEVendorID[:], data[12:])
@@ -179,6 +195,9 @@ func (qh *QuoteHeader) UnmarshalBinary(data []byte) error {
 
 	return nil
 }
+
+// teeTypeSGX is the SGX TEE type.
+const teeTypeSGX uint32 = 0
 
 // QEVendorID_Intel is the Quoting Enclave vendor ID for Intel (939A7233F79C4CA9940A0DB3957F0607).
 var QEVendorID_Intel = []byte{0x93, 0x9a, 0x72, 0x33, 0xf7, 0x9c, 0x4c, 0xa9, 0x94, 0x0a, 0x0d, 0xb3, 0x95, 0x7f, 0x06, 0x07} // nolint: revive

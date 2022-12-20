@@ -15,8 +15,11 @@ import (
 )
 
 const (
+	// requiredTCBInfoID is the required TCB info identifier.
+	requiredTCBInfoID = "SGX"
+
 	// requiredTCBInfoVersion is the required TCB info version.
-	requiredTCBInfoVersion = 2
+	requiredTCBInfoVersion = 3
 
 	// requiredQEID is the required QE identity enclave ID.
 	requiredQEID = "QE"
@@ -184,8 +187,16 @@ func (st *SignedTCBInfo) open(ts time.Time, policy *QuotePolicy, pk *ecdsa.Publi
 	return &tcbInfo, nil
 }
 
+// TDXModule is a representation of the properties of Intel’s TDX SEAM module.
+type TDXModule struct {
+	MRSIGNER       string  `json:"mrsigner"`
+	Attributes     [8]byte `json:"attributes"`
+	AttributesMask [8]byte `json:"attributesMask"`
+}
+
 // TCBInfo is the TCB info body.
 type TCBInfo struct {
+	ID                      string     `json:"id"`
 	Version                 int        `json:"version"`
 	IssueDate               string     `json:"issueDate"`
 	NextUpdate              string     `json:"nextUpdate"`
@@ -193,10 +204,15 @@ type TCBInfo struct {
 	PCEID                   string     `json:"pceId"`
 	TCBType                 int        `json:"tcbType"`
 	TCBEvaluationDataNumber uint32     `json:"tcbEvaluationDataNumber"`
+	TDXModule               TDXModule  `json:"tdxModule,omitempty"`
 	TCBLevels               []TCBLevel `json:"tcbLevels"`
 }
 
 func (ti *TCBInfo) validate(ts time.Time, policy *QuotePolicy) error {
+	if ti.ID != requiredTCBInfoID {
+		return fmt.Errorf("pcs/tcb: unexpected TCB info identifier: %s", ti.ID)
+	}
+
 	if ti.Version != requiredTCBInfoVersion {
 		return fmt.Errorf("pcs/tcb: unexpected TCB info version: %d", ti.Version)
 	}
@@ -328,30 +344,23 @@ func (tle *TCBOutOfDateError) Error() string {
 	return fmt.Sprintf("%s TCB is not up to date (likely needs upgrade): %s", tle.Kind, tle.Status)
 }
 
+// TCBComponent is a TCB component.
+type TCBComponent struct {
+	SVN      int32  `json:"svn"`
+	Category string `json:"category,omitempty"`
+	Type     string `json:"type,omitempty"`
+}
+
 // TCBLevel is a platform TCB level.
 type TCBLevel struct {
 	TCB struct {
-		PCESVN    int32 `json:"pcesvn"`
-		Comp01SVN int32 `json:"sgxtcbcomp01svn"`
-		Comp02SVN int32 `json:"sgxtcbcomp02svn"`
-		Comp03SVN int32 `json:"sgxtcbcomp03svn"`
-		Comp04SVN int32 `json:"sgxtcbcomp04svn"`
-		Comp05SVN int32 `json:"sgxtcbcomp05svn"`
-		Comp06SVN int32 `json:"sgxtcbcomp06svn"`
-		Comp07SVN int32 `json:"sgxtcbcomp07svn"`
-		Comp08SVN int32 `json:"sgxtcbcomp08svn"`
-		Comp09SVN int32 `json:"sgxtcbcomp09svn"`
-		Comp10SVN int32 `json:"sgxtcbcomp10svn"`
-		Comp11SVN int32 `json:"sgxtcbcomp11svn"`
-		Comp12SVN int32 `json:"sgxtcbcomp12svn"`
-		Comp13SVN int32 `json:"sgxtcbcomp13svn"`
-		Comp14SVN int32 `json:"sgxtcbcomp14svn"`
-		Comp15SVN int32 `json:"sgxtcbcomp15svn"`
-		Comp16SVN int32 `json:"sgxtcbcomp16svn"`
+		PCESVN        int32            `json:"pcesvn"`
+		SGXComponents [16]TCBComponent `json:"sgxtcbcomponents"`
+		TDXComponents [16]TCBComponent `json:"tdxtcbcomponents,omitempty"`
 	} `json:"tcb"`
 	Date        string    `json:"tcbDate"`
 	Status      TCBStatus `json:"tcbStatus"`
-	AdvisoryIDs []string  `json:"advisoryIDs"`
+	AdvisoryIDs []string  `json:"advisoryIDs,omitempty"`
 }
 
 // matches performs the SVN comparison.
@@ -360,26 +369,9 @@ func (tl *TCBLevel) matches(tcbCompSvn [16]int32, pcesvn int32) bool {
 	//    16) with the corresponding values in the TCB Level. If all SGX TCB Comp SVNs in the
 	//    certificate are greater or equal to the corresponding values in TCB Level, go to b,
 	//    otherwise move to the next item on TCB Levels list.
-	for i, svn := range []int32{
-		tl.TCB.Comp01SVN,
-		tl.TCB.Comp02SVN,
-		tl.TCB.Comp03SVN,
-		tl.TCB.Comp04SVN,
-		tl.TCB.Comp05SVN,
-		tl.TCB.Comp06SVN,
-		tl.TCB.Comp07SVN,
-		tl.TCB.Comp08SVN,
-		tl.TCB.Comp09SVN,
-		tl.TCB.Comp10SVN,
-		tl.TCB.Comp11SVN,
-		tl.TCB.Comp12SVN,
-		tl.TCB.Comp13SVN,
-		tl.TCB.Comp14SVN,
-		tl.TCB.Comp15SVN,
-		tl.TCB.Comp16SVN,
-	} {
+	for i, comp := range tl.TCB.SGXComponents {
 		// At least one SVN is lower, no match.
-		if tcbCompSvn[i] < svn {
+		if tcbCompSvn[i] < comp.SVN {
 			return false
 		}
 	}
@@ -490,6 +482,7 @@ type QEIdentity struct {
 	MRSIGNER                string            `json:"mrsigner"`
 	ISVProdID               uint16            `json:"isvprodid"`
 	TCBLevels               []EnclaveTCBLevel `json:"tcbLevels"`
+	AdvisoryIDs             []int             `json:"advisoryIDs,omitempty"`
 }
 
 func (qe *QEIdentity) validate(ts time.Time, policy *QuotePolicy) error {
