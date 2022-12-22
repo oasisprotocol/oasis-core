@@ -33,7 +33,11 @@ use crate::{
     enclave_rpc::{
         demux::Demux as RpcDemux,
         dispatcher::Dispatcher as RpcDispatcher,
-        types::{Message as RpcMessage, Request as RpcRequest},
+        session::SessionInfo,
+        types::{
+            Kind, Kind as RpcKind, Message as RpcMessage, Request as RpcRequest,
+            Response as RpcResponse,
+        },
         Context as RpcContext,
     },
     policy::PolicyVerifier,
@@ -334,28 +338,23 @@ impl Dispatcher {
             }
 
             // RPC and transaction requests.
-            Body::RuntimeRPCCallRequest { request } => {
-                // RPC call.
-                self.dispatch_rpc(
-                    &state.rpc_demux,
-                    &state.rpc_dispatcher,
-                    &state.protocol,
-                    &state.consensus_verifier,
-                    ctx,
-                    request,
-                )
-                .await
+            Body::RuntimeRPCCallRequest { request, kind } => {
+                debug!(self.logger, "Received RPC call request";
+                    "kind" => ?kind,
+                );
+
+                match kind {
+                    Kind::NoiseSession => self.dispatch_secure_rpc(ctx, state, request).await,
+                    Kind::InsecureQuery => self.dispatch_insecure_rpc(ctx, state, request).await,
+                    Kind::LocalQuery => self.dispatch_local_rpc(ctx, state, request).await,
+                }
             }
             Body::RuntimeLocalRPCCallRequest { request } => {
-                // Local RPC call.
-                self.dispatch_local_rpc(
-                    &state.rpc_dispatcher,
-                    &state.protocol,
-                    &state.consensus_verifier,
-                    ctx,
-                    request,
-                )
-                .await
+                debug!(self.logger, "Received RPC call request";
+                    "kind" => ?Kind::LocalQuery,
+                );
+
+                self.dispatch_local_rpc(ctx, state, request).await
             }
             Body::RuntimeExecuteTxBatchRequest {
                 mode,
@@ -823,20 +822,20 @@ impl Dispatcher {
         .unwrap() // Propagate panics during transaction dispatch.
     }
 
-    async fn dispatch_rpc(
+    async fn dispatch_secure_rpc(
         &self,
-        rpc_demux: &Arc<Mutex<RpcDemux>>,
-        rpc_dispatcher: &Arc<RpcDispatcher>,
-        protocol: &Arc<Protocol>,
-        consensus_verifier: &Arc<dyn Verifier>,
         ctx: Context,
+        state: State,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
-        debug!(self.logger, "Received RPC call request");
+        // Make sure to abort the process on panic during RPC processing as that indicates a
+        // serious problem and should make sure to clean up the process.
+        let _guard = AbortOnPanic;
 
         // Process frame.
         let mut buffer = vec![];
-        let result = rpc_demux
+        let result = state
+            .rpc_demux
             .lock()
             .unwrap()
             .process_frame(request, &mut buffer)
@@ -869,35 +868,20 @@ impl Dispatcher {
                     }
 
                     // Request, dispatch.
-                    let ctx = ctx.freeze();
-                    let rak = self.rak.clone();
-                    let protocol = protocol.clone();
-                    let consensus_verifier = consensus_verifier.clone();
-                    let rpc_dispatcher = rpc_dispatcher.clone();
-
-                    let response = tokio::task::spawn_blocking(move || {
-                        let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
-                            Context::create_child(&ctx),
-                            protocol.clone(),
-                        ));
-                        let rpc_ctx = RpcContext::new(
-                            ctx.clone(),
-                            rak,
-                            session_info,
-                            consensus_verifier,
-                            &untrusted_local,
-                        );
-                        let response = rpc_dispatcher.dispatch(req, rpc_ctx);
-                        RpcMessage::Response(response)
-                    })
-                    .await?;
+                    let response = self
+                        .dispatch_rpc(ctx, req, RpcKind::NoiseSession, session_info, &state)
+                        .await?;
+                    let response = RpcMessage::Response(response);
 
                     // Note: MKVS commit is omitted, this MUST be global side-effect free.
 
-                    debug!(self.logger, "RPC call dispatch complete");
+                    debug!(self.logger, "RPC call dispatch complete";
+                        "kind" => ?Kind::NoiseSession,
+                    );
 
                     let mut buffer = vec![];
-                    rpc_demux
+                    state
+                        .rpc_demux
                         .lock()
                         .unwrap()
                         .write_message(session_id, response, &mut buffer)
@@ -910,7 +894,8 @@ impl Dispatcher {
                 RpcMessage::Close => {
                     // Session close.
                     let mut buffer = vec![];
-                    rpc_demux
+                    state
+                        .rpc_demux
                         .lock()
                         .unwrap()
                         .close(session_id, &mut buffer)
@@ -931,54 +916,93 @@ impl Dispatcher {
         }
     }
 
-    async fn dispatch_local_rpc(
-        self: &Arc<Self>,
-        rpc_dispatcher: &Arc<RpcDispatcher>,
-        protocol: &Arc<Protocol>,
-        consensus_verifier: &Arc<dyn Verifier>,
+    async fn dispatch_insecure_rpc(
+        &self,
         ctx: Context,
+        state: State,
+        request: Vec<u8>,
+    ) -> Result<Body, Error> {
+        // Make sure to abort the process on panic during RPC processing as that indicates a
+        // serious problem and should make sure to clean up the process.
+        let _guard = AbortOnPanic;
+
+        let request: RpcRequest = cbor::from_slice(&request)
+            .map_err(|_| Error::new("rhp/dispatcher", 1, "malformed request"))?;
+
+        // Request, dispatch.
+        let response = self
+            .dispatch_rpc(ctx, request, RpcKind::InsecureQuery, None, &state)
+            .await?;
+        let response = cbor::to_vec(response);
+
+        // Note: MKVS commit is omitted, this MUST be global side-effect free.
+
+        debug!(self.logger, "RPC call dispatch complete";
+            "kind" => ?Kind::InsecureQuery,
+        );
+
+        Ok(Body::RuntimeRPCCallResponse { response })
+    }
+
+    async fn dispatch_local_rpc(
+        &self,
+        ctx: Context,
+        state: State,
         request: Vec<u8>,
     ) -> Result<Body, Error> {
         // Make sure to abort the process on panic during local RPC processing as that indicates a
         // serious problem and should make sure to clean up the process.
         let _guard = AbortOnPanic;
 
-        debug!(self.logger, "Received local RPC call request");
-
-        let req: RpcRequest = cbor::from_slice(&request)
+        let request = cbor::from_slice(&request)
             .map_err(|_| Error::new("rhp/dispatcher", 1, "malformed request"))?;
 
         // Request, dispatch.
-        let ctx = ctx.freeze();
-        let protocol = protocol.clone();
-        let dispatcher = self.clone();
-        let rpc_dispatcher = rpc_dispatcher.clone();
-        let consensus_verifier = consensus_verifier.clone();
+        let response = self
+            .dispatch_rpc(ctx, request, RpcKind::LocalQuery, None, &state)
+            .await?;
+        let response = RpcMessage::Response(response);
+        let response = cbor::to_vec(response);
 
-        tokio::task::spawn_blocking(move || {
+        debug!(self.logger, "RPC call dispatch complete";
+            "kind" => ?Kind::LocalQuery,
+        );
+
+        Ok(Body::RuntimeLocalRPCCallResponse { response })
+    }
+
+    async fn dispatch_rpc(
+        &self,
+        ctx: Context,
+        request: RpcRequest,
+        kind: RpcKind,
+        session_info: Option<Arc<SessionInfo>>,
+        state: &State,
+    ) -> Result<RpcResponse, Error> {
+        let ctx = ctx.freeze();
+        let rak = self.rak.clone();
+        let protocol = state.protocol.clone();
+        let consensus_verifier = state.consensus_verifier.clone();
+        let rpc_dispatcher = state.rpc_dispatcher.clone();
+
+        let response = tokio::task::spawn_blocking(move || {
             let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
                 Context::create_child(&ctx),
                 protocol.clone(),
             ));
             let rpc_ctx = RpcContext::new(
                 ctx.clone(),
-                dispatcher.rak.clone(),
-                None,
+                rak,
+                session_info,
                 consensus_verifier,
                 &untrusted_local,
             );
-            let response = rpc_dispatcher.dispatch_local(req, rpc_ctx);
-            let response = RpcMessage::Response(response);
 
-            // Note: MKVS commit is omitted, this MUST be global side-effect free.
-
-            debug!(dispatcher.logger, "Local RPC call dispatch complete");
-
-            let response = cbor::to_vec(response);
-            Ok(Body::RuntimeLocalRPCCallResponse { response })
+            rpc_dispatcher.dispatch(rpc_ctx, request, kind)
         })
-        .await
-        .unwrap() // Propagate panics during local RPC dispatch.
+        .await?;
+
+        Ok(response)
     }
 
     fn handle_km_policy_update(

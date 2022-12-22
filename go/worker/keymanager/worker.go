@@ -144,36 +144,44 @@ func (w *Worker) Initialized() <-chan struct{} {
 	return w.initCh
 }
 
-func (w *Worker) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
-	// Handle access control as only peers on the access list can call this method.
-	peerID, ok := rpc.PeerIDFromContext(ctx)
-	if !ok {
-		return nil, fmt.Errorf("not authorized")
-	}
+func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.Kind) ([]byte, error) {
+	switch kind {
+	case enclaverpc.KindNoiseSession:
+		// Handle access control as only peers on the access list can call this method.
+		peerID, ok := rpc.PeerIDFromContext(ctx)
+		if !ok {
+			return nil, fmt.Errorf("not authorized")
+		}
 
-	// Peek into the frame data to extract the method.
-	var frame enclaverpc.Frame
-	if err := cbor.Unmarshal(data, &frame); err != nil {
-		return nil, fmt.Errorf("malformed request")
-	}
+		// Peek into the frame data to extract the method.
+		var frame enclaverpc.Frame
+		if err := cbor.Unmarshal(data, &frame); err != nil {
+			return nil, fmt.Errorf("malformed request")
+		}
 
-	// Note that the untrusted plaintext is also checked in the enclave, so if the node lied about
-	// what method it's using, we will know and the request will get rejected.
-	switch frame.UntrustedPlaintext {
-	case "":
-		// Anyone can connect.
-	case getPublicKeyRequestMethod, getPublicEphemeralKeyRequestMethod:
-		// Anyone can get public keys.
-	default:
-		if _, privatePeered := w.privatePeers[peerID]; !privatePeered {
-			// Defer to access control to check the policy.
-			w.RLock()
-			_, allowed := w.accessList[peerID]
-			w.RUnlock()
-			if !allowed {
-				return nil, fmt.Errorf("not authorized")
+		// Note that the untrusted plaintext is also checked in the enclave, so if the node lied about
+		// what method it's using, we will know and the request will get rejected.
+		switch frame.UntrustedPlaintext {
+		case "":
+			// Anyone can connect.
+		case getPublicKeyRequestMethod, getPublicEphemeralKeyRequestMethod:
+			// Anyone can get public keys.
+		default:
+			if _, privatePeered := w.privatePeers[peerID]; !privatePeered {
+				// Defer to access control to check the policy.
+				w.RLock()
+				_, allowed := w.accessList[peerID]
+				w.RUnlock()
+				if !allowed {
+					return nil, fmt.Errorf("not authorized")
+				}
 			}
 		}
+	case enclaverpc.KindInsecureQuery:
+		// Insecure queries are always allowed.
+	default:
+		// Local queries are not allowed.
+		return nil, fmt.Errorf("unsupported RPC kind")
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, rpcCallTimeout)
@@ -189,6 +197,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte) ([]byte, error) {
 	req := &protocol.Body{
 		RuntimeRPCCallRequest: &protocol.RuntimeRPCCallRequest{
 			Request: data,
+			Kind:    kind,
 		},
 	}
 

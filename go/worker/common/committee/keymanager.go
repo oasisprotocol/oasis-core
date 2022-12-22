@@ -77,6 +77,7 @@ func (km *KeyManagerClientWrapper) SetKeyManagerID(id *common.Namespace) {
 func (km *KeyManagerClientWrapper) CallEnclave(
 	ctx context.Context,
 	data []byte,
+	kind enclaverpc.Kind,
 	pf *enclaverpc.PeerFeedback,
 ) ([]byte, error) {
 	km.l.Lock()
@@ -113,6 +114,7 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 
 	rsp, nextPf, err := cli.CallEnclave(ctx, &keymanagerP2P.CallEnclaveRequest{
 		Data: data,
+		Kind: kind,
 	})
 	if err != nil {
 		return nil, err

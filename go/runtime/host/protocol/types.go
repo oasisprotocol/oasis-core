@@ -238,6 +238,8 @@ type RuntimeCapabilityTEERakQuoteResponse struct {
 type RuntimeRPCCallRequest struct {
 	// Request.
 	Request []byte `json:"request"`
+	// Kind is the type of RPC call.
+	Kind enclaverpc.Kind `json:"kind,omitempty"`
 }
 
 // RuntimeRPCCallResponse is a worker RPC call response message body.
@@ -442,8 +444,9 @@ type RuntimeConsensusSyncRequest struct {
 
 // HostRPCCallRequest is a host RPC call request message body.
 type HostRPCCallRequest struct {
-	Endpoint string `json:"endpoint"`
-	Request  []byte `json:"request"`
+	Endpoint string          `json:"endpoint"`
+	Request  []byte          `json:"request"`
+	Kind     enclaverpc.Kind `json:"kind,omitempty"`
 
 	// PeerFeedback contains optional peer feedback for the last RPC call under the given endpoint.
 	//

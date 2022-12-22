@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/p2p/peermgmt"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
 // KeyManagerProtocolID is a unique protocol identifier for the keymanager protocol.
@@ -23,7 +24,8 @@ const (
 
 // CallEnclaveRequest is a CallEnclave request.
 type CallEnclaveRequest struct {
-	Data []byte `json:"data"`
+	Data []byte          `json:"data"`
+	Kind enclaverpc.Kind `json:"kind,omitempty"`
 }
 
 // CallEnclaveResponse is a response to a CallEnclave request.

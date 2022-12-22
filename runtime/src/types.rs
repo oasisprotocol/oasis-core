@@ -141,6 +141,7 @@ pub enum Body {
     },
     RuntimeRPCCallRequest {
         request: Vec<u8>,
+        kind: enclave_rpc::types::Kind,
     },
     RuntimeRPCCallResponse {
         response: Vec<u8>,
@@ -213,6 +214,7 @@ pub enum Body {
     HostRPCCallRequest {
         endpoint: String,
         request: Vec<u8>,
+        kind: enclave_rpc::types::Kind,
         #[cbor(optional, rename = "pf")]
         peer_feedback: Option<enclave_rpc::types::PeerFeedback>,
     },

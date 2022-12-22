@@ -9,12 +9,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
 // KeyManager is the keymanager service interface.
 type KeyManager interface {
 	// CallEnclave calls the keymanager enclave with the provided data.
-	CallEnclave(ctx context.Context, data []byte) ([]byte, error)
+	CallEnclave(ctx context.Context, data []byte, kind enclaverpc.Kind) ([]byte, error)
 }
 
 type service struct {
@@ -38,7 +39,7 @@ func (s *service) HandleRequest(ctx context.Context, method string, body cbor.Ra
 }
 
 func (s *service) handleCallEnclave(ctx context.Context, request *CallEnclaveRequest) (*CallEnclaveResponse, error) {
-	data, err := s.km.CallEnclave(ctx, request.Data)
+	data, err := s.km.CallEnclave(ctx, request.Data, request.Kind)
 	if err != nil {
 		return nil, err
 	}

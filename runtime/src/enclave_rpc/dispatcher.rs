@@ -1,14 +1,14 @@
 //! RPC dispatcher.
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use thiserror::Error;
 
 use crate::{common::sgx::QuotePolicy, consensus::keymanager::SignedPolicySGX};
 
 use super::{
     context::Context,
-    types::{Body, Request, Response},
+    types::{Body, Kind, Request, Response},
 };
 
 /// Dispatch error.
@@ -16,6 +16,8 @@ use super::{
 enum DispatchError {
     #[error("method not found: {method:?}")]
     MethodNotFound { method: String },
+    #[error("invalid RPC kind: {method:?} ({kind:?})")]
+    InvalidRpcKind { method: String, kind: Kind },
 }
 
 /// Custom context initializer.
@@ -38,6 +40,8 @@ where
 pub struct MethodDescriptor {
     /// Method name.
     pub name: String,
+    /// Specifies which kind of RPC is allowed to call the method.
+    pub kind: Kind,
 }
 
 /// Handler for a RPC method.
@@ -115,12 +119,17 @@ impl Method {
     }
 
     /// Return method name.
-    pub fn get_name(&self) -> &String {
+    fn get_name(&self) -> &String {
         &self.dispatcher.get_descriptor().name
     }
 
+    /// Return RPC call kind.
+    fn get_kind(&self) -> Kind {
+        self.dispatcher.get_descriptor().kind
+    }
+
     /// Dispatch a request.
-    pub fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response> {
+    fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response> {
         self.dispatcher.dispatch(request, ctx)
     }
 }
@@ -135,8 +144,6 @@ pub type KeyManagerQuotePolicyHandler = dyn Fn(QuotePolicy) + Send + Sync;
 pub struct Dispatcher {
     /// Registered RPC methods.
     methods: HashMap<String, Method>,
-    /// Registered local RPC methods.
-    local_methods: HashMap<String, Method>,
     /// Registered key manager policy handler.
     km_policy_handler: Option<Box<KeyManagerPolicyHandler>>,
     /// Registered key manager quote policy handler.
@@ -147,11 +154,8 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     /// Register a new method in the dispatcher.
-    pub fn add_method(&mut self, method: Method, is_local: bool) {
-        match is_local {
-            false => self.methods.insert(method.get_name().clone(), method),
-            true => self.local_methods.insert(method.get_name().clone(), method),
-        };
+    pub fn add_method(&mut self, method: Method) {
+        self.methods.insert(method.get_name().clone(), method);
     }
 
     /// Configure context initializer.
@@ -163,12 +167,12 @@ impl Dispatcher {
     }
 
     /// Dispatch request.
-    pub fn dispatch(&self, request: Request, mut ctx: Context) -> Response {
+    pub fn dispatch(&self, mut ctx: Context, request: Request, kind: Kind) -> Response {
         if let Some(ref ctx_init) = self.ctx_initializer {
             ctx_init.init(&mut ctx);
         }
 
-        match self.dispatch_fallible(request, &mut ctx, false) {
+        match self.dispatch_fallible(&mut ctx, request, kind) {
             Ok(response) => response,
             Err(error) => Response {
                 body: Body::Error(format!("{}", error)),
@@ -178,40 +182,29 @@ impl Dispatcher {
 
     fn dispatch_fallible(
         &self,
-        request: Request,
         ctx: &mut Context,
-        is_local: bool,
+        request: Request,
+        kind: Kind,
     ) -> Result<Response> {
-        let vtbl = match is_local {
-            false => &self.methods,
-            true => &self.local_methods,
+        let method = match self.methods.get(&request.method) {
+            Some(method) => method,
+            None => bail!(DispatchError::MethodNotFound {
+                method: request.method,
+            }),
         };
 
-        if let Some(ref ctx_init) = self.ctx_initializer {
-            ctx_init.init(ctx);
-        }
-
-        match vtbl.get(&request.method) {
-            Some(dispatcher) => dispatcher.dispatch(request, ctx),
-            None => Err(DispatchError::MethodNotFound {
+        match (method.get_kind(), kind) {
+            (Kind::NoiseSession, Kind::NoiseSession) => {}
+            (Kind::InsecureQuery, Kind::InsecureQuery) => {}
+            (Kind::InsecureQuery, Kind::NoiseSession) => {}
+            (Kind::LocalQuery, Kind::LocalQuery) => {}
+            _ => bail!(DispatchError::InvalidRpcKind {
                 method: request.method,
-            }
-            .into()),
-        }
-    }
+                kind,
+            }),
+        };
 
-    /// Dispatch local request.
-    pub fn dispatch_local(&self, request: Request, mut ctx: Context) -> Response {
-        if let Some(ref ctx_init) = self.ctx_initializer {
-            ctx_init.init(&mut ctx);
-        }
-
-        match self.dispatch_fallible(request, &mut ctx, true) {
-            Ok(response) => response,
-            Err(error) => Response {
-                body: Body::Error(format!("{}", error)),
-            },
-        }
+        method.dispatch(request, ctx)
     }
 
     /// Handle key manager policy update.
