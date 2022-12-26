@@ -1022,14 +1022,12 @@ impl Dispatcher {
         let runtime_id = state.protocol.get_host_info().runtime_id;
         let key_manager = state
             .policy_verifier
-            .key_manager(ctx.clone(), &runtime_id, true)?;
+            .key_manager(ctx.clone(), &runtime_id)?;
         let untrusted_policy = cbor::from_slice(&signed_policy_raw).map_err(|err| anyhow!(err))?;
-        let published_policy = state.policy_verifier.verify_key_manager_policy(
-            ctx,
-            untrusted_policy,
-            key_manager,
-            false,
-        )?;
+        let published_policy =
+            state
+                .policy_verifier
+                .verify_key_manager_policy(ctx, untrusted_policy, key_manager)?;
 
         // Dispatch the local RPC call.
         state
@@ -1058,14 +1056,11 @@ impl Dispatcher {
         let runtime_id = state.protocol.get_host_info().runtime_id;
         let key_manager = state
             .policy_verifier
-            .key_manager(ctx.clone(), &runtime_id, true)?;
-        let policy = state.policy_verifier.verify_quote_policy(
-            ctx,
-            quote_policy,
-            &key_manager,
-            None,
-            false,
-        )?;
+            .key_manager(ctx.clone(), &runtime_id)?;
+        let policy =
+            state
+                .policy_verifier
+                .verify_quote_policy(ctx, quote_policy, &key_manager, None)?;
 
         // Dispatch the local RPC call.
         state.rpc_dispatcher.handle_km_quote_policy_update(policy);

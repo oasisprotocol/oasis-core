@@ -80,7 +80,6 @@ impl Policy {
             ioctx,
             untrusted_policy,
             key_manager,
-            false,
         )?;
         let new_policy = CachedPolicy::parse(published_policy, policy_raw)?;
 

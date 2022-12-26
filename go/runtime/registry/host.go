@@ -29,8 +29,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
-// notifyTimeout is the maximum time to wait for a notification to be processed by the runtime.
-const notifyTimeout = 10 * time.Second
+const (
+	// notifyTimeout is the maximum time to wait for a notification to be processed by the runtime.
+	notifyTimeout = 10 * time.Second
+
+	// retryInterval is the time interval used between failed key manager updates.
+	retryInterval = time.Second
+)
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.
 type RuntimeHostNode struct {
@@ -538,22 +543,49 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	}
 	defer evSub.Close()
 
-	// Fetch runtime info so that we know which features the runtime supports.
-	rtInfo, err := n.host.GetInfo(ctx)
-	if err != nil {
-		n.logger.Error("failed to fetch runtime info",
-			"err", err,
-		)
-		return
-	}
+	retryTicker := time.NewTicker(retryInterval)
+	defer retryTicker.Stop()
+
+	var (
+		policyUpdated      = true
+		quotePolicyUpdated = true
+		runtimeInfoUpdated = false
+	)
 
 	var (
 		st *keymanager.Status
 		sc *node.SGXConstraints
 		vi *registry.VersionInfo
+		ri *protocol.RuntimeInfoResponse
 	)
 
 	for {
+		// Fetch runtime info so that we know which features the current runtime version supports.
+		if !runtimeInfoUpdated {
+			if ri, err = n.host.GetInfo(ctx); err != nil {
+				n.logger.Error("failed to fetch runtime info",
+					"err", err,
+				)
+				return
+			}
+			runtimeInfoUpdated = true
+		}
+
+		// Make sure that we actually have a new policy.
+		if !policyUpdated && st != nil && st.Policy != nil {
+			if err = n.updateKeyManagerPolicy(ctx, st.Policy); err == nil {
+				policyUpdated = true
+			}
+		}
+
+		// Make sure that we actually have a new quote policy and that the current runtime version
+		// supports quote policy updates.
+		if !quotePolicyUpdated && sc != nil && sc.Policy != nil && ri.Features.KeyManagerQuotePolicyUpdates {
+			if err = n.updateKeyManagerQuotePolicy(ctx, sc.Policy); err == nil {
+				quotePolicyUpdated = true
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			return
@@ -564,13 +596,8 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 			}
 			st = newSt
 
-			n.updateKeyManagerPolicy(ctx, st.Policy)
+			policyUpdated = false
 		case epoch := <-epoCh:
-			// Skip quote policy updates if the runtime doesn't support them.
-			if !rtInfo.Features.KeyManagerQuotePolicyUpdates {
-				continue
-			}
-
 			// Check if the key manager was redeployed, as that is when a new quote policy might
 			// take effect.
 			dsc, err := n.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
@@ -606,24 +633,27 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 			}
 			sc = &newSc
 
-			n.updateKeyManagerQuotePolicy(ctx, sc.Policy)
+			quotePolicyUpdated = false
 		case ev := <-evCh:
 			// Runtime host changes, make sure to update the policies if runtime is restarted.
 			if ev.Started == nil && ev.Updated == nil {
 				continue
 			}
-			// Make sure that we actually have policies.
-			if st != nil {
-				n.updateKeyManagerPolicy(ctx, st.Policy)
-			}
-			if sc != nil {
-				n.updateKeyManagerQuotePolicy(ctx, sc.Policy)
-			}
+
+			policyUpdated = false
+			quotePolicyUpdated = false
+			runtimeInfoUpdated = false
+		case <-retryTicker.C:
+			// Retry updates if some of them failed. When using Tendermint as a backend service
+			// the host will see the new state one block before the consensus verifier as the former
+			// sees the block H after it is executed while the latter needs to trust the block H
+			// first by verifying the signatures which are only available after the block H+1
+			// finalizes.
 		}
 	}
 }
 
-func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *keymanager.SignedPolicySGX) {
+func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *keymanager.SignedPolicySGX) error {
 	n.logger.Debug("got key manager policy update", "policy", policy)
 
 	raw := cbor.Marshal(policy)
@@ -638,13 +668,14 @@ func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy
 		n.logger.Error("failed dispatching key manager policy update to runtime",
 			"err", err,
 		)
-		return
+		return err
 	}
 
 	n.logger.Debug("key manager policy update dispatched")
+	return nil
 }
 
-func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(ctx context.Context, policy *quote.Policy) {
+func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(ctx context.Context, policy *quote.Policy) error {
 	n.logger.Debug("got key manager quote policy update", "policy", policy)
 
 	req := &protocol.Body{RuntimeKeyManagerQuotePolicyUpdateRequest: &protocol.RuntimeKeyManagerQuotePolicyUpdateRequest{
@@ -658,9 +689,10 @@ func (n *runtimeHostNotifier) updateKeyManagerQuotePolicy(ctx context.Context, p
 		n.logger.Error("failed dispatching key manager quote policy update to runtime",
 			"err", err,
 		)
-		return
+		return err
 	}
 	n.logger.Debug("key manager quote policy update dispatched")
+	return nil
 }
 
 func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
