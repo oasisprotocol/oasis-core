@@ -17,7 +17,6 @@ use crate::{
             registry::ImmutableState as RegistryState,
         },
         verifier::Verifier,
-        HEIGHT_LATEST,
     },
 };
 
@@ -30,8 +29,12 @@ pub enum PolicyVerifierError {
     NoDeployment,
     #[error("bad TEE constraints")]
     BadTEEConstraints,
+    #[error("policy mismatch")]
+    PolicyMismatch,
     #[error("policy hasn't been published")]
     PolicyNotPublished,
+    #[error("status hasn't been published")]
+    StatusNotPublished,
     #[error("configured runtime hardware mismatch")]
     HardwareMismatch,
     #[error("runtime doesn't use key manager")]
@@ -62,16 +65,9 @@ impl PolicyVerifier {
         ctx: Arc<Context>,
         runtime_id: &Namespace,
         version: Option<Version>,
-        use_latest_state: bool,
     ) -> Result<QuotePolicy> {
-        // Verify to the latest height, if needed.
-        let consensus_state = if use_latest_state {
-            self.consensus_verifier.latest_state()?
-        } else {
-            self.consensus_verifier.state_at(HEIGHT_LATEST)?
-        };
-
         // Fetch quote policy from the consensus layer using the given or the active version.
+        let consensus_state = self.consensus_verifier.latest_state()?;
         let registry_state = RegistryState::new(&consensus_state);
         let runtime = registry_state
             .runtime(Context::create_child(&ctx), runtime_id)?
@@ -111,9 +107,8 @@ impl PolicyVerifier {
         policy: QuotePolicy,
         runtime_id: &Namespace,
         version: Option<Version>,
-        use_latest_state: bool,
     ) -> Result<QuotePolicy> {
-        let published_policy = self.quote_policy(ctx, runtime_id, version, use_latest_state)?;
+        let published_policy = self.quote_policy(ctx, runtime_id, version)?;
 
         if policy != published_policy {
             debug!(
@@ -122,7 +117,7 @@ impl PolicyVerifier {
                 "untrusted" => ?policy,
                 "published" => ?published_policy,
             );
-            return Err(PolicyVerifierError::PolicyNotPublished.into());
+            return Err(PolicyVerifierError::PolicyMismatch.into());
         }
 
         Ok(published_policy)
@@ -133,20 +128,13 @@ impl PolicyVerifier {
         &self,
         ctx: Arc<Context>,
         key_manager: Namespace,
-        use_latest_state: bool,
     ) -> Result<SignedPolicySGX> {
-        // Verify to the latest height, if needed.
-        let consensus_state = if use_latest_state {
-            self.consensus_verifier.latest_state()?
-        } else {
-            self.consensus_verifier.state_at(HEIGHT_LATEST)?
-        };
-
         // Fetch policy from the consensus layer.
+        let consensus_state = self.consensus_verifier.latest_state()?;
         let km_state = KeyManagerState::new(&consensus_state);
         let policy = km_state
             .status(Context::create_child(&ctx), key_manager)?
-            .ok_or(PolicyVerifierError::PolicyNotPublished)?
+            .ok_or(PolicyVerifierError::StatusNotPublished)?
             .policy
             .ok_or(PolicyVerifierError::PolicyNotPublished)?;
 
@@ -159,9 +147,8 @@ impl PolicyVerifier {
         ctx: Arc<Context>,
         policy: SignedPolicySGX,
         key_manager: Namespace,
-        use_latest_state: bool,
     ) -> Result<SignedPolicySGX> {
-        let published_policy = self.key_manager_policy(ctx, key_manager, use_latest_state)?;
+        let published_policy = self.key_manager_policy(ctx, key_manager)?;
 
         if policy != published_policy {
             debug!(
@@ -170,25 +157,15 @@ impl PolicyVerifier {
                 "untrusted" => ?policy,
                 "published" => ?published_policy,
             );
-            return Err(PolicyVerifierError::PolicyNotPublished.into());
+            return Err(PolicyVerifierError::PolicyMismatch.into());
         }
 
         Ok(published_policy)
     }
 
     /// Fetch runtime's key manager.
-    pub fn key_manager(
-        &self,
-        ctx: Arc<Context>,
-        runtime_id: &Namespace,
-        use_latest_state: bool,
-    ) -> Result<Namespace> {
-        let consensus_state = if use_latest_state {
-            self.consensus_verifier.latest_state()?
-        } else {
-            self.consensus_verifier.state_at(HEIGHT_LATEST)?
-        };
-
+    pub fn key_manager(&self, ctx: Arc<Context>, runtime_id: &Namespace) -> Result<Namespace> {
+        let consensus_state = self.consensus_verifier.latest_state()?;
         let registry_state = RegistryState::new(&consensus_state);
         let runtime = registry_state
             .runtime(Context::create_child(&ctx), runtime_id)?

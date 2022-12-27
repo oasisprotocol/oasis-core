@@ -112,7 +112,6 @@ impl Handler {
                 ctx,
                 &self.runtime_id,
                 version,
-                true,
             )?;
 
             self.rak.set_quote_policy(policy)?;
