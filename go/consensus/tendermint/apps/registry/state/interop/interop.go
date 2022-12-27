@@ -1,6 +1,7 @@
 package interop
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -137,9 +138,10 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 				},
 				Deployments: []*registry.VersionInfo{
 					{
-						Version:   version.FromU64(123),
-						ValidFrom: 42,
-						TEE:       []byte{1, 2, 3, 4, 5},
+						Version:        version.FromU64(123),
+						ValidFrom:      42,
+						TEE:            []byte{1, 2, 3, 4, 5},
+						BundleChecksum: bytes.Repeat([]byte{0x05}, 32),
 					},
 					{
 						Version:   version.FromU64(120),
