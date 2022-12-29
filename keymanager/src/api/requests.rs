@@ -1,5 +1,8 @@
 use oasis_core_runtime::{
-    common::{crypto::signature::Signature, namespace::Namespace},
+    common::{
+        crypto::signature::{PublicKey, Signature},
+        namespace::Namespace,
+    },
     consensus::beacon::EpochTime,
 };
 
@@ -17,7 +20,7 @@ pub struct InitRequest {
 }
 
 /// Key manager initialization response.
-#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Default, Debug, cbor::Encode, cbor::Decode)]
 pub struct InitResponse {
     /// True iff the key manager thinks it's running in a secure mode.
     pub is_secure: bool,
@@ -25,6 +28,8 @@ pub struct InitResponse {
     pub checksum: Vec<u8>,
     /// Checksum for identifying policy.
     pub policy_checksum: Vec<u8>,
+    /// Runtime signing key.
+    pub rsk: PublicKey,
 }
 
 /// Signed InitResponse.

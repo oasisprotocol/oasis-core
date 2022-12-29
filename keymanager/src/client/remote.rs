@@ -12,10 +12,15 @@ use lru::LruCache;
 
 use oasis_core_runtime::{
     common::{
+        crypto::signature::PublicKey,
         namespace::Namespace,
         sgx::{EnclaveIdentity, QuotePolicy},
     },
-    consensus::{beacon::EpochTime, keymanager::SignedPolicySGX, verifier::Verifier},
+    consensus::{
+        beacon::EpochTime,
+        state::{beacon::ImmutableState as BeaconState, keymanager::Status as KeyManagerStatus},
+        verifier::Verifier,
+    },
     enclave_rpc::{client::RpcClient, session},
     protocol::Protocol,
     rak::RAK,
@@ -49,6 +54,8 @@ struct Inner {
     /// Local cache for the long-term and ephemeral public keys fetched from
     /// get_public_key and get_public_ephemeral_key KeyManager endpoints.
     public_key_cache: RwLock<LruCache<(KeyPairId, Option<EpochTime>), SignedPublicKey>>,
+    /// Key manager's runtime signing key.
+    rsk: RwLock<Option<PublicKey>>,
 }
 
 /// A key manager client which talks to a remote key manager enclave.
@@ -74,6 +81,7 @@ impl RemoteClient {
                 public_key_cache: RwLock::new(LruCache::new(
                     NonZeroUsize::new(keys_cache_sizes).unwrap(),
                 )),
+                rsk: RwLock::new(None),
             }),
         }
     }
@@ -107,7 +115,7 @@ impl RemoteClient {
     /// Create a new key manager client with runtime-internal transport.
     ///
     /// Using this method valid enclave identities and quote policy won't be preset and should
-    /// be obtained via the runtime-host protocol and updated with the `set_policy` and
+    /// be obtained via the runtime-host protocol and updated with the `set_status` and
     /// `set_quote_policy` methods. In case the signer set is non-empty, session establishment
     /// will fail until the initial policies will be updated.
     pub fn new_runtime(
@@ -152,13 +160,21 @@ impl RemoteClient {
         )
     }
 
-    /// Set client allowed enclaves from key manager policy.
-    pub fn set_policy(&self, untrusted_policy: SignedPolicySGX) -> Result<(), KeyManagerError> {
-        let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+    /// Set allowed enclaves and runtime signing key from key manager status.
+    pub fn set_status(&self, status: KeyManagerStatus) -> Result<(), KeyManagerError> {
+        // Set runtime signing key.
+        if let Some(rsk) = status.rsk {
+            self.inner.rsk.write().unwrap().replace(rsk);
+        }
 
-        let policies: HashSet<EnclaveIdentity> =
-            HashSet::from_iter(policy.enclaves.keys().cloned());
-        self.inner.rpc_client.update_enclaves(Some(policies));
+        // Set client allowed enclaves from key manager policy.
+        if let Some(untrusted_policy) = status.policy {
+            let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+
+            let policies: HashSet<EnclaveIdentity> =
+                HashSet::from_iter(policy.enclaves.keys().cloned());
+            self.inner.rpc_client.update_enclaves(Some(policies));
+        }
 
         Ok(())
     }
@@ -166,6 +182,20 @@ impl RemoteClient {
     /// Set key manager's quote policy.
     pub fn set_quote_policy(&self, policy: QuotePolicy) {
         self.inner.rpc_client.update_quote_policy(policy);
+    }
+
+    fn verify_public_key(
+        &self,
+        key: &SignedPublicKey,
+        key_pair_id: KeyPairId,
+        epoch: Option<EpochTime>,
+        now: Option<EpochTime>,
+    ) -> Result<(), KeyManagerError> {
+        let pk = self.inner.rsk.read().unwrap();
+        let pk = pk.as_ref().ok_or(KeyManagerError::RSKMissing)?;
+
+        key.verify(self.inner.runtime_id, key_pair_id, epoch, now, pk)
+            .map_err(KeyManagerError::InvalidSignature)
     }
 }
 
@@ -187,8 +217,10 @@ impl KeyManagerClient for RemoteClient {
         ctx: Context,
         key_pair_id: KeyPairId,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
+        // Fetch from cache.
         let mut cache = self.inner.private_key_cache.write().unwrap();
-        if let Some(keys) = cache.get(&(key_pair_id, None)) {
+        let id = &(key_pair_id, None);
+        if let Some(keys) = cache.get(id) {
             return Box::pin(future::ok(keys.clone()));
         }
 
@@ -223,9 +255,16 @@ impl KeyManagerClient for RemoteClient {
         ctx: Context,
         key_pair_id: KeyPairId,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
+        // Fetch from cache.
         let mut cache = self.inner.public_key_cache.write().unwrap();
-        if let Some(key) = cache.get(&(key_pair_id, None)) {
-            return Box::pin(future::ok(key.clone()));
+        let id = &(key_pair_id, None);
+        if let Some(key) = cache.get(id) {
+            match self.verify_public_key(key, key_pair_id, None, None) {
+                Ok(()) => return Box::pin(future::ok(key.clone())),
+                Err(_) => {
+                    cache.pop(id);
+                }
+            }
         }
 
         // No entry in cache, fetch from key manager.
@@ -238,13 +277,16 @@ impl KeyManagerClient for RemoteClient {
 
             let key: SignedPublicKey = inner
                 .rpc_client
-                .secure_call(
+                .insecure_call(
                     ctx,
                     METHOD_GET_PUBLIC_KEY,
                     LongTermKeyRequest::new(Some(height), inner.runtime_id, key_pair_id),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
+
+            // Verify the signature.
+            self.verify_public_key(&key, key_pair_id, None, None)?;
 
             // Cache key.
             let mut cache = inner.public_key_cache.write().unwrap();
@@ -260,8 +302,10 @@ impl KeyManagerClient for RemoteClient {
         key_pair_id: KeyPairId,
         epoch: EpochTime,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
+        // Fetch from cache.
         let mut cache = self.inner.private_key_cache.write().unwrap();
-        if let Some(keys) = cache.get(&(key_pair_id, Some(epoch))) {
+        let id = &(key_pair_id, Some(epoch));
+        if let Some(keys) = cache.get(id) {
             return Box::pin(future::ok(keys.clone()));
         }
 
@@ -297,9 +341,30 @@ impl KeyManagerClient for RemoteClient {
         key_pair_id: KeyPairId,
         epoch: EpochTime,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
+        let ctx = ctx.freeze();
+
+        // Fetch current epoch.
+        let get_consensus_epoch = || -> Result<EpochTime, anyhow::Error> {
+            let consensus_state = self.inner.consensus_verifier.latest_state()?;
+            let beacon_state = BeaconState::new(&consensus_state);
+            let consensus_epoch = beacon_state.epoch(Context::create_child(&ctx))?;
+            Ok(consensus_epoch)
+        };
+        let consensus_epoch = match get_consensus_epoch() {
+            Ok(epoch) => epoch,
+            Err(err) => return Box::pin(future::err(KeyManagerError::Other(err))),
+        };
+
+        // Fetch from cache.
         let mut cache = self.inner.public_key_cache.write().unwrap();
-        if let Some(key) = cache.get(&(key_pair_id, Some(epoch))) {
-            return Box::pin(future::ok(key.clone()));
+        let id = &(key_pair_id, Some(epoch));
+        if let Some(key) = cache.get(id) {
+            match self.verify_public_key(key, key_pair_id, Some(epoch), Some(consensus_epoch)) {
+                Ok(()) => return Box::pin(future::ok(key.clone())),
+                Err(_) => {
+                    cache.pop(id);
+                }
+            }
         }
 
         // No entry in cache, fetch from key manager.
@@ -312,13 +377,16 @@ impl KeyManagerClient for RemoteClient {
 
             let key: SignedPublicKey = inner
                 .rpc_client
-                .secure_call(
-                    ctx,
+                .insecure_call(
+                    Context::create_child(&ctx),
                     METHOD_GET_PUBLIC_EPHEMERAL_KEY,
                     EphemeralKeyRequest::new(Some(height), inner.runtime_id, key_pair_id, epoch),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
+
+            // Verify the signature.
+            self.verify_public_key(&key, key_pair_id, Some(epoch), Some(consensus_epoch))?;
 
             // Cache key.
             let mut cache = inner.public_key_cache.write().unwrap();

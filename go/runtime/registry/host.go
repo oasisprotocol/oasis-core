@@ -547,7 +547,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	defer retryTicker.Stop()
 
 	var (
-		policyUpdated      = true
+		statusUpdated      = true
 		quotePolicyUpdated = true
 		runtimeInfoUpdated = false
 	)
@@ -571,10 +571,17 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 			runtimeInfoUpdated = true
 		}
 
-		// Make sure that we actually have a new policy.
-		if !policyUpdated && st != nil && st.Policy != nil {
-			if err = n.updateKeyManagerPolicy(ctx, st.Policy); err == nil {
-				policyUpdated = true
+		// Make sure that we actually have a new status.
+		if !statusUpdated && st != nil {
+			switch {
+			case ri.Features.KeyManagerStatusUpdates:
+				if err = n.updateKeyManagerStatus(ctx, st); err == nil {
+					statusUpdated = true
+				}
+			case st.Policy != nil:
+				if err = n.updateKeyManagerPolicy(ctx, st.Policy); err == nil {
+					statusUpdated = true
+				}
 			}
 		}
 
@@ -596,7 +603,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 			}
 			st = newSt
 
-			policyUpdated = false
+			statusUpdated = false
 		case epoch := <-epoCh:
 			// Check if the key manager was redeployed, as that is when a new quote policy might
 			// take effect.
@@ -640,7 +647,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 				continue
 			}
 
-			policyUpdated = false
+			statusUpdated = false
 			quotePolicyUpdated = false
 			runtimeInfoUpdated = false
 		case <-retryTicker.C:
@@ -651,6 +658,27 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 			// finalizes.
 		}
 	}
+}
+
+func (n *runtimeHostNotifier) updateKeyManagerStatus(ctx context.Context, status *keymanager.Status) error {
+	n.logger.Debug("got key manager status update", "status", status)
+
+	req := &protocol.Body{RuntimeKeyManagerStatusUpdateRequest: &protocol.RuntimeKeyManagerStatusUpdateRequest{
+		Status: *status,
+	}}
+
+	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
+	defer cancel()
+
+	if _, err := n.host.Call(ctx, req); err != nil {
+		n.logger.Error("failed dispatching key manager status update to runtime",
+			"err", err,
+		)
+		return err
+	}
+
+	n.logger.Debug("key manager status update dispatched")
+	return nil
 }
 
 func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *keymanager.SignedPolicySGX) error {

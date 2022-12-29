@@ -16,6 +16,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	consensusTx "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -89,6 +90,8 @@ type Body struct {
 	RuntimeExecuteTxBatchResponse              *RuntimeExecuteTxBatchResponse             `json:",omitempty"`
 	RuntimeAbortRequest                        *Empty                                     `json:",omitempty"`
 	RuntimeAbortResponse                       *Empty                                     `json:",omitempty"`
+	RuntimeKeyManagerStatusUpdateRequest       *RuntimeKeyManagerStatusUpdateRequest      `json:",omitempty"`
+	RuntimeKeyManagerStatusUpdateResponse      *Empty                                     `json:",omitempty"`
 	RuntimeKeyManagerPolicyUpdateRequest       *RuntimeKeyManagerPolicyUpdateRequest      `json:",omitempty"`
 	RuntimeKeyManagerPolicyUpdateResponse      *Empty                                     `json:",omitempty"`
 	RuntimeKeyManagerQuotePolicyUpdateRequest  *RuntimeKeyManagerQuotePolicyUpdateRequest `json:",omitempty"`
@@ -174,6 +177,9 @@ type Features struct {
 	// KeyManagerQuotePolicyUpdates is a feature specifying that the runtime supports updating
 	// key manager's quote policy.
 	KeyManagerQuotePolicyUpdates bool `json:"key_manager_quote_policy_updates,omitempty"`
+	// KeyManagerStatusUpdates is a feature specifying that the runtime supports updating
+	// key manager's status.
+	KeyManagerStatusUpdates bool `json:"key_manager_status_updates,omitempty"`
 }
 
 // HasScheduleControl returns true when the runtime supports the schedule control feature.
@@ -402,12 +408,17 @@ type RuntimeExecuteTxBatchResponse struct {
 	Deprecated1 cbor.RawMessage `json:"batch_weight_limits,omitempty"`
 }
 
-// RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy request message body.
+// RuntimeKeyManagerStatusUpdateRequest is a runtime key manager status update request message body.
+type RuntimeKeyManagerStatusUpdateRequest struct {
+	Status keymanager.Status `json:"status"`
+}
+
+// RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy update request message body.
 type RuntimeKeyManagerPolicyUpdateRequest struct {
 	SignedPolicyRaw []byte `json:"signed_policy_raw"`
 }
 
-// RuntimeKeyManagerQuotePolicyUpdateRequest is a runtime key manager quote policy request
+// RuntimeKeyManagerQuotePolicyUpdateRequest is a runtime key manager quote policy update request
 // message body.
 type RuntimeKeyManagerQuotePolicyUpdateRequest struct {
 	Policy quote.Policy `json:"policy"`

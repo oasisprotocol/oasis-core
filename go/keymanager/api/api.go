@@ -72,6 +72,9 @@ type Status struct {
 
 	// Policy is the key manager policy.
 	Policy *SignedPolicySGX `json:"policy"`
+
+	// RSK is the runtime signing key of the key manager.
+	RSK *signature.PublicKey `json:"rsk,omitempty"`
 }
 
 // Backend is a key manager management implementation.
@@ -100,9 +103,10 @@ func NewUpdatePolicyTx(nonce uint64, fee *transaction.Fee, sigPol *SignedPolicyS
 // InitResponse is the initialization RPC response, returned as part of a
 // SignedInitResponse from the key manager enclave.
 type InitResponse struct {
-	IsSecure       bool   `json:"is_secure"`
-	Checksum       []byte `json:"checksum"`
-	PolicyChecksum []byte `json:"policy_checksum"`
+	IsSecure       bool                 `json:"is_secure"`
+	Checksum       []byte               `json:"checksum"`
+	PolicyChecksum []byte               `json:"policy_checksum"`
+	RSK            *signature.PublicKey `json:"rsk,omitempty"`
 }
 
 // SignedInitResponse is the signed initialization RPC response, returned

@@ -17,6 +17,7 @@ use crate::{
         self,
         beacon::EpochTime,
         roothash::{self, Block, ComputeResultsHeader, Header},
+        state::keymanager::Status as KeyManagerStatus,
         transaction::{Proof, SignedTransaction},
         LightBlock,
     },
@@ -184,10 +185,10 @@ pub enum Body {
         tx_input_root: Hash,
         tx_input_write_log: WriteLog,
     },
-    RuntimeKeyManagerPolicyUpdateRequest {
-        signed_policy_raw: Vec<u8>,
+    RuntimeKeyManagerStatusUpdateRequest {
+        status: KeyManagerStatus,
     },
-    RuntimeKeyManagerPolicyUpdateResponse {},
+    RuntimeKeyManagerStatusUpdateResponse {},
     RuntimeKeyManagerQuotePolicyUpdateRequest {
         policy: QuotePolicy,
     },
@@ -330,6 +331,9 @@ pub struct Features {
     /// A feature specifying that the runtime supports updating key manager's quote policy.
     #[cbor(optional)]
     pub key_manager_quote_policy_updates: bool,
+    /// A feature specifying that the runtime supports updating key manager's status.
+    #[cbor(optional)]
+    pub key_manager_status_updates: bool,
 }
 
 impl Default for Features {
@@ -337,6 +341,7 @@ impl Default for Features {
         Self {
             schedule_control: None,
             key_manager_quote_policy_updates: true,
+            key_manager_status_updates: true,
         }
     }
 }

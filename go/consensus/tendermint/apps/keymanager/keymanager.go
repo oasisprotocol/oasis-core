@@ -171,6 +171,7 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 				"is_initialized", newStatus.IsInitialized,
 				"is_secure", newStatus.IsSecure,
 				"checksum", hex.EncodeToString(newStatus.Checksum),
+				"rsk", newStatus.RSK,
 				"nodes", newStatus.Nodes,
 			)
 
@@ -260,6 +261,7 @@ func (app *keymanagerApplication) generateStatus(
 			continue
 		}
 
+		// Skip nodes with mismatched policy.
 		var nodePolicyHash [api.ChecksumSize]byte
 		switch len(initResponse.PolicyChecksum) {
 		case 0:
@@ -282,24 +284,8 @@ func (app *keymanagerApplication) generateStatus(
 			continue
 		}
 
-		if status.IsInitialized {
-			// Already initialized.  Check to see if it should be added to
-			// the node list.
-			if initResponse.IsSecure != status.IsSecure {
-				ctx.Logger().Error("Security status mismatch for runtime",
-					"id", kmrt.ID,
-					"node_id", n.ID,
-				)
-				continue
-			}
-			if !bytes.Equal(initResponse.Checksum, status.Checksum) {
-				ctx.Logger().Error("Checksum mismatch for runtime",
-					"id", kmrt.ID,
-					"node_id", n.ID,
-				)
-				continue
-			}
-		} else {
+		// Set immutable status fields that cannot change after initialization.
+		if !status.IsInitialized {
 			// Not initialized.  The first node gets to be the source
 			// of truth, every other node will sync off it.
 
@@ -315,6 +301,38 @@ func (app *keymanagerApplication) generateStatus(
 			status.IsSecure = initResponse.IsSecure
 			status.IsInitialized = true
 			status.Checksum = initResponse.Checksum
+		}
+
+		// Skip nodes with mismatched status fields.
+		if initResponse.IsSecure != status.IsSecure {
+			ctx.Logger().Error("Security status mismatch for runtime",
+				"id", kmrt.ID,
+				"node_id", n.ID,
+			)
+			continue
+		}
+		if !bytes.Equal(initResponse.Checksum, status.Checksum) {
+			ctx.Logger().Error("Checksum mismatch for runtime",
+				"id", kmrt.ID,
+				"node_id", n.ID,
+			)
+			continue
+		}
+
+		// Update mutable status fields that can change on epoch transitions.
+		if status.RSK == nil {
+			// The first node with non-nil runtime signing key gets to be the source of truth.
+			status.RSK = initResponse.RSK
+		}
+
+		// Skip nodes with mismatched runtime signing key.
+		// For backward compatibility we always allow nodes without runtime signing key.
+		if initResponse.RSK != nil && !initResponse.RSK.Equal(*status.RSK) {
+			ctx.Logger().Error("Runtime signing key mismatch for runtime",
+				"id", kmrt.ID,
+				"node_id", n.ID,
+			)
+			continue
 		}
 
 		status.Nodes = append(status.Nodes, n.ID)

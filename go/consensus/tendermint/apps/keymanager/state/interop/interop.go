@@ -104,6 +104,7 @@ func InitializeTestKeyManagerState(ctx context.Context, mkvs mkvs.Tree) error {
 			Checksum:      nil,
 			Nodes:         nil,
 			Policy:        nil,
+			RSK:           nil,
 		},
 		{
 			ID:            keymanager2,
@@ -115,6 +116,7 @@ func InitializeTestKeyManagerState(ctx context.Context, mkvs mkvs.Tree) error {
 				signers[1].Public(),
 			},
 			Policy: &sigPolicy,
+			RSK:    nil,
 		},
 	} {
 		if err := state.SetStatus(ctx, status); err != nil {

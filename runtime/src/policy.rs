@@ -13,7 +13,8 @@ use crate::{
         keymanager::SignedPolicySGX,
         registry::{SGXConstraints, TEEHardware},
         state::{
-            beacon::ImmutableState as BeaconState, keymanager::ImmutableState as KeyManagerState,
+            beacon::ImmutableState as BeaconState,
+            keymanager::{ImmutableState as KeyManagerState, Status},
             registry::ImmutableState as RegistryState,
         },
         verifier::Verifier,
@@ -33,6 +34,8 @@ pub enum PolicyVerifierError {
     PolicyMismatch,
     #[error("policy hasn't been published")]
     PolicyNotPublished,
+    #[error("status mismatch")]
+    StatusMismatch,
     #[error("status hasn't been published")]
     StatusNotPublished,
     #[error("configured runtime hardware mismatch")]
@@ -123,22 +126,46 @@ impl PolicyVerifier {
         Ok(published_policy)
     }
 
+    /// Fetch key manager's status from the latest verified consensus layer state.
+    pub fn key_manager_status(&self, ctx: Arc<Context>, key_manager: Namespace) -> Result<Status> {
+        let consensus_state = self.consensus_verifier.latest_state()?;
+        let km_state = KeyManagerState::new(&consensus_state);
+        km_state
+            .status(Context::create_child(&ctx), key_manager)?
+            .ok_or_else(|| PolicyVerifierError::StatusNotPublished.into())
+    }
+
+    /// Verify that key manager's status has been published in the consensus layer.
+    pub fn verify_key_manager_status(
+        &self,
+        ctx: Arc<Context>,
+        status: Status,
+        key_manager: Namespace,
+    ) -> Result<Status> {
+        let published_status = self.key_manager_status(ctx, key_manager)?;
+
+        if status != published_status {
+            debug!(
+                self.logger,
+                "key manager status mismatch";
+                "untrusted" => ?status,
+                "published" => ?published_status,
+            );
+            return Err(PolicyVerifierError::StatusMismatch.into());
+        }
+
+        Ok(published_status)
+    }
+
     /// Fetch key manager's policy from the latest verified consensus layer state.
     pub fn key_manager_policy(
         &self,
         ctx: Arc<Context>,
         key_manager: Namespace,
     ) -> Result<SignedPolicySGX> {
-        // Fetch policy from the consensus layer.
-        let consensus_state = self.consensus_verifier.latest_state()?;
-        let km_state = KeyManagerState::new(&consensus_state);
-        let policy = km_state
-            .status(Context::create_child(&ctx), key_manager)?
-            .ok_or(PolicyVerifierError::StatusNotPublished)?
+        self.key_manager_status(ctx, key_manager)?
             .policy
-            .ok_or(PolicyVerifierError::PolicyNotPublished)?;
-
-        Ok(policy)
+            .ok_or_else(|| PolicyVerifierError::PolicyNotPublished.into())
     }
 
     /// Verify that key manager's policy has been published in the consensus layer.

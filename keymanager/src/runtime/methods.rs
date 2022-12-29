@@ -40,7 +40,7 @@ pub fn get_public_key(req: &LongTermKeyRequest, _ctx: &mut RpcContext) -> Result
 
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req)?;
-    let sig = kdf.sign_public_key(pk)?;
+    let sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, None)?;
     Ok(sig)
 }
 
@@ -67,7 +67,16 @@ pub fn get_public_ephemeral_key(
 
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req)?;
-    let sig = kdf.sign_public_key(pk)?;
+    let mut sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, Some(req.epoch))?;
+
+    // Outdated key manager clients request public ephemeral keys via secure RPC calls,
+    // they never verify their signatures and are not aware that signed ephemeral keys expire.
+    // To ensure backwards compatibility we clear the expiration epoch. This should be removed
+    // in the future once all clients are upgraded.
+    if ctx.session_info.is_some() {
+        sig.expiration = None
+    }
+
     Ok(sig)
 }
 

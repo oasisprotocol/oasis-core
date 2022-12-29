@@ -43,6 +43,7 @@ const (
 	CfgStatusInitialized = "keymanager.status.initialized"
 	CfgStatusSecure      = "keymanager.status.secure"
 	CfgStatusChecksum    = "keymanager.status.checksum"
+	CfgStatusRSK         = "keymanager.status.rsk"
 
 	policyFilename = "km_policy.cbor"
 	statusFilename = "km_status.json"
@@ -518,12 +519,26 @@ func statusFromFlags() (*kmApi.Status, error) {
 		return nil, fmt.Errorf("%s is true, but %s is not provided", CfgStatusInitialized, CfgStatusChecksum)
 	}
 
+	var rsk *signature.PublicKey
+	if viper.GetString(CfgStatusRSK) != "" {
+		var decodedRsk signature.PublicKey
+		if err := decodedRsk.UnmarshalText([]byte(viper.GetString(CfgStatusRSK))); err != nil {
+			return nil, err
+		}
+		rsk = &decodedRsk
+	}
+
+	if viper.GetString(CfgStatusRSK) != "" && !viper.GetBool(CfgStatusInitialized) {
+		return nil, fmt.Errorf("%s provided, but %s is false", CfgStatusRSK, CfgStatusInitialized)
+	}
+
 	return &kmApi.Status{
 		ID:            id,
 		IsInitialized: viper.GetBool(CfgStatusInitialized),
 		IsSecure:      viper.GetBool(CfgStatusSecure),
 		Checksum:      checksum,
 		Policy:        signedPolicy,
+		RSK:           rsk,
 	}, nil
 }
 
@@ -598,6 +613,7 @@ func registerKMInitStatusFlags(cmd *cobra.Command) {
 		cmd.Flags().Bool(CfgStatusInitialized, false, "is key manager done initializing. Requires "+CfgStatusChecksum)
 		cmd.Flags().Bool(CfgStatusSecure, false, "is key manager secure")
 		cmd.Flags().String(CfgStatusChecksum, "", "key manager's master secret verification checksum in hex. Requires "+CfgStatusInitialized)
+		cmd.Flags().String(CfgStatusRSK, "", "key manager's runtime signing key in base64. Requires "+CfgStatusInitialized)
 	}
 
 	cmd.Flags().AddFlagSet(policyFileFlag)
@@ -615,6 +631,7 @@ func registerKMInitStatusFlags(cmd *cobra.Command) {
 		CfgStatusInitialized,
 		CfgStatusSecure,
 		CfgStatusChecksum,
+		CfgStatusRSK,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

@@ -9,7 +9,7 @@ use std::{
     thread,
 };
 
-use anyhow::{anyhow, Result as AnyResult};
+use anyhow::Result as AnyResult;
 use io_context::Context;
 use slog::{debug, error, info, warn, Logger};
 use tokio::sync::mpsc;
@@ -27,6 +27,7 @@ use crate::{
     consensus::{
         beacon::EpochTime,
         roothash::{self, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT},
+        state::keymanager::Status as KeyManagerStatus,
         verifier::Verifier,
         LightBlock,
     },
@@ -449,9 +450,9 @@ impl Dispatcher {
             }
 
             // Other requests.
-            Body::RuntimeKeyManagerPolicyUpdateRequest { signed_policy_raw } => {
-                // Key manager policy update local RPC call.
-                self.handle_km_policy_update(ctx, state, signed_policy_raw)
+            Body::RuntimeKeyManagerStatusUpdateRequest { status } => {
+                // Key manager status update local RPC call.
+                self.handle_km_status_update(ctx, state, status)
             }
             Body::RuntimeKeyManagerQuotePolicyUpdateRequest {
                 policy: quote_policy,
@@ -1005,38 +1006,37 @@ impl Dispatcher {
         Ok(response)
     }
 
-    fn handle_km_policy_update(
+    fn handle_km_status_update(
         &self,
         ctx: Context,
         state: State,
-        signed_policy_raw: Vec<u8>,
+        status: KeyManagerStatus,
     ) -> Result<Body, Error> {
         // Make sure to abort the process on panic during policy processing as that indicates a
         // serious problem and should make sure to clean up the process.
         let _guard = AbortOnPanic;
 
-        debug!(self.logger, "Received km policy update request");
+        debug!(self.logger, "Received km status update request");
 
-        // Verify and decode the policy.
+        // Verify and decode the status.
         let ctx = ctx.freeze();
         let runtime_id = state.protocol.get_host_info().runtime_id;
         let key_manager = state
             .policy_verifier
             .key_manager(ctx.clone(), &runtime_id)?;
-        let untrusted_policy = cbor::from_slice(&signed_policy_raw).map_err(|err| anyhow!(err))?;
-        let published_policy =
+        let published_status =
             state
                 .policy_verifier
-                .verify_key_manager_policy(ctx, untrusted_policy, key_manager)?;
+                .verify_key_manager_status(ctx, status, key_manager)?;
 
         // Dispatch the local RPC call.
         state
             .rpc_dispatcher
-            .handle_km_policy_update(published_policy);
+            .handle_km_status_update(published_status);
 
-        debug!(self.logger, "KM policy update request complete");
+        debug!(self.logger, "KM status update request complete");
 
-        Ok(Body::RuntimeKeyManagerPolicyUpdateResponse {})
+        Ok(Body::RuntimeKeyManagerStatusUpdateResponse {})
     }
 
     fn handle_km_quote_policy_update(

@@ -379,7 +379,7 @@ impl Protocol {
             | Body::RuntimeLocalRPCCallRequest { .. }
             | Body::RuntimeCheckTxBatchRequest { .. }
             | Body::RuntimeExecuteTxBatchRequest { .. }
-            | Body::RuntimeKeyManagerPolicyUpdateRequest { .. }
+            | Body::RuntimeKeyManagerStatusUpdateRequest { .. }
             | Body::RuntimeKeyManagerQuotePolicyUpdateRequest { .. }
             | Body::RuntimeQueryRequest { .. }
             | Body::RuntimeConsensusSyncRequest { .. } => {

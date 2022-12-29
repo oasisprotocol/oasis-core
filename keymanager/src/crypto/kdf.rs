@@ -24,6 +24,7 @@ use oasis_core_runtime::{
         namespace::Namespace,
         sgx::egetkey::egetkey,
     },
+    consensus::beacon::EpochTime,
     enclave_rpc::Context as RpcContext,
     runtime_context,
     storage::KeyValue,
@@ -41,11 +42,10 @@ use crate::{
     runtime::context::Context as KmContext,
 };
 
+use super::KeyPairId;
+
 /// Context used for the init response signature.
 const INIT_RESPONSE_CONTEXT: &[u8] = b"oasis-core/keymanager: init response";
-
-/// Context used for the public key signature.
-const PUBLIC_KEY_CONTEXT: [u8; 8] = *b"EkKmPubK";
 
 lazy_static! {
     // Global KDF object.
@@ -92,11 +92,18 @@ lazy_static! {
             false => b"ekiden-checksum-master-secret-insecure",
         }
     };
+
+    static ref RUNTIME_SIGNING_KEY_CUSTOM: &'static [u8] = {
+        match BUILD_INFO.is_secure {
+            true => b"ekiden-derive-signing-key",
+            false => b"ekiden-derive-signing-key-insecure",
+        }
+    };
 }
 
 /// A dummy key for use in non-SGX tests where integrity is not needed.
 #[cfg(not(target_env = "sgx"))]
-const INSECURE_SIGNING_KEY_SEED: &str = "ekiden test key manager RAK seed";
+const INSECURE_RAK_SEED: &str = "ekiden test key manager RAK seed";
 
 const MASTER_SECRET_STORAGE_KEY: &[u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
@@ -157,9 +164,16 @@ pub struct Kdf {
 struct Inner {
     /// Master secret.
     master_secret: Option<MasterSecret>,
+    /// Checksum of the master secret and the key manager runtime ID.
     checksum: Option<Vec<u8>>,
+    /// Key manager runtime ID.
     runtime_id: Option<Namespace>,
+    /// Key manager committee signer derived from the master secret and
+    /// the key manager runtime ID.
+    ///
+    /// Used to sign derived long-term and ephemeral public runtime keys.
     signer: Option<Arc<dyn signature::Signer>>,
+    /// Cache for storing derived key pairs.
     cache: LruCache<Vec<u8>, KeyPair>,
 }
 
@@ -172,12 +186,12 @@ impl Inner {
         self.cache.clear();
     }
 
-    fn derive_key(&self, req: &impl KeyRequest) -> Result<KeyPair> {
+    fn derive_key(&self, kdf_custom: &[u8], seed: &[u8], xof_custom: &[u8]) -> Result<KeyPair> {
         let checksum = self.get_checksum()?;
-        let mut secret = self.derive_secret(req)?;
+        let mut secret = self.derive_secret(kdf_custom, seed)?;
 
         // Note: The `name` parameter for cSHAKE is reserved for use by NIST.
-        let mut xof = CShake::new_cshake256(&[], req.xof_custom());
+        let mut xof = CShake::new_cshake256(&[], xof_custom);
         xof.update(&secret);
         secret.zeroize();
         let mut xof = xof.xof();
@@ -201,7 +215,7 @@ impl Inner {
         ))
     }
 
-    fn derive_secret(&self, req: &impl KeyRequest) -> Result<Vec<u8>> {
+    fn derive_secret(&self, kdf_custom: &[u8], seed: &[u8]) -> Result<Vec<u8>> {
         let master_secret = match self.master_secret.as_ref() {
             Some(master_secret) => master_secret,
             None => return Err(KeyManagerError::NotInitialized.into()),
@@ -210,8 +224,8 @@ impl Inner {
         let mut k = [0u8; 32];
 
         // KMAC256(master_secret, seed, 32, kdf_custom)
-        let mut f = KMac::new_kmac256(master_secret.as_ref(), req.kdf_custom());
-        f.update(&req.seed()[..]);
+        let mut f = KMac::new_kmac256(master_secret.as_ref(), kdf_custom);
+        f.update(seed);
         f.finalize(&mut k);
 
         Ok(k.to_vec())
@@ -365,37 +379,32 @@ impl Kdf {
         // that either matches the global state, will become the global
         // state, or should become the global state (rare).
         //
-        // It is ok to generate a response.
+        // It is ok to derive the signing key and generate a response.
 
-        // The RAK (signing key) may have changed since the last init call.
+        // Derive signing key from the master secret.
+        let secret = inner.derive_secret(&RUNTIME_SIGNING_KEY_CUSTOM, km_runtime_id.as_ref())?;
+        let sk = signature::PrivateKey::from_bytes(secret);
+        let pk = sk.public_key();
+        inner.signer = Some(Arc::new(sk));
+
+        // Prepare RAK signer.
         #[cfg(target_env = "sgx")]
-        {
-            let signer: Arc<dyn signature::Signer> = ctx.rak.clone();
-            inner.signer = Some(signer);
-        }
+        let signer: Arc<dyn signature::Signer> = ctx.rak.clone();
         #[cfg(not(target_env = "sgx"))]
-        {
-            let priv_key = Arc::new(signature::PrivateKey::from_test_seed(
-                INSECURE_SIGNING_KEY_SEED.to_string(),
-            ));
-
-            let signer: Arc<dyn signature::Signer> = priv_key;
-            inner.signer = Some(signer);
-        }
+        let signer: Arc<dyn signature::Signer> = Arc::new(signature::PrivateKey::from_test_seed(
+            INSECURE_RAK_SEED.to_string(),
+        ));
 
         // Build the response and sign it with the RAK.
         let init_response = InitResponse {
             is_secure: BUILD_INFO.is_secure && !Policy::unsafe_skip(),
             checksum: inner.checksum.as_ref().unwrap().clone(),
             policy_checksum,
+            rsk: pk,
         };
 
         let body = cbor::to_vec(init_response.clone());
-        let signature = inner
-            .signer
-            .as_ref()
-            .unwrap()
-            .sign(INIT_RESPONSE_CONTEXT, &body)?;
+        let signature = signer.sign(INIT_RESPONSE_CONTEXT, &body)?;
 
         Ok(SignedInitResponse {
             init_response,
@@ -413,7 +422,7 @@ impl Kdf {
             return Ok(keys.clone());
         };
 
-        let key = inner.derive_key(req)?;
+        let key = inner.derive_key(req.kdf_custom(), &req.seed()[..], req.xof_custom())?;
         inner.cache.put(cache_key, key.clone());
 
         Ok(key)
@@ -426,24 +435,21 @@ impl Kdf {
     }
 
     /// Signs the public key using the key manager key.
-    pub fn sign_public_key(&self, key: PublicKey) -> Result<SignedPublicKey> {
-        let mut body = key.as_ref().to_vec();
-
+    pub fn sign_public_key(
+        &self,
+        key: PublicKey,
+        runtime_id: Namespace,
+        key_pair_id: KeyPairId,
+        epoch: Option<EpochTime>,
+    ) -> Result<SignedPublicKey> {
         let inner = self.inner.read().unwrap();
         let checksum = inner.get_checksum()?;
-        body.extend_from_slice(&checksum);
-
         let signer = inner
             .signer
             .as_ref()
             .ok_or(KeyManagerError::NotInitialized)?;
-        let signature = signer.sign(&PUBLIC_KEY_CONTEXT, &body)?;
 
-        Ok(SignedPublicKey {
-            key,
-            checksum,
-            signature,
-        })
+        SignedPublicKey::new(key, checksum, runtime_id, key_pair_id, epoch, signer)
     }
 
     // Replicate master secret.
@@ -564,8 +570,8 @@ mod tests {
     };
 
     use super::{
-        Inner, Kdf, KeyRequest, EPHEMERAL_KDF_CUSTOM, EPHEMERAL_XOF_CUSTOM, PUBLIC_KEY_CONTEXT,
-        RUNTIME_KDF_CUSTOM, RUNTIME_XOF_CUSTOM,
+        Inner, Kdf, KeyRequest, EPHEMERAL_KDF_CUSTOM, EPHEMERAL_XOF_CUSTOM, RUNTIME_KDF_CUSTOM,
+        RUNTIME_XOF_CUSTOM,
     };
 
     struct SimpleKeyRequest<'a> {
@@ -666,8 +672,13 @@ mod tests {
         let kdf = Kdf::default();
 
         let pk = PublicKey::from(vec![1u8; 32]);
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let key_pair_id = KeyPairId::from(vec![1u8; 32]);
+        let epoch = Some(10);
+        let now = Some(15);
+
         let sig = kdf
-            .sign_public_key(pk)
+            .sign_public_key(pk, runtime_id, key_pair_id, epoch)
             .expect("public key should be signed");
 
         let mut body = pk.as_ref().to_vec();
@@ -675,8 +686,7 @@ mod tests {
         body.extend_from_slice(&checksum);
 
         let pk = PrivateKey::from_bytes(vec![4u8; 32]).public_key();
-        sig.signature
-            .verify(&pk, &PUBLIC_KEY_CONTEXT, &body)
+        sig.verify(runtime_id, key_pair_id, epoch, now, &pk)
             .expect("signature should be valid");
     }
 

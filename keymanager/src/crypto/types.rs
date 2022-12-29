@@ -1,11 +1,31 @@
+use std::sync::Arc;
+
+use anyhow::Result;
 use rand::{rngs::OsRng, Rng};
+use thiserror::Error;
 use x25519_dalek;
 use zeroize::Zeroize;
 
-use oasis_core_runtime::{common::crypto::signature::Signature, impl_bytes};
+use oasis_core_runtime::{
+    common::{
+        crypto::signature::{PublicKey as EdPublicKey, Signature, Signer},
+        namespace::Namespace,
+    },
+    consensus::beacon::EpochTime,
+    impl_bytes,
+};
 
 impl_bytes!(KeyPairId, 32, "A 256-bit key pair identifier.");
 impl_bytes!(PublicKey, 32, "A public key.");
+
+/// Context used for the public key signature.
+const PUBLIC_KEY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager: pk signature";
+
+/// Maximum age of a signed ephemeral public key in the number of epochs.
+const MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE: EpochTime = 10;
+
+/// The size of the key manager state checksum.
+const CHECKSUM_SIZE: usize = 32;
 
 /// A private key.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
@@ -96,6 +116,19 @@ pub struct InputKeyPair {
     pub sk: PrivateKey,
 }
 
+/// Signed public key error.
+#[derive(Error, Debug)]
+enum SignedPublicKeyError {
+    #[error("invalid checksum")]
+    InvalidChecksum,
+    #[error("current epoch required")]
+    CurrentEpochRequired,
+    #[error("signature from the future")]
+    SignatureFromFuture,
+    #[error("signature expired")]
+    SignatureExpired,
+}
+
 /// Signed public key.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct SignedPublicKey {
@@ -103,6 +136,288 @@ pub struct SignedPublicKey {
     pub key: PublicKey,
     /// Checksum of the key manager state.
     pub checksum: Vec<u8>,
-    /// Sign(sk, (key || checksum)) from the key manager.
+    /// Sign(sk, (key || checksum || runtime id || key pair id || epoch || expiration epoch)) from
+    /// the key manager.
     pub signature: Signature,
+    /// Expiration epoch.
+    #[cbor(optional)]
+    pub expiration: Option<EpochTime>,
+}
+
+impl SignedPublicKey {
+    /// Create a new signed public key.
+    pub fn new(
+        key: PublicKey,
+        checksum: Vec<u8>,
+        runtime_id: Namespace,
+        key_pair_id: KeyPairId,
+        epoch: Option<EpochTime>,
+        signer: &Arc<dyn Signer>,
+    ) -> Result<Self> {
+        if checksum.len() != CHECKSUM_SIZE {
+            return Err(SignedPublicKeyError::InvalidChecksum.into());
+        }
+
+        let expiration = epoch.map(|epoch| epoch + MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE);
+        let body = Self::body(key, &checksum, runtime_id, key_pair_id, epoch, expiration);
+        let signature = signer.sign(PUBLIC_KEY_SIGNATURE_CONTEXT, &body)?;
+
+        Ok(SignedPublicKey {
+            key,
+            checksum,
+            signature,
+            expiration,
+        })
+    }
+
+    /// Verify the signature.
+    pub fn verify(
+        &self,
+        runtime_id: Namespace,
+        key_pair_id: KeyPairId,
+        epoch: Option<EpochTime>,
+        now: Option<EpochTime>,
+        pk: &EdPublicKey,
+    ) -> Result<()> {
+        // Checksum validation.
+        if self.checksum.len() != CHECKSUM_SIZE {
+            return Err(SignedPublicKeyError::InvalidChecksum.into());
+        }
+
+        // Cache validation for ephemeral keys.
+        if let Some(epoch) = epoch {
+            let now = now.ok_or(SignedPublicKeyError::CurrentEpochRequired)?;
+            if now < epoch {
+                return Err(SignedPublicKeyError::SignatureFromFuture.into());
+            }
+        }
+        if let Some(expiration) = self.expiration {
+            let now = now.ok_or(SignedPublicKeyError::CurrentEpochRequired)?;
+            if now > expiration {
+                return Err(SignedPublicKeyError::SignatureExpired.into());
+            }
+        }
+
+        let body = Self::body(
+            self.key,
+            &self.checksum,
+            runtime_id,
+            key_pair_id,
+            epoch,
+            self.expiration,
+        );
+
+        self.signature
+            .verify(pk, PUBLIC_KEY_SIGNATURE_CONTEXT, &body)
+    }
+
+    fn body(
+        key: PublicKey,
+        checksum: &[u8],
+        runtime_id: Namespace,
+        key_pair_id: KeyPairId,
+        epoch: Option<EpochTime>,
+        expiration: Option<EpochTime>,
+    ) -> Vec<u8> {
+        let mut body = key.as_ref().to_vec();
+        body.extend_from_slice(checksum);
+        body.extend_from_slice(runtime_id.as_ref());
+        body.extend_from_slice(key_pair_id.as_ref());
+        if let Some(epoch) = epoch {
+            body.extend_from_slice(&epoch.to_be_bytes());
+        }
+        if let Some(expiration) = expiration {
+            body.extend_from_slice(&expiration.to_be_bytes());
+        }
+        body
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use oasis_core_runtime::{
+        common::{
+            crypto::signature::{PrivateKey, Signer},
+            namespace::Namespace,
+        },
+        consensus::beacon::EpochTime,
+    };
+
+    use crate::crypto::{
+        types::MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE, KeyPairId, PublicKey, SignedPublicKey,
+    };
+
+    #[test]
+    fn test_signed_public_key_with_epoch() {
+        test_signed_public_key(Some(10), Some(15))
+    }
+
+    #[test]
+    fn test_signed_public_key_without_epoch() {
+        test_signed_public_key(None, None)
+    }
+
+    fn test_signed_public_key(epoch: Option<EpochTime>, now: Option<EpochTime>) {
+        let sk = Arc::new(PrivateKey::from_test_seed("seed".to_string()));
+        let pk = sk.public_key();
+
+        let key = PublicKey([1u8; 32]);
+        let checksum = [1u8; 32].to_vec();
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let key_pair_id = KeyPairId::from(vec![1u8; 32]);
+        let signer: Arc<dyn Signer> = sk;
+
+        // Create a signature with invalid checksum.
+        let result = SignedPublicKey::new(
+            key,
+            [2u8; 30].to_vec(),
+            runtime_id,
+            key_pair_id,
+            epoch,
+            &signer,
+        );
+        assert!(
+            result.is_err(),
+            "signing public key with invalid checksum should fail"
+        );
+        assert_eq!(result.unwrap_err().to_string(), "invalid checksum");
+
+        // Create a signature.
+        let result = SignedPublicKey::new(key, checksum, runtime_id, key_pair_id, epoch, &signer);
+        assert!(result.is_ok(), "signing public key should work");
+        let signed_pk = result.unwrap();
+
+        // Verify the signature.
+        let result = signed_pk.verify(runtime_id, key_pair_id, epoch, now, &pk);
+        assert!(result.is_ok(), "verification should succeed");
+
+        // Verify the signature with different runtime id.
+        let result = signed_pk.verify(Namespace::from(vec![2u8; 32]), key_pair_id, epoch, now, &pk);
+        assert!(
+            result.is_err(),
+            "verification with different runtime id should fail"
+        );
+        assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+
+        // Verify the signature with different key pair id.
+        let result = signed_pk.verify(runtime_id, KeyPairId::from(vec![2u8; 32]), epoch, now, &pk);
+        assert!(
+            result.is_err(),
+            "verification with different key pair id should fail"
+        );
+        assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+
+        // Verify the signature with different values of epoch.
+        match epoch {
+            Some(epoch) => {
+                // Verify the signature with different epoch.
+                let result = signed_pk.verify(runtime_id, key_pair_id, Some(epoch + 1), now, &pk);
+                assert!(
+                    result.is_err(),
+                    "verification with different epoch should fail"
+                );
+                assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+
+                // Verify the signature after it expires.
+                let result = signed_pk.verify(
+                    runtime_id,
+                    key_pair_id,
+                    Some(epoch),
+                    Some(epoch + MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE + 1),
+                    &pk,
+                );
+                assert!(
+                    result.is_err(),
+                    "verification of expired signature should fail"
+                );
+                assert_eq!(result.unwrap_err().to_string(), "signature expired");
+
+                // Verify the signature with epoch from the future.
+                let result =
+                    signed_pk.verify(runtime_id, key_pair_id, Some(epoch), Some(epoch - 1), &pk);
+                assert!(
+                    result.is_err(),
+                    "verification with epoch from the future should fail"
+                );
+                assert_eq!(result.unwrap_err().to_string(), "signature from the future");
+
+                // Verify the signature without epoch.
+                let result = signed_pk.verify(runtime_id, key_pair_id, None, now, &pk);
+                assert!(result.is_err(), "verification without epoch should fail");
+                assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+
+                // Verify the signature without current epoch.
+                let result = signed_pk.verify(runtime_id, key_pair_id, Some(epoch), None, &pk);
+                assert!(
+                    result.is_err(),
+                    "verification without current epoch should fail"
+                );
+                assert_eq!(result.unwrap_err().to_string(), "current epoch required");
+            }
+            None => {
+                // Verify the signature with epoch.
+                let result = signed_pk.verify(runtime_id, key_pair_id, Some(1), Some(1), &pk);
+                assert!(result.is_err(), "verification with an epoch should fail");
+                assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+            }
+        };
+
+        // Verify the signature with different key.
+        let invalid_signed_pk = SignedPublicKey {
+            key: PublicKey([2u8; 32]),
+            checksum: signed_pk.checksum.clone(),
+            signature: signed_pk.signature.clone(),
+            expiration: signed_pk.expiration,
+        };
+        let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, now, &pk);
+        assert!(
+            result.is_err(),
+            "verification with different key should fail"
+        );
+        assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+
+        // Verify the signature with different checksum.
+        let invalid_signed_pk = SignedPublicKey {
+            key: signed_pk.key.clone(),
+            checksum: [2u8; 32].to_vec(),
+            signature: signed_pk.signature.clone(),
+            expiration: signed_pk.expiration,
+        };
+        let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, now, &pk);
+        assert!(
+            result.is_err(),
+            "verification with different checksum should fail"
+        );
+        assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+
+        // Verify the signature with invalid checksum.
+        let invalid_signed_pk = SignedPublicKey {
+            key: signed_pk.key.clone(),
+            checksum: [1u8; 30].to_vec(),
+            signature: signed_pk.signature.clone(),
+            expiration: signed_pk.expiration,
+        };
+        let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, now, &pk);
+        assert!(
+            result.is_err(),
+            "verification with invalid checksum should fail"
+        );
+        assert_eq!(result.unwrap_err().to_string(), "invalid checksum");
+
+        // Verify the signature with different expiration epoch.
+        let invalid_signed_pk = SignedPublicKey {
+            key: signed_pk.key.clone(),
+            checksum: signed_pk.checksum.clone(),
+            signature: signed_pk.signature.clone(),
+            expiration: Some(100),
+        };
+        let result = invalid_signed_pk.verify(runtime_id, key_pair_id, epoch, Some(15), &pk);
+        assert!(
+            result.is_err(),
+            "verification with different expiration epoch should fail"
+        );
+        assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+    }
 }
