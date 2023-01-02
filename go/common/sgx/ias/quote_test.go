@@ -68,4 +68,20 @@ func TestQuote(t *testing.T) {
 	bQuote, err := quote.MarshalBinary()
 	require.NoError(t, err, "EncodeQuote")
 	require.Equal(t, rawQuote, bQuote, "BinaryQuote")
+
+	// Test blacklisted GID.
+	bundle := &AVRBundle{
+		Body:             raw,
+		Signature:        sig,
+		CertificateChain: certs,
+	}
+	quotePolicy := &QuotePolicy{
+		GIDBlacklist: []uint32{},
+	}
+	_, err = bundle.Open(quotePolicy, IntelTrustRoots, time.Now())
+	require.NoError(t, err, "AVRBundle.Open")
+
+	quotePolicy.GIDBlacklist = []uint32{quote.Body.GID}
+	_, err = bundle.Open(quotePolicy, IntelTrustRoots, time.Now())
+	require.Error(t, err, "AVRBundle.Open should fail with blacklisted GID")
 }

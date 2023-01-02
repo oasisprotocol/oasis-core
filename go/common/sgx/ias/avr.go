@@ -81,6 +81,9 @@ type QuotePolicy struct {
 	//
 	// Note: QuoteOK and QuoteSwHardeningNeeded are ALWAYS allowed, and do not need to be specified.
 	AllowedQuoteStatuses []ISVEnclaveQuoteStatus `json:"allowed_quote_statuses,omitempty"`
+
+	// GIDBlackList is a list of blocked platform EPID group IDs.
+	GIDBlacklist []uint32 `json:"gid_blacklist,omitempty"`
 }
 
 // ISVEnclaveQuoteStatus is the status of an enclave quote.
@@ -214,6 +217,17 @@ func (b *AVRBundle) Open(policy *QuotePolicy, trustRoots *x509.CertPool, ts time
 	// Verify against policy.
 	if !avr.quoteStatusAllowed(policy) {
 		return nil, fmt.Errorf("quote status not allowed by policy")
+	}
+
+	quote, err := avr.Quote()
+	if err != nil {
+		return nil, fmt.Errorf("quote open failure: %w", err)
+	}
+	// Validate EPID GID not blacklisted.
+	for _, blocked := range policy.GIDBlacklist {
+		if blocked == quote.Body.GID {
+			return nil, fmt.Errorf("blacklisted quote GID")
+		}
 	}
 
 	return avr, nil

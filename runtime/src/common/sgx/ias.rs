@@ -55,6 +55,8 @@ enum AVRError {
     InvalidSignature,
     #[error("IAS quotes are disabled by policy")]
     Disabled,
+    #[error("blacklisted IAS quote GID")]
+    BlacklistedGID,
 }
 
 pub const QUOTE_CONTEXT_LEN: usize = 8;
@@ -128,6 +130,10 @@ pub struct QuotePolicy {
     /// specified.
     #[cbor(optional)]
     pub allowed_quote_statuses: Vec<i64>, // TODO: Define ISVEnclaveQuoteStatus type.
+
+    /// List of blocked platform EPID group IDs.
+    #[cbor(optional)]
+    pub gid_blacklist: Vec<u32>,
 }
 
 /// Decoded quote body.
@@ -279,6 +285,15 @@ pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
         Ok(quote_body) => quote_body,
         _ => return Err(AVRError::MalformedQuote.into()),
     };
+
+    // Verify EPID GID not blacklisted.
+    if policy
+        .gid_blacklist
+        .iter()
+        .any(|gid| gid == &quote_body.gid)
+    {
+        return Err(AVRError::BlacklistedGID.into());
+    }
 
     // Disallow debug enclaves, if we are in production environment and disallow production enclaves,
     // if we are in debug environment.
