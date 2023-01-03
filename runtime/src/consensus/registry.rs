@@ -551,6 +551,7 @@ impl SGXConstraints {
                 ias: Some(sgx::ias::QuotePolicy {
                     disabled: false,
                     allowed_quote_statuses: allowed_quote_statuses.clone(),
+                    gid_blacklist: Vec::new(),
                 }),
                 ..Default::default()
             },
