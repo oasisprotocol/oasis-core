@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -36,9 +37,12 @@ var Registration = &registration{
 }
 
 const (
-	registryNumEntities        = 10
-	registryNumNodesPerEntity  = 5
-	registryNodeMaxEpochUpdate = 5
+	registryNumEntities           = 10
+	registryNumNodesPerEntity     = 5
+	registryNodeMaxEpochUpdate    = 5
+	registryRtOwnerChangeInterval = 20
+
+	registryIterationTimeout = 15 * time.Second
 )
 
 type registration struct {
@@ -184,6 +188,12 @@ func (r *registration) Run( // nolint: gocyclo
 		return fmt.Errorf("txsource/registration: failed to create node-identities dir: %w", err)
 	}
 
+	type runtimeInfo struct {
+		entityIdx int
+		desc      *registry.Runtime
+	}
+	rtInfo := &runtimeInfo{}
+
 	// Load all accounts.
 	type nodeAcc struct {
 		id            *identity.Identity
@@ -199,12 +209,11 @@ func (r *registration) Run( // nolint: gocyclo
 
 	fac := memorySigner.NewFactory()
 	for i := range entityAccs {
-		signer, err2 := fac.Generate(signature.SignerEntity, rng)
+		entityAccs[i].signer, err = fac.Generate(signature.SignerEntity, rng)
 		if err != nil {
-			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err2)
+			return fmt.Errorf("memory signer factory Generate account %d: %w", i, err)
 		}
-		entityAccs[i].signer = signer
-		entityAccs[i].address = staking.NewAddress(signer.Public())
+		entityAccs[i].address = staking.NewAddress(entityAccs[i].signer.Public())
 	}
 
 	// Register entities.
@@ -259,7 +268,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// Submit register entity transaction.
 		tx := registry.NewRegisterEntityTx(entityAccs[i].reckonedNonce, nil, sigEntity)
 		entityAccs[i].reckonedNonce++
-		if err := r.FundSignAndSubmitTx(ctx, entityAccs[i].signer, tx); err != nil {
+		if err = r.FundSignAndSubmitTx(ctx, entityAccs[i].signer, tx); err != nil {
 			r.Logger.Error("failed to sign and submit regsiter entity transaction",
 				"tx", tx,
 				"signer", entityAccs[i].signer,
@@ -267,9 +276,13 @@ func (r *registration) Run( // nolint: gocyclo
 			return fmt.Errorf("failed to sign and submit tx: %w", err)
 		}
 
+		// Ensure entities have required stake to register runtime.
+		if err = r.EscrowFunds(ctx, fundingAccount, entityAccs[i].address, quantity.NewFromUint64(10_000)); err != nil {
+			return fmt.Errorf("account escrow failure: %w", err)
+		}
+
 		// Register runtime.
-		// XXX: currently only a single runtime is registered at start. Could
-		// also periodically register new runtimes.
+		// XXX: currently only a single runtime is used throughout the test, could use more.
 		if i == 0 {
 			// Current epoch.
 			epoch, err := beacon.GetEpoch(ctx, consensus.HeightLatest)
@@ -277,8 +290,9 @@ func (r *registration) Run( // nolint: gocyclo
 				return fmt.Errorf("failed to get current epoch: %w", err)
 			}
 
-			runtimeDesc := getRuntime(entityAccs[i].signer.Public(), r.ns, epoch)
-			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, nil, runtimeDesc)
+			rtInfo.entityIdx = i
+			rtInfo.desc = getRuntime(entityAccs[i].signer.Public(), r.ns, epoch)
+			tx := registry.NewRegisterRuntimeTx(entityAccs[i].reckonedNonce, nil, rtInfo.desc)
 			entityAccs[i].reckonedNonce++
 			if err := r.FundSignAndSubmitTx(ctx, entityAccs[i].signer, tx); err != nil {
 				r.Logger.Error("failed to sign and submit register runtime transaction",
@@ -290,13 +304,23 @@ func (r *registration) Run( // nolint: gocyclo
 		}
 	}
 
+	iteration := 0
+	var loopCtx context.Context
+	var cancel context.CancelFunc
 	for {
+		if cancel != nil {
+			cancel()
+		}
+		loopCtx, cancel = context.WithTimeout(ctx, registryIterationTimeout)
+		defer cancel()
+
 		// Select a random node from random entity and register it.
-		selectedAcc := &entityAccs[rng.Intn(registryNumEntities)]
+		selectedEntityIdx := rng.Intn(registryNumEntities)
+		selectedAcc := &entityAccs[selectedEntityIdx]
 		selectedNode := selectedAcc.nodeIdentities[rng.Intn(registryNumNodesPerEntity)]
 
 		// Current epoch.
-		epoch, err := beacon.GetEpoch(ctx, consensus.HeightLatest)
+		epoch, err := beacon.GetEpoch(loopCtx, consensus.HeightLatest)
 		if err != nil {
 			return fmt.Errorf("failed to get current epoch: %w", err)
 		}
@@ -313,7 +337,7 @@ func (r *registration) Run( // nolint: gocyclo
 		// Register node.
 		tx := registry.NewRegisterNodeTx(selectedNode.reckonedNonce, nil, sigNode)
 		selectedNode.reckonedNonce++
-		if err := r.FundSignAndSubmitTx(ctx, selectedNode.id.NodeSigner, tx); err != nil {
+		if err := r.FundSignAndSubmitTx(loopCtx, selectedNode.id.NodeSigner, tx); err != nil {
 			r.Logger.Error("failed to sign and submit register node transaction",
 				"tx", tx,
 				"signer", selectedNode.id.NodeSigner,
@@ -325,6 +349,30 @@ func (r *registration) Run( // nolint: gocyclo
 			"node", selectedNode.nodeDesc,
 		)
 
+		// Periodically re-register the runtime with a new owner.
+		if iteration&registryRtOwnerChangeInterval == 0 {
+			// Update runtime owner.
+			currentOwner := rtInfo.entityIdx
+			rtInfo.desc.EntityID = entityAccs[selectedEntityIdx].signer.Public()
+			rtInfo.entityIdx = selectedEntityIdx
+			// Sign the transaction with current owner.
+			tx := registry.NewRegisterRuntimeTx(entityAccs[currentOwner].reckonedNonce, nil, rtInfo.desc)
+			entityAccs[currentOwner].reckonedNonce++
+
+			if err := r.FundSignAndSubmitTx(loopCtx, entityAccs[currentOwner].signer, tx); err != nil {
+				r.Logger.Error("failed to sign and submit register runtime transaction",
+					"tx", tx,
+					"signer", entityAccs[currentOwner].signer,
+				)
+				return fmt.Errorf("failed to sign and submit tx: %w", err)
+			}
+
+			r.Logger.Debug("registered runtime",
+				"runtime", rtInfo.desc,
+			)
+		}
+
+		iteration++
 		select {
 		case <-time.After(1 * time.Second):
 		case <-gracefulExit.Done():

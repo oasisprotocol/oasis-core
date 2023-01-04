@@ -45,7 +45,8 @@ const (
 )
 
 var (
-	entityNodeSeed = []byte("testRegistryEntityNodes")
+	entityNodeSeed    = []byte("testRegistryEntityNodes")
+	entityRuntimeSeed = []byte("testRegistryEntityRuntime")
 
 	invalidPK = signature.NewBlacklistedPublicKey("0000000000000000000000000000000000000000000000000000000000000000")
 )
@@ -985,6 +986,11 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	re, err = NewTestRuntime([]byte("Runtime re-registration test 2"), entity, true)
 	require.NoError(err, "NewTestRuntime (re-registration test 2)")
 	re.Runtime.Kind = api.KindKeyManager
+	re.MustRegister(t, backend, consensus)
+	// Changing the owning entity should work.
+	entities, err := NewTestEntities(entityRuntimeSeed, 1)
+	require.NoError(err, "NewTestEntities")
+	re.Runtime.EntityID = entities[0].Entity.ID
 	re.MustRegister(t, backend, consensus)
 	// Non-compute runtimes cannot transition to runtime governance.
 	re.Runtime.GovernanceModel = api.GovernanceRuntime

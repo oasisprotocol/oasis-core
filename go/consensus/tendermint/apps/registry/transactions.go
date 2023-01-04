@@ -715,6 +715,8 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		// based on the existing governance model and not the new one,
 		// otherwise it would be impossible to transition from entity to
 		// runtime governance, for example.
+		// Similarly, if we're updating the controlling entity, we should check the signer
+		// based on the existing EntityID and not the new one.
 		var rtToCheck *registry.Runtime
 		if existingRt != nil {
 			rtToCheck = existingRt
@@ -744,31 +746,36 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 		}
 	}
 
+	// Start a new transaction and rollback in case we fail.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	// Make sure that the entity or runtime has enough stake.
 	// Runtimes using the consensus layer governance model do not require stake.
-	if !params.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
+	if rtAddress := rt.StakingAddress(); !params.DebugBypassStake && rtAddress != nil {
 		claim := registry.StakeClaimForRuntime(rt.ID)
 		thresholds := registry.StakeThresholdsForRuntime(rt)
-		var acctAddr staking.Address
-		switch rt.GovernanceModel {
-		case registry.GovernanceEntity:
-			acctAddr = staking.NewAddress(rt.EntityID)
-		case registry.GovernanceRuntime:
-			acctAddr = ctx.CallerAddress()
-		default:
-			// Basic validation should have caught this, but just in case...
-			ctx.Logger().Debug("RegisterRuntime: invalid governance model")
-			return nil, registry.ErrInvalidArgument
-		}
 
-		if err = stakingState.AddStakeClaim(ctx, acctAddr, claim, thresholds); err != nil {
+		if err = stakingState.AddStakeClaim(ctx, *rtAddress, claim, thresholds); err != nil {
 			ctx.Logger().Debug("RegisterRuntime: insufficient stake",
 				"err", err,
 				"entity", rt.EntityID,
 				"runtime", rt.ID,
-				"account", acctAddr,
+				"account", rtAddress,
 			)
 			return nil, err
+		}
+
+		// If owner was updated remove stake claim from previous owner.
+		if existingRt != nil && *existingRt.StakingAddress() != *rtAddress {
+			if err = stakingState.RemoveStakeClaim(ctx, *existingRt.StakingAddress(), claim); err != nil {
+				ctx.Logger().Debug("RegisterRuntime: removing stake claim",
+					"err", err,
+					"entity", existingRt.EntityID,
+					"runtime", rt.ID,
+				)
+				return nil, err
+			}
 		}
 	}
 
@@ -805,6 +812,8 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 
 		ctx.EmitEvent(api.NewEventBuilder(app.Name()).TypedAttribute(&registry.RuntimeStartedEvent{Runtime: rt}))
 	}
+
+	ctx.Commit()
 
 	return rt, nil
 }
