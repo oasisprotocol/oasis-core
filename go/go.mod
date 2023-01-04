@@ -40,7 +40,7 @@ require (
 	github.com/libp2p/go-libp2p v0.24.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
 	github.com/multiformats/go-multiaddr v0.8.0
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20221003100820-41fad3beba17
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/powerman/rpc-codec v1.2.2
