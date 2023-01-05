@@ -115,14 +115,8 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	}
 
 	var events []*api.Event
-	// Decode events from block results.
+	// Decode events from block results (at the beginning of the block).
 	blockEvs, err := EventsFromTendermint(nil, results.Height, results.BeginBlockEvents)
-	if err != nil {
-		return nil, err
-	}
-	events = append(events, blockEvs...)
-
-	blockEvs, err = EventsFromTendermint(nil, results.Height, results.EndBlockEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +133,13 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 		}
 		events = append(events, evs...)
 	}
+
+	// Decode events from block results (at the end of the block).
+	blockEvs, err = EventsFromTendermint(nil, results.Height, results.EndBlockEvents)
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, blockEvs...)
 
 	return events, nil
 }
