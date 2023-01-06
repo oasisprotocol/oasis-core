@@ -12,14 +12,13 @@ use lru::LruCache;
 use rand::{rngs::OsRng, Rng};
 use sgx_isa::Keypolicy;
 use sp800_185::{CShake, KMac};
-use x25519_dalek;
 use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
         crypto::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
-            signature,
+            signature, x25519,
         },
         namespace::Namespace,
         sgx::egetkey::egetkey,
@@ -37,7 +36,7 @@ use crate::{
         ReplicateResponse, SignedInitResponse,
     },
     client::{KeyManagerClient, RemoteClient},
-    crypto::{KeyPair, MasterSecret, PrivateKey, PublicKey, SignedPublicKey, StateKey},
+    crypto::{KeyPair, MasterSecret, SignedPublicKey, StateKey},
     policy::Policy,
     runtime::context::Context as KmContext,
 };
@@ -203,16 +202,11 @@ impl Inner {
 
         // Public/private keypair.
         xof.squeeze(&mut k);
-        let sk = x25519_dalek::StaticSecret::from(k);
+        let sk = x25519::PrivateKey::from(k);
         k.zeroize();
-        let pk = x25519_dalek::PublicKey::from(&sk);
+        let pk = x25519::PublicKey::from(&sk);
 
-        Ok(KeyPair::new(
-            PublicKey(*pk.as_bytes()),
-            PrivateKey(sk.to_bytes()),
-            state_key,
-            checksum,
-        ))
+        Ok(KeyPair::new(pk, sk, state_key, checksum))
     }
 
     fn derive_secret(&self, kdf_custom: &[u8], seed: &[u8]) -> Result<Vec<u8>> {
@@ -429,7 +423,7 @@ impl Kdf {
     }
 
     /// Get the public part of the key.
-    pub fn get_public_key(&self, req: &impl KeyRequest) -> Result<PublicKey> {
+    pub fn get_public_key(&self, req: &impl KeyRequest) -> Result<x25519::PublicKey> {
         let keys = self.get_or_create_keys(req)?;
         Ok(keys.input_keypair.pk)
     }
@@ -437,7 +431,7 @@ impl Kdf {
     /// Signs the public key using the key manager key.
     pub fn sign_public_key(
         &self,
-        key: PublicKey,
+        key: x25519::PublicKey,
         runtime_id: Namespace,
         key_pair_id: KeyPairId,
         epoch: Option<EpochTime>,
@@ -562,11 +556,14 @@ mod tests {
     use lru::LruCache;
     use rustc_hex::{FromHex, ToHex};
 
-    use oasis_core_runtime::common::{crypto::signature::PrivateKey, namespace::Namespace};
+    use oasis_core_runtime::common::{
+        crypto::{signature::PrivateKey, x25519},
+        namespace::Namespace,
+    };
 
     use crate::{
         api::{EphemeralKeyRequest, LongTermKeyRequest},
-        crypto::{KeyPairId, MasterSecret, PublicKey},
+        crypto::{KeyPairId, MasterSecret},
     };
 
     use super::{
@@ -631,7 +628,10 @@ mod tests {
             .get_or_create_keys(&req)
             .expect("private key should be created");
 
-        assert_eq!(sk1.input_keypair.sk.0, sk2.input_keypair.sk.0);
+        assert_eq!(
+            sk1.input_keypair.sk.0.to_bytes(),
+            sk2.input_keypair.sk.0.to_bytes()
+        );
         assert_eq!(sk1.input_keypair.pk.0, sk2.input_keypair.pk.0);
     }
 
@@ -649,7 +649,10 @@ mod tests {
             .get_or_create_keys(&req)
             .expect("private key should be created");
 
-        assert_ne!(sk1.input_keypair.sk.0, sk2.input_keypair.sk.0);
+        assert_ne!(
+            sk1.input_keypair.sk.0.to_bytes(),
+            sk2.input_keypair.sk.0.to_bytes()
+        );
         assert_ne!(sk1.input_keypair.pk.0, sk2.input_keypair.pk.0);
     }
 
@@ -671,7 +674,7 @@ mod tests {
     fn public_key_signature_is_valid() {
         let kdf = Kdf::default();
 
-        let pk = PublicKey::from(vec![1u8; 32]);
+        let pk = x25519::PublicKey::from([1u8; 32]);
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let key_pair_id = KeyPairId::from(vec![1u8; 32]);
         let epoch = Some(10);
@@ -681,7 +684,7 @@ mod tests {
             .sign_public_key(pk, runtime_id, key_pair_id, epoch)
             .expect("public key should be signed");
 
-        let mut body = pk.as_ref().to_vec();
+        let mut body = pk.0.to_bytes().to_vec();
         let checksum = kdf.inner.into_inner().unwrap().checksum.unwrap();
         body.extend_from_slice(&checksum);
 
@@ -869,8 +872,8 @@ mod tests {
                 .get_or_create_keys(&req)
                 .expect("private key should be created");
 
-            assert_eq!(sk.input_keypair.sk.0.to_hex::<String>(), v.sk);
-            assert_eq!(sk.input_keypair.pk.0.to_hex::<String>(), v.pk);
+            assert_eq!(sk.input_keypair.sk.0.to_bytes().to_hex::<String>(), v.sk);
+            assert_eq!(sk.input_keypair.pk.0.to_bytes().to_hex::<String>(), v.pk);
         }
     }
 }

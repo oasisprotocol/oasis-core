@@ -3,7 +3,6 @@
 use std::{collections::BTreeMap, convert::TryInto};
 
 use io_context::Context as IoContext;
-use x25519_dalek;
 
 use super::{crypto::EncryptionContext, types::*, Context, TxContext};
 use oasis_core_keymanager::crypto::KeyPairId;
@@ -12,6 +11,7 @@ use oasis_core_runtime::{
         crypto::{
             hash::Hash,
             mrae::deoxysii::{self, NONCE_SIZE},
+            x25519,
         },
         key_format::KeyFormat,
         versioned::Versioned,
@@ -377,8 +377,8 @@ impl Methods {
             .map_err(|err| err.to_string())?;
 
         // Generate ephemeral key. Not secure, but good enough for testing purposes.
-        let ephemeral_sk = x25519_dalek::StaticSecret::from(hash);
-        let ephemeral_pk = x25519_dalek::PublicKey::from(&ephemeral_sk);
+        let ephemeral_sk = x25519::PrivateKey::from(hash);
+        let ephemeral_pk = x25519::PublicKey::from(&ephemeral_sk);
 
         // ElGamal encryption.
         let ciphertext = deoxysii::box_seal(
@@ -386,12 +386,12 @@ impl Methods {
             args.plaintext,
             vec![],
             &long_term_pk.key.0,
-            &ephemeral_sk.to_bytes(),
+            &ephemeral_sk.0,
         )
         .map_err(|err| format!("failed to encrypt plaintext: {}", err))?;
 
         // Return ephemeral_pk || ciphertext.
-        let mut c = ephemeral_pk.as_bytes().to_vec();
+        let mut c = ephemeral_pk.0.as_bytes().to_vec();
         c.extend(ciphertext);
 
         Ok(Some(c))
@@ -418,24 +418,26 @@ impl Methods {
             .map_err(|err| format!("private ephemeral key not available: {}", err))?;
 
         // Decode ephemeral_pk || ciphertext.
-        let ephemeral_pk = args
+        let ephemeral_pk: [u8; x25519::PUBLIC_KEY_LENGTH] = args
             .ciphertext
-            .get(0..32)
+            .get(0..x25519::PUBLIC_KEY_LENGTH)
             .ok_or("invalid ciphertext")?
             .try_into()
             .unwrap();
         let ciphertext = args
             .ciphertext
-            .get(32..)
+            .get(x25519::PUBLIC_KEY_LENGTH..)
             .ok_or("invalid ciphertext")?
             .to_vec();
+
+        let ephemeral_pk = x25519::PublicKey::from(ephemeral_pk);
 
         // ElGamal decryption.
         let plaintext = deoxysii::box_open(
             &[0u8; NONCE_SIZE],
             ciphertext,
             vec![],
-            ephemeral_pk,
+            &ephemeral_pk.0,
             &long_term_sk.input_keypair.sk.0,
         )
         .map_err(|err| format!("failed to decrypt ciphertext: {}", err))?;
