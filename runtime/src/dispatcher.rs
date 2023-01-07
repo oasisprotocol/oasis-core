@@ -738,7 +738,7 @@ impl Dispatcher {
             "in_msgs_hash" => ?header.in_msgs_hash,
         );
 
-        let rak_sig = if self.rak.public_key().is_some() {
+        let rak_sig = if self.rak.public_rak().is_some() {
             self.rak
                 .sign(
                     COMPUTE_RESULTS_HEADER_CONTEXT,

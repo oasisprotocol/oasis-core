@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -553,6 +555,9 @@ type CapabilityTEE struct {
 	// Runtime attestation key.
 	RAK signature.PublicKey `json:"rak"`
 
+	// Runtime encryption key.
+	REK *x25519.PublicKey `json:"rek,omitempty"`
+
 	// Attestation.
 	Attestation []byte `json:"attestation"`
 }
@@ -572,7 +577,7 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64,
 		// Parse SGX remote attestation.
 		var sa SGXAttestation
 		if err := cbor.Unmarshal(c.Attestation, &sa); err != nil {
-			return fmt.Errorf("node: malfomed SGX attestation: %w", err)
+			return fmt.Errorf("node: malformed SGX attestation: %w", err)
 		}
 		if err := sa.ValidateBasic(teeCfg); err != nil {
 			return fmt.Errorf("node: malformed SGX attestation: %w", err)
@@ -587,7 +592,8 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64,
 			return fmt.Errorf("node: malformed SGX constraints: %w", err)
 		}
 
-		return sa.Verify(teeCfg, ts, height, &sc, c.RAK, nodeID)
+		// Verify SGX remote attestation.
+		return sa.Verify(teeCfg, ts, height, &sc, c.RAK, c.REK, nodeID)
 	default:
 		return ErrInvalidTEEHardware
 	}

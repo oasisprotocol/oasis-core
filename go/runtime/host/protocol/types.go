@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
+
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -216,6 +218,7 @@ type RuntimeCapabilityTEERakInitRequest struct {
 // RuntimeCapabilityTEERakReportResponse is a worker RFC 0009 CapabilityTEE RAK response message body.
 type RuntimeCapabilityTEERakReportResponse struct {
 	RakPub signature.PublicKey `json:"rak_pub"`
+	RekPub *x25519.PublicKey   `json:"rek_pub,omitempty"`
 	Report []byte              `json:"report"`
 	Nonce  string              `json:"nonce"`
 }

@@ -13,7 +13,8 @@ use crate::{
     common::{
         crypto::{
             hash::Hash,
-            signature::{PublicKey, Signature},
+            signature::{self, Signature},
+            x25519,
         },
         namespace::Namespace,
         quantity, sgx,
@@ -44,7 +45,7 @@ pub struct TCPAddress {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct TLSAddress {
     /// Public key used for establishing TLS connections.
-    pub pub_key: PublicKey,
+    pub pub_key: signature::PublicKey,
 
     /// Address at which the node can be reached.
     pub address: TCPAddress,
@@ -54,10 +55,10 @@ pub struct TLSAddress {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct TLSInfo {
     /// Public key used for establishing TLS connections.
-    pub pub_key: PublicKey,
+    pub pub_key: signature::PublicKey,
 
     /// Public key that will be used for establishing connections after certificate rotation (if enabled).
-    pub next_pub_key: PublicKey,
+    pub next_pub_key: signature::PublicKey,
 
     #[cbor(rename = "addresses", optional)]
     pub _deprecated_addresses: Option<Vec<TLSAddress>>,
@@ -67,7 +68,7 @@ pub struct TLSInfo {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct P2PInfo {
     /// Unique identifier of the node on the P2P transport.
-    pub id: PublicKey,
+    pub id: signature::PublicKey,
 
     /// List of addresses at which the node can be reached.
     pub addresses: Option<Vec<TCPAddress>>,
@@ -80,7 +81,7 @@ pub struct P2PInfo {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct ConsensusAddress {
     /// Public key identifying the node.
-    pub id: PublicKey,
+    pub id: signature::PublicKey,
 
     /// Address at which the node can be reached.
     pub address: TCPAddress,
@@ -90,7 +91,7 @@ pub struct ConsensusAddress {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct ConsensusInfo {
     /// Unique identifier of the node as a consensus member.
-    pub id: PublicKey,
+    pub id: signature::PublicKey,
 
     /// List of addresses at which the node can be reached.
     pub addresses: Option<Vec<ConsensusAddress>>,
@@ -100,7 +101,7 @@ pub struct ConsensusInfo {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct VRFInfo {
     /// Unique identifier of the node used to generate VRF proofs.
-    pub id: PublicKey,
+    pub id: signature::PublicKey,
 }
 
 /// Represents the node's TEE capability.
@@ -110,7 +111,11 @@ pub struct CapabilityTEE {
     pub hardware: TEEHardware,
 
     /// Runtime attestation key.
-    pub rak: PublicKey,
+    pub rak: signature::PublicKey,
+
+    /// Runtime encryption key.
+    #[cbor(optional)]
+    pub rek: Option<x25519::PublicKey>,
 
     /// Attestation.
     pub attestation: Vec<u8>,
@@ -219,10 +224,10 @@ pub struct Node {
     pub v: u16,
 
     /// Public key identifying the node.
-    pub id: PublicKey,
+    pub id: signature::PublicKey,
 
     /// Public key identifying the Entity controlling the node.
-    pub entity_id: PublicKey,
+    pub entity_id: signature::PublicKey,
 
     /// Epoch in which the node's commitment expires.
     pub expiration: u64,
@@ -414,7 +419,7 @@ pub struct RuntimeStakingParameters {
 pub struct EntityWhitelistRuntimeAdmissionPolicy {
     /// Entity whitelist configuration for each whitelisted entity.
     #[cbor(optional)]
-    pub entities: BTreeMap<PublicKey, EntityWhitelistConfig>,
+    pub entities: BTreeMap<signature::PublicKey, EntityWhitelistConfig>,
 }
 
 /// Entity whitelist configuration.
@@ -584,11 +589,17 @@ impl SGXAttestation {
     }
 
     /// Hashes the required data that needs to be signed by RAK producing the attestation signature.
-    pub fn hash(report_data: &[u8], node_id: PublicKey, height: u64) -> [u8; 32] {
+    pub fn hash(
+        report_data: &[u8],
+        node_id: signature::PublicKey,
+        height: u64,
+        rek: x25519::PublicKey,
+    ) -> [u8; 32] {
         let mut h = TupleHash::v256(ATTESTATION_SIGNATURE_CONTEXT);
         h.update(report_data);
         h.update(node_id.as_ref());
         h.update(&height.to_le_bytes());
+        h.update(rek.0.as_bytes());
         let mut result = [0u8; 32];
         h.finalize(&mut result);
         result
@@ -623,7 +634,7 @@ pub struct Runtime {
     /// Globally unique long term identifier of the runtime.
     pub id: Namespace,
     /// Public key identifying the Entity controlling the runtime.
-    pub entity_id: PublicKey,
+    pub entity_id: signature::PublicKey,
     /// Runtime genesis information.
     pub genesis: RuntimeGenesis,
     /// Type of runtime.
@@ -701,9 +712,9 @@ pub struct RuntimeGenesis {
 
 #[cfg(test)]
 mod tests {
-    use std::net::Ipv4Addr;
+    use std::{convert::TryInto, net::Ipv4Addr};
 
-    use rustc_hex::ToHex;
+    use rustc_hex::{FromHex, ToHex};
 
     use crate::common::quantity::Quantity;
 
@@ -753,7 +764,7 @@ mod tests {
                 Runtime {
                     v: 42,
                     id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000000"),
-                    entity_id: PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000"),
+                    entity_id: signature::PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000"),
                     genesis: RuntimeGenesis{
                         round: 43,
                         state_root: Hash::digest_bytes(b"stateroot hash"),
@@ -796,7 +807,7 @@ mod tests {
                     admission_policy: RuntimeAdmissionPolicy::EntityWhitelist(EntityWhitelistRuntimeAdmissionPolicy{
                         entities:
                             btreemap! {
-                                PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000") => EntityWhitelistConfig {
+                                signature::PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000") => EntityWhitelistConfig {
                                      max_nodes: btreemap! {
                                          RolesMask::ROLE_COMPUTE_WORKER => 3,
                                          RolesMask::ROLE_KEY_MANAGER => 1,
@@ -854,24 +865,24 @@ mod tests {
                 "qmF2A2JpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIP/////////////////////////////////////////ybG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaNjcmFrWCD/////////////////////////////////////////+GhoYXJkd2FyZQFrYXR0ZXN0YXRpb25GAAECAwQFaWNvbnNlbnN1c6JiaWRYIP/////////////////////////////////////////2aWFkZHJlc3Nlc4BpZW50aXR5X2lkWCD/////////////////////////////////////////8WpleHBpcmF0aW9uGCA=",
                 Node{
                     v: 3,
-                    id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
-                    entity_id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+                    id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+                    entity_id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
                     expiration: 32,
                     tls: TLSInfo{
-                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
-                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
                         ..Default::default()
                     },
                     p2p: P2PInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
                         ..Default::default()
                     },
                     consensus: ConsensusInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
                         addresses: Some(Vec::new()),
                     },
                     vrf: VRFInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
                     },
                     runtimes: Some(vec![
                         NodeRuntime{
@@ -885,8 +896,9 @@ mod tests {
                             capabilities: Capabilities{
                                tee: Some(CapabilityTEE{
                                    hardware: TEEHardware::TEEHardwareIntelSGX,
-                                    rak: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+                                    rak: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
                                     attestation: vec![0, 1,2,3,4,5],
+                                    ..Default::default()
                                }),
                             },
                             extra_info: Some(vec![5,3,2,1]),
@@ -938,8 +950,8 @@ mod tests {
                 Node{
                     v: 2,
                     tls: TLSInfo{
-                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
-                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
                         _deprecated_addresses: Some(vec![]),
                     },
                     ..Default::default()
@@ -950,19 +962,19 @@ mod tests {
                 Node{
                     v: 2,
                     tls: TLSInfo{
-                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
-                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
                         _deprecated_addresses: Some(vec![
                             TLSAddress{
-                                pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+                                pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
                                 address: TCPAddress { ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(), port: 123, ..Default::default() }
                             },
                             TLSAddress{
-                                pub_key: PublicKey::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc4"),
+                                pub_key: signature::PublicKey::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc4"),
                                 address: TCPAddress { ip: Ipv4Addr::new(192, 168, 1, 1).to_ipv6_mapped().octets().to_vec(), port: 4000, ..Default::default() }
                             },
                             TLSAddress{
-                                pub_key: PublicKey::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd4"),
+                                pub_key: signature::PublicKey::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd4"),
                                 address: TCPAddress { ip: Ipv4Addr::new(234, 100, 99, 88).to_ipv6_mapped().octets().to_vec(), port: 8000, ..Default::default() }
                             },
 
@@ -975,27 +987,27 @@ mod tests {
                 "qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0bG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaNjcmFrWCD/////////////////////////////////////////+GhoYXJkd2FyZQFrYXR0ZXN0YXRpb25GAAECAwQFaWNvbnNlbnN1c6JiaWRYIP/////////////////////////////////////////2aWFkZHJlc3Nlc4BpZW50aXR5X2lkWCD/////////////////////////////////////////8WpleHBpcmF0aW9uGCA=",
                 Node{
                     v: 2,
-                    id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
-                    entity_id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+                    id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+                    entity_id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
                     expiration: 32,
                     tls: TLSInfo{
-                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
-                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
                         _deprecated_addresses: Some(vec![TLSAddress{
-                                pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+                                pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
                                 address: TCPAddress { ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(), port: 123, ..Default::default() }
                             }])
                     },
                     p2p: P2PInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
                         ..Default::default()
                     },
                     consensus: ConsensusInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
                         addresses: Some(Vec::new()),
                     },
                     vrf: VRFInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
                     },
                     runtimes: Some(vec![
                         NodeRuntime{
@@ -1007,11 +1019,61 @@ mod tests {
                             id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000011"),
                             version: Version::from(123),
                             capabilities: Capabilities{
-                               tee: Some(CapabilityTEE{
-                                   hardware: TEEHardware::TEEHardwareIntelSGX,
-                                    rak: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+                                tee: Some(CapabilityTEE{
+                                    hardware: TEEHardware::TEEHardwareIntelSGX,
+                                    rak: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
                                     attestation: vec![0, 1,2,3,4,5],
-                               }),
+                                    ..Default::default()
+                                }),
+                            },
+                            extra_info: Some(vec![5,3,2,1]),
+                        },
+                    ]),
+                    ..Default::default()
+                },
+            ),
+            (
+                "qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0bG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaRjcmFrWCD/////////////////////////////////////////+GNyZWtYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaGhhcmR3YXJlAWthdHRlc3RhdGlvbkYAAQIDBAVpY29uc2Vuc3VzomJpZFgg//////////////////////////////////////////ZpYWRkcmVzc2VzgGllbnRpdHlfaWRYIP/////////////////////////////////////////xamV4cGlyYXRpb24YIA==",
+                Node{
+                    v: 2,
+                    id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+                    entity_id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+                    expiration: 32,
+                    tls: TLSInfo{
+                        pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+                        next_pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        _deprecated_addresses: Some(vec![TLSAddress{
+                                pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+                                address: TCPAddress { ip: Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped().octets().to_vec(), port: 123, ..Default::default() }
+                            }])
+                    },
+                    p2p: P2PInfo{
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
+                        ..Default::default()
+                    },
+                    consensus: ConsensusInfo{
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
+                        addresses: Some(Vec::new()),
+                    },
+                    vrf: VRFInfo{
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
+                    },
+                    runtimes: Some(vec![
+                        NodeRuntime{
+                            id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),
+                            version: Version::from(321u64),
+                            ..Default::default()
+                        },
+                        NodeRuntime{
+                            id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000011"),
+                            version: Version::from(123),
+                            capabilities: Capabilities{
+                                tee: Some(CapabilityTEE{
+                                    hardware: TEEHardware::TEEHardwareIntelSGX,
+                                    rak: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+                                    rek: Some(x25519::PublicKey::from([0;32])),
+                                    attestation: vec![0, 1,2,3,4,5],
+                                }),
                             },
                             extra_info: Some(vec![5,3,2,1]),
                         },
@@ -1117,14 +1179,23 @@ mod tests {
 
     #[test]
     fn test_hash_attestation() {
-        let h = SGXAttestation::hash(
-            b"foo bar",
-            PublicKey::from("47aadd91516ac548decdb436fde957992610facc09ba2f850da0fe1b2be96119"),
-            42,
+        let report_data = b"foo bar";
+        let node_id = signature::PublicKey::from(
+            "47aadd91516ac548decdb436fde957992610facc09ba2f850da0fe1b2be96119",
         );
+        let height = 42;
+        let rek: [u8; x25519::PUBLIC_KEY_LENGTH] =
+            "7992610facc09ba2f850da0fe1b2be9611947aadd91516ac548decdb436fde95"
+                .from_hex::<Vec<u8>>()
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let rek = x25519::PublicKey::from(rek);
+
+        let h = SGXAttestation::hash(report_data, node_id, height, rek);
         assert_eq!(
             h.to_hex::<String>(),
-            "0f01a5084bbf432427873cbce5f8c3bff76bc22b9d1e0674b852e43698abb195"
+            "9a288bd33ba7a4c2eefdee68e4c08c1a34c369302ef8176a3bfdb4fedcec333e"
         );
     }
 }

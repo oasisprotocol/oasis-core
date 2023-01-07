@@ -112,7 +112,7 @@ mod test {
 
     use crate::{
         common::{
-            crypto::{hash::Hash, signature::PublicKey},
+            crypto::{hash::Hash, signature},
             namespace::Namespace,
         },
         consensus::registry::{
@@ -163,27 +163,27 @@ mod test {
         let expected_nodes = vec![
                 Node{
                     v: 3,
-                    id: PublicKey::from("43e5aaee54c768867718837ef4f6a6161e0615da0fcf8da394e5c8b7a0d54c18"),
-                    entity_id: PublicKey::from("761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531"),
+                    id: signature::PublicKey::from("43e5aaee54c768867718837ef4f6a6161e0615da0fcf8da394e5c8b7a0d54c18"),
+                    entity_id: signature::PublicKey::from("761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531"),
                     expiration: 32,
                     ..Default::default()
                 },
                 Node{
                     v: 3,
-                    id: PublicKey::from("f43c3559658f76b85d0630f56dc75d603807ac60be0ca3aada66799289066758"),
-                    entity_id: PublicKey::from("761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531"),
+                    id: signature::PublicKey::from("f43c3559658f76b85d0630f56dc75d603807ac60be0ca3aada66799289066758"),
+                    entity_id: signature::PublicKey::from("761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531"),
                     expiration: 32,
                     tls: TLSInfo{
-                        pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
-                        next_pub_key: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+                        pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+                        next_pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
                         ..Default::default()
                     },
                     p2p: P2PInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
                         addresses: Some(Vec::new()),
                     },
                     consensus: ConsensusInfo{
-                        id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+                        id: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
                         addresses: Some(Vec::new()),
                     },
                     vrf: VRFInfo{
@@ -201,8 +201,9 @@ mod test {
                             capabilities: Capabilities{
                                tee: Some(CapabilityTEE{
                                    hardware: TEEHardware::TEEHardwareIntelSGX,
-                                    rak: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+                                    rak: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
                                     attestation: vec![0, 1,2,3,4,5],
+                                    ..Default::default()
                                }),
                             },
                             extra_info: Some(vec![5,3,2,1]),
@@ -224,7 +225,7 @@ mod test {
         let node = registry_state
             .node(
                 Context::create_child(&ctx),
-                &PublicKey::from(
+                &signature::PublicKey::from(
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
                 ),
             )
@@ -237,7 +238,7 @@ mod test {
                 id: Namespace::from(
                     "8000000000000000000000000000000000000000000000000000000000000010",
                 ),
-                entity_id: PublicKey::from(
+                entity_id: signature::PublicKey::from(
                     "761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531",
                 ),
                 kind: RuntimeKind::KindCompute,
@@ -261,7 +262,7 @@ mod test {
                 id: Namespace::from(
                     "8000000000000000000000000000000000000000000000000000000000000011",
                 ),
-                entity_id: PublicKey::from(
+                entity_id: signature::PublicKey::from(
                     "761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531",
                 ),
                 kind: RuntimeKind::KindCompute,

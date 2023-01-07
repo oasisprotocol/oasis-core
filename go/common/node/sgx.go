@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
+
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -209,6 +211,7 @@ func (sa *SGXAttestation) Verify(
 	height uint64,
 	sc *SGXConstraints,
 	rak signature.PublicKey,
+	rek *x25519.PublicKey,
 	nodeID signature.PublicKey,
 ) error {
 	if cfg == nil {
@@ -243,7 +246,7 @@ func (sa *SGXAttestation) Verify(
 
 	if cfg.SGX.SignedAttestations {
 		// In case the signed attestation feature is enabled, verify the signature.
-		return sa.verifyAttestationSignature(sc, rak, verifiedQuote.ReportData, nodeID, height)
+		return sa.verifyAttestationSignature(sc, rak, rek, verifiedQuote.ReportData, nodeID, height)
 	}
 
 	return nil
@@ -252,11 +255,12 @@ func (sa *SGXAttestation) Verify(
 func (sa *SGXAttestation) verifyAttestationSignature(
 	sc *SGXConstraints,
 	rak signature.PublicKey,
+	rek *x25519.PublicKey,
 	reportData []byte,
 	nodeID signature.PublicKey,
 	height uint64,
 ) error {
-	h := HashAttestation(reportData, nodeID, sa.Height)
+	h := HashAttestation(reportData, nodeID, sa.Height, rek)
 	if !rak.Verify(AttestationSignatureContext, h, sa.Signature[:]) {
 		return ErrInvalidAttestationSignature
 	}
@@ -275,8 +279,8 @@ func (sa *SGXAttestation) verifyAttestationSignature(
 // HashAttestation hashes the required data that needs to be signed by RAK producing the attestation
 // signature. The hash is computed as follows:
 //
-//	TupleHash[AttestationSignatureContext](reportData, nodeID, height)
-func HashAttestation(reportData []byte, nodeID signature.PublicKey, height uint64) []byte {
+//	TupleHash[AttestationSignatureContext](reportData, nodeID, height, *rek)
+func HashAttestation(reportData []byte, nodeID signature.PublicKey, height uint64, rek *x25519.PublicKey) []byte {
 	h := tuplehash.New256(32, []byte(AttestationSignatureContext))
 	_, _ = h.Write(reportData)
 	rawNodeID, _ := nodeID.MarshalBinary()
@@ -284,5 +288,8 @@ func HashAttestation(reportData []byte, nodeID signature.PublicKey, height uint6
 	var rawHeight [8]byte
 	binary.LittleEndian.PutUint64(rawHeight[:], height)
 	_, _ = h.Write(rawHeight[:])
+	if rek != nil {
+		_, _ = h.Write(rek[:])
+	}
 	return h.Sum(nil)
 }

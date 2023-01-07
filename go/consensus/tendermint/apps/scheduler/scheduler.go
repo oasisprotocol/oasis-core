@@ -386,7 +386,7 @@ func (app *schedulerApplication) isSuitableExecutorWorker(
 				activeDeployment.TEE,
 				n.node.ID,
 			); err != nil {
-				ctx.Logger().Warn("failed to verify node TEE attestaion",
+				ctx.Logger().Warn("failed to verify node TEE attestation",
 					"err", err,
 					"node_id", n.node.ID,
 					"timestamp", ctx.Now(),

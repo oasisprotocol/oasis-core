@@ -7,7 +7,8 @@ use crate::{
     common::{
         crypto::{
             hash::Hash,
-            signature::{PublicKey, Signature},
+            signature::{self, Signature},
+            x25519,
         },
         namespace::Namespace,
         sgx::{ias::AVR, Quote, QuotePolicy},
@@ -125,7 +126,8 @@ pub enum Body {
     RuntimeCapabilityTEERakInitResponse {},
     RuntimeCapabilityTEERakReportRequest {},
     RuntimeCapabilityTEERakReportResponse {
-        rak_pub: PublicKey,
+        rak_pub: signature::PublicKey,
+        rek_pub: x25519::PublicKey,
         report: Vec<u8>,
         nonce: String,
     },
@@ -265,7 +267,7 @@ pub enum Body {
     },
     HostIdentityRequest {},
     HostIdentityResponse {
-        node_id: PublicKey,
+        node_id: signature::PublicKey,
     },
 }
 

@@ -83,7 +83,7 @@ func initFakeCapabilitiesSGX(nodeID signature.PublicKey) (signature.Signer, *nod
 	})
 
 	// Generate attestation signature.
-	h := node.HashAttestation(quote.Report.ReportData[:], nodeID, 1)
+	h := node.HashAttestation(quote.Report.ReportData[:], nodeID, 1, nil)
 	attestationSig, err := signature.Sign(fr, node.AttestationSignatureContext, h)
 	if err != nil {
 		return nil, nil, err

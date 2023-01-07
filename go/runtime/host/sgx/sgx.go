@@ -330,6 +330,7 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *loggin
 		return nil, fmt.Errorf("error while requesting worker quote and public RAK: %w", err)
 	}
 	rakPub := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.RakPub
+	rekPub := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.RekPub
 	report := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.Report
 	nonce := rakQuoteRes.RuntimeCapabilityTEERakReportResponse.Nonce
 
@@ -341,6 +342,7 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *loggin
 	capabilityTEE := &node.CapabilityTEE{
 		Hardware:    node.TEEHardwareIntelSGX,
 		RAK:         rakPub,
+		REK:         rekPub,
 		Attestation: attestation,
 	}
 
