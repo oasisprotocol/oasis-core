@@ -110,6 +110,15 @@ func (sc *serviceClient) Addresses(ctx context.Context, height int64) ([]api.Add
 	return q.Addresses(ctx)
 }
 
+func (sc *serviceClient) CommissionScheduleAddresses(ctx context.Context, height int64) ([]api.Address, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.CommissionScheduleAddresses(ctx)
+}
+
 func (sc *serviceClient) Account(ctx context.Context, query *api.OwnerQuery) (*api.Account, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {

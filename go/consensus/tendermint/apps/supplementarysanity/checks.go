@@ -114,7 +114,7 @@ func checkRootHash(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	return nil
 }
 
-func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
+func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error { //nolint: gocyclo
 	st := stakingState.NewMutableState(ctx.State())
 
 	parameters, err := st.ConsensusParameters(ctx)
@@ -145,6 +145,7 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	if err != nil {
 		return fmt.Errorf("Addresses(): %w", err)
 	}
+	addressesWithCommissionSchedule := make(map[staking.Address]bool)
 	var acct *staking.Account
 	for _, addr := range addresses {
 		acct, err = st.Account(ctx, addr)
@@ -154,6 +155,9 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 		err = staking.SanityCheckAccount(&total, parameters, now, addr, acct, totalSupply)
 		if err != nil {
 			return fmt.Errorf("SanityCheckAccount %s: %w", addr, err)
+		}
+		if !acct.Escrow.CommissionSchedule.IsEmpty() {
+			addressesWithCommissionSchedule[addr] = true
 		}
 	}
 
@@ -181,6 +185,26 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error {
 			"balances in accounts plus governance deposits (%s), plus common pool (%s), plus last block fees (%s), does not add up to total supply (%s)",
 			governanceDeposits.String(), commonPool.String(), totalFees.String(), totalSupply.String(),
 		)
+	}
+
+	// Ensure CommissionScheduleAddresses response matches actual addresses with commission schedule.
+	commissionAddresses, err := st.CommissionScheduleAddresses(ctx)
+	if err != nil {
+		return fmt.Errorf("CommissionScheduleAddresses(): %w", err)
+	}
+	if l1, l2 := len(addressesWithCommissionSchedule), len(commissionAddresses); l1 != l2 {
+		return fmt.Errorf("number of addresses with non-empty commission schedule (%d) doesn't match the number of addresses returned by CommissionScheduleAddresses (%d)",
+			l1, l2)
+	}
+	seen := make(map[staking.Address]bool, len(commissionAddresses))
+	for _, addr := range commissionAddresses {
+		if _, ok := seen[addr]; ok {
+			return fmt.Errorf("duplicate address in CommissionScheduleAddresses response (%s)", addr)
+		}
+		seen[addr] = true
+		if _, ok := addressesWithCommissionSchedule[addr]; !ok {
+			return fmt.Errorf("address without commission schedule (%s) in CommissionScheduleAddresses response", addr)
+		}
 	}
 
 	// All shares of all delegations for a given account must add up to account's Escrow.Active.TotalShares.

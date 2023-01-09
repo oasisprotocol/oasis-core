@@ -39,6 +39,10 @@ type CommissionScheduleRules struct {
 	MaxRateSteps uint16 `json:"max_rate_steps,omitempty"`
 	// Maximum number of commission rate bound steps a commission schedule can specify.
 	MaxBoundSteps uint16 `json:"max_bound_steps,omitempty"`
+
+	// MinCommissionRate is the minimum commission rate an account can configure.
+	// The rate is obtained by dividing this value with the `CommissionRateDenominator`.
+	MinCommissionRate quantity.Quantity `json:"min_commission_rate"`
 }
 
 // CommissionRateStep sets a commission rate and its starting time.
@@ -100,6 +104,11 @@ type CommissionSchedule struct {
 	Bounds []CommissionRateBoundStep `json:"bounds,omitempty"`
 }
 
+// IsEmpty returns true if commission schedule is empty.
+func (cs *CommissionSchedule) IsEmpty() bool {
+	return len(cs.Rates) == 0 && len(cs.Bounds) == 0
+}
+
 // PrettyPrint writes a pretty-printed representation of CommissionSchedule to
 // the given writer.
 func (cs CommissionSchedule) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
@@ -153,6 +162,9 @@ func (cs *CommissionSchedule) validateNondegenerate(rules *CommissionScheduleRul
 		if step.Rate.Cmp(CommissionRateDenominator) > 0 {
 			return fmt.Errorf("rate step %d rate %v/%v over unity", i, step.Rate, CommissionRateDenominator)
 		}
+		if step.Rate.Cmp(&rules.MinCommissionRate) < 0 {
+			return fmt.Errorf("rate step %d rate '%v' less than minimum allowed commission rate: '%v'", i, step.Rate, rules.MinCommissionRate)
+		}
 	}
 
 	for i, step := range cs.Bounds {
@@ -170,6 +182,12 @@ func (cs *CommissionSchedule) validateNondegenerate(rules *CommissionScheduleRul
 		}
 		if step.RateMax.Cmp(&step.RateMin) < 0 {
 			return fmt.Errorf("bound step %d maximum rate %v/%v less than minimum rate %v/%v", i, step.RateMax, CommissionRateDenominator, step.RateMin, CommissionRateDenominator)
+		}
+		if step.RateMax.Cmp(&rules.MinCommissionRate) < 0 {
+			return fmt.Errorf("bound step %d maximum rate '%v' less than minimum allowed commission rate: '%v'", i, step.RateMax, rules.MinCommissionRate)
+		}
+		if step.RateMin.Cmp(&rules.MinCommissionRate) < 0 {
+			return fmt.Errorf("bound step %d minimum rate '%v' less than minimum allowed commission rate: '%v'", i, step.RateMax, rules.MinCommissionRate)
 		}
 	}
 
@@ -334,9 +352,9 @@ func (cs *CommissionSchedule) validateWithinBound(now beacon.EpochTime) error {
 	return nil
 }
 
-// PruneAndValidateForGenesis gets a schedule ready for use in the genesis document.
+// PruneAndValidate validates and prunes old rules.
 // Returns an error if there is a validation failure. If it does, the schedule may be pruned already.
-func (cs *CommissionSchedule) PruneAndValidateForGenesis(rules *CommissionScheduleRules, now beacon.EpochTime) error {
+func (cs *CommissionSchedule) PruneAndValidate(rules *CommissionScheduleRules, now beacon.EpochTime) error {
 	if err := cs.validateComplexity(rules); err != nil {
 		return err
 	}

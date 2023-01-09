@@ -30,6 +30,8 @@ var (
 	methodThreshold = serviceName.NewMethod("Threshold", ThresholdQuery{})
 	// methodAddresses is the Addresses method.
 	methodAddresses = serviceName.NewMethod("Addresses", int64(0))
+	// methodCommissionScheduleAddresses is the CommissionScheduleAddresses method.
+	methodCommissionScheduleAddresses = serviceName.NewMethod("CommissionScheduleAddresses", int64(0))
 	// methodAccount is the Account method.
 	methodAccount = serviceName.NewMethod("Account", OwnerQuery{})
 	// methodDelegationsFor is the DelegationsFor method.
@@ -92,6 +94,10 @@ var (
 			{
 				MethodName: methodAddresses.ShortName(),
 				Handler:    handlerAddresses,
+			},
+			{
+				MethodName: methodCommissionScheduleAddresses.ShortName(),
+				Handler:    handlerCommissionScheduleAddresses,
 			},
 			{
 				MethodName: methodAccount.ShortName(),
@@ -320,6 +326,29 @@ func handlerAddresses(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Addresses(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerCommissionScheduleAddresses(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).CommissionScheduleAddresses(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodCommissionScheduleAddresses.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).CommissionScheduleAddresses(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -673,6 +702,14 @@ func (c *stakingClient) Threshold(ctx context.Context, query *ThresholdQuery) (*
 func (c *stakingClient) Addresses(ctx context.Context, height int64) ([]Address, error) {
 	var rsp []Address
 	if err := c.conn.Invoke(ctx, methodAddresses.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *stakingClient) CommissionScheduleAddresses(ctx context.Context, height int64) ([]Address, error) {
+	var rsp []Address
+	if err := c.conn.Invoke(ctx, methodCommissionScheduleAddresses.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

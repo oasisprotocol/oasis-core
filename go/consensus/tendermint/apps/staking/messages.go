@@ -3,6 +3,7 @@ package staking
 import (
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
@@ -39,6 +40,59 @@ func (app *stakingApplication) changeParameters(ctx *api.Context, msg interface{
 	}
 	if err = params.SanityCheck(); err != nil {
 		return nil, fmt.Errorf("staking: failed to validate consensus parameters: %w", err)
+	}
+
+	// Do any necessary state migrations.
+	if changes.MinCommissionRate != nil && apply {
+		var epoch beacon.EpochTime
+		epoch, err = ctx.AppState().GetCurrentEpoch(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("staking: failed to load epoch")
+		}
+		// On MinCommissionRate update, the staking state needs to be updated to ensure all
+		// commission rates and bounds are above the new min commission rate.
+		var addresses []staking.Address
+		addresses, err = state.CommissionScheduleAddresses(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("staking: failed to load addresses: %w", err)
+		}
+		for _, addr := range addresses {
+			var acc *staking.Account
+			acc, err = state.Account(ctx, addr)
+			if err != nil {
+				return nil, fmt.Errorf("staking: failed to load account: %w", err)
+			}
+			var updated bool
+			for i, bound := range acc.Escrow.CommissionSchedule.Bounds {
+				if changes.MinCommissionRate.Cmp(&bound.RateMin) > 0 {
+					// Update the minimum rate bound, to be at least the minimum bound.
+					acc.Escrow.CommissionSchedule.Bounds[i].RateMin = *changes.MinCommissionRate.Clone()
+					updated = true
+				}
+				if changes.MinCommissionRate.Cmp(&bound.RateMax) > 0 {
+					// Update the maximum rate bound, to be at least the minimum bound.
+					acc.Escrow.CommissionSchedule.Bounds[i].RateMax = *changes.MinCommissionRate.Clone()
+					updated = true
+				}
+			}
+			for i, rate := range acc.Escrow.CommissionSchedule.Rates {
+				if changes.MinCommissionRate.Cmp(&rate.Rate) > 0 {
+					// Update the rate, to be at least the minimum bound.
+					acc.Escrow.CommissionSchedule.Rates[i].Rate = *changes.MinCommissionRate.Clone()
+					updated = true
+				}
+			}
+			if updated {
+				// Validate updated commission schedule. Also prunes old, unused rules.
+				if err = acc.Escrow.CommissionSchedule.PruneAndValidate(&params.CommissionScheduleRules, epoch); err != nil {
+					return nil, fmt.Errorf("staking: commission schedule for account '%s' invalid after update: %w", addr, err)
+				}
+				if err = state.SetAccount(ctx, addr, acc); err != nil {
+					return nil, fmt.Errorf("staking: failed to store account '%s': %w", addr, err)
+				}
+			}
+
+		}
 	}
 
 	// Apply changes.
