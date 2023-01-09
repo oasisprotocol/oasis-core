@@ -1231,13 +1231,6 @@ func VerifyRuntimeUpdate(
 	now beacon.EpochTime,
 	params *ConsensusParameters,
 ) error {
-	if !currentRt.EntityID.Equal(newRt.EntityID) {
-		logger.Error("RegisterRuntime: trying to change runtime owner",
-			"current_owner", currentRt.EntityID,
-			"new_owner", newRt.EntityID,
-		)
-		return ErrRuntimeUpdateNotAllowed
-	}
 	if !currentRt.ID.Equal(&newRt.ID) {
 		logger.Error("RegisterRuntime: trying to update runtime ID",
 			"current_id", currentRt.ID.String(),

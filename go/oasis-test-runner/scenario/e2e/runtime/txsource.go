@@ -257,8 +257,16 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			FeeSplitWeightVote:        *quantity.NewFromUint64(1),
 			FeeSplitWeightNextPropose: *quantity.NewFromUint64(1),
 			AllowEscrowMessages:       true,
+			Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+				staking.KindEntity:            *quantity.NewFromUint64(0),
+				staking.KindNodeValidator:     *quantity.NewFromUint64(0),
+				staking.KindNodeCompute:       *quantity.NewFromUint64(0),
+				staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
+				staking.KindRuntimeCompute:    *quantity.NewFromUint64(100),
+				staking.KindRuntimeKeyManager: *quantity.NewFromUint64(100),
+			},
 		},
-		TotalSupply: *quantity.NewFromUint64(150000000400),
+		TotalSupply: *quantity.NewFromUint64(150000001400),
 		Ledger: map[staking.Address]*staking.Account{
 			e2e.DeterministicValidator0: {
 				General: staking.GeneralAccount{
@@ -369,6 +377,15 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 					},
 				},
 			},
+			// Ensure test entity has enough stake to register runtimes.
+			e2e.TestEntityAccount: {
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *quantity.NewFromUint64(1000),
+						TotalShares: *quantity.NewFromUint64(100),
+					},
+				},
+			},
 		},
 		Delegations: map[staking.Address]map[staking.Address]*staking.Delegation{
 			e2e.DeterministicEntity1: {
@@ -388,6 +405,11 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			},
 			e2e.DeterministicEntity4: {
 				e2e.DeterministicEntity4: &staking.Delegation{
+					Shares: *quantity.NewFromUint64(100),
+				},
+			},
+			e2e.TestEntityAccount: {
+				e2e.TestEntityAccount: &staking.Delegation{
 					Shares: *quantity.NewFromUint64(100),
 				},
 			},

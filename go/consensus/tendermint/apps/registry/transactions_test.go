@@ -503,6 +503,190 @@ func TestRegisterNode(t *testing.T) {
 	}
 }
 
+func TestRegisterRuntime(t *testing.T) {
+	computeStakeThreshold := quantity.NewFromUint64(100)
+
+	require := requirePkg.New(t)
+
+	now := time.Unix(1580461674, 0)
+	cfg := abciAPI.MockApplicationStateConfig{}
+	appState := abciAPI.NewMockApplicationState(&cfg)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	defer ctx.Close()
+
+	var md abciAPI.NoopMessageDispatcher
+	app := registryApplication{appState, &md}
+
+	state := registryState.NewMutableState(ctx.State())
+	stakeState := stakingState.NewMutableState(ctx.State())
+	beaconState := beaconState.NewMutableState(ctx.State())
+
+	// Set up default staking consensus parameters.
+	defaultStakeParameters := staking.ConsensusParameters{
+		Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+			staking.KindEntity:            *quantity.NewFromUint64(0),
+			staking.KindRuntimeCompute:    *computeStakeThreshold,
+			staking.KindRuntimeKeyManager: *quantity.NewFromUint64(0),
+		},
+	}
+
+	// Set up registry consensus parameters.
+	err := state.SetConsensusParameters(ctx, &registry.ConsensusParameters{
+		DebugAllowTestRuntimes: true,
+		MaxRuntimeDeployments:  20,
+		EnableRuntimeGovernanceModels: map[registry.RuntimeGovernanceModel]bool{
+			registry.GovernanceEntity: true,
+		},
+	})
+	require.NoError(err, "registry.SetConsensusParameters")
+
+	// Setup beacon consensus parameters.
+	err = beaconState.SetConsensusParameters(ctx, &beacon.ConsensusParameters{
+		Backend: beacon.BackendInsecure,
+	})
+	require.NoError(err, "beacon.SetConsensusParameters")
+
+	// Store all successful registrations in a map for easier reference in later test cases.
+	type testCaseData struct {
+		// Signers.
+		entitySigner signature.Signer
+
+		// Runtime descriptor.
+		runtime *registry.Runtime
+	}
+	tcData := make(map[string]*testCaseData)
+
+	tcs := []struct {
+		name        string
+		prepareFn   func(tcd *testCaseData)
+		stakeParams *staking.ConsensusParameters
+		valid       bool
+	}{
+		// A simple compute runtime.
+		{
+			"Compute Runtime",
+			nil,
+			nil,
+			true,
+		},
+		// Test updating entity.
+		{
+			"Compute Runtime Update Entity No Stake",
+			func(tcd *testCaseData) {
+				// Update previously registered runtime.
+				tcd.runtime = tcData["Compute Runtime"].runtime
+				tcd.entitySigner = tcData["Compute Runtime"].entitySigner
+				// Update entity ID.
+				tcd.runtime.EntityID = memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime entity signer: no stake").Public()
+			},
+			nil,
+			false,
+		},
+		{
+			"Compute Runtime Update Entity",
+			func(tcd *testCaseData) {
+				newEntity := tcd.entitySigner
+				// Update previously registered runtime.
+				tcd.runtime = tcData["Compute Runtime"].runtime
+				tcd.entitySigner = tcData["Compute Runtime"].entitySigner
+				// Update entity ID.
+				tcd.runtime.EntityID = newEntity.Public()
+			},
+			nil,
+			true,
+		},
+		// TODO: add more tests in future.
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			require = requirePkg.New(t)
+
+			// Reset staking consensus parameters.
+			stakeParams := tc.stakeParams
+			if stakeParams == nil {
+				stakeParams = &defaultStakeParameters
+			}
+			err = stakeState.SetConsensusParameters(ctx, stakeParams)
+			require.NoError(err, "staking.SetConsensusParameters")
+
+			// Prepare default signers.
+			tcd := &testCaseData{
+				entitySigner: memorySigner.NewTestSigner("consensus/tendermint/apps/registry: runtime entity signer: " + tc.name),
+			}
+
+			// Prepare a test entity that owns the nodes.
+			ent := entity.Entity{
+				Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
+				ID:        tcd.entitySigner.Public(),
+			}
+			sigEnt, err := entity.SignEntity(tcd.entitySigner, registry.RegisterEntitySignatureContext, &ent)
+			require.NoError(err, "SignEntity")
+			err = state.SetEntity(ctx, &ent, sigEnt)
+			require.NoError(err, "SetEntity")
+
+			// Ensure entity has stake for the runtime.
+			err = stakeState.SetAccount(ctx, staking.NewAddress(ent.ID), &staking.Account{
+				Escrow: staking.EscrowAccount{
+					Active: staking.SharePool{
+						Balance:     *computeStakeThreshold,
+						TotalShares: *computeStakeThreshold,
+					},
+				},
+			})
+			require.NoError(err, "SetAccount")
+
+			// Prepare a new minimal runtime.
+			tcd.runtime = &registry.Runtime{
+				Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+				ID:              common.NewTestNamespaceFromSeed([]byte("consensus/tendermint/apps/registry: runtime tests: "), 0),
+				EntityID:        tcd.entitySigner.Public(),
+				Kind:            registry.KindCompute,
+				GovernanceModel: registry.GovernanceEntity,
+				Executor: registry.ExecutorParameters{
+					GroupSize:    1,
+					RoundTimeout: 5,
+				},
+				TxnScheduler: registry.TxnSchedulerParameters{
+					BatchFlushTimeout: 100_000_000,
+					MaxBatchSize:      100,
+					MaxBatchSizeBytes: 100_000_000,
+					ProposerTimeout:   2,
+				},
+				Deployments: []*registry.VersionInfo{
+					{
+						ValidFrom: 100,
+					},
+				},
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
+				},
+			}
+			if tc.prepareFn != nil {
+				tc.prepareFn(tcd)
+			}
+
+			// Attempt to register the runtime.
+			txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+			defer txCtx.Close()
+			txCtx.SetTxSigner(tcd.entitySigner.Public())
+			_, err = app.registerRuntime(txCtx, state, tcd.runtime)
+			switch tc.valid {
+			case true:
+				require.NoError(err, "runtime registration should succeed")
+
+				// Make sure the runtime is registered.
+				_, err = state.Runtime(ctx, tcd.runtime.ID)
+				require.NoError(err, "runtime should be registered")
+			case false:
+				require.Error(err, "runtime registration should fail")
+			}
+
+			tcData[tc.name] = tcd
+		})
+	}
+}
+
 func TestProofFreshness(t *testing.T) {
 	require := requirePkg.New(t)
 

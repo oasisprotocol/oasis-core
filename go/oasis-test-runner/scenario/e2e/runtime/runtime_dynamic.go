@@ -488,7 +488,7 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		Account: entAddr,
 		Amount:  enoughStake,
 	})
-	nonce++ // nolint: ineffassign
+	nonce++
 	sigTx, err = transaction.Sign(entSigner, tx)
 	if err != nil {
 		return fmt.Errorf("failed to sign escrow: %w", err)
@@ -518,6 +518,30 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Another epoch transition to elect committees.
 	if err = sc.epochTransition(ctx); err != nil {
 		return err
+	}
+
+	// Transition the runtime governance model to runtime.
+	compRtDesc.GovernanceModel = registry.GovernanceRuntime
+	// Ensure runtime account has enough stake.
+	tx = staking.NewAddEscrowTx(nonce, &transaction.Fee{Gas: 10000}, &staking.Escrow{
+		Account: *compRtDesc.StakingAddress(),
+		Amount:  enoughStake,
+	})
+	nonce++
+	sigTx, err = transaction.Sign(entSigner, tx)
+	if err != nil {
+		return fmt.Errorf("failed to sign escrow: %w", err)
+	}
+	if err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx); err != nil {
+		return fmt.Errorf("failed to escrow stake: %w", err)
+	}
+	// Update the runtime governance model.
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
+		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
+	}
+	nonce++ // nolint: ineffassign
+	if err = cli.Consensus.SubmitTx(txPath); err != nil {
+		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
