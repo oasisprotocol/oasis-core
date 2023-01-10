@@ -4,6 +4,7 @@ package deoxysii
 import (
 	"crypto/sha512"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 	"github.com/oasisprotocol/deoxysii"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mrae/api"
@@ -18,11 +19,11 @@ var (
 
 type boxImpl struct{}
 
-func (impl *boxImpl) DeriveSymmetricKey(key []byte, publicKey, privateKey *[32]byte) {
+func (impl *boxImpl) DeriveSymmetricKey(key []byte, publicKey *x25519.PublicKey, privateKey *x25519.PrivateKey) {
 	api.ECDHAndTweak(key, publicKey, privateKey, sha512.New512_256, boxKDFTweak)
 }
 
-func (impl *boxImpl) Seal(dst, nonce, plaintext, additionalData []byte, peersPublicKey, privateKey *[32]byte) []byte {
+func (impl *boxImpl) Seal(dst, nonce, plaintext, additionalData []byte, peersPublicKey *x25519.PublicKey, privateKey *x25519.PrivateKey) []byte {
 	var k [deoxysii.KeySize]byte
 	impl.DeriveSymmetricKey(k[:], peersPublicKey, privateKey)
 
@@ -35,7 +36,7 @@ func (impl *boxImpl) Seal(dst, nonce, plaintext, additionalData []byte, peersPub
 	return aead.Seal(dst, nonce, plaintext, additionalData)
 }
 
-func (impl *boxImpl) Open(dst, nonce, plaintext, additionalData []byte, peersPublicKey, privateKey *[32]byte) ([]byte, error) {
+func (impl *boxImpl) Open(dst, nonce, plaintext, additionalData []byte, peersPublicKey *x25519.PublicKey, privateKey *x25519.PrivateKey) ([]byte, error) {
 	var k [deoxysii.KeySize]byte
 	impl.DeriveSymmetricKey(k[:], peersPublicKey, privateKey)
 

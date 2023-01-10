@@ -3,12 +3,14 @@ use std::sync::Arc;
 use anyhow::Result;
 use rand::{rngs::OsRng, Rng};
 use thiserror::Error;
-use x25519_dalek;
 use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
-        crypto::signature::{PublicKey as EdPublicKey, Signature, Signer},
+        crypto::{
+            signature::{self, Signature, Signer},
+            x25519,
+        },
         namespace::Namespace,
     },
     consensus::beacon::EpochTime,
@@ -16,7 +18,6 @@ use oasis_core_runtime::{
 };
 
 impl_bytes!(KeyPairId, 32, "A 256-bit key pair identifier.");
-impl_bytes!(PublicKey, 32, "A public key.");
 
 /// Context used for the public key signature.
 const PUBLIC_KEY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager: pk signature";
@@ -26,12 +27,6 @@ const MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE: EpochTime = 10;
 
 /// The size of the key manager state checksum.
 const CHECKSUM_SIZE: usize = 32;
-
-/// A private key.
-#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
-#[cbor(transparent)]
-#[zeroize(drop)]
-pub struct PrivateKey(pub [u8; 32]);
 
 /// A state encryption key.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
@@ -71,39 +66,39 @@ pub struct KeyPair {
 impl KeyPair {
     /// Generate a new random key (for testing).
     pub fn generate_mock() -> Self {
-        let mut rng = OsRng {};
-        let sk = x25519_dalek::StaticSecret::new(&mut rng);
-        let pk = x25519_dalek::PublicKey::from(&sk);
+        let sk = x25519::PrivateKey::generate();
+        let pk = x25519::PublicKey::from(&sk);
 
+        let mut rng = OsRng {};
         let mut state_key = StateKey::default();
         rng.fill(&mut state_key.0);
 
-        KeyPair::new(
-            PublicKey(*pk.as_bytes()),
-            PrivateKey(sk.to_bytes()),
-            state_key,
-            vec![],
-        )
+        KeyPair::new(pk, sk, state_key, vec![])
     }
 
     /// Create a `KeyPair`.
-    pub fn new(pk: PublicKey, sk: PrivateKey, k: StateKey, sum: Vec<u8>) -> Self {
+    pub fn new(
+        pk: x25519::PublicKey,
+        sk: x25519::PrivateKey,
+        state_key: StateKey,
+        checksum: Vec<u8>,
+    ) -> Self {
         Self {
             input_keypair: InputKeyPair { pk, sk },
-            state_key: k,
-            checksum: sum,
+            state_key,
+            checksum,
         }
     }
 
     /// Create a `KeyPair` with only the public key.
-    pub fn from_public_key(k: PublicKey, sum: Vec<u8>) -> Self {
+    pub fn from_public_key(pk: x25519::PublicKey, checksum: Vec<u8>) -> Self {
         Self {
             input_keypair: InputKeyPair {
-                pk: k,
-                sk: PrivateKey::default(),
+                pk,
+                ..Default::default()
             },
-            state_key: StateKey::default(),
-            checksum: sum,
+            checksum,
+            ..Default::default()
         }
     }
 }
@@ -111,9 +106,9 @@ impl KeyPair {
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct InputKeyPair {
     /// Public key.
-    pub pk: PublicKey,
+    pub pk: x25519::PublicKey,
     /// Private key.
-    pub sk: PrivateKey,
+    pub sk: x25519::PrivateKey,
 }
 
 /// Signed public key error.
@@ -133,7 +128,7 @@ enum SignedPublicKeyError {
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct SignedPublicKey {
     /// Public key.
-    pub key: PublicKey,
+    pub key: x25519::PublicKey,
     /// Checksum of the key manager state.
     pub checksum: Vec<u8>,
     /// Sign(sk, (key || checksum || runtime id || key pair id || epoch || expiration epoch)) from
@@ -147,7 +142,7 @@ pub struct SignedPublicKey {
 impl SignedPublicKey {
     /// Create a new signed public key.
     pub fn new(
-        key: PublicKey,
+        key: x25519::PublicKey,
         checksum: Vec<u8>,
         runtime_id: Namespace,
         key_pair_id: KeyPairId,
@@ -177,7 +172,7 @@ impl SignedPublicKey {
         key_pair_id: KeyPairId,
         epoch: Option<EpochTime>,
         now: Option<EpochTime>,
-        pk: &EdPublicKey,
+        pk: &signature::PublicKey,
     ) -> Result<()> {
         // Checksum validation.
         if self.checksum.len() != CHECKSUM_SIZE {
@@ -212,14 +207,14 @@ impl SignedPublicKey {
     }
 
     fn body(
-        key: PublicKey,
+        key: x25519::PublicKey,
         checksum: &[u8],
         runtime_id: Namespace,
         key_pair_id: KeyPairId,
         epoch: Option<EpochTime>,
         expiration: Option<EpochTime>,
     ) -> Vec<u8> {
-        let mut body = key.as_ref().to_vec();
+        let mut body = key.0.as_bytes().to_vec();
         body.extend_from_slice(checksum);
         body.extend_from_slice(runtime_id.as_ref());
         body.extend_from_slice(key_pair_id.as_ref());
@@ -239,15 +234,16 @@ mod test {
 
     use oasis_core_runtime::{
         common::{
-            crypto::signature::{PrivateKey, Signer},
+            crypto::{
+                signature::{self, Signer},
+                x25519,
+            },
             namespace::Namespace,
         },
         consensus::beacon::EpochTime,
     };
 
-    use crate::crypto::{
-        types::MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE, KeyPairId, PublicKey, SignedPublicKey,
-    };
+    use crate::crypto::{types::MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE, KeyPairId, SignedPublicKey};
 
     #[test]
     fn test_signed_public_key_with_epoch() {
@@ -260,10 +256,10 @@ mod test {
     }
 
     fn test_signed_public_key(epoch: Option<EpochTime>, now: Option<EpochTime>) {
-        let sk = Arc::new(PrivateKey::from_test_seed("seed".to_string()));
+        let sk = Arc::new(signature::PrivateKey::from_test_seed("seed".to_string()));
         let pk = sk.public_key();
 
-        let key = PublicKey([1u8; 32]);
+        let key = x25519::PublicKey::from([1u8; 32]);
         let checksum = [1u8; 32].to_vec();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let key_pair_id = KeyPairId::from(vec![1u8; 32]);
@@ -366,7 +362,7 @@ mod test {
 
         // Verify the signature with different key.
         let invalid_signed_pk = SignedPublicKey {
-            key: PublicKey([2u8; 32]),
+            key: x25519::PublicKey::from([2u8; 32]),
             checksum: signed_pk.checksum.clone(),
             signature: signed_pk.signature.clone(),
             expiration: signed_pk.expiration,
