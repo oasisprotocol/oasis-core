@@ -2003,7 +2003,7 @@ dependencies = [
  "enclave-runner",
  "futures 0.3.25",
  "sgxs-loaders",
- "tokio 1.24.1",
+ "tokio 0.2.25",
 ]
 
 [[package]]
