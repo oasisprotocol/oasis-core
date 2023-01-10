@@ -50,6 +50,9 @@ var (
 		MethodUpdatePolicy,
 	}
 
+	// RPCMethodInit is the name of the `init` method.
+	RPCMethodInit = "init"
+
 	initResponseContext = signature.NewContext("oasis-core/keymanager: init response")
 )
 
@@ -111,6 +114,14 @@ type Backend interface {
 // NewUpdatePolicyTx creates a new policy update transaction.
 func NewUpdatePolicyTx(nonce uint64, fee *transaction.Fee, sigPol *SignedPolicySGX) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodUpdatePolicy, sigPol)
+}
+
+// InitRequest is the initialization RPC request, sent to the key manager
+// enclave.
+type InitRequest struct {
+	Checksum    []byte `json:"checksum"`
+	Policy      []byte `json:"policy"`
+	MayGenerate bool   `json:"may_generate"`
 }
 
 // InitResponse is the initialization RPC response, returned as part of a

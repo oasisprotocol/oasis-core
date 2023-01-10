@@ -222,6 +222,59 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 	return resp.Response, nil
 }
 
+func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface{}) error {
+	req := enclaverpc.Request{
+		Method: method,
+		Args:   args,
+	}
+	body := &protocol.Body{
+		RuntimeLocalRPCCallRequest: &protocol.RuntimeLocalRPCCallRequest{
+			Request: cbor.Marshal(&req),
+		},
+	}
+
+	rt := w.GetHostedRuntime()
+	response, err := rt.Call(w.ctx, body)
+	if err != nil {
+		w.logger.Error("failed to dispatch local RPC call to runtime",
+			"err", err,
+		)
+		return err
+	}
+
+	resp := response.RuntimeLocalRPCCallResponse
+	if resp == nil {
+		w.logger.Error("malformed response from runtime",
+			"response", response,
+		)
+		return errMalformedResponse
+	}
+
+	var msg enclaverpc.Message
+	if err = cbor.Unmarshal(resp.Response, &msg); err != nil {
+		return fmt.Errorf("malformed message envelope: %w", err)
+	}
+
+	if msg.Response == nil {
+		return fmt.Errorf("message is not a response: '%s'", hex.EncodeToString(resp.Response))
+	}
+
+	switch {
+	case msg.Response.Body.Success != nil:
+	case msg.Response.Body.Error != nil:
+		return fmt.Errorf("rpc failure: '%s'", *msg.Response.Body.Error)
+	default:
+		return fmt.Errorf("unknown rpc response status: '%s'", hex.EncodeToString(resp.Response))
+	}
+
+	payload := cbor.Marshal(msg.Response.Body.Success)
+	if err = cbor.Unmarshal(payload, rsp); err != nil {
+		return fmt.Errorf("failed to extract rpc response payload: %w", err)
+	}
+
+	return nil
+}
+
 func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) error {
 	var initOk bool
 	defer func() {
@@ -235,67 +288,23 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 	}()
 
 	// Initialize the key manager.
-	type InitRequest struct {
-		Checksum    []byte `json:"checksum"`
-		Policy      []byte `json:"policy"`
-		MayGenerate bool   `json:"may_generate"`
-	}
-	type InitCall struct { // nolint: maligned
-		Method string      `json:"method"`
-		Args   InitRequest `json:"args"`
-	}
-
 	var policy []byte
 	if status.Policy != nil {
 		policy = cbor.Marshal(status.Policy)
 	}
 
-	call := InitCall{
-		Method: "init",
-		Args: InitRequest{
-			Checksum:    status.Checksum,
-			Policy:      policy,
-			MayGenerate: w.mayGenerate,
-		},
-	}
-	req := &protocol.Body{
-		RuntimeLocalRPCCallRequest: &protocol.RuntimeLocalRPCCallRequest{
-			Request: cbor.Marshal(&call),
-		},
-	}
-
-	rt := w.GetHostedRuntime()
-	response, err := rt.Call(w.ctx, req)
-	if err != nil {
-		w.logger.Error("failed to initialize enclave",
-			"err", err,
-		)
-		return err
-	}
-
-	resp := response.RuntimeLocalRPCCallResponse
-	if resp == nil {
-		w.logger.Error("malformed response initializing enclave",
-			"response", response,
-		)
-		return errMalformedResponse
-	}
-
-	innerResp, err := extractMessageResponsePayload(resp.Response)
-	if err != nil {
-		w.logger.Error("failed to extract rpc response payload",
-			"err", err,
-		)
-		return fmt.Errorf("worker/keymanager: failed to extract rpc response payload: %w", err)
+	args := api.InitRequest{
+		Checksum:    status.Checksum,
+		Policy:      policy,
+		MayGenerate: w.mayGenerate,
 	}
 
 	var signedInitResp api.SignedInitResponse
-	if err = cbor.Unmarshal(innerResp, &signedInitResp); err != nil {
-		w.logger.Error("failed to parse response initializing enclave",
+	if err := w.localCallEnclave(api.RPCMethodInit, args, &signedInitResp); err != nil {
+		w.logger.Error("failed to initialize enclave",
 			"err", err,
-			"response", innerResp,
 		)
-		return fmt.Errorf("worker/keymanager: failed to parse response initializing enclave: %w", err)
+		return fmt.Errorf("worker/keymanager: failed to initialize enclave: %w", err)
 	}
 
 	// Validate the signature.
@@ -311,7 +320,7 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 			return fmt.Errorf("worker/keymanager: unknown TEE hardware: %v", tee.Hardware)
 		}
 
-		if err = signedInitResp.Verify(signingKey); err != nil {
+		if err := signedInitResp.Verify(signingKey); err != nil {
 			return fmt.Errorf("worker/keymanager: failed to validate initialization response signature: %w", err)
 		}
 	}
@@ -360,38 +369,6 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 	w.policyChecksum = signedInitResp.InitResponse.PolicyChecksum
 
 	return nil
-}
-
-func extractMessageResponsePayload(raw []byte) ([]byte, error) {
-	// See: runtime/src/rpc/types.rs
-	type MessageResponseBody struct {
-		Success interface{} `json:",omitempty"`
-		Error   *string     `json:",omitempty"`
-	}
-	type MessageResponse struct {
-		Response *struct {
-			Body MessageResponseBody `json:"body"`
-		}
-	}
-
-	var msg MessageResponse
-	if err := cbor.Unmarshal(raw, &msg); err != nil {
-		return nil, fmt.Errorf("malformed message envelope: %w", err)
-	}
-
-	if msg.Response == nil {
-		return nil, fmt.Errorf("message is not a response: '%s'", hex.EncodeToString(raw))
-	}
-
-	switch {
-	case msg.Response.Body.Success != nil:
-	case msg.Response.Body.Error != nil:
-		return nil, fmt.Errorf("rpc failure: '%s'", *msg.Response.Body.Error)
-	default:
-		return nil, fmt.Errorf("unknown rpc response status: '%s'", hex.EncodeToString(raw))
-	}
-
-	return cbor.Marshal(msg.Response.Body.Success), nil
 }
 
 func (w *Worker) setStatus(status *api.Status) {

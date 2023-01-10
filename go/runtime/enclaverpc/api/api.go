@@ -20,6 +20,28 @@ type Frame struct {
 	Payload            []byte `json:"payload,omitempty"`
 }
 
+// Request is an EnclaveRPC request.
+type Request struct {
+	Method string      `json:"method"`
+	Args   interface{} `json:"args"`
+}
+
+// Body is an EnclaveRPC response body.
+type Body struct {
+	Success interface{} `json:",omitempty"`
+	Error   *string     `json:",omitempty"`
+}
+
+// Response is an EnclaveRPC response.
+type Response struct {
+	Body Body `json:"body"`
+}
+
+// Message is an EnclaveRPC protocol message.
+type Message struct {
+	Response *Response `json:"response"`
+}
+
 // PeerFeedback is the feedback on the peer that handled the last RPC call.
 type PeerFeedback uint8
 
