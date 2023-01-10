@@ -27,6 +27,10 @@ pub enum KeyManagerError {
     PolicyInvalid(#[from] anyhow::Error),
     #[error("policy has insufficient signatures")]
     PolicyInsufficientSignatures,
+    #[error("runtime signing key missing")]
+    RSKMissing,
+    #[error("signature verification failed: {0}")]
+    InvalidSignature(anyhow::Error),
     #[error(transparent)]
     Other(anyhow::Error),
 }

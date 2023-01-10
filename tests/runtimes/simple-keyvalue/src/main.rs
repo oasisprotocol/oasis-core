@@ -375,17 +375,17 @@ pub fn main_with_version(version: Version) {
             trusted_policy_signers(),
         ));
 
+        let key_manager = km_client.clone();
+        state
+            .rpc_dispatcher
+            .set_keymanager_status_update_handler(Some(Box::new(move |status| {
+                key_manager
+                    .set_status(status)
+                    .expect("failed to update km client status");
+            })));
+
         #[cfg(target_env = "sgx")]
         {
-            let key_manager = km_client.clone();
-            state
-                .rpc_dispatcher
-                .set_keymanager_policy_update_handler(Some(Box::new(move |policy| {
-                    key_manager
-                        .set_policy(policy)
-                        .expect("failed to update km client policy");
-                })));
-
             let key_manager = km_client.clone();
             state
                 .rpc_dispatcher

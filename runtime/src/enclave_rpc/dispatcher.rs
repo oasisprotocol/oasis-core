@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use thiserror::Error;
 
-use crate::{common::sgx::QuotePolicy, consensus::keymanager::SignedPolicySGX};
+use crate::{common::sgx::QuotePolicy, consensus::state::keymanager::Status as KeyManagerStatus};
 
 use super::{
     context::Context,
@@ -134,8 +134,8 @@ impl Method {
     }
 }
 
-/// Key manager policy update handler callback.
-pub type KeyManagerPolicyHandler = dyn Fn(SignedPolicySGX) + Send + Sync;
+/// Key manager status update handler callback.
+pub type KeyManagerStatusHandler = dyn Fn(KeyManagerStatus) + Send + Sync;
 /// Key manager quote policy update handler callback.
 pub type KeyManagerQuotePolicyHandler = dyn Fn(QuotePolicy) + Send + Sync;
 
@@ -144,8 +144,8 @@ pub type KeyManagerQuotePolicyHandler = dyn Fn(QuotePolicy) + Send + Sync;
 pub struct Dispatcher {
     /// Registered RPC methods.
     methods: HashMap<String, Method>,
-    /// Registered key manager policy handler.
-    km_policy_handler: Option<Box<KeyManagerPolicyHandler>>,
+    /// Registered key manager status handler.
+    km_status_handler: Option<Box<KeyManagerStatusHandler>>,
     /// Registered key manager quote policy handler.
     km_quote_policy_handler: Option<Box<KeyManagerQuotePolicyHandler>>,
     /// Registered context initializer.
@@ -207,10 +207,10 @@ impl Dispatcher {
         method.dispatch(request, ctx)
     }
 
-    /// Handle key manager policy update.
-    pub fn handle_km_policy_update(&self, policy: SignedPolicySGX) {
-        if let Some(handler) = self.km_policy_handler.as_ref() {
-            handler(policy)
+    /// Handle key manager status update.
+    pub fn handle_km_status_update(&self, status: KeyManagerStatus) {
+        if let Some(handler) = self.km_status_handler.as_ref() {
+            handler(status)
         }
     }
 
@@ -221,12 +221,12 @@ impl Dispatcher {
         }
     }
 
-    /// Update key manager policy update handler.
-    pub fn set_keymanager_policy_update_handler(
+    /// Update key manager status update handler.
+    pub fn set_keymanager_status_update_handler(
         &mut self,
-        f: Option<Box<KeyManagerPolicyHandler>>,
+        f: Option<Box<KeyManagerStatusHandler>>,
     ) {
-        self.km_policy_handler = f;
+        self.km_status_handler = f;
     }
 
     /// Update key manager quote policy update handler.

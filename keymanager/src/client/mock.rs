@@ -58,6 +58,7 @@ impl KeyManagerClient for MockClient {
                 key: ck.input_keypair.pk,
                 checksum: vec![],
                 signature: Signature::default(),
+                expiration: None,
             })
         }))
     }
@@ -90,6 +91,7 @@ impl KeyManagerClient for MockClient {
                         key: ck.input_keypair.pk,
                         checksum: vec![],
                         signature: Signature::default(),
+                        expiration: None,
                     })
                 }),
         )

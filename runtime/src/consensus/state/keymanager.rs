@@ -42,6 +42,8 @@ pub struct Status {
     pub nodes: Vec<PublicKey>,
     /// Key manager policy.
     pub policy: Option<SignedPolicySGX>,
+    /// Runtime signing key of the key manager.
+    pub rsk: Option<PublicKey>,
 }
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
@@ -172,6 +174,7 @@ mod test {
                 checksum: vec![],
                 nodes: vec![],
                 policy: None,
+                rsk: None,
             },
             Status {
                 id: keymanager2,
@@ -202,6 +205,7 @@ mod test {
                         },
                     ],
                 }),
+                rsk: None,
             },
         ];
 
