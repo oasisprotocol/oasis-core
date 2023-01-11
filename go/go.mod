@@ -60,8 +60,8 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.3.0
 	golang.org/x/net v0.4.0
-	google.golang.org/genproto v0.0.0-20221109142239-94d6d90a7d66
-	google.golang.org/grpc v1.50.1
+	google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6
+	google.golang.org/grpc v1.52.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20221004221323-12db695f1648
 	google.golang.org/protobuf v1.28.2-0.20220831092852-f930b1dc76e8
 )
