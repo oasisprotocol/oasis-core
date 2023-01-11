@@ -92,7 +92,7 @@ type Node struct { // nolint: maligned
 
 	// VRF contains information for this node's participation in VRF
 	// based elections.
-	VRF *VRFInfo `json:"vrf,omitempty"`
+	VRF VRFInfo `json:"vrf"`
 
 	// Runtimes are the node's runtimes.
 	Runtimes []*Runtime `json:"runtimes"`
@@ -145,19 +145,22 @@ type nodeV2 struct { // nolint: maligned
 
 // ToV3 returns the V3 representation of the V2 node descriptor.
 func (nv2 *nodeV2) ToV3() *Node {
-	return &Node{
+	nv3 := &Node{
 		Versioned:       cbor.NewVersioned(3),
 		ID:              nv2.ID,
 		EntityID:        nv2.EntityID,
 		Expiration:      nv2.Expiration,
 		P2P:             nv2.P2P,
 		Consensus:       nv2.Consensus,
-		VRF:             nv2.VRF,
 		Runtimes:        nv2.Runtimes,
 		SoftwareVersion: nv2.SoftwareVersion,
 		Roles:           nv2.Roles & ^roleReserved3,                                      // Clear consensus-rpc role.
 		TLS:             TLSInfo{PubKey: nv2.TLS.PubKey, NextPubKey: nv2.TLS.NextPubKey}, // Migrate to new TLS Info.
 	}
+	if nv2.VRF != nil {
+		nv3.VRF = *nv2.VRF
+	}
+	return nv3
 }
 
 // SoftwareVersion is the node's oasis-node software version.

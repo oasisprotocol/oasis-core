@@ -237,13 +237,7 @@ pub struct Node {
     pub consensus: ConsensusInfo,
 
     /// Information for this node's participation in VRF based elections.
-    #[cbor(optional)]
-    pub vrf: Option<VRFInfo>,
-
-    /// Information for this node's participation in the old PVSS based random beacon protocol.
-    /// Deprecated.
-    #[cbor(optional)]
-    pub beacon: Option<cbor::Value>,
+    pub vrf: VRFInfo,
 
     /// Node's runtimes.
     pub runtimes: Option<Vec<NodeRuntime>>,
@@ -852,7 +846,7 @@ mod tests {
         // NOTE: These tests MUST be synced with go/common/node/node_test.go.
         let tcs = vec![
             (
-                "qWF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVz9mljb25zZW5zdXOiYmlkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGlhZGRyZXNzZXP2aWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABqZXhwaXJhdGlvbgA=",
+                "qmF2A2JpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjcDJwomJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABpYWRkcmVzc2Vz9mN0bHOiZ3B1Yl9rZXlYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbG5leHRfcHViX2tleVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABjdnJmoWJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABlcm9sZXMAaHJ1bnRpbWVz9mljb25zZW5zdXOiYmlkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGlhZGRyZXNzZXP2aWVudGl0eV9pZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABqZXhwaXJhdGlvbgA=",
                 Node{v: 3, ..Default::default()},
                 true,
             ),
@@ -876,9 +870,9 @@ mod tests {
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
                         addresses: Some(Vec::new()),
                     },
-                    vrf: Some(VRFInfo{
+                    vrf: VRFInfo{
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
-                    }),
+                    },
                     runtimes: Some(vec![
                         NodeRuntime{
                             id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),
@@ -1000,9 +994,9 @@ mod tests {
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
                         addresses: Some(Vec::new()),
                     },
-                    vrf: Some(VRFInfo{
+                    vrf: VRFInfo{
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
-                    }),
+                    },
                     runtimes: Some(vec![
                         NodeRuntime{
                             id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),

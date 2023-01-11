@@ -459,25 +459,10 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		if beaconParams, err = beaconState.ConsensusParameters(ctx); err != nil {
 			return fmt.Errorf("tendermint/registry: couldn't get beacon parameters: %w", err)
 		}
-		if beaconParams.Backend == beacon.BackendVRF {
+		if beaconParams.Backend == beacon.BackendVRF && !existingNode.VRF.ID.Equal(newNode.VRF.ID) {
 			// If the VRF backend is active, and the node's VRF key has
 			// changed, reset election eligibility.
-			vrfChanged := func() bool {
-				if existingNode.VRF == nil || newNode.VRF == nil {
-					return false
-				}
-				if existingNode.VRF == nil && newNode.VRF != nil {
-					return true
-				}
-				if existingNode.VRF != nil && newNode.VRF == nil {
-					return true
-				}
-				return !existingNode.VRF.ID.Equal(newNode.VRF.ID)
-			}()
-
-			if statusDirty = vrfChanged; statusDirty {
-				status.ElectionEligibleAfter = beacon.EpochInvalid
-			}
+			status.ElectionEligibleAfter = beacon.EpochInvalid
 		}
 	}
 	if statusDirty {

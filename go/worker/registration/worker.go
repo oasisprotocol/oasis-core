@@ -908,7 +908,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 		Consensus: node.ConsensusInfo{
 			ID: w.identity.ConsensusSigner.Public(),
 		},
-		VRF: &node.VRFInfo{
+		VRF: node.VRFInfo{
 			ID: w.identity.VRFSigner.Public(),
 		},
 		SoftwareVersion: node.SoftwareVersion(version.SoftwareVersion),

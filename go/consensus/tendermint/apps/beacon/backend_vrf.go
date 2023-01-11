@@ -290,9 +290,6 @@ func (impl *backendVRF) doProveTx(
 	if err != nil {
 		return fmt.Errorf("beacon: tx not from a node: %v", err)
 	}
-	if node.VRF == nil {
-		return fmt.Errorf("beacon: tx signer missing VRF metadata")
-	}
 
 	// Deserialize the tx.
 	var proveTx beacon.VRFProve

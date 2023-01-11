@@ -134,7 +134,7 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 				ID: runtimeID,
 			},
 		},
-		VRF: &node.VRFInfo{
+		VRF: node.VRFInfo{
 			ID: nodeIdentity.VRFSigner.Public(),
 		},
 	}

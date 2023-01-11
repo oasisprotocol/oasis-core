@@ -658,18 +658,20 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 
 	// Validate VRFInfo.
-	if n.VRF != nil {
-		if !sigNode.MultiSigned.IsSignedBy(n.VRF.ID) {
-			logger.Error("RegisterNode: not signed by VRF ID",
-				"signed_node", sigNode,
-				"node", n,
-			)
-			return nil, nil, fmt.Errorf("%w: registration not signed by VRF ID", ErrInvalidArgument)
-		}
-		expectedSigners = append(expectedSigners, n.VRF.ID)
-	} else {
-		return nil, nil, fmt.Errorf("%w: registration missing VRF ID", ErrInvalidArgument)
+	if !n.VRF.ID.IsValid() {
+		logger.Error("RegisterNode: invalid VRF ID",
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: invalid VRF ID", ErrInvalidArgument)
 	}
+	if !sigNode.MultiSigned.IsSignedBy(n.VRF.ID) {
+		logger.Error("RegisterNode: not signed by VRF ID",
+			"signed_node", sigNode,
+			"node", n,
+		)
+		return nil, nil, fmt.Errorf("%w: registration not signed by VRF ID", ErrInvalidArgument)
+	}
+	expectedSigners = append(expectedSigners, n.VRF.ID)
 
 	// Validate TLSInfo.
 	if !n.TLS.PubKey.IsValid() {
@@ -740,9 +742,7 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 		{"consensus ID", n.Consensus.ID},
 		{"P2P ID", n.P2P.ID},
 		{"TLS public key", n.TLS.PubKey},
-	}
-	if n.VRF != nil {
-		subKeys = append(subKeys, nodeSubKey{"VRF ID", n.VRF.ID})
+		{"VRF ID", n.VRF.ID},
 	}
 
 	for _, subKey := range subKeys {

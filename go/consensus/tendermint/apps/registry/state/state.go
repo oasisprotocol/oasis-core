@@ -587,18 +587,14 @@ func (s *MutableState) SetNode(ctx context.Context, existingNode, node *node.Nod
 	}
 
 	// VRF key.
-	if existingNode != nil && existingNode.VRF != nil {
+	if existingNode != nil && !existingNode.VRF.ID.Equal(node.VRF.ID) {
 		// Remove old VRF key if it has changed.
-		if node.VRF == nil || !existingNode.VRF.ID.Equal(node.VRF.ID) {
-			if err = s.ms.Remove(ctx, keyMapKeyFmt.Encode(&existingNode.VRF.ID)); err != nil {
-				return abciAPI.UnavailableStateError(err)
-			}
-		}
-	}
-	if node.VRF != nil {
-		if err = s.ms.Insert(ctx, keyMapKeyFmt.Encode(&node.VRF.ID), rawNodeID); err != nil {
+		if err = s.ms.Remove(ctx, keyMapKeyFmt.Encode(&existingNode.VRF.ID)); err != nil {
 			return abciAPI.UnavailableStateError(err)
 		}
+	}
+	if err = s.ms.Insert(ctx, keyMapKeyFmt.Encode(&node.VRF.ID), rawNodeID); err != nil {
+		return abciAPI.UnavailableStateError(err)
 	}
 
 	// Committee TLS key.
@@ -641,11 +637,8 @@ func (s *MutableState) RemoveNode(ctx context.Context, node *node.Node) error {
 	if err := s.ms.Remove(ctx, keyMapKeyFmt.Encode(&node.TLS.PubKey)); err != nil {
 		return abciAPI.UnavailableStateError(err)
 	}
-
-	if node.VRF != nil {
-		if err := s.ms.Remove(ctx, keyMapKeyFmt.Encode(&node.VRF.ID)); err != nil {
-			return abciAPI.UnavailableStateError(err)
-		}
+	if err := s.ms.Remove(ctx, keyMapKeyFmt.Encode(&node.VRF.ID)); err != nil {
+		return abciAPI.UnavailableStateError(err)
 	}
 
 	return nil
