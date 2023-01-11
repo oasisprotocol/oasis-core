@@ -12,6 +12,44 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.4 (2023-01-11)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/runtime/registry: Fix watching policy updates
+  ([#5092](https://github.com/oasisprotocol/oasis-core/issues/5092))
+
+  When multiple key managers were running, the last known status of the
+  runtime's key manager was overwritten with each status update. On runtime
+  (re)starts, this resulted in the wrong policy being set.
+
+- go/worker/client: Better handle latest round queries with verification
+  ([#5123](https://github.com/oasisprotocol/oasis-core/issues/5123))
+
+  When a query is requesting to be executed against the latest round and
+  the runtime reports a consensus verifier error, use an earlier round
+  instead as the latest round may not yet be verifiable by the light
+  client as it needs to wait for the validator signatures.
+
+### Internal Changes
+
+- runtime/src/protocol: Deserialize unknown rhp messages as invalid
+  ([#5094](https://github.com/oasisprotocol/oasis-core/issues/5094))
+
+  Runtime-host protocol terminated the reader thread when failed to deserialize
+  a runtime message on the Rust side (e.g. when `Body` enum contained an unknown
+  field). Decoding is now more robust as these messages are deserialized as
+  invalid and latter discarded and logged as malformed by the handler.
+
+- rust: Bump tokio from 1.21.2 to 1.24.1
+  ([#5120](https://github.com/oasisprotocol/oasis-core/issues/5120))
+
 ## 22.2.3 (2022-11-23)
 
 | Protocol          | Version   |
