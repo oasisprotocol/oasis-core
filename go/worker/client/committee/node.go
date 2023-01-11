@@ -11,6 +11,7 @@ import (
 
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -149,22 +150,52 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 	}
 	maxMessages := dsc.Executor.MaxMessages
 
-	annBlk, err := n.commonNode.Runtime.History().GetAnnotatedBlock(ctx, round)
-	if err != nil {
-		return nil, fmt.Errorf("client: failed to fetch annotated block from history: %w", err)
+	var resolvedRound uint64
+	queryFn := func(round uint64) ([]byte, error) {
+		annBlk, err := n.commonNode.Runtime.History().GetAnnotatedBlock(ctx, round)
+		if err != nil {
+			return nil, fmt.Errorf("client: failed to fetch annotated block from history: %w", err)
+		}
+		resolvedRound = annBlk.Block.Header.Round
+
+		// Get consensus light block for state after executing block at given height.
+		lb, err := n.commonNode.Consensus.GetLightBlockForState(ctx, annBlk.Height)
+		if err != nil {
+			return nil, fmt.Errorf("client: failed to get light block at height %d: %w", annBlk.Height, err)
+		}
+		epoch, err := n.commonNode.Consensus.Beacon().GetEpoch(ctx, annBlk.Height)
+		if err != nil {
+			return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", annBlk.Height, err)
+		}
+
+		return hrt.Query(ctx, annBlk.Block, lb, epoch, maxMessages, method, args)
 	}
 
-	// Get consensus light block for state after executing block at given height.
-	lb, err := n.commonNode.Consensus.GetLightBlockForState(ctx, annBlk.Height)
-	if err != nil {
-		return nil, fmt.Errorf("client: failed to get light block at height %d: %w", annBlk.Height, err)
-	}
-	epoch, err := n.commonNode.Consensus.Beacon().GetEpoch(ctx, annBlk.Height)
-	if err != nil {
-		return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", annBlk.Height, err)
-	}
+	data, err := queryFn(round)
+	if errors.Is(err, protocol.ErrVerifierVerificationFailed) {
+		// The query failed due to the runtime's consensus verifier failing to verify the given
+		// header. We assume that this is because a finalized header is not yet available for the
+		// given round.
+		switch round {
+		case api.RoundLatest:
+			// Since we are allowed to decide what we see as the latest round, use an earlier one.
+			n.logger.Debug("runtime's consensus verifier reports failure, retrying",
+				"method", method,
+				"target_round", resolvedRound,
+			)
 
-	return hrt.Query(ctx, annBlk.Block, lb, epoch, maxMessages, method, args)
+			data, err = queryFn(resolvedRound - 1)
+		default:
+			// A specific round was given so this query is not yet possible.
+			n.logger.Debug("runtime's consensus verifier reports failure",
+				"method", method,
+				"target_round", round,
+			)
+
+			return nil, roothash.ErrNotFound
+		}
+	}
+	return data, err
 }
 
 func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[hash.Hash]*pendingTx) error {
