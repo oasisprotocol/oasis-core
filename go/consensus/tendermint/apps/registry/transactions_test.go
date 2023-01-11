@@ -456,7 +456,7 @@ func TestRegisterNode(t *testing.T) {
 				TLS: node.TLSInfo{
 					PubKey: tcd.tlsSigner.Public(),
 				},
-				VRF: &node.VRFInfo{
+				VRF: node.VRFInfo{
 					ID: tcd.vrfSigner.Public(),
 				},
 			}

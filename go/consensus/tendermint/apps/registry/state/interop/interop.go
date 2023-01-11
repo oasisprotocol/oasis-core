@@ -67,7 +67,7 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 					ID:        signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
 					Addresses: []node.ConsensusAddress{},
 				},
-				VRF: &node.VRFInfo{
+				VRF: node.VRFInfo{
 					ID: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
 				},
 				Runtimes: []*node.Runtime{

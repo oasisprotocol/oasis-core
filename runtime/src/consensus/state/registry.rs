@@ -139,7 +139,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("00653d0a677ec3d058bce7889ca824f7d8d74db44fcaf966ef6d155794f9208d"),
+            hash: Hash::from("c44bfc477d7db14deb0e8ce421f1ab465574336ac6eda28a07b4bd90b7b6aa78"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -186,9 +186,9 @@ mod test {
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
                         addresses: Some(Vec::new()),
                     },
-                    vrf: Some(VRFInfo{
+                    vrf: VRFInfo{
                         id: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
-                    }),
+                    },
                     runtimes: Some(vec![
                         NodeRuntime{
                             id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000010"),

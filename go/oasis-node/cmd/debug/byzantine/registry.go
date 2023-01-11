@@ -48,7 +48,7 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 		Consensus: node.ConsensusInfo{
 			ID: id.ConsensusSigner.Public(),
 		},
-		VRF: &node.VRFInfo{
+		VRF: node.VRFInfo{
 			ID: id.VRFSigner.Public(),
 		},
 		Runtimes: runtimes,

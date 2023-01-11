@@ -1159,7 +1159,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 			ID:         nod.Signer.Public(),
 			EntityID:   ent.Entity.ID,
 			Expiration: uint64(expiration),
-			VRF: &node.VRFInfo{
+			VRF: node.VRFInfo{
 				ID: nodeIdentity.VRFSigner.Public(),
 			},
 			Runtimes: runtimes,
@@ -1447,7 +1447,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		}
 		newNode.P2P.ID = invalidIdentity.P2PSigner.Public()
 		newNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		newNode.VRF = &node.VRFInfo{
+		newNode.VRF = node.VRFInfo{
 			ID: invalidIdentity.VRFSigner.Public(),
 		}
 		newNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()

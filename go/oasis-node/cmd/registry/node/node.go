@@ -158,7 +158,7 @@ func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		Consensus: node.ConsensusInfo{
 			ID: nodeIdentity.ConsensusSigner.Public(),
 		},
-		VRF: &node.VRFInfo{
+		VRF: node.VRFInfo{
 			ID: nodeIdentity.VRFSigner.Public(),
 		},
 		SoftwareVersion: node.SoftwareVersion(version.SoftwareVersion),

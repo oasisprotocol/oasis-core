@@ -168,7 +168,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 				},
 			},
 		},
-		VRF: &node.VRFInfo{
+		VRF: node.VRFInfo{
 			ID: identity.VRFSigner.Public(),
 		},
 		Roles: node.RoleValidator,

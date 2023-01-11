@@ -256,7 +256,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 			ID:        nodeP2PSigner.Public(),
 			Addresses: []node.Address{testAddress},
 		},
-		VRF: &node.VRFInfo{
+		VRF: node.VRFInfo{
 			ID: nodeVRFSigner.Public(),
 		},
 		Consensus: node.ConsensusInfo{

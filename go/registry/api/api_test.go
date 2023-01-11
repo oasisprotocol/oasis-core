@@ -133,7 +133,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 				P2P: node.P2PInfo{
 					ID: nodeP2PSigner.Public(),
 				},
-				VRF: &node.VRFInfo{
+				VRF: node.VRFInfo{
 					ID: nodeVRFSigner.Public(),
 				},
 				Roles:      node.RoleValidator,
@@ -160,7 +160,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 					ID:        nodeP2PSigner.Public(),
 					Addresses: []node.Address{{IP: net.IPv4(127, 0, 0, 1), Port: 9002}},
 				},
-				VRF: &node.VRFInfo{
+				VRF: node.VRFInfo{
 					ID: nodeVRFSigner.Public(),
 				},
 				Roles:      node.RoleValidator,
@@ -187,7 +187,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 					ID:        nodeP2PSigner.Public(),
 					Addresses: []node.Address{{IP: net.IPv4(127, 0, 0, 1), Port: 9002}},
 				},
-				VRF: &node.VRFInfo{
+				VRF: node.VRFInfo{
 					ID: nodeVRFSigner.Public(),
 				},
 				Roles:      node.RoleComputeWorker,
