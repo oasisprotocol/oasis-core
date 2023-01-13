@@ -27,11 +27,8 @@ use crate::{
     },
     consensus::{
         beacon::EpochTime,
-        roothash::{ComputeResultsHeader, Header, HeaderType::EpochTransition},
-        state::{
-            beacon::ImmutableState as BeaconState, roothash::ImmutableState as RoothashState,
-            ConsensusState,
-        },
+        roothash::{ComputeResultsHeader, Header},
+        state::ConsensusState,
         tendermint::{
             chain_id, decode_light_block, state_root_from_header,
             verifier::{
@@ -59,6 +56,7 @@ mod clock;
 mod handle;
 mod io;
 mod noop;
+mod predicates;
 mod store;
 mod types;
 mod voting;
@@ -190,15 +188,9 @@ impl Verifier {
         cache: &mut Cache,
         instance: &mut Instance,
         consensus_block: LightBlock,
-    ) -> Result<LightBlockMeta, Error> {
-        if consensus_block.height < cache.last_verified_height {
-            // Ignore requests for earlier heights.
-            return Err(Error::VerificationFailed(anyhow!(
-                "height seems to have moved backwards"
-            )));
-        }
-
+    ) -> Result<(LightBlockMeta, ConsensusState), Error> {
         // Decode passed block as a Tendermint block.
+        let lb_height = consensus_block.height;
         let untrusted_block =
             decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
         let untrusted_header = untrusted_block
@@ -209,6 +201,11 @@ impl Verifier {
         // Verify up to the block at current height.
         // Only does forward verification and fails if height is lower than the last trust height.
         let height = untrusted_header.header().height.value();
+        if height != lb_height {
+            return Err(Error::VerificationFailed(anyhow!(
+                "inconsistent light block/header height"
+            )));
+        }
         let verified_block = self.verify_to_target(height, cache, instance)?;
 
         // Validate passed consensus block.
@@ -216,9 +213,15 @@ impl Verifier {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
-        cache.last_verified_height = height;
+        // Create consensus state accessor at the given block height.
+        let state_root = untrusted_block.get_state_root();
+        let state = ConsensusState::from_protocol(
+            self.protocol.clone(),
+            state_root.version + 1,
+            state_root,
+        );
 
-        Ok(untrusted_block)
+        Ok((untrusted_block, state))
     }
 
     /// Verify state freshness using RAK and nonces.
@@ -339,48 +342,17 @@ impl Verifier {
         runtime_header: Header,
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        // Verify runtime ID matches.
-        if runtime_header.namespace != self.runtime_id {
-            return Err(Error::VerificationFailed(anyhow!(
-                "header namespace does not match trusted runtime id"
-            )));
-        }
-
-        if runtime_header.round < cache.last_verified_round {
-            // Ignore requests for earlier rounds.
-            return Err(Error::VerificationFailed(anyhow!(
-                "round seems to have moved backwards"
-            )));
-        }
-        if epoch < cache.last_verified_epoch {
-            // Ignore requests for earlier epochs.
-            return Err(Error::VerificationFailed(anyhow!(
-                "epoch seems to have moved backwards"
-            )));
-        }
-
-        // If round has advanced make sure that consensus height has also advanced as a round can
-        // only be finalized in a subsequent consensus block. This is to avoid a situation where
-        // one would keep feeding the same consensus block for subsequent rounds.
-        //
-        // NOTE: This needs to happen before the call to verify_consensus_only which updates the
-        //       cache.last_verified_height field.
-        if runtime_header.round > cache.last_verified_round
-            && consensus_block.height <= cache.last_verified_height
-        {
-            return Err(Error::VerificationFailed(anyhow!(
-                "consensus height did not advance but runtime round did"
-            )));
-        }
+        // Perform basic verifications.
+        predicates::verify_namespace(self.runtime_id, &runtime_header)?;
+        predicates::verify_round_advance(cache, &runtime_header, &consensus_block, epoch)?;
+        predicates::verify_consensus_advance(cache, &consensus_block)?;
 
         // Verify the consensus layer block first to obtain an authoritative state root.
-        let consensus_block = self.verify_consensus_only(cache, instance, consensus_block)?;
-        let state_root = consensus_block.get_state_root();
-        let state = ConsensusState::from_protocol(
-            self.protocol.clone(),
-            state_root.version + 1,
-            state_root,
-        );
+        let (consensus_block, state) =
+            self.verify_consensus_only(cache, instance, consensus_block)?;
+        cache.last_verified_height = state.height();
+
+        predicates::verify_time(&runtime_header, &consensus_block)?;
 
         // Check if we have already verified this runtime header to avoid re-verification.
         if let Some(state_root) = cache.verified_state_roots.get(&runtime_header.round) {
@@ -392,58 +364,16 @@ impl Verifier {
             // Force full verification in case of cache mismatch.
         }
 
-        // Verify that the state root matches.
-        let roothash_state = RoothashState::new(&state);
-        let state_root = roothash_state
-            .state_root(Context::background(), self.runtime_id)
-            .map_err(|err| {
-                Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
-            })?;
-        if runtime_header.state_root != state_root {
+        predicates::verify_state_root(&state, &runtime_header).or_else(|_| {
             // It could happen that the runtime did not process any previous rounds (e.g. due to
             // being a backup node or recently restarting). In this case the state could be out of
             // date (due to Tendermint's state finalization delay) so we should try to use the
             // latest state for verification.
             let latest_state = self.latest_consensus_state(cache, instance)?;
-            let latest_roothash_state = RoothashState::new(&latest_state);
-            let latest_state_root = latest_roothash_state
-                .state_root(Context::background(), self.runtime_id)
-                .map_err(|err| {
-                    Error::VerificationFailed(anyhow!(
-                        "failed to retrieve trusted state root: {}",
-                        err
-                    ))
-                })?;
-            if runtime_header.state_root != latest_state_root {
-                return Err(Error::VerificationFailed(anyhow!(
-                    "state root mismatch (expected: {} got: {})",
-                    latest_state_root,
-                    runtime_header.state_root
-                )));
-            }
-        }
+            predicates::verify_state_root(&latest_state, &runtime_header)
+        })?;
 
-        // Verify that the epoch matches.
-        let beacon_state = BeaconState::new(&state);
-        let current_epoch = match runtime_header.header_type {
-            // Query future epoch as the epoch just changed in the epoch transition block.
-            EpochTransition => beacon_state
-                .future_epoch(Context::background())
-                .map_err(|err| {
-                    Error::VerificationFailed(anyhow!("failed to retrieve future epoch: {}", err))
-                }),
-            _ => beacon_state.epoch(Context::background()).map_err(|err| {
-                Error::VerificationFailed(anyhow!("failed to retrieve epoch: {}", err))
-            }),
-        }?;
-
-        if current_epoch != epoch {
-            return Err(Error::VerificationFailed(anyhow!(
-                "epoch number mismatch (expected: {} got: {})",
-                current_epoch,
-                epoch,
-            )));
-        }
+        predicates::verify_epoch(&state, &runtime_header, epoch)?;
 
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
@@ -451,10 +381,10 @@ impl Verifier {
             cache.node_id = self.verify_freshness_with_rak(&state, &cache.node_id)?;
         }
 
-        // Cache verified runtime header.
+        // Cache verified state root and epoch.
         cache
             .verified_state_roots
-            .put(runtime_header.round, state_root);
+            .put(runtime_header.round, runtime_header.state_root);
         cache.last_verified_round = runtime_header.round;
         cache.last_verified_epoch = epoch;
 
@@ -469,37 +399,14 @@ impl Verifier {
         runtime_header: Header,
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        // Verify runtime ID matches.
-        if runtime_header.namespace != self.runtime_id {
-            return Err(Error::VerificationFailed(anyhow!(
-                "header namespace does not match trusted runtime id"
-            )));
-        }
+        // Perform basic verifications.
+        predicates::verify_namespace(self.runtime_id, &runtime_header)?;
 
         // Verify the consensus layer block first to obtain an authoritative state root.
-        let untrusted_block =
-            decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
-        let untrusted_header = untrusted_block
-            .signed_header
-            .as_ref()
-            .ok_or_else(|| Error::VerificationFailed(anyhow!("missing signed header")))?;
+        let (consensus_block, state) =
+            self.verify_consensus_only(cache, instance, consensus_block)?;
 
-        // Verify up to the block at current height.
-        // Only does forward verification and fails if height is lower than the last trust height.
-        let height = untrusted_header.header().height.value();
-        let verified_block = self.verify_to_target(height, cache, instance)?;
-
-        // Validate passed consensus block.
-        if untrusted_header.header() != verified_block.signed_header.header() {
-            return Err(Error::VerificationFailed(anyhow!("header mismatch")));
-        }
-
-        let state_root = untrusted_block.get_state_root();
-        let state = ConsensusState::from_protocol(
-            self.protocol.clone(),
-            state_root.version + 1,
-            state_root,
-        );
+        predicates::verify_time(&runtime_header, &consensus_block)?;
 
         // Check if we have already verified this runtime header to avoid re-verification.
         if let Some((state_root, state_epoch)) = cache
@@ -514,48 +421,13 @@ impl Verifier {
             // Force full verification in case of cache mismatch.
         }
 
-        // Verify that the state root matches.
-        let roothash_state = RoothashState::new(&state);
-        let state_root = roothash_state
-            .state_root(Context::background(), self.runtime_id)
-            .map_err(|err| {
-                Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
-            })?;
+        predicates::verify_state_root(&state, &runtime_header)?;
+        predicates::verify_epoch(&state, &runtime_header, epoch)?;
 
-        if runtime_header.state_root != state_root {
-            return Err(Error::VerificationFailed(anyhow!(
-                "state root mismatch (expected: {} got: {})",
-                state_root,
-                runtime_header.state_root
-            )));
-        }
-
-        // Verify that the epoch matches.
-        let beacon_state = BeaconState::new(&state);
-        let state_epoch = match runtime_header.header_type {
-            // Query future epoch as the epoch just changed in the epoch transition block.
-            EpochTransition => beacon_state
-                .future_epoch(Context::background())
-                .map_err(|err| {
-                    Error::VerificationFailed(anyhow!("failed to retrieve future epoch: {}", err))
-                }),
-            _ => beacon_state.epoch(Context::background()).map_err(|err| {
-                Error::VerificationFailed(anyhow!("failed to retrieve epoch: {}", err))
-            }),
-        }?;
-
-        if state_epoch != epoch {
-            return Err(Error::VerificationFailed(anyhow!(
-                "epoch number mismatch (expected: {} got: {})",
-                state_epoch,
-                epoch,
-            )));
-        }
-
-        // Cache verified runtime header.
+        // Cache verified state root and epoch.
         cache
             .verified_state_roots_queries
-            .put(runtime_header.round, (state_root, state_epoch));
+            .put(runtime_header.round, (runtime_header.state_root, epoch));
 
         Ok(state)
     }
