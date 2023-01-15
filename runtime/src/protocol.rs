@@ -410,12 +410,6 @@ impl Protocol {
         if tendermint::BACKEND_NAME != host_info.consensus_backend {
             return Err(ProtocolError::IncompatibleConsensusBackend.into());
         }
-        if !BUILD_INFO
-            .consensus_version
-            .is_compatible_with(&host_info.consensus_protocol_version)
-        {
-            return Err(ProtocolError::IncompatibleConsensusBackend.into());
-        }
         let mut local_host_info = self.host_info.lock().unwrap();
         if local_host_info.is_some() {
             return Err(ProtocolError::AlreadyInitialized.into());

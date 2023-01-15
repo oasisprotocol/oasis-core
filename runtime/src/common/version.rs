@@ -68,14 +68,6 @@ pub const PROTOCOL_VERSION: Version = Version {
     patch: 0,
 };
 
-// Version of the consensus protocol runtime code works with. This version MUST
-// be compatible with the one supported by the worker host.
-pub const CONSENSUS_VERSION: Version = Version {
-    major: 7,
-    minor: 0,
-    patch: 0,
-};
-
 /// Protocol versions.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct ProtocolVersions {
