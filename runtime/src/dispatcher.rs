@@ -17,10 +17,7 @@ use tokio::sync::mpsc;
 use crate::{
     attestation, cache,
     common::{
-        crypto::{
-            hash::Hash,
-            signature::{Signature, Signer},
-        },
+        crypto::{hash::Hash, signature::Signer},
         logger::get_logger,
         sgx::QuotePolicy,
     },
@@ -738,16 +735,13 @@ impl Dispatcher {
             "in_msgs_hash" => ?header.in_msgs_hash,
         );
 
-        let rak_sig = if self.rak.public_rak().is_some() {
-            self.rak
-                .sign(
-                    COMPUTE_RESULTS_HEADER_CONTEXT,
-                    &cbor::to_vec(header.clone()),
-                )
-                .unwrap()
-        } else {
-            Signature::default()
-        };
+        let rak_sig = self
+            .rak
+            .sign(
+                COMPUTE_RESULTS_HEADER_CONTEXT,
+                &cbor::to_vec(header.clone()),
+            )
+            .unwrap();
 
         Ok(Body::RuntimeExecuteTxBatchResponse {
             batch: ComputedBatch {

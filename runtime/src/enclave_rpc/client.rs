@@ -472,7 +472,7 @@ mod test {
 
     impl MockTransport {
         fn new() -> Self {
-            let rak = Arc::new(RAK::default());
+            let rak = Arc::new(RAK::new());
 
             Self {
                 rak: rak.clone(),

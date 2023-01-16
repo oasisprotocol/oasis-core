@@ -130,7 +130,7 @@ impl Handler {
         let consensus_state = self.consensus_verifier.latest_state()?;
         let height = consensus_state.height();
         let node_id = self.host.identity()?;
-        let rek = self.rak.public_rek().expect("REK must be configured");
+        let rek = self.rak.public_rek();
         let h = SGXAttestation::hash(&verified_quote.report_data, node_id, height, rek);
         let signature = self.rak.sign(ATTESTATION_SIGNATURE_CONTEXT, &h)?;
 

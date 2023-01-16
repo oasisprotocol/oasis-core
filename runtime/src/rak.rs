@@ -34,11 +34,16 @@ const RAK_HASH_CONTEXT: &[u8] = b"oasis-core/node: TEE RAK binding";
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 const QUOTE_NONCE_CONTEXT: &[u8] = b"oasis-core/node: TEE quote nonce";
 
+/// A dummy RAK seed for use in non-SGX tests where integrity is not needed.
+#[cfg(not(target_env = "sgx"))]
+const INSECURE_RAK_SEED: &str = "ekiden test key manager RAK seed";
+/// A dummy REK seed for use in non-SGX tests where confidentiality is not needed.
+#[cfg(not(target_env = "sgx"))]
+const INSECURE_REK_SEED: &str = "ekiden test key manager REK seed";
+
 /// RAK-related error.
 #[derive(Error, Debug)]
 enum RAKError {
-    #[error("RAK is not configured")]
-    NotConfigured,
     #[error("RAK binding mismatch")]
     BindingMismatch,
     #[error("malformed report data")]
@@ -64,8 +69,8 @@ enum QuoteError {
 }
 
 struct Inner {
-    private_rak: Option<signature::PrivateKey>,
-    private_rek: Option<x25519::PrivateKey>,
+    private_rak: signature::PrivateKey,
+    private_rek: x25519::PrivateKey,
     quote: Option<Arc<Quote>>,
     quote_timestamp: Option<i64>,
     quote_policy: Option<Arc<QuotePolicy>>,
@@ -90,12 +95,28 @@ pub struct RAK {
 }
 
 impl Default for RAK {
-    /// Create an uninitialized runtime attestation key instance.
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RAK {
+    /// Create an uninitialized runtime attestation key instance.
+    pub fn new() -> Self {
+        #[cfg(target_env = "sgx")]
+        let private_rak = signature::PrivateKey::generate();
+        #[cfg(target_env = "sgx")]
+        let private_rek = x25519::PrivateKey::generate();
+
+        #[cfg(not(target_env = "sgx"))]
+        let private_rak = signature::PrivateKey::from_test_seed(INSECURE_RAK_SEED.to_string());
+        #[cfg(not(target_env = "sgx"))]
+        let private_rek = x25519::PrivateKey::from_test_seed(INSECURE_REK_SEED.to_string());
+
         Self {
             inner: RwLock::new(Inner {
-                private_rak: None,
-                private_rek: None,
+                private_rak,
+                private_rek,
                 quote: None,
                 quote_timestamp: None,
                 quote_policy: None,
@@ -106,9 +127,7 @@ impl Default for RAK {
             }),
         }
     }
-}
 
-impl RAK {
     /// Generate report body = H(RAK_HASH_CONTEXT || RAK_pub).
     fn report_body_for_rak(rak: &signature::PublicKey) -> Hash {
         let mut message = [0; 64];
@@ -154,20 +173,14 @@ impl RAK {
         };
         inner.target_info = Some(target_info);
 
-        // Generate the ephemeral RAK and REK iff not set.
-        if inner.private_rak.is_none() {
-            inner.private_rak = Some(signature::PrivateKey::generate());
-            inner.private_rek = Some(x25519::PrivateKey::generate());
-        }
-
         Ok(())
     }
 
     /// Initialize the RAK attestation report.
     #[cfg(target_env = "sgx")]
     pub(crate) fn init_report(&self) -> (signature::PublicKey, x25519::PublicKey, Report, String) {
-        let rak_pub = self.public_rak().expect("RAK must be configured");
-        let rek_pub = self.public_rek().expect("REK must be configured");
+        let rak_pub = self.public_rak();
+        let rek_pub = self.public_rek();
         let target_info = self
             .get_sgx_target_info()
             .expect("target_info must be configured");
@@ -200,7 +213,7 @@ impl RAK {
     /// Configure the remote attestation quote for RAK.
     #[cfg(target_env = "sgx")]
     pub(crate) fn set_quote(&self, quote: Quote) -> Result<VerifiedQuote> {
-        let rak_pub = self.public_rak().expect("RAK must be configured");
+        let rak_pub = self.public_rak();
 
         let mut inner = self.inner.write().unwrap();
 
@@ -279,20 +292,20 @@ impl RAK {
 
     /// Public part of RAK.
     ///
-    /// This method may return `None` in the case where the enclave is not
-    /// running on SGX hardware.
-    pub fn public_rak(&self) -> Option<signature::PublicKey> {
+    /// This method will return an insecure test key in the case where
+    /// the enclave is not running on SGX hardware.
+    pub fn public_rak(&self) -> signature::PublicKey {
         let inner = self.inner.read().unwrap();
-        inner.private_rak.as_ref().map(|pk| pk.public_key())
+        inner.private_rak.public_key()
     }
 
     /// Public part of REK.
     ///
-    /// This method may return `None` in the case where the enclave is not
-    /// running on SGX hardware.
-    pub fn public_rek(&self) -> Option<x25519::PublicKey> {
+    /// This method will return an insecure test key in the case where
+    /// the enclave is not running on SGX hardware.
+    pub fn public_rek(&self) -> x25519::PublicKey {
         let inner = self.inner.read().unwrap();
-        inner.private_rek.as_ref().map(|pk| pk.public_key())
+        inner.private_rek.public_key()
     }
 
     /// Quote for RAK.
@@ -347,7 +360,7 @@ impl RAK {
     /// Checks whether the RAK matches another specified (RAK_pub, quote) pair.
     pub fn matches(&self, rak: &signature::PublicKey, quote: &Quote) -> bool {
         // Check if public key matches.
-        if !self.public_rak().map(|pk| &pk == rak).unwrap_or(false) {
+        if &self.public_rak() != rak {
             return false;
         }
 
@@ -359,7 +372,6 @@ impl RAK {
 impl Signer for RAK {
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         let inner = self.inner.read().unwrap();
-        let sk = inner.private_rak.as_ref().ok_or(RAKError::NotConfigured)?;
-        sk.sign(context, message)
+        inner.private_rak.sign(context, message)
     }
 }

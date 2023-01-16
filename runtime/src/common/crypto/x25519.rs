@@ -4,6 +4,8 @@ use rand::rngs::OsRng;
 use x25519_dalek;
 use zeroize::Zeroize;
 
+use super::hash::Hash;
+
 /// The length of an X25519 private key, in bytes.
 pub const PRIVATE_KEY_LENGTH: usize = 32;
 
@@ -26,6 +28,12 @@ impl PrivateKey {
     /// Compute corresponding public key.
     pub fn public_key(&self) -> PublicKey {
         PublicKey(x25519_dalek::PublicKey::from(&self.0))
+    }
+
+    /// Generate a new private key from a test key seed.
+    pub fn from_test_seed(seed: String) -> Self {
+        let seed = Hash::digest_bytes(seed.as_bytes());
+        Self::from(seed.0)
     }
 }
 

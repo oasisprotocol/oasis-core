@@ -18,7 +18,8 @@ use oasis_core_runtime::{
     common::{
         crypto::{
             mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
-            signature, x25519,
+            signature::{self, Signer},
+            x25519,
         },
         namespace::Namespace,
         sgx::egetkey::egetkey,
@@ -99,10 +100,6 @@ lazy_static! {
         }
     };
 }
-
-/// A dummy key for use in non-SGX tests where integrity is not needed.
-#[cfg(not(target_env = "sgx"))]
-const INSECURE_RAK_SEED: &str = "ekiden test key manager RAK seed";
 
 const MASTER_SECRET_STORAGE_KEY: &[u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
@@ -381,14 +378,6 @@ impl Kdf {
         let pk = sk.public_key();
         inner.signer = Some(Arc::new(sk));
 
-        // Prepare RAK signer.
-        #[cfg(target_env = "sgx")]
-        let signer: Arc<dyn signature::Signer> = ctx.rak.clone();
-        #[cfg(not(target_env = "sgx"))]
-        let signer: Arc<dyn signature::Signer> = Arc::new(signature::PrivateKey::from_test_seed(
-            INSECURE_RAK_SEED.to_string(),
-        ));
-
         // Build the response and sign it with the RAK.
         let init_response = InitResponse {
             is_secure: BUILD_INFO.is_secure && !Policy::unsafe_skip(),
@@ -398,7 +387,7 @@ impl Kdf {
         };
 
         let body = cbor::to_vec(init_response.clone());
-        let signature = signer.sign(INIT_RESPONSE_CONTEXT, &body)?;
+        let signature = ctx.rak.sign(INIT_RESPONSE_CONTEXT, &body)?;
 
         Ok(SignedInitResponse {
             init_response,

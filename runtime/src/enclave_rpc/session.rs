@@ -178,11 +178,11 @@ impl Session {
     fn get_rak_binding(&self) -> Vec<u8> {
         match self.rak {
             Some(ref rak) => {
-                if rak.public_rak().is_none() || rak.quote().is_none() {
+                if rak.quote().is_none() {
                     return vec![];
                 }
 
-                let rak_pub = rak.public_rak().expect("RAK is configured");
+                let rak_pub = rak.public_rak();
                 let quote = rak.quote().expect("quote is configured");
                 let binding = rak
                     .sign(&RAK_SESSION_BINDING_CONTEXT, &self.local_static_pub)

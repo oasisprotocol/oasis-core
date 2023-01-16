@@ -142,10 +142,7 @@ impl Protocol {
 
     /// The runtime attestation key.
     pub fn get_rak(&self) -> Option<&Arc<RAK>> {
-        if self.rak.public_rak().is_none() || self.rak.quote().is_none() {
-            return None;
-        }
-
+        self.rak.quote()?;
         Some(&self.rak)
     }
 

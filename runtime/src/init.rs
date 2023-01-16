@@ -24,7 +24,7 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     info!(logger, "Runtime is starting");
 
     // Initialize runtime attestation key.
-    let rak = Arc::new(RAK::default());
+    let rak = Arc::new(RAK::new());
 
     // Initialize the dispatcher.
     let dispatcher = Dispatcher::new(initializer, rak.clone());
