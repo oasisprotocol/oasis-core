@@ -212,6 +212,7 @@ mod test {
                                    hardware: TEEHardware::TEEHardwareIntelSGX,
                                     rak: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
                                     attestation: vec![0, 1,2,3,4,5],
+                                    ..Default::default()
                                }),
                             },
                             extra_info: Some(vec![5,3,2,1]),
