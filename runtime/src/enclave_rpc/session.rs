@@ -11,7 +11,7 @@ use crate::{
         crypto::signature::{PublicKey, Signature, Signer},
         sgx::{ias, EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
     },
-    rak::RAK,
+    identity::Identity,
 };
 
 /// Noise protocol pattern.
@@ -50,7 +50,7 @@ enum State {
 /// An encrypted and authenticated RPC session.
 pub struct Session {
     local_static_pub: Vec<u8>,
-    rak: Option<Arc<RAK>>,
+    identity: Option<Arc<Identity>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
     policy: Option<Arc<QuotePolicy>>,
     info: Option<Arc<SessionInfo>>,
@@ -62,13 +62,13 @@ impl Session {
     fn new(
         handshake_state: snow::HandshakeState,
         local_static_pub: Vec<u8>,
-        rak: Option<Arc<RAK>>,
+        identity: Option<Arc<Identity>>,
         remote_enclaves: Option<HashSet<EnclaveIdentity>>,
         policy: Option<Arc<QuotePolicy>>,
     ) -> Self {
         Self {
             local_static_pub,
-            rak,
+            identity,
             remote_enclaves,
             policy,
             info: None,
@@ -176,15 +176,15 @@ impl Session {
     }
 
     fn get_rak_binding(&self) -> Vec<u8> {
-        match self.rak {
-            Some(ref rak) => {
-                if rak.public_rak().is_none() || rak.quote().is_none() {
+        match self.identity {
+            Some(ref identity) => {
+                if identity.quote().is_none() {
                     return vec![];
                 }
 
-                let rak_pub = rak.public_rak().expect("RAK is configured");
-                let quote = rak.quote().expect("quote is configured");
-                let binding = rak
+                let rak_pub = identity.public_rak();
+                let quote = identity.quote().expect("quote is configured");
+                let binding = identity
                     .sign(&RAK_SESSION_BINDING_CONTEXT, &self.local_static_pub)
                     .unwrap();
 
@@ -318,7 +318,7 @@ impl RAKBinding {
         }
 
         // Verify RAK binding.
-        RAK::verify_binding(&verified_quote, &self.rak_pub())?;
+        Identity::verify_binding(&verified_quote, &self.rak_pub())?;
 
         // Verify remote static key binding.
         self.binding()
@@ -339,7 +339,7 @@ impl RAKBinding {
 /// Session builder.
 #[derive(Clone, Default)]
 pub struct Builder {
-    rak: Option<Arc<RAK>>,
+    identity: Option<Arc<Identity>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
     policy: Option<Arc<QuotePolicy>>,
 }
@@ -363,8 +363,8 @@ impl Builder {
     }
 
     /// Enable RAK binding.
-    pub fn local_rak(mut self, rak: Arc<RAK>) -> Self {
-        self.rak = Some(rak);
+    pub fn local_identity(mut self, identity: Arc<Identity>) -> Self {
+        self.identity = Some(identity);
         self
     }
 
@@ -374,36 +374,42 @@ impl Builder {
     ) -> (
         snow::Builder<'a>,
         snow::Keypair,
-        Option<Arc<RAK>>,
+        Option<Arc<Identity>>,
         Option<HashSet<EnclaveIdentity>>,
         Option<Arc<QuotePolicy>>,
     ) {
         let noise_builder = snow::Builder::new(NOISE_PATTERN.parse().unwrap());
-        let rak = self.rak.take();
+        let identity = self.identity.take();
         let remote_enclaves = self.remote_enclaves.take();
         let quote_policy = self.policy.take();
         let keypair = noise_builder.generate_keypair().unwrap();
 
-        (noise_builder, keypair, rak, remote_enclaves, quote_policy)
+        (
+            noise_builder,
+            keypair,
+            identity,
+            remote_enclaves,
+            quote_policy,
+        )
     }
 
     /// Build initiator session.
     pub fn build_initiator(self) -> Session {
-        let (builder, keypair, rak, enclaves, policy) = self.build();
+        let (builder, keypair, identity, enclaves, policy) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_initiator()
             .unwrap();
-        Session::new(session, keypair.public, rak, enclaves, policy)
+        Session::new(session, keypair.public, identity, enclaves, policy)
     }
 
     /// Build responder session.
     pub fn build_responder(self) -> Session {
-        let (builder, keypair, rak, enclaves, policy) = self.build();
+        let (builder, keypair, identity, enclaves, policy) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_responder()
             .unwrap();
-        Session::new(session, keypair.public, rak, enclaves, policy)
+        Session::new(session, keypair.public, identity, enclaves, policy)
     }
 }

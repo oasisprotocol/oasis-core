@@ -17,10 +17,7 @@ use tokio::sync::mpsc;
 use crate::{
     attestation, cache,
     common::{
-        crypto::{
-            hash::Hash,
-            signature::{Signature, Signer},
-        },
+        crypto::{hash::Hash, signature::Signer},
         logger::get_logger,
         sgx::QuotePolicy,
     },
@@ -41,9 +38,9 @@ use crate::{
         },
         Context as RpcContext,
     },
+    identity::Identity,
     policy::PolicyVerifier,
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
-    rak::RAK,
     storage::mkvs::{sync::NoopReadSyncer, OverlayTree, Root, RootType},
     transaction::{
         dispatcher::{Dispatcher as TxnDispatcher, NoopDispatcher as TxnNoopDispatcher},
@@ -77,7 +74,7 @@ pub struct PreInitState<'a> {
     /// Protocol instance.
     pub protocol: &'a Arc<Protocol>,
     /// Runtime Attestation Key instance.
-    pub rak: &'a Arc<RAK>,
+    pub identity: &'a Arc<Identity>,
     /// RPC demultiplexer instance.
     pub rpc_demux: &'a mut RpcDemux,
     /// RPC dispatcher instance.
@@ -161,7 +158,7 @@ enum Command {
 pub struct Dispatcher {
     logger: Logger,
     queue_tx: mpsc::Sender<Command>,
-    rak: Arc<RAK>,
+    identity: Arc<Identity>,
     abort_batch: Arc<AtomicBool>,
 
     state: Mutex<Option<ProtocolState>>,
@@ -188,13 +185,13 @@ impl Dispatcher {
     }
 
     /// Create a new runtime call dispatcher.
-    pub fn new(initializer: Box<dyn Initializer>, rak: Arc<RAK>) -> Arc<Self> {
+    pub fn new(initializer: Box<dyn Initializer>, identity: Arc<Identity>) -> Arc<Self> {
         let (tx, rx) = mpsc::channel(BACKLOG_SIZE);
 
         let dispatcher = Arc::new(Dispatcher {
             logger: get_logger("runtime/dispatcher"),
             queue_tx: tx,
-            rak,
+            identity,
             abort_batch: Arc::new(AtomicBool::new(false)),
             state: Mutex::new(None),
             state_cond: Condvar::new(),
@@ -256,11 +253,11 @@ impl Dispatcher {
 
         // Create actual dispatchers for RPCs and transactions.
         info!(self.logger, "Starting the runtime dispatcher");
-        let mut rpc_demux = RpcDemux::new(self.rak.clone());
+        let mut rpc_demux = RpcDemux::new(self.identity.clone());
         let mut rpc_dispatcher = RpcDispatcher::default();
         let pre_init_state = PreInitState {
             protocol: &protocol,
-            rak: &self.rak,
+            identity: &self.identity,
             rpc_demux: &mut rpc_demux,
             rpc_dispatcher: &mut rpc_dispatcher,
             consensus_verifier: &consensus_verifier,
@@ -279,7 +276,7 @@ impl Dispatcher {
             rpc_dispatcher: Arc::new(rpc_dispatcher),
             txn_dispatcher: Arc::from(txn_dispatcher),
             attestation_handler: attestation::Handler::new(
-                self.rak.clone(),
+                self.identity.clone(),
                 protocol.clone(),
                 consensus_verifier.clone(),
                 protocol.get_runtime_id(),
@@ -738,16 +735,13 @@ impl Dispatcher {
             "in_msgs_hash" => ?header.in_msgs_hash,
         );
 
-        let rak_sig = if self.rak.public_rak().is_some() {
-            self.rak
-                .sign(
-                    COMPUTE_RESULTS_HEADER_CONTEXT,
-                    &cbor::to_vec(header.clone()),
-                )
-                .unwrap()
-        } else {
-            Signature::default()
-        };
+        let rak_sig = self
+            .identity
+            .sign(
+                COMPUTE_RESULTS_HEADER_CONTEXT,
+                &cbor::to_vec(header.clone()),
+            )
+            .unwrap();
 
         Ok(Body::RuntimeExecuteTxBatchResponse {
             batch: ComputedBatch {
@@ -981,7 +975,7 @@ impl Dispatcher {
         state: &State,
     ) -> Result<RpcResponse, Error> {
         let ctx = ctx.freeze();
-        let rak = self.rak.clone();
+        let identity = self.identity.clone();
         let protocol = state.protocol.clone();
         let consensus_verifier = state.consensus_verifier.clone();
         let rpc_dispatcher = state.rpc_dispatcher.clone();
@@ -993,7 +987,7 @@ impl Dispatcher {
             ));
             let rpc_ctx = RpcContext::new(
                 ctx.clone(),
-                rak,
+                identity,
                 session_info,
                 consensus_verifier,
                 &untrusted_local,

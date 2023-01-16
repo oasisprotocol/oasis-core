@@ -22,8 +22,8 @@ use oasis_core_runtime::{
         verifier::Verifier,
     },
     enclave_rpc::{client::RpcClient, session},
+    identity::Identity,
     protocol::Protocol,
-    rak::RAK,
 };
 
 use crate::{
@@ -94,7 +94,7 @@ impl RemoteClient {
         policy: Option<Arc<QuotePolicy>>,
         protocol: Arc<Protocol>,
         consensus_verifier: Arc<dyn Verifier>,
-        rak: Arc<RAK>,
+        identity: Arc<Identity>,
         keys_cache_sizes: usize,
     ) -> Self {
         Self::new(
@@ -103,7 +103,7 @@ impl RemoteClient {
                 session::Builder::default()
                     .remote_enclaves(enclaves)
                     .quote_policy(policy)
-                    .local_rak(rak),
+                    .local_identity(identity),
                 protocol,
                 KEY_MANAGER_ENDPOINT,
             ),
@@ -122,7 +122,7 @@ impl RemoteClient {
         runtime_id: Namespace,
         protocol: Arc<Protocol>,
         consensus_verifier: Arc<dyn Verifier>,
-        rak: Arc<RAK>,
+        identity: Arc<Identity>,
         keys_cache_sizes: usize,
         signers: TrustedPolicySigners,
     ) -> Self {
@@ -155,7 +155,7 @@ impl RemoteClient {
             policy,
             protocol,
             consensus_verifier,
-            rak,
+            identity,
             keys_cache_sizes,
         )
     }
