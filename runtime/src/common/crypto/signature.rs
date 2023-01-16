@@ -164,7 +164,7 @@ impl Signature {
         let mut k: Sha512 = Sha512::new();
         k.update(R_bits);
         k.update(pk.as_ref());
-        k.update(&msg);
+        k.update(msg);
         let k = Scalar::from_hash(k);
 
         // Check the cofactored group equation ([8][S]B = [8]R + [8][k]A').

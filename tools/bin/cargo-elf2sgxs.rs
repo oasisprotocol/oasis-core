@@ -38,9 +38,9 @@ enum CommandFail {
 
 fn run_command(mut cmd: Command) -> Result<(), CommandFail> {
     match cmd.status() {
-        Err(e) => Err(CommandFail::Io(format!("{:?}", cmd), e)),
+        Err(e) => Err(CommandFail::Io(format!("{cmd:?}"), e)),
         Ok(status) if status.success() => Ok(()),
-        Ok(status) => Err(CommandFail::Status(format!("{:?}", cmd), status)),
+        Ok(status) => Err(CommandFail::Status(format!("{cmd:?}"), status)),
     }
 }
 
@@ -122,10 +122,9 @@ fn real_main() -> Result<()> {
                 println!(
                     "{} {}",
                     Green.bold().paint(format!("{:>12}", "elf2sgxs")),
-                    White.dimmed().paint(format!(
-                        "(skipped {} due to newer target file)",
-                        target_name
-                    )),
+                    White
+                        .dimmed()
+                        .paint(format!("(skipped {target_name} due to newer target file)")),
                 );
                 continue;
             }

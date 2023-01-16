@@ -175,7 +175,7 @@ impl Dispatcher {
         match self.dispatch_fallible(&mut ctx, request, kind) {
             Ok(response) => response,
             Err(error) => Response {
-                body: Body::Error(format!("{}", error)),
+                body: Body::Error(format!("{error}")),
             },
         }
     }

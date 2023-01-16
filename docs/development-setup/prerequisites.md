@@ -134,8 +134,8 @@ Core:
   active toolchain
   ----------------
 
-  nightly-2022-08-22-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain.toml')
-  rustc 1.65.0-nightly (c0941dfb5 2022-08-21)
+  nightly-2023-01-16-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain.toml')
+  rustc 1.68.0-nightly (9e75dddf6 2023-01-15)
   ```
 
 * (**OPTIONAL**) [gofumpt] and [goimports].

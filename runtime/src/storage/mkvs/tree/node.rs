@@ -18,21 +18,16 @@ pub trait Node {
 }
 
 /// Storage root type.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum RootType {
     /// Invalid or uninitialized storage root type.
+    #[default]
     Invalid = 0,
     /// Storage root for runtime state.
     State = 1,
     /// Storage root for transaction IO.
     IO = 2,
-}
-
-impl Default for RootType {
-    fn default() -> Self {
-        RootType::Invalid
-    }
 }
 
 /// Storage root.
@@ -467,7 +462,7 @@ impl KeyTrait for Key {
         let mut new_key: Key = vec![0; (key_len + k2_len).to_bytes()];
         new_key[..key_len_bytes].clone_from_slice(&self[..key_len_bytes]);
 
-        for i in 0..k2.len() as usize {
+        for i in 0..k2.len() {
             // First set the right chunk of the previous byte
             if key_len % 8 != 0 && key_len_bytes > 0 {
                 new_key[key_len_bytes + i - 1] |= k2[i] >> (key_len % 8);
