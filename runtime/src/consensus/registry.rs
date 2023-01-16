@@ -112,6 +112,10 @@ pub struct CapabilityTEE {
     /// Runtime attestation key.
     pub rak: PublicKey,
 
+    /// Runtime encryption key.
+    #[cbor(optional)]
+    pub rek: Option<[u8; 32]>,
+
     /// Attestation.
     pub attestation: Vec<u8>,
 }
@@ -894,6 +898,7 @@ mod tests {
                                    hardware: TEEHardware::TEEHardwareIntelSGX,
                                     rak: PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
                                     attestation: vec![0, 1,2,3,4,5],
+                                    ..Default::default()
                                }),
                             },
                             extra_info: Some(vec![5,3,2,1]),
