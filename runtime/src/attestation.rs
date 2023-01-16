@@ -88,13 +88,14 @@ impl Handler {
             self.logger,
             "Initializing the runtime attestation key report"
         );
-        let (rak_pub, report, nonce) = self.rak.init_report();
+        let (rak_pub, rek_pub, report, nonce) = self.rak.init_report();
 
         let report: &[u8] = report.as_ref();
         let report = report.to_vec();
 
         Ok(Body::RuntimeCapabilityTEERakReportResponse {
             rak_pub,
+            rek_pub,
             report,
             nonce,
         })
@@ -125,11 +126,12 @@ impl Handler {
         // Configure the quote and policy on the RAK.
         let verified_quote = self.rak.set_quote(quote)?;
 
-        // Sign the report data, latest verified consensus height and host node ID.
+        // Sign the report data, latest verified consensus height, REK and host node ID.
         let consensus_state = self.consensus_verifier.latest_state()?;
         let height = consensus_state.height();
         let node_id = self.host.identity()?;
-        let h = SGXAttestation::hash(&verified_quote.report_data, node_id, height);
+        let rek = self.rak.public_rek().expect("REK must be configured");
+        let h = SGXAttestation::hash(&verified_quote.report_data, node_id, height, rek);
         let signature = self.rak.sign(ATTESTATION_SIGNATURE_CONTEXT, &h)?;
 
         Ok(Body::RuntimeCapabilityTEERakQuoteResponse { height, signature })

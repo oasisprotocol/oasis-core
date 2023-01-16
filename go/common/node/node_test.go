@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -297,6 +299,52 @@ func TestNodeForTestSerializationV2(t *testing.T) {
 				},
 			},
 			"qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0bG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaNjcmFrWCD/////////////////////////////////////////+GhoYXJkd2FyZQFrYXR0ZXN0YXRpb25GAAECAwQFaWNvbnNlbnN1c6JiaWRYIP/////////////////////////////////////////2aWFkZHJlc3Nlc4BpZW50aXR5X2lkWCD/////////////////////////////////////////8WpleHBpcmF0aW9uGCA=",
+		},
+		{
+			nodeV2{
+				Versioned:  cbor.NewVersioned(2),
+				ID:         signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
+				EntityID:   signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+				Expiration: 32,
+				TLS: nodeV2TLSInfo{
+					PubKey:     signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2"),
+					NextPubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),
+					DeprecatedAddresses: []TLSAddress{
+						{
+							PubKey:  signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4"),
+							Address: Address{IP: net.IPv4(127, 0, 0, 1), Port: 123},
+						},
+					},
+				},
+				P2P: P2PInfo{
+					ID: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5"),
+				},
+				Consensus: ConsensusInfo{
+					ID:        signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6"),
+					Addresses: []ConsensusAddress{},
+				},
+				VRF: &VRFInfo{
+					ID: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7"),
+				},
+				Runtimes: []*Runtime{
+					{
+						ID:      runtimeID,
+						Version: version.FromU64(321),
+					},
+					{
+						ID:      runtimeID2,
+						Version: version.FromU64(123),
+						Capabilities: Capabilities{TEE: &CapabilityTEE{
+							Hardware:    TEEHardwareIntelSGX,
+							RAK:         signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+							REK:         &x25519.PublicKey{},
+							Attestation: []byte{0, 1, 2, 3, 4, 5},
+						}},
+						ExtraInfo: []byte{5, 3, 2, 1},
+					},
+				},
+			},
+			"qmF2AmJpZFgg//////////////////////////////////////////BjcDJwomJpZFgg//////////////////////////////////////////VpYWRkcmVzc2Vz9mN0bHOjZ3B1Yl9rZXlYIP/////////////////////////////////////////yaWFkZHJlc3Nlc4GiZ2FkZHJlc3OjYklQUAAAAAAAAAAAAAD//38AAAFkUG9ydBh7ZFpvbmVgZ3B1Yl9rZXlYIP/////////////////////////////////////////0bG5leHRfcHViX2tleVgg//////////////////////////////////////////NjdnJmoWJpZFgg//////////////////////////////////////////dlcm9sZXMAaHJ1bnRpbWVzgqRiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQZ3ZlcnNpb26hZXBhdGNoGQFBamV4dHJhX2luZm/2bGNhcGFiaWxpdGllc6CkYmlkWCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEWd2ZXJzaW9uoWVwYXRjaBh7amV4dHJhX2luZm9EBQMCAWxjYXBhYmlsaXRpZXOhY3RlZaRjcmFrWCD/////////////////////////////////////////+GNyZWtYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaGhhcmR3YXJlAWthdHRlc3RhdGlvbkYAAQIDBAVpY29uc2Vuc3VzomJpZFgg//////////////////////////////////////////ZpYWRkcmVzc2VzgGllbnRpdHlfaWRYIP/////////////////////////////////////////xamV4cGlyYXRpb24YIA==",
 		},
 	} {
 		enc := cbor.Marshal(tc.node)

@@ -106,7 +106,7 @@ func GetTransactionScheduler(committee *scheduler.Committee, round uint64) (*sch
 	workers := committee.Workers()
 	numNodes := uint64(len(workers))
 	if numNodes == 0 {
-		return nil, fmt.Errorf("GetTransactionScheduler: no workers in commmittee")
+		return nil, fmt.Errorf("GetTransactionScheduler: no workers in committee")
 	}
 	schedulerIdx := round % numNodes
 	return workers[schedulerIdx], nil

@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
+
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -118,9 +120,16 @@ func TestHashAttestation(t *testing.T) {
 
 	var nodeID signature.PublicKey
 	_ = nodeID.UnmarshalHex("47aadd91516ac548decdb436fde957992610facc09ba2f850da0fe1b2be96119")
-	h := HashAttestation([]byte("foo bar"), nodeID, 42)
-	hHex := hex.EncodeToString(h)
-	require.EqualValues("0f01a5084bbf432427873cbce5f8c3bff76bc22b9d1e0674b852e43698abb195", hHex)
+
+	rekRaw, _ := hex.DecodeString("7992610facc09ba2f850da0fe1b2be9611947aadd91516ac548decdb436fde95")
+	var rek x25519.PublicKey
+	copy(rek[:], rekRaw)
+
+	h := HashAttestation([]byte("foo bar"), nodeID, 42, nil)
+	require.EqualValues("0f01a5084bbf432427873cbce5f8c3bff76bc22b9d1e0674b852e43698abb195", hex.EncodeToString(h))
+
+	h = HashAttestation([]byte("foo bar"), nodeID, 42, &rek)
+	require.EqualValues("9a288bd33ba7a4c2eefdee68e4c08c1a34c369302ef8176a3bfdb4fedcec333e", hex.EncodeToString(h))
 }
 
 func FuzzSGXConstraints(f *testing.F) {

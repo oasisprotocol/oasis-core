@@ -81,6 +81,7 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 						Capabilities: node.Capabilities{TEE: &node.CapabilityTEE{
 							Hardware:    node.TEEHardwareIntelSGX,
 							RAK:         signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8"),
+							REK:         nil,
 							Attestation: []byte{0, 1, 2, 3, 4, 5},
 						}},
 						ExtraInfo: []byte{5, 3, 2, 1},
