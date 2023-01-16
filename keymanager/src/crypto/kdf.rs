@@ -306,10 +306,10 @@ impl Kdf {
                         let km_client = RemoteClient::new_runtime_with_enclaves_and_policy(
                             rctx.runtime_id,
                             Policy::global().may_replicate_from(),
-                            ctx.rak.quote_policy(),
+                            ctx.identity.quote_policy(),
                             rctx.protocol.clone(),
                             ctx.consensus_verifier.clone(),
-                            ctx.rak.clone(),
+                            ctx.identity.clone(),
                             1, // Not used, doesn't matter.
                         );
 
@@ -387,7 +387,7 @@ impl Kdf {
         };
 
         let body = cbor::to_vec(init_response.clone());
-        let signature = ctx.rak.sign(INIT_RESPONSE_CONTEXT, &body)?;
+        let signature = ctx.identity.sign(INIT_RESPONSE_CONTEXT, &body)?;
 
         Ok(SignedInitResponse {
             init_response,

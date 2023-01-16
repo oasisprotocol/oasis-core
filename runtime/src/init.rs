@@ -8,8 +8,8 @@ use crate::{
     common::logger::{get_logger, init_logger},
     config::Config,
     dispatcher::{Dispatcher, Initializer},
+    identity::Identity,
     protocol::{Protocol, Stream},
-    rak::RAK,
 };
 
 /// Starts the runtime.
@@ -23,11 +23,11 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     let logger = get_logger("runtime");
     info!(logger, "Runtime is starting");
 
-    // Initialize runtime attestation key.
-    let rak = Arc::new(RAK::new());
+    // Initialize runtime identity with runtime attestation key and runtime encryption key.
+    let identity = Arc::new(Identity::new());
 
     // Initialize the dispatcher.
-    let dispatcher = Dispatcher::new(initializer, rak.clone());
+    let dispatcher = Dispatcher::new(initializer, identity.clone());
 
     info!(logger, "Establishing connection with the worker host");
 
@@ -50,7 +50,7 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     };
 
     // Initialize the protocol handler loop.
-    let protocol = Arc::new(Protocol::new(stream, rak, dispatcher, config));
+    let protocol = Arc::new(Protocol::new(stream, identity, dispatcher, config));
 
     // Start handling protocol messages. This blocks the main thread forever
     // (or until we get a shutdown request).

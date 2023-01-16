@@ -370,7 +370,7 @@ pub fn main_with_version(version: Version) {
             hi.runtime_id,
             state.protocol.clone(),
             state.consensus_verifier.clone(),
-            state.rak.clone(),
+            state.identity.clone(),
             1024,
             trusted_policy_signers(),
         ));

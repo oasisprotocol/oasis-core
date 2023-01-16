@@ -456,14 +456,14 @@ mod test {
 
     use crate::{
         enclave_rpc::{demux::Demux, session, types},
-        rak::RAK,
+        identity::Identity,
     };
 
     use super::{super::transport::Transport, RpcClient};
 
     #[derive(Clone)]
     struct MockTransport {
-        rak: Arc<RAK>,
+        identity: Arc<Identity>,
         demux: Arc<Mutex<Demux>>,
         next_error: Arc<AtomicBool>,
         peer_feedback: Arc<Mutex<(u64, Option<types::PeerFeedback>)>>,
@@ -472,11 +472,11 @@ mod test {
 
     impl MockTransport {
         fn new() -> Self {
-            let rak = Arc::new(RAK::new());
+            let identity = Arc::new(Identity::new());
 
             Self {
-                rak: rak.clone(),
-                demux: Arc::new(Mutex::new(Demux::new(rak))),
+                identity: identity.clone(),
+                demux: Arc::new(Mutex::new(Demux::new(identity))),
                 next_error: Arc::new(AtomicBool::new(false)),
                 peer_feedback: Arc::new(Mutex::new((0, None))),
                 peer_feedback_history: Arc::new(Mutex::new(Vec::new())),
@@ -485,7 +485,7 @@ mod test {
 
         fn reset(&self) {
             let mut demux = self.demux.lock().unwrap();
-            *demux = Demux::new(self.rak.clone());
+            *demux = Demux::new(self.identity.clone());
         }
 
         fn induce_transport_error(&self) {

@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     common::{crypto::signature::PublicKey, namespace::Namespace, version::Version},
-    rak::RAK,
+    identity::Identity,
     types::{self, EventKind},
 };
 
@@ -204,7 +204,7 @@ pub struct TrustedState {
 /// passed in order to optimize discovery for subsequent runs.
 pub fn verify_state_freshness(
     state: &ConsensusState,
-    rak: &RAK,
+    identity: &Identity,
     runtime_id: &Namespace,
     version: &Version,
     node_id: &Option<PublicKey>,
@@ -212,7 +212,7 @@ pub fn verify_state_freshness(
     let registry_state = RegistryState::new(&state);
 
     match node_id {
-        // Node ID is cached, query the node and check for matching RAK.
+        // Node ID is cached, query the node and check for matching identity.
         Some(node_id) => {
             let node = registry_state
                 .node(Context::background(), node_id)
@@ -228,9 +228,9 @@ pub fn verify_state_freshness(
                     node_id,
                 ))
             })?;
-            if !node.has_tee(rak, runtime_id, version) {
+            if !node.has_tee(identity, runtime_id, version) {
                 return Err(Error::VerificationFailed(anyhow!(
-                    "own RAK not found in registry state"
+                    "own identity not found in registry state"
                 )));
             }
 
@@ -246,14 +246,14 @@ pub fn verify_state_freshness(
             })?;
             let mut found_node: Option<PublicKey> = None;
             for node in nodes {
-                if node.has_tee(rak, runtime_id, version) {
+                if node.has_tee(identity, runtime_id, version) {
                     found_node = Some(node.id);
                     break;
                 }
             }
             if found_node.is_none() {
                 return Err(Error::VerificationFailed(anyhow!(
-                    "own RAK not found in registry state",
+                    "own identity not found in registry state",
                 )));
             }
 

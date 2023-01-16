@@ -8,7 +8,7 @@ use super::{
     session::{Builder, Session, SessionInfo},
     types::{Frame, Message, SessionID},
 };
-use crate::{common::time::insecure_posix_system_time, rak::RAK};
+use crate::{common::time::insecure_posix_system_time, identity::Identity};
 
 /// Maximum concurrent EnclaveRPC sessions.
 const DEFAULT_MAX_CONCURRENT_SESSIONS: usize = 100;
@@ -32,7 +32,7 @@ pub type SessionMessage = (SessionID, Option<Arc<SessionInfo>>, Message, String)
 
 /// Session demultiplexer.
 pub struct Demux {
-    rak: Arc<RAK>,
+    identity: Arc<Identity>,
     sessions: HashMap<SessionID, EnrichedSession>,
     max_concurrent_sessions: usize,
     stale_session_timeout: u64,
@@ -46,9 +46,9 @@ struct EnrichedSession {
 
 impl Demux {
     /// Create new session demultiplexer.
-    pub fn new(rak: Arc<RAK>) -> Self {
+    pub fn new(identity: Arc<Identity>) -> Self {
         Self {
-            rak,
+            identity,
             sessions: HashMap::new(),
             max_concurrent_sessions: DEFAULT_MAX_CONCURRENT_SESSIONS,
             stale_session_timeout: DEFAULT_STALE_SESSION_TIMEOUT_SECS,
@@ -135,8 +135,8 @@ impl Demux {
             // Create a new session.
             if self.sessions.len() < self.max_concurrent_sessions {
                 let mut session = Builder::default()
-                    .quote_policy(self.rak.quote_policy())
-                    .local_rak(self.rak.clone())
+                    .quote_policy(self.identity.quote_policy())
+                    .local_identity(self.identity.clone())
                     .build_responder();
                 let result = match session.process_data(frame.payload, writer).map(|m| {
                     m.map(|msg| (id, session.session_info(), msg, untrusted_plaintext.clone()))

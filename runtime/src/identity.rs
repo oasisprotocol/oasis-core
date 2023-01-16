@@ -41,9 +41,9 @@ const INSECURE_RAK_SEED: &str = "ekiden test key manager RAK seed";
 #[cfg(not(target_env = "sgx"))]
 const INSECURE_REK_SEED: &str = "ekiden test key manager REK seed";
 
-/// RAK-related error.
+/// Identity-related error.
 #[derive(Error, Debug)]
-enum RAKError {
+enum IdentityError {
     #[error("RAK binding mismatch")]
     BindingMismatch,
     #[error("malformed report data")]
@@ -69,8 +69,8 @@ enum QuoteError {
 }
 
 struct Inner {
-    private_rak: signature::PrivateKey,
-    private_rek: x25519::PrivateKey,
+    rak: signature::PrivateKey,
+    rek: x25519::PrivateKey,
     quote: Option<Arc<Quote>>,
     quote_timestamp: Option<i64>,
     quote_policy: Option<Arc<QuotePolicy>>,
@@ -83,40 +83,42 @@ struct Inner {
     nonce: Option<[u8; 32]>,
 }
 
-/// Runtime attestation key.
+/// Runtime identity.
 ///
-/// The runtime attestation key (RAK) represents the identity of the enclave
-/// and can be used to sign remote attestations. Its purpose is to avoid
-/// round trips to IAS/PCS for each verification as the verifier can instead
-/// verify the RAK signature and the signature on the provided quote which binds
-/// RAK to the enclave.
-pub struct RAK {
+/// The identity can be used to sign remote attestations with runtime
+/// attestation key (RAK) or to decrypt ciphertexts sent to the enclave
+/// with runtime encryption key (REK). RAK avoids round trips to IAS/PCS
+/// for each verification as the verifier can instead verify the RAK signature
+/// and the signature on the provided quote which binds RAK to the enclave.
+/// REK allows enclaves to publish encrypted data on-chain to an enclave
+/// instance.
+pub struct Identity {
     inner: RwLock<Inner>,
 }
 
-impl Default for RAK {
+impl Default for Identity {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RAK {
-    /// Create an uninitialized runtime attestation key instance.
+impl Identity {
+    /// Create an uninitialized runtime identity.
     pub fn new() -> Self {
         #[cfg(target_env = "sgx")]
-        let private_rak = signature::PrivateKey::generate();
+        let rak = signature::PrivateKey::generate();
         #[cfg(target_env = "sgx")]
-        let private_rek = x25519::PrivateKey::generate();
+        let rek = x25519::PrivateKey::generate();
 
         #[cfg(not(target_env = "sgx"))]
-        let private_rak = signature::PrivateKey::from_test_seed(INSECURE_RAK_SEED.to_string());
+        let rak = signature::PrivateKey::from_test_seed(INSECURE_RAK_SEED.to_string());
         #[cfg(not(target_env = "sgx"))]
-        let private_rek = x25519::PrivateKey::from_test_seed(INSECURE_REK_SEED.to_string());
+        let rek = x25519::PrivateKey::from_test_seed(INSECURE_REK_SEED.to_string());
 
         Self {
             inner: RwLock::new(Inner {
-                private_rak,
-                private_rek,
+                rak,
+                rek,
                 quote: None,
                 quote_timestamp: None,
                 quote_policy: None,
@@ -160,9 +162,9 @@ impl RAK {
             .map(|target_info| target_info.clone())
     }
 
-    /// Initialize the RAK.
+    /// Initialize the SGX target info.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn init_rak(&self, target_info: Vec<u8>) -> Result<()> {
+    pub(crate) fn init_target_info(&self, target_info: Vec<u8>) -> Result<()> {
         let mut inner = self.inner.write().unwrap();
 
         // Set the Quoting Enclave target_info first, as unlike key generation
@@ -176,7 +178,7 @@ impl RAK {
         Ok(())
     }
 
-    /// Initialize the RAK attestation report.
+    /// Initialize the attestation report.
     #[cfg(target_env = "sgx")]
     pub(crate) fn init_report(&self) -> (signature::PublicKey, x25519::PublicKey, Report, String) {
         let rak_pub = self.public_rak();
@@ -296,7 +298,7 @@ impl RAK {
     /// the enclave is not running on SGX hardware.
     pub fn public_rak(&self) -> signature::PublicKey {
         let inner = self.inner.read().unwrap();
-        inner.private_rak.public_key()
+        inner.rak.public_key()
     }
 
     /// Public part of REK.
@@ -305,7 +307,7 @@ impl RAK {
     /// the enclave is not running on SGX hardware.
     pub fn public_rek(&self) -> x25519::PublicKey {
         let inner = self.inner.read().unwrap();
-        inner.private_rek.public_key()
+        inner.rek.public_key()
     }
 
     /// Quote for RAK.
@@ -348,17 +350,17 @@ impl RAK {
     /// Verify a provided RAK binding.
     pub fn verify_binding(quote: &VerifiedQuote, rak: &signature::PublicKey) -> Result<()> {
         if quote.report_data.len() < 32 {
-            return Err(RAKError::MalformedReportData.into());
+            return Err(IdentityError::MalformedReportData.into());
         }
         if Self::report_body_for_rak(rak).as_ref() != &quote.report_data[..32] {
-            return Err(RAKError::BindingMismatch.into());
+            return Err(IdentityError::BindingMismatch.into());
         }
 
         Ok(())
     }
 
     /// Checks whether the RAK matches another specified (RAK_pub, quote) pair.
-    pub fn matches(&self, rak: &signature::PublicKey, quote: &Quote) -> bool {
+    pub fn rak_matches(&self, rak: &signature::PublicKey, quote: &Quote) -> bool {
         // Check if public key matches.
         if &self.public_rak() != rak {
             return false;
@@ -369,9 +371,9 @@ impl RAK {
     }
 }
 
-impl Signer for RAK {
+impl Signer for Identity {
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         let inner = self.inner.read().unwrap();
-        inner.private_rak.sign(context, message)
+        inner.rak.sign(context, message)
     }
 }

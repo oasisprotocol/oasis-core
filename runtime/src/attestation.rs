@@ -20,14 +20,14 @@ use crate::{
     common::{logger::get_logger, namespace::Namespace, version::Version},
     consensus::verifier::Verifier,
     host::Host,
-    rak::RAK,
+    identity::Identity,
 };
 
 /// Attestation flow handler.
 #[derive(Clone)]
 pub struct Handler {
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-    rak: Arc<RAK>,
+    identity: Arc<Identity>,
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     host: Arc<dyn Host>,
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
@@ -43,14 +43,14 @@ pub struct Handler {
 impl Handler {
     /// Create a new instance of the attestation flow handler.
     pub fn new(
-        rak: Arc<RAK>,
+        identity: Arc<Identity>,
         host: Arc<dyn Host>,
         consensus_verifier: Arc<dyn Verifier>,
         runtime_id: Namespace,
         version: Version,
     ) -> Self {
         Self {
-            rak,
+            identity,
             host,
             consensus_verifier,
             runtime_id,
@@ -65,7 +65,9 @@ impl Handler {
     /// Handle an attestation flow request.
     pub fn handle(&self, ctx: Context, request: Body) -> Result<Body> {
         match request {
-            Body::RuntimeCapabilityTEERakInitRequest { target_info } => self.rak_init(target_info),
+            Body::RuntimeCapabilityTEERakInitRequest { target_info } => {
+                self.target_info_init(target_info)
+            }
             Body::RuntimeCapabilityTEERakReportRequest {} => self.report_init(),
             Body::RuntimeCapabilityTEERakAvrRequest { avr } => {
                 // TODO: Remove this once we want to break the runtime host protocol.
@@ -77,18 +79,15 @@ impl Handler {
         }
     }
 
-    fn rak_init(&self, target_info: Vec<u8>) -> Result<Body> {
-        info!(self.logger, "Initializing the runtime attestation key");
-        self.rak.init_rak(target_info)?;
+    fn target_info_init(&self, target_info: Vec<u8>) -> Result<Body> {
+        info!(self.logger, "Initializing the runtime target info");
+        self.identity.init_target_info(target_info)?;
         Ok(Body::RuntimeCapabilityTEERakInitResponse {})
     }
 
     fn report_init(&self) -> Result<Body> {
-        info!(
-            self.logger,
-            "Initializing the runtime attestation key report"
-        );
-        let (rak_pub, rek_pub, report, nonce) = self.rak.init_report();
+        info!(self.logger, "Initializing the runtime key report");
+        let (rak_pub, rek_pub, report, nonce) = self.identity.init_report();
 
         let report: &[u8] = report.as_ref();
         let report = report.to_vec();
@@ -102,7 +101,7 @@ impl Handler {
     }
 
     fn set_quote(&self, ctx: Context, quote: Quote) -> Result<Body> {
-        if self.rak.quote_policy().is_none() {
+        if self.identity.quote_policy().is_none() {
             info!(self.logger, "Configuring quote policy");
 
             // Obtain current quote policy from (verified) consensus state.
@@ -115,7 +114,7 @@ impl Handler {
                 version,
             )?;
 
-            self.rak.set_quote_policy(policy)?;
+            self.identity.set_quote_policy(policy)?;
         }
 
         info!(
@@ -123,16 +122,16 @@ impl Handler {
             "Configuring quote for the runtime attestation key binding"
         );
 
-        // Configure the quote and policy on the RAK.
-        let verified_quote = self.rak.set_quote(quote)?;
+        // Configure the quote and policy on the identity.
+        let verified_quote = self.identity.set_quote(quote)?;
 
         // Sign the report data, latest verified consensus height, REK and host node ID.
         let consensus_state = self.consensus_verifier.latest_state()?;
         let height = consensus_state.height();
         let node_id = self.host.identity()?;
-        let rek = self.rak.public_rek();
+        let rek = self.identity.public_rek();
         let h = SGXAttestation::hash(&verified_quote.report_data, node_id, height, rek);
-        let signature = self.rak.sign(ATTESTATION_SIGNATURE_CONTEXT, &h)?;
+        let signature = self.identity.sign(ATTESTATION_SIGNATURE_CONTEXT, &h)?;
 
         Ok(Body::RuntimeCapabilityTEERakQuoteResponse { height, signature })
     }

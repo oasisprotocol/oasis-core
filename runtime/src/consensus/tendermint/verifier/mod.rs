@@ -230,13 +230,19 @@ impl Verifier {
         state: &ConsensusState,
         node_id: &Option<PublicKey>,
     ) -> Result<Option<PublicKey>, Error> {
-        let rak = if let Some(rak) = self.protocol.get_rak() {
-            rak
+        let identity = if let Some(identity) = self.protocol.get_identity() {
+            identity
         } else {
             return Ok(None);
         };
 
-        verify_state_freshness(state, rak, &self.runtime_id, &self.runtime_version, node_id)
+        verify_state_freshness(
+            state,
+            identity,
+            &self.runtime_id,
+            &self.runtime_version,
+            node_id,
+        )
     }
 
     /// Verify state freshness using prove freshness transaction.

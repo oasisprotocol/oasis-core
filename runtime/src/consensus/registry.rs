@@ -21,7 +21,7 @@ use crate::{
         version::Version,
     },
     consensus::{beacon::EpochTime, scheduler, staking},
-    rak::RAK,
+    identity::Identity,
 };
 
 /// Attestation signature context.
@@ -131,13 +131,13 @@ impl CapabilityTEE {
     }
 
     /// Checks whether the TEE capability matches the given TEE identity.
-    pub fn matches(&self, rak: &RAK) -> bool {
+    pub fn matches(&self, identity: &Identity) -> bool {
         match self.hardware {
             TEEHardware::TEEHardwareInvalid => false,
             TEEHardware::TEEHardwareIntelSGX => {
                 // Decode SGX attestation and check quote equality.
                 let attestation: SGXAttestation = self.try_decode_attestation().unwrap();
-                rak.matches(&self.rak, &attestation.quote())
+                identity.rak_matches(&self.rak, &attestation.quote())
             }
         }
     }
@@ -257,7 +257,7 @@ pub struct Node {
 
 impl Node {
     /// Checks whether the node has the provided TEE identity configured.
-    pub fn has_tee(&self, rak: &RAK, runtime_id: &Namespace, version: &Version) -> bool {
+    pub fn has_tee(&self, identity: &Identity, runtime_id: &Namespace, version: &Version) -> bool {
         if let Some(rts) = &self.runtimes {
             for rt in rts {
                 if runtime_id != &rt.id {
@@ -267,7 +267,7 @@ impl Node {
                     continue;
                 }
                 if let Some(tee) = &rt.capabilities.tee {
-                    if tee.matches(rak) {
+                    if tee.matches(identity) {
                         return true;
                     }
                 }

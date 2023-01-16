@@ -19,7 +19,7 @@ use crate::{
     config::Config,
     consensus::{tendermint, verifier::Verifier},
     dispatcher::Dispatcher,
-    rak::RAK,
+    identity::Identity,
     storage::KeyValue,
     types::{Body, Error, Message, MessageType, RuntimeInfoRequest, RuntimeInfoResponse},
     BUILD_INFO,
@@ -88,9 +88,9 @@ pub struct HostInfo {
 pub struct Protocol {
     /// Logger.
     logger: Logger,
-    /// Runtime attestation key.
+    /// Runtime identity.
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-    rak: Arc<RAK>,
+    identity: Arc<Identity>,
     /// Incoming request dispatcher.
     dispatcher: Arc<Dispatcher>,
     /// Channel for sending outgoing messages.
@@ -113,7 +113,7 @@ impl Protocol {
     /// Create a new protocol handler instance.
     pub(crate) fn new(
         stream: Stream,
-        rak: Arc<RAK>,
+        identity: Arc<Identity>,
         dispatcher: Arc<Dispatcher>,
         config: Config,
     ) -> Self {
@@ -123,7 +123,7 @@ impl Protocol {
 
         Self {
             logger,
-            rak,
+            identity,
             dispatcher,
             outgoing_tx,
             outgoing_rx,
@@ -140,10 +140,10 @@ impl Protocol {
         &self.config
     }
 
-    /// The runtime attestation key.
-    pub fn get_rak(&self) -> Option<&Arc<RAK>> {
-        self.rak.quote()?;
-        Some(&self.rak)
+    /// The runtime identity.
+    pub fn get_identity(&self) -> Option<&Arc<Identity>> {
+        self.identity.quote()?;
+        Some(&self.identity)
     }
 
     /// The runtime identifier for this instance.
@@ -461,16 +461,16 @@ impl Protocol {
 
     /// Ensure that the runtime is ready to process requests and fail otherwise.
     pub fn ensure_initialized(&self) -> anyhow::Result<()> {
-        if self.host_info.lock().unwrap().is_none() {
-            return Err(ProtocolError::HostInfoNotConfigured.into());
-        }
+        self.host_info
+            .lock()
+            .unwrap()
+            .as_ref()
+            .ok_or(ProtocolError::HostInfoNotConfigured)?;
 
         #[cfg(target_env = "sgx")]
-        {
-            if self.rak.quote().is_none() {
-                return Err(ProtocolError::AttestationRequired.into());
-            }
-        }
+        self.identity
+            .quote()
+            .ok_or(ProtocolError::AttestationRequired)?;
 
         Ok(())
     }
