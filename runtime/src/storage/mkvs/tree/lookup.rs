@@ -65,7 +65,7 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        self._get(&ctx, pending_root, 0, &boxed_key, 0, check_only)
+        self._get(&ctx, pending_root, 0, &boxed_key, check_only)
     }
 
     fn _get(
@@ -74,7 +74,6 @@ impl Tree {
         ptr: NodePtrRef,
         bit_depth: Depth,
         key: &Key,
-        depth: Depth,
         check_only: bool,
     ) -> Result<Option<Value>> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
@@ -103,7 +102,6 @@ impl Tree {
                             n.leaf_node.clone(),
                             bit_depth + n.label_bit_length,
                             key,
-                            depth,
                             check_only,
                         );
                     }
@@ -120,7 +118,6 @@ impl Tree {
                             n.right.clone(),
                             bit_depth + n.label_bit_length,
                             key,
-                            depth + 1,
                             check_only,
                         );
                     } else {
@@ -129,7 +126,6 @@ impl Tree {
                             n.left.clone(),
                             bit_depth + n.label_bit_length,
                             key,
-                            depth + 1,
                             check_only,
                         );
                     }

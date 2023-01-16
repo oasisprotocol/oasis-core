@@ -47,20 +47,15 @@ pub struct AnnotatedBlock {
 /// # Note
 ///
 /// This should be kept in sync with go/roothash/api/block/header.go.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum HeaderType {
+    #[default]
     Invalid = 0,
     Normal = 1,
     RoundFailed = 2,
     EpochTransition = 3,
     Suspended = 4,
-}
-
-impl Default for HeaderType {
-    fn default() -> Self {
-        HeaderType::Invalid
-    }
 }
 
 /// A message that can be emitted by the runtime to be processed by the consensus layer.

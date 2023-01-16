@@ -251,9 +251,9 @@ struct Verifier {
 }
 
 impl quote::Quote3SignatureEcdsaP256Verifier for Verifier {
-    fn verify_certification_data<'a>(
+    fn verify_certification_data(
         &mut self,
-        quote3signature: &'a quote::Quote3SignatureEcdsaP256,
+        quote3signature: &quote::Quote3SignatureEcdsaP256,
     ) -> quote::Result<Vec<u8>> {
         // Only PCK certificate chain is supported as certification data.
         let certs = quote3signature

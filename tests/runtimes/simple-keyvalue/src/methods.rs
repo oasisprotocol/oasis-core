@@ -86,7 +86,7 @@ impl Methods {
             .runtime_state
             .get(IoContext::create_child(&ctx.parent.core.io_ctx), &nonce_key)
         {
-            Some(_) => Err(format!("Duplicate nonce: {}", nonce)),
+            Some(_) => Err(format!("Duplicate nonce: {nonce}")),
             None => {
                 if !ctx.is_check_only() {
                     ctx.parent.core.runtime_state.insert(
@@ -388,7 +388,7 @@ impl Methods {
             &long_term_pk.key.0,
             &ephemeral_sk.0,
         )
-        .map_err(|err| format!("failed to encrypt plaintext: {}", err))?;
+        .map_err(|err| format!("failed to encrypt plaintext: {err}"))?;
 
         // Return ephemeral_pk || ciphertext.
         let mut c = ephemeral_pk.0.as_bytes().to_vec();
@@ -415,7 +415,7 @@ impl Methods {
                 .get_or_create_ephemeral_keys(io_ctx, key_pair_id, args.epoch);
         let long_term_sk = tokio::runtime::Handle::current()
             .block_on(result)
-            .map_err(|err| format!("private ephemeral key not available: {}", err))?;
+            .map_err(|err| format!("private ephemeral key not available: {err}"))?;
 
         // Decode ephemeral_pk || ciphertext.
         let ephemeral_pk: [u8; x25519::PUBLIC_KEY_LENGTH] = args
@@ -440,7 +440,7 @@ impl Methods {
             &ephemeral_pk.0,
             &long_term_sk.input_keypair.sk.0,
         )
-        .map_err(|err| format!("failed to decrypt ciphertext: {}", err))?;
+        .map_err(|err| format!("failed to decrypt ciphertext: {err}"))?;
 
         Ok(Some(plaintext))
     }

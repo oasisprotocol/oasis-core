@@ -278,21 +278,16 @@ impl Node {
 }
 
 /// Runtime kind.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u32)]
 pub enum RuntimeKind {
     /// Invalid runtime that should never be explicitly set.
+    #[default]
     KindInvalid = 0,
     /// Generic compute runtime.
     KindCompute = 1,
     /// Key manager runtime.
     KindKeyManager = 2,
-}
-
-impl Default for RuntimeKind {
-    fn default() -> Self {
-        RuntimeKind::KindInvalid
-    }
 }
 
 /// Parameters for the executor committee.
@@ -453,10 +448,11 @@ impl Default for RuntimeAdmissionPolicy {
 }
 
 /// Runtime governance model.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum RuntimeGovernanceModel {
     /// Invalid model that should never be explicitly set.
+    #[default]
     GovernanceInvalid = 0,
     /// Entity governance model.
     GovernanceEntity = 1,
@@ -464,12 +460,6 @@ pub enum RuntimeGovernanceModel {
     GovernanceRuntime = 2,
     /// Consensus governance model.
     GovernanceConsensus = 3,
-}
-
-impl Default for RuntimeGovernanceModel {
-    fn default() -> Self {
-        RuntimeGovernanceModel::GovernanceInvalid
-    }
 }
 
 /// Per-runtime version information.
@@ -607,19 +597,14 @@ impl SGXAttestation {
 }
 
 /// TEE hardware implementation.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[repr(u8)]
 pub enum TEEHardware {
     /// Non-TEE implementation.
+    #[default]
     TEEHardwareInvalid = 0,
     /// Intel SGX TEE implementation.
     TEEHardwareIntelSGX = 1,
-}
-
-impl Default for TEEHardware {
-    fn default() -> Self {
-        TEEHardware::TEEHardwareInvalid
-    }
 }
 
 /// The latest entity descriptor version that should be used for all new descriptors. Using earlier

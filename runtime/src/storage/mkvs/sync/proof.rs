@@ -82,7 +82,7 @@ impl ProofVerifier {
             return Err(anyhow!("verifier: empty proof"));
         }
 
-        let (idx, root_node) = self._verify_proof(proof, 0)?;
+        let (idx, root_node) = Self::_verify_proof(proof, 0)?;
         // Make sure that all of the entries in the proof have been used. The returned index should
         // point to just beyond the last element.
         if idx != proof.entries.len() {
@@ -100,7 +100,7 @@ impl ProofVerifier {
         Ok(root_node)
     }
 
-    fn _verify_proof(&self, proof: &Proof, idx: usize) -> Result<(usize, NodePtrRef)> {
+    fn _verify_proof(proof: &Proof, idx: usize) -> Result<(usize, NodePtrRef)> {
         if idx >= proof.entries.len() {
             return Err(anyhow!("verifier: malformed proof"));
         }
@@ -122,11 +122,11 @@ impl ProofVerifier {
                 let mut pos = idx + 1;
                 if let NodeBox::Internal(ref mut nd) = node {
                     // Left.
-                    let result = self._verify_proof(proof, pos)?;
+                    let result = Self::_verify_proof(proof, pos)?;
                     pos = result.0;
                     nd.left = result.1;
                     // Right.
-                    let result = self._verify_proof(proof, pos)?;
+                    let result = Self::_verify_proof(proof, pos)?;
                     pos = result.0;
                     nd.right = result.1;
 

@@ -110,7 +110,7 @@ impl From<tokio::task::JoinError> for Error {
         Error::new(
             "dispatcher",
             1,
-            &format!("error while processing request: {}", e),
+            &format!("error while processing request: {e}"),
         )
     }
 }
@@ -265,7 +265,7 @@ impl Dispatcher {
         let post_init_state = initializer.init(pre_init_state);
         let mut txn_dispatcher = post_init_state
             .txn_dispatcher
-            .unwrap_or_else(|| Box::new(TxnNoopDispatcher::default()));
+            .unwrap_or_else(|| Box::<TxnNoopDispatcher>::default());
         txn_dispatcher.set_abort_batch_flag(self.abort_batch.clone());
 
         let state = State {
@@ -836,7 +836,7 @@ impl Dispatcher {
             .process_frame(request, &mut buffer)
             .map_err(|err| {
                 error!(self.logger, "Error while processing frame"; "err" => %err);
-                Error::new("rhp/dispatcher", 1, &format!("{}", err))
+                Error::new("rhp/dispatcher", 1, &format!("{err}"))
             })?;
 
         if let Some((session_id, session_info, message, untrusted_plaintext)) = result {
@@ -882,7 +882,7 @@ impl Dispatcher {
                         .write_message(session_id, response, &mut buffer)
                         .map_err(|err| {
                             error!(self.logger, "Error while writing response"; "err" => %err);
-                            Error::new("rhp/dispatcher", 1, &format!("{}", err))
+                            Error::new("rhp/dispatcher", 1, &format!("{err}"))
                         })
                         .map(|_| Body::RuntimeRPCCallResponse { response: buffer })
                 }
@@ -896,7 +896,7 @@ impl Dispatcher {
                         .close(session_id, &mut buffer)
                         .map_err(|err| {
                             error!(self.logger, "Error while closing session"; "err" => %err);
-                            Error::new("rhp/dispatcher", 1, &format!("{}", err))
+                            Error::new("rhp/dispatcher", 1, &format!("{err}"))
                         })
                         .map(|_| Body::RuntimeRPCCallResponse { response: buffer })
                 }

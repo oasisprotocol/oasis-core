@@ -91,7 +91,7 @@ impl Address {
 impl fmt::LowerHex for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for i in &self.0[..] {
-            write!(f, "{:02x}", i)?;
+            write!(f, "{i:02x}")?;
         }
         Ok(())
     }

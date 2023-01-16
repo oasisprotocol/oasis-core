@@ -277,7 +277,7 @@ pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
     };
 
     let quote_body = avr_body.isv_enclave_quote_body()?;
-    let quote_body = match base64::decode(&quote_body) {
+    let quote_body = match base64::decode(quote_body) {
         Ok(quote_body) => quote_body,
         _ => return Err(AVRError::MalformedQuote.into()),
     };
