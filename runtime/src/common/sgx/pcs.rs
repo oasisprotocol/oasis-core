@@ -929,7 +929,7 @@ mod tests {
             },
         };
 
-        let now = Utc.timestamp(1671497404, 0);
+        let now = Utc.timestamp_opt(1671497404, 0).unwrap();
 
         let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
@@ -949,7 +949,7 @@ mod tests {
 
         let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
 
-        let now = Utc.timestamp(1671497404, 0);
+        let now = Utc.timestamp_opt(1671497404, 0).unwrap();
 
         let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
@@ -969,7 +969,7 @@ mod tests {
 
         let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
 
-        let now = Utc.timestamp(1671497404, 0);
+        let now = Utc.timestamp_opt(1671497404, 0).unwrap();
         let policy = &QuotePolicy {
             fmspc_blacklist: vec!["00606A000000".to_string()],
             ..Default::default()

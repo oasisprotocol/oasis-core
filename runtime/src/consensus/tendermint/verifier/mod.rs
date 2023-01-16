@@ -13,9 +13,11 @@ use tendermint_light_client::{
     components::{self, io::AtHeight, verifier::PredicateVerifier},
     light_client,
     operations::{ProdCommitValidator, ProdHasher},
+    store::LightStore,
     supervisor::Instance,
     types::{
-        Hash as TMHash, LightBlock as TMLightBlock, PeerId, Time, TrustThreshold, TrustedBlockState,
+        Hash as TMHash, LightBlock as TMLightBlock, PeerId, Status, Time, TrustThreshold,
+        TrustedBlockState,
     },
     verifier::{predicates::ProdPredicates, Verdict, Verifier as TMVerifier},
 };
@@ -41,14 +43,18 @@ use crate::{
             LightBlockMeta,
         },
         transaction::{Transaction, SIGNATURE_CONTEXT},
-        verifier::{self, verify_state_freshness, Error, TrustRoot, TrustedState},
+        verifier::{self, verify_state_freshness, Error, TrustRoot},
         Event, LightBlock, HEIGHT_LATEST,
     },
     protocol::Protocol,
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
 };
 
-use self::{cache::Cache, handle::Handle, store::TrustedStateStore};
+use self::{
+    cache::Cache,
+    handle::Handle,
+    store::{TrustedState, TrustedStateStore},
+};
 
 // Modules.
 mod cache;
@@ -564,17 +570,24 @@ impl Verifier {
         // Verify if we can trust light blocks from a new chain if the consensus
         // chain context changes.
         info!(self.logger, "Checking chain context change");
-        let trust_root = self.handle_chain_context_change(
+        let trusted_state = self.handle_chain_context_change(
             trusted_state,
             verifier.as_ref(),
             clock.as_ref(),
             io.as_ref(),
         )?;
 
+        // Insert all of the trusted blocks into the light store as trusted.
+        let mut store = Box::new(LruStore::new(1024));
+        for lb in trusted_state.trusted_blocks {
+            store.insert(lb.into(), Status::Trusted);
+        }
+        let trust_root = trusted_state.trust_root;
+
         let builder = LightClientBuilder::custom(
             peer_id,
             options,
-            Box::new(LruStore::new(1024)),
+            store,
             io,
             Box::new(ProdHasher),
             clock,
@@ -604,7 +617,7 @@ impl Verifier {
         // processing any requests.
         let verified_block = self.verify_to_target(HEIGHT_LATEST, &mut cache, &mut instance)?;
 
-        self.trusted_state_store.save(&verified_block);
+        self.trusted_state_store.save(&instance.state.light_store);
 
         let mut last_saved_verified_block_height =
             verified_block.signed_header.header.height.value();
@@ -683,7 +696,7 @@ impl Verifier {
             if let Some(last_verified_block) = cache.last_verified_block.as_ref() {
                 let last_height = last_verified_block.signed_header.header.height.into();
                 if last_height - last_saved_verified_block_height > TRUSTED_STATE_SAVE_INTERVAL {
-                    self.trusted_state_store.save(last_verified_block);
+                    self.trusted_state_store.save(&instance.state.light_store);
                     last_saved_verified_block_height = last_height;
                 }
             }
@@ -692,28 +705,32 @@ impl Verifier {
 
     fn handle_chain_context_change(
         &self,
-        trusted_state: TrustedState,
+        mut trusted_state: TrustedState,
         verifier: &impl TMVerifier,
         clock: &impl components::clock::Clock,
         io: &Io,
-    ) -> Result<TrustRoot, Error> {
+    ) -> Result<TrustedState, Error> {
         let host_info = self.protocol.get_host_info();
 
         // Nothing to handle.
         if trusted_state.trust_root.chain_context == host_info.consensus_chain_context {
             info!(self.logger, "Consensus chain context hasn't changed");
-            return Ok(trusted_state.trust_root);
+            return Ok(trusted_state);
         }
         info!(self.logger, "Consensus chain context has changed");
 
         // Chain context transition cannot be done directly from the embedded
         // trust root as we don't have access to the matching trusted light
         // block which validator set we need to verify blocks from the new chain.
-        let trusted_block = trusted_state.trusted_block.ok_or_else(|| {
-            Error::ChainContextTransitionFailed(anyhow!(
-                "cannot transition from embedded trust root"
-            ))
-        })?;
+        let trusted_block: TMLightBlock = trusted_state
+            .trusted_blocks
+            .pop()
+            .ok_or_else(|| {
+                Error::ChainContextTransitionFailed(anyhow!(
+                    "cannot transition from embedded trust root"
+                ))
+            })?
+            .into();
 
         // Fetch genesis block from the host and prepare untrusted state for
         // verification. Since host cannot be trusted we need to verify if
@@ -740,8 +757,7 @@ impl Verifier {
         // Keeping heights at minimum distance of 2 will make sure that the
         // verifier will check if there is enough overlap between the validator
         // sets.
-        let lbm = decode_light_block(trusted_block).map_err(Error::ChainContextTransitionFailed)?;
-        let header = lbm.signed_header.unwrap().header;
+        let header = trusted_block.signed_header.header;
         let height = header.height;
         let height = if height.increment() != untrusted.height() {
             height
@@ -757,7 +773,7 @@ impl Verifier {
         let trusted = TrustedBlockState {
             header_time: header.time,
             height,
-            next_validators: &lbm.validators,
+            next_validators: &trusted_block.validators,
             next_validators_hash: header.validators_hash,
             // We need to use the target chain ID as we know it has changed.
             chain_id: &chain_id(&host_info.consensus_chain_context),
@@ -801,7 +817,7 @@ impl Verifier {
 
         info!(self.logger, "Consensus chain context transition done");
 
-        let header = untrusted_block.signed_header.header;
+        let header = &untrusted_block.signed_header.header;
         let trust_root = TrustRoot {
             height: header.height.into(),
             hash: header.hash().to_string(),
@@ -809,6 +825,9 @@ impl Verifier {
             chain_context: host_info.consensus_chain_context,
         };
 
-        Ok(trust_root)
+        Ok(TrustedState {
+            trust_root,
+            trusted_blocks: vec![untrusted_block.into()],
+        })
     }
 }

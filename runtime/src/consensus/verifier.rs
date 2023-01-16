@@ -186,18 +186,6 @@ pub struct TrustRoot {
     pub chain_context: String,
 }
 
-/// Trusted state containing trust root and trusted light block.
-#[derive(Debug, Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct TrustedState {
-    /// Trust root.
-    pub trust_root: TrustRoot,
-    /// Trusted light block.
-    ///
-    /// Optional as we don't want to force trusted state for embedded trust
-    /// root to have a matching trusted light block.
-    pub trusted_block: Option<LightBlock>,
-}
-
 /// Verify consensus layer state freshness based on our internal state.
 ///
 /// Returns the node ID of the node where this runtime is executing on. The same node ID may be
