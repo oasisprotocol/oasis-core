@@ -23,10 +23,7 @@ use tendermint_light_client::{
 };
 
 use crate::{
-    common::{
-        crypto::signature::PublicKey, logger::get_logger, namespace::Namespace, process, time,
-        version::Version,
-    },
+    common::{logger::get_logger, namespace::Namespace, process, time, version::Version},
     consensus::{
         beacon::EpochTime,
         roothash::{ComputeResultsHeader, Header},
@@ -45,6 +42,7 @@ use crate::{
         verifier::{self, verify_state_freshness, Error, TrustRoot},
         Event, LightBlock, HEIGHT_LATEST,
     },
+    host::Host,
     protocol::Protocol,
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
 };
@@ -236,12 +234,12 @@ impl Verifier {
     fn verify_freshness_with_rak(
         &self,
         state: &ConsensusState,
-        node_id: &Option<PublicKey>,
-    ) -> Result<Option<PublicKey>, Error> {
+        cache: &Cache,
+    ) -> Result<(), Error> {
         let identity = if let Some(identity) = self.protocol.get_identity() {
             identity
         } else {
-            return Ok(None);
+            return Ok(());
         };
 
         verify_state_freshness(
@@ -249,7 +247,7 @@ impl Verifier {
             identity,
             &self.runtime_id,
             &self.runtime_version,
-            node_id,
+            &cache.host_node_id,
         )
     }
 
@@ -392,7 +390,7 @@ impl Verifier {
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            cache.node_id = self.verify_freshness_with_rak(&state, &cache.node_id)?;
+            self.verify_freshness_with_rak(&state, cache)?;
         }
 
         // Cache verified state root and epoch.
@@ -614,7 +612,12 @@ impl Verifier {
             "trust_root_chain_context" => ?trust_root.chain_context,
         );
 
-        let mut cache = Cache::default();
+        let host_node_id = self
+            .protocol
+            .identity()
+            .expect("host should provide a node identity");
+
+        let mut cache = Cache::new(host_node_id);
 
         // Sync the verifier up to the latest block to make sure we are up to date before
         // processing any requests.

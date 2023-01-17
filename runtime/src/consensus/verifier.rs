@@ -187,66 +187,35 @@ pub struct TrustRoot {
 }
 
 /// Verify consensus layer state freshness based on our internal state.
-///
-/// Returns the node ID of the node where this runtime is executing on. The same node ID may be
-/// passed in order to optimize discovery for subsequent runs.
 pub fn verify_state_freshness(
     state: &ConsensusState,
     identity: &Identity,
     runtime_id: &Namespace,
     version: &Version,
-    node_id: &Option<PublicKey>,
-) -> Result<Option<PublicKey>, Error> {
+    host_node_id: &PublicKey,
+) -> Result<(), Error> {
     let registry_state = RegistryState::new(&state);
 
-    match node_id {
-        // Node ID is cached, query the node and check for matching identity.
-        Some(node_id) => {
-            let node = registry_state
-                .node(Context::background(), node_id)
-                .map_err(|err| {
-                    Error::VerificationFailed(anyhow!(
-                        "failed to retrieve node from the registry: {}",
-                        err
-                    ))
-                })?;
-            let node = node.ok_or_else(|| {
-                Error::VerificationFailed(anyhow!(
-                    "own node ID '{}' not found in registry state",
-                    node_id,
-                ))
-            })?;
-            if !node.has_tee(identity, runtime_id, version) {
-                return Err(Error::VerificationFailed(anyhow!(
-                    "own identity not found in registry state"
-                )));
-            }
+    let node = registry_state
+        .node(Context::background(), host_node_id)
+        .map_err(|err| {
+            Error::VerificationFailed(anyhow!(
+                "failed to retrieve node from the registry: {}",
+                err
+            ))
+        })?;
+    let node = node.ok_or_else(|| {
+        Error::VerificationFailed(anyhow!(
+            "own node ID '{}' not found in registry state",
+            host_node_id,
+        ))
+    })?;
 
-            Ok(Some(*node_id))
-        }
-        // Node ID not cached, need to scan all registry nodes.
-        None => {
-            let nodes = registry_state.nodes(Context::background()).map_err(|err| {
-                Error::VerificationFailed(anyhow!(
-                    "failed to retrieve nodes from the registry: {}",
-                    err
-                ))
-            })?;
-            let mut found_node: Option<PublicKey> = None;
-            for node in nodes {
-                if node.has_tee(identity, runtime_id, version) {
-                    found_node = Some(node.id);
-                    break;
-                }
-            }
-            if found_node.is_none() {
-                return Err(Error::VerificationFailed(anyhow!(
-                    "own identity not found in registry state",
-                )));
-            }
-
-            // Cache node ID to avoid re-scanning.
-            Ok(found_node)
-        }
+    if !node.has_tee(identity, runtime_id, version) {
+        return Err(Error::VerificationFailed(anyhow!(
+            "own identity not found in registry state"
+        )));
     }
+
+    Ok(())
 }
