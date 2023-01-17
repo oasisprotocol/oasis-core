@@ -1,7 +1,6 @@
 //! Runtime call dispatcher.
 use std::{
     convert::TryInto,
-    process,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Condvar, Mutex,
@@ -22,6 +21,7 @@ use crate::{
             signature::{Signature, Signer},
         },
         logger::get_logger,
+        process,
     },
     consensus::{
         beacon::EpochTime,
