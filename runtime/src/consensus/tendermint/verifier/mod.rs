@@ -24,7 +24,7 @@ use tendermint_light_client::{
 
 use crate::{
     common::{
-        crypto::signature::PublicKey, logger::get_logger, namespace::Namespace, time,
+        crypto::signature::PublicKey, logger::get_logger, namespace::Namespace, process, time,
         version::Version,
     },
     consensus::{
@@ -508,7 +508,7 @@ impl Verifier {
                         Ok(result) => result,
                         Err(_) => {
                             error!(logger, "Consensus verifier aborted");
-                            std::process::abort();
+                            process::abort();
                         }
                     };
 
@@ -528,7 +528,7 @@ impl Verifier {
                         error!(logger, "Consensus verifier terminated, aborting";
                             "err" => %err,
                         );
-                        std::process::abort();
+                        process::abort();
                     }
                 }
 
@@ -537,7 +537,7 @@ impl Verifier {
             }
 
             error!(logger, "Failed to start consensus verifier, aborting");
-            std::process::abort();
+            process::abort();
         });
     }
 
