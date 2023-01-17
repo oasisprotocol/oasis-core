@@ -1,7 +1,6 @@
 //! Runtime call dispatcher.
 use std::{
     convert::TryInto,
-    process,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Condvar, Mutex,
@@ -19,6 +18,7 @@ use crate::{
     common::{
         crypto::{hash::Hash, signature::Signer},
         logger::get_logger,
+        process,
         sgx::QuotePolicy,
     },
     consensus::{
