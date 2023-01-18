@@ -2,6 +2,7 @@
 
 #[macro_use]
 pub mod bytes;
+pub mod alloc;
 pub mod crypto;
 pub mod key_format;
 pub mod logger;

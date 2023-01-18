@@ -365,5 +365,11 @@ func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
 		return err
 	}
 
+	sc.Logger.Info("waiting for 7200 blocks")
+	_, err = sc.waitBlocks(ctx, 7200)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

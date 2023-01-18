@@ -95,6 +95,10 @@ pub struct BuildInfo {
     pub is_secure: bool,
 }
 
+// Configure a custom allocator.
+#[global_allocator]
+static RUNTIME_ALLOCATOR: common::alloc::Allocator = common::alloc::Allocator;
+
 // Re-exports.
 pub use self::{
     enclave_rpc::{demux::Demux as RpcDemux, dispatcher::Dispatcher as RpcDispatcher},

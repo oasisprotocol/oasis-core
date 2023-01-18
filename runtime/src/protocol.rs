@@ -294,6 +294,8 @@ impl Protocol {
                 let id = message.id;
                 let ctx = Context::background();
 
+                warn!(self.logger, "memory usage"; "currently_allocated" => crate::common::alloc::currently_allocated());
+
                 let body = match self.handle_request(ctx, id, message.body) {
                     Ok(Some(result)) => result,
                     Ok(None) => {
