@@ -139,6 +139,9 @@ impl Verifier {
         }
         .map_err(|err| Error::VerificationFailed(err.into()))?;
 
+        // Clear verification trace as it could otherwise lead to infinite memory growth.
+        instance.state.verification_trace.clear();
+
         cache.update_verified_block(&verified_block);
         self.update_insecure_posix_time(&verified_block);
 
