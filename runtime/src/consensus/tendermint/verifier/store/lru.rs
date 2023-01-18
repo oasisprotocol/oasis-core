@@ -20,33 +20,33 @@ impl std::fmt::Debug for LruStore {
     }
 }
 
-struct Inner {
-    unverified: lru::LruCache<Height, LightBlock>,
-    verified: lru::LruCache<Height, LightBlock>,
-    trusted: lru::LruCache<Height, LightBlock>,
-    failed: lru::LruCache<Height, LightBlock>,
+#[derive(Clone, Debug, PartialEq)]
+struct StoreEntry {
+    light_block: LightBlock,
+    status: Status,
 }
 
-impl Inner {
-    fn store(&mut self, status: Status) -> &mut lru::LruCache<Height, LightBlock> {
-        match status {
-            Status::Unverified => &mut self.unverified,
-            Status::Verified => &mut self.verified,
-            Status::Trusted => &mut self.trusted,
-            Status::Failed => &mut self.failed,
+impl StoreEntry {
+    fn new(light_block: LightBlock, status: Status) -> Self {
+        Self {
+            light_block,
+            status,
         }
     }
 }
 
+struct Inner {
+    trust_root_height: Height,
+    blocks: lru::LruCache<Height, StoreEntry>,
+}
+
 impl LruStore {
-    /// Create a new, empty, in-memory LRU store of the given capacity.
-    pub fn new(capacity: usize) -> Self {
+    /// Create a new, empty, in-memory LRU store of the given capacity and trust root height.
+    pub fn new(capacity: usize, trust_root_height: Height) -> Self {
         Self {
             inner: Mutex::new(Inner {
-                unverified: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
-                verified: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
-                trusted: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
-                failed: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
+                trust_root_height,
+                blocks: lru::LruCache::new(NonZeroUsize::new(capacity).unwrap()),
             }),
         }
     }
@@ -62,50 +62,149 @@ impl LruStore {
 
 impl LightStore for LruStore {
     fn get(&self, height: Height, status: Status) -> Option<LightBlock> {
-        self.inner().store(status).get(&height).cloned()
+        self.inner()
+            .blocks
+            .get(&height)
+            .filter(|e| e.status == status)
+            .map(|e| e.light_block.clone())
     }
 
     fn insert(&mut self, light_block: LightBlock, status: Status) {
-        self.inner_mut()
-            .store(status)
-            .put(light_block.height(), light_block);
+        let store = self.inner_mut();
+
+        // Promote trust root to prevent it from being evicted.
+        store.blocks.promote(&store.trust_root_height);
+
+        store
+            .blocks
+            .put(light_block.height(), StoreEntry::new(light_block, status));
     }
 
     fn remove(&mut self, height: Height, status: Status) {
-        self.inner_mut().store(status).pop(&height);
+        let store = self.inner_mut();
+
+        // Prevent removal of trust root.
+        if height == store.trust_root_height {
+            return;
+        }
+
+        if store
+            .blocks
+            .get(&height)
+            .map(|e| e.status != status)
+            .unwrap_or(true)
+        {
+            return;
+        }
+        store.blocks.pop(&height);
     }
 
     fn update(&mut self, light_block: &LightBlock, status: Status) {
-        self.inner_mut()
-            .store(status)
-            .put(light_block.height(), light_block.clone());
+        self.insert(light_block.clone(), status)
     }
 
     fn highest(&self, status: Status) -> Option<LightBlock> {
         self.inner()
-            .store(status)
+            .blocks
             .iter()
+            .filter(|(_, e)| e.status == status)
             .max_by_key(|(&height, _)| height)
-            .map(|(_, lb)| lb.clone())
+            .map(|(_, e)| e.light_block.clone())
     }
 
     fn lowest(&self, status: Status) -> Option<LightBlock> {
         self.inner()
-            .store(status)
+            .blocks
             .iter()
+            .filter(|(_, e)| e.status == status)
             .min_by_key(|(&height, _)| height)
-            .map(|(_, lb)| lb.clone())
+            .map(|(_, e)| e.light_block.clone())
     }
 
     #[allow(clippy::needless_collect)]
     fn all(&self, status: Status) -> Box<dyn Iterator<Item = LightBlock>> {
         let light_blocks: Vec<_> = self
             .inner()
-            .store(status)
+            .blocks
             .iter()
-            .map(|(_, lb)| lb.clone())
+            .filter(|(_, e)| e.status == status)
+            .map(|(_, e)| e.light_block.clone())
             .collect();
 
         Box::new(light_blocks.into_iter())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use tendermint_light_client::{
+        store::LightStore,
+        types::{LightBlock, Status},
+    };
+    use tendermint_testgen::{Generator, LightChain};
+
+    use super::LruStore;
+
+    fn generate_blocks(count: u64) -> Vec<LightBlock> {
+        LightChain::default_with_length(count)
+            .light_blocks
+            .into_iter()
+            .map(|lb| lb.generate().unwrap())
+            .map(|lb| LightBlock {
+                signed_header: lb.signed_header,
+                validators: lb.validators,
+                next_validators: lb.next_validators,
+                provider: lb.provider,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_trust_root_height_retained() {
+        let blocks = generate_blocks(10);
+        let mut store = LruStore::new(2, blocks[0].height()); // Only storing two blocks.
+        store.insert(blocks[0].clone(), Status::Trusted);
+        store.insert(blocks[1].clone(), Status::Trusted);
+        store.insert(blocks[2].clone(), Status::Trusted);
+        store.insert(blocks[3].clone(), Status::Trusted);
+
+        let lowest = store
+            .lowest(Status::Trusted)
+            .expect("there should be a lowest block");
+        assert_eq!(lowest, blocks[0]);
+    }
+
+    #[test]
+    fn test_basic() {
+        let blocks = generate_blocks(10);
+        let mut store = LruStore::new(10, blocks[0].height());
+        for block in &blocks {
+            store.insert(block.clone(), Status::Trusted);
+
+            // Block should be stored.
+            let stored_block = store.get(block.height(), Status::Trusted);
+            assert_eq!(stored_block.as_ref(), Some(block));
+
+            // Highest and lowest blocks should be correct.
+            let highest = store
+                .highest(Status::Trusted)
+                .expect("there should be a highest block");
+            let lowest = store
+                .lowest(Status::Trusted)
+                .expect("there should be a lowest block");
+            assert_eq!(&highest, block);
+            assert_eq!(lowest, blocks[0]);
+        }
+
+        // Test removal of trust root block.
+        store.remove(blocks[0].height(), Status::Trusted);
+
+        let block_zero = store.get(blocks[0].height(), Status::Trusted);
+        assert_eq!(block_zero.as_ref(), Some(&blocks[0]));
+
+        let lowest = store
+            .lowest(Status::Trusted)
+            .expect("there should be a lowest block");
+        assert_eq!(lowest, blocks[0]);
     }
 }

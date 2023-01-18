@@ -699,7 +699,7 @@ impl Verifier {
         let builder = LightClientBuilder::custom(
             peer_id,
             options,
-            Box::new(LruStore::new(1024)),
+            Box::new(LruStore::new(1024, trust_root.height.try_into().unwrap())),
             io,
             Box::new(ProdHasher),
             clock,
