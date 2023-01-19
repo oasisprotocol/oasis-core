@@ -581,7 +581,10 @@ impl Verifier {
         )?;
 
         // Insert all of the trusted blocks into the light store as trusted.
-        let mut store = Box::new(LruStore::new(1024));
+        let mut store = Box::new(LruStore::new(
+            1024,
+            trusted_state.trust_root.height.try_into().unwrap(),
+        ));
         for lb in trusted_state.trusted_blocks {
             store.insert(lb.into(), Status::Trusted);
         }
