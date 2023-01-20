@@ -267,8 +267,7 @@ func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface
 		return fmt.Errorf("unknown rpc response status: '%s'", hex.EncodeToString(resp.Response))
 	}
 
-	payload := cbor.Marshal(msg.Response.Body.Success)
-	if err = cbor.Unmarshal(payload, rsp); err != nil {
+	if err = cbor.Unmarshal(msg.Response.Body.Success, rsp); err != nil {
 		return fmt.Errorf("failed to extract rpc response payload: %w", err)
 	}
 

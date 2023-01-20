@@ -1,6 +1,8 @@
 // Package api defines the EnclaveRPC interface.
 package api
 
+import "github.com/oasisprotocol/oasis-core/go/common/cbor"
+
 // Kind is the RPC call kind.
 type Kind uint8
 
@@ -28,8 +30,8 @@ type Request struct {
 
 // Body is an EnclaveRPC response body.
 type Body struct {
-	Success interface{} `json:",omitempty"`
-	Error   *string     `json:",omitempty"`
+	Success cbor.RawMessage `json:",omitempty"`
+	Error   *string         `json:",omitempty"`
 }
 
 // Response is an EnclaveRPC response.
