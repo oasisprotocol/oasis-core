@@ -54,7 +54,7 @@ pr_and_docker_changes() {
 # Helper that checks if the given tag of the oasisprotocol/oasis-core-ci Docker image exists.
 check_docker_ci_image_tag_exists() {
   local tag=$1
-  DOCKER_CLI_EXPERIMENTAL=enabled docker manifest inspect oasisprotocol/oasis-core-ci:${tag}
+  curl --silent -f --head -lL "https://hub.docker.com/v2/repositories/oasisprotocol/oasis-core-ci/tags/${tag}/"
 }
 
 # Determine the oasis-core-ci Docker image tag to use for tests.

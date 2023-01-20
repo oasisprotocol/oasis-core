@@ -22,7 +22,7 @@ use tendermint_light_client::{
 
 use crate::{
     common::{
-        crypto::signature::PublicKey, logger::get_logger, namespace::Namespace, time,
+        crypto::signature::PublicKey, logger::get_logger, namespace::Namespace, process, time,
         version::Version,
     },
     consensus::{
@@ -138,6 +138,9 @@ impl Verifier {
                 .verify_to_target(height.try_into().unwrap(), &mut instance.state),
         }
         .map_err(|err| Error::VerificationFailed(err.into()))?;
+
+        // Clear verification trace as it could otherwise lead to infinite memory growth.
+        instance.state.verification_trace.clear();
 
         cache.update_verified_block(&verified_block);
         self.update_insecure_posix_time(&verified_block);
@@ -624,7 +627,7 @@ impl Verifier {
                         Ok(result) => result,
                         Err(_) => {
                             error!(logger, "Consensus verifier aborted");
-                            std::process::abort();
+                            process::abort();
                         }
                     };
 
@@ -644,7 +647,7 @@ impl Verifier {
                         error!(logger, "Consensus verifier terminated, aborting";
                             "err" => %err,
                         );
-                        std::process::abort();
+                        process::abort();
                     }
                 }
 
@@ -653,7 +656,7 @@ impl Verifier {
             }
 
             error!(logger, "Failed to start consensus verifier, aborting");
-            std::process::abort();
+            process::abort();
         });
     }
 
@@ -696,7 +699,7 @@ impl Verifier {
         let builder = LightClientBuilder::custom(
             peer_id,
             options,
-            Box::new(LruStore::new(1024)),
+            Box::new(LruStore::new(512, trust_root.height.try_into().unwrap())),
             io,
             Box::new(ProdHasher),
             clock,
