@@ -68,7 +68,7 @@ impl Quote {
         let mut verified_quote = match self {
             Quote::Ias(avr) => ias::verify(avr, &policy.ias.clone().unwrap_or_default()),
             Quote::Pcs(qb) => {
-                let now = Utc.timestamp(insecure_posix_time(), 0);
+                let now = Utc.timestamp_opt(insecure_posix_time(), 0).unwrap();
                 Ok(qb.verify(&policy.pcs.clone().unwrap_or_default(), now)?)
             }
         }?;

@@ -916,7 +916,7 @@ mod tests {
             },
         };
 
-        let now = Utc.timestamp(1652701082, 0);
+        let now = Utc.timestamp_opt(1652701082, 0).unwrap();
 
         let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
@@ -936,7 +936,7 @@ mod tests {
 
         let qb: QuoteBundle = cbor::from_slice(RAW_QUOTE_BUNDLE).unwrap();
 
-        let now = Utc.timestamp(1652701082, 0);
+        let now = Utc.timestamp_opt(1652701082, 0).unwrap();
 
         let verified_quote = qb.verify(&QuotePolicy::default(), now).unwrap();
         assert_eq!(
