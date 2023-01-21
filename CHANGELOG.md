@@ -12,6 +12,48 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.5 (2023-01-21)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- ci: Use Ubuntu 20.04 for release builds
+  ([#5130](https://github.com/oasisprotocol/oasis-core/issues/5130))
+
+  This was automatically changed when `ubuntu-latest` was switched to
+  Ubuntu 22.04. We should use the same build environment for all of the patch
+  releases (22.2.4 is an exception as we didn't see this earlier).
+
+- runtime: Clear verification trace after block verification
+  ([#5148](https://github.com/oasisprotocol/oasis-core/issues/5148))
+
+### Internal Changes
+
+- runtime/src/protocol: Remove consensus version compatibility check
+  ([#5135](https://github.com/oasisprotocol/oasis-core/issues/5135))
+
+  Consensus version check was a sanity check which didn't allow dump-restore
+  upgrades. The removal did no harm as the consensus version was never
+  authenticated and light clients use the verifier to check state compatibility
+  and authenticity.
+
+- runtime/src/consensus/registry: Add runtime encryption key (REK)
+  ([#5137](https://github.com/oasisprotocol/oasis-core/issues/5137))
+
+  Added REK to the node TEE capability descriptor to ensure old enclaves won't
+  panic when new ones register with a non-nil REK.
+
+- runtime: Attempt to flush buffers before aborting
+  ([#5146](https://github.com/oasisprotocol/oasis-core/issues/5146))
+
+- runtime: Simplify the LRU-backed consensus verifier light store
+  ([#5149](https://github.com/oasisprotocol/oasis-core/issues/5149))
+
 ## 22.2.4 (2023-01-11)
 
 | Protocol          | Version   |
