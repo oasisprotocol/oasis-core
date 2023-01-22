@@ -28,11 +28,12 @@ use oasis_core_runtime::{
 
 use crate::{
     api::{
-        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateRequest,
-        ReplicateResponse, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS, METHOD_GET_OR_CREATE_KEYS,
-        METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY, METHOD_REPLICATE_MASTER_SECRET,
+        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateMasterSecretRequest,
+        ReplicateMasterSecretResponse, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
+        METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
+        METHOD_REPLICATE_MASTER_SECRET,
     },
-    crypto::{KeyPair, KeyPairId, MasterSecret, SignedPublicKey},
+    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey},
     policy::{set_trusted_policy_signers, verify_policy_and_trusted_signers, TrustedPolicySigners},
 };
 
@@ -416,10 +417,7 @@ impl KeyManagerClient for RemoteClient {
         })
     }
 
-    fn replicate_master_secret(
-        &self,
-        ctx: Context,
-    ) -> BoxFuture<Result<Option<MasterSecret>, KeyManagerError>> {
+    fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>> {
         let inner = self.inner.clone();
         Box::pin(async move {
             let height = inner
@@ -427,16 +425,16 @@ impl KeyManagerClient for RemoteClient {
                 .latest_height()
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let rsp: ReplicateResponse = inner
+            let rsp: ReplicateMasterSecretResponse = inner
                 .rpc_client
                 .secure_call(
                     ctx,
                     METHOD_REPLICATE_MASTER_SECRET,
-                    ReplicateRequest::new(Some(height)),
+                    ReplicateMasterSecretRequest::new(Some(height)),
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
-            Ok(Some(rsp.master_secret))
+            Ok(rsp.master_secret)
         })
     }
 }

@@ -1,5 +1,5 @@
 //! Methods exported to remote clients via EnclaveRPC.
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use io_context::Context;
 
 use oasis_core_runtime::{
@@ -10,8 +10,8 @@ use oasis_core_runtime::{
 
 use crate::{
     api::{
-        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateRequest,
-        ReplicateResponse,
+        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateMasterSecretRequest,
+        ReplicateMasterSecretResponse,
     },
     crypto::{kdf::Kdf, KeyPair, SignedPublicKey},
     policy::Policy,
@@ -30,7 +30,7 @@ pub fn get_or_create_keys(req: &LongTermKeyRequest, ctx: &mut RpcContext) -> Res
     authorize_private_key_generation(&req.runtime_id, ctx)?;
     validate_height_freshness(req.height, ctx)?;
 
-    Kdf::global().get_or_create_keys(req)
+    Kdf::global().get_or_create_keys(req.runtime_id, req.key_pair_id, None)
 }
 
 /// See `Kdf::get_public_key`.
@@ -39,7 +39,7 @@ pub fn get_public_key(req: &LongTermKeyRequest, _ctx: &mut RpcContext) -> Result
     // Absolutely anyone is allowed to query public long-term keys.
 
     let kdf = Kdf::global();
-    let pk = kdf.get_public_key(req)?;
+    let pk = kdf.get_public_key(req.runtime_id, req.key_pair_id, None)?;
     let sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, None)?;
     Ok(sig)
 }
@@ -53,7 +53,7 @@ pub fn get_or_create_ephemeral_keys(
     validate_epoch(req.epoch, ctx)?;
     validate_height_freshness(req.height, ctx)?;
 
-    Kdf::global().get_or_create_keys(req)
+    Kdf::global().get_or_create_keys(req.runtime_id, req.key_pair_id, Some(req.epoch))
 }
 
 /// See `Kdf::get_public_key`.
@@ -66,7 +66,7 @@ pub fn get_public_ephemeral_key(
     validate_epoch(req.epoch, ctx)?;
 
     let kdf = Kdf::global();
-    let pk = kdf.get_public_key(req)?;
+    let pk = kdf.get_public_key(req.runtime_id, req.key_pair_id, Some(req.epoch))?;
     let mut sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, Some(req.epoch))?;
 
     // Outdated key manager clients request public ephemeral keys via secure RPC calls,
@@ -82,13 +82,14 @@ pub fn get_public_ephemeral_key(
 
 /// See `Kdf::replicate_master_secret`.
 pub fn replicate_master_secret(
-    req: &ReplicateRequest,
+    req: &ReplicateMasterSecretRequest,
     ctx: &mut RpcContext,
-) -> Result<ReplicateResponse> {
+) -> Result<ReplicateMasterSecretResponse> {
     authorize_master_secret_replication(ctx)?;
     validate_height_freshness(req.height, ctx)?;
 
-    Kdf::global().replicate_master_secret()
+    let master_secret = Kdf::global().replicate_master_secret()?;
+    Ok(ReplicateMasterSecretResponse { master_secret })
 }
 
 /// Authorize the remote enclave so that the private keys are never released to an incorrect enclave.

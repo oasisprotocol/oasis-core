@@ -6,7 +6,7 @@ use oasis_core_runtime::{
     consensus::beacon::EpochTime,
 };
 
-use crate::crypto::{KeyPairId, MasterSecret};
+use crate::crypto::{KeyPairId, Secret};
 
 /// Key manager initialization request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
@@ -41,23 +41,23 @@ pub struct SignedInitResponse {
     pub signature: Signature,
 }
 
-/// Key manager replication request.
+/// Key manager master secret replication request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct ReplicateRequest {
+pub struct ReplicateMasterSecretRequest {
     /// Latest trust root height.
     pub height: Option<u64>,
 }
 
-impl ReplicateRequest {
+impl ReplicateMasterSecretRequest {
     pub fn new(height: Option<u64>) -> Self {
         Self { height }
     }
 }
 
-/// Key manager replication response.
+/// Key manager master secret replication response.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct ReplicateResponse {
-    pub master_secret: MasterSecret,
+pub struct ReplicateMasterSecretResponse {
+    pub master_secret: Secret,
 }
 
 /// Long-term key request for private/public key generation and retrieval.

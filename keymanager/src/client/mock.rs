@@ -11,7 +11,7 @@ use oasis_core_runtime::{common::crypto::signature::Signature, consensus::beacon
 
 use crate::{
     api::KeyManagerError,
-    crypto::{KeyPair, KeyPairId, MasterSecret, SignedPublicKey},
+    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey},
 };
 
 use super::KeyManagerClient;
@@ -97,10 +97,7 @@ impl KeyManagerClient for MockClient {
         )
     }
 
-    fn replicate_master_secret(
-        &self,
-        _ctx: Context,
-    ) -> BoxFuture<Result<Option<MasterSecret>, KeyManagerError>> {
+    fn replicate_master_secret(&self, _ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>> {
         unimplemented!();
     }
 }
