@@ -15,7 +15,7 @@ build-tools:
 	@$(ECHO) "$(MAGENTA)*** Building Rust tools...$(OFF)"
 	@CARGO_TARGET_DIR=target/default cargo install --locked --path tools
 
-# NOTE: We epxplictly set CARGO_TARGET_DIR as a workaround to avoid
+# NOTE: We explictly set CARGO_TARGET_DIR as a workaround to avoid
 #       recompilations in newer cargo nightly builds.
 #       See https://github.com/oasisprotocol/oasis-core/pull/2673 for details.
 build-runtimes:
