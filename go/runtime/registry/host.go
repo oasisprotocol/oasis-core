@@ -185,7 +185,7 @@ func (h *runtimeHostHandler) handleHostRPCCall(
 		if err != nil {
 			return nil, err
 		}
-		res, err := kmCli.CallEnclave(ctx, rq.Request, rq.Kind, rq.PeerFeedback)
+		res, err := kmCli.CallEnclave(ctx, rq.Request, nil, rq.Kind, rq.PeerFeedback)
 		if err != nil {
 			return nil, err
 		}
