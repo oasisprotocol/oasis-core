@@ -12,7 +12,7 @@ use lru::LruCache;
 
 use oasis_core_runtime::{
     common::{
-        crypto::signature::PublicKey,
+        crypto::signature::{self, PublicKey},
         namespace::Namespace,
         sgx::{EnclaveIdentity, QuotePolicy},
     },
@@ -88,14 +88,17 @@ impl RemoteClient {
 
     /// Create a new key manager client with runtime-internal transport and explicit key manager
     /// enclave identities and quote policy.
+    #[allow(clippy::too_many_arguments)]
     pub fn new_runtime_with_enclaves_and_policy(
         runtime_id: Namespace,
+        km_runtime_id: Option<Namespace>,
         enclaves: Option<HashSet<EnclaveIdentity>>,
         policy: Option<Arc<QuotePolicy>>,
         protocol: Arc<Protocol>,
         consensus_verifier: Arc<dyn Verifier>,
         identity: Arc<Identity>,
         keys_cache_sizes: usize,
+        nodes: Vec<signature::PublicKey>,
     ) -> Self {
         Self::new(
             runtime_id,
@@ -103,9 +106,12 @@ impl RemoteClient {
                 session::Builder::default()
                     .remote_enclaves(enclaves)
                     .quote_policy(policy)
-                    .local_identity(identity),
+                    .local_identity(identity)
+                    .consensus_verifier(Some(consensus_verifier.clone()))
+                    .remote_runtime_id(km_runtime_id),
                 protocol,
                 KEY_MANAGER_ENDPOINT,
+                nodes,
             ),
             consensus_verifier,
             keys_cache_sizes,
@@ -114,10 +120,10 @@ impl RemoteClient {
 
     /// Create a new key manager client with runtime-internal transport.
     ///
-    /// Using this method valid enclave identities and quote policy won't be preset and should
-    /// be obtained via the runtime-host protocol and updated with the `set_status` and
-    /// `set_quote_policy` methods. In case the signer set is non-empty, session establishment
-    /// will fail until the initial policies will be updated.
+    /// Using this method valid enclave identities, quote policy and key manager runtime ID won't
+    /// be preset and should be obtained via the runtime-host protocol and updated with the
+    /// `set_status` and `set_quote_policy` methods. In case the signer set is non-empty, session
+    /// establishment will fail until the initial policies will be updated.
     pub fn new_runtime(
         runtime_id: Namespace,
         protocol: Arc<Protocol>,
@@ -125,6 +131,7 @@ impl RemoteClient {
         identity: Arc<Identity>,
         keys_cache_sizes: usize,
         signers: TrustedPolicySigners,
+        nodes: Vec<signature::PublicKey>,
     ) -> Self {
         // Skip policy checks iff both OASIS_UNSAFE_SKIP_KM_POLICY and
         // OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES are set. The latter is there to ensure that this is a
@@ -142,21 +149,26 @@ impl RemoteClient {
             None
         };
 
-        // Key manager's quote policy should be obtained via the runtime-host protocol. Until then,
-        // all quote verifications will fail with a missing quote policy error.
+        // Key manager's quote policy and runtime ID should be obtained via the runtime-host
+        // protocol. Until then, all quote verifications will fail with a missing quote policy
+        // error and all remote node identity verifications will fail with a missing runtime ID
+        // error.
         let policy = None;
+        let km_runtime_id = None;
 
         // Configure trusted policy signers.
         set_trusted_policy_signers(signers);
 
         Self::new_runtime_with_enclaves_and_policy(
             runtime_id,
+            km_runtime_id,
             enclaves,
             policy,
             protocol,
             consensus_verifier,
             identity,
             keys_cache_sizes,
+            nodes,
         )
     }
 
@@ -166,6 +178,9 @@ impl RemoteClient {
         if let Some(rsk) = status.rsk {
             self.inner.rsk.write().unwrap().replace(rsk);
         }
+
+        // Set key manager runtime ID.
+        self.inner.rpc_client.update_runtime_id(Some(status.id));
 
         // Set client allowed enclaves from key manager policy.
         if let Some(untrusted_policy) = status.policy {
@@ -182,6 +197,11 @@ impl RemoteClient {
     /// Set key manager's quote policy.
     pub fn set_quote_policy(&self, policy: QuotePolicy) {
         self.inner.rpc_client.update_quote_policy(policy);
+    }
+
+    /// Set allowed key manager nodes.
+    pub fn set_nodes(&self, nodes: Vec<signature::PublicKey>) {
+        self.inner.rpc_client.update_nodes(nodes);
     }
 
     fn verify_public_key(

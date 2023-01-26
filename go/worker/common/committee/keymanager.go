@@ -92,14 +92,16 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 	nodes []signature.PublicKey,
 	kind enclaverpc.Kind,
 	pf *enclaverpc.PeerFeedback,
-) ([]byte, error) {
+) ([]byte, signature.PublicKey, error) {
+	var node signature.PublicKey
+
 	km.l.Lock()
 	cli := km.cli
 	lastPf := km.lastPeerFeedback
 	km.l.Unlock()
 
 	if cli == nil {
-		return nil, fmt.Errorf("key manager not available")
+		return nil, node, fmt.Errorf("key manager not available")
 	}
 
 	// Propagate peer feedback on the last EnclaveRPC call to guide routing decision.
@@ -139,7 +141,12 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 
 	rsp, nextPf, err := cli.CallEnclave(ctx, req, peers)
 	if err != nil {
-		return nil, err
+		return nil, node, err
+	}
+
+	node, ok := kmNodes[nextPf.PeerID()]
+	if !ok {
+		return nil, node, fmt.Errorf("unknown peer id")
 	}
 
 	// Store peer feedback instance that we can use.
@@ -149,7 +156,7 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 	}
 	km.l.Unlock()
 
-	return rsp.Data, nil
+	return rsp.Data, node, nil
 }
 
 // NewKeyManagerClientWrapper creates a new key manager client wrapper.

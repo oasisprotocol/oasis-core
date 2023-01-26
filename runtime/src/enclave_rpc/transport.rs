@@ -4,7 +4,7 @@ use anyhow::{anyhow, Error as AnyError};
 use futures::future::{self, BoxFuture};
 use io_context::Context;
 
-use crate::{types::Body, Protocol};
+use crate::{common::crypto::signature, types::Body, Protocol};
 
 use super::types;
 
@@ -16,7 +16,8 @@ pub trait Transport: Send + Sync {
         session_id: types::SessionID,
         data: Vec<u8>,
         untrusted_plaintext: String,
-    ) -> BoxFuture<Result<Vec<u8>, AnyError>> {
+        nodes: Vec<signature::PublicKey>,
+    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>> {
         // Frame message.
         let frame = types::Frame {
             session: session_id,
@@ -24,15 +25,16 @@ pub trait Transport: Send + Sync {
             payload: data,
         };
 
-        self.write_message_impl(ctx, cbor::to_vec(frame), types::Kind::NoiseSession)
+        self.write_message_impl(ctx, cbor::to_vec(frame), types::Kind::NoiseSession, nodes)
     }
 
     fn write_insecure_query(
         &self,
         ctx: Context,
         data: Vec<u8>,
-    ) -> BoxFuture<Result<Vec<u8>, AnyError>> {
-        self.write_message_impl(ctx, data, types::Kind::InsecureQuery)
+        nodes: Vec<signature::PublicKey>,
+    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>> {
+        self.write_message_impl(ctx, data, types::Kind::InsecureQuery, nodes)
     }
 
     fn write_message_impl(
@@ -40,7 +42,8 @@ pub trait Transport: Send + Sync {
         ctx: Context,
         data: Vec<u8>,
         kind: types::Kind,
-    ) -> BoxFuture<Result<Vec<u8>, AnyError>>;
+        nodes: Vec<signature::PublicKey>,
+    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>>;
 
     fn set_peer_feedback(&self, _pfid: u64, _peer_feedback: Option<types::PeerFeedback>) {
         // Default implementation doesn't do anything.
@@ -77,7 +80,8 @@ impl Transport for RuntimeTransport {
         ctx: Context,
         data: Vec<u8>,
         kind: types::Kind,
-    ) -> BoxFuture<Result<Vec<u8>, AnyError>> {
+        nodes: Vec<signature::PublicKey>,
+    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>> {
         let peer_feedback = {
             let mut pf = self.peer_feedback.lock().unwrap();
             let peer_feedback = pf.1.take();
@@ -100,13 +104,16 @@ impl Transport for RuntimeTransport {
                 endpoint: self.endpoint.clone(),
                 request: data,
                 kind,
+                nodes,
                 peer_feedback,
             },
         );
 
         match rsp {
             Err(err) => Box::pin(future::err(err.into())),
-            Ok(Body::HostRPCCallResponse { response }) => Box::pin(future::ok(response)),
+            Ok(Body::HostRPCCallResponse { response, node }) => {
+                Box::pin(future::ok((response, node)))
+            }
             Ok(_) => Box::pin(future::err(anyhow!("bad response type"))),
         }
     }

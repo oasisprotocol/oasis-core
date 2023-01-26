@@ -218,11 +218,13 @@ pub enum Body {
         endpoint: String,
         request: Vec<u8>,
         kind: enclave_rpc::types::Kind,
+        nodes: Vec<signature::PublicKey>,
         #[cbor(optional, rename = "pf")]
         peer_feedback: Option<enclave_rpc::types::PeerFeedback>,
     },
     HostRPCCallResponse {
         response: Vec<u8>,
+        node: signature::PublicKey,
     },
     HostStorageSyncRequest(StorageSyncRequestWithEndpoint),
     HostStorageSyncResponse(StorageSyncResponse),
