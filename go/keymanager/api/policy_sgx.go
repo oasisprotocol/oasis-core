@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -23,6 +24,9 @@ type PolicySGX struct {
 
 	// Enclaves is the per-key manager enclave ID access control policy.
 	Enclaves map[sgx.EnclaveIdentity]*EnclavePolicySGX `json:"enclaves"`
+
+	// MaxEphemeralSecretAge is the maximum age of an ephemeral secret in the number of epochs.
+	MaxEphemeralSecretAge beacon.EpochTime `json:"max_ephemeral_secret_age,omitempty"`
 }
 
 // EnclavePolicySGX is the per-SGX key manager enclave ID access control policy.

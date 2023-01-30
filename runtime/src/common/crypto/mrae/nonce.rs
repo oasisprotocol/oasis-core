@@ -3,6 +3,7 @@ use std::ops::Deref;
 
 use anyhow::{anyhow, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use rand::{rngs::OsRng, Rng};
 
 /// Size of the nonce in bytes.
 pub use super::deoxysii::NONCE_SIZE;
@@ -24,12 +25,23 @@ pub struct Nonce {
 }
 
 impl Nonce {
+    /// Create a new nonce.
     pub fn new(start_value: [u8; NONCE_SIZE]) -> Self {
         Nonce {
             current_value: start_value,
             start_value,
         }
     }
+
+    /// Generate a random nonce.
+    pub fn generate() -> Self {
+        let mut rng = OsRng {};
+        let mut start_value = [0u8; NONCE_SIZE];
+        rng.fill(&mut start_value);
+
+        Self::new(start_value)
+    }
+
     /// Adds one to the nonce, affecting only the last 32 counting bits.
     /// Returns an error iff we've exceeded our nonce's counter capacity, i.e.,
     /// we've incremented 2^32 times. In this case, the Nonce remains unchanged,

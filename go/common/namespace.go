@@ -129,6 +129,11 @@ func (n Namespace) String() string {
 	return hex.EncodeToString(n[:])
 }
 
+// Hash returns a cryptographic hash of a namespace identifier.
+func (n Namespace) Hash() hash.Hash {
+	return hash.NewFromBytes(n[:])
+}
+
 // IsTest returns true iff the namespace is for a test runtime.
 func (n Namespace) IsTest() bool {
 	return n.flags()&NamespaceTest != 0

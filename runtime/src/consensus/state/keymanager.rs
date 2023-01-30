@@ -8,7 +8,11 @@ use crate::{
         key_format::{KeyFormat, KeyFormatAtom},
         namespace::Namespace,
     },
-    consensus::{keymanager::SignedPolicySGX, state::StateError},
+    consensus::{
+        beacon::EpochTime,
+        keymanager::{SignedEncryptedEphemeralSecret, SignedPolicySGX},
+        state::StateError,
+    },
     key_format,
     storage::mkvs::ImmutableMKVS,
 };
@@ -26,6 +30,7 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 }
 
 key_format!(StatusKeyFmt, 0x70, Hash);
+key_format!(EphemeralSecretKeyFmt, 0x72, (Hash, EpochTime));
 
 /// Current key manager status.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
@@ -74,7 +79,29 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
         Ok(result)
     }
 
+    /// Looks up a specific key manager ephemeral secret by its namespace identifier and epoch.
+    pub fn ephemeral_secret(
+        &self,
+        ctx: Context,
+        id: Namespace,
+        epoch: EpochTime,
+    ) -> Result<Option<SignedEncryptedEphemeralSecret>, StateError> {
+        let h = Hash::digest_bytes(id.as_ref());
+        match self
+            .mkvs
+            .get(ctx, &EphemeralSecretKeyFmt((h, epoch)).encode())
+        {
+            Ok(Some(b)) => Ok(Some(self.decode_secret(&b)?)),
+            Ok(None) => Ok(None),
+            Err(err) => Err(StateError::Unavailable(anyhow!(err))),
+        }
+    }
+
     fn decode_status(&self, data: &[u8]) -> Result<Status, StateError> {
+        cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))
+    }
+
+    fn decode_secret(&self, data: &[u8]) -> Result<SignedEncryptedEphemeralSecret, StateError> {
         cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))
     }
 }
@@ -92,11 +119,12 @@ mod test {
             crypto::{
                 hash::Hash,
                 signature::{Signature, SignatureBundle},
+                x25519,
             },
             namespace::Namespace,
             sgx::{EnclaveIdentity, MrEnclave, MrSigner},
         },
-        consensus::keymanager::{EnclavePolicySGX, PolicySGX},
+        consensus::keymanager::{EnclavePolicySGX, EncryptedEphemeralSecret, PolicySGX},
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
             Root, RootType, Tree,
@@ -114,7 +142,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("c44bfc477d7db14deb0e8ce421f1ab465574336ac6eda28a07b4bd90b7b6aa78"),
+            hash: Hash::from("7d17a7ad7030b923200a8233f2a74fff950adea77440fb6a687a0978d552a659"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -160,8 +188,8 @@ mod test {
             PublicKey::from("96533c123a6f4d33c68357109c2eb7c6e6a0f947be3ae1e320d153f561523ff2");
         let signer2 =
             PublicKey::from("4b97bfd95e829d5838131492b5c133e66ac6ef0db414c0be6207ec78c12d2b17");
-        let sig1 = Signature::from("37d04567456cab63004d54acacc60afb9d2315d5890401080d60b059cdd9088af5441974d0f53c2fca628877f0721780d8b79b66e92440ad120b44a5fce7be05");
-        let sig2 = Signature::from("7d76c6d0914f32f3abd33db51d95ca13c03c9313f4eb84bbecc4c5571ff51373d65b774bafae3e82677a6d4dd35f30b1d6751db0b3acc5e1b2c7811b67bf9801");
+        let sig1 = Signature::from("eda666cff6e4030200737e0c7707ad4a378aab4cc0455306992c13da2155b97c91b0fde0325a7a6818f2cbf92813cc587723c8c205a7cb5389ca7b21a038b60a");
+        let sig2 = Signature::from("db90d354272e025aa9a5856f32ea4f5d6becb0ff6340f3cb7f9104ac04ef29ed4f9b5c21b7ea82924800b30f94724b40c376414f80780ff8b7b60a34edea9f02");
         let checksum = "1bff211fae98c88ba82388ae954b88a71d3bbe327e162e9fa711fe7a1b759c3e"
             .from_hex()
             .unwrap();
@@ -193,6 +221,7 @@ mod test {
                                 may_replicate: vec![keymanager_enclave2],
                             },
                         )]),
+                        max_ephemeral_secret_age: 10,
                     },
                     signatures: vec![
                         SignatureBundle {
@@ -208,6 +237,23 @@ mod test {
                 rsk: None,
             },
         ];
+
+        let rek1 = x25519::PrivateKey::from_test_seed("first rek".to_string());
+        let rek2 = x25519::PrivateKey::from_test_seed("second rek".to_string());
+
+        let expected_secret = SignedEncryptedEphemeralSecret {
+            secret: EncryptedEphemeralSecret {
+                runtime_id: keymanager1,
+                epoch: 1,
+                checksum: vec![1,2,3,4,5],
+                public_key: rek1.public_key(),
+                ciphertexts: HashMap::from([
+                    (rek1.public_key(), vec![1, 2, 3]),
+                    (rek2.public_key(), vec![4, 5, 6]),
+                ]),
+            },
+            signature: Signature::from("7e5dbd8da19c0624b60a9af8a5daa73414d9cdbc483619a08e11b9ceda423be658a4e791fb0a79197b0eafe621bf21c15e5fca5eba8b91fba6644864bc952803"),
+        };
 
         // Test statuses.
         let mut statuses = keymanager_state
@@ -229,5 +275,22 @@ mod test {
             .status(Context::create_child(&ctx), id)
             .expect("status query should work");
         assert_eq!(status, None, "invalid status");
+
+        // Test ephemeral secret (happy path, invalid epoch, invalid runtime).
+        let secret = keymanager_state
+            .ephemeral_secret(Context::create_child(&ctx), keymanager1, 1)
+            .expect("ephemeral secret query should work")
+            .expect("ephemeral secret query should return a result");
+        assert_eq!(secret, expected_secret, "invalid ephemeral secret");
+
+        let secret = keymanager_state
+            .ephemeral_secret(Context::create_child(&ctx), keymanager1, 2)
+            .expect("ephemeral secret query should work");
+        assert_ne!(secret, None, "invalid ephemeral secret");
+
+        let secret = keymanager_state
+            .ephemeral_secret(Context::create_child(&ctx), keymanager2, 1)
+            .expect("ephemeral secret query should work");
+        assert_eq!(secret, None, "invalid ephemeral secret");
     }
 }

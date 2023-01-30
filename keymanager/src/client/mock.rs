@@ -100,4 +100,12 @@ impl KeyManagerClient for MockClient {
     fn replicate_master_secret(&self, _ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>> {
         unimplemented!();
     }
+
+    fn replicate_ephemeral_secret(
+        &self,
+        _ctx: Context,
+        _epoch: EpochTime,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
+        unimplemented!();
+    }
 }

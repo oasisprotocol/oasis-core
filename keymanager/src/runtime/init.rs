@@ -9,8 +9,10 @@ use oasis_core_runtime::{
 
 use crate::{
     api::{
-        LOCAL_METHOD_INIT, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS, METHOD_GET_OR_CREATE_KEYS,
-        METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY, METHOD_REPLICATE_MASTER_SECRET,
+        LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET, LOCAL_METHOD_INIT,
+        LOCAL_METHOD_LOAD_EPHEMERAL_SECRET, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
+        METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
+        METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
     policy::{set_trusted_policy_signers, TrustedPolicySigners},
 };
@@ -60,6 +62,13 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
             },
             methods::replicate_master_secret,
         ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: METHOD_REPLICATE_EPHEMERAL_SECRET.to_string(),
+                kind: RpcKind::NoiseSession,
+            },
+            methods::replicate_ephemeral_secret,
+        ));
 
         // Register local methods, for use by the node key manager component.
         state.rpc_dispatcher.add_method(RpcMethod::new(
@@ -68,6 +77,20 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
                 kind: RpcKind::LocalQuery,
             },
             methods::init_kdf,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET.to_string(),
+                kind: RpcKind::LocalQuery,
+            },
+            methods::generate_ephemeral_secret,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: LOCAL_METHOD_LOAD_EPHEMERAL_SECRET.to_string(),
+                kind: RpcKind::LocalQuery,
+            },
+            methods::load_ephemeral_secret,
         ));
 
         let runtime_id = state.protocol.get_runtime_id();

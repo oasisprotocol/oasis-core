@@ -5,6 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 )
@@ -112,4 +113,19 @@ type WorkerStatus struct {
 	Policy *api.SignedPolicySGX `json:"policy"`
 	// PolicyChecksum is the checksum of the key manager policy.
 	PolicyChecksum []byte `json:"policy_checksum"`
+
+	// EphemeralSecrets are the ephemeral secret generation and replication stats.
+	EphemeralSecrets EphemeralSecretStats `json:"ephemeral_secrets"`
+}
+
+// EphemeralSecretStats are the ephemeral secret generation and replication stats.
+type EphemeralSecretStats struct {
+	// NumLoaded is the number of loaded ephemeral secrets.
+	NumLoaded int `json:"num_loaded"`
+	// LastLoaded is the epoch of the last loaded ephemeral secret.
+	LastLoaded beacon.EpochTime `json:"last_loaded_epoch"`
+	// NumGenerated is the number of generated ephemeral secrets.
+	NumGenerated int `json:"num_generated"`
+	// LastGenerated is the epoch of the last generated ephemeral secret.
+	LastGenerated beacon.EpochTime `json:"last_generated_epoch"`
 }

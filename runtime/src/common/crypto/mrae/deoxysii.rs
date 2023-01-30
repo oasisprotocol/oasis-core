@@ -12,6 +12,18 @@ use super::{
 
 type Kdf = Hmac<Sha512Trunc256>;
 
+/// An abstract Deoxys-II-256-128 box opener.
+pub trait Opener: Send + Sync {
+    /// Unboxes ("opens") the provided additional data and ciphertext.
+    fn box_open(
+        &self,
+        nonce: &[u8; NONCE_SIZE],
+        ciphertext: Vec<u8>,
+        additional_data: Vec<u8>,
+        peers_public_key: &PublicKey,
+    ) -> Result<Vec<u8>>;
+}
+
 /// Derives a MRAE AEAD symmetric key suitable for use with the asymmetric
 /// box primitives from the provided X25519 public and private keys.
 fn derive_symmetric_key(public: &PublicKey, private: &StaticSecret) -> [u8; KEY_SIZE] {

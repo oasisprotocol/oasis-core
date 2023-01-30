@@ -1,5 +1,6 @@
 //! Key Derivation Function.
 use std::{
+    collections::HashMap,
     convert::TryInto,
     num::NonZeroUsize,
     sync::{Arc, RwLock},
@@ -10,7 +11,6 @@ use anyhow::Result;
 use io_context::Context as IoContext;
 use lazy_static::lazy_static;
 use lru::LruCache;
-use rand::{rngs::OsRng, Rng};
 use sgx_isa::Keypolicy;
 use sp800_185::{CShake, KMac};
 use zeroize::Zeroize;
@@ -18,7 +18,10 @@ use zeroize::Zeroize;
 use oasis_core_runtime::{
     common::{
         crypto::{
-            mrae::deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
+            mrae::{
+                deoxysii::{DeoxysII, NONCE_SIZE, TAG_SIZE},
+                nonce::Nonce,
+            },
             signature::{self, Signer},
             x25519,
         },
@@ -84,10 +87,17 @@ lazy_static! {
         }
     };
 
-    static ref RUNTIME_CHECKSUM_CUSTOM: &'static [u8] = {
+    static ref CHECKSUM_MASTER_SECRET_CUSTOM: &'static [u8] = {
         match BUILD_INFO.is_secure {
             true => b"ekiden-checksum-master-secret",
             false => b"ekiden-checksum-master-secret-insecure",
+        }
+    };
+
+    static ref CHECKSUM_EPHEMERAL_SECRET_CUSTOM: &'static [u8] = {
+        match BUILD_INFO.is_secure {
+            true => b"ekiden-checksum-ephemeral-secret",
+            false => b"ekiden-checksum-ephemeral-secret-insecure",
         }
     };
 
@@ -103,14 +113,18 @@ const MASTER_SECRET_STORAGE_KEY: &[u8] = b"keymanager_master_secret";
 const MASTER_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
 const MASTER_SECRET_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal master secret v0";
 
+const EPHEMERAL_SECRET_CACHE_SIZE: usize = 20;
+
 /// Kdf, which derives key manager keys from a master secret.
 pub struct Kdf {
     inner: RwLock<Inner>,
 }
 
 struct Inner {
-    /// Master secret.
+    /// Master secret used to derive long-term runtime keys, RSK key, etc.
     master_secret: Option<Secret>,
+    // Ephemeral secrets used to derive ephemeral runtime keys.
+    ephemeral_secrets: HashMap<EpochTime, Secret>,
     /// Checksum of the master secret and the key manager runtime ID.
     checksum: Option<Vec<u8>>,
     /// Key manager runtime ID.
@@ -127,6 +141,7 @@ struct Inner {
 impl Inner {
     fn reset(&mut self) {
         self.master_secret = None;
+        self.ephemeral_secrets.clear();
         self.checksum = None;
         self.runtime_id = None;
         self.signer = None;
@@ -156,17 +171,22 @@ impl Inner {
         Ok(KeyPair::new(pk, sk, state_key, checksum))
     }
 
-    /// Derive ephemeral secret from the master secret.
-    fn derive_ephemeral_secret(&self, kdf_custom: &[u8], seed: &[u8]) -> Result<Secret> {
-        let secret = match self.master_secret.as_ref() {
+    /// Derive ephemeral secret from the key manager's ephemeral secret.
+    fn derive_ephemeral_secret(
+        &self,
+        kdf_custom: &[u8],
+        seed: &[u8],
+        epoch: EpochTime,
+    ) -> Result<Secret> {
+        let secret = match self.ephemeral_secrets.get(&epoch) {
             Some(secret) => secret,
-            None => return Err(KeyManagerError::NotInitialized.into()),
+            None => return Err(KeyManagerError::EphemeralSecretNotFound(epoch).into()),
         };
 
         Self::derive_secret(secret, kdf_custom, seed)
     }
 
-    /// Derive long-term secret from the master secret.
+    /// Derive long-term secret from the key manager's master secret.
     fn derive_static_secret(&self, kdf_custom: &[u8], seed: &[u8]) -> Result<Secret> {
         let secret = match self.master_secret.as_ref() {
             Some(secret) => secret,
@@ -200,6 +220,7 @@ impl Kdf {
         Self {
             inner: RwLock::new(Inner {
                 master_secret: None,
+                ephemeral_secrets: HashMap::new(),
                 checksum: None,
                 runtime_id: None,
                 signer: None,
@@ -211,6 +232,12 @@ impl Kdf {
     /// Global KDF instance.
     pub fn global<'a>() -> &'a Kdf {
         &KDF
+    }
+
+    /// Key manager runtime ID.
+    pub fn runtime_id(&self) -> Option<Namespace> {
+        let inner = self.inner.read().unwrap();
+        inner.runtime_id
     }
 
     /// Initialize the KDF internal state.
@@ -396,8 +423,8 @@ impl Kdf {
 
         // Generate keys.
         let keys = match epoch {
-            Some(_) => {
-                let secret = inner.derive_ephemeral_secret(&EPHEMERAL_KDF_CUSTOM, &seed)?;
+            Some(epoch) => {
+                let secret = inner.derive_ephemeral_secret(&EPHEMERAL_KDF_CUSTOM, &seed, epoch)?;
                 inner.derive_keys(secret, &EPHEMERAL_XOF_CUSTOM)?
             }
             None => {
@@ -454,6 +481,34 @@ impl Kdf {
         Ok(secret)
     }
 
+    /// Replicate ephemeral secret.
+    pub fn replicate_ephemeral_secret(&self, epoch: EpochTime) -> Result<Secret> {
+        let inner = self.inner.read().unwrap();
+
+        let secret = inner
+            .ephemeral_secrets
+            .get(&epoch)
+            .ok_or(KeyManagerError::EphemeralSecretNotFound(epoch))?
+            .clone();
+        Ok(secret)
+    }
+
+    /// Add ephemeral secret to the local cache.
+    pub fn add_ephemeral_secret(&self, epoch: EpochTime, secret: Secret) {
+        let mut inner = self.inner.write().unwrap();
+        inner.ephemeral_secrets.insert(epoch, Secret(secret.0));
+
+        // Drop the oldest secret, if we exceed the capacity.
+        if inner.ephemeral_secrets.len() > EPHEMERAL_SECRET_CACHE_SIZE {
+            let min = *inner
+                .ephemeral_secrets
+                .keys()
+                .min()
+                .expect("map should not be empty");
+            inner.ephemeral_secrets.remove(&min);
+        }
+    }
+
     fn load_master_secret(
         untrusted_local: &dyn KeyValue,
         runtime_id: &Namespace,
@@ -489,14 +544,11 @@ impl Kdf {
         master_secret: &Secret,
         runtime_id: &Namespace,
     ) {
-        let mut rng = OsRng {};
-
         // Encrypt the master secret.
-        let mut nonce = [0u8; NONCE_SIZE];
-        rng.fill(&mut nonce);
+        let nonce = Nonce::generate();
         let d2 = Self::new_d2();
         let mut ciphertext = d2.seal(&nonce, master_secret.as_ref(), runtime_id.as_ref());
-        ciphertext.extend_from_slice(&nonce);
+        ciphertext.extend_from_slice(&nonce.to_vec());
 
         // Persist the encrypted master secret.
         untrusted_local
@@ -508,8 +560,25 @@ impl Kdf {
         let mut k = [0u8; 32];
 
         // KMAC256(master_secret, kmRuntimeID, 32, "ekiden-checksum-master-secret")
-        let mut f = KMac::new_kmac256(master_secret.as_ref(), &RUNTIME_CHECKSUM_CUSTOM);
+        let mut f = KMac::new_kmac256(master_secret.as_ref(), &CHECKSUM_MASTER_SECRET_CUSTOM);
         f.update(runtime_id.as_ref());
+        f.finalize(&mut k);
+
+        k.to_vec()
+    }
+
+    /// Compute the checksum of the ephemeral secret.
+    pub fn checksum_ephemeral_secret(
+        ephemeral_secret: &Secret,
+        runtime_id: &Namespace,
+        epoch: EpochTime,
+    ) -> Vec<u8> {
+        let mut k = [0u8; 32];
+
+        // KMAC256(ephemeral_secret, kmRuntimeID, epoch, 32, "ekiden-checksum-ephemeral-secret")
+        let mut f = KMac::new_kmac256(ephemeral_secret.as_ref(), &CHECKSUM_EPHEMERAL_SECRET_CUSTOM);
+        f.update(runtime_id.as_ref());
+        f.update(epoch.to_le_bytes().as_ref());
         f.finalize(&mut k);
 
         k.to_vec()
@@ -528,7 +597,7 @@ impl Kdf {
 mod tests {
 
     use std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         convert::TryInto,
         num::NonZeroUsize,
         sync::{Arc, RwLock},
@@ -546,8 +615,11 @@ mod tests {
     };
 
     use crate::crypto::{
-        kdf::{CHECKSUM_CUSTOM, RUNTIME_CHECKSUM_CUSTOM, RUNTIME_SIGNING_KEY_CUSTOM},
-        KeyPairId, Secret,
+        kdf::{
+            CHECKSUM_CUSTOM, CHECKSUM_EPHEMERAL_SECRET_CUSTOM, CHECKSUM_MASTER_SECRET_CUSTOM,
+            EPHEMERAL_SECRET_CACHE_SIZE, RUNTIME_SIGNING_KEY_CUSTOM,
+        },
+        KeyPairId, Secret, SECRET_SIZE,
     };
 
     use super::{
@@ -570,6 +642,10 @@ mod tests {
                     runtime_id: Some(Namespace([3u8; 32])),
                     signer: Some(Arc::new(PrivateKey::from_bytes(vec![4u8; 32]))),
                     cache: LruCache::new(NonZeroUsize::new(1).unwrap()),
+                    ephemeral_secrets: HashMap::from([
+                        (1, Secret([1u8; SECRET_SIZE])),
+                        (2, Secret([2u8; SECRET_SIZE])),
+                    ]),
                 }),
             }
         }
@@ -715,18 +791,106 @@ mod tests {
     }
 
     #[test]
+    fn ephemeral_secret_can_be_replicated() {
+        let kdf = Kdf::default();
+
+        // Non-existing secret.
+        let error = kdf
+            .replicate_ephemeral_secret(100)
+            .map(|_| ())
+            .expect_err("ephemeral secret should not be replicated");
+        assert_eq!(
+            error.to_string(),
+            "ephemeral secret for epoch 100 not found"
+        );
+
+        // Existing secret.
+        let secret = kdf
+            .replicate_ephemeral_secret(1)
+            .expect("ephemeral secret should be replicated");
+        let inner = kdf.inner.into_inner().unwrap();
+        assert_eq!(secret.0, inner.ephemeral_secrets.get(&1).unwrap().0);
+    }
+
+    #[test]
+    fn ephemeral_secret_can_be_loaded() {
+        let kdf = Kdf::default();
+
+        // Secret for epoch 1 should exist.
+        kdf.inner
+            .read()
+            .unwrap()
+            .ephemeral_secrets
+            .get(&1)
+            .expect("ephemeral secret for epoch 1 should exist");
+
+        // Secret for epoch 2 should also exist.
+        {
+            let inner = kdf.inner.read().unwrap();
+            let secret = inner
+                .ephemeral_secrets
+                .get(&2)
+                .expect("ephemeral secret for epoch 2 should exist");
+            assert_eq!(secret.0, [2; SECRET_SIZE]);
+        }
+
+        // Secret for epoch 3 should not exist.
+        kdf.inner
+            .read()
+            .unwrap()
+            .ephemeral_secrets
+            .get(&3)
+            .map(|_| panic!("ephemeral secret for epoch 3 should not exist"));
+
+        // Insert enough secrets so that the oldest one is removed.
+        for epoch in 1..EPHEMERAL_SECRET_CACHE_SIZE + 2 {
+            kdf.add_ephemeral_secret(epoch.try_into().unwrap(), Secret([100; SECRET_SIZE]));
+        }
+
+        // Secret for epoch 1 should be removed.
+        kdf.inner
+            .read()
+            .unwrap()
+            .ephemeral_secrets
+            .get(&1)
+            .map(|_| panic!("ephemeral secret for epoch 1 should not exist"));
+
+        // Secret for epoch 2 should change.
+        {
+            let inner = kdf.inner.read().unwrap();
+            let secret = inner
+                .ephemeral_secrets
+                .get(&2)
+                .expect("ephemeral secret for epoch 2 should exist");
+            assert_eq!(secret.0, [100; SECRET_SIZE]);
+        }
+
+        // Secret for epoch 3 should be inserted.
+        kdf.inner
+            .read()
+            .unwrap()
+            .ephemeral_secrets
+            .get(&3)
+            .expect("ephemeral secret for epoch 3 should exist");
+    }
+
+    #[test]
     fn unique_customs() {
         // All key requests must have unique customs otherwise they can
         // derivate keys from the same KMac and/or CShake!!!
-        let mut customs: HashSet<&[u8]> = HashSet::new();
-        customs.insert(&CHECKSUM_CUSTOM);
-        customs.insert(&RUNTIME_KDF_CUSTOM);
-        customs.insert(&RUNTIME_XOF_CUSTOM);
-        customs.insert(&EPHEMERAL_KDF_CUSTOM);
-        customs.insert(&EPHEMERAL_XOF_CUSTOM);
-        customs.insert(&RUNTIME_CHECKSUM_CUSTOM);
-        customs.insert(&RUNTIME_SIGNING_KEY_CUSTOM);
-        assert_eq!(7, customs.len());
+        let customs: Vec<&[u8]> = vec![
+            &CHECKSUM_CUSTOM,
+            &RUNTIME_KDF_CUSTOM,
+            &RUNTIME_XOF_CUSTOM,
+            &EPHEMERAL_KDF_CUSTOM,
+            &EPHEMERAL_XOF_CUSTOM,
+            &CHECKSUM_MASTER_SECRET_CUSTOM,
+            &CHECKSUM_EPHEMERAL_SECRET_CUSTOM,
+            &RUNTIME_SIGNING_KEY_CUSTOM,
+        ];
+        let total = customs.len();
+        let set: HashSet<&[u8]> = customs.into_iter().collect();
+        assert_eq!(total, set.len());
     }
 
     #[test]
@@ -734,6 +898,7 @@ mod tests {
         #[derive(Default)]
         struct TestVector<'a> {
             master_secret: &'a str,
+            ephemeral_secret: &'a str,
             runtime_id: &'a str,
             key_pair_id: &'a str,
             epoch: EpochTime,
@@ -747,67 +912,82 @@ mod tests {
             // A random vector.
             TestVector {
                 master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                ephemeral_secret:
+                    "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
                 runtime_id: "c818f97228a53b201e2afa383b64199c732c7ba1a67ac55ea2cb3b8fba367740",
                 key_pair_id: "fb99076f6a5a8c52bcf562cae5152d0410f47a615fc7bc4966dc9a4f477bd217",
                 epoch: 8935419451,
+                // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
                 lk_sk: "702c5a25ff1149591cf7bca763fbe647a43939f43330a8fd331305d73e489b7c",
                 lk_pk: "66013b5ad263b4fa504e8682371fbfa102d18cc1e1b811bc125603b1abc9487b",
                 // lk_sk: "a009036a2a796c3bf1ae498e7055b481bc5965f9ff013c25270b1a61c8da125d",
                 // lk_pk: "14dc0e45265d8bb23479b742b39528eb10bec264c5c9f74b8c2f51638f3a7239",
-                ek_sk: "780899b45db36117c26d68991bed2820afe8fa9822d3ad5e7bb3a1b7280bf575",
-                ek_pk: "e60c69b71ab3323d94b0739639a3196ffc1e18a090a3ca5074291387849c2e0a",
+                ek_sk: "70b65768679884c84dc0cd406a852a15e9ab40291f23c35215d0ea402dbf5955",
+                ek_pk: "0b7f41d8b1896fee21e294e1e03078ad6efd5136d1ecf8a029d83ac5e87eca38",
             },
-            // Different master secret.
+            // Different master and ephemeral secret.
             TestVector {
                 master_secret: "54083e90f05860653161bc1575765b3311f6a55d1cab84919cb1e2b02c8351ec",
+                ephemeral_secret:
+                    "b8092ab767ddc47cb56807d4d1fd0e66eae0b02e289d1e38d4dfa900619edc47",
                 runtime_id: "c818f97228a53b201e2afa383b64199c732c7ba1a67ac55ea2cb3b8fba367740",
                 key_pair_id: "fb99076f6a5a8c52bcf562cae5152d0410f47a615fc7bc4966dc9a4f477bd217",
                 epoch: 8935419451,
+                // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
                 lk_sk: "5045ff4735a1fc7cbdb729d7cfb9349a11e664bf3198e78b9b714bf7dffe984e",
                 lk_pk: "ba3de0b2d206d7c8c46c3cf82bdf7ea6a6db1c768207ed54f54d08a72c65101e",
                 // lk_sk: "885c1651dc64af6965ef2ed5d690d2110cfce0353f4d263cb6e894db847d4468",
                 // lk_pk: "4260efb7dcc4e5655139477e991e5a124243740644e7f937680cd015e8645d1a",
-                ek_sk: "486a42ca2b133bda56acf0b10856475d33d5d65bdd8a19f758e66f477bf1e84c",
-                ek_pk: "e9ce9a2ea28044a2ce9bf407079f1afc00e263faf187af84ef3ac33451a83e12",
+                ek_sk: "6877eab1ce46ca610a2ca3c7d5fa560049ac55ccc6e95cad3aa2ac108c3f8659",
+                ek_pk: "2b11099802017aaf256631ad309c01f35647433ace0f9eb30e0059dfb1d8773d",
             },
             // Different runtime ID.
             TestVector {
                 master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                ephemeral_secret:
+                    "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
                 runtime_id: "1aa3e6d86c0779afde8a367dbbb025538fb77e410624ece8b25a6be9e1a5170d",
                 key_pair_id: "fb99076f6a5a8c52bcf562cae5152d0410f47a615fc7bc4966dc9a4f477bd217",
                 epoch: 8935419451,
+                // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
                 lk_sk: "e03a8c8e86024934e84d61d789ae7b292a0124bd7cedb1ac740e750391936150",
                 lk_pk: "09761afffa3ef10c7a62390e81bca3c217c7cde216c9660c0f69d3709439587b",
                 // lk_sk: "e8c587d47625d6d7b213fcc4db3ddda295cf5bf6458165aedd293afea89f7a49",
                 // lk_pk: "1733d7cd352941d2fad73d73e4bcc88ee9d94a6872a2c0ce0431ba20616eed75",
-                ek_sk: "e01cbc199d1c4ce1e1cf079dd109957801f0861491cdc7bcfefc45ced487ae69",
-                ek_pk: "1a070e1ba69d6ece36e80731331f2b0414f2db05657aa5b32637dbbee278e95f",
+                ek_sk: "10dc53440e825f2ed1a9d584223deae2d07a0440f9dec306e7ebc81568fb6070",
+                ek_pk: "f1cf258fc81c72b6bf8ce552e1f9823b0def9d0892d54083adad56a09acada61",
             },
             // Different key pair ID.
             TestVector {
                 master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                ephemeral_secret:
+                    "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
                 runtime_id: "c818f97228a53b201e2afa383b64199c732c7ba1a67ac55ea2cb3b8fba367740",
                 key_pair_id: "18789f16d8a8fbd75f529f0a1de3e95469eb537c283dc66eb296a6681a46c066",
                 epoch: 8935419451,
+                // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
                 lk_sk: "a82089503a2b9f2804ee61dcc8ddc3c52f49be9aa6545d235ede885597d12d7a",
                 lk_pk: "a0d546af1faf39e45171830d8779b1744f1b2407b3dcad5d454d1cdcfe7b7276",
                 // lk_sk: "7034c6b9054b726286732bf6e8f0e8075e1d0ee3610a7fe9a188afba4fe97b6a",
                 // lk_pk: "d03ff12b41e83913433c4b57d919d05c18661ef1c6ac014568ad2efc67e48f40",
-                ek_sk: "b09515d7ea6cc46eb0bfcc5228112185c83f7f151b62f6c2932a35bb277b127f",
-                ek_pk: "45bff1009b9ea4a712c127dd29a38df8b74825d381a280b1730202a4a66b6041",
+                ek_sk: "905bc45eb9d1b0e543f0fe37a9d9827dd21bc02e70a538ee9a95cbb18a769f68",
+                ek_pk: "ec6dc8616acfedaf9ba2a2853a4eb286befab6e7e3beda3f5bce68a344ddaa13",
             },
             // Different epoch.
             TestVector {
                 master_secret: "3fa39161fe106fb770503558dad41bea3221888c09477d864507e615094f5d38",
+                ephemeral_secret:
+                    "2a9d51ed0380d11b26255ecc894dfc3aa48196c9b0da463a3073ea820a65a090",
                 runtime_id: "c818f97228a53b201e2afa383b64199c732c7ba1a67ac55ea2cb3b8fba367740",
                 key_pair_id: "fb99076f6a5a8c52bcf562cae5152d0410f47a615fc7bc4966dc9a4f477bd217",
                 epoch: 943032087,
+                // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
                 lk_sk: "702c5a25ff1149591cf7bca763fbe647a43939f43330a8fd331305d73e489b7c",
                 lk_pk: "66013b5ad263b4fa504e8682371fbfa102d18cc1e1b811bc125603b1abc9487b",
                 // lk_sk: "a009036a2a796c3bf1ae498e7055b481bc5965f9ff013c25270b1a61c8da125d",
                 // lk_pk: "14dc0e45265d8bb23479b742b39528eb10bec264c5c9f74b8c2f51638f3a7239",
-                ek_sk: "70c67e2b4e8899b043fbd2e5d8ab78afb3f87f141724494d5c45f03f085d5a59",
-                ek_pk: "5cf09d76408b397312c664696416b9e6e2a9dbe6aa08b01d81f80a2bd7666218",
+                ek_sk: "a05eaa02f85225b5618dd3bdf15984601d80558947a9a51b9c3a141f16979f6e",
+                ek_pk: "026d01541e41af210cbb482de8b0a7ea772757e53bf3dbe5008e43f95db49d64",
             },
         ];
 
@@ -827,6 +1007,16 @@ mod tests {
                             .try_into()
                             .unwrap(),
                     )),
+                    ephemeral_secrets: HashMap::from([(
+                        v.epoch,
+                        Secret(
+                            v.ephemeral_secret
+                                .from_hex::<Vec<u8>>()
+                                .unwrap()
+                                .try_into()
+                                .unwrap(),
+                        ),
+                    )]),
                     checksum: Some(checksum.from_hex().unwrap()),
                     runtime_id: Some(Namespace::from(runtime_id)),
                     signer: Some(Arc::new(PrivateKey::from_bytes(signer.from_hex().unwrap()))),

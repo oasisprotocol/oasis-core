@@ -3,6 +3,7 @@ package keymanager
 import (
 	"context"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager/state"
@@ -13,6 +14,7 @@ import (
 type Query interface {
 	Status(context.Context, common.Namespace) (*keymanager.Status, error)
 	Statuses(context.Context) ([]*keymanager.Status, error)
+	EphemeralSecret(context.Context, common.Namespace, beacon.EpochTime) (*keymanager.SignedEncryptedEphemeralSecret, error)
 	Genesis(context.Context) (*keymanager.Genesis, error)
 }
 
@@ -40,6 +42,10 @@ func (kq *keymanagerQuerier) Status(ctx context.Context, id common.Namespace) (*
 
 func (kq *keymanagerQuerier) Statuses(ctx context.Context) ([]*keymanager.Status, error) {
 	return kq.state.Statuses(ctx)
+}
+
+func (kq *keymanagerQuerier) EphemeralSecret(ctx context.Context, id common.Namespace, epoch beacon.EpochTime) (*keymanager.SignedEncryptedEphemeralSecret, error) {
+	return kq.state.EphemeralSecret(ctx, id, epoch)
 }
 
 func (app *keymanagerApplication) QueryFactory() interface{} {

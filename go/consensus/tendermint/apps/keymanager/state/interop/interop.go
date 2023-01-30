@@ -2,9 +2,13 @@ package interop
 
 import (
 	"context"
+	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
+
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -69,6 +73,7 @@ func InitializeTestKeyManagerState(ctx context.Context, mkvs mkvs.Tree) error {
 		Enclaves: map[sgx.EnclaveIdentity]*kmApi.EnclavePolicySGX{
 			keymanagerEnclave1: &enclavePolicySGX,
 		},
+		MaxEphemeralSecretAge: 10,
 	}
 	sigPolicy := kmApi.SignedPolicySGX{
 		Policy:     policy,
@@ -121,6 +126,35 @@ func InitializeTestKeyManagerState(ctx context.Context, mkvs mkvs.Tree) error {
 	} {
 		if err := state.SetStatus(ctx, status); err != nil {
 			return fmt.Errorf("setting key manager status: %w", err)
+		}
+	}
+
+	// Add two ephemeral secrets.
+	rek1 := x25519.PrivateKey(sha512.Sum512_256([]byte("first rek")))
+	rek2 := x25519.PrivateKey(sha512.Sum512_256([]byte("second rek")))
+
+	for epoch := 1; epoch <= 2; epoch++ {
+		secret := kmApi.EncryptedEphemeralSecret{
+			ID:        keymanager1,
+			Epoch:     beacon.EpochTime(epoch),
+			Checksum:  []byte{1, 2, 3, 4, 5},
+			PublicKey: *rek1.Public(),
+			Ciphertexts: map[x25519.PublicKey][]byte{
+				*rek1.Public(): {1, 2, 3},
+				*rek2.Public(): {4, 5, 6},
+			},
+		}
+		sig, err := signature.Sign(signers[0], kmApi.EncryptedEphemeralSecretSignatureContext, cbor.Marshal(secret))
+		if err != nil {
+			return fmt.Errorf("failed to sign ephemeral secret: %w", err)
+		}
+		sigSecret := kmApi.SignedEncryptedEphemeralSecret{
+			Secret:    secret,
+			Signature: sig.Signature,
+		}
+		err = state.SetEphemeralSecret(ctx, &sigSecret)
+		if err != nil {
+			return fmt.Errorf("failed to set ephemeral secret: %w", err)
 		}
 	}
 

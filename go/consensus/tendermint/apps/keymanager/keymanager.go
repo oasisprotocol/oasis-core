@@ -21,6 +21,9 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
+// maxEphemeralSecretAge is the maximum age of an ephemeral secret in the number of epochs.
+const maxEphemeralSecretAge = 20
+
 var emptyHashSha3 = sha3.Sum256(nil)
 
 type keymanagerApplication struct {
@@ -76,6 +79,12 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 			return api.ErrInvalidArgument
 		}
 		return app.updatePolicy(ctx, state, &sigPol)
+	case api.MethodPublishEphemeralSecret:
+		var sigSec api.SignedEncryptedEphemeralSecret
+		if err := cbor.Unmarshal(tx.Body, &sigSec); err != nil {
+			return api.ErrInvalidArgument
+		}
+		return app.publishEphemeralSecret(ctx, state, &sigSec)
 	default:
 		return fmt.Errorf("keymanager: invalid method: %s", tx.Method)
 	}
@@ -176,10 +185,19 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 			)
 
 			// Set, enqueue for emit.
-			if err := state.SetStatus(ctx, newStatus); err != nil {
+			if err = state.SetStatus(ctx, newStatus); err != nil {
 				return fmt.Errorf("failed to set key manager status: %w", err)
 			}
 			toEmit = append(toEmit, newStatus)
+		}
+
+		// Clean ephemeral secrets.
+		// TODO: use max ephemeral secret age from the key manager policy
+		if epoch > maxEphemeralSecretAge {
+			expiryEpoch := epoch - maxEphemeralSecretAge
+			if err = state.CleanEphemeralSecrets(ctx, rt.ID, expiryEpoch); err != nil {
+				return fmt.Errorf("failed to clean ephemeral secrets: %w", err)
+			}
 		}
 	}
 

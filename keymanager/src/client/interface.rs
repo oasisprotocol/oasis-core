@@ -58,6 +58,13 @@ pub trait KeyManagerClient: Send + Sync {
 
     /// Get a copy of the master secret for replication.
     fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>>;
+
+    /// Get a copy of the ephemeral secret for replication.
+    fn replicate_ephemeral_secret(
+        &self,
+        ctx: Context,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>>;
 }
 
 impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
@@ -101,5 +108,13 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
 
     fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>> {
         KeyManagerClient::replicate_master_secret(&**self, ctx)
+    }
+
+    fn replicate_ephemeral_secret(
+        &self,
+        ctx: Context,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
+        KeyManagerClient::replicate_ephemeral_secret(&**self, ctx, epoch)
     }
 }

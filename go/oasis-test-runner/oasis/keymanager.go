@@ -208,6 +208,11 @@ func (km *Keymanager) ExportsPath() string {
 	return nodeExportsPath(km.dir)
 }
 
+// P2PPort returns the node's P2P port.
+func (km *Keymanager) P2PPort() uint16 {
+	return km.p2pPort
+}
+
 func (km *Keymanager) provisionGenesis() error {
 	if km.runtime.excludeFromGenesis {
 		return nil

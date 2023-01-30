@@ -28,10 +28,11 @@ use oasis_core_runtime::{
 
 use crate::{
     api::{
-        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateMasterSecretRequest,
+        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateEphemeralSecretRequest,
+        ReplicateEphemeralSecretResponse, ReplicateMasterSecretRequest,
         ReplicateMasterSecretResponse, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
         METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
-        METHOD_REPLICATE_MASTER_SECRET,
+        METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey},
     policy::{set_trusted_policy_signers, verify_policy_and_trusted_signers, TrustedPolicySigners},
@@ -430,11 +431,41 @@ impl KeyManagerClient for RemoteClient {
                 .secure_call(
                     ctx,
                     METHOD_REPLICATE_MASTER_SECRET,
-                    ReplicateMasterSecretRequest::new(Some(height)),
+                    ReplicateMasterSecretRequest {
+                        height: Some(height),
+                    },
                 )
                 .await
                 .map_err(|err| KeyManagerError::Other(err.into()))?;
             Ok(rsp.master_secret)
+        })
+    }
+
+    fn replicate_ephemeral_secret(
+        &self,
+        ctx: Context,
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
+        let inner = self.inner.clone();
+        Box::pin(async move {
+            let height = inner
+                .consensus_verifier
+                .latest_height()
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
+            let rsp: ReplicateEphemeralSecretResponse = inner
+                .rpc_client
+                .secure_call(
+                    ctx,
+                    METHOD_REPLICATE_EPHEMERAL_SECRET,
+                    ReplicateEphemeralSecretRequest {
+                        height: Some(height),
+                        epoch,
+                    },
+                )
+                .await
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+            Ok(rsp.ephemeral_secret)
         })
     }
 }

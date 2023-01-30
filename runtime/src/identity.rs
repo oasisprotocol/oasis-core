@@ -20,6 +20,7 @@ use tiny_keccak::{Hasher, TupleHash};
 use crate::common::crypto::hash::Hash;
 use crate::common::{
     crypto::{
+        mrae::deoxysii::{self, Opener},
         signature::{self, Signature, Signer},
         x25519,
     },
@@ -375,5 +376,26 @@ impl Signer for Identity {
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         let inner = self.inner.read().unwrap();
         inner.rak.sign(context, message)
+    }
+}
+
+impl Opener for Identity {
+    fn box_open(
+        &self,
+        nonce: &[u8; deoxysii::NONCE_SIZE],
+        ciphertext: Vec<u8>,
+        additional_data: Vec<u8>,
+        peers_public_key: &x25519_dalek::PublicKey,
+    ) -> Result<Vec<u8>> {
+        let inner = self.inner.read().unwrap();
+        let private_key = &inner.rek.0;
+
+        deoxysii::box_open(
+            nonce,
+            ciphertext,
+            additional_data,
+            peers_public_key,
+            private_key,
+        )
     }
 }
