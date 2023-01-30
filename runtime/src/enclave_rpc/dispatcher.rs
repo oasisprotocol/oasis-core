@@ -47,17 +47,17 @@ pub struct MethodDescriptor {
 /// Handler for a RPC method.
 pub trait MethodHandler<Rq, Rsp> {
     /// Invoke the method implementation and return a response.
-    fn handle(&self, request: &Rq, ctx: &mut Context) -> Result<Rsp>;
+    fn handle(&self, ctx: &mut Context, request: &Rq) -> Result<Rsp>;
 }
 
 impl<Rq, Rsp, F> MethodHandler<Rq, Rsp> for F
 where
     Rq: 'static,
     Rsp: 'static,
-    F: Fn(&Rq, &mut Context) -> Result<Rsp> + 'static,
+    F: Fn(&mut Context, &Rq) -> Result<Rsp> + 'static,
 {
-    fn handle(&self, request: &Rq, ctx: &mut Context) -> Result<Rsp> {
-        (*self)(request, ctx)
+    fn handle(&self, ctx: &mut Context, request: &Rq) -> Result<Rsp> {
+        (*self)(ctx, request)
     }
 }
 
@@ -67,7 +67,7 @@ pub trait MethodHandlerDispatch {
     fn get_descriptor(&self) -> &MethodDescriptor;
 
     /// Dispatch request.
-    fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response>;
+    fn dispatch(&self, ctx: &mut Context, request: Request) -> Result<Response>;
 }
 
 struct MethodHandlerDispatchImpl<Rq, Rsp> {
@@ -86,9 +86,9 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response> {
+    fn dispatch(&self, ctx: &mut Context, request: Request) -> Result<Response> {
         let request = cbor::from_value(request.args)?;
-        let response = self.handler.handle(&request, ctx)?;
+        let response = self.handler.handle(ctx, &request)?;
 
         Ok(Response {
             body: Body::Success(cbor::to_value(response)),
@@ -129,8 +129,8 @@ impl Method {
     }
 
     /// Dispatch a request.
-    fn dispatch(&self, request: Request, ctx: &mut Context) -> Result<Response> {
-        self.dispatcher.dispatch(request, ctx)
+    fn dispatch(&self, ctx: &mut Context, request: Request) -> Result<Response> {
+        self.dispatcher.dispatch(ctx, request)
     }
 }
 
@@ -204,7 +204,7 @@ impl Dispatcher {
             }),
         };
 
-        method.dispatch(request, ctx)
+        method.dispatch(ctx, request)
     }
 
     /// Handle key manager status update.

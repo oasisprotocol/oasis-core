@@ -10,8 +10,8 @@ use oasis_core_runtime::{
 
 use crate::{
     api::{
-        EphemeralKeyRequest, KeyManagerError, LongTermKeyRequest, ReplicateMasterSecretRequest,
-        ReplicateMasterSecretResponse,
+        EphemeralKeyRequest, InitRequest, KeyManagerError, LongTermKeyRequest,
+        ReplicateMasterSecretRequest, ReplicateMasterSecretResponse, SignedInitResponse,
     },
     crypto::{kdf::Kdf, KeyPair, SignedPublicKey},
     policy::Policy,
@@ -25,16 +25,22 @@ const MAX_EPHEMERAL_KEY_AGE: EpochTime = 10;
 /// of blocks lower than the height of the latest trust root.
 const MAX_FRESH_HEIGHT_AGE: u64 = 50;
 
+/// Initialize the Kdf.
+pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitResponse> {
+    let policy_checksum = Policy::global().init(ctx, &req.policy)?;
+    Kdf::global().init(req, ctx, policy_checksum)
+}
+
 /// See `Kdf::get_or_create_keys`.
-pub fn get_or_create_keys(req: &LongTermKeyRequest, ctx: &mut RpcContext) -> Result<KeyPair> {
-    authorize_private_key_generation(&req.runtime_id, ctx)?;
-    validate_height_freshness(req.height, ctx)?;
+pub fn get_or_create_keys(ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Result<KeyPair> {
+    authorize_private_key_generation(ctx, &req.runtime_id)?;
+    validate_height_freshness(ctx, req.height)?;
 
     Kdf::global().get_or_create_keys(req.runtime_id, req.key_pair_id, None)
 }
 
 /// See `Kdf::get_public_key`.
-pub fn get_public_key(req: &LongTermKeyRequest, _ctx: &mut RpcContext) -> Result<SignedPublicKey> {
+pub fn get_public_key(_ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Result<SignedPublicKey> {
     // No authentication or authorization.
     // Absolutely anyone is allowed to query public long-term keys.
 
@@ -46,24 +52,24 @@ pub fn get_public_key(req: &LongTermKeyRequest, _ctx: &mut RpcContext) -> Result
 
 /// See `Kdf::get_or_create_keys`.
 pub fn get_or_create_ephemeral_keys(
-    req: &EphemeralKeyRequest,
     ctx: &mut RpcContext,
+    req: &EphemeralKeyRequest,
 ) -> Result<KeyPair> {
-    authorize_private_key_generation(&req.runtime_id, ctx)?;
-    validate_epoch(req.epoch, ctx)?;
-    validate_height_freshness(req.height, ctx)?;
+    authorize_private_key_generation(ctx, &req.runtime_id)?;
+    validate_epoch(ctx, req.epoch)?;
+    validate_height_freshness(ctx, req.height)?;
 
     Kdf::global().get_or_create_keys(req.runtime_id, req.key_pair_id, Some(req.epoch))
 }
 
 /// See `Kdf::get_public_key`.
 pub fn get_public_ephemeral_key(
-    req: &EphemeralKeyRequest,
     ctx: &mut RpcContext,
+    req: &EphemeralKeyRequest,
 ) -> Result<SignedPublicKey> {
     // No authentication or authorization.
     // Absolutely anyone is allowed to query public ephemeral keys.
-    validate_epoch(req.epoch, ctx)?;
+    validate_epoch(ctx, req.epoch)?;
 
     let kdf = Kdf::global();
     let pk = kdf.get_public_key(req.runtime_id, req.key_pair_id, Some(req.epoch))?;
@@ -82,18 +88,18 @@ pub fn get_public_ephemeral_key(
 
 /// See `Kdf::replicate_master_secret`.
 pub fn replicate_master_secret(
-    req: &ReplicateMasterSecretRequest,
     ctx: &mut RpcContext,
+    req: &ReplicateMasterSecretRequest,
 ) -> Result<ReplicateMasterSecretResponse> {
     authorize_master_secret_replication(ctx)?;
-    validate_height_freshness(req.height, ctx)?;
+    validate_height_freshness(ctx, req.height)?;
 
     let master_secret = Kdf::global().replicate_master_secret()?;
     Ok(ReplicateMasterSecretResponse { master_secret })
 }
 
 /// Authorize the remote enclave so that the private keys are never released to an incorrect enclave.
-fn authorize_private_key_generation(runtime_id: &Namespace, ctx: &RpcContext) -> Result<()> {
+fn authorize_private_key_generation(ctx: &RpcContext, runtime_id: &Namespace) -> Result<()> {
     if Policy::unsafe_skip() {
         return Ok(()); // Authorize unsafe builds always.
     }
@@ -119,7 +125,7 @@ fn authenticate<'a>(ctx: &'a RpcContext) -> Result<&'a EnclaveIdentity> {
 
 /// Validate that the epoch used for derivation of ephemeral private keys is not
 /// in the future or too far back in the past.
-fn validate_epoch(epoch: EpochTime, ctx: &RpcContext) -> Result<()> {
+fn validate_epoch(ctx: &RpcContext, epoch: EpochTime) -> Result<()> {
     let consensus_state = ctx.consensus_verifier.latest_state()?;
     let beacon_state = BeaconState::new(&consensus_state);
     let consensus_epoch = beacon_state.epoch(Context::create_child(&ctx.io_ctx))?;
@@ -134,7 +140,7 @@ fn validate_epoch(epoch: EpochTime, ctx: &RpcContext) -> Result<()> {
 ///
 /// Key manager should use this validation to detect whether the runtimes
 /// querying it have a fresh enough state.
-fn validate_height_freshness(height: Option<u64>, ctx: &RpcContext) -> Result<()> {
+fn validate_height_freshness(ctx: &RpcContext, height: Option<u64>) -> Result<()> {
     // Outdated key manager clients will not send height in their requests.
     // To ensure backwards compatibility we skip check in those cases.
     // This should be removed in the future by making height mandatory.
