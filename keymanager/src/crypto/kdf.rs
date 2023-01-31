@@ -305,12 +305,14 @@ impl Kdf {
 
                         let km_client = RemoteClient::new_runtime_with_enclaves_and_policy(
                             rctx.runtime_id,
+                            Some(rctx.runtime_id),
                             Policy::global().may_replicate_from(),
                             ctx.identity.quote_policy(),
                             rctx.protocol.clone(),
                             ctx.consensus_verifier.clone(),
                             ctx.identity.clone(),
                             1, // Not used, doesn't matter.
+                            vec![],
                         );
 
                         let result =

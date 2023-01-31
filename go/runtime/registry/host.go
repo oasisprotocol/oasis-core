@@ -185,12 +185,19 @@ func (h *runtimeHostHandler) handleHostRPCCall(
 		if err != nil {
 			return nil, err
 		}
-		res, err := kmCli.CallEnclave(ctx, rq.Request, rq.Kind, rq.PeerFeedback)
+		res, node, err := kmCli.CallEnclave(ctx, rq.Request, rq.Nodes, rq.Kind, rq.PeerFeedback)
 		if err != nil {
 			return nil, err
 		}
+		// Don't send node identity if the runtime doesn't support explicit key manager RPC calls.
+		if rq.Nodes == nil {
+			return &protocol.HostRPCCallResponse{
+				Response: res,
+			}, nil
+		}
 		return &protocol.HostRPCCallResponse{
-			Response: cbor.FixSliceForSerde(res),
+			Response: res,
+			Node:     &node,
 		}, nil
 	default:
 		return nil, errEndpointNotSupported

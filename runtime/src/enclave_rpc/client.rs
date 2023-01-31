@@ -19,7 +19,11 @@ use tokio;
 
 use crate::{
     cbor,
-    common::sgx::{EnclaveIdentity, QuotePolicy},
+    common::{
+        crypto::signature,
+        namespace::Namespace,
+        sgx::{EnclaveIdentity, QuotePolicy},
+    },
     enclave_rpc::{
         session::{Builder, Session},
         types,
@@ -86,6 +90,8 @@ impl MultiplexedSession {
 }
 
 struct Inner {
+    /// Allowed nodes.
+    nodes: Mutex<Vec<signature::PublicKey>>,
     /// Multiplexed session.
     session: Mutex<MultiplexedSession>,
     /// Used transport.
@@ -107,11 +113,16 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    fn new(transport: Box<dyn Transport>, builder: Builder) -> Self {
+    fn new(
+        transport: Box<dyn Transport>,
+        builder: Builder,
+        nodes: Vec<signature::PublicKey>,
+    ) -> Self {
         let (tx, rx) = mpsc::channel(SENDQ_BACKLOG);
 
         Self {
             inner: Arc::new(Inner {
+                nodes: Mutex::new(nodes),
                 session: Mutex::new(MultiplexedSession::new(builder)),
                 transport,
                 recvq: Mutex::new(Some(rx)),
@@ -123,8 +134,17 @@ impl RpcClient {
     }
 
     /// Construct an unconnected RPC client with runtime-internal transport.
-    pub fn new_runtime(builder: Builder, protocol: Arc<Protocol>, endpoint: &str) -> Self {
-        Self::new(Box::new(RuntimeTransport::new(protocol, endpoint)), builder)
+    pub fn new_runtime(
+        builder: Builder,
+        protocol: Arc<Protocol>,
+        endpoint: &str,
+        nodes: Vec<signature::PublicKey>,
+    ) -> Self {
+        Self::new(
+            Box::new(RuntimeTransport::new(protocol, endpoint)),
+            builder,
+            nodes,
+        )
     }
 
     /// Call a remote method using an encrypted and authenticated Noise session.
@@ -293,9 +313,15 @@ impl RpcClient {
     async fn connect(inner: Arc<Inner>, ctx: Context) -> Result<(), RpcClientError> {
         let mut buffer = vec![];
         let session_id;
+
         {
             let mut session = inner.session.lock().unwrap();
-            if session.inner.is_connected() {
+            let nodes = inner.nodes.lock().unwrap();
+
+            // No need to create a new session if we are connected to one of the nodes.
+            if session.inner.is_connected()
+                && (nodes.is_empty() || session.inner.is_connected_to(&nodes))
+            {
                 return Ok(());
             }
             // Make sure the session is reset for a new connection.
@@ -312,15 +338,20 @@ impl RpcClient {
         let fctx = ctx.freeze();
         let ctx = Context::create_child(&fctx);
 
-        let data = inner
+        let nodes = inner.nodes.lock().unwrap().to_vec();
+        let (data, node) = inner
             .transport
-            .write_noise_session(ctx, session_id, buffer, String::new())
+            .write_noise_session(ctx, session_id, buffer, String::new(), nodes)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
         let mut buffer = vec![];
         {
             let mut session = inner.session.lock().unwrap();
+            // Update the session with the identity of the remote node. The latter still needs
+            // to be verified using the RAK from the consensus layer.
+            session.inner.set_remote_node(node)?;
+
             // Handshake2 -> Transport
             session
                 .inner
@@ -331,7 +362,7 @@ impl RpcClient {
         let ctx = Context::create_child(&fctx);
         inner
             .transport
-            .write_noise_session(ctx, session_id, buffer, String::new())
+            .write_noise_session(ctx, session_id, buffer, String::new(), vec![node])
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -341,6 +372,7 @@ impl RpcClient {
     async fn close(inner: Arc<Inner>) -> Result<(), RpcClientError> {
         let mut buffer = vec![];
         let session_id;
+        let node;
         {
             let mut session = inner.session.lock().unwrap();
             if !session.inner.is_connected() {
@@ -351,12 +383,13 @@ impl RpcClient {
                 .write_message(types::Message::Close, &mut buffer)
                 .map_err(|_| RpcClientError::Transport)?;
             session_id = session.id;
+            node = session.inner.get_node()?
         }
 
         let ctx = Context::background();
-        let data = inner
+        let (data, _) = inner
             .transport
-            .write_noise_session(ctx, session_id, buffer, String::new())
+            .write_noise_session(ctx, session_id, buffer, String::new(), vec![node])
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -384,6 +417,7 @@ impl RpcClient {
         let method = request.method.clone();
         let msg = types::Message::Request(request);
         let session_id;
+        let node;
         let mut buffer = vec![];
         {
             let mut session = inner.session.lock().unwrap();
@@ -392,11 +426,12 @@ impl RpcClient {
                 .write_message(msg, &mut buffer)
                 .map_err(|_| RpcClientError::Transport)?;
             session_id = session.id;
+            node = session.inner.get_node()?;
         }
 
-        let data = inner
+        let (data, _) = inner
             .transport
-            .write_noise_session(ctx, session_id, buffer, method)
+            .write_noise_session(ctx, session_id, buffer, method, vec![node])
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -417,9 +452,10 @@ impl RpcClient {
         ctx: Context,
         request: types::Request,
     ) -> Result<types::Response, RpcClientError> {
-        let data = inner
+        let nodes = inner.nodes.lock().unwrap().to_vec();
+        let (data, _) = inner
             .transport
-            .write_insecure_query(ctx, cbor::to_vec(request))
+            .write_insecure_query(ctx, cbor::to_vec(request), nodes)
             .await
             .map_err(|_| RpcClientError::Transport)?;
 
@@ -431,15 +467,38 @@ impl RpcClient {
     /// Useful if the key manager's policy has changed.
     pub fn update_enclaves(&self, enclaves: Option<HashSet<EnclaveIdentity>>) {
         let mut session = self.inner.session.lock().unwrap();
+        if session.builder.get_remote_enclaves() == &enclaves {
+            return;
+        }
         session.builder = mem::take(&mut session.builder).remote_enclaves(enclaves);
         session.reset();
     }
 
     /// Update key manager's quote policy.
     pub fn update_quote_policy(&self, policy: QuotePolicy) {
+        let policy = Some(Arc::new(policy));
         let mut session = self.inner.session.lock().unwrap();
-        session.builder = mem::take(&mut session.builder).quote_policy(Some(Arc::new(policy)));
+        if session.builder.get_quote_policy() == &policy {
+            return;
+        }
+        session.builder = mem::take(&mut session.builder).quote_policy(policy);
         session.reset();
+    }
+
+    /// Update remote runtime id.
+    pub fn update_runtime_id(&self, id: Option<Namespace>) {
+        let mut session = self.inner.session.lock().unwrap();
+        if session.builder.get_remote_runtime_id() == &id {
+            return;
+        }
+        session.builder = mem::take(&mut session.builder).remote_runtime_id(id);
+        session.reset();
+    }
+
+    /// Update allowed nodes.
+    pub fn update_nodes(&self, nodes: Vec<signature::PublicKey>) {
+        let mut inner_nodes = self.inner.nodes.lock().unwrap();
+        *inner_nodes = nodes;
     }
 }
 
@@ -455,6 +514,7 @@ mod test {
     use io_context::Context;
 
     use crate::{
+        common::crypto::signature,
         enclave_rpc::{demux::Demux, session, types},
         identity::Identity,
     };
@@ -510,7 +570,8 @@ mod test {
             _ctx: Context,
             request: Vec<u8>,
             kind: types::Kind,
-        ) -> BoxFuture<Result<Vec<u8>, anyhow::Error>> {
+            _nodes: Vec<signature::PublicKey>,
+        ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), anyhow::Error>> {
             let pf = {
                 let mut pf = self.peer_feedback.lock().unwrap();
                 let peer_feedback = pf.1.take();
@@ -553,13 +614,13 @@ mod test {
 
                             let mut buffer = Vec::new();
                             match demux.write_message(session_id, response, &mut buffer) {
-                                Ok(_) => Box::pin(future::ok(buffer)),
+                                Ok(_) => Box::pin(future::ok((buffer, Default::default()))),
                                 Err(error) => Box::pin(future::err(error)),
                             }
                         }
                         Ok(None) => {
                             // Handshake.
-                            Box::pin(future::ok(buffer))
+                            Box::pin(future::ok((buffer, Default::default())))
                         }
                     }
                 }
@@ -568,7 +629,7 @@ mod test {
                     let rq: types::Request = cbor::from_slice(&request).unwrap();
                     let body = types::Body::Success(rq.args);
                     let response = types::Response { body };
-                    return Box::pin(future::ok(cbor::to_vec(response)));
+                    return Box::pin(future::ok((cbor::to_vec(response), Default::default())));
                 }
                 types::Kind::LocalQuery => {
                     panic!("unhandled RPC kind")
@@ -597,7 +658,7 @@ mod test {
             .unwrap();
         let transport = MockTransport::new();
         let builder = session::Builder::default();
-        let client = RpcClient::new(Box::new(transport.clone()), builder);
+        let client = RpcClient::new(Box::new(transport.clone()), builder, vec![]);
 
         // Basic secure call.
         let result: u64 = rt

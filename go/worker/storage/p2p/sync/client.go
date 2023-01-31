@@ -107,9 +107,9 @@ func (c *client) GetCheckpointChunk(
 	// When a checkpoint is passed, we limit requests to only those peers that actually advertised
 	// having the checkpoint in question to avoid needless requests.
 	if cp != nil {
-		peers := make(map[core.PeerID]struct{})
+		peers := make([]core.PeerID, 0, len(cp.Peers))
 		for _, pf := range cp.Peers {
-			peers[pf.PeerID()] = struct{}{}
+			peers = append(peers, pf.PeerID())
 		}
 		opts = append(opts, rpc.WithLimitPeers(peers))
 	}

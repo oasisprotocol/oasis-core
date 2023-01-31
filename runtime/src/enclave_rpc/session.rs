@@ -2,15 +2,18 @@
 use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
 use anyhow::Result;
+use io_context::Context;
 use snow;
 use thiserror::Error;
 
 use super::types::Message;
 use crate::{
     common::{
-        crypto::signature::{PublicKey, Signature, Signer},
+        crypto::signature::{self, PublicKey, Signature, Signer},
+        namespace::Namespace,
         sgx::{ias, EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
     },
+    consensus::{state::registry::ImmutableState as RegistryState, verifier::Verifier},
     identity::Identity,
 };
 
@@ -32,6 +35,16 @@ enum SessionError {
     MismatchedEnclaveIdentity,
     #[error("missing quote policy")]
     MissingQuotePolicy,
+    #[error("remote node not set")]
+    NodeNotSet,
+    #[error("remote node already set")]
+    NodeAlreadySet,
+    #[error("remote node not registered")]
+    NodeNotRegistered,
+    #[error("RAK not published in the consensus layer")]
+    RAKNotFound,
+    #[error("runtime id not set")]
+    RuntimeNotSet,
 }
 
 /// Information about a session.
@@ -49,9 +62,12 @@ enum State {
 
 /// An encrypted and authenticated RPC session.
 pub struct Session {
+    consensus_verifier: Option<Arc<dyn Verifier>>,
     local_static_pub: Vec<u8>,
     identity: Option<Arc<Identity>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
+    remote_node: Option<signature::PublicKey>,
+    remote_runtime_id: Option<Namespace>,
     policy: Option<Arc<QuotePolicy>>,
     info: Option<Arc<SessionInfo>>,
     state: State,
@@ -60,16 +76,21 @@ pub struct Session {
 
 impl Session {
     fn new(
+        consensus_verifier: Option<Arc<dyn Verifier>>,
         handshake_state: snow::HandshakeState,
         local_static_pub: Vec<u8>,
         identity: Option<Arc<Identity>>,
         remote_enclaves: Option<HashSet<EnclaveIdentity>>,
+        remote_runtime_id: Option<Namespace>,
         policy: Option<Arc<QuotePolicy>>,
     ) -> Self {
         Self {
+            consensus_verifier,
             local_static_pub,
             identity,
             remote_enclaves,
+            remote_node: None,
+            remote_runtime_id,
             policy,
             info: None,
             state: State::Handshake1(handshake_state),
@@ -231,6 +252,12 @@ impl Session {
         let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
         let verified_quote = rak_binding.verify(remote_static, &self.remote_enclaves, policy)?;
 
+        // Verify node identity if verification is enabled.
+        if self.consensus_verifier.is_some() {
+            let rak = rak_binding.rak_pub();
+            self.verify_node_identity(rak)?;
+        }
+
         Ok(Some(Arc::new(SessionInfo {
             rak_binding,
             verified_quote,
@@ -248,9 +275,57 @@ impl Session {
         matches!(self.state, State::Transport(_))
     }
 
+    /// Whether the session is connected to one of the given nodes.
+    pub fn is_connected_to(&self, nodes: &Vec<signature::PublicKey>) -> bool {
+        nodes.iter().any(|&node| Some(node) == self.remote_node)
+    }
+
     /// Whether the session is in closed state.
     pub fn is_closed(&self) -> bool {
         matches!(self.state, State::Closed)
+    }
+
+    /// Return remote node identifier.
+    pub fn get_node(&self) -> Result<signature::PublicKey> {
+        self.remote_node.ok_or(SessionError::NodeNotSet.into())
+    }
+
+    /// Set the remote node identifier.
+    pub fn set_remote_node(&mut self, node: signature::PublicKey) -> Result<()> {
+        if self.remote_node.is_some() {
+            return Err(SessionError::NodeAlreadySet.into());
+        }
+        self.remote_node = Some(node);
+        Ok(())
+    }
+
+    /// Verify the identity of the remote node by comparing the given RAK with the trusted RAK
+    /// obtained from the consensus layer registry service.
+    fn verify_node_identity(&self, rak: signature::PublicKey) -> Result<()> {
+        let consensus_verifier = self
+            .consensus_verifier
+            .as_ref()
+            .expect("consensus verifier should be set");
+        let runtime_id = self.remote_runtime_id.ok_or(SessionError::RuntimeNotSet)?;
+        let node = self.remote_node.ok_or(SessionError::NodeNotSet)?;
+
+        let consensus_state = consensus_verifier.latest_state()?;
+        let registry_state = RegistryState::new(&consensus_state);
+        let node = registry_state
+            .node(Context::background(), &node)?
+            .ok_or(SessionError::NodeNotRegistered)?;
+        let verified = node
+            .runtimes
+            .unwrap_or_default()
+            .iter()
+            .filter(|rt| rt.id == runtime_id)
+            .flat_map(|rt| &rt.capabilities.tee)
+            .any(|tee| tee.rak == rak);
+
+        if !verified {
+            return Err(SessionError::RAKNotFound.into());
+        }
+        Ok(())
     }
 }
 
@@ -339,8 +414,10 @@ impl RAKBinding {
 /// Session builder.
 #[derive(Clone, Default)]
 pub struct Builder {
+    consensus_verifier: Option<Arc<dyn Verifier>>,
     identity: Option<Arc<Identity>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
+    remote_runtime_id: Option<Namespace>,
     policy: Option<Arc<QuotePolicy>>,
 }
 
@@ -354,6 +431,28 @@ impl Builder {
     pub fn remote_enclaves(mut self, enclaves: Option<HashSet<EnclaveIdentity>>) -> Self {
         self.remote_enclaves = enclaves;
         self
+    }
+
+    /// Return remote runtime ID if configured in the builder.
+    pub fn get_remote_runtime_id(&self) -> &Option<Namespace> {
+        &self.remote_runtime_id
+    }
+
+    /// Set remote runtime ID for node identity verification.
+    pub fn remote_runtime_id(mut self, id: Option<Namespace>) -> Self {
+        self.remote_runtime_id = id;
+        self
+    }
+
+    /// Enable remote node identity verification.
+    pub fn consensus_verifier(mut self, verifier: Option<Arc<dyn Verifier>>) -> Self {
+        self.consensus_verifier = verifier;
+        self
+    }
+
+    /// Return quote policy if configured in the builder.
+    pub fn get_quote_policy(&self) -> &Option<Arc<QuotePolicy>> {
+        &self.policy
     }
 
     /// Configure quote policy used for remote quote verification.
@@ -374,19 +473,25 @@ impl Builder {
     ) -> (
         snow::Builder<'a>,
         snow::Keypair,
+        Option<Namespace>,
+        Option<Arc<dyn Verifier>>,
         Option<Arc<Identity>>,
         Option<HashSet<EnclaveIdentity>>,
         Option<Arc<QuotePolicy>>,
     ) {
         let noise_builder = snow::Builder::new(NOISE_PATTERN.parse().unwrap());
+        let verifier = self.consensus_verifier.take();
         let identity = self.identity.take();
         let remote_enclaves = self.remote_enclaves.take();
+        let remote_runtime_id = self.remote_runtime_id.take();
         let quote_policy = self.policy.take();
         let keypair = noise_builder.generate_keypair().unwrap();
 
         (
             noise_builder,
             keypair,
+            remote_runtime_id,
+            verifier,
             identity,
             remote_enclaves,
             quote_policy,
@@ -395,21 +500,37 @@ impl Builder {
 
     /// Build initiator session.
     pub fn build_initiator(self) -> Session {
-        let (builder, keypair, identity, enclaves, policy) = self.build();
+        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_initiator()
             .unwrap();
-        Session::new(session, keypair.public, identity, enclaves, policy)
+        Session::new(
+            verifier,
+            session,
+            keypair.public,
+            identity,
+            enclaves,
+            runtime_id,
+            policy,
+        )
     }
 
     /// Build responder session.
     pub fn build_responder(self) -> Session {
-        let (builder, keypair, identity, enclaves, policy) = self.build();
+        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy) = self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_responder()
             .unwrap();
-        Session::new(session, keypair.public, identity, enclaves, policy)
+        Session::new(
+            verifier,
+            session,
+            keypair.public,
+            identity,
+            enclaves,
+            runtime_id,
+            policy,
+        )
     }
 }

@@ -35,27 +35,11 @@ const (
 
 // PeerManagerOptions are peer manager options.
 type PeerManagerOptions struct {
-	peerFilter  PeerFilter
 	stickyPeers bool
 }
 
 // PeerManagerOption is a peer manager option setter.
 type PeerManagerOption func(opts *PeerManagerOptions)
-
-// PeerFilter is a peer filtering interface.
-type PeerFilter interface {
-	// IsPeerAcceptable checks whether the given peer should be used.
-	IsPeerAcceptable(peerID core.PeerID) bool
-}
-
-// WithPeerFilter configures peer filtering.
-//
-// When set, only peers accepted by the filter will be returned.
-func WithPeerFilter(filter PeerFilter) PeerManagerOption {
-	return func(opts *PeerManagerOptions) {
-		opts.peerFilter = filter
-	}
-}
 
 // WithStickyPeers configures the sticky peers feature.
 //
@@ -69,7 +53,7 @@ func WithStickyPeers(enabled bool) PeerManagerOption {
 
 // BestPeersOptions are per-call options.
 type BestPeersOptions struct {
-	limitPeers map[core.PeerID]struct{}
+	limitPeers []core.PeerID
 }
 
 // NewBestPeersOptions creates options using default and given values.
@@ -85,7 +69,7 @@ func NewBestPeersOptions(opts ...BestPeersOption) *BestPeersOptions {
 type BestPeersOption func(opts *BestPeersOptions)
 
 // WithLimitPeers configures the peers that the call should be limited to.
-func WithLimitPeers(peers map[core.PeerID]struct{}) BestPeersOption {
+func WithLimitPeers(peers []core.PeerID) BestPeersOption {
 	return func(opts *BestPeersOptions) {
 		opts.limitPeers = peers
 	}
@@ -302,24 +286,32 @@ func (mgr *peerManager) GetBestPeers(opts ...BestPeersOption) []core.PeerID {
 
 	o := NewBestPeersOptions(opts...)
 
-	// Start by including peers that are acceptable and in the limited set.
+	// Start by including all peers that are in the limited set, if given.
+	// Do not include the sticky peer so we can prepend it later.
 	var haveStickyPeer bool
 	peers := make([]core.PeerID, 0, len(mgr.peers))
-	for peer := range mgr.peers {
-		if !mgr.isPeerAcceptable(peer) {
-			continue
-		}
-		if o.limitPeers != nil {
-			if _, exists := o.limitPeers[peer]; !exists {
+	switch len(o.limitPeers) {
+	case 0:
+		// Add all known peers except the sticky one.
+		for peer := range mgr.peers {
+			if mgr.stickyPeer == peer {
+				haveStickyPeer = true
 				continue
 			}
+			peers = append(peers, peer)
 		}
-		if mgr.stickyPeer == peer {
-			// Do not include the sticky peer so we can prepend it later.
-			haveStickyPeer = true
-			continue
+	default:
+		// Keep peers from the limited set only.
+		for _, peer := range o.limitPeers {
+			if _, ok := mgr.peers[peer]; !ok {
+				continue
+			}
+			if mgr.stickyPeer == peer {
+				haveStickyPeer = true
+				continue
+			}
+			peers = append(peers, peer)
 		}
-		peers = append(peers, peer)
 	}
 
 	// Sort peers by success rate and latency.
@@ -429,14 +421,6 @@ func (mgr *peerManager) peerProtocolWatcher() {
 			}
 		}
 	}
-}
-
-func (mgr *peerManager) isPeerAcceptable(peerID core.PeerID) bool {
-	if mgr.opts.peerFilter == nil {
-		return true
-	}
-
-	return mgr.opts.peerFilter.IsPeerAcceptable(peerID)
 }
 
 // NewPeerManager creates a new peer manager for the given protocol.
