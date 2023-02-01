@@ -218,6 +218,13 @@ func (app *keymanagerApplication) generateStatus(
 	}
 	policyHash := sha3.Sum256(rawPolicy)
 
+	ts := ctx.Now()
+	height := uint64(ctx.BlockHeight())
+
+	// Construct a key manager committee. A node is added to the committee if it supports
+	// at least one version of the key manager runtime and if all supported versions conform
+	// to the key manager status fields.
+nextNode:
 	for _, n := range nodes {
 		if n.IsExpired(uint64(epoch)) {
 			continue
@@ -226,114 +233,112 @@ func (app *keymanagerApplication) generateStatus(
 			continue
 		}
 
-		var nodeRt *node.Runtime
-		for _, rt := range n.Runtimes {
-			if rt.ID.Equal(&kmrt.ID) {
-				nodeRt = rt
-				break
-			}
-		}
-		if nodeRt == nil {
-			continue
-		}
+		isInitialized := status.IsInitialized
+		isSecure := status.IsSecure
+		checksum := status.Checksum
+		RSK := status.RSK
 
-		var teeOk bool
-		if nodeRt.Capabilities.TEE == nil {
-			teeOk = kmrt.TEEHardware == node.TEEHardwareInvalid
-		} else {
-			teeOk = kmrt.TEEHardware == nodeRt.Capabilities.TEE.Hardware
-		}
-		if !teeOk {
-			ctx.Logger().Error("TEE hardware mismatch",
-				"id", kmrt.ID,
-				"node_id", n.ID,
-			)
-			continue
-		}
-
-		initResponse, err := api.VerifyExtraInfo(ctx.Logger(), n.ID, kmrt, nodeRt, ctx.Now(), uint64(ctx.BlockHeight()), params)
-		if err != nil {
-			ctx.Logger().Error("failed to validate ExtraInfo",
-				"err", err,
-				"id", kmrt.ID,
-				"node_id", n.ID,
-			)
-			continue
-		}
-
-		// Skip nodes with mismatched policy.
-		var nodePolicyHash [api.ChecksumSize]byte
-		switch len(initResponse.PolicyChecksum) {
-		case 0:
-			nodePolicyHash = emptyHashSha3
-		case api.ChecksumSize:
-			copy(nodePolicyHash[:], initResponse.PolicyChecksum)
-		default:
-			ctx.Logger().Error("failed to parse policy checksum",
-				"err", err,
-				"id", kmrt.ID,
-				"node_id", n.ID,
-			)
-			continue
-		}
-		if policyHash != nodePolicyHash {
-			ctx.Logger().Error("Policy checksum mismatch for runtime",
-				"id", kmrt.ID,
-				"node_id", n.ID,
-			)
-			continue
-		}
-
-		// Set immutable status fields that cannot change after initialization.
-		if !status.IsInitialized {
-			// Not initialized.  The first node gets to be the source
-			// of truth, every other node will sync off it.
-
-			// Allow false -> true transitions, but not the reverse, so that
-			// it is possible to set the security status in the genesis block.
-			if initResponse.IsSecure != status.IsSecure && !initResponse.IsSecure {
-				ctx.Logger().Error("Security status mismatch for runtime",
-					"id", kmrt.ID,
-					"node_id", n.ID,
-				)
+		var numVersions int
+		for _, nodeRt := range n.Runtimes {
+			if !nodeRt.ID.Equal(&kmrt.ID) {
 				continue
 			}
-			status.IsSecure = initResponse.IsSecure
+
+			vars := []interface{}{
+				"id", kmrt.ID,
+				"node_id", n.ID,
+				"version", nodeRt.Version,
+			}
+
+			var teeOk bool
+			if nodeRt.Capabilities.TEE == nil {
+				teeOk = kmrt.TEEHardware == node.TEEHardwareInvalid
+			} else {
+				teeOk = kmrt.TEEHardware == nodeRt.Capabilities.TEE.Hardware
+			}
+			if !teeOk {
+				ctx.Logger().Error("TEE hardware mismatch", vars...)
+				continue nextNode
+			}
+
+			initResponse, err := api.VerifyExtraInfo(ctx.Logger(), n.ID, kmrt, nodeRt, ts, height, params)
+			if err != nil {
+				ctx.Logger().Error("failed to validate ExtraInfo", append(vars, "err", err)...)
+				continue nextNode
+			}
+
+			// Skip nodes with mismatched policy.
+			var nodePolicyHash [api.ChecksumSize]byte
+			switch len(initResponse.PolicyChecksum) {
+			case 0:
+				nodePolicyHash = emptyHashSha3
+			case api.ChecksumSize:
+				copy(nodePolicyHash[:], initResponse.PolicyChecksum)
+			default:
+				ctx.Logger().Error("failed to parse policy checksum", append(vars, "err", err)...)
+				continue nextNode
+			}
+			if policyHash != nodePolicyHash {
+				ctx.Logger().Error("Policy checksum mismatch for runtime", vars...)
+				continue nextNode
+			}
+
+			// Set immutable status fields that cannot change after initialization.
+			if !isInitialized {
+				// The first version gets to be the source of truth.
+
+				// Allow false -> true transitions, but not the reverse, so that
+				// it is possible to set the security status in the genesis block.
+				if initResponse.IsSecure != isSecure && !initResponse.IsSecure {
+					ctx.Logger().Error("Security status mismatch for runtime", vars...)
+					continue nextNode
+				}
+				isInitialized = true
+				isSecure = initResponse.IsSecure
+				checksum = initResponse.Checksum
+			}
+
+			// Skip nodes with mismatched status fields.
+			if initResponse.IsSecure != isSecure {
+				ctx.Logger().Error("Security status mismatch for runtime", vars...)
+				continue nextNode
+			}
+			if !bytes.Equal(initResponse.Checksum, checksum) {
+				ctx.Logger().Error("Checksum mismatch for runtime", vars...)
+				continue nextNode
+			}
+
+			// Update mutable status fields that can change on epoch transitions.
+			if RSK == nil {
+				// The first version with non-nil runtime signing key gets to be the source of truth.
+				RSK = initResponse.RSK
+			}
+
+			// Skip nodes with mismatched runtime signing key.
+			// For backward compatibility we always allow nodes without runtime signing key.
+			if initResponse.RSK != nil && !initResponse.RSK.Equal(*RSK) {
+				ctx.Logger().Error("Runtime signing key mismatch for runtime", vars)
+				continue nextNode
+			}
+
+			numVersions++
+		}
+
+		if numVersions == 0 {
+			continue
+		}
+		if !isInitialized {
+			panic("the key manager must be initialized")
+		}
+
+		// If the key manager is not initialized, the first verified node gets to be the source
+		// of truth, every other node will sync off it.
+		if !status.IsInitialized {
 			status.IsInitialized = true
-			status.Checksum = initResponse.Checksum
+			status.IsSecure = isSecure
+			status.Checksum = checksum
 		}
-
-		// Skip nodes with mismatched status fields.
-		if initResponse.IsSecure != status.IsSecure {
-			ctx.Logger().Error("Security status mismatch for runtime",
-				"id", kmrt.ID,
-				"node_id", n.ID,
-			)
-			continue
-		}
-		if !bytes.Equal(initResponse.Checksum, status.Checksum) {
-			ctx.Logger().Error("Checksum mismatch for runtime",
-				"id", kmrt.ID,
-				"node_id", n.ID,
-			)
-			continue
-		}
-
-		// Update mutable status fields that can change on epoch transitions.
-		if status.RSK == nil {
-			// The first node with non-nil runtime signing key gets to be the source of truth.
-			status.RSK = initResponse.RSK
-		}
-
-		// Skip nodes with mismatched runtime signing key.
-		// For backward compatibility we always allow nodes without runtime signing key.
-		if initResponse.RSK != nil && !initResponse.RSK.Equal(*status.RSK) {
-			ctx.Logger().Error("Runtime signing key mismatch for runtime",
-				"id", kmrt.ID,
-				"node_id", n.ID,
-			)
-			continue
-		}
+		status.RSK = RSK
 
 		status.Nodes = append(status.Nodes, n.ID)
 	}
