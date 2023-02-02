@@ -38,8 +38,7 @@ type Node struct {
 	quitCh   chan struct{}
 	initCh   chan struct{}
 
-	checkCh *channels.InfiniteChannel
-	txCh    *channels.InfiniteChannel
+	txCh *channels.InfiniteChannel
 
 	logger *logging.Logger
 }
@@ -90,8 +89,6 @@ func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 
 // HandleNewBlockLocked is guarded by CrossNode.
 func (n *Node) HandleNewBlockLocked(blk *block.Block) {
-	// Queue block for checks.
-	n.checkCh.In() <- blk
 }
 
 // HandleNewEventLocked is guarded by CrossNode.
@@ -269,6 +266,14 @@ func (n *Node) worker() {
 		cancel()
 	}()
 
+	// Subscribe to blocks being synced to local storage.
+	blkCh, blkSub, err := n.commonNode.Runtime.History().WatchBlocks()
+	if err != nil {
+		close(n.initCh)
+		return
+	}
+	defer blkSub.Close()
+
 	// We are initialized.
 	close(n.initCh)
 
@@ -291,8 +296,8 @@ func (n *Node) worker() {
 			tx := rtx.(*pendingTx)
 			pending[tx.txHash] = tx
 			continue
-		case blk := <-n.checkCh.Out():
-			blocks = append(blocks, blk.(*block.Block))
+		case blk := <-blkCh:
+			blocks = append(blocks, blk.Block)
 		case <-recheckCh:
 		}
 
@@ -333,7 +338,6 @@ func NewNode(commonNode *committee.Node) (*Node, error) {
 		stopCh:     make(chan struct{}),
 		quitCh:     make(chan struct{}),
 		initCh:     make(chan struct{}),
-		checkCh:    channels.NewInfiniteChannel(),
 		txCh:       channels.NewInfiniteChannel(),
 		logger:     logging.GetLogger("worker/client/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
