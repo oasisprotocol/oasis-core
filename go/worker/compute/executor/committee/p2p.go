@@ -68,16 +68,12 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signatur
 		crash.Here(crashPointBatchReceiveAfter)
 
 		proposal := cm.Proposal
-
 		epoch := h.n.commonNode.Group.GetEpochSnapshot()
-		h.n.commonNode.CrossNode.Lock()
-		round := h.n.commonNode.CurrentBlock.Header.Round
-		h.n.commonNode.CrossNode.Unlock()
 
 		// Before opening the signed dispatch message, verify that it was actually signed by the
 		// current transaction scheduler.
-		if err := epoch.VerifyTxnSchedulerSigner(proposal.NodeID, round); err != nil {
-			// Not signed by the current txn scheduler.
+		if err := epoch.VerifyTxnSchedulerSigner(proposal.NodeID, proposal.Header.Round-1); err != nil {
+			// Not signed by the transaction scheduler for the round, do not forward.
 			return errMsgFromNonTxnSched
 		}
 
@@ -86,11 +82,7 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signatur
 			return p2pError.Permanent(err)
 		}
 
-		err := h.n.queueBatchBlocking(ctx, proposal)
-		if err != nil {
-			return err
-		}
-		return nil
+		return h.n.processProposal(ctx, proposal)
 	default:
 		return p2pError.ErrUnhandledMessage
 	}
