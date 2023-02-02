@@ -116,12 +116,25 @@ type SignedInitResponse struct {
 	Signature    []byte       `json:"signature"`
 }
 
+// Verify verifies the signature of the init response using the given key.
 func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 	raw := cbor.Marshal(r.InitResponse)
 	if !pk.Verify(initResponseContext, raw, r.Signature) {
 		return fmt.Errorf("keymanager: invalid initialization response signature")
 	}
 	return nil
+}
+
+// SignInitResponse signs the given init response.
+func SignInitResponse(signer signature.Signer, response *InitResponse) (*SignedInitResponse, error) {
+	sig, err := signer.ContextSign(initResponseContext, cbor.Marshal(response))
+	if err != nil {
+		return nil, err
+	}
+	return &SignedInitResponse{
+		InitResponse: *response,
+		Signature:    sig,
+	}, nil
 }
 
 // VerifyExtraInfo verifies and parses the per-node + per-runtime ExtraInfo
