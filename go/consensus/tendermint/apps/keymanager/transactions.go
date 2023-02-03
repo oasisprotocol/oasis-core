@@ -53,11 +53,11 @@ func (app *keymanagerApplication) updatePolicy(
 	}
 
 	// Charge gas for this operation.
-	regParams, err := regState.ConsensusParameters(ctx)
+	kmParams, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		return err
 	}
-	if err = ctx.Gas().UseGas(1, registry.GasOpUpdateKeyManager, regParams.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, api.GasOpUpdatePolicy, kmParams.GasCosts); err != nil {
 		return err
 	}
 
@@ -78,6 +78,11 @@ func (app *keymanagerApplication) updatePolicy(
 	// node-reregistration, but I'm not sure how often the policy
 	// will get updated.
 	epoch, err := app.state.GetCurrentEpoch(ctx)
+	if err != nil {
+		return err
+	}
+
+	regParams, err := regState.ConsensusParameters(ctx)
 	if err != nil {
 		return err
 	}

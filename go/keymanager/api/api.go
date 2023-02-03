@@ -53,6 +53,19 @@ var (
 	initResponseContext = signature.NewContext("oasis-core/keymanager: init response")
 )
 
+const (
+	// GasOpUpdatePolicy is the gas operation identifier for policy updates
+	// costs.
+	GasOpUpdatePolicy transaction.Op = "update_policy"
+)
+
+// XXX: Define reasonable default gas costs.
+
+// DefaultGasCosts are the "default" gas costs for operations.
+var DefaultGasCosts = transaction.Costs{
+	GasOpUpdatePolicy: 1000,
+}
+
 // Status is the current key manager status.
 type Status struct {
 	// ID is the runtime ID of the key manager.
@@ -180,41 +193,28 @@ func VerifyExtraInfo(
 
 // Genesis is the key manager management genesis state.
 type Genesis struct {
+	// Parameters are the key manager consensus parameters.
+	Parameters ConsensusParameters `json:"params"`
+
 	Statuses []*Status `json:"statuses,omitempty"`
 }
 
-// SanityCheckStatuses examines the statuses table.
-func SanityCheckStatuses(statuses []*Status) error {
-	for _, status := range statuses {
-		// Verify key manager runtime ID.
-		if !status.ID.IsKeyManager() {
-			return fmt.Errorf("keymanager: sanity check failed: key manager runtime ID %s is invalid", status.ID)
-		}
-
-		// Verify currently active key manager node IDs.
-		for _, node := range status.Nodes {
-			if !node.IsValid() {
-				return fmt.Errorf("keymanager: sanity check failed: key manager node ID %s is invalid", node.String())
-			}
-		}
-
-		// Verify SGX policy signatures if the policy exists.
-		if status.Policy != nil {
-			if err := SanityCheckSignedPolicySGX(nil, status.Policy); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+// ConsensusParameters are the key manager consensus parameters.
+type ConsensusParameters struct {
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
 }
 
-// SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck() error {
-	err := SanityCheckStatuses(g.Statuses)
-	if err != nil {
-		return err
-	}
+// ConsensusParameterChanges are allowed key manager consensus parameter changes.
+type ConsensusParameterChanges struct {
+	// GasCosts are the new gas costs.
+	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
+}
 
+// Apply applies changes to the given consensus parameters.
+func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
+	if c.GasCosts != nil {
+		params.GasCosts = c.GasCosts
+	}
 	return nil
 }
 

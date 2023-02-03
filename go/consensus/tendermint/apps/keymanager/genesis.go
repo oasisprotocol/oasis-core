@@ -24,6 +24,12 @@ func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, request types.Re
 		"state", string(b),
 	)
 
+	state := keymanagerState.NewMutableState(ctx.State())
+
+	if err := state.SetConsensusParameters(ctx, &st.Parameters); err != nil {
+		return fmt.Errorf("tendermint/keymanager: failed to set consensus parameters: %w", err)
+	}
+
 	epoch, err := app.state.GetCurrentEpoch(ctx)
 	if err != nil {
 		return fmt.Errorf("tendermint/keymanager: couldn't get current epoch: %w", err)
@@ -49,7 +55,6 @@ func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, request types.Re
 	}
 
 	var toEmit []*keymanager.Status
-	state := keymanagerState.NewMutableState(ctx.State())
 	for i, v := range st.Statuses {
 		if v == nil {
 			return fmt.Errorf("InitChain: Status index %d is nil", i)
