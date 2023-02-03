@@ -19,8 +19,6 @@ const (
 	NotReady StateName = "NotReady"
 	// WaitingForBatch is the name of StateWaitingForBatch.
 	WaitingForBatch = "WaitingForBatch"
-	// WaitingForBlock is the name of StateWaitingForBlock.
-	WaitingForBlock = "WaitingForBlock"
 	// WaitingForEvent is the name of StateWaitingForEvent.
 	WaitingForEvent = "WaitingForEvent"
 	// WaitingForTxs is the name of the StateWaitingForTxs.
@@ -44,27 +42,11 @@ var validStateTransitions = map[StateName][]StateName{
 	// Transitions from WaitingForBatch state.
 	WaitingForBatch: {
 		WaitingForBatch,
-		// Received batch, need to catch up current block.
-		WaitingForBlock,
 		// Received batch, current block is up to date.
 		ProcessingBatch,
 		// Received batch, waiting for discrepancy event.
 		WaitingForEvent,
 		// Received batch, waiting for missing transactions.
-		WaitingForTxs,
-		// Epoch transition occurred and we are no longer in the committee.
-		NotReady,
-	},
-
-	// Transitions from WaitingForBlock state.
-	WaitingForBlock: {
-		// Abort: seen newer block while waiting for block.
-		WaitingForBatch,
-		// Seen block that we were waiting for.
-		ProcessingBatch,
-		// Seen block that we were waiting for, waiting for disrepancy event.
-		WaitingForEvent,
-		// Seen block that we were waiting for, waiting for transactions.
 		WaitingForTxs,
 		// Epoch transition occurred and we are no longer in the committee.
 		NotReady,
@@ -139,22 +121,6 @@ func (s StateWaitingForBatch) Name() StateName {
 
 // String returns a string representation of the state.
 func (s StateWaitingForBatch) String() string {
-	return string(s.Name())
-}
-
-// StateWaitingForBlock is the waiting for block state.
-type StateWaitingForBlock struct {
-	// Batch that is waiting to be processed.
-	batch *unresolvedBatch
-}
-
-// Name returns the name of the state.
-func (s StateWaitingForBlock) Name() StateName {
-	return WaitingForBlock
-}
-
-// String returns a string representation of the state.
-func (s StateWaitingForBlock) String() string {
 	return string(s.Name())
 }
 
