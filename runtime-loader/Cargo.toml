@@ -9,7 +9,7 @@ clap = "4.0.22"
 anyhow = "1.0"
 futures = { version = "0.3.25", features = ["compat", "io-compat"] }
 # NOTE: The version of tokio is constrained by what the upstream enclave-runner is using.
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.24", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aesm-client = { version = "0.5.4", features = ["sgxs"] }
