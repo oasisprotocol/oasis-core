@@ -36,10 +36,7 @@ import (
 var (
 	errSeenNewerBlock     = fmt.Errorf("executor: seen newer block")
 	errRuntimeAborted     = fmt.Errorf("executor: runtime aborted batch processing")
-	errIncompatibleHeader = p2pError.Permanent(fmt.Errorf("executor: incompatible header"))
 	errBatchTooLarge      = p2pError.Permanent(fmt.Errorf("executor: batch too large"))
-	errIncorrectRole      = fmt.Errorf("executor: incorrect role")
-	errIncorrectState     = fmt.Errorf("executor: incorrect state")
 	errMsgFromNonTxnSched = fmt.Errorf("executor: received txn scheduler dispatch msg from non-txn scheduler")
 
 	// proposeTimeoutDelay is the duration to wait before submitting the propose timeout request.
@@ -116,6 +113,7 @@ type Node struct { // nolint: maligned
 	// Guarded by .commonNode.CrossNode.
 	proposingTimeout bool
 	missingTxsCancel context.CancelFunc
+	pendingProposals *pendingProposals
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -203,12 +201,13 @@ func (n *Node) getMetricLabels() prometheus.Labels {
 	}
 }
 
-func (n *Node) queueBatchBlocking(ctx context.Context, proposal *commitment.Proposal) error {
+func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposal) error {
 	rt, err := n.commonNode.Runtime.ActiveDescriptor(ctx)
 	if err != nil {
 		n.logger.Warn("failed to fetch active runtime descriptor",
 			"err", err,
 		)
+		// Do not forward the proposal further as we are unable to validate it.
 		return p2pError.Permanent(err)
 	}
 
@@ -218,6 +217,7 @@ func (n *Node) queueBatchBlocking(ctx context.Context, proposal *commitment.Prop
 			"max_batch_size", rt.TxnScheduler.MaxBatchSize,
 			"batch_size", len(proposal.Batch),
 		)
+		// Do not forward the proposal further as it seems invalid.
 		return errBatchTooLarge
 	}
 
@@ -228,7 +228,7 @@ func (n *Node) queueBatchBlocking(ctx context.Context, proposal *commitment.Prop
 
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
-	return n.handleExternalBatchLocked(batch)
+	return n.handleProposalLocked(batch)
 }
 
 func (n *Node) bumpReselect() {
@@ -305,32 +305,6 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 
 	// Perform actions based on current state.
 	switch state := n.state.(type) {
-	case StateWaitingForBlock:
-		// Check if this was the block we were waiting for.
-		currentHash := header.EncodedHash()
-		if currentHash.Equal(&state.batch.proposal.Header.PreviousHash) {
-			n.logger.Info("received block needed for batch processing")
-			clearProposalQueue = false
-			n.maybeStartProcessingBatchLocked(state.batch)
-			break
-		}
-
-		// Check if the new block is for the same or newer round than the
-		// one we are waiting for. In this case, we should abort as the
-		// block will never be seen.
-		curRound := header.Round
-		waitRound := state.batch.proposal.Header.Round - 1
-		if curRound >= waitRound {
-			n.logger.Warn("seen newer block while waiting for block")
-			n.transitionLocked(StateWaitingForBatch{})
-			break
-		}
-
-		// Continue waiting for block.
-		n.logger.Info("still waiting for block",
-			"current_round", curRound,
-			"wait_round", waitRound,
-		)
 	case StateWaitingForTxs:
 		// Stop waiting for transactions and start a new round.
 		n.logger.Warn("considering previous proposal invalid due to missing transactions")
@@ -393,6 +367,9 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 
 		n.commonNode.TxPool.WakeupScheduler()
 	}
+
+	// Check if we have any pending proposals and attempt to handle them.
+	n.handlePendingProposalsLocked()
 }
 
 func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
@@ -1310,45 +1287,29 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 }
 
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) handleExternalBatchLocked(batch *unresolvedBatch) error {
-	// If we are not waiting for a batch, don't do anything.
+func (n *Node) handleProposalLocked(batch *unresolvedBatch) error {
+	n.logger.Debug("handling a new batch proposal",
+		"proposer", batch.proposal.NodeID,
+		"round", batch.proposal.Header.Round,
+	)
+
+	// TODO: Handle proposal equivocation.
+
 	if _, ok := n.state.(StateWaitingForBatch); !ok {
-		return errIncorrectState
+		// Currently not waiting for batch.
+	} else if epoch := n.commonNode.Group.GetEpochSnapshot(); !epoch.IsExecutorMember() {
+		// Currently not an executor committee member.
+	} else {
+		// Maybe process if we have the correct block.
+		currentHash := n.commonNode.CurrentBlock.Header.EncodedHash()
+		if currentHash.Equal(&batch.proposal.Header.PreviousHash) {
+			n.maybeStartProcessingBatchLocked(batch)
+			return nil // Forward proposal.
+		}
 	}
 
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-
-	// We can only receive external batches if we are an executor member.
-	if !epoch.IsExecutorMember() {
-		n.logger.Error("got external batch while in incorrect role")
-		return errIncorrectRole
-	}
-
-	// Check if we have the correct block -- in this case, start processing the batch.
-	currentHash := n.commonNode.CurrentBlock.Header.EncodedHash()
-	if currentHash.Equal(&batch.proposal.Header.PreviousHash) {
-		n.maybeStartProcessingBatchLocked(batch)
-		return nil
-	}
-
-	// Check if the current block is older than what is expected we base our batch
-	// on. In case it is equal or newer, but different, discard the batch.
-	curRound := n.commonNode.CurrentBlock.Header.Round
-	waitRound := batch.proposal.Header.Round - 1
-	if curRound >= waitRound {
-		n.logger.Warn("got external batch based on incompatible header",
-			"previous_hash", batch.proposal.Header.PreviousHash,
-			"round", batch.proposal.Header.Round,
-		)
-		return errIncompatibleHeader
-	}
-
-	// Wait for the correct block to arrive.
-	n.transitionLocked(StateWaitingForBlock{
-		batch: batch,
-	})
-
-	return nil
+	// When checks fail, add proposal into the queue of pending proposals for later retry.
+	return n.addPendingProposalLocked(batch)
 }
 
 // nudgeAvailabilityLocked checks whether the executor worker should declare itself available.
@@ -1618,6 +1579,7 @@ func NewNode(
 		commonNode:       commonNode,
 		commonCfg:        commonCfg,
 		roleProvider:     roleProvider,
+		pendingProposals: newPendingProposals(),
 		ctx:              ctx,
 		cancelCtx:        cancel,
 		stopCh:           make(chan struct{}),
