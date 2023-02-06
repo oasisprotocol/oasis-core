@@ -512,8 +512,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 			DebugBypassStake:          viper.GetBool(cfgRoothashDebugBypassStake),
 			MaxRuntimeMessages:        viper.GetUint32(CfgRoothashMaxRuntimeMessages),
 			MaxInRuntimeMessages:      viper.GetUint32(CfgRoothashMaxInRuntimeMessages),
-			// TODO: Make these configurable.
-			GasCosts: roothash.DefaultGasCosts,
+			GasCosts:                  roothash.DefaultGasCosts, // TODO: Make these configurable.
 		},
 	}
 
@@ -557,7 +556,11 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 // AppendKeyManagerState appends the key manager genesis state given a vector of
 // key manager statuses.
 func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.Logger) error {
-	var kmSt keymanager.Genesis
+	kmSt := keymanager.Genesis{
+		Parameters: keymanager.ConsensusParameters{
+			GasCosts: keymanager.DefaultGasCosts, // TODO: Make these configurable.
+		},
+	}
 
 	for _, v := range statuses {
 		b, err := os.ReadFile(v)

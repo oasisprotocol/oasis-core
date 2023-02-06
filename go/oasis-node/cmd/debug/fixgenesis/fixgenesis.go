@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -308,6 +309,11 @@ NodeLoop:
 		}
 		newDoc.Registry.Nodes = append(newDoc.Registry.Nodes, sigNode)
 	}
+
+	// Move key manager gas costs from the registry to the key manager.
+	newDoc.KeyManager.Parameters.GasCosts = keymanager.DefaultGasCosts
+	newDoc.KeyManager.Parameters.GasCosts[keymanager.GasOpUpdatePolicy] = newDoc.Registry.Parameters.GasCosts["update_keymanager"]
+	delete(newDoc.Registry.Parameters.GasCosts, "update_keymanager")
 
 	return &newDoc, nil
 }

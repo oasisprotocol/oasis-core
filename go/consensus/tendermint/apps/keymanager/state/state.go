@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -11,14 +12,37 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
-// statusKeyFmt is the key manager status key format.
-//
-// Value is CBOR-serialized key manager status.
-var statusKeyFmt = keyformat.New(0x70, keyformat.H(&common.Namespace{}))
+var (
+	// statusKeyFmt is the key manager status key format.
+	//
+	// Value is CBOR-serialized key manager status.
+	statusKeyFmt = keyformat.New(0x70, keyformat.H(&common.Namespace{}))
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized keymanager.ConsensusParameters.
+	parametersKeyFmt = keyformat.New(0x71)
+)
 
 // ImmutableState is the immutable key manager state wrapper.
 type ImmutableState struct {
 	is *abciAPI.ImmutableState
+}
+
+// ConsensusParameters returns the key manager consensus parameters.
+func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*api.ConsensusParameters, error) {
+	raw, err := st.is.Get(ctx, parametersKeyFmt.Encode())
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("tendermint/keymanager: expected consensus parameters to be present in app state")
+	}
+
+	var params api.ConsensusParameters
+	if err = cbor.Unmarshal(raw, &params); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &params, nil
 }
 
 func (st *ImmutableState) Statuses(ctx context.Context) ([]*api.Status, error) {
@@ -85,6 +109,17 @@ type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// SetConsensusParameters sets key manager consensus parameters.
+//
+// NOTE: This method must only be called from InitChain/EndBlock contexts.
+func (st *MutableState) SetConsensusParameters(ctx context.Context, params *api.ConsensusParameters) error {
+	if err := st.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
+		return err
+	}
+	err := st.ms.Insert(ctx, parametersKeyFmt.Encode(), cbor.Marshal(params))
+	return abciAPI.UnavailableStateError(err)
 }
 
 func (st *MutableState) SetStatus(ctx context.Context, status *api.Status) error {

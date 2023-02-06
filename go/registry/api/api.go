@@ -1496,9 +1496,6 @@ const (
 	// GasOpRuntimeEpochMaintenance is the gas operation identifier for per-epoch
 	// runtime maintenance costs.
 	GasOpRuntimeEpochMaintenance transaction.Op = "runtime_epoch_maintenance"
-	// GasOpUpdateKeyManager is the gas operation identifier for key manager
-	// policy updates costs.
-	GasOpUpdateKeyManager transaction.Op = "update_keymanager"
 	// GasOpProveFreshness is the gas operation identifier for freshness proofs.
 	GasOpProveFreshness transaction.Op = "prove_freshness"
 )
@@ -1513,7 +1510,6 @@ var DefaultGasCosts = transaction.Costs{
 	GasOpUnfreezeNode:            1000,
 	GasOpRegisterRuntime:         1000,
 	GasOpRuntimeEpochMaintenance: 1000,
-	GasOpUpdateKeyManager:        1000,
 	GasOpProveFreshness:          1000,
 }
 
