@@ -6,16 +6,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type FixedRateSchedulerTestSuite struct {
-	suite.Suite
-}
-
 func TestFixedRateScheduler(t *testing.T) {
-	require := require.New(t)
-
 	t.Run("No tasks", func(t *testing.T) {
 		scheduler := NewFixedRateScheduler(time.Millisecond, time.Millisecond)
 		scheduler.Start()
@@ -24,6 +17,8 @@ func TestFixedRateScheduler(t *testing.T) {
 	})
 
 	t.Run("Many tasks", func(t *testing.T) {
+		require := require.New(t)
+
 		n1, n2 := 0, 0
 		t1 := func(ctx context.Context) error { n1++; return nil }
 		t2 := func(ctx context.Context) error { n2++; return nil }
@@ -42,6 +37,8 @@ func TestFixedRateScheduler(t *testing.T) {
 	})
 
 	t.Run("New task while running", func(t *testing.T) {
+		require := require.New(t)
+
 		n1, n2 := 0, 0
 		t1 := func(ctx context.Context) error { n1++; return nil }
 		t2 := func(ctx context.Context) error { n2++; return nil }
@@ -61,6 +58,8 @@ func TestFixedRateScheduler(t *testing.T) {
 	})
 
 	t.Run("Stopped during initial delay", func(t *testing.T) {
+		require := require.New(t)
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
@@ -81,6 +80,8 @@ func TestFixedRateScheduler(t *testing.T) {
 	})
 
 	t.Run("Stopped between repetitions", func(t *testing.T) {
+		require := require.New(t)
+
 		scheduler := NewFixedRateScheduler(0, time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -103,6 +104,8 @@ func TestFixedRateScheduler(t *testing.T) {
 	})
 
 	t.Run("Stopped during task execution", func(t *testing.T) {
+		require := require.New(t)
+
 		t1 := func(ctx context.Context) error { <-ctx.Done(); return nil }
 
 		scheduler := NewFixedRateScheduler(0, time.Millisecond)
