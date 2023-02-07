@@ -20,7 +20,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/mathrand"
 	commonGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -786,18 +785,13 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		return err
 	}
 
-	logFmt := logging.FmtJSON
-	logLevel := logging.LevelDebug
-
 	args := []string{
 		"debug", "txsource",
 		"--address", "unix:" + node.SocketPath(),
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + common.CfgDataDir, d.String(),
+		"--" + workload.CfgDataDir, d.String(),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
-		"--log.format", logFmt.String(),
-		"--log.level", logLevel.String(),
 		"--" + commonGrpc.CfgLogDebug,
 		"--" + flags.CfgGenesisFile, sc.Net.GenesisPath(),
 		"--" + workload.CfgRuntimeID, runtimeID.String(),

@@ -69,6 +69,7 @@ require (
 require (
 	github.com/DataDog/zstd v1.4.1 // indirect
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
+	github.com/a8m/envsubst v1.3.0 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.22.1 // indirect

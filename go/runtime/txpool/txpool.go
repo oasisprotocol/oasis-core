@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
+	"github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
 )
 
 const (
@@ -42,19 +43,6 @@ const (
 	// RepublishInterval.
 	republishLimitReinvokeTimeout = 1 * time.Second
 )
-
-// Config is the transaction pool configuration.
-type Config struct {
-	MaxPoolSize          uint64
-	MaxCheckTxBatchSize  uint64
-	MaxLastSeenCacheSize uint64
-
-	RepublishInterval time.Duration
-
-	// RecheckInterval is the interval (in rounds) when any pending transactions are subject to a
-	// recheck and any non-passing transactions are removed.
-	RecheckInterval uint64
-}
 
 // TransactionMeta contains the per-transaction metadata.
 type TransactionMeta struct {
@@ -181,7 +169,7 @@ type txPool struct {
 	initCh chan struct{}
 
 	runtimeID   common.Namespace
-	cfg         *Config
+	cfg         config.Config
 	host        RuntimeHostProvisioner
 	txPublisher TransactionPublisher
 	history     history.History
@@ -913,7 +901,7 @@ func (t *txPool) flushWorker() {
 // New creates a new transaction pool instance.
 func New(
 	runtimeID common.Namespace,
-	cfg *Config,
+	cfg config.Config,
 	host RuntimeHostProvisioner,
 	history history.History,
 	txPublisher TransactionPublisher,

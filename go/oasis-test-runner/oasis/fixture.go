@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -306,7 +307,7 @@ type KeymanagerFixture struct {
 	Entity  int `json:"entity"`
 	Policy  int `json:"policy"`
 
-	RuntimeProvisioner string `json:"runtime_provisioner"`
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
@@ -368,7 +369,7 @@ type ComputeWorkerFixture struct {
 
 	Entity int `json:"entity"`
 
-	RuntimeProvisioner string `json:"runtime_provisioner"`
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
 
 	AllowEarlyTermination bool `json:"allow_early_termination"`
 	AllowErrorTermination bool `json:"allow_error_termination"`
@@ -502,7 +503,7 @@ type ClientFixture struct {
 	// Runtimes contains the indexes of the runtimes to enable.
 	Runtimes []int `json:"runtimes,omitempty"`
 
-	RuntimeProvisioner string `json:"runtime_provisioner"`
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
 
 	// RuntimeConfig contains the per-runtime node-local configuration.
 	RuntimeConfig map[int]map[string]interface{} `json:"runtime_config,omitempty"`

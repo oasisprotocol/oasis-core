@@ -6,7 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/spf13/viper"
 	tmcore "github.com/tendermint/tendermint/rpc/core"
 	tmcoretypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
@@ -24,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
@@ -275,8 +275,8 @@ func (n *commonNode) initialize() error {
 	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
 
 	// Enable supplementary sanity checks when enabled.
-	if viper.GetBool(CfgSupplementarySanityEnabled) {
-		ssa := supplementarysanity.New(viper.GetUint64(CfgSupplementarySanityInterval))
+	if config.GlobalConfig.Consensus.SupplementarySanity.Enabled {
+		ssa := supplementarysanity.New(config.GlobalConfig.Consensus.SupplementarySanity.Interval)
 		if err = n.RegisterApplication(ssa); err != nil {
 			return fmt.Errorf("failed to register supplementary sanity check app: %w", err)
 		}
@@ -302,11 +302,6 @@ func (n *commonNode) Cleanup() {
 // Implements consensusAPI.Backend.
 func (n *commonNode) ConsensusKey() signature.PublicKey {
 	return n.identity.ConsensusSigner.Public()
-}
-
-// Implements consensusAPI.Backend.
-func (n *commonNode) SupportedFeatures() consensusAPI.FeatureMask {
-	return consensusAPI.FeatureServices | consensusAPI.FeatureFullNode
 }
 
 // Implements consensusAPI.Backend.
@@ -780,6 +775,10 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		Parameters: *cp,
 		Meta:       meta,
 	}, nil
+}
+
+func (n *commonNode) SupportedFeatures() consensusAPI.FeatureMask {
+	return n.parentNode.SupportedFeatures()
 }
 
 // Implements consensusAPI.Backend.

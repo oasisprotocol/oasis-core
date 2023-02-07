@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	CfgDataDir = "datadir"
+
 	maxSubmissionRetryElapsedTime = 120 * time.Second
 
 	fundAccountAmount = 10000000000
@@ -194,6 +196,8 @@ func FundAccountFromTestEntity(
 }
 
 func init() {
+	Flags.String(CfgDataDir, "", "data directory")
+
 	Flags.AddFlagSet(QueriesFlags)
 	Flags.AddFlagSet(RuntimeFlags)
 }

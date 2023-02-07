@@ -6,9 +6,11 @@ import (
 	"crypto/x509"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,8 +18,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
+	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/config"
+	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
@@ -62,6 +66,7 @@ type ConsensusStateSyncCfg struct {
 // Feature is a feature or worker hosted by a concrete oasis-node process.
 type Feature interface {
 	AddArgs(args *argBuilder) error
+	ModifyConfig() error
 }
 
 // CustomStartFeature is a feature with a customized start method.
@@ -80,6 +85,7 @@ type Node struct { // nolint: maligned
 
 	Name   string
 	NodeID signature.PublicKey
+	Config config.Config
 
 	net *Network
 	dir *env.Dir
@@ -165,6 +171,11 @@ func (n *Node) LogPath() string {
 	return nodeLogPath(n.dir)
 }
 
+// ConfigFile returns the path to the node's config file.
+func (n *Node) ConfigFile() string {
+	return filepath.Join(n.DataDir(), "config.yaml")
+}
+
 // DataDir returns the path to the node's data directory.
 func (n *Node) DataDir() string {
 	return n.dir.String()
@@ -179,15 +190,84 @@ func (n *Node) LoadIdentity() (*identity.Identity, error) {
 	return identity.Load(n.dir.String(), factory)
 }
 
+// AddSeedNodesToConfig appends the network's seed nodes to the node's config.
+func (n *Node) AddSeedNodesToConfig() {
+	n.AddSeedNodesToConfigExcept("")
+}
+
+// AddSeedNodesToConfigExcept appends the network's seed nodes to the node's
+// config, except for the given seed node.
+func (n *Node) AddSeedNodesToConfigExcept(excludeSeedNodeName string) {
+	seedNodes := []string{}
+	for _, seed := range n.net.seeds {
+		if seed.Name == excludeSeedNodeName {
+			continue
+		}
+
+		tendermintSeed := commonNode.ConsensusAddress{
+			ID: seed.p2pSigner,
+			Address: commonNode.Address{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: int64(seed.consensusPort),
+			},
+		}
+		libp2pSeed := commonNode.ConsensusAddress{
+			ID: seed.p2pSigner,
+			Address: commonNode.Address{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: int64(seed.libp2pSeedPort),
+			},
+		}
+
+		seedNodes = append(seedNodes, tendermintSeed.String())
+		seedNodes = append(seedNodes, libp2pSeed.String())
+	}
+
+	n.Config.P2P.Seeds = seedNodes
+}
+
+// AddSentriesToConfig appends the given sentry nodes to the node's config.
+func (n *Node) AddSentriesToConfig(sentries []*Sentry) {
+	var addrs []string
+	for _, sentry := range sentries {
+		addrs = append(addrs, fmt.Sprintf("%s@127.0.0.1:%d", sentry.tlsPublicKey.String(), sentry.controlPort))
+	}
+	n.Config.Runtime.SentryAddresses = addrs
+}
+
 // Start starts the node.
 func (n *Node) Start() error {
-	args := newArgBuilder()
+	// Initialize node configuration.
+	n.Config = config.DefaultConfig()
+
+	n.Config.Common.DataDir = n.DataDir()
+	n.Config.Common.Debug.AllowRoot = true
+	n.Config.Common.Debug.Rlimit = cmdCommon.RequiredRlimit
+
+	n.Config.Pprof.BindAddress = "0.0.0.0:" + strconv.Itoa(int(n.pprofPort))
+
+	if n.consensus.PruneNumKept > 0 {
+		n.Config.Consensus.Prune.Strategy = abci.PruneKeepN.String()
+		n.Config.Consensus.Prune.NumKept = n.consensus.PruneNumKept
+		n.Config.Consensus.Prune.Interval = n.consensus.PruneInterval
+	} else {
+		n.Config.Consensus.Prune.Strategy = abci.PruneNone.String()
+	}
+
+	n.Config.Consensus.Submission.GasPrice = n.consensus.SubmissionGasPrice
+	n.Config.Consensus.MinGasPrice = n.consensus.MinGasPrice
+
+	// Initialize node command-line arguments.
+	args := newArgBuilder().debugDontBlameOasis().debugAllowTestKeys()
 	var customStart CustomStartFeature
 
 	// Reset hosted runtimes as various AddArgs will be populating them.
 	n.hostedRuntimes = make(map[common.Namespace]*hostedRuntime)
 
 	for _, f := range n.features {
+		if err := f.ModifyConfig(); err != nil {
+			return fmt.Errorf("oasis/node: failed to modify config for feature on node %s: %w", n.Name, err)
+		}
 		if err := f.AddArgs(args); err != nil {
 			return fmt.Errorf("oasis/node: failed to add arguments for feature on node %s: %w", n.Name, err)
 		}
@@ -198,12 +278,26 @@ func (n *Node) Start() error {
 			customStart = cf
 		}
 	}
+
 	for _, hosted := range n.hostedRuntimes {
-		args.appendHostedRuntime(hosted.runtime, hosted.localConfig)
+		if hosted.runtime.pruner.Strategy != "" {
+			n.Config.Runtime.HistoryPruner.Strategy = hosted.runtime.pruner.Strategy
+			n.Config.Runtime.HistoryPruner.Interval = hosted.runtime.pruner.Interval
+			n.Config.Runtime.HistoryPruner.NumKept = hosted.runtime.pruner.NumKept
+		}
+
+		n.Config.Runtime.Paths = append(n.Config.Runtime.Paths, hosted.runtime.BundlePaths()...)
+
+		if hosted.localConfig != nil {
+			if n.Config.Runtime.RuntimeConfig == nil {
+				n.Config.Runtime.RuntimeConfig = make(map[string]interface{})
+			}
+			n.Config.Runtime.RuntimeConfig[hosted.runtime.ID().String()] = hosted.localConfig
+		}
 	}
 
 	if n.consensus.EnableArchiveMode {
-		args.extraArgs([]Argument{{Name: tendermint.CfgMode, Values: []string{consensusAPI.ModeArchive.String()}}})
+		n.Config.Mode = config.ModeArchive
 	}
 
 	args.extraArgs(n.extraArgs)

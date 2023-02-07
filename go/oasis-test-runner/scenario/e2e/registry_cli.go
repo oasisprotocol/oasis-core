@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -22,6 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -122,7 +125,7 @@ func (sc *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers
 	}
 	// Check that is-registered subcommand detects all validators as registered.
 	for _, val := range sc.Net.Validators() {
-		if err = sc.isRegistered(childEnv, val.Name, val.DataDir()); err != nil {
+		if err = sc.isRegistered(childEnv, val.Name, val.ConfigFile()); err != nil {
 			return err
 		}
 	}
@@ -149,7 +152,7 @@ func (sc *registryCLIImpl) testEntityAndNode(childEnv *env.Env, cli *cli.Helpers
 	if err != nil {
 		return err
 	}
-	err = sc.isRegistered(childEnv, "node", nDir.String())
+	err = sc.isRegistered(childEnv, "node", filepath.Join(nDir.String(), "config.yaml"))
 	if err == nil || !strings.Contains(err.Error(), "node is not registered") {
 		return errors.New("is-registered should detect the new node is not registered")
 	}
@@ -338,12 +341,12 @@ func (sc *registryCLIImpl) listNodes(childEnv *env.Env) ([]signature.PublicKey, 
 }
 
 // isRegistered checks if the given node is registered.
-func (sc *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeDataDir string) error {
+func (sc *registryCLIImpl) isRegistered(childEnv *env.Env, nodeName, nodeCfgFile string) error {
 	sc.Logger.Info(fmt.Sprintf("checking if node %s is registered", nodeName))
 	args := []string{
 		"registry", "node", "is-registered",
 		"--" + grpc.CfgAddress, "unix:" + sc.Net.Validators()[0].SocketPath(),
-		"--" + cmdCommon.CfgDataDir, nodeDataDir,
+		"--" + cmdCommon.CfgConfigFile, nodeCfgFile,
 	}
 	out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, "is-registered", sc.Net.Config().NodeBinary, args)
 	if err != nil {
@@ -431,6 +434,19 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 
 	// Helper for running the cmd and importing the generated node instance.
 	runInitNode := func() (*node.Node, error) {
+		// Write a dummy config file with just the data dir to make init happy.
+		// (It will get overwritten with the proper config before the node is started.)
+		cfgFile := filepath.Join(dataDir, "config.yaml")
+		cfg := config.DefaultConfig()
+		cfg.Common.DataDir = dataDir
+		cfgString, grr := yaml.Marshal(&cfg)
+		if grr != nil {
+			return nil, fmt.Errorf("failed to marshal config file: %w", grr)
+		}
+		if grr = os.WriteFile(cfgFile, cfgString, 0o600); grr != nil {
+			return nil, fmt.Errorf("failed to write config file '%s': %w", cfgFile, grr)
+		}
+
 		args := []string{
 			"registry", "node", "init",
 			"--" + cmdRegNode.CfgConsensusAddress, strings.Join(testConsensusAddressesStr, ","),
@@ -442,7 +458,7 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 			"--" + cmdRegNode.CfgNodeRuntimeID, testNode.Runtimes[0].ID.String(),
 			"--" + cmdSigner.CfgSigner, fileSigner.SignerName,
 			"--" + cmdSigner.CfgCLISignerDir, entDir,
-			"--" + cmdCommon.CfgDataDir, dataDir,
+			"--" + cmdCommon.CfgConfigFile, cfgFile,
 		}
 		var out bytes.Buffer
 		out, err = cli.RunSubCommandWithOutput(childEnv, sc.Logger, "init-node", sc.Net.Config().NodeBinary, args)

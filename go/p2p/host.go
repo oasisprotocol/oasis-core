@@ -12,11 +12,11 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 )
 
@@ -71,7 +71,7 @@ func (cfg *HostConfig) NewHost() (host.Host, *conngater.BasicConnectionGater, er
 // Load loads host configuration.
 func (cfg *HostConfig) Load() error {
 	userAgent := fmt.Sprintf("oasis-core/%s", version.SoftwareVersion)
-	port := viper.GetUint16(CfgHostPort)
+	port := config.GlobalConfig.P2P.Port
 
 	// Listen for connections on all interfaces.
 	listenAddr, err := multiaddr.NewMultiaddr(
@@ -129,7 +129,7 @@ func (cfg *ConnManagerConfig) NewConnManager() (*connmgr.BasicConnMgr, error) {
 // Load loads connection manager configuration.
 func (cfg *ConnManagerConfig) Load() error {
 	persistentPeersMap := make(map[core.PeerID]struct{})
-	for _, pp := range viper.GetStringSlice(CfgConnMgrPersistentPeers) {
+	for _, pp := range config.GlobalConfig.P2P.ConnectionManager.PersistentPeers {
 		var addr node.ConsensusAddress
 		if err := addr.UnmarshalText([]byte(pp)); err != nil {
 			return fmt.Errorf("malformed address (expected pubkey@IP:port): %w", err)
@@ -148,9 +148,9 @@ func (cfg *ConnManagerConfig) Load() error {
 		persistentPeers = append(persistentPeers, pid)
 	}
 
-	cfg.MinPeers = viper.GetInt(CfgConnMgrMaxNumPeers)
+	cfg.MinPeers = config.GlobalConfig.P2P.ConnectionManager.MaxNumPeers
 	cfg.MaxPeers = cfg.MinPeers + peersHighWatermarkDelta
-	cfg.GracePeriod = viper.GetDuration(CfgConnMgrPeerGracePeriod)
+	cfg.GracePeriod = config.GlobalConfig.P2P.ConnectionManager.PeerGracePeriod
 	cfg.PersistentPeers = persistentPeers
 
 	return nil
@@ -185,7 +185,7 @@ func (cfg *ConnGaterConfig) NewConnGater() (*conngater.BasicConnectionGater, err
 // Load loads connection gater configuration.
 func (cfg *ConnGaterConfig) Load() error {
 	blockedPeers := make([]net.IP, 0)
-	for _, blockedIP := range viper.GetStringSlice(CfgConnGaterBlockedPeerIPs) {
+	for _, blockedIP := range config.GlobalConfig.P2P.ConnectionGater.BlockedPeerIPs {
 		parsedIP := net.ParseIP(blockedIP)
 		if parsedIP == nil {
 			return fmt.Errorf("malformed blocked IP: %s", blockedIP)

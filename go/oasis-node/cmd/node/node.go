@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
@@ -452,7 +453,8 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	// Log the version of the binary so that we can figure out what the
 	// binary is from the logs.
 	logger.Info("Starting oasis-node",
-		"Version", version.SoftwareVersion,
+		"version", version.SoftwareVersion,
+		"mode", config.GlobalConfig.Mode,
 	)
 
 	if err = verifyElevatedPrivileges(logger); err != nil {
@@ -520,14 +522,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 	}
 
 	// Initialize upgrader backend.
-	tmMode, err := tendermint.Mode()
-	if err != nil {
-		logger.Error("invalid tendermint mode",
-			"err", err,
-		)
-		return nil, err
-	}
-	isArchive := tmMode == consensusAPI.ModeArchive
+	isArchive := config.GlobalConfig.Mode == config.ModeArchive
 	node.Upgrader, err = upgrade.New(node.commonStore, node.dataDir, !isArchive)
 	if err != nil {
 		logger.Error("failed to initialize upgrade backend",
@@ -558,8 +553,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 
 	// Initialize P2P network. Since libp2p host starts listening immediately when created, make
 	// sure that we don't start it if it is not needed.
-	switch {
-	case node.Consensus.Mode() != consensusAPI.ModeArchive:
+	if !isArchive {
 		if genesisDoc.Registry.Parameters.DebugAllowUnroutableAddresses {
 			p2p.DebugForceAllowUnroutableAddresses()
 		}
@@ -570,7 +564,7 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		if err = node.Consensus.RegisterP2PService(node.P2P); err != nil {
 			return nil, err
 		}
-	default:
+	} else {
 		node.P2P = p2p.NewNop()
 	}
 	node.svcMgr.Register(node.P2P)

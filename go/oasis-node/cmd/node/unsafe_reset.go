@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	CfgDataDir = "datadir"
+
 	// CfgPreserveLocalStorage exempts the untrusted local storage from
 	// the unsafe-reset sub-command.
 	CfgPreserveLocalStorage = "preserve.local_storage"
@@ -63,7 +65,7 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir := cmdCommon.DataDir()
+	dataDir := viper.GetString(CfgDataDir)
 	if dataDir == "" {
 		logger.Error("data directory must be set")
 		return
@@ -147,6 +149,7 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 }
 
 func init() {
+	unsafeResetFlags.String(CfgDataDir, "", "data directory")
 	unsafeResetFlags.Bool(CfgPreserveLocalStorage, true, "preserve per-runtime untrusted local storage")
 	unsafeResetFlags.Bool(CfgPreserveMKVSDatabase, true, "preserve per-runtime MKVS database")
 	_ = viper.BindPFlags(unsafeResetFlags)

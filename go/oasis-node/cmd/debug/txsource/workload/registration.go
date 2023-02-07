@@ -22,7 +22,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -182,7 +181,7 @@ func (r *registration) Run( // nolint: gocyclo
 		panic(err)
 	}
 
-	baseDir := viper.GetString(cmdCommon.CfgDataDir)
+	baseDir := viper.GetString(CfgDataDir)
 	nodeIdentitiesDir := filepath.Join(baseDir, "node-identities")
 	if err = common.Mkdir(nodeIdentitiesDir); err != nil {
 		return fmt.Errorf("txsource/registration: failed to create node-identities dir: %w", err)

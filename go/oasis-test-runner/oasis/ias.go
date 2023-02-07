@@ -23,11 +23,7 @@ type iasProxy struct {
 }
 
 func (ias *iasProxy) AddArgs(args *argBuilder) error {
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		grpcServerPort(ias.grpcPort).
+	args.grpcServerPort(ias.grpcPort).
 		grpcWait()
 
 	// If non-mock, IAS Proxy should get the SPID and API key through env vars.
@@ -41,6 +37,10 @@ func (ias *iasProxy) AddArgs(args *argBuilder) error {
 	}
 	args.internalSocketAddress(ias.net.validators[0].SocketPath())
 
+	return nil
+}
+
+func (ias *iasProxy) ModifyConfig() error {
 	return nil
 }
 

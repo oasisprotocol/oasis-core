@@ -16,7 +16,6 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
-	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -26,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/discovery/bootstrap"
@@ -291,7 +291,7 @@ func (p *p2p) RegisterHandler(topic string, handler api.Handler) {
 	_ = p.pubsub.RegisterTopicValidator(
 		topic,
 		h.topicMessageValidator,
-		pubsub.WithValidatorConcurrency(viper.GetInt(CfgGossipsubValidateConcurrency)),
+		pubsub.WithValidatorConcurrency(config.GlobalConfig.P2P.Gossipsub.ValidateConcurrency),
 	)
 
 	p.logger.Debug("registered new topic handler",
@@ -449,7 +449,7 @@ type Config struct {
 
 // Load loads P2P configuration.
 func (cfg *Config) Load() error {
-	rawAddresses, err := configparser.ParseAddressList(viper.GetStringSlice(CfgRegistrationAddresses))
+	rawAddresses, err := configparser.ParseAddressList(config.GlobalConfig.P2P.Registration.Addresses)
 	if err != nil {
 		return fmt.Errorf("failed to parse address list: %w", err)
 	}
@@ -488,6 +488,7 @@ func (cfg *Config) Load() error {
 
 // GossipSubConfig describes a set of settings for a gossip pubsub.
 type GossipSubConfig struct {
+	// XXX: Main config has int64, but here just int -- investigate.
 	PeerOutboundQueueSize int
 	ValidateQueueSize     int
 	ValidateThrottle      int
@@ -497,14 +498,14 @@ type GossipSubConfig struct {
 
 // Load loads gossipsub configuration.
 func (cfg *GossipSubConfig) Load() error {
-	persistentPeers, err := api.AddrInfosFromConsensusAddrs(viper.GetStringSlice(CfgConnMgrPersistentPeers))
+	persistentPeers, err := api.AddrInfosFromConsensusAddrs(config.GlobalConfig.P2P.ConnectionManager.PersistentPeers)
 	if err != nil {
 		return fmt.Errorf("failed to convert persistent peers' addresses: %w", err)
 	}
 
-	cfg.PeerOutboundQueueSize = viper.GetInt(CfgGossipsubPeerOutboundQueueSize)
-	cfg.ValidateQueueSize = viper.GetInt(CfgGossipsubValidateQueueSize)
-	cfg.ValidateThrottle = viper.GetInt(CfgGossipsubValidateThrottle)
+	cfg.PeerOutboundQueueSize = config.GlobalConfig.P2P.Gossipsub.PeerOutboundQueueSize
+	cfg.ValidateQueueSize = config.GlobalConfig.P2P.Gossipsub.ValidateQueueSize
+	cfg.ValidateThrottle = config.GlobalConfig.P2P.Gossipsub.ValidateThrottle
 	cfg.PersistentPeers = persistentPeers
 
 	return nil
@@ -519,14 +520,14 @@ type BootstrapDiscoveryConfig struct {
 
 // Load loads bootstrap discovery configuration.
 func (cfg *BootstrapDiscoveryConfig) Load() error {
-	seeds, err := api.AddrInfosFromConsensusAddrs(viper.GetStringSlice(CfgSeeds))
+	seeds, err := api.AddrInfosFromConsensusAddrs(config.GlobalConfig.P2P.Seeds)
 	if err != nil {
 		return fmt.Errorf("failed to convert seeds' addresses: %w", err)
 	}
 
 	cfg.Seeds = seeds
-	cfg.Enable = viper.GetBool(CfgBootstrapEnable)
-	cfg.RetentionPeriod = viper.GetDuration(CfgBootstrapRetentionPeriod)
+	cfg.Enable = config.GlobalConfig.P2P.Discovery.Bootstrap.Enable
+	cfg.RetentionPeriod = config.GlobalConfig.P2P.Discovery.Bootstrap.RetentionPeriod
 
 	return nil
 }

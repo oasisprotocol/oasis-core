@@ -2,10 +2,13 @@ package oasis
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
+	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 )
 
@@ -55,6 +58,29 @@ func (sentry *Sentry) GetSentryControlAddress() string {
 }
 
 func (sentry *Sentry) AddArgs(args *argBuilder) error {
+	args.
+		configureDebugCrashPoints(sentry.crashPointsProbability).
+		appendNetwork(sentry.net)
+
+	return nil
+}
+
+func (sentry *Sentry) ModifyConfig() error {
+	sentry.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(sentry.consensusPort))
+	sentry.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(sentry.consensusPort))
+
+	if sentry.supplementarySanityInterval > 0 {
+		sentry.Config.Consensus.SupplementarySanity.Enabled = true
+		sentry.Config.Consensus.SupplementarySanity.Interval = sentry.supplementarySanityInterval
+	}
+
+	sentry.Config.Registration.RotateCerts = 0
+
+	sentry.Config.Sentry.Enabled = true
+	sentry.Config.Sentry.Control.Port = sentry.controlPort
+
+	sentry.AddSeedNodesToConfig()
+
 	validators, err := resolveValidators(sentry.net, sentry.validatorIndices)
 	if err != nil {
 		return err
@@ -70,30 +96,64 @@ func (sentry *Sentry) AddArgs(args *argBuilder) error {
 		return err
 	}
 
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		debugEnableProfiling(sentry.Node.pprofPort).
-		workerCertificateRotation(false).
-		workerSentryEnabled().
-		workerSentryControlPort(sentry.controlPort).
-		tendermintCoreAddress(sentry.consensusPort).
-		tendermintPrune(sentry.consensus.PruneNumKept, sentry.consensus.PruneInterval).
-		tendermintRecoverCorruptedWAL(sentry.consensus.TendermintRecoverCorruptedWAL).
-		configureDebugCrashPoints(sentry.crashPointsProbability).
-		tendermintSupplementarySanity(sentry.supplementarySanityInterval).
-		appendNetwork(sentry.net).
-		appendSeedNodes(sentry.net.seeds)
-
 	if len(validators) > 0 {
-		args.addValidatorsAsSentryUpstreams(validators)
+		var addrs, sentryPubKeys []string
+
+		for _, val := range validators {
+			addr := commonNode.ConsensusAddress{
+				ID: val.p2pSigner,
+				Address: commonNode.Address{
+					IP:   net.ParseIP("127.0.0.1"),
+					Port: int64(val.consensusPort),
+				},
+			}
+			addrs = append(addrs, addr.String())
+			key, _ := val.sentryPubKey.MarshalText()
+			sentryPubKeys = append(sentryPubKeys, string(key))
+		}
+
+		sentry.Config.Sentry.Control.AuthorizedPubkeys = append(sentry.Config.Sentry.Control.AuthorizedPubkeys, sentryPubKeys...)
+		sentry.Config.Consensus.SentryUpstreamAddresses = append(sentry.Config.Consensus.SentryUpstreamAddresses, addrs...)
 	}
+
 	if len(computeWorkers) > 0 {
-		args.addSentryComputeWorkers(computeWorkers)
+		var tmAddrs, sentryPubKeys []string
+
+		for _, computeWorker := range computeWorkers {
+			addr := commonNode.ConsensusAddress{
+				ID: computeWorker.p2pSigner,
+				Address: commonNode.Address{
+					IP:   net.ParseIP("127.0.0.1"),
+					Port: int64(computeWorker.consensusPort),
+				},
+			}
+			tmAddrs = append(tmAddrs, addr.String())
+			key, _ := computeWorker.sentryPubKey.MarshalText()
+			sentryPubKeys = append(sentryPubKeys, string(key))
+		}
+
+		sentry.Config.Sentry.Control.AuthorizedPubkeys = append(sentry.Config.Sentry.Control.AuthorizedPubkeys, sentryPubKeys...)
+		sentry.Config.Consensus.SentryUpstreamAddresses = append(sentry.Config.Consensus.SentryUpstreamAddresses, tmAddrs...)
 	}
+
 	if len(keymanagerWorkers) > 0 {
-		args.addSentryKeymanagerWorkers(keymanagerWorkers)
+		var tmAddrs, sentryPubKeys []string
+
+		for _, keymanager := range keymanagerWorkers {
+			addr := commonNode.ConsensusAddress{
+				ID: keymanager.p2pSigner,
+				Address: commonNode.Address{
+					IP:   net.ParseIP("127.0.0.1"),
+					Port: int64(keymanager.consensusPort),
+				},
+			}
+			tmAddrs = append(tmAddrs, addr.String())
+			key, _ := keymanager.sentryPubKey.MarshalText()
+			sentryPubKeys = append(sentryPubKeys, string(key))
+		}
+
+		sentry.Config.Sentry.Control.AuthorizedPubkeys = append(sentry.Config.Sentry.Control.AuthorizedPubkeys, sentryPubKeys...)
+		sentry.Config.Consensus.SentryUpstreamAddresses = append(sentry.Config.Consensus.SentryUpstreamAddresses, tmAddrs...)
 	}
 
 	return nil

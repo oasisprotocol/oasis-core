@@ -293,7 +293,6 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	sc.validator = sc.Net.Validators()[1] // the network controller is on the first one
 	submitArgs := []string{
 		"control", "upgrade-binary",
-		"--log.level", "debug",
 		"--wait",
 		"--address", "unix:" + sc.validator.SocketPath(),
 	}

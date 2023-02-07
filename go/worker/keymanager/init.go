@@ -7,13 +7,12 @@ import (
 	"fmt"
 
 	"github.com/libp2p/go-libp2p/core"
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
@@ -23,18 +22,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
-const (
-	// CfgRuntimeID configures the runtime ID.
-	CfgRuntimeID = "worker.keymanager.runtime.id"
-	// CfgMayGenerate allows the enclave to generate a master secret.
-	CfgMayGenerate = "worker.keymanager.may_generate"
-	// CfgPrivatePeerPubKeys allows adding manual, unadvertised peers that can call protected methods.
-	CfgPrivatePeerPubKeys = "worker.keymanager.private_peer_pub_keys"
-)
-
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
-
 // New constructs a new key manager worker.
 func New(
 	commonWorker *workerCommon.Worker,
@@ -43,8 +30,8 @@ func New(
 	backend api.Backend,
 ) (*Worker, error) {
 	var enabled bool
-	switch commonWorker.RuntimeRegistry.Mode() {
-	case runtimeRegistry.RuntimeModeKeymanager:
+	switch config.GlobalConfig.Mode {
+	case config.ModeKeyManager:
 		// When configured in keymanager mode, enable the keymanager worker.
 		enabled = true
 	default:
@@ -68,7 +55,7 @@ func New(
 		commonWorker:        commonWorker,
 		backend:             backend,
 		enabled:             enabled,
-		mayGenerate:         viper.GetBool(CfgMayGenerate),
+		mayGenerate:         config.GlobalConfig.Keymanager.MayGenerate,
 	}
 
 	if !w.enabled {
@@ -77,7 +64,7 @@ func New(
 
 	initMetrics()
 
-	for _, b64pk := range viper.GetStringSlice(CfgPrivatePeerPubKeys) {
+	for _, b64pk := range config.GlobalConfig.Keymanager.PrivatePeerPubKeys {
 		pkBytes, err := base64.StdEncoding.DecodeString(b64pk)
 		if err != nil {
 			return nil, fmt.Errorf("oasis/keymanager: `%s` is not a base64-encoded public key (%w)", b64pk, err)
@@ -94,7 +81,7 @@ func New(
 	}
 
 	var runtimeID common.Namespace
-	if err := runtimeID.UnmarshalHex(viper.GetString(CfgRuntimeID)); err != nil {
+	if err := runtimeID.UnmarshalHex(config.GlobalConfig.Keymanager.RuntimeID); err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
 	}
 
@@ -122,12 +109,4 @@ func New(
 	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, runtimeID, w))
 
 	return w, nil
-}
-
-func init() {
-	Flags.String(CfgRuntimeID, "", "Key manager Runtime ID")
-	Flags.Bool(CfgMayGenerate, false, "Key manager may generate new master secret")
-	Flags.StringSlice(CfgPrivatePeerPubKeys, []string{}, "b64-encoded public keys of unadvertised peers that may call protected methods")
-
-	_ = viper.BindPFlags(Flags)
 }

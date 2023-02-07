@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/spf13/viper"
-
 	tmlight "github.com/tendermint/tendermint/light"
 	tmlightprovider "github.com/tendermint/tendermint/light/provider"
 	tmlightdb "github.com/tendermint/tendermint/light/store/db"
@@ -16,6 +14,7 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/light/api"
@@ -128,7 +127,7 @@ func NewInternalClient(ctx context.Context, chainContext string, p2p rpc.P2P, cf
 		providers, // Witnesses.
 		tmlightdb.New(tmdb.NewMemDB(), ""),
 		tmlight.MaxRetryAttempts(5), // TODO: Make this configurable.
-		tmlight.Logger(common.NewLogAdapter(!viper.GetBool(common.CfgLogDebug))),
+		tmlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
 		tmlight.DisableProviderRemoval(),
 	)
 	if err != nil {

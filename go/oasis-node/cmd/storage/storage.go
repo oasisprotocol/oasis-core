@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
@@ -171,7 +171,7 @@ func doMigrate(cmd *cobra.Command, args []string) error {
 			defer history.Close()
 
 			nodeCfg := &db.Config{
-				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, viper.GetString(workerStorage.CfgBackend)),
+				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, config.GlobalConfig.Storage.Backend),
 				Namespace: rt,
 			}
 
@@ -214,7 +214,7 @@ func doCheck(cmd *cobra.Command, args []string) error {
 			runtimeDir := registry.GetRuntimeStateDir(dataDir, rt)
 
 			nodeCfg := &db.Config{
-				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, viper.GetString(workerStorage.CfgBackend)),
+				DB:        workerStorage.GetLocalBackendDBDir(runtimeDir, config.GlobalConfig.Storage.Backend),
 				Namespace: rt,
 			}
 
@@ -260,7 +260,7 @@ func doRenameNs(cmd *cobra.Command, args []string) error {
 	dstDir := registry.GetRuntimeStateDir(dataDir, dstID)
 
 	nodeCfg := &db.Config{
-		DB:        workerStorage.GetLocalBackendDBDir(srcDir, viper.GetString(workerStorage.CfgBackend)),
+		DB:        workerStorage.GetLocalBackendDBDir(srcDir, config.GlobalConfig.Storage.Backend),
 		Namespace: srcID,
 	}
 

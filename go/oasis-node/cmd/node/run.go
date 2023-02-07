@@ -6,41 +6,11 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/service"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 )
-
-const (
-	// ModeValidator is the name of the validator node mode.
-	ModeValidator string = "validator"
-
-	// ModeNonValidator is the name of the non-validator node mode.
-	ModeNonValidator string = "non-validator"
-
-	// ModeCompute is the name of the compute node mode.
-	ModeCompute string = "compute"
-
-	// ModeKeyManager is the name of the key manager node mode.
-	ModeKeyManager string = "keymanager"
-
-	// ModeClient is the name of the client node mode.
-	ModeClient string = "client"
-
-	// ModeStatelessClient is the name of the stateless client node mode.
-	ModeStatelessClient string = "client-stateless"
-
-	// ModeSeed is the name of the seed node mode.
-	ModeSeed string = "seed"
-
-	// ModeArchive is the name of the archive node mode.
-	ModeArchive string = "archive"
-)
-
-func Mode() string {
-	return viper.GetString(CfgMode)
-}
 
 type runnableNode interface {
 	service.CleanupAble
@@ -56,8 +26,8 @@ func Run(cmd *cobra.Command, args []string) {
 		err  error
 	)
 
-	switch Mode() {
-	case ModeSeed:
+	switch config.GlobalConfig.Mode {
+	case config.ModeSeed:
 		node, err = NewSeedNode()
 	default:
 		node, err = NewNode()

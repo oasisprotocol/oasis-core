@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
-	"github.com/tendermint/tendermint/config"
+	tmconfig "github.com/tendermint/tendermint/config"
 	tmp2p "github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
 	tmversion "github.com/tendermint/tendermint/version"
@@ -18,12 +16,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	tmcommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasisprotocol/oasis-core/go/p2p"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -32,15 +30,7 @@ const (
 	// https://github.com/tendermint/tendermint/issues/3523
 	// This is set to the same value as in tendermint.
 	tendermintSeedDisconnectWaitPeriod = 28 * time.Hour
-
-	// CfgDebugDisableAddrBookFromGenesis disables populating seed node address book from genesis.
-	// This flag is used to disable initial addr book population from genesis in some E2E tests to
-	// test the seed node functionality.
-	CfgDebugDisableAddrBookFromGenesis = "consensus.tendermint.seed.debug.disable_addr_book_from_genesis"
 )
-
-// Flags has the configuration flags.
-var Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 // Service is the seed node service.
 type Service struct {
@@ -153,21 +143,21 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 		return nil, fmt.Errorf("tendermint/seed: failed to initialize data dir: %w", err)
 	}
 
-	tmSeeds, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(p2p.CfgSeeds))
+	tmSeeds, err := tmcommon.ConsensusAddressesToTendermint(config.GlobalConfig.P2P.Seeds)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to convert seed addresses: %w", err)
 	}
 
-	p2pCfg := config.DefaultP2PConfig()
+	p2pCfg := tmconfig.DefaultP2PConfig()
 	p2pCfg.SeedMode = true
 	p2pCfg.Seeds = strings.Join(tmSeeds, ",")
-	p2pCfg.ExternalAddress = viper.GetString(tmcommon.CfgCoreExternalAddress)
-	p2pCfg.MaxNumInboundPeers = viper.GetInt(tmcommon.CfgP2PMaxNumInboundPeers)
-	p2pCfg.MaxNumOutboundPeers = viper.GetInt(tmcommon.CfgP2PMaxNumOutboundPeers)
-	p2pCfg.SendRate = viper.GetInt64(tmcommon.CfgP2PSendRate)
-	p2pCfg.RecvRate = viper.GetInt64(tmcommon.CfgP2PRecvRate)
-	p2pCfg.AddrBookStrict = !(viper.GetBool(tmcommon.CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
-	p2pCfg.AllowDuplicateIP = viper.GetBool(tmcommon.CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
+	p2pCfg.ExternalAddress = config.GlobalConfig.Consensus.ExternalAddress
+	p2pCfg.MaxNumInboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumInboundPeers
+	p2pCfg.MaxNumOutboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumOutboundPeers
+	p2pCfg.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
+	p2pCfg.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
+	p2pCfg.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
+	p2pCfg.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
 
 	nodeKey := &tmp2p.NodeKey{PrivKey: crypto.SignerToTendermint(identity.P2PSigner)}
 
@@ -184,7 +174,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 			version.TendermintAppVersion,
 		),
 		DefaultNodeID: nodeKey.ID(),
-		ListenAddr:    viper.GetString(tmcommon.CfgCoreListenAddress),
+		ListenAddr:    config.GlobalConfig.Consensus.ListenAddress,
 		Network:       api.TendermintChainID(doc.ChainContext()),
 		Version:       tmversion.TMCoreSemVer,
 		Channels:      []byte{pex.PexChannel},
@@ -192,7 +182,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 	}
 
 	// Carve out all of the services.
-	logger := tmcommon.NewLogAdapter(!viper.GetBool(tmcommon.CfgLogDebug))
+	logger := tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)
 	if srv.addr, err = tmp2p.NewNetAddressString(tmp2p.IDAddressString(nodeInfo.DefaultNodeID, nodeInfo.ListenAddr)); err != nil {
 		return nil, fmt.Errorf("tendermint/seed: failed to create seed address: %w", err)
 	}
@@ -205,7 +195,7 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 		return nil, fmt.Errorf("tendermint/seed: failed to start address book: %w", err)
 	}
 
-	if !(viper.GetBool(CfgDebugDisableAddrBookFromGenesis) && cmflags.DebugDontBlameOasis()) {
+	if !(config.GlobalConfig.Consensus.Debug.DisableAddrBookFromGenesis && cmflags.DebugDontBlameOasis()) {
 		if err = populateAddrBookFromGenesis(srv.addrBook, doc, srv.addr); err != nil {
 			return nil, fmt.Errorf("tendermint/seed: failed to populate address book from genesis: %w", err)
 		}
@@ -278,12 +268,4 @@ func populateAddrBookFromGenesis(addrBook tmp2p.AddrBook, doc *genesis.Document,
 	}
 
 	return nil
-}
-
-func init() {
-	Flags.Bool(CfgDebugDisableAddrBookFromGenesis, false, "disable populating address book with genesis validators")
-
-	_ = Flags.MarkHidden(CfgDebugDisableAddrBookFromGenesis)
-
-	_ = viper.BindPFlags(Flags)
 }

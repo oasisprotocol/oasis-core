@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
@@ -31,7 +34,7 @@ type Compute struct { // nolint: maligned
 
 	*Node
 
-	runtimeProvisioner string
+	runtimeProvisioner runtimeConfig.RuntimeProvisioner
 
 	sentryIndices []int
 
@@ -43,7 +46,6 @@ type Compute struct { // nolint: maligned
 
 	sentryPubKey  signature.PublicKey
 	consensusPort uint16
-	clientPort    uint16
 	p2pPort       uint16
 
 	runtimes      []int
@@ -54,7 +56,7 @@ type Compute struct { // nolint: maligned
 type ComputeCfg struct {
 	NodeCfg
 
-	RuntimeProvisioner string
+	RuntimeProvisioner runtimeConfig.RuntimeProvisioner
 
 	Runtimes          []int
 	RuntimeConfig     map[int]map[string]interface{}
@@ -111,11 +113,6 @@ func (worker *Compute) DatabasePath() string {
 	return filepath.Join(worker.dir.String(), database.DefaultFileName(worker.storageBackend))
 }
 
-// GetClientAddress returns the compute node endpoint address.
-func (worker *Compute) GetClientAddress() string {
-	return fmt.Sprintf("127.0.0.1:%d", worker.clientPort)
-}
-
 // PauseCheckpointer pauses or unpauses the storage worker's checkpointer.
 func (worker *Compute) PauseCheckpointer(ctx context.Context, runtimeID common.Namespace, pause bool) error {
 	ctrl, err := NewController(worker.SocketPath())
@@ -133,36 +130,56 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 	worker.RLock()
 	defer worker.RUnlock()
 
-	args.debugDontBlameOasis().
-		debugAllowRoot().
-		debugAllowTestKeys().
-		debugSetRlimit().
-		debugEnableProfiling(worker.Node.pprofPort).
-		workerCertificateRotation(!worker.disableCertRotation).
-		tendermintCoreAddress(worker.consensusPort).
-		tendermintSubmissionGasPrice(worker.consensus.SubmissionGasPrice).
-		tendermintPrune(worker.consensus.PruneNumKept, worker.consensus.PruneInterval).
-		tendermintRecoverCorruptedWAL(worker.consensus.TendermintRecoverCorruptedWAL).
-		workerClientPort(worker.clientPort).
-		workerP2pPort(worker.p2pPort).
-		runtimeMode(registry.RuntimeModeCompute).
-		runtimeProvisioner(worker.runtimeProvisioner).
-		runtimeSGXLoader(worker.net.cfg.RuntimeSGXLoaderBinary).
-		storageBackend(worker.storageBackend).
-		workerStoragePublicRPCEnabled(!worker.disablePublicRPC).
-		workerStorageDebugDisableCheckpointSync(worker.checkpointSyncDisabled).
-		workerStorageCheckpointerEnabled(true).
-		workerStorageCheckpointCheckInterval(worker.checkpointCheckInterval).
-		configureDebugCrashPoints(worker.crashPointsProbability).
-		tendermintSupplementarySanity(worker.supplementarySanityInterval).
-		appendNetwork(worker.net).
-		appendEntity(worker.entity)
+	args.configureDebugCrashPoints(worker.crashPointsProbability).
+		appendNetwork(worker.net)
+
+	if worker.entity.isDebugTestEntity {
+		args.appendDebugTestEntity()
+	}
 
 	for _, idx := range worker.runtimes {
 		v := worker.net.runtimes[idx]
 		// XXX: could support configurable binary idx if ever needed.
 		worker.addHostedRuntime(v, worker.runtimeConfig[idx])
 	}
+
+	return nil
+}
+
+func (worker *Compute) ModifyConfig() error {
+	worker.RLock()
+	defer worker.RUnlock()
+
+	worker.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(worker.consensusPort))
+	worker.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(worker.consensusPort))
+
+	if worker.supplementarySanityInterval > 0 {
+		worker.Config.Consensus.SupplementarySanity.Enabled = true
+		worker.Config.Consensus.SupplementarySanity.Interval = worker.supplementarySanityInterval
+	}
+
+	worker.Config.P2P.Port = worker.p2pPort
+
+	if !worker.entity.isDebugTestEntity {
+		dir := worker.entity.dir.String()
+		worker.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+	}
+
+	if worker.disableCertRotation {
+		worker.Config.Registration.RotateCerts = 0
+	} else {
+		worker.Config.Registration.RotateCerts = 1
+	}
+
+	worker.Config.Mode = config.ModeCompute
+	worker.Config.Runtime.Provisioner = worker.runtimeProvisioner
+	worker.Config.Runtime.SGXLoader = worker.net.cfg.RuntimeSGXLoaderBinary
+
+	worker.Config.Storage.Backend = worker.storageBackend
+	worker.Config.Storage.PublicRPCEnabled = !worker.disablePublicRPC
+	worker.Config.Storage.CheckpointSyncDisabled = worker.checkpointSyncDisabled
+	worker.Config.Storage.Checkpointer.Enabled = true
+	worker.Config.Storage.Checkpointer.CheckInterval = worker.checkpointCheckInterval
 
 	// Sentry configuration.
 	sentries, err := resolveSentries(worker.net, worker.sentryIndices)
@@ -171,10 +188,10 @@ func (worker *Compute) AddArgs(args *argBuilder) error {
 	}
 
 	if len(sentries) > 0 {
-		args.addSentries(sentries).
-			tendermintDisablePeerExchange()
+		worker.Config.Consensus.P2P.DisablePeerExchange = true
+		worker.AddSentriesToConfig(sentries)
 	} else {
-		args.appendSeedNodes(worker.net.seeds)
+		worker.AddSeedNodesToConfig()
 	}
 
 	return nil
@@ -205,10 +222,10 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 
 	// Setup defaults.
 	if cfg.RuntimeProvisioner == "" {
-		cfg.RuntimeProvisioner = registry.RuntimeProvisionerSandboxed
+		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
 	if isNoSandbox() {
-		cfg.RuntimeProvisioner = registry.RuntimeProvisionerUnconfined
+		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerUnconfined
 	}
 	if cfg.StorageBackend == "" {
 		cfg.StorageBackend = database.BackendNameBadgerDB
@@ -234,7 +251,6 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		sentryPubKey:            sentryPubKey,
 		runtimeProvisioner:      cfg.RuntimeProvisioner,
 		consensusPort:           host.getProvisionedPort(nodePortConsensus),
-		clientPort:              host.getProvisionedPort(nodePortClient),
 		p2pPort:                 host.getProvisionedPort(nodePortP2P),
 		runtimes:                cfg.Runtimes,
 		runtimeConfig:           cfg.RuntimeConfig,

@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
@@ -18,7 +20,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity/tendermint"
 )
 
+const CfgDataDir = "datadir"
+
 var (
+	datadirFlags = flag.NewFlagSet("", flag.ContinueOnError)
+
 	identityCmd = &cobra.Command{
 		Use:   "identity",
 		Short: "identity interface utilities",
@@ -50,7 +56,10 @@ func doNodeInit(cmd *cobra.Command, args []string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir := cmdCommon.DataDir()
+	// Workaround for viper bug: https://github.com/spf13/viper/issues/233
+	_ = viper.BindPFlag(CfgDataDir, identityCmd.PersistentFlags().Lookup(CfgDataDir))
+
+	dataDir := viper.GetString(CfgDataDir)
 	if dataDir == "" {
 		logger.Error("data directory must be set")
 		os.Exit(1)
@@ -79,7 +88,10 @@ func doShowPubkey(cmd *cobra.Command, args []string, sentry bool) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
-	dataDir := cmdCommon.DataDir()
+	// Workaround for viper bug: https://github.com/spf13/viper/issues/233
+	_ = viper.BindPFlag(CfgDataDir, identityCmd.PersistentFlags().Lookup(CfgDataDir))
+
+	dataDir := viper.GetString(CfgDataDir)
 	if dataDir == "" {
 		logger.Error("data directory must be set")
 		os.Exit(1)
@@ -133,10 +145,18 @@ func doShowSentryTLSPubkey(cmd *cobra.Command, args []string) {
 func Register(parentCmd *cobra.Command) {
 	tendermint.Register(identityCmd)
 
+	identityCmd.PersistentFlags().AddFlagSet(datadirFlags)
+
 	identityInitCmd.Flags().AddFlagSet(cmdFlags.VerboseFlags)
+
 	identityCmd.AddCommand(identityInitCmd)
 	identityCmd.AddCommand(identityShowSentryPubkeyCmd)
 	identityCmd.AddCommand(identityShowTLSPubkeyCmd)
 
 	parentCmd.AddCommand(identityCmd)
+}
+
+func init() {
+	datadirFlags.String(CfgDataDir, "", "data directory")
+	_ = viper.BindPFlags(datadirFlags)
 }

@@ -40,6 +40,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/random"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
@@ -53,64 +54,10 @@ import (
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
-	"github.com/oasisprotocol/oasis-core/go/p2p"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
-)
-
-const (
-	// CfgABCIPruneStrategy configures the ABCI state pruning strategy.
-	CfgABCIPruneStrategy = "consensus.tendermint.abci.prune.strategy"
-	// CfgABCIPruneNumKept configures the amount of kept heights if pruning is enabled.
-	CfgABCIPruneNumKept = "consensus.tendermint.abci.prune.num_kept"
-	// CfgABCIPruneInterval configures the ABCI state pruning interval.
-	CfgABCIPruneInterval = "consensus.tendermint.abci.prune.interval"
-
-	// CfgCheckpointerDisabled disables the ABCI state checkpointer.
-	CfgCheckpointerDisabled = "consensus.tendermint.checkpointer.disabled"
-	// CfgCheckpointerCheckInterval configures the ABCI state checkpointing check interval.
-	CfgCheckpointerCheckInterval = "consensus.tendermint.checkpointer.check_interval"
-
-	// CfgSentryUpstreamAddress defines nodes for which we act as a sentry for.
-	CfgSentryUpstreamAddress = "consensus.tendermint.sentry.upstream_address"
-
-	// CfgP2PPersistentPeer configures tendermint's persistent peer(s).
-	CfgP2PPersistentPeer = "consensus.tendermint.p2p.persistent_peer"
-	// CfgP2PPersistenPeersMaxDialPeriod configures the tendermint's persistent peer max dial period.
-	CfgP2PPersistenPeersMaxDialPeriod = "consensus.tendermint.p2p.persistent_peers_max_dial_period"
-	// CfgP2PDisablePeerExchange disables tendermint's peer-exchange (Pex) reactor.
-	CfgP2PDisablePeerExchange = "consensus.tendermint.p2p.disable_peer_exchange"
-	// CfgP2PUnconditionalPeer configures tendermint's unconditional peer(s).
-	CfgP2PUnconditionalPeer = "consensus.tendermint.p2p.unconditional_peer"
-
-	// CfgDebugUnsafeReplayRecoverCorruptedWAL enables the debug and unsafe
-	// automatic corrupted WAL recovery during replay.
-	CfgDebugUnsafeReplayRecoverCorruptedWAL = "consensus.tendermint.debug.unsafe_replay_recover_corrupted_wal"
-
-	// CfgMinGasPrice configures the minimum gas price for this validator.
-	CfgMinGasPrice = "consensus.tendermint.min_gas_price"
-
-	// CfgSupplementarySanityEnabled is the supplementary sanity enabled flag.
-	CfgSupplementarySanityEnabled = "consensus.tendermint.supplementarysanity.enabled"
-	// CfgSupplementarySanityInterval configures the supplementary sanity check interval.
-	CfgSupplementarySanityInterval = "consensus.tendermint.supplementarysanity.interval"
-
-	// CfgConsensusStateSyncEnabled enabled consensus state sync.
-	CfgConsensusStateSyncEnabled = "consensus.tendermint.state_sync.enabled"
-	// CfgConsensusStateSyncTrustPeriod is the light client trust period.
-	CfgConsensusStateSyncTrustPeriod = "consensus.tendermint.state_sync.trust_period"
-	// CfgConsensusStateSyncTrustHeight is the known trusted height for the light client.
-	CfgConsensusStateSyncTrustHeight = "consensus.tendermint.state_sync.trust_height"
-	// CfgConsensusStateSyncTrustHash is the known trusted block header hash for the light client.
-	CfgConsensusStateSyncTrustHash = "consensus.tendermint.state_sync.trust_hash"
-
-	// CfgUpgradeStopDelay is the average amount of time to delay shutting down the node on upgrade.
-	CfgUpgradeStopDelay = "consensus.tendermint.upgrade.stop_delay"
-
-	// CfgHaltHeight is the block height at which the local node should be shutdown.
-	CfgHaltHeight = "consensus.tendermint.halt_height"
 )
 
 const (
@@ -241,8 +188,8 @@ func (t *fullService) Synced() <-chan struct{} {
 }
 
 // Implements consensusAPI.Backend.
-func (t *fullService) Mode() consensusAPI.Mode {
-	return consensusAPI.ModeFull
+func (t *fullService) SupportedFeatures() consensusAPI.FeatureMask {
+	return consensusAPI.FeatureServices | consensusAPI.FeatureFullNode
 }
 
 // Implements consensusAPI.Backend.
@@ -458,7 +405,6 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 		return nil, err
 	}
 	status.Status = consensusAPI.StatusStateSyncing
-	status.Mode = consensusAPI.ModeFull
 
 	status.P2P = &consensusAPI.P2PStatus{}
 	status.P2P.PubKey = t.identity.P2PSigner.Public()
@@ -593,12 +539,12 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 	// Create Tendermint application mux.
 	var pruneCfg abci.PruneConfig
-	pruneStrat := viper.GetString(CfgABCIPruneStrategy)
+	pruneStrat := config.GlobalConfig.Consensus.Prune.Strategy
 	if err = pruneCfg.Strategy.FromString(pruneStrat); err != nil {
 		return err
 	}
-	pruneCfg.NumKept = viper.GetUint64(CfgABCIPruneNumKept)
-	pruneCfg.PruneInterval = viper.GetDuration(CfgABCIPruneInterval)
+	pruneCfg.NumKept = config.GlobalConfig.Consensus.Prune.NumKept
+	pruneCfg.PruneInterval = config.GlobalConfig.Consensus.Prune.Interval
 	const minPruneInterval = 1 * time.Second
 	if pruneCfg.PruneInterval < minPruneInterval {
 		pruneCfg.PruneInterval = minPruneInterval
@@ -609,11 +555,11 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		StorageBackend:            db.GetBackendName(),
 		Pruning:                   pruneCfg,
 		HaltEpochHeight:           t.genesis.HaltEpoch,
-		HaltBlockHeight:           viper.GetUint64(CfgHaltHeight),
-		MinGasPrice:               viper.GetUint64(CfgMinGasPrice),
+		HaltBlockHeight:           config.GlobalConfig.Consensus.HaltHeight,
+		MinGasPrice:               config.GlobalConfig.Consensus.MinGasPrice,
 		OwnTxSigner:               t.identity.NodeSigner.Public(),
-		DisableCheckpointer:       viper.GetBool(CfgCheckpointerDisabled),
-		CheckpointerCheckInterval: viper.GetDuration(CfgCheckpointerCheckInterval),
+		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
+		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
 		InitialHeight:             uint64(t.genesis.Height),
 		ChainContext:              t.genesis.ChainContext(),
 	}
@@ -631,19 +577,19 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	}
 
 	// Convert addresses and public keys to Tendermint form.
-	persistentPeers, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(CfgP2PPersistentPeer))
+	persistentPeers, err := tmcommon.ConsensusAddressesToTendermint(config.GlobalConfig.Consensus.P2P.PersistentPeer)
 	if err != nil {
 		return fmt.Errorf("tendermint: failed to convert persistent peer addresses: %w", err)
 	}
-	seeds, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(p2p.CfgSeeds))
+	seeds, err := tmcommon.ConsensusAddressesToTendermint(config.GlobalConfig.P2P.Seeds)
 	if err != nil {
 		return fmt.Errorf("tendermint: failed to convert seed addresses: %w", err)
 	}
-	sentryUpstreamAddrs, err := tmcommon.ConsensusAddressesToTendermint(viper.GetStringSlice(CfgSentryUpstreamAddress))
+	sentryUpstreamAddrs, err := tmcommon.ConsensusAddressesToTendermint(config.GlobalConfig.Consensus.SentryUpstreamAddresses)
 	if err != nil {
 		return fmt.Errorf("tendermint: failed to convert sentry upstream addresses: %w", err)
 	}
-	unconditionalPeers, err := tmcommon.PublicKeysToTendermint(viper.GetStringSlice(CfgP2PUnconditionalPeer))
+	unconditionalPeers, err := tmcommon.PublicKeysToTendermint(config.GlobalConfig.Consensus.P2P.UnconditionalPeer)
 	if err != nil {
 		return fmt.Errorf("tendermint: failed to convert unconditional peer public keys: %w", err)
 	}
@@ -658,24 +604,24 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	tenderConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.Parameters.SkipTimeoutCommit
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
-	tenderConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = viper.GetBool(CfgDebugUnsafeReplayRecoverCorruptedWAL) && cmflags.DebugDontBlameOasis()
+	tenderConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = config.GlobalConfig.Consensus.Debug.UnsafeReplayRecoverCorruptedWAL && cmflags.DebugDontBlameOasis()
 	tenderConfig.Mempool.Version = tmconfig.MempoolV1
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.Instrumentation.PrometheusListenAddr = ""
 	tenderConfig.TxIndex.Indexer = "null"
-	tenderConfig.P2P.ListenAddress = viper.GetString(tmcommon.CfgCoreListenAddress)
-	tenderConfig.P2P.ExternalAddress = viper.GetString(tmcommon.CfgCoreExternalAddress)
-	tenderConfig.P2P.PexReactor = !viper.GetBool(CfgP2PDisablePeerExchange)
-	tenderConfig.P2P.MaxNumInboundPeers = viper.GetInt(tmcommon.CfgP2PMaxNumInboundPeers)
-	tenderConfig.P2P.MaxNumOutboundPeers = viper.GetInt(tmcommon.CfgP2PMaxNumOutboundPeers)
-	tenderConfig.P2P.SendRate = viper.GetInt64(tmcommon.CfgP2PSendRate)
-	tenderConfig.P2P.RecvRate = viper.GetInt64(tmcommon.CfgP2PRecvRate)
+	tenderConfig.P2P.ListenAddress = config.GlobalConfig.Consensus.ListenAddress
+	tenderConfig.P2P.ExternalAddress = config.GlobalConfig.Consensus.ExternalAddress
+	tenderConfig.P2P.PexReactor = !config.GlobalConfig.Consensus.P2P.DisablePeerExchange
+	tenderConfig.P2P.MaxNumInboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumInboundPeers
+	tenderConfig.P2P.MaxNumOutboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumOutboundPeers
+	tenderConfig.P2P.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
+	tenderConfig.P2P.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
 	tenderConfig.P2P.PersistentPeers = strings.Join(persistentPeers, ",")
-	tenderConfig.P2P.PersistentPeersMaxDialPeriod = viper.GetDuration(CfgP2PPersistenPeersMaxDialPeriod)
+	tenderConfig.P2P.PersistentPeersMaxDialPeriod = config.GlobalConfig.Consensus.P2P.PersistenPeersMaxDialPeriod
 	tenderConfig.P2P.UnconditionalPeerIDs = strings.Join(unconditionalPeers, ",")
 	tenderConfig.P2P.Seeds = strings.Join(seeds, ",")
-	tenderConfig.P2P.AddrBookStrict = !(viper.GetBool(tmcommon.CfgDebugP2PAddrBookLenient) && cmflags.DebugDontBlameOasis())
-	tenderConfig.P2P.AllowDuplicateIP = viper.GetBool(tmcommon.CfgDebugP2PAllowDuplicateIP) && cmflags.DebugDontBlameOasis()
+	tenderConfig.P2P.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
+	tenderConfig.P2P.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
 	tenderConfig.RPC.ListenAddress = ""
 
 	if len(sentryUpstreamAddrs) > 0 {
@@ -774,7 +720,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 		// Configure state sync if enabled.
 		var stateProvider tmstatesync.StateProvider
-		if viper.GetBool(CfgConsensusStateSyncEnabled) {
+		if config.GlobalConfig.Consensus.StateSync.Enabled {
 			t.Logger.Info("state sync enabled")
 
 			t.Lock()
@@ -787,14 +733,14 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 			// Enable state sync in the configuration.
 			tenderConfig.StateSync.Enable = true
-			tenderConfig.StateSync.TrustHash = viper.GetString(CfgConsensusStateSyncTrustHash)
+			tenderConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.StateSync.TrustHash
 
 			// Create new state sync state provider.
 			cfg := lightAPI.ClientConfig{
 				GenesisDocument: tmGenDoc,
 				TrustOptions: tmlight.TrustOptions{
-					Period: viper.GetDuration(CfgConsensusStateSyncTrustPeriod),
-					Height: int64(viper.GetUint64(CfgConsensusStateSyncTrustHeight)),
+					Period: config.GlobalConfig.Consensus.StateSync.TrustPeriod,
+					Height: int64(config.GlobalConfig.Consensus.StateSync.TrustHeight),
 					Hash:   tenderConfig.StateSync.TrustHashBytes(),
 				},
 			}
@@ -813,7 +759,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			tendermintGenesisProvider,
 			wrapDbProvider,
 			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
-			tmcommon.NewLogAdapter(!viper.GetBool(tmcommon.CfgLogDebug)),
+			tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug),
 			tmnode.StateProvider(stateProvider),
 		)
 		if err != nil {
@@ -849,7 +795,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 				// when all the other services start shutting down.
 				//
 				// Randomize the period so that not all nodes shut down at the same time.
-				delay := random.GetRandomValueFromInterval(0.5, rand.Float64(), viper.GetDuration(CfgUpgradeStopDelay))
+				delay := random.GetRandomValueFromInterval(0.5, rand.Float64(), config.GlobalConfig.Consensus.UpgradeStopDelay)
 				time.Sleep(delay)
 
 				t.Logger.Info("stopping the node for upgrade")
@@ -1017,51 +963,15 @@ func New(
 	t.Logger.Info("starting a full consensus node")
 
 	// Create the submission manager.
-	pd, err := consensusAPI.NewStaticPriceDiscovery(viper.GetUint64(tmcommon.CfgSubmissionGasPrice))
+	pd, err := consensusAPI.NewStaticPriceDiscovery(config.GlobalConfig.Consensus.Submission.GasPrice)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to create submission manager: %w", err)
 	}
-	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, viper.GetUint64(tmcommon.CfgSubmissionMaxFee))
+	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, config.GlobalConfig.Consensus.Submission.MaxFee)
 
 	if err := t.lazyInit(); err != nil {
 		return nil, fmt.Errorf("lazy init: %w", err)
 	}
 
 	return t, t.initialize()
-}
-
-func init() {
-	Flags.String(CfgABCIPruneStrategy, abci.PruneDefault, "ABCI state pruning strategy")
-	Flags.Uint64(CfgABCIPruneNumKept, 3600, "ABCI state versions kept (when applicable)")
-	Flags.Duration(CfgABCIPruneInterval, 2*time.Minute, "ABCI state pruning interval")
-	Flags.Bool(CfgCheckpointerDisabled, false, "Disable the ABCI state checkpointer")
-	Flags.Duration(CfgCheckpointerCheckInterval, 1*time.Minute, "ABCI state checkpointer check interval")
-	Flags.StringSlice(CfgSentryUpstreamAddress, []string{}, "Tendermint nodes for which we act as sentry of the form pubkey@IP:port")
-	Flags.StringSlice(CfgP2PPersistentPeer, []string{}, "Tendermint persistent peer(s) of the form pubkey@IP:port")
-	Flags.StringSlice(CfgP2PUnconditionalPeer, []string{}, "Tendermint unconditional peer(s) public keys")
-	Flags.Bool(CfgP2PDisablePeerExchange, false, "Disable Tendermint's peer-exchange reactor")
-	Flags.Duration(CfgP2PPersistenPeersMaxDialPeriod, 0*time.Second, "Tendermint max timeout when redialing a persistent peer (default: unlimited)")
-	Flags.Uint64(CfgMinGasPrice, 0, "minimum gas price")
-	Flags.Bool(CfgDebugUnsafeReplayRecoverCorruptedWAL, false, "Enable automatic recovery from corrupted WAL during replay (UNSAFE).")
-
-	Flags.Bool(CfgSupplementarySanityEnabled, false, "enable supplementary sanity checks (slows down consensus)")
-	Flags.Uint64(CfgSupplementarySanityInterval, 10, "supplementary sanity check interval (in blocks)")
-
-	Flags.Uint64(CfgHaltHeight, 0, "height at which to force-shutdown the node (in blocks)")
-
-	// State sync.
-	Flags.Bool(CfgConsensusStateSyncEnabled, false, "enable state sync")
-	Flags.Duration(CfgConsensusStateSyncTrustPeriod, 24*time.Hour, "state sync: light client trust period")
-	Flags.Uint64(CfgConsensusStateSyncTrustHeight, 0, "state sync: light client trusted height")
-	Flags.String(CfgConsensusStateSyncTrustHash, "", "state sync: light client trusted consensus header hash")
-
-	Flags.Duration(CfgUpgradeStopDelay, 60*time.Second, "average amount of time to delay shutting down the node on upgrade")
-
-	_ = Flags.MarkHidden(CfgDebugUnsafeReplayRecoverCorruptedWAL)
-
-	_ = Flags.MarkHidden(CfgSupplementarySanityEnabled)
-	_ = Flags.MarkHidden(CfgSupplementarySanityInterval)
-
-	_ = viper.BindPFlags(Flags)
-	Flags.AddFlagSet(db.Flags)
 }

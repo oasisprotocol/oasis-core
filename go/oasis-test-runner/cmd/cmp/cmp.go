@@ -503,16 +503,16 @@ func fetchAndCompare(
 func initCmpLogger() error {
 	var logFmt logging.Format
 	if err := logFmt.Set(viper.GetString(common.CfgLogFmt)); err != nil {
-		return fmt.Errorf("root: failed to set log format: %w", err)
+		return fmt.Errorf("cmp/root: failed to set log format: %w", err)
 	}
 
 	var logLevel logging.Level
 	if err := logLevel.Set(viper.GetString(common.CfgLogLevel)); err != nil {
-		return fmt.Errorf("root: failed to set log level: %w", err)
+		return fmt.Errorf("cmp/root: failed to set log level: %w", err)
 	}
 
 	if err := logging.Initialize(os.Stdout, logFmt, logLevel, nil); err != nil {
-		return fmt.Errorf("root: failed to initialize logging: %w", err)
+		return fmt.Errorf("cmp/root: failed to initialize logging: %w", err)
 	}
 
 	cmpLogger = logging.GetLogger("cmd/cmp")

@@ -11,8 +11,6 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/prometheus/client_golang/prometheus"
-	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -27,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -43,26 +42,11 @@ const (
 	// worker's service store.
 	DBBucketName = "worker/registration"
 
-	// CfgRegistrationEntity configures the registration worker entity.
-	CfgRegistrationEntity = "worker.registration.entity"
-	// CfgRegistrationForceRegister overrides a previously saved deregistration
-	// request.
-	//
-	// Note: This flag is deprecated and `oasis-node control clear-deregister`
-	// should be used instead.
-	CfgRegistrationForceRegister = "worker.registration.force_register"
-	// CfgRegistrationRotateCerts sets the number of epochs that a node's TLS
-	// certificate should be valid for.
-	CfgRegistrationRotateCerts = "worker.registration.rotate_certs"
-
 	periodicMetricsInterval = 60 * time.Second
 )
 
 var (
 	deregistrationRequestStoreKey = []byte("deregistration requested")
-
-	// Flags has the configuration flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	allowUnroutableAddresses bool
 
@@ -383,7 +367,7 @@ Loop:
 			if !w.identity.DoNotRotateTLS && !tlsRotationPending {
 				// Per how many epochs should we do rotations?
 				// TODO: Make this time-based instead.
-				rotateTLSCertsPer := beacon.EpochTime(viper.GetUint64(CfgRegistrationRotateCerts))
+				rotateTLSCertsPer := beacon.EpochTime(config.GlobalConfig.Registration.RotateCerts)
 				if rotateTLSCertsPer != 0 && (epoch-lastTLSRotationEpoch) >= rotateTLSCertsPer {
 					// Rotate node TLS certificates.
 					err := w.identity.RotateCertificates()
@@ -1055,7 +1039,7 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 	}
 
 	// Load the registration entity descriptor.
-	f := viper.GetString(CfgRegistrationEntity)
+	f := config.GlobalConfig.Registration.Entity
 	if f == "" {
 		// TODO: There are certain configurations (eg: the test client) that
 		// spin up workers, which require a registration worker, but don't
@@ -1102,7 +1086,7 @@ func New(
 		return nil, err
 	}
 
-	if viper.GetUint64(CfgRegistrationRotateCerts) != 0 && identity.DoNotRotateTLS {
+	if config.GlobalConfig.Registration.RotateCerts != 0 && identity.DoNotRotateTLS {
 		return nil, fmt.Errorf("node TLS certificate rotation must not be enabled if using pre-generated TLS certificates")
 	}
 
@@ -1128,15 +1112,9 @@ func New(
 		registerCh:         make(chan struct{}, 64),
 	}
 
-	if viper.GetBool(CfgRegistrationForceRegister) {
-		if err = SetForcedDeregister(w.store, false); err != nil {
-			return nil, fmt.Errorf("failed to clear persisted forced-deregister: %w", err)
-		}
-		storedDeregister = false
-	}
 	w.storedDeregister = storedDeregister
 
-	if flags.ConsensusValidator() {
+	if config.GlobalConfig.Consensus.Validator {
 		rp, err := w.NewRoleProvider(node.RoleValidator)
 		if err != nil {
 			return nil, err
@@ -1203,12 +1181,6 @@ func init() {
 	metricsOnce.Do(func() {
 		prometheus.MustRegister(nodeCollectors...)
 	})
-
-	Flags.String(CfgRegistrationEntity, "", "entity to use as the node owner in registrations")
-	Flags.Bool(CfgRegistrationForceRegister, false, "(DEPRECATED) override a previously saved deregistration request")
-	Flags.Uint64(CfgRegistrationRotateCerts, 0, "rotate node TLS certificates every N epochs (0 to disable)")
-
-	_ = viper.BindPFlags(Flags)
 }
 
 func SetForcedDeregister(store *persistent.ServiceStore, deregister bool) error {

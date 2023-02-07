@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -21,7 +22,6 @@ import (
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	storageDatabase "github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
-	"github.com/oasisprotocol/oasis-core/go/worker/storage"
 )
 
 const cfgExportDir = "storage.export.dir"
@@ -156,16 +156,16 @@ func exportIterator(fn string, root *storageAPI.Root, it mkvs.Iterator) error {
 }
 
 func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storageAPI.Backend, error) {
+	b := strings.ToLower(config.GlobalConfig.Storage.Backend)
 	// The right thing to do will be to use storage.New, but the backend config
 	// assumes that identity is valid, and we don't have one.
 	cfg := &storageAPI.Config{
-		Backend:      strings.ToLower(viper.GetString(storage.CfgBackend)),
+		Backend:      b,
 		DB:           dataDir,
 		Namespace:    namespace,
-		MaxCacheSize: int64(viper.GetSizeInBytes(storage.CfgMaxCacheSize)),
+		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfig.Storage.MaxCacheSize)),
 	}
 
-	b := strings.ToLower(viper.GetString(storage.CfgBackend))
 	switch b {
 	case storageDatabase.BackendNameBadgerDB:
 		cfg.DB = filepath.Join(cfg.DB, storageDatabase.DefaultFileName(cfg.Backend))

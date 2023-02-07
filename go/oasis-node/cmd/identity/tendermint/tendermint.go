@@ -10,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
+
 	tmbytes "github.com/tendermint/tendermint/libs/bytes"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -19,6 +21,8 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
+
+const CfgDataDir = "datadir"
 
 var (
 	tmCmd = &cobra.Command{
@@ -48,9 +52,18 @@ func printTmAddress(desc, keyFile string) {
 		cmdCommon.EarlyLogAndExit(err)
 	}
 
+	// Workaround for viper bug: https://github.com/spf13/viper/issues/233
+	_ = viper.BindPFlag(CfgDataDir, tmCmd.PersistentFlags().Lookup(CfgDataDir))
+
+	dataDir := viper.GetString(CfgDataDir)
+	if dataDir == "" {
+		logger.Error("data directory must be set")
+		os.Exit(1)
+	}
+
 	var pubKey signature.PublicKey
 
-	if err := pubKey.LoadPEM(filepath.Join(cmdCommon.DataDir(), keyFile), nil); err != nil {
+	if err := pubKey.LoadPEM(filepath.Join(dataDir, keyFile), nil); err != nil {
 		logger.Error("failed to open node's public key",
 			"err", err,
 			"key_file", keyFile,
@@ -83,12 +96,13 @@ func Register(parentCmd *cobra.Command) {
 	tmCmd.AddCommand(tmShowNodeAddressCmd)
 	tmCmd.AddCommand(tmShowConsensusAddressCmd)
 
-	tmShowNodeAddressCmd.Flags().AddFlagSet(tmFlags)
-	tmShowConsensusAddressCmd.Flags().AddFlagSet(tmFlags)
+	tmCmd.PersistentFlags().AddFlagSet(tmFlags)
 
 	parentCmd.AddCommand(tmCmd)
 }
 
 func init() {
+	tmFlags.String(CfgDataDir, "", "data directory")
 	tmFlags.AddFlagSet(cmdFlags.VerboseFlags)
+	_ = viper.BindPFlags(tmFlags)
 }
