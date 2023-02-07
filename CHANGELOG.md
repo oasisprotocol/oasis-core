@@ -12,6 +12,25 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.6 (2023-02-06)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/worker/compute: Do not drop valid proposals
+  ([#5161](https://github.com/oasisprotocol/oasis-core/issues/5161))
+
+  Previously valid proposals could be dropped instead of being forwarded
+  via the P2P gossip when the local node's consensus view was slightly
+  behind even though the proposal was valid. With smaller committees and
+  certain topologies this could result in some nodes not getting the
+  proposals.
+
 ## 22.2.5 (2023-01-21)
 
 | Protocol          | Version   |
