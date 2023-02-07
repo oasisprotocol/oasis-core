@@ -1114,7 +1114,7 @@ func New(
 
 	w.storedDeregister = storedDeregister
 
-	if config.GlobalConfig.Consensus.Validator {
+	if config.GlobalConfig.Consensus.Validator || config.GlobalConfig.Mode == config.ModeValidator {
 		rp, err := w.NewRoleProvider(node.RoleValidator)
 		if err != nil {
 			return nil, err
