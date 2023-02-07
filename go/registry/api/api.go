@@ -706,9 +706,10 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 	}
 	expectedSigners = append(expectedSigners, n.P2P.ID)
 	p2pAddressRequired := n.HasRoles(P2PAddressRequiredRoles)
-	switch isGenesis {
+	switch isGenesis || isSanityCheck {
 	case true:
 		// Allow legacy descriptor with optional p2p address for validator.
+		// XXX: Remove this after 23.0.x.
 		if n.HasRoles(node.RoleValidator) {
 			p2pAddressRequired = false
 		}

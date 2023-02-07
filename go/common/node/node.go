@@ -62,7 +62,7 @@ const (
 	LatestNodeDescriptorVersion = 3
 
 	// Minimum and maximum descriptor versions that are allowed.
-	minNodeDescriptorVersion = 2
+	minNodeDescriptorVersion = 3
 	maxNodeDescriptorVersion = LatestNodeDescriptorVersion
 
 	nodeSoftwareVersionMaxLength = 128
