@@ -10,14 +10,14 @@ import (
 )
 
 func TestOne(t *testing.T) {
-	require := require.New(t)
-
 	noopFn := func(ctx context.Context) {}
 	blockFn := func(ctx context.Context) {
 		<-ctx.Done()
 	}
 
 	t.Run("Non-blocking function", func(t *testing.T) {
+		require := require.New(t)
+
 		one := NewOne()
 
 		// All functions should start and stop if there is big enough time gap
@@ -40,6 +40,8 @@ func TestOne(t *testing.T) {
 	})
 
 	t.Run("Blocking function", func(t *testing.T) {
+		require := require.New(t)
+
 		one := NewOne()
 
 		// First function should start, others not.

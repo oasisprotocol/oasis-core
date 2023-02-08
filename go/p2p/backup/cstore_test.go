@@ -95,12 +95,12 @@ func (s *CommonStoreBackendTestSuite) TestDelete() {
 }
 
 func (s *CommonStoreBackendTestSuite) TestBackupRestore() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	s.Run("No namespaces", func() {
+		require := require.New(s.T())
+
 		err := s.backend.Delete(ctx)
 		require.NoError(err, "Failed to delete the backup")
 
@@ -111,6 +111,8 @@ func (s *CommonStoreBackendTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("No peers", func() {
+		require := require.New(s.T())
+
 		err := s.backend.Delete(ctx)
 		require.NoError(err, "Failed to delete the backup")
 
@@ -126,6 +128,8 @@ func (s *CommonStoreBackendTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("No addrs", func() {
+		require := require.New(s.T())
+
 		err := s.backend.Backup(ctx, map[string][]peer.AddrInfo{
 			"ns-1": {
 				{
@@ -140,6 +144,8 @@ func (s *CommonStoreBackendTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("One namespace", func() {
+		require := require.New(s.T())
+
 		peers := map[string][]peer.AddrInfo{
 			"ns-1": {s.addrs[0], s.addrs[1], s.addrs[2]},
 		}
@@ -154,6 +160,8 @@ func (s *CommonStoreBackendTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("Many namespaces", func() {
+		require := require.New(s.T())
+
 		peers := map[string][]peer.AddrInfo{
 			"ns-1": {s.addrs[0], s.addrs[1], s.addrs[2]},
 			"ns-2": {s.addrs[2], s.addrs[3], s.addrs[4]},
@@ -173,6 +181,8 @@ func (s *CommonStoreBackendTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("Many concurrent backups/restores", func() {
+		require := require.New(s.T())
+
 		peers := map[string][]peer.AddrInfo{
 			"ns-1": {s.addrs[0], s.addrs[1], s.addrs[2]},
 			"ns-2": {s.addrs[2], s.addrs[3], s.addrs[4]},
@@ -202,24 +212,28 @@ func (s *CommonStoreBackendTestSuite) TestBackupRestore() {
 }
 
 func (s *CommonStoreBackendTestSuite) TestNilCommonStore() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	backup := NewCommonStoreBackend(nil, "bucket", "key")
 
 	s.Run("Delete", func() {
+		require := require.New(s.T())
+
 		err := backup.Delete(ctx)
 		require.NoError(err, "Failed to delete on nil common store")
 	})
 
 	s.Run("Backup", func() {
+		require := require.New(s.T())
+
 		err := backup.Backup(ctx, nil)
 		require.NoError(err, "Failed to backup on nil common store")
 	})
 
 	s.Run("Restore", func() {
+		require := require.New(s.T())
+
 		_, err := backup.Restore(ctx)
 		require.NoError(err, "Failed to restore on nil common store")
 	})

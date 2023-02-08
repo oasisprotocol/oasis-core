@@ -45,18 +45,20 @@ func (s *DiscoveryTestSuite) TestStartStop() {
 }
 
 func (s *DiscoveryTestSuite) TestFindPeers() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("Happy path", func() {
+		require := require.New(s.T())
+
 		peers := s.discovery.findPeers(ctx, "ns-1")
 		require.Equal(3, len(peers))
 		require.Equal(1, s.discoveryCount())
 	})
 
 	s.Run("Errors", func() {
+		require := require.New(s.T())
+
 		// Should try all seeds.
 		peers := s.discovery.findPeers(ctx, "ns-0")
 		require.Equal(0, len(peers))
@@ -65,12 +67,10 @@ func (s *DiscoveryTestSuite) TestFindPeers() {
 }
 
 func (s *DiscoveryTestSuite) TestAdvertise() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	checkAdvertiseCounter := func(expected int) {
+	checkAdvertiseCounter := func(t *testing.T, expected int) {
 		for {
 			select {
 			case <-time.After(time.Microsecond):
@@ -78,7 +78,7 @@ func (s *DiscoveryTestSuite) TestAdvertise() {
 					return
 				}
 			case <-ctx.Done():
-				require.Equal(expected, s.advertiseCount())
+				require.Equal(s.T(), expected, s.advertiseCount())
 				return
 			}
 		}
@@ -91,13 +91,13 @@ func (s *DiscoveryTestSuite) TestAdvertise() {
 
 		time.Sleep(10 * time.Millisecond)
 
-		checkAdvertiseCounter(0)
+		checkAdvertiseCounter(s.T(), 0)
 	})
 
 	s.discovery.start()
 
 	s.Run("Startup", func() {
-		checkAdvertiseCounter(6)
+		checkAdvertiseCounter(s.T(), 6)
 	})
 
 	s.Run("Running", func() {
@@ -107,7 +107,7 @@ func (s *DiscoveryTestSuite) TestAdvertise() {
 
 		time.Sleep(10 * time.Millisecond)
 
-		checkAdvertiseCounter(9)
+		checkAdvertiseCounter(s.T(), 9)
 	})
 
 	s.Run("Error", func() {
@@ -115,14 +115,14 @@ func (s *DiscoveryTestSuite) TestAdvertise() {
 
 		time.Sleep(10 * time.Millisecond)
 
-		checkAdvertiseCounter(9)
+		checkAdvertiseCounter(s.T(), 9)
 	})
 
 	s.discovery.stop()
 	s.discovery.start()
 
 	s.Run("Restart", func() {
-		checkAdvertiseCounter(18)
+		checkAdvertiseCounter(s.T(), 18)
 	})
 
 	s.discovery.stop()

@@ -688,8 +688,6 @@ func TestRegisterRuntime(t *testing.T) {
 }
 
 func TestProofFreshness(t *testing.T) {
-	require := requirePkg.New(t)
-
 	now := time.Unix(1580461674, 0)
 	cfg := abciAPI.MockApplicationStateConfig{}
 	appState := abciAPI.NewMockApplicationState(&cfg)
@@ -704,12 +702,14 @@ func TestProofFreshness(t *testing.T) {
 		err := state.SetConsensusParameters(ctx, &registry.ConsensusParameters{
 			TEEFeatures: TEEFeatures,
 		})
-		require.NoError(err, "registry.SetConsensusParameters")
+		requirePkg.NoError(t, err, "registry.SetConsensusParameters")
 	}
 
 	var blob [32]byte
 
 	t.Run("happy path", func(t *testing.T) {
+		require := requirePkg.New(t)
+
 		setTEEFeaturesFn(&node.TEEFeatures{FreshnessProofs: true})
 
 		err := app.proveFreshness(ctx, state, blob)
@@ -717,6 +717,8 @@ func TestProofFreshness(t *testing.T) {
 	})
 
 	t.Run("not enabled", func(t *testing.T) {
+		require := requirePkg.New(t)
+
 		// Freshness proofs disabled.
 		setTEEFeaturesFn(&node.TEEFeatures{FreshnessProofs: false})
 

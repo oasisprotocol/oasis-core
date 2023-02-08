@@ -115,24 +115,28 @@ func (s *BootstrapTestSuite) TearDownSuite() {
 }
 
 func (s *BootstrapTestSuite) TestAdvertise() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("Empty namespace", func() {
+		require := require.New(s.T())
+
 		ttl, err := s.peers[0].Advertise(ctx, "")
 		require.NoError(err, "Advertise failed")
 		require.Equal(peerstore.PeerRegistrationTTL, ttl)
 	})
 
 	s.Run("One namespace", func() {
+		require := require.New(s.T())
+
 		ttl, err := s.peers[0].Advertise(ctx, "ns-0")
 		require.NoError(err, "Advertise failed")
 		require.Equal(peerstore.PeerRegistrationTTL, ttl)
 	})
 
 	s.Run("Repeat advertisements", func() {
+		require := require.New(s.T())
+
 		for i := 0; i < 5; i++ {
 			ttl, err := s.peers[0].Advertise(ctx, "ns-1")
 			require.NoError(err, "Advertise failed")
@@ -142,14 +146,12 @@ func (s *BootstrapTestSuite) TestAdvertise() {
 }
 
 func (s *BootstrapTestSuite) TestDiscovery() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	findPeers := func(d discovery.Discovery, ns string, limit int) int {
 		peers, err := d.FindPeers(ctx, ns, discovery.Limit(limit))
-		require.NoError(err, "FindPeers failed")
+		require.NoError(s.T(), err, "FindPeers failed")
 
 		n := 0
 		for range peers {
@@ -159,10 +161,14 @@ func (s *BootstrapTestSuite) TestDiscovery() {
 	}
 
 	s.Run("No peers", func() {
+		require := require.New(s.T())
+
 		require.Equal(0, findPeers(s.peers[0], "ns-404", 100))
 	})
 
 	s.Run("Many peers", func() {
+		require := require.New(s.T())
+
 		for _, peer := range s.peers {
 			_, err := peer.Advertise(ctx, "ns-2")
 			require.NoError(err, "Advertise failed")
@@ -171,6 +177,8 @@ func (s *BootstrapTestSuite) TestDiscovery() {
 	})
 
 	s.Run("Retention period", func() {
+		require := require.New(s.T())
+
 		n := 3
 
 		// Advertise only first 3 peers.
@@ -195,6 +203,8 @@ func (s *BootstrapTestSuite) TestDiscovery() {
 	})
 
 	s.Run("Peer limit", func() {
+		require := require.New(s.T())
+
 		for _, peer := range s.peers {
 			_, err := peer.Advertise(ctx, "ns-4")
 			require.NoError(err, "Advertise failed")
@@ -204,6 +214,8 @@ func (s *BootstrapTestSuite) TestDiscovery() {
 	})
 
 	s.Run("Malicious peer", func() {
+		require := require.New(s.T())
+
 		require.Equal(len(s.peers), findPeers(s.maliciousPeer, "limit", 100))
 
 		// Should not return any peers as malicious seed will return more than 1 peer.

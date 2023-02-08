@@ -12,12 +12,12 @@ import (
 )
 
 func TestProtocolID(t *testing.T) {
-	require := require.New(t)
-
 	chainContext := "d19ea2397fde0eba4b429f05443cced640c1f866c6df43f07132f1cdf6516c84"
 	version := version.Version{Major: 1, Minor: 2, Patch: 3}
 
 	t.Run("NewProtocolID", func(t *testing.T) {
+		require := require.New(t)
+
 		protocolID := "consensus"
 		expected := protocol.ID(
 			"/oasis/d19ea2397fde0eba4b429f05443cced640c1f866c6df43f07132f1cdf6516c84/consensus/1.0.0",
@@ -27,6 +27,8 @@ func TestProtocolID(t *testing.T) {
 	})
 
 	t.Run("NewRuntimeProtocolID", func(t *testing.T) {
+		require := require.New(t)
+
 		protocolID := "runtime"
 
 		var runtimeID common.Namespace
@@ -41,6 +43,8 @@ func TestProtocolID(t *testing.T) {
 	})
 
 	t.Run("NewTopicIDForRuntime", func(t *testing.T) {
+		require := require.New(t)
+
 		kind := api.TopicKind("topic")
 
 		var runtimeID common.Namespace

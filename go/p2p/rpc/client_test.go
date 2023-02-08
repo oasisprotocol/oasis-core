@@ -160,12 +160,12 @@ func (s *RPCTestSuite) SetupTest() {
 }
 
 func (s *RPCTestSuite) TestCall() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("Happy path", func() {
+		require := require.New(s.T())
+
 		peer := s.serverHosts[2].ID()
 		var rsp testResponse
 		pf, err := s.client.Call(ctx, peer, testMethod, &testRequest{}, &rsp)
@@ -179,6 +179,8 @@ func (s *RPCTestSuite) TestCall() {
 	})
 
 	s.Run("Peer returns an error", func() {
+		require := require.New(s.T())
+
 		peer := s.serverHosts[3].ID()
 		var rsp testResponse
 		_, err := s.client.Call(ctx, peer, "404", &testRequest{}, &rsp)
@@ -191,12 +193,12 @@ func (s *RPCTestSuite) TestCall() {
 }
 
 func (s *RPCTestSuite) TestCallOne() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("Happy path", func() {
+		require := require.New(s.T())
+
 		peers := make([]peer.ID, 0, len(s.serverHosts))
 		for _, h := range s.serverHosts {
 			peers = append(peers, h.ID())
@@ -213,6 +215,8 @@ func (s *RPCTestSuite) TestCallOne() {
 	})
 
 	s.Run("All peers return an error", func() {
+		require := require.New(s.T())
+
 		peers := make([]peer.ID, 0, len(s.serverHosts))
 		for i, h := range s.serverHosts {
 			if i < 2 {
@@ -230,12 +234,12 @@ func (s *RPCTestSuite) TestCallOne() {
 }
 
 func (s *RPCTestSuite) TestCallMulti() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("Happy path", func() {
+		require := require.New(s.T())
+
 		peers := make([]peer.ID, 0, len(s.serverHosts))
 		for _, h := range s.serverHosts {
 			peers = append(peers, h.ID())
@@ -252,6 +256,8 @@ func (s *RPCTestSuite) TestCallMulti() {
 	})
 
 	s.Run("All peers return an error", func() {
+		require := require.New(s.T())
+
 		peers := make([]peer.ID, 0, len(s.serverHosts))
 		for i, h := range s.serverHosts {
 			if i < 2 {
@@ -271,58 +277,56 @@ func (s *RPCTestSuite) TestCallMulti() {
 }
 
 func (s *RPCTestSuite) TestListener() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	peer := s.serverHosts[2].ID()
 	var rsp testResponse
 	pf, err := s.client.Call(ctx, peer, testMethod, &testRequest{}, &rsp)
-	require.NoError(err, "Call failed")
+	require.NoError(s.T(), err, "Call failed")
 
-	test := func(l *testListener, s, f, b int) {
-		require.Equal(s, l.successes)
-		require.Equal(f, l.failures)
-		require.Equal(b, l.badPeers)
+	test := func(t *testing.T, l *testListener, s, f, b int) {
+		require.Equal(t, s, l.successes)
+		require.Equal(t, f, l.failures)
+		require.Equal(t, b, l.badPeers)
 	}
 
 	s.Run("Happy path", func() {
 		firstListener := testListener{}
-		test(&firstListener, 0, 0, 0)
+		test(s.T(), &firstListener, 0, 0, 0)
 
 		secondListener := testListener{}
-		test(&secondListener, 0, 0, 0)
+		test(s.T(), &secondListener, 0, 0, 0)
 
 		s.client.RegisterListener(&firstListener)
 		pf.RecordSuccess()
-		test(&firstListener, 1, 0, 0)
+		test(s.T(), &firstListener, 1, 0, 0)
 		pf.RecordFailure()
-		test(&firstListener, 1, 1, 0)
+		test(s.T(), &firstListener, 1, 1, 0)
 		pf.RecordBadPeer()
-		test(&firstListener, 1, 1, 1)
-		test(&secondListener, 0, 0, 0)
+		test(s.T(), &firstListener, 1, 1, 1)
+		test(s.T(), &secondListener, 0, 0, 0)
 
 		s.client.RegisterListener(&secondListener)
 		pf.RecordSuccess()
 		pf.RecordFailure()
 		pf.RecordBadPeer()
-		test(&firstListener, 2, 2, 2)
-		test(&secondListener, 1, 1, 1)
+		test(s.T(), &firstListener, 2, 2, 2)
+		test(s.T(), &secondListener, 1, 1, 1)
 
 		s.client.UnregisterListener(&firstListener)
 		pf.RecordSuccess()
 		pf.RecordFailure()
 		pf.RecordBadPeer()
-		test(&secondListener, 2, 2, 2)
-		test(&firstListener, 2, 2, 2)
+		test(s.T(), &secondListener, 2, 2, 2)
+		test(s.T(), &firstListener, 2, 2, 2)
 
 		s.client.UnregisterListener(&secondListener)
 		pf.RecordSuccess()
 		pf.RecordFailure()
 		pf.RecordBadPeer()
-		test(&secondListener, 2, 2, 2)
-		test(&firstListener, 2, 2, 2)
+		test(s.T(), &secondListener, 2, 2, 2)
+		test(s.T(), &firstListener, 2, 2, 2)
 	})
 
 	s.Run("Register/unregister multiple times", func() {
@@ -332,16 +336,16 @@ func (s *RPCTestSuite) TestListener() {
 			s.client.RegisterListener(&listener)
 		}
 		pf.RecordSuccess()
-		test(&listener, 1, 0, 0)
+		test(s.T(), &listener, 1, 0, 0)
 
 		for i := 0; i < 10; i++ {
 			s.client.UnregisterListener(&listener)
 		}
 		pf.RecordSuccess()
-		test(&listener, 1, 0, 0)
+		test(s.T(), &listener, 1, 0, 0)
 
 		s.client.RegisterListener(&listener)
 		pf.RecordSuccess()
-		test(&listener, 2, 0, 0)
+		test(s.T(), &listener, 2, 0, 0)
 	})
 }
