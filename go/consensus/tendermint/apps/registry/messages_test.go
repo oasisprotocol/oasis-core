@@ -14,8 +14,6 @@ import (
 )
 
 func TestChangeParameters(t *testing.T) {
-	require := require.New(t)
-
 	// Prepare context.
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
@@ -31,7 +29,7 @@ func TestChangeParameters(t *testing.T) {
 		MaxNodeExpiration: 10,
 	}
 	err := state.SetConsensusParameters(ctx, params)
-	require.NoError(err, "setting consensus parameters should succeed")
+	require.NoError(t, err, "setting consensus parameters should succeed")
 
 	// Prepare proposal.
 	maxNodeExpiration := uint64(20)
@@ -45,6 +43,8 @@ func TestChangeParameters(t *testing.T) {
 
 	// Run sub-tests.
 	t.Run("happy path - validate only", func(t *testing.T) {
+		require := require.New(t)
+
 		res, err := app.changeParameters(ctx, &proposal, false)
 		require.NoError(err, "validation of consensus parameter changes should succeed")
 		require.Equal(struct{}{}, res)
@@ -54,6 +54,8 @@ func TestChangeParameters(t *testing.T) {
 		require.Equal(params.MaxNodeExpiration, state.MaxNodeExpiration, "consensus parameters shouldn't change")
 	})
 	t.Run("happy path - apply changes", func(t *testing.T) {
+		require := require.New(t)
+
 		res, err := app.changeParameters(ctx, &proposal, true)
 		require.NoError(err, "changing consensus parameters should succeed")
 		require.Equal(struct{}{}, res)
@@ -63,10 +65,14 @@ func TestChangeParameters(t *testing.T) {
 		require.Equal(maxNodeExpiration, state.MaxNodeExpiration, "consensus parameters should change")
 	})
 	t.Run("invalid proposal", func(t *testing.T) {
+		require := require.New(t)
+
 		_, err := app.changeParameters(ctx, "proposal", true)
 		require.EqualError(err, "registry: failed to type assert change parameters proposal")
 	})
 	t.Run("different module", func(t *testing.T) {
+		require := require.New(t)
+
 		proposal := governance.ChangeParametersProposal{
 			Module: "module",
 		}
@@ -75,6 +81,8 @@ func TestChangeParameters(t *testing.T) {
 		require.NoError(err, "changes for other modules should be ignored without error")
 	})
 	t.Run("empty changes", func(t *testing.T) {
+		require := require.New(t)
+
 		proposal := governance.ChangeParametersProposal{
 			Module: registry.ModuleName,
 		}
@@ -82,6 +90,8 @@ func TestChangeParameters(t *testing.T) {
 		require.EqualError(err, "registry: failed to validate consensus parameter changes: consensus parameter changes should not be empty")
 	})
 	t.Run("invalid changes", func(t *testing.T) {
+		require := require.New(t)
+
 		var maxNodeExpiration uint64
 		changes := registry.ConsensusParameterChanges{
 			MaxNodeExpiration: &maxNodeExpiration,

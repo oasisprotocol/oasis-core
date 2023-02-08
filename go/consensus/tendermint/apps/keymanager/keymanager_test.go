@@ -20,8 +20,6 @@ import (
 )
 
 func TestGenerateStatus(t *testing.T) {
-	require := require.New(t)
-
 	// Prepare context.
 	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
@@ -52,17 +50,17 @@ func TestGenerateStatus(t *testing.T) {
 		PolicyChecksum: policyChecksum[:],
 	}
 	sigInitResponse, err := api.SignInitResponse(rakSigner, &initResponse)
-	require.NoError(err, "SignInitResponse")
+	require.NoError(t, err, "SignInitResponse")
 
 	initResponse.IsSecure = false
 	sigInitResponseInsecure, err := api.SignInitResponse(rakSigner, &initResponse)
-	require.NoError(err, "SignInitResponse")
+	require.NoError(t, err, "SignInitResponse")
 
 	// Two key manager runtimes, one compute runtime.
 	runtimeIDs := make([]common.Namespace, 3)
-	require.NoError(runtimeIDs[0].UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000"), "runtime 0 (keymanager)")
-	require.NoError(runtimeIDs[1].UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000001"), "runtime 1 (keymanager)")
-	require.NoError(runtimeIDs[2].UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000002"), "runtime 2")
+	require.NoError(t, runtimeIDs[0].UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000000"), "runtime 0 (keymanager)")
+	require.NoError(t, runtimeIDs[1].UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000001"), "runtime 1 (keymanager)")
+	require.NoError(t, runtimeIDs[2].UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000002"), "runtime 2")
 
 	// Initial key manager statuses.
 	initializedStatus := &api.Status{
@@ -196,6 +194,8 @@ func TestGenerateStatus(t *testing.T) {
 	}
 
 	t.Run("No nodes", func(t *testing.T) {
+		require := require.New(t)
+
 		newStatus := app.generateStatus(ctx, runtimes[0], uninitializedStatus, nodes[0:6], params, epoch)
 		require.Equal(uninitializedStatus, newStatus, "key manager committee should be empty")
 
@@ -204,6 +204,8 @@ func TestGenerateStatus(t *testing.T) {
 	})
 
 	t.Run("One node", func(t *testing.T) {
+		require := require.New(t)
+
 		// Node 6 (secure = false)
 		expStatus := &api.Status{
 			ID:            runtimeIDs[0],
@@ -226,6 +228,8 @@ func TestGenerateStatus(t *testing.T) {
 	})
 
 	t.Run("Multiple nodes", func(t *testing.T) {
+		require := require.New(t)
+
 		// The first node is the source of truth when constructing a committee. If the node 6 is
 		// processed before nodes 7 and 8, the latter won't be accepted as they are secure.
 		expStatus := &api.Status{

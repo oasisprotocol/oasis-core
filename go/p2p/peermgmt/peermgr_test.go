@@ -185,12 +185,12 @@ func (s *PeerManagerTestSuite) TestUnregisterTopic() {
 }
 
 func (s *PeerManagerTestSuite) TestProtocolTracking() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("One peer", func() {
+		require := require.New(s.T())
+
 		err := s.host.Connect(ctx, *s.infos[0])
 		require.NoError(err, "Connect failed")
 		require.Equal(1, s.manager.NumProtocolPeers(s.protocols[0]))
@@ -201,6 +201,8 @@ func (s *PeerManagerTestSuite) TestProtocolTracking() {
 	})
 
 	s.Run("Many peers", func() {
+		require := require.New(s.T())
+
 		for _, info := range s.infos {
 			err := s.host.Connect(ctx, *info)
 			require.NoError(err, "Connect failed")
@@ -211,6 +213,8 @@ func (s *PeerManagerTestSuite) TestProtocolTracking() {
 	})
 
 	s.Run("Disconnect few peers", func() {
+		require := require.New(s.T())
+
 		n := len(s.infos) / 2
 		for _, info := range s.infos[:n] {
 			err := s.host.Network().ClosePeer(info.ID)

@@ -11,7 +11,6 @@ import (
 )
 
 func TestOverlay(t *testing.T) {
-	require := require.New(t)
 	ctx := context.Background()
 
 	// Generate some items.
@@ -44,7 +43,7 @@ func TestOverlay(t *testing.T) {
 	overlay := NewOverlay(tree)
 	for _, item := range items {
 		err := overlay.Insert(ctx, item.Key, item.Value)
-		require.NoError(err, "Insert")
+		require.NoError(t, err, "Insert")
 	}
 
 	// Test that an overlay-only iterator works correctly.
@@ -57,13 +56,15 @@ func TestOverlay(t *testing.T) {
 
 	// Insert some items into the underlying tree.
 	err := tree.ApplyWriteLog(ctx, writelog.NewStaticIterator(items))
-	require.NoError(err, "ApplyWriteLog")
+	require.NoError(t, err, "ApplyWriteLog")
 
 	// Create an overlay.
 	overlay = NewOverlay(tree)
 
 	// Test that all keys can be fetched from an empty overlay.
 	t.Run("EmptyOverlay/Get", func(t *testing.T) {
+		require := require.New(t)
+
 		for _, item := range items {
 			var value []byte
 			value, err = overlay.Get(ctx, item.Key)
@@ -83,16 +84,18 @@ func TestOverlay(t *testing.T) {
 
 	// Add some updates to the overlay.
 	err = overlay.Remove(ctx, []byte("key 2"))
-	require.NoError(err, "Remove")
+	require.NoError(t, err, "Remove")
 	err = overlay.Insert(ctx, []byte("key 7"), []byte("seven"))
-	require.NoError(err, "Insert")
+	require.NoError(t, err, "Insert")
 	err = overlay.Remove(ctx, []byte("key 5"))
-	require.NoError(err, "Remove")
+	require.NoError(t, err, "Remove")
 	err = overlay.Insert(ctx, []byte("key 5"), []byte("fivey"))
-	require.NoError(err, "Insert")
+	require.NoError(t, err, "Insert")
 
 	// Make sure updates did not propagate to the inner tree.
 	t.Run("Updates/NoPropagation", func(t *testing.T) {
+		require := require.New(t)
+
 		var value []byte
 		value, err = tree.Get(ctx, []byte("key 2"))
 		require.NoError(err, "Get")
@@ -127,6 +130,8 @@ func TestOverlay(t *testing.T) {
 
 	// Test that all keys can be fetched from an updated overlay.
 	t.Run("Updates/Get", func(t *testing.T) {
+		require := require.New(t)
+
 		for _, item := range items {
 			var value []byte
 			value, err = overlay.Get(ctx, item.Key)
@@ -145,10 +150,12 @@ func TestOverlay(t *testing.T) {
 
 	// Commit the overlay.
 	err = overlay.Commit(ctx)
-	require.NoError(err, "Commit")
+	require.NoError(t, err, "Commit")
 
 	// Test that all keys can be fetched from an updated tree.
 	t.Run("Committed/Get", func(t *testing.T) {
+		require := require.New(t)
+
 		for _, item := range items {
 			var value []byte
 			value, err = tree.Get(ctx, item.Key)
@@ -168,5 +175,5 @@ func TestOverlay(t *testing.T) {
 	// Make sure that closing the overlay does not close the inner tree.
 	overlay.Close()
 	_, err = tree.Get(ctx, []byte("key"))
-	require.NoError(err, "Get")
+	require.NoError(t, err, "Get")
 }

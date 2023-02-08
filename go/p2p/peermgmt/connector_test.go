@@ -87,12 +87,12 @@ func (s *ConnectorTestSuite) TearDownTest() {
 }
 
 func (s *ConnectorTestSuite) TestConnect() {
-	require := require.New(s.T())
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	s.Run("Blocked peer", func() {
+		require := require.New(s.T())
+
 		connected := s.connector.connect(ctx, s.blocked[0])
 		require.False(connected)
 
@@ -100,6 +100,8 @@ func (s *ConnectorTestSuite) TestConnect() {
 	})
 
 	s.Run("Empty address", func() {
+		require := require.New(s.T())
+
 		info := peer.AddrInfo{}
 		connected := s.connector.connect(ctx, info)
 		require.False(connected)
@@ -108,6 +110,8 @@ func (s *ConnectorTestSuite) TestConnect() {
 	})
 
 	s.Run("Host not allowed", func() {
+		require := require.New(s.T())
+
 		info := peer.AddrInfo{
 			ID:    s.host.ID(),
 			Addrs: s.host.Addrs(),
@@ -119,6 +123,8 @@ func (s *ConnectorTestSuite) TestConnect() {
 	})
 
 	s.Run("Canceled context", func() {
+		require := require.New(s.T())
+
 		ctx2, cancel2 := context.WithCancel(ctx)
 		cancel2()
 
@@ -129,6 +135,8 @@ func (s *ConnectorTestSuite) TestConnect() {
 	})
 
 	s.Run("Happy path", func() {
+		require := require.New(s.T())
+
 		connected := s.connector.connect(ctx, s.allowed[0])
 		require.True(connected)
 
@@ -136,6 +144,8 @@ func (s *ConnectorTestSuite) TestConnect() {
 	})
 
 	s.Run("DoS", func() {
+		require := require.New(s.T())
+
 		var wg sync.WaitGroup
 		wg.Add(100)
 		for i := 0; i < 100; i++ {
@@ -152,7 +162,6 @@ func (s *ConnectorTestSuite) TestConnect() {
 
 func (s *ConnectorTestSuite) TestConnectMany() {
 	time.Sleep(time.Second)
-	require := require.New(s.T())
 
 	sendToCh := func(peers []peer.AddrInfo) <-chan peer.AddrInfo {
 		peerCh := make(chan peer.AddrInfo, len(peers))
@@ -167,6 +176,8 @@ func (s *ConnectorTestSuite) TestConnectMany() {
 	defer cancel()
 
 	s.Run("No peers", func() {
+		require := require.New(s.T())
+
 		s.connector.connectMany(ctx, sendToCh(nil), 1000)
 		require.Equal(0, len(s.host.Network().Peers()))
 
@@ -175,6 +186,8 @@ func (s *ConnectorTestSuite) TestConnectMany() {
 	})
 
 	s.Run("Canceled ctx", func() {
+		require := require.New(s.T())
+
 		ctx2, cancel2 := context.WithCancel(ctx)
 		cancel2()
 
@@ -183,11 +196,15 @@ func (s *ConnectorTestSuite) TestConnectMany() {
 	})
 
 	s.Run("Happy path - limited", func() {
+		require := require.New(s.T())
+
 		s.connector.connectMany(ctx, sendToCh(s.all), 2)
 		require.Equal(2, len(s.host.Network().Peers()))
 	})
 
 	s.Run("Happy path - unlimited", func() {
+		require := require.New(s.T())
+
 		s.connector.connectMany(ctx, sendToCh(s.all), 100)
 		require.Equal(len(s.allowed), len(s.host.Network().Peers()))
 	})

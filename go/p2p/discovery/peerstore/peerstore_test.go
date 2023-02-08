@@ -132,9 +132,9 @@ func (s *StoreTestSuite) TestPeers() {
 }
 
 func (s *StoreTestSuite) TestStoreOptions() {
-	require := require.New(s.T())
-
 	s.Run("Max peers", func() {
+		require := require.New(s.T())
+
 		store := NewStore(backup.NewInMemoryBackend(),
 			WithMaxPeers(2),
 		)
@@ -156,6 +156,8 @@ func (s *StoreTestSuite) TestStoreOptions() {
 	})
 
 	s.Run("Max namespace peers", func() {
+		require := require.New(s.T())
+
 		store := NewStore(backup.NewInMemoryBackend(),
 			WithMaxNamespacePeers(1),
 		)
@@ -177,6 +179,8 @@ func (s *StoreTestSuite) TestStoreOptions() {
 	})
 
 	s.Run("Max peer's namespaces", func() {
+		require := require.New(s.T())
+
 		store := NewStore(backup.NewInMemoryBackend(),
 			WithMaxPeerNamespaces(1),
 		)

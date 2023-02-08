@@ -60,18 +60,18 @@ func (s *PeerstoreBackupTestSuite) SetupSuite() {
 }
 
 func (s *PeerstoreBackupTestSuite) TestBackupRestore() {
-	require := require.New(s.T())
-
-	clearStore := func() {
+	clearStore := func(t *testing.T) {
 		for _, p := range s.store.Peers() {
 			s.store.ClearAddrs(p)
 		}
-		require.Empty(s.store.PeersWithAddrs())
+		require.Empty(t, s.store.PeersWithAddrs())
 	}
 
 	s.Run("Empty store", func() {
+		require := require.New(s.T())
+
 		// Ensure that the store is empty.
-		clearStore()
+		clearStore(s.T())
 
 		// Store empty peerstore.
 		err := s.backup.backup(context.Background())
@@ -84,6 +84,8 @@ func (s *PeerstoreBackupTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("One peer", func() {
+		require := require.New(s.T())
+
 		// Add one peer.
 		s.store.AddAddrs(s.infos[0].ID, s.infos[0].Addrs, peerstore.RecentlyConnectedAddrTTL)
 
@@ -92,7 +94,7 @@ func (s *PeerstoreBackupTestSuite) TestBackupRestore() {
 		require.NoError(err, "Backup failed")
 
 		// Ensure that the store is empty.
-		clearStore()
+		clearStore(s.T())
 
 		// Load one peer.
 		err = s.backup.restore(context.Background())
@@ -101,6 +103,8 @@ func (s *PeerstoreBackupTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("Many peers", func() {
+		require := require.New(s.T())
+
 		// Add many peers.
 		for _, info := range s.infos {
 			s.store.AddAddrs(info.ID, info.Addrs, peerstore.RecentlyConnectedAddrTTL)
@@ -111,7 +115,7 @@ func (s *PeerstoreBackupTestSuite) TestBackupRestore() {
 		require.NoError(err, "Backup failed")
 
 		// Ensure that the store is empty.
-		clearStore()
+		clearStore(s.T())
 
 		// Load one peer.
 		err = s.backup.restore(context.Background())
@@ -120,6 +124,8 @@ func (s *PeerstoreBackupTestSuite) TestBackupRestore() {
 	})
 
 	s.Run("Many concurrent backups/restores", func() {
+		require := require.New(s.T())
+
 		// Many concurrent loads/saves.
 		var wg sync.WaitGroup
 		defer wg.Wait()
