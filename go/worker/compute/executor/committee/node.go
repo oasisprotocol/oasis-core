@@ -107,7 +107,6 @@ var (
 type Node struct { // nolint: maligned
 	runtimeReady         bool
 	runtimeVersion       version.Version
-	runtimeCapabilityTEE *node.CapabilityTEE
 	runtimeTrustSynced   bool
 	runtimeTrustSyncCncl context.CancelFunc
 
@@ -1338,20 +1337,23 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 
 		n.roleProvider.SetAvailable(func(nd *node.Node) error {
 			for _, version := range n.commonNode.Runtime.HostVersions() {
-				// For TEE-enabled runtimes we can only advertise the active version as this will
-				// otherwise cause additional downtime on upgrades due to capability updates not
-				// being allowed.
-				if n.runtimeCapabilityTEE != nil && version != n.runtimeVersion {
-					continue
-				}
-
 				// Skip sending any old versions that will never be active again.
 				if version.ToU64() < n.runtimeVersion.ToU64() {
 					continue
 				}
 
+				// Obtain CapabilityTEE for the given runtime version.
+				capabilityTEE, err := n.commonNode.GetHostedRuntimeCapabilityTEE(n.ctx, version)
+				if err != nil {
+					n.logger.Warn("failed to get CapabilityTEE for hosted runtime, skipping",
+						"err", err,
+						"version", version,
+					)
+					continue
+				}
+
 				rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID(), version)
-				rt.Capabilities.TEE = n.runtimeCapabilityTEE
+				rt.Capabilities.TEE = capabilityTEE
 			}
 			return nil
 		})
@@ -1396,17 +1398,17 @@ func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
 		// We are now able to service requests for this runtime.
 		n.runtimeReady = true
 		n.runtimeVersion = ev.Started.Version
-		n.runtimeCapabilityTEE = ev.Started.CapabilityTEE
 	case ev.Updated != nil:
 		// Update runtime capabilities.
 		n.runtimeReady = true
-		n.runtimeCapabilityTEE = ev.Updated.CapabilityTEE
 	case ev.FailedToStart != nil, ev.Stopped != nil:
 		// Runtime failed to start or was stopped -- we can no longer service requests.
 		n.runtimeReady = false
 
 		// Cancel any outstanding runtime light client sync.
 		n.cancelRuntimeTrustSyncLocked()
+	case ev.ConfigUpdated != nil:
+		// Configuration updated, just refresh availability.
 	default:
 		// Unknown event.
 		n.logger.Warn("unknown worker event",

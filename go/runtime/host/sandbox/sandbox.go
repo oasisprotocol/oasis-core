@@ -3,6 +3,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -16,12 +17,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox/process"
 )
+
+var errRuntimeNotReady = errors.New("runtime is not yet ready")
 
 const (
 	runtimeConnectTimeout      = 5 * time.Second
@@ -116,6 +120,7 @@ type sandboxedRuntime struct {
 	notifier *pubsub.Broker
 
 	notifyUpdateCapabilityTEE *channels.RingChannel
+	capabilityTEE             *node.CapabilityTEE
 
 	logger *logging.Logger
 }
@@ -132,7 +137,7 @@ func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeIn
 		defer r.RUnlock()
 
 		if r.conn == nil {
-			return fmt.Errorf("runtime is not ready")
+			return errRuntimeNotReady
 		}
 		rsp, err = r.conn.GetInfo(ctx)
 		return err
@@ -144,13 +149,24 @@ func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeIn
 }
 
 // Implements host.Runtime.
+func (r *sandboxedRuntime) GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+	r.RLock()
+	defer r.RUnlock()
+
+	if r.conn == nil {
+		return nil, errRuntimeNotReady
+	}
+	return r.capabilityTEE, nil
+}
+
+// Implements host.Runtime.
 func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
 	callFn := func() error {
 		r.RLock()
 		defer r.RUnlock()
 
 		if r.conn == nil {
-			return fmt.Errorf("runtime is not ready")
+			return errRuntimeNotReady
 		}
 		rsp, err = r.conn.Call(ctx, body)
 		if err != nil {
@@ -400,8 +416,11 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	}
 
 	ok = true
+	r.Lock()
 	r.process = p
 	r.conn = pc
+	r.capabilityTEE = ev.CapabilityTEE
+	r.Unlock()
 
 	// Notify subscribers that a runtime has been started.
 	r.notifier.Broadcast(&host.Event{Started: ev})
@@ -444,6 +463,7 @@ func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 	r.conn.Close()
 	r.process = nil
 	r.conn = nil
+	r.capabilityTEE = nil
 	r.Unlock()
 
 	// Notify subscribers that the runtime has stopped.
@@ -470,6 +490,7 @@ func (r *sandboxedRuntime) manager() {
 
 			r.Lock()
 			r.conn = nil
+			r.capabilityTEE = nil
 			r.Unlock()
 		}
 
@@ -478,6 +499,16 @@ func (r *sandboxedRuntime) manager() {
 
 		close(r.quitCh)
 	}()
+
+	// Subscribe to own events to make sure the cached CapabilityTEE remains up-to-date.
+	evCh, evSub, err := r.WatchEvents(context.Background())
+	if err != nil {
+		r.logger.Error("unable to subscribe to own events",
+			"err", err,
+		)
+		return
+	}
+	defer evSub.Close()
 
 	var attempt int
 	for {
@@ -548,6 +579,7 @@ func (r *sandboxedRuntime) manager() {
 			r.conn.Close()
 			r.process = nil
 			r.conn = nil
+			r.capabilityTEE = nil
 			r.Unlock()
 
 			// Notify subscribers that the runtime has stopped.
@@ -558,6 +590,13 @@ func (r *sandboxedRuntime) manager() {
 			if ticker != nil {
 				ticker.Stop()
 				ticker = nil
+			}
+		case ev := <-evCh:
+			// Update runtime's CapabilityTEE in case this is an update event.
+			if ue := ev.Updated; ue != nil {
+				r.Lock()
+				r.capabilityTEE = ue.CapabilityTEE
+				r.Unlock()
 			}
 		}
 	}

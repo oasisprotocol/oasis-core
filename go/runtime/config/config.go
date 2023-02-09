@@ -84,7 +84,12 @@ type Config struct {
 	// (where the PubKey@ part represents base64 encoded node TLS public key).
 	SentryAddresses []string `yaml:"sentry_addresses,omitempty"`
 
+	// Transaction pool configuration.
 	TxPool tpConfig.Config `yaml:"tx_pool,omitempty"`
+
+	// Number of epochs before runtime activation epoch when to start the runtime to warm it up and
+	// prepare any required attestations. Zero disables pre-warming.
+	PreWarmEpochs uint64 `yaml:"pre_warm_epochs,omitempty"`
 }
 
 // HistoryPrunerConfig is the history pruner configuration structure.
@@ -156,5 +161,6 @@ func DefaultConfig() Config {
 			RecheckInterval:      5,
 			RepublishInterval:    60 * time.Second,
 		},
+		PreWarmEpochs: 3,
 	}
 }

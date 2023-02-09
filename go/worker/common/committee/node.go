@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -432,10 +433,23 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		activeVersion = activeDeploy.Version
 	}
 
-	if err := n.SetHostedRuntimeVersion(n.ctx, activeVersion); err != nil {
-		n.logger.Error("failed to activate runtime version",
+	// For compute nodes, determine if there is a next version and activate it early.
+	var nextVersion *version.Version
+	if config.GlobalConfig.Mode == config.ModeCompute {
+		nextDeploy := n.CurrentDescriptor.NextDeployment(n.CurrentEpoch)
+		preWarmEpochs := beacon.EpochTime(config.GlobalConfig.Runtime.PreWarmEpochs)
+
+		if nextDeploy != nil && nextDeploy.ValidFrom-n.CurrentEpoch <= preWarmEpochs {
+			nextVersion = new(version.Version)
+			*nextVersion = nextDeploy.Version
+		}
+	}
+
+	if err := n.SetHostedRuntimeVersion(n.ctx, activeVersion, nextVersion); err != nil {
+		n.logger.Error("failed to activate runtime version(s)",
 			"err", err,
 			"version", activeVersion,
+			"next_version", nextVersion,
 		)
 		// This is not fatal and it should result in the node declaring itself unavailable.
 	}

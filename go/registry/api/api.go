@@ -974,6 +974,11 @@ func verifyNodeRuntimeChanges(
 					// can chose not to include it in the registration.
 					continue
 				}
+				if vi := rtDesc.DeploymentForVersion(version); vi == nil {
+					// If the missing version is no longer scheduled, it is
+					// fine if the node does not include it.
+					continue
+				}
 
 				logger.Error("RegisterNode: trying to update runtimes, current version is misssing in new set",
 					"runtime_id", id,

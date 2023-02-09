@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -45,7 +46,7 @@ func (r *runtime) ID() common.Namespace {
 }
 
 // Implements host.Runtime.
-func (r *runtime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoResponse, err error) {
+func (r *runtime) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
 	return &protocol.RuntimeInfoResponse{
 		ProtocolVersion: version.RuntimeHostProtocol,
 		RuntimeVersion:  version.MustFromString("0.0.0"),
@@ -55,6 +56,11 @@ func (r *runtime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoRespons
 			},
 		},
 	}, nil
+}
+
+// Implements host.Runtime.
+func (r *runtime) GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+	return nil, nil
 }
 
 // Implements host.Runtime.

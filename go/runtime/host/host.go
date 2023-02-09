@@ -52,6 +52,10 @@ type Runtime interface {
 	// GetInfo retrieves the runtime information.
 	GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error)
 
+	// GetCapabilityTEE retrieves the CapabilityTEE of the runtime. It may be nil in case the
+	// runtime is not running inside a TEE.
+	GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error)
+
 	// Call sends a request message to the runtime over the Runtime Host Protocol and waits for the
 	// response (which may be a failure).
 	Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error)
@@ -85,6 +89,7 @@ type Event struct {
 	FailedToStart *FailedToStartEvent
 	Stopped       *StoppedEvent
 	Updated       *UpdatedEvent
+	ConfigUpdated *ConfigUpdatedEvent
 }
 
 // StartedEvent is a runtime started event.
@@ -115,3 +120,9 @@ type UpdatedEvent struct {
 	// not running inside a TEE.
 	CapabilityTEE *node.CapabilityTEE
 }
+
+// ConfigUpdatedEvent is a runtime configuration updated event.
+//
+// This event can be used by runtime host implementations to signal that the underlying runtime
+// configuration has changed and some things (e.g. registration) may need a refresh.
+type ConfigUpdatedEvent struct{}

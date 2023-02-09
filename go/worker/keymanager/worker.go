@@ -961,7 +961,7 @@ func (w *Worker) worker() { // nolint: gocyclo
 				// Key managers always need to use the enclave version given to them in the bundle
 				// as they need to make sure that replication is possible during upgrades.
 				activeVersion := w.runtime.HostVersions()[0] // Init made sure we have exactly one.
-				if err = w.SetHostedRuntimeVersion(w.ctx, activeVersion); err != nil {
+				if err = w.SetHostedRuntimeVersion(w.ctx, activeVersion, nil); err != nil {
 					w.logger.Error("failed to activate runtime version",
 						"err", err,
 						"version", activeVersion,
