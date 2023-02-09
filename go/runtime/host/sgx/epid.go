@@ -55,7 +55,6 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	if err != nil {
 		return nil, fmt.Errorf("error while requesting SigRL: %w", err)
 	}
-	sigRL = cbor.FixSliceForSerde(sigRL)
 
 	quote, err := sp.aesm.GetQuote(
 		ctx,
@@ -79,10 +78,6 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	if err != nil {
 		return nil, fmt.Errorf("error while verifying attestation evidence: %w", err)
 	}
-
-	avrBundle.Body = cbor.FixSliceForSerde(avrBundle.Body)
-	avrBundle.CertificateChain = cbor.FixSliceForSerde(avrBundle.CertificateChain)
-	avrBundle.Signature = cbor.FixSliceForSerde(avrBundle.Signature)
 
 	// Prepare quote structure.
 	q := sgxQuote.Quote{

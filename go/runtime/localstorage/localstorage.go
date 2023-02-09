@@ -13,7 +13,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
@@ -70,7 +69,7 @@ func (s *localStorage) Get(key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return cbor.FixSliceForSerde(value), nil
+	return value, nil
 }
 
 func (s *localStorage) Set(key, value []byte) error {
