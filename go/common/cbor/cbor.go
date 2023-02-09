@@ -71,15 +71,6 @@ func init() {
 	}
 }
 
-// FixSliceForSerde will convert `nil` to `[]byte` to work around serde
-// brain damage.
-func FixSliceForSerde(b []byte) []byte {
-	if b != nil {
-		return b
-	}
-	return []byte{}
-}
-
 // Marshal serializes a given type into a CBOR byte vector.
 func Marshal(src interface{}) []byte {
 	b, err := encMode.Marshal(src)

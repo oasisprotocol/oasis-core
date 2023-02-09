@@ -253,8 +253,8 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 	call := InitCall{
 		Method: "init",
 		Args: InitRequest{
-			Checksum:    cbor.FixSliceForSerde(status.Checksum),
-			Policy:      cbor.FixSliceForSerde(policy),
+			Checksum:    status.Checksum,
+			Policy:      policy,
 			MayGenerate: w.mayGenerate,
 		},
 	}
