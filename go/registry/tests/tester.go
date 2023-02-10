@@ -1397,6 +1397,10 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 			if rt.Kind != api.KindCompute {
 				continue
 			}
+			if rt.TEEHardware == node.TEEHardwareIntelSGX {
+				// Don't bother with fake SGX capabilities.
+				continue
+			}
 			if _, exists := rtMap[rt.ID]; !exists {
 				moreRuntimes = append(moreRuntimes, &node.Runtime{ID: rt.ID})
 				break
