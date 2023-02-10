@@ -795,19 +795,24 @@ func VerifyNodeRuntimeEnclaveIDs(
 	ts time.Time,
 	height uint64,
 ) error {
-	// If no TEE available, do nothing.
-	if rt.Capabilities.TEE == nil {
-		return nil
+	// Verify that the node is running on the same hardware as the runtime.
+	hw := node.TEEHardwareInvalid
+	if rt.Capabilities.TEE != nil {
+		hw = rt.Capabilities.TEE.Hardware
 	}
-
-	if regRt.TEEHardware != rt.Capabilities.TEE.Hardware {
+	if hw != regRt.TEEHardware {
 		logger.Error("VerifyNodeRuntimeEnclaveIDs: runtime TEE.Hardware mismatch",
 			"runtime_id", rt.ID,
 			"required_tee_hardware", regRt.TEEHardware,
-			"tee_hardware", rt.Capabilities.TEE.Hardware,
+			"tee_hardware", hw,
 			"ts", ts,
 		)
 		return ErrTEEHardwareMismatch
+	}
+
+	// If no TEE available, do nothing.
+	if rt.Capabilities.TEE == nil {
+		return nil
 	}
 
 	// Find the runtime in the descriptor corresponding to the version
