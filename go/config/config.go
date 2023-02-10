@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	tm "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/config"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/config"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/config"
 	common "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/config"
 	pprof "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof/config"
@@ -67,6 +68,7 @@ type Config struct {
 	Mode NodeMode `yaml:"mode"`
 
 	Common    common.Config  `yaml:"common"`
+	Genesis   genesis.Config `yaml:"genesis"`
 	Consensus tm.Config      `yaml:"consensus"`
 	Runtime   runtime.Config `yaml:"runtime"`
 	P2P       p2p.Config     `yaml:"p2p"`
@@ -97,6 +99,9 @@ func (c *Config) Validate() error {
 
 	if err = c.Common.Validate(); err != nil {
 		return fmt.Errorf("common: %w", err)
+	}
+	if err = c.Genesis.Validate(); err != nil {
+		return fmt.Errorf("genesis: %w", err)
 	}
 	if err = c.Consensus.Validate(); err != nil {
 		return fmt.Errorf("tendermint: %w", err)
@@ -134,6 +139,7 @@ func DefaultConfig() Config {
 	return Config{
 		Mode:         ModeClient,
 		Common:       common.DefaultConfig(),
+		Genesis:      genesis.DefaultConfig(),
 		Consensus:    tm.DefaultConfig(),
 		Runtime:      runtime.DefaultConfig(),
 		P2P:          p2p.DefaultConfig(),

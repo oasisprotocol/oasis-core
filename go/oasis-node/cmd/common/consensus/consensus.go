@@ -57,7 +57,7 @@ func AssertTxFileOK() {
 }
 
 func InitGenesis() *genesisAPI.Document {
-	genesis, err := genesisFile.DefaultFileProvider()
+	genesis, err := genesisFile.NewFileProvider(cmdFlags.GenesisFile())
 	if err != nil {
 		logger.Error("failed to load genesis file",
 			"err", err,
