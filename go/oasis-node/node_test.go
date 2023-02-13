@@ -184,7 +184,7 @@ func newTestNode(t *testing.T) *testNode {
 	doc, err := genesis.GetGenesisDocument()
 	require.NoError(err, "test entity genesis document")
 	require.NoError(doc.WriteFileJSON(genesisPath))
-	viper.Set(cmdCommonFlags.CfgGenesisFile, genesisPath)
+	config.GlobalConfig.Genesis.File = genesisPath
 
 	n := &testNode{
 		runtimeID:    testRuntime.ID,

@@ -16,6 +16,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -128,9 +129,9 @@ func initializeAndRegisterByzantineNode(
 	)
 
 	// Initialize the genesis provider.
-	genesis, err := genesis.DefaultFileProvider()
+	genesis, err := genesis.NewFileProvider(cmdFlags.GenesisFile())
 	if err != nil {
-		return nil, fmt.Errorf("genesis DefaultFileProvider: %w", err)
+		return nil, fmt.Errorf("genesis init failed: %w", err)
 	}
 
 	// Retrieve the genesis document and use it to configure the ChainID for

@@ -34,7 +34,6 @@ func init() {
 	_ = viper.BindPFlags(Flags)
 
 	Flags.AddFlagSet(flags.DebugTestEntityFlags)
-	Flags.AddFlagSet(flags.GenesisFileFlags)
 
 	// Backend initialization flags.
 	for _, v := range []*flag.FlagSet{

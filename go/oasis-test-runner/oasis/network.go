@@ -623,10 +623,10 @@ func (net *Network) startOasisNode(
 	cfg.Common.Log.Level["default"] = "debug"
 	cfg.Common.Log.Format = "json"
 	cfg.Common.Log.File = nodeLogPath(node.dir)
+	cfg.Genesis.File = net.GenesisPath()
 
 	baseArgs := []string{
 		"--" + cmdCommon.CfgConfigFile, cfgFile,
-		"--genesis.file", net.GenesisPath(),
 	}
 	if len(subCmd) == 0 {
 		if net.iasProxy != nil {
@@ -641,6 +641,8 @@ func (net *Network) startOasisNode(
 		cfg.Consensus.UpgradeStopDelay = 10 * time.Second
 
 		extraArgs = extraArgs.debugAllowDebugEnclaves()
+	} else {
+		baseArgs = append(baseArgs, "--genesis.file", net.GenesisPath())
 	}
 	if net.cfg.UseShortGrpcSocketPaths {
 		// Keep the socket, if it was already generated!
