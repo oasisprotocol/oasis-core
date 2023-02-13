@@ -407,7 +407,7 @@ func (m *PeerManager) connectPeers(ctx context.Context, registered bool) {
 }
 
 func (m *PeerManager) supportsProtocol(p core.PeerID, protocol core.ProtocolID) bool {
-	supported, err := m.host.Peerstore().FirstSupportedProtocol(p, string(protocol))
+	supported, err := m.host.Peerstore().FirstSupportedProtocol(p, protocol)
 	if err != nil {
 		m.logger.Debug("cannot determine if the peer supports the protocol",
 			"err", err,
