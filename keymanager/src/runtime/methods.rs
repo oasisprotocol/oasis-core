@@ -12,8 +12,8 @@ use oasis_core_runtime::{
     common::{
         crypto::{
             mrae::{
-                deoxysii::{self, Opener, TAG_SIZE},
-                nonce::{Nonce, NONCE_SIZE},
+                deoxysii::{self, Opener},
+                nonce::Nonce,
             },
             signature::{self, Signer},
             x25519,
@@ -30,18 +30,21 @@ use oasis_core_runtime::{
         },
     },
     enclave_rpc::Context as RpcContext,
-    runtime_context,
+    runtime_context, BUILD_INFO,
 };
 
 use crate::{
     api::{
         EphemeralKeyRequest, GenerateEphemeralSecretRequest, GenerateEphemeralSecretResponse,
-        InitRequest, KeyManagerError, LoadEphemeralSecretRequest, LongTermKeyRequest,
+        InitRequest, InitResponse, KeyManagerError, LoadEphemeralSecretRequest, LongTermKeyRequest,
         ReplicateEphemeralSecretRequest, ReplicateEphemeralSecretResponse,
         ReplicateMasterSecretRequest, ReplicateMasterSecretResponse, SignedInitResponse,
     },
     client::{KeyManagerClient, RemoteClient},
-    crypto::{kdf::Kdf, KeyPair, Secret, SignedPublicKey, SECRET_SIZE},
+    crypto::{
+        kdf::Kdf, pack_runtime_id_epoch, unpack_encrypted_secret_nonce, KeyPair, Secret,
+        SignedPublicKey, SECRET_SIZE,
+    },
     policy::Policy,
     runtime::context::Context as KmContext,
 };
@@ -54,13 +57,52 @@ const MAX_EPHEMERAL_KEY_AGE: EpochTime = 10;
 /// of blocks lower than the height of the latest trust root.
 const MAX_FRESH_HEIGHT_AGE: u64 = 50;
 
-/// The size of an encrypted ephemeral secret.
-const EPHEMERAL_SECRET_STORAGE_SIZE: usize = 32 + TAG_SIZE + NONCE_SIZE;
-
 /// Initialize the Kdf.
 pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitResponse> {
+    let rctx = runtime_context!(ctx, KmContext);
+    let runtime_id = rctx.runtime_id;
+    let storage = ctx.untrusted_local_storage;
+
     let policy_checksum = Policy::global().init(ctx, &req.policy)?;
-    Kdf::global().init(req, ctx, policy_checksum)
+
+    let kdf = Kdf::global();
+    kdf.set_runtime_id(runtime_id)?;
+
+    // Load master secrets if not already loaded. It is intended that manual intervention
+    // by the operator is required to remove/alter persisted secrets.
+    kdf.load_master_secrets(storage, &runtime_id)?;
+
+    // Replicate the missing secrets.
+    let next_generation = kdf.next_generation();
+    if !req.checksum.is_empty() && next_generation <= req.generation {
+        let nodes = key_manager_nodes(ctx, runtime_id)?;
+        for generation in next_generation..=req.generation {
+            let secret = fetch_master_secret(ctx, generation, &nodes)?;
+            kdf.add_master_secret(storage, &runtime_id, secret, generation)?;
+        }
+    }
+
+    // TODO: Allow enclaves to generate master secrets for all generations.
+    if req.checksum.is_empty() && kdf.next_generation() == 0 {
+        // A master secret is not set, and there is no checksum in the
+        // request. Either this key manager instance has never been
+        // initialized, or our view of the external state is not current.
+        if !req.may_generate {
+            return Err(KeyManagerError::ReplicationRequired.into());
+        }
+
+        let secret = Secret::generate();
+        let generation = 0;
+        kdf.add_master_secret(storage, &runtime_id, secret, generation)?;
+    }
+
+    // Master secrets should now be synced unless someone did an internal state reset.
+    // It is also possible that new secrets were loaded, but we don't care about any
+    // of that as we always HAVE to check if the current state matches the global one.
+    let (checksum, rsk) = kdf.status(&runtime_id, req.checksum.clone(), req.generation)?;
+
+    // State is up-to-date, build the response and sign it with the RAK.
+    sign_init_response(ctx, checksum, policy_checksum, rsk)
 }
 
 /// See `Kdf::get_or_create_keys`.
@@ -68,21 +110,31 @@ pub fn get_or_create_keys(ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Res
     authorize_private_key_generation(ctx, &req.runtime_id)?;
     validate_height_freshness(ctx, req.height)?;
 
-    Kdf::global().get_or_create_keys(req.runtime_id, req.key_pair_id, None)
+    Kdf::global().get_or_create_longterm_keys(
+        ctx.untrusted_local_storage,
+        req.runtime_id,
+        req.key_pair_id,
+        req.generation,
+    )
 }
 
 /// See `Kdf::get_public_key`.
-pub fn get_public_key(_ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Result<SignedPublicKey> {
+pub fn get_public_key(ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Result<SignedPublicKey> {
     // No authentication or authorization.
     // Absolutely anyone is allowed to query public long-term keys.
 
     let kdf = Kdf::global();
-    let pk = kdf.get_public_key(req.runtime_id, req.key_pair_id, None)?;
+    let pk = kdf.get_public_longterm_key(
+        ctx.untrusted_local_storage,
+        req.runtime_id,
+        req.key_pair_id,
+        req.generation,
+    )?;
     let sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, None)?;
     Ok(sig)
 }
 
-/// See `Kdf::get_or_create_keys`.
+/// See `Kdf::get_or_create_ephemeral_keys`.
 pub fn get_or_create_ephemeral_keys(
     ctx: &mut RpcContext,
     req: &EphemeralKeyRequest,
@@ -91,10 +143,10 @@ pub fn get_or_create_ephemeral_keys(
     validate_ephemeral_key_epoch(ctx, req.epoch)?;
     validate_height_freshness(ctx, req.height)?;
 
-    Kdf::global().get_or_create_keys(req.runtime_id, req.key_pair_id, Some(req.epoch))
+    Kdf::global().get_or_create_ephemeral_keys(req.runtime_id, req.key_pair_id, req.epoch)
 }
 
-/// See `Kdf::get_public_key`.
+/// See `Kdf::get_public_ephemeral_key`.
 pub fn get_public_ephemeral_key(
     ctx: &mut RpcContext,
     req: &EphemeralKeyRequest,
@@ -104,7 +156,7 @@ pub fn get_public_ephemeral_key(
     validate_ephemeral_key_epoch(ctx, req.epoch)?;
 
     let kdf = Kdf::global();
-    let pk = kdf.get_public_key(req.runtime_id, req.key_pair_id, Some(req.epoch))?;
+    let pk = kdf.get_public_ephemeral_key(req.runtime_id, req.key_pair_id, req.epoch)?;
     let mut sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, Some(req.epoch))?;
 
     // Outdated key manager clients request public ephemeral keys via secure RPC calls,
@@ -126,7 +178,8 @@ pub fn replicate_master_secret(
     authorize_secret_replication(ctx)?;
     validate_height_freshness(ctx, req.height)?;
 
-    let master_secret = Kdf::global().replicate_master_secret()?;
+    let master_secret =
+        Kdf::global().replicate_master_secret(ctx.untrusted_local_storage, req.generation)?;
     Ok(ReplicateMasterSecretResponse { master_secret })
 }
 
@@ -171,22 +224,22 @@ pub fn generate_ephemeral_secret(
     let mut nonce = Nonce::generate();
     let secret = Secret::generate();
     let plaintext = secret.0.to_vec();
-    let additional_data = pack_additional_data(&runtime_id, epoch);
+    let additional_data = pack_runtime_id_epoch(&runtime_id, epoch);
     let mut ciphertexts = HashMap::new();
     let checksum = Kdf::checksum_ephemeral_secret(&secret, &runtime_id, epoch);
 
     for &rek in rek_keys.iter() {
         nonce.increment()?;
 
-        let ciphertext = deoxysii::box_seal(
+        let mut ciphertext = deoxysii::box_seal(
             &nonce,
             plaintext.clone(),
             additional_data.clone(),
             &rek.0,
             &private_key.0,
         )?;
+        ciphertext.extend_from_slice(&nonce.to_vec());
 
-        let ciphertext = pack_ciphertext(&nonce, ciphertext);
         ciphertexts.insert(*rek, ciphertext);
     }
 
@@ -223,7 +276,7 @@ pub fn load_ephemeral_secret(ctx: &mut RpcContext, req: &LoadEphemeralSecretRequ
         return Err(KeyManagerError::EphemeralSecretChecksumMismatch.into());
     }
 
-    Kdf::global().add_ephemeral_secret(signed_secret.epoch, secret);
+    Kdf::global().add_ephemeral_secret(secret, signed_secret.epoch);
 
     Ok(())
 }
@@ -242,8 +295,9 @@ fn decrypt_ephemeral_secret(
         None => return Ok(None),
     };
 
-    let (nonce, ciphertext) = unpack_ciphertext(ciphertext)?;
-    let additional_data = pack_additional_data(&runtime_id, epoch);
+    let (ciphertext, nonce) =
+        unpack_encrypted_secret_nonce(ciphertext).ok_or(KeyManagerError::InvalidCiphertext)?;
+    let additional_data = pack_runtime_id_epoch(&runtime_id, epoch);
     let plaintext =
         ctx.identity
             .box_open(&nonce, ciphertext, additional_data, &secret.public_key.0)?;
@@ -257,26 +311,33 @@ fn decrypt_ephemeral_secret(
     Ok(Some(secret))
 }
 
+/// Fetch master secret from another key manager enclave.
+fn fetch_master_secret(
+    ctx: &mut RpcContext,
+    generation: u64,
+    nodes: &Vec<signature::PublicKey>,
+) -> Result<Secret> {
+    let km_client = key_manager_client_for_replication(ctx);
+    for node in nodes.iter() {
+        km_client.set_nodes(vec![*node]);
+        let result =
+            km_client.replicate_master_secret(Context::create_child(&ctx.io_ctx), generation);
+        let result = tokio::runtime::Handle::current().block_on(result);
+        if let Ok(secret) = result {
+            return Ok(secret);
+        }
+    }
+
+    Err(KeyManagerError::MasterSecretNotReplicated(generation).into())
+}
+
 /// Fetch ephemeral secret from another key manager enclave.
 fn fetch_ephemeral_secret(
     ctx: &mut RpcContext,
     epoch: EpochTime,
     nodes: Vec<signature::PublicKey>,
 ) -> Result<Secret> {
-    let rctx = runtime_context!(ctx, KmContext);
-
-    let km_client = RemoteClient::new_runtime_with_enclaves_and_policy(
-        rctx.runtime_id,
-        Some(rctx.runtime_id),
-        Policy::global().may_replicate_from(),
-        ctx.identity.quote_policy(),
-        rctx.protocol.clone(),
-        ctx.consensus_verifier.clone(),
-        ctx.identity.clone(),
-        1, // Not used, doesn't matter.
-        vec![],
-    );
-
+    let km_client = key_manager_client_for_replication(ctx);
     for node in nodes.iter() {
         km_client.set_nodes(vec![*node]);
         let result =
@@ -288,6 +349,43 @@ fn fetch_ephemeral_secret(
     }
 
     Err(KeyManagerError::EphemeralSecretNotReplicated(epoch).into())
+}
+
+/// Key manager client for master and ephemeral secret replication.
+fn key_manager_client_for_replication(ctx: &mut RpcContext) -> RemoteClient {
+    let rctx = runtime_context!(ctx, KmContext);
+    let protocol = rctx.protocol.clone();
+    let runtime_id = rctx.runtime_id;
+
+    RemoteClient::new_runtime_with_enclaves_and_policy(
+        runtime_id,
+        Some(runtime_id),
+        Policy::global().may_replicate_from(),
+        ctx.identity.quote_policy(),
+        protocol,
+        ctx.consensus_verifier.clone(),
+        ctx.identity.clone(),
+        1, // Not used, doesn't matter.
+        vec![],
+    )
+}
+
+/// Create init response and sign it with RAK.
+fn sign_init_response(
+    ctx: &mut RpcContext,
+    checksum: Vec<u8>,
+    policy_checksum: Vec<u8>,
+    rsk: signature::PublicKey,
+) -> Result<SignedInitResponse> {
+    let is_secure = BUILD_INFO.is_secure && !Policy::unsafe_skip();
+    let init_response = InitResponse {
+        is_secure,
+        checksum,
+        policy_checksum,
+        rsk,
+    };
+    let signer: Arc<dyn Signer> = ctx.identity.clone();
+    SignedInitResponse::new(init_response, &signer)
 }
 
 /// Authorize the remote enclave so that the private keys are never released to an incorrect enclave.
@@ -372,21 +470,29 @@ fn validate_signed_ephemeral_secret(
     Ok(published_signed_secret.secret)
 }
 
-/// Fetch REK keys of the key manager enclaves from the consensus layer.
-fn key_manager_rek_keys(
-    ctx: &RpcContext,
-    id: Namespace,
-) -> Result<HashMap<signature::PublicKey, x25519::PublicKey>> {
+/// Fetch the identities of the key manager nodes.
+fn key_manager_nodes(ctx: &RpcContext, id: Namespace) -> Result<Vec<signature::PublicKey>> {
     let consensus_state = ctx.consensus_verifier.latest_state()?;
-    let registry_state = RegistryState::new(&consensus_state);
     let km_state = KeyManagerState::new(&consensus_state);
     let status = km_state
         .status(Context::create_child(&ctx.io_ctx), id)?
         .ok_or(KeyManagerError::StatusNotFound)?;
 
-    let mut rek_map = HashMap::new();
+    Ok(status.nodes)
+}
 
-    for pk in status.nodes.iter() {
+/// Fetch REK keys of the key manager enclaves from the consensus layer.
+fn key_manager_rek_keys(
+    ctx: &RpcContext,
+    id: Namespace,
+) -> Result<HashMap<signature::PublicKey, x25519::PublicKey>> {
+    let nodes = key_manager_nodes(ctx, id)?;
+
+    let consensus_state = ctx.consensus_verifier.latest_state()?;
+    let registry_state = RegistryState::new(&consensus_state);
+
+    let mut rek_map = HashMap::new();
+    for pk in nodes.iter() {
         let node = registry_state.node(Context::create_child(&ctx.io_ctx), pk)?;
         let runtimes = node
             .map(|n| n.runtimes)
@@ -428,35 +534,4 @@ fn nodes_with_ephemeral_secret(
         .collect();
 
     Ok(nodes)
-}
-
-/// Concatenate runtime ID and epoch into a byte vector (runtime_id || epoch) using little-endian
-/// byte order.
-fn pack_additional_data(runtime_id: &Namespace, epoch: EpochTime) -> Vec<u8> {
-    let mut additional_data = runtime_id.0.to_vec();
-    additional_data.extend(epoch.to_le_bytes());
-    additional_data
-}
-
-/// Concatenate nonce and ciphertext into a byte vector (nonce || ciphertext).
-fn pack_ciphertext(nonce: &Nonce, ciphertext: Vec<u8>) -> Vec<u8> {
-    let mut data = nonce.to_vec();
-    data.extend(ciphertext);
-    data
-}
-
-/// Unpack the concatenation of nonce and ciphertext (nonce || ciphertext).
-fn unpack_ciphertext(ciphertext: &Vec<u8>) -> Result<([u8; NONCE_SIZE], Vec<u8>)> {
-    if ciphertext.len() != EPHEMERAL_SECRET_STORAGE_SIZE {
-        return Err(KeyManagerError::InvalidCiphertext.into());
-    }
-
-    let nonce: [u8; NONCE_SIZE] = ciphertext
-        .get(0..NONCE_SIZE)
-        .unwrap()
-        .try_into()
-        .expect("slice with incorrect length");
-    let ciphertext = ciphertext.get(NONCE_SIZE..).unwrap().to_vec();
-
-    Ok((nonce, ciphertext))
 }
