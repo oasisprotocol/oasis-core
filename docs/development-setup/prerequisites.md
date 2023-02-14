@@ -11,7 +11,7 @@ Core:
 * System packages:
   * [Bubblewrap] (at least version 0.3.3).
   * [GCC] (including C++ subpackage).
-  * [Clang] development package. (If you want to build a version after v22.1.9)
+  * [Clang] (including development package).
   * [Protobuf] compiler.
   * [GNU Make].
   * [CMake].
@@ -27,7 +27,7 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo dnf install bubblewrap gcc gcc-c++ clang-devel protobuf-compiler make cmake openssl-devel libseccomp-devel pkg-config
+  sudo dnf install bubblewrap gcc gcc-c++ clang-devel clang protobuf-compiler make cmake openssl-devel libseccomp-devel pkg-config
   ```
   <!-- markdownlint-enable line-length -->
 
@@ -36,7 +36,7 @@ Core:
 
   <!-- markdownlint-disable line-length -->
   ```
-  sudo apt install bubblewrap gcc g++ gcc-multilib libclang-dev protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
+  sudo apt install bubblewrap gcc g++ gcc-multilib libclang-dev clang protobuf-compiler make cmake libssl-dev libseccomp-dev pkg-config
   ```
   <!-- markdownlint-enable line-length -->
 
@@ -90,23 +90,14 @@ Core:
 
 * [Fortanix Rust EDP] utilities.
 
-  Make sure a _nightly_ version of the Rust toolchain is installed:
-
-  ```
-  rustup install nightly
-  ```
-
-  Then install the Fortanix Rust EDP utilities by running:
+  Install the Fortanix Rust EDP utilities by running:
 
   <!-- markdownlint-disable line-length -->
   ```
-  cargo +nightly install fortanix-sgx-tools
-  cargo +nightly install sgxs-tools
+  cargo install fortanix-sgx-tools
+  cargo install sgxs-tools
   ```
   <!-- markdownlint-enable line-length -->
-
-  _NOTE: These utilities must be compiled with a nightly version of the Rust
-  toolchain since they use the `#![feature]` macro._
 
 * Oasis Core's Rust toolchain version with Fortanix SGX target.
 
