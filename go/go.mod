@@ -21,7 +21,7 @@ replace (
 )
 
 require (
-	github.com/a8m/envsubst v1.3.0
+	github.com/a8m/envsubst v1.4.2
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cenkalti/backoff/v4 v4.2.0
 	github.com/dgraph-io/badger/v3 v3.2103.4
