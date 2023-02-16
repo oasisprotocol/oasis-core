@@ -3,9 +3,13 @@ package api
 
 import (
 	"context"
+	"crypto/sha512"
 	"fmt"
 	"time"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
+
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -24,6 +28,9 @@ const (
 
 	// ChecksumSize is the length of checksum in bytes.
 	ChecksumSize = 32
+
+	// KeyPairIDSize is the size of a key pair ID in bytes.
+	KeyPairIDSize = 32
 )
 
 var (
@@ -34,12 +41,23 @@ var (
 	// exist.
 	ErrNoSuchStatus = errors.New(ModuleName, 2, "keymanager: no such status")
 
+	// ErrNoSuchEphemeralSecret is the error returned when a key manager ephemeral secret
+	// for the given epoch does not exist.
+	ErrNoSuchEphemeralSecret = errors.New(ModuleName, 3, "keymanager: no such ephemeral secret")
+
 	// MethodUpdatePolicy is the method name for policy updates.
 	MethodUpdatePolicy = transaction.NewMethodName(ModuleName, "UpdatePolicy", SignedPolicySGX{})
 
-	// TestPublicKey is the insecure hardcoded key manager public key, used
+	// MethodPublishEphemeralSecret is the method name for publishing ephemeral secret.
+	MethodPublishEphemeralSecret = transaction.NewMethodName(ModuleName, "PublishEphemeralSecret", EncryptedEphemeralSecret{})
+
+	// InsecureRAK is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.
-	TestPublicKey signature.PublicKey
+	InsecureRAK signature.PublicKey
+
+	// InsecureREK is the insecure hardcoded key manager public key, used
+	// in insecure builds when a REK is unavailable.
+	InsecureREK x25519.PublicKey
 
 	// TestSigners contains a list of signers with corresponding test keys, used
 	// in insecure builds when a RAK is unavailable.
@@ -48,23 +66,47 @@ var (
 	// Methods is the list of all methods supported by the key manager backend.
 	Methods = []transaction.MethodName{
 		MethodUpdatePolicy,
+		MethodPublishEphemeralSecret,
 	}
 
-	initResponseContext = signature.NewContext("oasis-core/keymanager: init response")
+	// RPCMethodInit is the name of the `init` method.
+	RPCMethodInit = "init"
+
+	// RPCMethodGetPublicKey is the name of the `get_public_key` method.
+	RPCMethodGetPublicKey = "get_public_key"
+
+	// RPCMethodGetPublicEphemeralKey is the name of the `get_public_ephemeral_key` method.
+	RPCMethodGetPublicEphemeralKey = "get_public_ephemeral_key"
+
+	// RPCMethodGenerateEphemeralSecret is the name of the `generate_ephemeral_secret` RPC method.
+	RPCMethodGenerateEphemeralSecret = "generate_ephemeral_secret"
+
+	// RPCMethodLoadEphemeralSecret is the name of the `load_ephemeral_secret` RPC method.
+	RPCMethodLoadEphemeralSecret = "load_ephemeral_secret"
+
+	// initResponseSignatureContext is the context used to sign key manager init responses.
+	initResponseSignatureContext = signature.NewContext("oasis-core/keymanager: init response")
 )
 
 const (
 	// GasOpUpdatePolicy is the gas operation identifier for policy updates
 	// costs.
 	GasOpUpdatePolicy transaction.Op = "update_policy"
+	// GasOpPublishEphemeralSecret is the gas operation identifier for publishing
+	// key manager ephemeral secret.
+	GasOpPublishEphemeralSecret transaction.Op = "publish_ephemeral_secret"
 )
 
 // XXX: Define reasonable default gas costs.
 
 // DefaultGasCosts are the "default" gas costs for operations.
 var DefaultGasCosts = transaction.Costs{
-	GasOpUpdatePolicy: 1000,
+	GasOpUpdatePolicy:           1000,
+	GasOpPublishEphemeralSecret: 1000,
 }
+
+// KeyPairID is a 256-bit key pair identifier.
+type KeyPairID [KeyPairIDSize]byte
 
 // Status is the current key manager status.
 type Status struct {
@@ -106,11 +148,30 @@ type Backend interface {
 
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(context.Context, int64) (*Genesis, error)
+
+	// GetEphemeralSecret returns the key manager ephemeral secret.
+	GetEphemeralSecret(context.Context, *registry.NamespaceEpochQuery) (*SignedEncryptedEphemeralSecret, error)
+
+	// WatchEphemeralSecrets returns a channel that produces a stream of ephemeral secrets.
+	WatchEphemeralSecrets() (<-chan *SignedEncryptedEphemeralSecret, *pubsub.Subscription)
 }
 
 // NewUpdatePolicyTx creates a new policy update transaction.
 func NewUpdatePolicyTx(nonce uint64, fee *transaction.Fee, sigPol *SignedPolicySGX) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodUpdatePolicy, sigPol)
+}
+
+// NewPublishEphemeralSecretTx creates a new publish ephemeral secret transaction.
+func NewPublishEphemeralSecretTx(nonce uint64, fee *transaction.Fee, sigEnt *SignedEncryptedEphemeralSecret) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodPublishEphemeralSecret, sigEnt)
+}
+
+// InitRequest is the initialization RPC request, sent to the key manager
+// enclave.
+type InitRequest struct {
+	Checksum    []byte `json:"checksum"`
+	Policy      []byte `json:"policy"`
+	MayGenerate bool   `json:"may_generate"`
 }
 
 // InitResponse is the initialization RPC response, returned as part of a
@@ -132,7 +193,7 @@ type SignedInitResponse struct {
 // Verify verifies the signature of the init response using the given key.
 func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 	raw := cbor.Marshal(r.InitResponse)
-	if !pk.Verify(initResponseContext, raw, r.Signature) {
+	if !pk.Verify(initResponseSignatureContext, raw, r.Signature) {
 		return fmt.Errorf("keymanager: invalid initialization response signature")
 	}
 	return nil
@@ -140,7 +201,7 @@ func (r *SignedInitResponse) Verify(pk signature.PublicKey) error {
 
 // SignInitResponse signs the given init response.
 func SignInitResponse(signer signature.Signer, response *InitResponse) (*SignedInitResponse, error) {
-	sig, err := signer.ContextSign(initResponseContext, cbor.Marshal(response))
+	sig, err := signer.ContextSign(initResponseSignatureContext, cbor.Marshal(response))
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +209,42 @@ func SignInitResponse(signer signature.Signer, response *InitResponse) (*SignedI
 		InitResponse: *response,
 		Signature:    sig,
 	}, nil
+}
+
+// EphemeralKeyRequest is the ephemeral key RPC request, sent to the key manager
+// enclave.
+type EphemeralKeyRequest struct {
+	Height    *uint64          `json:"height"`
+	ID        common.Namespace `json:"runtime_id"`
+	KeyPairID KeyPairID        `json:"key_pair_id"`
+	Epoch     beacon.EpochTime `json:"epoch"`
+}
+
+// SignedPublicKey is the RPC response, returned as part of
+// an EphemeralKeyRequest from the key manager enclave.
+type SignedPublicKey struct {
+	Key        x25519.PublicKey       `json:"key"`
+	Checksum   []byte                 `json:"checksum"`
+	Signature  signature.RawSignature `json:"signature"`
+	Expiration *beacon.EpochTime      `json:"expiration,omitempty"`
+}
+
+// GenerateEphemeralSecretRequest is the generate ephemeral secret RPC request,
+// sent to the key manager enclave.
+type GenerateEphemeralSecretRequest struct {
+	Epoch beacon.EpochTime `json:"epoch"`
+}
+
+// GenerateEphemeralSecretResponse is the RPC response, returned as part of
+// a GenerateEphemeralSecretRequest from the key manager enclave.
+type GenerateEphemeralSecretResponse struct {
+	SignedSecret SignedEncryptedEphemeralSecret `json:"signed_secret"`
+}
+
+// LoadEphemeralSecretRequest is the load ephemeral secret RPC request,
+// sent to the key manager enclave.
+type LoadEphemeralSecretRequest struct {
+	SignedSecret SignedEncryptedEphemeralSecret `json:"signed_secret"`
 }
 
 // VerifyExtraInfo verifies and parses the per-node + per-runtime ExtraInfo
@@ -167,7 +264,7 @@ func VerifyExtraInfo(
 	)
 	if nodeRt.Capabilities.TEE == nil || nodeRt.Capabilities.TEE.Hardware == node.TEEHardwareInvalid {
 		hw = node.TEEHardwareInvalid
-		rak = TestPublicKey
+		rak = InsecureRAK
 	} else {
 		hw = nodeRt.Capabilities.TEE.Hardware
 		rak = nodeRt.Capabilities.TEE.RAK
@@ -228,6 +325,16 @@ func (ev *StatusUpdateEvent) EventKind() string {
 	return "status"
 }
 
+// EphemeralSecretPublishedEvent is the key manager ephemeral secret published event.
+type EphemeralSecretPublishedEvent struct {
+	Secret *SignedEncryptedEphemeralSecret
+}
+
+// EventKind returns a string representation of this event's kind.
+func (ev *EphemeralSecretPublishedEvent) EventKind() string {
+	return "ephemeral_secret"
+}
+
 func init() {
 	// Old `INSECURE_SIGNING_KEY_PKCS8`.
 	var oldTestKey signature.PublicKey
@@ -245,7 +352,10 @@ func init() {
 		TestSigners = append(TestSigners, tmpSigner)
 
 		if idx == 0 {
-			TestPublicKey = tmpSigner.Public()
+			InsecureRAK = tmpSigner.Public()
 		}
 	}
+
+	rek := x25519.PrivateKey(sha512.Sum512_256([]byte("ekiden test key manager REK seed")))
+	InsecureREK = *rek.Public()
 }

@@ -241,6 +241,13 @@ type NamespaceQuery struct {
 	ID     common.Namespace `json:"id"`
 }
 
+// NamespaceEpochQuery is a registry query by namespace (Runtime ID) and epoch.
+type NamespaceEpochQuery struct {
+	Height int64            `json:"height"`
+	ID     common.Namespace `json:"id"`
+	Epoch  beacon.EpochTime `json:"epoch"`
+}
+
 // GetRuntimeQuery is a registry query by namespace (Runtime ID).
 type GetRuntimeQuery struct {
 	Height           int64            `json:"height"`

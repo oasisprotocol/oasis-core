@@ -292,6 +292,10 @@ func (c *client) CallOne(
 ) (PeerFeedback, error) {
 	c.logger.Debug("call", "method", method)
 
+	if len(peers) == 0 {
+		return nil, fmt.Errorf("no peers given to service the request")
+	}
+
 	co := NewCallOptions(opts...)
 
 	// Prepare the request.

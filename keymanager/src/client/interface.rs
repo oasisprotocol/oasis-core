@@ -8,7 +8,7 @@ use oasis_core_runtime::consensus::beacon::EpochTime;
 
 use crate::{
     api::KeyManagerError,
-    crypto::{KeyPair, KeyPairId, MasterSecret, SignedPublicKey},
+    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey},
 };
 
 /// Key manager client interface.
@@ -57,10 +57,14 @@ pub trait KeyManagerClient: Send + Sync {
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>>;
 
     /// Get a copy of the master secret for replication.
-    fn replicate_master_secret(
+    fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>>;
+
+    /// Get a copy of the ephemeral secret for replication.
+    fn replicate_ephemeral_secret(
         &self,
         ctx: Context,
-    ) -> BoxFuture<Result<Option<MasterSecret>, KeyManagerError>>;
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>>;
 }
 
 impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
@@ -102,10 +106,15 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         KeyManagerClient::get_public_ephemeral_key(&**self, ctx, key_pair_id, epoch)
     }
 
-    fn replicate_master_secret(
+    fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>> {
+        KeyManagerClient::replicate_master_secret(&**self, ctx)
+    }
+
+    fn replicate_ephemeral_secret(
         &self,
         ctx: Context,
-    ) -> BoxFuture<Result<Option<MasterSecret>, KeyManagerError>> {
-        KeyManagerClient::replicate_master_secret(&**self, ctx)
+        epoch: EpochTime,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
+        KeyManagerClient::replicate_ephemeral_secret(&**self, ctx, epoch)
     }
 }

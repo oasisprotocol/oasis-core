@@ -1,12 +1,25 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
+use anyhow::Result;
 use thiserror::Error;
 
 use crate::common::{
-    crypto::signature::SignatureBundle, namespace::Namespace, sgx::EnclaveIdentity,
+    crypto::{
+        signature::{Signature, SignatureBundle, Signer},
+        x25519,
+    },
+    namespace::Namespace,
+    sgx::EnclaveIdentity,
 };
 
-const POLICY_SIGN_CONTEXT: &[u8] = b"oasis-core/keymanager: policy";
+use super::beacon::EpochTime;
+
+/// Context used to sign key manager policies.
+const POLICY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager: policy";
+
+/// Context used to sign encrypted key manager ephemeral secrets.
+const ENCRYPTED_EPHEMERAL_SECRET_SIGNATURE_CONTEXT: &[u8] =
+    b"oasis-core/keymanager: encrypted ephemeral secret";
 
 /// Errors emitted by the key manager module.
 #[derive(Error, Debug)]
@@ -21,6 +34,8 @@ pub struct PolicySGX {
     pub serial: u32,
     pub id: Namespace,
     pub enclaves: HashMap<EnclaveIdentity, EnclavePolicySGX>,
+    #[cbor(optional)]
+    pub max_ephemeral_secret_age: EpochTime,
 }
 
 /// Per enclave key manager access control policy.
@@ -43,10 +58,44 @@ impl SignedPolicySGX {
         let raw_policy = cbor::to_vec(self.policy.clone());
         for sig in &self.signatures {
             sig.signature
-                .verify(&sig.public_key, POLICY_SIGN_CONTEXT, &raw_policy)
+                .verify(&sig.public_key, POLICY_SIGNATURE_CONTEXT, &raw_policy)
                 .map_err(|_| Error::InvalidSignature)?;
         }
 
         Ok(&self.policy)
+    }
+}
+
+/// Encrypted ephemeral secret.
+#[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub struct EncryptedEphemeralSecret {
+    /// Runtime ID of the key manager.
+    pub runtime_id: Namespace,
+    /// Epoch time to which the ephemeral secret belongs.
+    pub epoch: EpochTime,
+    /// Checksum for validating decryption.
+    pub checksum: Vec<u8>,
+    // Public part of the key which was used to encrypt the ephemeral secret.
+    pub public_key: x25519::PublicKey,
+    /// A map of REK encrypted ephemeral secrets for all known key manager enclaves.
+    pub ciphertexts: HashMap<x25519::PublicKey, Vec<u8>>,
+}
+
+/// Signed encrypted ephemeral secret (RAK).
+#[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub struct SignedEncryptedEphemeralSecret {
+    /// Encrypted ephemeral secret.
+    pub secret: EncryptedEphemeralSecret,
+    /// Signature of the encrypted ephemeral secret.
+    pub signature: Signature,
+}
+
+impl SignedEncryptedEphemeralSecret {
+    pub fn new(secret: EncryptedEphemeralSecret, signer: &Arc<dyn Signer>) -> Result<Self> {
+        let signature = signer.sign(
+            ENCRYPTED_EPHEMERAL_SECRET_SIGNATURE_CONTEXT,
+            &cbor::to_vec(secret.clone()),
+        )?;
+        Ok(Self { secret, signature })
     }
 }

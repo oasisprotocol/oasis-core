@@ -32,8 +32,9 @@ type serviceClient struct {
 
 	logger *logging.Logger
 
-	querier  *app.QueryFactory
-	notifier *pubsub.Broker
+	querier        *app.QueryFactory
+	statusNotifier *pubsub.Broker
+	secretNotifier *pubsub.Broker
 }
 
 func (sc *serviceClient) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*api.Status, error) {
@@ -55,7 +56,7 @@ func (sc *serviceClient) GetStatuses(ctx context.Context, height int64) ([]*api.
 }
 
 func (sc *serviceClient) WatchStatuses() (<-chan *api.Status, *pubsub.Subscription) {
-	sub := sc.notifier.Subscribe()
+	sub := sc.statusNotifier.Subscribe()
 	ch := make(chan *api.Status)
 	sub.Unwrap(ch)
 
@@ -69,6 +70,23 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	}
 
 	return q.Genesis(ctx)
+}
+
+func (sc *serviceClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceEpochQuery) (*api.SignedEncryptedEphemeralSecret, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.EphemeralSecret(ctx, query.ID, query.Epoch)
+}
+
+func (sc *serviceClient) WatchEphemeralSecrets() (<-chan *api.SignedEncryptedEphemeralSecret, *pubsub.Subscription) {
+	sub := sc.secretNotifier.Subscribe()
+	ch := make(chan *api.SignedEncryptedEphemeralSecret)
+	sub.Unwrap(ch)
+
+	return ch, sub
 }
 
 // Implements api.ServiceClient.
@@ -89,8 +107,19 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 			}
 
 			for _, status := range event.Statuses {
-				sc.notifier.Broadcast(status)
+				sc.statusNotifier.Broadcast(status)
 			}
+		}
+		if events.IsAttributeKind(pair.GetKey(), &api.EphemeralSecretPublishedEvent{}) {
+			var event api.EphemeralSecretPublishedEvent
+			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+				sc.logger.Error("worker: failed to get ephemeral secret from tag",
+					"err", err,
+				)
+				continue
+			}
+
+			sc.secretNotifier.Broadcast(event.Secret)
 		}
 	}
 	return nil
@@ -108,7 +137,7 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 		logger:  logging.GetLogger("keymanager/tendermint"),
 		querier: a.QueryFactory().(*app.QueryFactory),
 	}
-	sc.notifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
+	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		statuses, err := sc.GetStatuses(ctx, consensus.HeightLatest)
 		if err != nil {
 			sc.logger.Error("status notifier: unable to get a list of statuses",
@@ -122,6 +151,7 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 			wr <- v
 		}
 	})
+	sc.secretNotifier = pubsub.NewBroker(false)
 
 	return sc, nil
 }

@@ -18,7 +18,7 @@ use oasis_core_runtime::{
             EnclaveIdentity,
         },
     },
-    consensus::keymanager::SignedPolicySGX,
+    consensus::{beacon::EpochTime, keymanager::SignedPolicySGX},
     enclave_rpc::Context as RpcContext,
     policy::PolicyVerifier,
     runtime_context,
@@ -136,7 +136,7 @@ impl Policy {
     }
 
     /// Check if the MRENCLAVE/MRSIGNER may replicate.
-    pub fn may_replicate_master_secret(&self, remote_enclave: &EnclaveIdentity) -> Result<()> {
+    pub fn may_replicate_secret(&self, remote_enclave: &EnclaveIdentity) -> Result<()> {
         // Always allow replication to ourselves, if it is possible to do so in
         // an authenticated manner.
         #[cfg(target_env = "sgx")]
@@ -153,7 +153,7 @@ impl Policy {
             .as_ref()
             .ok_or(KeyManagerError::NotAuthorized)?;
 
-        match policy.may_replicate_master_secret(remote_enclave) {
+        match policy.may_replicate_secret(remote_enclave) {
             true => Ok(()),
             false => Err(KeyManagerError::NotAuthorized.into()),
         }
@@ -205,6 +205,7 @@ struct CachedPolicy {
     pub may_query: HashMap<Namespace, HashSet<EnclaveIdentity>>,
     pub may_replicate: HashSet<EnclaveIdentity>,
     pub may_replicate_from: HashSet<EnclaveIdentity>,
+    pub max_ephemeral_secret_age: EpochTime,
 }
 
 impl CachedPolicy {
@@ -254,6 +255,8 @@ impl CachedPolicy {
             }
         }
 
+        cached_policy.max_ephemeral_secret_age = policy.max_ephemeral_secret_age;
+
         Ok(cached_policy)
     }
 
@@ -269,7 +272,7 @@ impl CachedPolicy {
         may_query.contains(remote_enclave)
     }
 
-    fn may_replicate_master_secret(&self, remote_enclave: &EnclaveIdentity) -> bool {
+    fn may_replicate_secret(&self, remote_enclave: &EnclaveIdentity) -> bool {
         self.may_replicate.contains(remote_enclave)
     }
 }

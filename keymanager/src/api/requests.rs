@@ -1,12 +1,12 @@
 use oasis_core_runtime::{
     common::{
-        crypto::signature::{PublicKey, Signature},
+        crypto::signature::{self, Signature},
         namespace::Namespace,
     },
-    consensus::beacon::EpochTime,
+    consensus::{beacon::EpochTime, keymanager::SignedEncryptedEphemeralSecret},
 };
 
-use crate::crypto::{KeyPairId, MasterSecret};
+use crate::crypto::{KeyPairId, Secret};
 
 /// Key manager initialization request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
@@ -29,7 +29,7 @@ pub struct InitResponse {
     /// Checksum for identifying policy.
     pub policy_checksum: Vec<u8>,
     /// Runtime signing key.
-    pub rsk: PublicKey,
+    pub rsk: signature::PublicKey,
 }
 
 /// Signed InitResponse.
@@ -41,23 +41,55 @@ pub struct SignedInitResponse {
     pub signature: Signature,
 }
 
-/// Key manager replication request.
+/// Key manager master secret replication request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct ReplicateRequest {
+pub struct ReplicateMasterSecretRequest {
     /// Latest trust root height.
     pub height: Option<u64>,
 }
 
-impl ReplicateRequest {
-    pub fn new(height: Option<u64>) -> Self {
-        Self { height }
-    }
+/// Key manager master secret replication response.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct ReplicateMasterSecretResponse {
+    /// Master secret.
+    pub master_secret: Secret,
 }
 
-/// Key manager replication response.
+/// Key manager ephemeral secret replication request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct ReplicateResponse {
-    pub master_secret: MasterSecret,
+pub struct ReplicateEphemeralSecretRequest {
+    /// Latest trust root height.
+    pub height: Option<u64>,
+    /// Epoch time.
+    pub epoch: EpochTime,
+}
+
+/// Key manager ephemeral secret replication response.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct ReplicateEphemeralSecretResponse {
+    /// Ephemeral secret.
+    pub ephemeral_secret: Secret,
+}
+
+/// Generate ephemeral secret request.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct GenerateEphemeralSecretRequest {
+    /// Epoch time.
+    pub epoch: EpochTime,
+}
+
+/// Generate ephemeral secret response.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct GenerateEphemeralSecretResponse {
+    /// Signed encrypted ephemeral secret.
+    pub signed_secret: SignedEncryptedEphemeralSecret,
+}
+
+/// Load ephemeral secret request.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct LoadEphemeralSecretRequest {
+    /// Signed encrypted ephemeral secret.
+    pub signed_secret: SignedEncryptedEphemeralSecret,
 }
 
 /// Long-term key request for private/public key generation and retrieval.

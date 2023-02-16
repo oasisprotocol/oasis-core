@@ -28,6 +28,9 @@ const MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE: EpochTime = 10;
 /// The size of the key manager state checksum.
 const CHECKSUM_SIZE: usize = 32;
 
+/// The size of the key manager master and ephemeral secrets.
+pub const SECRET_SIZE: usize = 32;
+
 /// A state encryption key.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
 #[cbor(transparent)]
@@ -40,13 +43,23 @@ impl AsRef<[u8]> for StateKey {
     }
 }
 
-/// A 256-bit master secret.
+/// A 256-bit secret.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
 #[cbor(transparent)]
 #[zeroize(drop)]
-pub struct MasterSecret(pub [u8; 32]);
+pub struct Secret(pub [u8; SECRET_SIZE]);
 
-impl AsRef<[u8]> for MasterSecret {
+impl Secret {
+    pub fn generate() -> Self {
+        let mut rng = OsRng {};
+        let mut secret = Secret::default();
+        rng.fill(&mut secret.0);
+
+        secret
+    }
+}
+
+impl AsRef<[u8]> for Secret {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }

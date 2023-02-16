@@ -759,8 +759,8 @@ func RegisterScenarios() error {
 		StorageEarlyStateSync,
 		// Sentry test.
 		Sentry,
-		// Keymanager key generation test.
-		KeymanagerKeyGeneration,
+		// Keymanager ephemeral keys test.
+		KeymanagerEphemeralKeys,
 		// Keymanager restart test.
 		KeymanagerRestart,
 		// Keymanager replicate test.

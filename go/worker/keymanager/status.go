@@ -57,15 +57,23 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		al = append(al, ral)
 	}
 
+	es := api.EphemeralSecretStats{
+		NumLoaded:     w.numLoadedSecrets,
+		LastLoaded:    w.lastLoadedSecret,
+		NumGenerated:  w.numGeneratedSecrets,
+		LastGenerated: w.lastGeneratedSecret,
+	}
+
 	gs := w.globalStatus
 	ws := api.WorkerStatus{
-		Status:         ss,
-		MayGenerate:    w.mayGenerate,
-		ClientRuntimes: rts,
-		AccessList:     al,
-		PrivatePeers:   ps,
-		Policy:         w.policy,
-		PolicyChecksum: w.policyChecksum,
+		Status:           ss,
+		MayGenerate:      w.mayGenerate,
+		ClientRuntimes:   rts,
+		AccessList:       al,
+		PrivatePeers:     ps,
+		Policy:           w.policy,
+		PolicyChecksum:   w.policyChecksum,
+		EphemeralSecrets: es,
 	}
 
 	return &api.Status{

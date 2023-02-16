@@ -138,6 +138,18 @@ type ConsensusParameters struct {
 	VRFParameters *VRFParameters `json:"vrf_parameters,omitempty"`
 }
 
+// Interval returns the epoch interval (in blocks).
+func (cp *ConsensusParameters) Interval() int64 {
+	switch cp.Backend {
+	case BackendInsecure:
+		return cp.InsecureParameters.Interval
+	case BackendVRF:
+		return cp.VRFParameters.Interval
+	default:
+		panic("invalid backend")
+	}
+}
+
 // InsecureParameters are the beacon parameters for the insecure backend.
 type InsecureParameters struct {
 	// Interval is the epoch interval (in blocks).

@@ -1,5 +1,3 @@
-use anyhow::Result;
-
 use oasis_core_runtime::{
     dispatcher::{Initializer, PostInitState, PreInitState},
     enclave_rpc::{
@@ -11,21 +9,15 @@ use oasis_core_runtime::{
 
 use crate::{
     api::{
-        InitRequest, SignedInitResponse, LOCAL_METHOD_INIT, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
+        LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET, LOCAL_METHOD_INIT,
+        LOCAL_METHOD_LOAD_EPHEMERAL_SECRET, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
         METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
-        METHOD_REPLICATE_MASTER_SECRET,
+        METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
-    crypto::kdf::Kdf,
-    policy::{set_trusted_policy_signers, Policy, TrustedPolicySigners},
+    policy::{set_trusted_policy_signers, TrustedPolicySigners},
 };
 
 use super::{context, methods};
-
-/// Initialize the Kdf.
-fn init_kdf(req: &InitRequest, ctx: &mut RpcContext) -> Result<SignedInitResponse> {
-    let policy_checksum = Policy::global().init(ctx, &req.policy)?;
-    Kdf::global().init(req, ctx, policy_checksum)
-}
 
 /// Initialize a keymanager with trusted policy signers.
 pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
@@ -70,6 +62,13 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
             },
             methods::replicate_master_secret,
         ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: METHOD_REPLICATE_EPHEMERAL_SECRET.to_string(),
+                kind: RpcKind::NoiseSession,
+            },
+            methods::replicate_ephemeral_secret,
+        ));
 
         // Register local methods, for use by the node key manager component.
         state.rpc_dispatcher.add_method(RpcMethod::new(
@@ -77,7 +76,21 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
                 name: LOCAL_METHOD_INIT.to_string(),
                 kind: RpcKind::LocalQuery,
             },
-            init_kdf,
+            methods::init_kdf,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET.to_string(),
+                kind: RpcKind::LocalQuery,
+            },
+            methods::generate_ephemeral_secret,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: LOCAL_METHOD_LOAD_EPHEMERAL_SECRET.to_string(),
+                kind: RpcKind::LocalQuery,
+            },
+            methods::load_ephemeral_secret,
         ));
 
         let runtime_id = state.protocol.get_runtime_id();
