@@ -41,9 +41,6 @@ var (
 	// signature fails verification.
 	ErrInvalidAttestationSignature = errors.New("node: invalid TEE attestation signature")
 
-	// ErrAttestationNotFresh is the error returned when the TEE attestation is
-	// not fresh enough.
-	ErrAttestationNotFresh = errors.New("node: TEE attestation not fresh enough")
 	// ErrAttestationFromFuture is the error returned when the TEE attestation appears
 	// to be from the future.
 	ErrAttestationFromFuture = errors.New("node: TEE attestation from the future")

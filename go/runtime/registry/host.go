@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/eapache/channels"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -35,6 +37,9 @@ const (
 
 	// retryInterval is the time interval used between failed key manager updates.
 	retryInterval = time.Second
+
+	// minAttestationInterval is the minimum attestation interval.
+	minAttestationInterval = 5 * time.Minute
 )
 
 // RuntimeHostNode provides methods for nodes that need to host runtimes.
@@ -743,14 +748,30 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 	// Create a ring channel with a capacity of one as we only care about the latest block.
 	blkCh := channels.NewRingChannel(channels.BufferCap(1))
 	go func() {
+		defer blkCh.Close()
+
 		for blk := range rawCh {
 			blkCh.In() <- blk
 		}
-		blkCh.Close()
 	}()
+
+	// Subscribe to runtime descriptor updates.
+	dscCh, dscSub, err := n.runtime.WatchRegistryDescriptor()
+	if err != nil {
+		n.logger.Error("failed to subscribe to registry descriptor updates",
+			"err", err,
+		)
+		return
+	}
+	defer dscSub.Close()
 
 	n.logger.Debug("watching consensus layer blocks")
 
+	var (
+		maxAttestationAge           uint64
+		lastAttestationUpdateHeight uint64
+		lastAttestationUpdate       time.Time
+	)
 	for {
 		select {
 		case <-n.ctx.Done():
@@ -759,26 +780,99 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 		case <-n.stopCh:
 			n.logger.Debug("termination requested")
 			return
+		case dsc := <-dscCh:
+			// We only care about TEE-enabled runtimes.
+			if dsc.TEEHardware != node.TEEHardwareIntelSGX {
+				continue
+			}
+
+			var epoch beacon.EpochTime
+			epoch, err = n.consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
+			if err != nil {
+				n.logger.Error("failed to query current epoch",
+					"err", err,
+				)
+				continue
+			}
+
+			// Fetch the active deployment.
+			vi := dsc.ActiveDeployment(epoch)
+			if vi == nil {
+				continue
+			}
+
+			// Parse SGX constraints.
+			var sc node.SGXConstraints
+			if err = cbor.Unmarshal(vi.TEE, &sc); err != nil {
+				n.logger.Error("malformed SGX constraints",
+					"err", err,
+				)
+				continue
+			}
+
+			// Apply defaults.
+			var params *registry.ConsensusParameters
+			params, err = n.consensus.Registry().ConsensusParameters(n.ctx, consensus.HeightLatest)
+			if err != nil {
+				n.logger.Error("failed to query registry parameters",
+					"err", err,
+				)
+				continue
+			}
+			if params.TEEFeatures != nil {
+				params.TEEFeatures.SGX.ApplyDefaultConstraints(&sc)
+			}
+
+			// Pick a random interval between 50% and 90% of the MaxAttestationAge.
+			if sc.MaxAttestationAge > 2 { // Ensure a is non-zero.
+				a := (sc.MaxAttestationAge * 4) / 10 // 40%
+				b := sc.MaxAttestationAge / 2        // 50%
+				maxAttestationAge = b + uint64(rand.Int63n(int64(a)))
+			} else {
+				maxAttestationAge = 0 // Disarm height-based re-attestation.
+			}
 		case rawBlk, ok := <-blkCh.Out():
+			// New consensus layer block.
 			if !ok {
 				return
 			}
 			blk := rawBlk.(*consensus.Block)
+			height := uint64(blk.Height)
 
 			// Notify the runtime that a new consensus layer block is available.
 			ctx, cancel := context.WithTimeout(n.ctx, notifyTimeout)
-			err = n.host.ConsensusSync(ctx, uint64(blk.Height))
+			err = n.host.ConsensusSync(ctx, height)
 			cancel()
 			if err != nil {
 				n.logger.Error("failed to notify runtime of a new consensus layer block",
 					"err", err,
-					"height", blk.Height,
+					"height", height,
 				)
 				continue
 			}
 			n.logger.Debug("runtime notified of new consensus layer block",
-				"height", blk.Height,
+				"height", height,
 			)
+
+			// Assume runtime has already done the initial attestation.
+			if lastAttestationUpdate.IsZero() {
+				lastAttestationUpdateHeight = height
+				lastAttestationUpdate = time.Now()
+			}
+			// Periodically trigger re-attestation.
+			if maxAttestationAge > 0 && height-lastAttestationUpdateHeight > maxAttestationAge &&
+				time.Since(lastAttestationUpdate) > minAttestationInterval {
+
+				n.logger.Debug("requesting the runtime to update CapabilityTEE")
+
+				if err = n.host.UpdateCapabilityTEE(n.ctx); err != nil {
+					n.logger.Error("failed to update runtime CapabilityTEE",
+						"err", err,
+					)
+				}
+				lastAttestationUpdateHeight = height
+				lastAttestationUpdate = time.Now()
+			}
 		}
 	}
 }

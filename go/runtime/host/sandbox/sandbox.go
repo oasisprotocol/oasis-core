@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
@@ -45,7 +46,7 @@ type Config struct {
 
 	// HostInitializer is a function that additionally initializes the runtime host. In case it is
 	// not specified a default function is used.
-	HostInitializer func(context.Context, host.Runtime, version.Version, process.Process, protocol.Connection) (*host.StartedEvent, error)
+	HostInitializer func(context.Context, *HostInitializerParams) (*host.StartedEvent, error)
 
 	// Logger is an optional logger to use with this provisioner. In case it is not specified a
 	// default logger will be created.
@@ -58,6 +59,16 @@ type Config struct {
 	InsecureNoSandbox bool
 }
 
+// HostInitializerParams contains parameters for the HostInitializer function.
+type HostInitializerParams struct {
+	Runtime    host.Runtime
+	Version    version.Version
+	Process    process.Process
+	Connection protocol.Connection
+
+	NotifyUpdateCapabilityTEE <-chan struct{}
+}
+
 type provisioner struct {
 	cfg Config
 }
@@ -67,14 +78,15 @@ func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Run
 	id := cfg.Bundle.Manifest.ID
 
 	r := &sandboxedRuntime{
-		cfg:      p.cfg,
-		rtCfg:    cfg,
-		id:       id,
-		stopCh:   make(chan struct{}),
-		quitCh:   make(chan struct{}),
-		ctrlCh:   make(chan interface{}, ctrlChannelBufferSize),
-		notifier: pubsub.NewBroker(false),
-		logger:   p.cfg.Logger.With("runtime_id", id),
+		cfg:                       p.cfg,
+		rtCfg:                     cfg,
+		id:                        id,
+		stopCh:                    make(chan struct{}),
+		quitCh:                    make(chan struct{}),
+		ctrlCh:                    make(chan interface{}, ctrlChannelBufferSize),
+		notifier:                  pubsub.NewBroker(false),
+		notifyUpdateCapabilityTEE: channels.NewRingChannel(1),
+		logger:                    p.cfg.Logger.With("runtime_id", id),
 	}
 
 	return r, nil
@@ -102,6 +114,8 @@ type sandboxedRuntime struct {
 	process  process.Process
 	conn     protocol.Connection
 	notifier *pubsub.Broker
+
+	notifyUpdateCapabilityTEE *channels.RingChannel
 
 	logger *logging.Logger
 }
@@ -149,6 +163,16 @@ func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (rsp *
 	// Retry call in case the runtime is not yet ready.
 	err = backoff.Retry(callFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
 	return
+}
+
+// Implements host.Runtime.
+func (r *sandboxedRuntime) UpdateCapabilityTEE(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case r.notifyUpdateCapabilityTEE.In() <- struct{}{}:
+	}
+	return nil
 }
 
 // Implements host.Runtime.
@@ -356,10 +380,21 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
 	}
 
+	notifyUpdateCapabilityTEECh := make(chan struct{})
+	channels.Unwrap(r.notifyUpdateCapabilityTEE, notifyUpdateCapabilityTEECh)
+
+	hp := &HostInitializerParams{
+		Runtime:                   r,
+		Version:                   *rtVersion,
+		Process:                   p,
+		Connection:                pc,
+		NotifyUpdateCapabilityTEE: notifyUpdateCapabilityTEECh,
+	}
+
 	// Perform configuration-specific host initialization.
 	exInitCtx, cancelExInit := context.WithTimeout(ctx, runtimeExtendedInitTimeout)
 	defer cancelExInit()
-	ev, err := r.cfg.HostInitializer(exInitCtx, r, *rtVersion, p, pc)
+	ev, err := r.cfg.HostInitializer(exInitCtx, hp)
 	if err != nil {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
@@ -559,15 +594,9 @@ func New(cfg Config) (host.Provisioner, error) {
 	}
 	// Use a default HostInitializer if none was provided.
 	if cfg.HostInitializer == nil {
-		cfg.HostInitializer = func(
-			ctx context.Context,
-			rt host.Runtime,
-			version version.Version,
-			p process.Process,
-			conn protocol.Connection,
-		) (*host.StartedEvent, error) {
+		cfg.HostInitializer = func(ctx context.Context, hp *HostInitializerParams) (*host.StartedEvent, error) {
 			return &host.StartedEvent{
-				Version: version,
+				Version: hp.Version,
 			}, nil
 		}
 	}

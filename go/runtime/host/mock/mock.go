@@ -174,6 +174,11 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 }
 
 // Implements host.Runtime.
+func (r *runtime) UpdateCapabilityTEE(ctx context.Context) error {
+	return nil
+}
+
+// Implements host.Runtime.
 func (r *runtime) WatchEvents(ctx context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *host.Event)
 	sub := r.notifier.Subscribe()
