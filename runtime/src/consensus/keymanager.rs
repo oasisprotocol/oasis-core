@@ -66,6 +66,17 @@ impl SignedPolicySGX {
     }
 }
 
+/// A secret encrypted with Deoxys-II MRAE algorithm.
+#[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub struct EncryptedSecret {
+    /// Checksum for validating decrypted secret.
+    pub checksum: Vec<u8>,
+    /// Public key to derive the symmetric key for decryption.
+    pub pub_key: x25519::PublicKey,
+    /// A map of REK encrypted secrets.
+    pub ciphertexts: HashMap<x25519::PublicKey, Vec<u8>>,
+}
+
 /// Encrypted ephemeral secret.
 #[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct EncryptedEphemeralSecret {
@@ -73,12 +84,8 @@ pub struct EncryptedEphemeralSecret {
     pub runtime_id: Namespace,
     /// Epoch time to which the ephemeral secret belongs.
     pub epoch: EpochTime,
-    /// Checksum for validating decryption.
-    pub checksum: Vec<u8>,
-    // Public part of the key which was used to encrypt the ephemeral secret.
-    pub public_key: x25519::PublicKey,
-    /// A map of REK encrypted ephemeral secrets for all known key manager enclaves.
-    pub ciphertexts: HashMap<x25519::PublicKey, Vec<u8>>,
+    /// Encrypted secret.
+    pub secret: EncryptedSecret,
 }
 
 /// Signed encrypted ephemeral secret (RAK).

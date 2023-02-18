@@ -146,7 +146,7 @@ func (sc *kmEphemeralKeysImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err != nil {
 		return err
 	}
-	if len(sigSecret.Secret.Ciphertexts) != 1 {
+	if len(sigSecret.Secret.Secret.Ciphertexts) != 1 {
 		return fmt.Errorf("the first ephemeral secret should be encrypted for one enclave only")
 	}
 
@@ -228,7 +228,7 @@ func (sc *kmEphemeralKeysImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err != nil {
 		return err
 	}
-	if len(sigSecret.Secret.Ciphertexts) != 1 {
+	if len(sigSecret.Secret.Secret.Ciphertexts) != 1 {
 		return fmt.Errorf("the first ephemeral secret should be encrypted for one enclave only")
 	}
 
@@ -351,7 +351,7 @@ func (sc *kmEphemeralKeysImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		// Skip first two secrets as we cannot be sure how many key manager nodes were registered
 		// when the secret was generated.
 		if i > 1 {
-			if n := len(sigSecret.Secret.Ciphertexts); n != numCiphertexts {
+			if n := len(sigSecret.Secret.Secret.Ciphertexts); n != numCiphertexts {
 				return fmt.Errorf("ephemeral secret should be encrypted to %d enclaves, not %d", numCiphertexts, n)
 			}
 		}

@@ -164,12 +164,14 @@ func TestPublishEphemeralSecret(t *testing.T) {
 	// Prepare signed secret.
 	newSignedSecret := func() *api.SignedEncryptedEphemeralSecret {
 		secret := api.EncryptedEphemeralSecret{
-			ID:        firstKmID,
-			Epoch:     beacon.EpochTime(1),
-			PublicKey: *reks[0].Public(),
-			Ciphertexts: map[x25519.PublicKey][]byte{
-				*reks[0].Public(): {1, 2, 3},
-				*reks[1].Public(): {4, 5, 6},
+			ID:    firstKmID,
+			Epoch: beacon.EpochTime(1),
+			Secret: api.EncryptedSecret{
+				PubKey: *reks[0].Public(),
+				Ciphertexts: map[x25519.PublicKey][]byte{
+					*reks[0].Public(): {1, 2, 3},
+					*reks[1].Public(): {4, 5, 6},
+				},
 			},
 		}
 		sig, err2 := signature.Sign(raks[0], api.EncryptedEphemeralSecretSignatureContext, cbor.Marshal(secret))
@@ -215,10 +217,10 @@ func TestPublishEphemeralSecret(t *testing.T) {
 
 	t.Run("not enough ciphertexts", func(t *testing.T) {
 		sigSecret := newSignedSecret()
-		delete(sigSecret.Secret.Ciphertexts, *reks[0].Public())
+		delete(sigSecret.Secret.Secret.Ciphertexts, *reks[0].Public())
 
 		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
-		require.EqualError(t, err, "keymanager: sanity check failed: ephemeral secret is not encrypted to enough enclaves")
+		require.EqualError(t, err, "keymanager: sanity check failed: secret is not encrypted with enough keys")
 	})
 
 	t.Run("empty committee", func(t *testing.T) {
@@ -226,7 +228,7 @@ func TestPublishEphemeralSecret(t *testing.T) {
 		sigSecret.Secret.ID = secondKmID
 
 		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
-		require.EqualError(t, err, "keymanager: sanity check failed: ephemeral secret cannot be encrypted to an empty committee")
+		require.EqualError(t, err, "keymanager: sanity check failed: secret has to be encrypted with at least one key")
 	})
 
 	t.Run("invalid signature", func(t *testing.T) {

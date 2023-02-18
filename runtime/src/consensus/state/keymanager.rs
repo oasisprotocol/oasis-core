@@ -124,7 +124,9 @@ mod test {
             namespace::Namespace,
             sgx::{EnclaveIdentity, MrEnclave, MrSigner},
         },
-        consensus::keymanager::{EnclavePolicySGX, EncryptedEphemeralSecret, PolicySGX},
+        consensus::keymanager::{
+            EnclavePolicySGX, EncryptedEphemeralSecret, EncryptedSecret, PolicySGX,
+        },
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
             Root, RootType, Tree,
@@ -142,7 +144,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("7d17a7ad7030b923200a8233f2a74fff950adea77440fb6a687a0978d552a659"),
+            hash: Hash::from("770079d8f120597eb8c4d3d3dfd9cf9eb6c4b3adbe80fc579cbb312667aa8443"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -245,14 +247,16 @@ mod test {
             secret: EncryptedEphemeralSecret {
                 runtime_id: keymanager1,
                 epoch: 1,
-                checksum: vec![1,2,3,4,5],
-                public_key: rek1.public_key(),
-                ciphertexts: HashMap::from([
-                    (rek1.public_key(), vec![1, 2, 3]),
-                    (rek2.public_key(), vec![4, 5, 6]),
-                ]),
+                secret: EncryptedSecret{
+                    checksum: vec![1,2,3,4,5],
+                    pub_key: rek1.public_key(),
+                    ciphertexts: HashMap::from([
+                        (rek1.public_key(), vec![1, 2, 3]),
+                        (rek2.public_key(), vec![4, 5, 6]),
+                    ]),
+                },
             },
-            signature: Signature::from("7e5dbd8da19c0624b60a9af8a5daa73414d9cdbc483619a08e11b9ceda423be658a4e791fb0a79197b0eafe621bf21c15e5fca5eba8b91fba6644864bc952803"),
+            signature: Signature::from("4a2d098e02411fdc14d6a36f91bb362fd4f4dbaadb4cbf70e20e038fe1740bc7dde0b20afd25657d6abc916be2b9ed0054d586aedb2b7951c99aab3206b24b02"),
         };
 
         // Test statuses.

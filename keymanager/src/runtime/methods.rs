@@ -23,7 +23,7 @@ use oasis_core_runtime::{
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::{EncryptedEphemeralSecret, SignedEncryptedEphemeralSecret},
+        keymanager::{EncryptedEphemeralSecret, EncryptedSecret, SignedEncryptedEphemeralSecret},
         state::{
             beacon::ImmutableState as BeaconState, keymanager::ImmutableState as KeyManagerState,
             registry::ImmutableState as RegistryState,
@@ -219,8 +219,8 @@ pub fn generate_ephemeral_secret(
     }
 
     // Generate a random encryption key, a random secret and encrypt the latter with REK keys.
-    let private_key = x25519::PrivateKey::generate();
-    let public_key = x25519::PublicKey::from(&private_key);
+    let priv_key = x25519::PrivateKey::generate();
+    let pub_key = x25519::PublicKey::from(&priv_key);
     let mut nonce = Nonce::generate();
     let secret = Secret::generate();
     let plaintext = secret.0.to_vec();
@@ -236,7 +236,7 @@ pub fn generate_ephemeral_secret(
             plaintext.clone(),
             additional_data.clone(),
             &rek.0,
-            &private_key.0,
+            &priv_key.0,
         )?;
         ciphertext.extend_from_slice(&nonce.to_vec());
 
@@ -246,11 +246,13 @@ pub fn generate_ephemeral_secret(
     // Sign the secret.
     let signer: Arc<dyn Signer> = ctx.identity.clone();
     let secret = EncryptedEphemeralSecret {
-        epoch,
         runtime_id,
-        checksum,
-        public_key,
-        ciphertexts,
+        epoch,
+        secret: EncryptedSecret {
+            checksum,
+            pub_key,
+            ciphertexts,
+        },
     };
     let signed_secret = SignedEncryptedEphemeralSecret::new(secret, &signer)?;
 
@@ -272,7 +274,7 @@ pub fn load_ephemeral_secret(ctx: &mut RpcContext, req: &LoadEphemeralSecretRequ
 
     let checksum =
         Kdf::checksum_ephemeral_secret(&secret, &signed_secret.runtime_id, signed_secret.epoch);
-    if checksum != signed_secret.checksum {
+    if checksum != signed_secret.secret.checksum {
         return Err(KeyManagerError::EphemeralSecretChecksumMismatch.into());
     }
 
@@ -290,7 +292,7 @@ fn decrypt_ephemeral_secret(
     let runtime_id = secret.runtime_id;
     let rek = ctx.identity.public_rek();
 
-    let ciphertext = match secret.ciphertexts.get(&rek) {
+    let ciphertext = match secret.secret.ciphertexts.get(&rek) {
         Some(ciphertext) => ciphertext,
         None => return Ok(None),
     };
@@ -298,9 +300,12 @@ fn decrypt_ephemeral_secret(
     let (ciphertext, nonce) =
         unpack_encrypted_secret_nonce(ciphertext).ok_or(KeyManagerError::InvalidCiphertext)?;
     let additional_data = pack_runtime_id_epoch(&runtime_id, epoch);
-    let plaintext =
-        ctx.identity
-            .box_open(&nonce, ciphertext, additional_data, &secret.public_key.0)?;
+    let plaintext = ctx.identity.box_open(
+        &nonce,
+        ciphertext,
+        additional_data,
+        &secret.secret.pub_key.0,
+    )?;
 
     if plaintext.len() != SECRET_SIZE {
         return Err(KeyManagerError::InvalidCiphertext.into());
@@ -529,7 +534,7 @@ fn nodes_with_ephemeral_secret(
     let rek_keys = key_manager_rek_keys(ctx, secret.runtime_id)?;
     let nodes = rek_keys
         .iter()
-        .filter(|(_, rek)| secret.ciphertexts.contains_key(rek))
+        .filter(|(_, rek)| secret.secret.ciphertexts.contains_key(rek))
         .map(|(&node, _)| node)
         .collect();
 
