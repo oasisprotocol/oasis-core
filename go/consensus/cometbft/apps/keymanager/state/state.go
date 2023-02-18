@@ -23,10 +23,14 @@ var (
 	//
 	// Value is CBOR-serialized keymanager.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x71)
+	// masterSecretKeyFmt is the key manager master secret key format.
+	//
+	// Value is CBOR-serialized key manager signed encrypted master secret.
+	masterSecretKeyFmt = keyformat.New(0x72, keyformat.H(&common.Namespace{}))
 	// ephemeralSecretKeyFmt is the key manager ephemeral secret key format.
 	//
 	// Value is CBOR-serialized key manager signed encrypted ephemeral secret.
-	ephemeralSecretKeyFmt = keyformat.New(0x72, keyformat.H(&common.Namespace{}), uint64(0))
+	ephemeralSecretKeyFmt = keyformat.New(0x73, keyformat.H(&common.Namespace{}), uint64(0))
 )
 
 // ImmutableState is the immutable key manager state wrapper.
@@ -102,6 +106,22 @@ func (st *ImmutableState) Status(ctx context.Context, id common.Namespace) (*api
 	return &status, nil
 }
 
+func (st *ImmutableState) MasterSecret(ctx context.Context, id common.Namespace) (*api.SignedEncryptedMasterSecret, error) {
+	data, err := st.is.Get(ctx, masterSecretKeyFmt.Encode(&id))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
+		return nil, api.ErrNoSuchMasterSecret
+	}
+
+	var secret api.SignedEncryptedMasterSecret
+	if err := cbor.Unmarshal(data, &secret); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &secret, nil
+}
+
 func (st *ImmutableState) EphemeralSecret(ctx context.Context, id common.Namespace, epoch beacon.EpochTime) (*api.SignedEncryptedEphemeralSecret, error) {
 	data, err := st.is.Get(ctx, ephemeralSecretKeyFmt.Encode(&id, uint64(epoch)))
 	if err != nil {
@@ -146,6 +166,11 @@ func (st *MutableState) SetConsensusParameters(ctx context.Context, params *api.
 
 func (st *MutableState) SetStatus(ctx context.Context, status *api.Status) error {
 	err := st.ms.Insert(ctx, statusKeyFmt.Encode(&status.ID), cbor.Marshal(status))
+	return abciAPI.UnavailableStateError(err)
+}
+
+func (st *MutableState) SetMasterSecret(ctx context.Context, secret *api.SignedEncryptedMasterSecret) error {
+	err := st.ms.Insert(ctx, masterSecretKeyFmt.Encode(&secret.Secret.ID), cbor.Marshal(secret))
 	return abciAPI.UnavailableStateError(err)
 }
 

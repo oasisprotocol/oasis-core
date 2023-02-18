@@ -196,6 +196,7 @@ struct CachedPolicy {
     pub may_query: HashMap<Namespace, HashSet<EnclaveIdentity>>,
     pub may_replicate: HashSet<EnclaveIdentity>,
     pub may_replicate_from: HashSet<EnclaveIdentity>,
+    pub master_secret_rotation_interval: EpochTime,
     pub max_ephemeral_secret_age: EpochTime,
 }
 
@@ -242,6 +243,7 @@ impl CachedPolicy {
             }
         }
 
+        cached_policy.master_secret_rotation_interval = policy.master_secret_rotation_interval;
         cached_policy.max_ephemeral_secret_age = policy.max_ephemeral_secret_age;
 
         Ok(cached_policy)

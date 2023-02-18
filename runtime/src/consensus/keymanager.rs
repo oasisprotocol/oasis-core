@@ -39,6 +39,8 @@ pub struct PolicySGX {
     pub id: Namespace,
     pub enclaves: HashMap<EnclaveIdentity, EnclavePolicySGX>,
     #[cbor(optional)]
+    pub master_secret_rotation_interval: EpochTime,
+    #[cbor(optional)]
     pub max_ephemeral_secret_age: EpochTime,
 }
 

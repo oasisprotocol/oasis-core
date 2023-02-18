@@ -79,6 +79,12 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 			return api.ErrInvalidArgument
 		}
 		return app.updatePolicy(ctx, state, &sigPol)
+	case api.MethodPublishMasterSecret:
+		var sigSec api.SignedEncryptedMasterSecret
+		if err := cbor.Unmarshal(tx.Body, &sigSec); err != nil {
+			return api.ErrInvalidArgument
+		}
+		return app.publishMasterSecret(ctx, state, &sigSec)
 	case api.MethodPublishEphemeralSecret:
 		var sigSec api.SignedEncryptedEphemeralSecret
 		if err := cbor.Unmarshal(tx.Body, &sigSec); err != nil {
@@ -179,6 +185,8 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 				"id", newStatus.ID,
 				"is_initialized", newStatus.IsInitialized,
 				"is_secure", newStatus.IsSecure,
+				"generation", newStatus.Generation,
+				"rotation_epoch", newStatus.RotationEpoch,
 				"checksum", hex.EncodeToString(newStatus.Checksum),
 				"rsk", newStatus.RSK,
 				"nodes", newStatus.Nodes,
@@ -226,6 +234,8 @@ func (app *keymanagerApplication) generateStatus(
 		ID:            kmrt.ID,
 		IsInitialized: oldStatus.IsInitialized,
 		IsSecure:      oldStatus.IsSecure,
+		Generation:    oldStatus.Generation,
+		RotationEpoch: oldStatus.RotationEpoch,
 		Checksum:      oldStatus.Checksum,
 		Policy:        oldStatus.Policy,
 	}

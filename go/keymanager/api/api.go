@@ -41,15 +41,21 @@ var (
 	// exist.
 	ErrNoSuchStatus = errors.New(ModuleName, 2, "keymanager: no such status")
 
+	// ErrNoSuchMasterSecret is the error returned when a key manager master secret does not exist.
+	ErrNoSuchMasterSecret = errors.New(ModuleName, 3, "keymanager: no such master secret")
+
 	// ErrNoSuchEphemeralSecret is the error returned when a key manager ephemeral secret
 	// for the given epoch does not exist.
-	ErrNoSuchEphemeralSecret = errors.New(ModuleName, 3, "keymanager: no such ephemeral secret")
+	ErrNoSuchEphemeralSecret = errors.New(ModuleName, 4, "keymanager: no such ephemeral secret")
 
 	// MethodUpdatePolicy is the method name for policy updates.
 	MethodUpdatePolicy = transaction.NewMethodName(ModuleName, "UpdatePolicy", SignedPolicySGX{})
 
+	// MethodPublishMasterSecret is the method name for publishing master secret.
+	MethodPublishMasterSecret = transaction.NewMethodName(ModuleName, "PublishMasterSecret", SignedEncryptedMasterSecret{})
+
 	// MethodPublishEphemeralSecret is the method name for publishing ephemeral secret.
-	MethodPublishEphemeralSecret = transaction.NewMethodName(ModuleName, "PublishEphemeralSecret", EncryptedEphemeralSecret{})
+	MethodPublishEphemeralSecret = transaction.NewMethodName(ModuleName, "PublishEphemeralSecret", SignedEncryptedEphemeralSecret{})
 
 	// InsecureRAK is the insecure hardcoded key manager public key, used
 	// in insecure builds when a RAK is unavailable.
@@ -66,6 +72,7 @@ var (
 	// Methods is the list of all methods supported by the key manager backend.
 	Methods = []transaction.MethodName{
 		MethodUpdatePolicy,
+		MethodPublishMasterSecret,
 		MethodPublishEphemeralSecret,
 	}
 
@@ -92,6 +99,9 @@ const (
 	// GasOpUpdatePolicy is the gas operation identifier for policy updates
 	// costs.
 	GasOpUpdatePolicy transaction.Op = "update_policy"
+	// GasOpPublishMasterSecret is the gas operation identifier for publishing
+	// key manager master secret.
+	GasOpPublishMasterSecret transaction.Op = "publish_master_secret"
 	// GasOpPublishEphemeralSecret is the gas operation identifier for publishing
 	// key manager ephemeral secret.
 	GasOpPublishEphemeralSecret transaction.Op = "publish_ephemeral_secret"
@@ -102,6 +112,7 @@ const (
 // DefaultGasCosts are the "default" gas costs for operations.
 var DefaultGasCosts = transaction.Costs{
 	GasOpUpdatePolicy:           1000,
+	GasOpPublishMasterSecret:    1000,
 	GasOpPublishEphemeralSecret: 1000,
 }
 
@@ -119,6 +130,12 @@ type Status struct {
 	// IsSecure is true iff the key manager is secure.
 	IsSecure bool `json:"is_secure"`
 
+	// Generation is the generation of the latest master secret.
+	Generation uint64 `json:"generation,omitempty"`
+
+	// RotationEpoch is the epoch of the last master secret rotation.
+	RotationEpoch beacon.EpochTime `json:"rotation_epoch,omitempty"`
+
 	// Checksum is the key manager master secret verification checksum.
 	Checksum []byte `json:"checksum"`
 
@@ -130,6 +147,40 @@ type Status struct {
 
 	// RSK is the runtime signing key of the key manager.
 	RSK *signature.PublicKey `json:"rsk,omitempty"`
+}
+
+// NextGeneration returns the generation of the next master secret.
+func (s *Status) NextGeneration() uint64 {
+	if len(s.Checksum) == 0 {
+		return 0
+	}
+	return s.Generation + 1
+}
+
+// VerifyRotationEpoch verifies if rotation can be performed in the given epoch.
+func (s *Status) VerifyRotationEpoch(epoch beacon.EpochTime) error {
+	if nextGen := s.NextGeneration(); nextGen == 0 {
+		return nil
+	}
+
+	// By default, rotation is disabled unless specified in the policy.
+	var rotationInterval beacon.EpochTime
+	if s.Policy != nil {
+		rotationInterval = s.Policy.Policy.MasterSecretRotationInterval
+	}
+
+	// Reject if rotation is disabled.
+	if rotationInterval == 0 {
+		return fmt.Errorf("master secret rotation disabled")
+	}
+
+	// Reject if the rotation period has not expired.
+	rotationEpoch := s.RotationEpoch + rotationInterval
+	if epoch < rotationEpoch {
+		return fmt.Errorf("master secret rotation interval has not yet expired")
+	}
+
+	return nil
 }
 
 // Backend is a key manager management implementation.
@@ -149,6 +200,12 @@ type Backend interface {
 	// StateToGenesis returns the genesis state at specified block height.
 	StateToGenesis(context.Context, int64) (*Genesis, error)
 
+	// GetMasterSecret returns the key manager master secret.
+	GetMasterSecret(context.Context, *registry.NamespaceQuery) (*SignedEncryptedMasterSecret, error)
+
+	// WatchMasterSecrets returns a channel that produces a stream of master secrets.
+	WatchMasterSecrets() (<-chan *SignedEncryptedMasterSecret, *pubsub.Subscription)
+
 	// GetEphemeralSecret returns the key manager ephemeral secret.
 	GetEphemeralSecret(context.Context, *registry.NamespaceEpochQuery) (*SignedEncryptedEphemeralSecret, error)
 
@@ -161,9 +218,14 @@ func NewUpdatePolicyTx(nonce uint64, fee *transaction.Fee, sigPol *SignedPolicyS
 	return transaction.NewTransaction(nonce, fee, MethodUpdatePolicy, sigPol)
 }
 
+// NewPublishMasterSecretTx creates a new publish master secret transaction.
+func NewPublishMasterSecretTx(nonce uint64, fee *transaction.Fee, sigSec *SignedEncryptedMasterSecret) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodPublishMasterSecret, sigSec)
+}
+
 // NewPublishEphemeralSecretTx creates a new publish ephemeral secret transaction.
-func NewPublishEphemeralSecretTx(nonce uint64, fee *transaction.Fee, sigEnt *SignedEncryptedEphemeralSecret) *transaction.Transaction {
-	return transaction.NewTransaction(nonce, fee, MethodPublishEphemeralSecret, sigEnt)
+func NewPublishEphemeralSecretTx(nonce uint64, fee *transaction.Fee, sigSec *SignedEncryptedEphemeralSecret) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodPublishEphemeralSecret, sigSec)
 }
 
 // InitRequest is the initialization RPC request, sent to the key manager
@@ -324,6 +386,16 @@ type StatusUpdateEvent struct {
 // EventKind returns a string representation of this event's kind.
 func (ev *StatusUpdateEvent) EventKind() string {
 	return "status"
+}
+
+// MasterSecretPublishedEvent is the key manager master secret published event.
+type MasterSecretPublishedEvent struct {
+	Secret *SignedEncryptedMasterSecret
+}
+
+// EventKind returns a string representation of this event's kind.
+func (ev *MasterSecretPublishedEvent) EventKind() string {
+	return "master_secret"
 }
 
 // EphemeralSecretPublishedEvent is the key manager ephemeral secret published event.
