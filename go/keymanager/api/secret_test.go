@@ -54,6 +54,39 @@ func TestEncryptedSecret(t *testing.T) {
 	require.EqualError(err, "keymanager: sanity check failed: secret has to be encrypted with at least one key")
 }
 
+func TestEncryptedMasterSecret(t *testing.T) {
+	require := require.New(t)
+
+	// Create a secret encrypted for a key manager committee with 3 members.
+	sec, reks := generateTestSecret(3)
+
+	// Wrap it in a master secret.
+	gen := uint64(0)
+	epoch := beacon.EpochTime(100)
+	encSec := EncryptedMasterSecret{
+		ID:         common.NewTestNamespaceFromSeed([]byte("runtime 1"), common.NamespaceKeyManager),
+		Generation: gen,
+		Epoch:      epoch,
+		Secret:     sec,
+	}
+
+	// Happy path.
+	err := encSec.SanityCheck(gen, epoch, reks)
+	require.NoError(err)
+
+	// Invalid generation.
+	err = encSec.SanityCheck(gen+1, epoch, reks)
+	require.EqualError(err, "keymanager: sanity check failed: master secret contains an invalid generation: (expected: 1, got: 0)")
+
+	// Invalid generation.
+	err = encSec.SanityCheck(gen, epoch+1, reks)
+	require.EqualError(err, "keymanager: sanity check failed: master secret contains an invalid epoch: (expected: 101, got: 100)")
+
+	// Empty key manager committee (make sure the secret is also checked).
+	err = encSec.SanityCheck(gen, epoch, nil)
+	require.EqualError(err, "keymanager: sanity check failed: secret has to be encrypted with at least one key")
+}
+
 func TestEncryptedEphemeralSecret(t *testing.T) {
 	require := require.New(t)
 
