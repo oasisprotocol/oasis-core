@@ -7,7 +7,6 @@ import (
 	"time"
 
 	flag "github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -20,8 +19,6 @@ import (
 )
 
 const (
-	CfgDataDir = "datadir"
-
 	maxSubmissionRetryElapsedTime = 120 * time.Second
 
 	fundAccountAmount = 10000000000
@@ -197,9 +194,6 @@ func FundAccountFromTestEntity(
 }
 
 func init() {
-	Flags.String(CfgDataDir, "", "data directory")
-	_ = viper.BindPFlags(Flags)
-
 	Flags.AddFlagSet(QueriesFlags)
 	Flags.AddFlagSet(RuntimeFlags)
 }

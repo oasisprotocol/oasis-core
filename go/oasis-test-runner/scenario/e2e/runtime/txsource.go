@@ -789,7 +789,6 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"debug", "txsource",
 		"--address", "unix:" + node.SocketPath(),
 		"--" + common.CfgDebugAllowTestKeys,
-		"--" + workload.CfgDataDir, d.String(),
 		"--" + flags.CfgDebugDontBlameOasis,
 		"--" + flags.CfgDebugTestEntity,
 		"--" + commonGrpc.CfgLogDebug,

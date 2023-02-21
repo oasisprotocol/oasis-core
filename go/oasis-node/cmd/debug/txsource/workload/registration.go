@@ -6,10 +6,8 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -181,11 +179,11 @@ func (r *registration) Run( // nolint: gocyclo
 		panic(err)
 	}
 
-	baseDir := viper.GetString(CfgDataDir)
-	nodeIdentitiesDir := filepath.Join(baseDir, "node-identities")
-	if err = common.Mkdir(nodeIdentitiesDir); err != nil {
+	nodeIdentitiesDir, err := os.MkdirTemp("", "oasis-e2e-registration")
+	if err != nil {
 		return fmt.Errorf("txsource/registration: failed to create node-identities dir: %w", err)
 	}
+	defer os.RemoveAll(nodeIdentitiesDir)
 
 	type runtimeInfo struct {
 		entityIdx int
@@ -256,6 +254,9 @@ func (r *registration) Run( // nolint: gocyclo
 
 			entityAccs[i].nodeIdentities = append(entityAccs[i].nodeIdentities, &nodeAcc{ident, nodeDesc, nodeAccNonce})
 			ent.Nodes = append(ent.Nodes, ident.NodeSigner.Public())
+
+			// Cleanup temporary node identity directory after generation.
+			_ = os.RemoveAll(dataDir)
 		}
 
 		// Register entity.
@@ -302,6 +303,8 @@ func (r *registration) Run( // nolint: gocyclo
 			}
 		}
 	}
+	// Cleanup temporary identities directory after generation.
+	_ = os.RemoveAll(nodeIdentitiesDir)
 
 	iteration := 0
 	var loopCtx context.Context
