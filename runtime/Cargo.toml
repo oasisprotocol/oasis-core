@@ -56,7 +56,7 @@ bech32 = "0.9.1"
 impl-trait-for-tuples = "0.2.1"
 x509-parser = "0.14.0"
 oid-registry = "0.6.0"
-rsa = "0.6.1"
+rsa = "0.8.1"
 base64-serde = "0.6.1"
 lru = "0.9.0"
 
