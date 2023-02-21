@@ -872,6 +872,14 @@ func (q *queries) Run(
 	for {
 		loopCtx, cancel := context.WithTimeout(ctx, queriesIterationTimeout)
 
+		// Ensure the node appears synced before doing queries. Given that nodes can be killed and
+		// held stopped for a while, they need to sync once they come back.
+		if isSynced, _ := q.control.IsSynced(loopCtx); !isSynced {
+			_ = q.control.WaitSync(loopCtx)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
 		err := q.doQueries(loopCtx, rng)
 		cancel()
 		switch {
