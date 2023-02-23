@@ -116,6 +116,17 @@ func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (rsp *proto
 	return
 }
 
+// UpdateCapabilityTEE implements host.Runtime.
+func (agg *Aggregate) UpdateCapabilityTEE(ctx context.Context) error {
+	agg.l.RLock()
+	defer agg.l.RUnlock()
+
+	if agg.active == nil {
+		return ErrNoActiveVersion
+	}
+	return agg.active.host.UpdateCapabilityTEE(ctx)
+}
+
 // WatchEvents implements host.Runtime.
 func (agg *Aggregate) WatchEvents(ctx context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *host.Event)

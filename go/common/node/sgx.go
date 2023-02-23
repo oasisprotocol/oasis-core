@@ -269,8 +269,8 @@ func (sa *SGXAttestation) verifyAttestationSignature(
 	if sa.Height > height {
 		return ErrAttestationFromFuture
 	}
-	if height-sa.Height > sc.MaxAttestationAge {
-		return ErrAttestationNotFresh
+	if age := height - sa.Height; age > sc.MaxAttestationAge {
+		return fmt.Errorf("node: TEE attestation not fresh enough (age: %d max: %d)", age, sc.MaxAttestationAge)
 	}
 
 	return nil

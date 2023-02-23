@@ -259,28 +259,22 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 	}, nil
 }
 
-func (s *sgxProvisioner) hostInitializer(
-	ctx context.Context,
-	rt host.Runtime,
-	version version.Version,
-	p process.Process,
-	conn protocol.Connection,
-) (*host.StartedEvent, error) {
+func (s *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostInitializerParams) (*host.StartedEvent, error) {
 	// Initialize TEE.
 	var err error
 	var ts *teeState
-	if ts, err = s.initCapabilityTEE(ctx, rt, conn, version); err != nil {
+	if ts, err = s.initCapabilityTEE(ctx, hp.Runtime, hp.Connection, hp.Version); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 	var capabilityTEE *node.CapabilityTEE
-	if capabilityTEE, err = s.updateCapabilityTEE(ctx, s.logger, ts, conn); err != nil {
+	if capabilityTEE, err = s.updateCapabilityTEE(ctx, s.logger, ts, hp.Connection); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 
-	go s.attestationWorker(ts, p, conn, version)
+	go s.attestationWorker(ts, hp)
 
 	return &host.StartedEvent{
-		Version:       version,
+		Version:       hp.Version,
 		CapabilityTEE: capabilityTEE,
 	}, nil
 }
@@ -349,7 +343,7 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *loggin
 	return capabilityTEE, nil
 }
 
-func (s *sgxProvisioner) attestationWorker(ts *teeState, p process.Process, conn protocol.Connection, version version.Version) {
+func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitializerParams) {
 	t := time.NewTicker(s.cfg.RuntimeAttestInterval)
 	defer t.Stop()
 
@@ -357,27 +351,33 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, p process.Process, conn
 
 	for {
 		select {
-		case <-p.Wait():
+		case <-hp.Process.Wait():
 			// Process has terminated.
 			return
 		case <-t.C:
-			// Update CapabilityTEE.
-			logger.Info("regenerating CapabilityTEE")
-
-			capabilityTEE, err := s.updateCapabilityTEE(context.Background(), logger, ts, conn)
-			if err != nil {
-				logger.Error("failed to regenerate CapabilityTEE",
-					"err", err,
-				)
-				continue
-			}
-
-			// Emit event about the updated CapabilityTEE.
-			ts.eventEmitter.EmitEvent(&host.Event{Updated: &host.UpdatedEvent{
-				Version:       version,
-				CapabilityTEE: capabilityTEE,
-			}})
+			// Re-attest based on the configured interval.
+		case <-hp.NotifyUpdateCapabilityTEE:
+			// Re-attest when explicitly requested. Also reset the periodic ticker to make sure we
+			// don't needlessly re-attest too often.
+			t.Reset(s.cfg.RuntimeAttestInterval)
 		}
+
+		// Update CapabilityTEE.
+		logger.Info("regenerating CapabilityTEE")
+
+		capabilityTEE, err := s.updateCapabilityTEE(context.Background(), logger, ts, hp.Connection)
+		if err != nil {
+			logger.Error("failed to regenerate CapabilityTEE",
+				"err", err,
+			)
+			continue
+		}
+
+		// Emit event about the updated CapabilityTEE.
+		ts.eventEmitter.EmitEvent(&host.Event{Updated: &host.UpdatedEvent{
+			Version:       hp.Version,
+			CapabilityTEE: capabilityTEE,
+		}})
 	}
 }
 
