@@ -304,13 +304,6 @@ nextNode:
 			// Set immutable status fields that cannot change after initialization.
 			if !isInitialized {
 				// The first version gets to be the source of truth.
-
-				// Allow false -> true transitions, but not the reverse, so that
-				// it is possible to set the security status in the genesis block.
-				if initResponse.IsSecure != isSecure && !initResponse.IsSecure {
-					ctx.Logger().Error("Security status mismatch for runtime", vars...)
-					continue nextNode
-				}
 				isInitialized = true
 				isSecure = initResponse.IsSecure
 				checksum = initResponse.Checksum
