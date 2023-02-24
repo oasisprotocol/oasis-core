@@ -29,6 +29,7 @@ import (
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -856,7 +857,8 @@ func (q *queries) Run(
 
 	if viper.GetBool(CfgQueriesRuntimeEnabled) {
 		// Only query genesis block info if runtime queries are enabled.
-		resp, err := q.runtime.GetGenesisBlock(ctx, q.runtimeID)
+		var resp *block.Block
+		resp, err = q.runtime.GetGenesisBlock(ctx, q.runtimeID)
 		if err != nil {
 			return fmt.Errorf("error querying runtime genesis block: %w", err)
 		}
@@ -864,7 +866,7 @@ func (q *queries) Run(
 
 		// Wait for 3rd epoch, so that runtimes are up and running.
 		q.logger.Info("waiting for 3rd epoch")
-		if err := q.beacon.WaitEpoch(ctx, 3); err != nil {
+		if err = q.beacon.WaitEpoch(ctx, 3); err != nil {
 			return fmt.Errorf("failed waiting for 2nd epoch: %w", err)
 		}
 	}
@@ -874,13 +876,16 @@ func (q *queries) Run(
 
 		// Ensure the node appears synced before doing queries. Given that nodes can be killed and
 		// held stopped for a while, they need to sync once they come back.
-		if isSynced, _ := q.control.IsSynced(loopCtx); !isSynced {
-			_ = q.control.WaitSync(loopCtx)
-			time.Sleep(1 * time.Second)
-			continue
+		switch isSynced, _ := q.control.IsSynced(loopCtx); isSynced {
+		case true:
+			// Node is synced, proceed with queries.
+			err = q.doQueries(loopCtx, rng)
+			q.iteration++
+		case false:
+			// Node is not synced, wait for it to sync (at most for queriesIterationTimeout).
+			err = q.control.WaitSync(loopCtx)
 		}
 
-		err := q.doQueries(loopCtx, rng)
 		cancel()
 		switch {
 		case err == nil:
@@ -894,7 +899,6 @@ func (q *queries) Run(
 		default:
 			return err
 		}
-		q.iteration++
 
 		select {
 		case <-time.After(1 * time.Second):
