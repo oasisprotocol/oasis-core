@@ -165,7 +165,6 @@ func NewArchive(
 			Strategy:      abci.PruneNone,
 			PruneInterval: time.Hour * 100, // Irrelevant as pruning is disabled.
 		},
-		HaltEpochHeight:     srv.genesis.HaltEpoch,
 		OwnTxSigner:         srv.identity.NodeSigner.Public(),
 		DisableCheckpointer: true,
 		InitialHeight:       uint64(srv.genesis.Height),

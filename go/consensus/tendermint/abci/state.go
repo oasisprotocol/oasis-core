@@ -64,9 +64,9 @@ type applicationState struct { // nolint: maligned
 
 	timeSource beacon.Backend
 
-	haltMode        bool
-	haltEpochHeight beacon.EpochTime
-	haltBlockHeight uint64
+	haltMode   bool
+	haltEpoch  beacon.EpochTime
+	haltHeight uint64
 
 	minGasPrice        quantity.Quantity
 	ownTxSigner        signature.PublicKey
@@ -259,13 +259,13 @@ func (s *applicationState) shouldHalt(ctx *api.Context) bool {
 	// If there is a halt block height configured, and the height(+1)
 	// is greater than or equal to the height point, transition into
 	// the halting state.
-	if s.haltBlockHeight != 0 && uint64(h) >= s.haltBlockHeight {
+	if s.haltHeight != 0 && uint64(h) >= s.haltHeight {
 		s.logger.Info("shouldHalt: reached halt block height",
 			"block_height", h,
-			"halt_block_height", s.haltBlockHeight,
+			"halt_block_height", s.haltHeight,
 		)
 		s.haltMode = true
-	} else {
+	} else if s.haltEpoch > 0 {
 		// Otherwise, check to see if the epoch will be equal to
 		// the halt epoch (if any).
 		currentEpoch, err := s.GetEpoch(ctx, h)
@@ -276,7 +276,7 @@ func (s *applicationState) shouldHalt(ctx *api.Context) bool {
 			)
 			return false
 		}
-		s.haltMode = currentEpoch == s.haltEpochHeight
+		s.haltMode = currentEpoch == s.haltEpoch
 	}
 
 	return s.haltMode
@@ -589,8 +589,8 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 		prunerNotifyCh:     channels.NewRingChannel(1),
 		pruneInterval:      cfg.Pruning.PruneInterval,
 		upgrader:           upgrader,
-		haltEpochHeight:    cfg.HaltEpochHeight,
-		haltBlockHeight:    cfg.HaltBlockHeight,
+		haltEpoch:          cfg.HaltEpoch,
+		haltHeight:         cfg.HaltHeight,
 		minGasPrice:        minGasPrice,
 		ownTxSigner:        cfg.OwnTxSigner,
 		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),

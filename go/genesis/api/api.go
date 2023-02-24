@@ -45,9 +45,6 @@ type Document struct {
 	Governance governance.Genesis `json:"governance"`
 	// Consensus is the consensus genesis state.
 	Consensus consensus.Genesis `json:"consensus"`
-	// HaltEpoch is the epoch height at which the network will stop processing
-	// any transactions and will halt.
-	HaltEpoch beacon.EpochTime `json:"halt_epoch"`
 	// Extra data is arbitrary extra data that is part of the
 	// genesis block but is otherwise ignored by the protocol.
 	ExtraData map[string][]byte `json:"extra_data"`

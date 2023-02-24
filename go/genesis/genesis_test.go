@@ -3,7 +3,6 @@ package genesis
 import (
 	"encoding/hex"
 	"fmt"
-	"math"
 	"testing"
 	"time"
 
@@ -42,10 +41,9 @@ import (
 // consensus/tendermint/tests/genesis/genesis.go.
 func testDoc() genesis.Document {
 	return genesis.Document{
-		Height:    1,
-		ChainID:   genesisTestHelpers.TestChainID,
-		Time:      time.Unix(1574858284, 0),
-		HaltEpoch: beacon.EpochTime(math.MaxUint64),
+		Height:  1,
+		ChainID: genesisTestHelpers.TestChainID,
+		Time:    time.Unix(1574858284, 0),
 		Beacon: beacon.Genesis{
 			Parameters: beacon.ConsensusParameters{
 				Backend:            beacon.BackendInsecure,
@@ -137,7 +135,7 @@ func TestGenesisChainContext(t *testing.T) {
 
 	// Having to update this every single time the genesis structure
 	// changes isn't annoying at all.
-	require.Equal(t, "719f70522786e522c56e913cf3d31cf79d479dc0670ae048f2e476f732ac2990", stableDoc.ChainContext())
+	require.Equal(t, "a9dfaa6890772f10bde7b0c34214b1faf22fdecd334d2199f30414f3a30aa3f6", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -289,11 +287,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 	d = testDoc()
 	d.ChainID = "   \t"
 	require.Error(d.SanityCheck(), "empty chain ID should be invalid")
-
-	d = testDoc()
-	d.Beacon.Base = 10
-	d.HaltEpoch = 5
-	require.Error(d.SanityCheck(), "halt epoch in the past should be invalid")
 
 	// Test consensus genesis checks.
 	d = testDoc()

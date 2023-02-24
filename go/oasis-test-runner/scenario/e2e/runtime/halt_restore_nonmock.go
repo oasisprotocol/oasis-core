@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"math"
 	"reflect"
 
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
@@ -97,8 +96,7 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 	// works with restored state.
 	sc.Logger.Info("starting the network again")
 
-	// Update halt epoch in the exported genesis so the network doesn't
-	// instantly halt.
+	// Update genesis file.
 	genesisFileProvider, err := genesis.NewFileProvider(files[0])
 	if err != nil {
 		sc.Logger.Error("failed getting genesis file provider",
@@ -114,7 +112,6 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 		)
 		return err
 	}
-	genesisDoc.HaltEpoch = math.MaxUint64
 	genesisDoc.Beacon.Parameters.VRFParameters.Interval -= 5 // Reduce interval.
 	if err = genesisDoc.WriteFileJSON(files[0]); err != nil {
 		sc.Logger.Error("failed to update genesis",
@@ -123,18 +120,19 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 		return err
 	}
 
+	// Disable halt epoch so the network doesn't instantly halt.
+	fixture.Network.HaltEpoch = 0
 	// Use the updated genesis file.
 	fixture.Network.GenesisFile = files[0]
 	// Make sure to not overwrite the entity.
 	fixture.Entities[1].Restore = true
+	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
+	// exceed maximum unix socket path length.
+	fixture.Network.UseShortGrpcSocketPaths = true
 
 	if sc.Net, err = fixture.Create(childEnv); err != nil {
 		return err
 	}
-
-	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
-	// exceed maximum unix socket path length.
-	sc.Net.Config().UseShortGrpcSocketPaths = true
 
 	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
 	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")

@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
-	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -35,7 +34,6 @@ const (
 	defaultConsensusBackend            = "tendermint"
 	defaultEpochtimeTendermintInterval = 30
 	defaultInitialHeight               = 1
-	defaultHaltEpoch                   = math.MaxUint64
 
 	defaultConsensusTimeoutCommit = 1 * time.Second
 
@@ -256,6 +254,7 @@ func (n *Node) Start() error {
 
 	n.Config.Consensus.Submission.GasPrice = n.consensus.SubmissionGasPrice
 	n.Config.Consensus.MinGasPrice = n.consensus.MinGasPrice
+	n.Config.Consensus.HaltEpoch = n.net.cfg.HaltEpoch
 
 	// Initialize node command-line arguments.
 	args := newArgBuilder().debugDontBlameOasis().debugAllowTestKeys()
