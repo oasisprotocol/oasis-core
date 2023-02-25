@@ -738,7 +738,6 @@ func (net *Network) MakeGenesis() error {
 		"--genesis.file", net.GenesisPath(),
 		"--chain.id", genesisTestHelpers.TestChainID,
 		"--initial_height", strconv.FormatInt(net.cfg.InitialHeight, 10),
-		"--halt.epoch", strconv.FormatUint(net.cfg.HaltEpoch, 10),
 		"--consensus.backend", net.cfg.Consensus.Backend,
 		"--consensus.tendermint.timeout_commit", net.cfg.Consensus.Parameters.TimeoutCommit.String(),
 		"--registry.enable_runtime_governance_models", "entity,runtime",
@@ -979,9 +978,6 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 	}
 	if cfgCopy.InitialHeight == 0 {
 		cfgCopy.InitialHeight = defaultInitialHeight
-	}
-	if cfgCopy.HaltEpoch == 0 {
-		cfgCopy.HaltEpoch = defaultHaltEpoch
 	}
 
 	net := &Network{

@@ -381,7 +381,6 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 	return &genesisAPI.Document{
 		Height:     blockHeight,
 		ChainID:    genesisDoc.ChainID,
-		HaltEpoch:  genesisDoc.HaltEpoch,
 		Time:       blk.Header.Time,
 		Beacon:     *beaconGenesis,
 		Registry:   *registryGenesis,

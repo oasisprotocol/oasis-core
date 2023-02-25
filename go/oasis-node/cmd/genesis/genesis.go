@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -53,7 +52,6 @@ const (
 	cfgStaking       = "staking"
 	cfgBlockHeight   = "height"
 	cfgChainID       = "chain.id"
-	cfgHaltEpoch     = "halt.epoch"
 	cfgInitialHeight = "initial_height"
 
 	// Registry config flags.
@@ -180,10 +178,9 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 
 	// Build the genesis state, if any.
 	doc := &genesis.Document{
-		Height:    viper.GetInt64(cfgInitialHeight),
-		ChainID:   chainID,
-		Time:      time.Now(),
-		HaltEpoch: beacon.EpochTime(viper.GetUint64(cfgHaltEpoch)),
+		Height:  viper.GetInt64(cfgInitialHeight),
+		ChainID: chainID,
+		Time:    time.Now(),
 	}
 	entities := viper.GetStringSlice(viperEntity)
 	runtimes := viper.GetStringSlice(cfgRuntime)
@@ -785,7 +782,6 @@ func init() {
 	initGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
 	initGenesisFlags.String(cfgChainID, "", "genesis chain id")
-	initGenesisFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "genesis halt epoch height")
 	initGenesisFlags.Int64(cfgInitialHeight, 1, "initial block height")
 
 	// Registry config flags.

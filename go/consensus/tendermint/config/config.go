@@ -30,7 +30,10 @@ type Config struct {
 	// Transaction submission configuration.
 	Submission SubmissionConfig `yaml:"submission,omitempty"`
 
-	// Height at which to force-shutdown the node (in blocks).
+	// Epoch at which to force-shutdown the node (in epochs, zero disables shutdown).
+	HaltEpoch uint64 `yaml:"halt_epoch,omitempty"`
+
+	// Height at which to force-shutdown the node (in blocks, zero disables shutdown).
 	HaltHeight uint64 `yaml:"halt_height,omitempty"`
 
 	// Average amount of time to delay shutting down the node on upgrade.
@@ -152,6 +155,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("p2p.recv_rate must be >= 0")
 	}
 
+	if c.HaltHeight > 0 && c.HaltEpoch > 0 {
+		return fmt.Errorf("only one of {halt_epoch, halt_height} can be set")
+	}
+
 	if c.StateSync.Enabled {
 		if c.StateSync.TrustPeriod < 1*time.Second {
 			return fmt.Errorf("state sync enabled, but state_sync.trust_period is zero")
@@ -189,6 +196,7 @@ func DefaultConfig() Config {
 			GasPrice: 0,
 			MaxFee:   0,
 		},
+		HaltEpoch:        0,
 		HaltHeight:       0,
 		UpgradeStopDelay: 60 * time.Second,
 		Prune: PruneConfig{

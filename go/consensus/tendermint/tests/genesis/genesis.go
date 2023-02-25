@@ -49,10 +49,9 @@ func (p *testNodeGenesisProvider) GetTendermintGenesisDocument() (*tmtypes.Genes
 // running a single node "network", only for testing.
 func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity, entSigner signature.Signer) (genesis.Provider, error) {
 	doc := &genesis.Document{
-		Height:    1,
-		ChainID:   genesisTestHelpers.TestChainID,
-		Time:      time.Now(),
-		HaltEpoch: beacon.EpochTime(math.MaxUint64),
+		Height:  1,
+		ChainID: genesisTestHelpers.TestChainID,
+		Time:    time.Now(),
 		Beacon: beacon.Genesis{
 			Parameters: beacon.ConsensusParameters{
 				Backend:          beacon.BackendInsecure,

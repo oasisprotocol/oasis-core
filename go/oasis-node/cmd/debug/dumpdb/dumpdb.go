@@ -149,7 +149,6 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 		Height:    qs.BlockHeight(),
 		Time:      time.Now(), // XXX: Make this deterministic?
 		ChainID:   oldDoc.ChainID,
-		HaltEpoch: oldDoc.HaltEpoch,
 		ExtraData: oldDoc.ExtraData,
 	}
 
