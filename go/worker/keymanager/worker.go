@@ -296,16 +296,40 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 		}
 	}()
 
-	// Initialize the key manager.
-	var policy []byte
-	if status.Policy != nil {
-		policy = cbor.Marshal(status.Policy)
+	// Check if the key manager supports init requests with key manager status
+	// field which were deployed together with master secret rotation feature.
+	// TODO: Remove in PR-5205.
+	rt := w.GetHostedRuntime()
+	if rt == nil {
+		w.logger.Warn("runtime is not yet ready")
+		return fmt.Errorf("worker/keymanager: runtime is not yet ready")
+	}
+	rtInfo, err := rt.GetInfo(w.ctx)
+	if err != nil {
+		w.logger.Warn("runtime is broken",
+			"err", err,
+		)
+		return fmt.Errorf("worker/keymanager: runtime is broken")
 	}
 
-	args := api.InitRequest{
-		Checksum:    status.Checksum,
-		Policy:      policy,
-		MayGenerate: w.mayGenerate,
+	// Initialize the key manager.
+	var args api.InitRequest
+	if rtInfo.Features.KeyManagerMasterSecretRotation {
+		args = api.InitRequest{
+			Status:      status,
+			MayGenerate: w.mayGenerate,
+		}
+	} else {
+		var policy []byte
+		if status.Policy != nil {
+			policy = cbor.Marshal(status.Policy)
+		}
+
+		args = api.InitRequest{
+			Checksum:    status.Checksum,
+			Policy:      policy,
+			MayGenerate: w.mayGenerate,
+		}
 	}
 
 	var signedInitResp api.SignedInitResponse

@@ -25,11 +25,13 @@ use oasis_core_runtime::{
         beacon::EpochTime,
         keymanager::{EncryptedEphemeralSecret, EncryptedSecret, SignedEncryptedEphemeralSecret},
         state::{
-            beacon::ImmutableState as BeaconState, keymanager::ImmutableState as KeyManagerState,
+            beacon::ImmutableState as BeaconState,
+            keymanager::{ImmutableState as KeyManagerState, Status},
             registry::ImmutableState as RegistryState,
         },
     },
     enclave_rpc::Context as RpcContext,
+    policy::PolicyVerifier,
     runtime_context, BUILD_INFO,
 };
 
@@ -63,8 +65,16 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
     let runtime_id = rctx.runtime_id;
     let storage = ctx.untrusted_local_storage;
 
-    let policy_checksum = Policy::global().init(ctx, &req.policy)?;
+    // Note that the first validation of the status will probably fail,
+    // as the verifier is one block behind the consensus.
+    let status = req.status.clone();
+    let status = validate_key_manager_status(ctx, runtime_id, status)?;
 
+    // Empty policies are allowed only in unsafe builds.
+    let policy = Policy::global();
+    let policy_checksum = policy.init(storage, status.policy)?;
+
+    // Always verify the runtime.
     let kdf = Kdf::global();
     kdf.set_runtime_id(runtime_id)?;
 
@@ -74,16 +84,15 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
 
     // Replicate the missing secrets.
     let next_generation = kdf.next_generation();
-    if !req.checksum.is_empty() && next_generation <= req.generation {
-        let nodes = key_manager_nodes(ctx, runtime_id)?;
-        for generation in next_generation..=req.generation {
-            let secret = fetch_master_secret(ctx, generation, &nodes)?;
+    if !status.checksum.is_empty() && next_generation <= status.generation {
+        for generation in next_generation..=status.generation {
+            let secret = fetch_master_secret(ctx, generation, &status.nodes)?;
             kdf.add_master_secret(storage, &runtime_id, secret, generation)?;
         }
     }
 
     // TODO: Allow enclaves to generate master secrets for all generations.
-    if req.checksum.is_empty() && kdf.next_generation() == 0 {
+    if status.checksum.is_empty() && kdf.next_generation() == 0 {
         // A master secret is not set, and there is no checksum in the
         // request. Either this key manager instance has never been
         // initialized, or our view of the external state is not current.
@@ -99,7 +108,7 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
     // Master secrets should now be synced unless someone did an internal state reset.
     // It is also possible that new secrets were loaded, but we don't care about any
     // of that as we always HAVE to check if the current state matches the global one.
-    let (checksum, rsk) = kdf.status(&runtime_id, req.checksum.clone(), req.generation)?;
+    let (checksum, rsk) = kdf.status(&runtime_id, status.checksum.clone(), status.generation)?;
 
     // State is up-to-date, build the response and sign it with the RAK.
     sign_init_response(ctx, checksum, policy_checksum, rsk)
@@ -426,6 +435,19 @@ fn consensus_epoch(ctx: &RpcContext) -> Result<EpochTime> {
     let consensus_epoch = beacon_state.epoch(Context::create_child(&ctx.io_ctx))?;
 
     Ok(consensus_epoch)
+}
+
+/// Verify that the key manager status has been published in the consensus layer.
+fn validate_key_manager_status(
+    ctx: &RpcContext,
+    runtime_id: Namespace,
+    status: Status,
+) -> Result<Status> {
+    let ioctx = ctx.io_ctx.clone();
+    let consensus_verifier = ctx.consensus_verifier.clone();
+    let verifier = PolicyVerifier::new(consensus_verifier);
+
+    verifier.verify_key_manager_status(ioctx, status, runtime_id)
 }
 
 /// Validate that the epoch used for derivation of ephemeral private keys is not

@@ -7,7 +7,9 @@ use oasis_core_runtime::{
         crypto::signature::{self, Signature, Signer},
         namespace::Namespace,
     },
-    consensus::{beacon::EpochTime, keymanager::SignedEncryptedEphemeralSecret},
+    consensus::{
+        beacon::EpochTime, keymanager::SignedEncryptedEphemeralSecret, state::keymanager::Status,
+    },
 };
 
 use crate::crypto::{KeyPairId, Secret};
@@ -18,12 +20,8 @@ const INIT_RESPONSE_CONTEXT: &[u8] = b"oasis-core/keymanager: init response";
 /// Key manager initialization request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct InitRequest {
-    /// Generation of the latest master secret.
-    pub generation: u64,
-    /// Checksum for validating replication.
-    pub checksum: Vec<u8>,
-    /// Policy for queries/replication.
-    pub policy: Vec<u8>,
+    /// Key manager status.
+    pub status: Status,
     /// True iff the enclave may generate a new master secret.
     pub may_generate: bool,
 }

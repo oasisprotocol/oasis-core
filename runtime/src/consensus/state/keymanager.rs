@@ -41,6 +41,8 @@ pub struct Status {
     pub is_initialized: bool,
     /// True iff the key manager is secure.
     pub is_secure: bool,
+    /// Generation of the latest master secret.
+    pub generation: u64,
     /// Key manager master secret verification checksum.
     pub checksum: Vec<u8>,
     /// List of currently active key manager node IDs.
@@ -201,6 +203,7 @@ mod test {
                 id: keymanager1,
                 is_initialized: false,
                 is_secure: false,
+                generation: 0,
                 checksum: vec![],
                 nodes: vec![],
                 policy: None,
@@ -210,6 +213,7 @@ mod test {
                 id: keymanager2,
                 is_initialized: true,
                 is_secure: true,
+                generation: 0,
                 checksum: checksum,
                 nodes: vec![signer1, signer2],
                 policy: Some(SignedPolicySGX {

@@ -1,5 +1,5 @@
 use oasis_core_keymanager::runtime::init::new_keymanager;
-use oasis_core_runtime::{common::version::Version, config::Config};
+use oasis_core_runtime::{common::version::Version, config::Config, types::Features};
 
 mod api;
 
@@ -9,6 +9,10 @@ pub fn main_with_version(version: Version) {
         init,
         Config {
             version,
+            features: Some(Features {
+                key_manager_master_secret_rotation: true,
+                ..Default::default()
+            }),
             ..Default::default()
         },
     );

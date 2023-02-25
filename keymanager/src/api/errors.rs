@@ -21,6 +21,8 @@ pub enum KeyManagerError {
     StateCorrupted,
     #[error("key manager replication required")]
     ReplicationRequired,
+    #[error("policy required")]
+    PolicyRequired,
     #[error("policy rollback")]
     PolicyRollback,
     #[error("policy alteration, without serial increment")]
