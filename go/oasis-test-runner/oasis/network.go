@@ -29,6 +29,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	tendermintFull "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/full"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -614,6 +615,13 @@ func (net *Network) startOasisNode(
 			tendermintDebugAddrBookLenient().
 			tendermintDebugAllowDuplicateIP().
 			tendermintUpgradeStopDelay(10 * time.Second)
+
+		if haltEpoch := net.cfg.HaltEpoch; haltEpoch > 0 {
+			extraArgs = extraArgs.extraArgs([]Argument{{
+				Name:   tendermintFull.CfgHaltEpoch,
+				Values: []string{strconv.FormatUint(haltEpoch, 10)},
+			}})
+		}
 	}
 	if net.cfg.UseShortGrpcSocketPaths {
 		// Keep the socket, if it was already generated!

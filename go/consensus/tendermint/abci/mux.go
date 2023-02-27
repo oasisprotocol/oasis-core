@@ -67,12 +67,12 @@ var (
 
 // ApplicationConfig is the configuration for the consensus application.
 type ApplicationConfig struct { // nolint: maligned
-	DataDir         string
-	StorageBackend  string
-	Pruning         PruneConfig
-	HaltEpochHeight beacon.EpochTime
-	HaltBlockHeight uint64
-	MinGasPrice     uint64
+	DataDir        string
+	StorageBackend string
+	Pruning        PruneConfig
+	HaltEpoch      beacon.EpochTime
+	HaltHeight     uint64
+	MinGasPrice    uint64
 
 	DisableCheckpointer       bool
 	CheckpointerCheckInterval time.Duration
@@ -440,7 +440,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		// On transition, trigger halt hooks.
 		mux.logger.Info("BeginBlock: halt mode transition, emitting empty block",
 			"block_height", blockHeight,
-			"epoch", mux.state.haltEpochHeight,
+			"epoch", currentEpoch,
 		)
 		mux.logger.Debug("dispatching halt hooks before halt point")
 		mux.dispatchHaltHooks(blockHeight, currentEpoch, nil)
