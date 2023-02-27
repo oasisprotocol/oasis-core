@@ -5,6 +5,7 @@ use tendermint_light_client::types::LightBlock as TMLightBlock;
 
 use crate::common::crypto::{hash::Hash, signature::PublicKey};
 
+/// Verifier cache.
 pub struct Cache {
     pub last_verified_height: u64,
     pub last_verified_round: u64,
@@ -12,7 +13,7 @@ pub struct Cache {
     pub last_verified_block: Option<TMLightBlock>,
     pub verified_state_roots: lru::LruCache<u64, Hash>,
     pub verified_state_roots_queries: lru::LruCache<u64, (Hash, u64)>,
-    pub node_id: Option<PublicKey>,
+    pub host_node_id: PublicKey,
 }
 
 impl Cache {
@@ -35,8 +36,9 @@ impl Cache {
     }
 }
 
-impl Default for Cache {
-    fn default() -> Self {
+impl Cache {
+    /// Construct a new verifier cache.
+    pub fn new(host_node_id: PublicKey) -> Self {
         Self {
             last_verified_height: 0,
             last_verified_round: 0,
@@ -44,7 +46,7 @@ impl Default for Cache {
             last_verified_block: None,
             verified_state_roots: lru::LruCache::new(NonZeroUsize::new(128).unwrap()),
             verified_state_roots_queries: lru::LruCache::new(NonZeroUsize::new(128).unwrap()),
-            node_id: None,
+            host_node_id,
         }
     }
 }
