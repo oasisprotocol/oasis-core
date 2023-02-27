@@ -1,6 +1,10 @@
+use std::sync::Arc;
+
+use anyhow::Result;
+
 use oasis_core_runtime::{
     common::{
-        crypto::signature::{self, Signature},
+        crypto::signature::{self, Signature, Signer},
         namespace::Namespace,
     },
     consensus::{beacon::EpochTime, keymanager::SignedEncryptedEphemeralSecret},
@@ -8,9 +12,14 @@ use oasis_core_runtime::{
 
 use crate::crypto::{KeyPairId, Secret};
 
+/// Context used for the init response signature.
+const INIT_RESPONSE_CONTEXT: &[u8] = b"oasis-core/keymanager: init response";
+
 /// Key manager initialization request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct InitRequest {
+    /// Generation of the latest master secret.
+    pub generation: u64,
     /// Checksum for validating replication.
     pub checksum: Vec<u8>,
     /// Policy for queries/replication.
@@ -41,11 +50,30 @@ pub struct SignedInitResponse {
     pub signature: Signature,
 }
 
+impl SignedInitResponse {
+    /// Create a new signed init response.
+    pub fn new(
+        init_response: InitResponse,
+        signer: &Arc<dyn Signer>,
+    ) -> Result<SignedInitResponse> {
+        let body = cbor::to_vec(init_response.clone());
+        let signature = signer.sign(INIT_RESPONSE_CONTEXT, &body)?;
+
+        Ok(SignedInitResponse {
+            init_response,
+            signature,
+        })
+    }
+}
+
 /// Key manager master secret replication request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct ReplicateMasterSecretRequest {
     /// Latest trust root height.
     pub height: Option<u64>,
+    /// Generation.
+    #[cbor(optional)]
+    pub generation: u64,
 }
 
 /// Key manager master secret replication response.
@@ -104,16 +132,8 @@ pub struct LongTermKeyRequest {
     pub runtime_id: Namespace,
     /// Key pair ID.
     pub key_pair_id: KeyPairId,
-}
-
-impl LongTermKeyRequest {
-    pub fn new(height: Option<u64>, runtime_id: Namespace, key_pair_id: KeyPairId) -> Self {
-        Self {
-            height,
-            runtime_id,
-            key_pair_id,
-        }
-    }
+    /// Generation.
+    pub generation: u64,
 }
 
 /// Ephemeral key request for private/public key generation and retrieval.
@@ -131,20 +151,4 @@ pub struct EphemeralKeyRequest {
     pub key_pair_id: KeyPairId,
     /// Epoch time.
     pub epoch: EpochTime,
-}
-
-impl EphemeralKeyRequest {
-    pub fn new(
-        height: Option<u64>,
-        runtime_id: Namespace,
-        key_pair_id: KeyPairId,
-        epoch: EpochTime,
-    ) -> Self {
-        Self {
-            height,
-            runtime_id,
-            key_pair_id,
-            epoch,
-        }
-    }
 }

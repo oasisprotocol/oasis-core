@@ -286,12 +286,15 @@ impl Methods {
         // Derive key pair ID based on key.
         let key_pair_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
 
+        // Always use keys from generation 0.
+        let generation = 0;
+
         // Fetch encryption keys.
         let io_ctx = IoContext::create_child(&ctx.parent.core.io_ctx);
         let result = ctx
             .parent
             .key_manager
-            .get_or_create_keys(io_ctx, key_pair_id);
+            .get_or_create_keys(io_ctx, key_pair_id, generation);
         let key = tokio::runtime::Handle::current()
             .block_on(result)
             .map_err(|err| err.to_string())?;

@@ -27,6 +27,7 @@ pub trait KeyManagerClient: Send + Sync {
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
+        generation: u64,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>>;
 
     /// Get long-term public key for a key pair id.
@@ -34,6 +35,7 @@ pub trait KeyManagerClient: Send + Sync {
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
+        generation: u64,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>>;
 
     /// Get or create named ephemeral key pair for given epoch.
@@ -57,7 +59,11 @@ pub trait KeyManagerClient: Send + Sync {
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>>;
 
     /// Get a copy of the master secret for replication.
-    fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>>;
+    fn replicate_master_secret(
+        &self,
+        ctx: Context,
+        generation: u64,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>>;
 
     /// Get a copy of the ephemeral secret for replication.
     fn replicate_ephemeral_secret(
@@ -76,16 +82,18 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
+        generation: u64,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
-        KeyManagerClient::get_or_create_keys(&**self, ctx, key_pair_id)
+        KeyManagerClient::get_or_create_keys(&**self, ctx, key_pair_id, generation)
     }
 
     fn get_public_key(
         &self,
         ctx: Context,
         key_pair_id: KeyPairId,
+        generation: u64,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
-        KeyManagerClient::get_public_key(&**self, ctx, key_pair_id)
+        KeyManagerClient::get_public_key(&**self, ctx, key_pair_id, generation)
     }
 
     fn get_or_create_ephemeral_keys(
@@ -106,8 +114,12 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         KeyManagerClient::get_public_ephemeral_key(&**self, ctx, key_pair_id, epoch)
     }
 
-    fn replicate_master_secret(&self, ctx: Context) -> BoxFuture<Result<Secret, KeyManagerError>> {
-        KeyManagerClient::replicate_master_secret(&**self, ctx)
+    fn replicate_master_secret(
+        &self,
+        ctx: Context,
+        generation: u64,
+    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
+        KeyManagerClient::replicate_master_secret(&**self, ctx, generation)
     }
 
     fn replicate_ephemeral_secret(
