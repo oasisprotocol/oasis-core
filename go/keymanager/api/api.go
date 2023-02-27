@@ -237,10 +237,7 @@ func NewPublishEphemeralSecretTx(nonce uint64, fee *transaction.Fee, sigSec *Sig
 // InitRequest is the initialization RPC request, sent to the key manager
 // enclave.
 type InitRequest struct {
-	Status      *Status `json:"status,omitempty"`       // TODO: Change in PR-5205.
-	Checksum    []byte  `json:"checksum,omitempty"`     // TODO: Remove in PR-5205.
-	Policy      []byte  `json:"policy,omitempty"`       // TODO: Remove in PR-5205.
-	MayGenerate bool    `json:"may_generate,omitempty"` // TODO: Remove in PR-5205.
+	Status Status `json:"status,omitempty"`
 }
 
 // InitResponse is the initialization RPC response, returned as part of a
