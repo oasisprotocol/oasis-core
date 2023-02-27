@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -16,10 +17,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
 )
 
 // RuntimeUpgrade is the runtime upgrade scenario.
 var RuntimeUpgrade scenario.Scenario = newRuntimeUpgradeImpl()
+
+const versionActivationTimeout = 15 * time.Second
 
 type runtimeUpgradeImpl struct {
 	runtimeImpl
@@ -69,6 +73,10 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	sc.upgradedRuntimeIndex = len(f.Runtimes)
 	f.Runtimes = append(f.Runtimes, runtimeFix)
 
+	// Compute nodes should include the upgraded runtime version.
+	for i := range f.ComputeWorkers {
+		f.ComputeWorkers[i].Runtimes = []int{sc.upgradedRuntimeIndex}
+	}
 	// The client node should include the upgraded runtime version.
 	f.Clients[0].Runtimes = []int{sc.upgradedRuntimeIndex}
 
@@ -133,19 +141,12 @@ func (sc *runtimeUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	enclavePolicies := make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
 
 	enclavePolicies[*kmRuntimeEncID] = &keymanager.EnclavePolicySGX{}
-	enclavePolicies[*kmRuntimeEncID].MayQuery = make(map[common.Namespace][]sgx.EnclaveIdentity)
-
-	// Allow new compute runtimes to query private data.
-	var deploymentIdx int
-	for _, rt := range sc.Net.Runtimes() {
-		if rt.Kind() != registry.KindCompute {
-			continue
-		}
-		// The updated runtime includes both deployments, only allow the last (updated) enclave identity.
-		if eid := rt.GetEnclaveIdentity(deploymentIdx); eid != nil {
-			enclavePolicies[*kmRuntimeEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
-		}
-		deploymentIdx++
+	enclavePolicies[*kmRuntimeEncID].MayQuery = map[common.Namespace][]sgx.EnclaveIdentity{
+		// Allow both old and new compute runtimes to query private data.
+		newRuntime.ID(): {
+			*oldRuntimeEncID,
+			*newRuntimeEncID,
+		},
 	}
 
 	sc.Logger.Info("initing updated KM policy")
@@ -175,6 +176,54 @@ func (sc *runtimeUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	return nil
 }
 
+func (sc *runtimeUpgradeImpl) ensureActiveVersion(ctx context.Context, v version.Version) error {
+	ctx, cancel := context.WithTimeout(ctx, versionActivationTimeout)
+	defer cancel()
+
+	rt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
+
+	sc.Logger.Info("ensuring that all compute workers have the correct active version",
+		"version", v,
+	)
+
+	for _, node := range sc.Net.ComputeWorkers() {
+		nodeCtrl, err := oasis.NewController(node.SocketPath())
+		if err != nil {
+			return fmt.Errorf("%s: failed to create controller: %w", node.Name, err)
+		}
+
+		// Wait for the version to become active and ensure no suspension observed.
+		for {
+			status, err := nodeCtrl.GetStatus(ctx)
+			if err != nil {
+				return fmt.Errorf("%s: failed to query status: %w", node.Name, err)
+			}
+
+			cs := status.Runtimes[rt.ID()].Committee
+			if cs == nil {
+				return fmt.Errorf("%s: missing status for runtime '%s'", node.Name, rt.ID())
+			}
+
+			if cs.ActiveVersion == nil {
+				return fmt.Errorf("%s: no version is active", node.Name)
+			}
+			// Retry if not yet activated.
+			if cs.ActiveVersion.ToU64() < v.ToU64() {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if *cs.ActiveVersion != v {
+				return fmt.Errorf("%s: unexpected active version (expected: %s got: %s)", node.Name, v, cs.ActiveVersion)
+			}
+			if cs.Status != commonWorker.StatusStateReady {
+				return fmt.Errorf("%s: runtime is not ready (got: %s)", node.Name, cs.Status)
+			}
+			break
+		}
+	}
+	return nil
+}
+
 func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
@@ -188,6 +237,11 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Make sure the old version is active on all compute nodes.
+	if err := sc.ensureActiveVersion(ctx, version.MustFromString("0.0.0")); err != nil {
+		return err
+	}
+
 	// Generate and update a policy that will allow the new runtime to run.
 	if err := sc.applyUpgradePolicy(childEnv); err != nil {
 		return fmt.Errorf("updating policies: %w", err)
@@ -198,12 +252,13 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
+	upgradeEpoch := epoch + 3
 
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating runtime descriptor")
 	newRt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
 	newRtDsc := newRt.ToRuntimeDescriptor()
-	newRtDsc.Deployments[1].ValidFrom = epoch + 1
+	newRtDsc.Deployments[1].ValidFrom = upgradeEpoch
 
 	newTxPath := filepath.Join(childEnv.Dir(), "register_update_compute_runtime.json")
 	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRtDsc, sc.nonce, newTxPath); err != nil {
@@ -214,41 +269,17 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("failed to update compute runtime: %w", err)
 	}
 
-	// Stop old compute workers, making sure they deregister.
-	sc.Logger.Info("stopping old runtime")
-	for _, worker := range sc.Net.ComputeWorkers() {
-		if err := worker.Stop(); err != nil {
-			return fmt.Errorf("failed to stop node: %w", err)
-		}
-	}
-
-	// Update worker configuration.
-	for _, worker := range sc.Net.ComputeWorkers() {
-		worker.UpdateRuntimes([]int{sc.upgradedRuntimeIndex})
-	}
-
-	// Start the compute workers back.
-	sc.Logger.Info("starting new runtime")
-	for _, worker := range sc.Net.ComputeWorkers() {
-		if err := worker.Start(); err != nil {
-			return fmt.Errorf("starting new compute worker: %w", err)
-		}
-	}
-
-	// Wait for the new nodes to register.
-	sc.Logger.Info("waiting for new compute workers to be ready")
-	for _, worker := range sc.Net.ComputeWorkers() {
-		if err := worker.WaitReady(ctx); err != nil {
-			return fmt.Errorf("error waiting for compute node '%s' to become ready: %w", worker.Name, err)
-		}
-	}
-
 	// Wait for activation epoch.
 	sc.Logger.Info("waiting for runtime upgrade epoch",
-		"epoch", epoch+1,
+		"epoch", upgradeEpoch,
 	)
-	if err := sc.Net.Controller().Beacon.WaitEpoch(ctx, epoch+1); err != nil {
+	if err := sc.Net.Controller().Beacon.WaitEpoch(ctx, upgradeEpoch); err != nil {
 		return fmt.Errorf("failed to wait for epoch: %w", err)
+	}
+
+	// Make sure the new version is active.
+	if err := sc.ensureActiveVersion(ctx, version.MustFromString("0.1.0")); err != nil {
+		return err
 	}
 
 	// Run client again.

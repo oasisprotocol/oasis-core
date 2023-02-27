@@ -117,8 +117,25 @@ func (n *RuntimeHostNode) WaitHostedRuntime(ctx context.Context) (host.RichRunti
 	return n.GetHostedRuntime(), nil
 }
 
-// SetHostedRuntimeVersion sets the currently active version for the hosted runtime.
-func (n *RuntimeHostNode) SetHostedRuntimeVersion(ctx context.Context, version version.Version) error {
+// GetHostedRuntimeCapabilityTEE returns the CapabilityTEE for a specific runtime version.
+func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE(ctx context.Context, version version.Version) (*node.CapabilityTEE, error) {
+	n.Lock()
+	agg := n.agg
+	n.Unlock()
+
+	if agg == nil {
+		return nil, fmt.Errorf("runtime not available")
+	}
+
+	rt, err := agg.GetVersion(ctx, version)
+	if err != nil {
+		return nil, err
+	}
+	return rt.GetCapabilityTEE(ctx)
+}
+
+// SetHostedRuntimeVersion sets the currently active and next versions for the hosted runtime.
+func (n *RuntimeHostNode) SetHostedRuntimeVersion(ctx context.Context, active version.Version, next *version.Version) error {
 	n.Lock()
 	agg := n.agg
 	n.Unlock()
@@ -127,7 +144,7 @@ func (n *RuntimeHostNode) SetHostedRuntimeVersion(ctx context.Context, version v
 		return fmt.Errorf("runtime not available")
 	}
 
-	return agg.SetVersion(ctx, version)
+	return agg.SetVersion(ctx, active, next)
 }
 
 // RuntimeHostHandlerFactory is an interface that can be used to create new runtime handlers and

@@ -10,10 +10,12 @@ import (
 	"sync"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -31,12 +33,54 @@ var (
 type aggregatedHost struct {
 	host host.Runtime
 
-	ch        <-chan *host.Event
-	sub       pubsub.ClosableSubscription
-	stopCh    chan struct{}
-	stoppedCh chan struct{}
+	ch               <-chan *host.Event
+	sub              pubsub.ClosableSubscription
+	stopCh           chan struct{}
+	stoppedCh        chan struct{}
+	stopDiscardCh    chan struct{}
+	stoppedDiscardCh chan *host.Event
 
 	version version.Version
+}
+
+func (ah *aggregatedHost) startDiscard() {
+	go func() {
+		var startedEv *host.Event
+		defer func() {
+			// In case we observed a started event, forward it.
+			ah.stoppedDiscardCh <- startedEv
+			close(ah.stoppedDiscardCh)
+		}()
+
+		for {
+			select {
+			case <-ah.stopDiscardCh:
+				return
+			case ev := <-ah.ch:
+				switch {
+				case ev.Started != nil:
+					// Store the last started event.
+					startedEv = ev
+				case ev.Stopped != nil:
+					// Clear out if any stopped event received.
+					startedEv = nil
+				case ev.Updated != nil && startedEv != nil:
+					// Make sure the started event's CapabilityTEE is always the latest one.
+					startedEv.Started.CapabilityTEE = ev.Updated.CapabilityTEE
+				}
+			}
+		}
+	}()
+}
+
+func (ah *aggregatedHost) stopDiscard(agg *Aggregate) {
+	close(ah.stopDiscardCh)
+	ev := <-ah.stoppedDiscardCh
+
+	// Propagate captured started event.
+	if ev != nil && agg != nil {
+		agg.notifier.Broadcast(ev)
+	}
 }
 
 func (ah *aggregatedHost) startPassthrough(agg *Aggregate) {
@@ -68,6 +112,7 @@ type Aggregate struct {
 
 	hosts  map[version.Version]*aggregatedHost
 	active *aggregatedHost
+	next   *aggregatedHost
 
 	notifier *pubsub.Broker
 }
@@ -86,6 +131,17 @@ func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoRespons
 		return nil, ErrNoActiveVersion
 	}
 	return agg.active.host.GetInfo(ctx)
+}
+
+// GetCapabilityTEE implements host.Runtime.
+func (agg *Aggregate) GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+	agg.l.RLock()
+	defer agg.l.RUnlock()
+
+	if agg.active == nil {
+		return nil, ErrNoActiveVersion
+	}
+	return agg.active.host.GetCapabilityTEE(ctx)
 }
 
 // Call implements host.Runtime.
@@ -121,10 +177,16 @@ func (agg *Aggregate) UpdateCapabilityTEE(ctx context.Context) error {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
-	if agg.active == nil {
-		return ErrNoActiveVersion
+	var errs *multierror.Error
+	if agg.active != nil {
+		err := agg.active.host.UpdateCapabilityTEE(ctx)
+		errs = multierror.Append(errs, err)
 	}
-	return agg.active.host.UpdateCapabilityTEE(ctx)
+	if agg.next != nil {
+		err := agg.next.host.UpdateCapabilityTEE(ctx)
+		errs = multierror.Append(errs, err)
+	}
+	return errs.ErrorOrNil()
 }
 
 // WatchEvents implements host.Runtime.
@@ -169,23 +231,57 @@ func (agg *Aggregate) Stop() {
 	// this leaves the notifier lying around.
 
 	agg.stopActiveLocked()
+	agg.stopNextLocked()
 }
 
-// SetVersion sets the active runtime version.  This routine will:
+// GetVersion retrieves the runtime host for the specified version.
+func (agg *Aggregate) GetVersion(ctx context.Context, version version.Version) (host.Runtime, error) {
+	agg.l.RLock()
+	defer agg.l.RUnlock()
+
+	host := agg.hosts[version]
+	if host == nil {
+		return nil, ErrNoSuchVersion
+	}
+	// Only allow fetching either the active or next versions.
+	if host != agg.active && host != agg.next {
+		return nil, ErrNoSuchVersion
+	}
+	return host.host, nil
+}
+
+// SetVersion sets the active and next runtime versions.  This routine will:
 //   - Do nothing if the active version is already the requested version.
 //   - Unconditionally tear down the currently active version (via Stop()).
 //   - Start the newly active version if it exists.
-func (agg *Aggregate) SetVersion(ctx context.Context, version version.Version) error {
+//   - Do nothing if the next version is already the requested version.
+//   - Start the next version if it exists.
+func (agg *Aggregate) SetVersion(ctx context.Context, active version.Version, next *version.Version) error {
 	agg.l.Lock()
 	defer agg.l.Unlock()
 
-	agg.logger.Info("SetVersion",
+	agg.logger.Info("set version",
 		"id", agg.ID(),
-		"version", version,
+		"active", active,
+		"next", next,
 	)
 
+	if err := agg.setActiveVersionLocked(ctx, active); err != nil {
+		return err
+	}
+	if err := agg.setNextVersionLocked(ctx, next); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (agg *Aggregate) setActiveVersionLocked(ctx context.Context, version version.Version) error {
+	// Contract: agg.l already locked for write.
+
+	next := agg.hosts[version]
+
 	// Ensure that we know about the new version.
-	if agg.hosts[version] == nil {
+	if next == nil {
 		agg.logger.Error("SetVersion: unknown version",
 			"id", agg.ID(),
 			"version", version,
@@ -199,7 +295,7 @@ func (agg *Aggregate) SetVersion(ctx context.Context, version version.Version) e
 	// If there already is an active version...
 	if agg.active != nil {
 		// And it is the same as the requested one, we are done.
-		if agg.hosts[version] == agg.active {
+		if next == agg.active {
 			return nil
 		}
 
@@ -208,26 +304,30 @@ func (agg *Aggregate) SetVersion(ctx context.Context, version version.Version) e
 	}
 
 	// Get ready to spin up the new runtime.
-	var err error
-	ah := agg.hosts[version]
-
-	host := ah.host
-	if err = host.Start(); err != nil {
-		// Do not bail, this can't actually fail in practice because
-		// the part that does all the work is async.  Log something.
-		agg.logger.Error("SetVersion: failed to start sub-host",
-			"err", err,
-			"id", agg.ID(),
-			"version", version,
-		)
+	if agg.next == next {
+		// This is the next active version which has already been started in advance. Clear out the
+		// currently active next version and stop discarding events.
+		agg.next = nil
+		next.stopDiscard(agg) // Forward any captured started events.
+	} else {
+		host := next.host
+		if err := host.Start(); err != nil {
+			// Do not bail, this can't actually fail in practice because
+			// the part that does all the work is async.  Log something.
+			agg.logger.Error("SetVersion: failed to start sub-host",
+				"err", err,
+				"id", agg.ID(),
+				"version", version,
+			)
+		}
 	}
 
 	// Assume that the caller is ok with SetVersion acting as a Stop+Start
 	// and just start propagating events immediately.
-	ah.startPassthrough(agg)
+	next.startPassthrough(agg)
 
 	// Active runtime swapped out, update the state and return.
-	agg.active = ah
+	agg.active = next
 
 	return nil
 }
@@ -275,6 +375,99 @@ func (agg *Aggregate) stopActiveLocked() {
 	agg.active = nil
 }
 
+func (agg *Aggregate) setNextVersionLocked(ctx context.Context, maybeVersion *version.Version) error {
+	// Contract: agg.l already locked for write.
+
+	// The next version could become unscheduled, in this case tear it down.
+	if maybeVersion == nil {
+		agg.stopNextLocked()
+		return nil
+	}
+	version := *maybeVersion
+
+	next := agg.hosts[version]
+
+	// Ensure that we know about the next version.
+	if next == nil {
+		agg.logger.Warn("unsupported next version",
+			"id", agg.ID(),
+			"version", version,
+		)
+		// Active version must be unaffected.
+		return ErrNoSuchVersion
+	}
+
+	// Ensure next version is not the same as the active version.
+	if agg.active != nil && next == agg.active {
+		return nil
+	}
+
+	// If there already is a next version...
+	if agg.next != nil {
+		// If it is the same as the requested one, we are done.
+		if next == agg.next {
+			return nil
+		}
+
+		// Warn in case the next version is changed but the previous one was not activated yet.
+		agg.logger.Warn("overwriting next version without activation",
+			"id", agg.ID(),
+			"version", version,
+			"previous_version", agg.next.version,
+		)
+		agg.stopNextLocked()
+	}
+
+	// Start the next version.
+	if err := next.host.Start(); err != nil {
+		// Do not bail, this can't actually fail in practice because
+		// the part that does all the work is async.  Log something.
+		agg.logger.Error("failed to start next version sub-host",
+			"err", err,
+			"id", agg.ID(),
+			"version", version,
+		)
+	}
+
+	// Start discarding events.
+	next.startDiscard()
+
+	// Update the next version.
+	agg.next = next
+
+	// Notify subscribers that configuration has changed.
+	agg.notifier.Broadcast(&host.Event{ConfigUpdated: &host.ConfigUpdatedEvent{}})
+
+	return nil
+}
+
+func (agg *Aggregate) stopNextLocked() {
+	// Contract: agg.l already locked for write.
+
+	if agg.next == nil {
+		return
+	}
+
+	agg.logger.Debug("stopNextLocked",
+		"id", agg.ID(),
+		"version", agg.next.version,
+	)
+
+	ah := agg.next
+	ah.stopDiscard(nil) // Drop any captured started events.
+
+	// Terminate the next instance.
+	ah.host.Stop()
+
+	// Close off the subscription, invalidate the old sub-host.
+	ah.sub.Close()
+	agg.hosts[ah.version] = nil
+	agg.next = nil
+
+	// Notify subscribers that configuration has changed.
+	agg.notifier.Broadcast(&host.Event{ConfigUpdated: &host.ConfigUpdatedEvent{}})
+}
+
 // New returns a new aggregated runtime.  The runtimes provided must be
 // freshly provisioned (ie: Start() must not have been called).
 func New(
@@ -310,12 +503,14 @@ func New(
 		}
 
 		ah := &aggregatedHost{
-			host:      rts[version],
-			ch:        ch,
-			sub:       sub,
-			stopCh:    make(chan struct{}),
-			stoppedCh: make(chan struct{}),
-			version:   version,
+			host:             rts[version],
+			ch:               ch,
+			sub:              sub,
+			stopCh:           make(chan struct{}),
+			stoppedCh:        make(chan struct{}),
+			stopDiscardCh:    make(chan struct{}),
+			stoppedDiscardCh: make(chan *host.Event),
+			version:          version,
 		}
 		agg.hosts[version] = ah
 	}

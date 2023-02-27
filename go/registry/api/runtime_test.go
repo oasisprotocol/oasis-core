@@ -712,6 +712,23 @@ func TestDeployments(t *testing.T) {
 	ad = rt.ActiveDeployment(1000)
 	require.EqualValues(3, ad.Version.Minor)
 
+	nd := rt.NextDeployment(0)
+	require.EqualValues(2, nd.Version.Minor)
+	nd = rt.NextDeployment(1)
+	require.EqualValues(2, nd.Version.Minor)
+	nd = rt.NextDeployment(9)
+	require.EqualValues(2, nd.Version.Minor)
+	nd = rt.NextDeployment(10)
+	require.EqualValues(3, nd.Version.Minor)
+	nd = rt.NextDeployment(20)
+	require.Nil(nd)
+	nd = rt.NextDeployment(50)
+	require.Nil(nd)
+	nd = rt.NextDeployment(100)
+	require.Nil(nd)
+	nd = rt.NextDeployment(1000)
+	require.Nil(nd)
+
 	ad = rt.DeploymentForVersion(version.Version{
 		Major: 0,
 		Minor: 1,
