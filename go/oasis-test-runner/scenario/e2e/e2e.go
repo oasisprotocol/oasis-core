@@ -366,14 +366,14 @@ func (sc *E2E) DumpRestoreNetwork(
 		}
 	}
 
+	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
+	// exceed maximum unix socket path length.
+	fixture.Network.UseShortGrpcSocketPaths = true
+
 	var err error
 	if sc.Net, err = fixture.Create(childEnv); err != nil {
 		return err
 	}
-
-	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
-	// exceed maximum unix socket path length.
-	sc.Net.Config().UseShortGrpcSocketPaths = true
 
 	return nil
 }

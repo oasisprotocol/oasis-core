@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"math"
 	"reflect"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -168,8 +167,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// works with restored state.
 	sc.Logger.Info("starting the network again")
 
-	// Update halt epoch in the exported genesis so the network doesn't
-	// instantly halt.
+	// Ensure compute runtime in genesis is in expected state.
 	genesisFileProvider, err := genesis.NewFileProvider(files[0])
 	if err != nil {
 		sc.Logger.Error("failed getting genesis file provider",
@@ -185,15 +183,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		)
 		return err
 	}
-	genesisDoc.HaltEpoch = math.MaxUint64
-	if err = genesisDoc.WriteFileJSON(files[0]); err != nil {
-		sc.Logger.Error("failed to update genesis",
-			"err", err,
-		)
-		return err
-	}
 
-	// Ensure compute runtime in genesis is in expected state.
 	var rtList []*registry.Runtime
 	switch sc.suspendRuntime {
 	case true:
@@ -217,18 +207,19 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return fmt.Errorf("runtime not in expected state")
 	}
 
+	// Disable halt epoch so the network doesn't instantly halt.
+	fixture.Network.HaltEpoch = 0
 	// Use the updated genesis file.
 	fixture.Network.GenesisFile = files[0]
 	// Make sure to not overwrite the entity.
 	fixture.Entities[1].Restore = true
+	// If network is used, enable shorter per-node socket paths, because some e2e test datadir
+	// exceed maximum unix socket path length.
+	fixture.Network.UseShortGrpcSocketPaths = true
 
 	if sc.Net, err = fixture.Create(childEnv); err != nil {
 		return err
 	}
-
-	// If network is used, enable shorter per-node socket paths, because some e2e test datadir exceed maximum unix
-	// socket path length.
-	sc.Net.Config().UseShortGrpcSocketPaths = true
 
 	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
 	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")

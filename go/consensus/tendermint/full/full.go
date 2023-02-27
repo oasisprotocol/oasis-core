@@ -112,6 +112,8 @@ const (
 
 	// CfgHaltHeight is the block height at which the local node should be shutdown.
 	CfgHaltHeight = "consensus.tendermint.halt_height"
+	// CfgHaltEpoch is the epoch at which the local node should be shutdown.
+	CfgHaltEpoch = "consensus.tendermint.halt_epoch"
 )
 
 const (
@@ -579,8 +581,8 @@ func (t *fullService) lazyInit() error {
 		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
 		StorageBackend:            db.GetBackendName(),
 		Pruning:                   pruneCfg,
-		HaltEpochHeight:           t.genesis.HaltEpoch,
-		HaltBlockHeight:           viper.GetUint64(CfgHaltHeight),
+		HaltEpoch:                 beaconAPI.EpochTime(viper.GetUint64(CfgHaltEpoch)),
+		HaltHeight:                viper.GetUint64(CfgHaltHeight),
 		MinGasPrice:               viper.GetUint64(CfgMinGasPrice),
 		OwnTxSigner:               t.identity.NodeSigner.Public(),
 		DisableCheckpointer:       viper.GetBool(CfgCheckpointerDisabled),
@@ -1015,7 +1017,8 @@ func init() {
 	Flags.Bool(CfgSupplementarySanityEnabled, false, "enable supplementary sanity checks (slows down consensus)")
 	Flags.Uint64(CfgSupplementarySanityInterval, 10, "supplementary sanity check interval (in blocks)")
 
-	Flags.Uint64(CfgHaltHeight, 0, "height at which to force-shutdown the node (in blocks)")
+	Flags.Uint64(CfgHaltHeight, 0, "height at which to force-shutdown the node (in blocks, zero to disable)")
+	Flags.Uint64(CfgHaltEpoch, 0, "epoch at which to force-shutdown the node (in epochs, zero to disable)")
 
 	// State sync.
 	Flags.Bool(CfgConsensusStateSyncEnabled, false, "enable state sync")
