@@ -18,7 +18,6 @@ import (
 const entityIdentitySeedTemplate = "oasis entity %d"
 
 var entityArgsDebugTest = []string{
-	"--" + flags.CfgDebugDontBlameOasis,
 	"--" + flags.CfgDebugTestEntity,
 	"--" + common.CfgDebugAllowTestKeys,
 }
@@ -149,7 +148,7 @@ func (net *Network) NewEntity(cfg *EntityCfg) (*Entity, error) {
 
 		var extraArgs []string
 		switch {
-		case cfg.Restore:
+		case cfg.Restore || net.cfg.RestoreIdentities:
 			// Restore an existing entity.
 		case net.cfg.DeterministicIdentities:
 			// Generate a deterministic entity.

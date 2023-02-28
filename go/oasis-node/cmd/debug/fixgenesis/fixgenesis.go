@@ -309,6 +309,9 @@ NodeLoop:
 		newDoc.Registry.Nodes = append(newDoc.Registry.Nodes, sigNode)
 	}
 
+	// Update base epoch.
+	newDoc.Beacon.Base = oldDoc.Beacon.Base + 1
+
 	return &newDoc, nil
 }
 

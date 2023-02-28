@@ -15,9 +15,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -29,23 +31,30 @@ import (
 )
 
 const (
-	cfgDeterministicIdentities = "fixture.default.deterministic_entities"
-	cfgFundEntities            = "fixture.default.fund_entities"
-	cfgEpochtimeMock           = "fixture.default.epochtime_mock"
-	cfgHaltEpoch               = "fixture.default.halt_epoch"
-	cfgKeymanagerBinary        = "fixture.default.keymanager.binary"
-	cfgNodeBinary              = "fixture.default.node.binary"
-	cfgNumEntities             = "fixture.default.num_entities"
-	cfgRuntimeID               = "fixture.default.runtime.id"
-	cfgRuntimeBinary           = "fixture.default.runtime.binary"
-	cfgRuntimeVersion          = "fixture.default.runtime.version"
-	cfgRuntimeStatePath        = "fixture.default.runtime.state_path"
-	cfgRuntimeProvisioner      = "fixture.default.runtime.provisioner"
-	cfgRuntimeLoader           = "fixture.default.runtime.loader"
-	cfgSetupRuntimes           = "fixture.default.setup_runtimes"
-	cfgTEEHardware             = "fixture.default.tee_hardware"
-	cfgInitialHeight           = "fixture.default.initial_height"
-	cfgStakingGenesis          = "fixture.default.staking_genesis"
+	cfgDebugTestEntity                     = "fixture.default.debug_test_entity"
+	cfgDeterministicIdentities             = "fixture.default.deterministic_entities"
+	cfgRestoreIdentities                   = "fixture.default.restore_identities"
+	cfgFundEntities                        = "fixture.default.fund_entities"
+	cfgEpochtimeMock                       = "fixture.default.epochtime_mock"
+	cfgEpochtimeInterval                   = "fixture.default.epochtime_interval"
+	cfgHaltEpoch                           = "fixture.default.halt_epoch"
+	cfgKeymanagerBinary                    = "fixture.default.keymanager.binary"
+	cfgNodeBinary                          = "fixture.default.node.binary"
+	cfgNumEntities                         = "fixture.default.num_entities"
+	cfgRuntimeID                           = "fixture.default.runtime.id"
+	cfgRuntimeBinary                       = "fixture.default.runtime.binary"
+	cfgRuntimeVersion                      = "fixture.default.runtime.version"
+	cfgRuntimeStatePath                    = "fixture.default.runtime.state_path"
+	cfgRuntimeProvisioner                  = "fixture.default.runtime.provisioner"
+	cfgRuntimeLoader                       = "fixture.default.runtime.loader"
+	cfgGovernanceUpgradeMinEpochDiff       = "fixture.default.governance.upgrade_min_epoch_diff"
+	cfgGovernanceUpgradeCancelMinEpochDiff = "fixture.default.governance.upgrade_cancel_min_epoch_diff"
+	cfgGovernanceVotingPeriod              = "fixture.default.governance.voting_period"
+	cfgSetupRuntimes                       = "fixture.default.setup_runtimes"
+	cfgTEEHardware                         = "fixture.default.tee_hardware"
+	cfgInitialHeight                       = "fixture.default.initial_height"
+	cfgStakingGenesis                      = "fixture.default.staking_genesis"
+	cfgGenesis                             = "fixture.default.genesis"
 )
 
 var keymanagerID common.Namespace
@@ -96,25 +105,40 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 			Beacon: beacon.ConsensusParameters{
 				Backend: beacon.BackendInsecure,
 			},
+			GovernanceParameters: &governance.ConsensusParameters{
+				UpgradeMinEpochDiff:       beacon.EpochTime(viper.GetUint64(cfgGovernanceUpgradeMinEpochDiff)),
+				VotingPeriod:              beacon.EpochTime(viper.GetUint64(cfgGovernanceVotingPeriod)),
+				UpgradeCancelMinEpochDiff: beacon.EpochTime(viper.GetUint64(cfgGovernanceUpgradeCancelMinEpochDiff)),
+				StakeThreshold:            90,
+				MinProposalDeposit:        *quantity.NewFromUint64(100),
+			},
 			InitialHeight: viper.GetInt64(cfgInitialHeight),
 			HaltEpoch:     viper.GetUint64(cfgHaltEpoch),
 			IAS: oasis.IASCfg{
 				Mock: true,
 			},
 			DeterministicIdentities: viper.GetBool(cfgDeterministicIdentities),
+			RestoreIdentities:       viper.GetBool(cfgRestoreIdentities),
 			FundEntities:            viper.GetBool(cfgFundEntities),
 			StakingGenesis:          &stakingGenesis,
+			GenesisFile:             viper.GetString(cfgGenesis),
 		},
-		Entities: []oasis.EntityCfg{
-			{IsDebugTestEntity: true},
-		},
+		Entities: []oasis.EntityCfg{},
 		Validators: []oasis.ValidatorFixture{
 			{Entity: 1, Consensus: oasis.ConsensusFixture{SupplementarySanityInterval: 1}},
 		},
 		Seeds: []oasis.SeedFixture{{}},
 	}
+	if viper.GetBool(cfgDebugTestEntity) {
+		fixture.Entities = append(fixture.Entities, oasis.EntityCfg{IsDebugTestEntity: true})
+	}
 	if viper.GetBool(cfgEpochtimeMock) {
 		fixture.Network.SetMockEpoch()
+	}
+	if interval := viper.GetInt64(cfgEpochtimeInterval); interval > 0 {
+		fixture.Network.Beacon.InsecureParameters = &beacon.InsecureParameters{
+			Interval: interval,
+		}
 	}
 
 	for i := 0; i < viper.GetInt(cfgNumEntities); i++ {
@@ -306,9 +330,12 @@ func getLatestVersionAndStateRoot(db mkvsAPI.NodeDB) (uint64, *hash.Hash, error)
 }
 
 func init() {
+	DefaultFixtureFlags.Bool(cfgDebugTestEntity, true, "include the debug test entity in genesis")
 	DefaultFixtureFlags.Bool(cfgDeterministicIdentities, false, "generate nodes with deterministic identities")
+	DefaultFixtureFlags.Bool(cfgRestoreIdentities, false, "restore identities")
 	DefaultFixtureFlags.Bool(cfgFundEntities, false, "fund all entities in genesis")
 	DefaultFixtureFlags.Bool(cfgEpochtimeMock, false, "use mock epochtime")
+	DefaultFixtureFlags.Uint64(cfgEpochtimeInterval, 0, "epochtime interval")
 	DefaultFixtureFlags.Bool(cfgSetupRuntimes, true, "initialize the network with runtimes and runtime nodes")
 	DefaultFixtureFlags.Int(cfgNumEntities, 1, "number of (non debug) entities in genesis")
 	DefaultFixtureFlags.String(cfgKeymanagerBinary, "simple-keymanager", "path to the keymanager runtime")
@@ -319,10 +346,14 @@ func init() {
 	DefaultFixtureFlags.StringSlice(cfgRuntimeStatePath, []string{""}, "runtime state path to initialize the runtime (and nodes) with")
 	DefaultFixtureFlags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
 	DefaultFixtureFlags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
+	DefaultFixtureFlags.Uint64(cfgGovernanceUpgradeMinEpochDiff, 100, "minimum epoch difference for upgrade proposals")
+	DefaultFixtureFlags.Uint64(cfgGovernanceUpgradeCancelMinEpochDiff, 70, "minimum epoch difference for cancel upgrade proposals")
+	DefaultFixtureFlags.Uint64(cfgGovernanceVotingPeriod, 20, "voting period for governance proposals")
 	DefaultFixtureFlags.String(cfgTEEHardware, "", "TEE hardware to use")
 	DefaultFixtureFlags.Uint64(cfgHaltEpoch, math.MaxUint64, "halt epoch height")
 	DefaultFixtureFlags.Int64(cfgInitialHeight, 1, "initial block height")
 	DefaultFixtureFlags.String(cfgStakingGenesis, "", "path to the staking genesis to use")
+	DefaultFixtureFlags.String(cfgGenesis, "", "path to the genesis to use")
 
 	_ = viper.BindPFlags(DefaultFixtureFlags)
 
