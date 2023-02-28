@@ -35,6 +35,7 @@ import (
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -741,6 +742,7 @@ func (net *Network) MakeGenesis() error {
 		"--consensus.backend", net.cfg.Consensus.Backend,
 		"--consensus.tendermint.timeout_commit", net.cfg.Consensus.Parameters.TimeoutCommit.String(),
 		"--registry.enable_runtime_governance_models", "entity,runtime",
+		"--" + flags.CfgDebugDontBlameOasis,
 		"--registry.debug.allow_unroutable_addresses", "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
 		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),
