@@ -19,13 +19,10 @@ use oasis_core_runtime::{
         },
     },
     consensus::{beacon::EpochTime, keymanager::SignedPolicySGX},
-    enclave_rpc::Context as RpcContext,
-    policy::PolicyVerifier,
-    runtime_context,
     storage::KeyValue,
 };
 
-use crate::{api::KeyManagerError, runtime::context::Context as KmContext};
+use crate::api::KeyManagerError;
 
 use super::verify_policy_and_trusted_signers;
 
@@ -62,35 +59,29 @@ impl Policy {
     }
 
     /// Initialize (or update) the policy state.
-    pub fn init(&self, ctx: &mut RpcContext, policy_raw: &[u8]) -> Result<Vec<u8>> {
+    ///
+    /// The policy is presumed trustworthy, so it's up to the caller to verify it against
+    /// the consensus layer state. Empty polices are allowed only in unsafe builds.
+    pub fn init(&self, storage: &dyn KeyValue, policy: Option<SignedPolicySGX>) -> Result<Vec<u8>> {
         // If this is an insecure build, don't bother trying to apply any policy.
         if Self::unsafe_skip() {
             return Ok(vec![]);
         }
 
-        // Ensure the new policy's runtime ID matches the current enclave's.
-        let rctx = runtime_context!(ctx, KmContext);
-        let key_manager = rctx.runtime_id;
-
-        // De-serialize the new policy, verify runtime ID and signatures.
-        let ioctx = ctx.io_ctx.clone();
-        let consensus_verifier = ctx.consensus_verifier.clone();
-        let untrusted_policy = cbor::from_slice(policy_raw)?;
-        let published_policy = PolicyVerifier::new(consensus_verifier).verify_key_manager_policy(
-            ioctx,
-            untrusted_policy,
-            key_manager,
-        )?;
-        let new_policy = CachedPolicy::parse(published_policy, policy_raw)?;
+        // Cache the new policy.
+        let policy = policy.ok_or(KeyManagerError::PolicyRequired)?;
+        let raw_policy = cbor::to_vec(policy.clone());
+        let new_policy = CachedPolicy::parse(policy, &raw_policy)?;
 
         // Lock as late as possible.
         let mut inner = self.inner.write().unwrap();
 
         // If there is no existing policy, attempt to load from local storage.
-        let old_policy =
-            inner.policy.as_ref().cloned().unwrap_or_else(|| {
-                Self::load_policy(ctx.untrusted_local_storage).unwrap_or_default()
-            });
+        let old_policy = inner
+            .policy
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| Self::load_policy(storage).unwrap_or_default());
 
         // Compare the new serial number with the old serial number, ensure
         // it is greater.
@@ -106,7 +97,7 @@ impl Policy {
             }
             Ordering::Less => {
                 // Persist then apply the new policy.
-                Self::save_raw_policy(ctx.untrusted_local_storage, policy_raw);
+                Self::save_raw_policy(storage, &raw_policy);
                 let new_checksum = new_policy.checksum.clone();
                 inner.policy = Some(new_policy);
 
@@ -178,8 +169,8 @@ impl Policy {
         }
     }
 
-    fn load_policy(untrusted_local: &dyn KeyValue) -> Option<CachedPolicy> {
-        let ciphertext = untrusted_local.get(POLICY_STORAGE_KEY.to_vec()).unwrap();
+    fn load_policy(storage: &dyn KeyValue) -> Option<CachedPolicy> {
+        let ciphertext = storage.get(POLICY_STORAGE_KEY.to_vec()).unwrap();
 
         unseal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, &ciphertext).map(|plaintext| {
             // Deserialization failures are fatal, because it is state corruption.
@@ -187,11 +178,11 @@ impl Policy {
         })
     }
 
-    fn save_raw_policy(untrusted_local: &dyn KeyValue, raw_policy: &[u8]) {
+    fn save_raw_policy(storage: &dyn KeyValue, raw_policy: &[u8]) {
         let ciphertext = seal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, raw_policy);
 
         // Persist the encrypted policy.
-        untrusted_local
+        storage
             .insert(POLICY_STORAGE_KEY.to_vec(), ciphertext)
             .expect("failed to persist policy");
     }
