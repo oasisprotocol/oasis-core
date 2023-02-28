@@ -9,10 +9,11 @@ use oasis_core_runtime::{
 
 use crate::{
     api::{
-        LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET, LOCAL_METHOD_INIT,
-        LOCAL_METHOD_LOAD_EPHEMERAL_SECRET, METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
-        METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
-        METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
+        LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET, LOCAL_METHOD_GENERATE_MASTER_SECRET,
+        LOCAL_METHOD_INIT, LOCAL_METHOD_LOAD_EPHEMERAL_SECRET, LOCAL_METHOD_LOAD_MASTER_SECRET,
+        METHOD_GET_OR_CREATE_EPHEMERAL_KEYS, METHOD_GET_OR_CREATE_KEYS,
+        METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY, METHOD_REPLICATE_EPHEMERAL_SECRET,
+        METHOD_REPLICATE_MASTER_SECRET,
     },
     policy::{set_trusted_policy_signers, TrustedPolicySigners},
 };
@@ -80,10 +81,24 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
         ));
         state.rpc_dispatcher.add_method(RpcMethod::new(
             RpcMethodDescriptor {
+                name: LOCAL_METHOD_GENERATE_MASTER_SECRET.to_string(),
+                kind: RpcKind::LocalQuery,
+            },
+            methods::generate_master_secret,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
                 name: LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET.to_string(),
                 kind: RpcKind::LocalQuery,
             },
             methods::generate_ephemeral_secret,
+        ));
+        state.rpc_dispatcher.add_method(RpcMethod::new(
+            RpcMethodDescriptor {
+                name: LOCAL_METHOD_LOAD_MASTER_SECRET.to_string(),
+                kind: RpcKind::LocalQuery,
+            },
+            methods::load_master_secret,
         ));
         state.rpc_dispatcher.add_method(RpcMethod::new(
             RpcMethodDescriptor {

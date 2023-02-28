@@ -13,6 +13,7 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/cmd"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -623,6 +624,43 @@ func (sc *Scenario) waitNodesSynced(ctx context.Context) error {
 	return nil
 }
 
+func (sc *Scenario) waitBlocks(ctx context.Context, n int) (*consensus.Block, error) {
+	sc.Logger.Info("waiting for blocks", "n", n)
+
+	blockCh, blockSub, err := sc.Net.Controller().Consensus.WatchBlocks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer blockSub.Close()
+
+	var blk *consensus.Block
+	for i := 0; i < n; i++ {
+		select {
+		case blk = <-blockCh:
+			sc.Logger.Info("new block",
+				"height", blk.Height,
+			)
+		case <-ctx.Done():
+			return nil, fmt.Errorf("timed out waiting for blocks")
+		}
+	}
+
+	return blk, nil
+}
+
+func (sc *Scenario) waitEpochs(ctx context.Context, n beacon.EpochTime) error {
+	sc.Logger.Info("waiting few epochs", "n", n)
+
+	epoch, err := sc.Net.ClientController().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+	if err != nil {
+		return err
+	}
+	if err := sc.Net.ClientController().Beacon.WaitEpoch(ctx, epoch+n); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (sc *Scenario) initialEpochTransitions(ctx context.Context, fixture *oasis.NetworkFixture) (beacon.EpochTime, error) {
 	return sc.initialEpochTransitionsWith(ctx, fixture, 0)
 }
@@ -779,12 +817,13 @@ func RegisterScenarios() error {
 		StorageEarlyStateSync,
 		// Sentry test.
 		Sentry,
-		// Keymanager ephemeral keys test.
+		// Keymanager tests.
+		KeymanagerMasterSecrets,
 		KeymanagerEphemeralKeys,
-		// Keymanager restart test.
+		KeymanagerDumpRestore,
 		KeymanagerRestart,
-		// Keymanager replicate test.
 		KeymanagerReplicate,
+		KeymanagerUpgrade,
 		// Dump/restore test.
 		DumpRestore,
 		DumpRestoreRuntimeRoundAdvance,
@@ -811,8 +850,6 @@ func RegisterScenarios() error {
 		TxSourceMultiShort,
 		// Late start test.
 		LateStart,
-		// KeymanagerUpgrade test.
-		KeymanagerUpgrade,
 		// RuntimeUpgrade test.
 		RuntimeUpgrade,
 		// HistoryReindex test.

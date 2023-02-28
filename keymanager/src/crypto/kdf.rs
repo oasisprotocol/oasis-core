@@ -17,8 +17,7 @@ use oasis_core_runtime::{
     common::{
         crypto::{
             mrae::{deoxysii::DeoxysII, nonce::Nonce},
-            signature::{self, PublicKey},
-            x25519,
+            signature, x25519,
         },
         namespace::Namespace,
         sgx::egetkey::egetkey,
@@ -31,8 +30,8 @@ use oasis_core_runtime::{
 use crate::{
     api::KeyManagerError,
     crypto::{
-        pack_runtime_id_generation, unpack_encrypted_generation_nonce,
-        unpack_encrypted_secret_nonce, KeyPair, KeyPairId, Secret, SignedPublicKey, StateKey,
+        pack_runtime_id_generation, unpack_encrypted_secret_nonce, KeyPair, KeyPairId, Secret,
+        SignedPublicKey, StateKey, VerifiableSecret,
     },
 };
 
@@ -97,12 +96,34 @@ lazy_static! {
     };
 }
 
-const LATEST_GENERATION_STORAGE_KEY: &[u8] = b"keymanager_master_secret_generation";
 const MASTER_SECRET_STORAGE_KEY_PREFIX: &[u8] = b"keymanager_master_secret";
+const MASTER_SECRET_CHECKSUM_STORAGE_KEY_PREFIX: &[u8] = b"keymanager_master_secret_checksum";
+const MASTER_SECRET_PROPOSAL_STORAGE_KEY: &[u8] = b"keymanager_master_secret_proposal";
 const MASTER_SECRET_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal master secret v0";
 
 const MASTER_SECRET_CACHE_SIZE: usize = 20;
 const EPHEMERAL_SECRET_CACHE_SIZE: usize = 20;
+
+/// KDF state.
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct State {
+    /// Checksum of the master secret.
+    ///
+    /// Empty if KDF is not initialized.
+    pub checksum: Vec<u8>,
+    /// Checksum of the next master secret.
+    ///
+    /// Empty if the proposal for the next master secret is not set.
+    pub next_checksum: Vec<u8>,
+    /// Key manager committee public runtime signing key.
+    ///
+    /// None if KDF is not initialized.
+    pub signing_key: Option<signature::PublicKey>,
+    /// Next key manager committee public runtime signing key.
+    ///
+    /// Empty if the proposal for the next master secret is not set.
+    pub next_signing_key: Option<signature::PublicKey>,
+}
 
 /// Kdf, which derives key manager keys from a master secret.
 pub struct Kdf {
@@ -116,8 +137,10 @@ struct Inner {
     master_secrets: LruCache<u64, Secret>,
     // Ephemeral secrets used to derive ephemeral runtime keys.
     ephemeral_secrets: HashMap<EpochTime, Secret>,
-    /// Checksum of the master secret and the key manager runtime ID.
+    /// Checksum of the master secret.
     checksum: Option<Vec<u8>>,
+    /// Checksum of the proposal for the next master secret.
+    next_checksum: Option<Vec<u8>>,
     /// Key manager runtime ID.
     runtime_id: Option<Namespace>,
     /// Key manager committee runtime signer derived from
@@ -130,6 +153,9 @@ struct Inner {
     ///
     /// Used to verify derived long-term and ephemeral public runtime keys.
     signing_key: Option<signature::PublicKey>,
+    /// Key manager committee public runtime signing key derived from
+    /// the proposal for the next master secret.
+    next_signing_key: Option<signature::PublicKey>,
     /// Local cache for the long-term private keys.
     longterm_keys: LruCache<(Vec<u8>, u64), KeyPair>,
     /// Local cache for the ephemeral private keys.
@@ -184,7 +210,7 @@ impl Inner {
             None => return Err(KeyManagerError::EphemeralSecretNotFound(epoch).into()),
         };
 
-        Self::derive_secret(secret, kdf_custom, seed)
+        Ok(Self::derive_secret(secret, kdf_custom, seed))
     }
 
     /// Derive long-term secret from the key manager's master secret.
@@ -199,10 +225,10 @@ impl Inner {
             None => return Err(KeyManagerError::MasterSecretNotFound(generation).into()),
         };
 
-        Self::derive_secret(secret, kdf_custom, seed)
+        Ok(Self::derive_secret(secret, kdf_custom, seed))
     }
 
-    fn derive_secret(secret: &Secret, kdf_custom: &[u8], seed: &[u8]) -> Result<Secret> {
+    fn derive_secret(secret: &Secret, kdf_custom: &[u8], seed: &[u8]) -> Secret {
         let mut k = Secret::default();
 
         // KMAC256(secret, seed, 32, kdf_custom)
@@ -210,7 +236,7 @@ impl Inner {
         f.update(seed);
         f.finalize(&mut k.0);
 
-        Ok(k)
+        k
     }
 
     fn get_checksum(&self) -> Result<Vec<u8>> {
@@ -227,15 +253,16 @@ impl Inner {
         }
     }
 
-    fn get_signing_key(&self) -> Result<signature::PublicKey> {
-        match self.signing_key {
-            Some(signing_key) => Ok(signing_key),
-            None => Err(KeyManagerError::NotInitialized.into()),
-        }
-    }
-
     fn get_next_generation(&self) -> u64 {
         self.generation.map(|g| g + 1).unwrap_or_default()
+    }
+
+    fn verify_next_generation(&self, generation: u64) -> Result<()> {
+        let next_generation = self.get_next_generation();
+        if next_generation != generation {
+            return Err(KeyManagerError::InvalidGeneration(next_generation, generation).into());
+        }
+        Ok(())
     }
 
     fn get_runtime_id(&self) -> Result<Namespace> {
@@ -274,9 +301,11 @@ impl Kdf {
                 master_secrets: LruCache::new(NonZeroUsize::new(MASTER_SECRET_CACHE_SIZE).unwrap()),
                 ephemeral_secrets: HashMap::new(),
                 checksum: None,
+                next_checksum: None,
                 runtime_id: None,
                 signer: None,
                 signing_key: None,
+                next_signing_key: None,
                 longterm_keys: LruCache::new(NonZeroUsize::new(1024).unwrap()),
                 ephemeral_keys: LruCache::new(NonZeroUsize::new(128).unwrap()),
             }),
@@ -288,60 +317,175 @@ impl Kdf {
         &KDF
     }
 
-    /// Set the runtime ID if it is not already set.
+    /// Initialize the KDF to ensure that its internal state is up-to-date.
     ///
-    /// If the runtime ID changes, the internal state is reset and an error is returned.
-    pub fn set_runtime_id(&self, runtime_id: Namespace) -> Result<()> {
-        let mut inner = self.inner.write().unwrap();
-        inner.set_runtime_id(runtime_id).map_err(|_| {
-            // Whowa, the caller's idea of our runtime ID has changed,
-            // something really screwed up is going on.
-            inner.reset();
-            KeyManagerError::StateCorrupted.into()
-        })
-    }
-
-    /// Key manager runtime ID.
-    pub fn runtime_id(&self) -> Option<Namespace> {
-        let inner = self.inner.read().unwrap();
-        inner.runtime_id
-    }
-
-    /// Next generation of the key manager master secret.
-    pub fn next_generation(&self) -> u64 {
-        let inner = self.inner.read().unwrap();
-        inner.get_next_generation()
-    }
-
-    /// Status of the internal state, i.e. checksum and runtime signing key.
+    /// The state is considered up-to-date if all generations of the master secret are encrypted
+    /// and stored locally, and the checksum of the last generation matches the given checksum.
+    /// If this condition is not met, the internal state is reset and the KDF needs to be
+    /// initialized again.
     ///
-    /// If given checksum and generation don't match internal state,
-    /// the state is reset and an error is returned.
-    pub fn status(
+    /// WARNINGS:
+    /// - Once master secrets have been persisted to disk, it is intended that manual
+    /// intervention by the operator is required to remove/alter them.
+    /// - The first initialization can take a very long time, especially if all generations
+    /// of the master secret must be replicated from other enclaves.
+    pub fn init<M>(
         &self,
-        runtime_id: &Namespace,
-        checksum: Vec<u8>,
+        storage: &dyn KeyValue,
+        runtime_id: Namespace,
         generation: u64,
-    ) -> Result<(Vec<u8>, PublicKey)> {
-        let mut inner = self.inner.write().unwrap();
-        inner.verify_runtime_id(runtime_id)?;
+        checksum: Vec<u8>,
+        master_secret_fetcher: M,
+    ) -> Result<State>
+    where
+        M: Fn(u64) -> Result<VerifiableSecret>,
+    {
+        // If the key manager has no secrets, nothing needs to be replicated.
+        if checksum.is_empty() {
+            let mut inner = self.inner.write().unwrap();
+            inner.set_runtime_id(runtime_id)?;
 
-        let local_checksum = inner.get_checksum()?;
-        if !checksum.is_empty() && local_checksum != checksum {
-            // The caller provided a checksum and there was a mismatch.
+            if inner.checksum.is_some() {
+                inner.reset();
+                return Err(KeyManagerError::StateCorrupted.into());
+            }
+
+            return Ok(State {
+                checksum,
+                next_checksum: inner.next_checksum.clone().unwrap_or_default(),
+                signing_key: inner.signing_key,
+                next_signing_key: inner.next_signing_key,
+            });
+        }
+
+        // Fetch internal state.
+        let (mut next_generation, mut curr_checksum) = {
+            let mut inner = self.inner.write().unwrap();
+            inner.set_runtime_id(runtime_id)?;
+
+            let next_generation = inner.get_next_generation();
+            let curr_checksum = inner.checksum.clone().unwrap_or(runtime_id.0.to_vec());
+            (next_generation, curr_checksum)
+        };
+
+        // On startup load all master secrets.
+        if next_generation == 0 {
+            loop {
+                let secret = match Self::load_master_secret(storage, &runtime_id, next_generation) {
+                    Some(secret) => secret,
+                    None => break,
+                };
+
+                let prev_checksum = Self::load_checksum(storage, next_generation);
+                if prev_checksum != curr_checksum {
+                    let mut inner = self.inner.write().unwrap();
+                    inner.reset();
+                    return Err(KeyManagerError::StorageCorrupted.into());
+                }
+
+                curr_checksum = Self::checksum_master_secret(&secret, &curr_checksum);
+                next_generation += 1;
+            }
+        }
+
+        // If only one master secret is missing, try using stored proposal.
+        if next_generation == generation {
+            if let Some(secret) = Self::load_master_secret_proposal(storage) {
+                // Proposed secret is untrusted and needs to be verified.
+                let next_checksum = Self::checksum_master_secret(&secret, &curr_checksum);
+
+                if next_checksum == checksum {
+                    Self::store_master_secret(storage, &runtime_id, &secret, generation);
+                    Self::store_checksum(storage, curr_checksum, generation);
+
+                    curr_checksum = next_checksum;
+                    next_generation += 1;
+                }
+            }
+        }
+
+        // Load and replicate the missing master secrets in reverse order so that every secret
+        // is verified against the consensus checksum before being saved.
+        let mut last_checksum = checksum.clone();
+        for generation in (next_generation..=generation).rev() {
+            // Check the local storage first.
+            let secret = Self::load_master_secret(storage, &runtime_id, generation);
+            if let Some(secret) = secret {
+                // Previous checksum is untrusted and needs to be verified.
+                let prev_checksum = Self::load_checksum(storage, generation);
+                let next_checksum = Self::checksum_master_secret(&secret, &prev_checksum);
+
+                if next_checksum != last_checksum {
+                    let mut inner = self.inner.write().unwrap();
+                    inner.reset();
+                    return Err(KeyManagerError::StorageCorrupted.into());
+                }
+
+                last_checksum = prev_checksum;
+                continue;
+            }
+
+            // Master secret wasn't found and needs to be fetched from another enclave.
+            // Fetched values are untrusted and need to be verified.
+            let vs = master_secret_fetcher(generation)?;
+            let (secret, prev_checksum) = match vs.checksum.is_empty() {
+                true => (vs.secret, runtime_id.0.to_vec()),
+                false => (vs.secret, vs.checksum),
+            };
+            let next_checksum = Self::checksum_master_secret(&secret, &prev_checksum);
+
+            if next_checksum != last_checksum {
+                return Err(KeyManagerError::MasterSecretChecksumMismatch.into());
+            }
+
+            Self::store_master_secret(storage, &runtime_id, &secret, generation);
+            Self::store_checksum(storage, prev_checksum.clone(), generation);
+
+            last_checksum = prev_checksum;
+        }
+
+        // Replication finished, verify the final state.
+        if next_generation > generation + 1 || curr_checksum != last_checksum {
+            // The caller provided a checksum and a generation and replication produced a mismatch.
             // The global key manager state disagrees with the enclave state.
+            let mut inner = self.inner.write().unwrap();
             inner.reset();
             return Err(KeyManagerError::StateCorrupted.into());
         }
 
-        let last_generation = inner.get_generation()?;
-        if generation != last_generation {
-            return Err(KeyManagerError::InvalidGeneration(last_generation, generation).into());
+        // Update internal state.
+        let mut inner = self.inner.write().unwrap();
+        inner.set_runtime_id(runtime_id)?;
+
+        if inner.generation != Some(generation) {
+            // Derive signing key from the latest secret.
+            let secret = Self::load_master_secret(storage, &runtime_id, generation)
+                .ok_or(anyhow::anyhow!(KeyManagerError::StateCorrupted))?;
+
+            let sk = Self::derive_signing_key(&runtime_id, &secret);
+            let pk = sk.public_key();
+
+            inner.generation = Some(generation);
+            inner.checksum = Some(checksum);
+            inner.signing_key = Some(pk);
+            inner.signer = Some(Arc::new(sk));
+            inner.next_checksum = None;
+            inner.next_signing_key = None;
+            inner.master_secrets.push(generation, secret);
         }
 
-        let rsk = inner.get_signing_key()?;
+        Ok(State {
+            checksum: inner.checksum.clone().unwrap_or_default(),
+            next_checksum: inner.next_checksum.clone().unwrap_or_default(),
+            signing_key: inner.signing_key,
+            next_signing_key: inner.next_signing_key,
+        })
+    }
 
-        Ok((local_checksum, rsk))
+    /// Key manager runtime ID.
+    pub fn runtime_id(&self) -> Result<Namespace> {
+        let inner = self.inner.read().unwrap();
+        inner.get_runtime_id()
     }
 
     /// Get or create long-term keys.
@@ -357,15 +501,23 @@ impl Kdf {
         let mut seed = runtime_id.as_ref().to_vec();
         seed.extend_from_slice(key_pair_id.as_ref());
 
+        let mut inner = self.inner.write().unwrap();
+
+        // Return only generations we know.
+        let last_generation = inner.get_generation()?;
+        if generation > last_generation {
+            return Err(KeyManagerError::GenerationFromFuture(last_generation, generation).into());
+        }
+
         // Check to see if the cached value exists.
         let id = (seed, generation);
-        let mut inner = self.inner.write().unwrap();
         if let Some(keys) = inner.longterm_keys.get(&id) {
             return Ok(keys.clone());
         };
 
         // Make sure the secret is loaded.
         if !inner.master_secrets.contains(&generation) {
+            let runtime_id = inner.get_runtime_id()?;
             let secret = match Self::load_master_secret(storage, &runtime_id, generation) {
                 Some(secret) => secret,
                 None => {
@@ -400,8 +552,9 @@ impl Kdf {
         seed.extend_from_slice(key_pair_id.as_ref());
         seed.extend_from_slice(epoch.to_be_bytes().as_ref()); // TODO: Remove once we transition to ephemeral secrets (how?)
 
-        // Check to see if the cached value exists.
         let mut inner = self.inner.write().unwrap();
+
+        // Check to see if the cached value exists.
         let id = (seed, epoch);
         if let Some(keys) = inner.ephemeral_keys.get(&id) {
             return Ok(keys.clone());
@@ -479,7 +632,7 @@ impl Kdf {
         }
 
         // Then try to load it from the storage.
-        // Don't update the cache as someone could be replicating old secrets.
+        // Don't update the cache as the caller could be replicating old secrets.
         let runtime_id = inner.get_runtime_id()?;
         let secret = match Self::load_master_secret(storage, &runtime_id, generation) {
             Some(secret) => secret,
@@ -504,65 +657,52 @@ impl Kdf {
         Ok(secret)
     }
 
-    /// Save master secret to the local cache.
-    fn save_master_secret(
-        &self,
-        runtime_id: &Namespace,
-        secret: Secret,
-        generation: u64,
-    ) -> Result<()> {
-        let mut inner = self.inner.write().unwrap();
-        inner.verify_runtime_id(runtime_id)?;
-
-        // Master secrets need to be added in sequential order.
-        let next_generation = inner.get_next_generation();
-        if generation != next_generation {
-            return Err(KeyManagerError::InvalidGeneration(next_generation, generation).into());
-        }
-
-        // Compute next checksum.
-        let last_checksum = inner.get_checksum().unwrap_or(runtime_id.as_ref().to_vec());
-        let checksum = Self::checksum_master_secret(&secret, &last_checksum);
-
-        // Derive signing key from the latest secret.
-        let rsk_secret =
-            Inner::derive_secret(&secret, &RUNTIME_SIGNING_KEY_CUSTOM, runtime_id.as_ref())?;
-        let sk = signature::PrivateKey::from_bytes(rsk_secret.0.to_vec());
-        let pk = sk.public_key();
-
-        // Update state.
-        inner.generation = Some(generation);
-        inner.checksum = Some(checksum);
-        inner.signing_key = Some(pk);
-        inner.signer = Some(Arc::new(sk));
-        inner.master_secrets.push(generation, secret);
-
-        Ok(())
-    }
-
-    /// Add master secret to the local cache and store it encrypted to untrusted local storage.
-    pub fn add_master_secret(
+    /// Verify the proposal for the next master secret and store it encrypted in untrusted
+    /// local storage.
+    pub fn add_master_secret_proposal(
         &self,
         storage: &dyn KeyValue,
         runtime_id: &Namespace,
         secret: Secret,
         generation: u64,
+        checksum: &Vec<u8>,
     ) -> Result<()> {
-        // Add to the cache before storing locally to make sure that secrets are added
-        // in sequential order.
-        self.save_master_secret(runtime_id, secret.clone(), generation)?;
+        let mut inner = self.inner.write().unwrap();
+        inner.verify_runtime_id(runtime_id)?;
+        inner.verify_next_generation(generation)?;
 
-        // Update the last generation after the secret is stored to avoid problems
-        // if we panic in between.
-        Self::store_master_secret(storage, runtime_id, &secret, generation);
-        Self::store_last_generation(storage, runtime_id, generation);
+        let last_checksum = inner.get_checksum().unwrap_or(runtime_id.0.to_vec());
+        let next_checksum = Self::checksum_master_secret(&secret, &last_checksum);
+        if &next_checksum != checksum {
+            return Err(KeyManagerError::MasterSecretChecksumMismatch.into());
+        }
+
+        Self::store_master_secret_proposal(storage, &secret);
+        inner.next_checksum = Some(next_checksum);
+
+        let next_signing_key = Self::derive_signing_key(runtime_id, &secret).public_key();
+        inner.next_signing_key = Some(next_signing_key);
 
         Ok(())
     }
 
     /// Add ephemeral secret to the local cache.
-    pub fn add_ephemeral_secret(&self, secret: Secret, epoch: EpochTime) {
+    pub fn add_ephemeral_secret(
+        &self,
+        runtime_id: &Namespace,
+        secret: Secret,
+        epoch: EpochTime,
+        checksum: &Vec<u8>,
+    ) -> Result<()> {
+        let expected_checksum = Self::checksum_ephemeral_secret(runtime_id, &secret, epoch);
+        if &expected_checksum != checksum {
+            return Err(KeyManagerError::EphemeralSecretChecksumMismatch.into());
+        }
+
         let mut inner = self.inner.write().unwrap();
+        inner.verify_runtime_id(runtime_id)?;
+
+        // Add to the cache.
         inner.ephemeral_secrets.insert(epoch, Secret(secret.0));
 
         // Drop the oldest secret, if we exceed the capacity.
@@ -573,42 +713,6 @@ impl Kdf {
                 .min()
                 .expect("map should not be empty");
             inner.ephemeral_secrets.remove(&min);
-        }
-    }
-
-    /// Load master secrets from untrusted local storage, if not loaded already.
-    pub fn load_master_secrets(
-        &self,
-        storage: &dyn KeyValue,
-        runtime_id: &Namespace,
-    ) -> Result<()> {
-        if self.next_generation() != 0 {
-            return Ok(());
-        }
-
-        // Fetch the last generation number.
-        let last_generation = match Self::load_last_generation(storage, runtime_id) {
-            Some(generation) => generation,
-            None => {
-                // Empty storage, nothing to load.
-                return Ok(());
-            }
-        };
-
-        // Fetch secrets and add them to the cache.
-        for generation in 0..=last_generation {
-            let secret = match Kdf::load_master_secret(storage, runtime_id, generation) {
-                Some(secret) => secret,
-                None => {
-                    // We could stop here and let the caller replicate other secrets,
-                    // but we won't as this looks like a state corruption.
-                    let mut inner = self.inner.write().unwrap();
-                    inner.reset();
-                    return Err(KeyManagerError::StateCorrupted.into());
-                }
-            };
-
-            self.save_master_secret(runtime_id, secret, generation)?;
         }
 
         Ok(())
@@ -621,7 +725,7 @@ impl Kdf {
     /// and generation, while the consensus layer guarantees uniqueness, i.e. only one generation
     /// of the master secret can be published per key manager runtime.
     fn load_master_secret(
-        untrusted_local: &dyn KeyValue,
+        storage: &dyn KeyValue,
         runtime_id: &Namespace,
         generation: u64,
     ) -> Option<Secret> {
@@ -629,7 +733,7 @@ impl Kdf {
         let mut key = MASTER_SECRET_STORAGE_KEY_PREFIX.to_vec();
         key.extend(generation.to_le_bytes());
 
-        let ciphertext = untrusted_local.get(key).unwrap();
+        let ciphertext = storage.get(key).unwrap();
         if ciphertext.is_empty() {
             return None;
         }
@@ -649,8 +753,7 @@ impl Kdf {
 
     /// Encrypt and store the master secret to untrusted local storage.
     ///
-    /// WARNING: To ensure uniqueness always verify that the master secret has been published
-    /// in the consensus layer!!!
+    /// WARNING: Always verify that the master secret has been published in the consensus layer!!!
     fn store_master_secret(
         storage: &dyn KeyValue,
         runtime_id: &Namespace,
@@ -665,7 +768,7 @@ impl Kdf {
         let nonce = Nonce::generate();
         let additional_data = pack_runtime_id_generation(runtime_id, generation);
         let d2 = Self::new_d2();
-        let mut ciphertext = d2.seal(&nonce, secret.as_ref(), additional_data);
+        let mut ciphertext = d2.seal(&nonce, secret, additional_data);
         ciphertext.extend_from_slice(&nonce.to_vec());
 
         // Persist the encrypted master secret.
@@ -674,46 +777,92 @@ impl Kdf {
             .expect("failed to persist master secret");
     }
 
-    /// Load the generation of the last stored master secret from untrusted local storage.
-    fn load_last_generation(untrusted_local: &dyn KeyValue, runtime_id: &Namespace) -> Option<u64> {
-        // Fetch the encrypted generation if it exists.
-        let key = LATEST_GENERATION_STORAGE_KEY.to_vec();
-        let ciphertext = untrusted_local.get(key).unwrap();
+    /// Load the proposal for the next master secret from untrusted local storage.
+    ///
+    /// Since master secret proposals can be overwritten if not accepted by the end of the rotation
+    /// period, it is impossible to know whether the loaded proposal is the latest one. Therefore,
+    /// it is crucial to ALWAYS verify that the checksum of the proposal matches the one published
+    /// in the consensus before accepting it.
+    fn load_master_secret_proposal(storage: &dyn KeyValue) -> Option<Secret> {
+        // Fetch the encrypted master secret proposal if it exists.
+        let key = MASTER_SECRET_PROPOSAL_STORAGE_KEY.to_vec();
+
+        let ciphertext = storage.get(key).unwrap();
         if ciphertext.is_empty() {
             return None;
         }
 
-        let (ciphertext, nonce) = unpack_encrypted_generation_nonce(&ciphertext)
+        let (ciphertext, nonce) = unpack_encrypted_secret_nonce(&ciphertext)
             .expect("persisted state is corrupted, invalid size");
 
-        // Decrypt the persisted generation.
+        // Decrypt the persisted master secret proposal.
         let d2 = Self::new_d2();
-        let plaintext = d2
-            .open(&nonce, ciphertext.to_vec(), runtime_id)
-            .expect("persisted state is corrupted");
+        let plaintext = match d2.open(&nonce, ciphertext.to_vec(), vec![]) {
+            Ok(plaintext) => plaintext,
+            Err(_) => return None,
+        };
 
-        Some(u64::from_le_bytes(plaintext.try_into().unwrap()))
+        Some(Secret(plaintext.try_into().unwrap()))
     }
 
-    /// Store the generation of the last master secret to untrusted local storage.
-    fn store_last_generation(
-        untrusted_local: &dyn KeyValue,
-        runtime_id: &Namespace,
-        generation: u64,
-    ) {
-        // We only store the latest generation.
-        let key = LATEST_GENERATION_STORAGE_KEY.to_vec();
+    /// Encrypt and store the next master secret proposal in untrusted local storage.
+    ///
+    /// If a proposal already exists, it will be overwritten.
+    fn store_master_secret_proposal(storage: &dyn KeyValue, secret: &Secret) {
+        // Using the same key for all proposals will override the previous one.
+        let key = MASTER_SECRET_PROPOSAL_STORAGE_KEY.to_vec();
 
-        // Encrypt the generation.
+        // Encrypt the master secret.
+        // Additional data has to be different from the one used when storing verified master
+        // secrets so that the attacker cannot replace secrets with rejected proposals.
+        // Since proposals are always verified before being accepted, confidentiality will suffice.
         let nonce = Nonce::generate();
         let d2 = Self::new_d2();
-        let mut ciphertext = d2.seal(&nonce, generation.to_le_bytes(), runtime_id);
+        let mut ciphertext = d2.seal(&nonce, secret, vec![]);
         ciphertext.extend_from_slice(&nonce.to_vec());
 
-        // Persist the encrypted generation.
-        untrusted_local
+        // Persist the encrypted master secret.
+        storage
             .insert(key, ciphertext)
-            .expect("failed to persist master secret generation");
+            .expect("failed to persist master secret proposal");
+    }
+
+    /// Load the master secret checksum from untrusted local storage.
+    pub fn load_checksum(storage: &dyn KeyValue, generation: u64) -> Vec<u8> {
+        // Fetch the checksum if it exists.
+        let mut key = MASTER_SECRET_CHECKSUM_STORAGE_KEY_PREFIX.to_vec();
+        key.extend(generation.to_le_bytes());
+
+        storage.get(key).expect("failed to fetch checksum")
+    }
+
+    /// Store the previous master secret checksum to untrusted local storage.
+    fn store_checksum(storage: &dyn KeyValue, checksum: Vec<u8>, generation: u64) {
+        // Every checksum is stored under its own key.
+        let mut key = MASTER_SECRET_CHECKSUM_STORAGE_KEY_PREFIX.to_vec();
+        key.extend(generation.to_le_bytes());
+
+        // Persist the checksum.
+        storage
+            .insert(key, checksum)
+            .expect("failed to persist checksum");
+    }
+
+    /// Compute the checksum of the master secret that should follow the last know generation.
+    pub fn checksum_master_secret_proposal(
+        &self,
+        runtime_id: Namespace,
+        secret: &Secret,
+        generation: u64,
+    ) -> Result<Vec<u8>> {
+        let inner = self.inner.read().unwrap();
+        inner.verify_runtime_id(&runtime_id)?;
+        inner.verify_next_generation(generation)?;
+
+        let last_checksum = inner.get_checksum().unwrap_or(runtime_id.0.to_vec());
+        let next_checksum = Self::checksum_master_secret(secret, &last_checksum);
+
+        Ok(next_checksum)
     }
 
     /// Compute the checksum of the master secret.
@@ -722,11 +871,11 @@ impl Kdf {
     /// to the key manager's runtime ID, using master secret generations as the KMAC keys
     /// at each step. The checksum calculation for the n-th generation can be expressed by
     /// the formula: KMAC(gen_n, ... KMAC(gen_2, KMAC(gen_1, KMAC(gen_0, runtime_id)))).
-    fn checksum_master_secret(master_secret: &Secret, last_checksum: &Vec<u8>) -> Vec<u8> {
+    fn checksum_master_secret(secret: &Secret, last_checksum: &Vec<u8>) -> Vec<u8> {
         let mut k = [0u8; 32];
 
         // KMAC256(master_secret, last_checksum, 32, "ekiden-checksum-master-secret")
-        let mut f = KMac::new_kmac256(master_secret.as_ref(), &CHECKSUM_MASTER_SECRET_CUSTOM);
+        let mut f = KMac::new_kmac256(secret.as_ref(), &CHECKSUM_MASTER_SECRET_CUSTOM);
         f.update(last_checksum);
         f.finalize(&mut k);
 
@@ -739,19 +888,24 @@ impl Kdf {
     /// concatenation of the key manager's runtime ID and the epoch, using ephemeral secret
     /// as the KMAC key.
     pub fn checksum_ephemeral_secret(
-        ephemeral_secret: &Secret,
         runtime_id: &Namespace,
+        secret: &Secret,
         epoch: EpochTime,
     ) -> Vec<u8> {
         let mut k = [0u8; 32];
 
         // KMAC256(ephemeral_secret, kmRuntimeID, epoch, 32, "ekiden-checksum-ephemeral-secret")
-        let mut f = KMac::new_kmac256(ephemeral_secret.as_ref(), &CHECKSUM_EPHEMERAL_SECRET_CUSTOM);
+        let mut f = KMac::new_kmac256(secret.as_ref(), &CHECKSUM_EPHEMERAL_SECRET_CUSTOM);
         f.update(runtime_id.as_ref());
         f.update(epoch.to_le_bytes().as_ref());
         f.finalize(&mut k);
 
         k.to_vec()
+    }
+
+    fn derive_signing_key(runtime_id: &Namespace, secret: &Secret) -> signature::PrivateKey {
+        let sec = Inner::derive_secret(secret, &RUNTIME_SIGNING_KEY_CUSTOM, runtime_id.as_ref());
+        signature::PrivateKey::from_bytes(sec.0.to_vec())
     }
 
     fn new_d2() -> DeoxysII {
@@ -772,8 +926,10 @@ mod tests {
         num::NonZeroUsize,
         panic,
         sync::{Arc, Mutex, RwLock},
+        vec,
     };
 
+    use anyhow::Result;
     use lru::LruCache;
     use rustc_hex::{FromHex, ToHex};
 
@@ -787,12 +943,17 @@ mod tests {
         types::Error,
     };
 
-    use crate::crypto::{
-        kdf::{
-            CHECKSUM_CUSTOM, CHECKSUM_EPHEMERAL_SECRET_CUSTOM, CHECKSUM_MASTER_SECRET_CUSTOM,
-            EPHEMERAL_SECRET_CACHE_SIZE, RUNTIME_SIGNING_KEY_CUSTOM,
+    use crate::{
+        api::KeyManagerError,
+        crypto::{
+            kdf::{
+                State, CHECKSUM_CUSTOM, CHECKSUM_EPHEMERAL_SECRET_CUSTOM,
+                CHECKSUM_MASTER_SECRET_CUSTOM, EPHEMERAL_SECRET_CACHE_SIZE,
+                MASTER_SECRET_CHECKSUM_STORAGE_KEY_PREFIX, MASTER_SECRET_STORAGE_KEY_PREFIX,
+                RUNTIME_SIGNING_KEY_CUSTOM,
+            },
+            KeyPairId, Secret, VerifiableSecret, SECRET_SIZE,
         },
-        KeyPairId, Secret, SECRET_SIZE,
     };
 
     use super::{
@@ -825,9 +986,11 @@ mod tests {
                     master_secrets,
                     ephemeral_secrets,
                     checksum: Some(vec![2u8; 32]),
+                    next_checksum: None,
                     runtime_id: Some(Namespace([3u8; 32])),
                     signer: Some(Arc::new(PrivateKey::from_bytes(vec![4u8; 32]))),
                     signing_key: Some(PrivateKey::from_bytes(vec![4u8; 32]).public_key()),
+                    next_signing_key: None,
                     longterm_keys: LruCache::new(NonZeroUsize::new(1).unwrap()),
                     ephemeral_keys: LruCache::new(NonZeroUsize::new(1).unwrap()),
                 }),
@@ -862,6 +1025,361 @@ mod tests {
             cache.insert(key, value);
             Ok(())
         }
+    }
+
+    /// Master secret and checksum provider.
+    pub struct MasterSecretProvider {
+        runtime_id: Namespace,
+    }
+
+    impl MasterSecretProvider {
+        fn new(runtime_id: Namespace) -> Self {
+            return Self { runtime_id };
+        }
+
+        fn fetch(&self, generation: u64) -> Result<VerifiableSecret> {
+            let mut secret = Default::default();
+            let mut prev_checksum = Default::default();
+            let mut next_checksum = self.runtime_id.0.to_vec();
+
+            for generation in 0..=generation {
+                secret = Secret([generation as u8; SECRET_SIZE]);
+
+                prev_checksum = next_checksum;
+                next_checksum = Kdf::checksum_master_secret(&secret, &prev_checksum);
+            }
+
+            Ok(VerifiableSecret {
+                secret,
+                checksum: prev_checksum,
+            })
+        }
+
+        fn checksum(&self, generation: u64) -> Vec<u8> {
+            self.fetch(generation + 1).unwrap().checksum
+        }
+    }
+
+    #[test]
+    fn init_replication() {
+        let kdf = Kdf::new();
+        let storage = InMemoryKeyValue::new();
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let provider = MasterSecretProvider::new(runtime_id);
+        let master_secret_fetcher = |generation| provider.fetch(generation);
+
+        // No secrets.
+        let result = kdf.init(&storage, runtime_id, 0, vec![], master_secret_fetcher);
+        assert!(result.is_ok());
+
+        let state = result.unwrap();
+        assert_eq!(state, State::default());
+
+        // Secrets replicated from other enclaves.
+        for generation in [0, 0, 1, 1, 2, 2, 5, 5] {
+            let checksum = provider.checksum(generation);
+
+            let result = kdf.init(
+                &storage,
+                runtime_id,
+                generation,
+                checksum.clone(),
+                master_secret_fetcher,
+            );
+            assert!(result.is_ok());
+
+            let state = result.unwrap();
+            assert_eq!(state.checksum, checksum);
+            assert!(state.signing_key.is_some());
+            assert!(state.next_checksum.is_empty());
+            assert!(state.next_signing_key.is_none());
+        }
+
+        // Secrets loaded from local storage or replicated from other enclaves.
+        for generation in [5, 5, 6, 6, 10, 10] {
+            let kdf = Kdf::new();
+            let checksum = provider.checksum(generation);
+
+            let result = kdf.init(
+                &storage,
+                runtime_id,
+                generation,
+                checksum.clone(),
+                master_secret_fetcher,
+            );
+            assert!(result.is_ok());
+
+            let state = result.unwrap();
+            assert_eq!(state.checksum, checksum);
+            assert!(state.signing_key.is_some());
+            assert!(state.next_checksum.is_empty());
+            assert!(state.next_signing_key.is_none());
+        }
+    }
+
+    #[test]
+    fn init_rotation() {
+        let kdf = Kdf::new();
+        let storage = InMemoryKeyValue::new();
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let provider = MasterSecretProvider::new(runtime_id);
+        let master_secret_fetcher =
+            |generation| Err(KeyManagerError::MasterSecretNotFound(generation).into());
+
+        // KDF needs to be initialized.
+        let result = kdf.init(&storage, runtime_id, 0, vec![], master_secret_fetcher);
+        assert!(result.is_ok());
+
+        // Rotate master secrets.
+        for generation in 0..5 {
+            let secret = provider.fetch(generation).unwrap().secret;
+            let checksum = provider.checksum(generation);
+            let result = kdf.add_master_secret_proposal(
+                &storage,
+                &runtime_id,
+                secret,
+                generation,
+                &checksum,
+            );
+            assert!(result.is_ok());
+
+            let result = kdf.init(
+                &storage,
+                runtime_id,
+                generation,
+                checksum.clone(),
+                master_secret_fetcher,
+            );
+            assert!(result.is_ok());
+
+            let state = result.unwrap();
+            assert_eq!(state.checksum, checksum);
+        }
+
+        // Invalid proposal.
+        let generation = 5;
+        let secret = Secret([0; SECRET_SIZE]);
+        let checksum = kdf
+            .checksum_master_secret_proposal(runtime_id, &secret, generation)
+            .unwrap();
+        let result =
+            kdf.add_master_secret_proposal(&storage, &runtime_id, secret, generation, &checksum);
+        assert!(result.is_ok());
+
+        let checksum = provider.checksum(generation);
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum,
+            master_secret_fetcher,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            KeyManagerError::MasterSecretNotFound(generation).to_string()
+        );
+
+        // Valid proposal.
+        let secret = provider.fetch(generation).unwrap().secret;
+        let checksum = provider.checksum(generation);
+        let result =
+            kdf.add_master_secret_proposal(&storage, &runtime_id, secret, generation, &checksum);
+        assert!(result.is_ok());
+
+        // Rotate master secret after restart.
+        let kdf = Kdf::new();
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum.clone(),
+            master_secret_fetcher,
+        );
+        assert!(result.is_ok());
+
+        let state = result.unwrap();
+        assert_eq!(state.checksum, checksum);
+    }
+
+    #[test]
+    fn init_corrupted_checksum() {
+        let kdf = Kdf::new();
+        let storage = InMemoryKeyValue::new();
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let provider = MasterSecretProvider::new(runtime_id);
+        let master_secret_fetcher = |generation| provider.fetch(generation);
+
+        // Init.
+        let generation = 5;
+        let checksum = provider.checksum(generation);
+
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum.clone(),
+            master_secret_fetcher,
+        );
+        assert!(result.is_ok());
+
+        // Corrupt checksum.
+        let mut key = MASTER_SECRET_CHECKSUM_STORAGE_KEY_PREFIX.to_vec();
+        key.extend(generation.to_le_bytes());
+
+        storage
+            .insert(key, vec![1, 2, 3])
+            .expect("checksum should be inserted");
+
+        // Init.
+        let kdf = Kdf::new();
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum.clone(),
+            master_secret_fetcher,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            KeyManagerError::StorageCorrupted.to_string()
+        );
+    }
+
+    #[test]
+    fn init_corrupted_secret() {
+        let kdf = Kdf::new();
+        let storage = InMemoryKeyValue::new();
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let provider = MasterSecretProvider::new(runtime_id);
+        let master_secret_fetcher = |generation| provider.fetch(generation);
+
+        // Init.
+        let generation = 5;
+        let checksum = provider.checksum(generation);
+
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum.clone(),
+            master_secret_fetcher,
+        );
+        assert!(result.is_ok());
+
+        // Corrupt master secret.
+        let mut key = MASTER_SECRET_STORAGE_KEY_PREFIX.to_vec();
+        key.extend(generation.to_le_bytes());
+
+        storage
+            .insert(key, vec![1, 2, 3])
+            .expect("secret should be inserted");
+
+        // Init.
+        let kdf = Kdf::new();
+        let result = panic::catch_unwind(|| {
+            kdf.init(
+                &storage,
+                runtime_id,
+                generation,
+                checksum.clone(),
+                master_secret_fetcher,
+            )
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn init_invalid_generation() {
+        let kdf = Kdf::new();
+        let storage = InMemoryKeyValue::new();
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let provider = MasterSecretProvider::new(runtime_id);
+        let master_secret_fetcher = |generation| provider.fetch(generation);
+
+        // Init.
+        let generation = 10;
+        let checksum = provider.checksum(generation);
+
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum.clone(),
+            master_secret_fetcher,
+        );
+        assert!(result.is_ok());
+
+        // Init with outdated generation.
+        let generation = 5;
+        let checksum = provider.checksum(generation);
+
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum.clone(),
+            master_secret_fetcher,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            KeyManagerError::StateCorrupted.to_string()
+        );
+    }
+
+    #[test]
+    fn init_invalid_runtime_id() {
+        let kdf = Kdf::new();
+        let storage = InMemoryKeyValue::new();
+        let runtime_id = Namespace::from(vec![1u8; 32]);
+        let invalid_runtime_id = Namespace::from(vec![2u8; 32]);
+        let provider = MasterSecretProvider::new(runtime_id);
+        let master_secret_fetcher = |generation| provider.fetch(generation);
+
+        // No secrets.
+        let result = kdf.init(&storage, runtime_id, 0, vec![], master_secret_fetcher);
+        assert!(result.is_ok());
+
+        let result = kdf.init(
+            &storage,
+            invalid_runtime_id,
+            0,
+            vec![],
+            master_secret_fetcher,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            KeyManagerError::RuntimeMismatch.to_string()
+        );
+
+        // Few secrets.
+        let generation = 5;
+        let checksum = provider.checksum(generation);
+
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            generation,
+            checksum.clone(),
+            master_secret_fetcher,
+        );
+        assert!(result.is_ok());
+
+        let result = kdf.init(
+            &storage,
+            invalid_runtime_id,
+            generation,
+            checksum,
+            master_secret_fetcher,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            KeyManagerError::RuntimeMismatch.to_string()
+        );
     }
 
     #[test]
@@ -1028,7 +1546,7 @@ mod tests {
         );
 
         // Secret loaded from the storage.
-        let generation = kdf.next_generation();
+        let generation = 2;
         let new_secret = Secret([3u8; SECRET_SIZE]);
         {
             let mut inner = kdf.inner.write().unwrap();
@@ -1073,6 +1591,7 @@ mod tests {
     #[test]
     fn ephemeral_secret_can_be_loaded() {
         let kdf = Kdf::default();
+        let runtime_id = kdf.runtime_id().expect("runtime id should be set");
 
         // Secret for epoch 1 should exist.
         kdf.inner
@@ -1101,8 +1620,11 @@ mod tests {
             .map(|_| panic!("ephemeral secret for epoch 3 should not exist"));
 
         // Insert enough secrets so that the oldest one is removed.
-        for epoch in 1..EPHEMERAL_SECRET_CACHE_SIZE + 2 {
-            kdf.add_ephemeral_secret(Secret([100; SECRET_SIZE]), epoch.try_into().unwrap());
+        for epoch in 1..(EPHEMERAL_SECRET_CACHE_SIZE + 2) as EpochTime {
+            let secret = Secret([100; SECRET_SIZE]);
+            let checksum = Kdf::checksum_ephemeral_secret(&runtime_id, &secret, epoch);
+            let result = kdf.add_ephemeral_secret(&runtime_id, secret, epoch, &checksum);
+            assert!(result.is_ok())
         }
 
         // Secret for epoch 1 should be removed.
@@ -1291,11 +1813,13 @@ mod tests {
                     master_secrets,
                     ephemeral_secrets,
                     checksum: Some(checksum.from_hex().unwrap()),
+                    next_checksum: None,
                     runtime_id: Some(Namespace::from(runtime_id)),
                     signer: Some(Arc::new(PrivateKey::from_bytes(signer.from_hex().unwrap()))),
                     signing_key: Some(
                         PrivateKey::from_bytes(signer.from_hex().unwrap()).public_key(),
                     ),
+                    next_signing_key: None,
                     longterm_keys: LruCache::new(NonZeroUsize::new(1).unwrap()),
                     ephemeral_keys: LruCache::new(NonZeroUsize::new(1).unwrap()),
                 }),
@@ -1317,29 +1841,6 @@ mod tests {
             assert_eq!(ek.input_keypair.sk.0.to_bytes().to_hex::<String>(), v.ek_sk);
             assert_eq!(ek.input_keypair.pk.0.to_bytes().to_hex::<String>(), v.ek_pk);
         }
-    }
-
-    #[test]
-    fn generation_save_load() {
-        let storage = InMemoryKeyValue::new();
-        let generation = 1;
-        let runtime_id = Namespace([2; NAMESPACE_SIZE]);
-
-        // Empty storage.
-        let result = Kdf::load_last_generation(&storage, &runtime_id);
-        assert!(result.is_none());
-
-        // Happy path.
-        Kdf::store_last_generation(&storage, &runtime_id, generation);
-        let loaded =
-            Kdf::load_last_generation(&storage, &runtime_id).expect("generation should be loaded");
-        assert_eq!(generation, loaded);
-
-        // Decryption panics (invalid runtime ID).
-        let invalid_runtime_id = Namespace([3; NAMESPACE_SIZE]);
-        let result =
-            panic::catch_unwind(|| Kdf::load_last_generation(&storage, &invalid_runtime_id));
-        assert!(result.is_err());
     }
 
     #[test]
@@ -1368,59 +1869,41 @@ mod tests {
     }
 
     #[test]
-    fn load_master_secrets() {
-        let runtime_id = Namespace([1; NAMESPACE_SIZE]);
-        let master_secrets = vec![
-            Secret([0; SECRET_SIZE]),
-            Secret([1; SECRET_SIZE]),
-            Secret([2; SECRET_SIZE]),
-        ];
+    fn checksum_save_load() {
+        let storage = InMemoryKeyValue::new();
+        let generation = 0;
+        let checksum = vec![1, 2, 3];
 
-        let empty_storage = InMemoryKeyValue::new();
-        let full_storage = InMemoryKeyValue::new();
-
-        Kdf::store_last_generation(&full_storage, &runtime_id, 2);
-        for (generation, secret) in master_secrets.iter().enumerate() {
-            Kdf::store_master_secret(&full_storage, &runtime_id, secret, generation as u64);
-        }
+        // Empty storage.
+        let result = Kdf::load_checksum(&storage, generation);
+        assert!(result.is_empty());
 
         // Happy path.
-        let kdf = Kdf::new();
-        kdf.set_runtime_id(runtime_id)
-            .expect("runtime id should not be set");
+        Kdf::store_checksum(&storage, checksum.clone(), generation);
+        let loaded = Kdf::load_checksum(&storage, generation);
+        assert_eq!(checksum, loaded);
+    }
 
-        let result = kdf.load_master_secrets(&full_storage, &runtime_id);
-        assert!(result.is_ok());
+    #[test]
+    fn master_secret_proposal_save_load() {
+        let storage = InMemoryKeyValue::new();
+        let secret = Secret([0; SECRET_SIZE]);
+        let new_secret = Secret([1; SECRET_SIZE]);
 
-        let mut inner = kdf.inner.write().unwrap();
-        assert_eq!(inner.generation.unwrap(), 2);
-        assert_eq!(
-            inner.checksum.clone().unwrap().to_hex::<String>(),
-            "ca9b0c294056ef674c4266e267e8972df8c6b8b0b5a3a86e081ed24daf306abf"
-        );
-        assert_eq!(inner.master_secrets.len(), 3);
-        for (generation, secret) in master_secrets.iter().enumerate() {
-            let generation = generation as u64;
-            let loaded = inner.master_secrets.get(&generation).cloned();
-            assert_eq!(loaded.unwrap().0, secret.0);
-        }
+        // Empty storage.
+        let result = Kdf::load_master_secret_proposal(&storage);
+        assert!(result.is_none());
 
-        // One master secret is missing.
-        Kdf::store_last_generation(&full_storage, &runtime_id, 3);
+        // Happy path.
+        Kdf::store_master_secret_proposal(&storage, &secret);
+        let loaded =
+            Kdf::load_master_secret_proposal(&storage).expect("master secret should be loaded");
+        assert_eq!(secret.0, loaded.0);
 
-        let kdf = Kdf::new();
-        kdf.set_runtime_id(runtime_id)
-            .expect("runtime id should not be set");
-
-        let result = kdf.load_master_secrets(&full_storage, &runtime_id);
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "key manager state corrupted"
-        );
-
-        // Empty store.
-        let kdf = Kdf::new();
-        let result = kdf.load_master_secrets(&empty_storage, &runtime_id);
-        assert!(result.is_ok());
+        // Overwrite the proposal and check if the last secret is kept.
+        Kdf::store_master_secret_proposal(&storage, &new_secret);
+        let loaded =
+            Kdf::load_master_secret_proposal(&storage).expect("master secret should be loaded");
+        assert_eq!(new_secret.0, loaded.0);
     }
 }

@@ -21,8 +21,8 @@ pub enum KeyManagerError {
     NotInitialized,
     #[error("key manager state corrupted")]
     StateCorrupted,
-    #[error("key manager replication required")]
-    ReplicationRequired,
+    #[error("key manager storage corrupted")]
+    StorageCorrupted,
     #[error("policy required")]
     PolicyRequired,
     #[error("policy rollback")]
@@ -41,10 +41,14 @@ pub enum KeyManagerError {
     REKNotPublished,
     #[error("signature verification failed: {0}")]
     InvalidSignature(#[source] anyhow::Error),
+    #[error("master secret checksum mismatch")]
+    MasterSecretChecksumMismatch,
     #[error("master secret generation {0} not found")]
     MasterSecretNotFound(u64),
     #[error("master secret generation {0} not replicated")]
     MasterSecretNotReplicated(u64),
+    #[error("master secret not published")]
+    MasterSecretNotPublished,
     #[error("ephemeral secret for epoch {0} not found")]
     EphemeralSecretNotFound(u64),
     #[error("ephemeral secret for epoch {0} not replicated")]

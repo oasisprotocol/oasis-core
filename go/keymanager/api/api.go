@@ -85,8 +85,14 @@ var (
 	// RPCMethodGetPublicEphemeralKey is the name of the `get_public_ephemeral_key` method.
 	RPCMethodGetPublicEphemeralKey = "get_public_ephemeral_key"
 
+	// RPCMethodGenerateMasterSecret is the name of the `generate_master_secret` RPC method.
+	RPCMethodGenerateMasterSecret = "generate_master_secret"
+
 	// RPCMethodGenerateEphemeralSecret is the name of the `generate_ephemeral_secret` RPC method.
 	RPCMethodGenerateEphemeralSecret = "generate_ephemeral_secret"
+
+	// RPCMethodLoadMasterSecret is the name of the `load_master_secret` RPC method.
+	RPCMethodLoadMasterSecret = "load_master_secret"
 
 	// RPCMethodLoadEphemeralSecret is the name of the `load_ephemeral_secret` RPC method.
 	RPCMethodLoadEphemeralSecret = "load_ephemeral_secret"
@@ -231,10 +237,10 @@ func NewPublishEphemeralSecretTx(nonce uint64, fee *transaction.Fee, sigSec *Sig
 // InitRequest is the initialization RPC request, sent to the key manager
 // enclave.
 type InitRequest struct {
-	Status      *Status `json:"status,omitempty"`   // TODO: Change in PR-5205.
-	Checksum    []byte  `json:"checksum,omitempty"` // TODO: Remove in PR-5205.
-	Policy      []byte  `json:"policy,omitempty"`   // TODO: Remove in PR-5205.
-	MayGenerate bool    `json:"may_generate"`
+	Status      *Status `json:"status,omitempty"`       // TODO: Change in PR-5205.
+	Checksum    []byte  `json:"checksum,omitempty"`     // TODO: Remove in PR-5205.
+	Policy      []byte  `json:"policy,omitempty"`       // TODO: Remove in PR-5205.
+	MayGenerate bool    `json:"may_generate,omitempty"` // TODO: Remove in PR-5205.
 }
 
 // InitResponse is the initialization RPC response, returned as part of a
@@ -242,8 +248,10 @@ type InitRequest struct {
 type InitResponse struct {
 	IsSecure       bool                 `json:"is_secure"`
 	Checksum       []byte               `json:"checksum"`
+	NextChecksum   []byte               `json:"next_checksum,omitempty"`
 	PolicyChecksum []byte               `json:"policy_checksum"`
 	RSK            *signature.PublicKey `json:"rsk,omitempty"`
+	NextRSK        *signature.PublicKey `json:"next_rsk,omitempty"`
 }
 
 // SignedInitResponse is the signed initialization RPC response, returned
@@ -274,6 +282,15 @@ func SignInitResponse(signer signature.Signer, response *InitResponse) (*SignedI
 	}, nil
 }
 
+// LongTermKeyRequest is the long-term key RPC request, sent to the key manager
+// enclave.
+type LongTermKeyRequest struct {
+	Height     *uint64          `json:"height"`
+	ID         common.Namespace `json:"runtime_id"`
+	KeyPairID  KeyPairID        `json:"key_pair_id"`
+	Generation uint64           `json:"generation"`
+}
+
 // EphemeralKeyRequest is the ephemeral key RPC request, sent to the key manager
 // enclave.
 type EphemeralKeyRequest struct {
@@ -292,6 +309,19 @@ type SignedPublicKey struct {
 	Expiration *beacon.EpochTime      `json:"expiration,omitempty"`
 }
 
+// GenerateMasterSecretRequest is the generate master secret RPC request,
+// sent to the key manager enclave.
+type GenerateMasterSecretRequest struct {
+	Generation uint64           `json:"generation"`
+	Epoch      beacon.EpochTime `json:"epoch"`
+}
+
+// GenerateMasterSecretResponse is the RPC response, returned as part of
+// a GenerateMasterSecretRequest from the key manager enclave.
+type GenerateMasterSecretResponse struct {
+	SignedSecret SignedEncryptedMasterSecret `json:"signed_secret"`
+}
+
 // GenerateEphemeralSecretRequest is the generate ephemeral secret RPC request,
 // sent to the key manager enclave.
 type GenerateEphemeralSecretRequest struct {
@@ -302,6 +332,12 @@ type GenerateEphemeralSecretRequest struct {
 // a GenerateEphemeralSecretRequest from the key manager enclave.
 type GenerateEphemeralSecretResponse struct {
 	SignedSecret SignedEncryptedEphemeralSecret `json:"signed_secret"`
+}
+
+// LoadMasterSecretRequest is the load master secret RPC request,
+// sent to the key manager enclave.
+type LoadMasterSecretRequest struct {
+	SignedSecret SignedEncryptedMasterSecret `json:"signed_secret"`
 }
 
 // LoadEphemeralSecretRequest is the load ephemeral secret RPC request,

@@ -5,13 +5,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"golang.org/x/exp/slices"
+
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
 // KeymanagerReplicate is the keymanager replication scenario.
@@ -42,96 +41,115 @@ func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
+	// Speed up the test.
+	f.Network.Beacon.VRFParameters = &beacon.VRFParameters{
+		Interval:             10,
+		ProofSubmissionDelay: 2,
+	}
+
+	// We don't need compute workers.
+	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}
+
 	// This requires multiple keymanagers.
 	f.Keymanagers = []oasis.KeymanagerFixture{
-		{Runtime: 0, Entity: 1},
-		{Runtime: 0, Entity: 1},
+		{Runtime: 0, Entity: 1, Policy: 0},
+		{Runtime: 0, Entity: 1, Policy: 0},
+		{Runtime: 0, Entity: 1, Policy: 0, NodeFixture: oasis.NodeFixture{NoAutoStart: true}},
+		{Runtime: 0, Entity: 1, Policy: 0, NodeFixture: oasis.NodeFixture{NoAutoStart: true}},
 	}
+
+	// Enable master secret rotation.
+	f.KeymanagerPolicies[0].MasterSecretRotationInterval = 1
 
 	return f, nil
 }
 
 func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
-	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
+	// Start the first two key managers.
+	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
-	// Wait for the client to exit.
-	if err := sc.WaitTestClientOnly(); err != nil {
-		return err
+	// Wait until 3 master secrets are generated.
+	if _, err := sc.waitMasterSecret(ctx, 2); err != nil {
+		return fmt.Errorf("master secret not generated: %w", err)
 	}
 
-	// Open a control connection to the replica.
-	if kmLen := len(sc.Net.Keymanagers()); kmLen < 2 {
-		return fmt.Errorf("expected more than 1 keymanager, have: %v", kmLen)
-	}
-	replica := sc.Net.Keymanagers()[1]
-
-	ctrl, err := oasis.NewController(replica.SocketPath())
+	// Make sure exactly two key managers were generating secrets.
+	status, err := sc.keymanagerStatus(ctx)
 	if err != nil {
 		return err
 	}
-
-	// Extract the replica's ExtraInfo.
-	node, err := ctrl.Registry.GetNode(
-		ctx,
-		&registry.IDQuery{
-			ID: replica.NodeID,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	rt := node.GetRuntime(keymanagerID, version.Version{})
-	if rt == nil {
-		return fmt.Errorf("replica is missing keymanager runtime from descriptor")
-	}
-	var signedInitResponse keymanager.SignedInitResponse
-	if err = cbor.Unmarshal(rt.ExtraInfo, &signedInitResponse); err != nil {
-		return fmt.Errorf("failed to unmarshal replica extrainfo")
+	if len(status.Nodes) != 2 {
+		return fmt.Errorf("key manager committee should consist of two nodes")
 	}
 
-	// Grab a state dump and cross check the checksum with that of
-	// the replica.
-	doc, err := ctrl.Consensus.StateToGenesis(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to obtain consensus state: %w", err)
-	}
-	if err = func() error {
-		for _, status := range doc.KeyManager.Statuses {
-			if !status.ID.Equal(&keymanagerID) {
-				continue
-			}
-			if !status.IsInitialized {
-				return fmt.Errorf("key manager failed to initialize")
-			}
-			if !bytes.Equal(status.Checksum, signedInitResponse.InitResponse.Checksum) {
-				return fmt.Errorf("key manager failed to replicate, checksum mismatch")
-			}
-			return nil
-		}
-		return fmt.Errorf("consensus state missing km status")
-	}(); err != nil {
+	// Stop the second manager.
+	// Upon restarting, its master secrets will be partially synchronized (3 out of 6).
+	if err = sc.Net.Keymanagers()[1].Stop(); err != nil {
 		return err
 	}
 
-	// Since the replica has published an ExtraInfo that shows that it has
-	// the correct master secret checksum, the replication process has
-	// succeeded from the enclave's point of view.
+	// Generate another 3 master secrets.
+	if _, err = sc.waitMasterSecret(ctx, 5); err != nil {
+		return fmt.Errorf("master secret not generated: %w", err)
+	}
 
-	// Query the node's keymanager consensus endpoint.
-	status, err := ctrl.Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
-		ID: keymanagerID,
-	})
+	// Make sure the first key manager was generating secrets.
+	status, err = sc.keymanagerStatus(ctx)
 	if err != nil {
 		return err
 	}
-	for _, v := range status.Nodes {
-		// And ensure that the node is present.
-		if v.Equal(replica.NodeID) {
-			return nil
+	if len(status.Nodes) != 1 {
+		return fmt.Errorf("key manager committee should consist of one node")
+	}
+
+	// Start key managers that are not running and wait until they replicate
+	// master secrets from the first one.
+	if err = sc.startAndWaitKeymanagers(ctx, []int{1, 2, 3}); err != nil {
+		return err
+	}
+
+	// If the replication was successful, the next key manager committee should
+	// consist of all nodes.
+	if status, err = sc.waitKeymanagerStatuses(ctx, 2); err != nil {
+		return err
+	}
+	if !status.IsInitialized {
+		return fmt.Errorf("key manager failed to initialize")
+	}
+	if len(status.Nodes) != len(sc.Net.Keymanagers()) {
+		return fmt.Errorf("key manager committee should consist of all nodes")
+	}
+	for _, km := range sc.Net.Keymanagers() {
+		if !slices.Contains(status.Nodes, km.NodeID) {
+			return fmt.Errorf("node missing from key manager status")
 		}
 	}
 
-	return fmt.Errorf("node missing from km status")
+	// Wait few blocks so that the key managers transition to the new secret and register
+	// with the latest checksum. The latter can take some time.
+	if _, err = sc.waitBlocks(ctx, 8); err != nil {
+		return err
+	}
+
+	// Check if checksums match.
+	for idx := range sc.Net.Keymanagers() {
+		initRsp, err := sc.keymanagerInitResponse(ctx, idx)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(initRsp.Checksum, status.Checksum) {
+			return fmt.Errorf("key manager checksum mismatch")
+		}
+	}
+
+	// If we came this far than all key managers should have the same state.
+	// Let's test if they replicated the same secrets by fetching long-term
+	// public keys for all generations.
+	if err := sc.compareLongtermPublicKeys(ctx, []int{0, 1, 2, 3}); err != nil {
+		return err
+	}
+
+	return nil
 }

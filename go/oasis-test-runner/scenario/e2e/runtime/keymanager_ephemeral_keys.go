@@ -2,36 +2,24 @@ package runtime
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"reflect"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
-	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
-	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
-	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
-	kmp2p "github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 )
 
 // KeymanagerEphemeralKeys is the keymanager ephemeral secret and ephemeral
@@ -113,19 +101,19 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	if err != nil {
 		return err
 	}
-	rpcClient, rpcHost, err := sc.keyManagerRPCClient(chainContext)
+	rpcClient, err := newKeyManagerRPCClient(chainContext)
 	if err != nil {
 		return err
 	}
-	firstKmPeerID, err := sc.addKeyManagerAddrToHost(firstKm, rpcHost)
+	firstKmPeerID, err := rpcClient.addKeyManagerAddrToHost(firstKm)
 	if err != nil {
 		return err
 	}
-	secondKmPeerID, err := sc.addKeyManagerAddrToHost(secondKm, rpcHost)
+	secondKmPeerID, err := rpcClient.addKeyManagerAddrToHost(secondKm)
 	if err != nil {
 		return err
 	}
-	thirdKmPeerID, err := sc.addKeyManagerAddrToHost(thirdKm, rpcHost)
+	thirdKmPeerID, err := rpcClient.addKeyManagerAddrToHost(thirdKm)
 	if err != nil {
 		return err
 	}
@@ -166,7 +154,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 		"epoch", sigSecret.Secret.Epoch-1,
 	)
 
-	key, err := sc.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch-1, firstKmPeerID, rpcClient)
+	key, err := rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch-1, firstKmPeerID)
 	if err != nil {
 		return err
 	}
@@ -181,7 +169,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 		"epoch", sigSecret.Secret.Epoch,
 	)
 
-	key, err = sc.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID, rpcClient)
+	key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID)
 	if err != nil {
 		return err
 	}
@@ -204,7 +192,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	sc.Logger.Info("testing ephemeral keys - restart",
 		"epoch", sigSecret.Secret.Epoch,
 	)
-	key, err = sc.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID, rpcClient)
+	key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID)
 	if err != nil {
 		return err
 	}
@@ -244,7 +232,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	}
 
 	// Fetch public key which will be used to test replication.
-	key, err = sc.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID, rpcClient)
+	key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, sigSecret.Secret.Epoch, firstKmPeerID)
 	if err != nil {
 		return err
 	}
@@ -290,7 +278,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	sc.Logger.Info("testing ephemeral keys - replication",
 		"epoch", sigSecret.Secret.Epoch,
 	)
-	keyCopy, err := sc.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, secondKmPeerID, rpcClient)
+	keyCopy, err := rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, secondKmPeerID)
 	if err != nil {
 		return err
 	}
@@ -304,7 +292,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	sc.Logger.Info("testing ephemeral keys - replication",
 		"epoch", sigSecret.Secret.Epoch,
 	)
-	keyCopy, err = sc.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, thirdKmPeerID, rpcClient)
+	keyCopy, err = rpcClient.fetchEphemeralPublicKey(ctx, sigSecret.Secret.Epoch, thirdKmPeerID)
 	if err != nil {
 		return err
 	}
@@ -363,7 +351,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 		)
 
 		for _, peerID := range []peer.ID{firstKmPeerID, secondKmPeerID, thirdKmPeerID} {
-			key, err = sc.fetchEphemeralPublicKeyWithRetry(ctx, epoch, peerID, rpcClient)
+			key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, epoch, peerID)
 			if err != nil {
 				return fmt.Errorf("fetching ephemeral key should succeed")
 			}
@@ -604,118 +592,4 @@ func (sc *kmEphemeralKeysImpl) checkNumberOfKeyManagers(ctx context.Context, n i
 	}
 
 	return nil
-}
-
-func (sc *kmEphemeralKeysImpl) keyManagerRPCClient(chainContext string) (rpc.Client, host.Host, error) {
-	signer, err := memory.NewFactory().Generate(signature.SignerP2P, rand.Reader)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	listenAddr, err := multiaddr.NewMultiaddr("/ip4/0.0.0.0/tcp/0")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	host, err := libp2p.New(
-		libp2p.ListenAddrs(listenAddr),
-		libp2p.Identity(p2p.SignerToPrivKey(signer)),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	pid := protocol.NewRuntimeProtocolID(chainContext, keymanagerID, kmp2p.KeyManagerProtocolID, kmp2p.KeyManagerProtocolVersion)
-	rc := rpc.NewClient(host, pid)
-
-	return rc, host, nil
-}
-
-func (sc *kmEphemeralKeysImpl) addKeyManagerAddrToHost(km *oasis.Keymanager, host host.Host) (peer.ID, error) {
-	identity, err := km.LoadIdentity()
-	if err != nil {
-		return "", err
-	}
-
-	peerID, err := p2p.PublicKeyToPeerID(identity.P2PSigner.Public())
-	if err != nil {
-		return "", err
-	}
-
-	listenAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", km.P2PPort()))
-	if err != nil {
-		return "", err
-	}
-
-	host.Peerstore().AddAddr(peerID, listenAddr, time.Hour)
-
-	return peerID, nil
-}
-
-func (sc *kmEphemeralKeysImpl) fetchEphemeralPublicKey(ctx context.Context, epoch beacon.EpochTime, peerID peer.ID, rc rpc.Client) (*x25519.PublicKey, error) {
-	args := keymanager.EphemeralKeyRequest{
-		Height:    nil,
-		ID:        keymanagerID,
-		KeyPairID: keymanager.KeyPairID{1, 2, 3},
-		Epoch:     epoch,
-	}
-
-	req := enclaverpc.Request{
-		Method: keymanager.RPCMethodGetPublicEphemeralKey,
-		Args:   args,
-	}
-
-	p2pReq := kmp2p.CallEnclaveRequest{
-		Kind: enclaverpc.KindInsecureQuery,
-		Data: cbor.Marshal(req),
-	}
-
-	var p2pRsp kmp2p.CallEnclaveResponse
-	_, err := rc.Call(ctx, peerID, kmp2p.MethodCallEnclave, p2pReq, &p2pRsp)
-	if err != nil {
-		return nil, err
-	}
-
-	var rsp enclaverpc.Response
-	if err = cbor.Unmarshal(p2pRsp.Data, &rsp); err != nil {
-		return nil, err
-	}
-
-	if rsp.Body.Error != nil {
-		msg := *rsp.Body.Error
-		if msg == fmt.Sprintf("ephemeral secret for epoch %d not found", epoch) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf(msg)
-	}
-
-	var key keymanager.SignedPublicKey
-	if err = cbor.Unmarshal(rsp.Body.Success, &key); err != nil {
-		return nil, err
-	}
-
-	return &key.Key, nil
-}
-
-func (sc *kmEphemeralKeysImpl) fetchEphemeralPublicKeyWithRetry(ctx context.Context, epoch beacon.EpochTime, peerID peer.ID, rc rpc.Client) (*x25519.PublicKey, error) {
-	var (
-		err error
-		key *x25519.PublicKey
-	)
-
-	retry := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 5), ctx)
-	err = backoff.Retry(func() error {
-		key, err = sc.fetchEphemeralPublicKey(ctx, epoch, peerID, rc)
-		if err != nil {
-			sc.Logger.Warn("failed to fetch ephemeral public key",
-				"err", err,
-			)
-		}
-		return err
-	}, retry)
-	if err != nil {
-		return nil, err
-	}
-
-	return key, err
 }
