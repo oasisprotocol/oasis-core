@@ -33,11 +33,13 @@ func TestEphemeralSecrets(t *testing.T) {
 	for i := 0; i < cap(secrets); i++ {
 		secret := api.SignedEncryptedEphemeralSecret{
 			Secret: api.EncryptedEphemeralSecret{
-				ID:          runtimes[(i/5)%2],
-				Epoch:       beacon.EpochTime(i),
-				Checksum:    []byte{},
-				PublicKey:   api.InsecureREK,
-				Ciphertexts: map[x25519.PublicKey][]byte{},
+				ID:    runtimes[(i/5)%2],
+				Epoch: beacon.EpochTime(i),
+				Secret: api.EncryptedSecret{
+					Checksum:    []byte{},
+					PubKey:      x25519.PublicKey{},
+					Ciphertexts: map[x25519.PublicKey][]byte{},
+				},
 			},
 		}
 		secrets = append(secrets, &secret)

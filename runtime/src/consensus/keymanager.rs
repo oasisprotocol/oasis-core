@@ -17,6 +17,10 @@ use super::beacon::EpochTime;
 /// Context used to sign key manager policies.
 const POLICY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager: policy";
 
+/// Context used to sign encrypted key manager master secrets.
+const ENCRYPTED_MASTER_SECRET_SIGNATURE_CONTEXT: &[u8] =
+    b"oasis-core/keymanager: encrypted master secret";
+
 /// Context used to sign encrypted key manager ephemeral secrets.
 const ENCRYPTED_EPHEMERAL_SECRET_SIGNATURE_CONTEXT: &[u8] =
     b"oasis-core/keymanager: encrypted ephemeral secret";
@@ -66,6 +70,30 @@ impl SignedPolicySGX {
     }
 }
 
+/// A secret encrypted with Deoxys-II MRAE algorithm.
+#[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub struct EncryptedSecret {
+    /// Checksum for validating decrypted secret.
+    pub checksum: Vec<u8>,
+    /// Public key to derive the symmetric key for decryption.
+    pub pub_key: x25519::PublicKey,
+    /// A map of REK encrypted secrets.
+    pub ciphertexts: HashMap<x25519::PublicKey, Vec<u8>>,
+}
+
+/// Encrypted master secret.
+#[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub struct EncryptedMasterSecret {
+    /// Runtime ID of the key manager.
+    pub runtime_id: Namespace,
+    /// Generation of the secret.
+    pub generation: u64,
+    /// Epoch time in which the secret was created.
+    pub epoch: EpochTime,
+    /// Encrypted secret.
+    pub secret: EncryptedSecret,
+}
+
 /// Encrypted ephemeral secret.
 #[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct EncryptedEphemeralSecret {
@@ -73,12 +101,27 @@ pub struct EncryptedEphemeralSecret {
     pub runtime_id: Namespace,
     /// Epoch time to which the ephemeral secret belongs.
     pub epoch: EpochTime,
-    /// Checksum for validating decryption.
-    pub checksum: Vec<u8>,
-    // Public part of the key which was used to encrypt the ephemeral secret.
-    pub public_key: x25519::PublicKey,
-    /// A map of REK encrypted ephemeral secrets for all known key manager enclaves.
-    pub ciphertexts: HashMap<x25519::PublicKey, Vec<u8>>,
+    /// Encrypted secret.
+    pub secret: EncryptedSecret,
+}
+
+/// Signed encrypted master secret (RAK).
+#[derive(Clone, Default, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
+pub struct SignedEncryptedMasterSecret {
+    /// Encrypted master secret.
+    pub secret: EncryptedMasterSecret,
+    /// Signature of the encrypted master secret.
+    pub signature: Signature,
+}
+
+impl SignedEncryptedMasterSecret {
+    pub fn new(secret: EncryptedMasterSecret, signer: &Arc<dyn Signer>) -> Result<Self> {
+        let signature = signer.sign(
+            ENCRYPTED_MASTER_SECRET_SIGNATURE_CONTEXT,
+            &cbor::to_vec(secret.clone()),
+        )?;
+        Ok(Self { secret, signature })
+    }
 }
 
 /// Signed encrypted ephemeral secret (RAK).

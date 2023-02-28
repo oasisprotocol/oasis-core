@@ -613,15 +613,15 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, epoch beaco
 	}
 
 	// Fetch RAK.
-	var rak signature.PublicKey
+	var rak *signature.PublicKey
 	switch kmRt.TEEHardware {
 	case node.TEEHardwareInvalid:
-		rak = api.InsecureRAK
+		rak = &api.InsecureRAK
 	case node.TEEHardwareIntelSGX:
 		if runtimeStatus.capabilityTEE == nil {
 			return fmt.Errorf("node doesn't have TEE capability")
 		}
-		rak = runtimeStatus.capabilityTEE.RAK
+		rak = &runtimeStatus.capabilityTEE.RAK
 	default:
 		return fmt.Errorf("TEE hardware mismatch")
 	}

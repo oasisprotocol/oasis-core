@@ -135,13 +135,15 @@ func InitializeTestKeyManagerState(ctx context.Context, mkvs mkvs.Tree) error {
 
 	for epoch := 1; epoch <= 2; epoch++ {
 		secret := kmApi.EncryptedEphemeralSecret{
-			ID:        keymanager1,
-			Epoch:     beacon.EpochTime(epoch),
-			Checksum:  []byte{1, 2, 3, 4, 5},
-			PublicKey: *rek1.Public(),
-			Ciphertexts: map[x25519.PublicKey][]byte{
-				*rek1.Public(): {1, 2, 3},
-				*rek2.Public(): {4, 5, 6},
+			ID:    keymanager1,
+			Epoch: beacon.EpochTime(epoch),
+			Secret: kmApi.EncryptedSecret{
+				Checksum: []byte{1, 2, 3, 4, 5},
+				PubKey:   *rek1.Public(),
+				Ciphertexts: map[x25519.PublicKey][]byte{
+					*rek1.Public(): {1, 2, 3},
+					*rek2.Public(): {4, 5, 6},
+				},
 			},
 		}
 		sig, err := signature.Sign(signers[0], kmApi.EncryptedEphemeralSecretSignatureContext, cbor.Marshal(secret))

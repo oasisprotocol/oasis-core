@@ -164,15 +164,15 @@ func (app *keymanagerApplication) publishEphemeralSecret(
 
 	// Fetch RAK. Remember that registration ensures that node's hardware meets
 	// the TEE requirements of the key manager runtime.
-	var rak signature.PublicKey
+	var rak *signature.PublicKey
 	switch kmRt.TEEHardware {
 	case node.TEEHardwareInvalid:
-		rak = api.InsecureRAK
+		rak = &api.InsecureRAK
 	case node.TEEHardwareIntelSGX:
 		if nRt.Capabilities.TEE == nil {
 			return fmt.Errorf("keymanager: node doesn't have TEE capability")
 		}
-		rak = nRt.Capabilities.TEE.RAK
+		rak = &nRt.Capabilities.TEE.RAK
 	default:
 		return fmt.Errorf("keymanager: TEE hardware mismatch")
 	}
