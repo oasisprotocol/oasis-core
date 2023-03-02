@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.7 (2023-03-02)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Features
+
+- Move halt epoch from genesis to node-local configuration
+  ([#5200](https://github.com/oasisprotocol/oasis-core/issues/5200))
+
+### Internal Changes
+
+- oasis-net-runner: add some useful configuration options
+  ([#5193](https://github.com/oasisprotocol/oasis-core/issues/5193))
+
+  Adds support for disabling debug test entity, configuring epochtime interval
+  and governance parameters to the `oasis-net-runner` default fixture.
+
 ## 22.2.6 (2023-02-06)
 
 | Protocol          | Version   |
