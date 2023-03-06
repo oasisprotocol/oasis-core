@@ -170,10 +170,13 @@ pub struct Dispatcher {
 impl Dispatcher {
     #[cfg(target_env = "sgx")]
     fn new_tokio_runtime() -> tokio::runtime::Runtime {
-        // In an SGX environment we use a single-threaded Tokio runtime.
-        tokio::runtime::Builder::new_current_thread()
-            .max_blocking_threads(2) // Limited in SGX.
-            .thread_keep_alive(std::time::Duration::from_secs(120))
+        // In SGX use a trimmed-down version of the Tokio runtime.
+        //
+        // Make sure to update THREADS.md if you change any of the thread-related settings.
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .max_blocking_threads(2)
+            .thread_keep_alive(std::time::Duration::MAX)
             .build()
             .unwrap()
     }

@@ -17,7 +17,7 @@ path = "src/upgraded.rs"
 [package.metadata.fortanix-sgx]
 heap-size = 134217728
 stack-size = 2097152
-threads = 6
+threads = 7
 
 [dependencies]
 oasis-core-runtime = { path = "../../../runtime" }
