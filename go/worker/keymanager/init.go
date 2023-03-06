@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math"
 
 	"github.com/libp2p/go-libp2p/core"
 
@@ -41,21 +42,25 @@ func New(
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	w := &Worker{
-		logger:              logging.GetLogger("worker/keymanager"),
-		ctx:                 ctx,
-		cancelCtx:           cancelFn,
-		stopCh:              make(chan struct{}),
-		quitCh:              make(chan struct{}),
-		initCh:              make(chan struct{}),
-		initTickerCh:        nil,
-		clientRuntimes:      make(map[common.Namespace]*clientRuntimeWatcher),
-		accessList:          make(map[core.PeerID]map[common.Namespace]struct{}),
-		privatePeers:        make(map[core.PeerID]struct{}),
-		accessListByRuntime: make(map[common.Namespace][]core.PeerID),
-		commonWorker:        commonWorker,
-		backend:             backend,
-		enabled:             enabled,
-		mayGenerate:         config.GlobalConfig.Keymanager.MayGenerate,
+		logger:               logging.GetLogger("worker/keymanager"),
+		ctx:                  ctx,
+		cancelCtx:            cancelFn,
+		stopCh:               make(chan struct{}),
+		quitCh:               make(chan struct{}),
+		initCh:               make(chan struct{}),
+		updateStatusTickerCh: nil,
+		clientRuntimes:       make(map[common.Namespace]*clientRuntimeWatcher),
+		accessList:           make(map[core.PeerID]map[common.Namespace]struct{}),
+		privatePeers:         make(map[core.PeerID]struct{}),
+		accessListByRuntime:  make(map[common.Namespace][]core.PeerID),
+		commonWorker:         commonWorker,
+		backend:              backend,
+		enabled:              enabled,
+		mayGenerate:          config.GlobalConfig.Keymanager.MayGenerate,
+		loadSecretCh:         make(chan struct{}, 1),
+		genSecretCh:          make(chan struct{}, 1),
+		genSecretDoneCh:      make(chan bool, 1),
+		genSecretHeight:      int64(math.MaxInt64),
 	}
 
 	if !w.enabled {
@@ -80,18 +85,17 @@ func New(
 		w.privatePeers[peerID] = struct{}{}
 	}
 
-	var runtimeID common.Namespace
-	if err := runtimeID.UnmarshalHex(config.GlobalConfig.Keymanager.RuntimeID); err != nil {
+	if err := w.runtimeID.UnmarshalHex(config.GlobalConfig.Keymanager.RuntimeID); err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
 	}
 
 	var err error
-	w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, runtimeID)
+	w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, w.runtimeID)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create role provider: %w", err)
 	}
 
-	w.runtime, err = commonWorker.RuntimeRegistry.NewUnmanagedRuntime(ctx, runtimeID)
+	w.runtime, err = commonWorker.RuntimeRegistry.NewUnmanagedRuntime(ctx, w.runtimeID)
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime registry entry: %w", err)
 	}
@@ -106,7 +110,7 @@ func New(
 	}
 
 	// Register keymanager service.
-	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, runtimeID, w))
+	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, w.runtimeID, w))
 
 	return w, nil
 }
