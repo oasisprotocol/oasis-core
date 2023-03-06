@@ -67,7 +67,7 @@ features = ["full"]
 [dev-dependencies]
 # For storage interoperability tests only.
 jsonrpc = { version = "0.13.0", features = ["simple_uds"] }
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 tendermint-testgen = "0.29.0"
 
 [[bin]]
