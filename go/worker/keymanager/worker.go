@@ -22,7 +22,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -76,10 +75,11 @@ type Worker struct { // nolint: maligned
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	initTicker   *backoff.Ticker
-	initTickerCh <-chan time.Time
+	updateStatusTicker   *backoff.Ticker
+	updateStatusTickerCh <-chan time.Time
 
-	runtime runtimeRegistry.Runtime
+	runtime   runtimeRegistry.Runtime
+	runtimeID common.Namespace
 
 	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
 
@@ -103,6 +103,19 @@ type Worker struct { // nolint: maligned
 
 	enabled     bool
 	mayGenerate bool
+
+	kmStatus *api.Status
+	rtStatus *runtimeStatus
+
+	secrets []*api.SignedEncryptedEphemeralSecret
+
+	loadSecretCh        chan struct{}
+	loadSecretRetry     int
+	genSecretCh         chan struct{}
+	genSecretDoneCh     chan bool
+	genSecretHeight     int64
+	genSecretInProgress bool
+	genSecretRetry      int
 }
 
 func (w *Worker) Name() string {
@@ -117,7 +130,6 @@ func (w *Worker) Start() error {
 		return nil
 	}
 
-	w.logger.Info("starting key manager worker")
 	go w.worker()
 
 	return nil
@@ -289,9 +301,9 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 	defer func() {
 		if !initOk {
 			// If initialization failed setup a retry ticker.
-			if w.initTicker == nil {
-				w.initTicker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
-				w.initTickerCh = w.initTicker.C
+			if w.updateStatusTicker == nil {
+				w.updateStatusTicker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
+				w.updateStatusTickerCh = w.updateStatusTicker.C
 			}
 		}
 	}()
@@ -365,10 +377,10 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 	w.logger.Info("Key manager initialized",
 		"checksum", hex.EncodeToString(signedInitResp.InitResponse.Checksum),
 	)
-	if w.initTicker != nil {
-		w.initTickerCh = nil
-		w.initTicker.Stop()
-		w.initTicker = nil
+	if w.updateStatusTicker != nil {
+		w.updateStatusTickerCh = nil
+		w.updateStatusTicker.Stop()
+		w.updateStatusTicker = nil
 	}
 
 	policyUpdateCount.Inc()
@@ -669,7 +681,7 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, epoch beaco
 		idx := slices.IndexFunc(n.Runtimes, func(rt *node.Runtime) bool {
 			// Skipping version check as key managers are running exactly one
 			// version of the runtime.
-			return rt.ID == kmStatus.ID
+			return rt.ID.Equal(&kmStatus.ID)
 		})
 		if idx == -1 {
 			continue
@@ -790,7 +802,247 @@ func (w *Worker) randomBlockHeight(epoch beacon.EpochTime, percentile int64) (in
 	return height, nil
 }
 
-func (w *Worker) worker() { // nolint: gocyclo
+func (w *Worker) handleStatusUpdate(kmStatus *api.Status) {
+	if kmStatus == nil || !kmStatus.ID.Equal(&w.runtimeID) {
+		return
+	}
+
+	// Cache the latest status.
+	w.setStatus(kmStatus)
+	w.kmStatus = kmStatus
+
+	if w.rtStatus == nil {
+		return
+	}
+
+	// Forward status update to key manager runtime.
+	if err := w.updateStatus(w.kmStatus, w.rtStatus); err != nil {
+		w.logger.Error("failed to handle status update",
+			"err", err,
+		)
+		return
+	}
+	// New runtimes can be allowed with the policy update.
+	if err := w.recheckAllRuntimes(w.kmStatus); err != nil {
+		w.logger.Error("failed rechecking runtimes",
+			"err", err,
+		)
+		return
+	}
+}
+
+func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
+	switch {
+	case ev.Started != nil, ev.Updated != nil:
+		// Runtime has started successfully.
+		w.rtStatus = &runtimeStatus{}
+		switch {
+		case ev.Started != nil:
+			w.rtStatus.version = ev.Started.Version
+			w.rtStatus.capabilityTEE = ev.Started.CapabilityTEE
+		case ev.Updated != nil:
+			w.rtStatus.version = ev.Updated.Version
+			w.rtStatus.capabilityTEE = ev.Updated.CapabilityTEE
+		default:
+			return
+		}
+
+		// Fetch last few ephemeral secrets and send a signal to load them.
+		var err error
+		w.secrets, err = w.fetchLastEphemeralSecrets(w.runtimeID)
+		if err != nil {
+			w.logger.Error("failed to fetch last ephemeral secrets",
+				"err", err,
+			)
+		}
+		w.loadSecretRetry = 0
+		select {
+		case w.loadSecretCh <- struct{}{}:
+		default:
+		}
+
+		if w.kmStatus == nil {
+			return
+		}
+
+		// Send a node preregistration, so that other nodes know to update their access
+		// control.
+		if w.enclaveStatus == nil {
+			w.roleProvider.SetAvailable(func(n *node.Node) error {
+				rt := n.AddOrUpdateRuntime(w.runtime.ID(), w.rtStatus.version)
+				rt.Version = w.rtStatus.version
+				rt.ExtraInfo = nil
+				rt.Capabilities.TEE = w.rtStatus.capabilityTEE
+				return nil
+			})
+		}
+
+		w.handleStatusUpdate(w.kmStatus)
+	case ev.FailedToStart != nil, ev.Stopped != nil:
+		// Worker failed to start or was stopped -- we can no longer service requests.
+		w.rtStatus = nil
+		w.roleProvider.SetUnavailable()
+	default:
+		// Unknown event.
+		w.logger.Warn("unknown worker event",
+			"ev", ev,
+		)
+	}
+}
+
+func (w *Worker) handleRuntimeRegistrationEvent(rt *registry.Runtime) {
+	if err := w.startClientRuntimeWatcher(rt, w.kmStatus); err != nil {
+		w.logger.Error("failed to start runtime watcher",
+			"err", err,
+		)
+		return
+	}
+}
+
+func (w *Worker) handleNewEpoch(epoch beacon.EpochTime) {
+	// Update per runtime access lists.
+	for _, crw := range w.getClientRuntimeWatchers() {
+		crw.epochTransition()
+	}
+
+	// Choose a random height for ephemeral secret generation. Avoid blocks at the end
+	// of the epoch as secret generation, publication and replication takes some time.
+	var err error
+	if w.genSecretHeight, err = w.randomBlockHeight(epoch, 90); err != nil {
+		// If randomization fails, the height will be set to zero meaning that the ephemeral
+		// secret will be generated immediately without a delay.
+		w.logger.Error("failed to select ephemeral secret block height",
+			"err", err,
+		)
+	}
+	w.genSecretRetry = 0
+
+	w.logger.Debug("block height for ephemeral secret generation selected",
+		"height", w.genSecretHeight,
+		"epoch", epoch,
+	)
+}
+
+func (w *Worker) handleNewBlock(blk *consensus.Block) {
+	if blk == nil {
+		w.logger.Error("watch blocks channel closed unexpectedly")
+		return
+	}
+
+	// (Re)Generate ephemeral secret once we reach the chosen height.
+	if blk.Height >= w.genSecretHeight {
+		select {
+		case w.genSecretCh <- struct{}{}:
+		default:
+		}
+	}
+
+	// (Re)Load ephemeral secrets. When using Tendermint as a backend service the first load
+	// will probably fail as the verifier is one block behind.
+	if len(w.secrets) > 0 {
+		select {
+		case w.loadSecretCh <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (w *Worker) handleNewEphemeralSecret(secret *api.SignedEncryptedEphemeralSecret, epoch beacon.EpochTime) {
+	if !secret.Secret.ID.Equal(&w.runtimeID) {
+		return
+	}
+
+	w.logger.Debug("ephemeral secret published",
+		"epoch", secret.Secret.Epoch,
+	)
+
+	if secret.Secret.Epoch == epoch+1 {
+		// Disarm ephemeral secret generation.
+		w.genSecretHeight = math.MaxInt64
+	}
+
+	// Add secret to the list and send a signal to load it.
+	w.secrets = append(w.secrets, secret)
+	w.loadSecretRetry = 0
+	select {
+	case w.loadSecretCh <- struct{}{}:
+	default:
+	}
+}
+
+func (w *Worker) handleGenerateEphemeralSecret(epoch beacon.EpochTime) {
+	if w.kmStatus == nil || w.rtStatus == nil || w.genSecretInProgress || w.genSecretHeight == math.MaxInt64 {
+		return
+	}
+
+	w.genSecretRetry++
+	if w.genSecretRetry > generateEphemeralSecretMaxRetries {
+		// Disarm ephemeral secret generation.
+		w.genSecretHeight = math.MaxInt64
+	}
+
+	w.genSecretInProgress = true
+
+	// Submitting transaction can take time, so don't block the loop.
+	generateEphemeralSecret := func(epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus, retry int) {
+		err := w.generateEphemeralSecret(w.runtimeID, epoch, kmStatus, rtStatus)
+		if err != nil {
+			w.logger.Error("failed to generate ephemeral secret",
+				"err", err,
+				"retry", retry,
+			)
+			w.genSecretDoneCh <- false
+			return
+		}
+		w.genSecretDoneCh <- true
+		w.setLastGeneratedSecretEpoch(epoch)
+	}
+
+	go generateEphemeralSecret(epoch+1, w.kmStatus, w.rtStatus, w.genSecretRetry-1)
+}
+
+func (w *Worker) handleGenerateEphemeralSecretDone(ok bool) {
+	// Disarm ephemeral secret generation unless a new height was chosen.
+	if ok && w.genSecretRetry > 0 {
+		w.genSecretHeight = math.MaxInt64
+	}
+	w.genSecretInProgress = false
+}
+
+func (w *Worker) handleLoadEphemeralSecret() {
+	var failed []*api.SignedEncryptedEphemeralSecret
+	for _, secret := range w.secrets {
+		if err := w.loadEphemeralSecret(secret); err != nil {
+			w.logger.Error("failed to load ephemeral secret",
+				"err", err,
+				"retry", w.loadSecretRetry,
+			)
+			failed = append(failed, secret)
+			continue
+		}
+		w.setLastLoadedSecretEpoch(secret.Secret.Epoch)
+	}
+	w.secrets = failed
+
+	w.loadSecretRetry++
+	if w.loadSecretRetry > loadEphemeralSecretMaxRetries {
+		// Disarm ephemeral secret loading.
+		w.secrets = nil
+	}
+}
+
+func (w *Worker) handleStop() {
+	w.logger.Info("termination requested")
+
+	// Wait until ephemeral secret generation running in the background finishes.
+	if w.genSecretInProgress {
+		<-w.genSecretDoneCh
+	}
+}
+
+func (w *Worker) worker() {
+	w.logger.Info("starting key manager worker")
+
 	defer close(w.quitCh)
 
 	// Wait for consensus sync.
@@ -799,6 +1051,54 @@ func (w *Worker) worker() { // nolint: gocyclo
 	case <-w.stopCh:
 		return
 	case <-w.commonWorker.Consensus.Synced():
+	}
+	w.logger.Info("consensus has finished initial synchronization")
+
+	// Provision the hosted runtime.
+	w.logger.Info("provisioning key manager runtime")
+
+	hrt, hrtNotifier, err := w.ProvisionHostedRuntime(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to provision key manager runtime",
+			"err", err,
+		)
+		return
+	}
+
+	hrtEventCh, hrtSub, err := hrt.WatchEvents(w.ctx)
+	if err != nil {
+		w.logger.Error("failed to subscribe to key manager runtime events",
+			"err", err,
+		)
+		return
+	}
+	defer hrtSub.Close()
+
+	if err = hrt.Start(); err != nil {
+		w.logger.Error("failed to start key manager runtime",
+			"err", err,
+		)
+		return
+	}
+	defer hrt.Stop()
+
+	if err = hrtNotifier.Start(); err != nil {
+		w.logger.Error("failed to start key manager runtime notifier",
+			"err", err,
+		)
+		return
+	}
+	defer hrtNotifier.Stop()
+
+	// Key managers always need to use the enclave version given to them in the bundle
+	// as they need to make sure that replication is possible during upgrades.
+	activeVersion := w.runtime.HostVersions()[0] // Init made sure we have exactly one.
+	if err = w.SetHostedRuntimeVersion(w.ctx, activeVersion, nil); err != nil {
+		w.logger.Error("failed to activate key manager runtime version",
+			"err", err,
+			"version", activeVersion,
+		)
+		return
 	}
 
 	// Need to explicitly watch for updates related to the key manager runtime
@@ -811,12 +1111,19 @@ func (w *Worker) worker() { // nolint: gocyclo
 	defer statusSub.Close()
 
 	// Subscribe to key manager ephemeral secret publications.
-	entCh, entSub := w.backend.WatchEphemeralSecrets()
-	defer entSub.Close()
+	ephCh, ephSub := w.backend.WatchEphemeralSecrets()
+	defer ephSub.Close()
 
 	// Subscribe to epoch transitions in order to know when we need to refresh
 	// the access control policy and choose a random block height for ephemeral
 	// secret generation.
+	epoch, err := w.commonWorker.Consensus.Beacon().GetEpoch(w.ctx, consensus.HeightLatest)
+	if err != nil {
+		w.logger.Error("failed to fetch current epoch",
+			"err", err,
+		)
+		return
+	}
 	epoCh, epoSub, err := w.commonWorker.Consensus.Beacon().WatchLatestEpoch(w.ctx)
 	if err != nil {
 		w.logger.Error("failed to watch epochs",
@@ -848,323 +1155,30 @@ func (w *Worker) worker() { // nolint: gocyclo
 	}
 	defer rtSub.Close()
 
-	var (
-		hrtEventCh           <-chan *host.Event
-		currentStatus        *api.Status
-		currentRuntimeStatus *runtimeStatus
-
-		epoch beacon.EpochTime
-
-		secret  *api.SignedEncryptedEphemeralSecret
-		secrets []*api.SignedEncryptedEphemeralSecret
-
-		loadSecretCh    = make(chan struct{}, 1)
-		loadSecretRetry = 0
-
-		genSecretCh         = make(chan struct{}, 1)
-		genSecretDoneCh     = make(chan bool, 1)
-		genSecretHeight     = int64(math.MaxInt64)
-		genSecretInProgress = false
-		genSecretRetry      = 0
-
-		runtimeID = w.runtime.ID()
-	)
 	for {
 		select {
 		case ev := <-hrtEventCh:
-			switch {
-			case ev.Started != nil, ev.Updated != nil:
-				// Runtime has started successfully.
-				currentRuntimeStatus = &runtimeStatus{}
-				switch {
-				case ev.Started != nil:
-					currentRuntimeStatus.version = ev.Started.Version
-					currentRuntimeStatus.capabilityTEE = ev.Started.CapabilityTEE
-				case ev.Updated != nil:
-					currentRuntimeStatus.version = ev.Updated.Version
-					currentRuntimeStatus.capabilityTEE = ev.Updated.CapabilityTEE
-				default:
-					continue
-				}
-
-				// Fetch last few ephemeral secrets and send a signal to load them.
-				secrets, err = w.fetchLastEphemeralSecrets(runtimeID)
-				if err != nil {
-					w.logger.Error("failed to fetch last ephemeral secrets",
-						"err", err,
-					)
-				}
-				loadSecretRetry = 0
-				select {
-				case loadSecretCh <- struct{}{}:
-				default:
-				}
-
-				if currentStatus == nil {
-					continue
-				}
-
-				// Send a node preregistration, so that other nodes know to update their access
-				// control.
-				if w.enclaveStatus == nil {
-					w.roleProvider.SetAvailable(func(n *node.Node) error {
-						rt := n.AddOrUpdateRuntime(w.runtime.ID(), currentRuntimeStatus.version)
-						rt.Version = currentRuntimeStatus.version
-						rt.ExtraInfo = nil
-						rt.Capabilities.TEE = currentRuntimeStatus.capabilityTEE
-						return nil
-					})
-				}
-
-				// Forward status update to key manager runtime.
-				if err = w.updateStatus(currentStatus, currentRuntimeStatus); err != nil {
-					w.logger.Error("failed to handle status update",
-						"err", err,
-					)
-					continue
-				}
-			case ev.FailedToStart != nil, ev.Stopped != nil:
-				// Worker failed to start or was stopped -- we can no longer service requests.
-				currentRuntimeStatus = nil
-				w.roleProvider.SetUnavailable()
-			default:
-				// Unknown event.
-				w.logger.Warn("unknown worker event",
-					"ev", ev,
-				)
-			}
-		case status := <-statusCh:
-			if !status.ID.Equal(&runtimeID) {
-				continue
-			}
-
-			// Cache the latest status.
-			w.setStatus(status)
-
-			// Check if this is the first update and we need to initialize the
-			// worker host.
-			hrt := w.GetHostedRuntime()
-			if hrt == nil {
-				// Start key manager runtime.
-				w.logger.Info("provisioning key manager runtime")
-
-				var hrtNotifier protocol.Notifier
-				hrt, hrtNotifier, err = w.ProvisionHostedRuntime(w.ctx)
-				if err != nil {
-					w.logger.Error("failed to provision key manager runtime",
-						"err", err,
-					)
-					return
-				}
-
-				var sub pubsub.ClosableSubscription
-				if hrtEventCh, sub, err = hrt.WatchEvents(w.ctx); err != nil {
-					w.logger.Error("failed to subscribe to runtime events",
-						"err", err,
-					)
-					return
-				}
-				defer sub.Close()
-
-				if err = hrt.Start(); err != nil {
-					w.logger.Error("failed to start runtime",
-						"err", err,
-					)
-					return
-				}
-				defer hrt.Stop()
-
-				if err = hrtNotifier.Start(); err != nil {
-					w.logger.Error("failed to start runtime notifier",
-						"err", err,
-					)
-					return
-				}
-				defer hrtNotifier.Stop()
-
-				// Key managers always need to use the enclave version given to them in the bundle
-				// as they need to make sure that replication is possible during upgrades.
-				activeVersion := w.runtime.HostVersions()[0] // Init made sure we have exactly one.
-				if err = w.SetHostedRuntimeVersion(w.ctx, activeVersion, nil); err != nil {
-					w.logger.Error("failed to activate runtime version",
-						"err", err,
-						"version", activeVersion,
-					)
-					return
-				}
-			}
-
-			currentStatus = status
-			if currentRuntimeStatus == nil {
-				continue
-			}
-
-			// Forward status update to key manager runtime.
-			if err = w.updateStatus(currentStatus, currentRuntimeStatus); err != nil {
-				w.logger.Error("failed to handle status update",
-					"err", err,
-				)
-				continue
-			}
-			// New runtimes can be allowed with the policy update.
-			if err = w.recheckAllRuntimes(currentStatus); err != nil {
-				w.logger.Error("failed rechecking runtimes",
-					"err", err,
-				)
-				continue
-			}
-		case <-w.initTickerCh:
-			if currentStatus == nil || currentRuntimeStatus == nil {
-				continue
-			}
-			if err = w.updateStatus(currentStatus, currentRuntimeStatus); err != nil {
-				w.logger.Error("failed to handle status update", "err", err)
-				continue
-			}
-			// New runtimes can be allowed with the policy update.
-			if err = w.recheckAllRuntimes(currentStatus); err != nil {
-				w.logger.Error("failed rechecking runtimes",
-					"err", err,
-				)
-				continue
-			}
+			w.handleRuntimeHostEvent(ev)
+		case kmStatus := <-statusCh:
+			w.handleStatusUpdate(kmStatus)
+		case <-w.updateStatusTickerCh:
+			w.handleStatusUpdate(w.kmStatus)
 		case rt := <-rtCh:
-			if err = w.startClientRuntimeWatcher(rt, currentStatus); err != nil {
-				w.logger.Error("failed to start runtime watcher",
-					"err", err,
-				)
-				continue
-			}
+			w.handleRuntimeRegistrationEvent(rt)
 		case epoch = <-epoCh:
-			// Update per runtime access lists.
-			for _, crw := range w.getClientRuntimeWatchers() {
-				crw.epochTransition()
-			}
-
-			// Choose a random height for ephemeral secret generation. Avoid blocks at the end
-			// of the epoch as secret generation, publication and replication takes some time.
-			if genSecretHeight, err = w.randomBlockHeight(epoch, 90); err != nil {
-				// If randomization fails, the height will be set to zero meaning that the ephemeral
-				// secret will be generated immediately without a delay.
-				w.logger.Error("failed to select ephemeral secret block height",
-					"err", err,
-				)
-			}
-			genSecretRetry = 0
-
-			w.logger.Debug("block height for ephemeral secret generation selected",
-				"height", genSecretHeight,
-				"epoch", epoch,
-			)
-		case blk, ok := <-blkCh:
-			if !ok {
-				w.logger.Error("watch blocks channel closed unexpectedly",
-					"err", err,
-				)
-				return
-			}
-
-			// (Re)Generate ephemeral secret once we reach the chosen height.
-			if blk.Height >= genSecretHeight {
-				select {
-				case genSecretCh <- struct{}{}:
-				default:
-				}
-			}
-
-			// (Re)Load ephemeral secrets. When using Tendermint as a backend service the first load
-			// will probably fail as the verifier is one block behind.
-			if len(secrets) > 0 {
-				select {
-				case loadSecretCh <- struct{}{}:
-				default:
-				}
-			}
-		case secret = <-entCh:
-			if secret.Secret.ID != runtimeID {
-				continue
-			}
-
-			if secret.Secret.Epoch == epoch+1 {
-				// Disarm ephemeral secret generation.
-				genSecretHeight = math.MaxInt64
-			}
-
-			// Add secret to the list and send a signal to load it.
-			secrets = append(secrets, secret)
-			loadSecretRetry = 0
-			select {
-			case loadSecretCh <- struct{}{}:
-			default:
-			}
-
-			w.logger.Debug("ephemeral secret published",
-				"epoch", secret.Secret.Epoch,
-			)
-		case <-genSecretCh:
-			if currentStatus == nil || currentRuntimeStatus == nil {
-				continue
-			}
-			if genSecretInProgress || genSecretHeight == math.MaxInt64 {
-				continue
-			}
-
-			genSecretRetry++
-			if genSecretRetry > generateEphemeralSecretMaxRetries {
-				// Disarm ephemeral secret generation.
-				genSecretHeight = math.MaxInt64
-			}
-
-			genSecretInProgress = true
-
-			// Submitting transaction can take time, so don't block the loop.
-			go func(epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus, retry int) {
-				err2 := w.generateEphemeralSecret(runtimeID, epoch, kmStatus, rtStatus)
-				if err2 != nil {
-					w.logger.Error("failed to generate ephemeral secret",
-						"err", err2,
-						"retry", retry,
-					)
-					genSecretDoneCh <- false
-					return
-				}
-				genSecretDoneCh <- true
-				w.setLastGeneratedSecretEpoch(epoch)
-			}(epoch+1, currentStatus, currentRuntimeStatus, genSecretRetry-1)
-		case ok := <-genSecretDoneCh:
-			// Disarm ephemeral secret generation unless a new height was chosen.
-			if ok && genSecretRetry > 0 {
-				genSecretHeight = math.MaxInt64
-			}
-			genSecretInProgress = false
-		case <-loadSecretCh:
-			var failed []*api.SignedEncryptedEphemeralSecret
-			for _, secret := range secrets {
-				if err = w.loadEphemeralSecret(secret); err != nil {
-					w.logger.Error("failed to load ephemeral secret",
-						"err", err,
-						"retry", loadSecretRetry,
-					)
-					failed = append(failed, secret)
-					continue
-				}
-				w.setLastLoadedSecretEpoch(secret.Secret.Epoch)
-			}
-			secrets = failed
-
-			loadSecretRetry++
-			if loadSecretRetry > loadEphemeralSecretMaxRetries {
-				// Disarm ephemeral secret loading.
-				secrets = nil
-			}
+			w.handleNewEpoch(epoch)
+		case blk := <-blkCh:
+			w.handleNewBlock(blk)
+		case secret := <-ephCh:
+			w.handleNewEphemeralSecret(secret, epoch)
+		case <-w.loadSecretCh:
+			w.handleLoadEphemeralSecret()
+		case <-w.genSecretCh:
+			w.handleGenerateEphemeralSecret(epoch)
+		case ok := <-w.genSecretDoneCh:
+			w.handleGenerateEphemeralSecretDone(ok)
 		case <-w.stopCh:
-			w.logger.Info("termination requested")
-
-			// Wait until ephemeral secret generation running in the background finishes.
-			if genSecretInProgress {
-				<-genSecretDoneCh
-			}
-
+			w.handleStop()
 			return
 		}
 	}
