@@ -83,7 +83,7 @@ func (knw *kmNodeWatcher) watchNodes() {
 			peers[n.P2P.ID] = true
 		}
 
-		knw.w.setAccessList(knw.w.runtime.ID(), nodes)
+		knw.w.setAccessList(knw.w.runtimeID, nodes)
 		if pm := knw.w.commonWorker.P2P.PeerManager(); pm != nil {
 			if pids, err := p2p.PublicKeyMapToPeerIDs(peers); err == nil {
 				pm.PeerTagger().SetPeerImportance(p2p.ImportantNodeKeyManager, knw.w.runtime.ID(), pids)
@@ -94,13 +94,12 @@ func (knw *kmNodeWatcher) watchNodes() {
 
 func (knw *kmNodeWatcher) rebuildActiveNodeIDs(nodeList []*node.Node) map[signature.PublicKey]bool {
 	m := make(map[signature.PublicKey]bool)
-	id := knw.w.runtime.ID()
 	for _, n := range nodeList {
 		if !n.HasRoles(node.RoleKeyManager) {
 			continue
 		}
 		for _, rt := range n.Runtimes {
-			if rt.ID.Equal(&id) {
+			if rt.ID.Equal(&knw.w.runtimeID) {
 				m[n.ID] = true
 				break
 			}

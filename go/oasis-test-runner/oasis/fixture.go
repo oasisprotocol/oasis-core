@@ -303,9 +303,10 @@ func (f *KeymanagerPolicyFixture) Create(net *Network) (*KeymanagerPolicy, error
 type KeymanagerFixture struct {
 	NodeFixture
 
-	Runtime int `json:"runtime"`
-	Entity  int `json:"entity"`
-	Policy  int `json:"policy"`
+	Runtime    int  `json:"runtime"`
+	Entity     int  `json:"entity"`
+	Policy     int  `json:"policy"`
+	SkipPolicy bool `json:"skip_policy,omitempty"`
 
 	RuntimeProvisioner runtimeConfig.RuntimeProvisioner `json:"runtime_provisioner"`
 
@@ -336,9 +337,11 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 	if err != nil {
 		return nil, err
 	}
-	policy, err := resolveKMPolicy(net, f.Policy)
-	if err != nil {
-		return nil, err
+	var policy *KeymanagerPolicy
+	if !f.SkipPolicy {
+		if policy, err = resolveKMPolicy(net, f.Policy); err != nil {
+			return nil, err
+		}
 	}
 
 	return net.NewKeymanager(&KeymanagerCfg{

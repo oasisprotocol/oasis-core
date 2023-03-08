@@ -64,7 +64,7 @@ impl Policy {
     /// the consensus layer state. Empty polices are allowed only in unsafe builds.
     pub fn init(&self, storage: &dyn KeyValue, policy: Option<SignedPolicySGX>) -> Result<Vec<u8>> {
         // If this is an insecure build, don't bother trying to apply any policy.
-        if Self::unsafe_skip() {
+        if policy.is_none() && Self::unsafe_skip() {
             return Ok(vec![]);
         }
 
@@ -207,16 +207,12 @@ impl CachedPolicy {
 
     fn parse(untrusted_policy: SignedPolicySGX, raw: &[u8]) -> Result<Self> {
         let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+        let checksum = Self::checksum_policy(raw);
 
         let mut cached_policy = Self::default();
         cached_policy.serial = policy.serial;
         cached_policy.runtime_id = policy.id;
-
-        let mut sha3 = Sha3::v256();
-        sha3.update(raw);
-        let mut k = [0; 32];
-        sha3.finalize(&mut k);
-        cached_policy.checksum = k.to_vec();
+        cached_policy.checksum = checksum;
 
         // Convert the policy into a cached one.
         //
@@ -265,5 +261,13 @@ impl CachedPolicy {
 
     fn may_replicate_secret(&self, remote_enclave: &EnclaveIdentity) -> bool {
         self.may_replicate.contains(remote_enclave)
+    }
+
+    fn checksum_policy(raw: &[u8]) -> Vec<u8> {
+        let mut sha3 = Sha3::v256();
+        sha3.update(raw);
+        let mut k = [0; 32];
+        sha3.finalize(&mut k);
+        k.to_vec()
     }
 }
