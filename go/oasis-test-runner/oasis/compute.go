@@ -224,9 +224,6 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	if cfg.RuntimeProvisioner == "" {
 		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
-	if isNoSandbox() {
-		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerUnconfined
-	}
 	if cfg.StorageBackend == "" {
 		cfg.StorageBackend = database.BackendNameBadgerDB
 	}

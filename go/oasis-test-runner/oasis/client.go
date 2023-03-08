@@ -77,9 +77,6 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	if cfg.RuntimeProvisioner == "" {
 		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
-	if isNoSandbox() {
-		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerUnconfined
-	}
 
 	// Pre-provision the node identity so that we can identify the entity.
 	err = host.setProvisionedIdentity(false, fmt.Sprintf(clientIdentitySeedTemplate, len(net.clients)))

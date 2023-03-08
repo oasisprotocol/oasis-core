@@ -338,9 +338,6 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	if cfg.RuntimeProvisioner == "" {
 		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
-	if isNoSandbox() {
-		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerUnconfined
-	}
 
 	km := &Keymanager{
 		Node:               host,

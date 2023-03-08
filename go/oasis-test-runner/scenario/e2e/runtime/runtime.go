@@ -23,6 +23,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -31,6 +32,7 @@ const (
 	cfgRuntimeBinaryDirDefault  = "runtime.binary_dir.default"
 	cfgRuntimeBinaryDirIntelSGX = "runtime.binary_dir.intel-sgx"
 	cfgRuntimeLoader            = "runtime.loader"
+	cfgRuntimeProvisioner       = "runtime.provisioner"
 	cfgTEEHardware              = "tee_hardware"
 	cfgIasMock                  = "ias.mock"
 	cfgEpochInterval            = "epoch.interval"
@@ -114,6 +116,7 @@ func newRuntimeImpl(name string, testClient TestClient) *runtimeImpl {
 	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
+	sc.Flags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
 	sc.Flags.String(cfgTEEHardware, "", "TEE hardware to use")
 	sc.Flags.Bool(cfgIasMock, true, "if mock IAS service should be used")
 	sc.Flags.Int64(cfgEpochInterval, 0, "epoch interval")
@@ -156,6 +159,12 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	runtimeBinary := "simple-keyvalue"
 	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
 	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
+	runtimeProvisionerRaw, _ := sc.Flags.GetString(cfgRuntimeProvisioner)
+	var runtimeProvisioner runtimeConfig.RuntimeProvisioner
+	if err = runtimeProvisioner.UnmarshalText([]byte(runtimeProvisionerRaw)); err != nil {
+		return nil, fmt.Errorf("failed to parse runtime provisioner: %w", err)
+	}
+
 	ff := &oasis.NetworkFixture{
 		TEE: oasis.TEEFixture{
 			Hardware: tee,
@@ -244,12 +253,21 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Runtime: 0, Serial: 1},
 		},
 		Keymanagers: []oasis.KeymanagerFixture{
-			{Runtime: 0, Entity: 1, Policy: 0, SkipPolicy: tee != node.TEEHardwareIntelSGX},
+			{
+				RuntimeProvisioner: runtimeProvisioner,
+				Runtime:            0,
+				Entity:             1,
+				Policy:             0,
+				SkipPolicy:         tee != node.TEEHardwareIntelSGX,
+			},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
-			{Entity: 1, Runtimes: []int{1}},
+			{RuntimeProvisioner: runtimeProvisioner, Entity: 1, Runtimes: []int{1}},
 			{
-				Entity: 1, Runtimes: []int{1}, RuntimeConfig: map[int]map[string]interface{}{
+				RuntimeProvisioner: runtimeProvisioner,
+				Entity:             1,
+				Runtimes:           []int{1},
+				RuntimeConfig: map[int]map[string]interface{}{
 					1: {
 						"core": map[string]interface{}{
 							"min_gas_price": 1, // Just to test support for runtime configuration.
@@ -257,12 +275,12 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 					},
 				},
 			},
-			{Entity: 1, Runtimes: []int{1}},
+			{RuntimeProvisioner: runtimeProvisioner, Entity: 1, Runtimes: []int{1}},
 		},
 		Sentries: []oasis.SentryFixture{},
 		Seeds:    []oasis.SeedFixture{{}},
 		Clients: []oasis.ClientFixture{
-			{Runtimes: []int{1}},
+			{RuntimeProvisioner: runtimeProvisioner, Runtimes: []int{1}},
 		},
 	}
 

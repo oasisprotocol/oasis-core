@@ -3,7 +3,6 @@ package oasis
 import (
 	"encoding/hex"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -19,14 +18,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 )
-
-// EnvNoSandbox is the env var to be set to 1 to force-disable sandboxing
-// runtimes.
-const EnvNoSandbox = "OASIS_UNSAFE_TESTS_NO_SANDBOX"
-
-func isNoSandbox() bool {
-	return os.Getenv(EnvNoSandbox) == "1"
-}
 
 // Argument is a single argument on the commandline, including its values.
 type Argument struct {
