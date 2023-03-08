@@ -244,7 +244,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Runtime: 0, Serial: 1},
 		},
 		Keymanagers: []oasis.KeymanagerFixture{
-			{Runtime: 0, Entity: 1},
+			{Runtime: 0, Entity: 1, Policy: 0, SkipPolicy: tee != node.TEEHardwareIntelSGX},
 		},
 		ComputeWorkers: []oasis.ComputeWorkerFixture{
 			{Entity: 1, Runtimes: []int{1}},

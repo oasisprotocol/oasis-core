@@ -45,7 +45,6 @@ const (
 	CfgStatusChecksum    = "keymanager.status.checksum"
 	CfgStatusRSK         = "keymanager.status.rsk"
 
-	policyFilename = "km_policy.cbor"
 	statusFilename = "km_status.json"
 )
 
@@ -639,8 +638,8 @@ func registerKMInitStatusFlags(cmd *cobra.Command) {
 
 // Register registers the keymanager sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	policyFileFlag.String(CfgPolicyFile, policyFilename, "file name of policy in CBOR format")
-	policySigFileFlag.StringSlice(CfgPolicySigFile, []string{policyFilename + ".sign"}, "file name(s) containing policy signature")
+	policyFileFlag.String(CfgPolicyFile, "", "file name of policy in CBOR format")
+	policySigFileFlag.StringSlice(CfgPolicySigFile, []string{}, "file name(s) containing policy signature")
 
 	_ = viper.BindPFlags(policyFileFlag)
 	_ = viper.BindPFlags(policySigFileFlag)

@@ -1,7 +1,8 @@
 //! Key manager client which talks to a remote key manager enclave.
+#[cfg(target_env = "sgx")]
+use std::iter::FromIterator;
 use std::{
     collections::HashSet,
-    iter::FromIterator,
     num::NonZeroUsize,
     sync::{Arc, RwLock},
 };
@@ -186,13 +187,21 @@ impl RemoteClient {
         // Set key manager runtime ID.
         self.inner.rpc_client.update_runtime_id(Some(status.id));
 
-        // Set client allowed enclaves from key manager policy.
-        if let Some(untrusted_policy) = status.policy {
-            let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+        // Verify and apply the policy, if set.
+        let untrusted_policy = match status.policy {
+            Some(policy) => policy,
+            None => return Ok(()),
+        };
 
-            let policies: HashSet<EnclaveIdentity> =
+        #[cfg_attr(not(target_env = "sgx"), allow(unused))]
+        let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+
+        // Set client allowed enclaves from key manager policy.
+        #[cfg(target_env = "sgx")]
+        {
+            let enclaves: HashSet<EnclaveIdentity> =
                 HashSet::from_iter(policy.enclaves.keys().cloned());
-            self.inner.rpc_client.update_enclaves(Some(policies));
+            self.inner.rpc_client.update_enclaves(Some(enclaves));
         }
 
         Ok(())

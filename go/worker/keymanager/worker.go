@@ -466,11 +466,10 @@ func (w *Worker) getClientRuntimeWatchers() []*clientRuntimeWatcher {
 }
 
 func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Status) error {
-	runtimeID := w.runtime.ID()
-	if status == nil || !status.IsInitialized {
+	if status == nil || !status.IsInitialized || w.rtStatus == nil {
 		return nil
 	}
-	if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&runtimeID) {
+	if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&w.runtimeID) {
 		return nil
 	}
 	if w.getClientRuntimeWatcher(rt.ID) != nil {
@@ -483,20 +482,23 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 
 	// Check policy document if runtime is allowed to query any of the
 	// key manager enclaves.
-	var found bool
+	var allowed bool
 	switch {
-	case !status.IsSecure && status.Policy == nil:
-		// Insecure test keymanagers can be without a policy.
-		found = true
-	case status.Policy != nil:
+	case w.rtStatus.capabilityTEE == nil:
+		// Insecure test key manager enclaves can be queried by all runtimes.
+		allowed = !status.IsSecure
+	case w.rtStatus.capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
+		if status.Policy == nil {
+			break
+		}
 		for _, enc := range status.Policy.Policy.Enclaves {
 			if _, ok := enc.MayQuery[rt.ID]; ok {
-				found = true
+				allowed = true
 				break
 			}
 		}
 	}
-	if !found {
+	if !allowed {
 		w.logger.Warn("runtime not found in keymanager policy, skipping",
 			"runtime_id", rt.ID,
 			"status", status,

@@ -46,77 +46,74 @@ func (pol *KeymanagerPolicy) provisionStatusArgs() []string {
 }
 
 func (pol *KeymanagerPolicy) provision() error {
-	if pol.runtime.teeHardware == node.TEEHardwareInvalid {
-		// No policy document.
-		pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicyFile, "")
-	} else {
-		// Policy signed with test keys.
-		policyPath := filepath.Join(pol.dir.String(), kmPolicyFile)
-		policyArgs := []string{
-			"keymanager", "init_policy",
-			"--" + flags.CfgDebugDontBlameOasis,
-			"--" + kmCmd.CfgPolicyFile, policyPath,
-			"--" + kmCmd.CfgPolicyID, pol.runtime.ID().String(),
-			"--" + kmCmd.CfgPolicySerial, strconv.Itoa(pol.serial),
-		}
+	// Policy signed with test keys.
+	policyPath := filepath.Join(pol.dir.String(), kmPolicyFile)
+	policyArgs := []string{
+		"keymanager", "init_policy",
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + kmCmd.CfgPolicyFile, policyPath,
+		"--" + kmCmd.CfgPolicyID, pol.runtime.ID().String(),
+		"--" + kmCmd.CfgPolicySerial, strconv.Itoa(pol.serial),
+	}
+	if pol.runtime.teeHardware == node.TEEHardwareIntelSGX {
 		policyArgs = append(policyArgs, []string{
 			"--" + kmCmd.CfgPolicyEnclaveID, pol.runtime.GetEnclaveIdentity(0).String(),
 		}...)
+	}
 
-		for _, rt := range pol.net.runtimes {
-			if rt.teeHardware == node.TEEHardwareInvalid || rt.kind != registry.KindCompute {
-				continue
-			}
-
-			arg := fmt.Sprintf("%s=%s", rt.ID(), rt.GetEnclaveIdentity(0))
-			policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
+	for _, rt := range pol.net.runtimes {
+		if rt.teeHardware != node.TEEHardwareIntelSGX || rt.kind != registry.KindCompute {
+			continue
 		}
 
-		w, err := pol.dir.NewLogWriter("provision-policy.log")
+		arg := fmt.Sprintf("%s=%s", rt.ID(), rt.GetEnclaveIdentity(0))
+		policyArgs = append(policyArgs, "--"+kmCmd.CfgPolicyMayQuery, arg)
+	}
+
+	w, err := pol.dir.NewLogWriter("provision-policy.log")
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	if err = pol.net.runNodeBinary(w, policyArgs...); err != nil {
+		pol.net.logger.Error("failed to provision keymanager policy",
+			"err", err,
+		)
+		return fmt.Errorf("oasis/keymanager: failed to provision keymanager policy: %w", err)
+	}
+
+	// Sign policy with test keys.
+	signArgsTpl := []string{
+		"keymanager", "sign_policy",
+		"--" + common.CfgDebugAllowTestKeys,
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + kmCmd.CfgPolicyFile, policyPath,
+	}
+	for i := 1; i <= 3; i++ {
+		signatureFile := filepath.Join(pol.dir.String(), fmt.Sprintf("%s.sign.%d", kmPolicyFile, i))
+		signArgs := append([]string{}, signArgsTpl...)
+		signArgs = append(signArgs, []string{
+			"--" + kmCmd.CfgPolicySigFile, signatureFile,
+			"--" + kmCmd.CfgPolicyTestKey, fmt.Sprintf("%d", i),
+		}...)
+		pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicySigFile, signatureFile)
+
+		w, err := pol.dir.NewLogWriter("provision-policy-sign.log")
 		if err != nil {
 			return err
 		}
 		defer w.Close()
 
-		if err = pol.net.runNodeBinary(w, policyArgs...); err != nil {
-			pol.net.logger.Error("failed to provision keymanager policy",
+		if err = pol.net.runNodeBinary(w, signArgs...); err != nil {
+			pol.net.logger.Error("failed to sign keymanager policy",
 				"err", err,
 			)
-			return fmt.Errorf("oasis/keymanager: failed to provision keymanager policy: %w", err)
+			return fmt.Errorf("oasis/keymanager: failed to sign keymanager policy: %w", err)
 		}
-
-		// Sign policy with test keys.
-		signArgsTpl := []string{
-			"keymanager", "sign_policy",
-			"--" + common.CfgDebugAllowTestKeys,
-			"--" + flags.CfgDebugDontBlameOasis,
-			"--" + kmCmd.CfgPolicyFile, policyPath,
-		}
-		for i := 1; i <= 3; i++ {
-			signatureFile := filepath.Join(pol.dir.String(), fmt.Sprintf("%s.sign.%d", kmPolicyFile, i))
-			signArgs := append([]string{}, signArgsTpl...)
-			signArgs = append(signArgs, []string{
-				"--" + kmCmd.CfgPolicySigFile, signatureFile,
-				"--" + kmCmd.CfgPolicyTestKey, fmt.Sprintf("%d", i),
-			}...)
-			pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicySigFile, signatureFile)
-
-			w, err := pol.dir.NewLogWriter("provision-policy-sign.log")
-			if err != nil {
-				return err
-			}
-			defer w.Close()
-
-			if err = pol.net.runNodeBinary(w, signArgs...); err != nil {
-				pol.net.logger.Error("failed to sign keymanager policy",
-					"err", err,
-				)
-				return fmt.Errorf("oasis/keymanager: failed to sign keymanager policy: %w", err)
-			}
-		}
-
-		pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicyFile, policyPath)
 	}
+
+	pol.statusArgs = append(pol.statusArgs, "--"+kmCmd.CfgPolicyFile, policyPath)
 
 	return nil
 }
@@ -227,7 +224,9 @@ func (km *Keymanager) provisionGenesis() error {
 		"--" + kmCmd.CfgStatusID, km.runtime.ID().String(),
 		"--" + kmCmd.CfgStatusFile, filepath.Join(km.dir.String(), kmStatusFile),
 	}
-	statusArgs = append(statusArgs, km.policy.provisionStatusArgs()...)
+	if km.policy != nil {
+		statusArgs = append(statusArgs, km.policy.provisionStatusArgs()...)
+	}
 
 	w, err := km.dir.NewLogWriter("provision-status.log")
 	if err != nil {
@@ -319,10 +318,6 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	host, err := net.GetNamedNode(kmName, &cfg.NodeCfg)
 	if err != nil {
 		return nil, err
-	}
-
-	if cfg.Policy == nil {
-		return nil, fmt.Errorf("oasis/keymanager: missing policy")
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
