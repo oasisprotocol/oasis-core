@@ -1,6 +1,7 @@
 package keymanager
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -75,9 +76,6 @@ type Worker struct { // nolint: maligned
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	updateStatusTicker   *backoff.Ticker
-	updateStatusTickerCh <-chan time.Time
-
 	runtime   runtimeRegistry.Runtime
 	runtimeID common.Namespace
 
@@ -91,10 +89,9 @@ type Worker struct { // nolint: maligned
 	roleProvider registration.RoleProvider
 	backend      api.Backend
 
-	globalStatus   *api.Status
-	enclaveStatus  *api.SignedInitResponse
-	policy         *api.SignedPolicySGX
-	policyChecksum []byte
+	globalStatus  *api.Status
+	enclaveStatus *api.SignedInitResponse
+	policy        *api.SignedPolicySGX
 
 	numLoadedSecrets    int
 	lastLoadedSecret    beacon.EpochTime
@@ -106,6 +103,12 @@ type Worker struct { // nolint: maligned
 
 	kmStatus *api.Status
 	rtStatus *runtimeStatus
+
+	initEnclaveInProgress  bool
+	initEnclaveRequired    bool
+	initEnclaveDoneCh      chan *api.SignedInitResponse
+	initEnclaveRetryCh     <-chan time.Time
+	initEnclaveRetryTicker *backoff.Ticker
 
 	secrets []*api.SignedEncryptedEphemeralSecret
 
@@ -296,17 +299,8 @@ func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface
 	return nil
 }
 
-func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) error {
-	var initOk bool
-	defer func() {
-		if !initOk {
-			// If initialization failed setup a retry ticker.
-			if w.updateStatusTicker == nil {
-				w.updateStatusTicker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
-				w.updateStatusTickerCh = w.updateStatusTicker.C
-			}
-		}
-	}()
+func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*api.SignedInitResponse, error) {
+	w.logger.Info("initializing key manager enclave")
 
 	// Check if the key manager supports init requests with key manager status
 	// field which were deployed together with master secret rotation feature.
@@ -314,31 +308,31 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 	rt := w.GetHostedRuntime()
 	if rt == nil {
 		w.logger.Warn("runtime is not yet ready")
-		return fmt.Errorf("worker/keymanager: runtime is not yet ready")
+		return nil, fmt.Errorf("worker/keymanager: runtime is not yet ready")
 	}
 	rtInfo, err := rt.GetInfo(w.ctx)
 	if err != nil {
 		w.logger.Warn("runtime is broken",
 			"err", err,
 		)
-		return fmt.Errorf("worker/keymanager: runtime is broken")
+		return nil, fmt.Errorf("worker/keymanager: runtime is broken")
 	}
 
 	// Initialize the key manager.
 	var args api.InitRequest
 	if rtInfo.Features.KeyManagerMasterSecretRotation {
 		args = api.InitRequest{
-			Status:      status,
+			Status:      kmStatus,
 			MayGenerate: w.mayGenerate,
 		}
 	} else {
 		var policy []byte
-		if status.Policy != nil {
-			policy = cbor.Marshal(status.Policy)
+		if kmStatus.Policy != nil {
+			policy = cbor.Marshal(kmStatus.Policy)
 		}
 
 		args = api.InitRequest{
-			Checksum:    status.Checksum,
+			Checksum:    kmStatus.Checksum,
 			Policy:      policy,
 			MayGenerate: w.mayGenerate,
 		}
@@ -349,11 +343,11 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 		w.logger.Error("failed to initialize enclave",
 			"err", err,
 		)
-		return fmt.Errorf("worker/keymanager: failed to initialize enclave: %w", err)
+		return nil, fmt.Errorf("worker/keymanager: failed to initialize enclave: %w", err)
 	}
 
 	// Validate the signature.
-	if tee := runtimeStatus.capabilityTEE; tee != nil {
+	if tee := rtStatus.capabilityTEE; tee != nil {
 		var signingKey signature.PublicKey
 
 		switch tee.Hardware {
@@ -362,58 +356,69 @@ func (w *Worker) updateStatus(status *api.Status, runtimeStatus *runtimeStatus) 
 		case node.TEEHardwareIntelSGX:
 			signingKey = tee.RAK
 		default:
-			return fmt.Errorf("worker/keymanager: unknown TEE hardware: %v", tee.Hardware)
+			return nil, fmt.Errorf("worker/keymanager: unknown TEE hardware: %v", tee.Hardware)
 		}
 
 		if err := signedInitResp.Verify(signingKey); err != nil {
-			return fmt.Errorf("worker/keymanager: failed to validate initialization response signature: %w", err)
+			return nil, fmt.Errorf("worker/keymanager: failed to validate initialization response signature: %w", err)
 		}
 	}
 
 	if !signedInitResp.InitResponse.IsSecure {
-		w.logger.Warn("Key manager enclave build is INSECURE")
+		w.logger.Warn("key manager enclave build is INSECURE")
 	}
 
-	w.logger.Info("Key manager initialized",
+	w.logger.Info("key manager enclave initialized",
+		"is_secure", signedInitResp.InitResponse.IsSecure,
 		"checksum", hex.EncodeToString(signedInitResp.InitResponse.Checksum),
+		"policy_checksum", hex.EncodeToString(signedInitResp.InitResponse.PolicyChecksum),
+		"rsk", signedInitResp.InitResponse.RSK,
 	)
-	if w.updateStatusTicker != nil {
-		w.updateStatusTickerCh = nil
-		w.updateStatusTicker.Stop()
-		w.updateStatusTicker = nil
-	}
-
-	policyUpdateCount.Inc()
-
-	// Register as we are now ready to handle requests.
-	initOk = true
-	w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
-		rt := n.AddOrUpdateRuntime(w.runtime.ID(), runtimeStatus.version)
-		rt.Version = runtimeStatus.version
-		rt.ExtraInfo = cbor.Marshal(signedInitResp)
-		rt.Capabilities.TEE = runtimeStatus.capabilityTEE
-		return nil
-	}, func(context.Context) error {
-		w.logger.Info("Key manager registered")
-
-		// Signal that we are initialized.
-		select {
-		case <-w.initCh:
-		default:
-			close(w.initCh)
-		}
-		return nil
-	})
 
 	// Cache the key manager enclave status and the currently active policy.
 	w.Lock()
 	defer w.Unlock()
 
-	w.enclaveStatus = &signedInitResp
-	w.policy = status.Policy
-	w.policyChecksum = signedInitResp.InitResponse.PolicyChecksum
+	if w.enclaveStatus == nil || !bytes.Equal(w.enclaveStatus.InitResponse.PolicyChecksum, signedInitResp.InitResponse.PolicyChecksum) {
+		policyUpdateCount.Inc()
+	}
 
-	return nil
+	w.enclaveStatus = &signedInitResp
+	w.policy = kmStatus.Policy
+
+	return &signedInitResp, nil
+}
+
+func (w *Worker) registerNode(rsp *api.SignedInitResponse) {
+	w.logger.Info("registering key manager using the latest init response",
+		"is_secure", rsp.InitResponse.IsSecure,
+		"checksum", hex.EncodeToString(rsp.InitResponse.Checksum),
+		"policy_checksum", hex.EncodeToString(rsp.InitResponse.PolicyChecksum),
+		"rsk", rsp.InitResponse.RSK,
+	)
+
+	// Register as we are now ready to handle requests.
+	rtStatus := w.rtStatus
+	extraInfo := cbor.Marshal(rsp)
+	w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
+		rt := n.AddOrUpdateRuntime(w.runtimeID, rtStatus.version)
+		rt.Version = rtStatus.version
+		rt.ExtraInfo = extraInfo
+		rt.Capabilities.TEE = rtStatus.capabilityTEE
+		return nil
+	}, func(context.Context) error {
+		w.logger.Info("key manager registered")
+
+		// Signal that we are initialized.
+		select {
+		case <-w.initCh:
+		default:
+			w.logger.Info("key manager initialized")
+			close(w.initCh)
+		}
+
+		return nil
+	})
 }
 
 func (w *Worker) setStatus(status *api.Status) {
@@ -465,8 +470,8 @@ func (w *Worker) getClientRuntimeWatchers() []*clientRuntimeWatcher {
 	return crws
 }
 
-func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Status) error {
-	if status == nil || !status.IsInitialized || w.rtStatus == nil {
+func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, kmStatus *api.Status) error {
+	if kmStatus == nil || !kmStatus.IsInitialized || w.rtStatus == nil {
 		return nil
 	}
 	if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&w.runtimeID) {
@@ -486,12 +491,12 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 	switch {
 	case w.rtStatus.capabilityTEE == nil:
 		// Insecure test key manager enclaves can be queried by all runtimes.
-		allowed = !status.IsSecure
+		allowed = !kmStatus.IsSecure
 	case w.rtStatus.capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
-		if status.Policy == nil {
+		if kmStatus.Policy == nil {
 			break
 		}
-		for _, enc := range status.Policy.Policy.Enclaves {
+		for _, enc := range kmStatus.Policy.Policy.Enclaves {
 			if _, ok := enc.MayQuery[rt.ID]; ok {
 				allowed = true
 				break
@@ -501,7 +506,7 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 	if !allowed {
 		w.logger.Warn("runtime not found in keymanager policy, skipping",
 			"runtime_id", rt.ID,
-			"status", status,
+			"status", kmStatus,
 		)
 		return nil
 	}
@@ -529,7 +534,7 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, status *api.Sta
 	return nil
 }
 
-func (w *Worker) recheckAllRuntimes(status *api.Status) error {
+func (w *Worker) recheckAllRuntimes(kmStatus *api.Status) error {
 	rts, err := w.commonWorker.Consensus.Registry().GetRuntimes(w.ctx,
 		&registry.GetRuntimesQuery{
 			Height:           consensus.HeightLatest,
@@ -543,7 +548,7 @@ func (w *Worker) recheckAllRuntimes(status *api.Status) error {
 		return fmt.Errorf("failed querying runtimes: %w", err)
 	}
 	for _, rt := range rts {
-		if err := w.startClientRuntimeWatcher(rt, status); err != nil {
+		if err := w.startClientRuntimeWatcher(rt, kmStatus); err != nil {
 			w.logger.Error("failed to start runtime watcher",
 				"err", err,
 			)
@@ -813,23 +818,76 @@ func (w *Worker) handleStatusUpdate(kmStatus *api.Status) {
 	w.setStatus(kmStatus)
 	w.kmStatus = kmStatus
 
-	if w.rtStatus == nil {
-		return
-	}
+	// (Re)Initialize the enclave.
+	// A new master secret generation or policy might have been published.
+	w.handleInitEnclave()
 
-	// Forward status update to key manager runtime.
-	if err := w.updateStatus(w.kmStatus, w.rtStatus); err != nil {
-		w.logger.Error("failed to handle status update",
-			"err", err,
-		)
-		return
-	}
 	// New runtimes can be allowed with the policy update.
 	if err := w.recheckAllRuntimes(w.kmStatus); err != nil {
 		w.logger.Error("failed rechecking runtimes",
 			"err", err,
 		)
 		return
+	}
+}
+
+func (w *Worker) handleInitEnclave() {
+	if w.kmStatus == nil || w.rtStatus == nil {
+		// There's no need to retry as another call will be made
+		// once both fields are initialized.
+		return
+	}
+	if w.initEnclaveInProgress {
+		// Try again later, immediately after the current task finishes.
+		w.initEnclaveRequired = true
+		return
+	}
+
+	// Lock. Allow only one active initialization.
+	w.initEnclaveRequired = false
+	w.initEnclaveInProgress = true
+
+	// Enclave initialization can take a long time (e.g. when master secrets
+	// need to be replicated), so don't block the loop.
+	initEnclave := func(kmStatus *api.Status, rtStatus *runtimeStatus) {
+		rsp, err := w.initEnclave(kmStatus, rtStatus)
+		if err != nil {
+			w.logger.Error("failed to initialize enclave",
+				"err", err,
+			)
+		}
+		w.initEnclaveDoneCh <- rsp
+	}
+
+	go initEnclave(w.kmStatus, w.rtStatus)
+}
+
+func (w *Worker) handleInitEnclaveDone(rsp *api.SignedInitResponse) {
+	// Unlock.
+	w.initEnclaveInProgress = false
+
+	// Stop or set up the retry ticker, depending on whether the initialization failed.
+	switch {
+	case rsp != nil && w.initEnclaveRetryTicker != nil:
+		w.initEnclaveRetryTicker.Stop()
+		w.initEnclaveRetryTicker = nil
+		w.initEnclaveRetryCh = nil
+	case rsp == nil && w.initEnclaveRetryTicker == nil && !w.initEnclaveRequired:
+		w.initEnclaveRetryTicker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
+		w.initEnclaveRetryCh = w.initEnclaveRetryTicker.C
+	}
+
+	// Ensure the enclave is up-to-date with the latest key manager status.
+	// For example, if the replication of master secrets took a long time,
+	// new secrets might have been generated and they need to be replicated too.
+	if w.initEnclaveRequired {
+		w.handleInitEnclave()
+		return
+	}
+
+	// (Re)Register the node with the latest init response.
+	if rsp != nil {
+		w.registerNode(rsp)
 	}
 }
 
@@ -868,13 +926,17 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 		}
 
 		// Send a node preregistration, so that other nodes know to update their access
-		// control.
+		// control. Without it, the enclave won't be able to replicate the master secrets
+		// needed for initialization.
 		if w.enclaveStatus == nil {
-			w.roleProvider.SetAvailable(func(n *node.Node) error {
+			w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
 				rt := n.AddOrUpdateRuntime(w.runtime.ID(), w.rtStatus.version)
 				rt.Version = w.rtStatus.version
 				rt.ExtraInfo = nil
 				rt.Capabilities.TEE = w.rtStatus.capabilityTEE
+				return nil
+			}, func(context.Context) error {
+				w.logger.Info("key manager registered (pre-registration)")
 				return nil
 			})
 		}
@@ -1036,7 +1098,10 @@ func (w *Worker) handleLoadEphemeralSecret() {
 func (w *Worker) handleStop() {
 	w.logger.Info("termination requested")
 
-	// Wait until ephemeral secret generation running in the background finishes.
+	// Wait until tasks running in the background finish.
+	if w.initEnclaveInProgress {
+		<-w.initEnclaveDoneCh
+	}
 	if w.genSecretInProgress {
 		<-w.genSecretDoneCh
 	}
@@ -1048,7 +1113,7 @@ func (w *Worker) worker() {
 	defer close(w.quitCh)
 
 	// Wait for consensus sync.
-	w.logger.Info("delaying worker start until after initial synchronization")
+	w.logger.Info("delaying key manager worker start until after consensus synchronization")
 	select {
 	case <-w.stopCh:
 		return
@@ -1163,8 +1228,10 @@ func (w *Worker) worker() {
 			w.handleRuntimeHostEvent(ev)
 		case kmStatus := <-statusCh:
 			w.handleStatusUpdate(kmStatus)
-		case <-w.updateStatusTickerCh:
-			w.handleStatusUpdate(w.kmStatus)
+		case <-w.initEnclaveRetryCh:
+			w.handleInitEnclave()
+		case rsp := <-w.initEnclaveDoneCh:
+			w.handleInitEnclaveDone(rsp)
 		case rt := <-rtCh:
 			w.handleRuntimeRegistrationEvent(rt)
 		case epoch = <-epoCh:

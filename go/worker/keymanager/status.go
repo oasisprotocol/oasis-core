@@ -57,6 +57,11 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		al = append(al, ral)
 	}
 
+	var pc []byte
+	if w.enclaveStatus != nil {
+		pc = w.enclaveStatus.InitResponse.PolicyChecksum
+	}
+
 	es := api.EphemeralSecretStats{
 		NumLoaded:     w.numLoadedSecrets,
 		LastLoaded:    w.lastLoadedSecret,
@@ -72,7 +77,7 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		AccessList:       al,
 		PrivatePeers:     ps,
 		Policy:           w.policy,
-		PolicyChecksum:   w.policyChecksum,
+		PolicyChecksum:   pc,
 		EphemeralSecrets: es,
 	}
 
