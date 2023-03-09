@@ -2,7 +2,6 @@
 use std::collections::BTreeMap;
 
 use anyhow::anyhow;
-use io_context::Context;
 
 use crate::{
     common::{
@@ -48,8 +47,8 @@ key_format!(GovernanceDepositsKeyFmt, 0x59, ());
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Returns the staking account for the given account address.
-    pub fn account(&self, ctx: Context, address: Address) -> Result<Account, StateError> {
-        match self.mkvs.get(ctx, &AccountsKeyFmt(address).encode()) {
+    pub fn account(&self, address: Address) -> Result<Account, StateError> {
+        match self.mkvs.get(&AccountsKeyFmt(address).encode()) {
             Ok(Some(b)) => {
                 cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))
             }
@@ -58,12 +57,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
         }
     }
 
-    fn load_stored_balance<K: KeyFormat>(
-        &self,
-        ctx: Context,
-        key_format: K,
-    ) -> Result<Quantity, StateError> {
-        match self.mkvs.get(ctx, &key_format.encode()) {
+    fn load_stored_balance<K: KeyFormat>(&self, key_format: K) -> Result<Quantity, StateError> {
+        match self.mkvs.get(&key_format.encode()) {
             Ok(Some(b)) => {
                 cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))
             }
@@ -73,28 +68,28 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     }
 
     /// Returns the total supply.
-    pub fn total_supply(&self, ctx: Context) -> Result<Quantity, StateError> {
-        self.load_stored_balance(ctx, TotalSupplyKeyFmt(()))
+    pub fn total_supply(&self) -> Result<Quantity, StateError> {
+        self.load_stored_balance(TotalSupplyKeyFmt(()))
     }
 
     /// Returns the balance of the global common pool.
-    pub fn common_pool(&self, ctx: Context) -> Result<Quantity, StateError> {
-        self.load_stored_balance(ctx, CommonPoolKeyFmt(()))
+    pub fn common_pool(&self) -> Result<Quantity, StateError> {
+        self.load_stored_balance(CommonPoolKeyFmt(()))
     }
 
     /// Returns the last block fees balance.
-    pub fn last_block_fees(&self, ctx: Context) -> Result<Quantity, StateError> {
-        self.load_stored_balance(ctx, LastBlockFees(()))
+    pub fn last_block_fees(&self) -> Result<Quantity, StateError> {
+        self.load_stored_balance(LastBlockFees(()))
     }
 
     /// Returns the governance deposits balance.
-    pub fn governance_deposits(&self, ctx: Context) -> Result<Quantity, StateError> {
-        self.load_stored_balance(ctx, GovernanceDepositsKeyFmt(()))
+    pub fn governance_deposits(&self) -> Result<Quantity, StateError> {
+        self.load_stored_balance(GovernanceDepositsKeyFmt(()))
     }
 
     /// Returns the non-empty addresses from the staking ledger.
-    pub fn addresses(&self, ctx: Context) -> Result<Vec<Address>, StateError> {
-        let mut it = self.mkvs.iter(ctx);
+    pub fn addresses(&self) -> Result<Vec<Address>, StateError> {
+        let mut it = self.mkvs.iter();
         it.seek(&AccountsKeyFmt::default().encode_partial(0));
 
         Ok(it
@@ -106,14 +101,13 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Returns the delegation.
     pub fn delegation(
         &self,
-        ctx: Context,
         delegator_addr: Address,
         escrow_addr: Address,
     ) -> Result<Delegation, StateError> {
-        match self.mkvs.get(
-            ctx,
-            &DelegationKeyFmt((escrow_addr, delegator_addr)).encode(),
-        ) {
+        match self
+            .mkvs
+            .get(&DelegationKeyFmt((escrow_addr, delegator_addr)).encode())
+        {
             Ok(Some(b)) => {
                 cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))
             }
@@ -125,9 +119,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Returns all active delegations.
     pub fn delegations(
         &self,
-        ctx: Context,
     ) -> Result<BTreeMap<Address, BTreeMap<Address, Delegation>>, StateError> {
-        let mut it = self.mkvs.iter(ctx);
+        let mut it = self.mkvs.iter();
         it.seek(&DelegationKeyFmt::default().encode_partial(0));
 
         let mut result: BTreeMap<Address, BTreeMap<Address, Delegation>> = BTreeMap::new();
@@ -153,15 +146,14 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Returns the debonding delegation.
     pub fn debonding_delegation(
         &self,
-        ctx: Context,
         delegator_addr: Address,
         escrow_addr: Address,
         epoch: EpochTime,
     ) -> Result<DebondingDelegation, StateError> {
-        match self.mkvs.get(
-            ctx,
-            &DebondingDelegationKeyFmt((delegator_addr, escrow_addr, epoch)).encode(),
-        ) {
+        match self
+            .mkvs
+            .get(&DebondingDelegationKeyFmt((delegator_addr, escrow_addr, epoch)).encode())
+        {
             Ok(Some(b)) => {
                 cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))
             }
@@ -173,9 +165,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Returns all debonding delegations.
     pub fn debonding_delegations(
         &self,
-        ctx: Context,
     ) -> Result<BTreeMap<Address, BTreeMap<Address, Vec<DebondingDelegation>>>, StateError> {
-        let mut it = self.mkvs.iter(ctx);
+        let mut it = self.mkvs.iter();
         it.seek(&DebondingDelegationKeyFmt::default().encode_partial(0));
 
         let mut result: BTreeMap<Address, BTreeMap<Address, Vec<DebondingDelegation>>> =
@@ -206,8 +197,6 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
     use crate::{
         common::crypto::{hash::Hash, signature::PublicKey},
         consensus::staking::{EscrowAccount, GeneralAccount, SharePool},
@@ -239,8 +228,6 @@ mod test {
             .build(server.read_sync());
         let staking_state = ImmutableState::new(&mkvs);
 
-        let ctx = Arc::new(Context::background());
-
         let pk =
             PublicKey::from("7e57baaad01fffffffffffffffffffffffffffffffffffffffffffffffffffff");
         let pk2 =
@@ -255,14 +242,14 @@ mod test {
 
         // Test all addresses and accounts.
         let addrs = staking_state
-            .addresses(Context::create_child(&ctx))
+            .addresses()
             .expect("addresses query should work");
         assert_eq!(expected_addrs, addrs, "expected addresses should match");
 
         let mut accounts = Vec::new();
         for addr in &addrs {
             let acc = staking_state
-                .account(Context::create_child(&ctx), addr.clone())
+                .account(addr.clone())
                 .expect("accounts query should work");
             accounts.push(acc);
         }
@@ -325,16 +312,12 @@ mod test {
 
         // Test all delegations.
         let delegations = staking_state
-            .delegations(Context::create_child(&ctx))
+            .delegations()
             .expect("delegations query should work");
         for (escrow_addr, dels) in &delegations {
             for (delegator_addr, del) in dels.clone() {
                 let d = staking_state
-                    .delegation(
-                        Context::create_child(&ctx),
-                        delegator_addr,
-                        escrow_addr.clone(),
-                    )
+                    .delegation(delegator_addr, escrow_addr.clone())
                     .expect("delegation query should work");
                 assert_eq!(del, d, "delegation should match")
             }
@@ -410,14 +393,13 @@ mod test {
 
         // Test all debonding delegations.
         let debonding_delegations = staking_state
-            .debonding_delegations(Context::create_child(&ctx))
+            .debonding_delegations()
             .expect("debonding delegations query should work");
         for (escrow_addr, debss) in &debonding_delegations {
             for (delegator_addr, debs) in debss {
                 for deb in debs {
                     let d = staking_state
                         .debonding_delegation(
-                            Context::create_child(&ctx),
                             delegator_addr.clone(),
                             escrow_addr.clone(),
                             deb.debond_end_time,
@@ -472,7 +454,7 @@ mod test {
 
         // Test all stored balances.
         let total_supply = staking_state
-            .total_supply(Context::create_child(&ctx))
+            .total_supply()
             .expect("total supply query should work");
         assert_eq!(
             Quantity::from(10000u32),
@@ -481,7 +463,7 @@ mod test {
         );
 
         let common_pool = staking_state
-            .common_pool(Context::create_child(&ctx))
+            .common_pool()
             .expect("common pool query should work");
         assert_eq!(
             Quantity::from(1000u32),
@@ -490,7 +472,7 @@ mod test {
         );
 
         let last_block_fees = staking_state
-            .last_block_fees(Context::create_child(&ctx))
+            .last_block_fees()
             .expect("last block fees query should work");
         assert_eq!(
             Quantity::from(33u32),
@@ -499,7 +481,7 @@ mod test {
         );
 
         let governance_deposits = staking_state
-            .governance_deposits(Context::create_child(&ctx))
+            .governance_deposits()
             .expect("governance deposits query should work");
         assert_eq!(
             Quantity::from(12u32),

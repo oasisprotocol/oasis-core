@@ -2,7 +2,6 @@
 use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
 use anyhow::Result;
-use io_context::Context;
 use snow;
 use thiserror::Error;
 
@@ -312,7 +311,7 @@ impl Session {
         let consensus_state = consensus_verifier.latest_state()?;
         let registry_state = RegistryState::new(&consensus_state);
         let node = registry_state
-            .node(Context::background(), &node)?
+            .node(&node)?
             .ok_or(SessionError::NodeNotRegistered)?;
         let verified = node
             .runtimes

@@ -4,8 +4,6 @@ use std::sync::Arc;
 #[cfg(target_env = "sgx")]
 use anyhow::{bail, Result};
 #[cfg(target_env = "sgx")]
-use io_context::Context;
-#[cfg(target_env = "sgx")]
 use slog::info;
 use slog::Logger;
 
@@ -63,7 +61,7 @@ impl Handler {
 #[cfg(target_env = "sgx")]
 impl Handler {
     /// Handle an attestation flow request.
-    pub fn handle(&self, ctx: Context, request: Body) -> Result<Body> {
+    pub fn handle(&self, request: Body) -> Result<Body> {
         match request {
             Body::RuntimeCapabilityTEERakInitRequest { target_info } => {
                 self.target_info_init(target_info)
@@ -71,9 +69,9 @@ impl Handler {
             Body::RuntimeCapabilityTEERakReportRequest {} => self.report_init(),
             Body::RuntimeCapabilityTEERakAvrRequest { avr } => {
                 // TODO: Remove this once we want to break the runtime host protocol.
-                self.set_quote(ctx, Quote::Ias(avr))
+                self.set_quote(Quote::Ias(avr))
             }
-            Body::RuntimeCapabilityTEERakQuoteRequest { quote } => self.set_quote(ctx, quote),
+            Body::RuntimeCapabilityTEERakQuoteRequest { quote } => self.set_quote(quote),
 
             _ => bail!("unsupported attestation request"),
         }
@@ -100,19 +98,15 @@ impl Handler {
         })
     }
 
-    fn set_quote(&self, ctx: Context, quote: Quote) -> Result<Body> {
+    fn set_quote(&self, quote: Quote) -> Result<Body> {
         if self.identity.quote_policy().is_none() {
             info!(self.logger, "Configuring quote policy");
 
             // Obtain current quote policy from (verified) consensus state.
-            let ctx = ctx.freeze();
             let consensus_verifier = self.consensus_verifier.clone();
             let version = Some(self.version);
-            let policy = PolicyVerifier::new(consensus_verifier).quote_policy(
-                ctx,
-                &self.runtime_id,
-                version,
-            )?;
+            let policy =
+                PolicyVerifier::new(consensus_verifier).quote_policy(&self.runtime_id, version)?;
 
             self.identity.set_quote_policy(policy)?;
         }

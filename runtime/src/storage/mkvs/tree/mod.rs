@@ -23,7 +23,6 @@ pub use remove::*;
 use std::{cell::RefCell, fmt, rc::Rc};
 
 use anyhow::Result;
-use io_context::Context;
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
@@ -170,32 +169,32 @@ impl fmt::Debug for Tree {
 }
 
 impl mkvs::FallibleMKVS for Tree {
-    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Tree::get(self, ctx, key)
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Tree::get(self, key)
     }
 
-    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
-        Tree::cache_contains_key(self, ctx, key)
+    fn cache_contains_key(&self, key: &[u8]) -> bool {
+        Tree::cache_contains_key(self, key)
     }
 
-    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        Tree::insert(self, ctx, key, value)
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        Tree::insert(self, key, value)
     }
 
-    fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Tree::remove(self, ctx, key)
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Tree::remove(self, key)
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[mkvs::Prefix], limit: u16) -> Result<()> {
-        Tree::prefetch_prefixes(self, ctx, prefixes, limit)
+    fn prefetch_prefixes(&self, prefixes: &[mkvs::Prefix], limit: u16) -> Result<()> {
+        Tree::prefetch_prefixes(self, prefixes, limit)
     }
 
-    fn iter(&self, ctx: Context) -> Box<dyn mkvs::Iterator + '_> {
-        Box::new(Tree::iter(self, ctx))
+    fn iter(&self) -> Box<dyn mkvs::Iterator + '_> {
+        Box::new(Tree::iter(self))
     }
 
-    fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
-        Tree::commit(self, ctx, namespace, version)
+    fn commit(&mut self, namespace: Namespace, version: u64) -> Result<Hash> {
+        Tree::commit(self, namespace, version)
     }
 }
 

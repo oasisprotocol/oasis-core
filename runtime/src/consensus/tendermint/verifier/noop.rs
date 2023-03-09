@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use io_context::Context;
 
 use crate::{
     consensus::{
@@ -30,10 +29,7 @@ impl NopVerifier {
     fn fetch_light_block(&self, height: u64) -> Result<LightBlock, Error> {
         let result = self
             .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusBlockRequest { height },
-            )
+            .call_host(Body::HostFetchConsensusBlockRequest { height })
             .map_err(|err| Error::VerificationFailed(err.into()))?;
 
         match result {
@@ -90,13 +86,9 @@ impl verifier::Verifier for NopVerifier {
     fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
         let result = self
             .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest {
-                    height,
-                    kind,
-                }),
-            )
+            .call_host(Body::HostFetchConsensusEventsRequest(
+                HostFetchConsensusEventsRequest { height, kind },
+            ))
             .map_err(|err| Error::VerificationFailed(err.into()))?;
 
         match result {

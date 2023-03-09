@@ -5,7 +5,6 @@ use futures::{
     future::{self, BoxFuture},
     TryFutureExt,
 };
-use io_context::Context;
 
 use oasis_core_runtime::{common::crypto::signature::Signature, consensus::beacon::EpochTime};
 
@@ -38,7 +37,6 @@ impl KeyManagerClient for MockClient {
 
     fn get_or_create_keys(
         &self,
-        _ctx: Context,
         key_pair_id: KeyPairId,
         generation: u64,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
@@ -53,12 +51,11 @@ impl KeyManagerClient for MockClient {
 
     fn get_public_key(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         generation: u64,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         Box::pin(
-            self.get_or_create_keys(ctx, key_pair_id, generation)
+            self.get_or_create_keys(key_pair_id, generation)
                 .and_then(|ck| {
                     future::ok(SignedPublicKey {
                         key: ck.input_keypair.pk,
@@ -72,7 +69,6 @@ impl KeyManagerClient for MockClient {
 
     fn get_or_create_ephemeral_keys(
         &self,
-        _ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
@@ -87,12 +83,11 @@ impl KeyManagerClient for MockClient {
 
     fn get_public_ephemeral_key(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
         Box::pin(
-            self.get_or_create_ephemeral_keys(ctx, key_pair_id, epoch)
+            self.get_or_create_ephemeral_keys(key_pair_id, epoch)
                 .and_then(|ck| {
                     future::ok(SignedPublicKey {
                         key: ck.input_keypair.pk,
@@ -106,7 +101,6 @@ impl KeyManagerClient for MockClient {
 
     fn replicate_master_secret(
         &self,
-        _ctx: Context,
         _generation: u64,
     ) -> BoxFuture<Result<Secret, KeyManagerError>> {
         unimplemented!();
@@ -114,7 +108,6 @@ impl KeyManagerClient for MockClient {
 
     fn replicate_ephemeral_secret(
         &self,
-        _ctx: Context,
         _epoch: EpochTime,
     ) -> BoxFuture<Result<Secret, KeyManagerError>> {
         unimplemented!();

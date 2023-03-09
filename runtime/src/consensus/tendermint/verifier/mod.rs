@@ -3,7 +3,6 @@ use std::{convert::TryInto, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use crossbeam::channel;
-use io_context::Context;
 use rand::{rngs::OsRng, Rng};
 use sha2::{Digest, Sha256};
 use slog::{error, info};
@@ -447,13 +446,9 @@ impl Verifier {
     fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
         let result = self
             .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest {
-                    height,
-                    kind,
-                }),
-            )
+            .call_host(Body::HostFetchConsensusEventsRequest(
+                HostFetchConsensusEventsRequest { height, kind },
+            ))
             .map_err(|err| Error::VerificationFailed(err.into()))?;
         // TODO: Perform event verification once this becomes possible.
 

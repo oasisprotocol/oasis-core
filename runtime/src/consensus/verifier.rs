@@ -2,7 +2,6 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use io_context::Context;
 use thiserror::Error;
 
 use super::{
@@ -196,14 +195,12 @@ pub fn verify_state_freshness(
 ) -> Result<(), Error> {
     let registry_state = RegistryState::new(&state);
 
-    let node = registry_state
-        .node(Context::background(), host_node_id)
-        .map_err(|err| {
-            Error::VerificationFailed(anyhow!(
-                "failed to retrieve node from the registry: {}",
-                err
-            ))
-        })?;
+    let node = registry_state.node(host_node_id).map_err(|err| {
+        Error::VerificationFailed(anyhow!(
+            "failed to retrieve node from the registry: {}",
+            err
+        ))
+    })?;
     let node = node.ok_or_else(|| {
         Error::VerificationFailed(anyhow!(
             "own node ID '{}' not found in registry state",

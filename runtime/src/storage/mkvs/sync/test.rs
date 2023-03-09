@@ -1,5 +1,3 @@
-use io_context::Context;
-
 use crate::storage::mkvs::{
     interop::{Driver, ProtocolServer},
     sync::*,
@@ -26,19 +24,14 @@ fn test_nil_pointers() {
     ];
 
     for entry in write_log.iter() {
-        tree.insert(
-            Context::background(),
-            &entry.key,
-            &entry.value.as_ref().unwrap(),
-        )
-        .expect("insert");
+        tree.insert(&entry.key, &entry.value.as_ref().unwrap())
+            .expect("insert");
     }
 
     // Verify at least one null pointer somewhere.
     //println!("full tree: {:#?}", tree);
 
-    let root =
-        Tree::commit(&mut tree, Context::background(), Default::default(), 0).expect("commit");
+    let root = Tree::commit(&mut tree, Default::default(), 0).expect("commit");
 
     server.apply(&write_log, root, Default::default(), 0);
 
@@ -52,7 +45,5 @@ fn test_nil_pointers() {
 
     // Now try inserting a k-v pair that will force the tree to traverse through the nil node
     // and dereference it.
-    remote
-        .insert(Context::background(), b"insert", b"key")
-        .expect("insert");
+    remote.insert(b"insert", b"key").expect("insert");
 }

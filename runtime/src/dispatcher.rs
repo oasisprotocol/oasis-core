@@ -9,7 +9,6 @@ use std::{
 };
 
 use anyhow::Result as AnyResult;
-use io_context::Context;
 use slog::{debug, error, info, warn, Logger};
 use tokio::sync::mpsc;
 
@@ -150,7 +149,7 @@ struct State {
 
 #[derive(Debug)]
 enum Command {
-    Request(Context, u64, Body),
+    Request(u64, Body),
     Abort(mpsc::Sender<()>),
 }
 
@@ -223,9 +222,8 @@ impl Dispatcher {
     }
 
     /// Queue a new request to be dispatched.
-    pub fn queue_request(&self, ctx: Context, id: u64, body: Body) -> AnyResult<()> {
-        self.queue_tx
-            .blocking_send(Command::Request(ctx, id, body))?;
+    pub fn queue_request(&self, id: u64, body: Body) -> AnyResult<()> {
+        self.queue_tx.blocking_send(Command::Request(id, body))?;
         Ok(())
     }
 
@@ -294,14 +292,14 @@ impl Dispatcher {
             while let Some(cmd) = rx.recv().await {
                 // Process received command.
                 match cmd {
-                    Command::Request(ctx, id, request) => {
+                    Command::Request(id, request) => {
                         // Process request in its own task.
                         let state = state.clone();
 
                         tokio::spawn(async move {
                             let protocol = state.protocol.clone();
                             let dispatcher = state.dispatcher.clone();
-                            let result = dispatcher.handle_request(state, ctx, request).await;
+                            let result = dispatcher.handle_request(state, request).await;
 
                             // Send response.
                             let response = match result {
@@ -322,12 +320,7 @@ impl Dispatcher {
         info!(self.logger, "Runtime call dispatcher is terminating");
     }
 
-    async fn handle_request(
-        self: &Arc<Self>,
-        state: State,
-        ctx: Context,
-        request: Body,
-    ) -> Result<Body, Error> {
+    async fn handle_request(self: &Arc<Self>, state: State, request: Body) -> Result<Body, Error> {
         match request {
             // Attestation-related requests.
             #[cfg(target_env = "sgx")]
@@ -335,7 +328,7 @@ impl Dispatcher {
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
             | Body::RuntimeCapabilityTEERakQuoteRequest { .. } => {
-                Ok(state.attestation_handler.handle(ctx, request)?)
+                Ok(state.attestation_handler.handle(request)?)
             }
 
             // RPC and transaction requests.
@@ -345,9 +338,9 @@ impl Dispatcher {
                 );
 
                 match kind {
-                    Kind::NoiseSession => self.dispatch_secure_rpc(ctx, state, request).await,
-                    Kind::InsecureQuery => self.dispatch_insecure_rpc(ctx, state, request).await,
-                    Kind::LocalQuery => self.dispatch_local_rpc(ctx, state, request).await,
+                    Kind::NoiseSession => self.dispatch_secure_rpc(state, request).await,
+                    Kind::InsecureQuery => self.dispatch_insecure_rpc(state, request).await,
+                    Kind::LocalQuery => self.dispatch_local_rpc(state, request).await,
                 }
             }
             Body::RuntimeLocalRPCCallRequest { request } => {
@@ -355,7 +348,7 @@ impl Dispatcher {
                     "kind" => ?Kind::LocalQuery,
                 );
 
-                self.dispatch_local_rpc(ctx, state, request).await
+                self.dispatch_local_rpc(state, request).await
             }
             Body::RuntimeExecuteTxBatchRequest {
                 mode,
@@ -370,7 +363,6 @@ impl Dispatcher {
             } => {
                 // Transaction execution.
                 self.dispatch_txn(
-                    ctx,
                     state.cache_set,
                     &state.txn_dispatcher,
                     &state.protocol,
@@ -399,7 +391,6 @@ impl Dispatcher {
             } => {
                 // Transaction check.
                 self.dispatch_txn(
-                    ctx,
                     state.cache_set,
                     &state.txn_dispatcher,
                     &state.protocol,
@@ -429,7 +420,6 @@ impl Dispatcher {
             } => {
                 // Query.
                 self.dispatch_query(
-                    ctx,
                     state.cache_set,
                     &state.txn_dispatcher,
                     &state.protocol,
@@ -452,13 +442,13 @@ impl Dispatcher {
             // Other requests.
             Body::RuntimeKeyManagerStatusUpdateRequest { status } => {
                 // Key manager status update local RPC call.
-                self.handle_km_status_update(ctx, state, status)
+                self.handle_km_status_update(state, status)
             }
             Body::RuntimeKeyManagerQuotePolicyUpdateRequest {
                 policy: quote_policy,
             } => {
                 // Key manager quote policy update local RPC call.
-                self.handle_km_quote_policy_update(ctx, state, quote_policy)
+                self.handle_km_quote_policy_update(state, quote_policy)
             }
             Body::RuntimeConsensusSyncRequest { height } => state
                 .consensus_verifier
@@ -476,7 +466,6 @@ impl Dispatcher {
     #[allow(clippy::too_many_arguments)]
     async fn dispatch_query(
         &self,
-        ctx: Context,
         cache_set: cache::CacheSet,
         txn_dispatcher: &Arc<dyn TxnDispatcher>,
         protocol: &Arc<Protocol>,
@@ -524,7 +513,6 @@ impl Dispatcher {
             let mut overlay = OverlayTree::new(cache.tree_mut());
 
             let txn_ctx = TxnContext::new(
-                ctx.freeze(),
                 protocol,
                 &state.consensus_block,
                 consensus_state,
@@ -545,7 +533,6 @@ impl Dispatcher {
 
     fn txn_check_batch(
         &self,
-        ctx: Arc<Context>,
         protocol: Arc<Protocol>,
         cache_set: cache::CacheSet,
         txn_dispatcher: &dyn TxnDispatcher,
@@ -566,7 +553,6 @@ impl Dispatcher {
         let mut overlay = OverlayTree::new(cache.tree_mut());
 
         let txn_ctx = TxnContext::new(
-            ctx.clone(),
             protocol.clone(),
             &state.consensus_block,
             consensus_state,
@@ -582,7 +568,7 @@ impl Dispatcher {
         if protocol.get_config().persist_check_tx_state {
             // Commit results to in-memory tree so they persist for subsequent batches that are
             // based on the same block.
-            let _ = overlay.commit(Context::create_child(&ctx)).unwrap();
+            let _ = overlay.commit().unwrap();
         }
 
         debug!(self.logger, "Transaction batch check complete");
@@ -593,7 +579,6 @@ impl Dispatcher {
     #[allow(clippy::too_many_arguments)]
     fn txn_execute_batch(
         &self,
-        ctx: Arc<Context>,
         protocol: Arc<Protocol>,
         cache_set: cache::CacheSet,
         txn_dispatcher: &dyn TxnDispatcher,
@@ -622,7 +607,6 @@ impl Dispatcher {
         let mut overlay = OverlayTree::new(cache.tree_mut());
 
         let txn_ctx = TxnContext::new(
-            ctx.clone(),
             protocol,
             &state.consensus_block,
             consensus_state,
@@ -648,11 +632,7 @@ impl Dispatcher {
 
         // Finalize state.
         let (state_write_log, new_state_root) = overlay
-            .commit_both(
-                Context::create_child(&ctx),
-                header.namespace,
-                header.round + 1,
-            )
+            .commit_both(header.namespace, header.round + 1)
             .expect("state commit must succeed");
 
         txn_dispatcher.finalize(new_state_root);
@@ -674,17 +654,11 @@ impl Dispatcher {
         for (batch_order, input) in inputs.drain(..).enumerate() {
             hashes.push(Hash::digest_bytes(&input));
             txn_tree
-                .add_input(
-                    Context::create_child(&ctx),
-                    input,
-                    batch_order.try_into().unwrap(),
-                )
+                .add_input(input, batch_order.try_into().unwrap())
                 .expect("add transaction must succeed");
         }
 
-        let (input_write_log, input_io_root) = txn_tree
-            .commit(Context::create_child(&ctx))
-            .expect("io commit must succeed");
+        let (input_write_log, input_io_root) = txn_tree.commit().expect("io commit must succeed");
 
         assert!(
             state.mode != ExecutionMode::Execute || input_io_root == io_root,
@@ -695,22 +669,15 @@ impl Dispatcher {
 
         for (tx_hash, result) in hashes.iter().zip(results.results.drain(..)) {
             txn_tree
-                .add_output(
-                    Context::create_child(&ctx),
-                    *tx_hash,
-                    result.output,
-                    result.tags,
-                )
+                .add_output(*tx_hash, result.output, result.tags)
                 .expect("add transaction must succeed");
         }
 
         txn_tree
-            .add_block_tags(Context::create_child(&ctx), results.block_tags)
+            .add_block_tags(results.block_tags)
             .expect("adding block tags must succeed");
 
-        let (io_write_log, io_root) = txn_tree
-            .commit(Context::create_child(&ctx))
-            .expect("io commit must succeed");
+        let (io_write_log, io_root) = txn_tree.commit().expect("io commit must succeed");
 
         let header = ComputeResultsHeader {
             round: header.round + 1,
@@ -764,7 +731,6 @@ impl Dispatcher {
     #[allow(clippy::too_many_arguments)]
     async fn dispatch_txn(
         self: &Arc<Self>,
-        ctx: Context,
         cache_set: cache::CacheSet,
         txn_dispatcher: &Arc<dyn TxnDispatcher>,
         protocol: &Arc<Protocol>,
@@ -795,17 +761,15 @@ impl Dispatcher {
             protocol.get_runtime_id(),
         );
 
-        let ctx = ctx.freeze();
         let protocol = protocol.clone();
         let dispatcher = self.clone();
         let txn_dispatcher = txn_dispatcher.clone();
 
         tokio::task::spawn_blocking(move || {
             if state.check_only {
-                dispatcher.txn_check_batch(ctx, protocol, cache_set, &txn_dispatcher, inputs, state)
+                dispatcher.txn_check_batch(protocol, cache_set, &txn_dispatcher, inputs, state)
             } else {
                 dispatcher.txn_execute_batch(
-                    ctx,
                     protocol,
                     cache_set,
                     &txn_dispatcher,
@@ -820,12 +784,7 @@ impl Dispatcher {
         .unwrap() // Propagate panics during transaction dispatch.
     }
 
-    async fn dispatch_secure_rpc(
-        &self,
-        ctx: Context,
-        state: State,
-        request: Vec<u8>,
-    ) -> Result<Body, Error> {
+    async fn dispatch_secure_rpc(&self, state: State, request: Vec<u8>) -> Result<Body, Error> {
         // Make sure to abort the process on panic during RPC processing as that indicates a
         // serious problem and should make sure to clean up the process.
         let _guard = AbortOnPanic;
@@ -867,7 +826,7 @@ impl Dispatcher {
 
                     // Request, dispatch.
                     let response = self
-                        .dispatch_rpc(ctx, req, RpcKind::NoiseSession, session_info, &state)
+                        .dispatch_rpc(req, RpcKind::NoiseSession, session_info, &state)
                         .await?;
                     let response = RpcMessage::Response(response);
 
@@ -914,12 +873,7 @@ impl Dispatcher {
         }
     }
 
-    async fn dispatch_insecure_rpc(
-        &self,
-        ctx: Context,
-        state: State,
-        request: Vec<u8>,
-    ) -> Result<Body, Error> {
+    async fn dispatch_insecure_rpc(&self, state: State, request: Vec<u8>) -> Result<Body, Error> {
         // Make sure to abort the process on panic during RPC processing as that indicates a
         // serious problem and should make sure to clean up the process.
         let _guard = AbortOnPanic;
@@ -929,7 +883,7 @@ impl Dispatcher {
 
         // Request, dispatch.
         let response = self
-            .dispatch_rpc(ctx, request, RpcKind::InsecureQuery, None, &state)
+            .dispatch_rpc(request, RpcKind::InsecureQuery, None, &state)
             .await?;
         let response = cbor::to_vec(response);
 
@@ -942,12 +896,7 @@ impl Dispatcher {
         Ok(Body::RuntimeRPCCallResponse { response })
     }
 
-    async fn dispatch_local_rpc(
-        &self,
-        ctx: Context,
-        state: State,
-        request: Vec<u8>,
-    ) -> Result<Body, Error> {
+    async fn dispatch_local_rpc(&self, state: State, request: Vec<u8>) -> Result<Body, Error> {
         // Make sure to abort the process on panic during local RPC processing as that indicates a
         // serious problem and should make sure to clean up the process.
         let _guard = AbortOnPanic;
@@ -957,7 +906,7 @@ impl Dispatcher {
 
         // Request, dispatch.
         let response = self
-            .dispatch_rpc(ctx, request, RpcKind::LocalQuery, None, &state)
+            .dispatch_rpc(request, RpcKind::LocalQuery, None, &state)
             .await?;
         let response = RpcMessage::Response(response);
         let response = cbor::to_vec(response);
@@ -971,30 +920,20 @@ impl Dispatcher {
 
     async fn dispatch_rpc(
         &self,
-        ctx: Context,
         request: RpcRequest,
         kind: RpcKind,
         session_info: Option<Arc<SessionInfo>>,
         state: &State,
     ) -> Result<RpcResponse, Error> {
-        let ctx = ctx.freeze();
         let identity = self.identity.clone();
         let protocol = state.protocol.clone();
         let consensus_verifier = state.consensus_verifier.clone();
         let rpc_dispatcher = state.rpc_dispatcher.clone();
 
         let response = tokio::task::spawn_blocking(move || {
-            let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(
-                Context::create_child(&ctx),
-                protocol.clone(),
-            ));
-            let rpc_ctx = RpcContext::new(
-                ctx.clone(),
-                identity,
-                session_info,
-                consensus_verifier,
-                &untrusted_local,
-            );
+            let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(protocol.clone()));
+            let rpc_ctx =
+                RpcContext::new(identity, session_info, consensus_verifier, &untrusted_local);
 
             rpc_dispatcher.dispatch(rpc_ctx, request, kind)
         })
@@ -1005,7 +944,6 @@ impl Dispatcher {
 
     fn handle_km_status_update(
         &self,
-        ctx: Context,
         state: State,
         status: KeyManagerStatus,
     ) -> Result<Body, Error> {
@@ -1016,15 +954,11 @@ impl Dispatcher {
         debug!(self.logger, "Received km status update request");
 
         // Verify and decode the status.
-        let ctx = ctx.freeze();
         let runtime_id = state.protocol.get_host_info().runtime_id;
-        let key_manager = state
+        let key_manager = state.policy_verifier.key_manager(&runtime_id)?;
+        let published_status = state
             .policy_verifier
-            .key_manager(ctx.clone(), &runtime_id)?;
-        let published_status =
-            state
-                .policy_verifier
-                .verify_key_manager_status(ctx, status, key_manager)?;
+            .verify_key_manager_status(status, key_manager)?;
 
         // Dispatch the local RPC call.
         state
@@ -1038,7 +972,6 @@ impl Dispatcher {
 
     fn handle_km_quote_policy_update(
         &self,
-        ctx: Context,
         state: State,
         quote_policy: QuotePolicy,
     ) -> Result<Body, Error> {
@@ -1049,15 +982,11 @@ impl Dispatcher {
         debug!(self.logger, "Received km quote policy update request");
 
         // Verify and decode the policy.
-        let ctx = ctx.freeze();
         let runtime_id = state.protocol.get_host_info().runtime_id;
-        let key_manager = state
+        let key_manager = state.policy_verifier.key_manager(&runtime_id)?;
+        let policy = state
             .policy_verifier
-            .key_manager(ctx.clone(), &runtime_id)?;
-        let policy =
-            state
-                .policy_verifier
-                .verify_quote_policy(ctx, quote_policy, &key_manager, None)?;
+            .verify_quote_policy(quote_policy, &key_manager, None)?;
 
         // Dispatch the local RPC call.
         state.rpc_dispatcher.handle_km_quote_policy_update(policy);

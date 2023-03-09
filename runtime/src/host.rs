@@ -1,5 +1,4 @@
 //! Host interface.
-use io_context::Context;
 use thiserror::Error;
 
 use crate::{
@@ -25,7 +24,7 @@ pub trait Host: Send + Sync {
 
 impl Host for Protocol {
     fn identity(&self) -> Result<PublicKey, Error> {
-        match self.call_host(Context::background(), Body::HostIdentityRequest {})? {
+        match self.call_host(Body::HostIdentityRequest {})? {
             Body::HostIdentityResponse { node_id } => Ok(node_id),
             _ => Err(Error::BadResponse),
         }

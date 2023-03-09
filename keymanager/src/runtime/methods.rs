@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::Result;
-use io_context::Context;
 
 use oasis_core_runtime::{
     common::{
@@ -334,8 +333,7 @@ fn fetch_master_secret(
     let km_client = key_manager_client_for_replication(ctx);
     for node in nodes.iter() {
         km_client.set_nodes(vec![*node]);
-        let result =
-            km_client.replicate_master_secret(Context::create_child(&ctx.io_ctx), generation);
+        let result = km_client.replicate_master_secret(generation);
         let result = tokio::runtime::Handle::current().block_on(result);
         if let Ok(secret) = result {
             return Ok(secret);
@@ -354,8 +352,7 @@ fn fetch_ephemeral_secret(
     let km_client = key_manager_client_for_replication(ctx);
     for node in nodes.iter() {
         km_client.set_nodes(vec![*node]);
-        let result =
-            km_client.replicate_ephemeral_secret(Context::create_child(&ctx.io_ctx), epoch);
+        let result = km_client.replicate_ephemeral_secret(epoch);
         let result = tokio::runtime::Handle::current().block_on(result);
         if let Ok(secret) = result {
             return Ok(secret);
@@ -432,7 +429,7 @@ fn authenticate<'a>(ctx: &'a RpcContext) -> Result<&'a EnclaveIdentity> {
 fn consensus_epoch(ctx: &RpcContext) -> Result<EpochTime> {
     let consensus_state = ctx.consensus_verifier.latest_state()?;
     let beacon_state = BeaconState::new(&consensus_state);
-    let consensus_epoch = beacon_state.epoch(Context::create_child(&ctx.io_ctx))?;
+    let consensus_epoch = beacon_state.epoch()?;
 
     Ok(consensus_epoch)
 }
@@ -443,11 +440,10 @@ fn validate_key_manager_status(
     runtime_id: Namespace,
     status: Status,
 ) -> Result<Status> {
-    let ioctx = ctx.io_ctx.clone();
     let consensus_verifier = ctx.consensus_verifier.clone();
     let verifier = PolicyVerifier::new(consensus_verifier);
 
-    verifier.verify_key_manager_status(ioctx, status, runtime_id)
+    verifier.verify_key_manager_status(status, runtime_id)
 }
 
 /// Validate that the epoch used for derivation of ephemeral private keys is not
@@ -486,11 +482,7 @@ fn validate_signed_ephemeral_secret(
     let consensus_state = ctx.consensus_verifier.latest_state()?;
     let km_state = KeyManagerState::new(&consensus_state);
     let published_signed_secret = km_state
-        .ephemeral_secret(
-            Context::create_child(&ctx.io_ctx),
-            signed_secret.secret.runtime_id,
-            signed_secret.secret.epoch,
-        )?
+        .ephemeral_secret(signed_secret.secret.runtime_id, signed_secret.secret.epoch)?
         .filter(|published_signed_secret| published_signed_secret == signed_secret)
         .ok_or(KeyManagerError::EphemeralSecretNotPublished)?;
 
@@ -502,7 +494,7 @@ fn key_manager_nodes(ctx: &RpcContext, id: Namespace) -> Result<Vec<signature::P
     let consensus_state = ctx.consensus_verifier.latest_state()?;
     let km_state = KeyManagerState::new(&consensus_state);
     let status = km_state
-        .status(Context::create_child(&ctx.io_ctx), id)?
+        .status(id)?
         .ok_or(KeyManagerError::StatusNotFound)?;
 
     Ok(status.nodes)
@@ -520,7 +512,7 @@ fn key_manager_rek_keys(
 
     let mut rek_map = HashMap::new();
     for pk in nodes.iter() {
-        let node = registry_state.node(Context::create_child(&ctx.io_ctx), pk)?;
+        let node = registry_state.node(pk)?;
         let runtimes = node
             .map(|n| n.runtimes)
             .unwrap_or_default()

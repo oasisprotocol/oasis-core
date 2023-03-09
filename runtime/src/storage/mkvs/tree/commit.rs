@@ -1,5 +1,4 @@
 use anyhow::Result;
-use io_context::Context;
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
@@ -9,7 +8,7 @@ use crate::{
 impl Tree {
     /// Commit tree updates to the underlying database and return
     /// the write log and new merkle root.
-    pub fn commit(&mut self, _ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
+    pub fn commit(&mut self, namespace: Namespace, version: u64) -> Result<Hash> {
         let mut update_list: UpdateList<LRUCache> = UpdateList::new();
         let pending_root = self.cache.borrow().get_pending_root();
         let new_hash = _commit(pending_root, &mut update_list)?;

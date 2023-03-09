@@ -10,7 +10,6 @@ use std::{
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
-use io_context::Context;
 use slog::{debug, error, info, warn, Logger};
 use thiserror::Error;
 
@@ -211,7 +210,7 @@ impl Protocol {
     }
 
     /// Make a new request to the runtime host and wait for the response.
-    pub fn call_host(&self, _ctx: Context, body: Body) -> Result<Body, Error> {
+    pub fn call_host(&self, body: Body) -> Result<Body, Error> {
         let id = self.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
         let message = Message {
             id,
@@ -292,9 +291,8 @@ impl Protocol {
             MessageType::Request => {
                 // Incoming request.
                 let id = message.id;
-                let ctx = Context::background();
 
-                let body = match self.handle_request(ctx, id, message.body) {
+                let body = match self.handle_request(id, message.body) {
                     Ok(Some(result)) => result,
                     Ok(None) => {
                         // A message will be sent later by another thread so there
@@ -337,7 +335,6 @@ impl Protocol {
 
     fn handle_request(
         self: &Arc<Protocol>,
-        ctx: Context,
         id: u64,
         request: Body,
     ) -> anyhow::Result<Option<Body>> {
@@ -365,7 +362,7 @@ impl Protocol {
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
             | Body::RuntimeCapabilityTEERakQuoteRequest { .. } => {
-                self.dispatcher.queue_request(ctx, id, request)?;
+                self.dispatcher.queue_request(id, request)?;
                 Ok(None)
             }
 
@@ -379,7 +376,7 @@ impl Protocol {
             | Body::RuntimeQueryRequest { .. }
             | Body::RuntimeConsensusSyncRequest { .. } => {
                 self.ensure_initialized()?;
-                self.dispatcher.queue_request(ctx, id, request)?;
+                self.dispatcher.queue_request(id, request)?;
                 Ok(None)
             }
 
@@ -482,26 +479,20 @@ impl Protocol {
 /// hiding data, tampering with keys/values, ignoring writes, replaying
 /// past values, etc.
 pub struct ProtocolUntrustedLocalStorage {
-    ctx: Arc<Context>,
     protocol: Arc<Protocol>,
 }
 
 impl ProtocolUntrustedLocalStorage {
-    pub fn new(ctx: Context, protocol: Arc<Protocol>) -> Self {
-        Self {
-            ctx: ctx.freeze(),
-            protocol,
-        }
+    pub fn new(protocol: Arc<Protocol>) -> Self {
+        Self { protocol }
     }
 }
 
 impl KeyValue for ProtocolUntrustedLocalStorage {
     fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let ctx = Context::create_child(&self.ctx);
-
         match self
             .protocol
-            .call_host(ctx, Body::HostLocalStorageGetRequest { key })?
+            .call_host(Body::HostLocalStorageGetRequest { key })?
         {
             Body::HostLocalStorageGetResponse { value } => Ok(value),
             _ => Err(ProtocolError::InvalidResponse.into()),
@@ -509,11 +500,9 @@ impl KeyValue for ProtocolUntrustedLocalStorage {
     }
 
     fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Error> {
-        let ctx = Context::create_child(&self.ctx);
-
         match self
             .protocol
-            .call_host(ctx, Body::HostLocalStorageSetRequest { key, value })?
+            .call_host(Body::HostLocalStorageSetRequest { key, value })?
         {
             Body::HostLocalStorageSetResponse {} => Ok(()),
             _ => Err(ProtocolError::InvalidResponse.into()),

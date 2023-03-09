@@ -8,7 +8,6 @@ use std::{
 };
 
 use futures::future::{self, BoxFuture};
-use io_context::Context;
 use lru::LruCache;
 
 use oasis_core_runtime::{
@@ -255,7 +254,6 @@ impl KeyManagerClient for RemoteClient {
 
     fn get_or_create_keys(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         generation: u64,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
@@ -277,7 +275,6 @@ impl KeyManagerClient for RemoteClient {
             let keys: KeyPair = inner
                 .rpc_client
                 .secure_call(
-                    ctx,
                     METHOD_GET_OR_CREATE_KEYS,
                     LongTermKeyRequest {
                         height: Some(height),
@@ -299,7 +296,6 @@ impl KeyManagerClient for RemoteClient {
 
     fn get_public_key(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         generation: u64,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
@@ -326,7 +322,6 @@ impl KeyManagerClient for RemoteClient {
             let key: SignedPublicKey = inner
                 .rpc_client
                 .insecure_call(
-                    ctx,
                     METHOD_GET_PUBLIC_KEY,
                     LongTermKeyRequest {
                         height: Some(height),
@@ -351,7 +346,6 @@ impl KeyManagerClient for RemoteClient {
 
     fn get_or_create_ephemeral_keys(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
     ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
@@ -373,7 +367,6 @@ impl KeyManagerClient for RemoteClient {
             let keys: KeyPair = inner
                 .rpc_client
                 .secure_call(
-                    ctx,
                     METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
                     EphemeralKeyRequest {
                         height: Some(height),
@@ -395,17 +388,14 @@ impl KeyManagerClient for RemoteClient {
 
     fn get_public_ephemeral_key(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
     ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
-        let ctx = ctx.freeze();
-
         // Fetch current epoch.
         let get_consensus_epoch = || -> Result<EpochTime, anyhow::Error> {
             let consensus_state = self.inner.consensus_verifier.latest_state()?;
             let beacon_state = BeaconState::new(&consensus_state);
-            let consensus_epoch = beacon_state.epoch(Context::create_child(&ctx))?;
+            let consensus_epoch = beacon_state.epoch()?;
             Ok(consensus_epoch)
         };
         let consensus_epoch = match get_consensus_epoch() {
@@ -436,7 +426,6 @@ impl KeyManagerClient for RemoteClient {
             let key: SignedPublicKey = inner
                 .rpc_client
                 .insecure_call(
-                    Context::create_child(&ctx),
                     METHOD_GET_PUBLIC_EPHEMERAL_KEY,
                     EphemeralKeyRequest {
                         height: Some(height),
@@ -461,7 +450,6 @@ impl KeyManagerClient for RemoteClient {
 
     fn replicate_master_secret(
         &self,
-        ctx: Context,
         generation: u64,
     ) -> BoxFuture<Result<Secret, KeyManagerError>> {
         let inner = self.inner.clone();
@@ -474,7 +462,6 @@ impl KeyManagerClient for RemoteClient {
             let rsp: ReplicateMasterSecretResponse = inner
                 .rpc_client
                 .secure_call(
-                    ctx,
                     METHOD_REPLICATE_MASTER_SECRET,
                     ReplicateMasterSecretRequest {
                         height: Some(height),
@@ -489,7 +476,6 @@ impl KeyManagerClient for RemoteClient {
 
     fn replicate_ephemeral_secret(
         &self,
-        ctx: Context,
         epoch: EpochTime,
     ) -> BoxFuture<Result<Secret, KeyManagerError>> {
         let inner = self.inner.clone();
@@ -502,7 +488,6 @@ impl KeyManagerClient for RemoteClient {
             let rsp: ReplicateEphemeralSecretResponse = inner
                 .rpc_client
                 .secure_call(
-                    ctx,
                     METHOD_REPLICATE_EPHEMERAL_SECRET,
                     ReplicateEphemeralSecretRequest {
                         height: Some(height),

@@ -1,6 +1,5 @@
 //! Registry state in the consensus layer.
 use anyhow::anyhow;
-use io_context::Context;
 
 use crate::{
     common::{
@@ -45,9 +44,9 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     }
 
     /// Looks up a specific node by its identifier.
-    pub fn node(&self, ctx: Context, id: &PublicKey) -> Result<Option<Node>, StateError> {
+    pub fn node(&self, id: &PublicKey) -> Result<Option<Node>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
-        match self.mkvs.get(ctx, &SignedNodeKeyFmt(h).encode()) {
+        match self.mkvs.get(&SignedNodeKeyFmt(h).encode()) {
             Ok(Some(b)) => Ok(Some(self.decode_node(&b)?)),
             Ok(None) => Ok(None),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
@@ -55,8 +54,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     }
 
     /// Returns the list of all registered nodes.
-    pub fn nodes(&self, ctx: Context) -> Result<Vec<Node>, StateError> {
-        let mut it = self.mkvs.iter(ctx);
+    pub fn nodes(&self) -> Result<Vec<Node>, StateError> {
+        let mut it = self.mkvs.iter();
         it.seek(&SignedNodeKeyFmt::default().encode_partial(0));
 
         let mut result: Vec<Node> = Vec::new();
@@ -80,22 +79,15 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// # Note
     ///
     /// This includes both non-suspended and suspended runtimes.
-    pub fn runtime(&self, ctx: Context, id: &Namespace) -> Result<Option<Runtime>, StateError> {
-        let ctx = ctx.freeze();
+    pub fn runtime(&self, id: &Namespace) -> Result<Option<Runtime>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
 
         // Try non-suspended first.
-        match self
-            .mkvs
-            .get(Context::create_child(&ctx), &RuntimeKeyFmt(h).encode())
-        {
+        match self.mkvs.get(&RuntimeKeyFmt(h).encode()) {
             Ok(Some(b)) => Ok(Some(self.decode_runtime(&b)?)),
             Ok(None) => {
                 // Also try suspended.
-                match self.mkvs.get(
-                    Context::create_child(&ctx),
-                    &SuspendedRuntimeKeyFmt(h).encode(),
-                ) {
+                match self.mkvs.get(&SuspendedRuntimeKeyFmt(h).encode()) {
                     Ok(Some(b)) => Ok(Some(self.decode_runtime(&b)?)),
                     Ok(None) => Ok(None),
                     Err(err) => Err(StateError::Unavailable(anyhow!(err))),
@@ -108,8 +100,6 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
     use crate::{
         common::{
             crypto::{hash::Hash, signature},
@@ -148,12 +138,8 @@ mod test {
             .build(server.read_sync());
         let registry_state = ImmutableState::new(&mkvs);
 
-        let ctx = Arc::new(Context::background());
-
         // Test get nodes.
-        let nodes = registry_state
-            .nodes(Context::create_child(&ctx))
-            .expect("nodes query should work");
+        let nodes = registry_state.nodes().expect("nodes query should work");
         assert_eq!(
             nodes.len(),
             2,
@@ -215,20 +201,14 @@ mod test {
         assert_eq!(nodes, expected_nodes,);
 
         let node = registry_state
-            .node(
-                Context::create_child(&ctx),
-                &expected_nodes.get(1).unwrap().id,
-            )
+            .node(&expected_nodes.get(1).unwrap().id)
             .expect("node query should work");
         assert_eq!(node, Some(expected_nodes.get(1).unwrap().clone()));
 
         let node = registry_state
-            .node(
-                Context::create_child(&ctx),
-                &signature::PublicKey::from(
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                ),
-            )
+            .node(&signature::PublicKey::from(
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            ))
             .expect("node query should work");
         assert_eq!(node, None);
 
@@ -287,7 +267,7 @@ mod test {
 
         for rt in expected_runtimes {
             let ext_rt = registry_state
-                .runtime(Context::create_child(&ctx), &rt.id)
+                .runtime(&rt.id)
                 .expect("runtime query should work");
             assert_eq!(ext_rt, Some(rt));
         }

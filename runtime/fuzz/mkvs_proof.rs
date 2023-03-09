@@ -1,5 +1,4 @@
 use honggfuzz::fuzz;
-use io_context::Context;
 
 use oasis_core_runtime::storage::mkvs::sync::{Proof, ProofVerifier, RawProofEntry};
 
@@ -12,7 +11,7 @@ fn main() {
             };
 
             let pv = ProofVerifier;
-            let _ = pv.verify_proof(Context::background(), proof.untrusted_root, &proof);
+            let _ = pv.verify_proof(proof.untrusted_root, &proof);
         });
     }
 }

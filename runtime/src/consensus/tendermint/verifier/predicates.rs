@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use io_context::Context;
 
 use crate::{
     common::namespace::Namespace,
@@ -95,7 +94,7 @@ pub fn verify_time(runtime_header: &Header, consensus_block: &LightBlockMeta) ->
 pub fn verify_state_root(state: &ConsensusState, runtime_header: &Header) -> Result<(), Error> {
     let roothash_state = RoothashState::new(&state);
     let state_root = roothash_state
-        .state_root(Context::background(), runtime_header.namespace)
+        .state_root(runtime_header.namespace)
         .map_err(|err| {
             Error::VerificationFailed(anyhow!("failed to retrieve trusted state root: {}", err))
         })?;
@@ -118,18 +117,15 @@ pub fn verify_epoch(
     epoch: EpochTime,
 ) -> Result<(), Error> {
     let beacon_state = BeaconState::new(&state);
-    let current_epoch =
-        match runtime_header.header_type {
-            // Query future epoch as the epoch just changed in the epoch transition block.
-            HeaderType::EpochTransition => beacon_state
-                .future_epoch(Context::background())
-                .map_err(|err| {
-                    Error::VerificationFailed(anyhow!("failed to retrieve future epoch: {}", err))
-                }),
-            _ => beacon_state.epoch(Context::background()).map_err(|err| {
-                Error::VerificationFailed(anyhow!("failed to retrieve epoch: {}", err))
-            }),
-        }?;
+    let current_epoch = match runtime_header.header_type {
+        // Query future epoch as the epoch just changed in the epoch transition block.
+        HeaderType::EpochTransition => beacon_state.future_epoch().map_err(|err| {
+            Error::VerificationFailed(anyhow!("failed to retrieve future epoch: {}", err))
+        }),
+        _ => beacon_state
+            .epoch()
+            .map_err(|err| Error::VerificationFailed(anyhow!("failed to retrieve epoch: {}", err))),
+    }?;
 
     if current_epoch != epoch {
         return Err(Error::VerificationFailed(anyhow!(

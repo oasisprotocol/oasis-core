@@ -3,7 +3,6 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use io_context::Context;
 use slog::{debug, Logger};
 use thiserror::Error;
 
@@ -65,7 +64,6 @@ impl PolicyVerifier {
     /// If the runtime version is not provided, the policy for the active deployment is returned.
     pub fn quote_policy(
         &self,
-        ctx: Arc<Context>,
         runtime_id: &Namespace,
         version: Option<Version>,
     ) -> Result<QuotePolicy> {
@@ -73,7 +71,7 @@ impl PolicyVerifier {
         let consensus_state = self.consensus_verifier.latest_state()?;
         let registry_state = RegistryState::new(&consensus_state);
         let runtime = registry_state
-            .runtime(Context::create_child(&ctx), runtime_id)?
+            .runtime(runtime_id)?
             .ok_or(PolicyVerifierError::MissingRuntimeDescriptor)?;
 
         let ad = match version {
@@ -82,7 +80,7 @@ impl PolicyVerifier {
                 .ok_or(PolicyVerifierError::NoDeployment)?,
             None => {
                 let beacon_state = BeaconState::new(&consensus_state);
-                let epoch = beacon_state.epoch(Context::create_child(&ctx))?;
+                let epoch = beacon_state.epoch()?;
 
                 runtime
                     .active_deployment(epoch)
@@ -106,12 +104,11 @@ impl PolicyVerifier {
     /// Verify that runtime's quote policy has been published in the consensus layer.
     pub fn verify_quote_policy(
         &self,
-        ctx: Arc<Context>,
         policy: QuotePolicy,
         runtime_id: &Namespace,
         version: Option<Version>,
     ) -> Result<QuotePolicy> {
-        let published_policy = self.quote_policy(ctx, runtime_id, version)?;
+        let published_policy = self.quote_policy(runtime_id, version)?;
 
         if policy != published_policy {
             debug!(
@@ -127,22 +124,21 @@ impl PolicyVerifier {
     }
 
     /// Fetch key manager's status from the latest verified consensus layer state.
-    pub fn key_manager_status(&self, ctx: Arc<Context>, key_manager: Namespace) -> Result<Status> {
+    pub fn key_manager_status(&self, key_manager: Namespace) -> Result<Status> {
         let consensus_state = self.consensus_verifier.latest_state()?;
         let km_state = KeyManagerState::new(&consensus_state);
         km_state
-            .status(Context::create_child(&ctx), key_manager)?
+            .status(key_manager)?
             .ok_or_else(|| PolicyVerifierError::StatusNotPublished.into())
     }
 
     /// Verify that key manager's status has been published in the consensus layer.
     pub fn verify_key_manager_status(
         &self,
-        ctx: Arc<Context>,
         status: Status,
         key_manager: Namespace,
     ) -> Result<Status> {
-        let published_status = self.key_manager_status(ctx, key_manager)?;
+        let published_status = self.key_manager_status(key_manager)?;
 
         if status != published_status {
             debug!(
@@ -158,12 +154,8 @@ impl PolicyVerifier {
     }
 
     /// Fetch key manager's policy from the latest verified consensus layer state.
-    pub fn key_manager_policy(
-        &self,
-        ctx: Arc<Context>,
-        key_manager: Namespace,
-    ) -> Result<SignedPolicySGX> {
-        self.key_manager_status(ctx, key_manager)?
+    pub fn key_manager_policy(&self, key_manager: Namespace) -> Result<SignedPolicySGX> {
+        self.key_manager_status(key_manager)?
             .policy
             .ok_or_else(|| PolicyVerifierError::PolicyNotPublished.into())
     }
@@ -171,11 +163,10 @@ impl PolicyVerifier {
     /// Verify that key manager's policy has been published in the consensus layer.
     pub fn verify_key_manager_policy(
         &self,
-        ctx: Arc<Context>,
         policy: SignedPolicySGX,
         key_manager: Namespace,
     ) -> Result<SignedPolicySGX> {
-        let published_policy = self.key_manager_policy(ctx, key_manager)?;
+        let published_policy = self.key_manager_policy(key_manager)?;
 
         if policy != published_policy {
             debug!(
@@ -191,11 +182,11 @@ impl PolicyVerifier {
     }
 
     /// Fetch runtime's key manager.
-    pub fn key_manager(&self, ctx: Arc<Context>, runtime_id: &Namespace) -> Result<Namespace> {
+    pub fn key_manager(&self, runtime_id: &Namespace) -> Result<Namespace> {
         let consensus_state = self.consensus_verifier.latest_state()?;
         let registry_state = RegistryState::new(&consensus_state);
         let runtime = registry_state
-            .runtime(Context::create_child(&ctx), runtime_id)?
+            .runtime(runtime_id)?
             .ok_or(PolicyVerifierError::MissingRuntimeDescriptor)?;
         let key_manager = runtime
             .key_manager

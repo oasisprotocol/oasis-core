@@ -1479,12 +1479,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "io-context"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6deff8086863b4b598829cfe72d405540d1497fe997f903cc171aade51dae88c"
-
-[[package]]
 name = "io-lifetimes"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2063,7 +2057,6 @@ dependencies = [
  "anyhow",
  "base64",
  "futures 0.3.26",
- "io-context",
  "lazy_static",
  "lru",
  "oasis-cbor",
@@ -2101,7 +2094,6 @@ dependencies = [
  "honggfuzz",
  "impl-trait-for-tuples",
  "intrusive-collections",
- "io-context",
  "jsonrpc",
  "lazy_static",
  "log",
@@ -2919,7 +2911,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "byteorder",
- "io-context",
  "oasis-cbor",
  "oasis-core-keymanager",
  "oasis-core-runtime",

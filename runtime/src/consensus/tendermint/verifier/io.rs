@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use io_context::Context;
-
 use tendermint_light_client::{
     components::{
         self,
@@ -37,10 +35,7 @@ impl Io {
     fn fetch_light_block(&self, height: u64) -> Result<LightBlockMeta, IoError> {
         let result = self
             .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusBlockRequest { height },
-            )
+            .call_host(Body::HostFetchConsensusBlockRequest { height })
             .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
 
         // Extract generic light block from response.
@@ -59,10 +54,7 @@ impl Io {
     pub fn fetch_genesis_height(&self) -> Result<u64, IoError> {
         let result = self
             .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchGenesisHeightRequest {},
-            )
+            .call_host(Body::HostFetchGenesisHeightRequest {})
             .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
 
         // Extract genesis height from response.
@@ -80,12 +72,9 @@ impl Io {
     ) -> Result<(SignedTransaction, u64, Proof), IoError> {
         let result = self
             .protocol
-            .call_host(
-                Context::background(),
-                Body::HostProveFreshnessRequest {
-                    blob: nonce.to_vec(),
-                },
-            )
+            .call_host(Body::HostProveFreshnessRequest {
+                blob: nonce.to_vec(),
+            })
             .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
 
         // Extract proof from response.

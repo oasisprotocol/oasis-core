@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Error as AnyError};
 use futures::future::{self, BoxFuture};
-use io_context::Context;
 
 use crate::{common::crypto::signature, types::Body, Protocol};
 
@@ -12,7 +11,6 @@ use super::types;
 pub trait Transport: Send + Sync {
     fn write_noise_session(
         &self,
-        ctx: Context,
         session_id: types::SessionID,
         data: Vec<u8>,
         untrusted_plaintext: String,
@@ -25,21 +23,19 @@ pub trait Transport: Send + Sync {
             payload: data,
         };
 
-        self.write_message_impl(ctx, cbor::to_vec(frame), types::Kind::NoiseSession, nodes)
+        self.write_message_impl(cbor::to_vec(frame), types::Kind::NoiseSession, nodes)
     }
 
     fn write_insecure_query(
         &self,
-        ctx: Context,
         data: Vec<u8>,
         nodes: Vec<signature::PublicKey>,
     ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>> {
-        self.write_message_impl(ctx, data, types::Kind::InsecureQuery, nodes)
+        self.write_message_impl(data, types::Kind::InsecureQuery, nodes)
     }
 
     fn write_message_impl(
         &self,
-        ctx: Context,
         data: Vec<u8>,
         kind: types::Kind,
         nodes: Vec<signature::PublicKey>,
@@ -77,7 +73,6 @@ impl RuntimeTransport {
 impl Transport for RuntimeTransport {
     fn write_message_impl(
         &self,
-        ctx: Context,
         data: Vec<u8>,
         kind: types::Kind,
         nodes: Vec<signature::PublicKey>,
@@ -98,16 +93,13 @@ impl Transport for RuntimeTransport {
 
         // NOTE: This is not actually async in SGX, but futures should be
         //       dispatched on the current thread anyway.
-        let rsp = self.protocol.call_host(
-            ctx,
-            Body::HostRPCCallRequest {
-                endpoint: self.endpoint.clone(),
-                request: data,
-                kind,
-                nodes,
-                peer_feedback,
-            },
-        );
+        let rsp = self.protocol.call_host(Body::HostRPCCallRequest {
+            endpoint: self.endpoint.clone(),
+            request: data,
+            kind,
+            nodes,
+            peer_feedback,
+        });
 
         match rsp {
             Err(err) => Box::pin(future::err(err.into())),
