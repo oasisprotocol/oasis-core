@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -20,10 +21,11 @@ type KeymanagerHelpers struct {
 }
 
 // InitPolicy generates the KM policy file.
-func (k *KeymanagerHelpers) InitPolicy(runtimeID common.Namespace, serial uint32, policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, polPath string) error {
+func (k *KeymanagerHelpers) InitPolicy(runtimeID common.Namespace, serial uint32, rotationInterval beacon.EpochTime, policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, polPath string) error {
 	k.logger.Info("initing KM policy",
 		"policy_path", polPath,
 		"serial", serial,
+		"rotation_interval", rotationInterval,
 		"num_policies", len(policies),
 	)
 
@@ -32,6 +34,7 @@ func (k *KeymanagerHelpers) InitPolicy(runtimeID common.Namespace, serial uint32
 		"--" + cmdKM.CfgPolicyFile, polPath,
 		"--" + cmdKM.CfgPolicyID, runtimeID.String(),
 		"--" + cmdKM.CfgPolicySerial, strconv.FormatUint(uint64(serial), 10),
+		"--" + cmdKM.CfgPolicyMasterSecretRotationInterval, strconv.FormatUint(uint64(rotationInterval), 10),
 	}
 	for enclave, policy := range policies {
 		args = append(args, "--"+cmdKM.CfgPolicyEnclaveID)

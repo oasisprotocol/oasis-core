@@ -13,6 +13,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -27,16 +28,17 @@ import (
 )
 
 const (
-	CfgPolicySerial       = "keymanager.policy.serial"
-	CfgPolicyID           = "keymanager.policy.id"
-	CfgPolicyFile         = "keymanager.policy.file"
-	CfgPolicyEnclaveID    = "keymanager.policy.enclave.id"
-	CfgPolicyMayQuery     = "keymanager.policy.may.query"
-	CfgPolicyMayReplicate = "keymanager.policy.may.replicate"
-	CfgPolicyKeyFile      = "keymanager.policy.key.file"
-	CfgPolicyTestKey      = "keymanager.policy.testkey"
-	CfgPolicySigFile      = "keymanager.policy.signature.file"
-	CfgPolicyIgnoreSig    = "keymanager.policy.ignore.signature"
+	CfgPolicySerial                       = "keymanager.policy.serial"
+	CfgPolicyID                           = "keymanager.policy.id"
+	CfgPolicyFile                         = "keymanager.policy.file"
+	CfgPolicyEnclaveID                    = "keymanager.policy.enclave.id"
+	CfgPolicyMayQuery                     = "keymanager.policy.may.query"
+	CfgPolicyMayReplicate                 = "keymanager.policy.may.replicate"
+	CfgPolicyKeyFile                      = "keymanager.policy.key.file"
+	CfgPolicyTestKey                      = "keymanager.policy.testkey"
+	CfgPolicySigFile                      = "keymanager.policy.signature.file"
+	CfgPolicyIgnoreSig                    = "keymanager.policy.ignore.signature"
+	CfgPolicyMasterSecretRotationInterval = "keymanager.policy.master_secret_rotation_interval"
 
 	CfgStatusFile        = "keymanager.status.file"
 	CfgStatusID          = "keymanager.status.id"
@@ -201,10 +203,13 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 		}
 	}
 
+	rotationInterval := api.EpochTime(viper.GetUint64(CfgPolicyMasterSecretRotationInterval))
+
 	return &kmApi.PolicySGX{
-		Serial:   serial,
-		ID:       id,
-		Enclaves: enclaves,
+		Serial:                       serial,
+		ID:                           id,
+		Enclaves:                     enclaves,
+		MasterSecretRotationInterval: rotationInterval,
 	}, nil
 }
 
@@ -548,6 +553,7 @@ func registerKMInitPolicyFlags(cmd *cobra.Command) {
 		cmd.Flags().String(CfgPolicyEnclaveID, "", "512-bit Key Manager Enclave ID in hex (concatenated MRENCLAVE and MRSIGNER). Multiple Enclave IDs with corresponding permissions can be provided respectively.")
 		cmd.Flags().StringSlice(CfgPolicyMayReplicate, []string{}, "enclave_id1,enclave_id2... list of new enclaves which are allowed to access the master secret. Requires "+CfgPolicyEnclaveID)
 		cmd.Flags().StringToString(CfgPolicyMayQuery, map[string]string{}, "runtime_id=enclave_id1,enclave_id2... sets enclave query permission for runtime_id. Requires "+CfgPolicyEnclaveID)
+		cmd.Flags().Uint64(CfgPolicyMasterSecretRotationInterval, 0, "master secret rotation interval")
 	}
 
 	cmd.Flags().AddFlagSet(policyFileFlag)
@@ -565,6 +571,7 @@ func registerKMInitPolicyFlags(cmd *cobra.Command) {
 		CfgPolicyEnclaveID,
 		CfgPolicyMayReplicate,
 		CfgPolicyMayQuery,
+		CfgPolicyMasterSecretRotationInterval,
 	} {
 		_ = viper.BindPFlag(v, cmd.Flags().Lookup(v))
 	}

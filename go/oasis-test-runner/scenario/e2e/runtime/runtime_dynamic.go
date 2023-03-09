@@ -165,7 +165,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		}
 	}
 	sc.Logger.Info("initing KM policy")
-	if err = cli.Keymanager.InitPolicy(kmRt.ID(), 1, enclavePolicies, kmPolicyPath); err != nil {
+	if err = cli.Keymanager.InitPolicy(kmRt.ID(), 1, 0, enclavePolicies, kmPolicyPath); err != nil {
 		return err
 	}
 	sc.Logger.Info("signing KM policy")

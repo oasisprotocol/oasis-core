@@ -263,7 +263,7 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, Consensus: oasis.ConsensusFixture{}},
 		},
 		KeymanagerPolicies: []oasis.KeymanagerPolicyFixture{
-			{Runtime: 0, Serial: 1},
+			{Runtime: 0, Serial: 1, MasterSecretRotationInterval: 0},
 		},
 		Keymanagers: []oasis.KeymanagerFixture{
 			{
