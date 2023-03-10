@@ -24,6 +24,7 @@ use oasis_core_runtime::{
         },
         state::staking::ImmutableState as StakingImmutableState,
     },
+    future::block_on,
     storage::MKVS,
     types::{Error as RuntimeError, EventKind},
 };
@@ -438,10 +439,9 @@ impl BlockHandler {
                     let mut height = ctx.core.consensus_state.height();
                     let mut found = false;
                     while height > 0 {
-                        let events = ctx
-                            .consensus_verifier
-                            .events_at(height, EventKind::Staking)
-                            .expect("should be able to query events");
+                        let events =
+                            block_on(ctx.consensus_verifier.events_at(height, EventKind::Staking))
+                                .expect("should be able to query events");
 
                         found = events.iter().any(|ev| {
                             matches!(ev, consensus::Event::Staking(staking::Event {

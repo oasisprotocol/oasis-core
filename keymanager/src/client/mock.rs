@@ -1,10 +1,7 @@
 //! Mock key manager client which stores everything locally.
 use std::{collections::HashMap, sync::Mutex};
 
-use futures::{
-    future::{self, BoxFuture},
-    TryFutureExt,
-};
+use async_trait::async_trait;
 
 use oasis_core_runtime::{common::crypto::signature::Signature, consensus::beacon::EpochTime};
 
@@ -32,84 +29,76 @@ impl MockClient {
     }
 }
 
+#[async_trait]
 impl KeyManagerClient for MockClient {
     fn clear_cache(&self) {}
 
-    fn get_or_create_keys(
+    async fn get_or_create_keys(
         &self,
         key_pair_id: KeyPairId,
         generation: u64,
-    ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
+    ) -> Result<KeyPair, KeyManagerError> {
         let mut keys = self.longterm_keys.lock().unwrap();
         let key = keys
             .entry((key_pair_id, generation))
             .or_insert_with(KeyPair::generate_mock)
             .clone();
 
-        Box::pin(future::ok(key))
+        Ok(key)
     }
 
-    fn get_public_key(
+    async fn get_public_key(
         &self,
         key_pair_id: KeyPairId,
         generation: u64,
-    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
-        Box::pin(
-            self.get_or_create_keys(key_pair_id, generation)
-                .and_then(|ck| {
-                    future::ok(SignedPublicKey {
-                        key: ck.input_keypair.pk,
-                        checksum: vec![],
-                        signature: Signature::default(),
-                        expiration: None,
-                    })
-                }),
-        )
+    ) -> Result<SignedPublicKey, KeyManagerError> {
+        let ck = self.get_or_create_keys(key_pair_id, generation).await?;
+        Ok(SignedPublicKey {
+            key: ck.input_keypair.pk,
+            checksum: vec![],
+            signature: Signature::default(),
+            expiration: None,
+        })
     }
 
-    fn get_or_create_ephemeral_keys(
+    async fn get_or_create_ephemeral_keys(
         &self,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
+    ) -> Result<KeyPair, KeyManagerError> {
         let mut keys = self.ephemeral_keys.lock().unwrap();
         let key = keys
             .entry((key_pair_id, epoch))
             .or_insert_with(KeyPair::generate_mock)
             .clone();
 
-        Box::pin(future::ok(key))
+        Ok(key)
     }
 
-    fn get_public_ephemeral_key(
+    async fn get_public_ephemeral_key(
         &self,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
-        Box::pin(
-            self.get_or_create_ephemeral_keys(key_pair_id, epoch)
-                .and_then(|ck| {
-                    future::ok(SignedPublicKey {
-                        key: ck.input_keypair.pk,
-                        checksum: vec![],
-                        signature: Signature::default(),
-                        expiration: None,
-                    })
-                }),
-        )
+    ) -> Result<SignedPublicKey, KeyManagerError> {
+        let ck = self
+            .get_or_create_ephemeral_keys(key_pair_id, epoch)
+            .await?;
+        Ok(SignedPublicKey {
+            key: ck.input_keypair.pk,
+            checksum: vec![],
+            signature: Signature::default(),
+            expiration: None,
+        })
     }
 
-    fn replicate_master_secret(
-        &self,
-        _generation: u64,
-    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
+    async fn replicate_master_secret(&self, _generation: u64) -> Result<Secret, KeyManagerError> {
         unimplemented!();
     }
 
-    fn replicate_ephemeral_secret(
+    async fn replicate_ephemeral_secret(
         &self,
         _epoch: EpochTime,
-    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
+    ) -> Result<Secret, KeyManagerError> {
         unimplemented!();
     }
 }

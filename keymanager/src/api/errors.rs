@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use oasis_core_runtime::consensus::{state::StateError, verifier};
+
 /// Key manager error.
 #[derive(Error, Debug)]
 pub enum KeyManagerError {
@@ -30,7 +32,7 @@ pub enum KeyManagerError {
     #[error("policy has invalid runtime")]
     PolicyInvalidRuntime,
     #[error("policy is malformed or invalid: {0}")]
-    PolicyInvalid(#[from] anyhow::Error),
+    PolicyInvalid(#[source] anyhow::Error),
     #[error("policy has insufficient signatures")]
     PolicyInsufficientSignatures,
     #[error("runtime signing key missing")]
@@ -38,7 +40,7 @@ pub enum KeyManagerError {
     #[error("runtime encryption key not published")]
     REKNotPublished,
     #[error("signature verification failed: {0}")]
-    InvalidSignature(anyhow::Error),
+    InvalidSignature(#[source] anyhow::Error),
     #[error("master secret generation {0} not found")]
     MasterSecretNotFound(u64),
     #[error("master secret generation {0} not replicated")]
@@ -59,6 +61,10 @@ pub enum KeyManagerError {
     RuntimeMismatch,
     #[error("active deployment not found")]
     ActiveDeploymentNotFound,
+    #[error("state error: {0}")]
+    StateError(#[from] StateError),
+    #[error("verification error: {0}")]
+    VerificationError(#[from] verifier::Error),
     #[error(transparent)]
-    Other(anyhow::Error),
+    Other(#[from] anyhow::Error),
 }

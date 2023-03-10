@@ -12,12 +12,14 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
 use slog::{debug, error, info, warn, Logger};
 use thiserror::Error;
+use tokio::sync::oneshot;
 
 use crate::{
     common::{logger::get_logger, namespace::Namespace, version::Version},
     config::Config,
     consensus::{tendermint, verifier::Verifier},
     dispatcher::Dispatcher,
+    future::block_on,
     identity::Identity,
     storage::KeyValue,
     types::{Body, Error, Message, MessageType, RuntimeInfoRequest, RuntimeInfoResponse},
@@ -101,7 +103,7 @@ pub struct Protocol {
     /// Outgoing request identifier generator.
     last_request_id: AtomicUsize,
     /// Pending outgoing requests.
-    pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
+    pending_out_requests: Mutex<HashMap<u64, oneshot::Sender<Body>>>,
     /// Runtime configuration.
     config: Config,
     /// Host environment information.
@@ -210,7 +212,18 @@ impl Protocol {
     }
 
     /// Make a new request to the runtime host and wait for the response.
+    ///
+    /// This is a blocking variant of `call_host_async`.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution context.
     pub fn call_host(&self, body: Body) -> Result<Body, Error> {
+        block_on(self.call_host_async(body))
+    }
+
+    /// Make a new request to the runtime host and wait for the response.
+    pub async fn call_host_async(&self, body: Body) -> Result<Body, Error> {
         let id = self.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
         let message = Message {
             id,
@@ -219,7 +232,7 @@ impl Protocol {
         };
 
         // Create a response channel and register an outstanding pending request.
-        let (tx, rx) = channel::bounded(1);
+        let (tx, rx) = oneshot::channel();
         {
             let mut pending_requests = self.pending_out_requests.lock().unwrap();
             pending_requests.insert(id, tx);
@@ -229,7 +242,7 @@ impl Protocol {
         self.send_message(message).map_err(Error::from)?;
 
         let result = rx
-            .recv()
+            .await
             .map_err(|_| Error::from(ProtocolError::ChannelClosed))?;
         match result {
             Body::Error(err) => Err(err),
@@ -318,8 +331,8 @@ impl Protocol {
 
                 match response_sender {
                     Some(response_sender) => {
-                        if let Err(error) = response_sender.try_send(message.body) {
-                            warn!(self.logger, "Unable to deliver response to local handler"; "err" => %error);
+                        if response_sender.send(message.body).is_err() {
+                            warn!(self.logger, "Unable to deliver response to local handler");
                         }
                     }
                     None => {
@@ -422,6 +435,7 @@ impl Protocol {
                 // Create the Tendermint consensus layer verifier and spawn it in a separate thread.
                 let verifier = tendermint::verifier::Verifier::new(
                     self.clone(),
+                    self.dispatcher.tokio_runtime(),
                     trust_root.clone(),
                     host_info.runtime_id,
                     host_info.consensus_chain_context.clone(),

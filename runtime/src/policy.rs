@@ -18,6 +18,7 @@ use crate::{
         },
         verifier::Verifier,
     },
+    future::block_on,
 };
 
 /// Policy verifier error.
@@ -68,7 +69,8 @@ impl PolicyVerifier {
         version: Option<Version>,
     ) -> Result<QuotePolicy> {
         // Fetch quote policy from the consensus layer using the given or the active version.
-        let consensus_state = self.consensus_verifier.latest_state()?;
+        // TODO: Make this async.
+        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
         let registry_state = RegistryState::new(&consensus_state);
         let runtime = registry_state
             .runtime(runtime_id)?
@@ -125,7 +127,8 @@ impl PolicyVerifier {
 
     /// Fetch key manager's status from the latest verified consensus layer state.
     pub fn key_manager_status(&self, key_manager: Namespace) -> Result<Status> {
-        let consensus_state = self.consensus_verifier.latest_state()?;
+        // TODO: Make this async.
+        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
         let km_state = KeyManagerState::new(&consensus_state);
         km_state
             .status(key_manager)?
@@ -183,7 +186,8 @@ impl PolicyVerifier {
 
     /// Fetch runtime's key manager.
     pub fn key_manager(&self, runtime_id: &Namespace) -> Result<Namespace> {
-        let consensus_state = self.consensus_verifier.latest_state()?;
+        // TODO: Make this async.
+        let consensus_state = block_on(self.consensus_verifier.latest_state())?;
         let registry_state = RegistryState::new(&consensus_state);
         let runtime = registry_state
             .runtime(runtime_id)?

@@ -61,7 +61,7 @@ impl Handler {
 #[cfg(target_env = "sgx")]
 impl Handler {
     /// Handle an attestation flow request.
-    pub fn handle(&self, request: Body) -> Result<Body> {
+    pub async fn handle(&self, request: Body) -> Result<Body> {
         match request {
             Body::RuntimeCapabilityTEERakInitRequest { target_info } => {
                 self.target_info_init(target_info)
@@ -69,9 +69,9 @@ impl Handler {
             Body::RuntimeCapabilityTEERakReportRequest {} => self.report_init(),
             Body::RuntimeCapabilityTEERakAvrRequest { avr } => {
                 // TODO: Remove this once we want to break the runtime host protocol.
-                self.set_quote(Quote::Ias(avr))
+                self.set_quote(Quote::Ias(avr)).await
             }
-            Body::RuntimeCapabilityTEERakQuoteRequest { quote } => self.set_quote(quote),
+            Body::RuntimeCapabilityTEERakQuoteRequest { quote } => self.set_quote(quote).await,
 
             _ => bail!("unsupported attestation request"),
         }
@@ -98,15 +98,20 @@ impl Handler {
         })
     }
 
-    fn set_quote(&self, quote: Quote) -> Result<Body> {
+    async fn set_quote(&self, quote: Quote) -> Result<Body> {
         if self.identity.quote_policy().is_none() {
             info!(self.logger, "Configuring quote policy");
 
-            // Obtain current quote policy from (verified) consensus state.
+            // TODO: Make async.
             let consensus_verifier = self.consensus_verifier.clone();
             let version = Some(self.version);
-            let policy =
-                PolicyVerifier::new(consensus_verifier).quote_policy(&self.runtime_id, version)?;
+            let runtime_id = self.runtime_id;
+            let policy = tokio::task::spawn_blocking(move || {
+                // Obtain current quote policy from (verified) consensus state.
+                PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, version)
+            })
+            .await
+            .unwrap()?;
 
             self.identity.set_quote_policy(policy)?;
         }
@@ -120,9 +125,9 @@ impl Handler {
         let verified_quote = self.identity.set_quote(quote)?;
 
         // Sign the report data, latest verified consensus height, REK and host node ID.
-        let consensus_state = self.consensus_verifier.latest_state()?;
+        let consensus_state = self.consensus_verifier.latest_state().await?;
         let height = consensus_state.height();
-        let node_id = self.host.identity()?;
+        let node_id = self.host.identity().await?;
         let rek = self.identity.public_rek();
         let h = SGXAttestation::hash(&verified_quote.report_data, node_id, height, rek);
         let signature = self.identity.sign(ATTESTATION_SIGNATURE_CONTEXT, &h)?;

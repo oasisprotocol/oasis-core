@@ -9,12 +9,8 @@ use std::{
 };
 
 use anyhow;
-use futures::{
-    channel::{mpsc, oneshot},
-    prelude::*,
-};
 use thiserror::Error;
-use tokio;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     cbor,
@@ -32,8 +28,8 @@ use crate::{
 
 use super::transport::{RuntimeTransport, Transport};
 
-/// Internal send queue backlog.
-const SENDQ_BACKLOG: usize = 10;
+/// Internal command queue backlog.
+const CMDQ_BACKLOG: usize = 32;
 
 /// RPC client error.
 #[derive(Error, Debug)]
@@ -56,12 +52,23 @@ pub enum RpcClientError {
     Unknown(#[from] anyhow::Error),
 }
 
-type SendqRequest = (
-    types::Request,
-    types::Kind,
-    oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
-    usize,
-);
+/// A command sent to the client controller task.
+#[derive(Debug)]
+enum Command {
+    Call(
+        types::Request,
+        types::Kind,
+        oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
+        usize,
+    ),
+    PeerFeedback(u64, types::PeerFeedback),
+    UpdateEnclaves(Option<HashSet<EnclaveIdentity>>),
+    UpdateQuotePolicy(QuotePolicy),
+    UpdateRuntimeID(Option<Namespace>),
+    UpdateNodes(Vec<signature::PublicKey>),
+    #[cfg(test)]
+    Ping(oneshot::Sender<()>),
+}
 
 struct MultiplexedSession {
     /// Session builder for resetting sessions.
@@ -87,27 +94,266 @@ impl MultiplexedSession {
     }
 }
 
-struct Inner {
-    /// Allowed nodes.
-    nodes: Mutex<Vec<signature::PublicKey>>,
-    /// Multiplexed session.
-    session: Mutex<MultiplexedSession>,
-    /// Used transport.
-    transport: Box<dyn Transport>,
-    /// Internal send queue receiver, only available until the controller
-    /// is spawned (is None later).
-    recvq: Mutex<Option<mpsc::Receiver<SendqRequest>>>,
-    /// Internal send queue sender for serializing all requests.
-    sendq: mpsc::Sender<SendqRequest>,
-    /// Flag indicating whether the controller has been spawned.
-    has_controller: AtomicBool,
+struct Controller {
     /// Maximum number of call retries.
     max_retries: usize,
+    /// Allowed nodes.
+    nodes: Vec<signature::PublicKey>,
+    /// Multiplexed session.
+    session: MultiplexedSession,
+    /// Used transport.
+    transport: Box<dyn Transport>,
+    /// Internal command queue (receiver part).
+    cmdq: mpsc::Receiver<Command>,
+    /// Internal command queue (sender part for retries).
+    cmdq_tx: mpsc::Sender<Command>,
+}
+
+impl Controller {
+    async fn run(mut self) {
+        while let Some(cmd) = self.cmdq.recv().await {
+            match cmd {
+                Command::Call(request, kind, sender, retries) => {
+                    self.call(request, kind, sender, retries).await
+                }
+                Command::PeerFeedback(pfid, peer_feedback) => {
+                    self.transport.set_peer_feedback(pfid, Some(peer_feedback));
+                }
+                Command::UpdateEnclaves(enclaves) => {
+                    if self.session.builder.get_remote_enclaves() == &enclaves {
+                        continue;
+                    }
+
+                    self.session.builder =
+                        mem::take(&mut self.session.builder).remote_enclaves(enclaves);
+                    self.session.reset();
+                }
+                Command::UpdateQuotePolicy(policy) => {
+                    let policy = Some(Arc::new(policy));
+                    if self.session.builder.get_quote_policy() == &policy {
+                        continue;
+                    }
+
+                    self.session.builder =
+                        mem::take(&mut self.session.builder).quote_policy(policy);
+                    self.session.reset();
+                }
+                Command::UpdateRuntimeID(id) => {
+                    if self.session.builder.get_remote_runtime_id() == &id {
+                        continue;
+                    }
+
+                    self.session.builder =
+                        mem::take(&mut self.session.builder).remote_runtime_id(id);
+                    self.session.reset();
+                }
+                Command::UpdateNodes(nodes) => {
+                    self.nodes = nodes;
+                }
+                #[cfg(test)]
+                Command::Ping(sender) => {
+                    let _ = sender.send(());
+                }
+            }
+        }
+
+        // Close stream after the client is dropped.
+        let _ = self.close().await;
+    }
+
+    async fn call(
+        &mut self,
+        request: types::Request,
+        kind: types::Kind,
+        sender: oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
+        retries: usize,
+    ) {
+        let result = async {
+            match kind {
+                types::Kind::NoiseSession => {
+                    // Attempt to establish a connection. This will not do anything in case the
+                    // session has already been established.
+                    self.connect().await?;
+
+                    // Perform the call.
+                    self.secure_call_raw(request.clone()).await
+                }
+                types::Kind::InsecureQuery => {
+                    // Perform the call.
+                    self.insecure_call_raw(request.clone()).await
+                }
+                _ => Err(RpcClientError::UnsupportedRpcKind),
+            }
+        }
+        .await;
+
+        // Update peer feedback for next request.
+        let pfid = self.transport.get_peer_feedback_id();
+        if result.is_err() {
+            // In case there was a transport error we need to reset the session immediately as no
+            // progress is possible.
+            self.session.reset();
+            // Set peer feedback immediately so retries can try new peers.
+            self.transport
+                .set_peer_feedback(pfid, Some(types::PeerFeedback::Failure));
+        }
+
+        match result {
+            ref r if r.is_ok() || retries >= self.max_retries => {
+                // Request was successful or number of retries has been exceeded.
+                let _ = sender.send(result.map(|rsp| (pfid, rsp)));
+            }
+
+            _ => {
+                // Attempt retry if number of retries is not exceeded. Retry is performed by
+                // queueing another request.
+                let _ = self
+                    .cmdq_tx
+                    .send(Command::Call(request, kind, sender, retries + 1))
+                    .await;
+            }
+        }
+    }
+
+    async fn connect(&mut self) -> Result<(), RpcClientError> {
+        // No need to create a new session if we are connected to one of the nodes.
+        if self.session.inner.is_connected()
+            && (self.nodes.is_empty() || self.session.inner.is_connected_to(&self.nodes))
+        {
+            return Ok(());
+        }
+        // Make sure the session is reset for a new connection.
+        self.session.reset();
+
+        // Handshake1 -> Handshake2
+        let mut buffer = vec![];
+        self.session
+            .inner
+            .process_data(vec![], &mut buffer)
+            .await
+            .expect("initiation must always succeed");
+        let session_id = self.session.id;
+
+        let (data, node) = self
+            .transport
+            .write_noise_session(session_id, buffer, String::new(), self.nodes.clone())
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        // Update the session with the identity of the remote node. The latter still needs to be
+        // verified using the RAK from the consensus layer.
+        self.session.inner.set_remote_node(node)?;
+
+        // Handshake2 -> Transport
+        let mut buffer = vec![];
+        self.session
+            .inner
+            .process_data(data, &mut buffer)
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        self.transport
+            .write_noise_session(session_id, buffer, String::new(), vec![node])
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        Ok(())
+    }
+
+    async fn secure_call_raw(
+        &mut self,
+        request: types::Request,
+    ) -> Result<types::Response, RpcClientError> {
+        let method = request.method.clone();
+        let msg = types::Message::Request(request);
+
+        // Prepare the request message.
+        let mut buffer = vec![];
+        self.session
+            .inner
+            .write_message(msg, &mut buffer)
+            .map_err(|_| RpcClientError::Transport)?;
+        let node = self.session.inner.get_node()?;
+
+        // Send the request and receive the response.
+        let (data, _) = self
+            .transport
+            .write_noise_session(self.session.id, buffer, method, vec![node])
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        // Process the response.
+        let msg = self
+            .session
+            .inner
+            .process_data(data, vec![])
+            .await?
+            .expect("message must be decoded if there is no error");
+
+        match msg {
+            types::Message::Response(rsp) => Ok(rsp),
+            msg => Err(RpcClientError::ExpectedResponseMessage(msg)),
+        }
+    }
+
+    async fn insecure_call_raw(
+        &mut self,
+        request: types::Request,
+    ) -> Result<types::Response, RpcClientError> {
+        let (data, _) = self
+            .transport
+            .write_insecure_query(cbor::to_vec(request), self.nodes.clone())
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        cbor::from_slice(&data).map_err(RpcClientError::DecodeError)
+    }
+
+    async fn close(&mut self) -> Result<(), RpcClientError> {
+        if !self.session.inner.is_connected() {
+            return Ok(());
+        }
+
+        // Prepare the close message.
+        let mut buffer = vec![];
+        self.session
+            .inner
+            .write_message(types::Message::Close, &mut buffer)
+            .map_err(|_| RpcClientError::Transport)?;
+        let node = self.session.inner.get_node()?;
+
+        // Send the message and receive the response.
+        let (data, _) = self
+            .transport
+            .write_noise_session(self.session.id, buffer, String::new(), vec![node])
+            .await
+            .map_err(|_| RpcClientError::Transport)?;
+
+        // Close the session and check the received message.
+        let msg = self
+            .session
+            .inner
+            .process_data(data, vec![])
+            .await?
+            .expect("message must be decoded if there is no error");
+        self.session.inner.close();
+
+        match msg {
+            types::Message::Close => Ok(()),
+            msg => Err(RpcClientError::ExpectedCloseMessage(msg)),
+        }
+    }
 }
 
 /// RPC client.
 pub struct RpcClient {
-    inner: Arc<Inner>,
+    /// Internal command queue (sender part).
+    cmdq: mpsc::Sender<Command>,
+    /// Flag indicating whether the controller has been spawned.
+    has_controller: AtomicBool,
+    /// Initial controller. Only exists until the controller is spawned and is then moved into the
+    /// controller task.
+    controller: Mutex<Option<Controller>>,
 }
 
 impl RpcClient {
@@ -116,18 +362,20 @@ impl RpcClient {
         builder: Builder,
         nodes: Vec<signature::PublicKey>,
     ) -> Self {
-        let (tx, rx) = mpsc::channel(SENDQ_BACKLOG);
+        // Create the command channel.
+        let (tx, rx) = mpsc::channel(CMDQ_BACKLOG);
 
         Self {
-            inner: Arc::new(Inner {
-                nodes: Mutex::new(nodes),
-                session: Mutex::new(MultiplexedSession::new(builder)),
-                transport,
-                recvq: Mutex::new(Some(rx)),
-                sendq: tx,
-                has_controller: AtomicBool::new(false),
+            cmdq: tx.clone(),
+            has_controller: AtomicBool::new(false),
+            controller: Mutex::new(Some(Controller {
                 max_retries: 3,
-            }),
+                nodes,
+                session: MultiplexedSession::new(builder),
+                transport,
+                cmdq: rx,
+                cmdq_tx: tx,
+            })),
         }
     }
 
@@ -197,7 +445,7 @@ impl RpcClient {
             Ok(_) => types::PeerFeedback::Success,
             Err(_) => types::PeerFeedback::Failure,
         };
-        self.inner.transport.set_peer_feedback(pfid, Some(pf));
+        let _ = self.cmdq.send(Command::PeerFeedback(pfid, pf)).await;
 
         result
     }
@@ -209,271 +457,86 @@ impl RpcClient {
     ) -> Result<(u64, types::Response), RpcClientError> {
         // Spawn a new controller if we haven't spawned one yet.
         if self
-            .inner
             .has_controller
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
-            let mut rx = self
-                .inner
-                .recvq
+            let controller = self
+                .controller
                 .lock()
                 .unwrap()
                 .take()
                 .expect("has_controller was false");
-            let inner = self.inner.clone();
 
-            tokio::spawn(async move {
-                while let Some((request, kind, rsp_tx, retries)) = rx.next().await {
-                    let result = async {
-                        match kind {
-                            types::Kind::NoiseSession => {
-                                // Attempt to establish a connection. This will not do anything in case the
-                                // session has already been established.
-                                Self::connect(inner.clone()).await?;
-
-                                // Perform the call.
-                                Self::secure_call_raw(inner.clone(), request.clone()).await
-                            }
-                            types::Kind::InsecureQuery => {
-                                // Perform the call.
-                                Self::insecure_call_raw(inner.clone(), request.clone()).await
-                            }
-                            _ => Err(RpcClientError::UnsupportedRpcKind),
-                        }
-                    }
-                    .await;
-
-                    // Update peer feedback for next request.
-                    let pfid = inner.transport.get_peer_feedback_id();
-                    if result.is_err() {
-                        // In case there was a transport error we need to reset the session
-                        // immediately as no progress is possible.
-                        let mut session = inner.session.lock().unwrap();
-                        session.reset();
-                        // Set peer feedback immediately so retries can try new peers.
-                        inner
-                            .transport
-                            .set_peer_feedback(pfid, Some(types::PeerFeedback::Failure));
-                    }
-
-                    match result {
-                        ref r if r.is_ok() || retries >= inner.max_retries => {
-                            // Request was successful or number of retries has been exceeded.
-                            let _ = rsp_tx.send(result.map(|rsp| (pfid, rsp)));
-                        }
-
-                        _ => {
-                            // Attempt retry if number of retries is not exceeded. Retry is
-                            // performed by queueing another request.
-                            let _ = inner
-                                .sendq
-                                .clone()
-                                .send((request, kind, rsp_tx, retries + 1))
-                                .await;
-                        }
-                    }
-                }
-
-                // Close stream after the client is dropped.
-                let _ = Self::close(inner).await;
-            });
+            tokio::spawn(controller.run());
         }
 
-        // Send request to controller.
-        let (rsp_tx, rsp_rx) = oneshot::channel();
-        self.inner
-            .sendq
-            .clone()
-            .send((request, kind, rsp_tx, 0))
+        // Send request to controller and wait for the response.
+        let (tx, rx) = oneshot::channel();
+        self.cmdq
+            .send(Command::Call(request, kind, tx, 0))
             .await
             .map_err(|_| RpcClientError::Dropped)?;
 
-        rsp_rx.await.map_err(|_| RpcClientError::Dropped)?
-    }
-
-    async fn connect(inner: Arc<Inner>) -> Result<(), RpcClientError> {
-        let mut buffer = vec![];
-        let session_id;
-
-        {
-            let mut session = inner.session.lock().unwrap();
-            let nodes = inner.nodes.lock().unwrap();
-
-            // No need to create a new session if we are connected to one of the nodes.
-            if session.inner.is_connected()
-                && (nodes.is_empty() || session.inner.is_connected_to(&nodes))
-            {
-                return Ok(());
-            }
-            // Make sure the session is reset for a new connection.
-            session.reset();
-
-            // Handshake1 -> Handshake2
-            session
-                .inner
-                .process_data(vec![], &mut buffer)
-                .expect("initiation must always succeed");
-            session_id = session.id;
-        }
-
-        let nodes = inner.nodes.lock().unwrap().to_vec();
-        let (data, node) = inner
-            .transport
-            .write_noise_session(session_id, buffer, String::new(), nodes)
-            .await
-            .map_err(|_| RpcClientError::Transport)?;
-
-        let mut buffer = vec![];
-        {
-            let mut session = inner.session.lock().unwrap();
-            // Update the session with the identity of the remote node. The latter still needs
-            // to be verified using the RAK from the consensus layer.
-            session.inner.set_remote_node(node)?;
-
-            // Handshake2 -> Transport
-            session
-                .inner
-                .process_data(data, &mut buffer)
-                .map_err(|_| RpcClientError::Transport)?;
-        }
-
-        inner
-            .transport
-            .write_noise_session(session_id, buffer, String::new(), vec![node])
-            .await
-            .map_err(|_| RpcClientError::Transport)?;
-
-        Ok(())
-    }
-
-    async fn close(inner: Arc<Inner>) -> Result<(), RpcClientError> {
-        let mut buffer = vec![];
-        let session_id;
-        let node;
-        {
-            let mut session = inner.session.lock().unwrap();
-            if !session.inner.is_connected() {
-                return Ok(());
-            }
-            session
-                .inner
-                .write_message(types::Message::Close, &mut buffer)
-                .map_err(|_| RpcClientError::Transport)?;
-            session_id = session.id;
-            node = session.inner.get_node()?
-        }
-
-        let (data, _) = inner
-            .transport
-            .write_noise_session(session_id, buffer, String::new(), vec![node])
-            .await
-            .map_err(|_| RpcClientError::Transport)?;
-
-        // Verify that session is closed.
-        let mut session = inner.session.lock().unwrap();
-        let msg = session
-            .inner
-            .process_data(data, vec![])?
-            .expect("message must be decoded if there is no error");
-
-        match msg {
-            types::Message::Close => {
-                session.inner.close();
-                Ok(())
-            }
-            msg => Err(RpcClientError::ExpectedCloseMessage(msg)),
-        }
-    }
-
-    async fn secure_call_raw(
-        inner: Arc<Inner>,
-        request: types::Request,
-    ) -> Result<types::Response, RpcClientError> {
-        let method = request.method.clone();
-        let msg = types::Message::Request(request);
-        let session_id;
-        let node;
-        let mut buffer = vec![];
-        {
-            let mut session = inner.session.lock().unwrap();
-            session
-                .inner
-                .write_message(msg, &mut buffer)
-                .map_err(|_| RpcClientError::Transport)?;
-            session_id = session.id;
-            node = session.inner.get_node()?;
-        }
-
-        let (data, _) = inner
-            .transport
-            .write_noise_session(session_id, buffer, method, vec![node])
-            .await
-            .map_err(|_| RpcClientError::Transport)?;
-
-        let mut session = inner.session.lock().unwrap();
-        let msg = session
-            .inner
-            .process_data(data, vec![])?
-            .expect("message must be decoded if there is no error");
-
-        match msg {
-            types::Message::Response(rsp) => Ok(rsp),
-            msg => Err(RpcClientError::ExpectedResponseMessage(msg)),
-        }
-    }
-
-    async fn insecure_call_raw(
-        inner: Arc<Inner>,
-        request: types::Request,
-    ) -> Result<types::Response, RpcClientError> {
-        let nodes = inner.nodes.lock().unwrap().to_vec();
-        let (data, _) = inner
-            .transport
-            .write_insecure_query(cbor::to_vec(request), nodes)
-            .await
-            .map_err(|_| RpcClientError::Transport)?;
-
-        cbor::from_slice(&data).map_err(RpcClientError::DecodeError)
+        rx.await.map_err(|_| RpcClientError::Dropped)?
     }
 
     /// Update allowed remote enclave identities.
     ///
     /// Useful if the key manager's policy has changed.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution context.
     pub fn update_enclaves(&self, enclaves: Option<HashSet<EnclaveIdentity>>) {
-        let mut session = self.inner.session.lock().unwrap();
-        if session.builder.get_remote_enclaves() == &enclaves {
-            return;
-        }
-        session.builder = mem::take(&mut session.builder).remote_enclaves(enclaves);
-        session.reset();
+        self.cmdq
+            .blocking_send(Command::UpdateEnclaves(enclaves))
+            .unwrap();
     }
 
     /// Update key manager's quote policy.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution context.
     pub fn update_quote_policy(&self, policy: QuotePolicy) {
-        let policy = Some(Arc::new(policy));
-        let mut session = self.inner.session.lock().unwrap();
-        if session.builder.get_quote_policy() == &policy {
-            return;
-        }
-        session.builder = mem::take(&mut session.builder).quote_policy(policy);
-        session.reset();
+        self.cmdq
+            .blocking_send(Command::UpdateQuotePolicy(policy))
+            .unwrap();
     }
 
     /// Update remote runtime id.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution context.
     pub fn update_runtime_id(&self, id: Option<Namespace>) {
-        let mut session = self.inner.session.lock().unwrap();
-        if session.builder.get_remote_runtime_id() == &id {
-            return;
-        }
-        session.builder = mem::take(&mut session.builder).remote_runtime_id(id);
-        session.reset();
+        self.cmdq
+            .blocking_send(Command::UpdateRuntimeID(id))
+            .unwrap();
     }
 
     /// Update allowed nodes.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution context.
     pub fn update_nodes(&self, nodes: Vec<signature::PublicKey>) {
-        let mut inner_nodes = self.inner.nodes.lock().unwrap();
-        *inner_nodes = nodes;
+        self.cmdq
+            .blocking_send(Command::UpdateNodes(nodes))
+            .unwrap();
+    }
+
+    /// Wait for the controller to process all queued messages.
+    #[cfg(test)]
+    async fn flush_cmd_queue(&self) -> Result<(), RpcClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.cmdq
+            .send(Command::Ping(tx))
+            .await
+            .map_err(|_| RpcClientError::Dropped)?;
+
+        rx.await.map_err(|_| RpcClientError::Dropped)
     }
 }
 
@@ -485,7 +548,7 @@ mod test {
     };
 
     use anyhow::anyhow;
-    use futures::future::{self, BoxFuture};
+    use async_trait::async_trait;
 
     use crate::{
         common::crypto::signature,
@@ -497,8 +560,7 @@ mod test {
 
     #[derive(Clone)]
     struct MockTransport {
-        identity: Arc<Identity>,
-        demux: Arc<Mutex<Demux>>,
+        demux: Arc<Demux>,
         next_error: Arc<AtomicBool>,
         peer_feedback: Arc<Mutex<(u64, Option<types::PeerFeedback>)>>,
         peer_feedback_history: Arc<Mutex<Vec<(u64, Option<types::PeerFeedback>)>>>,
@@ -506,11 +568,8 @@ mod test {
 
     impl MockTransport {
         fn new() -> Self {
-            let identity = Arc::new(Identity::new());
-
             Self {
-                identity: identity.clone(),
-                demux: Arc::new(Mutex::new(Demux::new(identity))),
+                demux: Arc::new(Demux::new(Arc::new(Identity::new()))),
                 next_error: Arc::new(AtomicBool::new(false)),
                 peer_feedback: Arc::new(Mutex::new((0, None))),
                 peer_feedback_history: Arc::new(Mutex::new(Vec::new())),
@@ -518,8 +577,7 @@ mod test {
         }
 
         fn reset(&self) {
-            let mut demux = self.demux.lock().unwrap();
-            *demux = Demux::new(self.identity.clone());
+            self.demux.reset();
         }
 
         fn induce_transport_error(&self) {
@@ -538,13 +596,14 @@ mod test {
         }
     }
 
+    #[async_trait]
     impl Transport for MockTransport {
-        fn write_message_impl(
+        async fn write_message_impl(
             &self,
             request: Vec<u8>,
             kind: types::Kind,
             _nodes: Vec<signature::PublicKey>,
-        ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), anyhow::Error>> {
+        ) -> Result<(Vec<u8>, signature::PublicKey), anyhow::Error> {
             let pf = {
                 let mut pf = self.peer_feedback.lock().unwrap();
                 let peer_feedback = pf.1.take();
@@ -563,18 +622,18 @@ mod test {
                 .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
                 .is_ok()
             {
-                return Box::pin(future::err(anyhow!("transport error")));
+                return Err(anyhow!("transport error"));
             }
-
-            let mut demux = self.demux.lock().unwrap();
 
             match kind {
                 types::Kind::NoiseSession => {
                     // Deliver directly to the multiplexer.
                     let mut buffer = Vec::new();
-                    match demux.process_frame(request, &mut buffer) {
-                        Err(err) => Box::pin(future::err(err)),
-                        Ok(Some((session_id, _session_info, message, _untrusted_plaintext))) => {
+                    let (mut session, message) =
+                        self.demux.process_frame(request, &mut buffer).await?;
+
+                    match message {
+                        Some(message) => {
                             // Message, process and write reply.
                             let body = match message {
                                 types::Message::Request(rq) => {
@@ -586,14 +645,13 @@ mod test {
                             let response = types::Message::Response(types::Response { body });
 
                             let mut buffer = Vec::new();
-                            match demux.write_message(session_id, response, &mut buffer) {
-                                Ok(_) => Box::pin(future::ok((buffer, Default::default()))),
-                                Err(error) => Box::pin(future::err(error)),
-                            }
+                            Ok(session
+                                .write_message(response, &mut buffer)
+                                .map(|_| (buffer, Default::default()))?)
                         }
-                        Ok(None) => {
+                        None => {
                             // Handshake.
-                            Box::pin(future::ok((buffer, Default::default())))
+                            Ok((buffer, Default::default()))
                         }
                     }
                 }
@@ -602,7 +660,7 @@ mod test {
                     let rq: types::Request = cbor::from_slice(&request).unwrap();
                     let body = types::Body::Success(rq.args);
                     let response = types::Response { body };
-                    return Box::pin(future::ok((cbor::to_vec(response), Default::default())));
+                    return Ok((cbor::to_vec(response), Default::default()));
                 }
                 types::Kind::LocalQuery => {
                     panic!("unhandled RPC kind")
@@ -626,15 +684,14 @@ mod test {
 
     #[test]
     fn test_rpc_client() {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
         let transport = MockTransport::new();
         let builder = session::Builder::default();
         let client = RpcClient::new(Box::new(transport.clone()), builder, vec![]);
 
         // Basic secure call.
         let result: u64 = rt.block_on(client.secure_call("test", 42)).unwrap();
+        rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 42, "secure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),
@@ -650,6 +707,7 @@ mod test {
         transport.reset();
 
         let result: u64 = rt.block_on(client.secure_call("test", 43)).unwrap();
+        rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 43, "secure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),
@@ -667,6 +725,7 @@ mod test {
         transport.induce_transport_error();
 
         let result: u64 = rt.block_on(client.secure_call("test", 44)).unwrap();
+        rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 44, "secure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),
@@ -681,6 +740,7 @@ mod test {
 
         // Basic insecure call.
         let result: u64 = rt.block_on(client.insecure_call("test", 45)).unwrap();
+        rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 45, "insecure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),
@@ -694,6 +754,7 @@ mod test {
         transport.induce_transport_error();
 
         let result: u64 = rt.block_on(client.insecure_call("test", 46)).unwrap();
+        rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 46, "insecure call should work");
         assert_eq!(
             transport.take_peer_feedback_history(),

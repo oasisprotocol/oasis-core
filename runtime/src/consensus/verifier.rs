@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use async_trait::async_trait;
 use thiserror::Error;
 
 use super::{
@@ -61,15 +62,16 @@ impl From<Error> for types::Error {
 }
 
 /// Verifier is the consensus layer state verifier trait.
+#[async_trait]
 pub trait Verifier: Send + Sync {
     /// Synchronize the verifier state up to including the passed consensus height.
-    fn sync(&self, height: u64) -> Result<(), Error>;
+    async fn sync(&self, height: u64) -> Result<(), Error>;
 
     /// Verify that the given runtime header is valid at the given consensus layer block and return
     /// the consensus layer state accessor for that block.
     ///
     /// This also verifies that the state is fresh.
-    fn verify(
+    async fn verify(
         &self,
         consensus_block: LightBlock,
         runtime_header: Header,
@@ -81,7 +83,7 @@ pub trait Verifier: Send + Sync {
     ///
     /// This is a relaxed version of the `verify` function that should be used for verifying state
     /// in queries.
-    fn verify_for_query(
+    async fn verify_for_query(
         &self,
         consensus_block: LightBlock,
         runtime_header: Header,
@@ -91,7 +93,7 @@ pub trait Verifier: Send + Sync {
     /// Return the consensus layer state accessor for the given consensus layer block WITHOUT
     /// performing any verification. This method should only be used for operations that do not
     /// require integrity guarantees.
-    fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error>;
+    async fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error>;
 
     /// Return the latest verified consensus layer state.
     ///
@@ -99,7 +101,7 @@ pub trait Verifier: Send + Sync {
     ///
     /// The state is not verified to be fresh. Use `verify_state_freshness` to perform this
     /// verification manually if needed.
-    fn latest_state(&self) -> Result<ConsensusState, Error>;
+    async fn latest_state(&self) -> Result<ConsensusState, Error>;
 
     /// Return the verified consensus layer state for a given height.
     ///
@@ -107,7 +109,7 @@ pub trait Verifier: Send + Sync {
     ///
     /// The state is not verified to be fresh. Use `verify_state_freshness` to perform this
     /// verification manually if needed.
-    fn state_at(&self, height: u64) -> Result<ConsensusState, Error>;
+    async fn state_at(&self, height: u64) -> Result<ConsensusState, Error>;
 
     /// Return the consensus layer events at the given height.
     ///
@@ -115,60 +117,61 @@ pub trait Verifier: Send + Sync {
     ///
     /// Event integrity is currently not verified and it thus relies on replicated computation even
     /// when using a TEE-enabled runtime.
-    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error>;
+    async fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error>;
 
     /// Return the latest known consensus layer height.
-    fn latest_height(&self) -> Result<u64, Error>;
+    async fn latest_height(&self) -> Result<u64, Error>;
 
     /// Record the given (locally computed and thus verified) results header as trusted.
-    fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error>;
+    async fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error>;
 }
 
+#[async_trait]
 impl<T: ?Sized + Verifier> Verifier for Arc<T> {
-    fn sync(&self, height: u64) -> Result<(), Error> {
-        Verifier::sync(&**self, height)
+    async fn sync(&self, height: u64) -> Result<(), Error> {
+        Verifier::sync(&**self, height).await
     }
 
-    fn verify(
+    async fn verify(
         &self,
         consensus_block: LightBlock,
         runtime_header: Header,
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        Verifier::verify(&**self, consensus_block, runtime_header, epoch)
+        Verifier::verify(&**self, consensus_block, runtime_header, epoch).await
     }
 
-    fn verify_for_query(
+    async fn verify_for_query(
         &self,
         consensus_block: LightBlock,
         runtime_header: Header,
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        Verifier::verify_for_query(&**self, consensus_block, runtime_header, epoch)
+        Verifier::verify_for_query(&**self, consensus_block, runtime_header, epoch).await
     }
 
-    fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
-        Verifier::unverified_state(&**self, consensus_block)
+    async fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
+        Verifier::unverified_state(&**self, consensus_block).await
     }
 
-    fn latest_state(&self) -> Result<ConsensusState, Error> {
-        Verifier::latest_state(&**self)
+    async fn latest_state(&self) -> Result<ConsensusState, Error> {
+        Verifier::latest_state(&**self).await
     }
 
-    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
-        Verifier::state_at(&**self, height)
+    async fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
+        Verifier::state_at(&**self, height).await
     }
 
-    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
-        Verifier::events_at(&**self, height, kind)
+    async fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
+        Verifier::events_at(&**self, height, kind).await
     }
 
-    fn latest_height(&self) -> Result<u64, Error> {
-        Verifier::latest_height(&**self)
+    async fn latest_height(&self) -> Result<u64, Error> {
+        Verifier::latest_height(&**self).await
     }
 
-    fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
-        Verifier::trust(&**self, header)
+    async fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
+        Verifier::trust(&**self, header).await
     }
 }
 

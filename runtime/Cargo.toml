@@ -58,6 +58,7 @@ oid-registry = "0.6.0"
 rsa = "0.6.1"
 base64-serde = "0.6.1"
 lru = "0.9.0"
+async-trait = "0.1.66"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
 version = "~1.26.0"

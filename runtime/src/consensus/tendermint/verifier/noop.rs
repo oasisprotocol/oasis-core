@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use async_trait::async_trait;
 
 use crate::{
     consensus::{
@@ -26,10 +27,11 @@ impl NopVerifier {
         Self { protocol }
     }
 
-    fn fetch_light_block(&self, height: u64) -> Result<LightBlock, Error> {
+    async fn fetch_light_block(&self, height: u64) -> Result<LightBlock, Error> {
         let result = self
             .protocol
-            .call_host(Body::HostFetchConsensusBlockRequest { height })
+            .call_host_async(Body::HostFetchConsensusBlockRequest { height })
+            .await
             .map_err(|err| Error::VerificationFailed(err.into()))?;
 
         match result {
@@ -39,30 +41,31 @@ impl NopVerifier {
     }
 }
 
+#[async_trait]
 impl verifier::Verifier for NopVerifier {
-    fn sync(&self, _height: u64) -> Result<(), Error> {
+    async fn sync(&self, _height: u64) -> Result<(), Error> {
         Ok(())
     }
 
-    fn verify(
+    async fn verify(
         &self,
         consensus_block: LightBlock,
         _runtime_header: Header,
         _epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        self.unverified_state(consensus_block)
+        self.unverified_state(consensus_block).await
     }
 
-    fn verify_for_query(
+    async fn verify_for_query(
         &self,
         consensus_block: LightBlock,
         _runtime_header: Header,
         _epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        self.unverified_state(consensus_block)
+        self.unverified_state(consensus_block).await
     }
 
-    fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
+    async fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
         let untrusted_block =
             decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
         // NOTE: No actual verification is performed.
@@ -74,21 +77,22 @@ impl verifier::Verifier for NopVerifier {
         ))
     }
 
-    fn latest_state(&self) -> Result<ConsensusState, Error> {
-        self.state_at(HEIGHT_LATEST)
+    async fn latest_state(&self) -> Result<ConsensusState, Error> {
+        self.state_at(HEIGHT_LATEST).await
     }
 
-    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
-        let block = self.fetch_light_block(height)?;
-        self.unverified_state(block)
+    async fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
+        let block = self.fetch_light_block(height).await?;
+        self.unverified_state(block).await
     }
 
-    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
+    async fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
         let result = self
             .protocol
-            .call_host(Body::HostFetchConsensusEventsRequest(
+            .call_host_async(Body::HostFetchConsensusEventsRequest(
                 HostFetchConsensusEventsRequest { height, kind },
             ))
+            .await
             .map_err(|err| Error::VerificationFailed(err.into()))?;
 
         match result {
@@ -99,11 +103,11 @@ impl verifier::Verifier for NopVerifier {
         }
     }
 
-    fn latest_height(&self) -> Result<u64, Error> {
-        Ok(self.fetch_light_block(HEIGHT_LATEST)?.height)
+    async fn latest_height(&self) -> Result<u64, Error> {
+        Ok(self.fetch_light_block(HEIGHT_LATEST).await?.height)
     }
 
-    fn trust(&self, _header: &ComputeResultsHeader) -> Result<(), Error> {
+    async fn trust(&self, _header: &ComputeResultsHeader) -> Result<(), Error> {
         Ok(())
     }
 }

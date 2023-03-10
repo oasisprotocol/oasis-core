@@ -1,4 +1,5 @@
 //! Host interface.
+use async_trait::async_trait;
 use thiserror::Error;
 
 use crate::{
@@ -17,14 +18,16 @@ pub enum Error {
 }
 
 /// Interface to the (untrusted) host node.
+#[async_trait]
 pub trait Host: Send + Sync {
     /// Returns the identity of the host node.
-    fn identity(&self) -> Result<PublicKey, Error>;
+    async fn identity(&self) -> Result<PublicKey, Error>;
 }
 
+#[async_trait]
 impl Host for Protocol {
-    fn identity(&self) -> Result<PublicKey, Error> {
-        match self.call_host(Body::HostIdentityRequest {})? {
+    async fn identity(&self) -> Result<PublicKey, Error> {
+        match self.call_host_async(Body::HostIdentityRequest {}).await? {
             Body::HostIdentityResponse { node_id } => Ok(node_id),
             _ => Err(Error::BadResponse),
         }

@@ -37,6 +37,7 @@ use crate::{
         },
         Context as RpcContext,
     },
+    future::block_on,
     identity::Identity,
     policy::PolicyVerifier,
     protocol::{Protocol, ProtocolUntrustedLocalStorage},
@@ -138,7 +139,7 @@ struct State {
     protocol: Arc<Protocol>,
     consensus_verifier: Arc<dyn Verifier>,
     dispatcher: Arc<Dispatcher>,
-    rpc_demux: Arc<Mutex<RpcDemux>>,
+    rpc_demux: Arc<RpcDemux>,
     rpc_dispatcher: Arc<RpcDispatcher>,
     txn_dispatcher: Arc<dyn TxnDispatcher>,
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
@@ -173,7 +174,7 @@ impl Dispatcher {
         //
         // Make sure to update THREADS.md if you change any of the thread-related settings.
         tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
+            .worker_threads(2)
             .max_blocking_threads(2)
             .thread_keep_alive(std::time::Duration::MAX)
             .build()
@@ -219,6 +220,11 @@ impl Dispatcher {
             consensus_verifier,
         });
         self.state_cond.notify_one();
+    }
+
+    /// Tokio async runtime handle.
+    pub fn tokio_runtime(&self) -> tokio::runtime::Handle {
+        self.tokio_runtime.handle().clone()
     }
 
     /// Queue a new request to be dispatched.
@@ -273,7 +279,7 @@ impl Dispatcher {
             protocol: protocol.clone(),
             consensus_verifier: consensus_verifier.clone(),
             dispatcher: self.clone(),
-            rpc_demux: Arc::new(Mutex::new(rpc_demux)),
+            rpc_demux: Arc::new(rpc_demux),
             rpc_dispatcher: Arc::new(rpc_dispatcher),
             txn_dispatcher: Arc::from(txn_dispatcher),
             attestation_handler: attestation::Handler::new(
@@ -328,7 +334,7 @@ impl Dispatcher {
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
             | Body::RuntimeCapabilityTEERakQuoteRequest { .. } => {
-                Ok(state.attestation_handler.handle(request)?)
+                Ok(state.attestation_handler.handle(request).await?)
             }
 
             // RPC and transaction requests.
@@ -442,17 +448,19 @@ impl Dispatcher {
             // Other requests.
             Body::RuntimeKeyManagerStatusUpdateRequest { status } => {
                 // Key manager status update local RPC call.
-                self.handle_km_status_update(state, status)
+                self.handle_km_status_update(state, status).await
             }
             Body::RuntimeKeyManagerQuotePolicyUpdateRequest {
                 policy: quote_policy,
             } => {
                 // Key manager quote policy update local RPC call.
                 self.handle_km_quote_policy_update(state, quote_policy)
+                    .await
             }
             Body::RuntimeConsensusSyncRequest { height } => state
                 .consensus_verifier
                 .sync(height)
+                .await
                 .map_err(Into::into)
                 .map(|_| Body::RuntimeConsensusSyncResponse {}),
 
@@ -496,13 +504,14 @@ impl Dispatcher {
         let protocol = protocol.clone();
         let txn_dispatcher = txn_dispatcher.clone();
 
-        tokio::task::spawn_blocking(move || {
-            // For queries we don't do any consensus layer integrity verification by default and it
-            // is up to the runtime to decide whether this is critical on a query-by-query basis.
-            let consensus_state = state
-                .consensus_verifier
-                .unverified_state(state.consensus_block.clone())?;
+        // For queries we don't do any consensus layer integrity verification by default and it
+        // is up to the runtime to decide whether this is critical on a query-by-query basis.
+        let consensus_state = state
+            .consensus_verifier
+            .unverified_state(state.consensus_block.clone())
+            .await?;
 
+        tokio::task::spawn_blocking(move || {
             let cache = cache_set.query(Root {
                 namespace: state.header.namespace,
                 version: state.header.round,
@@ -540,9 +549,12 @@ impl Dispatcher {
         state: TxDispatchState,
     ) -> Result<Body, Error> {
         // For check-only we don't do any consensus layer integrity verification.
-        let consensus_state = state
-            .consensus_verifier
-            .unverified_state(state.consensus_block.clone())?;
+        // TODO: Make this async.
+        let consensus_state = block_on(
+            state
+                .consensus_verifier
+                .unverified_state(state.consensus_block.clone()),
+        )?;
 
         let mut cache = cache_set.check(Root {
             namespace: state.header.namespace,
@@ -588,11 +600,12 @@ impl Dispatcher {
         state: TxDispatchState,
     ) -> Result<Body, Error> {
         // Verify consensus state and runtime state root integrity before execution.
-        let consensus_state = state.consensus_verifier.verify(
+        // TODO: Make this async.
+        let consensus_state = block_on(state.consensus_verifier.verify(
             state.consensus_block.clone(),
             state.header.clone(),
             state.epoch,
-        )?;
+        ))?;
         // Ensure the runtime is still ready to process requests.
         protocol.ensure_initialized()?;
 
@@ -692,9 +705,9 @@ impl Dispatcher {
         };
 
         // Since we've computed the batch, we can trust it.
-        state
-            .consensus_verifier
-            .trust(&header)
+        // TODO: Make this async.
+        tokio::runtime::Handle::current()
+            .block_on(state.consensus_verifier.trust(&header))
             .expect("trusting a computed header must succeed");
 
         debug!(self.logger, "Transaction batch execution complete";
@@ -791,17 +804,9 @@ impl Dispatcher {
 
         // Process frame.
         let mut buffer = vec![];
-        let result = state
-            .rpc_demux
-            .lock()
-            .unwrap()
-            .process_frame(request, &mut buffer)
-            .map_err(|err| {
-                error!(self.logger, "Error while processing frame"; "err" => %err);
-                Error::new("rhp/dispatcher", 1, &format!("{err}"))
-            })?;
+        let (mut session, message) = state.rpc_demux.process_frame(request, &mut buffer).await?;
 
-        if let Some((session_id, session_info, message, untrusted_plaintext)) = result {
+        if let Some(message) = message {
             // Dispatch request.
             assert!(
                 buffer.is_empty(),
@@ -810,23 +815,9 @@ impl Dispatcher {
 
             match message {
                 RpcMessage::Request(req) => {
-                    // First make sure that the untrusted_plaintext matches
-                    // the request's method!
-                    if untrusted_plaintext != req.method {
-                        error!(self.logger, "Request methods don't match!";
-                            "untrusted_plaintext" => ?untrusted_plaintext,
-                            "method" => ?req.method
-                        );
-                        return Err(Error::new(
-                            "rhp/dispatcher",
-                            1,
-                            "Request's method doesn't match untrusted_plaintext copy.",
-                        ));
-                    }
-
                     // Request, dispatch.
                     let response = self
-                        .dispatch_rpc(req, RpcKind::NoiseSession, session_info, &state)
+                        .dispatch_rpc(req, RpcKind::NoiseSession, session.info(), &state)
                         .await?;
                     let response = RpcMessage::Response(response);
 
@@ -837,11 +828,8 @@ impl Dispatcher {
                     );
 
                     let mut buffer = vec![];
-                    state
-                        .rpc_demux
-                        .lock()
-                        .unwrap()
-                        .write_message(session_id, response, &mut buffer)
+                    session
+                        .write_message(response, &mut buffer)
                         .map_err(|err| {
                             error!(self.logger, "Error while writing response"; "err" => %err);
                             Error::new("rhp/dispatcher", 1, &format!("{err}"))
@@ -853,9 +841,7 @@ impl Dispatcher {
                     let mut buffer = vec![];
                     state
                         .rpc_demux
-                        .lock()
-                        .unwrap()
-                        .close(session_id, &mut buffer)
+                        .close(session, &mut buffer)
                         .map_err(|err| {
                             error!(self.logger, "Error while closing session"; "err" => %err);
                             Error::new("rhp/dispatcher", 1, &format!("{err}"))
@@ -942,7 +928,7 @@ impl Dispatcher {
         Ok(response)
     }
 
-    fn handle_km_status_update(
+    async fn handle_km_status_update(
         &self,
         state: State,
         status: KeyManagerStatus,
@@ -955,22 +941,28 @@ impl Dispatcher {
 
         // Verify and decode the status.
         let runtime_id = state.protocol.get_host_info().runtime_id;
-        let key_manager = state.policy_verifier.key_manager(&runtime_id)?;
-        let published_status = state
-            .policy_verifier
-            .verify_key_manager_status(status, key_manager)?;
 
-        // Dispatch the local RPC call.
-        state
-            .rpc_dispatcher
-            .handle_km_status_update(published_status);
+        tokio::task::spawn_blocking(move || -> Result<(), Error> {
+            let key_manager = state.policy_verifier.key_manager(&runtime_id)?;
+            let published_status = state
+                .policy_verifier
+                .verify_key_manager_status(status, key_manager)?;
+
+            // Dispatch the local RPC call.
+            state
+                .rpc_dispatcher
+                .handle_km_status_update(published_status);
+
+            Ok(())
+        })
+        .await??;
 
         debug!(self.logger, "KM status update request complete");
 
         Ok(Body::RuntimeKeyManagerStatusUpdateResponse {})
     }
 
-    fn handle_km_quote_policy_update(
+    async fn handle_km_quote_policy_update(
         &self,
         state: State,
         quote_policy: QuotePolicy,
@@ -983,13 +975,20 @@ impl Dispatcher {
 
         // Verify and decode the policy.
         let runtime_id = state.protocol.get_host_info().runtime_id;
-        let key_manager = state.policy_verifier.key_manager(&runtime_id)?;
-        let policy = state
-            .policy_verifier
-            .verify_quote_policy(quote_policy, &key_manager, None)?;
 
-        // Dispatch the local RPC call.
-        state.rpc_dispatcher.handle_km_quote_policy_update(policy);
+        tokio::task::spawn_blocking(move || -> Result<(), Error> {
+            let key_manager = state.policy_verifier.key_manager(&runtime_id)?;
+            let policy =
+                state
+                    .policy_verifier
+                    .verify_quote_policy(quote_policy, &key_manager, None)?;
+
+            // Dispatch the local RPC call.
+            state.rpc_dispatcher.handle_km_quote_policy_update(policy);
+
+            Ok(())
+        })
+        .await??;
 
         debug!(self.logger, "KM quote policy update request complete");
 

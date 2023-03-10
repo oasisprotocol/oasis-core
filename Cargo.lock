@@ -170,6 +170,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.66"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b84f9ebcc6c1f5b8cb160f6990096a5c127f423fcb6e1ccc46c370cbdfb75dfc"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2055,6 +2066,7 @@ name = "oasis-core-keymanager"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64",
  "futures 0.3.26",
  "lazy_static",
@@ -2078,6 +2090,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
+ "async-trait",
  "base64",
  "base64-serde",
  "bech32",

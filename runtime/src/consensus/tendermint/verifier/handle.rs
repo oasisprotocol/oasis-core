@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use crossbeam::channel;
+use tokio::sync::oneshot;
 
 use crate::{
     consensus::{
@@ -22,23 +24,24 @@ pub struct Handle {
     pub command_sender: channel::Sender<Command>,
 }
 
+#[async_trait]
 impl verifier::Verifier for Handle {
-    fn sync(&self, height: u64) -> Result<(), Error> {
-        let (sender, receiver) = channel::bounded(1);
+    async fn sync(&self, height: u64) -> Result<(), Error> {
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::Synchronize(height, sender))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 
-    fn verify(
+    async fn verify(
         &self,
         consensus_block: LightBlock,
         runtime_header: Header,
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::Verify(
                 consensus_block,
@@ -49,16 +52,16 @@ impl verifier::Verifier for Handle {
             ))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 
-    fn verify_for_query(
+    async fn verify_for_query(
         &self,
         consensus_block: LightBlock,
         runtime_header: Header,
         epoch: EpochTime,
     ) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::Verify(
                 consensus_block,
@@ -69,10 +72,10 @@ impl verifier::Verifier for Handle {
             ))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 
-    fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
+    async fn unverified_state(&self, consensus_block: LightBlock) -> Result<ConsensusState, Error> {
         let untrusted_block =
             decode_light_block(consensus_block).map_err(Error::VerificationFailed)?;
         // NOTE: No actual verification is performed.
@@ -84,48 +87,48 @@ impl verifier::Verifier for Handle {
         ))
     }
 
-    fn latest_state(&self) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
+    async fn latest_state(&self) -> Result<ConsensusState, Error> {
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::LatestState(sender))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 
-    fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
-        let (sender, receiver) = channel::bounded(1);
+    async fn state_at(&self, height: u64) -> Result<ConsensusState, Error> {
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::StateAt(height, sender))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 
-    fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
-        let (sender, receiver) = channel::bounded(1);
+    async fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::EventsAt(height, kind, sender))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 
-    fn latest_height(&self) -> Result<u64, Error> {
-        let (sender, receiver) = channel::bounded(1);
+    async fn latest_height(&self) -> Result<u64, Error> {
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::LatestHeight(sender))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 
-    fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
-        let (sender, receiver) = channel::bounded(1);
+    async fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
+        let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::Trust(header.clone(), sender))
             .map_err(|_| Error::Internal)?;
 
-        receiver.recv().map_err(|_| Error::Internal)?
+        receiver.await.map_err(|_| Error::Internal)?
     }
 }
