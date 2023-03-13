@@ -10,7 +10,6 @@ use std::{
 };
 
 use anyhow::Result;
-use io_context::Context;
 use tempfile::{self, TempDir};
 
 use super::{rpc, Driver};
@@ -134,19 +133,15 @@ impl ReadSync for ProtocolServerReadSyncer {
         self
     }
 
-    fn sync_get(&mut self, _ctx: Context, request: GetRequest) -> Result<ProofResponse> {
+    fn sync_get(&mut self, request: GetRequest) -> Result<ProofResponse> {
         Ok(self.client.sync_get(&request)?)
     }
 
-    fn sync_get_prefixes(
-        &mut self,
-        _ctx: Context,
-        request: GetPrefixesRequest,
-    ) -> Result<ProofResponse> {
+    fn sync_get_prefixes(&mut self, request: GetPrefixesRequest) -> Result<ProofResponse> {
         Ok(self.client.sync_get_prefixes(&request)?)
     }
 
-    fn sync_iterate(&mut self, _ctx: Context, request: IterateRequest) -> Result<ProofResponse> {
+    fn sync_iterate(&mut self, request: IterateRequest) -> Result<ProofResponse> {
         Ok(self.client.sync_iterate(&request)?)
     }
 }

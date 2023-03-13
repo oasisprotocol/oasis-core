@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::Result;
-use io_context::Context;
 
 use oasis_core_runtime::{
     common::{
@@ -31,6 +30,7 @@ use oasis_core_runtime::{
         },
     },
     enclave_rpc::Context as RpcContext,
+    future::block_on,
     policy::PolicyVerifier,
     runtime_context, BUILD_INFO,
 };
@@ -334,9 +334,7 @@ fn fetch_master_secret(
     let km_client = key_manager_client_for_replication(ctx);
     for node in nodes.iter() {
         km_client.set_nodes(vec![*node]);
-        let result =
-            km_client.replicate_master_secret(Context::create_child(&ctx.io_ctx), generation);
-        let result = tokio::runtime::Handle::current().block_on(result);
+        let result = block_on(km_client.replicate_master_secret(generation));
         if let Ok(secret) = result {
             return Ok(secret);
         }
@@ -354,9 +352,7 @@ fn fetch_ephemeral_secret(
     let km_client = key_manager_client_for_replication(ctx);
     for node in nodes.iter() {
         km_client.set_nodes(vec![*node]);
-        let result =
-            km_client.replicate_ephemeral_secret(Context::create_child(&ctx.io_ctx), epoch);
-        let result = tokio::runtime::Handle::current().block_on(result);
+        let result = block_on(km_client.replicate_ephemeral_secret(epoch));
         if let Ok(secret) = result {
             return Ok(secret);
         }
@@ -430,9 +426,9 @@ fn authenticate<'a>(ctx: &'a RpcContext) -> Result<&'a EnclaveIdentity> {
 
 /// Fetch current epoch from the consensus layer.
 fn consensus_epoch(ctx: &RpcContext) -> Result<EpochTime> {
-    let consensus_state = ctx.consensus_verifier.latest_state()?;
+    let consensus_state = block_on(ctx.consensus_verifier.latest_state())?;
     let beacon_state = BeaconState::new(&consensus_state);
-    let consensus_epoch = beacon_state.epoch(Context::create_child(&ctx.io_ctx))?;
+    let consensus_epoch = beacon_state.epoch()?;
 
     Ok(consensus_epoch)
 }
@@ -443,11 +439,10 @@ fn validate_key_manager_status(
     runtime_id: Namespace,
     status: Status,
 ) -> Result<Status> {
-    let ioctx = ctx.io_ctx.clone();
     let consensus_verifier = ctx.consensus_verifier.clone();
     let verifier = PolicyVerifier::new(consensus_verifier);
 
-    verifier.verify_key_manager_status(ioctx, status, runtime_id)
+    verifier.verify_key_manager_status(status, runtime_id)
 }
 
 /// Validate that the epoch used for derivation of ephemeral private keys is not
@@ -470,7 +465,7 @@ fn validate_height_freshness(ctx: &RpcContext, height: Option<u64>) -> Result<()
     // To ensure backwards compatibility we skip check in those cases.
     // This should be removed in the future by making height mandatory.
     if let Some(height) = height {
-        let latest_height = ctx.consensus_verifier.latest_height()?;
+        let latest_height = block_on(ctx.consensus_verifier.latest_height())?;
         if latest_height > MAX_FRESH_HEIGHT_AGE && height < latest_height - MAX_FRESH_HEIGHT_AGE {
             return Err(KeyManagerError::HeightNotFresh.into());
         }
@@ -483,14 +478,10 @@ fn validate_signed_ephemeral_secret(
     ctx: &RpcContext,
     signed_secret: &SignedEncryptedEphemeralSecret,
 ) -> Result<EncryptedEphemeralSecret> {
-    let consensus_state = ctx.consensus_verifier.latest_state()?;
+    let consensus_state = block_on(ctx.consensus_verifier.latest_state())?;
     let km_state = KeyManagerState::new(&consensus_state);
     let published_signed_secret = km_state
-        .ephemeral_secret(
-            Context::create_child(&ctx.io_ctx),
-            signed_secret.secret.runtime_id,
-            signed_secret.secret.epoch,
-        )?
+        .ephemeral_secret(signed_secret.secret.runtime_id, signed_secret.secret.epoch)?
         .filter(|published_signed_secret| published_signed_secret == signed_secret)
         .ok_or(KeyManagerError::EphemeralSecretNotPublished)?;
 
@@ -499,10 +490,10 @@ fn validate_signed_ephemeral_secret(
 
 /// Fetch the identities of the key manager nodes.
 fn key_manager_nodes(ctx: &RpcContext, id: Namespace) -> Result<Vec<signature::PublicKey>> {
-    let consensus_state = ctx.consensus_verifier.latest_state()?;
+    let consensus_state = block_on(ctx.consensus_verifier.latest_state())?;
     let km_state = KeyManagerState::new(&consensus_state);
     let status = km_state
-        .status(Context::create_child(&ctx.io_ctx), id)?
+        .status(id)?
         .ok_or(KeyManagerError::StatusNotFound)?;
 
     Ok(status.nodes)
@@ -515,12 +506,12 @@ fn key_manager_rek_keys(
 ) -> Result<HashMap<signature::PublicKey, x25519::PublicKey>> {
     let nodes = key_manager_nodes(ctx, id)?;
 
-    let consensus_state = ctx.consensus_verifier.latest_state()?;
+    let consensus_state = block_on(ctx.consensus_verifier.latest_state())?;
     let registry_state = RegistryState::new(&consensus_state);
 
     let mut rek_map = HashMap::new();
     for pk in nodes.iter() {
-        let node = registry_state.node(Context::create_child(&ctx.io_ctx), pk)?;
+        let node = registry_state.node(pk)?;
         let runtimes = node
             .map(|n| n.runtimes)
             .unwrap_or_default()

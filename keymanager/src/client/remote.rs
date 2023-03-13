@@ -7,8 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use futures::future::{self, BoxFuture};
-use io_context::Context;
+use async_trait::async_trait;
 use lru::LruCache;
 
 use oasis_core_runtime::{
@@ -232,6 +231,7 @@ impl RemoteClient {
     }
 }
 
+#[async_trait]
 impl KeyManagerClient for RemoteClient {
     fn clear_cache(&self) {
         // We explicitly only take one lock at a time.
@@ -253,265 +253,255 @@ impl KeyManagerClient for RemoteClient {
         drop(cache);
     }
 
-    fn get_or_create_keys(
+    async fn get_or_create_keys(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         generation: u64,
-    ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
-        // Fetch from cache.
-        let mut cache = self.inner.longterm_private_keys.write().unwrap();
+    ) -> Result<KeyPair, KeyManagerError> {
         let id = (key_pair_id, generation);
-        if let Some(keys) = cache.get(&id) {
-            return Box::pin(future::ok(keys.clone()));
+
+        // First try to fetch from cache.
+        {
+            let mut cache = self.inner.longterm_private_keys.write().unwrap();
+            if let Some(keys) = cache.get(&id) {
+                return Ok(keys.clone());
+            }
         }
 
         // No entry in cache, fetch from key manager.
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let height = inner
-                .consensus_verifier
-                .latest_height()
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let height = self
+            .inner
+            .consensus_verifier
+            .latest_height()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let keys: KeyPair = inner
-                .rpc_client
-                .secure_call(
-                    ctx,
-                    METHOD_GET_OR_CREATE_KEYS,
-                    LongTermKeyRequest {
-                        height: Some(height),
-                        runtime_id: inner.runtime_id,
-                        key_pair_id,
-                        generation,
-                    },
-                )
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let keys: KeyPair = self
+            .inner
+            .rpc_client
+            .secure_call(
+                METHOD_GET_OR_CREATE_KEYS,
+                LongTermKeyRequest {
+                    height: Some(height),
+                    runtime_id: self.inner.runtime_id,
+                    key_pair_id,
+                    generation,
+                },
+            )
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            // Cache key.
-            let mut cache = inner.longterm_private_keys.write().unwrap();
-            cache.put(id, keys.clone());
+        // Cache key.
+        let mut cache = self.inner.longterm_private_keys.write().unwrap();
+        cache.put(id, keys.clone());
 
-            Ok(keys)
-        })
+        Ok(keys)
     }
 
-    fn get_public_key(
+    async fn get_public_key(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         generation: u64,
-    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
-        // Fetch from cache.
-        let mut cache = self.inner.longterm_public_keys.write().unwrap();
+    ) -> Result<SignedPublicKey, KeyManagerError> {
         let id = (key_pair_id, generation);
-        if let Some(key) = cache.get(&id) {
-            match self.verify_public_key(key, key_pair_id, None, None) {
-                Ok(()) => return Box::pin(future::ok(key.clone())),
-                Err(_) => {
-                    cache.pop(&id);
+
+        // First fetch from cache.
+        {
+            let mut cache = self.inner.longterm_public_keys.write().unwrap();
+            if let Some(key) = cache.get(&id) {
+                match self.verify_public_key(key, key_pair_id, None, None) {
+                    Ok(()) => return Ok(key.clone()),
+                    Err(_) => {
+                        cache.pop(&id);
+                    }
                 }
             }
         }
 
         // No entry in cache, fetch from key manager.
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let height = inner
-                .consensus_verifier
-                .latest_height()
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let height = self
+            .inner
+            .consensus_verifier
+            .latest_height()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let key: SignedPublicKey = inner
-                .rpc_client
-                .insecure_call(
-                    ctx,
-                    METHOD_GET_PUBLIC_KEY,
-                    LongTermKeyRequest {
-                        height: Some(height),
-                        runtime_id: inner.runtime_id,
-                        key_pair_id,
-                        generation,
-                    },
-                )
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let key: SignedPublicKey = self
+            .inner
+            .rpc_client
+            .insecure_call(
+                METHOD_GET_PUBLIC_KEY,
+                LongTermKeyRequest {
+                    height: Some(height),
+                    runtime_id: self.inner.runtime_id,
+                    key_pair_id,
+                    generation,
+                },
+            )
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            // Verify the signature.
-            self.verify_public_key(&key, key_pair_id, None, None)?;
+        // Verify the signature.
+        self.verify_public_key(&key, key_pair_id, None, None)?;
 
-            // Cache key.
-            let mut cache = inner.longterm_public_keys.write().unwrap();
-            cache.put(id, key.clone());
+        // Cache key.
+        let mut cache = self.inner.longterm_public_keys.write().unwrap();
+        cache.put(id, key.clone());
 
-            Ok(key)
-        })
+        Ok(key)
     }
 
-    fn get_or_create_ephemeral_keys(
+    async fn get_or_create_ephemeral_keys(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<KeyPair, KeyManagerError>> {
-        // Fetch from cache.
-        let mut cache = self.inner.ephemeral_private_keys.write().unwrap();
+    ) -> Result<KeyPair, KeyManagerError> {
         let id = (key_pair_id, epoch);
-        if let Some(keys) = cache.get(&id) {
-            return Box::pin(future::ok(keys.clone()));
+
+        // First try to fetch from cache.
+        {
+            let mut cache = self.inner.ephemeral_private_keys.write().unwrap();
+            if let Some(keys) = cache.get(&id) {
+                return Ok(keys.clone());
+            }
         }
 
         // No entry in cache, fetch from key manager.
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let height = inner
-                .consensus_verifier
-                .latest_height()
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let height = self
+            .inner
+            .consensus_verifier
+            .latest_height()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let keys: KeyPair = inner
-                .rpc_client
-                .secure_call(
-                    ctx,
-                    METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
-                    EphemeralKeyRequest {
-                        height: Some(height),
-                        runtime_id: inner.runtime_id,
-                        key_pair_id,
-                        epoch,
-                    },
-                )
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let keys: KeyPair = self
+            .inner
+            .rpc_client
+            .secure_call(
+                METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
+                EphemeralKeyRequest {
+                    height: Some(height),
+                    runtime_id: self.inner.runtime_id,
+                    key_pair_id,
+                    epoch,
+                },
+            )
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            // Cache key.
-            let mut cache = inner.ephemeral_private_keys.write().unwrap();
-            cache.put(id, keys.clone());
+        // Cache key.
+        let mut cache = self.inner.ephemeral_private_keys.write().unwrap();
+        cache.put(id, keys.clone());
 
-            Ok(keys)
-        })
+        Ok(keys)
     }
 
-    fn get_public_ephemeral_key(
+    async fn get_public_ephemeral_key(
         &self,
-        ctx: Context,
         key_pair_id: KeyPairId,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<SignedPublicKey, KeyManagerError>> {
-        let ctx = ctx.freeze();
+    ) -> Result<SignedPublicKey, KeyManagerError> {
+        let id = (key_pair_id, epoch);
 
         // Fetch current epoch.
-        let get_consensus_epoch = || -> Result<EpochTime, anyhow::Error> {
-            let consensus_state = self.inner.consensus_verifier.latest_state()?;
+        let consensus_state = self.inner.consensus_verifier.latest_state().await?;
+        let consensus_epoch = tokio::task::spawn_blocking(move || {
             let beacon_state = BeaconState::new(&consensus_state);
-            let consensus_epoch = beacon_state.epoch(Context::create_child(&ctx))?;
-            Ok(consensus_epoch)
-        };
-        let consensus_epoch = match get_consensus_epoch() {
-            Ok(epoch) => epoch,
-            Err(err) => return Box::pin(future::err(KeyManagerError::Other(err))),
-        };
+            beacon_state.epoch()
+        })
+        .await
+        .unwrap()?;
 
-        // Fetch from cache.
-        let mut cache = self.inner.ephemeral_public_keys.write().unwrap();
-        let id = (key_pair_id, epoch);
-        if let Some(key) = cache.get(&id) {
-            match self.verify_public_key(key, key_pair_id, Some(epoch), Some(consensus_epoch)) {
-                Ok(()) => return Box::pin(future::ok(key.clone())),
-                Err(_) => {
-                    cache.pop(&id);
+        // First try to fetch from cache.
+        {
+            let mut cache = self.inner.ephemeral_public_keys.write().unwrap();
+            if let Some(key) = cache.get(&id) {
+                match self.verify_public_key(key, key_pair_id, Some(epoch), Some(consensus_epoch)) {
+                    Ok(()) => return Ok(key.clone()),
+                    Err(_) => {
+                        cache.pop(&id);
+                    }
                 }
             }
         }
 
         // No entry in cache, fetch from key manager.
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let height = inner
-                .consensus_verifier
-                .latest_height()
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let height = self
+            .inner
+            .consensus_verifier
+            .latest_height()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let key: SignedPublicKey = inner
-                .rpc_client
-                .insecure_call(
-                    Context::create_child(&ctx),
-                    METHOD_GET_PUBLIC_EPHEMERAL_KEY,
-                    EphemeralKeyRequest {
-                        height: Some(height),
-                        runtime_id: inner.runtime_id,
-                        key_pair_id,
-                        epoch,
-                    },
-                )
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+        let key: SignedPublicKey = self
+            .inner
+            .rpc_client
+            .insecure_call(
+                METHOD_GET_PUBLIC_EPHEMERAL_KEY,
+                EphemeralKeyRequest {
+                    height: Some(height),
+                    runtime_id: self.inner.runtime_id,
+                    key_pair_id,
+                    epoch,
+                },
+            )
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            // Verify the signature.
-            self.verify_public_key(&key, key_pair_id, Some(epoch), Some(consensus_epoch))?;
+        // Verify the signature.
+        self.verify_public_key(&key, key_pair_id, Some(epoch), Some(consensus_epoch))?;
 
-            // Cache key.
-            let mut cache = inner.ephemeral_public_keys.write().unwrap();
-            cache.put(id, key.clone());
+        // Cache key.
+        let mut cache = self.inner.ephemeral_public_keys.write().unwrap();
+        cache.put(id, key.clone());
 
-            Ok(key)
-        })
+        Ok(key)
     }
 
-    fn replicate_master_secret(
-        &self,
-        ctx: Context,
-        generation: u64,
-    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let height = inner
-                .consensus_verifier
-                .latest_height()
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+    async fn replicate_master_secret(&self, generation: u64) -> Result<Secret, KeyManagerError> {
+        let height = self
+            .inner
+            .consensus_verifier
+            .latest_height()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let rsp: ReplicateMasterSecretResponse = inner
-                .rpc_client
-                .secure_call(
-                    ctx,
-                    METHOD_REPLICATE_MASTER_SECRET,
-                    ReplicateMasterSecretRequest {
-                        height: Some(height),
-                        generation,
-                    },
-                )
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
-            Ok(rsp.master_secret)
-        })
+        self.inner
+            .rpc_client
+            .secure_call(
+                METHOD_REPLICATE_MASTER_SECRET,
+                ReplicateMasterSecretRequest {
+                    height: Some(height),
+                    generation,
+                },
+            )
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))
+            .map(|rsp: ReplicateMasterSecretResponse| rsp.master_secret)
     }
 
-    fn replicate_ephemeral_secret(
+    async fn replicate_ephemeral_secret(
         &self,
-        ctx: Context,
         epoch: EpochTime,
-    ) -> BoxFuture<Result<Secret, KeyManagerError>> {
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let height = inner
-                .consensus_verifier
-                .latest_height()
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
+    ) -> Result<Secret, KeyManagerError> {
+        let height = self
+            .inner
+            .consensus_verifier
+            .latest_height()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-            let rsp: ReplicateEphemeralSecretResponse = inner
-                .rpc_client
-                .secure_call(
-                    ctx,
-                    METHOD_REPLICATE_EPHEMERAL_SECRET,
-                    ReplicateEphemeralSecretRequest {
-                        height: Some(height),
-                        epoch,
-                    },
-                )
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
-            Ok(rsp.ephemeral_secret)
-        })
+        self.inner
+            .rpc_client
+            .secure_call(
+                METHOD_REPLICATE_EPHEMERAL_SECRET,
+                ReplicateEphemeralSecretRequest {
+                    height: Some(height),
+                    epoch,
+                },
+            )
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))
+            .map(|rsp: ReplicateEphemeralSecretResponse| rsp.ephemeral_secret)
     }
 }

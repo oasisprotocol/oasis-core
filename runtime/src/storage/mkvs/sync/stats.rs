@@ -1,7 +1,6 @@
 use std::any::Any;
 
 use anyhow::Result;
-use io_context::Context;
 
 use crate::storage::mkvs::sync::*;
 
@@ -34,22 +33,18 @@ impl ReadSync for StatsCollector {
         self
     }
 
-    fn sync_get(&mut self, ctx: Context, request: GetRequest) -> Result<ProofResponse> {
+    fn sync_get(&mut self, request: GetRequest) -> Result<ProofResponse> {
         self.sync_get_count += 1;
-        self.rs.sync_get(ctx, request)
+        self.rs.sync_get(request)
     }
 
-    fn sync_get_prefixes(
-        &mut self,
-        ctx: Context,
-        request: GetPrefixesRequest,
-    ) -> Result<ProofResponse> {
+    fn sync_get_prefixes(&mut self, request: GetPrefixesRequest) -> Result<ProofResponse> {
         self.sync_get_prefixes_count += 1;
-        self.rs.sync_get_prefixes(ctx, request)
+        self.rs.sync_get_prefixes(request)
     }
 
-    fn sync_iterate(&mut self, ctx: Context, request: IterateRequest) -> Result<ProofResponse> {
+    fn sync_iterate(&mut self, request: IterateRequest) -> Result<ProofResponse> {
         self.sync_iterate_count += 1;
-        self.rs.sync_iterate(ctx, request)
+        self.rs.sync_iterate(request)
     }
 }

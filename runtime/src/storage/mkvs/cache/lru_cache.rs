@@ -1,8 +1,7 @@
-use std::{any::Any, cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc, sync::Arc};
+use std::{any::Any, cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc};
 
 use anyhow::{anyhow, Result};
 use intrusive_collections::{intrusive_adapter, LinkedList, LinkedListLink};
-use io_context::Context;
 use thiserror::Error;
 
 use crate::storage::mkvs::{cache::*, sync::*, tree::*};
@@ -395,7 +394,6 @@ impl Cache for LRUCache {
 
     fn deref_node_ptr<F: ReadSyncFetcher>(
         &mut self,
-        ctx: &Arc<Context>,
         ptr: NodePtrRef,
         fetcher: Option<F>,
     ) -> Result<Option<NodeRef>> {
@@ -430,7 +428,7 @@ impl Cache for LRUCache {
 
         // Node not available locally, fetch from read syncer.
         if let Some(fetcher) = fetcher {
-            self.remote_sync(ctx, ptr_ref.clone(), fetcher)?;
+            self.remote_sync(ptr_ref.clone(), fetcher)?;
         } else {
             return Err(anyhow!(
                 "mkvs: node to dereference not available locally and no fetcher provided"
@@ -446,18 +444,8 @@ impl Cache for LRUCache {
         Ok(ptr.node.clone())
     }
 
-    fn remote_sync<F: ReadSyncFetcher>(
-        &mut self,
-        ctx: &Arc<Context>,
-        ptr: NodePtrRef,
-        fetcher: F,
-    ) -> Result<()> {
-        let proof = fetcher.fetch(
-            Context::create_child(ctx),
-            self.sync_root,
-            ptr.clone(),
-            &mut self.read_syncer,
-        )?;
+    fn remote_sync<F: ReadSyncFetcher>(&mut self, ptr: NodePtrRef, fetcher: F) -> Result<()> {
+        let proof = fetcher.fetch(self.sync_root, ptr.clone(), &mut self.read_syncer)?;
 
         // The proof can be for one of two hashes: i) it is either for ptr.Hash in case
         // all the nodes are only contained in the subtree below ptr, or ii) it is for
@@ -476,7 +464,7 @@ impl Cache for LRUCache {
 
         // Verify proof.
         let pv = ProofVerifier;
-        let subtree = pv.verify_proof(Context::create_child(ctx), expected_root, &proof)?;
+        let subtree = pv.verify_proof(expected_root, &proof)?;
 
         // Merge resulting nodes.
         let mut merged_nodes: Vec<NodePtrRef> = Vec::new();

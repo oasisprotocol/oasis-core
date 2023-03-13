@@ -2,10 +2,9 @@ mod lru_cache;
 
 pub use lru_cache::*;
 
-use std::{any::Any, ptr::NonNull, sync::Arc};
+use std::{any::Any, ptr::NonNull};
 
 use anyhow::Result;
-use io_context::Context;
 
 use crate::storage::mkvs::{cache::lru_cache::CacheItemBox, sync::*, tree::*};
 
@@ -21,27 +20,15 @@ pub struct CacheStats {
 /// Used to fetch proofs from a remote tree via the ReadSyncer interface.
 pub trait ReadSyncFetcher {
     /// Fetch proof.
-    fn fetch(
-        &self,
-        ctx: Context,
-        root: Root,
-        ptr: NodePtrRef,
-        rs: &mut Box<dyn ReadSync>,
-    ) -> Result<Proof>;
+    fn fetch(&self, root: Root, ptr: NodePtrRef, rs: &mut Box<dyn ReadSync>) -> Result<Proof>;
 }
 
 impl<F> ReadSyncFetcher for F
 where
-    F: Fn(Context, Root, NodePtrRef, &mut Box<dyn ReadSync>) -> Result<Proof>,
+    F: Fn(Root, NodePtrRef, &mut Box<dyn ReadSync>) -> Result<Proof>,
 {
-    fn fetch(
-        &self,
-        ctx: Context,
-        root: Root,
-        ptr: NodePtrRef,
-        rs: &mut Box<dyn ReadSync>,
-    ) -> Result<Proof> {
-        (*self)(ctx, root, ptr, rs)
+    fn fetch(&self, root: Root, ptr: NodePtrRef, rs: &mut Box<dyn ReadSync>) -> Result<Proof> {
+        (*self)(root, ptr, rs)
     }
 }
 
@@ -87,17 +74,11 @@ pub trait Cache {
     /// without invoking the read syncer.
     fn deref_node_ptr<F: ReadSyncFetcher>(
         &mut self,
-        ctx: &Arc<Context>,
         ptr: NodePtrRef,
         fetcher: Option<F>,
     ) -> Result<Option<NodeRef>>;
     /// Perform a remote sync with the configured remote syncer.
-    fn remote_sync<F: ReadSyncFetcher>(
-        &mut self,
-        ctx: &Arc<Context>,
-        ptr: NodePtrRef,
-        fetcher: F,
-    ) -> Result<()>;
+    fn remote_sync<F: ReadSyncFetcher>(&mut self, ptr: NodePtrRef, fetcher: F) -> Result<()>;
 
     /// Mark that a tree node was just used.
     fn use_node(&mut self, ptr: NodePtrRef) -> bool;

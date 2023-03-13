@@ -1,8 +1,6 @@
 //! Runtime call context.
 use std::sync::Arc;
 
-use io_context::Context as IoContext;
-
 use crate::{
     consensus::{
         beacon::EpochTime,
@@ -16,8 +14,6 @@ use crate::{
 
 /// Transaction context.
 pub struct Context<'a> {
-    /// I/O context.
-    pub io_ctx: Arc<IoContext>,
     /// Low-level access to the underlying Runtime Host Protocol.
     pub protocol: Arc<Protocol>,
     /// Consensus light block.
@@ -43,7 +39,6 @@ impl<'a> Context<'a> {
     /// Construct new transaction context.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        io_ctx: Arc<IoContext>,
         protocol: Arc<Protocol>,
         consensus_block: &'a LightBlock,
         consensus_state: ConsensusState,
@@ -55,7 +50,6 @@ impl<'a> Context<'a> {
         check_only: bool,
     ) -> Self {
         Self {
-            io_ctx,
             protocol,
             consensus_block,
             consensus_state,

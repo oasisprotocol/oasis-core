@@ -1,4 +1,3 @@
-use io_context::Context;
 use std::sync::Arc;
 
 use sgx_isa::Keypolicy;
@@ -79,8 +78,7 @@ pub struct TrustedStateStore {
 impl TrustedStateStore {
     /// Create a new trusted state local store.
     pub fn new(runtime_id: Namespace, chain_context: String, protocol: Arc<Protocol>) -> Self {
-        let untrusted_local_store =
-            ProtocolUntrustedLocalStorage::new(Context::background(), protocol);
+        let untrusted_local_store = ProtocolUntrustedLocalStorage::new(protocol);
 
         Self {
             runtime_id,

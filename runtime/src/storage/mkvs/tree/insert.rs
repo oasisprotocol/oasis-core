@@ -1,7 +1,6 @@
-use std::{mem, sync::Arc};
+use std::mem;
 
 use anyhow::{anyhow, Result};
-use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, tree::*};
 
@@ -9,8 +8,7 @@ use super::lookup::FetcherSyncGet;
 
 impl Tree {
     /// Insert a key/value pair into the tree.
-    pub fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        let ctx = ctx.freeze();
+    pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let pending_root = self.cache.borrow().get_pending_root();
         let boxed_key = key.to_vec();
         let boxed_val = value.to_vec();
@@ -18,7 +16,7 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        let (new_root, old_val) = self._insert(&ctx, pending_root, 0, &boxed_key, boxed_val)?;
+        let (new_root, old_val) = self._insert(pending_root, 0, &boxed_key, boxed_val)?;
         self.cache.borrow_mut().set_pending_root(new_root);
 
         Ok(old_val)
@@ -26,17 +24,15 @@ impl Tree {
 
     fn _insert(
         &mut self,
-        ctx: &Arc<Context>,
         ptr: NodePtrRef,
         bit_depth: Depth,
         key: &Key,
         val: Value,
     ) -> Result<(NodePtrRef, Option<Value>)> {
-        let node_ref = self.cache.borrow_mut().deref_node_ptr(
-            ctx,
-            ptr.clone(),
-            Some(FetcherSyncGet::new(key, false)),
-        )?;
+        let node_ref = self
+            .cache
+            .borrow_mut()
+            .deref_node_ptr(ptr.clone(), Some(FetcherSyncGet::new(key, false)))?;
 
         let (_, key_remainder) = key.split(bit_depth, key.bit_length());
 
@@ -63,7 +59,6 @@ impl Tree {
                             // Key to insert ends exactly at this node. Add it to the
                             // existing internal node as LeafNode.
                             r = self._insert(
-                                ctx,
                                 n.leaf_node.clone(),
                                 bit_depth + n.label_bit_length,
                                 key,
@@ -73,7 +68,6 @@ impl Tree {
                         } else if key.get_bit(bit_depth + n.label_bit_length) {
                             // Insert recursively based on the bit value.
                             r = self._insert(
-                                ctx,
                                 n.right.clone(),
                                 bit_depth + n.label_bit_length,
                                 key,
@@ -82,7 +76,6 @@ impl Tree {
                             n.right = r.0;
                         } else {
                             r = self._insert(
-                                ctx,
                                 n.left.clone(),
                                 bit_depth + n.label_bit_length,
                                 key,

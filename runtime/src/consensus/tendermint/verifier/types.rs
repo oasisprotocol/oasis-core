@@ -1,4 +1,4 @@
-use crossbeam::channel;
+use tokio::sync::oneshot;
 
 use crate::{
     consensus::{
@@ -17,18 +17,19 @@ pub const NONCE_SIZE: usize = 32;
 /// Nonce for prove freshness request.
 pub type Nonce = [u8; NONCE_SIZE];
 
+/// Command sent to the verifier thread.
 pub enum Command {
-    Synchronize(u64, channel::Sender<Result<(), Error>>),
+    Synchronize(u64, oneshot::Sender<Result<(), Error>>),
     Verify(
         LightBlock,
         Header,
         EpochTime,
-        channel::Sender<Result<ConsensusState, Error>>,
+        oneshot::Sender<Result<ConsensusState, Error>>,
         bool,
     ),
-    Trust(ComputeResultsHeader, channel::Sender<Result<(), Error>>),
-    LatestState(channel::Sender<Result<ConsensusState, Error>>),
-    LatestHeight(channel::Sender<Result<u64, Error>>),
-    StateAt(u64, channel::Sender<Result<ConsensusState, Error>>),
-    EventsAt(u64, EventKind, channel::Sender<Result<Vec<Event>, Error>>),
+    Trust(ComputeResultsHeader, oneshot::Sender<Result<(), Error>>),
+    LatestState(oneshot::Sender<Result<ConsensusState, Error>>),
+    LatestHeight(oneshot::Sender<Result<u64, Error>>),
+    StateAt(u64, oneshot::Sender<Result<ConsensusState, Error>>),
+    EventsAt(u64, EventKind, oneshot::Sender<Result<Vec<Event>, Error>>),
 }

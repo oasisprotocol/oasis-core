@@ -1,5 +1,3 @@
-use io_context::Context as IoContext;
-
 use oasis_core_runtime::{
     common::crypto::mrae::deoxysii::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE},
     storage::MKVS,
@@ -28,9 +26,9 @@ impl EncryptionContext {
     }
 
     /// Get encrypted MKVS entry.
-    pub fn get(&self, mkvs: &dyn MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn get(&self, mkvs: &dyn MKVS, key: &[u8]) -> Option<Vec<u8>> {
         let key = self.derive_encrypted_key(key);
-        let ciphertext = match mkvs.get(ctx, &key) {
+        let ciphertext = match mkvs.get(&key) {
             Some(ciphertext) => ciphertext,
             None => return None,
         };
@@ -42,7 +40,6 @@ impl EncryptionContext {
     pub fn insert(
         &self,
         mkvs: &mut dyn MKVS,
-        ctx: IoContext,
         key: &[u8],
         value: &[u8],
         nonce: &[u8],
@@ -52,7 +49,7 @@ impl EncryptionContext {
         ciphertext.extend_from_slice(&nonce);
 
         let key = self.derive_encrypted_key(key);
-        let ciphertext = match mkvs.insert(ctx, &key, &ciphertext) {
+        let ciphertext = match mkvs.insert(&key, &ciphertext) {
             Some(ciphertext) => ciphertext,
             None => return None,
         };
@@ -61,9 +58,9 @@ impl EncryptionContext {
     }
 
     /// Remove encrypted MKVS entry.
-    pub fn remove(&self, mkvs: &mut dyn MKVS, ctx: IoContext, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn remove(&self, mkvs: &mut dyn MKVS, key: &[u8]) -> Option<Vec<u8>> {
         let key = self.derive_encrypted_key(key);
-        let ciphertext = match mkvs.remove(ctx, &key) {
+        let ciphertext = match mkvs.remove(&key) {
             Some(ciphertext) => ciphertext,
             None => return None,
         };

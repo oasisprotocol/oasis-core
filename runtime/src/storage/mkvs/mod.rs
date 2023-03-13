@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::{Error, Result};
-use io_context::Context;
 
 use crate::common::{crypto::hash::Hash, namespace::Namespace};
 
@@ -99,14 +98,14 @@ impl From<Vec<u8>> for Prefix {
 /// Merklized key-value store.
 pub trait MKVS {
     /// Fetch entry with given key.
-    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
+    fn get(&self, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Check if the local MKVS cache contains the given key.
     ///
     /// While get can be used to check if the MKVS as a whole contains
     /// a given key, this function specifically guarantees that no remote
     /// syncing will be invoked, only checking the local cache.
-    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool;
+    fn cache_contains_key(&self, key: &[u8]) -> bool;
 
     /// Update entry with given key.
     ///
@@ -116,38 +115,33 @@ pub trait MKVS {
     /// returned.
     ///
     /// [`None`]: std::option::Option
-    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>>;
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>>;
 
     /// Remove entry with given key, returning the value at the key if the key was previously
     /// in the database.
-    fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>>;
+    fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16);
+    fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16);
 
     /// Returns an iterator over the tree.
-    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
+    fn iter(&self) -> Box<dyn Iterator + '_>;
 
     /// Commit all database changes to the underlying store.
-    fn commit(
-        &mut self,
-        ctx: Context,
-        namespace: Namespace,
-        version: u64,
-    ) -> Result<(WriteLog, Hash)>;
+    fn commit(&mut self, namespace: Namespace, version: u64) -> Result<(WriteLog, Hash)>;
 }
 
 /// Merklized key-value store where methods return errors instead of panicking.
 pub trait FallibleMKVS {
     /// Fetch entry with given key.
-    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Check if the local MKVS cache contains the given key.
     ///
     /// While get can be used to check if the MKVS as a whole contains
     /// a given key, this function specifically guarantees that no remote
     /// syncing will be invoked, only checking the local cache.
-    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool;
+    fn cache_contains_key(&self, key: &[u8]) -> bool;
 
     /// Update entry with given key.
     ///
@@ -157,48 +151,48 @@ pub trait FallibleMKVS {
     /// returned.
     ///
     /// [`None`]: std::option::Option
-    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Remove entry with given key, returning the value at the key if the key was previously
     /// in the database.
-    fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()>;
+    fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16) -> Result<()>;
 
     /// Returns an iterator over the tree.
-    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
+    fn iter(&self) -> Box<dyn Iterator + '_>;
 
     /// Commit all database changes to the underlying store.
-    fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash>;
+    fn commit(&mut self, namespace: Namespace, version: u64) -> Result<Hash>;
 }
 
 /// Immutable merkalized key value store.
 pub trait ImmutableMKVS {
     /// Fetch entry with given key.
-    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>>;
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()>;
+    fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16) -> Result<()>;
 
     /// Returns an iterator over the tree.
-    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_>;
+    fn iter(&self) -> Box<dyn Iterator + '_>;
 }
 
 impl<T> ImmutableMKVS for T
 where
     T: FallibleMKVS,
 {
-    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        T::get(self, ctx, key)
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::get(self, key)
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()> {
-        T::prefetch_prefixes(self, ctx, prefixes, limit)
+    fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16) -> Result<()> {
+        T::prefetch_prefixes(self, prefixes, limit)
     }
 
-    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
-        T::iter(self, ctx)
+    fn iter(&self) -> Box<dyn Iterator + '_> {
+        T::iter(self)
     }
 }
 
@@ -230,67 +224,62 @@ pub trait Iterator: iter::Iterator<Item = (Vec<u8>, Vec<u8>)> {
 }
 
 impl<T: MKVS + ?Sized> MKVS for &mut T {
-    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
-        T::get(self, ctx, key)
+    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        T::get(self, key)
     }
 
-    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
-        T::cache_contains_key(self, ctx, key)
+    fn cache_contains_key(&self, key: &[u8]) -> bool {
+        T::cache_contains_key(self, key)
     }
 
-    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-        T::insert(self, ctx, key, value)
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+        T::insert(self, key, value)
     }
 
-    fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
-        T::remove(self, ctx, key)
+    fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+        T::remove(self, key)
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) {
-        T::prefetch_prefixes(self, ctx, prefixes, limit)
+    fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16) {
+        T::prefetch_prefixes(self, prefixes, limit)
     }
 
-    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
-        T::iter(self, ctx)
+    fn iter(&self) -> Box<dyn Iterator + '_> {
+        T::iter(self)
     }
 
-    fn commit(
-        &mut self,
-        ctx: Context,
-        namespace: Namespace,
-        version: u64,
-    ) -> Result<(WriteLog, Hash)> {
-        T::commit(self, ctx, namespace, version)
+    fn commit(&mut self, namespace: Namespace, version: u64) -> Result<(WriteLog, Hash)> {
+        T::commit(self, namespace, version)
     }
 }
 
 impl<T: FallibleMKVS + ?Sized> FallibleMKVS for &mut T {
-    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        T::get(self, ctx, key)
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::get(self, key)
     }
 
-    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
-        T::cache_contains_key(self, ctx, key)
+    fn cache_contains_key(&self, key: &[u8]) -> bool {
+        T::cache_contains_key(self, key)
     }
 
-    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        T::insert(self, ctx, key, value)
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::insert(self, key, value)
     }
 
-    fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        T::remove(self, ctx, key)
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        T::remove(self, key)
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[Prefix], limit: u16) -> Result<()> {
-        T::prefetch_prefixes(self, ctx, prefixes, limit)
+    fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16) -> Result<()> {
+        T::prefetch_prefixes(self, prefixes, limit)
     }
 
-    fn iter(&self, ctx: Context) -> Box<dyn Iterator + '_> {
-        T::iter(self, ctx)
+    fn iter(&self) -> Box<dyn Iterator + '_> {
+        T::iter(self)
     }
 
-    fn commit(&mut self, ctx: Context, namespace: Namespace, version: u64) -> Result<Hash> {
-        T::commit(self, ctx, namespace, version)
+    fn commit(&mut self, namespace: Namespace, version: u64) -> Result<Hash> {
+        T::commit(self, namespace, version)
     }
 }
 

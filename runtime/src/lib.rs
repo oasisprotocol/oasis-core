@@ -28,6 +28,7 @@ pub mod config;
 pub mod consensus;
 pub mod dispatcher;
 pub mod enclave_rpc;
+pub mod future;
 pub mod host;
 pub mod identity;
 pub mod init;

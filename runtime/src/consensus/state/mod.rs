@@ -2,7 +2,6 @@
 use std::sync::Arc;
 
 use anyhow::{Error, Result};
-use io_context::Context;
 use thiserror::Error;
 
 use crate::{
@@ -66,39 +65,37 @@ impl ConsensusState {
 }
 
 impl ImmutableMKVS for ConsensusState {
-    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.mkvs.get(ctx, key)
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.mkvs.get(key)
     }
 
     fn prefetch_prefixes(
         &self,
-        ctx: Context,
         prefixes: &[crate::storage::mkvs::Prefix],
         limit: u16,
     ) -> Result<()> {
-        self.mkvs.prefetch_prefixes(ctx, prefixes, limit)
+        self.mkvs.prefetch_prefixes(prefixes, limit)
     }
 
-    fn iter(&self, ctx: Context) -> Box<dyn crate::storage::mkvs::Iterator + '_> {
-        Box::new(self.mkvs.iter(ctx))
+    fn iter(&self) -> Box<dyn crate::storage::mkvs::Iterator + '_> {
+        Box::new(self.mkvs.iter())
     }
 }
 
 impl ImmutableMKVS for &ConsensusState {
-    fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.mkvs.get(ctx, key)
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.mkvs.get(key)
     }
 
     fn prefetch_prefixes(
         &self,
-        ctx: Context,
         prefixes: &[crate::storage::mkvs::Prefix],
         limit: u16,
     ) -> Result<()> {
-        self.mkvs.prefetch_prefixes(ctx, prefixes, limit)
+        self.mkvs.prefetch_prefixes(prefixes, limit)
     }
 
-    fn iter(&self, ctx: Context) -> Box<dyn crate::storage::mkvs::Iterator + '_> {
-        Box::new(self.mkvs.iter(ctx))
+    fn iter(&self) -> Box<dyn crate::storage::mkvs::Iterator + '_> {
+        Box::new(self.mkvs.iter())
     }
 }

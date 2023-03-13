@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use anyhow::Result;
-use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, tree::*};
 
@@ -10,15 +7,14 @@ use super::lookup::FetcherSyncGet;
 impl Tree {
     /// Remove entry with given key, returning the value at the key if the key was previously
     /// in the database.
-    pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let ctx = ctx.freeze();
+    pub fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        let (new_root, _, old_val) = self._remove(&ctx, pending_root, 0, &boxed_key)?;
+        let (new_root, _, old_val) = self._remove(pending_root, 0, &boxed_key)?;
         self.cache.borrow_mut().set_pending_root(new_root);
 
         Ok(old_val)
@@ -26,16 +22,14 @@ impl Tree {
 
     fn _remove(
         &mut self,
-        ctx: &Arc<Context>,
         ptr: NodePtrRef,
         bit_depth: Depth,
         key: &Key,
     ) -> Result<(NodePtrRef, bool, Option<Value>)> {
-        let node_ref = self.cache.borrow_mut().deref_node_ptr(
-            ctx,
-            ptr.clone(),
-            Some(FetcherSyncGet::new(key, true)),
-        )?;
+        let node_ref = self
+            .cache
+            .borrow_mut()
+            .deref_node_ptr(ptr.clone(), Some(FetcherSyncGet::new(key, true)))?;
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
@@ -62,11 +56,11 @@ impl Tree {
                     }
 
                     let (new_child, c, o) = if key.bit_length() == bit_length {
-                        self._remove(ctx, n.leaf_node.clone(), bit_depth, key)?
+                        self._remove(n.leaf_node.clone(), bit_depth, key)?
                     } else if key.get_bit(bit_length) {
-                        self._remove(ctx, n.right.clone(), bit_length, key)?
+                        self._remove(n.right.clone(), bit_length, key)?
                     } else {
-                        self._remove(ctx, n.left.clone(), bit_length, key)?
+                        self._remove(n.left.clone(), bit_length, key)?
                     };
 
                     changed = c;
@@ -83,16 +77,14 @@ impl Tree {
                     // Fetch and check the remaining children.
                     // NOTE: The leaf node is always included with the internal node.
                     remaining_leaf = n.leaf_node.borrow().node.clone();
-                    remaining_left = self.cache.borrow_mut().deref_node_ptr(
-                        ctx,
-                        n.left.clone(),
-                        Some(FetcherSyncGet::new(key, true)),
-                    )?;
-                    remaining_right = self.cache.borrow_mut().deref_node_ptr(
-                        ctx,
-                        n.right.clone(),
-                        Some(FetcherSyncGet::new(key, true)),
-                    )?;
+                    remaining_left = self
+                        .cache
+                        .borrow_mut()
+                        .deref_node_ptr(n.left.clone(), Some(FetcherSyncGet::new(key, true)))?;
+                    remaining_right = self
+                        .cache
+                        .borrow_mut()
+                        .deref_node_ptr(n.right.clone(), Some(FetcherSyncGet::new(key, true)))?;
                 } else {
                     unreachable!("node kind is Internal");
                 }

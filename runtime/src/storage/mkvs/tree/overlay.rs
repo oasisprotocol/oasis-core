@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::{Error, Result};
-use io_context::Context;
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
@@ -33,19 +32,19 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
     }
 
     /// Get an existing key.
-    pub fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         // For dirty values, check the overlay.
         if self.dirty.contains(key) {
             return Ok(self.overlay.get(key).cloned());
         }
 
         // Otherwise fetch from inner tree.
-        self.inner.get(ctx, key)
+        self.inner.get(key)
     }
 
     /// Insert a key/value pair into the tree.
-    pub fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        let previous = self.get(ctx, key)?;
+    pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        let previous = self.get(key)?;
 
         self.overlay.insert(key.to_owned(), value.to_owned());
         self.dirty.insert(key.to_owned());
@@ -55,13 +54,13 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
 
     /// Remove entry with given key, returning the value at the key if the key was previously
     /// in the database.
-    pub fn remove(&mut self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    pub fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         // For dirty values, remove from the overlay.
         if self.dirty.contains(key) {
             return Ok(self.overlay.remove(key));
         }
 
-        let value = self.inner.get(ctx, key)?;
+        let value = self.inner.get(key)?;
 
         // Do not treat a value as dirty if it was not dirty before and did not exist in the inner tree.
         if value.is_some() {
@@ -71,18 +70,17 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
     }
 
     /// Return an iterator over the tree.
-    pub fn iter(&self, ctx: Context) -> OverlayTreeIterator<T> {
-        OverlayTreeIterator::new(ctx, self)
+    pub fn iter(&self) -> OverlayTreeIterator<T> {
+        OverlayTreeIterator::new(self)
     }
 
     /// Commit any modifications to the underlying tree.
-    pub fn commit(&mut self, ctx: Context) -> Result<mkvs::WriteLog> {
-        let ctx = ctx.freeze();
+    pub fn commit(&mut self) -> Result<mkvs::WriteLog> {
         let mut log: mkvs::WriteLog = Vec::new();
 
         // Insert all items present in the overlay.
         for (key, value) in &self.overlay {
-            self.inner.insert(Context::create_child(&ctx), key, value)?;
+            self.inner.insert(key, value)?;
             self.dirty.remove(key);
 
             log.push(mkvs::LogEntry {
@@ -94,7 +92,7 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
 
         // Any remaining dirty items must have been removed.
         for key in &self.dirty {
-            self.inner.remove(Context::create_child(&ctx), key)?;
+            self.inner.remove(key)?;
 
             log.push(mkvs::LogEntry {
                 key: key.clone(),
@@ -110,17 +108,13 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
     /// tree, returning the new root hash.
     pub fn commit_both(
         &mut self,
-        ctx: Context,
         namespace: Namespace,
         version: u64,
     ) -> Result<(mkvs::WriteLog, Hash)> {
-        let ctx = ctx.freeze();
         // First commit modifications to the underlying tree.
-        let write_log = self.commit(Context::create_child(&ctx))?;
+        let write_log = self.commit()?;
         // Then commit the underlying tree.
-        let root_hash = self
-            .inner
-            .commit(Context::create_child(&ctx), namespace, version)?;
+        let root_hash = self.inner.commit(namespace, version)?;
 
         Ok((write_log, root_hash))
     }
@@ -139,10 +133,10 @@ pub struct OverlayTreeIterator<'tree, T: mkvs::FallibleMKVS> {
 }
 
 impl<'tree, T: mkvs::FallibleMKVS> OverlayTreeIterator<'tree, T> {
-    fn new(ctx: Context, tree: &'tree OverlayTree<T>) -> Self {
+    fn new(tree: &'tree OverlayTree<T>) -> Self {
         Self {
             tree,
-            inner: tree.inner.iter(ctx),
+            inner: tree.inner.iter(),
             overlay: tree.overlay.range(vec![]..).peekable(),
             overlay_valid: true,
             key: None,
@@ -261,41 +255,36 @@ impl<'tree, T: mkvs::FallibleMKVS> mkvs::Iterator for OverlayTreeIterator<'tree,
 }
 
 impl<T: mkvs::FallibleMKVS> mkvs::MKVS for OverlayTree<T> {
-    fn get(&self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
-        self.get(ctx, key).unwrap()
+    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        self.get(key).unwrap()
     }
 
-    fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
+    fn cache_contains_key(&self, key: &[u8]) -> bool {
         // For dirty values, check the overlay.
         if self.dirty.contains(key) {
             return self.overlay.contains_key(key);
         }
-        self.inner.cache_contains_key(ctx, key)
+        self.inner.cache_contains_key(key)
     }
 
-    fn insert(&mut self, ctx: Context, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-        self.insert(ctx, key, value).unwrap()
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+        self.insert(key, value).unwrap()
     }
 
-    fn remove(&mut self, ctx: Context, key: &[u8]) -> Option<Vec<u8>> {
-        self.remove(ctx, key).unwrap()
+    fn remove(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+        self.remove(key).unwrap()
     }
 
-    fn prefetch_prefixes(&self, ctx: Context, prefixes: &[mkvs::Prefix], limit: u16) {
-        self.inner.prefetch_prefixes(ctx, prefixes, limit).unwrap()
+    fn prefetch_prefixes(&self, prefixes: &[mkvs::Prefix], limit: u16) {
+        self.inner.prefetch_prefixes(prefixes, limit).unwrap()
     }
 
-    fn iter(&self, ctx: Context) -> Box<dyn mkvs::Iterator + '_> {
-        Box::new(self.iter(ctx))
+    fn iter(&self) -> Box<dyn mkvs::Iterator + '_> {
+        Box::new(self.iter())
     }
 
-    fn commit(
-        &mut self,
-        ctx: Context,
-        namespace: Namespace,
-        version: u64,
-    ) -> Result<(mkvs::WriteLog, Hash)> {
-        self.commit_both(ctx, namespace, version)
+    fn commit(&mut self, namespace: Namespace, version: u64) -> Result<(mkvs::WriteLog, Hash)> {
+        self.commit_both(namespace, version)
     }
 }
 
@@ -336,16 +325,16 @@ mod test {
         // Create an overlay over an empty tree and insert some items into the overlay.
         let mut overlay = OverlayTree::new(&mut tree);
         for (key, value) in items.iter() {
-            overlay.insert(Context::background(), key, value).unwrap();
+            overlay.insert(key, value).unwrap();
         }
 
         // Test that an overlay-only iterator works correctly.
-        let it = overlay.iter(Context::background());
+        let it = overlay.iter();
         test_iterator_with(&items, it, &tests);
 
         // Insert some items into the underlying tree.
         for (key, value) in items.iter() {
-            tree.insert(Context::background(), key, value).unwrap();
+            tree.insert(key, value).unwrap();
         }
 
         // Create a tree pointer so we can unsafely peek into the tree later.
@@ -356,37 +345,33 @@ mod test {
 
         // Test that all keys can be fetched from an empty overlay.
         for (k, expected_v) in &items {
-            let v = overlay.get(Context::background(), &k).unwrap();
+            let v = overlay.get(&k).unwrap();
             assert_eq!(v.as_ref(), Some(expected_v));
         }
 
         // Test that merged iterator works correctly on an empty overlay (it should behave exactly
         // the same as for the inner tree).
-        let it = overlay.iter(Context::background());
+        let it = overlay.iter();
         test_iterator_with(&items, it, &tests);
 
         // Add some updates to the overlay.
-        overlay.remove(Context::background(), b"key 2").unwrap();
-        overlay
-            .insert(Context::background(), b"key 7", b"seven")
-            .unwrap();
-        overlay.remove(Context::background(), b"key 5").unwrap();
-        overlay
-            .insert(Context::background(), b"key 5", b"fivey")
-            .unwrap();
+        overlay.remove(b"key 2").unwrap();
+        overlay.insert(b"key 7", b"seven").unwrap();
+        overlay.remove(b"key 5").unwrap();
+        overlay.insert(b"key 5", b"fivey").unwrap();
 
         // Make sure updates did not propagate to the inner tree.
         // NOTE: This is unsafe as we are otherwise not allowed to reference the inner tree.
         unsafe {
             let tree_ref = &*tree_ref;
 
-            let value = tree_ref.get(Context::background(), b"key 2").unwrap();
+            let value = tree_ref.get(b"key 2").unwrap();
             assert_eq!(
                 value,
                 Some(b"two".to_vec()),
                 "value in inner tree should be unchanged"
             );
-            let value = tree_ref.get(Context::background(), b"key 7").unwrap();
+            let value = tree_ref.get(b"key 7").unwrap();
             assert_eq!(value, None, "value should not exist in inner tree");
         }
 
@@ -415,25 +400,25 @@ mod test {
 
         // Test that all keys can be fetched from an updated overlay.
         for (k, expected_v) in &items {
-            let v = overlay.get(Context::background(), &k).unwrap();
+            let v = overlay.get(&k).unwrap();
             assert_eq!(v.as_ref(), Some(expected_v));
         }
 
         // Make sure that merged overlay iterator works.
-        let it = overlay.iter(Context::background());
+        let it = overlay.iter();
         test_iterator_with(&items, it, &tests);
 
         // Commit the overlay.
-        overlay.commit(Context::background()).unwrap();
+        overlay.commit().unwrap();
 
         // Test that all keys can be fetched from an updated tree.
         for (k, expected_v) in &items {
-            let v = tree.get(Context::background(), &k).unwrap();
+            let v = tree.get(&k).unwrap();
             assert_eq!(v.as_ref(), Some(expected_v));
         }
 
         // Make sure that the updated tree is correct.
-        let it = tree.iter(Context::background());
+        let it = tree.iter();
         test_iterator_with(&items, it, &tests);
     }
 }

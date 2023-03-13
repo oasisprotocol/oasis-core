@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use anyhow::Result;
-use io_context::Context;
 
 use crate::storage::mkvs::{cache::*, sync::*, tree::*};
 
@@ -20,64 +17,52 @@ impl<'a> FetcherSyncGet<'a> {
 }
 
 impl<'a> ReadSyncFetcher for FetcherSyncGet<'a> {
-    fn fetch(
-        &self,
-        ctx: Context,
-        root: Root,
-        ptr: NodePtrRef,
-        rs: &mut Box<dyn ReadSync>,
-    ) -> Result<Proof> {
-        let rsp = rs.sync_get(
-            ctx,
-            GetRequest {
-                tree: TreeID {
-                    root,
-                    position: ptr.borrow().hash,
-                },
-                key: self.key.clone(),
-                include_siblings: self.include_siblings,
+    fn fetch(&self, root: Root, ptr: NodePtrRef, rs: &mut Box<dyn ReadSync>) -> Result<Proof> {
+        let rsp = rs.sync_get(GetRequest {
+            tree: TreeID {
+                root,
+                position: ptr.borrow().hash,
             },
-        )?;
+            key: self.key.clone(),
+            include_siblings: self.include_siblings,
+        })?;
         Ok(rsp.proof)
     }
 }
 
 impl Tree {
     /// Get an existing key.
-    pub fn get(&self, ctx: Context, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self._get_top(ctx, key, false)
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self._get_top(key, false)
     }
 
     /// Check if the key exists in the local cache.
-    pub fn cache_contains_key(&self, ctx: Context, key: &[u8]) -> bool {
-        match self._get_top(ctx, key, true) {
+    pub fn cache_contains_key(&self, key: &[u8]) -> bool {
+        match self._get_top(key, true) {
             Ok(Some(_)) => true,
             Ok(None) => false,
             Err(_) => false,
         }
     }
 
-    fn _get_top(&self, ctx: Context, key: &[u8], check_only: bool) -> Result<Option<Vec<u8>>> {
-        let ctx = ctx.freeze();
+    fn _get_top(&self, key: &[u8], check_only: bool) -> Result<Option<Vec<u8>>> {
         let boxed_key = key.to_vec();
         let pending_root = self.cache.borrow().get_pending_root();
 
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        self._get(&ctx, pending_root, 0, &boxed_key, check_only)
+        self._get(pending_root, 0, &boxed_key, check_only)
     }
 
     fn _get(
         &self,
-        ctx: &Arc<Context>,
         ptr: NodePtrRef,
         bit_depth: Depth,
         key: &Key,
         check_only: bool,
     ) -> Result<Option<Value>> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
-            ctx,
             ptr,
             if check_only {
                 None
@@ -98,7 +83,6 @@ impl Tree {
                     // Does lookup key end here? Look into LeafNode.
                     if key.bit_length() == bit_depth + n.label_bit_length {
                         return self._get(
-                            ctx,
                             n.leaf_node.clone(),
                             bit_depth + n.label_bit_length,
                             key,
@@ -114,7 +98,6 @@ impl Tree {
                     // Continue recursively based on a bit value.
                     if key.get_bit(bit_depth + n.label_bit_length) {
                         return self._get(
-                            ctx,
                             n.right.clone(),
                             bit_depth + n.label_bit_length,
                             key,
@@ -122,7 +105,6 @@ impl Tree {
                         );
                     } else {
                         return self._get(
-                            ctx,
                             n.left.clone(),
                             bit_depth + n.label_bit_length,
                             key,

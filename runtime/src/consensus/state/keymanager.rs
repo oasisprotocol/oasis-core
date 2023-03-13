@@ -1,6 +1,5 @@
 //! Key manager state in the consensus layer.
 use anyhow::anyhow;
-use io_context::Context;
 
 use crate::{
     common::{
@@ -55,9 +54,9 @@ pub struct Status {
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Looks up a specific key manager status by its namespace identifier.
-    pub fn status(&self, ctx: Context, id: Namespace) -> Result<Option<Status>, StateError> {
+    pub fn status(&self, id: Namespace) -> Result<Option<Status>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
-        match self.mkvs.get(ctx, &StatusKeyFmt(h).encode()) {
+        match self.mkvs.get(&StatusKeyFmt(h).encode()) {
             Ok(Some(b)) => Ok(Some(self.decode_status(&b)?)),
             Ok(None) => Ok(None),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
@@ -65,8 +64,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     }
 
     /// Returns the list of all key manager statuses.
-    pub fn statuses(&self, ctx: Context) -> Result<Vec<Status>, StateError> {
-        let mut it = self.mkvs.iter(ctx);
+    pub fn statuses(&self) -> Result<Vec<Status>, StateError> {
+        let mut it = self.mkvs.iter();
         it.seek(&StatusKeyFmt::default().encode_partial(0));
 
         let mut result: Vec<Status> = Vec::new();
@@ -84,15 +83,11 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     /// Looks up a specific key manager ephemeral secret by its namespace identifier and epoch.
     pub fn ephemeral_secret(
         &self,
-        ctx: Context,
         id: Namespace,
         epoch: EpochTime,
     ) -> Result<Option<SignedEncryptedEphemeralSecret>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
-        match self
-            .mkvs
-            .get(ctx, &EphemeralSecretKeyFmt((h, epoch)).encode())
-        {
+        match self.mkvs.get(&EphemeralSecretKeyFmt((h, epoch)).encode()) {
             Ok(Some(b)) => Ok(Some(self.decode_secret(&b)?)),
             Ok(None) => Ok(None),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
@@ -110,9 +105,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, default::Default, sync::Arc, vec};
+    use std::{collections::HashMap, default::Default, vec};
 
-    use io_context::Context;
     use rustc_hex::FromHex;
 
     use super::*;
@@ -154,8 +148,6 @@ mod test {
             .with_root(mock_consensus_root)
             .build(server.read_sync());
         let keymanager_state = ImmutableState::new(&mkvs);
-
-        let ctx = Arc::new(Context::background());
 
         // Prepare expected results.
         let runtime =
@@ -265,14 +257,14 @@ mod test {
 
         // Test statuses.
         let mut statuses = keymanager_state
-            .statuses(Context::create_child(&ctx))
+            .statuses()
             .expect("statuses query should work");
         statuses.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
         assert_eq!(statuses, expected_statuses, "invalid statuses");
 
         // Test status.
         let status = keymanager_state
-            .status(Context::create_child(&ctx), expected_statuses[1].id)
+            .status(expected_statuses[1].id)
             .expect("status query should work")
             .expect("status query should return a result");
         assert_eq!(status, expected_statuses[1], "invalid status");
@@ -280,24 +272,24 @@ mod test {
         let id =
             Namespace::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         let status = keymanager_state
-            .status(Context::create_child(&ctx), id)
+            .status(id)
             .expect("status query should work");
         assert_eq!(status, None, "invalid status");
 
         // Test ephemeral secret (happy path, invalid epoch, invalid runtime).
         let secret = keymanager_state
-            .ephemeral_secret(Context::create_child(&ctx), keymanager1, 1)
+            .ephemeral_secret(keymanager1, 1)
             .expect("ephemeral secret query should work")
             .expect("ephemeral secret query should return a result");
         assert_eq!(secret, expected_secret, "invalid ephemeral secret");
 
         let secret = keymanager_state
-            .ephemeral_secret(Context::create_child(&ctx), keymanager1, 2)
+            .ephemeral_secret(keymanager1, 2)
             .expect("ephemeral secret query should work");
         assert_ne!(secret, None, "invalid ephemeral secret");
 
         let secret = keymanager_state
-            .ephemeral_secret(Context::create_child(&ctx), keymanager2, 1)
+            .ephemeral_secret(keymanager2, 1)
             .expect("ephemeral secret query should work");
         assert_eq!(secret, None, "invalid ephemeral secret");
     }

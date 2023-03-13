@@ -1,8 +1,5 @@
 //! Test method implementations.
-
 use std::{collections::BTreeMap, convert::TryInto};
-
-use io_context::Context as IoContext;
 
 use super::{crypto::EncryptionContext, types::*, Context, TxContext};
 use oasis_core_keymanager::crypto::KeyPairId;
@@ -27,6 +24,7 @@ use oasis_core_runtime::{
         },
         state::staking::ImmutableState as StakingImmutableState,
     },
+    future::block_on,
     storage::MKVS,
     types::{Error as RuntimeError, EventKind},
 };
@@ -59,41 +57,26 @@ impl Methods {
 
         let state = StakingImmutableState::new(&ctx.parent.core.consensus_state);
         let mut result = BTreeMap::new();
-        let addrs = state
-            .addresses(IoContext::create_child(&ctx.parent.core.io_ctx))
-            .map_err(|err| err.to_string())?;
+        let addrs = state.addresses().map_err(|err| err.to_string())?;
         for addr in addrs {
             result.insert(
                 addr.clone(),
-                state
-                    .account(IoContext::create_child(&ctx.parent.core.io_ctx), addr)
-                    .map_err(|err| err.to_string())?,
+                state.account(addr).map_err(|err| err.to_string())?,
             );
         }
 
-        let delegations = state
-            .delegations(IoContext::create_child(&ctx.parent.core.io_ctx))
-            .map_err(|err| err.to_string())?;
+        let delegations = state.delegations().map_err(|err| err.to_string())?;
 
         Ok((result, delegations))
     }
 
     pub fn check_nonce(ctx: &mut TxContext, nonce: u64) -> Result<(), String> {
         let nonce_key = NonceKeyFormat { nonce }.encode();
-        match ctx
-            .parent
-            .core
-            .runtime_state
-            .get(IoContext::create_child(&ctx.parent.core.io_ctx), &nonce_key)
-        {
+        match ctx.parent.core.runtime_state.get(&nonce_key) {
             Some(_) => Err(format!("Duplicate nonce: {nonce}")),
             None => {
                 if !ctx.is_check_only() {
-                    ctx.parent.core.runtime_state.insert(
-                        IoContext::create_child(&ctx.parent.core.io_ctx),
-                        &nonce_key,
-                        &[0x1],
-                    );
+                    ctx.parent.core.runtime_state.insert(&nonce_key, &[0x1]);
                 }
                 Ok(())
             }
@@ -120,11 +103,10 @@ impl Methods {
             StakingMessage::Withdraw(args.withdraw),
         )));
 
-        ctx.parent.core.runtime_state.insert(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            &PendingMessagesKeyFormat { index }.encode(),
-            b"withdraw",
-        );
+        ctx.parent
+            .core
+            .runtime_state
+            .insert(&PendingMessagesKeyFormat { index }.encode(), b"withdraw");
 
         Ok(())
     }
@@ -142,11 +124,10 @@ impl Methods {
             StakingMessage::Transfer(args.transfer),
         )));
 
-        ctx.parent.core.runtime_state.insert(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            &PendingMessagesKeyFormat { index }.encode(),
-            b"transfer",
-        );
+        ctx.parent
+            .core
+            .runtime_state
+            .insert(&PendingMessagesKeyFormat { index }.encode(), b"transfer");
 
         Ok(())
     }
@@ -164,11 +145,10 @@ impl Methods {
             StakingMessage::AddEscrow(args.escrow),
         )));
 
-        ctx.parent.core.runtime_state.insert(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            &PendingMessagesKeyFormat { index }.encode(),
-            b"add_escrow",
-        );
+        ctx.parent
+            .core
+            .runtime_state
+            .insert(&PendingMessagesKeyFormat { index }.encode(), b"add_escrow");
 
         Ok(())
     }
@@ -190,7 +170,6 @@ impl Methods {
         )));
 
         ctx.parent.core.runtime_state.insert(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
             &PendingMessagesKeyFormat { index }.encode(),
             b"reclaim_escrow",
         );
@@ -212,7 +191,6 @@ impl Methods {
         )));
 
         ctx.parent.core.runtime_state.insert(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
             &PendingMessagesKeyFormat { index }.encode(),
             b"update_runtime",
         );
@@ -231,11 +209,11 @@ impl Methods {
         ctx.emit_tag(b"kv_op", b"insert");
         ctx.emit_tag(b"kv_key", args.key.as_bytes());
 
-        let existing = ctx.parent.core.runtime_state.insert(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            args.key.as_bytes(),
-            args.value.as_bytes(),
-        );
+        let existing = ctx
+            .parent
+            .core
+            .runtime_state
+            .insert(args.key.as_bytes(), args.value.as_bytes());
         existing
             .map(String::from_utf8)
             .transpose()
@@ -250,10 +228,7 @@ impl Methods {
         ctx.emit_tag(b"kv_op", b"get");
         ctx.emit_tag(b"kv_key", args.key.as_bytes());
 
-        let existing = ctx.parent.core.runtime_state.get(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            args.key.as_bytes(),
-        );
+        let existing = ctx.parent.core.runtime_state.get(args.key.as_bytes());
         existing
             .map(String::from_utf8)
             .transpose()
@@ -268,10 +243,7 @@ impl Methods {
         ctx.emit_tag(b"kv_op", b"remove");
         ctx.emit_tag(b"kv_key", args.key.as_bytes());
 
-        let existing = ctx.parent.core.runtime_state.remove(
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            args.key.as_bytes(),
-        );
+        let existing = ctx.parent.core.runtime_state.remove(args.key.as_bytes());
         existing
             .map(String::from_utf8)
             .transpose()
@@ -290,11 +262,10 @@ impl Methods {
         let generation = 0;
 
         // Fetch encryption keys.
-        let io_ctx = IoContext::create_child(&ctx.parent.core.io_ctx);
         let result = ctx
             .parent
             .key_manager
-            .get_or_create_keys(io_ctx, key_pair_id, generation);
+            .get_or_create_keys(key_pair_id, generation);
         let key = tokio::runtime::Handle::current()
             .block_on(result)
             .map_err(|err| err.to_string())?;
@@ -314,7 +285,6 @@ impl Methods {
         let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes())?;
         let existing = enc_ctx.insert(
             ctx.parent.core.runtime_state,
-            IoContext::create_child(&ctx.parent.core.io_ctx),
             args.key.as_bytes(),
             args.value.as_bytes(),
             &nonce,
@@ -331,11 +301,7 @@ impl Methods {
             return Ok(None);
         }
         let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes())?;
-        let existing = enc_ctx.get(
-            ctx.parent.core.runtime_state,
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            args.key.as_bytes(),
-        );
+        let existing = enc_ctx.get(ctx.parent.core.runtime_state, args.key.as_bytes());
         existing
             .map(String::from_utf8)
             .transpose()
@@ -348,11 +314,7 @@ impl Methods {
             return Ok(None);
         }
         let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes())?;
-        let existing = enc_ctx.remove(
-            ctx.parent.core.runtime_state,
-            IoContext::create_child(&ctx.parent.core.io_ctx),
-            args.key.as_bytes(),
-        );
+        let existing = enc_ctx.remove(ctx.parent.core.runtime_state, args.key.as_bytes());
         existing
             .map(String::from_utf8)
             .transpose()
@@ -370,11 +332,10 @@ impl Methods {
         let key_pair_id = KeyPairId::from(hash.as_ref());
 
         // Fetch public key.
-        let io_ctx = IoContext::create_child(&ctx.parent.core.io_ctx);
-        let result =
-            ctx.parent
-                .key_manager
-                .get_public_ephemeral_key(io_ctx, key_pair_id, args.epoch);
+        let result = ctx
+            .parent
+            .key_manager
+            .get_public_ephemeral_key(key_pair_id, args.epoch);
         let long_term_pk = tokio::runtime::Handle::current()
             .block_on(result)
             .map_err(|err| err.to_string())?;
@@ -411,11 +372,10 @@ impl Methods {
         let key_pair_id = KeyPairId::from(hash.as_ref());
 
         // Fetch private key.
-        let io_ctx = IoContext::create_child(&ctx.parent.core.io_ctx);
-        let result =
-            ctx.parent
-                .key_manager
-                .get_or_create_ephemeral_keys(io_ctx, key_pair_id, args.epoch);
+        let result = ctx
+            .parent
+            .key_manager
+            .get_or_create_ephemeral_keys(key_pair_id, args.epoch);
         let long_term_sk = tokio::runtime::Handle::current()
             .block_on(result)
             .map_err(|err| format!("private ephemeral key not available: {err}"))?;
@@ -457,10 +417,10 @@ impl BlockHandler {
         // Process any message results.
         for ev in &ctx.core.round_results.messages {
             // Fetch and remove message metadata.
-            let meta = ctx.core.runtime_state.remove(
-                IoContext::create_child(&ctx.core.io_ctx),
-                &PendingMessagesKeyFormat { index: ev.index }.encode(),
-            );
+            let meta = ctx
+                .core
+                .runtime_state
+                .remove(&PendingMessagesKeyFormat { index: ev.index }.encode());
 
             // Make sure metadata is as expected.
             match meta.as_deref() {
@@ -479,10 +439,9 @@ impl BlockHandler {
                     let mut height = ctx.core.consensus_state.height();
                     let mut found = false;
                     while height > 0 {
-                        let events = ctx
-                            .consensus_verifier
-                            .events_at(height, EventKind::Staking)
-                            .expect("should be able to query events");
+                        let events =
+                            block_on(ctx.consensus_verifier.events_at(height, EventKind::Staking))
+                                .expect("should be able to query events");
 
                         found = events.iter().any(|ev| {
                             matches!(ev, consensus::Event::Staking(staking::Event {
@@ -532,10 +491,7 @@ impl BlockHandler {
         }
 
         // Check if there are any leftover pending messages metadata.
-        let mut it = ctx
-            .core
-            .runtime_state
-            .iter(IoContext::create_child(&ctx.core.io_ctx));
+        let mut it = ctx.core.runtime_state.iter();
         it.seek(&PendingMessagesKeyFormat { index: 0 }.encode_partial(0));
         // Either there should be no next key...
         if let Some((key, _value)) = it.next() {
@@ -549,11 +505,9 @@ impl BlockHandler {
         drop(it);
 
         // Store current epoch to test consistency.
-        ctx.core.runtime_state.insert(
-            IoContext::create_child(&ctx.core.io_ctx),
-            &[0x02],
-            &ctx.core.epoch.to_be_bytes(),
-        );
+        ctx.core
+            .runtime_state
+            .insert(&[0x02], &ctx.core.epoch.to_be_bytes());
 
         Ok(())
     }

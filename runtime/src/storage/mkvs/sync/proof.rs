@@ -2,7 +2,6 @@ use std::ops::{Deref, DerefMut};
 
 use anyhow::{anyhow, Result};
 use arbitrary::Arbitrary;
-use io_context::Context;
 
 use crate::{
     common::crypto::hash::Hash,
@@ -68,7 +67,7 @@ pub struct ProofVerifier;
 impl ProofVerifier {
     /// Verify a proof and generate an in-memory subtree representing the
     /// nodes which are included in the proof.
-    pub fn verify_proof(&self, _ctx: Context, root: Hash, proof: &Proof) -> Result<NodePtrRef> {
+    pub fn verify_proof(&self, root: Hash, proof: &Proof) -> Result<NodePtrRef> {
         // Sanity check that the proof is for the correct root (as otherwise it
         // makes no sense to verify the proof).
         if proof.untrusted_root != root {
@@ -156,7 +155,6 @@ impl ProofVerifier {
 #[cfg(test)]
 mod test {
     use base64;
-    use io_context::Context;
 
     use super::*;
 
@@ -178,14 +176,14 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
 
         // Proof should verify.
         let pv = ProofVerifier;
-        pv.verify_proof(Context::background(), root_hash, &proof)
+        pv.verify_proof(root_hash, &proof)
             .expect("verify proof should not fail with a valid proof");
 
         // Invalid proofs should not verify.
 
         // Empty proof.
         let empty_proof = Proof::default();
-        let result = pv.verify_proof(Context::background(), root_hash, &empty_proof);
+        let result = pv.verify_proof(root_hash, &empty_proof);
         assert!(
             result.is_err(),
             "verify proof should fail with an empty proof"
@@ -193,7 +191,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
 
         // Different root.
         let bogus_hash = Hash::digest_bytes(b"i am a bogus hash");
-        let result = pv.verify_proof(Context::background(), bogus_hash, &proof);
+        let result = pv.verify_proof(bogus_hash, &proof);
         assert!(
             result.is_err(),
             "verify proof should fail with a proof for a different root"
@@ -202,7 +200,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
         // Different hash element.
         let mut corrupted = proof.clone();
         corrupted.entries[4].as_mut().unwrap()[10] = 0x00;
-        let result = pv.verify_proof(Context::background(), root_hash, &corrupted);
+        let result = pv.verify_proof(root_hash, &corrupted);
         assert!(
             result.is_err(),
             "verify proof should fail with invalid proof"
@@ -211,7 +209,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
         // Corrupted full node.
         let mut corrupted = proof.clone();
         corrupted.entries[0].as_mut().unwrap().truncate(3);
-        let result = pv.verify_proof(Context::background(), root_hash, &corrupted);
+        let result = pv.verify_proof(root_hash, &corrupted);
         assert!(
             result.is_err(),
             "verify proof should fail with invalid proof"
@@ -220,7 +218,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
         // Corrupted hash.
         let mut corrupted = proof.clone();
         corrupted.entries[2].as_mut().unwrap().truncate(3);
-        let result = pv.verify_proof(Context::background(), root_hash, &corrupted);
+        let result = pv.verify_proof(root_hash, &corrupted);
         assert!(
             result.is_err(),
             "verify proof should fail with invalid proof"
@@ -229,7 +227,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
         // Corrupted proof element type.
         let mut corrupted = proof.clone();
         corrupted.entries[3].as_mut().unwrap()[0] = 0xaa;
-        let result = pv.verify_proof(Context::background(), root_hash, &corrupted);
+        let result = pv.verify_proof(root_hash, &corrupted);
         assert!(
             result.is_err(),
             "verify proof should fail with invalid proof"
@@ -238,7 +236,7 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
         // Missing elements.
         let mut corrupted = proof.clone();
         corrupted.entries.truncate(3);
-        let result = pv.verify_proof(Context::background(), root_hash, &corrupted);
+        let result = pv.verify_proof(root_hash, &corrupted);
         assert!(
             result.is_err(),
             "verify proof should fail with invalid proof"
@@ -262,13 +260,13 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
 
         // Proof should verify.
         let pv = ProofVerifier;
-        pv.verify_proof(Context::background(), root_hash, &proof)
+        pv.verify_proof(root_hash, &proof)
             .expect("verify proof should not fail with a valid proof");
 
         // Duplicate some nodes and add them to the end.
         proof.entries.push(proof.entries[0].clone());
 
-        pv.verify_proof(Context::background(), root_hash, &proof)
+        pv.verify_proof(root_hash, &proof)
             .expect_err("proof with extra data should fail to validate");
     }
 }

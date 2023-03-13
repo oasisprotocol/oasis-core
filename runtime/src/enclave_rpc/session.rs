@@ -2,7 +2,6 @@
 use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
 use anyhow::Result;
-use io_context::Context;
 use snow;
 use thiserror::Error;
 
@@ -103,7 +102,7 @@ impl Session {
     /// In case the session is in transport mode the returned result will
     /// contained a parsed message. The `writer` will be used in case any
     /// protocol replies need to be generated.
-    pub fn process_data<W: Write>(
+    pub async fn process_data<W: Write>(
         &mut self,
         data: Vec<u8>,
         mut writer: W,
@@ -139,7 +138,9 @@ impl Session {
                     let remote_static = state
                         .get_remote_static()
                         .expect("dh exchange just happened");
-                    self.info = self.verify_rak_binding(&self.buf[..len], remote_static)?;
+                    self.info = self
+                        .verify_rak_binding(&self.buf[..len], remote_static)
+                        .await?;
 
                     // -> s, se
                     let len = state.write_message(&self.get_rak_binding(), &mut self.buf)?;
@@ -150,7 +151,9 @@ impl Session {
                     let remote_static = state
                         .get_remote_static()
                         .expect("dh exchange just happened");
-                    self.info = self.verify_rak_binding(&self.buf[..len], remote_static)?;
+                    self.info = self
+                        .verify_rak_binding(&self.buf[..len], remote_static)
+                        .await?;
                 }
 
                 // Move into transport mode.
@@ -230,7 +233,7 @@ impl Session {
         }
     }
 
-    fn verify_rak_binding(
+    async fn verify_rak_binding(
         &self,
         rak_binding: &[u8],
         remote_static: &[u8],
@@ -255,7 +258,7 @@ impl Session {
         // Verify node identity if verification is enabled.
         if self.consensus_verifier.is_some() {
             let rak = rak_binding.rak_pub();
-            self.verify_node_identity(rak)?;
+            self.verify_node_identity(rak).await?;
         }
 
         Ok(Some(Arc::new(SessionInfo {
@@ -301,7 +304,7 @@ impl Session {
 
     /// Verify the identity of the remote node by comparing the given RAK with the trusted RAK
     /// obtained from the consensus layer registry service.
-    fn verify_node_identity(&self, rak: signature::PublicKey) -> Result<()> {
+    async fn verify_node_identity(&self, rak: signature::PublicKey) -> Result<()> {
         let consensus_verifier = self
             .consensus_verifier
             .as_ref()
@@ -309,11 +312,17 @@ impl Session {
         let runtime_id = self.remote_runtime_id.ok_or(SessionError::RuntimeNotSet)?;
         let node = self.remote_node.ok_or(SessionError::NodeNotSet)?;
 
-        let consensus_state = consensus_verifier.latest_state()?;
-        let registry_state = RegistryState::new(&consensus_state);
-        let node = registry_state
-            .node(Context::background(), &node)?
-            .ok_or(SessionError::NodeNotRegistered)?;
+        let consensus_state = consensus_verifier.latest_state().await?;
+        // TODO: Make this access async.
+        let node = tokio::task::spawn_blocking(move || -> Result<_> {
+            let registry_state = RegistryState::new(&consensus_state);
+            Ok(registry_state
+                .node(&node)?
+                .ok_or(SessionError::NodeNotRegistered)?)
+        })
+        .await
+        .unwrap()?;
+
         let verified = node
             .runtimes
             .unwrap_or_default()

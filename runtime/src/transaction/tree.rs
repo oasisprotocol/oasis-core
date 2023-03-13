@@ -1,6 +1,5 @@
 //! Transaction I/O tree.
 use anyhow::{anyhow, Result};
-use io_context::Context;
 
 use super::tags::Tags;
 use crate::{
@@ -142,7 +141,7 @@ impl Tree {
     }
 
     /// Add an input transaction artifact.
-    pub fn add_input(&mut self, ctx: Context, input: Vec<u8>, batch_order: u32) -> Result<()> {
+    pub fn add_input(&mut self, input: Vec<u8>, batch_order: u32) -> Result<()> {
         if input.is_empty() {
             return Err(anyhow!("transaction: no input given"));
         }
@@ -150,7 +149,6 @@ impl Tree {
         let tx_hash = Hash::digest_bytes(&input);
 
         self.tree.insert(
-            ctx,
             &TxnKeyFormat {
                 tx_hash,
                 kind: ArtifactKind::Input,
@@ -163,17 +161,8 @@ impl Tree {
     }
 
     /// Add an output transaction artifact.
-    pub fn add_output(
-        &mut self,
-        ctx: Context,
-        tx_hash: Hash,
-        output: Vec<u8>,
-        tags: Tags,
-    ) -> Result<()> {
-        let ctx = ctx.freeze();
-
+    pub fn add_output(&mut self, tx_hash: Hash, output: Vec<u8>, tags: Tags) -> Result<()> {
         self.tree.insert(
-            Context::create_child(&ctx),
             &TxnKeyFormat {
                 tx_hash,
                 kind: ArtifactKind::Output,
@@ -185,7 +174,6 @@ impl Tree {
         // Add tags if specified.
         for tag in tags {
             self.tree.insert(
-                Context::create_child(&ctx),
                 &TagKeyFormat {
                     key: tag.key,
                     tx_hash,
@@ -199,12 +187,9 @@ impl Tree {
     }
 
     /// Add block tags.
-    pub fn add_block_tags(&mut self, ctx: Context, tags: Tags) -> Result<()> {
-        let ctx = ctx.freeze();
-
+    pub fn add_block_tags(&mut self, tags: Tags) -> Result<()> {
         for tag in tags {
             self.tree.insert(
-                Context::create_child(&ctx),
                 &TagKeyFormat {
                     key: tag.key,
                     tx_hash: TAG_BLOCK_TX_HASH,
@@ -219,16 +204,14 @@ impl Tree {
 
     /// Commit updates to the underlying Merkle tree and return the write
     /// log and root hash.
-    pub fn commit(&mut self, ctx: Context) -> Result<(WriteLog, Hash)> {
+    pub fn commit(&mut self) -> Result<(WriteLog, Hash)> {
         self.tree
-            .commit_both(ctx, self.io_root.namespace, self.io_root.version)
+            .commit_both(self.io_root.namespace, self.io_root.version)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use io_context::Context;
-
     use crate::storage::mkvs::sync::*;
 
     use super::{super::tags::Tag, *};
@@ -245,9 +228,8 @@ mod test {
 
         let input = b"this goes in".to_vec();
         let tx_hash = Hash::digest_bytes(&input);
-        tree.add_input(Context::background(), input, 0).unwrap();
+        tree.add_input(input, 0).unwrap();
         tree.add_output(
-            Context::background(),
             tx_hash,
             b"and this comes out".to_vec(),
             vec![Tag::new(b"tag1".to_vec(), b"value1".to_vec())],
@@ -258,9 +240,8 @@ mod test {
             let input = format!("this goes in ({})", i).into_bytes();
             let tx_hash = Hash::digest_bytes(&input);
 
-            tree.add_input(Context::background(), input, i + 1).unwrap();
+            tree.add_input(input, i + 1).unwrap();
             tree.add_output(
-                Context::background(),
                 tx_hash,
                 b"and this comes out".to_vec(),
                 vec![
@@ -272,7 +253,7 @@ mod test {
         }
 
         // NOTE: This root is synced with go/runtime/transaction/transaction_test.go.
-        let (_, root_hash) = tree.commit(Context::background()).unwrap();
+        let (_, root_hash) = tree.commit().unwrap();
         assert_eq!(
             format!("{:?}", root_hash),
             "8399ffa753987b00ec6ab251337c6b88e40812662ed345468fcbf1dbdd16321c",

@@ -3,7 +3,6 @@ use std::{convert::TryInto, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use crossbeam::channel;
-use io_context::Context;
 use rand::{rngs::OsRng, Rng};
 use sha2::{Digest, Sha256};
 use slog::{error, info};
@@ -42,6 +41,7 @@ use crate::{
         verifier::{self, verify_state_freshness, Error, TrustRoot},
         Event, LightBlock, HEIGHT_LATEST,
     },
+    future::block_on,
     host::Host,
     protocol::Protocol,
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
@@ -77,6 +77,7 @@ const TRUSTED_STATE_SAVE_INTERVAL: u64 = 128;
 pub struct Verifier {
     logger: slog::Logger,
     protocol: Arc<Protocol>,
+    tokio_runtime: tokio::runtime::Handle,
     runtime_version: Version,
     runtime_id: Namespace,
     chain_context: String,
@@ -90,6 +91,7 @@ impl Verifier {
     /// Create a new Tendermint consensus layer verifier.
     pub fn new(
         protocol: Arc<Protocol>,
+        tokio_runtime: tokio::runtime::Handle,
         trust_root: TrustRoot,
         runtime_id: Namespace,
         chain_context: String,
@@ -108,6 +110,7 @@ impl Verifier {
         Self {
             logger,
             protocol,
+            tokio_runtime,
             runtime_version,
             runtime_id,
             chain_context,
@@ -447,13 +450,9 @@ impl Verifier {
     fn events_at(&self, height: u64, kind: EventKind) -> Result<Vec<Event>, Error> {
         let result = self
             .protocol
-            .call_host(
-                Context::background(),
-                Body::HostFetchConsensusEventsRequest(HostFetchConsensusEventsRequest {
-                    height,
-                    kind,
-                }),
-            )
+            .call_host(Body::HostFetchConsensusEventsRequest(
+                HostFetchConsensusEventsRequest { height, kind },
+            ))
             .map_err(|err| Error::VerificationFailed(err.into()))?;
         // TODO: Perform event verification once this becomes possible.
 
@@ -494,6 +493,8 @@ impl Verifier {
     /// Start the verifier in a separate thread.
     pub fn start(self) {
         std::thread::spawn(move || {
+            let _guard = self.tokio_runtime.enter(); // Ensure Tokio runtime is available.
+
             let logger = get_logger("consensus/tendermint/verifier");
             info!(logger, "Starting consensus verifier");
 
@@ -612,10 +613,8 @@ impl Verifier {
             "trust_root_chain_context" => ?trust_root.chain_context,
         );
 
-        let host_node_id = self
-            .protocol
-            .identity()
-            .expect("host should provide a node identity");
+        let host_node_id =
+            block_on(self.protocol.identity()).expect("host should provide a node identity");
 
         let mut cache = Cache::new(host_node_id);
 

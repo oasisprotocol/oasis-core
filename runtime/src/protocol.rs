@@ -10,15 +10,16 @@ use std::{
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam::channel;
-use io_context::Context;
 use slog::{debug, error, info, warn, Logger};
 use thiserror::Error;
+use tokio::sync::oneshot;
 
 use crate::{
     common::{logger::get_logger, namespace::Namespace, version::Version},
     config::Config,
     consensus::{tendermint, verifier::Verifier},
     dispatcher::Dispatcher,
+    future::block_on,
     identity::Identity,
     storage::KeyValue,
     types::{Body, Error, Message, MessageType, RuntimeInfoRequest, RuntimeInfoResponse},
@@ -102,7 +103,7 @@ pub struct Protocol {
     /// Outgoing request identifier generator.
     last_request_id: AtomicUsize,
     /// Pending outgoing requests.
-    pending_out_requests: Mutex<HashMap<u64, channel::Sender<Body>>>,
+    pending_out_requests: Mutex<HashMap<u64, oneshot::Sender<Body>>>,
     /// Runtime configuration.
     config: Config,
     /// Host environment information.
@@ -211,7 +212,18 @@ impl Protocol {
     }
 
     /// Make a new request to the runtime host and wait for the response.
-    pub fn call_host(&self, _ctx: Context, body: Body) -> Result<Body, Error> {
+    ///
+    /// This is a blocking variant of `call_host_async`.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if called within an asynchronous execution context.
+    pub fn call_host(&self, body: Body) -> Result<Body, Error> {
+        block_on(self.call_host_async(body))
+    }
+
+    /// Make a new request to the runtime host and wait for the response.
+    pub async fn call_host_async(&self, body: Body) -> Result<Body, Error> {
         let id = self.last_request_id.fetch_add(1, Ordering::SeqCst) as u64;
         let message = Message {
             id,
@@ -220,7 +232,7 @@ impl Protocol {
         };
 
         // Create a response channel and register an outstanding pending request.
-        let (tx, rx) = channel::bounded(1);
+        let (tx, rx) = oneshot::channel();
         {
             let mut pending_requests = self.pending_out_requests.lock().unwrap();
             pending_requests.insert(id, tx);
@@ -230,7 +242,7 @@ impl Protocol {
         self.send_message(message).map_err(Error::from)?;
 
         let result = rx
-            .recv()
+            .await
             .map_err(|_| Error::from(ProtocolError::ChannelClosed))?;
         match result {
             Body::Error(err) => Err(err),
@@ -292,9 +304,8 @@ impl Protocol {
             MessageType::Request => {
                 // Incoming request.
                 let id = message.id;
-                let ctx = Context::background();
 
-                let body = match self.handle_request(ctx, id, message.body) {
+                let body = match self.handle_request(id, message.body) {
                     Ok(Some(result)) => result,
                     Ok(None) => {
                         // A message will be sent later by another thread so there
@@ -320,8 +331,8 @@ impl Protocol {
 
                 match response_sender {
                     Some(response_sender) => {
-                        if let Err(error) = response_sender.try_send(message.body) {
-                            warn!(self.logger, "Unable to deliver response to local handler"; "err" => %error);
+                        if response_sender.send(message.body).is_err() {
+                            warn!(self.logger, "Unable to deliver response to local handler");
                         }
                     }
                     None => {
@@ -337,7 +348,6 @@ impl Protocol {
 
     fn handle_request(
         self: &Arc<Protocol>,
-        ctx: Context,
         id: u64,
         request: Body,
     ) -> anyhow::Result<Option<Body>> {
@@ -365,7 +375,7 @@ impl Protocol {
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
             | Body::RuntimeCapabilityTEERakQuoteRequest { .. } => {
-                self.dispatcher.queue_request(ctx, id, request)?;
+                self.dispatcher.queue_request(id, request)?;
                 Ok(None)
             }
 
@@ -379,7 +389,7 @@ impl Protocol {
             | Body::RuntimeQueryRequest { .. }
             | Body::RuntimeConsensusSyncRequest { .. } => {
                 self.ensure_initialized()?;
-                self.dispatcher.queue_request(ctx, id, request)?;
+                self.dispatcher.queue_request(id, request)?;
                 Ok(None)
             }
 
@@ -425,6 +435,7 @@ impl Protocol {
                 // Create the Tendermint consensus layer verifier and spawn it in a separate thread.
                 let verifier = tendermint::verifier::Verifier::new(
                     self.clone(),
+                    self.dispatcher.tokio_runtime(),
                     trust_root.clone(),
                     host_info.runtime_id,
                     host_info.consensus_chain_context.clone(),
@@ -482,26 +493,20 @@ impl Protocol {
 /// hiding data, tampering with keys/values, ignoring writes, replaying
 /// past values, etc.
 pub struct ProtocolUntrustedLocalStorage {
-    ctx: Arc<Context>,
     protocol: Arc<Protocol>,
 }
 
 impl ProtocolUntrustedLocalStorage {
-    pub fn new(ctx: Context, protocol: Arc<Protocol>) -> Self {
-        Self {
-            ctx: ctx.freeze(),
-            protocol,
-        }
+    pub fn new(protocol: Arc<Protocol>) -> Self {
+        Self { protocol }
     }
 }
 
 impl KeyValue for ProtocolUntrustedLocalStorage {
     fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let ctx = Context::create_child(&self.ctx);
-
         match self
             .protocol
-            .call_host(ctx, Body::HostLocalStorageGetRequest { key })?
+            .call_host(Body::HostLocalStorageGetRequest { key })?
         {
             Body::HostLocalStorageGetResponse { value } => Ok(value),
             _ => Err(ProtocolError::InvalidResponse.into()),
@@ -509,11 +514,9 @@ impl KeyValue for ProtocolUntrustedLocalStorage {
     }
 
     fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Error> {
-        let ctx = Context::create_child(&self.ctx);
-
         match self
             .protocol
-            .call_host(ctx, Body::HostLocalStorageSetRequest { key, value })?
+            .call_host(Body::HostLocalStorageSetRequest { key, value })?
         {
             Body::HostLocalStorageSetResponse {} => Ok(()),
             _ => Err(ProtocolError::InvalidResponse.into()),

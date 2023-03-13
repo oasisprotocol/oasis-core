@@ -1,23 +1,22 @@
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Error as AnyError};
-use futures::future::{self, BoxFuture};
-use io_context::Context;
+use async_trait::async_trait;
 
 use crate::{common::crypto::signature, types::Body, Protocol};
 
 use super::types;
 
 /// An EnclaveRPC transport.
+#[async_trait]
 pub trait Transport: Send + Sync {
-    fn write_noise_session(
+    async fn write_noise_session(
         &self,
-        ctx: Context,
         session_id: types::SessionID,
         data: Vec<u8>,
         untrusted_plaintext: String,
         nodes: Vec<signature::PublicKey>,
-    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>> {
+    ) -> Result<(Vec<u8>, signature::PublicKey), AnyError> {
         // Frame message.
         let frame = types::Frame {
             session: session_id,
@@ -25,25 +24,25 @@ pub trait Transport: Send + Sync {
             payload: data,
         };
 
-        self.write_message_impl(ctx, cbor::to_vec(frame), types::Kind::NoiseSession, nodes)
+        self.write_message_impl(cbor::to_vec(frame), types::Kind::NoiseSession, nodes)
+            .await
     }
 
-    fn write_insecure_query(
+    async fn write_insecure_query(
         &self,
-        ctx: Context,
         data: Vec<u8>,
         nodes: Vec<signature::PublicKey>,
-    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>> {
-        self.write_message_impl(ctx, data, types::Kind::InsecureQuery, nodes)
+    ) -> Result<(Vec<u8>, signature::PublicKey), AnyError> {
+        self.write_message_impl(data, types::Kind::InsecureQuery, nodes)
+            .await
     }
 
-    fn write_message_impl(
+    async fn write_message_impl(
         &self,
-        ctx: Context,
         data: Vec<u8>,
         kind: types::Kind,
         nodes: Vec<signature::PublicKey>,
-    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>>;
+    ) -> Result<(Vec<u8>, signature::PublicKey), AnyError>;
 
     fn set_peer_feedback(&self, _pfid: u64, _peer_feedback: Option<types::PeerFeedback>) {
         // Default implementation doesn't do anything.
@@ -74,14 +73,14 @@ impl RuntimeTransport {
     }
 }
 
+#[async_trait]
 impl Transport for RuntimeTransport {
-    fn write_message_impl(
+    async fn write_message_impl(
         &self,
-        ctx: Context,
         data: Vec<u8>,
         kind: types::Kind,
         nodes: Vec<signature::PublicKey>,
-    ) -> BoxFuture<Result<(Vec<u8>, signature::PublicKey), AnyError>> {
+    ) -> Result<(Vec<u8>, signature::PublicKey), AnyError> {
         let peer_feedback = {
             let mut pf = self.peer_feedback.lock().unwrap();
             let peer_feedback = pf.1.take();
@@ -96,25 +95,20 @@ impl Transport for RuntimeTransport {
             peer_feedback
         };
 
-        // NOTE: This is not actually async in SGX, but futures should be
-        //       dispatched on the current thread anyway.
-        let rsp = self.protocol.call_host(
-            ctx,
-            Body::HostRPCCallRequest {
+        let rsp = self
+            .protocol
+            .call_host_async(Body::HostRPCCallRequest {
                 endpoint: self.endpoint.clone(),
                 request: data,
                 kind,
                 nodes,
                 peer_feedback,
-            },
-        );
+            })
+            .await?;
 
         match rsp {
-            Err(err) => Box::pin(future::err(err.into())),
-            Ok(Body::HostRPCCallResponse { response, node }) => {
-                Box::pin(future::ok((response, node)))
-            }
-            Ok(_) => Box::pin(future::err(anyhow!("bad response type"))),
+            Body::HostRPCCallResponse { response, node } => Ok((response, node)),
+            _ => Err(anyhow!("bad response type")),
         }
     }
 
