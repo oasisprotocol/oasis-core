@@ -8,6 +8,7 @@ use crate::{
     common::logger::{get_logger, init_logger},
     config::Config,
     dispatcher::{Dispatcher, Initializer},
+    future::new_tokio_runtime,
     identity::Identity,
     protocol::{Protocol, Stream},
 };
@@ -26,8 +27,12 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     // Initialize runtime identity with runtime attestation key and runtime encryption key.
     let identity = Arc::new(Identity::new());
 
+    // Initialize the async Tokio runtime.
+    let tokio_runtime = new_tokio_runtime();
+    let tokio_handle = tokio_runtime.handle();
+
     // Initialize the dispatcher.
-    let dispatcher = Dispatcher::new(initializer, identity.clone());
+    let dispatcher = Dispatcher::new(tokio_handle.clone(), initializer, identity.clone());
 
     info!(logger, "Establishing connection with the worker host");
 
@@ -50,7 +55,13 @@ pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
     };
 
     // Initialize the protocol handler loop.
-    let protocol = Arc::new(Protocol::new(stream, identity, dispatcher, config));
+    let protocol = Arc::new(Protocol::new(
+        tokio_handle.clone(),
+        stream,
+        identity,
+        dispatcher,
+        config,
+    ));
 
     // Start handling protocol messages. This blocks the main thread forever
     // (or until we get a shutdown request).

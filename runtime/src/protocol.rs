@@ -108,11 +108,14 @@ pub struct Protocol {
     config: Config,
     /// Host environment information.
     host_info: Mutex<Option<HostInfo>>,
+    /// Tokio runtime handle.
+    tokio_runtime: tokio::runtime::Handle,
 }
 
 impl Protocol {
     /// Create a new protocol handler instance.
     pub(crate) fn new(
+        tokio_runtime: tokio::runtime::Handle,
         stream: Stream,
         identity: Arc<Identity>,
         dispatcher: Arc<Dispatcher>,
@@ -133,6 +136,7 @@ impl Protocol {
             pending_out_requests: Mutex::new(HashMap::new()),
             config,
             host_info: Mutex::new(None),
+            tokio_runtime,
         }
     }
 
@@ -435,7 +439,7 @@ impl Protocol {
                 // Create the Tendermint consensus layer verifier and spawn it in a separate thread.
                 let verifier = tendermint::verifier::Verifier::new(
                     self.clone(),
-                    self.dispatcher.tokio_runtime(),
+                    self.tokio_runtime.clone(),
                     trust_root.clone(),
                     host_info.runtime_id,
                     host_info.consensus_chain_context.clone(),

@@ -164,31 +164,16 @@ pub struct Dispatcher {
     state: Mutex<Option<ProtocolState>>,
     state_cond: Condvar,
 
-    tokio_runtime: tokio::runtime::Runtime,
+    tokio_runtime: tokio::runtime::Handle,
 }
 
 impl Dispatcher {
-    #[cfg(target_env = "sgx")]
-    fn new_tokio_runtime() -> tokio::runtime::Runtime {
-        // In SGX use a trimmed-down version of the Tokio runtime.
-        //
-        // Make sure to update THREADS.md if you change any of the thread-related settings.
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .max_blocking_threads(2)
-            .thread_keep_alive(std::time::Duration::MAX)
-            .build()
-            .unwrap()
-    }
-
-    #[cfg(not(target_env = "sgx"))]
-    fn new_tokio_runtime() -> tokio::runtime::Runtime {
-        // Otherwise we use a fully-fledged Tokio runtime.
-        tokio::runtime::Runtime::new().unwrap()
-    }
-
     /// Create a new runtime call dispatcher.
-    pub fn new(initializer: Box<dyn Initializer>, identity: Arc<Identity>) -> Arc<Self> {
+    pub fn new(
+        tokio_runtime: tokio::runtime::Handle,
+        initializer: Box<dyn Initializer>,
+        identity: Arc<Identity>,
+    ) -> Arc<Self> {
         let (tx, rx) = mpsc::channel(BACKLOG_SIZE);
 
         let dispatcher = Arc::new(Dispatcher {
@@ -198,7 +183,7 @@ impl Dispatcher {
             abort_batch: Arc::new(AtomicBool::new(false)),
             state: Mutex::new(None),
             state_cond: Condvar::new(),
-            tokio_runtime: Self::new_tokio_runtime(),
+            tokio_runtime,
         });
 
         // Spawn the dispatcher processing thread.
@@ -220,11 +205,6 @@ impl Dispatcher {
             consensus_verifier,
         });
         self.state_cond.notify_one();
-    }
-
-    /// Tokio async runtime handle.
-    pub fn tokio_runtime(&self) -> tokio::runtime::Handle {
-        self.tokio_runtime.handle().clone()
     }
 
     /// Queue a new request to be dispatched.
