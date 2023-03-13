@@ -2155,7 +2155,7 @@ dependencies = [
  "enclave-runner",
  "futures 0.3.26",
  "sgxs-loaders",
- "tokio 0.2.25",
+ "tokio 1.26.0",
 ]
 
 [[package]]
