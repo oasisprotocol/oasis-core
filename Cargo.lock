@@ -2131,10 +2131,10 @@ dependencies = [
  "snow",
  "sp800-185",
  "tempfile",
- "tendermint",
+ "tendermint 0.29.1",
  "tendermint-light-client",
- "tendermint-proto",
- "tendermint-rpc",
+ "tendermint-proto 0.29.1",
+ "tendermint-rpc 0.29.1",
  "tendermint-testgen",
  "thiserror",
  "tiny-keccak 2.0.2",
@@ -3151,7 +3151,36 @@ dependencies = [
  "signature",
  "subtle",
  "subtle-encoding",
- "tendermint-proto",
+ "tendermint-proto 0.29.1",
+ "time 0.3.20",
+ "zeroize",
+]
+
+[[package]]
+name = "tendermint"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b90c3c1e32352551f0f1639ce765e4c66ce250c733d4b9ba1aff81130437465c"
+dependencies = [
+ "bytes 1.4.0",
+ "digest 0.10.6",
+ "ed25519",
+ "ed25519-consensus",
+ "flex-error",
+ "futures 0.3.26",
+ "num-traits",
+ "once_cell",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "serde_repr",
+ "sha2 0.10.6",
+ "signature",
+ "subtle",
+ "subtle-encoding",
+ "tendermint-proto 0.30.0",
  "time 0.3.20",
  "zeroize",
 ]
@@ -3165,16 +3194,30 @@ dependencies = [
  "flex-error",
  "serde",
  "serde_json",
- "tendermint",
+ "tendermint 0.29.1",
+ "toml",
+ "url",
+]
+
+[[package]]
+name = "tendermint-config"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74efd33bcb53413b77cbe90ccb2cf0403930a5c1f300725deb87a61f7c4fab90"
+dependencies = [
+ "flex-error",
+ "serde",
+ "serde_json",
+ "tendermint 0.30.0",
  "toml",
  "url",
 ]
 
 [[package]]
 name = "tendermint-light-client"
-version = "0.29.1"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a6a750e8ef7fcf3311ff82f29cbcb3687ee6545b22a16d65b06a8eaedf498d1"
+checksum = "ac7f5273471fbeaad69e196146dd459f3857c021141a67287aedd0504429e4f0"
 dependencies = [
  "contracts",
  "crossbeam-channel 0.4.4",
@@ -3185,22 +3228,22 @@ dependencies = [
  "serde_cbor",
  "serde_derive",
  "static_assertions",
- "tendermint",
+ "tendermint 0.30.0",
  "tendermint-light-client-verifier",
- "tendermint-rpc",
+ "tendermint-rpc 0.30.0",
  "time 0.3.20",
 ]
 
 [[package]]
 name = "tendermint-light-client-verifier"
-version = "0.29.1"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11c3dc3c75f7a5708ac0bf98374b2b1a2cf17b3a45ddfd5faab3c111aff7fc0e"
+checksum = "f36e9193521a81e4c824faedc5eb31926f8918ebb21a1fa9cee9b3dbe5164a93"
 dependencies = [
  "derive_more",
  "flex-error",
  "serde",
- "tendermint",
+ "tendermint 0.30.0",
  "time 0.3.20",
 ]
 
@@ -3209,6 +3252,24 @@ name = "tendermint-proto"
 version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c943f78c929cdf14553842f705f2c30324bc35b9179caaa5c9b80620f60652e6"
+dependencies = [
+ "bytes 1.4.0",
+ "flex-error",
+ "num-derive 0.3.3",
+ "num-traits",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_bytes",
+ "subtle-encoding",
+ "time 0.3.20",
+]
+
+[[package]]
+name = "tendermint-proto"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e553ed65874c3f35a71eb60d255edfea956274b5af37a0297d54bba039fe45e3"
 dependencies = [
  "bytes 1.4.0",
  "flex-error",
@@ -3238,8 +3299,33 @@ dependencies = [
  "serde_json",
  "subtle",
  "subtle-encoding",
- "tendermint",
- "tendermint-config",
+ "tendermint 0.29.1",
+ "tendermint-config 0.29.1",
+ "thiserror",
+ "time 0.3.20",
+ "url",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "tendermint-rpc"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d79bd426571d6a805be5c0b6749707ede6c6ee5e55dd45baef46857a1baa9f54"
+dependencies = [
+ "bytes 1.4.0",
+ "flex-error",
+ "getrandom 0.2.8",
+ "peg",
+ "pin-project",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "subtle",
+ "subtle-encoding",
+ "tendermint 0.30.0",
+ "tendermint-config 0.30.0",
  "thiserror",
  "time 0.3.20",
  "url",
@@ -3259,7 +3345,7 @@ dependencies = [
  "serde_json",
  "simple-error",
  "tempfile",
- "tendermint",
+ "tendermint 0.29.1",
  "time 0.3.20",
 ]
 
