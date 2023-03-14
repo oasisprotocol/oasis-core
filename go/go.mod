@@ -46,7 +46,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.14.0
-	github.com/prometheus/common v0.40.0
+	github.com/prometheus/common v0.42.0
 	github.com/prometheus/procfs v0.8.0
 	github.com/seccomp/libseccomp-golang v0.10.0
 	github.com/spf13/cast v1.5.0
