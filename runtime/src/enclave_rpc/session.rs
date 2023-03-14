@@ -314,14 +314,12 @@ impl Session {
 
         let consensus_state = consensus_verifier.latest_state().await?;
         // TODO: Make this access async.
-        let node = tokio::task::spawn_blocking(move || -> Result<_> {
+        let node = tokio::task::block_in_place(move || -> Result<_> {
             let registry_state = RegistryState::new(&consensus_state);
             Ok(registry_state
                 .node(&node)?
                 .ok_or(SessionError::NodeNotRegistered)?)
-        })
-        .await
-        .unwrap()?;
+        })?;
 
         let verified = node
             .runtimes

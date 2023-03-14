@@ -405,12 +405,10 @@ impl KeyManagerClient for RemoteClient {
 
         // Fetch current epoch.
         let consensus_state = self.inner.consensus_verifier.latest_state().await?;
-        let consensus_epoch = tokio::task::spawn_blocking(move || {
+        let consensus_epoch = tokio::task::block_in_place(move || {
             let beacon_state = BeaconState::new(&consensus_state);
             beacon_state.epoch()
-        })
-        .await
-        .unwrap()?;
+        })?;
 
         // First try to fetch from cache.
         {
