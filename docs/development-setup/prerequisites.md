@@ -262,7 +262,7 @@ you have a [recent version of Docker installed](
 https://docs.docker.com/install/).
 
 Oasis development environment with all the dependencies preinstalled is
-available in the `oasisprotocol/oasis-core-dev:master` image.
+available in the `ghcr.io/oasisprotocol/oasis-core-dev:master` image.
 To run a container, do the following in the top-level directory:
 
 ```bash
@@ -278,7 +278,7 @@ docker run -t -i \
   --security-opt seccomp=unconfined \
   -v $(pwd):/code \
   -w /code \
-  oasisprotocol/oasis-core-dev:master \
+  ghcr.io/oasisprotocol/oasis-core-dev:master \
   bash
 ```
 
