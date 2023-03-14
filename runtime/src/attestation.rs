@@ -106,12 +106,10 @@ impl Handler {
             let consensus_verifier = self.consensus_verifier.clone();
             let version = Some(self.version);
             let runtime_id = self.runtime_id;
-            let policy = tokio::task::spawn_blocking(move || {
+            let policy = tokio::task::block_in_place(move || {
                 // Obtain current quote policy from (verified) consensus state.
                 PolicyVerifier::new(consensus_verifier).quote_policy(&runtime_id, version)
-            })
-            .await
-            .unwrap()?;
+            })?;
 
             self.identity.set_quote_policy(policy)?;
         }
