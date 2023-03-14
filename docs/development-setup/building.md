@@ -64,7 +64,7 @@ To run an Oasis node under SGX make sure:
     --device /dev/isgx \
     --volume /var/run/aesmd:/var/run/aesmd \
     --name aesmd \
-    fortanix/aesmd
+    ghcr.io/oasisprotocol/aesmd:master
   ```
 
 Run `sgx-detect` (part of fortanix rust tools) to verify that everything is

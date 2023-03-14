@@ -212,7 +212,7 @@ docker-shell:
 	  --security-opt seccomp=unconfined \
 	  -v $(shell pwd):/code \
 	  -w /code \
-	  oasisprotocol/oasis-core-dev:master \
+	  ghcr.io/oasisprotocol/oasis-core-dev:master \
 	  bash
 
 # List of targets that are not actual files.

@@ -51,10 +51,10 @@ pr_and_docker_changes() {
     'docker/'
 }
 
-# Helper that checks if the given tag of the oasisprotocol/oasis-core-ci Docker image exists.
+# Helper that checks if the given tag of the ghcr.io/oasisprotocol/oasis-core-ci Docker image exists.
 check_docker_ci_image_tag_exists() {
   local tag=$1
-  curl --silent -f --head -lL "https://hub.docker.com/v2/repositories/oasisprotocol/oasis-core-ci/tags/${tag}/"
+  docker manifest inspect ghcr.io/oasisprotocol/oasis-core-ci:${tag}
 }
 
 # Determine the oasis-core-ci Docker image tag to use for tests.
@@ -77,7 +77,7 @@ if pr_and_docker_changes; then
 fi
 
 if ! check_docker_ci_image_tag_exists "${docker_tag}"; then
-    echo 1>&2 "Docker image 'oasisprotocol/oasis-core-ci:${docker_tag}' does not exist."
+    echo 1>&2 "Docker image 'ghcr.io/oasisprotocol/oasis-core-ci:${docker_tag}' does not exist."
     exit 1
 fi
 
