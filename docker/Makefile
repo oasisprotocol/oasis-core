@@ -1,4 +1,4 @@
-IMG_ORG ?= oasisprotocol
+IMG_ORG ?= ghcr.io/oasisprotocol
 IMG_VER ?= master
 
 IMAGES = oasis-core-dev oasis-core-ci aesmd
