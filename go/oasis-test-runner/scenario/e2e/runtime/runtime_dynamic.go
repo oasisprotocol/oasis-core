@@ -275,6 +275,9 @@ func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	registyCh, sub, err := sc.Net.Controller().Registry.WatchEvents(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to watch events: %w", err)
+	}
 	defer sub.Close()
 	ensureRuntimeEvents := func(suspended bool) error {
 		// Ensure expected suspended/started event is received.

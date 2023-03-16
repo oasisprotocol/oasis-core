@@ -33,10 +33,10 @@ jobs:
           # For more info, see:
           # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
           fetch-depth: 0
-      - name: Set up Go 1.18
+      - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: "1.18.x"
+          go-version: "1.20.x"
       - name: Set up Rust
         run: rustup show
       - name: Install Oasis Node prerequisites
