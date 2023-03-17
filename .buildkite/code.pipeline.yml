@@ -6,7 +6,7 @@
 #
 
 docker_plugin_default_config: &docker_plugin_default_config
-  image: "oasisprotocol/oasis-core-ci:${DOCKER_OASIS_CORE_CI_BASE_TAG}"
+  image: "ghcr.io/oasisprotocol/oasis-core-ci:${DOCKER_OASIS_CORE_CI_BASE_TAG}"
   always_pull: true
   workdir: /workdir
   volumes:
