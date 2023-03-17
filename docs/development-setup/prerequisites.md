@@ -40,30 +40,30 @@ Core:
   ```
   <!-- markdownlint-enable line-length -->
 
-* [Go] (at least version 1.19.3).
+* [Go] (at least version 1.20.2).
 
   If your distribution provides a new-enough version of Go, just use that.
 
   Please note that if you want to compile Oasis Core v22.1.9 or earlier,
-  then go 1.19 is not supported yet; you need to use 1.18.x.
+  then go >=1.19 is not supported yet; you need to use 1.18.x.
 
   Otherwise:
   * install the Go version provided by your distribution,
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.19.3, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.20.2, with:
 
     ```
-    go install golang.org/dl/go1.19.3@latest
-    go1.19.3 download
+    go install golang.org/dl/go1.20.2@latest
+    go1.20.2 download
     ```
 
   * instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.19.3
+    export OASIS_GO=go1.20.2
     ```
 
 * [Rust].
@@ -138,7 +138,7 @@ Core:
 
   ```
   ${OASIS_GO:-go} install mvdan.cc/gofumpt@v0.4.0
-  ${OASIS_GO:-go} install golang.org/x/tools/cmd/goimports@v0.3.0
+  ${OASIS_GO:-go} install golang.org/x/tools/cmd/goimports@v0.7.0
   ```
 
 * (**OPTIONAL**) [golangci-lint].
@@ -151,7 +151,7 @@ Core:
   ```
   curl -sSfL \
   https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v1.50.1
+   | sh -s -- -b $(${OASIS_GO:-go} env GOPATH)/bin v1.51.2
   ```
 
 * (**OPTIONAL**) [protoc-gen-go].
