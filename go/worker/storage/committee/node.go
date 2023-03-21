@@ -383,7 +383,10 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 		thisRoot: thisRoot,
 	}
 	defer func() {
-		n.diffCh <- result
+		select {
+		case n.diffCh <- result:
+		case <-n.ctx.Done():
+		}
 	}()
 	// Check if the new root doesn't already exist.
 	if !n.localStorage.NodeDB().HasRoot(thisRoot) {
@@ -437,9 +440,14 @@ func (n *Node) finalize(summary *blockSummary) {
 		)
 	}
 
-	n.finalizeCh <- finalizeResult{
+	result := finalizeResult{
 		summary: summary,
 		err:     err,
+	}
+
+	select {
+	case n.finalizeCh <- result:
+	case <-n.ctx.Done():
 	}
 }
 
