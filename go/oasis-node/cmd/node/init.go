@@ -130,7 +130,7 @@ func startMetricServer(svcMgr *background.ServiceManager, logger *logging.Logger
 // startProfilingServer initializes and starts the profiling server.
 func startProfilingServer(svcMgr *background.ServiceManager, logger *logging.Logger) (service.BackgroundService, error) {
 	// Initialize the profiling server.
-	profiling, err := pprof.New(svcMgr.Ctx)
+	profiling, err := pprof.New()
 	if err != nil {
 		logger.Error("failed to initialize pprof server",
 			"err", err,

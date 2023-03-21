@@ -192,8 +192,11 @@ func (env *Env) Cleanup() {
 	}
 
 	// Tear down this environment's commands.
-	for _, v := range env.cleanupCmds {
-		v.termOrKill()
+	for _, m := range env.cleanupCmds {
+		go m.termOrKill()
+	}
+	for _, m := range env.cleanupCmds {
+		<-m.doneCh
 	}
 
 	// Do the cleanup for this environment.

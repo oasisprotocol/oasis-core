@@ -2,7 +2,6 @@
 package pprof
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -24,9 +23,6 @@ type pprofService struct {
 
 	listener net.Listener
 	server   *http.Server
-
-	ctx   context.Context
-	errCh chan error
 }
 
 // DumpHeapToFile writes the current process heap to given file with unique suffix.
@@ -79,7 +75,11 @@ func (p *pprofService) Start() error {
 
 	go func() {
 		if err := p.server.Serve(p.listener); err != nil {
-			p.errCh <- err
+			if err != http.ErrServerClosed {
+				p.Logger.Error("pprof server terminated uncleanly",
+					"err", err,
+				)
+			}
 		}
 		p.BaseBackgroundService.Stop()
 	}()
@@ -95,16 +95,7 @@ func (p *pprofService) Stop() {
 	}
 
 	if p.server != nil {
-		select {
-		case err := <-p.errCh:
-			if err != nil {
-				p.Logger.Error("pprof server terminated uncleanly",
-					"err", err,
-				)
-			}
-		default:
-			_ = p.server.Close()
-		}
+		_ = p.server.Close()
 		p.server = nil
 	}
 }
@@ -117,13 +108,11 @@ func (p *pprofService) Cleanup() {
 }
 
 // New constructs a new pprof service.
-func New(ctx context.Context) (service.BackgroundService, error) {
+func New() (service.BackgroundService, error) {
 	address := config.GlobalConfig.Pprof.BindAddress
 
 	return &pprofService{
 		BaseBackgroundService: *service.NewBaseBackgroundService("pprof"),
 		address:               address,
-		ctx:                   ctx,
-		errCh:                 make(chan error),
 	}, nil
 }

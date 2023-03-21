@@ -141,7 +141,7 @@ func doProxy(cmd *cobra.Command, args []string) {
 	env.svcMgr.Register(metrics)
 
 	// Initialize the profiling server.
-	profiling, err := pprof.New(env.svcMgr.Ctx)
+	profiling, err := pprof.New()
 	if err != nil {
 		logger.Error("failed to initialize pprof server",
 			"err", err,
