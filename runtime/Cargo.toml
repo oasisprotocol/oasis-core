@@ -33,10 +33,10 @@ rustc-hex = "2.0.1"
 rand = "0.7.3"
 futures = "0.3.25"
 tokio = { version = "~1.26.0", features = ["rt", "rt-multi-thread", "sync"] }
-tendermint = "0.29.0"
-tendermint-proto = "0.29.0"
-tendermint-light-client = { version = "0.29.0", features = ["rust-crypto"], default-features = false }
-tendermint-rpc = { version = "0.29.0", default-features = false }
+tendermint = "0.30.0"
+tendermint-proto = "0.30.0"
+tendermint-light-client = { version = "0.30.0", features = ["rust-crypto"], default-features = false }
+tendermint-rpc = { version = "0.30.0", default-features = false }
 curve25519-dalek = "3.2.0"
 x25519-dalek = "1.1.0"
 ed25519-dalek = "1.0.1"
@@ -68,7 +68,7 @@ features = ["full"]
 # For storage interoperability tests only.
 jsonrpc = { version = "0.13.0", features = ["simple_uds"] }
 tempfile = "3.4.0"
-tendermint-testgen = "0.29.0"
+tendermint-testgen = "0.30.0"
 
 [[bin]]
 name = "fuzz-mkvs-proof"
