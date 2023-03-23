@@ -125,7 +125,17 @@ func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error
 	return targetInfo, nil
 }
 
+func (ts *teeState) updateTargetInfo(ctx context.Context, sp *sgxProvisioner) ([]byte, error) {
+	if ts.impl == nil {
+		return nil, fmt.Errorf("not initialized")
+	}
+	return ts.impl.Init(ctx, sp, ts.runtimeID, ts.version)
+}
+
 func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
+	if ts.impl == nil {
+		return nil, fmt.Errorf("not initialized")
+	}
 	return ts.impl.Update(ctx, sp, conn, report, nonce)
 }
 
@@ -295,24 +305,37 @@ func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime,
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing TEE state: %w", err)
 	}
+	if err = s.updateTargetInfo(ctx, targetInfo, conn); err != nil {
+		return nil, fmt.Errorf("error while updating TEE target info: %w", err)
+	}
 
-	if _, err = conn.Call(
+	return &ts, nil
+}
+
+func (s *sgxProvisioner) updateTargetInfo(ctx context.Context, targetInfo []byte, conn protocol.Connection) error {
+	_, err := conn.Call(
 		ctx,
 		&protocol.Body{
 			RuntimeCapabilityTEERakInitRequest: &protocol.RuntimeCapabilityTEERakInitRequest{
 				TargetInfo: targetInfo,
 			},
 		},
-	); err != nil {
-		return nil, fmt.Errorf("error while initializing RAK: %w", err)
-	}
-
-	return &ts, nil
+	)
+	return err
 }
 
 func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *logging.Logger, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
+
+	// Update report target info in case the QE identity has changed (e.g. aesmd upgrade).
+	targetInfo, err := ts.updateTargetInfo(ctx, s)
+	if err != nil {
+		return nil, fmt.Errorf("error while updating TEE target info: %w", err)
+	}
+	if err = s.updateTargetInfo(ctx, targetInfo, conn); err != nil {
+		return nil, fmt.Errorf("error while updating TEE target info: %w", err)
+	}
 
 	rakQuoteRes, err := conn.Call(
 		ctx,
