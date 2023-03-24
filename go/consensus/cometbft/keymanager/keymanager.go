@@ -82,13 +82,13 @@ func (sc *serviceClient) GetMasterSecret(ctx context.Context, query *registry.Na
 	return q.MasterSecret(ctx, query.ID)
 }
 
-func (sc *serviceClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceEpochQuery) (*api.SignedEncryptedEphemeralSecret, error) {
+func (sc *serviceClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceQuery) (*api.SignedEncryptedEphemeralSecret, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.EphemeralSecret(ctx, query.ID, query.Epoch)
+	return q.EphemeralSecret(ctx, query.ID)
 }
 
 func (sc *serviceClient) WatchMasterSecrets() (<-chan *api.SignedEncryptedMasterSecret, *pubsub.Subscription) {

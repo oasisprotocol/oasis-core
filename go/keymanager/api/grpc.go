@@ -21,7 +21,7 @@ var (
 	// methodGetMasterSecret is the GetMasterSecret method.
 	methodGetMasterSecret = serviceName.NewMethod("GetMasterSecret", registry.NamespaceQuery{})
 	// methodGetEphemeralSecret is the GetEphemeralSecret method.
-	methodGetEphemeralSecret = serviceName.NewMethod("GetEphemeralSecret", registry.NamespaceEpochQuery{})
+	methodGetEphemeralSecret = serviceName.NewMethod("GetEphemeralSecret", registry.NamespaceQuery{})
 
 	// methodWatchStatuses is the WatchStatuses method.
 	methodWatchStatuses = serviceName.NewMethod("WatchStatuses", nil)
@@ -147,7 +147,7 @@ func handlerGetEphemeralSecret(
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
-	var query registry.NamespaceEpochQuery
+	var query registry.NamespaceQuery
 	if err := dec(&query); err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func handlerGetEphemeralSecret(
 		FullMethod: methodGetEphemeralSecret.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).GetEphemeralSecret(ctx, req.(*registry.NamespaceEpochQuery))
+		return srv.(Backend).GetEphemeralSecret(ctx, req.(*registry.NamespaceQuery))
 	}
 	return interceptor(ctx, &query, info, handler)
 }
@@ -273,7 +273,7 @@ func (c *KeymanagerClient) GetMasterSecret(ctx context.Context, query *registry.
 	return resp, nil
 }
 
-func (c *KeymanagerClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceEpochQuery) (*SignedEncryptedEphemeralSecret, error) {
+func (c *KeymanagerClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceQuery) (*SignedEncryptedEphemeralSecret, error) {
 	var resp *SignedEncryptedEphemeralSecret
 	if err := c.conn.Invoke(ctx, methodGetEphemeralSecret.FullName(), query, &resp); err != nil {
 		return nil, err

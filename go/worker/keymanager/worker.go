@@ -117,7 +117,7 @@ type Worker struct { // nolint: maligned
 	genMstSecInProgress bool
 	genMstSecRetry      int
 
-	ephSecrets []*api.SignedEncryptedEphemeralSecret
+	ephSecret *api.SignedEncryptedEphemeralSecret
 
 	loadEphSecRetry     int
 	genEphSecDoneCh     chan bool
@@ -710,22 +710,15 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, epoch beaco
 
 	// Check if the ephemeral secret has been published in this epoch.
 	// Note that despite this check, the nodes can still publish ephemeral secrets at the same time.
-	_, err := w.commonWorker.Consensus.KeyManager().GetEphemeralSecret(w.ctx, &registry.NamespaceEpochQuery{
+	lastSecret, err := w.commonWorker.Consensus.KeyManager().GetEphemeralSecret(w.ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     runtimeID,
-		Epoch:  epoch,
 	})
-	switch err {
-	case nil:
-		w.logger.Info("skipping secret generation, ephemeral secret already published")
-		return nil
-	case api.ErrNoSuchEphemeralSecret:
-		// Secret hasn't been published.
-	default:
-		w.logger.Error("failed to fetch ephemeral secret",
-			"err", err,
-		)
-		return fmt.Errorf("failed to fetch ephemeral secret: %w", err)
+	if err != nil && err != api.ErrNoSuchEphemeralSecret {
+		return err
+	}
+	if lastSecret != nil && epoch == lastSecret.Secret.Epoch {
+		return fmt.Errorf("ephemeral secret can be proposed once per epoch")
 	}
 
 	// Skip generation if the node is not in the key manager committee.
@@ -882,45 +875,6 @@ func (w *Worker) loadEphemeralSecret(sigSecret *api.SignedEncryptedEphemeralSecr
 	}
 
 	return nil
-}
-
-func (w *Worker) fetchLastEphemeralSecrets(runtimeID common.Namespace) ([]*api.SignedEncryptedEphemeralSecret, error) {
-	w.logger.Info("fetching last ephemeral secrets")
-
-	// Get next epoch.
-	epoch, err := w.commonWorker.Consensus.Beacon().GetEpoch(w.ctx, consensus.HeightLatest)
-	if err != nil {
-		w.logger.Error("failed to fetch epoch",
-			"err", err,
-		)
-		return nil, fmt.Errorf("failed to fetch epoch: %w", err)
-	}
-	epoch++
-
-	// Fetch last few ephemeral secrets.
-	N := ephemeralSecretCacheSize
-	secrets := make([]*api.SignedEncryptedEphemeralSecret, 0, N)
-	for i := 0; i < N && epoch > 0; i, epoch = i+1, epoch-1 {
-		secret, err := w.commonWorker.Consensus.KeyManager().GetEphemeralSecret(w.ctx, &registry.NamespaceEpochQuery{
-			Height: consensus.HeightLatest,
-			ID:     runtimeID,
-			Epoch:  epoch,
-		})
-
-		switch err {
-		case nil:
-			secrets = append(secrets, secret)
-		case api.ErrNoSuchEphemeralSecret:
-			// Secret hasn't been published.
-		default:
-			w.logger.Error("failed to fetch ephemeral secret",
-				"err", err,
-			)
-			return nil, fmt.Errorf("failed to fetch ephemeral secret: %w", err)
-		}
-	}
-
-	return secrets, nil
 }
 
 // randomBlockHeight returns the height of a random block in the k-th percentile of the given epoch.
@@ -1086,17 +1040,6 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 		default:
 			return
 		}
-
-		// Fetch last few ephemeral secrets and load them.
-		var err error
-		w.ephSecrets, err = w.fetchLastEphemeralSecrets(w.runtimeID)
-		if err != nil {
-			w.logger.Error("failed to fetch last ephemeral secrets",
-				"err", err,
-			)
-		}
-		w.loadEphSecRetry = 0
-		w.handleLoadEphemeralSecret()
 
 		if w.kmStatus == nil {
 			return
@@ -1291,14 +1234,13 @@ func (w *Worker) handleNewEphemeralSecret(secret *api.SignedEncryptedEphemeralSe
 		"epoch", secret.Secret.Epoch,
 	)
 
+	w.ephSecret = secret
+	w.loadEphSecRetry = 0
+
 	if secret.Secret.Epoch == epoch+1 {
 		// Disarm ephemeral secret generation.
 		w.genEphSecRetry = math.MaxInt64
 	}
-
-	// Add secret to the list and send a signal to load it.
-	w.ephSecrets = append(w.ephSecrets, secret)
-	w.loadEphSecRetry = 0
 
 	w.handleLoadEphemeralSecret()
 }
@@ -1353,29 +1295,26 @@ func (w *Worker) handleGenerateEphemeralSecretDone(ok bool) {
 }
 
 func (w *Worker) handleLoadEphemeralSecret() {
-	if w.kmStatus == nil || w.rtStatus == nil {
+	if w.kmStatus == nil || w.rtStatus == nil || w.ephSecret == nil {
+		return
+	}
+	if w.loadEphSecRetry > loadSecretMaxRetries {
 		return
 	}
 
-	var failed []*api.SignedEncryptedEphemeralSecret
-	for _, secret := range w.ephSecrets {
-		if err := w.loadEphemeralSecret(secret); err != nil {
-			w.logger.Error("failed to load ephemeral secret",
-				"err", err,
-				"retry", w.loadEphSecRetry,
-			)
-			failed = append(failed, secret)
-			continue
-		}
-		w.setLastLoadedEphemeralSecretEpoch(secret.Secret.Epoch)
-	}
-	w.ephSecrets = failed
-
+	// Retry only few times per epoch.
 	w.loadEphSecRetry++
-	if w.loadEphSecRetry > loadSecretMaxRetries {
-		// Disarm ephemeral secret loading.
-		w.ephSecrets = nil
+
+	if err := w.loadEphemeralSecret(w.ephSecret); err != nil {
+		w.logger.Error("failed to load ephemeral secret",
+			"err", err,
+		)
+		return
 	}
+
+	// Disarm ephemeral secret loading.
+	w.loadEphSecRetry = math.MaxInt64
+	w.setLastLoadedEphemeralSecretEpoch(w.ephSecret.Secret.Epoch)
 }
 
 func (w *Worker) handleStop() {

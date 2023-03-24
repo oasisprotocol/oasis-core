@@ -124,40 +124,38 @@ func InitializeTestKeyManagerState(ctx context.Context, mkvs mkvs.Tree) error {
 			RSK:    nil,
 		},
 	} {
-		if err := state.SetStatus(ctx, status); err != nil {
+		if err = state.SetStatus(ctx, status); err != nil {
 			return fmt.Errorf("setting key manager status: %w", err)
 		}
 	}
 
-	// Add two ephemeral secrets.
+	// Add an ephemeral secret.
 	rek1 := x25519.PrivateKey(sha512.Sum512_256([]byte("first rek")))
 	rek2 := x25519.PrivateKey(sha512.Sum512_256([]byte("second rek")))
-
-	for epoch := 1; epoch <= 2; epoch++ {
-		secret := kmApi.EncryptedEphemeralSecret{
-			ID:    keymanager1,
-			Epoch: beacon.EpochTime(epoch),
-			Secret: kmApi.EncryptedSecret{
-				Checksum: []byte{1, 2, 3, 4, 5},
-				PubKey:   *rek1.Public(),
-				Ciphertexts: map[x25519.PublicKey][]byte{
-					*rek1.Public(): {1, 2, 3},
-					*rek2.Public(): {4, 5, 6},
-				},
+	epoch := 1
+	secret := kmApi.EncryptedEphemeralSecret{
+		ID:    keymanager1,
+		Epoch: beacon.EpochTime(epoch),
+		Secret: kmApi.EncryptedSecret{
+			Checksum: []byte{1, 2, 3, 4, 5},
+			PubKey:   *rek1.Public(),
+			Ciphertexts: map[x25519.PublicKey][]byte{
+				*rek1.Public(): {1, 2, 3},
+				*rek2.Public(): {4, 5, 6},
 			},
-		}
-		sig, err := signature.Sign(signers[0], kmApi.EncryptedEphemeralSecretSignatureContext, cbor.Marshal(secret))
-		if err != nil {
-			return fmt.Errorf("failed to sign ephemeral secret: %w", err)
-		}
-		sigSecret := kmApi.SignedEncryptedEphemeralSecret{
-			Secret:    secret,
-			Signature: sig.Signature,
-		}
-		err = state.SetEphemeralSecret(ctx, &sigSecret)
-		if err != nil {
-			return fmt.Errorf("failed to set ephemeral secret: %w", err)
-		}
+		},
+	}
+	sig, err := signature.Sign(signers[0], kmApi.EncryptedEphemeralSecretSignatureContext, cbor.Marshal(secret))
+	if err != nil {
+		return fmt.Errorf("failed to sign ephemeral secret: %w", err)
+	}
+	sigSecret := kmApi.SignedEncryptedEphemeralSecret{
+		Secret:    secret,
+		Signature: sig.Signature,
+	}
+	err = state.SetEphemeralSecret(ctx, &sigSecret)
+	if err != nil {
+		return fmt.Errorf("failed to set ephemeral secret: %w", err)
 	}
 
 	return nil

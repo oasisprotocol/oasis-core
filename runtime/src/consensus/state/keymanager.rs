@@ -32,7 +32,7 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 key_format!(StatusKeyFmt, 0x70, Hash);
 key_format!(MasterSecretKeyFmt, 0x72, Hash);
-key_format!(EphemeralSecretKeyFmt, 0x73, (Hash, EpochTime));
+key_format!(EphemeralSecretKeyFmt, 0x73, Hash);
 
 /// Current key manager status.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
@@ -102,10 +102,9 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     pub fn ephemeral_secret(
         &self,
         id: Namespace,
-        epoch: EpochTime,
     ) -> Result<Option<SignedEncryptedEphemeralSecret>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
-        match self.mkvs.get(&EphemeralSecretKeyFmt((h, epoch)).encode()) {
+        match self.mkvs.get(&EphemeralSecretKeyFmt(h).encode()) {
             Ok(Some(b)) => Ok(Some(self.decode_ephemeral_secret(&b)?)),
             Ok(None) => Ok(None),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
@@ -167,7 +166,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("b5ee772727869caf8d0d333a7a9d65562ca34d8d6f3cf496af9e90f1705f10ec"),
+            hash: Hash::from("a40448052f74a1c0c2d47c2b01a433ad7f3782ea47dfe5575170fec2587569c9"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -308,19 +307,9 @@ mod test {
 
         // Test ephemeral secret (happy path, invalid epoch, invalid runtime).
         let secret = keymanager_state
-            .ephemeral_secret(keymanager1, 1)
+            .ephemeral_secret(keymanager1)
             .expect("ephemeral secret query should work")
             .expect("ephemeral secret query should return a result");
         assert_eq!(secret, expected_secret, "invalid ephemeral secret");
-
-        let secret = keymanager_state
-            .ephemeral_secret(keymanager1, 2)
-            .expect("ephemeral secret query should work");
-        assert_ne!(secret, None, "invalid ephemeral secret");
-
-        let secret = keymanager_state
-            .ephemeral_secret(keymanager2, 1)
-            .expect("ephemeral secret query should work");
-        assert_eq!(secret, None, "invalid ephemeral secret");
     }
 }

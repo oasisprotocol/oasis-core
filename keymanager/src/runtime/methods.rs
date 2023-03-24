@@ -83,8 +83,10 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
     let generation = status.generation;
     let checksum = status.checksum;
     let nodes = status.nodes;
+    let epoch = consensus_epoch(ctx)?;
     let client = key_manager_client_for_replication(ctx);
     let master_secret_fetcher = |generation| fetch_master_secret(generation, &nodes, &client);
+    let ephemeral_secret_fetcher = |epoch| fetch_ephemeral_secret(epoch, &nodes, &client);
 
     let kdf = Kdf::global();
     let state = kdf.init(
@@ -92,7 +94,9 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
         runtime_id,
         generation,
         checksum,
+        epoch,
         master_secret_fetcher,
+        ephemeral_secret_fetcher,
     )?;
 
     // State is up-to-date, build the response and sign it with the RAK.
@@ -581,7 +585,7 @@ fn validate_signed_ephemeral_secret(
     let consensus_state = block_on(ctx.consensus_verifier.latest_state())?;
     let km_state = KeyManagerState::new(&consensus_state);
     let published_signed_secret = km_state
-        .ephemeral_secret(signed_secret.secret.runtime_id, signed_secret.secret.epoch)?
+        .ephemeral_secret(signed_secret.secret.runtime_id)?
         .filter(|published_signed_secret| published_signed_secret == signed_secret)
         .ok_or(KeyManagerError::EphemeralSecretNotPublished)?;
 

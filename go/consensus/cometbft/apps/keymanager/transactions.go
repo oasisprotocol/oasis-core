@@ -249,15 +249,13 @@ func (app *keymanagerApplication) publishEphemeralSecret(
 		return fmt.Errorf("keymanager: ephemeral secret can be published only by the key manager committee")
 	}
 
-	// Reject if the secret has been published.
-	_, err = state.EphemeralSecret(ctx, secret.Secret.ID, secret.Secret.Epoch)
-	switch err {
-	case nil:
-		return fmt.Errorf("keymanager: ephemeral secret for epoch %d already published", secret.Secret.Epoch)
-	case api.ErrNoSuchEphemeralSecret:
-		// Secret hasn't been published.
-	default:
+	// Reject if the ephemeral secret has been published in this epoch.
+	lastSecret, err := state.EphemeralSecret(ctx, secret.Secret.ID)
+	if err != nil && err != api.ErrNoSuchEphemeralSecret {
 		return err
+	}
+	if lastSecret != nil && secret.Secret.Epoch == lastSecret.Secret.Epoch {
+		return fmt.Errorf("keymanager: ephemeral secret can be proposed once per epoch")
 	}
 
 	// Verify the secret. Ephemeral secrets can be published for the next epoch only.

@@ -239,6 +239,20 @@ impl Inner {
         k
     }
 
+    fn add_ephemeral_secret(&mut self, secret: Secret, epoch: EpochTime) {
+        self.ephemeral_secrets.insert(epoch, secret);
+
+        // Drop the oldest secret, if we exceed the capacity.
+        if self.ephemeral_secrets.len() > EPHEMERAL_SECRET_CACHE_SIZE {
+            let min = *self
+                .ephemeral_secrets
+                .keys()
+                .min()
+                .expect("map should not be empty");
+            self.ephemeral_secrets.remove(&min);
+        }
+    }
+
     fn get_checksum(&self) -> Result<Vec<u8>> {
         match self.checksum.as_ref() {
             Some(checksum) => Ok(checksum.clone()),
@@ -329,16 +343,20 @@ impl Kdf {
     /// intervention by the operator is required to remove/alter them.
     /// - The first initialization can take a very long time, especially if all generations
     /// of the master secret must be replicated from other enclaves.
-    pub fn init<M>(
+    #[allow(clippy::too_many_arguments)]
+    pub fn init<M, E>(
         &self,
         storage: &dyn KeyValue,
         runtime_id: Namespace,
         generation: u64,
         checksum: Vec<u8>,
+        epoch: EpochTime,
         master_secret_fetcher: M,
+        ephemeral_secret_fetcher: E,
     ) -> Result<State>
     where
         M: Fn(u64) -> Result<VerifiableSecret>,
+        E: Fn(EpochTime) -> Result<Secret>,
     {
         // If the key manager has no secrets, nothing needs to be replicated.
         if checksum.is_empty() {
@@ -367,6 +385,22 @@ impl Kdf {
             let curr_checksum = inner.checksum.clone().unwrap_or(runtime_id.0.to_vec());
             (next_generation, curr_checksum)
         };
+
+        // On startup replicate ephemeral secrets.
+        if next_generation == 0 {
+            let last = epoch + 1;
+            for epoch in (0..=last).rev() {
+                if let Ok(secret) = ephemeral_secret_fetcher(epoch) {
+                    let mut inner = self.inner.write().unwrap();
+                    inner.verify_runtime_id(&runtime_id)?;
+                    inner.add_ephemeral_secret(secret, epoch);
+                    continue;
+                }
+                if epoch != last {
+                    break;
+                }
+            }
+        }
 
         // On startup load all master secrets.
         if next_generation == 0 {
@@ -703,17 +737,7 @@ impl Kdf {
         inner.verify_runtime_id(runtime_id)?;
 
         // Add to the cache.
-        inner.ephemeral_secrets.insert(epoch, Secret(secret.0));
-
-        // Drop the oldest secret, if we exceed the capacity.
-        if inner.ephemeral_secrets.len() > EPHEMERAL_SECRET_CACHE_SIZE {
-            let min = *inner
-                .ephemeral_secrets
-                .keys()
-                .min()
-                .expect("map should not be empty");
-            inner.ephemeral_secrets.remove(&min);
-        }
+        inner.add_ephemeral_secret(secret, epoch);
 
         Ok(())
     }
@@ -1065,11 +1089,22 @@ mod tests {
         let kdf = Kdf::new();
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
+        let epoch = 0;
         let provider = MasterSecretProvider::new(runtime_id);
         let master_secret_fetcher = |generation| provider.fetch(generation);
+        let ephemeral_secret_fetcher =
+            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
 
         // No secrets.
-        let result = kdf.init(&storage, runtime_id, 0, vec![], master_secret_fetcher);
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            0,
+            vec![],
+            epoch,
+            master_secret_fetcher,
+            ephemeral_secret_fetcher,
+        );
         assert!(result.is_ok());
 
         let state = result.unwrap();
@@ -1084,7 +1119,9 @@ mod tests {
                 runtime_id,
                 generation,
                 checksum.clone(),
+                epoch,
                 master_secret_fetcher,
+                ephemeral_secret_fetcher,
             );
             assert!(result.is_ok());
 
@@ -1105,7 +1142,9 @@ mod tests {
                 runtime_id,
                 generation,
                 checksum.clone(),
+                epoch,
                 master_secret_fetcher,
+                ephemeral_secret_fetcher,
             );
             assert!(result.is_ok());
 
@@ -1122,12 +1161,23 @@ mod tests {
         let kdf = Kdf::new();
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
+        let epoch = 0;
         let provider = MasterSecretProvider::new(runtime_id);
         let master_secret_fetcher =
             |generation| Err(KeyManagerError::MasterSecretNotFound(generation).into());
+        let ephemeral_secret_fetcher =
+            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
 
         // KDF needs to be initialized.
-        let result = kdf.init(&storage, runtime_id, 0, vec![], master_secret_fetcher);
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            0,
+            vec![],
+            epoch,
+            master_secret_fetcher,
+            ephemeral_secret_fetcher,
+        );
         assert!(result.is_ok());
 
         // Rotate master secrets.
@@ -1148,7 +1198,9 @@ mod tests {
                 runtime_id,
                 generation,
                 checksum.clone(),
+                epoch,
                 master_secret_fetcher,
+                ephemeral_secret_fetcher,
             );
             assert!(result.is_ok());
 
@@ -1172,7 +1224,9 @@ mod tests {
             runtime_id,
             generation,
             checksum,
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1194,7 +1248,9 @@ mod tests {
             runtime_id,
             generation,
             checksum.clone(),
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_ok());
 
@@ -1207,8 +1263,11 @@ mod tests {
         let kdf = Kdf::new();
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
+        let epoch = 0;
         let provider = MasterSecretProvider::new(runtime_id);
         let master_secret_fetcher = |generation| provider.fetch(generation);
+        let ephemeral_secret_fetcher =
+            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
 
         // Init.
         let generation = 5;
@@ -1219,7 +1278,9 @@ mod tests {
             runtime_id,
             generation,
             checksum.clone(),
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_ok());
 
@@ -1238,7 +1299,9 @@ mod tests {
             runtime_id,
             generation,
             checksum.clone(),
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1252,8 +1315,11 @@ mod tests {
         let kdf = Kdf::new();
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
+        let epoch = 0;
         let provider = MasterSecretProvider::new(runtime_id);
         let master_secret_fetcher = |generation| provider.fetch(generation);
+        let ephemeral_secret_fetcher =
+            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
 
         // Init.
         let generation = 5;
@@ -1264,7 +1330,9 @@ mod tests {
             runtime_id,
             generation,
             checksum.clone(),
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_ok());
 
@@ -1284,7 +1352,9 @@ mod tests {
                 runtime_id,
                 generation,
                 checksum.clone(),
+                epoch,
                 master_secret_fetcher,
+                ephemeral_secret_fetcher,
             )
         });
         assert!(result.is_err());
@@ -1295,8 +1365,11 @@ mod tests {
         let kdf = Kdf::new();
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
+        let epoch = 0;
         let provider = MasterSecretProvider::new(runtime_id);
         let master_secret_fetcher = |generation| provider.fetch(generation);
+        let ephemeral_secret_fetcher =
+            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
 
         // Init.
         let generation = 10;
@@ -1307,7 +1380,9 @@ mod tests {
             runtime_id,
             generation,
             checksum.clone(),
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_ok());
 
@@ -1320,7 +1395,9 @@ mod tests {
             runtime_id,
             generation,
             checksum.clone(),
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1334,12 +1411,23 @@ mod tests {
         let kdf = Kdf::new();
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
+        let epoch = 0;
         let invalid_runtime_id = Namespace::from(vec![2u8; 32]);
         let provider = MasterSecretProvider::new(runtime_id);
         let master_secret_fetcher = |generation| provider.fetch(generation);
+        let ephemeral_secret_fetcher =
+            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
 
         // No secrets.
-        let result = kdf.init(&storage, runtime_id, 0, vec![], master_secret_fetcher);
+        let result = kdf.init(
+            &storage,
+            runtime_id,
+            0,
+            vec![],
+            epoch,
+            master_secret_fetcher,
+            ephemeral_secret_fetcher,
+        );
         assert!(result.is_ok());
 
         let result = kdf.init(
@@ -1347,7 +1435,9 @@ mod tests {
             invalid_runtime_id,
             0,
             vec![],
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1364,7 +1454,9 @@ mod tests {
             runtime_id,
             generation,
             checksum.clone(),
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_ok());
 
@@ -1373,7 +1465,9 @@ mod tests {
             invalid_runtime_id,
             generation,
             checksum,
+            epoch,
             master_secret_fetcher,
+            ephemeral_secret_fetcher,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1381,7 +1475,6 @@ mod tests {
             KeyManagerError::RuntimeMismatch.to_string()
         );
     }
-
     #[test]
     fn key_generation_is_deterministic() {
         let kdf = Kdf::default();

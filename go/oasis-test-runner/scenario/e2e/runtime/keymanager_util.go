@@ -218,6 +218,29 @@ func (sc *Scenario) waitMasterSecret(ctx context.Context, generation uint64) (*k
 	}
 }
 
+func (sc *Scenario) waitEphemeralSecrets(ctx context.Context, n int) (*keymanager.SignedEncryptedEphemeralSecret, error) {
+	sc.Logger.Info("waiting ephemeral secrets", "n", n)
+
+	ephCh, ephSub, err := sc.Net.Controller().Keymanager.WatchEphemeralSecrets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer ephSub.Close()
+
+	var secret *keymanager.SignedEncryptedEphemeralSecret
+	for i := 0; i < n; i++ {
+		select {
+		case secret = <-ephCh:
+			sc.Logger.Info("ephemeral secret published",
+				"epoch", secret.Secret.Epoch,
+			)
+		case <-ctx.Done():
+			return nil, fmt.Errorf("timed out waiting for ephemeral secrets")
+		}
+	}
+	return secret, nil
+}
+
 func (sc *Scenario) updateRotationInterval(ctx context.Context, nonce uint64, childEnv *env.Env, rotationInterval beacon.EpochTime) error {
 	sc.Logger.Info("updating master secret rotation interval in the key manager policy",
 		"interval", rotationInterval,

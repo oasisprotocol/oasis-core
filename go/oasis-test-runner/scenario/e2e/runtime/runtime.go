@@ -819,7 +819,7 @@ func RegisterScenarios() error {
 		Sentry,
 		// Keymanager tests.
 		KeymanagerMasterSecrets,
-		KeymanagerEphemeralKeys,
+		KeymanagerEphemeralSecrets,
 		KeymanagerDumpRestore,
 		KeymanagerRestart,
 		KeymanagerReplicate,

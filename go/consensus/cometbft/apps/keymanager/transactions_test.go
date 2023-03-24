@@ -254,6 +254,6 @@ func TestPublishEphemeralSecret(t *testing.T) {
 	t.Run("ephemeral secret already published", func(t *testing.T) {
 		sigSecret := newSignedSecret()
 		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
-		require.EqualError(t, err, "keymanager: ephemeral secret for epoch 1 already published")
+		require.EqualError(t, err, "keymanager: ephemeral secret can be proposed once per epoch")
 	})
 }

@@ -22,9 +22,6 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// maxEphemeralSecretAge is the maximum age of an ephemeral secret in the number of epochs.
-const maxEphemeralSecretAge = 20
-
 // minProposalReplicationPercent is the minimum percentage of enclaves in the key manager committee
 // that must replicate the proposal for the next master secret before it is accepted.
 const minProposalReplicationPercent = 66
@@ -211,15 +208,6 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 				return fmt.Errorf("failed to set key manager status: %w", err)
 			}
 			toEmit = append(toEmit, newStatus)
-		}
-
-		// Clean ephemeral secrets.
-		// TODO: use max ephemeral secret age from the key manager policy
-		if epoch > maxEphemeralSecretAge {
-			expiryEpoch := epoch - maxEphemeralSecretAge
-			if err = state.CleanEphemeralSecrets(ctx, rt.ID, expiryEpoch); err != nil {
-				return fmt.Errorf("failed to clean ephemeral secrets: %w", err)
-			}
 		}
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -15,14 +14,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// KeymanagerEphemeralKeys is the keymanager ephemeral secret and ephemeral
+// KeymanagerEphemeralSecrets is the keymanager ephemeral secret and ephemeral
 // key generation scenario.
 //
 // It uses encryption and decryption transactions provided by the
@@ -36,22 +34,22 @@ import (
 //   - Start all managers and test that ephemeral secrets can be replicated.
 //   - Run managers for few epochs and test that everything works.
 //   - Publish transactions that use ephemeral keys to encrypt/decrypt messages.
-var KeymanagerEphemeralKeys scenario.Scenario = newKmEphemeralKeysImpl()
+var KeymanagerEphemeralSecrets scenario.Scenario = newKmEphemeralSecretsImpl()
 
-type kmEphemeralKeysImpl struct {
+type kmEphemeralSecretsImpl struct {
 	Scenario
 }
 
-func newKmEphemeralKeysImpl() scenario.Scenario {
-	return &kmEphemeralKeysImpl{
+func newKmEphemeralSecretsImpl() scenario.Scenario {
+	return &kmEphemeralSecretsImpl{
 		Scenario: *NewScenario(
-			"keymanager-ephemeral-keys",
+			"keymanager-ephemeral-secrets",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }
 
-func (sc *kmEphemeralKeysImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *kmEphemeralSecretsImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
@@ -67,13 +65,13 @@ func (sc *kmEphemeralKeysImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *kmEphemeralKeysImpl) Clone() scenario.Scenario {
-	return &kmEphemeralKeysImpl{
+func (sc *kmEphemeralSecretsImpl) Clone() scenario.Scenario {
+	return &kmEphemeralSecretsImpl{
 		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
-func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
+func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	// Start the network, but no need to start the client. Just ensure it
 	// is synced.
 	if err := sc.Scenario.StartNetworkAndWaitForClientSync(ctx); err != nil {
@@ -89,12 +87,6 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 		return err
 	}
 
-	// Prepare key managers.
-	kms := sc.Net.Keymanagers()
-	firstKm := kms[0]
-	secondKm := kms[1]
-	thirdKm := kms[2]
-
 	// Prepare an RPC client which will be used to query key manager nodes
 	// for public ephemeral keys.
 	chainContext, err := sc.Net.Controller().Consensus.GetChainContext(ctx)
@@ -105,34 +97,29 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	if err != nil {
 		return err
 	}
-	firstKmPeerID, err := rpcClient.addKeyManagerAddrToHost(firstKm)
+	kms := sc.Net.Keymanagers()
+	firstKmPeerID, err := rpcClient.addKeyManagerAddrToHost(kms[0])
 	if err != nil {
 		return err
 	}
-	secondKmPeerID, err := rpcClient.addKeyManagerAddrToHost(secondKm)
+	secondKmPeerID, err := rpcClient.addKeyManagerAddrToHost(kms[1])
 	if err != nil {
 		return err
 	}
-	thirdKmPeerID, err := rpcClient.addKeyManagerAddrToHost(thirdKm)
+	thirdKmPeerID, err := rpcClient.addKeyManagerAddrToHost(kms[2])
 	if err != nil {
 		return err
 	}
 
 	// Wait until the first key manager is ready.
-	sc.Logger.Info("ensuring the first key manager is ready")
-
-	firstKmCtrl, err := oasis.NewController(firstKm.SocketPath())
-	if err != nil {
-		return err
-	}
-	if err = firstKmCtrl.WaitReady(ctx); err != nil {
+	if err = sc.waitKeymanagers(ctx, []int{0}); err != nil {
 		return err
 	}
 
 	// Wait until the first ephemeral secret is published.
 	sc.Logger.Info("waiting for the first ephemeral secret")
 
-	sigSecret, err := sc.waitForNextEphemeralSecret(ctx)
+	sigSecret, err := sc.waitEphemeralSecrets(ctx, 1)
 	if err != nil {
 		return err
 	}
@@ -178,13 +165,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	}
 
 	// Restart the first key manager.
-	sc.Logger.Info("restarting the first key manager")
-	if err = firstKm.Restart(ctx); err != nil {
-		return fmt.Errorf("failed to restart the first key manager: %w", err)
-	}
-
-	sc.Logger.Info("ensuring the first key manager is ready")
-	if err = firstKmCtrl.WaitReady(ctx); err != nil {
+	if err = sc.restartAndWaitKeymanagers(ctx, []int{0}); err != nil {
 		return err
 	}
 
@@ -196,25 +177,14 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	if err != nil {
 		return err
 	}
-	switch rt.TEEHardware {
-	case node.TEEHardwareIntelSGX:
-		// REK changes on restarts and therefore the key managers shouldn't be able to decrypt
-		// previous ciphertexts.
-		if key != nil {
-			return fmt.Errorf("ephemeral key for epoch %d should not be available", sigSecret.Secret.Epoch)
-		}
-	default:
-		// Insecure REK doesn't change on restarts so the key manager should be able to decrypt
-		// all previous ciphertexts.
-		if key == nil {
-			return fmt.Errorf("ephemeral key for epoch %d should be available", sigSecret.Secret.Epoch)
-		}
+	if key != nil {
+		return fmt.Errorf("ephemeral key for epoch %d should not be available", sigSecret.Secret.Epoch)
 	}
 
 	// Wait until the next ephemeral secret is published.
 	sc.Logger.Info("waiting for the first ephemeral secret")
 
-	sigSecret, err = sc.waitForNextEphemeralSecret(ctx)
+	sigSecret, err = sc.waitEphemeralSecrets(ctx, 1)
 	if err != nil {
 		return err
 	}
@@ -247,30 +217,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	}
 
 	// Start other key managers.
-	sc.Logger.Info("starting all key managers")
-
-	if err = secondKm.Start(); err != nil {
-		return fmt.Errorf("failed to start the second key manager: %w", err)
-	}
-	if err = thirdKm.Start(); err != nil {
-		return fmt.Errorf("failed to start the third key manager: %w", err)
-	}
-
-	sc.Logger.Info("ensuring all key manager are ready")
-
-	secondKmCtrl, err := oasis.NewController(secondKm.SocketPath())
-	if err != nil {
-		return err
-	}
-	if err = secondKmCtrl.WaitReady(ctx); err != nil {
-		return err
-	}
-
-	thirdKmCtrl, err := oasis.NewController(thirdKm.SocketPath())
-	if err != nil {
-		return err
-	}
-	if err = thirdKmCtrl.WaitReady(ctx); err != nil {
+	if err = sc.startAndWaitKeymanagers(ctx, []int{1, 2}); err != nil {
 		return err
 	}
 
@@ -303,9 +250,8 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 		return fmt.Errorf("ephemeral keys should be the same")
 	}
 
-	// Test that all key managers produce the same keys and that ephemeral secrets
-	// are published in the consensus layer.
-	sc.Logger.Info("testing if ephemeral keys are the same and ephemeral secrets published")
+	// Test that all key managers derive the same keys.
+	sc.Logger.Info("testing if ephemeral keys are the same")
 
 	epoCh, epoSub, err := sc.Net.Controller().Beacon.WatchEpochs(ctx)
 	if err != nil {
@@ -314,21 +260,42 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	defer epoSub.Close()
 
 	set := make(map[x25519.PublicKey]struct{})
-	for i := 0; i < 5; i++ {
+	for i := 1; i <= 3; i++ {
 		epoch := <-epoCh
 
-		sc.Logger.Info("checking if ephemeral secret was published",
+		sc.Logger.Info("fetching ephemeral keys from all key managers",
 			"epoch", epoch,
 		)
 
-		sigSecret, err = sc.Net.Controller().Keymanager.GetEphemeralSecret(ctx, &registry.NamespaceEpochQuery{
-			Height: consensus.HeightLatest,
-			ID:     keymanagerID,
-			Epoch:  epoch,
-		})
-		if err != nil {
-			return err
+		for _, peerID := range []peer.ID{firstKmPeerID, secondKmPeerID, thirdKmPeerID} {
+			key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, epoch, peerID)
+			if err != nil {
+				return fmt.Errorf("fetching ephemeral key should succeed, %w", err)
+			}
+			if key == nil {
+				return fmt.Errorf("ephemeral key for epoch %d should be available", epoch)
+			}
+			set[*key] = struct{}{}
 		}
+
+		if len(set) != i {
+			return fmt.Errorf("ephemeral keys should match")
+		}
+	}
+
+	// Test that published secrets are encrypted to all enclaves.
+	ephCh, ephSub, err := sc.Net.Controller().Keymanager.WatchEphemeralSecrets(ctx)
+	if err != nil {
+		return err
+	}
+	defer ephSub.Close()
+
+	for i := 1; i <= 3; i++ {
+		sigSecret := <-ephCh
+
+		sc.Logger.Info("checking if published ephemeral secret contains enough ciphertexts",
+			"epoch", sigSecret.Secret.Epoch,
+		)
 
 		var numCiphertexts int
 		switch rt.TEEHardware {
@@ -338,31 +305,8 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 			numCiphertexts = 1
 		}
 
-		// Skip first two secrets as we cannot be sure how many key manager nodes were registered
-		// when the secret was generated.
-		if i > 1 {
-			if n := len(sigSecret.Secret.Secret.Ciphertexts); n != numCiphertexts {
-				return fmt.Errorf("ephemeral secret should be encrypted to %d enclaves, not %d", numCiphertexts, n)
-			}
-		}
-
-		sc.Logger.Info("fetching ephemeral keys from all key managers",
-			"epoch", epoch,
-		)
-
-		for _, peerID := range []peer.ID{firstKmPeerID, secondKmPeerID, thirdKmPeerID} {
-			key, err = rpcClient.fetchEphemeralPublicKeyWithRetry(ctx, epoch, peerID)
-			if err != nil {
-				return fmt.Errorf("fetching ephemeral key should succeed")
-			}
-			if key == nil {
-				return fmt.Errorf("ephemeral key for epoch %d should be available", epoch)
-			}
-			set[*key] = struct{}{}
-		}
-
-		if len(set) != i+1 {
-			return fmt.Errorf("ephemeral keys should match")
+		if n := len(sigSecret.Secret.Secret.Ciphertexts); n != numCiphertexts {
+			return fmt.Errorf("ephemeral secret should be encrypted to %d enclaves, not %d", numCiphertexts, n)
 		}
 	}
 
@@ -503,7 +447,7 @@ func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error
 	return nil
 }
 
-func (sc *kmEphemeralKeysImpl) submitKeyValueRuntimeEncryptTx(
+func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -532,7 +476,7 @@ func (sc *kmEphemeralKeysImpl) submitKeyValueRuntimeEncryptTx(
 	return rsp, nil
 }
 
-func (sc *kmEphemeralKeysImpl) submitKeyValueRuntimeDecryptTx(
+func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -561,25 +505,7 @@ func (sc *kmEphemeralKeysImpl) submitKeyValueRuntimeDecryptTx(
 	return rsp, nil
 }
 
-func (sc *kmEphemeralKeysImpl) waitForNextEphemeralSecret(ctx context.Context) (*keymanager.SignedEncryptedEphemeralSecret, error) {
-	ch, sub, err := sc.Net.Controller().Keymanager.WatchEphemeralSecrets(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer sub.Close()
-
-	select {
-	case secret, ok := <-ch:
-		if !ok {
-			return nil, fmt.Errorf("channel for ephemeral secrets closed")
-		}
-		return secret, nil
-	case <-time.After(time.Minute):
-		return nil, fmt.Errorf("timed out waiting for the next ephemeral secret")
-	}
-}
-
-func (sc *kmEphemeralKeysImpl) checkNumberOfKeyManagers(ctx context.Context, n int) error {
+func (sc *kmEphemeralSecretsImpl) checkNumberOfKeyManagers(ctx context.Context, n int) error {
 	status, err := sc.Net.Controller().Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     keymanagerID,

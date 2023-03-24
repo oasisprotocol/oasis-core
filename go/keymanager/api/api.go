@@ -45,7 +45,7 @@ var (
 	ErrNoSuchMasterSecret = errors.New(ModuleName, 3, "keymanager: no such master secret")
 
 	// ErrNoSuchEphemeralSecret is the error returned when a key manager ephemeral secret
-	// for the given epoch does not exist.
+	// does not exist.
 	ErrNoSuchEphemeralSecret = errors.New(ModuleName, 4, "keymanager: no such ephemeral secret")
 
 	// MethodUpdatePolicy is the method name for policy updates.
@@ -213,7 +213,7 @@ type Backend interface {
 	WatchMasterSecrets() (<-chan *SignedEncryptedMasterSecret, *pubsub.Subscription)
 
 	// GetEphemeralSecret returns the key manager ephemeral secret.
-	GetEphemeralSecret(context.Context, *registry.NamespaceEpochQuery) (*SignedEncryptedEphemeralSecret, error)
+	GetEphemeralSecret(context.Context, *registry.NamespaceQuery) (*SignedEncryptedEphemeralSecret, error)
 
 	// WatchEphemeralSecrets returns a channel that produces a stream of ephemeral secrets.
 	WatchEphemeralSecrets() (<-chan *SignedEncryptedEphemeralSecret, *pubsub.Subscription)
