@@ -10,7 +10,7 @@ cbor = { version = "0.5.1", package = "oasis-cbor" }
 
 # Third party.
 anyhow = "1.0"
-base64 = "0.13.0"
+base64 = "0.21.0"
 futures = "0.3.25"
 lazy_static = "1.3.0"
 lru = "0.9.0"
