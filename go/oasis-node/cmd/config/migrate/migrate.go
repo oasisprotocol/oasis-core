@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -39,6 +40,7 @@ var (
 	initOnce sync.Once
 )
 
+// Recursively prune maps that are empty.
 func pruneEmptyMaps(m map[string]interface{}) {
 	for k, v := range m {
 		if vMap, isMap := v.(map[string]interface{}); isMap {
@@ -48,6 +50,86 @@ func pruneEmptyMaps(m map[string]interface{}) {
 			}
 		}
 	}
+}
+
+// Translate known P2P addresses from the old format into the new.
+func translateKnownP2P(in []string) ([]string, uint) {
+	// Old format is the Tendermint P2P address, which we can't translate
+	// automatically because it is hashed.
+	// New format is the node's P2P public key.
+	// However, we know both the old and new addresses of Oasis public
+	// seed nodes for the testnet and mainnet, so we can at least translate
+	// those.
+
+	known := map[string]string{
+		// Mainnet seed node.
+		"E27F6B7A350B4CC2B48A6CBE94B0A02B0DCB0BF3@35.199.49.168:26656": "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656",
+		// Testnet seed node.
+		"53572F689E5BACDD3C6527E6594EC49C8F3093F6@34.86.165.6:26656": "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:26656",
+	}
+
+	var numUnknown uint
+
+	out := make([]string, len(in))
+	for idx, p2pOld := range in {
+		var p2pNew string
+
+		if knownNew, isKnown := known[p2pOld]; isKnown {
+			// New address is known, use it.
+			p2pNew = knownNew
+		} else {
+			// New address is not known, make sure the user replaces the ID.
+			s := strings.Split(p2pOld, "@")
+			addr := s[len(s)-1]
+			p2pNew = fmt.Sprintf("INSERT_P2P_PUBKEY_HERE@%s", addr)
+			numUnknown++
+		}
+
+		out[idx] = p2pNew
+	}
+
+	return out, numUnknown
+}
+
+// Wrapper for the above function that simplifies logging.
+func convertP2P(i interface{}, oldS string, newS string) []string {
+	if i == nil {
+		return []string{}
+	}
+
+	// Go can't convert interface{} into []string in one go, so we have to
+	// do it in two steps.
+	in1, ok := i.([]interface{})
+	if !ok {
+		logger.Error("P2P address list in input file is malformed", "section", oldS, "expected", "[]interface{}", "got", fmt.Sprintf("%T", i))
+		os.Exit(1)
+	}
+
+	if len(in1) == 0 {
+		return []string{}
+	}
+
+	in := make([]string, len(in1))
+	for idx, ii := range in1 {
+		if s, ok := ii.(string); ok {
+			in[idx] = s
+		} else {
+			logger.Error("P2P address list in input file is malformed", "section", oldS, "expected", "string", "got", fmt.Sprintf("%T", ii))
+			os.Exit(1)
+		}
+	}
+
+	out, numUnknown := translateKnownP2P(in)
+
+	if numUnknown == uint(len(in)) {
+		logger.Error(fmt.Sprintf("%s is now %s, but instead of Tendermint P2P addresses we now use P2P public keys here, so manual migration of all addresses is required -- replace INSERT_P2P_PUBKEY_HERE with the P2P public key of the node (use 'oasis-node control status' to get its P2P public key)", oldS, newS))
+	} else if numUnknown > 0 {
+		logger.Error(fmt.Sprintf("%s is now %s, but instead of Tendermint P2P addresses we now use P2P public keys here, so manual migration of some addresses is required -- replace INSERT_P2P_PUBKEY_HERE with the P2P public key of the node (use 'oasis-node control status' to get its P2P public key)", oldS, newS))
+	} else {
+		logger.Warn(fmt.Sprintf("%s is now %s, but instead of Tendermint P2P addresses we now use P2P public keys here, however, all the addresses in this section of your config file have known translation mappings and were automatically translated for you", oldS, newS))
+	}
+
+	return out
 }
 
 func doMigrateConfig(cmd *cobra.Command, args []string) {
@@ -195,8 +277,9 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 							}
 						}
 					} else if k == "sentry" {
-						if _, ok := m(v)["upstream_address"]; ok {
-							logger.Info("consensus.tendermint.sentry.upstream_address is now consensus.sentry_upstream_addresses, but instead of Tendermint P2P addresses we now use P2P public keys here, so manual migration is required!")
+						if upaddr, ok := m(v)["upstream_address"]; ok {
+							m(newCfg["consensus"])["sentry_upstream_addresses"] = convertP2P(upaddr, "consensus.tendermint.sentry.upstream_address", "consensus.sentry_upstream_addresses")
+							delete(m(m(tendermint)["sentry"]), "upstream_address")
 						}
 					} else if k == "upgrade" {
 						if sd, ok := m(v)["stop_delay"]; ok {
@@ -212,13 +295,17 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 						mkSubMap(m(newCfg["consensus"]), "p2p")
 						for pk, pv := range m(v) {
 							if pk == "persistent_peer" {
-								logger.Error("consensus.tendermint.p2p.persistent_peer is now consensus.p2p.persistent_peers, but instead of Tendermint P2P addresses we now use P2P public keys here, so manual migration is required!")
+								m(m(newCfg["consensus"])["p2p"])["persistent_peers"] = convertP2P(pv, "consensus.tendermint.p2p.persistent_peer", "consensus.p2p.persistent_peers")
+								delete(m(m(tendermint)["p2p"]), pk)
 								continue
 							} else if pk == "unconditional_peer" || pk == "unconditional_peer_ids" {
-								logger.Info(fmt.Sprintf("consensus.tendermint.p2p.%s is now consensus.p2p.unconditional_peers, but instead of Tendermint P2P addresses we now use P2P public keys here, so manual migration is required!", pk))
+								m(m(newCfg["consensus"])["p2p"])["unconditional_peers"] = convertP2P(pv, fmt.Sprintf("consensus.tendermint.p2p.%s", pk), "consensus.p2p.unconditional_peers")
+								delete(m(m(tendermint)["p2p"]), pk)
 								continue
 							} else if pk == "seed" {
-								logger.Error("consensus.tendermint.p2p.seed is now p2p.seeds, but instead of Tendermint P2P addresses we now use P2P public keys here, so manual migration is required!")
+								mkSubMap(newCfg, "p2p")
+								m(newCfg["p2p"])["seeds"] = convertP2P(pv, "consensus.tendermint.p2p.seed", "p2p.seeds")
+								delete(m(m(tendermint)["p2p"]), pk)
 								continue
 							}
 							m(m(newCfg["consensus"])["p2p"])[pk] = pv
@@ -238,17 +325,20 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 			}
 		}
 	}
-	newCfg["mode"] = nodeMode
 
 	runtime, ok := oldCfg["runtime"]
 	if ok {
 		if mode, ok := m(runtime)["mode"]; ok {
 			logger.Warn("runtime.mode has been deprecated in favor of using the global node mode")
-			if mode != "none" && mode != nodeMode {
-				logger.Warn("node mode set to runtime.mode", "mode", mode)
-				newCfg["mode"] = mode
+			if modeStr, ok := mode.(string); ok {
+				if modeStr != "none" && modeStr != nodeMode {
+					nodeMode = modeStr
+					logger.Warn("node mode set to runtime.mode", "mode", nodeMode)
+				}
+				delete(m(runtime), "mode")
+			} else {
+				logger.Error("runtime.mode has invalid type (string expected)")
 			}
-			delete(m(runtime), "mode")
 		}
 
 		if sandbox, ok := m(runtime)["sandbox"]; ok {
@@ -579,6 +669,8 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 		logger.Error("failed to convert migrated config file into YAML", "err", err)
 		os.Exit(1)
 	}
+	// Prepend the node mode at the very beginning.
+	newCfgRaw = append([]byte(fmt.Sprintf("mode: %s\n", nodeMode)), newCfgRaw...)
 	if err = os.WriteFile(cfgOutFileName, newCfgRaw, 0o600); err != nil {
 		logger.Error("failed to write migrated config file", "file_name", cfgOutFileName, "err", err)
 		os.Exit(1)

@@ -113,10 +113,13 @@ consensus:
     p2p:
       # Seed node setup.
       seed:
-        - "E27F6B7A350B4CC2B48A6CBE94B0A02B0DCB0BF3@35.199.49.168:26656"
+        - "53572F689E5BACDD3C6527E6594EC49C8F3093F6@34.86.165.6:26656"
 
       persistent_peer:
         - "asdf@1.2.3.4:5678"
+
+      unconditional_peer:
+        - "53572F689E5BACDD3C6527E6594EC49C8F3093F6@34.86.165.6:26656"
 
       disable_peer_exchange: true
 
@@ -434,6 +437,7 @@ func TestConfigMigrationSimple(t *testing.T) {
 	require.Equal(newConfig.Common.Log.Level["tendermint"], "debug")
 	require.Equal(newConfig.Common.Log.Level["tendermint/context"], "error")
 	require.Equal(newConfig.Genesis.File, "/node/etc/genesis.json")
+	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
 	require.Equal(newConfig.Runtime.Paths[0], "/node/runtime/cipher-paratime-2.6.2.orc")
 	require.Equal(newConfig.Runtime.Paths[1], "/node/runtime/emerald-paratime-10.0.0.orc")
 	require.Equal(newConfig.Runtime.Paths[2], "/node/runtime/sapphire-paratime-0.4.0.orc")
@@ -454,6 +458,10 @@ func TestConfigMigrationComplex(t *testing.T) {
 	require.Equal(newConfig.Common.Log.Level["tendermint/context"], "error")
 	require.Equal(newConfig.Genesis.File, "/storage/node/genesis.json")
 	require.Equal(newConfig.P2P.Port, uint16(9002))
+	require.Equal(newConfig.P2P.Seeds[0], "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:26656")
+	require.Equal(newConfig.Consensus.P2P.PersistentPeer[0], "INSERT_P2P_PUBKEY_HERE@1.2.3.4:5678")
+	require.Equal(newConfig.Consensus.P2P.UnconditionalPeer[0], "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:26656")
+	require.Equal(newConfig.Consensus.SentryUpstreamAddresses[0], "INSERT_P2P_PUBKEY_HERE@1.2.3.4:5678")
 	require.Equal(newConfig.IAS.ProxyAddress, []string{"qwerty@1.2.3.4:4321"})
 	require.Equal(newConfig.Pprof.BindAddress, "0.0.0.0:6666")
 	require.Equal(newConfig.Runtime.Environment, rtConfig.RuntimeEnvironmentSGX)
@@ -487,6 +495,7 @@ func TestConfigMigrationKM(t *testing.T) {
 	require.Equal(newConfig.Common.Log.Level["default"], "debug")
 	require.Equal(newConfig.Genesis.File, "/km/etc/genesis.json")
 	require.Equal(newConfig.P2P.Port, uint16(1234))
+	require.Equal(newConfig.P2P.Seeds[0], "INSERT_P2P_PUBKEY_HERE@1.2.3.4:26656")
 	require.Equal(newConfig.P2P.Registration.Addresses[0], "4.3.2.1:26656")
 	require.Equal(newConfig.Registration.Entity, "/km/etc/entity/entity.json")
 	require.Equal(newConfig.IAS.ProxyAddress, []string{"foo@1.2.3.4:5678"})
@@ -511,6 +520,7 @@ func TestConfigMigrationDocsNonValidator(t *testing.T) {
 	require.Equal(newConfig.Common.Log.Level["tendermint"], "info")
 	require.Equal(newConfig.Common.Log.Level["tendermint/context"], "error")
 	require.Equal(newConfig.Genesis.File, "/node/etc/genesis.json")
+	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
 	require.Equal(newConfig.Consensus.Validator, false)
 }
 
@@ -558,6 +568,7 @@ func TestConfigMigrationDocsParaTime(t *testing.T) {
 	require.Equal(newConfig.Genesis.File, "/node/etc/genesis.json")
 	require.Equal(newConfig.P2P.Port, uint16(30002))
 	require.Equal(newConfig.P2P.Registration.Addresses[0], "1.2.3.4:30002")
+	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
 	require.Equal(newConfig.Registration.Entity, "/node/entity/entity.json")
 	require.Equal(newConfig.IAS.ProxyAddress, []string{"asdf@5.4.3.2:1234"})
 	require.Equal(newConfig.Runtime.SGXLoader, "/node/bin/oasis-core-runtime-loader")
@@ -579,6 +590,7 @@ func TestConfigMigrationDocsParaTimeClient(t *testing.T) {
 	require.Equal(newConfig.Common.Log.Level["tendermint"], "info")
 	require.Equal(newConfig.Common.Log.Level["tendermint/context"], "error")
 	require.Equal(newConfig.Genesis.File, "/node/etc/genesis.json")
+	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
 	require.Equal(newConfig.Runtime.Paths[0], "/node/runtimes/test.orc")
 }
 
@@ -601,4 +613,6 @@ func TestConfigMigrationDocsSentry(t *testing.T) {
 	require.Equal(newConfig.Sentry.Enabled, true)
 	require.Equal(newConfig.Sentry.Control.Port, uint16(9009))
 	require.Equal(newConfig.Sentry.Control.AuthorizedPubkeys[0], "asdf")
+	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
+	require.Equal(newConfig.Consensus.SentryUpstreamAddresses[0], "INSERT_P2P_PUBKEY_HERE@1.2.3.4:26656")
 }
