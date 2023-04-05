@@ -263,7 +263,6 @@ func init() {
 	_ = viper.BindEnv(cfgSPID, envSPID)
 
 	_ = viper.BindPFlags(proxyFlags)
-	proxyFlags.AddFlagSet(metrics.Flags)
 	proxyFlags.AddFlagSet(cmdGrpc.ServerLocalFlags)
 	proxyFlags.AddFlagSet(cmdGrpc.ServerTCPFlags)
 	proxyFlags.AddFlagSet(cmdGrpc.ClientFlags)

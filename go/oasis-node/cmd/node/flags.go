@@ -8,7 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdGrpc "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	cmdSigner "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/signer"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage"
@@ -37,7 +36,6 @@ func init() {
 
 	// Backend initialization flags.
 	for _, v := range []*flag.FlagSet{
-		metrics.Flags,
 		cmdGrpc.ServerLocalFlags,
 		cmdSigner.Flags,
 		runtimeRegistry.Flags,

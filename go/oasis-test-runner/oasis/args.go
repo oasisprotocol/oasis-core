@@ -4,9 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
-	"strings"
-
-	"github.com/spf13/viper"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -15,7 +12,6 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 )
 
@@ -137,29 +133,6 @@ func (args *argBuilder) configureDebugCrashPoints(prob float64) *argBuilder {
 
 func (args *argBuilder) appendDebugTestEntity() *argBuilder {
 	args.vec = append(args.vec, Argument{Name: flags.CfgDebugTestEntity})
-	return args
-}
-
-func (args *argBuilder) appendNodeMetrics(node *Node) *argBuilder {
-	args.vec = append(args.vec, []Argument{
-		{metrics.CfgMetricsMode, []string{metrics.MetricsModePush}, false},
-		{metrics.CfgMetricsAddr, []string{viper.GetString(metrics.CfgMetricsAddr)}, false},
-		{metrics.CfgMetricsInterval, []string{viper.GetString(metrics.CfgMetricsInterval)}, false},
-		{metrics.CfgMetricsJobName, []string{node.Name}, false},
-	}...)
-
-	// Append labels.
-	ti := node.net.env.ScenarioInfo()
-	labels := metrics.GetDefaultPushLabels(ti)
-	var l []string
-	for k, v := range labels {
-		l = append(l, k+"="+v)
-	}
-	args.vec = append(args.vec, Argument{
-		Name:   metrics.CfgMetricsLabels,
-		Values: []string{strings.Join(l, ",")},
-	})
-
 	return args
 }
 

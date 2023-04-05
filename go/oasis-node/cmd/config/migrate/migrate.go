@@ -634,6 +634,13 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	metrics, ok := oldCfg["metrics"]
+	if ok {
+		mkSubMap(newCfg, "metrics")
+		newCfg["metrics"] = metrics
+		delete(oldCfg, "metrics")
+	}
+
 	// If we deleted any keys, make sure we don't retain empty structures.
 	pruneEmptyMaps(oldCfg)
 	// Also prune new config.
@@ -645,9 +652,6 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 	}
 	if _, ok = oldCfg["grpc"]; ok {
 		logger.Warn("note that grpc.* options are from now on only available on the command-line")
-	}
-	if _, ok = oldCfg["metrics"]; ok {
-		logger.Warn("note that metrics.* options are from now on only available on the command-line")
 	}
 
 	logger.Info("config file migration completed")

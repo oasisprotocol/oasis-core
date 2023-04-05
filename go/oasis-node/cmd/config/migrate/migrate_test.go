@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -141,6 +142,15 @@ runtime:
 # Profiling.
 pprof:
   bind: 0.0.0.0:6666
+
+# Metrics.
+metrics:
+  mode: pull
+  address: 0.0.0.0:9101
+  job_name: node-mainnet
+  interval: 10s
+  labels:
+    instance: asdf-instance-0
 `
 
 // Keymanager test configuration file.
@@ -482,6 +492,11 @@ func TestConfigMigrationComplex(t *testing.T) {
 	require.Equal(newConfig.Storage.CheckpointSyncDisabled, true)
 	require.Equal(newConfig.Storage.Checkpointer.Enabled, true)
 	require.Equal(newConfig.Registration.Entity, "/storage/node/entity/entity.json")
+	require.Equal(newConfig.Metrics.Mode, "pull")
+	require.Equal(newConfig.Metrics.Address, "0.0.0.0:9101")
+	require.Equal(newConfig.Metrics.JobName, "node-mainnet")
+	require.Equal(newConfig.Metrics.Interval, 10*time.Second)
+	require.Equal(newConfig.Metrics.Labels["instance"], "asdf-instance-0")
 }
 
 func TestConfigMigrationKM(t *testing.T) {

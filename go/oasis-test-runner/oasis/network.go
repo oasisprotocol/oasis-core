@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -85,6 +84,14 @@ type IASCfg struct {
 	Mock bool `json:"mock,omitempty"`
 }
 
+// MetricsCfg is the Oasis test network metrics configuration.
+type MetricsCfg struct {
+	// Prometheus address.
+	Address string `json:"address"`
+	// Push interval.
+	Interval time.Duration `json:"interval"`
+}
+
 // NetworkCfg is the Oasis test network configuration.
 type NetworkCfg struct { // nolint: maligned
 	// GenesisFile is an optional genesis file to use.
@@ -119,6 +126,9 @@ type NetworkCfg struct { // nolint: maligned
 
 	// IAS is the Network IAS configuration.
 	IAS IASCfg `json:"ias"`
+
+	// Metrics is the network metrics configuration.
+	Metrics MetricsCfg `json:"metrics,omitempty"`
 
 	// StakingGenesis is the staking genesis data to be included if
 	// GenesisFile is not set.
@@ -657,8 +667,12 @@ func (net *Network) startOasisNode(
 		cfg.Consensus.StateSync.TrustHeight = node.consensusStateSync.TrustHeight
 		cfg.Consensus.StateSync.TrustHash = node.consensusStateSync.TrustHash
 	}
-	if viper.IsSet(metrics.CfgMetricsAddr) {
-		extraArgs = extraArgs.appendNodeMetrics(node)
+	if net.Config().Metrics.Address != "" {
+		cfg.Metrics.Mode = metrics.MetricsModePush
+		cfg.Metrics.Address = net.Config().Metrics.Address
+		cfg.Metrics.Interval = net.Config().Metrics.Interval
+		cfg.Metrics.JobName = node.Name
+		cfg.Metrics.Labels = metrics.GetDefaultPushLabels(net.env.ScenarioInfo())
 	}
 	args := append([]string{}, subCmd...)
 	args = append(args, baseArgs...)
