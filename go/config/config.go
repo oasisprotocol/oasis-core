@@ -2,7 +2,9 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 
 	"github.com/a8m/envsubst"
 	"gopkg.in/yaml.v3"
@@ -161,9 +163,12 @@ func InitConfig(cfgFile string) error {
 	}
 
 	// Reset the global config and apply changes from the config file.
+	// Report error if any of the fields from the input file are unknown.
 	GlobalConfig = DefaultConfig()
-	err = yaml.Unmarshal(cfg, &GlobalConfig)
-	if err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(cfg))
+	dec.KnownFields(true)
+	err = dec.Decode(&GlobalConfig)
+	if err != nil && err != io.EOF {
 		return fmt.Errorf("failed to load config file '%s': %w", cfgFile, err)
 	}
 

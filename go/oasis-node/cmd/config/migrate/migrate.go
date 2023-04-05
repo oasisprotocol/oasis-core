@@ -3,7 +3,9 @@
 package migrate
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -681,8 +683,10 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 	// Validate new config.
 	logger.Info("validating migrated config file")
 	newCfgStruct := config.DefaultConfig()
-	err = yaml.Unmarshal(newCfgRaw, &newCfgStruct)
-	if err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(newCfgRaw))
+	dec.KnownFields(true)
+	err = dec.Decode(&newCfgStruct)
+	if err != nil && err != io.EOF {
 		logger.Error("failed to parse config file after migration (this might be normal if you're using environment variable substitutions in your original config file)", "err", err)
 		os.Exit(1)
 	}
