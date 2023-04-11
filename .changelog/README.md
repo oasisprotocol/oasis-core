@@ -108,12 +108,11 @@ as needed._
 ## Render Change Log preview
 
 To get a preview of how your change (and other changes queued up in this
-directory) will look in the Change Log, install [Oasis Labs' towncrier fork]
-with:
+directory) will look in the Change Log, install [our towncrier fork] with:
 
 ```bash
 pip3 install --upgrade \
-  https://github.com/oasislabs/towncrier/archive/oasis-master.tar.gz
+  https://github.com/oasisprotocol/towncrier/archive/oasis-master.tar.gz
 ```
 
 _NOTE: [towncrier] requires Python 3.5+._
@@ -131,5 +130,5 @@ _NOTE: You can use any version for the preview, it doesn't really matter._
 
 [Change Log]: ../CHANGELOG.md
 [towncrier]: https://github.com/hawkowl/towncrier
-[Oasis Labs' towncrier fork]: https://github.com/oasislabs/towncrier
+[our towncrier fork]: https://github.com/oasisprotocol/towncrier
 [style of Git commit messages]: ../CONTRIBUTING.md#git-commit-messages
