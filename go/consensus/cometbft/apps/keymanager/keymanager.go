@@ -243,7 +243,7 @@ func (app *keymanagerApplication) generateStatus( // nolint: gocyclo
 		Policy:        oldStatus.Policy,
 	}
 
-	// Data need to count the nodes that have replicated the proposal for the next master secret.
+	// Data needed to count the nodes that have replicated the proposal for the next master secret.
 	var (
 		nextGeneration uint64
 		nextChecksum   []byte
@@ -340,6 +340,12 @@ nextNode:
 				ctx.Logger().Error("Security status mismatch for runtime", vars...)
 				continue nextNode
 			}
+
+			// Skip nodes with mismatched checksum.
+			// Note that a node needs to register with an empty checksum if no master secrets
+			// have been generated so far. Otherwise, if secrets have been generated, the node
+			// needs to register with a checksum computed over all the secrets generated so far
+			// since the key manager's checksum is updated after every master secret rotation.
 			if !bytes.Equal(initResponse.Checksum, status.Checksum) {
 				ctx.Logger().Error("Checksum mismatch for runtime", vars...)
 				continue nextNode
@@ -398,7 +404,7 @@ nextNode:
 	// the proposal for the next master secret.
 	if numNodes := len(status.Nodes); numNodes > 0 && nextChecksum != nil {
 		percent := len(updatedNodes) * 100 / numNodes
-		if percent > minProposalReplicationPercent {
+		if percent >= minProposalReplicationPercent {
 			status.Generation = nextGeneration
 			status.RotationEpoch = epoch
 			status.Checksum = nextChecksum

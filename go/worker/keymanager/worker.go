@@ -908,18 +908,18 @@ func (w *Worker) updateGenerateMasterSecretEpoch() {
 	// If at least one master secret has been generated, respect the rotation interval.
 	nextGen := w.kmStatus.NextGeneration()
 	if nextGen != 0 {
-		// Disable rotation if the policy is not set.
 		var rotationInterval beacon.EpochTime
 		if w.kmStatus.Policy != nil {
 			rotationInterval = w.kmStatus.Policy.Policy.MasterSecretRotationInterval
 		}
 
-		// Secrets are allowed to be generated at most one epoch before the rotation.
-		nextEpoch = w.kmStatus.RotationEpoch + rotationInterval - 1
-
-		// Rotation not allowed.
-		if rotationInterval == 0 {
+		switch rotationInterval {
+		case 0:
+			// Rotation not allowed.
 			nextEpoch = math.MaxUint64
+		default:
+			// Secrets are allowed to be generated at most one epoch before the rotation.
+			nextEpoch = w.kmStatus.RotationEpoch + rotationInterval - 1
 		}
 	}
 

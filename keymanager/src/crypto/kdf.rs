@@ -15,12 +15,9 @@ use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
-        crypto::{
-            mrae::{deoxysii::DeoxysII, nonce::Nonce},
-            signature, x25519,
-        },
+        crypto::{mrae::nonce::Nonce, signature, x25519},
         namespace::Namespace,
-        sgx::egetkey::egetkey,
+        sgx::seal::new_deoxysii,
     },
     consensus::beacon::EpochTime,
     storage::KeyValue,
@@ -31,8 +28,9 @@ use crate::{
     api::KeyManagerError,
     crypto::{
         pack_runtime_id_generation, unpack_encrypted_secret_nonce, KeyPair, KeyPairId, Secret,
-        SignedPublicKey, StateKey, VerifiableSecret,
+        SignedPublicKey, StateKey,
     },
+    secrets::SecretProvider,
 };
 
 lazy_static! {
@@ -99,7 +97,10 @@ lazy_static! {
 const MASTER_SECRET_STORAGE_KEY_PREFIX: &[u8] = b"keymanager_master_secret";
 const MASTER_SECRET_CHECKSUM_STORAGE_KEY_PREFIX: &[u8] = b"keymanager_master_secret_checksum";
 const MASTER_SECRET_PROPOSAL_STORAGE_KEY: &[u8] = b"keymanager_master_secret_proposal";
-const MASTER_SECRET_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal master secret v0";
+
+const MASTER_SECRET_SEAL_CONTEXT: &[u8] = b"oasis-core/keymanager: master secret seal";
+const MASTER_SECRET_PROPOSAL_SEAL_CONTEXT: &[u8] =
+    b"oasis-core/keymanager: master secret proposal seal";
 
 const MASTER_SECRET_CACHE_SIZE: usize = 20;
 const EPHEMERAL_SECRET_CACHE_SIZE: usize = 20;
@@ -344,20 +345,15 @@ impl Kdf {
     /// - The first initialization can take a very long time, especially if all generations
     /// of the master secret must be replicated from other enclaves.
     #[allow(clippy::too_many_arguments)]
-    pub fn init<M, E>(
+    pub fn init(
         &self,
         storage: &dyn KeyValue,
         runtime_id: Namespace,
         generation: u64,
         checksum: Vec<u8>,
         epoch: EpochTime,
-        master_secret_fetcher: M,
-        ephemeral_secret_fetcher: E,
-    ) -> Result<State>
-    where
-        M: Fn(u64) -> Result<VerifiableSecret>,
-        E: Fn(EpochTime) -> Result<Secret>,
-    {
+        provider: &dyn SecretProvider,
+    ) -> Result<State> {
         // If the key manager has no secrets, nothing needs to be replicated.
         if checksum.is_empty() {
             let mut inner = self.inner.write().unwrap();
@@ -388,17 +384,22 @@ impl Kdf {
 
         // On startup replicate ephemeral secrets.
         if next_generation == 0 {
-            let last = epoch + 1;
-            for epoch in (0..=last).rev() {
-                if let Ok(secret) = ephemeral_secret_fetcher(epoch) {
-                    let mut inner = self.inner.write().unwrap();
-                    inner.verify_runtime_id(&runtime_id)?;
-                    inner.add_ephemeral_secret(secret, epoch);
-                    continue;
-                }
-                if epoch != last {
-                    break;
-                }
+            let to = epoch + 1;
+            let from = to.saturating_sub(EPHEMERAL_SECRET_CACHE_SIZE as u64);
+
+            for epoch in (from..=to).rev() {
+                let secret = match provider.ephemeral_secret_iter(epoch).next() {
+                    Some(secret) => secret,
+                    _ => {
+                        if epoch == to {
+                            continue;
+                        }
+                        break;
+                    }
+                };
+                let mut inner = self.inner.write().unwrap();
+                inner.verify_runtime_id(&runtime_id)?;
+                inner.add_ephemeral_secret(secret, epoch);
             }
         }
 
@@ -424,7 +425,9 @@ impl Kdf {
 
         // If only one master secret is missing, try using stored proposal.
         if next_generation == generation {
-            if let Some(secret) = Self::load_master_secret_proposal(storage) {
+            if let Some(secret) =
+                Self::load_master_secret_proposal(storage, &runtime_id, generation)
+            {
                 // Proposed secret is untrusted and needs to be verified.
                 let next_checksum = Self::checksum_master_secret(&secret, &curr_checksum);
 
@@ -461,16 +464,23 @@ impl Kdf {
 
             // Master secret wasn't found and needs to be fetched from another enclave.
             // Fetched values are untrusted and need to be verified.
-            let vs = master_secret_fetcher(generation)?;
-            let (secret, prev_checksum) = match vs.checksum.is_empty() {
-                true => (vs.secret, runtime_id.0.to_vec()),
-                false => (vs.secret, vs.checksum),
-            };
-            let next_checksum = Self::checksum_master_secret(&secret, &prev_checksum);
+            let (secret, prev_checksum) = provider
+                .master_secret_iter(generation)
+                .find_map(|vs| {
+                    let prev_checksum = if vs.checksum.is_empty() {
+                        runtime_id.0.to_vec()
+                    } else {
+                        vs.checksum
+                    };
 
-            if next_checksum != last_checksum {
-                return Err(KeyManagerError::MasterSecretChecksumMismatch.into());
-            }
+                    let next_checksum = Self::checksum_master_secret(&vs.secret, &prev_checksum);
+                    if next_checksum != last_checksum {
+                        return None;
+                    }
+
+                    Some((vs.secret, prev_checksum))
+                })
+                .ok_or(KeyManagerError::MasterSecretNotReplicated(generation))?;
 
             Self::store_master_secret(storage, &runtime_id, &secret, generation);
             Self::store_checksum(storage, prev_checksum.clone(), generation);
@@ -494,7 +504,7 @@ impl Kdf {
         if inner.generation != Some(generation) {
             // Derive signing key from the latest secret.
             let secret = Self::load_master_secret(storage, &runtime_id, generation)
-                .ok_or(anyhow::anyhow!(KeyManagerError::StateCorrupted))?;
+                .ok_or(KeyManagerError::StateCorrupted)?;
 
             let sk = Self::derive_signing_key(&runtime_id, &secret);
             let pk = sk.public_key();
@@ -711,7 +721,7 @@ impl Kdf {
             return Err(KeyManagerError::MasterSecretChecksumMismatch.into());
         }
 
-        Self::store_master_secret_proposal(storage, &secret);
+        Self::store_master_secret_proposal(storage, runtime_id, &secret, generation);
         inner.next_checksum = Some(next_checksum);
 
         let next_signing_key = Self::derive_signing_key(runtime_id, &secret).public_key();
@@ -767,7 +777,7 @@ impl Kdf {
         let additional_data = pack_runtime_id_generation(runtime_id, generation);
 
         // Decrypt the persisted master secret.
-        let d2 = Self::new_d2();
+        let d2 = new_deoxysii(Keypolicy::MRENCLAVE, MASTER_SECRET_SEAL_CONTEXT);
         let plaintext = d2
             .open(&nonce, ciphertext.to_vec(), additional_data)
             .expect("persisted state is corrupted");
@@ -791,7 +801,7 @@ impl Kdf {
         // Encrypt the master secret.
         let nonce = Nonce::generate();
         let additional_data = pack_runtime_id_generation(runtime_id, generation);
-        let d2 = Self::new_d2();
+        let d2 = new_deoxysii(Keypolicy::MRENCLAVE, MASTER_SECRET_SEAL_CONTEXT);
         let mut ciphertext = d2.seal(&nonce, secret, additional_data);
         ciphertext.extend_from_slice(&nonce.to_vec());
 
@@ -807,7 +817,11 @@ impl Kdf {
     /// period, it is impossible to know whether the loaded proposal is the latest one. Therefore,
     /// it is crucial to ALWAYS verify that the checksum of the proposal matches the one published
     /// in the consensus before accepting it.
-    fn load_master_secret_proposal(storage: &dyn KeyValue) -> Option<Secret> {
+    fn load_master_secret_proposal(
+        storage: &dyn KeyValue,
+        runtime_id: &Namespace,
+        generation: u64,
+    ) -> Option<Secret> {
         // Fetch the encrypted master secret proposal if it exists.
         let key = MASTER_SECRET_PROPOSAL_STORAGE_KEY.to_vec();
 
@@ -818,10 +832,11 @@ impl Kdf {
 
         let (ciphertext, nonce) = unpack_encrypted_secret_nonce(&ciphertext)
             .expect("persisted state is corrupted, invalid size");
+        let additional_data = pack_runtime_id_generation(runtime_id, generation);
 
         // Decrypt the persisted master secret proposal.
-        let d2 = Self::new_d2();
-        let plaintext = match d2.open(&nonce, ciphertext.to_vec(), vec![]) {
+        let d2 = new_deoxysii(Keypolicy::MRENCLAVE, MASTER_SECRET_PROPOSAL_SEAL_CONTEXT);
+        let plaintext = match d2.open(&nonce, ciphertext.to_vec(), additional_data) {
             Ok(plaintext) => plaintext,
             Err(_) => return None,
         };
@@ -829,20 +844,25 @@ impl Kdf {
         Some(Secret(plaintext.try_into().unwrap()))
     }
 
-    /// Encrypt and store the next master secret proposal in untrusted local storage.
+    /// Encrypt and store the master secret proposal in untrusted local storage.
     ///
     /// If a proposal already exists, it will be overwritten.
-    fn store_master_secret_proposal(storage: &dyn KeyValue, secret: &Secret) {
+    fn store_master_secret_proposal(
+        storage: &dyn KeyValue,
+        runtime_id: &Namespace,
+        secret: &Secret,
+        generation: u64,
+    ) {
         // Using the same key for all proposals will override the previous one.
         let key = MASTER_SECRET_PROPOSAL_STORAGE_KEY.to_vec();
 
         // Encrypt the master secret.
-        // Additional data has to be different from the one used when storing verified master
+        // Seal context has to be different from the one used when storing verified master
         // secrets so that the attacker cannot replace secrets with rejected proposals.
-        // Since proposals are always verified before being accepted, confidentiality will suffice.
         let nonce = Nonce::generate();
-        let d2 = Self::new_d2();
-        let mut ciphertext = d2.seal(&nonce, secret, vec![]);
+        let additional_data = pack_runtime_id_generation(runtime_id, generation);
+        let d2 = new_deoxysii(Keypolicy::MRENCLAVE, MASTER_SECRET_PROPOSAL_SEAL_CONTEXT);
+        let mut ciphertext = d2.seal(&nonce, secret, additional_data);
         ciphertext.extend_from_slice(&nonce.to_vec());
 
         // Persist the encrypted master secret.
@@ -895,7 +915,7 @@ impl Kdf {
     /// to the key manager's runtime ID, using master secret generations as the KMAC keys
     /// at each step. The checksum calculation for the n-th generation can be expressed by
     /// the formula: KMAC(gen_n, ... KMAC(gen_2, KMAC(gen_1, KMAC(gen_0, runtime_id)))).
-    fn checksum_master_secret(secret: &Secret, last_checksum: &Vec<u8>) -> Vec<u8> {
+    pub fn checksum_master_secret(secret: &Secret, last_checksum: &Vec<u8>) -> Vec<u8> {
         let mut k = [0u8; 32];
 
         // KMAC256(master_secret, last_checksum, 32, "ekiden-checksum-master-secret")
@@ -930,14 +950,6 @@ impl Kdf {
     fn derive_signing_key(runtime_id: &Namespace, secret: &Secret) -> signature::PrivateKey {
         let sec = Inner::derive_secret(secret, &RUNTIME_SIGNING_KEY_CUSTOM, runtime_id.as_ref());
         signature::PrivateKey::from_bytes(sec.0.to_vec())
-    }
-
-    fn new_d2() -> DeoxysII {
-        let mut seal_key = egetkey(Keypolicy::MRENCLAVE, MASTER_SECRET_SEAL_CONTEXT);
-        let d2 = DeoxysII::new(&seal_key);
-        seal_key.zeroize();
-
-        d2
     }
 }
 
@@ -976,8 +988,9 @@ mod tests {
                 MASTER_SECRET_CHECKSUM_STORAGE_KEY_PREFIX, MASTER_SECRET_STORAGE_KEY_PREFIX,
                 RUNTIME_SIGNING_KEY_CUSTOM,
             },
-            KeyPairId, Secret, VerifiableSecret, SECRET_SIZE,
+            KeyPairId, Secret, SECRET_SIZE,
         },
+        secrets::MockSecretProvider,
     };
 
     use super::{
@@ -1051,60 +1064,16 @@ mod tests {
         }
     }
 
-    /// Master secret and checksum provider.
-    pub struct MasterSecretProvider {
-        runtime_id: Namespace,
-    }
-
-    impl MasterSecretProvider {
-        fn new(runtime_id: Namespace) -> Self {
-            return Self { runtime_id };
-        }
-
-        fn fetch(&self, generation: u64) -> Result<VerifiableSecret> {
-            let mut secret = Default::default();
-            let mut prev_checksum = Default::default();
-            let mut next_checksum = self.runtime_id.0.to_vec();
-
-            for generation in 0..=generation {
-                secret = Secret([generation as u8; SECRET_SIZE]);
-
-                prev_checksum = next_checksum;
-                next_checksum = Kdf::checksum_master_secret(&secret, &prev_checksum);
-            }
-
-            Ok(VerifiableSecret {
-                secret,
-                checksum: prev_checksum,
-            })
-        }
-
-        fn checksum(&self, generation: u64) -> Vec<u8> {
-            self.fetch(generation + 1).unwrap().checksum
-        }
-    }
-
     #[test]
     fn init_replication() {
         let kdf = Kdf::new();
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
-        let provider = MasterSecretProvider::new(runtime_id);
-        let master_secret_fetcher = |generation| provider.fetch(generation);
-        let ephemeral_secret_fetcher =
-            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
+        let provider = MockSecretProvider::new(runtime_id, false);
 
         // No secrets.
-        let result = kdf.init(
-            &storage,
-            runtime_id,
-            0,
-            vec![],
-            epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
-        );
+        let result = kdf.init(&storage, runtime_id, 0, vec![], epoch, &provider);
         assert!(result.is_ok());
 
         let state = result.unwrap();
@@ -1112,7 +1081,7 @@ mod tests {
 
         // Secrets replicated from other enclaves.
         for generation in [0, 0, 1, 1, 2, 2, 5, 5] {
-            let checksum = provider.checksum(generation);
+            let checksum = provider.checksum_master_secret(generation);
 
             let result = kdf.init(
                 &storage,
@@ -1120,8 +1089,7 @@ mod tests {
                 generation,
                 checksum.clone(),
                 epoch,
-                master_secret_fetcher,
-                ephemeral_secret_fetcher,
+                &provider,
             );
             assert!(result.is_ok());
 
@@ -1135,7 +1103,7 @@ mod tests {
         // Secrets loaded from local storage or replicated from other enclaves.
         for generation in [5, 5, 6, 6, 10, 10] {
             let kdf = Kdf::new();
-            let checksum = provider.checksum(generation);
+            let checksum = provider.checksum_master_secret(generation);
 
             let result = kdf.init(
                 &storage,
@@ -1143,8 +1111,7 @@ mod tests {
                 generation,
                 checksum.clone(),
                 epoch,
-                master_secret_fetcher,
-                ephemeral_secret_fetcher,
+                &provider,
             );
             assert!(result.is_ok());
 
@@ -1162,28 +1129,16 @@ mod tests {
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
-        let provider = MasterSecretProvider::new(runtime_id);
-        let master_secret_fetcher =
-            |generation| Err(KeyManagerError::MasterSecretNotFound(generation).into());
-        let ephemeral_secret_fetcher =
-            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
+        let provider = MockSecretProvider::new(runtime_id, true);
 
         // KDF needs to be initialized.
-        let result = kdf.init(
-            &storage,
-            runtime_id,
-            0,
-            vec![],
-            epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
-        );
+        let result = kdf.init(&storage, runtime_id, 0, vec![], epoch, &provider);
         assert!(result.is_ok());
 
         // Rotate master secrets.
         for generation in 0..5 {
-            let secret = provider.fetch(generation).unwrap().secret;
-            let checksum = provider.checksum(generation);
+            let secret = provider.master_secret(generation);
+            let checksum = provider.checksum_master_secret(generation);
             let result = kdf.add_master_secret_proposal(
                 &storage,
                 &runtime_id,
@@ -1199,8 +1154,7 @@ mod tests {
                 generation,
                 checksum.clone(),
                 epoch,
-                master_secret_fetcher,
-                ephemeral_secret_fetcher,
+                &provider,
             );
             assert!(result.is_ok());
 
@@ -1218,25 +1172,17 @@ mod tests {
             kdf.add_master_secret_proposal(&storage, &runtime_id, secret, generation, &checksum);
         assert!(result.is_ok());
 
-        let checksum = provider.checksum(generation);
-        let result = kdf.init(
-            &storage,
-            runtime_id,
-            generation,
-            checksum,
-            epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
-        );
+        let checksum = provider.checksum_master_secret(generation);
+        let result = kdf.init(&storage, runtime_id, generation, checksum, epoch, &provider);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            KeyManagerError::MasterSecretNotFound(generation).to_string()
+            KeyManagerError::MasterSecretNotReplicated(generation).to_string()
         );
 
         // Valid proposal.
-        let secret = provider.fetch(generation).unwrap().secret;
-        let checksum = provider.checksum(generation);
+        let secret = provider.master_secret(generation);
+        let checksum = provider.checksum_master_secret(generation);
         let result =
             kdf.add_master_secret_proposal(&storage, &runtime_id, secret, generation, &checksum);
         assert!(result.is_ok());
@@ -1249,8 +1195,7 @@ mod tests {
             generation,
             checksum.clone(),
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_ok());
 
@@ -1264,14 +1209,11 @@ mod tests {
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
-        let provider = MasterSecretProvider::new(runtime_id);
-        let master_secret_fetcher = |generation| provider.fetch(generation);
-        let ephemeral_secret_fetcher =
-            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
+        let provider = MockSecretProvider::new(runtime_id, false);
 
         // Init.
         let generation = 5;
-        let checksum = provider.checksum(generation);
+        let checksum = provider.checksum_master_secret(generation);
 
         let result = kdf.init(
             &storage,
@@ -1279,8 +1221,7 @@ mod tests {
             generation,
             checksum.clone(),
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_ok());
 
@@ -1300,8 +1241,7 @@ mod tests {
             generation,
             checksum.clone(),
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1316,14 +1256,11 @@ mod tests {
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
-        let provider = MasterSecretProvider::new(runtime_id);
-        let master_secret_fetcher = |generation| provider.fetch(generation);
-        let ephemeral_secret_fetcher =
-            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
+        let provider = MockSecretProvider::new(runtime_id, false);
 
         // Init.
         let generation = 5;
-        let checksum = provider.checksum(generation);
+        let checksum = provider.checksum_master_secret(generation);
 
         let result = kdf.init(
             &storage,
@@ -1331,8 +1268,7 @@ mod tests {
             generation,
             checksum.clone(),
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_ok());
 
@@ -1353,8 +1289,7 @@ mod tests {
                 generation,
                 checksum.clone(),
                 epoch,
-                master_secret_fetcher,
-                ephemeral_secret_fetcher,
+                &provider,
             )
         });
         assert!(result.is_err());
@@ -1366,14 +1301,11 @@ mod tests {
         let storage = InMemoryKeyValue::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
-        let provider = MasterSecretProvider::new(runtime_id);
-        let master_secret_fetcher = |generation| provider.fetch(generation);
-        let ephemeral_secret_fetcher =
-            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
+        let provider = MockSecretProvider::new(runtime_id, false);
 
         // Init.
         let generation = 10;
-        let checksum = provider.checksum(generation);
+        let checksum = provider.checksum_master_secret(generation);
 
         let result = kdf.init(
             &storage,
@@ -1381,14 +1313,13 @@ mod tests {
             generation,
             checksum.clone(),
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_ok());
 
         // Init with outdated generation.
         let generation = 5;
-        let checksum = provider.checksum(generation);
+        let checksum = provider.checksum_master_secret(generation);
 
         let result = kdf.init(
             &storage,
@@ -1396,8 +1327,7 @@ mod tests {
             generation,
             checksum.clone(),
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1413,32 +1343,13 @@ mod tests {
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
         let invalid_runtime_id = Namespace::from(vec![2u8; 32]);
-        let provider = MasterSecretProvider::new(runtime_id);
-        let master_secret_fetcher = |generation| provider.fetch(generation);
-        let ephemeral_secret_fetcher =
-            |epoch| Err(KeyManagerError::EphemeralSecretNotFound(epoch).into());
+        let provider = MockSecretProvider::new(runtime_id, false);
 
         // No secrets.
-        let result = kdf.init(
-            &storage,
-            runtime_id,
-            0,
-            vec![],
-            epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
-        );
+        let result = kdf.init(&storage, runtime_id, 0, vec![], epoch, &provider);
         assert!(result.is_ok());
 
-        let result = kdf.init(
-            &storage,
-            invalid_runtime_id,
-            0,
-            vec![],
-            epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
-        );
+        let result = kdf.init(&storage, invalid_runtime_id, 0, vec![], epoch, &provider);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -1447,7 +1358,7 @@ mod tests {
 
         // Few secrets.
         let generation = 5;
-        let checksum = provider.checksum(generation);
+        let checksum = provider.checksum_master_secret(generation);
 
         let result = kdf.init(
             &storage,
@@ -1455,8 +1366,7 @@ mod tests {
             generation,
             checksum.clone(),
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_ok());
 
@@ -1466,8 +1376,7 @@ mod tests {
             generation,
             checksum,
             epoch,
-            master_secret_fetcher,
-            ephemeral_secret_fetcher,
+            &provider,
         );
         assert!(result.is_err());
         assert_eq!(
@@ -1475,6 +1384,7 @@ mod tests {
             KeyManagerError::RuntimeMismatch.to_string()
         );
     }
+
     #[test]
     fn key_generation_is_deterministic() {
         let kdf = Kdf::default();
@@ -1982,21 +1892,32 @@ mod tests {
         let storage = InMemoryKeyValue::new();
         let secret = Secret([0; SECRET_SIZE]);
         let new_secret = Secret([1; SECRET_SIZE]);
+        let runtime_id = Namespace([2; NAMESPACE_SIZE]);
+        let generation = 3;
 
         // Empty storage.
-        let result = Kdf::load_master_secret_proposal(&storage);
+        let result = Kdf::load_master_secret_proposal(&storage, &runtime_id, generation);
         assert!(result.is_none());
 
         // Happy path.
-        Kdf::store_master_secret_proposal(&storage, &secret);
-        let loaded =
-            Kdf::load_master_secret_proposal(&storage).expect("master secret should be loaded");
+        Kdf::store_master_secret_proposal(&storage, &runtime_id, &secret, generation);
+        let loaded = Kdf::load_master_secret_proposal(&storage, &runtime_id, generation)
+            .expect("master secret should be loaded");
         assert_eq!(secret.0, loaded.0);
 
+        // Decryption returns None (invalid generation).
+        let loaded = Kdf::load_master_secret_proposal(&storage, &runtime_id, generation + 1);
+        assert!(loaded.is_none());
+
+        // Decryption returns None  (invalid runtime ID).
+        let invalid_runtime_id = Namespace([3; NAMESPACE_SIZE]);
+        let loaded = Kdf::load_master_secret_proposal(&storage, &invalid_runtime_id, generation);
+        assert!(loaded.is_none());
+
         // Overwrite the proposal and check if the last secret is kept.
-        Kdf::store_master_secret_proposal(&storage, &new_secret);
-        let loaded =
-            Kdf::load_master_secret_proposal(&storage).expect("master secret should be loaded");
+        Kdf::store_master_secret_proposal(&storage, &runtime_id, &new_secret, generation);
+        let loaded = Kdf::load_master_secret_proposal(&storage, &runtime_id, generation)
+            .expect("master secret should be loaded");
         assert_eq!(new_secret.0, loaded.0);
     }
 }

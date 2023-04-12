@@ -192,6 +192,7 @@ func (sc *Scenario) waitMasterSecret(ctx context.Context, generation uint64) (*k
 			sc.Logger.Info("master secret proposed",
 				"generation", secret.Secret.Generation,
 				"epoch", secret.Secret.Epoch,
+				"num_ciphertexts", len(secret.Secret.Secret.Ciphertexts),
 			)
 		case status := <-stCh:
 			if !status.ID.Equal(&keymanagerID) {

@@ -17,7 +17,7 @@ pub fn seal(key_policy: Keypolicy, context: &[u8], data: &[u8]) -> Vec<u8> {
     // Encrypt the raw policy.
     let mut nonce = [0u8; NONCE_SIZE];
     rng.fill(&mut nonce);
-    let d2 = new_d2(key_policy, context);
+    let d2 = new_deoxysii(key_policy, context);
     let mut ciphertext = d2.seal(&nonce, data, vec![]);
     ciphertext.extend_from_slice(&nonce);
 
@@ -48,7 +48,7 @@ pub fn unseal(key_policy: Keypolicy, context: &[u8], ciphertext: &[u8]) -> Optio
     nonce.copy_from_slice(&ciphertext[ct_len..]);
     let ciphertext = &ciphertext[..ct_len];
 
-    let d2 = new_d2(key_policy, context);
+    let d2 = new_deoxysii(key_policy, context);
     let plaintext = d2
         .open(&nonce, ciphertext.to_vec(), vec![])
         .expect("ciphertext is corrupted");
@@ -56,7 +56,11 @@ pub fn unseal(key_policy: Keypolicy, context: &[u8], ciphertext: &[u8]) -> Optio
     Some(plaintext)
 }
 
-fn new_d2(key_policy: Keypolicy, context: &[u8]) -> DeoxysII {
+/// Creates a new Deoxys-II instance initialized with an SGX sealing key derived
+/// from the results of the `EGETKEY`instruction.
+///
+/// The `context` field is a domain separation tag.
+pub fn new_deoxysii(key_policy: Keypolicy, context: &[u8]) -> DeoxysII {
     let mut seal_key = egetkey(key_policy, context);
     let d2 = DeoxysII::new(&seal_key);
     seal_key.zeroize();

@@ -46,14 +46,15 @@ use crate::{
         ReplicateEphemeralSecretRequest, ReplicateEphemeralSecretResponse,
         ReplicateMasterSecretRequest, ReplicateMasterSecretResponse, SignedInitResponse,
     },
-    client::{KeyManagerClient, RemoteClient},
+    client::RemoteClient,
     crypto::{
         kdf::{Kdf, State},
         pack_runtime_id_epoch, pack_runtime_id_generation_epoch, unpack_encrypted_secret_nonce,
-        KeyPair, Secret, SignedPublicKey, VerifiableSecret, SECRET_SIZE,
+        KeyPair, Secret, SignedPublicKey, SECRET_SIZE,
     },
     policy::Policy,
     runtime::context::Context as KmContext,
+    secrets::{KeyManagerSecretProvider, SecretProvider},
 };
 
 /// Maximum age of an ephemeral key in the number of epochs.
@@ -85,19 +86,10 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
     let nodes = status.nodes;
     let epoch = consensus_epoch(ctx)?;
     let client = key_manager_client_for_replication(ctx);
-    let master_secret_fetcher = |generation| fetch_master_secret(generation, &nodes, &client);
-    let ephemeral_secret_fetcher = |epoch| fetch_ephemeral_secret(epoch, &nodes, &client);
+    let provider = KeyManagerSecretProvider::new(client, nodes);
 
     let kdf = Kdf::global();
-    let state = kdf.init(
-        storage,
-        runtime_id,
-        generation,
-        checksum,
-        epoch,
-        master_secret_fetcher,
-        ephemeral_secret_fetcher,
-    )?;
+    let state = kdf.init(storage, runtime_id, generation, checksum, epoch, &provider)?;
 
     // State is up-to-date, build the response and sign it with the RAK.
     sign_init_response(ctx, state, policy_checksum)
@@ -336,7 +328,20 @@ pub fn load_ephemeral_secret(ctx: &mut RpcContext, req: &LoadEphemeralSecretRequ
         None => {
             let nodes = nodes_with_ephemeral_secret(ctx, &signed_secret)?;
             let client = key_manager_client_for_replication(ctx);
-            fetch_ephemeral_secret(signed_secret.epoch, &nodes, &client)?
+
+            KeyManagerSecretProvider::new(client, nodes)
+                .ephemeral_secret_iter(signed_secret.epoch)
+                .find(|secret| {
+                    let checksum = Kdf::checksum_ephemeral_secret(
+                        &signed_secret.runtime_id,
+                        secret,
+                        signed_secret.epoch,
+                    );
+                    checksum == signed_secret.secret.checksum
+                })
+                .ok_or(KeyManagerError::EphemeralSecretNotReplicated(
+                    signed_secret.epoch,
+                ))?
         }
     };
 
@@ -413,40 +418,6 @@ fn decrypt_ephemeral_secret(
     let secret = Secret(plaintext.try_into().expect("slice with incorrect length"));
 
     Ok(Some(secret))
-}
-
-/// Fetch master secret from another key manager enclave.
-fn fetch_master_secret(
-    generation: u64,
-    nodes: &Vec<signature::PublicKey>,
-    client: &RemoteClient,
-) -> Result<VerifiableSecret> {
-    for node in nodes.iter() {
-        client.set_nodes(vec![*node]);
-        let result = block_on(client.replicate_master_secret(generation));
-        if let Ok(secret) = result {
-            return Ok(secret);
-        }
-    }
-
-    Err(KeyManagerError::MasterSecretNotReplicated(generation).into())
-}
-
-/// Fetch ephemeral secret from another key manager enclave.
-fn fetch_ephemeral_secret(
-    epoch: EpochTime,
-    nodes: &Vec<signature::PublicKey>,
-    client: &RemoteClient,
-) -> Result<Secret> {
-    for node in nodes.iter() {
-        client.set_nodes(vec![*node]);
-        let result = block_on(client.replicate_ephemeral_secret(epoch));
-        if let Ok(secret) = result {
-            return Ok(secret);
-        }
-    }
-
-    Err(KeyManagerError::EphemeralSecretNotReplicated(epoch).into())
 }
 
 /// Key manager client for master and ephemeral secret replication.

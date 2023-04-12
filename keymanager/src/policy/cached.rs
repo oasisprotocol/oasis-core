@@ -31,7 +31,7 @@ lazy_static! {
 }
 
 const POLICY_STORAGE_KEY: &[u8] = b"keymanager_policy";
-const POLICY_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal policy v0";
+const POLICY_SEAL_CONTEXT: &[u8] = b"oasis-core/keymanager: policy seal";
 
 /// Policy, which manages the key manager policy.
 pub struct Policy {

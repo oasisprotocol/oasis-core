@@ -823,6 +823,8 @@ func RegisterScenarios() error {
 		KeymanagerDumpRestore,
 		KeymanagerRestart,
 		KeymanagerReplicate,
+		KeymanagerReplicateMany,
+		KeymanagerRotationFailure,
 		KeymanagerUpgrade,
 		// Dump/restore test.
 		DumpRestore,
