@@ -162,9 +162,11 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 		return nil, fmt.Errorf("cometbft/keymanager: failed to register app: %w", err)
 	}
 
-	sc := &serviceClient{
-		logger:  logging.GetLogger("cometbft/keymanager"),
-		querier: a.QueryFactory().(*app.QueryFactory),
+	sc := serviceClient{
+		logger:            logging.GetLogger("cometbft/keymanager"),
+		querier:           a.QueryFactory().(*app.QueryFactory),
+		mstSecretNotifier: pubsub.NewBroker(false),
+		ephSecretNotifier: pubsub.NewBroker(false),
 	}
 	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		statuses, err := sc.GetStatuses(ctx, consensus.HeightLatest)
@@ -180,8 +182,6 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 			wr <- v
 		}
 	})
-	sc.mstSecretNotifier = pubsub.NewBroker(false)
-	sc.ephSecretNotifier = pubsub.NewBroker(false)
 
-	return sc, nil
+	return &sc, nil
 }
