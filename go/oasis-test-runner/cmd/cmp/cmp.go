@@ -21,6 +21,8 @@ import (
 
 const (
 	cfgMetrics                = "metrics"
+	cfgMetricsAddr            = "metrics.address"
+	cfgMetricsLabels          = "metrics.labels"
 	cfgMetricsP               = "m"
 	cfgMetricsTargetGitBranch = "metrics.target.git_branch"
 	cfgMetricsSourceGitBranch = "metrics.source.git_branch"
@@ -528,7 +530,7 @@ func runCmp(cmd *cobra.Command, args []string) {
 
 	var err error
 	client, err = api.NewClient(api.Config{
-		Address: viper.GetString(metrics.CfgMetricsAddr),
+		Address: viper.GetString(cfgMetricsAddr),
 	})
 	if err != nil {
 		cmpLogger.Error("error creating client", "err", err)
@@ -555,7 +557,7 @@ func runCmp(cmd *cobra.Command, args []string) {
 		// Set other required Prometheus labels, if passed.
 		// TODO: Integrate scenario parameters and parameter set combinations if
 		// multiple values are provided like we do in oasis-test-runner.
-		for k, v := range viper.GetStringMapString(metrics.CfgMetricsLabels) {
+		for k, v := range viper.GetStringMapString(cfgMetricsLabels) {
 			srcLabels[k] = v
 			tgtLabels[k] = v
 		}
@@ -673,6 +675,9 @@ func Register(parentCmd *cobra.Command) {
 		"(optional) git_branch label for the target benchmark instance",
 	)
 	cmpFlags.String(cfgMetricsNetDevice, "lo", "network device traffic to compare")
+
+	cmpFlags.String(cfgMetricsAddr, "127.0.0.1:3000", "metrics pull address")
+	cmpFlags.StringToString(cfgMetricsLabels, map[string]string{}, "metrics push instance label")
 
 	_ = viper.BindPFlags(cmpFlags)
 	cmpCmd.Flags().AddFlagSet(cmpFlags)

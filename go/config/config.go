@@ -2,7 +2,9 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 
 	"github.com/a8m/envsubst"
 	"gopkg.in/yaml.v3"
@@ -11,6 +13,7 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/config"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/config"
 	common "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/config"
+	metrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics/config"
 	pprof "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/pprof/config"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/config"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/config"
@@ -74,6 +77,7 @@ type Config struct {
 	P2P       p2p.Config     `yaml:"p2p"`
 	IAS       ias.Config     `yaml:"ias,omitempty"`
 	Pprof     pprof.Config   `yaml:"pprof,omitempty"`
+	Metrics   metrics.Config `yaml:"metrics,omitempty"`
 
 	Registration workerRegistration.Config `yaml:"registration,omitempty"`
 	Keymanager   workerKM.Config           `yaml:"keymanager,omitempty"`
@@ -130,6 +134,9 @@ func (c *Config) Validate() error {
 	if err = c.Pprof.Validate(); err != nil {
 		return fmt.Errorf("pprof: %w", err)
 	}
+	if err = c.Metrics.Validate(); err != nil {
+		return fmt.Errorf("metrics: %w", err)
+	}
 
 	return nil
 }
@@ -149,6 +156,7 @@ func DefaultConfig() Config {
 		Sentry:       workerSentry.DefaultConfig(),
 		IAS:          ias.DefaultConfig(),
 		Pprof:        pprof.DefaultConfig(),
+		Metrics:      metrics.DefaultConfig(),
 	}
 }
 
@@ -161,9 +169,12 @@ func InitConfig(cfgFile string) error {
 	}
 
 	// Reset the global config and apply changes from the config file.
+	// Report error if any of the fields from the input file are unknown.
 	GlobalConfig = DefaultConfig()
-	err = yaml.Unmarshal(cfg, &GlobalConfig)
-	if err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(cfg))
+	dec.KnownFields(true)
+	err = dec.Decode(&GlobalConfig)
+	if err != nil && err != io.EOF {
 		return fmt.Errorf("failed to load config file '%s': %w", cfgFile, err)
 	}
 

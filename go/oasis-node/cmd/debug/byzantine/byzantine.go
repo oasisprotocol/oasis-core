@@ -16,7 +16,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -303,7 +302,6 @@ func init() {
 	_ = viper.BindPFlags(storageFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(storageFlags)
 
-	byzantineCmd.PersistentFlags().AddFlagSet(metrics.Flags)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugDontBlameOasisFlag)
 	byzantineCmd.PersistentFlags().AddFlagSet(flags.DebugTestEntityFlags)

@@ -37,6 +37,9 @@ const (
 	cfgNumRuns          = "num_runs"
 	cfgParallelJobCount = "parallel.job_count"
 	cfgParallelJobIndex = "parallel.job_index"
+	cfgMetricsAddr      = "metrics.address"
+	cfgMetricsLabels    = "metrics.labels"
+	cfgMetricsInterval  = "metrics.interval"
 )
 
 var (
@@ -268,7 +271,7 @@ func initRootEnv(cmd *cobra.Command) (*env.Env, error) {
 func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 	cmd.SilenceUsage = true
 
-	if viper.IsSet(metrics.CfgMetricsAddr) {
+	if viper.IsSet(cfgMetricsAddr) {
 		oasisTestRunnerOnce.Do(func() {
 			prometheus.MustRegister(oasisTestRunnerCollectors...)
 		})
@@ -421,8 +424,8 @@ func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 				}
 
 				// Init per-run prometheus pusher, if metrics are enabled.
-				if viper.IsSet(metrics.CfgMetricsAddr) {
-					pusher = push.New(viper.GetString(metrics.CfgMetricsAddr), metrics.MetricsJobTestRunner)
+				if viper.IsSet(cfgMetricsAddr) {
+					pusher = push.New(viper.GetString(cfgMetricsAddr), metrics.MetricsJobTestRunner)
 					labels := metrics.GetDefaultPushLabels(childEnv.ScenarioInfo())
 					for k, v := range labels {
 						pusher = pusher.Grouping(k, v)
@@ -498,6 +501,12 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 	// datadir for some scenarios exceed the maximum unix socket path length.
 	if net != nil {
 		net.Config().UseShortGrpcSocketPaths = true
+
+		// Populate metrics settings.
+		if viper.IsSet(cfgMetricsAddr) {
+			net.Config().Metrics.Address = viper.GetString(cfgMetricsAddr)
+			net.Config().Metrics.Interval = viper.GetDuration(cfgMetricsInterval)
+		}
 	}
 
 	if err = sc.Init(childEnv, net); err != nil {
@@ -588,9 +597,9 @@ func init() {
 		nil,
 		"regexp patterns matching names of scenarios to skip",
 	)
-	persistentFlags.String(metrics.CfgMetricsAddr, "", "Prometheus address")
+	persistentFlags.String(cfgMetricsAddr, "", "Prometheus address")
 	persistentFlags.StringToString(
-		metrics.CfgMetricsLabels,
+		cfgMetricsLabels,
 		map[string]string{},
 		"override Prometheus labels",
 	)
@@ -602,7 +611,7 @@ func init() {
 	rootFlags.StringVar(&cfgFile, cfgConfigFile, "", "config file")
 	rootFlags.Bool(cfgLogNoStdout, false, "do not multiplex logs to stdout")
 	rootFlags.Duration(
-		metrics.CfgMetricsInterval,
+		cfgMetricsInterval,
 		5*time.Second,
 		"metrics push interval for test runner and oasis nodes",
 	)
