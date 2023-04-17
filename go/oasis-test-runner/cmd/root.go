@@ -271,6 +271,10 @@ func initRootEnv(cmd *cobra.Command) (*env.Env, error) {
 func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 	cmd.SilenceUsage = true
 
+	// Workaround for viper bug: https://github.com/spf13/viper/issues/233
+	_ = viper.BindPFlag(cfgMetricsAddr, cmd.Flags().Lookup(cfgMetricsAddr))
+	_ = viper.BindPFlag(cfgMetricsLabels, cmd.Flags().Lookup(cfgMetricsLabels))
+
 	if viper.IsSet(cfgMetricsAddr) {
 		oasisTestRunnerOnce.Do(func() {
 			prometheus.MustRegister(oasisTestRunnerCollectors...)
