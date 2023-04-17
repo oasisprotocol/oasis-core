@@ -528,6 +528,10 @@ func runCmp(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Workaround for viper bug: https://github.com/spf13/viper/issues/233
+	_ = viper.BindPFlag(cfgMetricsAddr, cmd.Flags().Lookup(cfgMetricsAddr))
+	_ = viper.BindPFlag(cfgMetricsLabels, cmd.Flags().Lookup(cfgMetricsLabels))
+
 	var err error
 	client, err = api.NewClient(api.Config{
 		Address: viper.GetString(cfgMetricsAddr),
@@ -676,7 +680,7 @@ func Register(parentCmd *cobra.Command) {
 	)
 	cmpFlags.String(cfgMetricsNetDevice, "lo", "network device traffic to compare")
 
-	cmpFlags.String(cfgMetricsAddr, "127.0.0.1:3000", "metrics pull address")
+	cmpFlags.String(cfgMetricsAddr, "http://127.0.0.1:3000", "metrics pull address")
 	cmpFlags.StringToString(cfgMetricsLabels, map[string]string{}, "metrics push instance label")
 
 	_ = viper.BindPFlags(cmpFlags)
