@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -570,8 +571,8 @@ func newRuntime(
 }
 
 // New creates a new runtime registry.
-func New(ctx context.Context, dataDir string, consensus consensus.Backend, ias ias.Endpoint) (Registry, error) {
-	cfg, err := newConfig(dataDir, consensus, ias)
+func New(ctx context.Context, dataDir string, commonStore *persistent.CommonStore, consensus consensus.Backend, ias ias.Endpoint) (Registry, error) {
+	cfg, err := newConfig(dataDir, commonStore, consensus, ias)
 	if err != nil {
 		return nil, err
 	}

@@ -23,6 +23,8 @@ type teeStateECDSA struct {
 	version   version.Version
 
 	key *aesm.AttestationKeyID
+
+	tcbCache *tcbCache
 }
 
 func (ec *teeStateECDSA) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error) {
@@ -63,7 +65,31 @@ func (ec *teeStateECDSA) Init(ctx context.Context, sp *sgxProvisioner, runtimeID
 	ec.version = version
 	ec.key = key
 
+	ec.tcbCache = newTcbCache(sp.serviceStore, sp.logger)
+
 	return targetInfo, nil
+}
+
+func (ec *teeStateECDSA) verifyBundle(quote pcs.Quote, quotePolicy *pcs.QuotePolicy, tcbBundle *pcs.TCBBundle, sp *sgxProvisioner, which string) error {
+	if tcbBundle == nil {
+		return fmt.Errorf("nil bundle is not valid")
+	}
+	_, err := quote.Verify(quotePolicy, time.Now(), tcbBundle)
+	var tcbErr *pcs.TCBOutOfDateError
+	switch {
+	case err == nil:
+		return nil
+	case errors.As(err, &tcbErr):
+		sp.logger.Error("TCB is not up to date",
+			"which", which,
+			"kind", tcbErr.Kind,
+			"tcb_status", tcbErr.Status.String(),
+			"advisory_ids", tcbErr.AdvisoryIDs,
+		)
+		return tcbErr
+	default:
+		return fmt.Errorf("quote verification failed (%s bundle): %w", which, err)
+	}
 }
 
 func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
@@ -100,11 +126,6 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 	if err != nil {
 		return nil, fmt.Errorf("PCK verification failed: %w", err)
 	}
-	// Fetch the TCB bundle from Intel PCS.
-	tcbBundle, err := sp.pcs.GetTCBBundle(ctx, pckInfo.FMSPC)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve TCB bundle: %w", err)
-	}
 
 	// Get current quote policy from the consensus layer.
 	var quotePolicy *pcs.QuotePolicy
@@ -129,19 +150,51 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 
 	// Verify the quote so we can catch errors early (the runtime and later consensus layer will
 	// also do their own verification).
-	_, err = quote.Verify(quotePolicy, time.Now(), tcbBundle)
-	var tcbErr *pcs.TCBOutOfDateError
-	switch {
-	case err == nil:
-	case errors.As(err, &tcbErr):
-		sp.logger.Error("current TCB is not up to date",
-			"kind", tcbErr.Kind,
-			"tcb_status", tcbErr.Status.String(),
-			"advisory_ids", tcbErr.AdvisoryIDs,
-		)
-		return nil, tcbErr
-	default:
-		return nil, fmt.Errorf("quote verification failed: %w", err)
+	// Check bundles in order: fresh first, then cached, then try downloading again if there was
+	// no scheduled refresh this time.
+	tcbBundle, err := func() (*pcs.TCBBundle, error) {
+		var fresh *pcs.TCBBundle
+
+		cached, refresh := ec.tcbCache.check(pckInfo.FMSPC)
+		if refresh {
+			if fresh, err = sp.pcs.GetTCBBundle(ctx, pckInfo.FMSPC); err != nil {
+				sp.logger.Warn("error downloading TCB refresh",
+					"err", err,
+				)
+			}
+			if err = ec.verifyBundle(quote, quotePolicy, fresh, sp, "fresh"); err == nil {
+				ec.tcbCache.cache(fresh, pckInfo.FMSPC)
+				return fresh, nil
+			}
+			sp.logger.Warn("error verifying downloaded TCB refresh",
+				"err", err,
+			)
+		}
+
+		if err = ec.verifyBundle(quote, quotePolicy, cached, sp, "cached"); err == nil {
+			return cached, nil
+		}
+
+		// If downloaded already, don't try again but just return the last error.
+		if refresh {
+			return nil, fmt.Errorf("both fresh and cached TCB bundles failed verification, cached error: %w", err)
+		}
+
+		// If not downloaded yet this time round, try forcing. Any errors are fatal.
+		if fresh, err = sp.pcs.GetTCBBundle(ctx, pckInfo.FMSPC); err != nil {
+			sp.logger.Warn("error downloading TCB",
+				"err", err,
+			)
+			return nil, err
+		}
+		if err = ec.verifyBundle(quote, quotePolicy, fresh, sp, "downloaded"); err != nil {
+			return nil, err
+		}
+		ec.tcbCache.cache(fresh, pckInfo.FMSPC)
+		return fresh, nil
+	}()
+	if err != nil {
+		return nil, err
 	}
 
 	// Prepare quote structure.
