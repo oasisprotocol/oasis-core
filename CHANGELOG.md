@@ -12,6 +12,24 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.8 (2023-04-20)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/worker/client: Also treat literal latest round as latest
+  ([#5248](https://github.com/oasisprotocol/oasis-core/issues/5248))
+
+### Internal Changes
+
+- docker: Switch to ghcr.io for container registry
+  ([#5224](https://github.com/oasisprotocol/oasis-core/issues/5224))
+
 ## 22.2.7 (2023-03-02)
 
 | Protocol          | Version   |
