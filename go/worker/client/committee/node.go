@@ -143,6 +143,7 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 	// Fetch the active descriptor so we can get the current message limits.
 	n.commonNode.CrossNode.Lock()
 	dsc := n.commonNode.CurrentDescriptor
+	latestRound := n.commonNode.CurrentBlock.Header.Round
 	n.commonNode.CrossNode.Unlock()
 
 	if dsc == nil {
@@ -177,7 +178,7 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 		// header. We assume that this is because a finalized header is not yet available for the
 		// given round.
 		switch round {
-		case api.RoundLatest:
+		case api.RoundLatest, latestRound:
 			// Since we are allowed to decide what we see as the latest round, use an earlier one.
 			n.logger.Debug("runtime's consensus verifier reports failure, retrying",
 				"method", method,
