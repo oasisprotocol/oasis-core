@@ -4,7 +4,7 @@ ignore-merge-commits=true
 ignore-fixup-commits=false
 ignore-squash-commits=false
 ignore=body-is-missing
-extra-path=.gitlint-rules
+contrib=contrib-disallow-cleanup-commits
 
 [title-max-length]
 line-length=72
@@ -14,3 +14,6 @@ line-length=80
 
 [body-min-length]
 min-length=20
+
+[title-must-not-contain-word]
+words=wip
