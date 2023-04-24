@@ -45,7 +45,7 @@ on Discord]. They submit changes to the project itself via pull requests, which
 will be considered for inclusion in the project by existing committers (see
 next section).
 
-[Oasis Network Community server on Discord]: https://discord.gg/RwNTK8t
+[Oasis Network Community server on Discord]: https://discord.gg/oasisprotocol
 
 ### Committers
 
