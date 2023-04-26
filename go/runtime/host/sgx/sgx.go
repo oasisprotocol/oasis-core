@@ -136,7 +136,12 @@ func (ts *teeState) update(ctx context.Context, sp *sgxProvisioner, conn protoco
 	if ts.impl == nil {
 		return nil, fmt.Errorf("not initialized")
 	}
-	return ts.impl.Update(ctx, sp, conn, report, nonce)
+
+	attestation, err := ts.impl.Update(ctx, sp, conn, report, nonce)
+
+	updateAttestationMetrics(ts.runtimeID.String(), err)
+
+	return attestation, err
 }
 
 type sgxProvisioner struct {
@@ -420,6 +425,8 @@ func New(cfg Config) (host.Provisioner, error) {
 	if cfg.RuntimeAttestInterval == 0 {
 		cfg.RuntimeAttestInterval = defaultRuntimeAttestInterval
 	}
+
+	initMetrics()
 
 	s := &sgxProvisioner{
 		cfg:       cfg,
