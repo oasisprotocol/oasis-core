@@ -77,8 +77,9 @@ type Worker struct { // nolint: maligned
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	runtime   runtimeRegistry.Runtime
-	runtimeID common.Namespace
+	runtime      runtimeRegistry.Runtime
+	runtimeID    common.Namespace
+	runtimeLabel string
 
 	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
 
@@ -383,14 +384,16 @@ func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*ap
 		"next_rsk", signedInitResp.InitResponse.NextRSK,
 	)
 
-	// Cache the key manager enclave status and the currently active policy.
 	w.Lock()
 	defer w.Unlock()
 
+	// Update metrics.
+	enclaveMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.Generation))
 	if w.enclaveStatus == nil || !bytes.Equal(w.enclaveStatus.InitResponse.PolicyChecksum, signedInitResp.InitResponse.PolicyChecksum) {
-		policyUpdateCount.Inc()
+		policyUpdateCount.WithLabelValues(w.runtimeLabel).Inc()
 	}
 
+	// Cache the key manager enclave status and the currently active policy.
 	w.enclaveStatus = &signedInitResp
 	w.policy = kmStatus.Policy
 
@@ -554,7 +557,8 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, kmStatus *api.S
 
 	w.addClientRuntimeWatcher(rt.ID, crw)
 
-	computeRuntimeCount.Inc()
+	// Update metrics.
+	computeRuntimeCount.WithLabelValues(w.runtimeLabel).Inc()
 
 	return nil
 }
@@ -700,6 +704,11 @@ func (w *Worker) generateMasterSecret(runtimeID common.Namespace, generation uin
 		return err
 	}
 
+	// Update metrics.
+	enclaveGeneratedMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(rsp.SignedSecret.Secret.Generation))
+	enclaveGeneratedMasterSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(rsp.SignedSecret.Secret.Epoch))
+	w.setLastGeneratedMasterSecretGeneration(rsp.SignedSecret.Secret.Generation)
+
 	return err
 }
 
@@ -770,6 +779,10 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, epoch beaco
 	if err = consensus.SignAndSubmitTx(w.ctx, w.commonWorker.Consensus, w.commonWorker.Identity.NodeSigner, tx); err != nil {
 		return err
 	}
+
+	// Update metrics.
+	enclaveGeneratedEphemeralSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(rsp.SignedSecret.Secret.Epoch))
+	w.setLastGeneratedEphemeralSecretEpoch(rsp.SignedSecret.Secret.Epoch)
 
 	return err
 }
@@ -854,6 +867,11 @@ func (w *Worker) loadMasterSecret(sigSecret *api.SignedEncryptedMasterSecret) er
 		return fmt.Errorf("failed to load master secret: %w", err)
 	}
 
+	// Update metrics.
+	enclaveMasterSecretProposalGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(w.mstSecret.Secret.Generation))
+	enclaveMasterSecretProposalEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(w.mstSecret.Secret.Epoch))
+	w.setLastLoadedMasterSecretGeneration(w.mstSecret.Secret.Generation)
+
 	return nil
 }
 
@@ -873,6 +891,10 @@ func (w *Worker) loadEphemeralSecret(sigSecret *api.SignedEncryptedEphemeralSecr
 		)
 		return fmt.Errorf("failed to load ephemeral secret: %w", err)
 	}
+
+	// Update metrics.
+	enclaveEphemeralSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(w.ephSecret.Secret.Epoch))
+	w.setLastLoadedEphemeralSecretEpoch(w.ephSecret.Secret.Epoch)
 
 	return nil
 }
@@ -945,6 +967,10 @@ func (w *Worker) handleStatusUpdate(kmStatus *api.Status) {
 		"rotation_epoch", kmStatus.RotationEpoch,
 		"checksum", hex.EncodeToString(kmStatus.Checksum),
 	)
+
+	// Update metrics.
+	consensusMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.Generation))
+	consensusMasterSecretRotationEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.RotationEpoch))
 
 	// Cache the latest status.
 	w.setStatus(kmStatus)
@@ -1140,6 +1166,11 @@ func (w *Worker) handleNewMasterSecret(secret *api.SignedEncryptedMasterSecret) 
 		"checksum", hex.EncodeToString(secret.Secret.Secret.Checksum),
 	)
 
+	// Update metrics.
+	consensusMasterSecretProposalGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(secret.Secret.Generation))
+	consensusMasterSecretProposalEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(secret.Secret.Epoch))
+
+	// Rearm master secret loading.
 	w.mstSecret = secret
 	w.loadMstSecRetry = 0
 
@@ -1179,8 +1210,6 @@ func (w *Worker) handleGenerateMasterSecret(height int64, epoch beacon.EpochTime
 			w.genMstSecDoneCh <- false
 			return
 		}
-
-		w.setLastGeneratedMasterSecretGeneration(nextGen)
 		w.genMstSecDoneCh <- true
 	}
 
@@ -1218,7 +1247,6 @@ func (w *Worker) handleLoadMasterSecret() {
 
 	// Disarm master secret loading.
 	w.loadMstSecRetry = math.MaxInt64
-	w.setLastLoadedMasterSecretGeneration(w.mstSecret.Secret.Generation)
 
 	// Announce that the enclave has replicated the proposal for the next master
 	// secret and is ready for rotation.
@@ -1234,6 +1262,10 @@ func (w *Worker) handleNewEphemeralSecret(secret *api.SignedEncryptedEphemeralSe
 		"epoch", secret.Secret.Epoch,
 	)
 
+	// Update metrics.
+	consensusEphemeralSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(secret.Secret.Epoch))
+
+	// Rearm ephemeral secret loading.
 	w.ephSecret = secret
 	w.loadEphSecRetry = 0
 
@@ -1276,8 +1308,6 @@ func (w *Worker) handleGenerateEphemeralSecret(height int64, epoch beacon.EpochT
 			w.genEphSecDoneCh <- false
 			return
 		}
-
-		w.setLastGeneratedEphemeralSecretEpoch(nextEpoch)
 		w.genEphSecDoneCh <- true
 	}
 
@@ -1314,7 +1344,6 @@ func (w *Worker) handleLoadEphemeralSecret() {
 
 	// Disarm ephemeral secret loading.
 	w.loadEphSecRetry = math.MaxInt64
-	w.setLastLoadedEphemeralSecretEpoch(w.ephSecret.Secret.Epoch)
 }
 
 func (w *Worker) handleStop() {

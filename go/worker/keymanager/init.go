@@ -85,9 +85,11 @@ func New(
 		w.privatePeers[peerID] = struct{}{}
 	}
 
+	// Parse runtime ID.
 	if err := w.runtimeID.UnmarshalHex(config.GlobalConfig.Keymanager.RuntimeID); err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
 	}
+	w.runtimeLabel = w.runtimeID.String()
 
 	var err error
 	w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, w.runtimeID)
