@@ -124,6 +124,18 @@ type IdentityStatus struct {
 
 // RegistrationStatus is the node registration status.
 type RegistrationStatus struct {
+	// LastAttemptSuccessful is true if the last registration attempt has been
+	// successful.
+	LastAttemptSuccessful bool `json:"last_attempt_successful"`
+
+	// LastAttemptErrorMessage contains the error message if the last
+	// registration attempt has not been successful.
+	LastAttemptErrorMessage string `json:"last_attempt_error_message,omitempty"`
+
+	// LastAttempt is the time of the last registration attempt.
+	// In case the node did not successfully register yet, it will be the zero timestamp.
+	LastAttempt time.Time `json:"last_attempt"`
+
 	// LastRegistration is the time of the last successful registration with the consensus registry
 	// service. In case the node did not successfully register yet, it will be the zero timestamp.
 	LastRegistration time.Time `json:"last_registration"`

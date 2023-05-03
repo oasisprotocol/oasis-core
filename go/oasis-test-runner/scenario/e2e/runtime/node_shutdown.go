@@ -95,6 +95,9 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	if status.Registration.Descriptor == nil {
 		return fmt.Errorf("node has not registered")
 	}
+	if !status.Registration.LastAttemptSuccessful || status.Registration.LastAttemptErrorMessage != "" {
+		return fmt.Errorf("node registration was not successful")
+	}
 
 	sc.Logger.Info("requesting node shutdown")
 	args := []string{

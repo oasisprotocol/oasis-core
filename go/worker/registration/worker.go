@@ -865,7 +865,7 @@ func (w *Worker) gatherConsensusAddresses(sentryConsensusAddrs []node.ConsensusA
 	return validatedAddrs, nil
 }
 
-func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) error {
+func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (err error) {
 	identityPublic := w.identity.NodeSigner.Public()
 	w.logger.Info("performing node (re-)registration",
 		"epoch", epoch,
@@ -898,7 +898,31 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 		SoftwareVersion: node.SoftwareVersion(version.SoftwareVersion),
 	}
 
-	if err := hook(&nodeDesc); err != nil {
+	// Update the registration status on successful or failed registration.
+	defer func() {
+		w.Lock()
+		defer w.Unlock()
+
+		switch err {
+		case nil:
+			w.status.LastAttemptSuccessful = true
+			w.status.LastAttemptErrorMessage = ""
+			w.status.LastAttempt = time.Now()
+			w.status.LastRegistration = w.status.LastAttempt
+			w.status.Descriptor = &nodeDesc
+		default:
+			w.status.LastAttemptSuccessful = false
+			w.status.LastAttemptErrorMessage = err.Error()
+			w.status.LastAttempt = time.Now()
+			if w.status.Descriptor != nil {
+				if w.status.Descriptor.Expiration < uint64(epoch) {
+					w.status.Descriptor = nil
+				}
+			}
+		}
+	}()
+
+	if err = hook(&nodeDesc); err != nil {
 		return err
 	}
 
@@ -915,9 +939,9 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 
 	// Add Consensus Addresses if required.
 	if nodeDesc.HasRoles(registry.ConsensusAddressRequiredRoles) {
-		addrs, err := w.gatherConsensusAddresses(sentryConsensusAddrs)
-		if err != nil {
-			return fmt.Errorf("error gathering consensus addresses: %w", err)
+		addrs, grr := w.gatherConsensusAddresses(sentryConsensusAddrs)
+		if grr != nil {
+			return fmt.Errorf("error gathering consensus addresses: %w", grr)
 		}
 		nodeDesc.Consensus.Addresses = addrs
 	}
@@ -941,27 +965,21 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) err
 		nodeSigners = append([]signature.Signer{w.identity.NodeSigner}, nodeSigners...)
 	}
 
-	sigNode, err := node.MultiSignNode(nodeSigners, registry.RegisterNodeSignatureContext, &nodeDesc)
-	if err != nil {
+	sigNode, grr := node.MultiSignNode(nodeSigners, registry.RegisterNodeSignatureContext, &nodeDesc)
+	if grr != nil {
 		w.logger.Error("failed to register node: unable to sign node descriptor",
-			"err", err,
+			"err", grr,
 		)
-		return err
+		return fmt.Errorf("unable to sign node descriptor: %w", grr)
 	}
 
 	tx := registry.NewRegisterNodeTx(0, nil, sigNode)
-	if err := consensus.SignAndSubmitTx(w.ctx, w.consensus, w.registrationSigner, tx); err != nil {
+	if err = consensus.SignAndSubmitTx(w.ctx, w.consensus, w.registrationSigner, tx); err != nil {
 		w.logger.Error("failed to register node",
 			"err", err,
 		)
 		return err
 	}
-
-	// Update the registration status on successful registration.
-	w.RLock()
-	w.status.LastRegistration = time.Now()
-	w.status.Descriptor = &nodeDesc
-	w.RUnlock()
 
 	w.logger.Info("node registered with the registry")
 	return nil
