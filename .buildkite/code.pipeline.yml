@@ -30,7 +30,7 @@ docker_plugin_default_config: &docker_plugin_default_config
     # Propapage the tmpfs mount.
     - /tmp:/tmp
     # NOTE: When changing the environment variables below, also copy the changes
-  # to the docker_plugin_sgx_config.
+    # to the docker_plugin_sgx1_config.
   environment:
     - "LC_ALL=C.UTF-8"
     - "LANG=C.UTF-8"
@@ -41,11 +41,11 @@ docker_plugin_default_config: &docker_plugin_default_config
   propagate-environment: true
   unconfined: true
 
-docker_plugin_sgx_config: &docker_plugin_sgx_config
+docker_plugin_sgx1_config: &docker_plugin_sgx1_config
   <<: *docker_plugin_default_config
   devices:
     # Intel SGX device.
-    - /dev/isgx
+    - /dev/sgx_enclave
   environment:
     - "OASIS_TEE_HARDWARE=intel-sgx"
     # Copy of environment variables defined in docker_plugin_default_config.
@@ -60,9 +60,9 @@ docker_plugin: &docker_plugin
   oasislabs/docker#v3.0.1-oasis1:
     <<: *docker_plugin_default_config
 
-docker_plugin_sgx: &docker_plugin_sgx
+docker_plugin_sgx1: &docker_plugin_sgx1
   oasislabs/docker#v3.0.1-oasis1:
-    <<: *docker_plugin_sgx_config
+    <<: *docker_plugin_sgx1_config
 
 retry: &retry_agent_failure
   automatic:
@@ -246,10 +246,10 @@ steps:
     plugins:
       <<: *docker_plugin
 
-  ###########################
-  # E2E test jobs - intel-sgx
-  ###########################
-  - label: E2E tests - intel-sgx (basic)
+  ######################
+  # E2E test jobs - sgx1
+  ######################
+  - label: E2E tests - sgx1 (basic)
     depends_on:
       - "build-go"
       - "build-rust-runtime-loader"
@@ -277,13 +277,13 @@ steps:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
     agents:
-      queue: intel-sgx
+      queue: sgx1
     retry:
       <<: *retry_agent_failure
     plugins:
-      <<: *docker_plugin_sgx
+      <<: *docker_plugin_sgx1
 
-  - label: E2E tests - intel-sgx (full)
+  - label: E2E tests - sgx1 (full)
     depends_on:
       - "build-go"
       - "build-rust-runtime-loader"
@@ -308,16 +308,16 @@ steps:
       OASIS_EXCLUDE_E2E: e2e/runtime/txsource-multi,e2e/runtime/txsource-multi-short
       TEST_BASE_DIR: /tmp
     agents:
-      queue: intel-sgx
+      queue: sgx1
     retry:
       <<: *retry_agent_failure
     plugins:
-      <<: *docker_plugin_sgx
+      <<: *docker_plugin_sgx1
 
-  ################################################
-  # E2E test - intel-sgx with IAS (only on master)
-  ################################################
-  - label: E2E tests - intel-sgx - IAS
+  ###########################################
+  # E2E test - sgx1 with IAS (only on master)
+  ###########################################
+  - label: E2E tests - sgx1 - IAS
     branches: master stable/*
     timeout_in_minutes: 15
     command:
@@ -333,11 +333,11 @@ steps:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
     agents:
-      queue: intel-sgx
+      queue: sgx1
     retry:
       <<: *retry_agent_failure
     plugins:
-      <<: *docker_plugin_sgx
+      <<: *docker_plugin_sgx1
 
   ####################################
   # Rust coverage job.
