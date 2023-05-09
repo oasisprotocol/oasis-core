@@ -3,6 +3,7 @@ package oasis
 import (
 	"crypto/ed25519"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -14,6 +15,7 @@ import (
 	kmCmd "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 )
 
@@ -351,6 +353,11 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		mayGenerate:        len(net.keymanagers) == 0,
 		privatePeerPubKeys: cfg.PrivatePeerPubKeys,
 	}
+
+	// Remove any exploded bundles on cleanup.
+	net.env.AddOnCleanup(func() {
+		_ = os.RemoveAll(bundle.ExplodedPath(km.dir.String()))
+	})
 
 	net.keymanagers = append(net.keymanagers, km)
 	host.features = append(host.features, km)
