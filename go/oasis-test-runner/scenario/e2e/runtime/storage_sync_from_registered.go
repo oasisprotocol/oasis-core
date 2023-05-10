@@ -24,7 +24,10 @@ type storageSyncFromRegisteredImpl struct {
 
 func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
-		runtimeImpl: *newRuntimeImpl("storage-sync-registered", BasicKVEncTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			"storage-sync-registered",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 
@@ -180,8 +183,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 
 	// Run the client again.
 	sc.Logger.Info("starting a second client to check if runtime works with compute worker 1")
-	newTestClient := sc.testClient.Clone().(*KeyValueEncTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithKey("key2").WithSeed("second_seed")
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

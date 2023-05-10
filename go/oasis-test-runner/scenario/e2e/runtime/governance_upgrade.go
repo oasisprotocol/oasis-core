@@ -63,7 +63,7 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 	sc := &governanceConsensusUpgradeImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			NewLongTermTestClient().WithMode(ModePart1),
+			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 		correctUpgradeVersion: correctUpgradeVersion,
 		shouldCancelUpgrade:   cancelUpgrade,
@@ -475,7 +475,6 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Check that runtime still works after the upgrade.
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 	return sc.runtimeImpl.Run(childEnv)
 }

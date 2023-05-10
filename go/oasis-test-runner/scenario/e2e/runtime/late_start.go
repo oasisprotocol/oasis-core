@@ -24,7 +24,10 @@ type lateStartImpl struct {
 
 func newLateStartImpl(name string) scenario.Scenario {
 	return &lateStartImpl{
-		runtimeImpl: *newRuntimeImpl(name, BasicKVTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			name,
+			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		),
 	}
 }
 

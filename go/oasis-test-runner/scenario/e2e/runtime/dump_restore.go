@@ -54,7 +54,7 @@ func newDumpRestoreImpl(
 	sc := &dumpRestoreImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			NewLongTermTestClient().WithMode(ModePart1NoMsg),
+			NewKVTestClient().WithScenario(InsertKeyValueScenario),
 		),
 		mapGenesisDocumentFn: mapGenesisDocumentFn,
 	}
@@ -189,7 +189,6 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 	return sc.runtimeImpl.Run(childEnv)
 }

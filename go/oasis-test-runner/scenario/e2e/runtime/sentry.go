@@ -26,7 +26,7 @@ import (
 
 var (
 	// Sentry is the Sentry node basic scenario.
-	Sentry scenario.Scenario = newSentryImpl("sentry", BasicKVTestClient)
+	Sentry scenario.Scenario = newSentryImpl()
 
 	validatorExtraLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertPeerExchangeDisabled(),
@@ -39,9 +39,12 @@ type sentryImpl struct {
 	runtimeImpl
 }
 
-func newSentryImpl(name string, testClient TestClient) scenario.Scenario {
+func newSentryImpl() scenario.Scenario {
 	return &sentryImpl{
-		runtimeImpl: *newRuntimeImpl(name, testClient),
+		runtimeImpl: *newRuntimeImpl(
+			"sentry",
+			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		),
 	}
 }
 

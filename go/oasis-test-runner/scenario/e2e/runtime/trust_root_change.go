@@ -30,12 +30,20 @@ var (
 	// TrustRootChangeTest is a happy path scenario which tests if trust
 	// can be transferred to a new light block when consensus chain context
 	// changes, e.g. on dump-restore network upgrades.
-	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl("change", NewLongTermTestClient().WithMode(ModePart1NoMsg), true)
+	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl(
+		"change",
+		NewKVTestClient().WithScenario(InsertKeyValueScenario),
+		true,
+	)
 
 	// TrustRootChangeFailsTest is an unhappy path scenario which tests
 	// that trust is never transferred to untrusted or invalid light blocks when
 	// consensus chain context changes.
-	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl("change-fails", BasicKVTestClient, false)
+	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl(
+		"change-fails",
+		NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		false,
+	)
 )
 
 type trustRootChangeImpl struct {
@@ -408,8 +416,7 @@ func (sc *trustRootChangeImpl) startClientAndComputeWorkers(ctx context.Context,
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed(seed)
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueScenario)
 	if err := sc.runtimeImpl.Run(childEnv); err != nil {
 		return err
 	}

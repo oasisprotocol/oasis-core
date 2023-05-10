@@ -33,7 +33,7 @@ func newKmUpgradeImpl() scenario.Scenario {
 	return &kmUpgradeImpl{
 		runtimeImpl: *newRuntimeImpl(
 			"keymanager-upgrade",
-			NewKeyValueEncTestClient().WithKey("key1").WithSeed("first_seed"),
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }
@@ -312,8 +312,7 @@ OUTER:
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	newTestClient := sc.testClient.Clone().(*KeyValueEncTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithKey("key2").WithSeed("second_seed")
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

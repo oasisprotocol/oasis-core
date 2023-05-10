@@ -25,7 +25,7 @@ func newHaltRestoreNonMockImpl() scenario.Scenario {
 	return &haltRestoreNonMockImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			NewLongTermTestClient().WithMode(ModePart1),
+			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 		haltEpoch: 8,
 	}
@@ -134,8 +134,7 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 		return err
 	}
 
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.startNetworkAndTestClient(ctx, childEnv); err != nil {

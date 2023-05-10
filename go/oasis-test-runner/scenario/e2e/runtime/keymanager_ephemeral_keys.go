@@ -56,7 +56,10 @@ type kmEphemeralKeysImpl struct {
 
 func newKmEphemeralKeysImpl() scenario.Scenario {
 	return &kmEphemeralKeysImpl{
-		runtimeImpl: *newRuntimeImpl("keymanager-ephemeral-keys", BasicKVEncTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			"keymanager-ephemeral-keys",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 

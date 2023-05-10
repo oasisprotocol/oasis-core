@@ -11,6 +11,7 @@ import (
 type TestClient interface {
 	Init(*runtimeImpl) error
 	Start(context.Context, *env.Env) error
+	Stop() error
 	Wait() error
 
 	// Clone returns a clone of a RuntimeTestClient instance, in a state

@@ -20,7 +20,7 @@ import (
 var ArchiveAPI scenario.Scenario = &archiveAPI{
 	runtimeImpl: *newRuntimeImpl(
 		"archive-api",
-		NewLongTermTestClient().WithMode(ModePart1),
+		NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 	),
 }
 
