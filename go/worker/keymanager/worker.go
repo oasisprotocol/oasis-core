@@ -320,7 +320,7 @@ func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*ap
 
 	// Initialize the key manager.
 	var args api.InitRequest
-	if rtInfo.Features.KeyManagerMasterSecretRotation {
+	if rtInfo.Features != nil && rtInfo.Features.KeyManagerMasterSecretRotation {
 		args = api.InitRequest{
 			Status:      kmStatus,
 			MayGenerate: w.mayGenerate,
