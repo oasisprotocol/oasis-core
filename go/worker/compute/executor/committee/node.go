@@ -523,6 +523,20 @@ func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
 		return
 	}
 
+	// If the next block will be an epoch transition block, do not propose anything as it will be
+	// reverted anyway (since the committee will change).
+	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(n.roundCtx, n.commonNode.CurrentBlockHeight)
+	if err != nil {
+		n.logger.Error("failed to fetch future epoch state",
+			"err", err,
+		)
+		return
+	}
+	if epochState != nil && epochState.Height == n.commonNode.CurrentBlockHeight+1 {
+		n.logger.Debug("not scheduling a batch, next consensus block is an epoch transition")
+		return
+	}
+
 	rtState, roundResults, err := n.getRtStateAndRoundResults(n.roundCtx, n.commonNode.CurrentBlockHeight)
 	if err != nil {
 		n.logger.Debug("not scheduling a batch",
@@ -550,12 +564,12 @@ func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
 	// Check what the runtime supports.
 	rt := n.commonNode.GetHostedRuntime()
 	if rt == nil {
-		n.logger.Debug("not scheduling a batch as the runtime is not yet ready")
+		n.logger.Debug("not scheduling a batch, the runtime is not yet ready")
 		return
 	}
 	rtInfo, err := rt.GetInfo(n.roundCtx)
 	if err != nil {
-		n.logger.Warn("not scheduling a batch as the runtime is broken",
+		n.logger.Warn("not scheduling a batch, the runtime is broken",
 			"err", err,
 		)
 		return
@@ -600,7 +614,7 @@ func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
 		}
 
 		// If we are not a transaction scheduler, we can't really schedule.
-		n.logger.Debug("not scheduling a batch as we are not a transaction scheduler")
+		n.logger.Debug("not scheduling a batch, not a transaction scheduler")
 		return
 	}
 
