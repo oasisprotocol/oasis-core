@@ -82,6 +82,7 @@ type RuntimeCfg struct { // nolint: maligned
 	Pruner RuntimePrunerCfg
 
 	ExcludeFromGenesis bool
+	KeepBundles        bool
 }
 
 // DeploymentCfg is a deployment configuration.
@@ -348,11 +349,13 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	}
 
 	// Remove any dynamically generated bundles on cleanup.
-	net.env.AddOnCleanup(func() {
-		for _, path := range rt.BundlePaths() {
-			_ = os.Remove(path)
-		}
-	})
+	if !cfg.KeepBundles {
+		net.env.AddOnCleanup(func() {
+			for _, path := range rt.BundlePaths() {
+				_ = os.Remove(path)
+			}
+		})
+	}
 
 	// Save runtime descriptor into file.
 	rtDescStr, _ := json.Marshal(rt.descriptor)
