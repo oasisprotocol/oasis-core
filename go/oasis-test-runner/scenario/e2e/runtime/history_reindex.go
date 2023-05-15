@@ -28,7 +28,10 @@ type historyReindexImpl struct {
 
 func newHistoryReindexImpl() scenario.Scenario {
 	return &historyReindexImpl{
-		runtimeImpl: *newRuntimeImpl("history-reindex", BasicKVEncTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			"history-reindex",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 

@@ -28,7 +28,10 @@ type kmKeyGenerationImpl struct {
 
 func newKmKeyGenerationImpl() scenario.Scenario {
 	return &kmKeyGenerationImpl{
-		runtimeImpl: *newRuntimeImpl("keymanager-key-generation", BasicKVEncTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			"keymanager-key-generation",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 

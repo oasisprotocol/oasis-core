@@ -29,7 +29,7 @@ func newStorageSyncInconsistentImpl() scenario.Scenario {
 	sc := &storageSyncInconsistentImpl{
 		runtimeImpl: *newRuntimeImpl(
 			"storage-sync-inconsistent",
-			NewKeyValueTestClient().WithRepeat(),
+			NewKVTestClient().WithScenario(SimpleKeyValueScenarioRepeated),
 		),
 	}
 	sc.runtimeImpl.debugNoRandomInitialEpoch = true // I give up.
@@ -183,8 +183,8 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	// Wait for the client to exit. Odd error handling here; if killing succeeded, then everything
 	// must have been fine up to this point and we can ignore the exit error from the kill.
 	sc.Logger.Info("scenario done, killing client")
-	testClient := sc.testClient.(*KeyValueTestClient)
-	if err = testClient.Kill(); err != nil {
+	testClient := sc.testClient.(*KVTestClient)
+	if err = testClient.Stop(); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil
 		}

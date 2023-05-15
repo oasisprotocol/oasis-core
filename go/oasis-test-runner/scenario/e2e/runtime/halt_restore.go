@@ -41,7 +41,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 	return &haltRestoreImpl{
 		runtimeImpl: *newRuntimeImpl(
 			name,
-			NewLongTermTestClient().WithMode(ModePart1),
+			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 		haltEpoch:      haltEpoch,
 		suspendRuntime: suspended,
@@ -221,8 +221,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.startNetworkAndWaitForClientSync(ctx); err != nil {

@@ -31,7 +31,10 @@ type runtimeUpgradeImpl struct {
 
 func newRuntimeUpgradeImpl() scenario.Scenario {
 	return &runtimeUpgradeImpl{
-		runtimeImpl: *newRuntimeImpl("runtime-upgrade", BasicKVEncTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			"runtime-upgrade",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 
@@ -253,9 +256,7 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
-	newTestClient := sc.testClient.Clone().(*KeyValueEncTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithKey("key2").WithSeed("second_seed")
-
+	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

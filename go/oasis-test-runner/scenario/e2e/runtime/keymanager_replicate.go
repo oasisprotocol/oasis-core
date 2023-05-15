@@ -23,7 +23,10 @@ type kmReplicateImpl struct {
 
 func newKmReplicateImpl() scenario.Scenario {
 	return &kmReplicateImpl{
-		runtimeImpl: *newRuntimeImpl("keymanager-replication", BasicKVEncTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			"keymanager-replication",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 

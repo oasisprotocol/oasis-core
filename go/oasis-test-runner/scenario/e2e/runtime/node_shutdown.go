@@ -26,7 +26,10 @@ type nodeShutdownImpl struct {
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		runtimeImpl: *newRuntimeImpl("node-shutdown", BasicKVTestClient),
+		runtimeImpl: *newRuntimeImpl(
+			"node-shutdown",
+			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		),
 	}
 	return sc
 }

@@ -27,7 +27,10 @@ const (
 )
 
 // TrustRoot is the consensus trust root verification scenario.
-var TrustRoot scenario.Scenario = newTrustRootImpl("simple", BasicKVTestClient)
+var TrustRoot scenario.Scenario = newTrustRootImpl(
+	"simple",
+	NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+)
 
 type trustRoot struct {
 	height       string
@@ -206,7 +209,6 @@ func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env
 		if err = cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
 			return err
 		}
-		nonce++
 		if err = cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
 			return fmt.Errorf("failed to update KM policy: %w", err)
 		}

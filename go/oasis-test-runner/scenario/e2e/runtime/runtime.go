@@ -41,9 +41,16 @@ var (
 	RuntimeParamsDummy = newRuntimeImpl("", nil)
 
 	// Runtime is the basic network + client test case with runtime support.
-	Runtime scenario.Scenario = newRuntimeImpl("runtime", BasicKVTestClient)
+	Runtime scenario.Scenario = newRuntimeImpl(
+		"runtime",
+		NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+	)
+
 	// RuntimeEncryption is the basic network + client with encryption test case.
-	RuntimeEncryption scenario.Scenario = newRuntimeImpl("runtime-encryption", BasicKVEncTestClient)
+	RuntimeEncryption scenario.Scenario = newRuntimeImpl(
+		"runtime-encryption",
+		NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+	)
 
 	// DefaultRuntimeLogWatcherHandlerFactories is a list of default log watcher
 	// handler factories for the basic scenario.
@@ -445,20 +452,6 @@ func unpackRawTxResp(rawRsp []byte) (cbor.RawMessage, error) {
 		return nil, fmt.Errorf("runtime tx failed: %s", *rsp.Error)
 	}
 	return rsp.Success, nil
-}
-
-func (sc *runtimeImpl) submitConsensusXferTx(
-	ctx context.Context,
-	id common.Namespace,
-	xfer staking.Transfer,
-	nonce uint64,
-) error {
-	_, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "consensus_transfer", struct {
-		Transfer staking.Transfer `json:"transfer"`
-	}{
-		Transfer: xfer,
-	})
-	return err
 }
 
 func (sc *runtimeImpl) submitConsensusXferTxMeta(
