@@ -28,7 +28,7 @@ const (
 // MultipleRuntimes is a scenario which tests running multiple runtimes on one node.
 var MultipleRuntimes = func() scenario.Scenario {
 	sc := &multipleRuntimesImpl{
-		runtimeImpl: *newRuntimeImpl("multiple-runtimes", nil),
+		RuntimeImpl: *NewRuntimeImpl("multiple-runtimes", nil),
 	}
 	sc.Flags.Int(cfgNumComputeRuntimes, 2, "number of compute runtimes per worker")
 	sc.Flags.Int(cfgNumComputeRuntimeTxns, 2, "number of transactions to perform")
@@ -39,17 +39,17 @@ var MultipleRuntimes = func() scenario.Scenario {
 }()
 
 type multipleRuntimesImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func (sc *multipleRuntimesImpl) Clone() scenario.Scenario {
 	return &multipleRuntimesImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}

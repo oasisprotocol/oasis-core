@@ -12,12 +12,12 @@ import (
 var OffsetRestart scenario.Scenario = newOffsetRestartImpl()
 
 type offsetRestartImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func newOffsetRestartImpl() scenario.Scenario {
 	sc := &offsetRestartImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			"offset-restart",
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
@@ -27,12 +27,12 @@ func newOffsetRestartImpl() scenario.Scenario {
 
 func (sc *offsetRestartImpl) Clone() scenario.Scenario {
 	return &offsetRestartImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *offsetRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (sc *offsetRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -62,7 +62,7 @@ func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -90,6 +90,6 @@ func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 	// if these disconnected after the client node had already seen them, thereby
 	// hanging the network (no transactions could be submitted).
 	sc.Logger.Info("network back up, trying to run client again")
-	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
-	return sc.runtimeImpl.Run(childEnv)
+	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	return sc.RuntimeImpl.Run(childEnv)
 }

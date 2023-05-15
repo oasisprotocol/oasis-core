@@ -19,12 +19,12 @@ var LateStart scenario.Scenario = newLateStartImpl("late-start")
 const lateStartInitialWait = 2 * time.Minute
 
 type lateStartImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func newLateStartImpl(name string) scenario.Scenario {
 	return &lateStartImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			name,
 			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
 		),
@@ -33,12 +33,12 @@ func newLateStartImpl(name string) scenario.Scenario {
 
 func (sc *lateStartImpl) Clone() scenario.Scenario {
 	return &lateStartImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *lateStartImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}

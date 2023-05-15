@@ -17,7 +17,7 @@ import (
 
 // KVTestClient is a client that exercises the simple key-value test runtime.
 type KVTestClient struct {
-	sc *runtimeImpl
+	sc *RuntimeImpl
 
 	seed     string
 	scenario TestClientScenario
@@ -27,7 +27,7 @@ type KVTestClient struct {
 	errCh    chan error
 }
 
-func (cli *KVTestClient) Init(scenario *runtimeImpl) error {
+func (cli *KVTestClient) Init(scenario *RuntimeImpl) error {
 	cli.sc = scenario
 	return nil
 }
@@ -208,7 +208,7 @@ func NewKVTestClient() *KVTestClient {
 	}
 }
 
-func (sc *runtimeImpl) submitAndDecodeRuntimeTx(
+func (sc *RuntimeImpl) submitAndDecodeRuntimeTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -228,7 +228,7 @@ func (sc *runtimeImpl) submitAndDecodeRuntimeTx(
 	return rsp, nil
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeInsertTx(
+func (sc *RuntimeImpl) submitKeyValueRuntimeInsertTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -255,7 +255,7 @@ func (sc *runtimeImpl) submitKeyValueRuntimeInsertTx(
 	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "insert", args)
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeGetTx(
+func (sc *RuntimeImpl) submitKeyValueRuntimeGetTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -279,7 +279,7 @@ func (sc *runtimeImpl) submitKeyValueRuntimeGetTx(
 	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "get", args)
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeRemoveTx(
+func (sc *RuntimeImpl) submitKeyValueRuntimeRemoveTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -303,7 +303,7 @@ func (sc *runtimeImpl) submitKeyValueRuntimeRemoveTx(
 	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "remove", args)
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeGetRuntimeIDTx(
+func (sc *RuntimeImpl) submitKeyValueRuntimeGetRuntimeIDTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -318,7 +318,7 @@ func (sc *runtimeImpl) submitKeyValueRuntimeGetRuntimeIDTx(
 	return rsp, nil
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeInsertMsg(
+func (sc *RuntimeImpl) submitKeyValueRuntimeInsertMsg(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -340,7 +340,7 @@ func (sc *runtimeImpl) submitKeyValueRuntimeInsertMsg(
 	return nil
 }
 
-func (sc *runtimeImpl) submitAndDecodeRuntimeQuery(
+func (sc *RuntimeImpl) submitAndDecodeRuntimeQuery(
 	ctx context.Context,
 	id common.Namespace,
 	round uint64,
@@ -360,7 +360,7 @@ func (sc *runtimeImpl) submitAndDecodeRuntimeQuery(
 	return rsp, nil
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeGetQuery(
+func (sc *RuntimeImpl) submitKeyValueRuntimeGetQuery(
 	ctx context.Context,
 	id common.Namespace,
 	key string,
@@ -380,7 +380,7 @@ func (sc *runtimeImpl) submitKeyValueRuntimeGetQuery(
 	return sc.submitAndDecodeRuntimeQuery(ctx, id, round, "get", args)
 }
 
-func (sc *runtimeImpl) submitConsensusTransferTx(
+func (sc *RuntimeImpl) submitConsensusTransferTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -402,7 +402,7 @@ func (sc *runtimeImpl) submitConsensusTransferTx(
 	return nil
 }
 
-func (sc *runtimeImpl) submitConsensusAccountsTx(
+func (sc *RuntimeImpl) submitConsensusAccountsTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,

@@ -36,12 +36,12 @@ var (
 const sentryChecksContextTimeout = 30 * time.Second
 
 type sentryImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func newSentryImpl() scenario.Scenario {
 	return &sentryImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			"sentry",
 			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
 		),
@@ -50,12 +50,12 @@ func newSentryImpl() scenario.Scenario {
 
 func (s *sentryImpl) Clone() scenario.Scenario {
 	return &sentryImpl{
-		runtimeImpl: *s.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *s.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := s.runtimeImpl.Fixture()
+	f, err := s.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (s *sentryImpl) dial(address string, clientOpts *cmnGrpc.ClientOptions) (*g
 
 func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Run the basic runtime test.
-	if err := s.runtimeImpl.Run(childEnv); err != nil {
+	if err := s.RuntimeImpl.Run(childEnv); err != nil {
 		return err
 	}
 

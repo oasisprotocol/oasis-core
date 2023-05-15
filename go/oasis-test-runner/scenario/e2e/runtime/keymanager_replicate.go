@@ -18,12 +18,12 @@ import (
 var KeymanagerReplicate scenario.Scenario = newKmReplicateImpl()
 
 type kmReplicateImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func newKmReplicateImpl() scenario.Scenario {
 	return &kmReplicateImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			"keymanager-replication",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -32,12 +32,12 @@ func newKmReplicateImpl() scenario.Scenario {
 
 func (sc *kmReplicateImpl) Clone() scenario.Scenario {
 	return &kmReplicateImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -53,12 +53,12 @@ func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *kmReplicateImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
-	if err := sc.waitTestClientOnly(); err != nil {
+	if err := sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 

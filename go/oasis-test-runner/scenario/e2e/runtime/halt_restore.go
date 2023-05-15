@@ -24,7 +24,7 @@ var (
 const haltEpoch = 10
 
 type haltRestoreImpl struct {
-	runtimeImpl
+	RuntimeImpl
 
 	suspendRuntime bool
 	haltEpoch      int
@@ -39,7 +39,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 		haltEpoch += 5
 	}
 	return &haltRestoreImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			name,
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
@@ -50,14 +50,14 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 
 func (sc *haltRestoreImpl) Clone() scenario.Scenario {
 	return &haltRestoreImpl{
-		runtimeImpl:    *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl:    *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 		suspendRuntime: sc.suspendRuntime,
 		haltEpoch:      sc.haltEpoch,
 	}
 }
 
 func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -86,7 +86,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	nextEpoch++ // Next, after initial transitions.
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -221,10 +221,10 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
-	if err = sc.startNetworkAndWaitForClientSync(ctx); err != nil {
+	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}
 	if _, err = sc.initialEpochTransitionsWith(fixture, genesisDoc.Beacon.Base); err != nil {
@@ -233,5 +233,5 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}
-	return sc.waitTestClientOnly()
+	return sc.WaitTestClientOnly()
 }
