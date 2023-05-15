@@ -35,7 +35,7 @@ var (
 )
 
 type governanceConsensusUpgradeImpl struct {
-	runtimeImpl
+	RuntimeImpl
 
 	currentEpoch beacon.EpochTime
 	entityNonce  uint64
@@ -61,7 +61,7 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 	}
 
 	sc := &governanceConsensusUpgradeImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			name,
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
@@ -74,7 +74,7 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 
 func (sc *governanceConsensusUpgradeImpl) Clone() scenario.Scenario {
 	return &governanceConsensusUpgradeImpl{
-		runtimeImpl:           *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl:           *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 		currentEpoch:          sc.currentEpoch,
 		entityNonce:           sc.entityNonce,
 		correctUpgradeVersion: sc.correctUpgradeVersion,
@@ -84,7 +84,7 @@ func (sc *governanceConsensusUpgradeImpl) Clone() scenario.Scenario {
 }
 
 func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func (sc *governanceConsensusUpgradeImpl) cancelUpgrade(proposalID uint64) error
 }
 
 func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
-	if err := sc.startNetworkAndTestClient(sc.ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(sc.ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -320,7 +320,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -475,6 +475,6 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Check that runtime still works after the upgrade.
-	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
-	return sc.runtimeImpl.Run(childEnv)
+	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	return sc.RuntimeImpl.Run(childEnv)
 }

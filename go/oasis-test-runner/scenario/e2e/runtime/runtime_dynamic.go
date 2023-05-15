@@ -26,26 +26,26 @@ import (
 var RuntimeDynamic scenario.Scenario = newRuntimeDynamicImpl()
 
 type runtimeDynamicImpl struct {
-	runtimeImpl
+	RuntimeImpl
 
 	epoch beacon.EpochTime
 }
 
 func newRuntimeDynamicImpl() scenario.Scenario {
 	return &runtimeDynamicImpl{
-		runtimeImpl: *newRuntimeImpl("runtime-dynamic", nil),
+		RuntimeImpl: *NewRuntimeImpl("runtime-dynamic", nil),
 	}
 }
 
 func (sc *runtimeDynamicImpl) Clone() scenario.Scenario {
 	return &runtimeDynamicImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 		epoch:       sc.epoch,
 	}
 }
 
 func (sc *runtimeDynamicImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}

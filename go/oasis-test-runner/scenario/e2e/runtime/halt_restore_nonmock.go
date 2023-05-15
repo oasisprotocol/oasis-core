@@ -15,7 +15,7 @@ import (
 var HaltRestoreNonMock scenario.Scenario = newHaltRestoreNonMockImpl()
 
 type haltRestoreNonMockImpl struct {
-	runtimeImpl
+	RuntimeImpl
 
 	haltEpoch int
 }
@@ -23,7 +23,7 @@ type haltRestoreNonMockImpl struct {
 func newHaltRestoreNonMockImpl() scenario.Scenario {
 	name := "halt-restore-nonmock"
 	return &haltRestoreNonMockImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			name,
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
@@ -33,13 +33,13 @@ func newHaltRestoreNonMockImpl() scenario.Scenario {
 
 func (sc *haltRestoreNonMockImpl) Clone() scenario.Scenario {
 	return &haltRestoreNonMockImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 		haltEpoch:   sc.haltEpoch,
 	}
 }
 
 func (sc *haltRestoreNonMockImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (sc *haltRestoreNonMockImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -62,7 +62,7 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 	}
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -134,11 +134,11 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 		return err
 	}
 
-	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
-	if err = sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
-	return sc.waitTestClientOnly()
+	return sc.WaitTestClientOnly()
 }

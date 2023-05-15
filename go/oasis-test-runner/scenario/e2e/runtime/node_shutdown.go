@@ -21,12 +21,12 @@ import (
 var NodeShutdown scenario.Scenario = newNodeShutdownImpl()
 
 type nodeShutdownImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			"node-shutdown",
 			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
 		),
@@ -36,12 +36,12 @@ func newNodeShutdownImpl() scenario.Scenario {
 
 func (sc *nodeShutdownImpl) Clone() scenario.Scenario {
 	return &nodeShutdownImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -60,12 +60,12 @@ func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	ctx := context.Background()
 	var err error
 
-	if err = sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 

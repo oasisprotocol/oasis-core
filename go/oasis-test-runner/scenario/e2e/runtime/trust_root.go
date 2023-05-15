@@ -20,7 +20,7 @@ import (
 )
 
 // TrustRoot is the consensus trust root verification scenario.
-var TrustRoot scenario.Scenario = newTrustRootImpl(
+var TrustRoot scenario.Scenario = NewTrustRootImpl(
 	"simple",
 	NewKVTestClient().WithScenario(SimpleKeyValueScenario),
 )
@@ -32,27 +32,27 @@ type trustRoot struct {
 	chainContext string
 }
 
-type trustRootImpl struct {
-	runtimeImpl
+type TrustRootImpl struct {
+	RuntimeImpl
 }
 
-func newTrustRootImpl(name string, testClient TestClient) *trustRootImpl {
+func NewTrustRootImpl(name string, testClient TestClient) *TrustRootImpl {
 	fullName := "trust-root/" + name
-	sc := &trustRootImpl{
-		runtimeImpl: *newRuntimeImpl(fullName, testClient),
+	sc := &TrustRootImpl{
+		RuntimeImpl: *NewRuntimeImpl(fullName, testClient),
 	}
 
 	return sc
 }
 
-func (sc *trustRootImpl) Clone() scenario.Scenario {
-	return &trustRootImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+func (sc *TrustRootImpl) Clone() scenario.Scenario {
+	return &TrustRootImpl{
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
-func (sc *trustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+func (sc *TrustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (sc *trustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *trustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.Env, root trustRoot) (func() error, error) {
+func (sc *TrustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.Env, root trustRoot) (func() error, error) {
 	sc.Logger.Info("building runtime with embedded trust root",
 		"height", root.height,
 		"hash", root.hash,
@@ -113,7 +113,7 @@ func (sc *trustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.E
 	return rebuild, nil
 }
 
-func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env) error {
+func (sc *TrustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env) error {
 	// Nonce used for transactions (increase this by 1 after each transaction).
 	var nonce uint64
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
@@ -215,7 +215,7 @@ func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env
 	return nil
 }
 
-func (sc *trustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Block, error) {
+func (sc *TrustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Block, error) {
 	sc.Logger.Info("waiting for a block")
 
 	blockCh, blockSub, err := sc.Net.Controller().Consensus.WatchBlocks(ctx)
@@ -236,7 +236,7 @@ func (sc *trustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Bloc
 	return blk, nil
 }
 
-func (sc *trustRootImpl) chainContext(ctx context.Context) (string, error) {
+func (sc *TrustRootImpl) chainContext(ctx context.Context) (string, error) {
 	sc.Logger.Info("fetching consensus chain context")
 
 	cc, err := sc.Net.Controller().Consensus.GetChainContext(ctx)
@@ -246,7 +246,7 @@ func (sc *trustRootImpl) chainContext(ctx context.Context) (string, error) {
 	return cc, nil
 }
 
-func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
+func (sc *TrustRootImpl) Run(childEnv *env.Env) (err error) {
 	ctx := context.Background()
 
 	// Determine the required directories for building the runtime with an embedded trust root.

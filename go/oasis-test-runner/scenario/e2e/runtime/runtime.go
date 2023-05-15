@@ -42,16 +42,16 @@ const (
 
 var (
 	// RuntimeParamsDummy is a dummy instance of runtimeImpl used to register global e2e/runtime flags.
-	RuntimeParamsDummy = newRuntimeImpl("", nil)
+	RuntimeParamsDummy = NewRuntimeImpl("", nil)
 
 	// Runtime is the basic network + client test case with runtime support.
-	Runtime scenario.Scenario = newRuntimeImpl(
+	Runtime scenario.Scenario = NewRuntimeImpl(
 		"runtime",
 		NewKVTestClient().WithScenario(SimpleKeyValueScenario),
 	)
 
 	// RuntimeEncryption is the basic network + client with encryption test case.
-	RuntimeEncryption scenario.Scenario = newRuntimeImpl(
+	RuntimeEncryption scenario.Scenario = NewRuntimeImpl(
 		"runtime-encryption",
 		NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 	)
@@ -91,8 +91,8 @@ type TxnOutput struct {
 	Error *string
 }
 
-// runtimeImpl is a base class for tests involving oasis-node with runtime.
-type runtimeImpl struct {
+// RuntimeImpl is a base class for tests involving oasis-node with runtime.
+type RuntimeImpl struct {
 	e2e.E2E
 
 	testClient TestClient
@@ -114,14 +114,15 @@ type runtimeImpl struct {
 	debugWeakAlphaOk bool
 }
 
-func newRuntimeImpl(name string, testClient TestClient) *runtimeImpl {
+// NewRuntimeImpl creates a new base scenario for oasis-node runtime end-to-end tests.
+func NewRuntimeImpl(name string, testClient TestClient) *RuntimeImpl {
 	// Empty scenario name is used for registering global parameters only.
 	fullName := "runtime"
 	if name != "" {
 		fullName += "/" + name
 	}
 
-	sc := &runtimeImpl{
+	sc := &RuntimeImpl{
 		E2E:        *e2e.NewE2E(fullName),
 		testClient: testClient,
 	}
@@ -138,12 +139,12 @@ func newRuntimeImpl(name string, testClient TestClient) *runtimeImpl {
 	return sc
 }
 
-func (sc *runtimeImpl) Clone() scenario.Scenario {
+func (sc *RuntimeImpl) Clone() scenario.Scenario {
 	var testClient TestClient
 	if sc.testClient != nil {
 		testClient = sc.testClient.Clone()
 	}
-	return &runtimeImpl{
+	return &RuntimeImpl{
 		E2E:                       sc.E2E.Clone(),
 		testClient:                testClient,
 		debugNoRandomInitialEpoch: sc.debugNoRandomInitialEpoch,
@@ -151,11 +152,11 @@ func (sc *runtimeImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *runtimeImpl) PreInit(childEnv *env.Env) error {
+func (sc *RuntimeImpl) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *RuntimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f, err := sc.E2E.Fixture()
 	if err != nil {
 		return nil, err
@@ -311,7 +312,7 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 // getTEEHardware returns the configured TEE hardware.
-func (sc *runtimeImpl) getTEEHardware() (node.TEEHardware, error) {
+func (sc *RuntimeImpl) getTEEHardware() (node.TEEHardware, error) {
 	teeStr, _ := sc.Flags.GetString(cfgTEEHardware)
 	var tee node.TEEHardware
 	if err := tee.FromString(teeStr); err != nil {
@@ -320,7 +321,7 @@ func (sc *runtimeImpl) getTEEHardware() (node.TEEHardware, error) {
 	return tee, nil
 }
 
-func (sc *runtimeImpl) resolveRuntimeBinaries(baseRuntimeBinary string) map[node.TEEHardware]string {
+func (sc *RuntimeImpl) resolveRuntimeBinaries(baseRuntimeBinary string) map[node.TEEHardware]string {
 	binaries := make(map[node.TEEHardware]string)
 	for _, tee := range []node.TEEHardware{
 		node.TEEHardwareInvalid,
@@ -331,7 +332,7 @@ func (sc *runtimeImpl) resolveRuntimeBinaries(baseRuntimeBinary string) map[node
 	return binaries
 }
 
-func (sc *runtimeImpl) resolveRuntimeBinary(runtimeBinary string, tee node.TEEHardware) string {
+func (sc *RuntimeImpl) resolveRuntimeBinary(runtimeBinary string, tee node.TEEHardware) string {
 	var runtimeExt, path string
 	switch tee {
 	case node.TEEHardwareInvalid:
@@ -345,16 +346,17 @@ func (sc *runtimeImpl) resolveRuntimeBinary(runtimeBinary string, tee node.TEEHa
 	return filepath.Join(path, runtimeBinary+runtimeExt)
 }
 
-func (sc *runtimeImpl) startNetworkAndTestClient(ctx context.Context, childEnv *env.Env) error {
+// StartNetworkAndTestClient starts the network and the runtime test client.
+func (sc *RuntimeImpl) StartNetworkAndTestClient(ctx context.Context, childEnv *env.Env) error {
 	// Start the network
-	if err := sc.startNetworkAndWaitForClientSync(ctx); err != nil {
+	if err := sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return fmt.Errorf("failed to initialize network: %w", err)
 	}
 
 	return sc.startTestClientOnly(ctx, childEnv)
 }
 
-func (sc *runtimeImpl) startTestClientOnly(ctx context.Context, childEnv *env.Env) error {
+func (sc *RuntimeImpl) startTestClientOnly(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.testClient.Init(sc); err != nil {
 		return fmt.Errorf("failed to initialize test client: %w", err)
 	}
@@ -366,11 +368,12 @@ func (sc *runtimeImpl) startTestClientOnly(ctx context.Context, childEnv *env.En
 	return nil
 }
 
-func (sc *runtimeImpl) waitTestClientOnly() error {
+// WaitTestClientOnly waits for the runtime test client to finish its work.
+func (sc *RuntimeImpl) WaitTestClientOnly() error {
 	return sc.testClient.Wait()
 }
 
-func (sc *runtimeImpl) checkTestClientLogs() error {
+func (sc *RuntimeImpl) checkTestClientLogs() error {
 	// Wait for logs to be fully processed before checking them. When
 	// the client exits very quickly the log watchers may not have
 	// processed the relevant logs yet.
@@ -381,22 +384,22 @@ func (sc *runtimeImpl) checkTestClientLogs() error {
 	return sc.Net.CheckLogWatchers()
 }
 
-func (sc *runtimeImpl) waitTestClient() error {
-	if err := sc.waitTestClientOnly(); err != nil {
+func (sc *RuntimeImpl) waitTestClient() error {
+	if err := sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 	return sc.checkTestClientLogs()
 }
 
-func (sc *runtimeImpl) Run(childEnv *env.Env) error {
+func (sc *RuntimeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 	return sc.waitTestClient()
 }
 
-func (sc *runtimeImpl) submitRuntimeTx(
+func (sc *RuntimeImpl) submitRuntimeTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -415,7 +418,7 @@ func (sc *runtimeImpl) submitRuntimeTx(
 	return rsp, nil
 }
 
-func (sc *runtimeImpl) submitRuntimeQuery(
+func (sc *RuntimeImpl) submitRuntimeQuery(
 	ctx context.Context,
 	id common.Namespace,
 	round uint64,
@@ -435,7 +438,7 @@ func (sc *runtimeImpl) submitRuntimeQuery(
 	return resp.Data, nil
 }
 
-func (sc *runtimeImpl) submitRuntimeTxMeta(
+func (sc *RuntimeImpl) submitRuntimeTxMeta(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
@@ -477,7 +480,7 @@ func unpackRawTxResp(rawRsp []byte) (cbor.RawMessage, error) {
 	return rsp.Success, nil
 }
 
-func (sc *runtimeImpl) submitConsensusXferTxMeta(
+func (sc *RuntimeImpl) submitConsensusXferTxMeta(
 	ctx context.Context,
 	id common.Namespace,
 	xfer staking.Transfer,
@@ -490,7 +493,7 @@ func (sc *runtimeImpl) submitConsensusXferTxMeta(
 	})
 }
 
-func (sc *runtimeImpl) submitRuntimeInMsg(ctx context.Context, id common.Namespace, nonce uint64, method string, args interface{}) error {
+func (sc *RuntimeImpl) submitRuntimeInMsg(ctx context.Context, id common.Namespace, nonce uint64, method string, args interface{}) error {
 	ctrl := sc.Net.ClientController()
 	if ctrl == nil {
 		return fmt.Errorf("client controller not available")
@@ -553,7 +556,7 @@ func (sc *runtimeImpl) submitRuntimeInMsg(ctx context.Context, id common.Namespa
 	return nil
 }
 
-func (sc *runtimeImpl) waitForClientSync(ctx context.Context) error {
+func (sc *RuntimeImpl) waitForClientSync(ctx context.Context) error {
 	clients := sc.Net.Clients()
 	if len(clients) == 0 {
 		return fmt.Errorf("scenario/e2e: network has no client nodes")
@@ -571,7 +574,8 @@ func (sc *runtimeImpl) waitForClientSync(ctx context.Context) error {
 	return nil
 }
 
-func (sc *runtimeImpl) startNetworkAndWaitForClientSync(ctx context.Context) error {
+// StartNetworkAndWaitForClientSync starts the network and waits for the client node to sync.
+func (sc *RuntimeImpl) StartNetworkAndWaitForClientSync(ctx context.Context) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -579,7 +583,7 @@ func (sc *runtimeImpl) startNetworkAndWaitForClientSync(ctx context.Context) err
 	return sc.waitForClientSync(ctx)
 }
 
-func (sc *runtimeImpl) waitNodesSynced() error {
+func (sc *RuntimeImpl) waitNodesSynced() error {
 	ctx := context.Background()
 
 	checkSynced := func(n *oasis.Node) error {
@@ -617,11 +621,11 @@ func (sc *runtimeImpl) waitNodesSynced() error {
 	return nil
 }
 
-func (sc *runtimeImpl) initialEpochTransitions(fixture *oasis.NetworkFixture) (beacon.EpochTime, error) {
+func (sc *RuntimeImpl) initialEpochTransitions(fixture *oasis.NetworkFixture) (beacon.EpochTime, error) {
 	return sc.initialEpochTransitionsWith(fixture, 0)
 }
 
-func (sc *runtimeImpl) initialEpochTransitionsWith(fixture *oasis.NetworkFixture, baseEpoch beacon.EpochTime) (beacon.EpochTime, error) {
+func (sc *RuntimeImpl) initialEpochTransitionsWith(fixture *oasis.NetworkFixture, baseEpoch beacon.EpochTime) (beacon.EpochTime, error) {
 	ctx := context.Background()
 
 	epoch := baseEpoch + 1

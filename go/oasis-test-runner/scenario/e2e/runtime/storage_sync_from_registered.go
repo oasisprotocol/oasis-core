@@ -19,12 +19,12 @@ import (
 var StorageSyncFromRegistered scenario.Scenario = newStorageSyncFromRegisteredImpl()
 
 type storageSyncFromRegisteredImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			"storage-sync-registered",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -33,12 +33,12 @@ func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 
 func (sc *storageSyncFromRegisteredImpl) Clone() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	var nextEpoch beacon.EpochTime
 
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -94,7 +94,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 	nextEpoch++
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -183,7 +183,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 
 	// Run the client again.
 	sc.Logger.Info("starting a second client to check if runtime works with compute worker 1")
-	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

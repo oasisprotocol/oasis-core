@@ -26,7 +26,7 @@ var RuntimeUpgrade scenario.Scenario = newRuntimeUpgradeImpl()
 const versionActivationTimeout = 15 * time.Second
 
 type runtimeUpgradeImpl struct {
-	runtimeImpl
+	RuntimeImpl
 
 	nonce uint64
 
@@ -35,7 +35,7 @@ type runtimeUpgradeImpl struct {
 
 func newRuntimeUpgradeImpl() scenario.Scenario {
 	return &runtimeUpgradeImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			"runtime-upgrade",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -43,7 +43,7 @@ func newRuntimeUpgradeImpl() scenario.Scenario {
 }
 
 func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *runtimeUpgradeImpl) Clone() scenario.Scenario {
 	return &runtimeUpgradeImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
@@ -231,12 +231,12 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 	sc.Logger.Info("waiting for client to exit")
 	// Wait for the client to exit.
-	if err := sc.waitTestClientOnly(); err != nil {
+	if err := sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -287,7 +287,7 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
-	sc.runtimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

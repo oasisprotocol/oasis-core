@@ -32,24 +32,24 @@ import (
 // runtime.
 var RuntimeGovernance = func() scenario.Scenario {
 	sc := &runtimeGovernanceImpl{
-		runtimeImpl: *newRuntimeImpl("runtime-governance", nil),
+		RuntimeImpl: *NewRuntimeImpl("runtime-governance", nil),
 	}
 	return sc
 }()
 
 type runtimeGovernanceImpl struct {
-	runtimeImpl
+	RuntimeImpl
 }
 
 func (sc *runtimeGovernanceImpl) Clone() scenario.Scenario {
 	return &runtimeGovernanceImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Start with the default fixture and make some modifications below.
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}

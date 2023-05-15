@@ -20,30 +20,30 @@ const checkpointInterval = 15
 var StorageSyncInconsistent scenario.Scenario = newStorageSyncInconsistentImpl()
 
 type storageSyncInconsistentImpl struct {
-	runtimeImpl
+	RuntimeImpl
 	messyStorage int
 	runtimeID    common.Namespace
 }
 
 func newStorageSyncInconsistentImpl() scenario.Scenario {
 	sc := &storageSyncInconsistentImpl{
-		runtimeImpl: *newRuntimeImpl(
+		RuntimeImpl: *NewRuntimeImpl(
 			"storage-sync-inconsistent",
 			NewKVTestClient().WithScenario(SimpleKeyValueScenarioRepeated),
 		),
 	}
-	sc.runtimeImpl.debugNoRandomInitialEpoch = true // I give up.
+	sc.RuntimeImpl.debugNoRandomInitialEpoch = true // I give up.
 	return sc
 }
 
 func (sc *storageSyncInconsistentImpl) Clone() scenario.Scenario {
 	return &storageSyncInconsistentImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
 	}
 }
 
 func (sc *storageSyncInconsistentImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.RuntimeImpl.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	sc.runtimeID = sc.Net.Runtimes()[1].ID()
 	ctx := context.Background()
 
-	if err := sc.runtimeImpl.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.RuntimeImpl.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
