@@ -377,6 +377,165 @@ func TestPoolStragglers(t *testing.T) {
 		ddEc := dc.ToDDResult().(*ExecutorCommitment)
 		require.EqualValues(t, &ec, ddEc, "DD should return the correct commitment")
 	})
+
+	t.Run("StragglerFailure", func(t *testing.T) {
+		// Create a pool.
+		pool := Pool{
+			Runtime:   rt,
+			Committee: committee,
+			Round:     0,
+		}
+
+		// Generate a commitment.
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		ec1 := ec
+		ec1.NodeID = sk1.Public()
+		err := ec1.Sign(sk1, rt.ID)
+		require.NoError(t, err, "ec1.Sign")
+
+		ec2 := ec
+		ec2.NodeID = sk2.Public()
+		ec2.Header.SetFailure(FailureUnknown)
+		err = ec2.Sign(sk2, rt.ID)
+		require.NoError(t, err, "ec2.Sign")
+
+		// Add first commitment.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec1, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should not be enough executor commitments.
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+
+		// Add second commitment (indicates failure).
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec2, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should be enough executor commitments and no discrepancy.
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
+		require.Equal(t, false, pool.Discrepancy)
+		ddEc := dc.ToDDResult().(*ExecutorCommitment)
+		require.EqualValues(t, &ec1, ddEc, "DD should return the correct commitment")
+	})
+
+	t.Run("TooManyStragglers", func(t *testing.T) {
+		// Create a pool.
+		pool := Pool{
+			Runtime:   rt,
+			Committee: committee,
+			Round:     0,
+		}
+
+		// Generate a commitment.
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		ec1 := ec
+		ec1.NodeID = sk1.Public()
+		ec1.Header.SetFailure(FailureUnknown)
+		err := ec1.Sign(sk1, rt.ID)
+		require.NoError(t, err, "ec1.Sign")
+
+		ec2 := ec
+		ec2.NodeID = sk2.Public()
+		ec2.Header.SetFailure(FailureUnknown)
+		err = ec2.Sign(sk2, rt.ID)
+		require.NoError(t, err, "ec2.Sign")
+
+		// Add first commitment (indicates failure).
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec1, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// The number of failures is equal to the number of allowed stragglers.
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+
+		// Add second commitment (indicates failure).
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec2, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// The number of failures exceeds the number of allowed stragglers.
+		_, err = pool.ProcessCommitments(false)
+		require.Equal(t, ErrDiscrepancyDetected, err, "ProcessCommitments")
+	})
+
+	// Generate a larger committee so we can test stragglers with failure indications.
+	rt, sks, committee, nl = generateMockCommittee(t, &registry.Runtime{
+		Kind:        registry.KindCompute,
+		TEEHardware: node.TEEHardwareInvalid,
+		Executor: registry.ExecutorParameters{
+			GroupSize:         3,
+			GroupBackupSize:   1,
+			AllowedStragglers: 1,
+		},
+		GovernanceModel: registry.GovernanceEntity,
+	})
+	sk1 = sks[0]
+	sk2 = sks[1]
+	sk3 := sks[2]
+
+	t.Run("StragglerFailureTimeout", func(t *testing.T) {
+		// Create a pool.
+		pool := Pool{
+			Runtime:   rt,
+			Committee: committee,
+			Round:     0,
+		}
+
+		// Generate a commitment.
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		ec1 := ec
+		ec1.NodeID = sk1.Public()
+		err := ec1.Sign(sk1, rt.ID)
+		require.NoError(t, err, "ec1.Sign")
+
+		ec2 := ec
+		ec2.NodeID = sk2.Public()
+		ec2.Header.SetFailure(FailureUnknown)
+		err = ec2.Sign(sk2, rt.ID)
+		require.NoError(t, err, "ec2.Sign")
+
+		ec3 := ec
+		ec3.NodeID = sk3.Public()
+		err = ec3.Sign(sk3, rt.ID)
+		require.NoError(t, err, "ec3.Sign")
+
+		// Add first commitment.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec1, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should not be enough executor commitments.
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+
+		// Add second commitment (indicates failure).
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec2, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should still not be enough executor commitments (even after timeout).
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+		_, err = pool.ProcessCommitments(true)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+
+		// Add third commitment.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec3, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should be enough executor commitments and no discrepancy.
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
+		require.Equal(t, false, pool.Discrepancy)
+		ddEc := dc.ToDDResult().(*ExecutorCommitment)
+		require.EqualValues(t, &ec1, ddEc, "DD should return the correct commitment")
+	})
 }
 
 func TestPoolTwoCommitments(t *testing.T) {
@@ -994,33 +1153,33 @@ func generateMockCommittee(t *testing.T, rtTemplate *registry.Runtime) (
 	rt.Versioned = cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion)
 	_ = rt.ID.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000000")
 
-	// Generate commitment signing keys.
-	sk1, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewSigner")
-	sk2, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewSigner")
-	sk3, err := memorySigner.NewSigner(rand.Reader)
-	require.NoError(t, err, "NewSigner")
-	sks = append(sks, sk1, sk2, sk3)
-
 	// Generate a committee.
 	committee = &scheduler.Committee{
 		Kind: scheduler.KindComputeExecutor,
-		Members: []*scheduler.CommitteeNode{
-			{
-				Role:      scheduler.RoleWorker,
-				PublicKey: sk1.Public(),
-			},
-			{
-				Role:      scheduler.RoleWorker,
-				PublicKey: sk2.Public(),
-			},
-			{
-				Role:      scheduler.RoleBackupWorker,
-				PublicKey: sk3.Public(),
-			},
-		},
 	}
+	// Workers.
+	for i := 0; i < int(rt.Executor.GroupSize); i++ {
+		sk, err := memorySigner.NewSigner(rand.Reader)
+		require.NoError(t, err, "NewSigner")
+		sks = append(sks, sk)
+
+		committee.Members = append(committee.Members, &scheduler.CommitteeNode{
+			Role:      scheduler.RoleWorker,
+			PublicKey: sk.Public(),
+		})
+	}
+	// Backup workers.
+	for i := 0; i < int(rt.Executor.GroupBackupSize); i++ {
+		sk, err := memorySigner.NewSigner(rand.Reader)
+		require.NoError(t, err, "NewSigner")
+		sks = append(sks, sk)
+
+		committee.Members = append(committee.Members, &scheduler.CommitteeNode{
+			Role:      scheduler.RoleBackupWorker,
+			PublicKey: sk.Public(),
+		})
+	}
+
 	nl = &staticNodeLookup{
 		runtime: &node.Runtime{
 			ID: rt.ID,
