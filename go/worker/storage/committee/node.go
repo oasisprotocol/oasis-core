@@ -134,6 +134,9 @@ type Node struct { // nolint: maligned
 	syncedLock  sync.RWMutex
 	syncedState blockSummary
 
+	statusLock sync.RWMutex
+	status     api.StorageWorkerStatus
+
 	blockCh    *channels.InfiniteChannel
 	diffCh     chan *fetchedDiff
 	finalizeCh chan finalizeResult
@@ -174,6 +177,8 @@ func NewNode(
 		fetchPool: fetchPool,
 
 		checkpointSyncCfg: checkpointSyncCfg,
+
+		status: api.StatusInitializing,
 
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
@@ -280,6 +285,10 @@ func (n *Node) Start() error {
 
 // Stop causes the worker to stop watching and shut down.
 func (n *Node) Stop() {
+	n.statusLock.Lock()
+	n.status = api.StatusStopping
+	n.statusLock.Unlock()
+
 	n.ctxCancel()
 }
 
@@ -303,8 +312,12 @@ func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
 	n.syncedLock.RLock()
 	defer n.syncedLock.RUnlock()
 
+	n.statusLock.RLock()
+	defer n.statusLock.RUnlock()
+
 	return &api.Status{
 		LastFinalizedRound: n.syncedState.Round,
+		Status:             n.status,
 	}, nil
 }
 
@@ -726,6 +739,10 @@ func (n *Node) worker() { // nolint: gocyclo
 
 	n.logger.Info("starting committee node")
 
+	n.statusLock.Lock()
+	n.status = api.StatusStarting
+	n.statusLock.Unlock()
+
 	// Determine genesis block.
 	genesisBlock, err := n.commonNode.Consensus.RootHash().GetGenesisBlock(n.ctx, &roothashApi.RuntimeRequest{
 		RuntimeID: n.commonNode.Runtime.ID(),
@@ -771,6 +788,10 @@ func (n *Node) worker() { // nolint: gocyclo
 	// Initialize genesis from the runtime descriptor.
 	isInitialStartup := (cachedLastRound == n.undefinedRound)
 	if isInitialStartup {
+		n.statusLock.Lock()
+		n.status = api.StatusInitializingGenesis
+		n.statusLock.Unlock()
+
 		var rt *registryApi.Runtime
 		rt, err = n.commonNode.Runtime.ActiveDescriptor(n.ctx)
 		if err != nil {
@@ -797,6 +818,10 @@ func (n *Node) worker() { // nolint: gocyclo
 	// syncing. In case we cannot (likely because we synced the consensus layer via state sync), we
 	// must wait for a later checkpoint to become available.
 	if !n.checkpointSyncForced {
+		n.statusLock.Lock()
+		n.status = api.StatusSyncStartCheck
+		n.statusLock.Unlock()
+
 		// Determine what is the first round that we would need to sync.
 		iterativeSyncStart := cachedLastRound
 		if iterativeSyncStart == n.undefinedRound {
@@ -925,6 +950,10 @@ func (n *Node) worker() { // nolint: gocyclo
 	// disabled via config.
 	//
 	if (isInitialStartup && !n.checkpointSyncCfg.Disabled) || n.checkpointSyncForced {
+		n.statusLock.Lock()
+		n.status = api.StatusSyncingCheckpoints
+		n.statusLock.Unlock()
+
 		var (
 			summary *blockSummary
 			attempt int
@@ -1047,6 +1076,10 @@ func (n *Node) worker() { // nolint: gocyclo
 			}
 		}
 	}
+
+	n.statusLock.Lock()
+	n.status = api.StatusSyncingRounds
+	n.statusLock.Unlock()
 
 	// Main processing loop. When a new block comes in, its state and io roots are inspected and their
 	// writelogs fetched from remote storage nodes in case we don't have them locally yet. Fetches are

@@ -11,6 +11,19 @@ import (
 // ModuleName is the storage worker module name.
 const ModuleName = "worker/storage"
 
+// StorageWorkerStatus is the status of the storage worker.
+type StorageWorkerStatus string
+
+const (
+	StatusInitializing        StorageWorkerStatus = "initializing"
+	StatusStarting            StorageWorkerStatus = "starting"
+	StatusStopping            StorageWorkerStatus = "stopping"
+	StatusInitializingGenesis StorageWorkerStatus = "initializing genesis"
+	StatusSyncStartCheck      StorageWorkerStatus = "sync start check"
+	StatusSyncingCheckpoints  StorageWorkerStatus = "syncing checkpoints"
+	StatusSyncingRounds       StorageWorkerStatus = "syncing rounds"
+)
+
 var (
 	// ErrRuntimeNotFound is the error returned when the called references an unknown runtime.
 	ErrRuntimeNotFound = errors.New(ModuleName, 1, "worker/storage: runtime not found")
@@ -48,6 +61,9 @@ type PauseCheckpointerRequest struct {
 
 // Status is the storage worker status.
 type Status struct {
+	// Status is the current status of the storage worker.
+	Status StorageWorkerStatus `json:"status"`
+
 	// LastFinalizedRound is the last synced and finalized round.
 	LastFinalizedRound uint64 `json:"last_finalized_round"`
 }
