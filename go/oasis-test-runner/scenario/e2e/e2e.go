@@ -3,6 +3,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,10 @@ import (
 
 	flag "github.com/spf13/pflag"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -23,6 +27,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -181,6 +187,33 @@ func (sc *Scenario) GetExportedGenesisFiles(skipCompute bool) ([]string, error) 
 	}
 
 	return files, nil
+}
+
+func (sc *Scenario) GetTestEntityNonce(ctx context.Context) (uint64, error) {
+	ent, _, err := entity.TestEntity()
+	if err != nil {
+		return 0, err
+	}
+	return sc.GetEntityNonce(ctx, ent)
+}
+
+func (sc *Scenario) GetEntityNonce(ctx context.Context, ent *entity.Entity) (uint64, error) {
+	addr := staking.NewAddress(ent.ID)
+	return sc.Net.ClientController().Consensus.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
+		Height:         consensus.HeightLatest,
+		AccountAddress: addr,
+	})
+}
+
+func (sc *Scenario) GetEntityNonceByID(ctx context.Context, id signature.PublicKey) (uint64, error) {
+	ent, err := sc.Net.ClientController().Registry.GetEntity(ctx, &registry.IDQuery{
+		Height: consensus.HeightLatest,
+		ID:     id,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return sc.GetEntityNonce(ctx, ent)
 }
 
 // Flag for consensus state reset.

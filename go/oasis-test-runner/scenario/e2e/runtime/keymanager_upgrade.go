@@ -238,16 +238,23 @@ func (sc *KmUpgradeImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
+	// Fetch nonce.
+	nonce, err := sc.GetTestEntityNonce(ctx)
+	if err != nil {
+		return err
+	}
+	sc.nonce = nonce
+
 	// Generate and update a policy that will allow replication for the new
 	// keymanager.
-	if err := sc.applyUpgradePolicy(childEnv); err != nil {
+	if err = sc.applyUpgradePolicy(childEnv); err != nil {
 		return fmt.Errorf("updating policies: %w", err)
 	}
 
 	// Start the new keymanager.
 	sc.Logger.Info("starting new keymanager")
 	newKm := sc.Net.Keymanagers()[1]
-	if err := newKm.Start(); err != nil {
+	if err = newKm.Start(); err != nil {
 		return fmt.Errorf("starting new key-manager: %w", err)
 	}
 
@@ -257,9 +264,17 @@ func (sc *KmUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
 
+	// Fetch old deployment.
+	oldRtDsc, err := sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
+		Height: consensus.HeightLatest,
+		ID:     sc.Net.Runtimes()[2].ID(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get runtime descriptor: %w", err)
+	}
+
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating keymanager runtime descriptor")
-	oldRtDsc := sc.Net.Runtimes()[0].ToRuntimeDescriptor()
 	newRt := sc.Net.Runtimes()[2]
 	rtDsc := newRt.ToRuntimeDescriptor()
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
