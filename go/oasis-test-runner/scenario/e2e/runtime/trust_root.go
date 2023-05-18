@@ -19,13 +19,6 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
-const (
-	cfgRuntimeSourceDir = "runtime.source_dir"
-	cfgRuntimeTargetDir = "runtime.target_dir"
-
-	trustRootRuntime = "simple-keyvalue"
-)
-
 // TrustRoot is the consensus trust root verification scenario.
 var TrustRoot scenario.Scenario = newTrustRootImpl(
 	"simple",
@@ -48,9 +41,6 @@ func newTrustRootImpl(name string, testClient TestClient) *trustRootImpl {
 	sc := &trustRootImpl{
 		runtimeImpl: *newRuntimeImpl(fullName, testClient),
 	}
-
-	sc.Flags.String(cfgRuntimeSourceDir, "", "path to the runtime source base dir")
-	sc.Flags.String(cfgRuntimeTargetDir, "", "path to the Cargo target dir (should be a parent of the runtime binary dir)")
 
 	return sc
 }
@@ -102,20 +92,20 @@ func (sc *trustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.E
 
 	// Build a new runtime with the given trust root embedded.
 	teeHardware, _ := sc.getTEEHardware()
-	builder := rust.NewBuilder(childEnv, teeHardware, trustRootRuntime, filepath.Join(buildDir, trustRootRuntime), targetDir)
+	builder := rust.NewBuilder(childEnv, teeHardware, runtimeBinary, filepath.Join(buildDir, runtimeBinary), targetDir)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT", root.height)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HASH", root.hash)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID", root.runtimeID)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_CHAIN_CONTEXT", root.chainContext)
 	if err := builder.Build(); err != nil {
-		return nil, fmt.Errorf("failed to build runtime '%s' with trust root: %w", trustRootRuntime, err)
+		return nil, fmt.Errorf("failed to build runtime '%s' with trust root: %w", runtimeBinary, err)
 	}
 
 	rebuild := func() error {
 		sc.Logger.Info("rebuilding runtime without the embedded trust root")
 		builder.ResetEnv()
 		if buildErr := builder.Build(); buildErr != nil {
-			return fmt.Errorf("failed to build plain runtime '%s': %w", trustRootRuntime, buildErr)
+			return fmt.Errorf("failed to build plain runtime '%s': %w", runtimeBinary, buildErr)
 		}
 		return nil
 	}

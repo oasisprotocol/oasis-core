@@ -31,6 +31,8 @@ import (
 const (
 	cfgRuntimeBinaryDirDefault  = "runtime.binary_dir.default"
 	cfgRuntimeBinaryDirIntelSGX = "runtime.binary_dir.intel-sgx"
+	cfgRuntimeSourceDir         = "runtime.source_dir"
+	cfgRuntimeTargetDir         = "runtime.target_dir"
 	cfgRuntimeLoader            = "runtime.loader"
 	cfgRuntimeProvisioner       = "runtime.provisioner"
 	cfgTEEHardware              = "tee_hardware"
@@ -61,6 +63,9 @@ var (
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoExecutionDiscrepancyDetected(),
 	}
+
+	runtimeBinary    = "simple-keyvalue"
+	keyManagerBinary = "simple-keymanager"
 
 	runtimeID    common.Namespace
 	keymanagerID common.Namespace
@@ -122,6 +127,8 @@ func newRuntimeImpl(name string, testClient TestClient) *runtimeImpl {
 	}
 	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
+	sc.Flags.String(cfgRuntimeSourceDir, "", "path to the runtime source base dir")
+	sc.Flags.String(cfgRuntimeTargetDir, "", "path to the Cargo target dir (should be a parent of the runtime binary dir)")
 	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	sc.Flags.String(cfgRuntimeProvisioner, "sandboxed", "the runtime provisioner: mock, unconfined, or sandboxed")
 	sc.Flags.String(cfgTEEHardware, "", "TEE hardware to use")
@@ -162,8 +169,6 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &sgx.FortanixDummyMrSigner
 	}
-	keyManagerBinary := "simple-keymanager"
-	runtimeBinary := "simple-keyvalue"
 	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
 	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
 	runtimeProvisionerRaw, _ := sc.Flags.GetString(cfgRuntimeProvisioner)
