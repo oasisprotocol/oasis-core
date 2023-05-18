@@ -121,7 +121,7 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 	if genesisNeedsUpgrade {
 		// When upgrade is needed, run fix-genesis.
 		latestMainnetGenesisFixed = filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
-		if err = s.runFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
+		if err = s.RunFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
 			return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
 				"file at '%s': %w", genesisURL, err)
 		}
@@ -187,7 +187,8 @@ func (s *genesisFileImpl) runGenesisCheckCmd(childEnv *env.Env, genesisFilePath 
 	return out.String(), nil
 }
 
-func (s *genesisFileImpl) runFixGenesisCmd(childEnv *env.Env, genesisFilePath, fixedGenesisFilePath string) error {
+// RunFixGenesisCmd runs the 'fix-genesis' command.
+func (s *Scenario) RunFixGenesisCmd(childEnv *env.Env, genesisFilePath, fixedGenesisFilePath string) error {
 	args := []string{
 		"debug", "fix-genesis",
 		"--genesis.file", genesisFilePath,

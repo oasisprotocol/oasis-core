@@ -21,16 +21,18 @@ import (
 )
 
 // KeymanagerUpgrade is the keymanager upgrade scenario.
-var KeymanagerUpgrade scenario.Scenario = newKmUpgradeImpl()
+var KeymanagerUpgrade scenario.Scenario = NewKmUpgradeImpl()
 
-type kmUpgradeImpl struct {
+// KmUpgradeImpl is a base class for keymanager upgrade end-to-end tests.
+type KmUpgradeImpl struct {
 	Scenario
 
 	nonce uint64
 }
 
-func newKmUpgradeImpl() scenario.Scenario {
-	return &kmUpgradeImpl{
+// NewKmUpgradeImpl creates a new base scenario for oasis-node keymanager upgrade end-to-end tests.
+func NewKmUpgradeImpl() scenario.Scenario {
+	return &KmUpgradeImpl{
 		Scenario: *NewScenario(
 			"keymanager-upgrade",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
@@ -38,7 +40,7 @@ func newKmUpgradeImpl() scenario.Scenario {
 	}
 }
 
-func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *KmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
@@ -76,13 +78,13 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *kmUpgradeImpl) Clone() scenario.Scenario {
-	return &kmUpgradeImpl{
+func (sc *KmUpgradeImpl) Clone() scenario.Scenario {
+	return &KmUpgradeImpl{
 		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
-func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
+func (sc *KmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
@@ -173,7 +175,7 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *kmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.Keymanager, rt *oasis.Runtime) error {
+func (sc *KmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.Keymanager, rt *oasis.Runtime) error {
 	ctrl, err := oasis.NewController(km.SocketPath())
 	if err != nil {
 		return err
@@ -223,7 +225,7 @@ func (sc *kmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.
 	return nil
 }
 
-func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
+func (sc *KmUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
