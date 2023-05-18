@@ -30,6 +30,8 @@ import (
 const (
 	cfgRuntimeBinaryDirDefault  = "runtime.binary_dir.default"
 	cfgRuntimeBinaryDirIntelSGX = "runtime.binary_dir.intel-sgx"
+	cfgRuntimeSourceDir         = "runtime.source_dir"
+	cfgRuntimeTargetDir         = "runtime.target_dir"
 	cfgRuntimeLoader            = "runtime.loader"
 	cfgTEEHardware              = "tee_hardware"
 	cfgIasMock                  = "ias.mock"
@@ -59,6 +61,9 @@ var (
 		oasis.LogAssertNoRoundFailures(),
 		oasis.LogAssertNoExecutionDiscrepancyDetected(),
 	}
+
+	runtimeBinary    = "simple-keyvalue"
+	keyManagerBinary = "simple-keymanager"
 
 	runtimeID    common.Namespace
 	keymanagerID common.Namespace
@@ -120,6 +125,8 @@ func newRuntimeImpl(name string, testClient TestClient) *runtimeImpl {
 	}
 	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
+	sc.Flags.String(cfgRuntimeSourceDir, "", "path to the runtime source base dir")
+	sc.Flags.String(cfgRuntimeTargetDir, "", "path to the Cargo target dir (should be a parent of the runtime binary dir)")
 	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
 	sc.Flags.String(cfgTEEHardware, "", "TEE hardware to use")
 	sc.Flags.Bool(cfgIasMock, true, "if mock IAS service should be used")
@@ -159,8 +166,6 @@ func (sc *runtimeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if tee == node.TEEHardwareIntelSGX {
 		mrSigner = &sgx.FortanixDummyMrSigner
 	}
-	keyManagerBinary := "simple-keymanager"
-	runtimeBinary := "simple-keyvalue"
 	runtimeLoader, _ := sc.Flags.GetString(cfgRuntimeLoader)
 	iasMock, _ := sc.Flags.GetBool(cfgIasMock)
 	ff := &oasis.NetworkFixture{
