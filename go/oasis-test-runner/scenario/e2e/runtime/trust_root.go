@@ -144,6 +144,23 @@ func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env
 		return fmt.Errorf("failed to register KM runtime: %w", err)
 	}
 
+	// Register a new compute runtime.
+	// Note that the bundles need to be refreshed before setting the key manager policy.
+	compRt := sc.Net.Runtimes()[1]
+	if err = compRt.RefreshRuntimeBundles(); err != nil {
+		return fmt.Errorf("failed to refresh runtime bundles: %w", err)
+	}
+	compRtDesc := compRt.ToRuntimeDescriptor()
+	compRtDesc.Deployments[0].ValidFrom = epoch + 2
+	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
+		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
+	}
+	nonce++
+	if err = cli.Consensus.SubmitTx(txPath); err != nil {
+		return fmt.Errorf("failed to register compute runtime: %w", err)
+	}
+
 	// Generate and update the new keymanager runtime's policy.
 	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
 	kmPolicySig1Path := filepath.Join(childEnv.Dir(), "km_policy_sig1.pem")
@@ -203,26 +220,6 @@ func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env
 		}
 	}
 
-	// Fetch current epoch.
-	epoch, err = sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
-	if err != nil {
-		return fmt.Errorf("failed to get current epoch: %w", err)
-	}
-
-	// Register a new compute runtime.
-	compRt := sc.Net.Runtimes()[1]
-	if err = compRt.RefreshRuntimeBundles(); err != nil {
-		return fmt.Errorf("failed to refresh runtime bundles: %w", err)
-	}
-	compRtDesc := compRt.ToRuntimeDescriptor()
-	compRtDesc.Deployments[0].ValidFrom = epoch + 2
-	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
-		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
-	}
-	if err = cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register compute runtime: %w", err)
-	}
 	return nil
 }
 
