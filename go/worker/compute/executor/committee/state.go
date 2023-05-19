@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -109,9 +108,9 @@ func (s StateNotReady) String() string {
 
 // StateWaitingForBatch is the waiting for batch state.
 type StateWaitingForBatch struct {
-	// Pending execute discrepancy detected event in case the node is a
-	// backup worker and the event was received before the batch.
-	pendingEvent *roothash.ExecutionDiscrepancyDetectedEvent
+	// Whether a discrepancy has been detected in case the node is a backup worker and the event has
+	// been received before the batch.
+	discrepancyDetected bool
 }
 
 // Name returns the name of the state.

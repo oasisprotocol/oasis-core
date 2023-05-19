@@ -136,6 +136,8 @@ type Node struct { // nolint: maligned
 	roundCtx       context.Context
 	roundCancelCtx context.CancelFunc
 
+	commitPool commitment.Pool
+
 	storage storage.LocalBackend
 	txSync  txsync.Client
 
@@ -743,7 +745,7 @@ func (n *Node) maybeStartProcessingBatchLocked(batch *unresolvedBatch) {
 	case epoch.IsExecutorBackupWorker():
 		// Backup worker, wait for discrepancy event.
 		state, ok := n.state.(StateWaitingForBatch)
-		if ok && state.pendingEvent != nil {
+		if ok && state.discrepancyDetected {
 			// We have already received a discrepancy event, start processing immediately.
 			n.logger.Info("already received a discrepancy event, start processing batch")
 			n.startProcessingBatchLocked(batch)
@@ -1249,59 +1251,6 @@ func (n *Node) signAndSubmitCommitment(roundCtx context.Context, ec *commitment.
 	return nil
 }
 
-// HandleNewEventLocked implements NodeHooks.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
-	switch {
-	case ev.ExecutionDiscrepancyDetected != nil:
-		n.logger.Warn("execution discrepancy detected")
-
-		crash.Here(crashPointDiscrepancyDetectedAfter)
-
-		discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
-
-		// If the node is not a backup worker in this epoch, no need to do anything. Also if the
-		// node is an executor worker in this epoch, then it has already processed and submitted
-		// a commitment, so no need to do anything.
-		epoch := n.commonNode.Group.GetEpochSnapshot()
-		if !epoch.IsExecutorBackupWorker() || epoch.IsExecutorWorker() {
-			return
-		}
-
-		// Make sure that the runtime has synced this consensus block.
-		if rt := n.commonNode.GetHostedRuntime(); rt != nil {
-			err := rt.ConsensusSync(n.roundCtx, uint64(ev.Height))
-			if err != nil {
-				n.logger.Warn("failed to ask the runtime to sync the latest consensus block",
-					"err", err,
-					"height", ev.Height,
-				)
-			}
-		}
-
-		var state StateWaitingForEvent
-		switch s := n.state.(type) {
-		case StateWaitingForBatch:
-			// Discrepancy detected event received before the batch. We need to
-			// record the received event and keep waiting for the batch.
-			s.pendingEvent = ev.ExecutionDiscrepancyDetected
-			n.transitionLocked(s)
-			return
-		case StateWaitingForEvent:
-			state = s
-		default:
-			n.logger.Warn("ignoring received discrepancy event in incorrect state",
-				"state", s,
-			)
-			return
-		}
-
-		// Backup worker, start processing a batch.
-		n.logger.Info("backup worker activating and processing batch")
-		n.startProcessingBatchLocked(state.batch)
-	}
-}
-
 // Guarded by n.commonNode.CrossNode.
 func (n *Node) handleProposalLocked(batch *unresolvedBatch) error {
 	n.logger.Debug("handling a new batch proposal",
@@ -1533,6 +1482,17 @@ func (n *Node) worker() {
 	schedSub, schedCh := n.commonNode.TxPool.WatchScheduler()
 	defer schedSub.Close()
 
+	// Subscribe to gossiped executor commitments.
+	ecCh, ecSub, err := n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx)
+	if err != nil {
+		n.logger.Error("failed to subscribe to executor commitments",
+			"err", err,
+		)
+		close(n.initCh)
+		return
+	}
+	defer ecSub.Close()
+
 	// We are initialized.
 	close(n.initCh)
 
@@ -1576,6 +1536,9 @@ func (n *Node) worker() {
 		case txs := <-txCh:
 			// Check any queued transactions.
 			n.handleNewCheckedTransactions(txs)
+		case ec := <-ecCh:
+			// Process observed executor commitments.
+			n.handleObservedExecutorCommitment(ec)
 		case <-n.reselect:
 			// Recalculate select set.
 		}
