@@ -132,7 +132,7 @@ func TestMessagesGasEstimation(t *testing.T) {
 
 	// Create a test message dispatcher that fakes gas estimation.
 	var md testMsgDispatcher
-	app := rootHashApplication{appState, &md}
+	app := rootHashApplication{appState, &md, nil}
 
 	// Generate a private key for the single node in this test.
 	sk, err := memorySigner.NewSigner(rand.Reader)
@@ -502,7 +502,7 @@ func TestEvidence(t *testing.T) {
 	err = expiredCommitment2.Sign(sk, runtime.ID)
 	require.NoError(err, "expiredCommitment2.Sign")
 	var md testMsgDispatcher
-	app := rootHashApplication{appState, &md}
+	app := rootHashApplication{appState, &md, nil}
 
 	ctx = appState.NewContext(abciAPI.ContextDeliverTx, now)
 	defer ctx.Close()
@@ -654,7 +654,7 @@ func TestSubmitMsg(t *testing.T) {
 	defer ctx.Close()
 
 	var md testMsgDispatcher
-	app := rootHashApplication{appState, &md}
+	app := rootHashApplication{appState, &md, nil}
 
 	// Generate a private key for the caller.
 	skCaller, err := memorySigner.NewSigner(rand.Reader)

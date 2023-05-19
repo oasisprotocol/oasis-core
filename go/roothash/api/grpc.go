@@ -9,6 +9,7 @@ import (
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 )
 
@@ -39,6 +40,8 @@ var (
 	methodWatchBlocks = serviceName.NewMethod("WatchBlocks", common.Namespace{})
 	// methodWatchEvents is the WatchEvents method.
 	methodWatchEvents = serviceName.NewMethod("WatchEvents", common.Namespace{})
+	// methodWatchExecutorCommitments is the WatchExecutorCommitments method.
+	methodWatchExecutorCommitments = serviceName.NewMethod("WatchExecutorCommitments", nil)
 
 	// serviceDesc is the gRPC service descriptor.
 	serviceDesc = grpc.ServiceDesc{
@@ -91,6 +94,11 @@ var (
 			{
 				StreamName:    methodWatchEvents.ShortName(),
 				Handler:       handlerWatchEvents,
+				ServerStreams: true,
+			},
+			{
+				StreamName:    methodWatchExecutorCommitments.ShortName(),
+				Handler:       handlerWatchExecutorCommitments,
 				ServerStreams: true,
 			},
 		},
@@ -362,6 +370,34 @@ func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
 	}
 }
 
+func handlerWatchExecutorCommitments(srv interface{}, stream grpc.ServerStream) error {
+	if err := stream.RecvMsg(nil); err != nil {
+		return err
+	}
+
+	ctx := stream.Context()
+	ch, sub, err := srv.(Backend).WatchExecutorCommitments(ctx)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case ec, ok := <-ch:
+			if !ok {
+				return nil
+			}
+
+			if err := stream.SendMsg(ec); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 // RegisterService registers a new roothash service with the given gRPC server.
 func RegisterService(server *grpc.Server, service Backend) {
 	server.RegisterService(&serviceDesc, service)
@@ -511,6 +547,41 @@ func (c *roothashClient) WatchEvents(ctx context.Context, runtimeID common.Names
 
 			select {
 			case ch <- &ev:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return ch, sub, nil
+}
+
+func (c *roothashClient) WatchExecutorCommitments(ctx context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
+	ctx, sub := pubsub.NewContextSubscription(ctx)
+
+	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchExecutorCommitments.FullName())
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = stream.SendMsg(nil); err != nil {
+		return nil, nil, err
+	}
+	if err = stream.CloseSend(); err != nil {
+		return nil, nil, err
+	}
+
+	ch := make(chan *commitment.ExecutorCommitment)
+	go func() {
+		defer close(ch)
+
+		for {
+			var ec commitment.ExecutorCommitment
+			if serr := stream.RecvMsg(&ec); serr != nil {
+				return
+			}
+
+			select {
+			case ch <- &ec:
 			case <-ctx.Done():
 				return
 			}

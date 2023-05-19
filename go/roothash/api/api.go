@@ -143,6 +143,13 @@ type Backend interface {
 	// WatchEvents returns a stream of protocol events.
 	WatchEvents(ctx context.Context, runtimeID common.Namespace) (<-chan *Event, pubsub.ClosableSubscription, error)
 
+	// WatchExecutorCommitments returns a channel that produces a stream of executor commitments
+	// observed in the consensus layer P2P network.
+	//
+	// Note that these commitments may not have been processed by consensus, commitments may be
+	// received in any order and duplicates are possible.
+	WatchExecutorCommitments(ctx context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error)
+
 	// TrackRuntime adds a runtime the history of which should be tracked.
 	TrackRuntime(ctx context.Context, history BlockHistory) error
 
