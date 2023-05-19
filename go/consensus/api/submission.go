@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -78,6 +79,9 @@ type submissionManager struct {
 	priceDiscovery PriceDiscovery
 	maxFee         quantity.Quantity
 
+	noncesLock sync.Mutex
+	nonces     map[staking.Address]uint64
+
 	logger *logging.Logger
 }
 
@@ -131,12 +135,41 @@ func (m *submissionManager) EstimateGasAndSetFee(ctx context.Context, signer sig
 	return nil
 }
 
+func (m *submissionManager) getSignerNonce(ctx context.Context, signerAddr staking.Address) (uint64, error) {
+	m.noncesLock.Lock()
+	defer m.noncesLock.Unlock()
+
+	nonce, ok := m.nonces[signerAddr]
+	if !ok {
+		// Query latest nonce when one is not available.
+		var err error
+		nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{
+			AccountAddress: signerAddr,
+			Height:         HeightLatest,
+		})
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	m.nonces[signerAddr] = nonce + 1
+
+	return nonce, nil
+}
+
+func (m *submissionManager) clearSignerNonce(signerAddr staking.Address) {
+	m.noncesLock.Lock()
+	defer m.noncesLock.Unlock()
+
+	delete(m.nonces, signerAddr)
+}
+
 func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction, withProof bool) (*transaction.SignedTransaction, *transaction.Proof, error) {
 	// Update transaction nonce.
 	var err error
 	signerAddr := staking.NewAddress(signer.Public())
 
-	tx.Nonce, err = m.backend.GetSignerNonce(ctx, &GetSignerNonceRequest{AccountAddress: signerAddr, Height: HeightLatest})
+	tx.Nonce, err = m.getSignerNonce(ctx, signerAddr)
 	if err != nil {
 		if errors.Is(err, ErrNoCommittedBlocks) {
 			// No committed blocks available, retry submission.
@@ -174,6 +207,7 @@ func (m *submissionManager) signAndSubmitTx(ctx context.Context, signer signatur
 			return nil, nil, err
 		case errors.Is(err, transaction.ErrInvalidNonce):
 			// Invalid nonce, retry submission.
+			m.clearSignerNonce(signerAddr)
 			m.logger.Debug("retrying transaction submission due to invalid nonce",
 				"account_address", signerAddr,
 				"nonce", tx.Nonce,
@@ -226,6 +260,7 @@ func NewSubmissionManager(backend ClientBackend, priceDiscovery PriceDiscovery, 
 	sm := &submissionManager{
 		backend:        backend,
 		priceDiscovery: priceDiscovery,
+		nonces:         make(map[staking.Address]uint64),
 		logger:         logging.GetLogger("consensus/submission"),
 	}
 	_ = sm.maxFee.FromUint64(maxFee)
