@@ -402,6 +402,11 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 		}
 		commits++
 
+		if commit.IsIndicatingFailure() {
+			failuresTally++
+			continue
+		}
+
 		// Quick check whether the result is already determined.
 		//
 		// i) In case of discrepancy detection, as soon as there is a discrepancy we can proceed
@@ -412,17 +417,12 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 		switch p.Discrepancy {
 		case false:
 			// Discrepancy detection.
-			if proposerCommit != nil && (commit.IsIndicatingFailure() || !proposerCommit.MostlyEqual(commit)) {
+			if proposerCommit != nil && !proposerCommit.MostlyEqual(commit) {
 				p.Discrepancy = true
 				return nil, ErrDiscrepancyDetected
 			}
 		case true:
 			// Discrepancy resolution.
-			if commit.IsIndicatingFailure() {
-				failuresTally++
-				continue
-			}
-
 			k := commit.ToVote()
 			if ent, ok := votes[k]; !ok {
 				votes[k] = &voteEnt{
@@ -435,7 +435,10 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 		}
 	}
 
-	if p.Discrepancy {
+	allowedStragglers := int(p.Runtime.Executor.AllowedStragglers)
+
+	switch p.Discrepancy {
+	case true:
 		// Discrepancy resolution.
 		minVotes := (required / 2) + 1
 		if failuresTally >= minVotes {
@@ -465,6 +468,14 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 		}
 
 		// No majority commitment so far.
+	case false:
+		// If it is already known that the number of valid commitments will not exceed the required
+		// threshold, there is no need to wait for the timer to expire. Instead, proceed directly to
+		// the discrepancy resolution mode, regardless of any additional commits.
+		if failuresTally > allowedStragglers {
+			p.Discrepancy = true
+			return nil, ErrDiscrepancyDetected
+		}
 	}
 
 	// While a timer is running, all nodes are required to answer.
@@ -479,7 +490,8 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 
 		switch p.Committee.Kind {
 		case scheduler.KindComputeExecutor:
-			required -= int(p.Runtime.Executor.AllowedStragglers)
+			required -= allowedStragglers
+			commits -= failuresTally // Since failures count as stragglers.
 		default:
 			// Would panic above.
 		}
