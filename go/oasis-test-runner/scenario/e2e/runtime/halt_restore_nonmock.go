@@ -15,7 +15,7 @@ import (
 var HaltRestoreNonMock scenario.Scenario = newHaltRestoreNonMockImpl()
 
 type haltRestoreNonMockImpl struct {
-	RuntimeImpl
+	Scenario
 
 	haltEpoch int
 }
@@ -23,7 +23,7 @@ type haltRestoreNonMockImpl struct {
 func newHaltRestoreNonMockImpl() scenario.Scenario {
 	name := "halt-restore-nonmock"
 	return &haltRestoreNonMockImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			name,
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
@@ -33,13 +33,13 @@ func newHaltRestoreNonMockImpl() scenario.Scenario {
 
 func (sc *haltRestoreNonMockImpl) Clone() scenario.Scenario {
 	return &haltRestoreNonMockImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
-		haltEpoch:   sc.haltEpoch,
+		Scenario:  *sc.Scenario.Clone().(*Scenario),
+		haltEpoch: sc.haltEpoch,
 	}
 }
 
 func (sc *haltRestoreNonMockImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 		return err
 	}
 
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {

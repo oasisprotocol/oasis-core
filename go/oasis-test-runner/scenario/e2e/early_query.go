@@ -16,31 +16,31 @@ var (
 	// EarlyQuery is the early query scenario where we query a validator node before the network
 	// has started and there are no committed blocks.
 	EarlyQuery scenario.Scenario = &earlyQueryImpl{
-		E2E: *NewE2E("early-query"),
+		Scenario: *NewScenario("early-query"),
 	}
 
 	// EarlyQueryInitHeight is the same as EarlyQuery scenario but with an initial height set.
 	EarlyQueryInitHeight scenario.Scenario = &earlyQueryImpl{
-		E2E:           *NewE2E("early-query/init-height"),
+		Scenario:      *NewScenario("early-query/init-height"),
 		initialHeight: 42,
 	}
 )
 
 type earlyQueryImpl struct {
-	E2E
+	Scenario
 
 	initialHeight int64
 }
 
 func (sc *earlyQueryImpl) Clone() scenario.Scenario {
 	return &earlyQueryImpl{
-		E2E:           sc.E2E.Clone(),
+		Scenario:      sc.Scenario.Clone(),
 		initialHeight: sc.initialHeight,
 	}
 }
 
 func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

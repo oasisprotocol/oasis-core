@@ -33,13 +33,13 @@ type trustRoot struct {
 }
 
 type TrustRootImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func NewTrustRootImpl(name string, testClient TestClient) *TrustRootImpl {
 	fullName := "trust-root/" + name
 	sc := &TrustRootImpl{
-		RuntimeImpl: *NewRuntimeImpl(fullName, testClient),
+		Scenario: *NewScenario(fullName, testClient),
 	}
 
 	return sc
@@ -47,12 +47,12 @@ func NewTrustRootImpl(name string, testClient TestClient) *TrustRootImpl {
 
 func (sc *TrustRootImpl) Clone() scenario.Scenario {
 	return &TrustRootImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *TrustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

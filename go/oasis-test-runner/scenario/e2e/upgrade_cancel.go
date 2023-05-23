@@ -20,7 +20,7 @@ const upgradeHandler = "__e2e-test-upgrade-cancel"
 var NodeUpgradeCancel scenario.Scenario = newNodeUpgradeCancelImpl()
 
 type nodeUpgradeCancelImpl struct {
-	E2E
+	Scenario
 
 	ctx          context.Context
 	currentEpoch beacon.EpochTime
@@ -36,21 +36,21 @@ func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
 
 func newNodeUpgradeCancelImpl() scenario.Scenario {
 	sc := &nodeUpgradeCancelImpl{
-		E2E: *NewE2E("node-upgrade-cancel"),
-		ctx: context.Background(),
+		Scenario: *NewScenario("node-upgrade-cancel"),
+		ctx:      context.Background(),
 	}
 	return sc
 }
 
 func (sc *nodeUpgradeCancelImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeCancelImpl{
-		E2E: sc.E2E.Clone(),
-		ctx: context.Background(),
+		Scenario: sc.Scenario.Clone(),
+		ctx:      context.Background(),
 	}
 }
 
 func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

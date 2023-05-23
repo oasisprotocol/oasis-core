@@ -35,7 +35,7 @@ var (
 )
 
 type governanceConsensusUpgradeImpl struct {
-	RuntimeImpl
+	Scenario
 
 	currentEpoch beacon.EpochTime
 	entityNonce  uint64
@@ -61,7 +61,7 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 	}
 
 	sc := &governanceConsensusUpgradeImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			name,
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
@@ -74,7 +74,7 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 
 func (sc *governanceConsensusUpgradeImpl) Clone() scenario.Scenario {
 	return &governanceConsensusUpgradeImpl{
-		RuntimeImpl:           *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario:              *sc.Scenario.Clone().(*Scenario),
 		currentEpoch:          sc.currentEpoch,
 		entityNonce:           sc.entityNonce,
 		correctUpgradeVersion: sc.correctUpgradeVersion,
@@ -84,7 +84,7 @@ func (sc *governanceConsensusUpgradeImpl) Clone() scenario.Scenario {
 }
 
 func (sc *governanceConsensusUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -475,6 +475,6 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Check that runtime still works after the upgrade.
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
-	return sc.RuntimeImpl.Run(childEnv)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	return sc.Scenario.Run(childEnv)
 }

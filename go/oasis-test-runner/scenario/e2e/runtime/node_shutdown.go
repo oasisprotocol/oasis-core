@@ -21,12 +21,12 @@ import (
 var NodeShutdown scenario.Scenario = newNodeShutdownImpl()
 
 type nodeShutdownImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"node-shutdown",
 			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
 		),
@@ -36,12 +36,12 @@ func newNodeShutdownImpl() scenario.Scenario {
 
 func (sc *nodeShutdownImpl) Clone() scenario.Scenario {
 	return &nodeShutdownImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

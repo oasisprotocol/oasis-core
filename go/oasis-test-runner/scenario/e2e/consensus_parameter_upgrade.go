@@ -215,7 +215,7 @@ var ChangeParametersMinCommissionRate scenario.Scenario = newConsensusParameterU
 )
 
 type consensusParameterUpgradeImpl struct {
-	E2E
+	Scenario
 
 	parameters     *api.ChangeParametersProposal
 	upgradeChecker upgradeChecker
@@ -229,7 +229,7 @@ type consensusParameterUpgradeImpl struct {
 
 func newConsensusParameterUpgradeImpl(name string, parameters *api.ChangeParametersProposal, upgradeChecker upgradeChecker) scenario.Scenario {
 	sc := &consensusParameterUpgradeImpl{
-		E2E:            *NewE2E(name),
+		Scenario:       *NewScenario(name),
 		ctx:            context.Background(),
 		parameters:     parameters,
 		upgradeChecker: upgradeChecker,
@@ -239,7 +239,7 @@ func newConsensusParameterUpgradeImpl(name string, parameters *api.ChangeParamet
 
 func (sc *consensusParameterUpgradeImpl) Clone() scenario.Scenario {
 	return &consensusParameterUpgradeImpl{
-		E2E:            sc.E2E.Clone(),
+		Scenario:       sc.Scenario.Clone(),
 		parameters:     sc.parameters,
 		upgradeChecker: sc.upgradeChecker,
 		currentEpoch:   sc.currentEpoch,
@@ -249,7 +249,7 @@ func (sc *consensusParameterUpgradeImpl) Clone() scenario.Scenario {
 }
 
 func (sc *consensusParameterUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

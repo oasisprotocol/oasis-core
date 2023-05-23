@@ -14,21 +14,21 @@ import (
 
 // Debond tests debonding records created in the genesis document.
 var Debond scenario.Scenario = &debondImpl{
-	E2E: *NewE2E("debond"),
+	Scenario: *NewScenario("debond"),
 }
 
 type debondImpl struct {
-	E2E
+	Scenario
 }
 
 func (s *debondImpl) Clone() scenario.Scenario {
 	return &debondImpl{
-		E2E: s.E2E.Clone(),
+		Scenario: s.Scenario.Clone(),
 	}
 }
 
 func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := s.E2E.Fixture()
+	f, err := s.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

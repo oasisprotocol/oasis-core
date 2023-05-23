@@ -51,12 +51,12 @@ import (
 var KeymanagerEphemeralKeys scenario.Scenario = newKmEphemeralKeysImpl()
 
 type kmEphemeralKeysImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func newKmEphemeralKeysImpl() scenario.Scenario {
 	return &kmEphemeralKeysImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"keymanager-ephemeral-keys",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -64,7 +64,7 @@ func newKmEphemeralKeysImpl() scenario.Scenario {
 }
 
 func (sc *kmEphemeralKeysImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (sc *kmEphemeralKeysImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *kmEphemeralKeysImpl) Clone() scenario.Scenario {
 	return &kmEphemeralKeysImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
@@ -89,7 +89,7 @@ func (sc *kmEphemeralKeysImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Start the network, but no need to start the client. Just ensure it
 	// is synced.
 	ctx := context.Background()
-	if err := sc.RuntimeImpl.StartNetworkAndWaitForClientSync(ctx); err != nil {
+	if err := sc.Scenario.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}
 

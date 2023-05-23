@@ -18,12 +18,12 @@ import (
 var KeymanagerReplicate scenario.Scenario = newKmReplicateImpl()
 
 type kmReplicateImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func newKmReplicateImpl() scenario.Scenario {
 	return &kmReplicateImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"keymanager-replication",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -32,12 +32,12 @@ func newKmReplicateImpl() scenario.Scenario {
 
 func (sc *kmReplicateImpl) Clone() scenario.Scenario {
 	return &kmReplicateImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

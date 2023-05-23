@@ -19,12 +19,12 @@ import (
 var StorageSync scenario.Scenario = newStorageSyncImpl()
 
 type storageSyncImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func newStorageSyncImpl() scenario.Scenario {
 	return &storageSyncImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"storage-sync",
 			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
 		),
@@ -33,12 +33,12 @@ func newStorageSyncImpl() scenario.Scenario {
 
 func (sc *storageSyncImpl) Clone() scenario.Scenario {
 	return &storageSyncImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

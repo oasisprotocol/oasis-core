@@ -152,7 +152,7 @@ var (
 )
 
 type nodeUpgradeImpl struct {
-	E2E
+	Scenario
 
 	validator  *oasis.Validator
 	controller *oasis.Controller
@@ -217,7 +217,7 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 
 func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeChecker) scenario.Scenario {
 	sc := &nodeUpgradeImpl{
-		E2E:            *NewE2E("node-upgrade-" + string(handlerName)),
+		Scenario:       *NewScenario("node-upgrade-" + string(handlerName)),
 		ctx:            context.Background(),
 		handlerName:    handlerName,
 		upgradeChecker: upgradeChecker,
@@ -227,7 +227,7 @@ func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeC
 
 func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeImpl{
-		E2E:            sc.E2E.Clone(),
+		Scenario:       sc.Scenario.Clone(),
 		ctx:            context.Background(),
 		handlerName:    sc.handlerName,
 		upgradeChecker: sc.upgradeChecker,
@@ -235,7 +235,7 @@ func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 }
 
 func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

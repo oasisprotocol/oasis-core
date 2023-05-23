@@ -24,14 +24,14 @@ import (
 var KeymanagerUpgrade scenario.Scenario = newKmUpgradeImpl()
 
 type kmUpgradeImpl struct {
-	RuntimeImpl
+	Scenario
 
 	nonce uint64
 }
 
 func newKmUpgradeImpl() scenario.Scenario {
 	return &kmUpgradeImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"keymanager-upgrade",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -39,7 +39,7 @@ func newKmUpgradeImpl() scenario.Scenario {
 }
 
 func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *kmUpgradeImpl) Clone() scenario.Scenario {
 	return &kmUpgradeImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
@@ -312,7 +312,7 @@ OUTER:
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}
