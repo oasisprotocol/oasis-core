@@ -105,7 +105,7 @@ clean:
 	generate $(go-binaries) $(go-plugins) build \
 	$(test-helpers) build-helpers \
 	$(test-vectors-targets) \
-	fmt lint \
+	fmt lint lint-mod-tidy \
 	$(test-targets) test force-test \
 	clean all
 
