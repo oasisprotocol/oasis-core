@@ -12,12 +12,12 @@ import (
 var KeymanagerRestart scenario.Scenario = newKmRestartImpl()
 
 type kmRestartImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func newKmRestartImpl() scenario.Scenario {
 	return &kmRestartImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"keymanager-restart",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -25,7 +25,7 @@ func newKmRestartImpl() scenario.Scenario {
 }
 
 func (sc *kmRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (sc *kmRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *kmRestartImpl) Clone() scenario.Scenario {
 	return &kmRestartImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
@@ -75,7 +75,7 @@ func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
 	// Run the second client on a different key so that it will require
 	// a second trip to the keymanager.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ var (
 const haltEpoch = 10
 
 type haltRestoreImpl struct {
-	RuntimeImpl
+	Scenario
 
 	suspendRuntime bool
 	haltEpoch      int
@@ -39,7 +39,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 		haltEpoch += 5
 	}
 	return &haltRestoreImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			name,
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
@@ -50,14 +50,14 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 
 func (sc *haltRestoreImpl) Clone() scenario.Scenario {
 	return &haltRestoreImpl{
-		RuntimeImpl:    *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario:       *sc.Scenario.Clone().(*Scenario),
 		suspendRuntime: sc.suspendRuntime,
 		haltEpoch:      sc.haltEpoch,
 	}
 }
 
 func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {

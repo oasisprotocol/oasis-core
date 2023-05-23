@@ -11,15 +11,15 @@ import (
 
 // MultipleSeeds is the scenario where multiple seed nodes are used.
 var MultipleSeeds scenario.Scenario = &multipleSeeds{
-	E2E: *NewE2E("multiple-seeds"),
+	Scenario: *NewScenario("multiple-seeds"),
 }
 
 type multipleSeeds struct {
-	E2E
+	Scenario
 }
 
 func (sc *multipleSeeds) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (sc *multipleSeeds) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *multipleSeeds) Clone() scenario.Scenario {
 	return &multipleSeeds{
-		E2E: sc.E2E.Clone(),
+		Scenario: sc.Scenario.Clone(),
 	}
 }
 

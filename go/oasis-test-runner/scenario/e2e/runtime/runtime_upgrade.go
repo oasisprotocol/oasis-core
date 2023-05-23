@@ -22,7 +22,7 @@ import (
 var RuntimeUpgrade scenario.Scenario = newRuntimeUpgradeImpl()
 
 type runtimeUpgradeImpl struct {
-	RuntimeImpl
+	Scenario
 
 	nonce uint64
 
@@ -31,7 +31,7 @@ type runtimeUpgradeImpl struct {
 
 func newRuntimeUpgradeImpl() scenario.Scenario {
 	return &runtimeUpgradeImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"runtime-upgrade",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -39,7 +39,7 @@ func newRuntimeUpgradeImpl() scenario.Scenario {
 }
 
 func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *runtimeUpgradeImpl) Clone() scenario.Scenario {
 	return &runtimeUpgradeImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
@@ -256,7 +256,7 @@ func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

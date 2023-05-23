@@ -40,7 +40,7 @@ var (
 )
 
 type dumpRestoreImpl struct {
-	RuntimeImpl
+	Scenario
 
 	mapGenesisDocumentFn func(*genesis.Document)
 }
@@ -52,7 +52,7 @@ func newDumpRestoreImpl(
 	// Use -nomsg variant as this test also compares with the database dump which cannot
 	// reconstruct the emitted messages as those are not available in the state dump alone.
 	sc := &dumpRestoreImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			name,
 			NewKVTestClient().WithScenario(InsertKeyValueScenario),
 		),
@@ -63,13 +63,13 @@ func newDumpRestoreImpl(
 
 func (sc *dumpRestoreImpl) Clone() scenario.Scenario {
 	return &dumpRestoreImpl{
-		RuntimeImpl:          *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario:             *sc.Scenario.Clone().(*Scenario),
 		mapGenesisDocumentFn: sc.mapGenesisDocumentFn,
 	}
 }
 
 func (sc *dumpRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +189,6 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
-	return sc.RuntimeImpl.Run(childEnv)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	return sc.Scenario.Run(childEnv)
 }

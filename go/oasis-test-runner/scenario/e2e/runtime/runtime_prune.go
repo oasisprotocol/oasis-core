@@ -26,23 +26,23 @@ const (
 )
 
 type runtimePruneImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func newRuntimePruneImpl() scenario.Scenario {
 	return &runtimePruneImpl{
-		RuntimeImpl: *NewRuntimeImpl("runtime-prune", nil),
+		Scenario: *NewScenario("runtime-prune", nil),
 	}
 }
 
 func (sc *runtimePruneImpl) Clone() scenario.Scenario {
 	return &runtimePruneImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

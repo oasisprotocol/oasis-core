@@ -416,8 +416,8 @@ func (sc *TrustRootImpl) startClientAndComputeWorkers(ctx context.Context, child
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueScenario)
-	if err := sc.RuntimeImpl.Run(childEnv); err != nil {
+	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueScenario)
+	if err := sc.Scenario.Run(childEnv); err != nil {
 		return err
 	}
 	return nil

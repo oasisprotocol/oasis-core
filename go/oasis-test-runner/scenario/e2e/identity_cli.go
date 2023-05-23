@@ -14,19 +14,19 @@ import (
 
 // IdentityCLI is the identity CLI scenario.
 var IdentityCLI scenario.Scenario = &identityCLIImpl{
-	E2E: *NewE2E("identity-cli"),
+	Scenario: *NewScenario("identity-cli"),
 }
 
 type identityCLIImpl struct {
-	E2E
+	Scenario
 
 	dataDir string
 }
 
 func (sc *identityCLIImpl) Clone() scenario.Scenario {
 	return &identityCLIImpl{
-		E2E:     sc.E2E.Clone(),
-		dataDir: sc.dataDir,
+		Scenario: sc.Scenario.Clone(),
+		dataDir:  sc.dataDir,
 	}
 }
 

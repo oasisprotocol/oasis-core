@@ -29,21 +29,21 @@ const (
 // GenesisFile is the scenario for testing the correctness of marshalled genesis
 // documents.
 var GenesisFile scenario.Scenario = &genesisFileImpl{
-	E2E: *NewE2E("genesis-file"),
+	Scenario: *NewScenario("genesis-file"),
 }
 
 type genesisFileImpl struct {
-	E2E
+	Scenario
 }
 
 func (s *genesisFileImpl) Clone() scenario.Scenario {
 	return &genesisFileImpl{
-		E2E: s.E2E.Clone(),
+		Scenario: s.Scenario.Clone(),
 	}
 }
 
 func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := s.E2E.Fixture()
+	f, err := s.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

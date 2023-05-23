@@ -16,7 +16,7 @@ const byzantineBeaconIdentitySeed = "ekiden byzantine node worker"
 var (
 	// ByzantineVRFBeaconHonest is the honest byzantine VRF beacon scenario.
 	ByzantineVRFBeaconHonest scenario.Scenario = &byzantineVRFBeaconImpl{
-		E2E: *NewE2E("byzantine/beacon-vrf-honest"),
+		Scenario: *NewScenario("byzantine/beacon-vrf-honest"),
 		extraArgs: []oasis.Argument{
 			{Name: byzantine.CfgVRFBeaconMode, Values: []string{byzantine.ModeVRFBeaconHonest.String()}},
 		},
@@ -25,7 +25,7 @@ var (
 
 	// ByzantineVRFBeaconEarly is the early-proof byzantine beacon scenario.
 	ByzantineVRFBeaconEarly scenario.Scenario = &byzantineVRFBeaconImpl{
-		E2E: *NewE2E("byzantine/beacon-vrf-early"),
+		Scenario: *NewScenario("byzantine/beacon-vrf-early"),
 		extraArgs: []oasis.Argument{
 			{Name: byzantine.CfgVRFBeaconMode, Values: []string{byzantine.ModeVRFBeaconEarly.String()}},
 		},
@@ -34,7 +34,7 @@ var (
 
 	// ByzantineVRFBeaconMissing is the missing-proof byzantine beacon scenario.
 	ByzantineVRFBeaconMissing scenario.Scenario = &byzantineVRFBeaconImpl{
-		E2E: *NewE2E("byzantine/beacon-vrf-missing"),
+		Scenario: *NewScenario("byzantine/beacon-vrf-missing"),
 		extraArgs: []oasis.Argument{
 			{Name: byzantine.CfgVRFBeaconMode, Values: []string{byzantine.ModeVRFBeaconMissing.String()}},
 		},
@@ -43,7 +43,7 @@ var (
 )
 
 type byzantineVRFBeaconImpl struct {
-	E2E
+	Scenario
 
 	extraArgs    []oasis.Argument
 	identitySeed string
@@ -51,14 +51,14 @@ type byzantineVRFBeaconImpl struct {
 
 func (sc *byzantineVRFBeaconImpl) Clone() scenario.Scenario {
 	return &byzantineVRFBeaconImpl{
-		E2E:          sc.E2E.Clone(),
+		Scenario:     sc.Scenario.Clone(),
 		extraArgs:    sc.extraArgs,
 		identitySeed: sc.identitySeed,
 	}
 }
 
 func (sc *byzantineVRFBeaconImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

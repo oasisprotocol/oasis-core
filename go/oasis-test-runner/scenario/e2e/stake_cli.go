@@ -74,7 +74,7 @@ var (
 
 	// StakeCLI is the staking scenario.
 	StakeCLI scenario.Scenario = &stakeCLIImpl{
-		E2E: *NewE2E("stake-cli"),
+		Scenario: *NewScenario("stake-cli"),
 	}
 
 	qZero = mustInitQuantity(0)
@@ -112,17 +112,17 @@ func contextWithTokenInfo() context.Context {
 }
 
 type stakeCLIImpl struct {
-	E2E
+	Scenario
 }
 
 func (sc *stakeCLIImpl) Clone() scenario.Scenario {
 	return &stakeCLIImpl{
-		E2E: sc.E2E.Clone(),
+		Scenario: sc.Scenario.Clone(),
 	}
 }
 
 func (sc *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

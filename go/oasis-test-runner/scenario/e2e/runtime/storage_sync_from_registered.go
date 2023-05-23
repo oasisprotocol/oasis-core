@@ -19,12 +19,12 @@ import (
 var StorageSyncFromRegistered scenario.Scenario = newStorageSyncFromRegisteredImpl()
 
 type storageSyncFromRegisteredImpl struct {
-	RuntimeImpl
+	Scenario
 }
 
 func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
-		RuntimeImpl: *NewRuntimeImpl(
+		Scenario: *NewScenario(
 			"storage-sync-registered",
 			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
@@ -33,12 +33,12 @@ func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 
 func (sc *storageSyncFromRegisteredImpl) Clone() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 
 	// Run the client again.
 	sc.Logger.Info("starting a second client to check if runtime works with compute worker 1")
-	sc.RuntimeImpl.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

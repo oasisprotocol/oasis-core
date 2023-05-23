@@ -15,15 +15,15 @@ import (
 
 // SeedAPI is the scenario where seed node control and consensus APIs are tested.
 var SeedAPI scenario.Scenario = &seedAPI{
-	E2E: *NewE2E("seed-api"),
+	Scenario: *NewScenario("seed-api"),
 }
 
 type seedAPI struct {
-	E2E
+	Scenario
 }
 
 func (sc *seedAPI) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (sc *seedAPI) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *seedAPI) Clone() scenario.Scenario {
 	return &seedAPI{
-		E2E: sc.E2E.Clone(),
+		Scenario: sc.Scenario.Clone(),
 	}
 }
 

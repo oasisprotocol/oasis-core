@@ -18,18 +18,18 @@ import (
 
 // ArchiveAPI is the scenario where archive node control, consensus and runtime APIs are tested.
 var ArchiveAPI scenario.Scenario = &archiveAPI{
-	RuntimeImpl: *NewRuntimeImpl(
+	Scenario: *NewScenario(
 		"archive-api",
 		NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 	),
 }
 
 type archiveAPI struct {
-	RuntimeImpl
+	Scenario
 }
 
 func (sc *archiveAPI) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.RuntimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (sc *archiveAPI) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *archiveAPI) Clone() scenario.Scenario {
 	return &archiveAPI{
-		RuntimeImpl: *sc.RuntimeImpl.Clone().(*RuntimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
