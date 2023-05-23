@@ -3,7 +3,7 @@ package db
 import (
 	"sync"
 
-	dbm "github.com/tendermint/tm-db"
+	dbm "github.com/cometbft/cometbft-db"
 )
 
 // Closer manages closing of multiple Tendermint Core databases.

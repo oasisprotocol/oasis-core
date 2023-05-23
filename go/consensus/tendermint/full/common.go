@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	dbm "github.com/cometbft/cometbft-db"
 	tmcore "github.com/tendermint/tendermint/rpc/core"
 	tmcoretypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
@@ -13,7 +14,6 @@ import (
 	tmstate "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/store"
 	tmtypes "github.com/tendermint/tendermint/types"
-	tmdb "github.com/tendermint/tm-db"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -86,7 +86,7 @@ type commonNode struct {
 	staking    stakingAPI.Backend
 
 	// These stores must be populated by the parent before the node is deemed ready.
-	blockStoreDB tmdb.DB
+	blockStoreDB dbm.DB
 	stateStore   state.Store
 	dbCloser     *db.Closer
 

@@ -4,8 +4,8 @@ package tests
 import (
 	"testing"
 
+	dbm "github.com/cometbft/cometbft-db"
 	"github.com/stretchr/testify/require"
-	dbm "github.com/tendermint/tm-db"
 )
 
 // TestTendermintDB tests the provided tendermint database.

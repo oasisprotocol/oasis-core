@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	dbm "github.com/cometbft/cometbft-db"
 	"github.com/prometheus/client_golang/prometheus"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -30,7 +31,6 @@ import (
 	tmstate "github.com/tendermint/tendermint/state"
 	tmstatesync "github.com/tendermint/tendermint/statesync"
 	tmtypes "github.com/tendermint/tendermint/types"
-	tmdb "github.com/tendermint/tm-db"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -677,7 +677,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	// HACK: Wrap the provider so we can extract the state database handle. This is required because
 	// Tendermint does not expose a way to access the state database and we need it to bypass some
 	// stupid things like pagination on the in-process "client".
-	wrapDbProvider := func(dbCtx *tmnode.DBContext) (tmdb.DB, error) {
+	wrapDbProvider := func(dbCtx *tmnode.DBContext) (dbm.DB, error) {
 		rawDB, derr := dbProvider(dbCtx)
 		if derr != nil {
 			return nil, derr

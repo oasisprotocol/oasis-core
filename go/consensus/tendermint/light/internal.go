@@ -7,12 +7,12 @@ import (
 	"reflect"
 	"time"
 
+	dbm "github.com/cometbft/cometbft-db"
 	tmlight "github.com/tendermint/tendermint/light"
 	tmlightprovider "github.com/tendermint/tendermint/light/provider"
 	tmlightdb "github.com/tendermint/tendermint/light/store/db"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
-	tmdb "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -125,7 +125,7 @@ func NewInternalClient(ctx context.Context, chainContext string, p2p rpc.P2P, cf
 		cfg.TrustOptions,
 		primary,   // Primary provider.
 		providers, // Witnesses.
-		tmlightdb.New(tmdb.NewMemDB(), ""),
+		tmlightdb.New(dbm.NewMemDB(), ""),
 		tmlight.MaxRetryAttempts(5), // TODO: Make this configurable.
 		tmlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
 		tmlight.DisableProviderRemoval(),

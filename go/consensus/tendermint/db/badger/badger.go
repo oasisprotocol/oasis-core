@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
+	dbm "github.com/cometbft/cometbft-db"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/options"
 	"github.com/tendermint/tendermint/node"
-	dbm "github.com/tendermint/tm-db"
 
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"

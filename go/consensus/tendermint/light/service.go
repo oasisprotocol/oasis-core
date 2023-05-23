@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"sync"
 
+	dbm "github.com/cometbft/cometbft-db"
 	tmlight "github.com/tendermint/tendermint/light"
 	tmlightprovider "github.com/tendermint/tendermint/light/provider"
 	tmlightstore "github.com/tendermint/tendermint/light/store"
 	tmlightdb "github.com/tendermint/tendermint/light/store/db"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmtypes "github.com/tendermint/tendermint/types"
-	tmdb "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -316,7 +316,7 @@ func New(ctx context.Context, dataDir string, genesis *genesisAPI.Document, c co
 	if err != nil {
 		return nil, err
 	}
-	store := tmlightdb.New(tmdb.NewPrefixDB(tdb, []byte{}), "")
+	store := tmlightdb.New(dbm.NewPrefixDB(tdb, []byte{}), "")
 
 	return &client{
 		ctx:       ctx,
