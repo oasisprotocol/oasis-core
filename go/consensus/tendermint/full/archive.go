@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	dbm "github.com/cometbft/cometbft-db"
 	"github.com/spf13/viper"
 	abcicli "github.com/tendermint/tendermint/abci/client"
 	tmconfig "github.com/tendermint/tendermint/config"
@@ -16,7 +17,6 @@ import (
 	tmcore "github.com/tendermint/tendermint/rpc/core"
 	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/store"
-	tdbm "github.com/tendermint/tm-db"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -200,7 +200,7 @@ func NewArchive(
 
 	// NOTE: DBContext uses a full tendermint config but the only thing that is actually used
 	// is the data dir field.
-	var stateDB tdbm.DB
+	var stateDB dbm.DB
 	stateDB, err = dbProvider(&tmnode.DBContext{ID: "state", Config: tmConfig})
 	if err != nil {
 		return nil, err

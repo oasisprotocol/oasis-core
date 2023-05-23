@@ -11,7 +11,7 @@ replace (
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
 	github.com/spf13/cast => github.com/oasisprotocol/cast v0.0.0-20220606122631-eba453e69641
 
-	github.com/tendermint/tendermint => github.com/oasisprotocol/tendermint v0.34.23-oasis2
+	github.com/tendermint/tendermint => github.com/oasisprotocol/cometbft v0.34.27-oasis1
 
 	// Required because of https://github.com/libp2p/go-libp2p-pubsub/issues/467.
 	github.com/whyrusleeping/timecache => github.com/oasisprotocol/timecache v0.0.0-20220102191729-558b1c931038
@@ -24,6 +24,7 @@ require (
 	github.com/a8m/envsubst v1.4.2
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cenkalti/backoff/v4 v4.2.0
+	github.com/cometbft/cometbft-db v0.7.0
 	github.com/dgraph-io/badger/v3 v3.2103.4
 	github.com/eapache/channels v1.1.0
 	github.com/fxamacker/cbor/v2 v2.4.0
@@ -55,7 +56,6 @@ require (
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.1
 	github.com/tendermint/tendermint v0.34.21
-	github.com/tendermint/tm-db v0.6.6
 	github.com/thepudds/fzgo v0.2.2
 	github.com/tyler-smith/go-bip39 v1.1.0
 	go.uber.org/multierr v1.10.0
@@ -71,11 +71,10 @@ require (
 )
 
 require (
-	github.com/DataDog/zstd v1.4.1 // indirect
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/btcsuite/btcd v0.22.1 // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.0.4 // indirect
@@ -84,16 +83,13 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
-	github.com/dgraph-io/badger/v2 v2.2007.2 // indirect
+	github.com/dgraph-io/badger/v2 v2.2007.4 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
-	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
-	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
-	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
