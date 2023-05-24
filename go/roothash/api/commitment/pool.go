@@ -449,6 +449,12 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 			return nil, ErrMajorityFailure
 		}
 
+		// If we already have the proposer commitment, we can try to resolve early based on majority
+		// vote. Otherwise we need to wait for the proposer commitment.
+		if proposerCommit == nil {
+			break
+		}
+
 		for _, ent := range votes {
 			if ent.tally >= minVotes {
 				// Majority agrees on a commit, result is determined regardless of additional
@@ -456,9 +462,6 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 				//
 				// Make sure that the majority commitment is the same as the proposer commitment. We
 				// must return the proposer commitment as that one contains additional data.
-				if proposerCommit == nil {
-					return nil, ErrNoProposerCommitment
-				}
 				if !proposerCommit.MostlyEqual(ent.commit) {
 					return nil, ErrBadProposerCommitment
 				}
@@ -503,7 +506,7 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 		}
 	}
 
-	if commits < required {
+	if commits < required || proposerCommit == nil {
 		return nil, ErrStillWaiting
 	}
 

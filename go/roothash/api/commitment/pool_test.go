@@ -743,14 +743,14 @@ func TestPoolTwoCommitments(t *testing.T) {
 }
 
 func TestPoolFailureIndicatingCommitment(t *testing.T) {
+	genesisTestHelpers.SetTestChainContext()
+
 	rt, sks, committee, nl := generateMockCommittee(t, nil)
 	sk1 := sks[0]
 	sk2 := sks[1]
 	sk3 := sks[2]
 
 	t.Run("FailureIndicating", func(t *testing.T) {
-		genesisTestHelpers.SetTestChainContext()
-
 		// Create a pool.
 		pool := Pool{
 			Runtime:   rt,
@@ -823,6 +823,73 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 
 		// Resolve discrepancy with commit from backup worker.
 		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec3, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should be enough executor commitments from backup workers and discrepancy
+		// resolution should succeed.
+		dc, err := pool.ProcessCommitments(false)
+		require.NoError(t, err, "ProcessCommitments")
+		require.Equal(t, true, pool.Discrepancy)
+		ddEc := dc.ToDDResult().(*ExecutorCommitment)
+		require.EqualValues(t, &ec1, ddEc, "DR should return the correct commitment")
+	})
+
+	t.Run("FailureIndicatingLateProposer", func(t *testing.T) {
+		// Create a pool.
+		pool := Pool{
+			Runtime:   rt,
+			Committee: committee,
+			Round:     0,
+		}
+
+		// Generate an executor commitment.
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		// Generate a valid commitment.
+		ec1 := ec
+		ec1.NodeID = sk1.Public()
+		err := ec1.Sign(sk1, rt.ID)
+		require.NoError(t, err, "ec1.Sign")
+
+		failedEc := ExecutorCommitment{
+			NodeID: sk2.Public(),
+			Header: ExecutorCommitmentHeader{
+				ComputeResultsHeader: ComputeResultsHeader{
+					Round:        ec.Header.Round,
+					PreviousHash: ec.Header.PreviousHash,
+				},
+				Failure: FailureUnknown,
+			},
+		}
+		err = failedEc.Sign(sk2, rt.ID)
+		require.NoError(t, err, "failedEc.Sign")
+
+		ec3 := ec
+		ec3.NodeID = sk3.Public()
+		err = ec3.Sign(sk3, rt.ID)
+		require.NoError(t, err, "ec3.Sign")
+
+		// First, submit the failure indicating commitment.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &failedEc, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// There should be a discrepancy (no stragglers allowed, failure indicated).
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrDiscrepancyDetected, err)
+		require.Equal(t, true, pool.Discrepancy)
+
+		// Then submit the backup worker commitment to resolve discrepancy.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec3, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+
+		// We should still be waiting for the proposer commitment.
+		_, err = pool.ProcessCommitments(false)
+		require.Error(t, err, "ProcessCommitments")
+		require.Equal(t, ErrStillWaiting, err, "ProcessCommitments")
+
+		// Only at the end submit the proposer commitment.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec1, nil)
 		require.NoError(t, err, "AddExecutorCommitment")
 
 		// There should be enough executor commitments from backup workers and discrepancy
