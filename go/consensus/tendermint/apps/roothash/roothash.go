@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/api"
@@ -38,6 +39,8 @@ var _ tmapi.Application = (*rootHashApplication)(nil)
 type rootHashApplication struct {
 	state tmapi.ApplicationState
 	md    tmapi.MessageDispatcher
+
+	ecNotifier *pubsub.Broker
 }
 
 func (app *rootHashApplication) Name() string {
@@ -818,6 +821,8 @@ func (app *rootHashApplication) tryFinalizeBlock(
 }
 
 // New constructs a new roothash application instance.
-func New() tmapi.Application {
-	return &rootHashApplication{}
+func New(ecNotifier *pubsub.Broker) tmapi.Application {
+	return &rootHashApplication{
+		ecNotifier: ecNotifier,
+	}
 }

@@ -24,6 +24,7 @@ import (
 	app "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
@@ -78,6 +79,8 @@ type serviceClient struct {
 	trackedRuntime map[common.Namespace]*trackedRuntime
 
 	pruneHandler *pruneHandler
+
+	ecNotifier *pubsub.Broker
 }
 
 // Implements api.Backend.
@@ -232,6 +235,15 @@ func (sc *serviceClient) WatchEvents(ctx context.Context, id common.Namespace) (
 		sub.Close()
 		return nil, nil, err
 	}
+
+	return ch, sub, nil
+}
+
+// Implements api.Backend.
+func (sc *serviceClient) WatchExecutorCommitments(ctx context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
+	sub := sc.ecNotifier.Subscribe()
+	ch := make(chan *commitment.ExecutorCommitment)
+	sub.Unwrap(ch)
 
 	return ch, sub, nil
 }
@@ -851,8 +863,11 @@ func New(
 	dataDir string,
 	backend tmapi.Backend,
 ) (ServiceClient, error) {
+	// Create the general executor commitment notifier.
+	ecNotifier := pubsub.NewBroker(false)
+
 	// Initialize and register the tendermint service component.
-	a := app.New()
+	a := app.New(ecNotifier)
 	if err := backend.RegisterApplication(a); err != nil {
 		return nil, err
 	}
@@ -876,6 +891,7 @@ func New(
 		cmdCh:            make(chan interface{}, runtimeRegistry.MaxRuntimeCount),
 		trackedRuntime:   make(map[common.Namespace]*trackedRuntime),
 		pruneHandler:     ph,
+		ecNotifier:       ecNotifier,
 	}, nil
 }
 
