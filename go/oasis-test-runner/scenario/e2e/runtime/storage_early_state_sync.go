@@ -23,26 +23,26 @@ import (
 var StorageEarlyStateSync scenario.Scenario = newStorageEarlyStateSyncImpl()
 
 type storageEarlyStateSyncImpl struct {
-	runtimeImpl
+	Scenario
 
 	epoch beacon.EpochTime
 }
 
 func newStorageEarlyStateSyncImpl() scenario.Scenario {
 	return &storageEarlyStateSyncImpl{
-		runtimeImpl: *newRuntimeImpl("storage-early-state-sync", nil),
+		Scenario: *NewScenario("storage-early-state-sync", nil),
 	}
 }
 
 func (sc *storageEarlyStateSyncImpl) Clone() scenario.Scenario {
 	return &storageEarlyStateSyncImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
-		epoch:       sc.epoch,
+		Scenario: *sc.Scenario.Clone().(*Scenario),
+		epoch:    sc.epoch,
 	}
 }
 
 func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

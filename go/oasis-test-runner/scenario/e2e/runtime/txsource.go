@@ -53,7 +53,7 @@ const (
 
 // TxSourceMultiShort uses multiple workloads for a short time.
 var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
-	runtimeImpl: *newRuntimeImpl("txsource-multi-short", nil),
+	Scenario: *NewScenario("txsource-multi-short", nil),
 	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -80,7 +80,7 @@ var TxSourceMultiShort scenario.Scenario = &txSourceImpl{
 
 // TxSourceMultiShortSGX uses multiple workloads for a short time.
 var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
-	runtimeImpl: *newRuntimeImpl("txsource-multi-short-sgx", nil),
+	Scenario: *NewScenario("txsource-multi-short-sgx", nil),
 	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -109,7 +109,7 @@ var TxSourceMultiShortSGX scenario.Scenario = &txSourceImpl{
 
 // TxSourceMulti uses multiple workloads.
 var TxSourceMulti scenario.Scenario = &txSourceImpl{
-	runtimeImpl: *newRuntimeImpl("txsource-multi", nil),
+	Scenario: *NewScenario("txsource-multi", nil),
 	clientWorkloads: []string{
 		workload.NameCommission,
 		workload.NameDelegation,
@@ -153,7 +153,7 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 }
 
 type txSourceImpl struct { // nolint: maligned
-	runtimeImpl
+	Scenario
 
 	clientWorkloads  []string
 	allNodeWorkloads []string
@@ -221,7 +221,7 @@ func (sc *txSourceImpl) generateConsensusFixture(f *oasis.ConsensusFixture, forc
 }
 
 func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -847,7 +847,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 
 func (sc *txSourceImpl) Clone() scenario.Scenario {
 	return &txSourceImpl{
-		runtimeImpl:                       *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario:                          *sc.Scenario.Clone().(*Scenario),
 		clientWorkloads:                   sc.clientWorkloads,
 		allNodeWorkloads:                  sc.allNodeWorkloads,
 		timeLimit:                         sc.timeLimit,

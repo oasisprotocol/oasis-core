@@ -19,15 +19,11 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
-const (
-	cfgRuntimeSourceDir = "runtime.source_dir"
-	cfgRuntimeTargetDir = "runtime.target_dir"
-
-	trustRootRuntime = "simple-keyvalue"
-)
-
 // TrustRoot is the consensus trust root verification scenario.
-var TrustRoot scenario.Scenario = newTrustRootImpl("simple", BasicKVTestClient)
+var TrustRoot scenario.Scenario = NewTrustRootImpl(
+	"simple",
+	NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+)
 
 type trustRoot struct {
 	height       string
@@ -36,30 +32,27 @@ type trustRoot struct {
 	chainContext string
 }
 
-type trustRootImpl struct {
-	runtimeImpl
+type TrustRootImpl struct {
+	Scenario
 }
 
-func newTrustRootImpl(name string, testClient TestClient) *trustRootImpl {
+func NewTrustRootImpl(name string, testClient TestClient) *TrustRootImpl {
 	fullName := "trust-root/" + name
-	sc := &trustRootImpl{
-		runtimeImpl: *newRuntimeImpl(fullName, testClient),
+	sc := &TrustRootImpl{
+		Scenario: *NewScenario(fullName, testClient),
 	}
-
-	sc.Flags.String(cfgRuntimeSourceDir, "", "path to the runtime source base dir")
-	sc.Flags.String(cfgRuntimeTargetDir, "", "path to the Cargo target dir (should be a parent of the runtime binary dir)")
 
 	return sc
 }
 
-func (sc *trustRootImpl) Clone() scenario.Scenario {
-	return &trustRootImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+func (sc *TrustRootImpl) Clone() scenario.Scenario {
+	return &TrustRootImpl{
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
-func (sc *trustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+func (sc *TrustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +75,7 @@ func (sc *trustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *trustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.Env, root trustRoot) (func() error, error) {
+func (sc *TrustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.Env, root trustRoot) (func() error, error) {
 	sc.Logger.Info("building runtime with embedded trust root",
 		"height", root.height,
 		"hash", root.hash,
@@ -99,20 +92,20 @@ func (sc *trustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.E
 
 	// Build a new runtime with the given trust root embedded.
 	teeHardware, _ := sc.getTEEHardware()
-	builder := rust.NewBuilder(childEnv, teeHardware, trustRootRuntime, filepath.Join(buildDir, trustRootRuntime), targetDir)
+	builder := rust.NewBuilder(childEnv, teeHardware, runtimeBinary, filepath.Join(buildDir, runtimeBinary), targetDir)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT", root.height)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HASH", root.hash)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID", root.runtimeID)
 	builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_CHAIN_CONTEXT", root.chainContext)
 	if err := builder.Build(); err != nil {
-		return nil, fmt.Errorf("failed to build runtime '%s' with trust root: %w", trustRootRuntime, err)
+		return nil, fmt.Errorf("failed to build runtime '%s' with trust root: %w", runtimeBinary, err)
 	}
 
 	rebuild := func() error {
 		sc.Logger.Info("rebuilding runtime without the embedded trust root")
 		builder.ResetEnv()
 		if buildErr := builder.Build(); buildErr != nil {
-			return fmt.Errorf("failed to build plain runtime '%s': %w", trustRootRuntime, buildErr)
+			return fmt.Errorf("failed to build plain runtime '%s': %w", runtimeBinary, buildErr)
 		}
 		return nil
 	}
@@ -120,7 +113,7 @@ func (sc *trustRootImpl) buildRuntimeBinary(ctx context.Context, childEnv *env.E
 	return rebuild, nil
 }
 
-func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env) error {
+func (sc *TrustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env) error {
 	// Nonce used for transactions (increase this by 1 after each transaction).
 	var nonce uint64
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
@@ -142,6 +135,23 @@ func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env
 	nonce++
 	if err = cli.Consensus.SubmitTx(kmTxPath); err != nil {
 		return fmt.Errorf("failed to register KM runtime: %w", err)
+	}
+
+	// Register a new compute runtime.
+	// Note that the bundles need to be refreshed before setting the key manager policy.
+	compRt := sc.Net.Runtimes()[1]
+	if err = compRt.RefreshRuntimeBundles(); err != nil {
+		return fmt.Errorf("failed to refresh runtime bundles: %w", err)
+	}
+	compRtDesc := compRt.ToRuntimeDescriptor()
+	compRtDesc.Deployments[0].ValidFrom = epoch + 2
+	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
+	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
+		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
+	}
+	nonce++
+	if err = cli.Consensus.SubmitTx(txPath); err != nil {
+		return fmt.Errorf("failed to register compute runtime: %w", err)
 	}
 
 	// Generate and update the new keymanager runtime's policy.
@@ -189,7 +199,6 @@ func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env
 		if err = cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
 			return err
 		}
-		nonce++
 		if err = cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
 			return fmt.Errorf("failed to update KM policy: %w", err)
 		}
@@ -203,30 +212,10 @@ func (sc *trustRootImpl) registerRuntimes(ctx context.Context, childEnv *env.Env
 		}
 	}
 
-	// Fetch current epoch.
-	epoch, err = sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
-	if err != nil {
-		return fmt.Errorf("failed to get current epoch: %w", err)
-	}
-
-	// Register a new compute runtime.
-	compRt := sc.Net.Runtimes()[1]
-	if err = compRt.RefreshRuntimeBundles(); err != nil {
-		return fmt.Errorf("failed to refresh runtime bundles: %w", err)
-	}
-	compRtDesc := compRt.ToRuntimeDescriptor()
-	compRtDesc.Deployments[0].ValidFrom = epoch + 2
-	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
-		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
-	}
-	if err = cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register compute runtime: %w", err)
-	}
 	return nil
 }
 
-func (sc *trustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Block, error) {
+func (sc *TrustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Block, error) {
 	sc.Logger.Info("waiting for a block")
 
 	blockCh, blockSub, err := sc.Net.Controller().Consensus.WatchBlocks(ctx)
@@ -247,7 +236,7 @@ func (sc *trustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Bloc
 	return blk, nil
 }
 
-func (sc *trustRootImpl) chainContext(ctx context.Context) (string, error) {
+func (sc *TrustRootImpl) chainContext(ctx context.Context) (string, error) {
 	sc.Logger.Info("fetching consensus chain context")
 
 	cc, err := sc.Net.Controller().Consensus.GetChainContext(ctx)
@@ -257,7 +246,7 @@ func (sc *trustRootImpl) chainContext(ctx context.Context) (string, error) {
 	return cc, nil
 }
 
-func (sc *trustRootImpl) Run(childEnv *env.Env) (err error) {
+func (sc *TrustRootImpl) Run(childEnv *env.Env) (err error) {
 	ctx := context.Background()
 
 	// Determine the required directories for building the runtime with an embedded trust root.

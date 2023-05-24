@@ -15,7 +15,7 @@ import (
 var HaltRestoreNonMock scenario.Scenario = newHaltRestoreNonMockImpl()
 
 type haltRestoreNonMockImpl struct {
-	runtimeImpl
+	Scenario
 
 	haltEpoch int
 }
@@ -23,9 +23,9 @@ type haltRestoreNonMockImpl struct {
 func newHaltRestoreNonMockImpl() scenario.Scenario {
 	name := "halt-restore-nonmock"
 	return &haltRestoreNonMockImpl{
-		runtimeImpl: *newRuntimeImpl(
+		Scenario: *NewScenario(
 			name,
-			NewLongTermTestClient().WithMode(ModePart1),
+			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 		haltEpoch: 8,
 	}
@@ -33,13 +33,13 @@ func newHaltRestoreNonMockImpl() scenario.Scenario {
 
 func (sc *haltRestoreNonMockImpl) Clone() scenario.Scenario {
 	return &haltRestoreNonMockImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
-		haltEpoch:   sc.haltEpoch,
+		Scenario:  *sc.Scenario.Clone().(*Scenario),
+		haltEpoch: sc.haltEpoch,
 	}
 }
 
 func (sc *haltRestoreNonMockImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (sc *haltRestoreNonMockImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -62,7 +62,7 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 	}
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -134,12 +134,11 @@ func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocy
 		return err
 	}
 
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
-	if err = sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
-	return sc.waitTestClientOnly()
+	return sc.WaitTestClientOnly()
 }

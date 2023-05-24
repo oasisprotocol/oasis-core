@@ -40,7 +40,7 @@ var (
 )
 
 type dumpRestoreImpl struct {
-	runtimeImpl
+	Scenario
 
 	mapGenesisDocumentFn func(*genesis.Document)
 }
@@ -52,9 +52,9 @@ func newDumpRestoreImpl(
 	// Use -nomsg variant as this test also compares with the database dump which cannot
 	// reconstruct the emitted messages as those are not available in the state dump alone.
 	sc := &dumpRestoreImpl{
-		runtimeImpl: *newRuntimeImpl(
+		Scenario: *NewScenario(
 			name,
-			NewLongTermTestClient().WithMode(ModePart1NoMsg),
+			NewKVTestClient().WithScenario(InsertKeyValueScenario),
 		),
 		mapGenesisDocumentFn: mapGenesisDocumentFn,
 	}
@@ -63,13 +63,13 @@ func newDumpRestoreImpl(
 
 func (sc *dumpRestoreImpl) Clone() scenario.Scenario {
 	return &dumpRestoreImpl{
-		runtimeImpl:          *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario:             *sc.Scenario.Clone().(*Scenario),
 		mapGenesisDocumentFn: sc.mapGenesisDocumentFn,
 	}
 }
 
 func (sc *dumpRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (sc *dumpRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -155,7 +155,7 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -189,7 +189,6 @@ func (sc *dumpRestoreImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed("second_seed")
-	return sc.runtimeImpl.Run(childEnv)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	return sc.Scenario.Run(childEnv)
 }

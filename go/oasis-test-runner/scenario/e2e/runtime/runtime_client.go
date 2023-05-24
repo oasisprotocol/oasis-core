@@ -9,8 +9,9 @@ import (
 // TestClient is the interface exposed to implement a runtime test
 // client that executes a pre-determined workload against a given runtime.
 type TestClient interface {
-	Init(*runtimeImpl) error
+	Init(*Scenario) error
 	Start(context.Context, *env.Env) error
+	Stop() error
 	Wait() error
 
 	// Clone returns a clone of a RuntimeTestClient instance, in a state

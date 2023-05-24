@@ -33,21 +33,21 @@ const (
 // GenesisFile is the scenario for testing the correctness of marshalled genesis
 // documents.
 var GenesisFile scenario.Scenario = &genesisFileImpl{
-	E2E: *NewE2E("genesis-file"),
+	Scenario: *NewScenario("genesis-file"),
 }
 
 type genesisFileImpl struct {
-	E2E
+	Scenario
 }
 
 func (s *genesisFileImpl) Clone() scenario.Scenario {
 	return &genesisFileImpl{
-		E2E: s.E2E.Clone(),
+		Scenario: s.Scenario.Clone(),
 	}
 }
 
 func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := s.E2E.Fixture()
+	f, err := s.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 	if genesisNeedsUpgrade {
 		// When upgrade is needed, run fix-genesis.
 		latestMainnetGenesisFixed = filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
-		if err = s.runFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
+		if err = s.RunFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
 			return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
 				"file at '%s': %w", genesisURL, err)
 		}
@@ -187,7 +187,8 @@ func (s *genesisFileImpl) runGenesisCheckCmd(childEnv *env.Env, genesisFilePath 
 	return out.String(), nil
 }
 
-func (s *genesisFileImpl) runFixGenesisCmd(childEnv *env.Env, genesisFilePath, fixedGenesisFilePath string) error {
+// RunFixGenesisCmd runs the 'fix-genesis' command.
+func (s *Scenario) RunFixGenesisCmd(childEnv *env.Env, genesisFilePath, fixedGenesisFilePath string) error {
 	args := []string{
 		"debug", "fix-genesis",
 		"--genesis.file", genesisFilePath,

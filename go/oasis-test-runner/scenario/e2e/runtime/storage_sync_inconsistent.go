@@ -20,30 +20,30 @@ const checkpointInterval = 15
 var StorageSyncInconsistent scenario.Scenario = newStorageSyncInconsistentImpl()
 
 type storageSyncInconsistentImpl struct {
-	runtimeImpl
+	Scenario
 	messyStorage int
 	runtimeID    common.Namespace
 }
 
 func newStorageSyncInconsistentImpl() scenario.Scenario {
 	sc := &storageSyncInconsistentImpl{
-		runtimeImpl: *newRuntimeImpl(
+		Scenario: *NewScenario(
 			"storage-sync-inconsistent",
-			NewKeyValueTestClient().WithRepeat(),
+			NewKVTestClient().WithScenario(SimpleKeyValueScenarioRepeated),
 		),
 	}
-	sc.runtimeImpl.debugNoRandomInitialEpoch = true // I give up.
+	sc.Scenario.debugNoRandomInitialEpoch = true // I give up.
 	return sc
 }
 
 func (sc *storageSyncInconsistentImpl) Clone() scenario.Scenario {
 	return &storageSyncInconsistentImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *storageSyncInconsistentImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	sc.runtimeID = sc.Net.Runtimes()[1].ID()
 	ctx := context.Background()
 
-	if err := sc.runtimeImpl.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.Scenario.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -183,8 +183,8 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 	// Wait for the client to exit. Odd error handling here; if killing succeeded, then everything
 	// must have been fine up to this point and we can ignore the exit error from the kill.
 	sc.Logger.Info("scenario done, killing client")
-	testClient := sc.testClient.(*KeyValueTestClient)
-	if err = testClient.Kill(); err != nil {
+	testClient := sc.testClient.(*KVTestClient)
+	if err = testClient.Stop(); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil
 		}

@@ -21,25 +21,27 @@ import (
 )
 
 // KeymanagerUpgrade is the keymanager upgrade scenario.
-var KeymanagerUpgrade scenario.Scenario = newKmUpgradeImpl()
+var KeymanagerUpgrade scenario.Scenario = NewKmUpgradeImpl()
 
-type kmUpgradeImpl struct {
-	runtimeImpl
+// KmUpgradeImpl is a base class for keymanager upgrade end-to-end tests.
+type KmUpgradeImpl struct {
+	Scenario
 
 	nonce uint64
 }
 
-func newKmUpgradeImpl() scenario.Scenario {
-	return &kmUpgradeImpl{
-		runtimeImpl: *newRuntimeImpl(
+// NewKmUpgradeImpl creates a new base scenario for oasis-node keymanager upgrade end-to-end tests.
+func NewKmUpgradeImpl() scenario.Scenario {
+	return &KmUpgradeImpl{
+		Scenario: *NewScenario(
 			"keymanager-upgrade",
-			NewKeyValueEncTestClient().WithKey("key1").WithSeed("first_seed"),
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }
 
-func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+func (sc *KmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +78,13 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *kmUpgradeImpl) Clone() scenario.Scenario {
-	return &kmUpgradeImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+func (sc *KmUpgradeImpl) Clone() scenario.Scenario {
+	return &KmUpgradeImpl{
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
-func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
+func (sc *KmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
@@ -173,7 +175,7 @@ func (sc *kmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *kmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.Keymanager, rt *oasis.Runtime) error {
+func (sc *KmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.Keymanager, rt *oasis.Runtime) error {
 	ctrl, err := oasis.NewController(km.SocketPath())
 	if err != nil {
 		return err
@@ -223,29 +225,36 @@ func (sc *kmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.
 	return nil
 }
 
-func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
+func (sc *KmUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 	sc.Logger.Info("waiting for client to exit")
 	// Wait for the client to exit.
-	if err := sc.waitTestClientOnly(); err != nil {
+	if err := sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
+	// Fetch nonce.
+	nonce, err := sc.GetTestEntityNonce(ctx)
+	if err != nil {
+		return err
+	}
+	sc.nonce = nonce
+
 	// Generate and update a policy that will allow replication for the new
 	// keymanager.
-	if err := sc.applyUpgradePolicy(childEnv); err != nil {
+	if err = sc.applyUpgradePolicy(childEnv); err != nil {
 		return fmt.Errorf("updating policies: %w", err)
 	}
 
 	// Start the new keymanager.
 	sc.Logger.Info("starting new keymanager")
 	newKm := sc.Net.Keymanagers()[1]
-	if err := newKm.Start(); err != nil {
+	if err = newKm.Start(); err != nil {
 		return fmt.Errorf("starting new key-manager: %w", err)
 	}
 
@@ -255,9 +264,17 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
 
+	// Fetch old deployment.
+	oldRtDsc, err := sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
+		Height: consensus.HeightLatest,
+		ID:     sc.Net.Runtimes()[2].ID(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get runtime descriptor: %w", err)
+	}
+
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating keymanager runtime descriptor")
-	oldRtDsc := sc.Net.Runtimes()[0].ToRuntimeDescriptor()
 	newRt := sc.Net.Runtimes()[2]
 	rtDsc := newRt.ToRuntimeDescriptor()
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
@@ -312,8 +329,7 @@ OUTER:
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	newTestClient := sc.testClient.Clone().(*KeyValueEncTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithKey("key2").WithSeed("second_seed")
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

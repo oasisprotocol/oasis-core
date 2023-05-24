@@ -18,18 +18,18 @@ import (
 
 // ArchiveAPI is the scenario where archive node control, consensus and runtime APIs are tested.
 var ArchiveAPI scenario.Scenario = &archiveAPI{
-	runtimeImpl: *newRuntimeImpl(
+	Scenario: *NewScenario(
 		"archive-api",
-		NewLongTermTestClient().WithMode(ModePart1),
+		NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 	),
 }
 
 type archiveAPI struct {
-	runtimeImpl
+	Scenario
 }
 
 func (sc *archiveAPI) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (sc *archiveAPI) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *archiveAPI) Clone() scenario.Scenario {
 	return &archiveAPI{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
@@ -283,7 +283,7 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 
 func (sc *archiveAPI) Run(childEnv *env.Env) error {
 	ctx := context.Background()
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -299,7 +299,7 @@ func (sc *archiveAPI) Run(childEnv *env.Env) error {
 
 	// Wait for the client to exit.
 	sc.Logger.Info("waiting for test client to exit")
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 

@@ -19,13 +19,13 @@ import (
 var (
 	// GasFeesStaking is the staking gas fees scenario.
 	GasFeesStaking scenario.Scenario = &gasFeesImpl{
-		E2E: *NewE2E("gas-fees/staking"),
+		Scenario: *NewScenario("gas-fees/staking"),
 	}
 
 	// GasFeesStakingDumpRestore is the staking gas fees scenario with
 	// dump-restore.
 	GasFeesStakingDumpRestore scenario.Scenario = &gasFeesImpl{
-		E2E:         *NewE2E("gas-fees/staking-dump-restore"),
+		Scenario:    *NewScenario("gas-fees/staking-dump-restore"),
 		dumpRestore: true,
 	}
 
@@ -44,20 +44,20 @@ var (
 )
 
 type gasFeesImpl struct {
-	E2E
+	Scenario
 
 	dumpRestore bool
 }
 
 func (sc *gasFeesImpl) Clone() scenario.Scenario {
 	return &gasFeesImpl{
-		E2E:         sc.E2E.Clone(),
+		Scenario:    sc.Scenario.Clone(),
 		dumpRestore: sc.dumpRestore,
 	}
 }
 
 func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

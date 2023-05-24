@@ -3,6 +3,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,10 @@ import (
 
 	flag "github.com/spf13/pflag"
 
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -23,6 +27,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -30,11 +36,11 @@ const (
 	cfgNodeBinary = "node.binary"
 )
 
-// E2eParamsDummy is a dummy instance of E2E used to register global e2e flags.
-var E2eParamsDummy = NewE2E("")
+// ParamsDummyScenario is a dummy instance of E2E scenario used to register global E2E flags.
+var ParamsDummyScenario = NewScenario("")
 
-// E2E is a base scenario for oasis-node end-to-end tests.
-type E2E struct {
+// Scenario is a base scenario for oasis-node end-to-end tests.
+type Scenario struct {
 	Net    *oasis.Network
 	Flags  *env.ParameterFlagSet
 	Logger *logging.Logger
@@ -42,15 +48,15 @@ type E2E struct {
 	name string
 }
 
-// NewE2E creates a new base scenario for oasis-node end-to-end tests.
-func NewE2E(name string) *E2E {
+// NewScenario creates a new base scenario for oasis-node end-to-end tests.
+func NewScenario(name string) *Scenario {
 	// Empty scenario name is used for registering global parameters only.
 	fullName := "e2e"
 	if name != "" {
 		fullName += "/" + name
 	}
 
-	sc := &E2E{
+	sc := &Scenario{
 		name:   fullName,
 		Logger: logging.GetLogger("scenario/" + fullName),
 		Flags:  env.NewParameterFlagSet(fullName, flag.ContinueOnError),
@@ -61,8 +67,8 @@ func NewE2E(name string) *E2E {
 }
 
 // Clone implements scenario.Scenario.
-func (sc *E2E) Clone() E2E {
-	return E2E{
+func (sc *Scenario) Clone() Scenario {
+	return Scenario{
 		Net:    sc.Net,
 		Flags:  sc.Flags.Clone(),
 		Logger: sc.Logger,
@@ -71,22 +77,22 @@ func (sc *E2E) Clone() E2E {
 }
 
 // Name implements scenario.Scenario.
-func (sc *E2E) Name() string {
+func (sc *Scenario) Name() string {
 	return sc.name
 }
 
 // Parameters implements scenario.Scenario.
-func (sc *E2E) Parameters() *env.ParameterFlagSet {
+func (sc *Scenario) Parameters() *env.ParameterFlagSet {
 	return sc.Flags
 }
 
 // PreInit implements scenario.Scenario.
-func (sc *E2E) PreInit(childEnv *env.Env) error {
+func (sc *Scenario) PreInit(childEnv *env.Env) error {
 	return nil
 }
 
 // Fixture implements scenario.Scenario.
-func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
+func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
 
 	return &oasis.NetworkFixture{
@@ -114,14 +120,14 @@ func (sc *E2E) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 // Init implements scenario.Scenario.
-func (sc *E2E) Init(childEnv *env.Env, net *oasis.Network) error {
+func (sc *Scenario) Init(childEnv *env.Env, net *oasis.Network) error {
 	sc.Net = net
 	return nil
 }
 
 // GetExportedGenesisFiles gathers exported genesis files and ensures
 // all exported genesis files match.
-func (sc *E2E) GetExportedGenesisFiles(skipCompute bool) ([]string, error) {
+func (sc *Scenario) GetExportedGenesisFiles(skipCompute bool) ([]string, error) {
 	dumpGlob := "genesis-*.json"
 
 	// Gather all nodes.
@@ -183,6 +189,33 @@ func (sc *E2E) GetExportedGenesisFiles(skipCompute bool) ([]string, error) {
 	return files, nil
 }
 
+func (sc *Scenario) GetTestEntityNonce(ctx context.Context) (uint64, error) {
+	ent, _, err := entity.TestEntity()
+	if err != nil {
+		return 0, err
+	}
+	return sc.GetEntityNonce(ctx, ent)
+}
+
+func (sc *Scenario) GetEntityNonce(ctx context.Context, ent *entity.Entity) (uint64, error) {
+	addr := staking.NewAddress(ent.ID)
+	return sc.Net.ClientController().Consensus.GetSignerNonce(ctx, &consensus.GetSignerNonceRequest{
+		Height:         consensus.HeightLatest,
+		AccountAddress: addr,
+	})
+}
+
+func (sc *Scenario) GetEntityNonceByID(ctx context.Context, id signature.PublicKey) (uint64, error) {
+	ent, err := sc.Net.ClientController().Registry.GetEntity(ctx, &registry.IDQuery{
+		Height: consensus.HeightLatest,
+		ID:     id,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return sc.GetEntityNonce(ctx, ent)
+}
+
 // Flag for consensus state reset.
 const (
 	PreserveValidatorRuntimeStorage uint8 = iota
@@ -207,7 +240,7 @@ const (
 
 // ResetConsensusState removes all consensus state, preserving runtime storage and node-local
 // storage databases unless specified with flags otherwise.
-func (sc *E2E) ResetConsensusState(childEnv *env.Env, flags map[uint8]bool) error {
+func (sc *Scenario) ResetConsensusState(childEnv *env.Env, flags map[uint8]bool) error {
 	if flags == nil {
 		flags = map[uint8]bool{
 			PreserveComputeWorkerRuntimeStorage: true,
@@ -276,7 +309,7 @@ func (sc *E2E) ResetConsensusState(childEnv *env.Env, flags map[uint8]bool) erro
 }
 
 // DumpRestoreNetwork first dumps the current network state and then attempts to restore it.
-func (sc *E2E) DumpRestoreNetwork(
+func (sc *Scenario) DumpRestoreNetwork(
 	childEnv *env.Env,
 	fixture *oasis.NetworkFixture,
 	doDbDump bool,
@@ -377,7 +410,7 @@ func (sc *E2E) DumpRestoreNetwork(
 	return nil
 }
 
-func (sc *E2E) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, exportPath string) error {
+func (sc *Scenario) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, exportPath string) error {
 	// Load the existing export.
 	eFp, err := genesisFile.NewFileProvider(exportPath)
 	if err != nil {
@@ -434,7 +467,7 @@ func (sc *E2E) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, ex
 	return nil
 }
 
-func (sc *E2E) finishWithoutChild() error {
+func (sc *Scenario) finishWithoutChild() error {
 	var err error
 	select {
 	case err = <-sc.Net.Errors():
@@ -447,7 +480,7 @@ func (sc *E2E) finishWithoutChild() error {
 // RegisterScenarios registers all end-to-end scenarios.
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
-	cmd.RegisterScenarioParams(E2eParamsDummy.Name(), E2eParamsDummy.Parameters())
+	cmd.RegisterScenarioParams(ParamsDummyScenario.Name(), ParamsDummyScenario.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{

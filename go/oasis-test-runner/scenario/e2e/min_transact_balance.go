@@ -19,14 +19,14 @@ import (
 
 var (
 	MinTransactBalance scenario.Scenario = &minTransactBalanceImpl{
-		E2E: *NewE2E("min-transact-balance"),
+		Scenario: *NewScenario("min-transact-balance"),
 	}
 	a1Signer = memorySigner.NewTestSigner("e2e/min-transact-balance: a1")
 	a1Addr   = staking.NewAddress(a1Signer.Public())
 )
 
 type minTransactBalanceImpl struct {
-	E2E
+	Scenario
 }
 
 func (mtb *minTransactBalanceImpl) signAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
@@ -85,12 +85,12 @@ func (mtb *minTransactBalanceImpl) getAccountAndCheckNonce(ctx context.Context, 
 
 func (mtb *minTransactBalanceImpl) Clone() scenario.Scenario {
 	return &minTransactBalanceImpl{
-		E2E: mtb.E2E.Clone(),
+		Scenario: mtb.Scenario.Clone(),
 	}
 }
 
 func (mtb *minTransactBalanceImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := mtb.E2E.Fixture()
+	f, err := mtb.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
