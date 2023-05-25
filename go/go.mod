@@ -39,7 +39,7 @@ require (
 	github.com/powerman/rpc-codec v1.2.2
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.42.0
-	github.com/prometheus/procfs v0.8.0
+	github.com/prometheus/procfs v0.10.0
 	github.com/seccomp/libseccomp-golang v0.10.0
 	github.com/spf13/cast v1.5.0
 	github.com/spf13/cobra v1.6.1
@@ -186,8 +186,8 @@ require (
 	go.uber.org/dig v1.15.0 // indirect
 	go.uber.org/fx v1.18.2 // indirect
 	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/sync v0.2.0 // indirect
+	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
