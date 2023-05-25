@@ -1,12 +1,6 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
-	// Updates the version used by badgerdb, because some of the Go
-	// module caches apparently have a messed up copy that causes
-	// build failures.
-	// https://github.com/google/flatbuffers/issues/6466
-	github.com/google/flatbuffers => github.com/google/flatbuffers v1.12.1
-
 	// v1.5.0 has broken uint parsing, use my commit with fixes instead until
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
 	github.com/spf13/cast => github.com/oasisprotocol/cast v0.0.0-20220606122631-eba453e69641
