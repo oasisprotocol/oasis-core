@@ -36,10 +36,9 @@ var (
 	// Error code 14 is reserved for future use.
 	ErrTimeoutNotCorrectRound = errors.New(moduleName, 15, "roothash/commitment: timeout not for correct round")
 	ErrNodeIsScheduler        = errors.New(moduleName, 16, "roothash/commitment: node is scheduler")
-	ErrMajorityFailure        = errors.New(moduleName, 17, "roothash/commitment: majority commitments indicated failure")
-	ErrInvalidRound           = errors.New(moduleName, 18, "roothash/commitment: invalid round")
-	ErrNoProposerCommitment   = errors.New(moduleName, 19, "roothash/commitment: no proposer commitment")
-	ErrBadProposerCommitment  = errors.New(moduleName, 20, "roothash/commitment: bad proposer commitment")
+	ErrInvalidRound           = errors.New(moduleName, 17, "roothash/commitment: invalid round")
+	ErrNoProposerCommitment   = errors.New(moduleName, 18, "roothash/commitment: no proposer commitment")
+	ErrBadProposerCommitment  = errors.New(moduleName, 19, "roothash/commitment: bad proposer commitment")
 )
 
 const (
@@ -156,25 +155,6 @@ func (p *Pool) ResetCommitments(round uint64) {
 	}
 	p.Discrepancy = false
 	p.NextTimeout = TimeoutNever
-}
-
-func (p *Pool) getCommitment(id signature.PublicKey) (OpenCommitment, bool) {
-	if p.Committee == nil {
-		panic("roothash/commitment: query commitments: " + ErrNoCommittee.Error())
-	}
-
-	var (
-		com OpenCommitment
-		ok  bool
-	)
-
-	switch p.Committee.Kind {
-	case scheduler.KindComputeExecutor:
-		com, ok = p.ExecuteCommitments[id]
-	default:
-		panic("roothash/commitment: unknown committee kind: " + p.Committee.Kind.String())
-	}
-	return com, ok
 }
 
 func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
@@ -360,164 +340,133 @@ func (p *Pool) AddExecutorCommitment(
 // ProcessCommitments performs a single round of commitment checks. If there are enough commitments
 // in the pool, it performs discrepancy detection or resolution.
 func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
-	if p.Committee == nil {
+	switch {
+	case p.Committee == nil:
 		return nil, ErrNoCommittee
+	case p.Committee.Kind != scheduler.KindComputeExecutor:
+		panic("roothash/commitment: unknown committee kind: " + p.Committee.Kind.String())
 	}
 
-	// Determine whether the proposer has submitted a commitment.
-	proposerCommit, err := p.getProposerCommitment()
-	switch err {
-	case nil:
-	case ErrNoProposerCommitment:
-		// Proposer has not submitted a commitment yet.
-	default:
-		return nil, err
-	}
-
-	type voteEnt struct {
+	type vote struct {
 		commit OpenCommitment
 		tally  int
 	}
 
-	var (
-		commits, required int
-		failuresTally     int
-	)
-	votes := make(map[hash.Hash]*voteEnt)
+	var total, commits, failures int
+
+	// Gather votes.
+	votes := make(map[hash.Hash]*vote)
 	for _, n := range p.Committee.Members {
-		var check bool
-		if !p.Discrepancy {
-			check = n.Role == scheduler.RoleWorker
-		} else {
-			check = n.Role == scheduler.RoleBackupWorker
-		}
-		if !check {
+		switch {
+		case !p.Discrepancy && n.Role != scheduler.RoleWorker:
+			continue
+		case p.Discrepancy && n.Role != scheduler.RoleBackupWorker:
 			continue
 		}
 
-		required++
-		commit, ok := p.getCommitment(n.PublicKey)
+		total++
+		commit, ok := p.ExecuteCommitments[n.PublicKey]
 		if !ok {
 			continue
 		}
 		commits++
 
 		if commit.IsIndicatingFailure() {
-			failuresTally++
+			failures++
 			continue
 		}
 
-		// Quick check whether the result is already determined.
-		//
-		// i) In case of discrepancy detection, as soon as there is a discrepancy we can proceed
-		//    with discrepancy resolution. No need to wait for all commits.
-		//
-		// ii) In case of discrepancy resolution, as soon as majority agrees on a result, we can
-		//     proceed with resolving the round.
-		switch p.Discrepancy {
-		case false:
-			// Discrepancy detection.
-			if proposerCommit != nil && !proposerCommit.MostlyEqual(commit) {
-				p.Discrepancy = true
-				return nil, ErrDiscrepancyDetected
+		k := commit.ToVote()
+		if v, ok := votes[k]; !ok {
+			votes[k] = &vote{
+				commit: commit,
+				tally:  1,
 			}
-		case true:
-			// Discrepancy resolution.
-			k := commit.ToVote()
-			if ent, ok := votes[k]; !ok {
-				votes[k] = &voteEnt{
-					commit: commit,
-					tally:  1,
-				}
-			} else {
-				ent.tally++
-			}
-		}
-	}
-
-	allowedStragglers := int(p.Runtime.Executor.AllowedStragglers)
-
-	switch p.Discrepancy {
-	case true:
-		// Discrepancy resolution.
-		minVotes := (required / 2) + 1
-		if failuresTally >= minVotes {
-			// Majority indicates failure, round will fail regardless of additional commits.
-			logger.Warn("discrepancy resolution majority failed",
-				logging.LogEvent, LogEventDiscrepancyMajorityFailure,
-			)
-			return nil, ErrMajorityFailure
+		} else {
+			v.tally++
 		}
 
-		// If we already have the proposer commitment, we can try to resolve early based on majority
-		// vote. Otherwise we need to wait for the proposer commitment.
-		if proposerCommit == nil {
-			break
-		}
-
-		for _, ent := range votes {
-			if ent.tally >= minVotes {
-				// Majority agrees on a commit, result is determined regardless of additional
-				// commits.
-				//
-				// Make sure that the majority commitment is the same as the proposer commitment. We
-				// must return the proposer commitment as that one contains additional data.
-				if !proposerCommit.MostlyEqual(ent.commit) {
-					return nil, ErrBadProposerCommitment
-				}
-
-				return proposerCommit, nil
-			}
-		}
-
-		// No majority commitment so far.
-	case false:
-		// If it is already known that the number of valid commitments will not exceed the required
-		// threshold, there is no need to wait for the timer to expire. Instead, proceed directly to
-		// the discrepancy resolution mode, regardless of any additional commits.
-		if failuresTally > allowedStragglers {
+		// As soon as there is a discrepancy we can proceed with discrepancy resolution.
+		// No need to wait for all commits.
+		if !p.Discrepancy && len(votes) > 1 {
 			p.Discrepancy = true
 			return nil, ErrDiscrepancyDetected
 		}
 	}
 
-	// While a timer is running, all nodes are required to answer.
-	//
-	// After the timeout has elapsed, a limited number of stragglers are allowed.
-	if didTimeout {
-		if p.Discrepancy {
-			// This was a forced finalization call due to timeout,
-			// and the round was in the discrepancy state.  Give up.
-			return nil, ErrInsufficientVotes
-		}
-
-		switch p.Committee.Kind {
-		case scheduler.KindComputeExecutor:
-			required -= allowedStragglers
-			commits -= failuresTally // Since failures count as stragglers.
-		default:
-			// Would panic above.
-		}
-
-		if proposerCommit == nil {
-			// If we timed out but the proposer did not submit a commitment, fail the round.
-			// TODO: Consider slashing for this offense.
-			return nil, ErrNoProposerCommitment
-		}
+	// Determine whether the proposer has submitted a commitment.
+	proposer, err := GetTransactionScheduler(p.Committee, p.Round)
+	if err != nil {
+		return nil, ErrNoCommittee
 	}
-
-	if commits < required || proposerCommit == nil {
-		return nil, ErrStillWaiting
+	proposerCommit, ok := p.ExecuteCommitments[proposer.PublicKey]
+	if !ok && didTimeout {
+		// TODO: Consider slashing for this offense.
+		return nil, ErrNoProposerCommitment
 	}
 
 	switch p.Discrepancy {
 	case false:
-		// No discrepancy.
-		return proposerCommit, nil
-	default:
-		// No majority commitment.
-		return nil, ErrInsufficientVotes
+		// Discrepancy detection.
+		allowedStragglers := int(p.Runtime.Executor.AllowedStragglers)
+
+		// If it is already known that the number of valid commitments will not exceed the required
+		// threshold, there is no need to wait for the timer to expire. Instead, proceed directly to
+		// the discrepancy resolution mode, regardless of any additional commits.
+		if failures > allowedStragglers {
+			p.Discrepancy = true
+			return nil, ErrDiscrepancyDetected
+		}
+
+		// While a timer is running, all nodes are required to answer.
+		required := total
+
+		// After the timeout has elapsed, a limited number of stragglers are allowed.
+		if didTimeout {
+			required -= allowedStragglers
+			commits -= failures // Since failures count as stragglers.
+		}
+
+		// Check if the majority has been reached.
+		if commits < required || proposerCommit == nil {
+			return nil, ErrStillWaiting
+		}
+
+	case true:
+		// Discrepancy resolution.
+		required := total/2 + 1
+
+		// Find the commit with the highest number of votes.
+		topVote := &vote{}
+		for _, v := range votes {
+			if v.tally > topVote.tally {
+				topVote = v
+			}
+		}
+
+		// Fail the round if the majority cannot be reached due to insufficient votes remaining
+		// (e.g. too many nodes have failed),
+		remaining := total - commits
+		if topVote.tally+remaining < required {
+			return nil, ErrInsufficientVotes
+		}
+
+		// Check if the majority has been reached.
+		if topVote.tally < required || proposerCommit == nil {
+			if didTimeout {
+				return nil, ErrInsufficientVotes
+			}
+			return nil, ErrStillWaiting
+		}
+
+		// Make sure that the majority commitment is the same as the proposer commitment.
+		if !proposerCommit.MostlyEqual(topVote.commit) {
+			return nil, ErrBadProposerCommitment
+		}
 	}
+
+	// We must return the proposer commitment as that one contains additional data.
+	return proposerCommit, nil
 }
 
 // CheckProposerTimeout verifies executor timeout request conditions.
@@ -558,26 +507,6 @@ func (p *Pool) CheckProposerTimeout(
 	}
 
 	return nil
-}
-
-func (p *Pool) getProposerCommitment() (OpenCommitment, error) {
-	var proposerCommit OpenCommitment
-	switch p.Committee.Kind {
-	case scheduler.KindComputeExecutor:
-		proposer, err := GetTransactionScheduler(p.Committee, p.Round)
-		if err != nil {
-			return nil, ErrNoCommittee
-		}
-
-		var ok bool
-		if proposerCommit, ok = p.ExecuteCommitments[proposer.PublicKey]; !ok {
-			// No proposer commitment, we cannot proceed.
-			return nil, ErrNoProposerCommitment
-		}
-	default:
-		panic("roothash/commitment: unknown committee kind while checking commitments: " + p.Committee.Kind.String())
-	}
-	return proposerCommit, nil
 }
 
 // TryFinalize attempts to finalize the commitments by performing discrepancy

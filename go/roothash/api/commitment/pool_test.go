@@ -742,6 +742,173 @@ func TestPoolTwoCommitments(t *testing.T) {
 	})
 }
 
+func TestPoolManyCommitments(t *testing.T) {
+	genesisTestHelpers.SetTestChainContext()
+
+	badHash1 := hash.NewFromBytes([]byte("discrepancy 1"))
+	badHash2 := hash.NewFromBytes([]byte("discrepancy 2"))
+
+	rt, sks, committee, nl := generateMockCommittee(t, &registry.Runtime{
+		Kind:        registry.KindCompute,
+		TEEHardware: node.TEEHardwareInvalid,
+		Executor: registry.ExecutorParameters{
+			GroupSize:         3,
+			GroupBackupSize:   4,
+			AllowedStragglers: 0,
+		},
+		GovernanceModel: registry.GovernanceEntity,
+	})
+
+	sk1 := sks[0]
+	sk2 := sks[1]
+	sk3 := sks[2]
+	sk4 := sks[3]
+	sk5 := sks[4]
+	sk6 := sks[5]
+
+	t.Run("DiscrepancyProposer", func(t *testing.T) {
+		pool := Pool{
+			Runtime:   rt,
+			Committee: committee,
+			Round:     0,
+		}
+
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		ec1 := ec
+		ec1.NodeID = sk1.Public()
+		err := ec1.Sign(sk1, rt.ID)
+		require.NoError(t, err, "ec1.Sign")
+
+		ec2 := ec
+		ec2.NodeID = sk2.Public()
+		ec2.Header.StateRoot = &badHash1
+		err = ec2.Sign(sk2, rt.ID)
+		require.NoError(t, err, "ec2.Sign")
+
+		// Commits differ, one is from the proposer.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec1, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrStillWaiting)
+
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec2, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrDiscrepancyDetected)
+	})
+
+	t.Run("DiscrepancyNoProposer", func(t *testing.T) {
+		pool := Pool{
+			Runtime:   rt,
+			Committee: committee,
+			Round:     0,
+		}
+
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		ec2 := ec
+		ec2.NodeID = sk2.Public()
+		err := ec2.Sign(sk2, rt.ID)
+		require.NoError(t, err, "ec2.Sign")
+
+		ec3 := ec
+		ec3.NodeID = sk3.Public()
+		ec3.Header.StateRoot = &badHash1
+		err = ec3.Sign(sk3, rt.ID)
+		require.NoError(t, err, "ec3.Sign")
+
+		// Commits differ, none of them is from the proposer.
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec2, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrStillWaiting)
+
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec3, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrDiscrepancyDetected)
+	})
+
+	t.Run("ResolutionTooManyFailures", func(t *testing.T) {
+		pool := Pool{
+			Runtime:     rt,
+			Committee:   committee,
+			Round:       0,
+			Discrepancy: true,
+		}
+
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		ec4 := ec
+		ec4.NodeID = sk4.Public()
+		ec4.Header.SetFailure(FailureUnknown)
+		err := ec4.Sign(sk4, rt.ID)
+		require.NoError(t, err, "ec4.Sign")
+
+		ec5 := ec
+		ec5.NodeID = sk5.Public()
+		ec5.Header.SetFailure(FailureUnknown)
+		err = ec5.Sign(sk5, rt.ID)
+		require.NoError(t, err, "ec5.Sign")
+
+		// Too many failures to achieve the majority (2 out of 4).
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec4, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrStillWaiting)
+
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec5, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrInsufficientVotes)
+	})
+
+	t.Run("ResolutionMajorityNotPossible", func(t *testing.T) {
+		pool := Pool{
+			Runtime:     rt,
+			Committee:   committee,
+			Round:       0,
+			Discrepancy: true,
+		}
+
+		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+
+		ec4 := ec
+		ec4.NodeID = sk4.Public()
+		err := ec4.Sign(sk4, rt.ID)
+		require.NoError(t, err, "ec4.Sign")
+
+		ec5 := ec
+		ec5.NodeID = sk5.Public()
+		ec5.Header.StateRoot = &badHash1
+		err = ec5.Sign(sk5, rt.ID)
+		require.NoError(t, err, "ec5.Sign")
+
+		ec6 := ec
+		ec6.NodeID = sk6.Public()
+		ec6.Header.StateRoot = &badHash2
+		err = ec6.Sign(sk6, rt.ID)
+		require.NoError(t, err, "ec6.Sign")
+
+		// Too many groups to achieve the majority (all groups have size 1, only 1 vote remaining).
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec4, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrStillWaiting)
+
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec5, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrStillWaiting)
+
+		err = pool.AddExecutorCommitment(context.Background(), childBlk, nl, &ec6, nil)
+		require.NoError(t, err, "AddExecutorCommitment")
+		_, err = pool.ProcessCommitments(false)
+		require.ErrorIs(t, err, ErrInsufficientVotes)
+	})
+}
+
 func TestPoolFailureIndicatingCommitment(t *testing.T) {
 	genesisTestHelpers.SetTestChainContext()
 
@@ -917,7 +1084,7 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		dc, err := pool.ProcessCommitments(false)
 		require.Nil(t, dc, "ProcessCommitments")
 		require.Error(t, err, "ProcessCommitments")
-		require.Equal(t, ErrMajorityFailure, err)
+		require.Equal(t, ErrInsufficientVotes, err)
 	})
 }
 
