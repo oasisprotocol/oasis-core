@@ -35,16 +35,22 @@ var (
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
 type ComputeResultsHeader struct {
-	Round        uint64    `json:"round"`
+	// Round is the round number.
+	Round uint64 `json:"round"`
+
+	// PreviousHash is the hash of the previous block header this batch was computed against.
 	PreviousHash hash.Hash `json:"previous_hash"`
 
 	// Optional fields (may be absent for failure indication).
 
-	IORoot       *hash.Hash `json:"io_root,omitempty"`
-	StateRoot    *hash.Hash `json:"state_root,omitempty"`
+	// IORoot is the I/O merkle root.
+	IORoot *hash.Hash `json:"io_root,omitempty"`
+	// StateRoot is the root hash of the state after computing this batch.
+	StateRoot *hash.Hash `json:"state_root,omitempty"`
+	// MessagesHash is the hash of messages sent from this batch.
 	MessagesHash *hash.Hash `json:"messages_hash,omitempty"`
 
-	// InMessagesHash is the hash of processed incoming messages.
+	// InMessagesHash is hash of processed incoming messages.
 	InMessagesHash *hash.Hash `json:"in_msgs_hash,omitempty"`
 	// InMessagesCount is the number of processed incoming messages.
 	InMessagesCount uint32 `json:"in_msgs_count,omitempty"`
@@ -240,9 +246,9 @@ func (c *ExecutorCommitment) ValidateBasic() error {
 // MostlyEqual returns true if the commitment is mostly equal to another
 // specified commitment as per discrepancy detection criteria.
 func (c *ExecutorCommitment) MostlyEqual(other OpenCommitment) bool {
-	h := c.Header.ComputeResultsHeader.EncodedHash()
-	otherHash := other.(*ExecutorCommitment).Header.ComputeResultsHeader.EncodedHash()
-	return h.Equal(&otherHash)
+	h := c.ToVote()
+	otherH := other.ToVote()
+	return h.Equal(&otherH)
 }
 
 // IsIndicatingFailure returns true if this commitment indicates a failure.
