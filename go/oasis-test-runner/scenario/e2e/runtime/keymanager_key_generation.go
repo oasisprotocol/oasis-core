@@ -23,22 +23,25 @@ import (
 var KeymanagerKeyGeneration scenario.Scenario = newKmKeyGenerationImpl()
 
 type kmKeyGenerationImpl struct {
-	runtimeImpl
+	Scenario
 }
 
 func newKmKeyGenerationImpl() scenario.Scenario {
 	return &kmKeyGenerationImpl{
-		runtimeImpl: *newRuntimeImpl("keymanager-key-generation", BasicKVEncTestClient),
+		Scenario: *NewScenario(
+			"keymanager-key-generation",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 
 func (sc *kmKeyGenerationImpl) Fixture() (*oasis.NetworkFixture, error) {
-	return sc.runtimeImpl.Fixture()
+	return sc.Scenario.Fixture()
 }
 
 func (sc *kmKeyGenerationImpl) Clone() scenario.Scenario {
 	return &kmKeyGenerationImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
@@ -46,7 +49,7 @@ func (sc *kmKeyGenerationImpl) Run(childEnv *env.Env) error {
 	// Start the network, but no need to start the client. Just ensure it
 	// is synced.
 	ctx := context.Background()
-	if err := sc.runtimeImpl.startNetworkAndWaitForClientSync(ctx); err != nil {
+	if err := sc.Scenario.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}
 

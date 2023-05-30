@@ -23,17 +23,20 @@ const (
 var HistoryReindex scenario.Scenario = newHistoryReindexImpl()
 
 type historyReindexImpl struct {
-	runtimeImpl
+	Scenario
 }
 
 func newHistoryReindexImpl() scenario.Scenario {
 	return &historyReindexImpl{
-		runtimeImpl: *newRuntimeImpl("history-reindex", BasicKVEncTestClient),
+		Scenario: *NewScenario(
+			"history-reindex",
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		),
 	}
 }
 
 func (sc *historyReindexImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +78,7 @@ func (sc *historyReindexImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *historyReindexImpl) Clone() scenario.Scenario {
 	return &historyReindexImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 

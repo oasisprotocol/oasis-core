@@ -201,7 +201,10 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     parallelism: 30
-    timeout_in_minutes: 15
+    # TODO: Temporary workaround to prevent timeouts during artifact downloading.
+    #       The timeout should be changed back to 15 minutes once we transition
+    #       to S3 or find a more efficient solution (see #5276).
+    timeout_in_minutes: 60
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -227,7 +230,10 @@ steps:
       - "build-go"
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
-    timeout_in_minutes: 15
+    # TODO: Temporary workaround to prevent timeouts during artifact downloading.
+    #       The timeout should be changed back to 15 minutes once we transition
+    #       to S3 or find a more efficient solution (see #5276).
+    timeout_in_minutes: 60
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/txsource-multi-short
@@ -256,7 +262,10 @@ steps:
       - "build-rust-runtimes"
     branches: "!master !stable/*"
     parallelism: 2
-    timeout_in_minutes: 20
+    # TODO: Temporary workaround to prevent timeouts during artifact downloading.
+    #       The timeout should be changed back to 20 minutes once we transition
+    #       to S3 or find a more efficient solution (see #5276).
+    timeout_in_minutes: 60
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.

@@ -42,21 +42,21 @@ import (
 
 // RegistryCLI is the registry CLI test scenario.
 var RegistryCLI scenario.Scenario = &registryCLIImpl{
-	E2E: *NewE2E("registry-cli"),
+	Scenario: *NewScenario("registry-cli"),
 }
 
 type registryCLIImpl struct {
-	E2E
+	Scenario
 }
 
 func (sc *registryCLIImpl) Clone() scenario.Scenario {
 	return &registryCLIImpl{
-		E2E: sc.E2E.Clone(),
+		Scenario: sc.Scenario.Clone(),
 	}
 }
 
 func (sc *registryCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

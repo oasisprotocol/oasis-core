@@ -19,23 +19,26 @@ import (
 var StorageSync scenario.Scenario = newStorageSyncImpl()
 
 type storageSyncImpl struct {
-	runtimeImpl
+	Scenario
 }
 
 func newStorageSyncImpl() scenario.Scenario {
 	return &storageSyncImpl{
-		runtimeImpl: *newRuntimeImpl("storage-sync", BasicKVTestClient),
+		Scenario: *NewScenario(
+			"storage-sync",
+			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		),
 	}
 }
 
 func (sc *storageSyncImpl) Clone() scenario.Scenario {
 	return &storageSyncImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -87,12 +90,12 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 	var err error
 	ctx := context.Background()
 
-	if err = sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
 	// Wait for the client to exit.
-	if err = sc.waitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -105,7 +108,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "checkpoint", fmt.Sprintf("my cp %d", i), drbg.Uint64()); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, drbg.Uint64(), "checkpoint", fmt.Sprintf("my cp %d", i), false); err != nil {
 			return err
 		}
 	}
@@ -182,7 +185,7 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 		sc.Logger.Info("submitting large transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, drbg.Uint64()); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, drbg.Uint64(), fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, false); err != nil {
 			return err
 		}
 	}

@@ -15,21 +15,21 @@ import (
 
 // ConsensusStateSync is the consensus state sync scenario.
 var ConsensusStateSync scenario.Scenario = &consensusStateSyncImpl{
-	E2E: *NewE2E("consensus-state-sync"),
+	Scenario: *NewScenario("consensus-state-sync"),
 }
 
 type consensusStateSyncImpl struct {
-	E2E
+	Scenario
 }
 
 func (sc *consensusStateSyncImpl) Clone() scenario.Scenario {
 	return &consensusStateSyncImpl{
-		E2E: sc.E2E.Clone(),
+		Scenario: sc.Scenario.Clone(),
 	}
 }
 
 func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

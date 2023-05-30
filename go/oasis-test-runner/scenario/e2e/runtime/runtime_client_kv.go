@@ -15,27 +15,24 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var BasicKVTestClient = NewKeyValueTestClient()
+// KVTestClient is a client that exercises the simple key-value test runtime.
+type KVTestClient struct {
+	sc *Scenario
 
-// KeyValueTestClient is a client that exercises the simple key-value
-// test runtime.
-type KeyValueTestClient struct {
-	sc *runtimeImpl
-
-	seed   string
-	repeat bool
+	seed     string
+	scenario TestClientScenario
 
 	ctx      context.Context
 	cancelFn context.CancelFunc
 	errCh    chan error
 }
 
-func (cli *KeyValueTestClient) Init(scenario *runtimeImpl) error {
+func (cli *KVTestClient) Init(scenario *Scenario) error {
 	cli.sc = scenario
 	return nil
 }
 
-func (cli *KeyValueTestClient) Start(ctx context.Context, childEnv *env.Env) error {
+func (cli *KVTestClient) Start(ctx context.Context, childEnv *env.Env) error {
 	cli.ctx = ctx
 
 	subCtx, cancelFn := context.WithCancel(ctx)
@@ -49,7 +46,7 @@ func (cli *KeyValueTestClient) Start(ctx context.Context, childEnv *env.Env) err
 	return nil
 }
 
-func (cli *KeyValueTestClient) Wait() error {
+func (cli *KVTestClient) Wait() error {
 	var err error
 
 	// Wait for the network to fail, the context to be canceled, or the
@@ -66,7 +63,7 @@ func (cli *KeyValueTestClient) Wait() error {
 	return err
 }
 
-func (cli *KeyValueTestClient) Kill() error {
+func (cli *KVTestClient) Stop() error {
 	// Kill the workload.
 	cli.cancelFn()
 
@@ -79,188 +76,257 @@ func (cli *KeyValueTestClient) Kill() error {
 	}
 }
 
-func (cli *KeyValueTestClient) Clone() TestClient {
-	ncli := NewKeyValueTestClient().WithSeed(cli.seed)
-	if cli.repeat {
-		ncli = ncli.WithRepeat()
+func (cli *KVTestClient) Clone() TestClient {
+	return &KVTestClient{
+		seed:     cli.seed,
+		scenario: cli.scenario,
 	}
-	return ncli
 }
 
-func (cli *KeyValueTestClient) WithSeed(seed string) *KeyValueTestClient {
+func (cli *KVTestClient) WithSeed(seed string) *KVTestClient {
 	cli.seed = seed
 	return cli
 }
 
-func (cli *KeyValueTestClient) WithRepeat() *KeyValueTestClient {
-	cli.repeat = true
+func (cli *KVTestClient) WithScenario(scenario TestClientScenario) *KVTestClient {
+	cli.scenario = scenario
 	return cli
 }
 
-func (cli *KeyValueTestClient) workload(ctx context.Context) error {
+func (cli *KVTestClient) workload(ctx context.Context) error {
 	// Initialize the nonce DRBG.
 	rng, err := drbgFromSeed(
-		[]byte("oasis-core/oasis-test-runner/e2e/runtime/kv"),
+		[]byte("oasis-core/oasis-test-runner/e2e/runtime/test-client"),
 		[]byte(cli.seed),
 	)
 	if err != nil {
 		return err
 	}
 
-	cli.sc.Logger.Info("initializing simple key/value runtime!")
+	cli.sc.Logger.Info("starting k/v runtime test client")
 
-	const (
-		myKey = "hello_key"
-
-		myLongKey   = "I laud Agni the priest, the divine minister of sacrifice, who invokes the gods, and is the most rich in gems."
-		myLongValue = "May Agni, the invoker, the sage, the true, the most renowned, a god, come hither with the gods!"
-	)
-
-	// Check whether Runtime ID is also set remotely.
-	//
-	// XXX: This would check that the response is sensible but the Rust
-	// side `to_string()` returns `8000…0000`, and the original Rust
-	// test client was doing a string compare so no one ever noticed
-	// that truncated values were being compared.
-	if _, err = cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, runtimeID, rng.Uint64()); err != nil {
-		return fmt.Errorf("failed to query remote runtime ID: %w", err)
-	}
-
-	for iter := 0; ; iter++ {
-		var resp string
-
-		cli.sc.Logger.Info("beginning client loop",
-			"iteration", iter,
-		)
-
-		// Test simple [set,get] calls.
-		myValue := fmt.Sprintf("hello_value_from_%s:%d", runtimeID, iter)
-		cli.sc.Logger.Info("storing k/v pair to database",
-			"key", myKey,
-			"value", myValue,
-		)
-		if resp, err = cli.sc.submitKeyValueRuntimeInsertTx(
-			ctx,
-			runtimeID,
-			myKey,
-			myValue,
-			rng.Uint64(),
-		); err != nil {
-			return fmt.Errorf("failed to insert k/v pair: %w", err)
-		}
-		if iter == 0 && resp != "" {
-			return fmt.Errorf("k/v pair already exists: '%v'", resp)
-		}
-
-		cli.sc.Logger.Info("checking if key exists and has the correct value")
-		resp, err = cli.sc.submitKeyValueRuntimeGetTx(
-			ctx,
-			runtimeID,
-			myKey,
-			rng.Uint64(),
-		)
-		if err != nil {
-			return err
-		}
-		if resp != myValue {
-			return fmt.Errorf("key does not have expected value (Got: '%v', Expected: '%v')", resp, myValue)
-		}
-
-		// Test [set, get] long key calls
-		cli.sc.Logger.Info("storing long k/v pair to database",
-			"key", myLongKey,
-			"value", myLongValue,
-		)
-		if resp, err = cli.sc.submitKeyValueRuntimeInsertTx(
-			ctx,
-			runtimeID,
-			myLongKey,
-			myLongValue,
-			rng.Uint64(),
-		); err != nil {
-			return fmt.Errorf("failed to insert k/v pair: %w", err)
-		}
-		if iter == 0 && resp != "" {
-			return fmt.Errorf("k/v pair already exists: '%v'", resp)
-		}
-
-		if err = cli.sc.submitConsensusXferTx(
-			ctx,
-			runtimeID,
-			staking.Transfer{},
-			rng.Uint64(),
-		); err != nil {
-			return fmt.Errorf("failed to submit consensus transfer: %w", err)
-		}
-
-		cli.sc.Logger.Info("checking if long key exists and has the correct value")
-		if resp, err = cli.sc.submitKeyValueRuntimeGetTx(
-			ctx,
-			runtimeID,
-			myLongKey,
-			rng.Uint64(),
-		); err != nil {
-			return err
-		}
-		if resp != myLongValue {
-			return fmt.Errorf("key does not have expected value (Got: '%v', Expected: '%v')", resp, myLongValue)
-		}
-
-		if !cli.repeat {
-			break
-		}
-	}
-
-	// Test submission and processing of incoming messages.
-	cli.sc.Logger.Info("testing incoming runtime messages")
-	const (
-		inMsgKey   = "in_msg"
-		inMsgValue = "hello world from inmsg"
-	)
-	err = cli.sc.submitRuntimeInMsg(ctx, runtimeID, rng.Uint64(), "insert", struct {
-		Key   string `json:"key"`
-		Value string `json:"value"`
-	}{
-		Key:   inMsgKey,
-		Value: inMsgValue,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to submit 'insert' incoming runtime message: %w", err)
-	}
-
-	resp, err := cli.sc.submitKeyValueRuntimeGetTx(ctx, runtimeID, inMsgKey, rng.Uint64())
-	if err != nil {
+	if err := cli.scenario(func(req interface{}) error {
+		return cli.submit(ctx, req, rng)
+	}); err != nil {
 		return err
 	}
-	if resp != inMsgValue {
-		return fmt.Errorf("key does not have expected value (got: '%s', expected: '%s')", resp, inMsgValue)
-	}
 
-	cli.sc.Logger.Info("testing consensus queries")
-	if _, err = cli.sc.submitRuntimeTx(ctx, runtimeID, rng.Uint64(), "consensus_accounts", nil); err != nil {
-		return fmt.Errorf("failed to submit consensus_accounts query: %w", err)
-	}
-	// TODO: The old test printed out the accounts and delegations, but
-	// it's not like it validated them or anything.
-
-	cli.sc.Logger.Info("simple k/v client finished")
+	cli.sc.Logger.Info("k/v runtime test client finished")
 
 	return nil
 }
 
-func NewKeyValueTestClient() *KeyValueTestClient {
-	return &KeyValueTestClient{
-		seed: "seeeeeeeeeeeeeeeeeeeeeeeeeeeeeed",
+func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.Source64) error {
+	switch req := req.(type) {
+	case InsertKeyValueTx:
+		rsp, err := cli.sc.submitKeyValueRuntimeInsertTx(
+			ctx,
+			runtimeID,
+			rng.Uint64(),
+			req.Key,
+			req.Value,
+			req.Encrypted,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert k/v pair: %w", err)
+		}
+		if rsp != req.Response {
+			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+		}
+
+	case GetKeyValueTx:
+		rsp, err := cli.sc.submitKeyValueRuntimeGetTx(
+			ctx,
+			runtimeID,
+			rng.Uint64(),
+			req.Key,
+			req.Encrypted,
+		)
+		if err != nil {
+			return err
+		}
+		if rsp != req.Response {
+			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+		}
+
+	case RemoveKeyValueTx:
+		rsp, err := cli.sc.submitKeyValueRuntimeRemoveTx(
+			ctx,
+			runtimeID,
+			rng.Uint64(),
+			req.Key,
+			req.Encrypted,
+		)
+		if err != nil {
+			return err
+		}
+		if rsp != req.Response {
+			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+		}
+
+	case InsertMsg:
+		err := cli.sc.submitKeyValueRuntimeInsertMsg(
+			ctx,
+			runtimeID,
+			rng.Uint64(),
+			req.Key,
+			req.Value,
+		)
+		if err != nil {
+			return err
+		}
+
+	case GetRuntimeIDTx:
+		_, err := cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, runtimeID, rng.Uint64())
+		if err != nil {
+			return err
+		}
+
+	case ConsensusTransferTx:
+		err := cli.sc.submitConsensusTransferTx(ctx, runtimeID, rng.Uint64(), staking.Transfer{})
+		if err != nil {
+			return err
+		}
+
+	case ConsensusAccountsTx:
+		err := cli.sc.submitConsensusAccountsTx(ctx, runtimeID, rng.Uint64())
+		if err != nil {
+			return err
+		}
+
+	default:
+		return fmt.Errorf("invalid k/v runtime test client scenario command")
+	}
+
+	return nil
+}
+
+func NewKVTestClient() *KVTestClient {
+	return &KVTestClient{
+		seed:     "seed",
+		scenario: func(submit func(req interface{}) error) error { return nil },
 	}
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeInsertTx(
+func (sc *Scenario) submitAndDecodeRuntimeTx(
 	ctx context.Context,
 	id common.Namespace,
+	nonce uint64,
+	method string,
+	args interface{},
+) (string, error) {
+	rawRsp, err := sc.submitRuntimeTx(ctx, id, nonce, method, args)
+	if err != nil {
+		return "", fmt.Errorf("failed to submit %s tx to runtime: %w", method, err)
+	}
+
+	var rsp string
+	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
+		return "", fmt.Errorf("failed to unmarshal %s tx response from runtime: %w", method, err)
+	}
+
+	return rsp, nil
+}
+
+func (sc *Scenario) submitKeyValueRuntimeInsertTx(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
 	key, value string,
+	encrypted bool,
+) (string, error) {
+	sc.Logger.Info("inserting k/v pair",
+		"key", key,
+		"value", value,
+		"encrypted", encrypted,
+	)
+
+	args := struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}{
+		Key:   key,
+		Value: value,
+	}
+
+	if encrypted {
+		return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "enc_insert", args)
+	}
+	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "insert", args)
+}
+
+func (sc *Scenario) submitKeyValueRuntimeGetTx(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	key string,
+	encrypted bool,
+) (string, error) {
+	sc.Logger.Info("retrieving k/v pair",
+		"key", key,
+		"encrypted", encrypted,
+	)
+
+	args := struct {
+		Key string `json:"key"`
+	}{
+		Key: key,
+	}
+
+	if encrypted {
+		return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "enc_get", args)
+	}
+	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "get", args)
+}
+
+func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	key string,
+	encrypted bool,
+) (string, error) {
+	sc.Logger.Info("removing k/v pair",
+		"key", key,
+		"encrypted", encrypted,
+	)
+
+	args := struct {
+		Key string `json:"key"`
+	}{
+		Key: key,
+	}
+
+	if encrypted {
+		return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "enc_remove", args)
+	}
+	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "remove", args)
+}
+
+func (sc *Scenario) submitKeyValueRuntimeGetRuntimeIDTx(
+	ctx context.Context,
+	id common.Namespace,
 	nonce uint64,
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, id, nonce, "insert", struct {
+	sc.Logger.Info("retrieving runtime ID")
+
+	rsp, err := sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "get_runtime_id", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to query remote runtime ID: %w", err)
+	}
+
+	return rsp, nil
+}
+
+func (sc *Scenario) submitKeyValueRuntimeInsertMsg(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	key, value string,
+) error {
+	sc.Logger.Info("submitting incoming runtime message")
+
+	err := sc.submitRuntimeInMsg(ctx, id, nonce, "insert", struct {
 		Key   string `json:"key"`
 		Value string `json:"value"`
 	}{
@@ -268,81 +334,89 @@ func (sc *runtimeImpl) submitKeyValueRuntimeInsertTx(
 		Value: value,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to submit insert tx to runtime: %w", err)
+		return fmt.Errorf("failed to submit insert incoming runtime message: %w", err)
 	}
 
-	var rsp string
-	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response from runtime: %w", err)
-	}
-
-	return rsp, nil
+	return nil
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeGetTx(
+func (sc *Scenario) submitAndDecodeRuntimeQuery(
 	ctx context.Context,
 	id common.Namespace,
-	key string,
-	nonce uint64,
+	round uint64,
+	method string,
+	args interface{},
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "get", struct {
-		Key string `json:"key"`
-	}{
-		Key: key,
-	})
+	rawRsp, err := sc.submitRuntimeQuery(ctx, id, round, method, args)
 	if err != nil {
-		return "", fmt.Errorf("failed to submit get tx to runtime: %w", err)
+		return "", fmt.Errorf("failed to submit %s query to runtime: %w", method, err)
 	}
 
 	var rsp string
 	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response from runtime: %w", err)
+		return "", fmt.Errorf("failed to unmarshal %s tx response from runtime: %w", method, err)
 	}
 
 	return rsp, nil
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeGetQuery(
+func (sc *Scenario) submitKeyValueRuntimeGetQuery(
 	ctx context.Context,
 	id common.Namespace,
 	key string,
 	round uint64,
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeQuery(ctx, runtimeID, round, "get", struct {
+	sc.Logger.Info("querying k/v pair",
+		"key", key,
+		"round", round,
+	)
+
+	args := struct {
 		Key string `json:"key"`
 	}{
 		Key: key,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to submit get query to runtime: %w", err)
 	}
 
-	var rsp string
-	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response from runtime: %w", err)
-	}
-
-	return rsp, nil
+	return sc.submitAndDecodeRuntimeQuery(ctx, id, round, "get", args)
 }
 
-func (sc *runtimeImpl) submitKeyValueRuntimeGetRuntimeIDTx(
+func (sc *Scenario) submitConsensusTransferTx(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
-) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "get_runtime_id", nil)
+	transfer staking.Transfer,
+) error {
+	sc.Logger.Info("submitting consensus transfer",
+		"transfer", transfer,
+	)
+
+	_, err := sc.submitRuntimeTx(ctx, id, nonce, "consensus_transfer", struct {
+		Transfer staking.Transfer `json:"transfer"`
+	}{
+		Transfer: transfer,
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to submit get_runtime_id tx to runtime: %w", err)
+		return fmt.Errorf("failed to submit consensus transfer: %w", err)
 	}
 
-	// For some reason I'm too stupid to understand the response is returned
-	// as a string of all things.
-	var rsp string
-	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response from runtime: %w", err)
-	}
+	return nil
+}
 
-	return rsp, nil
+func (sc *Scenario) submitConsensusAccountsTx(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+) error {
+	sc.Logger.Info("submitting consensus accounts query")
+
+	_, err := sc.submitRuntimeTx(ctx, id, nonce, "consensus_accounts", nil)
+	if err != nil {
+		return fmt.Errorf("failed to submit consensus_accounts query: %w", err)
+	}
+	// TODO: The old test printed out the accounts and delegations, but
+	// it's not like it validated them or anything.
+
+	return nil
 }
 
 func drbgFromSeed(domainSep, seed []byte) (rand.Source64, error) {

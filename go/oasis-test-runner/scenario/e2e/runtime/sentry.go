@@ -26,7 +26,7 @@ import (
 
 var (
 	// Sentry is the Sentry node basic scenario.
-	Sentry scenario.Scenario = newSentryImpl("sentry", BasicKVTestClient)
+	Sentry scenario.Scenario = newSentryImpl()
 
 	validatorExtraLogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 		oasis.LogAssertPeerExchangeDisabled(),
@@ -36,23 +36,26 @@ var (
 const sentryChecksContextTimeout = 30 * time.Second
 
 type sentryImpl struct {
-	runtimeImpl
+	Scenario
 }
 
-func newSentryImpl(name string, testClient TestClient) scenario.Scenario {
+func newSentryImpl() scenario.Scenario {
 	return &sentryImpl{
-		runtimeImpl: *newRuntimeImpl(name, testClient),
+		Scenario: *NewScenario(
+			"sentry",
+			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		),
 	}
 }
 
 func (s *sentryImpl) Clone() scenario.Scenario {
 	return &sentryImpl{
-		runtimeImpl: *s.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *s.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (s *sentryImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := s.runtimeImpl.Fixture()
+	f, err := s.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +156,7 @@ func (s *sentryImpl) dial(address string, clientOpts *cmnGrpc.ClientOptions) (*g
 
 func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	// Run the basic runtime test.
-	if err := s.runtimeImpl.Run(childEnv); err != nil {
+	if err := s.Scenario.Run(childEnv); err != nil {
 		return err
 	}
 

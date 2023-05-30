@@ -22,23 +22,23 @@ var (
 )
 
 type runtimeMessageImpl struct {
-	runtimeImpl
+	Scenario
 }
 
 func newRuntimeMessage() scenario.Scenario {
 	return &runtimeMessageImpl{
-		runtimeImpl: *newRuntimeImpl("runtime-message", nil),
+		Scenario: *NewScenario("runtime-message", nil),
 	}
 }
 
 func (sc *runtimeMessageImpl) Clone() scenario.Scenario {
 	return &runtimeMessageImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *runtimeMessageImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

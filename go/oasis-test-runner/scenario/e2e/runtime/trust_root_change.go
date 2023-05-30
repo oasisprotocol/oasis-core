@@ -30,16 +30,24 @@ var (
 	// TrustRootChangeTest is a happy path scenario which tests if trust
 	// can be transferred to a new light block when consensus chain context
 	// changes, e.g. on dump-restore network upgrades.
-	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl("change", NewLongTermTestClient().WithMode(ModePart1NoMsg), true)
+	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl(
+		"change",
+		NewKVTestClient().WithScenario(InsertKeyValueScenario),
+		true,
+	)
 
 	// TrustRootChangeFailsTest is an unhappy path scenario which tests
 	// that trust is never transferred to untrusted or invalid light blocks when
 	// consensus chain context changes.
-	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl("change-fails", BasicKVTestClient, false)
+	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl(
+		"change-fails",
+		NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		false,
+	)
 )
 
 type trustRootChangeImpl struct {
-	trustRootImpl
+	TrustRootImpl
 
 	// Happy or unhappy scenario.
 	happy bool
@@ -56,7 +64,7 @@ func newTrustRootChangeImpl(name string, testClient TestClient, happy bool) *tru
 	// if the key/value store remains intact after multiple chain context
 	// changes.
 	sc := &trustRootChangeImpl{
-		trustRootImpl: *newTrustRootImpl(name, testClient),
+		TrustRootImpl: *NewTrustRootImpl(name, testClient),
 		happy:         happy,
 	}
 
@@ -65,7 +73,7 @@ func newTrustRootChangeImpl(name string, testClient TestClient, happy bool) *tru
 
 func (sc *trustRootChangeImpl) Clone() scenario.Scenario {
 	return &trustRootChangeImpl{
-		trustRootImpl: *sc.trustRootImpl.Clone().(*trustRootImpl),
+		TrustRootImpl: *sc.TrustRootImpl.Clone().(*TrustRootImpl),
 		happy:         sc.happy,
 	}
 }
@@ -97,7 +105,7 @@ func (sc *trustRootChangeImpl) happyRun(childEnv *env.Env) (err error) {
 	ctx := context.Background()
 
 	// Step 1: Build a simple key/value runtime and start the network.
-	rebuild, err := sc.buildKeyValueRuntime(ctx, childEnv)
+	rebuild, err := sc.BuildRuntimeBinary(ctx, childEnv)
 	if err != nil {
 		return err
 	}
@@ -176,7 +184,7 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 	ctx := context.Background()
 
 	// Step 1: Build a simple key/value runtime and start the network.
-	rebuild, err := sc.buildKeyValueRuntime(ctx, childEnv)
+	rebuild, err := sc.BuildRuntimeBinary(ctx, childEnv)
 	if err != nil {
 		return err
 	}
@@ -294,7 +302,7 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 	return nil
 }
 
-func (sc *trustRootChangeImpl) buildKeyValueRuntime(ctx context.Context, childEnv *env.Env) (func() error, error) {
+func (sc *TrustRootImpl) BuildRuntimeBinary(ctx context.Context, childEnv *env.Env) (func() error, error) {
 	// Start network with validators only, as configured in the fixture.
 	// We need those to produce blocks from which we pick one and use it
 	// as our embedded trust root.
@@ -374,7 +382,7 @@ func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oas
 	return nil
 }
 
-func (sc *trustRootChangeImpl) startClientAndComputeWorkers(ctx context.Context, childEnv *env.Env) error {
+func (sc *TrustRootImpl) startClientAndComputeWorkers(ctx context.Context, childEnv *env.Env) error {
 	// Start client and compute workers as they are not auto started.
 	sc.Logger.Info("starting clients and compute workers")
 	for _, n := range sc.Net.Clients() {
@@ -408,9 +416,8 @@ func (sc *trustRootChangeImpl) startClientAndComputeWorkers(ctx context.Context,
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	newTestClient := sc.testClient.Clone().(*LongTermTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithMode(ModePart2).WithSeed(seed)
-	if err := sc.runtimeImpl.Run(childEnv); err != nil {
+	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueScenario)
+	if err := sc.Scenario.Run(childEnv); err != nil {
 		return err
 	}
 	return nil

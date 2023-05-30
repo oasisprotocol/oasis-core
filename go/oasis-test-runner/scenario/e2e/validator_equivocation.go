@@ -27,21 +27,21 @@ import (
 
 // ValidatorEquivocation is the validator equivocation scenario.
 var ValidatorEquivocation scenario.Scenario = &validatorEquivocationImpl{
-	E2E: *NewE2E("validator-equivocation"),
+	Scenario: *NewScenario("validator-equivocation"),
 }
 
 type validatorEquivocationImpl struct {
-	E2E
+	Scenario
 }
 
 func (sc *validatorEquivocationImpl) Clone() scenario.Scenario {
 	return &validatorEquivocationImpl{
-		E2E: sc.E2E.Clone(),
+		Scenario: sc.Scenario.Clone(),
 	}
 }
 
 func (sc *validatorEquivocationImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.E2E.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}

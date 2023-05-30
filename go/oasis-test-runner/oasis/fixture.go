@@ -240,6 +240,7 @@ type RuntimeFixture struct { // nolint: maligned
 	Pruner RuntimePrunerCfg `json:"pruner,omitempty"`
 
 	ExcludeFromGenesis bool `json:"exclude_from_genesis,omitempty"`
+	KeepBundles        bool `json:"keep_bundles,omitempty"`
 }
 
 // Create instantiates the runtime described by the fixture.
@@ -277,6 +278,7 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 		GenesisStateRoot:   f.GenesisStateRoot,
 		Pruner:             f.Pruner,
 		ExcludeFromGenesis: f.ExcludeFromGenesis,
+		KeepBundles:        f.KeepBundles,
 		GovernanceModel:    f.GovernanceModel,
 		Deployments:        f.Deployments,
 	})

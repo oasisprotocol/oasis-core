@@ -24,22 +24,22 @@ import (
 var KeymanagerUpgrade scenario.Scenario = newKmUpgradeImpl()
 
 type kmUpgradeImpl struct {
-	runtimeImpl
+	Scenario
 
 	nonce uint64
 }
 
 func newKmUpgradeImpl() scenario.Scenario {
 	return &kmUpgradeImpl{
-		runtimeImpl: *newRuntimeImpl(
+		Scenario: *NewScenario(
 			"keymanager-upgrade",
-			NewKeyValueEncTestClient().WithKey("key1").WithSeed("first_seed"),
+			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }
 
 func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *kmUpgradeImpl) Clone() scenario.Scenario {
 	return &kmUpgradeImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
@@ -227,12 +227,12 @@ func (sc *kmUpgradeImpl) Run(childEnv *env.Env) error {
 	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
-	if err := sc.startNetworkAndTestClient(ctx, childEnv); err != nil {
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 	sc.Logger.Info("waiting for client to exit")
 	// Wait for the client to exit.
-	if err := sc.waitTestClientOnly(); err != nil {
+	if err := sc.WaitTestClientOnly(); err != nil {
 		return err
 	}
 
@@ -312,8 +312,7 @@ OUTER:
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	newTestClient := sc.testClient.Clone().(*KeyValueEncTestClient)
-	sc.runtimeImpl.testClient = newTestClient.WithKey("key2").WithSeed("second_seed")
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}

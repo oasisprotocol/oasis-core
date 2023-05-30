@@ -13,24 +13,24 @@ import (
 
 // GasFeesRuntimes is the runtime gas fees scenario.
 var GasFeesRuntimes scenario.Scenario = &gasFeesRuntimesImpl{
-	runtimeImpl: *newRuntimeImpl("gas-fees/runtimes", nil),
+	Scenario: *NewScenario("gas-fees/runtimes", nil),
 }
 
 // gasPrice is the gas price used during the test.
 const gasPrice = 1
 
 type gasFeesRuntimesImpl struct {
-	runtimeImpl
+	Scenario
 }
 
 func (sc *gasFeesRuntimesImpl) Clone() scenario.Scenario {
 	return &gasFeesRuntimesImpl{
-		runtimeImpl: *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 
 func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (sc *gasFeesRuntimesImpl) Run(childEnv *env.Env) error {
 
 	// Submit a runtime transaction to check whether transaction processing works.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, "hello", "non-free world", 0); err != nil {
+	if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, 0, "hello", "non-free world", false); err != nil {
 		return err
 	}
 

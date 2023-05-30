@@ -2,7 +2,9 @@ package oasis
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 )
 
@@ -88,6 +90,11 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 	}
+
+	// Remove any exploded bundles on cleanup.
+	net.env.AddOnCleanup(func() {
+		_ = os.RemoveAll(bundle.ExplodedPath(client.dir.String()))
+	})
 
 	net.clients = append(net.clients, client)
 	host.features = append(host.features, client)

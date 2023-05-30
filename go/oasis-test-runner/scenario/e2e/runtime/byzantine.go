@@ -308,7 +308,7 @@ func withCustomRuntimeConfig(cfgFn func(rt *oasis.RuntimeFixture)) byzantineOpti
 }
 
 type byzantineImpl struct {
-	runtimeImpl
+	Scenario
 
 	schedParams        scheduler.ForceElectCommitteeRole
 	configureRuntimeFn func(*oasis.RuntimeFixture)
@@ -338,7 +338,7 @@ func newByzantineImpl(
 	opts ...byzantineOption,
 ) scenario.Scenario {
 	sc := &byzantineImpl{
-		runtimeImpl:                *newRuntimeImpl("byzantine/"+name, nil),
+		Scenario:                   *NewScenario("byzantine/"+name, nil),
 		script:                     script,
 		extraArgs:                  extraArgs,
 		skipStorageSyncWait:        skipStorageWait,
@@ -362,7 +362,7 @@ func newByzantineImpl(
 
 func (sc *byzantineImpl) Clone() scenario.Scenario {
 	return &byzantineImpl{
-		runtimeImpl:                *sc.runtimeImpl.Clone().(*runtimeImpl),
+		Scenario:                   *sc.Scenario.Clone().(*Scenario),
 		script:                     sc.script,
 		extraArgs:                  sc.extraArgs,
 		skipStorageSyncWait:        sc.skipStorageSyncWait,
@@ -375,7 +375,7 @@ func (sc *byzantineImpl) Clone() scenario.Scenario {
 }
 
 func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
-	f, err := sc.runtimeImpl.Fixture()
+	f, err := sc.Scenario.Fixture()
 	if err != nil {
 		return nil, err
 	}
