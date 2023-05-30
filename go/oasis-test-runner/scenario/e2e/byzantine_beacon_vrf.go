@@ -93,12 +93,10 @@ func (sc *byzantineVRFBeaconImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *byzantineVRFBeaconImpl) Run(childEnv *env.Env) error {
+func (sc *byzantineVRFBeaconImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	// Wait for the validators to come up.
 	sc.Logger.Info("waiting for validators to initialize",

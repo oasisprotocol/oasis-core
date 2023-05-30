@@ -77,12 +77,10 @@ func (s *debondImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (s *debondImpl) Run(*env.Env) error {
+func (s *debondImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := s.Net.Start(); err != nil {
 		return fmt.Errorf("net Start: %w", err)
 	}
-
-	ctx := context.Background()
 
 	s.Logger.Info("waiting for network to come up")
 	if err := s.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {

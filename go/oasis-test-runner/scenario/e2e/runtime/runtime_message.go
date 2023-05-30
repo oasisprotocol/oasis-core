@@ -48,7 +48,7 @@ func (sc *runtimeMessageImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
+func (sc *runtimeMessageImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -59,11 +59,10 @@ func (sc *runtimeMessageImpl) Run(childEnv *env.Env) error {
 	}
 
 	var epoch beacon.EpochTime
-	if epoch, err = sc.initialEpochTransitions(fixture); err != nil {
+	if epoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	c := sc.Net.ClientController().RuntimeClient
 
 	blkCh, sub, err := c.WatchBlocks(ctx, runtimeID)

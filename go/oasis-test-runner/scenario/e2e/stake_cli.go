@@ -96,8 +96,7 @@ func mustInitQuantity(i int64) (q quantity.Quantity) {
 }
 
 // Return a context with values of token's ticker symbol and token's value base-10 exponent.
-func contextWithTokenInfo() context.Context {
-	ctx := context.Background()
+func contextWithTokenInfo(ctx context.Context) context.Context {
 	ctx = context.WithValue(
 		ctx,
 		prettyprint.ContextKeyTokenSymbol,
@@ -147,7 +146,7 @@ func (sc *stakeCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
+func (sc *stakeCLIImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Generate beneficiary entity.
 	beneficiaryEntityDir, err := childEnv.NewSubDir("beneficiary-entity")
 	if err != nil {
@@ -168,7 +167,6 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	ctx := context.Background()
 	sc.Logger.Info("waiting for nodes to register")
 	if err = sc.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
 		return fmt.Errorf("waiting for nodes to register: %w", err)
@@ -263,32 +261,32 @@ func (sc *stakeCLIImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Transfer
-	if err = sc.testTransfer(childEnv, cli, srcAddress, beneficiaryAddress); err != nil {
+	if err = sc.testTransfer(ctx, childEnv, cli, srcAddress, beneficiaryAddress); err != nil {
 		return fmt.Errorf("error while running Transfer test: %w", err)
 	}
 
 	// Burn
-	if err = sc.testBurn(childEnv, cli, srcAddress); err != nil {
+	if err = sc.testBurn(ctx, childEnv, cli, srcAddress); err != nil {
 		return fmt.Errorf("error while running Burn test: %w", err)
 	}
 
 	// Escrow
-	if err = sc.testEscrow(childEnv, cli, srcAddress, escrowAddress); err != nil {
+	if err = sc.testEscrow(ctx, childEnv, cli, srcAddress, escrowAddress); err != nil {
 		return fmt.Errorf("error while running Escrow test: %w", err)
 	}
 
 	// ReclaimEscrow
-	if err = sc.testReclaimEscrow(childEnv, cli, srcAddress, escrowAddress); err != nil {
+	if err = sc.testReclaimEscrow(ctx, childEnv, cli, srcAddress, escrowAddress); err != nil {
 		return fmt.Errorf("error while running ReclaimEscrow test: %w", err)
 	}
 
 	// AmendCommissionSchedule
-	if err = sc.testAmendCommissionSchedule(childEnv, cli, srcAddress); err != nil {
+	if err = sc.testAmendCommissionSchedule(ctx, childEnv, cli, srcAddress); err != nil {
 		return fmt.Errorf("error while running AmendCommissionSchedule test: %w", err)
 	}
 
 	// Allow and Withdraw
-	if err = sc.testAllowWithdraw(childEnv, cli, srcAddress, beneficiaryAddress, beneficiaryEntityDir.String()); err != nil {
+	if err = sc.testAllowWithdraw(ctx, childEnv, cli, srcAddress, beneficiaryAddress, beneficiaryEntityDir.String()); err != nil {
 		return fmt.Errorf("error while running AllowWithdraw test: %w", err)
 	}
 
@@ -340,7 +338,7 @@ func (sc *stakeCLIImpl) testValidateAddress(childEnv *env.Env, addressText strin
 }
 
 // testTransfer tests transfer of transferAmount base units from src to dst.
-func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, dst api.Address) error {
+func (sc *stakeCLIImpl) testTransfer(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, src, dst api.Address) error {
 	srcNonce, err := sc.getAccountNonce(childEnv, src)
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
@@ -349,7 +347,7 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, d
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for destination account %s: %w", dst, err)
 	}
-	ctx := contextWithTokenInfo()
+	ctx = contextWithTokenInfo(ctx)
 
 	unsignedTransferTxPath := filepath.Join(childEnv.Dir(), "stake_transfer_unsigned.cbor")
 	if err = sc.genUnsignedTransferTx(childEnv, transferAmount, srcNonce, dst, unsignedTransferTxPath); err != nil {
@@ -420,12 +418,12 @@ func (sc *stakeCLIImpl) testTransfer(childEnv *env.Env, cli *cli.Helpers, src, d
 }
 
 // testBurn tests burning of burnAmount base units owned by src.
-func (sc *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src api.Address) error {
+func (sc *stakeCLIImpl) testBurn(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, src api.Address) error {
 	srcNonce, err := sc.getAccountNonce(childEnv, src)
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
 	}
-	ctx := contextWithTokenInfo()
+	ctx = contextWithTokenInfo(ctx)
 
 	burnTxPath := filepath.Join(childEnv.Dir(), "stake_burn.json")
 	if err = sc.genBurnTx(childEnv, burnAmount, srcNonce, burnTxPath); err != nil {
@@ -457,12 +455,12 @@ func (sc *stakeCLIImpl) testBurn(childEnv *env.Env, cli *cli.Helpers, src api.Ad
 }
 
 // testEscrow tests escrowing escrowAmount base units from src to dst.
-func (sc *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src, escrow api.Address) error {
+func (sc *stakeCLIImpl) testEscrow(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, src, escrow api.Address) error {
 	srcNonce, err := sc.getAccountNonce(childEnv, src)
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
 	}
-	ctx := contextWithTokenInfo()
+	ctx = contextWithTokenInfo(ctx)
 
 	escrowTxPath := filepath.Join(childEnv.Dir(), "stake_escrow.json")
 	if err = sc.genEscrowTx(childEnv, escrowAmount, srcNonce, escrow, escrowTxPath); err != nil {
@@ -506,12 +504,12 @@ func (sc *stakeCLIImpl) testEscrow(childEnv *env.Env, cli *cli.Helpers, src, esc
 }
 
 // testReclaimEscrow test reclaiming reclaimEscrowShares shares from an escrow account.
-func (sc *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, src, escrow api.Address) error {
+func (sc *stakeCLIImpl) testReclaimEscrow(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, src, escrow api.Address) error {
 	srcNonce, err := sc.getAccountNonce(childEnv, src)
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
 	}
-	ctx := contextWithTokenInfo()
+	ctx = contextWithTokenInfo(ctx)
 
 	reclaimEscrowTxPath := filepath.Join(childEnv.Dir(), "stake_reclaim_escrow.json")
 	if err = sc.genReclaimEscrowTx(childEnv, reclaimEscrowShares, srcNonce, escrow, reclaimEscrowTxPath); err != nil {
@@ -551,7 +549,7 @@ func (sc *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, s
 	}
 
 	// Advance epochs to trigger reclaim processing.
-	if err = sc.Net.Controller().SetEpoch(context.Background(), 1); err != nil {
+	if err = sc.Net.Controller().SetEpoch(ctx, 1); err != nil {
 		return fmt.Errorf("failed to set epoch: %w", err)
 	}
 
@@ -580,7 +578,7 @@ func (sc *stakeCLIImpl) testReclaimEscrow(childEnv *env.Env, cli *cli.Helpers, s
 	return nil
 }
 
-func (sc *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.Helpers, src api.Address) error {
+func (sc *stakeCLIImpl) testAmendCommissionSchedule(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, src api.Address) error {
 	rates := []api.CommissionRateStep{
 		{
 			Start: 40,
@@ -611,7 +609,7 @@ func (sc *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
 	}
-	ctx := contextWithTokenInfo()
+	ctx = contextWithTokenInfo(ctx)
 
 	amendCommissionScheduleTxPath := filepath.Join(childEnv.Dir(), "amend_commission_schedule.json")
 	if err := sc.genAmendCommissionScheduleTx(childEnv, srcNonce, &api.CommissionSchedule{
@@ -639,7 +637,7 @@ func (sc *stakeCLIImpl) testAmendCommissionSchedule(childEnv *env.Env, cli *cli.
 }
 
 // testAllowWithdraw tests setting an allowance and withdrawing.
-func (sc *stakeCLIImpl) testAllowWithdraw(childEnv *env.Env, cli *cli.Helpers, src, beneficiary api.Address, beneficiaryEntityDir string) error {
+func (sc *stakeCLIImpl) testAllowWithdraw(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, src, beneficiary api.Address, beneficiaryEntityDir string) error {
 	srcNonce, err := sc.getAccountNonce(childEnv, src)
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
@@ -648,7 +646,7 @@ func (sc *stakeCLIImpl) testAllowWithdraw(childEnv *env.Env, cli *cli.Helpers, s
 	if err != nil {
 		return fmt.Errorf("getAccountNonce for source account %s: %w", src, err)
 	}
-	ctx := contextWithTokenInfo()
+	ctx = contextWithTokenInfo(ctx)
 
 	// Set allowance.
 	allowTxPath := filepath.Join(childEnv.Dir(), "stake_allow.json")

@@ -227,7 +227,7 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
+func (sc *runtimeGovernanceImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -238,11 +238,10 @@ func (sc *runtimeGovernanceImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for all nodes to start.
-	if _, err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	var rtNonce uint64
 
 	// Filter compute runtimes.

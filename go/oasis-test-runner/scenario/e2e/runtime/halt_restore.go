@@ -69,8 +69,7 @@ func (sc *haltRestoreImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
-	ctx := context.Background()
+func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
@@ -80,7 +79,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return err
 	}
 	var nextEpoch beacon.EpochTime
-	if nextEpoch, err = sc.initialEpochTransitions(fixture); err != nil {
+	if nextEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 	nextEpoch++ // Next, after initial transitions.
@@ -227,7 +226,7 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}
-	if _, err = sc.initialEpochTransitionsWith(fixture, genesisDoc.Beacon.Base); err != nil {
+	if _, err = sc.initialEpochTransitionsWith(ctx, fixture, genesisDoc.Beacon.Base); err != nil {
 		return err
 	}
 	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {

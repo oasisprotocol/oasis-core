@@ -116,13 +116,11 @@ func (mtb *minTransactBalanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (mtb *minTransactBalanceImpl) Run(childEnv *env.Env) error {
+func (mtb *minTransactBalanceImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Start the network
 	if err := mtb.Net.Start(); err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	mtb.Logger.Info("waiting for network to come up")
 	if err := mtb.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {

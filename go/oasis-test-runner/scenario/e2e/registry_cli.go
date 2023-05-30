@@ -70,12 +70,11 @@ func (sc *registryCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *registryCLIImpl) Run(childEnv *env.Env) error {
+func (sc *registryCLIImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	sc.Logger.Info("waiting for nodes to register")
 	if err := sc.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {
 		return fmt.Errorf("waiting for nodes to register: %w", err)

@@ -47,8 +47,7 @@ func (sc *offsetRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *offsetRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
@@ -58,7 +57,7 @@ func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if _, err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 
@@ -91,5 +90,5 @@ func (sc *offsetRestartImpl) Run(childEnv *env.Env) error {
 	// hanging the network (no transactions could be submitted).
 	sc.Logger.Info("network back up, trying to run client again")
 	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
-	return sc.Scenario.Run(childEnv)
+	return sc.Scenario.Run(ctx, childEnv)
 }

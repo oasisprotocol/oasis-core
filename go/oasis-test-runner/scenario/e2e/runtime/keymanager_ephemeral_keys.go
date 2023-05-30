@@ -85,10 +85,9 @@ func (sc *kmEphemeralKeysImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *kmEphemeralKeysImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+func (sc *kmEphemeralKeysImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	// Start the network, but no need to start the client. Just ensure it
 	// is synced.
-	ctx := context.Background()
 	if err := sc.Scenario.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}

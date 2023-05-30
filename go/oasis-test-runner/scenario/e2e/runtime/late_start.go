@@ -49,9 +49,7 @@ func (sc *lateStartImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *lateStartImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
-
+func (sc *lateStartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Start the network.
 	var err error
 	if err = sc.Net.Start(); err != nil {

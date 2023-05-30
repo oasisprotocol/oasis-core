@@ -86,10 +86,8 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
+func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { //nolint: gocyclo
 	var err error
-	ctx := context.Background()
-
 	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}

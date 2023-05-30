@@ -246,9 +246,7 @@ func (sc *TrustRootImpl) chainContext(ctx context.Context) (string, error) {
 	return cc, nil
 }
 
-func (sc *TrustRootImpl) Run(childEnv *env.Env) (err error) {
-	ctx := context.Background()
-
+func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error) {
 	// Determine the required directories for building the runtime with an embedded trust root.
 	buildDir, _ := sc.Flags.GetString(cfgRuntimeSourceDir)
 	targetDir, _ := sc.Flags.GetString(cfgRuntimeTargetDir)

@@ -59,7 +59,7 @@ func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
+func (sc *runtimePruneImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -69,11 +69,10 @@ func (sc *runtimePruneImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if _, err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	c := sc.Net.ClientController().RuntimeClient
 
 	// Submit transactions.
