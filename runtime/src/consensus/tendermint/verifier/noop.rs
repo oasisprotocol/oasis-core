@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use io_context::Context;
+use slog::info;
 
 use crate::{
+    common::logger::get_logger,
     consensus::{
         beacon::EpochTime,
         roothash::{ComputeResultsHeader, Header},
@@ -25,6 +27,12 @@ impl NopVerifier {
     /// Create a new non-verifying verifier.
     pub fn new(protocol: Arc<Protocol>) -> Self {
         Self { protocol }
+    }
+
+    /// Start the non-verifying verifier.
+    pub fn start(&self) {
+        let logger = get_logger("consensus/cometbft/verifier");
+        info!(logger, "Starting consensus noop verifier");
     }
 
     fn fetch_light_block(&self, height: u64) -> Result<LightBlock, Error> {

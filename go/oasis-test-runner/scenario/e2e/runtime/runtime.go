@@ -585,6 +585,11 @@ func (sc *Scenario) waitNodesSynced(ctx context.Context) error {
 			return err
 		}
 	}
+	for _, n := range sc.Net.Keymanagers() {
+		if err := checkSynced(n.Node); err != nil {
+			return err
+		}
+	}
 	for _, n := range sc.Net.ComputeWorkers() {
 		if err := checkSynced(n.Node); err != nil {
 			return err
