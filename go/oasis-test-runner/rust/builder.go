@@ -14,19 +14,17 @@ import (
 )
 
 const (
-	builderSubDir         = "cargo-builder"
-	builderLogConsoleFile = "console.log"
+	builderSubDir = "cargo-builder"
 )
 
 // Builder provides an interface for building Rust runtimes by invoking `cargo`.
 type Builder struct {
 	env *env.Env
 
-	teeHardware node.TEEHardware
-	pkg         string
-
 	buildDir  string
 	targetDir string
+
+	teeHardware node.TEEHardware
 
 	envVars map[string]string
 }
@@ -41,12 +39,14 @@ func (b *Builder) ResetEnv() {
 	b.envVars = make(map[string]string)
 }
 
-func (b *Builder) cargoCommand(subCommand string) (*exec.Cmd, error) {
+func (b *Builder) cargoCommand(subCommand string, pkg string) (*exec.Cmd, error) {
 	dir, err := b.env.NewSubDir(builderSubDir)
 	if err != nil {
 		return nil, err
 	}
-	w, err := dir.NewLogWriter(builderLogConsoleFile)
+
+	logFile := fmt.Sprintf("%s.log", subCommand)
+	w, err := dir.NewLogWriter(logFile)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (b *Builder) cargoCommand(subCommand string) (*exec.Cmd, error) {
 	})
 
 	cmd := exec.Command("cargo", subCommand)
-	cmd.Dir = b.buildDir
+	cmd.Dir = filepath.Join(b.buildDir, pkg)
 	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = w
 	cmd.Stderr = w
@@ -75,12 +75,13 @@ func (b *Builder) cargoCommand(subCommand string) (*exec.Cmd, error) {
 }
 
 // Build starts the build process.
-func (b *Builder) Build() error {
-	cmd, err := b.cargoCommand("build")
+func (b *Builder) Build(pkg string) error {
+	cmd, err := b.cargoCommand("build", pkg)
 	if err != nil {
 		return err
 	}
-	cmd.Args = append(cmd.Args, "--package", b.pkg)
+
+	cmd.Args = append(cmd.Args, "--package", pkg)
 
 	if b.teeHardware == node.TEEHardwareIntelSGX {
 		cmd.Args = append(cmd.Args, "--target", "x86_64-fortanix-unknown-sgx")
@@ -91,12 +92,12 @@ func (b *Builder) Build() error {
 	}
 
 	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("failed to build runtime with trust root: %w", err)
+		return fmt.Errorf("failed to build runtime: %w", err)
 	}
 
 	// When building for SGX, also convert the ELF binary to SGXS format.
 	if b.teeHardware == node.TEEHardwareIntelSGX {
-		if cmd, err = b.cargoCommand("elf2sgxs"); err != nil {
+		if cmd, err = b.cargoCommand("elf2sgxs", pkg); err != nil {
 			return fmt.Errorf("failed to elf2sgxs runtime: %w", err)
 		}
 		if err = cmd.Run(); err != nil {
@@ -109,17 +110,15 @@ func (b *Builder) Build() error {
 // NewBuilder creates a new builder for Rust runtimes.
 func NewBuilder(
 	env *env.Env,
-	teeHardware node.TEEHardware,
-	pkg string,
 	buildDir string,
 	targetDir string,
+	teeHardware node.TEEHardware,
 ) *Builder {
 	return &Builder{
 		env:         env,
-		teeHardware: teeHardware,
-		pkg:         pkg,
 		buildDir:    buildDir,
 		targetDir:   targetDir,
+		teeHardware: teeHardware,
 		envVars:     make(map[string]string),
 	}
 }
