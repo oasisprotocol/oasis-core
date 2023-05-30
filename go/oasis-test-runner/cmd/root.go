@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,8 @@ const (
 	cfgNumRuns          = "num_runs"
 	cfgParallelJobCount = "parallel.job_count"
 	cfgParallelJobIndex = "parallel.job_index"
+	cfgTimeout          = "timeout"
+	cfgScenarioTimeout  = "scenario_timeout"
 )
 
 var (
@@ -364,6 +367,10 @@ func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 		return fmt.Errorf("root: failed to parse scenario parameters: %w", err)
 	}
 
+	// Allow scenarios to run for a limited amount of time.
+	ctx, cancel := context.WithTimeout(context.Background(), viper.GetDuration(cfgTimeout))
+	defer cancel()
+
 	// Run all requested scenarios.
 	index := 0
 	for run := 0; run < numRuns; run++ {
@@ -430,7 +437,7 @@ func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 					pusher = pusher.Gatherer(prometheus.DefaultGatherer)
 				}
 
-				if err = doScenario(childEnv, v); err != nil {
+				if err = doScenario(ctx, childEnv, v); err != nil {
 					logger.Error("failed to run scenario",
 						"err", err,
 						"scenario", name,
@@ -466,7 +473,7 @@ func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
 	return nil
 }
 
-func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
+func doScenario(ctx context.Context, childEnv *env.Env, sc scenario.Scenario) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("root: panic caught running scenario: %v: %s", r, debug.Stack())
@@ -513,7 +520,11 @@ func doScenario(childEnv *env.Env, sc scenario.Scenario) (err error) {
 		}
 	}
 
-	if err = sc.Run(childEnv); err != nil {
+	// Allow scenario to run for a limited amount of time.
+	ctx, cancel := context.WithTimeout(ctx, viper.GetDuration(cfgScenarioTimeout))
+	defer cancel()
+
+	if err = sc.Run(ctx, childEnv); err != nil {
 		err = fmt.Errorf("root: failed to run scenario: %w", err)
 		return
 	}
@@ -609,6 +620,8 @@ func init() {
 	rootFlags.IntVarP(&numRuns, cfgNumRuns, "n", 1, "number of runs for given scenario(s)")
 	rootFlags.Int(cfgParallelJobCount, 1, "(for CI) number of overall parallel jobs")
 	rootFlags.Int(cfgParallelJobIndex, 0, "(for CI) index of this parallel job")
+	rootFlags.Duration(cfgTimeout, 24*time.Hour, "the maximum allowable total duration for all scenarios")
+	rootFlags.Duration(cfgScenarioTimeout, 20*time.Minute, "the maximum allowable duration for an individual scenario")
 	_ = viper.BindPFlags(rootFlags)
 	rootCmd.Flags().AddFlagSet(rootFlags)
 	rootCmd.Flags().AddFlagSet(env.Flags)

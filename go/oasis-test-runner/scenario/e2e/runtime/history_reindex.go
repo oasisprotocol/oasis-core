@@ -82,8 +82,7 @@ func (sc *historyReindexImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *historyReindexImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	// Start the network.
@@ -158,7 +157,7 @@ func (sc *historyReindexImpl) Run(childEnv *env.Env) error {
 	if err != nil {
 		return err
 	}
-	if err = computeCtrl.WaitReady(context.Background()); err != nil {
+	if err = computeCtrl.WaitReady(ctx); err != nil {
 		return err
 	}
 

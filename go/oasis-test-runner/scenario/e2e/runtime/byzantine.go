@@ -453,9 +453,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *byzantineImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
-
+func (sc *byzantineImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -472,7 +470,7 @@ func (sc *byzantineImpl) Run(childEnv *env.Env) error {
 	}
 	defer blkSub.Close()
 
-	epoch, err := sc.initialEpochTransitions(fixture)
+	epoch, err := sc.initialEpochTransitions(ctx, fixture)
 	if err != nil {
 		return err
 	}

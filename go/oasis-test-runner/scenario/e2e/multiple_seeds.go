@@ -43,12 +43,10 @@ func (sc *multipleSeeds) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *multipleSeeds) Run(childEnv *env.Env) error { // nolint: gocyclo
+func (sc *multipleSeeds) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	if err := sc.Net.Start(); err != nil {
 		return fmt.Errorf("net Start: %w", err)
 	}
-
-	ctx := context.Background()
 
 	sc.Logger.Info("waiting for network to come up")
 	if err := sc.Net.Controller().WaitNodesRegistered(ctx, 3); err != nil {

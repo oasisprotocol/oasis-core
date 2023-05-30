@@ -119,9 +119,7 @@ func (sc *gasFeesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return ff, nil
 }
 
-func (sc *gasFeesImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
-
+func (sc *gasFeesImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.runTests(ctx); err != nil {
 		return err
 	}

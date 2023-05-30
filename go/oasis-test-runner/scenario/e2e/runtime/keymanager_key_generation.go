@@ -45,10 +45,9 @@ func (sc *kmKeyGenerationImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *kmKeyGenerationImpl) Run(childEnv *env.Env) error {
+func (sc *kmKeyGenerationImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Start the network, but no need to start the client. Just ensure it
 	// is synced.
-	ctx := context.Background()
 	if err := sc.Scenario.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}

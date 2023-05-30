@@ -56,8 +56,7 @@ func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *nodeShutdownImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
-	ctx := context.Background()
+func (sc *nodeShutdownImpl) Run(ctx context.Context, childEnv *env.Env) error { //nolint: gocyclo
 	var err error
 
 	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {

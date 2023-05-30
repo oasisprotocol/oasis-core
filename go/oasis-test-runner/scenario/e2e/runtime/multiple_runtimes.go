@@ -142,7 +142,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
+func (sc *multipleRuntimesImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -153,11 +153,9 @@ func (sc *multipleRuntimesImpl) Run(childEnv *env.Env) error {
 	}
 
 	// Wait for the nodes.
-	if _, err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	// Submit transactions.
 	numComputeRuntimeTxns, _ := sc.Flags.GetInt(cfgNumComputeRuntimeTxns)

@@ -60,7 +60,7 @@ func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (s *genesisFileImpl) Run(childEnv *env.Env) error {
+func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Manually provision genesis file.
 	s.Logger.Info("manually provisioning genesis file before starting the network")
 	if err := s.Net.MakeGenesis(); err != nil {
@@ -80,7 +80,7 @@ func (s *genesisFileImpl) Run(childEnv *env.Env) error {
 	}
 
 	s.Logger.Info("waiting for network to come up")
-	if err := s.Net.Controller().WaitNodesRegistered(context.Background(), 1); err != nil {
+	if err := s.Net.Controller().WaitNodesRegistered(ctx, 1); err != nil {
 		return fmt.Errorf("e2e/genesis-file: failed to wait for registered nodes: %w", err)
 	}
 

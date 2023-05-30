@@ -78,11 +78,11 @@ func (sc *trustRootChangeImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *trustRootChangeImpl) Run(childEnv *env.Env) error {
+func (sc *trustRootChangeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if !sc.happy {
-		return sc.unhappyRun(childEnv)
+		return sc.unhappyRun(ctx, childEnv)
 	}
-	return sc.happyRun(childEnv)
+	return sc.happyRun(ctx, childEnv)
 }
 
 // happyRun tests that trust is transferred to a new light block when consensus
@@ -101,9 +101,7 @@ func (sc *trustRootChangeImpl) Run(childEnv *env.Env) error {
 //   - Start the network and test if everything works.
 //   - Repeat last two points. Chain context transition can be done repeatedly,
 //     as long as new light blocks are trusted and valid.
-func (sc *trustRootChangeImpl) happyRun(childEnv *env.Env) (err error) {
-	ctx := context.Background()
-
+func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) (err error) {
 	// Step 1: Build a simple key/value runtime and start the network.
 	rebuild, err := sc.BuildRuntimeBinary(ctx, childEnv)
 	if err != nil {
@@ -180,9 +178,7 @@ func (sc *trustRootChangeImpl) happyRun(childEnv *env.Env) (err error) {
 //   - Repeat last two points. This time set genesis height to something big
 //     and remove one validator from the set so that we can simulate what
 //     happens when the new validator set has only 2/3 of the voting power.
-func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
-	ctx := context.Background()
-
+func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env) (err error) {
 	// Step 1: Build a simple key/value runtime and start the network.
 	rebuild, err := sc.BuildRuntimeBinary(ctx, childEnv)
 	if err != nil {
@@ -417,7 +413,7 @@ func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context,
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
 	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueScenario)
-	if err := sc.Scenario.Run(childEnv); err != nil {
+	if err := sc.Scenario.Run(ctx, childEnv); err != nil {
 		return err
 	}
 	return nil

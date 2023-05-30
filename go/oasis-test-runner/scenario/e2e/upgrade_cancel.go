@@ -22,13 +22,12 @@ var NodeUpgradeCancel scenario.Scenario = newNodeUpgradeCancelImpl()
 type nodeUpgradeCancelImpl struct {
 	Scenario
 
-	ctx          context.Context
 	currentEpoch beacon.EpochTime
 }
 
-func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
+func (sc *nodeUpgradeCancelImpl) nextEpoch(ctx context.Context) error {
 	sc.currentEpoch++
-	if err := sc.Net.Controller().SetEpoch(sc.ctx, sc.currentEpoch); err != nil {
+	if err := sc.Net.Controller().SetEpoch(ctx, sc.currentEpoch); err != nil {
 		return fmt.Errorf("failed to set epoch to %d: %w", sc.currentEpoch, err)
 	}
 	return nil
@@ -37,7 +36,6 @@ func (sc *nodeUpgradeCancelImpl) nextEpoch() error {
 func newNodeUpgradeCancelImpl() scenario.Scenario {
 	sc := &nodeUpgradeCancelImpl{
 		Scenario: *NewScenario("node-upgrade-cancel"),
-		ctx:      context.Background(),
 	}
 	return sc
 }
@@ -45,7 +43,6 @@ func newNodeUpgradeCancelImpl() scenario.Scenario {
 func (sc *nodeUpgradeCancelImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeCancelImpl{
 		Scenario: sc.Scenario.Clone(),
-		ctx:      context.Background(),
 	}
 }
 
@@ -78,7 +75,7 @@ func (sc *nodeUpgradeCancelImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return ff, nil
 }
 
-func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
+func (sc *nodeUpgradeCancelImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	var err error
 
 	if err = sc.Net.Start(); err != nil {
@@ -86,10 +83,10 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 	}
 
 	sc.Logger.Info("waiting for network to come up")
-	if err = sc.Net.Controller().WaitNodesRegistered(sc.ctx, len(sc.Net.Validators())); err != nil {
+	if err = sc.Net.Controller().WaitNodesRegistered(ctx, len(sc.Net.Validators())); err != nil {
 		return err
 	}
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 
@@ -123,7 +120,7 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("error submitting upgrade descriptor to node: %w", err)
 	}
 
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 
@@ -139,10 +136,10 @@ func (sc *nodeUpgradeCancelImpl) Run(childEnv *env.Env) error {
 		return fmt.Errorf("error canceling upgrade: %w", err)
 	}
 
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 	// This brings us to epoch 4. If the node failed to cancel the upgrade, it'll be dead by now.

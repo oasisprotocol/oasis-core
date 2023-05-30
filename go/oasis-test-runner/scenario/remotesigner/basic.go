@@ -1,6 +1,7 @@
 package remotesigner
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -35,7 +36,7 @@ func (sc *basicImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *basicImpl) Run(childEnv *env.Env) error {
+func (sc *basicImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Provision the server keys.
 	sc.logger.Info("provisioning the server keys")
 	serverBinary, _ := sc.flags.GetString(cfgServerBinary)
