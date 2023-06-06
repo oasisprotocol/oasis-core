@@ -11,7 +11,7 @@ import (
 )
 
 func TestConsistentHash(t *testing.T) {
-	// NOTE: These hashes MUST be synced with runtime/src/common/roothash.rs.
+	// NOTE: These hashes MUST be synced with runtime/src/common/roothash/commitment/executor.rs.
 	var emptyHeaderHash hash.Hash
 	_ = emptyHeaderHash.UnmarshalHex("57d73e02609a00fcf4ca43cbf8c9f12867c46942d246fb2b0bce42cbdb8db844")
 

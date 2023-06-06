@@ -5,7 +5,7 @@ import "github.com/oasisprotocol/oasis-core/go/common"
 
 // Block is an Oasis block.
 //
-// Keep this in sync with /runtime/src/common/roothash.rs.
+// Keep this in sync with /runtime/src/consensus/roothash/block.rs.
 type Block struct {
 	// Header is the block header.
 	Header Header `json:"header"`

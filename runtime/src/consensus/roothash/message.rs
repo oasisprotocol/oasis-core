@@ -1,62 +1,7 @@
-//! Consensus roothash structures.
-//!
-//! # Note
-//!
-//! This **MUST** be kept in sync with go/roothash/api.
-//!
-use thiserror::Error;
-
 use crate::{
-    common::{
-        crypto::{hash::Hash, signature::PublicKey},
-        namespace::Namespace,
-        quantity::Quantity,
-        versioned::Versioned,
-    },
-    consensus::{address::Address, governance, registry, staking, state::StateError},
+    common::{crypto::hash::Hash, quantity::Quantity, versioned::Versioned},
+    consensus::{address::Address, governance, registry, staking},
 };
-
-/// Errors emitted by the roothash module.
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("roothash: invalid runtime {0}")]
-    InvalidRuntime(Namespace),
-
-    #[error(transparent)]
-    State(#[from] StateError),
-}
-
-/// Runtime block.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
-pub struct Block {
-    /// Header.
-    pub header: Header,
-}
-
-/// Runtime block annotated with consensus information.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
-pub struct AnnotatedBlock {
-    /// Consensus height at which this runtime block was produced.
-    pub consensus_height: i64,
-    /// Runtime block.
-    pub block: Block,
-}
-
-/// Header type.
-///
-/// # Note
-///
-/// This should be kept in sync with go/roothash/api/block/header.go.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
-#[repr(u8)]
-pub enum HeaderType {
-    #[default]
-    Invalid = 0,
-    Normal = 1,
-    RoundFailed = 2,
-    EpochTransition = 3,
-    Suspended = 4,
-}
 
 /// A message that can be emitted by the runtime to be processed by the consensus layer.
 #[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
@@ -111,29 +56,6 @@ pub enum GovernanceMessage {
     SubmitProposal(governance::ProposalContent),
 }
 
-/// Result of a message being processed by the consensus layer.
-#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
-pub struct MessageEvent {
-    #[cbor(optional)]
-    pub module: String,
-
-    #[cbor(optional)]
-    pub code: u32,
-
-    #[cbor(optional)]
-    pub index: u32,
-
-    #[cbor(optional)]
-    pub result: Option<cbor::Value>,
-}
-
-impl MessageEvent {
-    /// Returns true if the event indicates that the message was successfully processed.
-    pub fn is_success(&self) -> bool {
-        self.code == 0
-    }
-}
-
 /// An incoming message emitted by the consensus layer to be processed by the runtime.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub struct IncomingMessage {
@@ -169,151 +91,21 @@ impl IncomingMessage {
     }
 }
 
-/// Information about how a particular round was executed by the consensus layer.
-#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
-pub struct RoundResults {
-    /// Results of executing emitted runtime messages.
-    #[cbor(optional)]
-    pub messages: Vec<MessageEvent>,
-
-    /// Public keys of compute nodes' controlling entities that positively contributed to the round
-    /// by replicating the computation correctly.
-    #[cbor(optional)]
-    pub good_compute_entities: Vec<PublicKey>,
-    /// Public keys of compute nodes' controlling entities that negatively contributed to the round
-    /// by causing discrepancies.
-    #[cbor(optional)]
-    pub bad_compute_entities: Vec<PublicKey>,
-}
-
-/// Block header.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
-pub struct Header {
-    /// Protocol version number.
-    pub version: u16,
-    /// Chain namespace.
-    pub namespace: Namespace,
-    /// Round number.
-    pub round: u64,
-    /// Timestamp (POSIX time).
-    pub timestamp: u64,
-    /// Header type.
-    pub header_type: HeaderType,
-    /// Previous block hash.
-    pub previous_hash: Hash,
-    /// I/O merkle root.
-    pub io_root: Hash,
-    /// State merkle root.
-    pub state_root: Hash,
-    /// Messages hash.
-    pub messages_hash: Hash,
-    /// Hash of processed incoming messages.
-    pub in_msgs_hash: Hash,
-}
-
-impl Header {
-    /// Returns a hash of an encoded header.
-    pub fn encoded_hash(&self) -> Hash {
-        Hash::digest_bytes(&cbor::to_vec(self.clone()))
-    }
-}
-
-/// Compute results header signature context.
-#[cfg_attr(not(target_env = "sgx"), allow(unused))]
-pub const COMPUTE_RESULTS_HEADER_CONTEXT: &[u8] = b"oasis-core/roothash: compute results header";
-
-/// The header of a computed batch output by a runtime. This header is a
-/// compressed representation (e.g., hashes instead of full content) of
-/// the actual results.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
-pub struct ComputeResultsHeader {
-    /// Round number.
-    pub round: u64,
-    /// Hash of the previous block header this batch was computed against.
-    pub previous_hash: Hash,
-
-    /// The I/O merkle root.
-    #[cbor(optional)]
-    pub io_root: Option<Hash>,
-    /// The root hash of the state after computing this batch.
-    #[cbor(optional)]
-    pub state_root: Option<Hash>,
-    /// Hash of messages sent from this batch.
-    #[cbor(optional)]
-    pub messages_hash: Option<Hash>,
-
-    /// The hash of processed incoming messages.
-    #[cbor(optional)]
-    pub in_msgs_hash: Option<Hash>,
-    /// The number of processed incoming messages.
-    #[cbor(optional)]
-    pub in_msgs_count: u32,
-}
-
-impl ComputeResultsHeader {
-    /// Returns a hash of an encoded header.
-    pub fn encoded_hash(&self) -> Hash {
-        Hash::digest_bytes(&cbor::to_vec(self.clone()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
+    use crate::{
+        common::{
+            crypto::{hash::Hash, signature::PublicKey},
+            namespace::Namespace,
+            quantity,
+            versioned::Versioned,
+        },
+        consensus::{governance, registry, scheduler, staking},
+    };
+
     use super::*;
-    use crate::{common::quantity, consensus::scheduler};
-
-    #[test]
-    fn test_consistent_hash_header() {
-        // NOTE: These hashes MUST be synced with go/roothash/api/block/header_test.go.
-        let empty = Header::default();
-        assert_eq!(
-            empty.encoded_hash(),
-            Hash::from("677ad1a6b9f5e99ed94e5d598b6f92a4641a5f952f2d753b2a6122b6dceeb792")
-        );
-
-        let populated = Header {
-            version: 42,
-            namespace: Namespace::from(Hash::empty_hash().as_ref()),
-            round: 1000,
-            timestamp: 1560257841,
-            header_type: HeaderType::RoundFailed,
-            previous_hash: empty.encoded_hash(),
-            io_root: Hash::empty_hash(),
-            state_root: Hash::empty_hash(),
-            messages_hash: Hash::empty_hash(),
-            in_msgs_hash: Hash::empty_hash(),
-        };
-        assert_eq!(
-            populated.encoded_hash(),
-            Hash::from("b17374d9b36796752a787d0726ef44826bfdb3ece52545e126c8e7592663544d")
-        );
-    }
-
-    #[test]
-    fn test_consistent_hash_compute_results_header() {
-        // NOTE: These hashes MUST be synced with go/roothash/api/commitment/executor_test.go.
-        let empty = ComputeResultsHeader::default();
-        assert_eq!(
-            empty.encoded_hash(),
-            Hash::from("57d73e02609a00fcf4ca43cbf8c9f12867c46942d246fb2b0bce42cbdb8db844")
-        );
-
-        let populated = ComputeResultsHeader {
-            round: 42,
-            previous_hash: empty.encoded_hash(),
-            io_root: Some(Hash::empty_hash()),
-            state_root: Some(Hash::empty_hash()),
-            messages_hash: Some(Hash::empty_hash()),
-            in_msgs_hash: Some(Hash::empty_hash()),
-            in_msgs_count: 0,
-        };
-        assert_eq!(
-            populated.encoded_hash(),
-            Hash::from("8459a9e6e3341cd2df5ada5737469a505baf92397aaa88b7100915324506d843")
-        );
-    }
 
     #[test]
     fn test_consistent_messages_hash() {
@@ -473,43 +265,6 @@ mod tests {
         for (msgs, expected_hash) in tcs {
             println!("{:?}", cbor::to_vec(msgs.clone()));
             assert_eq!(Message::messages_hash(&msgs), Hash::from(expected_hash));
-        }
-    }
-
-    #[test]
-    fn test_consistent_round_results() {
-        let tcs = vec![
-            ("oA==", RoundResults::default()),
-            ("oWhtZXNzYWdlc4GiZGNvZGUBZm1vZHVsZWR0ZXN0", RoundResults {
-                messages: vec![MessageEvent{module: "test".to_owned(), code: 1, index: 0, result: None}],
-                ..Default::default()
-            }),
-            ("omhtZXNzYWdlc4GkZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3RmcmVzdWx0a3Rlc3QtcmVzdWx0dWdvb2RfY29tcHV0ZV9lbnRpdGllc4NYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI=",
-                RoundResults {
-                    messages: vec![MessageEvent{module: "test".to_owned(), code: 42, index: 1, result: Some(cbor::Value::TextString("test-result".to_string()))}],
-                    good_compute_entities: vec![
-                        "0000000000000000000000000000000000000000000000000000000000000000".into(),
-                        "0000000000000000000000000000000000000000000000000000000000000001".into(),
-                        "0000000000000000000000000000000000000000000000000000000000000002".into(),
-                    ],
-                    ..Default::default()
-                }),
-            ("o2htZXNzYWdlc4GkZGNvZGUYKmVpbmRleAFmbW9kdWxlZHRlc3RmcmVzdWx0a3Rlc3QtcmVzdWx0dGJhZF9jb21wdXRlX2VudGl0aWVzgVggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAF1Z29vZF9jb21wdXRlX2VudGl0aWVzglggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
-                RoundResults {
-                    messages: vec![MessageEvent{module: "test".to_owned(), code: 42, index: 1, result: Some(cbor::Value::TextString("test-result".to_string()))}],
-                    good_compute_entities: vec![
-                        "0000000000000000000000000000000000000000000000000000000000000000".into(),
-                        "0000000000000000000000000000000000000000000000000000000000000002".into(),
-                    ],
-                    bad_compute_entities: vec![
-                        "0000000000000000000000000000000000000000000000000000000000000001".into(),
-                    ],
-                }),
-        ];
-        for (encoded_base64, rr) in tcs {
-            let dec: RoundResults = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("round results should deserialize correctly");
-            assert_eq!(dec, rr, "decoded results should match the expected value");
         }
     }
 }
