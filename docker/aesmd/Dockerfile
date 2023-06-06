@@ -4,7 +4,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get install -qq curl lsb-release gpg
 
-ADD intel-sgx-deb.gpg /etc/apt/trusted.gpg.d
+ADD intel-sgx-deb.asc /etc/apt/trusted.gpg.d
 
 RUN echo "deb https://download.01.org/intel-sgx/sgx_repo/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/intel-sgx.list && \
     apt-get update -qq && apt-get install -qq sgx-aesm-service libsgx-aesm-launch-plugin libsgx-aesm-epid-plugin
