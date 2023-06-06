@@ -29,6 +29,51 @@ pub enum Error {
 
     #[error(transparent)]
     State(#[from] StateError),
+
+    #[error("roothash/commitment: no runtime configured")]
+    NoRuntime,
+
+    #[error("roothash/commitment: no committee configured")]
+    NoCommittee,
+
+    #[error("roothash/commitment: invalid committee kind")]
+    InvalidCommitteeKind,
+
+    #[error("roothash/commitment: batch RAK signature invalid")]
+    RakSigInvalid,
+
+    #[error("roothash/commitment: node not part of committee")]
+    NotInCommittee,
+
+    #[error("roothash/commitment: node already sent commitment")]
+    AlreadyCommitted,
+
+    #[error("roothash/commitment: submitted commitment is not based on correct block")]
+    NotBasedOnCorrectBlock,
+
+    #[error("roothash/commitment: discrepancy detected")]
+    DiscrepancyDetected,
+
+    #[error("roothash/commitment: still waiting for commits")]
+    StillWaiting,
+
+    #[error("roothash/commitment: insufficient votes to finalize discrepancy resolution round")]
+    InsufficientVotes,
+
+    #[error("roothash/commitment: bad executor commitment")]
+    BadExecutorCommitment,
+
+    #[error("roothash/commitment: invalid messages")]
+    InvalidMessages,
+
+    #[error("roothash/commitment: invalid round")]
+    InvalidRound,
+
+    #[error("roothash/commitment: no proposer commitment")]
+    NoProposerCommitment,
+
+    #[error("roothash/commitment: bad proposer commitment")]
+    BadProposerCommitment,
 }
 
 /// Runtime block annotated with consensus information.

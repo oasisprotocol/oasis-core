@@ -22,7 +22,7 @@ use crate::{
     },
     consensus::{
         beacon::EpochTime,
-        roothash::{self, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_CONTEXT},
+        roothash::{self, ComputeResultsHeader, Header, COMPUTE_RESULTS_HEADER_SIGNATURE_CONTEXT},
         state::keymanager::Status as KeyManagerStatus,
         verifier::Verifier,
         LightBlock,
@@ -701,7 +701,7 @@ impl Dispatcher {
         let rak_sig = self
             .identity
             .sign(
-                COMPUTE_RESULTS_HEADER_CONTEXT,
+                COMPUTE_RESULTS_HEADER_SIGNATURE_CONTEXT,
                 &cbor::to_vec(header.clone()),
             )
             .unwrap();

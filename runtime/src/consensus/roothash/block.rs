@@ -17,6 +17,45 @@ pub struct Block {
     pub header: Header,
 }
 
+impl Block {
+    /// Creates a new empty genesis block given a runtime id and POSIX timestamp.
+    pub fn new_genesis_block(id: Namespace, timestamp: u64) -> Block {
+        Block {
+            header: Header {
+                version: 0,
+                round: 0,
+                timestamp,
+                header_type: HeaderType::Normal,
+                namespace: id,
+                previous_hash: Hash::empty_hash(),
+                io_root: Hash::empty_hash(),
+                state_root: Hash::empty_hash(),
+                messages_hash: Hash::empty_hash(),
+                in_msgs_hash: Hash::empty_hash(),
+            },
+        }
+    }
+
+    /// Creates a new empty block with a specific type.
+    pub fn new_empty_block(child: &Block, timestamp: u64, header_type: HeaderType) -> Block {
+        Block {
+            header: Header {
+                version: child.header.version,
+                namespace: child.header.namespace,
+                round: child.header.round + 1,
+                timestamp,
+                header_type,
+                previous_hash: child.header.encoded_hash(),
+                io_root: Hash::empty_hash(),
+                // State root is unchanged.
+                state_root: child.header.state_root,
+                messages_hash: Hash::empty_hash(),
+                in_msgs_hash: Hash::empty_hash(),
+            },
+        }
+    }
+}
+
 /// Header type.
 ///
 /// # Note

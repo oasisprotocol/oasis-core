@@ -36,6 +36,7 @@ func TestConsistentHash(t *testing.T) {
 }
 
 func TestValidateBasic(t *testing.T) {
+	// NOTE: These hashes MUST be synced with runtime/src/common/roothash/commitment/executor.rs.
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 

@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use crate::{
     common::{crypto::hash::Hash, quantity::Quantity, versioned::Versioned},
     consensus::{address::Address, governance, registry, staking},
@@ -25,6 +27,24 @@ impl Message {
         }
         Hash::digest_bytes(&cbor::to_vec(msgs.to_vec()))
     }
+
+    /// Returns a hash of provided incoming runtime messages.
+    pub fn in_messages_hash(msgs: &[IncomingMessage]) -> Hash {
+        if msgs.is_empty() {
+            // Special case if there are no messages.
+            return Hash::empty_hash();
+        }
+        Hash::digest_bytes(&cbor::to_vec(msgs.to_vec()))
+    }
+
+    /// Performs basic validation of the runtime message.
+    pub fn validate_basic(&self) -> Result<()> {
+        match self {
+            Message::Staking(msg) => msg.inner.validate_basic(),
+            Message::Registry(msg) => msg.inner.validate_basic(),
+            Message::Governance(msg) => msg.inner.validate_basic(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
@@ -42,10 +62,48 @@ pub enum StakingMessage {
     ReclaimEscrow(staking::ReclaimEscrow),
 }
 
+impl StakingMessage {
+    /// Performs basic validation of the staking message.
+    pub fn validate_basic(&self) -> Result<()> {
+        match self {
+            StakingMessage::Transfer(_) => {
+                // No validation at this time.
+                Ok(())
+            }
+            StakingMessage::Withdraw(_) => {
+                // No validation at this time.
+                Ok(())
+            }
+            StakingMessage::AddEscrow(_) => {
+                // No validation at this time.
+                Ok(())
+            }
+            StakingMessage::ReclaimEscrow(_) => {
+                // No validation at this time.
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 pub enum RegistryMessage {
     #[cbor(rename = "update_runtime")]
     UpdateRuntime(registry::Runtime),
+}
+
+impl RegistryMessage {
+    /// Performs basic validation of the registry message.
+    pub fn validate_basic(&self) -> Result<()> {
+        match self {
+            RegistryMessage::UpdateRuntime(_) => {
+                // The runtime descriptor will already be validated in registerRuntime
+                // in the registry app when it processes the message, so we don't have
+                // to do any validation here.
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, cbor::Encode, cbor::Decode)]
@@ -54,6 +112,22 @@ pub enum GovernanceMessage {
     CastVote(governance::ProposalVote),
     #[cbor(rename = "submit_proposal")]
     SubmitProposal(governance::ProposalContent),
+}
+
+impl GovernanceMessage {
+    /// Performs basic validation of the governance message.
+    pub fn validate_basic(&self) -> Result<()> {
+        match self {
+            GovernanceMessage::CastVote(_) => {
+                // No validation at this time.
+                Ok(())
+            }
+            GovernanceMessage::SubmitProposal(_) => {
+                // No validation at this time.
+                Ok(())
+            }
+        }
+    }
 }
 
 /// An incoming message emitted by the consensus layer to be processed by the runtime.
