@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	badgerDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	rocksDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/rocksdb"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	mkvsTests "github.com/oasisprotocol/oasis-core/go/storage/mkvs/tests"
@@ -2275,6 +2276,30 @@ func TestBadgerBackend(t *testing.T) {
 		// Create a Badger-backed Node DB factory.
 		factory := func(ns common.Namespace) (db.NodeDB, error) {
 			return badgerDb.New(&db.Config{
+				DB:           dir,
+				NoFsync:      true,
+				Namespace:    ns,
+				MaxCacheSize: 16 * 1024 * 1024,
+			})
+		}
+
+		cleanup := func() {
+			os.RemoveAll(dir)
+		}
+
+		return factory, cleanup
+	}, nil)
+}
+
+func TestRocksDBBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (NodeDBFactory, func()) {
+		// Create a new random temporary directory under /tmp.
+		dir, err := os.MkdirTemp("", "mkvs.test.rocksdb")
+		require.NoError(t, err, "TempDir")
+
+		// Create a RocksDB-backed Node DB factory.
+		factory := func(ns common.Namespace) (db.NodeDB, error) {
+			return rocksDb.New(&db.Config{
 				DB:           dir,
 				NoFsync:      true,
 				Namespace:    ns,
