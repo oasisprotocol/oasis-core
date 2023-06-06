@@ -1,7 +1,6 @@
 package events
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 
@@ -28,8 +27,8 @@ type CustomTypedAttribute interface {
 }
 
 // IsAttributeKind checks whether the given attribute key corresponds to the passed typed attribute.
-func IsAttributeKind(key []byte, kind TypedAttribute) bool {
-	return bytes.Equal(key, []byte(kind.EventKind()))
+func IsAttributeKind(key string, kind TypedAttribute) bool {
+	return key == kind.EventKind()
 }
 
 // DecodeValue decodes the attribute event value.
@@ -47,11 +46,11 @@ func DecodeValue(value string, ev TypedAttribute) error {
 }
 
 // EncodeValue encodes the attribute event value.
-func EncodeValue(ev TypedAttribute) []byte {
+func EncodeValue(ev TypedAttribute) string {
 	// Use custom decode if this is a custom typed attribute.
 	if cta, ok := ev.(CustomTypedAttribute); ok {
-		return []byte(cta.EventValue())
+		return cta.EventValue()
 	}
 	// Otherwise default to base64 encoded CBOR marshalled value.
-	return []byte(base64.StdEncoding.EncodeToString(cbor.Marshal(ev)))
+	return base64.StdEncoding.EncodeToString(cbor.Marshal(ev))
 }

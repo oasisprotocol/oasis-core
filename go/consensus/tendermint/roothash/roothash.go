@@ -7,12 +7,12 @@ import (
 	"math"
 	"sync"
 
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 	"github.com/hashicorp/go-multierror"
-	tmabcitypes "github.com/tendermint/tendermint/abci/types"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
@@ -74,7 +74,7 @@ type serviceClient struct {
 	runtimeNotifiers map[common.Namespace]*runtimeBrokers
 	genesisBlocks    map[common.Namespace]*block.Block
 
-	queryCh        chan tmpubsub.Query
+	queryCh        chan cmtpubsub.Query
 	cmdCh          chan interface{}
 	trackedRuntime map[common.Namespace]*trackedRuntime
 
@@ -289,7 +289,7 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 
 func (sc *serviceClient) getEvents(ctx context.Context, height int64, txns [][]byte) ([]*api.Event, error) {
 	// Get block results at given height.
-	var results *tmrpctypes.ResultBlockResults
+	var results *cmtrpctypes.ResultBlockResults
 	results, err := sc.backend.GetBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get tendermint block results",
@@ -312,7 +312,7 @@ func (sc *serviceClient) getEvents(ctx context.Context, height int64, txns [][]b
 		// The order of transactions in txns and results.TxsResults is
 		// supposed to match, so the same index in both slices refers to the
 		// same transaction.
-		var tx tmtypes.Tx
+		var tx cmttypes.Tx
 		if txns != nil {
 			tx = txns[txIdx]
 		}
@@ -418,7 +418,7 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 	)
 
 	for height := lastHeight; height <= currentHeight; height++ {
-		var results *tmrpctypes.ResultBlockResults
+		var results *cmtrpctypes.ResultBlockResults
 		results, err = sc.backend.GetBlockResults(sc.ctx, height)
 		if err != nil {
 			// XXX: could soft-fail first few heights in case more heights were
@@ -454,14 +454,14 @@ func (sc *serviceClient) reindexBlocks(currentHeight int64, bh api.BlockHistory)
 					}
 
 					var rtAttribute api.RuntimeIDAttribute
-					if err = eventsAPI.DecodeValue(string(val), &rtAttribute); err != nil {
+					if err = eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
 						return 0, fmt.Errorf("roothash: corrupt runtime ID: %w", err)
 					}
 					evRtID = &rtAttribute.ID
 
 				case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
 					var e api.FinalizedEvent
-					if err = eventsAPI.DecodeValue(string(val), &e); err != nil {
+					if err = eventsAPI.DecodeValue(val, &e); err != nil {
 						logger.Error("failed to unmarshal finalized event",
 							"err", err,
 							"height", height,
@@ -570,8 +570,8 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
-	events, err := EventsFromTendermint(tx, height, []tmabcitypes.Event{*ev})
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+	events, err := EventsFromTendermint(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("roothash: failed to process tendermint events: %w", err)
 	}
@@ -723,9 +723,9 @@ func (sc *serviceClient) processFinalizedEvent(
 
 // EventsFromTendermint extracts staking events from tendermint events.
 func EventsFromTendermint(
-	tx tmtypes.Tx,
+	tx cmttypes.Tx,
 	height int64,
-	tmEvents []tmabcitypes.Event,
+	tmEvents []cmtabcitypes.Event,
 ) ([]*api.Event, error) {
 	var txHash hash.Hash
 	switch tx {
@@ -756,7 +756,7 @@ EventLoop:
 			case eventsAPI.IsAttributeKind(key, &api.FinalizedEvent{}):
 				// Finalized event.
 				var e api.FinalizedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
 					continue EventLoop
 				}
@@ -765,7 +765,7 @@ EventLoop:
 			case eventsAPI.IsAttributeKind(key, &api.ExecutionDiscrepancyDetectedEvent{}):
 				// An execution discrepancy has been detected.
 				var e api.ExecutionDiscrepancyDetectedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err))
 					continue EventLoop
 				}
@@ -774,7 +774,7 @@ EventLoop:
 			case eventsAPI.IsAttributeKind(key, &api.ExecutorCommittedEvent{}):
 				// An executor commit has been processed.
 				var e api.ExecutorCommittedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutorComitted event: %w", err))
 					continue EventLoop
 				}
@@ -783,7 +783,7 @@ EventLoop:
 			case eventsAPI.IsAttributeKind(key, &api.InMsgProcessedEvent{}):
 				// Incoming message processed event.
 				var e api.InMsgProcessedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt InMsgProcessed event: %w", err))
 					continue EventLoop
 				}
@@ -795,7 +795,7 @@ EventLoop:
 					continue EventLoop
 				}
 				rtAttribute := api.RuntimeIDAttribute{}
-				if err := eventsAPI.DecodeValue(string(val), &rtAttribute); err != nil {
+				if err := eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt runtime ID: %w", err))
 					continue EventLoop
 				}
@@ -887,7 +887,7 @@ func New(
 		allBlockNotifier: pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
 		genesisBlocks:    make(map[common.Namespace]*block.Block),
-		queryCh:          make(chan tmpubsub.Query, runtimeRegistry.MaxRuntimeCount),
+		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
 		cmdCh:            make(chan interface{}, runtimeRegistry.MaxRuntimeCount),
 		trackedRuntime:   make(map[common.Namespace]*trackedRuntime),
 		pruneHandler:     ph,

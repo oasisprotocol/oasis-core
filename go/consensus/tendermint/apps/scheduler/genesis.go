@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/tendermint/tendermint/abci/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	"github.com/cometbft/cometbft/abci/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -166,8 +166,8 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 		if err != nil {
 			return fmt.Errorf("init chain: total supply would break voting power computation: %w", err)
 		}
-		if supplyPower > tmtypes.MaxTotalVotingPower {
-			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, tmtypes.MaxTotalVotingPower)
+		if supplyPower > cmttypes.MaxTotalVotingPower {
+			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, cmttypes.MaxTotalVotingPower)
 		}
 	}
 

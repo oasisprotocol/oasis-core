@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"sync"
 
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
-	tmabcitypes "github.com/tendermint/tendermint/abci/types"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -240,7 +240,7 @@ func (sc *serviceClient) SetEpoch(ctx context.Context, epoch beaconAPI.EpochTime
 }
 
 func (sc *serviceClient) ServiceDescriptor() tmAPI.ServiceDescriptor {
-	return tmAPI.NewStaticServiceDescriptor("beacon", app.EventType, []tmpubsub.Query{app.QueryApp})
+	return tmAPI.NewStaticServiceDescriptor("beacon", app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
 func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
@@ -281,11 +281,14 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
 	return nil
 }
 
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
-		if events.IsAttributeKind(pair.GetKey(), &beaconAPI.EpochEvent{}) {
+		key := pair.GetKey()
+		val := pair.GetValue()
+
+		if events.IsAttributeKind(key, &beaconAPI.EpochEvent{}) {
 			var event beaconAPI.EpochEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+			if err := events.DecodeValue(val, &event); err != nil {
 				sc.logger.Error("epochtime: malformed epoch event value",
 					"err", err,
 				)
@@ -296,9 +299,9 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 				sc.epochNotifier.Broadcast(event.Epoch)
 			}
 		}
-		if events.IsAttributeKind(pair.GetKey(), &beaconAPI.VRFEvent{}) {
+		if events.IsAttributeKind(key, &beaconAPI.VRFEvent{}) {
 			var event beaconAPI.VRFEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+			if err := events.DecodeValue(val, &event); err != nil {
 				sc.logger.Error("beacon: malformed VRF event",
 					"err", err,
 				)

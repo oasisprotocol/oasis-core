@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cometbft/cometbft/abci/types"
 	"github.com/eapache/channels"
-	"github.com/tendermint/tendermint/abci/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"

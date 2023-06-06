@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	tmstore "github.com/tendermint/tendermint/store"
+	cmtstore "github.com/cometbft/cometbft/store"
 
 	"github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -158,7 +158,7 @@ func (sc *validatorEquivocationImpl) Run(childEnv *env.Env) error { // nolint: g
 	if err != nil {
 		return fmt.Errorf("tendermint badger db: %w", err)
 	}
-	tmBlkStore := tmstore.NewBlockStore(tmDb)
+	tmBlkStore := cmtstore.NewBlockStore(tmDb)
 	tmBlk := tmBlkStore.LoadBlock(1)
 	if tmBlk == nil {
 		return fmt.Errorf("loading tendermint block failed")

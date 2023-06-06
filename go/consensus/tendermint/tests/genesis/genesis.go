@@ -6,8 +6,7 @@ import (
 	"net"
 	"time"
 
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -34,14 +33,14 @@ var _ tendermint.GenesisProvider = (*testNodeGenesisProvider)(nil)
 
 type testNodeGenesisProvider struct {
 	document   *genesis.Document
-	tmDocument *tmtypes.GenesisDoc
+	tmDocument *cmttypes.GenesisDoc
 }
 
 func (p *testNodeGenesisProvider) GetGenesisDocument() (*genesis.Document, error) {
 	return p.document, nil
 }
 
-func (p *testNodeGenesisProvider) GetTendermintGenesisDocument() (*tmtypes.GenesisDoc, error) {
+func (p *testNodeGenesisProvider) GetTendermintGenesisDocument() (*cmttypes.GenesisDoc, error) {
 	return p.tmDocument, nil
 }
 
@@ -189,20 +188,20 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 	if err != nil {
 		return nil, err
 	}
-	tmDoc := &tmtypes.GenesisDoc{
+	tmDoc := &cmttypes.GenesisDoc{
 		InitialHeight:   doc.Height,
 		ChainID:         doc.ChainID,
 		GenesisTime:     doc.Time,
-		ConsensusParams: tmtypes.DefaultConsensusParams(),
+		ConsensusParams: cmttypes.DefaultConsensusParams(),
 		AppState:        b,
 	}
-	tmDoc.ConsensusParams.Version = tmproto.VersionParams{
-		AppVersion: version.TendermintAppVersion,
+	tmDoc.ConsensusParams.Version = cmttypes.VersionParams{
+		App: version.TendermintAppVersion,
 	}
 
 	nodeID := identity.ConsensusSigner.Public()
 	pk := crypto.PublicKeyToTendermint(&nodeID)
-	validator := tmtypes.GenesisValidator{
+	validator := cmttypes.GenesisValidator{
 		Address: pk.Address(),
 		PubKey:  pk,
 		Power:   1,

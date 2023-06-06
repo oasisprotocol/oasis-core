@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tendermint/tendermint/abci/types"
+	"github.com/cometbft/cometbft/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"

@@ -7,13 +7,13 @@ import (
 	"sync/atomic"
 
 	dbm "github.com/cometbft/cometbft-db"
-	tmcore "github.com/tendermint/tendermint/rpc/core"
-	tmcoretypes "github.com/tendermint/tendermint/rpc/core/types"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/jsonrpc/types"
-	"github.com/tendermint/tendermint/state"
-	tmstate "github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/store"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmtcore "github.com/cometbft/cometbft/rpc/core"
+	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmtrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
+	"github.com/cometbft/cometbft/state"
+	cmtstate "github.com/cometbft/cometbft/state"
+	"github.com/cometbft/cometbft/store"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -68,7 +68,7 @@ type commonNode struct {
 	serviceClientsWg sync.WaitGroup
 
 	ctx    context.Context
-	rpcCtx *tmrpctypes.Context
+	rpcCtx *cmtrpctypes.Context
 
 	dataDir  string
 	identity *identity.Identity
@@ -496,7 +496,7 @@ func (n *commonNode) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSi
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error) {
+func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*cmttypes.Block, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -511,7 +511,7 @@ func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmt
 	default:
 		return nil, err
 	}
-	result, err := tmcore.Block(n.rpcCtx, &tmHeight)
+	result, err := cmtcore.Block(n.rpcCtx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block query failed: %w", err)
 	}
@@ -519,7 +519,7 @@ func (n *commonNode) GetTendermintBlock(ctx context.Context, height int64) (*tmt
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*tmcoretypes.ResultBlockResults, error) {
+func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*cmtcoretypes.ResultBlockResults, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -528,7 +528,7 @@ func (n *commonNode) GetBlockResults(ctx context.Context, height int64) (*tmcore
 	if err != nil {
 		return nil, err
 	}
-	result, err := tmcore.BlockResults(n.rpcCtx, &tmHeight)
+	result, err := cmtcore.BlockResults(n.rpcCtx, &tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: block results query failed: %w", err)
 	}
@@ -578,7 +578,7 @@ func (n *commonNode) getLightBlock(ctx context.Context, height int64, allowPendi
 		return nil, err
 	}
 
-	var lb tmtypes.LightBlock
+	var lb cmttypes.LightBlock
 
 	// Don't use the client as that imposes stupid pagination. Access the state database directly.
 	lb.ValidatorSet, err = n.stateStore.LoadValidators(tmHeight)
@@ -586,7 +586,7 @@ func (n *commonNode) getLightBlock(ctx context.Context, height int64, allowPendi
 		return nil, consensusAPI.ErrVersionNotFound
 	}
 
-	commit, err := tmcore.Commit(n.rpcCtx, &tmHeight)
+	commit, err := cmtcore.Commit(n.rpcCtx, &tmHeight)
 	if err == nil && commit.Header != nil {
 		lb.SignedHeader = &commit.SignedHeader
 		tmHeight = commit.Header.Height
@@ -594,16 +594,16 @@ func (n *commonNode) getLightBlock(ctx context.Context, height int64, allowPendi
 		// The specified height seems to be for the "next" block that has not yet been finalized. We
 		// construct a "pending" block instead (this block cannot be verified by a light client as
 		// it doesn't have any commits).
-		var state tmstate.State
+		var state cmtstate.State
 		state, err = n.stateStore.Load()
 		if err != nil {
 			return nil, fmt.Errorf("tendermint: failed to fetch latest blockchain state: %w", err)
 		}
 
-		commit := tmtypes.NewCommit(height, 0, tmtypes.BlockID{}, nil)
+		commit := cmttypes.NewCommit(height, 0, cmttypes.BlockID{}, nil)
 		var proposerAddr [20]byte
-		blk, _ := state.MakeBlock(height, nil, commit, nil, proposerAddr[:])
-		lb.SignedHeader = &tmtypes.SignedHeader{
+		blk := state.MakeBlock(height, nil, commit, nil, proposerAddr[:])
+		lb.SignedHeader = &cmttypes.SignedHeader{
 			Header: &blk.Header,
 			Commit: commit,
 		}
@@ -749,13 +749,14 @@ func (n *commonNode) GetParameters(ctx context.Context, height int64) (*consensu
 		return nil, err
 	}
 	// Query consensus parameters directly from the state store, as fetching
-	// via tmcore.ConsensusParameters also tries fetching latest uncommitted
+	// via n.client.ConsensusParameters also tries fetching latest uncommitted
 	// block which wont work with the archive node setup.
 	consensusParams, err := n.stateStore.LoadConsensusParams(tmHeight)
 	if err != nil {
 		return nil, fmt.Errorf("%w: tendermint: consensus params query failed: %s", consensusAPI.ErrVersionNotFound, err.Error())
 	}
-	meta, err := consensusParams.Marshal()
+	cpPB := consensusParams.ToProto()
+	meta, err := cpPB.Marshal()
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to marshal consensus params: %w", err)
 	}
@@ -861,7 +862,7 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 // Unimplemented methods.
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error) {
+func (n *commonNode) WatchTendermintBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error) {
 	return nil, nil, consensusAPI.ErrUnsupported
 }
 
@@ -935,7 +936,7 @@ func newCommonNode(
 		BaseBackgroundService: *cmservice.NewBaseBackgroundService("tendermint"),
 		ctx:                   ctx,
 		identity:              identity,
-		rpcCtx:                &tmrpctypes.Context{},
+		rpcCtx:                &cmtrpctypes.Context{},
 		genesis:               genesisDoc,
 		dataDir:               dataDir,
 		svcMgr:                cmbackground.NewServiceManager(logging.GetLogger("tendermint/servicemanager")),

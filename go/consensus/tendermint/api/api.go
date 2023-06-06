@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tendermint/tendermint/abci/types"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
-	tmp2p "github.com/tendermint/tendermint/p2p"
-	tmcrypto "github.com/tendermint/tendermint/proto/tendermint/crypto"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	"github.com/cometbft/cometbft/abci/types"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
+	cmtp2p "github.com/cometbft/cometbft/p2p"
+	cmtcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
+	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -41,8 +41,8 @@ func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.Valid
 	pk, _ := id.MarshalBinary()
 
 	return types.ValidatorUpdate{
-		PubKey: tmcrypto.PublicKey{
-			Sum: &tmcrypto.PublicKey_Ed25519{
+		PubKey: cmtcrypto.PublicKey{
+			Sum: &cmtcrypto.PublicKey_Ed25519{
 				Ed25519: pk,
 			},
 		},
@@ -52,7 +52,7 @@ func PublicKeyToValidatorUpdate(id signature.PublicKey, power int64) types.Valid
 
 // NodeToP2PAddr converts an Oasis node descriptor to a tendermint p2p
 // address book entry.
-func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
+func NodeToP2PAddr(n *node.Node) (*cmtp2p.NetAddress, error) {
 	// WARNING: p2p/transport.go:MultiplexTransport.upgrade() uses
 	// a case sensitive string comparison to validate public keys,
 	// because tendermint.
@@ -76,7 +76,7 @@ func NodeToP2PAddr(n *node.Node) (*tmp2p.NetAddress, error) {
 
 	addr := pubKeyAddrHex + "@" + string(coreAddress)
 
-	tmAddr, err := tmp2p.NewNetAddressString(addr)
+	tmAddr, err := cmtp2p.NewNetAddressString(addr)
 	if err != nil {
 		return nil, fmt.Errorf("tendermint/api: failed to reformat validator: %w", err)
 	}
@@ -91,7 +91,7 @@ type EventBuilder struct {
 }
 
 // attribute appends a key/value pair to the event.
-func (bld *EventBuilder) attribute(key, value []byte) *EventBuilder {
+func (bld *EventBuilder) attribute(key, value string) *EventBuilder {
 	bld.ev.Attributes = append(bld.ev.Attributes, types.EventAttribute{
 		Key:   key,
 		Value: value,
@@ -102,7 +102,7 @@ func (bld *EventBuilder) attribute(key, value []byte) *EventBuilder {
 
 // TypedAttribute appends a typed attribute to the event.
 func (bld *EventBuilder) TypedAttribute(value events.TypedAttribute) *EventBuilder {
-	return bld.attribute([]byte(value.EventKind()), events.EncodeValue(value))
+	return bld.attribute(value.EventKind(), events.EncodeValue(value))
 }
 
 // Dirty returns true iff the EventBuilder has attributes.
@@ -137,23 +137,23 @@ func EventTypeForApp(eventApp string) string {
 	return "oasis_event_" + eventApp
 }
 
-// QueryForApp generates a tmquery.Query for events belonging to the
+// QueryForApp generates a cmtquery.Query for events belonging to the
 // specified App.
-func QueryForApp(eventApp string) tmpubsub.Query {
-	return tmquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
+func QueryForApp(eventApp string) cmtpubsub.Query {
+	return cmtquery.MustParse(fmt.Sprintf("%s EXISTS", EventTypeForApp(eventApp)))
 }
 
 // BlockMeta is the Tendermint-specific per-block metadata that is
 // exposed via the consensus API.
 type BlockMeta struct {
 	// Header is the Tendermint block header.
-	Header *tmtypes.Header `json:"header"`
+	Header *cmttypes.Header `json:"header"`
 	// LastCommit is the Tendermint last commit info.
-	LastCommit *tmtypes.Commit `json:"last_commit"`
+	LastCommit *cmttypes.Commit `json:"last_commit"`
 }
 
 // NewBlock creates a new consensus.Block from a Tendermint block.
-func NewBlock(blk *tmtypes.Block) *consensus.Block {
+func NewBlock(blk *cmttypes.Block) *consensus.Block {
 	meta := BlockMeta{
 		Header:     &blk.Header,
 		LastCommit: blk.LastCommit,
@@ -198,15 +198,15 @@ type Backend interface {
 	SetTransactionAuthHandler(TransactionAuthHandler) error
 
 	// GetBlock returns the Tendermint block at the specified height.
-	GetTendermintBlock(ctx context.Context, height int64) (*tmtypes.Block, error)
+	GetTendermintBlock(ctx context.Context, height int64) (*cmttypes.Block, error)
 
 	// GetBlockResults returns the ABCI results from processing a block
 	// at a specific height.
-	GetBlockResults(ctx context.Context, height int64) (*tmrpctypes.ResultBlockResults, error)
+	GetBlockResults(ctx context.Context, height int64) (*cmtrpctypes.ResultBlockResults, error)
 
 	// WatchTendermintBlocks returns a stream of Tendermint blocks as they are
 	// returned via the `EventDataNewBlock` query.
-	WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error)
+	WatchTendermintBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error)
 
 	// GetLastRetainedVersion returns the earliest retained version the ABCI
 	// state.
@@ -258,8 +258,8 @@ type TransactionAuthHandler interface {
 
 // ServiceEvent is a Tendermint-specific consensus.ServiceEvent.
 type ServiceEvent struct {
-	Block *tmtypes.EventDataNewBlockHeader `json:"block,omitempty"`
-	Tx    *tmtypes.EventDataTx             `json:"tx,omitempty"`
+	Block *cmttypes.EventDataNewBlockHeader `json:"block,omitempty"`
+	Tx    *cmttypes.EventDataTx             `json:"tx,omitempty"`
 }
 
 // ServiceDescriptor is a Tendermint consensus service descriptor.
@@ -271,7 +271,7 @@ type ServiceDescriptor interface {
 	EventType() string
 
 	// Queries returns a channel that emits queries that need to be subscribed to.
-	Queries() <-chan tmpubsub.Query
+	Queries() <-chan cmtpubsub.Query
 
 	// Commands returns a channel that emits commands for the service client.
 	Commands() <-chan interface{}
@@ -280,7 +280,7 @@ type ServiceDescriptor interface {
 type serviceDescriptor struct {
 	name      string
 	eventType string
-	queryCh   <-chan tmpubsub.Query
+	queryCh   <-chan cmtpubsub.Query
 	cmdCh     <-chan interface{}
 }
 
@@ -292,7 +292,7 @@ func (sd *serviceDescriptor) EventType() string {
 	return sd.eventType
 }
 
-func (sd *serviceDescriptor) Queries() <-chan tmpubsub.Query {
+func (sd *serviceDescriptor) Queries() <-chan cmtpubsub.Query {
 	return sd.queryCh
 }
 
@@ -301,7 +301,7 @@ func (sd *serviceDescriptor) Commands() <-chan interface{} {
 }
 
 // NewServiceDescriptor creates a new consensus service descriptor.
-func NewServiceDescriptor(name, eventType string, queryCh <-chan tmpubsub.Query, cmdCh <-chan interface{}) ServiceDescriptor {
+func NewServiceDescriptor(name, eventType string, queryCh <-chan cmtpubsub.Query, cmdCh <-chan interface{}) ServiceDescriptor {
 	return &serviceDescriptor{
 		name:      name,
 		eventType: eventType,
@@ -311,8 +311,8 @@ func NewServiceDescriptor(name, eventType string, queryCh <-chan tmpubsub.Query,
 }
 
 // NewStaticServiceDescriptor creates a new static consensus service descriptor.
-func NewStaticServiceDescriptor(name, eventType string, queries []tmpubsub.Query) ServiceDescriptor {
-	ch := make(chan tmpubsub.Query)
+func NewStaticServiceDescriptor(name, eventType string, queries []cmtpubsub.Query) ServiceDescriptor {
+	ch := make(chan cmtpubsub.Query)
 	go func() {
 		defer close(ch)
 
@@ -334,7 +334,7 @@ type ServiceClient interface {
 	DeliverBlock(ctx context.Context, height int64) error
 
 	// DeliverEvent delivers an event emitted by the consensus service.
-	DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *types.Event) error
+	DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *types.Event) error
 
 	// DeliverCommand delivers a command emitted via the command channel.
 	DeliverCommand(ctx context.Context, height int64, cmd interface{}) error
@@ -350,7 +350,7 @@ func (bsc *BaseServiceClient) DeliverBlock(ctx context.Context, height int64) er
 }
 
 // DeliverEvent implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *types.Event) error {
+func (bsc *BaseServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *types.Event) error {
 	return nil
 }
 
@@ -377,5 +377,5 @@ var MessageStateSyncCompleted = messageKind(0)
 
 // TendermintChainID returns the Tendermint chain ID computed from chain context.
 func TendermintChainID(chainContext string) string {
-	return chainContext[:tmtypes.MaxChainIDLen]
+	return chainContext[:cmttypes.MaxChainIDLen]
 }

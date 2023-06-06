@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tendermint/tendermint/abci/types"
+	"github.com/cometbft/cometbft/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"

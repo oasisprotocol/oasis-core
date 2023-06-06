@@ -12,7 +12,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
-	tmbytes "github.com/tendermint/tendermint/libs/bytes"
+	cmtbytes "github.com/cometbft/cometbft/libs/bytes"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -75,7 +75,7 @@ func printTmAddress(desc, keyFile string) {
 	if cmdFlags.Verbose() {
 		descBytes := []byte(desc)
 		descBytes[0] = byte(unicode.ToUpper(rune(descBytes[0])))
-		fmt.Printf("%s: %s (fingerprint: %X)\n", descBytes, tmAddress, tmbytes.Fingerprint(tmAddress))
+		fmt.Printf("%s: %s (fingerprint: %X)\n", descBytes, tmAddress, cmtbytes.Fingerprint(tmAddress))
 	} else {
 		fmt.Println(tmAddress)
 	}

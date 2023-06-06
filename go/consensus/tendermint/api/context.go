@@ -1,12 +1,11 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/tendermint/tendermint/abci/types"
+	"github.com/cometbft/cometbft/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -332,7 +331,7 @@ func (c *Context) GetEvents() []types.Event {
 }
 
 // hasEvent checks if a specific event has been emitted.
-func (c *Context) hasEvent(app string, key []byte) bool {
+func (c *Context) hasEvent(app string, key string) bool {
 	evType := EventTypeForApp(app)
 
 	for _, ev := range c.events {
@@ -341,7 +340,7 @@ func (c *Context) hasEvent(app string, key []byte) bool {
 		}
 
 		for _, pair := range ev.Attributes {
-			if bytes.Equal(pair.GetKey(), key) {
+			if pair.GetKey() == key {
 				return true
 			}
 		}
@@ -351,7 +350,7 @@ func (c *Context) hasEvent(app string, key []byte) bool {
 
 // HasEvent checks if a specific event has been emitted.
 func (c *Context) HasEvent(app string, kind events.TypedAttribute) bool {
-	return c.hasEvent(app, []byte(kind.EventKind()))
+	return c.hasEvent(app, kind.EventKind())
 }
 
 // DecodeEvent decodes the given raw event as a specific typed event.
@@ -359,7 +358,7 @@ func (c *Context) DecodeEvent(index int, ev events.TypedAttribute) error {
 	raw := c.events[index]
 	for _, pair := range raw.Attributes {
 		if events.IsAttributeKind(pair.GetKey(), ev) {
-			return events.DecodeValue(string(pair.GetValue()), ev)
+			return events.DecodeValue(pair.GetValue(), ev)
 		}
 	}
 	return fmt.Errorf("incompatible event")
