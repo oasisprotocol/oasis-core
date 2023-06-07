@@ -7,7 +7,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
 // ProposalSignatureContext is the context used for signing propose batch dispatch messages.
@@ -98,16 +97,4 @@ func (p *Proposal) Verify(runtimeID common.Namespace) error {
 		return fmt.Errorf("roothash/commitment: signature verification failed")
 	}
 	return nil
-}
-
-// GetTransactionScheduler returns the transaction scheduler of the provided
-// committee based on the provided round.
-func GetTransactionScheduler(committee *scheduler.Committee, round uint64) (*scheduler.CommitteeNode, error) {
-	workers := committee.Workers()
-	numNodes := uint64(len(workers))
-	if numNodes == 0 {
-		return nil, fmt.Errorf("GetTransactionScheduler: no workers in committee")
-	}
-	schedulerIdx := round % numNodes
-	return workers[schedulerIdx], nil
 }

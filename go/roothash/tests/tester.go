@@ -658,7 +658,7 @@ WaitForProposerTimeoutBlocks:
 
 	// Get scheduler at round.
 	var scheduler *scheduler.CommitteeNode
-	scheduler, err = commitment.GetTransactionScheduler(s.executorCommittee.committee, child.Header.Round)
+	scheduler, err = s.executorCommittee.committee.TransactionScheduler(child.Header.Round)
 	require.NoError(err, "roothash.TransactionScheduler")
 
 	// Select node to trigger timeout.

@@ -138,7 +138,7 @@ func (p *Pool) isScheduler(id signature.PublicKey) bool {
 	if p.Committee == nil {
 		return false
 	}
-	scheduler, err := GetTransactionScheduler(p.Committee, p.Round)
+	scheduler, err := p.Committee.TransactionScheduler(p.Round)
 	if err != nil {
 		return false
 	}
@@ -395,7 +395,7 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 	}
 
 	// Determine whether the proposer has submitted a commitment.
-	proposer, err := GetTransactionScheduler(p.Committee, p.Round)
+	proposer, err := p.Committee.TransactionScheduler(p.Round)
 	if err != nil {
 		return nil, ErrNoCommittee
 	}

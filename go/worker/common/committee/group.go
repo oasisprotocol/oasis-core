@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -141,7 +140,7 @@ func (e *EpochSnapshot) IsTransactionScheduler(round uint64) bool {
 	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
 		return false
 	}
-	scheduler, err := commitment.GetTransactionScheduler(e.executorCommittee.Committee, round)
+	scheduler, err := e.executorCommittee.Committee.TransactionScheduler(round)
 	if err != nil {
 		return false
 	}
@@ -170,7 +169,7 @@ func (e *EpochSnapshot) VerifyTxnSchedulerSigner(id signature.PublicKey, round u
 	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
 		return fmt.Errorf("epoch: no active transaction scheduler")
 	}
-	scheduler, err := commitment.GetTransactionScheduler(e.executorCommittee.Committee, round)
+	scheduler, err := e.executorCommittee.Committee.TransactionScheduler(round)
 	if err != nil {
 		return fmt.Errorf("epoch: error getting transaction scheduler: %w", err)
 	}

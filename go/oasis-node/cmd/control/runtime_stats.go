@@ -20,7 +20,6 @@ import (
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	schedulerAPI "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -496,7 +495,7 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 			}
 			// Set committee info.
 			currentCommittee = state.ExecutorPool.Committee
-			currentScheduler, err = commitment.GetTransactionScheduler(currentCommittee, currentRound)
+			currentScheduler, err = currentCommittee.TransactionScheduler(currentRound)
 			if err != nil {
 				logger.Error("failed to query transaction scheduler",
 					"err", err,
