@@ -80,9 +80,9 @@ func (n *Node) handleObservedExecutorCommitment(ec *commitment.ExecutorCommitmen
 	// Make sure the executor commitment is for the next round.
 	currentRound := n.commonNode.CurrentBlock.Header.Round
 	nextRound := currentRound + 1
-	if ec.Header.Round != nextRound {
+	if ec.Header.Header.Round != nextRound {
 		n.logger.Debug("observed executor commitment is not for the next round",
-			"ec_round", ec.Header.Round,
+			"ec_round", ec.Header.Header.Round,
 			"next_round", nextRound,
 		)
 		return

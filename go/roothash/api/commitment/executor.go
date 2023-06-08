@@ -86,8 +86,10 @@ const (
 
 // ExecutorCommitmentHeader is the header of an executor commitment.
 type ExecutorCommitmentHeader struct {
-	ComputeResultsHeader
+	// Header is the compute results header.
+	Header ComputeResultsHeader `json:"header"`
 
+	// Failure is the executor commitment failure reason.
 	Failure ExecutorCommitmentFailure `json:"failure,omitempty"`
 
 	// Optional fields (may be absent for failure indication).
@@ -98,11 +100,11 @@ type ExecutorCommitmentHeader struct {
 // SetFailure sets failure reason and clears any fields that should be clear
 // in a failure indicating commitment.
 func (eh *ExecutorCommitmentHeader) SetFailure(failure ExecutorCommitmentFailure) {
-	eh.ComputeResultsHeader.IORoot = nil
-	eh.ComputeResultsHeader.StateRoot = nil
-	eh.ComputeResultsHeader.MessagesHash = nil
-	eh.ComputeResultsHeader.InMessagesHash = nil
-	eh.ComputeResultsHeader.InMessagesCount = 0
+	eh.Header.IORoot = nil
+	eh.Header.StateRoot = nil
+	eh.Header.MessagesHash = nil
+	eh.Header.InMessagesHash = nil
+	eh.Header.InMessagesCount = 0
 	eh.RAKSignature = nil
 	eh.Failure = failure
 }
@@ -126,7 +128,7 @@ func (eh *ExecutorCommitmentHeader) VerifyRAK(rak signature.PublicKey) error {
 	if eh.RAKSignature == nil {
 		return fmt.Errorf("missing RAK signature")
 	}
-	if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(eh.ComputeResultsHeader), eh.RAKSignature[:]) {
+	if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(eh.Header), eh.RAKSignature[:]) {
 		return fmt.Errorf("RAK signature verification failed")
 	}
 	return nil
@@ -139,8 +141,8 @@ func (eh *ExecutorCommitmentHeader) MostlyEqual(other *ExecutorCommitmentHeader)
 	if eh.Failure != other.Failure {
 		return false
 	}
-	h1 := eh.ComputeResultsHeader.EncodedHash()
-	h2 := other.ComputeResultsHeader.EncodedHash()
+	h1 := eh.Header.EncodedHash()
+	h2 := other.Header.EncodedHash()
 	return h1.Equal(&h2)
 }
 
@@ -191,7 +193,7 @@ func (c *ExecutorCommitment) Verify(runtimeID common.Namespace) error {
 
 // ValidateBasic performs basic executor commitment validity checks.
 func (c *ExecutorCommitment) ValidateBasic() error {
-	header := &c.Header.ComputeResultsHeader
+	header := &c.Header.Header
 	switch c.Header.Failure {
 	case FailureNone:
 		// Ensure header fields are present.
@@ -259,7 +261,7 @@ func (c *ExecutorCommitment) IsIndicatingFailure() bool {
 // ToVote returns a hash that represents a vote for this commitment as
 // per discrepancy resolution criteria.
 func (c *ExecutorCommitment) ToVote() hash.Hash {
-	return c.Header.ComputeResultsHeader.EncodedHash()
+	return c.Header.Header.EncodedHash()
 }
 
 // ToDDResult returns a commitment-specific result after discrepancy

@@ -329,7 +329,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 		ec := commitment.ExecutorCommitment{
 			NodeID: node.Signer.Public(),
 			Header: commitment.ExecutorCommitmentHeader{
-				ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Header: commitment.ComputeResultsHeader{
 					Round:           parent.Header.Round,
 					PreviousHash:    parent.Header.PreviousHash,
 					IORoot:          &parent.Header.IORoot,

@@ -47,7 +47,7 @@ func TestPoolDefault(t *testing.T) {
 	ec := ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: ExecutorCommitmentHeader{
-			ComputeResultsHeader: ComputeResultsHeader{
+			Header: ComputeResultsHeader{
 				Round:        blk.Header.Round,
 				PreviousHash: blk.Header.PreviousHash,
 				IORoot:       &blk.Header.IORoot,
@@ -125,12 +125,12 @@ func TestPoolSingleCommitment(t *testing.T) {
 		fn          func(*ExecutorCommitment)
 		expectedErr error
 	}{
-		{"BlockBadRound", func(ec *ExecutorCommitment) { ec.Header.Round-- }, ErrNotBasedOnCorrectBlock},
-		{"BlockBadPreviousHash", func(ec *ExecutorCommitment) { ec.Header.PreviousHash.FromBytes([]byte("invalid")) }, ErrNotBasedOnCorrectBlock},
-		{"MissingIORootHash", func(ec *ExecutorCommitment) { ec.Header.IORoot = nil }, ErrBadExecutorCommitment},
-		{"MissingStateRootHash", func(ec *ExecutorCommitment) { ec.Header.StateRoot = nil }, ErrBadExecutorCommitment},
-		{"MissingMessagesHash", func(ec *ExecutorCommitment) { ec.Header.MessagesHash = nil }, ErrBadExecutorCommitment},
-		{"MissingInMessagesHash", func(ec *ExecutorCommitment) { ec.Header.InMessagesHash = nil }, ErrBadExecutorCommitment},
+		{"BlockBadRound", func(ec *ExecutorCommitment) { ec.Header.Header.Round-- }, ErrNotBasedOnCorrectBlock},
+		{"BlockBadPreviousHash", func(ec *ExecutorCommitment) { ec.Header.Header.PreviousHash.FromBytes([]byte("invalid")) }, ErrNotBasedOnCorrectBlock},
+		{"MissingIORootHash", func(ec *ExecutorCommitment) { ec.Header.Header.IORoot = nil }, ErrBadExecutorCommitment},
+		{"MissingStateRootHash", func(ec *ExecutorCommitment) { ec.Header.Header.StateRoot = nil }, ErrBadExecutorCommitment},
+		{"MissingMessagesHash", func(ec *ExecutorCommitment) { ec.Header.Header.MessagesHash = nil }, ErrBadExecutorCommitment},
+		{"MissingInMessagesHash", func(ec *ExecutorCommitment) { ec.Header.Header.InMessagesHash = nil }, ErrBadExecutorCommitment},
 		{"BadFailureIndicating", func(ec *ExecutorCommitment) { ec.Header.Failure = FailureUnknown }, ErrBadExecutorCommitment},
 	} {
 		_, _, invalidEc := generateExecutorCommitment(t, pool.Round)
@@ -166,7 +166,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 		{Registry: &message.RegistryMessage{UpdateRuntime: &registry.Runtime{}}},
 	}
 	msgHash := message.MessagesHash(ecWithMsgs.Messages)
-	ecWithMsgs.Header.MessagesHash = &msgHash
+	ecWithMsgs.Header.Header.MessagesHash = &msgHash
 	err = ecWithMsgs.Sign(sk, rtID)
 	require.NoError(t, err, "ecWithMsgs.Sign")
 
@@ -252,7 +252,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 
 	// Generate a commitment.
 	childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
-	rakSig, err := signature.Sign(skRAK, ComputeResultsHeaderSignatureContext, cbor.Marshal(ec.Header.ComputeResultsHeader))
+	rakSig, err := signature.Sign(skRAK, ComputeResultsHeaderSignatureContext, cbor.Marshal(ec.Header.Header))
 	require.NoError(t, err, "Sign")
 	ec.Header.RAKSignature = &rakSig.Signature
 
@@ -782,7 +782,7 @@ func TestPoolManyCommitments(t *testing.T) {
 
 		ec2 := ec
 		ec2.NodeID = sk2.Public()
-		ec2.Header.StateRoot = &badHash1
+		ec2.Header.Header.StateRoot = &badHash1
 		err = ec2.Sign(sk2, rt.ID)
 		require.NoError(t, err, "ec2.Sign")
 
@@ -814,7 +814,7 @@ func TestPoolManyCommitments(t *testing.T) {
 
 		ec3 := ec
 		ec3.NodeID = sk3.Public()
-		ec3.Header.StateRoot = &badHash1
+		ec3.Header.Header.StateRoot = &badHash1
 		err = ec3.Sign(sk3, rt.ID)
 		require.NoError(t, err, "ec3.Sign")
 
@@ -881,13 +881,13 @@ func TestPoolManyCommitments(t *testing.T) {
 
 		ec5 := ec
 		ec5.NodeID = sk5.Public()
-		ec5.Header.StateRoot = &badHash1
+		ec5.Header.Header.StateRoot = &badHash1
 		err = ec5.Sign(sk5, rt.ID)
 		require.NoError(t, err, "ec5.Sign")
 
 		ec6 := ec
 		ec6.NodeID = sk6.Public()
-		ec6.Header.StateRoot = &badHash2
+		ec6.Header.Header.StateRoot = &badHash2
 		err = ec6.Sign(sk6, rt.ID)
 		require.NoError(t, err, "ec6.Sign")
 
@@ -937,9 +937,9 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		failedEc := ExecutorCommitment{
 			NodeID: sk2.Public(),
 			Header: ExecutorCommitmentHeader{
-				ComputeResultsHeader: ComputeResultsHeader{
-					Round:        ec.Header.Round,
-					PreviousHash: ec.Header.PreviousHash,
+				Header: ComputeResultsHeader{
+					Round:        ec.Header.Header.Round,
+					PreviousHash: ec.Header.Header.PreviousHash,
 				},
 				Failure: FailureUnknown,
 			},
@@ -1021,9 +1021,9 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		failedEc := ExecutorCommitment{
 			NodeID: sk2.Public(),
 			Header: ExecutorCommitmentHeader{
-				ComputeResultsHeader: ComputeResultsHeader{
-					Round:        ec.Header.Round,
-					PreviousHash: ec.Header.PreviousHash,
+				Header: ComputeResultsHeader{
+					Round:        ec.Header.Header.Round,
+					PreviousHash: ec.Header.Header.PreviousHash,
 				},
 				Failure: FailureUnknown,
 			},
@@ -1435,7 +1435,7 @@ func generateExecutorCommitment(t *testing.T, round uint64) (*block.Block, *bloc
 
 	ec := ExecutorCommitment{
 		Header: ExecutorCommitmentHeader{
-			ComputeResultsHeader: ComputeResultsHeader{
+			Header: ComputeResultsHeader{
 				Round:          parentBlk.Header.Round,
 				PreviousHash:   parentBlk.Header.PreviousHash,
 				IORoot:         &parentBlk.Header.IORoot,
@@ -1479,7 +1479,7 @@ func setupDiscrepancy(
 	ec2 := ec
 	ec2.NodeID = sk2.Public()
 	badHash := hash.NewFromBytes([]byte("discrepancy"))
-	ec2.Header.StateRoot = &badHash
+	ec2.Header.Header.StateRoot = &badHash
 
 	err = ec2.Sign(sk2, rt.ID)
 	require.NoError(t, err, "ec2.Sign")

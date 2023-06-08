@@ -1116,8 +1116,8 @@ func (n *Node) proposeBatch(
 	ec := &commitment.ExecutorCommitment{
 		NodeID: n.commonNode.Identity.NodeSigner.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: batch.Header,
-			RAKSignature:         &rakSig,
+			Header:       batch.Header,
+			RAKSignature: &rakSig,
 		},
 	}
 	// If we are the transaction scheduler also include all the emitted messages.
@@ -1214,7 +1214,7 @@ func (n *Node) proposeBatch(
 	case nil:
 		n.transitionLocked(StateWaitingForFinalize{
 			batchStartTime: state.batchStartTime,
-			proposedIORoot: *ec.Header.IORoot,
+			proposedIORoot: *ec.Header.Header.IORoot,
 			txHashes:       processed.txHashes,
 		})
 	default:
@@ -1439,7 +1439,7 @@ func (n *Node) handleProcessedBatch(batch *processedBatch, processingCh chan *pr
 	commit := &commitment.ExecutorCommitment{
 		NodeID: n.commonNode.Identity.NodeSigner.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:        lastHeader.Round + 1,
 				PreviousHash: lastHeader.EncodedHash(),
 			},

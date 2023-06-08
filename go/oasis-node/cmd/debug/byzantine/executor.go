@@ -318,7 +318,7 @@ func (cbc *computeBatchContext) createCommitment(
 	ec := &commitment.ExecutorCommitment{
 		NodeID: id.NodeSigner.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: header,
+			Header: header,
 		},
 	}
 	if rak != nil {

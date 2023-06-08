@@ -260,7 +260,7 @@ func (app *rootHashApplication) submitEvidence(
 	case evidence.EquivocationExecutor != nil:
 		commitA := evidence.EquivocationExecutor.CommitA
 
-		if commitA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+		if commitA.Header.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
 			ctx.Logger().Debug("Evidence: commitment equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
 				"current_round", rtState.CurrentBlock.Header.Round,
@@ -268,7 +268,7 @@ func (app *rootHashApplication) submitEvidence(
 			)
 			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)
 		}
-		round = commitA.Header.Round
+		round = commitA.Header.Header.Round
 		pk = commitA.NodeID
 	case evidence.EquivocationProposal != nil:
 		proposalA := evidence.EquivocationProposal.ProposalA

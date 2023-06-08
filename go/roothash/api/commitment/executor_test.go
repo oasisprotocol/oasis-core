@@ -44,7 +44,7 @@ func TestValidateBasic(t *testing.T) {
 
 	body := ExecutorCommitment{
 		Header: ExecutorCommitmentHeader{
-			ComputeResultsHeader: ComputeResultsHeader{
+			Header: ComputeResultsHeader{
 				Round:          42,
 				PreviousHash:   emptyHeaderHash,
 				IORoot:         &emptyRoot,
@@ -70,7 +70,7 @@ func TestValidateBasic(t *testing.T) {
 		{
 			"Bad IORoot",
 			func(ec ExecutorCommitment) ExecutorCommitment {
-				ec.Header.IORoot = nil
+				ec.Header.Header.IORoot = nil
 				return ec
 			},
 			true,
@@ -78,7 +78,7 @@ func TestValidateBasic(t *testing.T) {
 		{
 			"Bad StateRoot",
 			func(ec ExecutorCommitment) ExecutorCommitment {
-				ec.Header.StateRoot = nil
+				ec.Header.Header.StateRoot = nil
 				return ec
 			},
 			true,
@@ -86,7 +86,7 @@ func TestValidateBasic(t *testing.T) {
 		{
 			"Bad MessagesHash",
 			func(ec ExecutorCommitment) ExecutorCommitment {
-				ec.Header.MessagesHash = nil
+				ec.Header.Header.MessagesHash = nil
 				return ec
 			},
 			true,
@@ -114,9 +114,9 @@ func TestValidateBasic(t *testing.T) {
 			func(ec ExecutorCommitment) ExecutorCommitment {
 				ec.Header.Failure = FailureUnknown
 				// ec.Header.IORoot is set.
-				ec.Header.StateRoot = nil
-				ec.Header.MessagesHash = nil
-				ec.Header.InMessagesHash = nil
+				ec.Header.Header.StateRoot = nil
+				ec.Header.Header.MessagesHash = nil
+				ec.Header.Header.InMessagesHash = nil
 				return ec
 			},
 			true,
@@ -125,10 +125,10 @@ func TestValidateBasic(t *testing.T) {
 			"Bad Failure (existing StateRoot)",
 			func(ec ExecutorCommitment) ExecutorCommitment {
 				ec.Header.Failure = FailureUnknown
-				ec.Header.IORoot = nil
+				ec.Header.Header.IORoot = nil
 				// ec.Header.StateRoot is set.
-				ec.Header.MessagesHash = nil
-				ec.Header.InMessagesHash = nil
+				ec.Header.Header.MessagesHash = nil
+				ec.Header.Header.InMessagesHash = nil
 				return ec
 			},
 			true,
@@ -137,10 +137,10 @@ func TestValidateBasic(t *testing.T) {
 			"Bad Failure (existing MessagesHash)",
 			func(ec ExecutorCommitment) ExecutorCommitment {
 				ec.Header.Failure = FailureUnknown
-				ec.Header.IORoot = nil
-				ec.Header.StateRoot = nil
+				ec.Header.Header.IORoot = nil
+				ec.Header.Header.StateRoot = nil
 				// ec.Header.MessagesHash is set.
-				ec.Header.InMessagesHash = nil
+				ec.Header.Header.InMessagesHash = nil
 				return ec
 			},
 			true,
@@ -149,9 +149,9 @@ func TestValidateBasic(t *testing.T) {
 			"Bad Failure (existing InMessagesHash)",
 			func(ec ExecutorCommitment) ExecutorCommitment {
 				ec.Header.Failure = FailureUnknown
-				ec.Header.IORoot = nil
-				ec.Header.StateRoot = nil
-				ec.Header.MessagesHash = nil
+				ec.Header.Header.IORoot = nil
+				ec.Header.Header.StateRoot = nil
+				ec.Header.Header.MessagesHash = nil
 				// ec.Header.InMessagesHash is set.
 				return ec
 			},

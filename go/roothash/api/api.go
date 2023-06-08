@@ -294,7 +294,7 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error
 		return fmt.Errorf("equivocation executor evidence signature public keys don't match")
 	}
 
-	if ev.CommitA.Header.Round != ev.CommitB.Header.Round {
+	if ev.CommitA.Header.Header.Round != ev.CommitB.Header.Header.Round {
 		return fmt.Errorf("equivocation evidence commit headers not for same round")
 	}
 
@@ -315,10 +315,10 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error
 	switch {
 	// Note: ValidateBasic checks above ensure that none of these fields are nil.
 	case a.Failure == commitment.FailureNone && b.Failure == commitment.FailureNone:
-		if a.PreviousHash.Equal(&b.PreviousHash) &&
-			a.IORoot.Equal(b.IORoot) &&
-			a.StateRoot.Equal(b.StateRoot) &&
-			a.MessagesHash.Equal(b.MessagesHash) {
+		if a.Header.PreviousHash.Equal(&b.Header.PreviousHash) &&
+			a.Header.IORoot.Equal(b.Header.IORoot) &&
+			a.Header.StateRoot.Equal(b.Header.StateRoot) &&
+			a.Header.MessagesHash.Equal(b.Header.MessagesHash) {
 			return fmt.Errorf("equivocation evidence commit headers match, no sign of equivocation")
 		}
 	default:

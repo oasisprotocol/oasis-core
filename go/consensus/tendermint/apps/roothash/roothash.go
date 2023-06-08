@@ -580,21 +580,21 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 		// Update the incoming message queue by removing processed messages. Do one final check to
 		// make sure that the processed messages actually correspond to the provided hash.
 		state := roothashState.NewMutableState(ctx.State())
-		if ec.Header.InMessagesCount > 0 {
+		if ec.Header.Header.InMessagesCount > 0 {
 			var meta *message.IncomingMessageQueueMeta
 			meta, err = state.IncomingMessageQueueMeta(ctx, rtState.Runtime.ID)
 			if err != nil {
 				return fmt.Errorf("failed to fetch incoming message queue metadata: %w", err)
 			}
 			var msgs []*message.IncomingMessage
-			msgs, err = state.IncomingMessageQueue(ctx, rtState.Runtime.ID, 0, ec.Header.InMessagesCount)
+			msgs, err = state.IncomingMessageQueue(ctx, rtState.Runtime.ID, 0, ec.Header.Header.InMessagesCount)
 			if err != nil {
 				return fmt.Errorf("failed to fetch incoming message queue: %w", err)
 			}
-			if inMsgsHash := message.InMessagesHash(msgs); !ec.Header.InMessagesHash.Equal(&inMsgsHash) {
+			if inMsgsHash := message.InMessagesHash(msgs); !ec.Header.Header.InMessagesHash.Equal(&inMsgsHash) {
 				ctx.Logger().Debug("finalized round contained invalid incoming message hash, failing instead",
 					"in_msgs_hash", inMsgsHash,
-					"ec_in_msgs_hash", *ec.Header.InMessagesHash,
+					"ec_in_msgs_hash", *ec.Header.Header.InMessagesHash,
 				)
 				// Make the round fail.
 				err = fmt.Errorf("finalized round contained invalid incoming message hash")
@@ -713,10 +713,10 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 
 		// Generate the final block.
 		blk := block.NewEmptyBlock(rtState.CurrentBlock, uint64(ctx.Now().Unix()), block.Normal)
-		blk.Header.IORoot = *ec.Header.IORoot
-		blk.Header.StateRoot = *ec.Header.StateRoot
-		blk.Header.MessagesHash = *ec.Header.MessagesHash
-		blk.Header.InMessagesHash = *ec.Header.InMessagesHash
+		blk.Header.IORoot = *ec.Header.Header.IORoot
+		blk.Header.StateRoot = *ec.Header.Header.StateRoot
+		blk.Header.MessagesHash = *ec.Header.Header.MessagesHash
+		blk.Header.InMessagesHash = *ec.Header.Header.InMessagesHash
 
 		// Timeout will be cleared by caller.
 		pool.ResetCommitments(blk.Header.Round)
