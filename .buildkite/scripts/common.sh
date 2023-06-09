@@ -3,7 +3,8 @@
 ##################
 
 # Temporary artifacts download directory.
-ARTIFACTS_TEMPORARY_DIR=/tmp/artifacts
+ARTIFACTS_CACHE_DIR=/tmp/artifacts
+ARTIFACTS_TMP_DIR=/tmp/artifacts_tmp
 CLEANING_UP=0
 
 # Download an artifact and change its mode
@@ -12,15 +13,17 @@ download_artifact() {
     local dst_dir=$2
     local mode=${3:-644}
 
-    mkdir -p ${ARTIFACTS_TEMPORARY_DIR}
-    mkdir -p ${dst_dir}
+    mkdir -p ${ARTIFACTS_CACHE_DIR} ${ARTIFACTS_TMP_DIR} ${dst_dir}
 
-    pushd ${ARTIFACTS_TEMPORARY_DIR}
-        # download only if checksum changed
-        (echo "$(buildkite-agent artifact shasum ${name})  ${name}" | sha1sum -c) \
-            || buildkite-agent artifact download ${name} .
-    popd
-    cp ${ARTIFACTS_TEMPORARY_DIR}/${name} ${dst_dir}/${name}
+    if [ -f "${ARTIFACTS_CACHE_DIR}/${name}" ] && (echo "$(buildkite-agent artifact shasum ${name})  ${ARTIFACTS_CACHE_DIR}/${name}" | sha1sum -c); then
+        # use artifact from cache
+        cp -f ${ARTIFACTS_CACHE_DIR}/${name} ${dst_dir}/${name}
+    else
+        # download artifact and cache it
+        buildkite-agent artifact download ${name} ${ARTIFACTS_TMP_DIR}/
+        cp -f ${ARTIFACTS_TMP_DIR}/${name} ${dst_dir}/${name}
+        mv -f ${ARTIFACTS_TMP_DIR}/${name} ${ARTIFACTS_CACHE_DIR}/${name}
+    fi
     chmod ${mode} ${dst_dir}/${name}
 }
 

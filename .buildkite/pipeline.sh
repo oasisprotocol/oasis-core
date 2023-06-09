@@ -82,6 +82,7 @@ if ! check_docker_ci_image_tag_exists "${docker_tag}"; then
 fi
 
 export DOCKER_OASIS_CORE_CI_BASE_TAG=${docker_tag}
+export BUILDKITE_BRANCH_SLUG=${BUILDKITE_BRANCH//\//-}
 
 # Decide which pipeline to use.
 pipeline=.buildkite/code.pipeline.yml
@@ -91,4 +92,3 @@ fi
 
 # Upload the selected pipeline.
 cat $pipeline | buildkite-agent pipeline upload
-
