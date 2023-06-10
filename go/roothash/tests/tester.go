@@ -329,7 +329,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 		ec := commitment.ExecutorCommitment{
 			NodeID: node.Signer.Public(),
 			Header: commitment.ExecutorCommitmentHeader{
-				ComputeResultsHeader: commitment.ComputeResultsHeader{
+				Header: commitment.ComputeResultsHeader{
 					Round:           parent.Header.Round,
 					PreviousHash:    parent.Header.PreviousHash,
 					IORoot:          &parent.Header.IORoot,
@@ -658,7 +658,7 @@ WaitForProposerTimeoutBlocks:
 
 	// Get scheduler at round.
 	var scheduler *scheduler.CommitteeNode
-	scheduler, err = commitment.GetTransactionScheduler(s.executorCommittee.committee, child.Header.Round)
+	scheduler, err = s.executorCommittee.committee.TransactionScheduler(child.Header.Round)
 	require.NoError(err, "roothash.TransactionScheduler")
 
 	// Select node to trigger timeout.

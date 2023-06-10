@@ -13,7 +13,14 @@ use sha2::{Digest as _, Sha512};
 use thiserror::Error;
 use zeroize::Zeroize;
 
+use crate::common::namespace::Namespace;
+
 use super::hash::Hash;
+
+/// The chain separator used to add additional domain separation based on the chain context.
+const CHAIN_SIGNATURE_CONTEXT_SEPARATOR: &[u8] = b" for chain ";
+/// The runtime separator used to add additional domain separation based on the runtime ID.
+const RUNTIME_SIGNATURE_CONTEXT_SEPARATOR: &[u8] = b" for runtime ";
 
 impl_bytes!(
     PublicKey,
@@ -93,6 +100,10 @@ impl PrivateKey {
 }
 
 impl Signer for PrivateKey {
+    fn public(&self) -> PublicKey {
+        self.public_key()
+    }
+
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         // TODO/#2103: Replace this with Ed25519ctx.
         let digest = Hash::digest_bytes_list(&[context, message]);
@@ -219,6 +230,9 @@ impl SignatureBundle {
 
 /// A abstract signer.
 pub trait Signer: Send + Sync {
+    /// Returns the public key corresponding to the signer.
+    fn public(&self) -> PublicKey;
+
     /// Generates a signature over the context and message.
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature>;
 }
@@ -245,6 +259,26 @@ fn sc_minimal(raw_s: &[u8]) -> bool {
 
     // The scalar is equal to the order of the curve.
     false
+}
+
+/// Extends signature context with additional domain separation based on the runtime ID.
+pub fn signature_context_with_runtime_separation(
+    mut context: Vec<u8>,
+    runtime_id: &Namespace,
+) -> Vec<u8> {
+    context.extend(RUNTIME_SIGNATURE_CONTEXT_SEPARATOR);
+    context.extend(runtime_id.0);
+    context
+}
+
+/// Extends signature context with additional domain separation based on the chain context.
+pub fn signature_context_with_chain_separation(
+    mut context: Vec<u8>,
+    chain_context: &String,
+) -> Vec<u8> {
+    context.extend(CHAIN_SIGNATURE_CONTEXT_SEPARATOR);
+    context.extend(chain_context.as_bytes());
+    context
 }
 
 #[cfg(test)]

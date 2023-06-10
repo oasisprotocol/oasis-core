@@ -66,7 +66,7 @@ func TestEvidenceHash(t *testing.T) {
 	ec := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:        blk.Header.Round,
 				PreviousHash: blk.Header.PreviousHash,
 				IORoot:       &blk.Header.IORoot,
@@ -147,7 +147,7 @@ func TestEvidenceValidateBasic(t *testing.T) {
 	signedCommitment1 := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          rtBlk.Header.Round + 1,
 				PreviousHash:   rtBlk.Header.EncodedHash(),
 				IORoot:         &rtBlk.Header.IORoot,
@@ -161,7 +161,7 @@ func TestEvidenceValidateBasic(t *testing.T) {
 	require.NoError(err, "signedCommitment1.Sign")
 
 	signedCommitment2 := signedCommitment1
-	signedCommitment2.Header.PreviousHash = hash.NewFromBytes([]byte("invalid hash"))
+	signedCommitment2.Header.Header.PreviousHash = hash.NewFromBytes([]byte("invalid hash"))
 	err = signedCommitment2.Sign(sk, rtID)
 	require.NoError(err, "signedCommitment2.Sign")
 
@@ -445,7 +445,7 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 	signed1Commitment := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          rt1Blk2.Header.Round,
 				PreviousHash:   rt1Blk2.Header.PreviousHash,
 				IORoot:         &rt1Blk2.Header.IORoot,
@@ -465,7 +465,7 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 	signed1Commitment2 := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          rt1Blk2.Header.Round,
 				PreviousHash:   hash.NewFromBytes([]byte("invalid hash")),
 				IORoot:         &rt1Blk2.Header.IORoot,
@@ -482,7 +482,7 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 	signed1Commitment3 := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          rt1Blk2.Header.Round + 1,
 				PreviousHash:   hash.NewFromBytes([]byte("invalid hash")),
 				IORoot:         &rt1Blk2.Header.IORoot,
@@ -499,7 +499,7 @@ func TestEquivocationExecutorEvidenceValidateBasic(t *testing.T) {
 	signed1Invalid := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          rt1Blk2.Header.Round,
 				PreviousHash:   hash.NewFromBytes([]byte("invalid hash")),
 				IORoot:         nil,

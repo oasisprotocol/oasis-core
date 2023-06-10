@@ -150,7 +150,7 @@ type Committee struct {
 }
 
 // Workers returns committee nodes with Worker role.
-func (c Committee) Workers() []*CommitteeNode {
+func (c *Committee) Workers() []*CommitteeNode {
 	var workers []*CommitteeNode
 	for _, member := range c.Members {
 		if member.Role != RoleWorker {
@@ -161,8 +161,20 @@ func (c Committee) Workers() []*CommitteeNode {
 	return workers
 }
 
+// TransactionScheduler returns the transaction scheduler of the committee
+// based on the provided round.
+func (c *Committee) TransactionScheduler(round uint64) (*CommitteeNode, error) {
+	workers := c.Workers()
+	numNodes := uint64(len(workers))
+	if numNodes == 0 {
+		return nil, fmt.Errorf("no workers in committee")
+	}
+	schedulerIdx := round % numNodes
+	return workers[schedulerIdx], nil
+}
+
 // String returns a string representation of a Committee.
-func (c Committee) String() string {
+func (c *Committee) String() string {
 	members := make([]string, len(c.Members))
 	for i, m := range c.Members {
 		members[i] = fmt.Sprintf("%+v", m)

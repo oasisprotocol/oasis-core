@@ -275,6 +275,23 @@ impl Node {
         }
         false
     }
+
+    /// Searches for an existing supported runtime descriptor
+    /// in runtimes with the specified version and returns it.
+    pub fn get_runtime(&self, runtime_id: &Namespace, version: &Version) -> Option<NodeRuntime> {
+        if let Some(rts) = &self.runtimes {
+            for rt in rts {
+                if runtime_id != &rt.id {
+                    continue;
+                }
+                if version != &rt.version {
+                    continue;
+                }
+                return Some(rt.clone());
+            }
+        }
+        None
+    }
 }
 
 /// Runtime kind.

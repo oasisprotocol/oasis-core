@@ -138,7 +138,7 @@ func (p *Pool) isScheduler(id signature.PublicKey) bool {
 	if p.Committee == nil {
 		return false
 	}
-	scheduler, err := GetTransactionScheduler(p.Committee, p.Round)
+	scheduler, err := p.Committee.TransactionScheduler(p.Round)
 	if err != nil {
 		return false
 	}
@@ -196,11 +196,11 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 	}
 
 	// Check if the block is based on the previous block.
-	if !commit.Header.IsParentOf(&blk.Header) {
+	if !commit.Header.Header.IsParentOf(&blk.Header) {
 		logger.Debug("executor commitment is not based on correct block",
 			"node_id", commit.NodeID,
 			"expected_previous_hash", blk.Header.EncodedHash(),
-			"previous_hash", commit.Header.PreviousHash,
+			"previous_hash", commit.Header.Header.PreviousHash,
 		)
 		return ErrNotBasedOnCorrectBlock
 	}
@@ -277,11 +277,11 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 				)
 				return ErrInvalidMessages
 			}
-			if h := message.MessagesHash(commit.Messages); !h.Equal(commit.Header.MessagesHash) {
+			if h := message.MessagesHash(commit.Messages); !h.Equal(commit.Header.Header.MessagesHash) {
 				logger.Debug("executor commitment from scheduler has invalid messages hash",
 					"node_id", commit.NodeID,
 					"expected_hash", h,
-					"messages_hash", commit.Header.MessagesHash,
+					"messages_hash", commit.Header.Header.MessagesHash,
 				)
 				return ErrInvalidMessages
 			}
@@ -395,7 +395,7 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 	}
 
 	// Determine whether the proposer has submitted a commitment.
-	proposer, err := GetTransactionScheduler(p.Committee, p.Round)
+	proposer, err := p.Committee.TransactionScheduler(p.Round)
 	if err != nil {
 		return nil, ErrNoCommittee
 	}

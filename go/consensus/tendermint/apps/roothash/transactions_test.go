@@ -211,7 +211,7 @@ func TestMessagesGasEstimation(t *testing.T) {
 	ec := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          newBlk.Header.Round,
 				PreviousHash:   newBlk.Header.PreviousHash,
 				IORoot:         &newBlk.Header.IORoot,
@@ -442,7 +442,7 @@ func TestEvidence(t *testing.T) {
 	signedCommitment1 := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          blk.Header.Round,
 				PreviousHash:   blk.Header.PreviousHash,
 				IORoot:         &blk.Header.IORoot,
@@ -455,7 +455,7 @@ func TestEvidence(t *testing.T) {
 	err = signedCommitment1.Sign(sk, runtime.ID)
 	require.NoError(err, "signedCommitment1.Sign")
 	signedCommitment2 := signedCommitment1
-	signedCommitment2.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
+	signedCommitment2.Header.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
 	err = signedCommitment2.Sign(sk, runtime.ID)
 	require.NoError(err, "signedCommitment2.Sign")
 
@@ -485,7 +485,7 @@ func TestEvidence(t *testing.T) {
 	expiredCommitment1 := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			ComputeResultsHeader: commitment.ComputeResultsHeader{
+			Header: commitment.ComputeResultsHeader{
 				Round:          blk2.Header.Round,
 				PreviousHash:   blk2.Header.PreviousHash,
 				IORoot:         &blk2.Header.IORoot,
@@ -498,7 +498,7 @@ func TestEvidence(t *testing.T) {
 	err = expiredCommitment1.Sign(sk, runtime.ID)
 	require.NoError(err, "expiredCommitment1.Sign")
 	expiredCommitment2 := expiredCommitment1
-	expiredCommitment2.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
+	expiredCommitment2.Header.Header.PreviousHash = hash.NewFromBytes([]byte("invalid ioroot"))
 	err = expiredCommitment2.Sign(sk, runtime.ID)
 	require.NoError(err, "expiredCommitment2.Sign")
 	var md testMsgDispatcher

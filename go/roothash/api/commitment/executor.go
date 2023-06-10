@@ -35,16 +35,22 @@ var (
 //
 // Keep the roothash RAK validation in sync with changes to this structure.
 type ComputeResultsHeader struct {
-	Round        uint64    `json:"round"`
+	// Round is the round number.
+	Round uint64 `json:"round"`
+
+	// PreviousHash is the hash of the previous block header this batch was computed against.
 	PreviousHash hash.Hash `json:"previous_hash"`
 
 	// Optional fields (may be absent for failure indication).
 
-	IORoot       *hash.Hash `json:"io_root,omitempty"`
-	StateRoot    *hash.Hash `json:"state_root,omitempty"`
+	// IORoot is the I/O merkle root.
+	IORoot *hash.Hash `json:"io_root,omitempty"`
+	// StateRoot is the root hash of the state after computing this batch.
+	StateRoot *hash.Hash `json:"state_root,omitempty"`
+	// MessagesHash is the hash of messages sent from this batch.
 	MessagesHash *hash.Hash `json:"messages_hash,omitempty"`
 
-	// InMessagesHash is the hash of processed incoming messages.
+	// InMessagesHash is hash of processed incoming messages.
 	InMessagesHash *hash.Hash `json:"in_msgs_hash,omitempty"`
 	// InMessagesCount is the number of processed incoming messages.
 	InMessagesCount uint32 `json:"in_msgs_count,omitempty"`
@@ -80,8 +86,10 @@ const (
 
 // ExecutorCommitmentHeader is the header of an executor commitment.
 type ExecutorCommitmentHeader struct {
-	ComputeResultsHeader
+	// Header is the compute results header.
+	Header ComputeResultsHeader `json:"header"`
 
+	// Failure is the executor commitment failure reason.
 	Failure ExecutorCommitmentFailure `json:"failure,omitempty"`
 
 	// Optional fields (may be absent for failure indication).
@@ -92,11 +100,11 @@ type ExecutorCommitmentHeader struct {
 // SetFailure sets failure reason and clears any fields that should be clear
 // in a failure indicating commitment.
 func (eh *ExecutorCommitmentHeader) SetFailure(failure ExecutorCommitmentFailure) {
-	eh.ComputeResultsHeader.IORoot = nil
-	eh.ComputeResultsHeader.StateRoot = nil
-	eh.ComputeResultsHeader.MessagesHash = nil
-	eh.ComputeResultsHeader.InMessagesHash = nil
-	eh.ComputeResultsHeader.InMessagesCount = 0
+	eh.Header.IORoot = nil
+	eh.Header.StateRoot = nil
+	eh.Header.MessagesHash = nil
+	eh.Header.InMessagesHash = nil
+	eh.Header.InMessagesCount = 0
 	eh.RAKSignature = nil
 	eh.Failure = failure
 }
@@ -120,7 +128,7 @@ func (eh *ExecutorCommitmentHeader) VerifyRAK(rak signature.PublicKey) error {
 	if eh.RAKSignature == nil {
 		return fmt.Errorf("missing RAK signature")
 	}
-	if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(eh.ComputeResultsHeader), eh.RAKSignature[:]) {
+	if !rak.Verify(ComputeResultsHeaderSignatureContext, cbor.Marshal(eh.Header), eh.RAKSignature[:]) {
 		return fmt.Errorf("RAK signature verification failed")
 	}
 	return nil
@@ -133,8 +141,8 @@ func (eh *ExecutorCommitmentHeader) MostlyEqual(other *ExecutorCommitmentHeader)
 	if eh.Failure != other.Failure {
 		return false
 	}
-	h1 := eh.ComputeResultsHeader.EncodedHash()
-	h2 := other.ComputeResultsHeader.EncodedHash()
+	h1 := eh.Header.EncodedHash()
+	h2 := other.Header.EncodedHash()
 	return h1.Equal(&h2)
 }
 
@@ -185,7 +193,7 @@ func (c *ExecutorCommitment) Verify(runtimeID common.Namespace) error {
 
 // ValidateBasic performs basic executor commitment validity checks.
 func (c *ExecutorCommitment) ValidateBasic() error {
-	header := &c.Header.ComputeResultsHeader
+	header := &c.Header.Header
 	switch c.Header.Failure {
 	case FailureNone:
 		// Ensure header fields are present.
@@ -240,9 +248,9 @@ func (c *ExecutorCommitment) ValidateBasic() error {
 // MostlyEqual returns true if the commitment is mostly equal to another
 // specified commitment as per discrepancy detection criteria.
 func (c *ExecutorCommitment) MostlyEqual(other OpenCommitment) bool {
-	h := c.Header.ComputeResultsHeader.EncodedHash()
-	otherHash := other.(*ExecutorCommitment).Header.ComputeResultsHeader.EncodedHash()
-	return h.Equal(&otherHash)
+	h := c.ToVote()
+	otherH := other.ToVote()
+	return h.Equal(&otherH)
 }
 
 // IsIndicatingFailure returns true if this commitment indicates a failure.
@@ -253,7 +261,7 @@ func (c *ExecutorCommitment) IsIndicatingFailure() bool {
 // ToVote returns a hash that represents a vote for this commitment as
 // per discrepancy resolution criteria.
 func (c *ExecutorCommitment) ToVote() hash.Hash {
-	return c.Header.ComputeResultsHeader.EncodedHash()
+	return c.Header.Header.EncodedHash()
 }
 
 // ToDDResult returns a commitment-specific result after discrepancy

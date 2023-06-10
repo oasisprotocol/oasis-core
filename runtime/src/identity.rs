@@ -373,6 +373,11 @@ impl Identity {
 }
 
 impl Signer for Identity {
+    fn public(&self) -> signature::PublicKey {
+        let inner = self.inner.read().unwrap();
+        inner.rak.public_key()
+    }
+
     fn sign(&self, context: &[u8], message: &[u8]) -> Result<Signature> {
         let inner = self.inner.read().unwrap();
         inner.rak.sign(context, message)
