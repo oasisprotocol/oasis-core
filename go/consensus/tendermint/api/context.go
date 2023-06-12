@@ -68,10 +68,11 @@ type Context struct { // nolint: maligned
 	isMessageExecution bool
 	isTransaction      bool
 
-	data          interface{}
-	events        []types.Event
-	gasAccountant GasAccountant
-	priority      int64
+	data           interface{}
+	events         []types.Event
+	eventsProvable []events.Provable
+	gasAccountant  GasAccountant
+	priority       int64
 
 	txSigner      signature.PublicKey
 	callerAddress staking.Address
@@ -142,12 +143,14 @@ func (c *Context) Close() {
 			// Non-transaction mode, propagate events.
 			if !c.IsSimulation() {
 				c.parent.events = append(c.parent.events, c.events...)
+				c.parent.eventsProvable = append(c.parent.eventsProvable, c.eventsProvable...)
 			}
 		}
 	}
 
 	c.parent = nil
 	c.events = nil
+	c.eventsProvable = nil
 	c.appState = nil
 	c.state = nil
 	c.blockCtx = nil
@@ -259,7 +262,9 @@ func (c *Context) Commit() *Context {
 	// Commit events.
 	// NOTE: Since isTransaction is true, we know c.parent is non-nil.
 	c.parent.events = append(c.parent.events, c.events...)
+	c.parent.eventsProvable = append(c.parent.eventsProvable, c.eventsProvable...)
 	c.events = nil
+	c.eventsProvable = nil
 
 	return c.parent
 }
@@ -323,6 +328,10 @@ func (c *Context) EmitEvent(bld *EventBuilder) {
 	if bld.Dirty() {
 		c.events = append(c.events, bld.Event())
 	}
+
+	if provable := bld.Provable(); len(provable) > 0 {
+		c.eventsProvable = append(c.eventsProvable, provable...)
+	}
 }
 
 // GetEvents returns the ABCI event vector corresponding to the tags.
@@ -362,6 +371,11 @@ func (c *Context) DecodeEvent(index int, ev events.TypedAttribute) error {
 		}
 	}
 	return fmt.Errorf("incompatible event")
+}
+
+// ProvableEvents returns the emitted provable events.
+func (c *Context) ProvableEvents() []events.Provable {
+	return c.eventsProvable
 }
 
 // SetGasAccountant configures the gas accountant on the context.

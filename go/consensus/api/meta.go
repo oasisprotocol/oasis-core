@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
@@ -21,10 +23,15 @@ const BlockMetadataMaxSize = 16_384
 type BlockMetadata struct {
 	// StateRoot is the state root after executing all logic in the block.
 	StateRoot hash.Hash `json:"state_root"`
+	// EventsRoot is the provable events root.
+	EventsRoot []byte `json:"events_root"`
 }
 
 // ValidateBasic performs basic block metadata structure validation.
 func (bm *BlockMetadata) ValidateBasic() error {
+	if len(bm.EventsRoot) != 32 {
+		return fmt.Errorf("malformed events root")
+	}
 	return nil
 }
 

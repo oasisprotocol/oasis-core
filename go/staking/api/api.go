@@ -221,6 +221,19 @@ func (e *TransferEvent) EventKind() string {
 	return "transfer"
 }
 
+// ShouldProve returns true iff the event should be included in the event proof tree.
+func (e *TransferEvent) ShouldProve() bool {
+	return true
+}
+
+// ProvableRepresentation returns the provable representation of an event.
+//
+// Since this representation is part of commitments that are included in consensus layer state
+// any changes to this representation are consensus-breaking.
+func (e *TransferEvent) ProvableRepresentation() any {
+	return e
+}
+
 // BurnEvent is the event emitted when stake is destroyed via a call to Burn.
 type BurnEvent struct {
 	Owner  Address           `json:"owner"`
@@ -230,6 +243,19 @@ type BurnEvent struct {
 // EventKind returns a string representation of this event's kind.
 func (e *BurnEvent) EventKind() string {
 	return "burn"
+}
+
+// ShouldProve returns true iff the event should be included in the event proof tree.
+func (e *BurnEvent) ShouldProve() bool {
+	return true
+}
+
+// ProvableRepresentation returns the provable representation of an event.
+//
+// Since this representation is part of commitments that are included in consensus layer state
+// any changes to this representation are consensus-breaking.
+func (e *BurnEvent) ProvableRepresentation() any {
+	return e
 }
 
 // EscrowEvent is an escrow event.
@@ -265,6 +291,19 @@ func (e *AddEscrowEvent) EventKind() string {
 	return "add_escrow"
 }
 
+// ShouldProve returns true iff the event should be included in the event proof tree.
+func (e *AddEscrowEvent) ShouldProve() bool {
+	return true
+}
+
+// ProvableRepresentation returns the provable representation of an event.
+//
+// Since this representation is part of commitments that are included in consensus layer state
+// any changes to this representation are consensus-breaking.
+func (e *AddEscrowEvent) ProvableRepresentation() any {
+	return e
+}
+
 // TakeEscrowEvent is the event emitted when stake is taken from an escrow
 // account (i.e. stake is slashed).
 type TakeEscrowEvent struct {
@@ -278,6 +317,19 @@ type TakeEscrowEvent struct {
 // EventKind returns a string representation of this event's kind.
 func (e *TakeEscrowEvent) EventKind() string {
 	return "take_escrow"
+}
+
+// ShouldProve returns true iff the event should be included in the event proof tree.
+func (e *TakeEscrowEvent) ShouldProve() bool {
+	return true
+}
+
+// ProvableRepresentation returns the provable representation of an event.
+//
+// Since this representation is part of commitments that are included in consensus layer state
+// any changes to this representation are consensus-breaking.
+func (e *TakeEscrowEvent) ProvableRepresentation() any {
+	return e
 }
 
 // DebondingStartEscrowEvent is the event emitted when the debonding process has
@@ -301,6 +353,19 @@ func (e *DebondingStartEscrowEvent) EventKind() string {
 	return "debonding_start"
 }
 
+// ShouldProve returns true iff the event should be included in the event proof tree.
+func (e *DebondingStartEscrowEvent) ShouldProve() bool {
+	return true
+}
+
+// ProvableRepresentation returns the provable representation of an event.
+//
+// Since this representation is part of commitments that are included in consensus layer state
+// any changes to this representation are consensus-breaking.
+func (e *DebondingStartEscrowEvent) ProvableRepresentation() any {
+	return e
+}
+
 // ReclaimEscrowEvent is the event emitted when stake is reclaimed from an
 // escrow account back into owner's general account.
 type ReclaimEscrowEvent struct {
@@ -315,6 +380,19 @@ func (e *ReclaimEscrowEvent) EventKind() string {
 	return "reclaim_escrow"
 }
 
+// ShouldProve returns true iff the event should be included in the event proof tree.
+func (e *ReclaimEscrowEvent) ShouldProve() bool {
+	return true
+}
+
+// ProvableRepresentation returns the provable representation of an event.
+//
+// Since this representation is part of commitments that are included in consensus layer state
+// any changes to this representation are consensus-breaking.
+func (e *ReclaimEscrowEvent) ProvableRepresentation() any {
+	return e
+}
+
 // AllowanceChangeEvent is the event emitted when allowance is changed for a beneficiary.
 type AllowanceChangeEvent struct { // nolint: maligned
 	Owner        Address           `json:"owner"`
@@ -327,6 +405,19 @@ type AllowanceChangeEvent struct { // nolint: maligned
 // EventKind returns a string representation of this event's kind.
 func (e *AllowanceChangeEvent) EventKind() string {
 	return "allowance_change"
+}
+
+// ShouldProve returns true iff the event should be included in the event proof tree.
+func (e *AllowanceChangeEvent) ShouldProve() bool {
+	return true
+}
+
+// ProvableRepresentation returns the provable representation of an event.
+//
+// Since this representation is part of commitments that are included in consensus layer state
+// any changes to this representation are consensus-breaking.
+func (e *AllowanceChangeEvent) ProvableRepresentation() any {
+	return e
 }
 
 // Transfer is a stake transfer.
