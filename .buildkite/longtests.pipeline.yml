@@ -6,20 +6,26 @@ docker_plugin_default_config: &docker_plugin_default_config
   volumes:
     - /var/lib/buildkite-agent/.coveralls:/root/.coveralls
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
-    # Shared Rust incremental compile caches.
-    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
-    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
-    # Shared Rust package checkouts directory.
-    - /var/tmp/cargo_pkg/git:/root/.cargo/git
-    - /var/tmp/cargo_pkg/registry:/root/.cargo/registry
-    # Shared Rust SGX standard library artifacts cache.
-    - /var/tmp/xargo_cache:/root/.xargo
-    # Shared Go package checkouts directory.
-    - /var/tmp/go_pkg:/root/go/pkg
     # Intel SGX Application Enclave Services Manager (AESM) daemon running on
     # the Buildkite host.
     - /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
-    - /var/tmp/longtests:/var/tmp/longtests
+    # Shared Go package checkouts directory.
+    - /storage/buildkite/global_cache/go_pkg:/root/go/pkg
+    # Shared Rust package checkouts directory.
+    - /storage/buildkite/global_cache/cargo_git:/root/.cargo/git
+    - /storage/buildkite/global_cache/cargo_registry:/root/.cargo/registry
+    # Shared Rust SGX standard library artifacts cache.
+    - /storage/buildkite/global_cache/xargo_cache:/root/.xargo
+    # Per-branch shared Rust incremental compile caches.
+    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
+    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
+    # Per-build shared downloaded Buildkite artifacts.
+    - /storage/buildkite/build_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/artifacts:/tmp/artifacts
+    # Per-build shared long tests.
+    - /storage/buildkite/build_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/longtests:/var/tmp/longtests
+  tmpfs:
+    # Per-job tmpfs for E2E test nodes, Codecov, Coveralls...
+    - /tmp:exec
   environment:
     - "LC_ALL=C.UTF-8"
     - "LANG=C.UTF-8"
@@ -27,10 +33,17 @@ docker_plugin_default_config: &docker_plugin_default_config
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "CARGO_INCREMENTAL=0"
     - "GOPROXY=https://proxy.golang.org/"
-    - "SLACK_WEBHOOK_URL"
-    - "METRICS_PUSH_ADDR"
+    - "BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"
+    - "BUILDKITE_S3_DEFAULT_REGION"
+    - "BUILDKITE_S3_ACL"
+    - "BUILDKITE_S3_SSE_ENABLED"
+    - "BUILDKITE_S3_ACCESS_KEY_ID"
+    - "BUILDKITE_S3_SECRET_ACCESS_KEY"
+    - "BUILDKITE_S3_SESSION_TOKEN"
     - "BUILDKITE_PIPELINE_NAME"
     - "BUILDKITE_BUILD_NUMBER"
+    - "SLACK_WEBHOOK_URL"
+    - "METRICS_PUSH_ADDR"
   propagate-environment: true
   unconfined: true
 
@@ -89,7 +102,7 @@ steps:
     env:
       TEST_BASE_DIR: /var/tmp/longtests
     agents:
-      daily: true
+      queue: daily
     # NOTE: we actually don't want to retry, but this is the only way that we
     # can execute the notify step only if tests failed.
     retry:

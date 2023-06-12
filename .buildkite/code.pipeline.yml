@@ -14,30 +14,40 @@ docker_plugin_default_config: &docker_plugin_default_config
     - /var/lib/buildkite-agent/.codecov:/root/.codecov
     # IAS Development API keys.
     - /var/lib/buildkite-agent/.oasis-ias:/root/.oasis-ias
-    # Shared Rust incremental compile caches.
-    - /var/tmp/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
-    - /var/tmp/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
-    # Shared Rust package checkouts directory.
-    - /var/tmp/cargo_pkg/git:/root/.cargo/git
-    - /var/tmp/cargo_pkg/registry:/root/.cargo/registry
-    # Shared Rust SGX standard library artifacts cache.
-    - /var/tmp/xargo_cache:/root/.xargo
-    # Shared Go package checkouts directory.
-    - /var/tmp/go_pkg:/root/go/pkg
     # Intel SGX Application Enclave Services Manager (AESM) daemon running on
     # the Buildkite host.
     - /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
-    # Propapage the tmpfs mount.
-    - /tmp:/tmp
+    # Shared Go package checkouts directory.
+    - /storage/buildkite/global_cache/go_pkg:/root/go/pkg
+    # Shared Rust package checkouts directory.
+    - /storage/buildkite/global_cache/cargo_git:/root/.cargo/git
+    - /storage/buildkite/global_cache/cargo_registry:/root/.cargo/registry
+    # Shared Rust SGX standard library artifacts cache.
+    - /storage/buildkite/global_cache/xargo_cache:/root/.xargo
+    # Per-branch shared Rust incremental compile caches.
+    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
+    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
+    # Per-build shared downloaded Buildkite artifacts.
+    - /storage/buildkite/build_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/artifacts:/tmp/artifacts
+  tmpfs:
+    # Per-job tmpfs for E2E test nodes, Codecov, Coveralls...
+    - /tmp:exec
+  environment:
     # NOTE: When changing the environment variables below, also copy the changes
     # to the docker_plugin_sgx1_config.
-  environment:
     - "LC_ALL=C.UTF-8"
     - "LANG=C.UTF-8"
     - "CARGO_TARGET_DIR=/var/tmp/artifacts"
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "CARGO_INCREMENTAL=0"
     - "GOPROXY=https://proxy.golang.org/"
+    - "BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"
+    - "BUILDKITE_S3_DEFAULT_REGION"
+    - "BUILDKITE_S3_ACL"
+    - "BUILDKITE_S3_SSE_ENABLED"
+    - "BUILDKITE_S3_ACCESS_KEY_ID"
+    - "BUILDKITE_S3_SECRET_ACCESS_KEY"
+    - "BUILDKITE_S3_SESSION_TOKEN"
   propagate-environment: true
   unconfined: true
 
@@ -55,6 +65,13 @@ docker_plugin_sgx1_config: &docker_plugin_sgx1_config
     - "CARGO_INSTALL_ROOT=/root/.cargo"
     - "CARGO_INCREMENTAL=0"
     - "GOPROXY=https://proxy.golang.org/"
+    - "BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"
+    - "BUILDKITE_S3_DEFAULT_REGION"
+    - "BUILDKITE_S3_ACL"
+    - "BUILDKITE_S3_SSE_ENABLED"
+    - "BUILDKITE_S3_ACCESS_KEY_ID"
+    - "BUILDKITE_S3_SECRET_ACCESS_KEY"
+    - "BUILDKITE_S3_SESSION_TOKEN"
 
 docker_plugin: &docker_plugin
   oasislabs/docker#v3.0.1-oasis1:
@@ -201,10 +218,7 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     parallelism: 30
-    # TODO: Temporary workaround to prevent timeouts during artifact downloading.
-    #       The timeout should be changed back to 15 minutes once we transition
-    #       to S3 or find a more efficient solution (see #5276).
-    timeout_in_minutes: 60
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
@@ -230,10 +244,7 @@ steps:
       - "build-go"
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
-    # TODO: Temporary workaround to prevent timeouts during artifact downloading.
-    #       The timeout should be changed back to 15 minutes once we transition
-    #       to S3 or find a more efficient solution (see #5276).
-    timeout_in_minutes: 60
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/txsource-multi-short
@@ -245,8 +256,6 @@ steps:
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
-    agents:
-      buildkite_agent_class: ephemeral # XXX: Use a dedicated tag instead.
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -262,10 +271,7 @@ steps:
       - "build-rust-runtimes"
     branches: "!master !stable/*"
     parallelism: 2
-    # TODO: Temporary workaround to prevent timeouts during artifact downloading.
-    #       The timeout should be changed back to 20 minutes once we transition
-    #       to S3 or find a more efficient solution (see #5276).
-    timeout_in_minutes: 60
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.
@@ -328,7 +334,7 @@ steps:
   ###########################################
   - label: E2E tests - sgx1 - IAS
     branches: master stable/*
-    timeout_in_minutes: 15
+    timeout_in_minutes: 20
     command:
       - .buildkite/scripts/sgx_ias_tests.sh
     # A unique string to identify the step. The value is available in the

@@ -12,6 +12,9 @@ set -euxo pipefail
 
 source .buildkite/scripts/common.sh
 
+# Randomize beginning of downloads to increase hits in CI pipeline cache
+sleep $((RANDOM % 5))
+
 # Oasis node, test runner, remote signer and runtime loader.
 download_artifact oasis-node go/oasis-node 755
 download_artifact oasis-node.test go/oasis-node 755
