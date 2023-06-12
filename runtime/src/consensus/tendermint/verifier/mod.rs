@@ -25,10 +25,11 @@ use crate::{
     common::{logger::get_logger, namespace::Namespace, process, time, version::Version},
     consensus::{
         beacon::EpochTime,
+        registry::METHOD_PROVE_FRESHNESS,
         roothash::{ComputeResultsHeader, Header},
         state::ConsensusState,
         tendermint::{
-            chain_id, decode_light_block, state_root_from_header,
+            chain_id, decode_light_block, merkle, state_root_from_header,
             verifier::{
                 clock::InsecureClock,
                 io::Io,
@@ -37,7 +38,7 @@ use crate::{
             },
             LightBlockMeta,
         },
-        transaction::{Transaction, SIGNATURE_CONTEXT},
+        transaction::{Proof, SignedTransaction, Transaction},
         verifier::{self, verify_state_freshness, Error, TrustRoot},
         Event, LightBlock, HEIGHT_LATEST,
     },
@@ -279,22 +280,20 @@ impl Verifier {
 
         // Ask host for freshness proof.
         let io = Io::new(&self.protocol);
-        let (signed_tx, height, merkle_proof) =
-            io.fetch_freshness_proof(&nonce).map_err(|err| {
-                Error::FreshnessVerificationFailed(anyhow!(
-                    "failed to fetch freshness proof: {}",
-                    err
-                ))
-            })?;
-
-        // Peek into the transaction to verify the nonce and the signature. No need to verify
-        // the name of the method though.
-        let tx: Transaction = cbor::from_slice(signed_tx.blob.as_slice()).map_err(|err| {
-            Error::FreshnessVerificationFailed(anyhow!(
-                "failed to decode prove freshness transaction: {}",
-                err
-            ))
+        let stwp = io.fetch_freshness_proof(&nonce).map_err(|err| {
+            Error::FreshnessVerificationFailed(anyhow!("failed to fetch freshness proof: {}", err))
         })?;
+
+        // Verify the transaction and the proof.
+        let tx = self.verify_transaction(cache, instance, &stwp.signed_tx, &stwp.proof)?;
+
+        // Verify the method name and the nonce.
+        if tx.method != METHOD_PROVE_FRESHNESS {
+            return Err(Error::FreshnessVerificationFailed(anyhow!(
+                "invalid method name"
+            )));
+        }
+
         let tx_nonce: Nonce = cbor::from_value(tx.body).map_err(|err| {
             Error::FreshnessVerificationFailed(anyhow!("failed to decode nonce: {}", err))
         })?;
@@ -303,50 +302,71 @@ impl Verifier {
             _ => return Err(Error::FreshnessVerificationFailed(anyhow!("invalid nonce"))),
         }
 
-        let mut context = SIGNATURE_CONTEXT.to_vec();
-        context.extend(self.chain_context.as_bytes());
-        if !signed_tx.signature.verify(&context, &signed_tx.blob) {
-            return Err(Error::FreshnessVerificationFailed(anyhow!(
+        info!(self.logger, "State freshness successfully verified");
+
+        Ok(())
+    }
+
+    fn verify_transaction(
+        &self,
+        cache: &mut Cache,
+        instance: &mut Instance,
+        signed_tx: &SignedTransaction,
+        proof: &Proof,
+    ) -> Result<Transaction, Error> {
+        // Verify the signature.
+        if !signed_tx.verify(&self.chain_context) {
+            return Err(Error::TransactionVerificationFailed(anyhow!(
                 "failed to verify the signature"
             )));
         }
 
-        // Fetch the block in which the transaction was published.
+        // Fetch the root hash of a block in which the transaction was published.
         let verified_block = self
-            .verify_to_target(height, cache, instance)
+            .verify_to_target(proof.height, cache, instance)
             .map_err(|err| {
-                Error::FreshnessVerificationFailed(anyhow!("failed to fetch the block: {}", err))
+                Error::TransactionVerificationFailed(anyhow!("failed to fetch the block: {}", err))
             })?;
 
         let header = verified_block.signed_header.header;
-        if header.height.value() != height {
-            return Err(Error::VerificationFailed(anyhow!("invalid block")));
+        if header.height.value() != proof.height {
+            return Err(Error::TransactionVerificationFailed(anyhow!(
+                "invalid block"
+            )));
         }
-
-        // Compute hash of the transaction and verify the proof.
-        let digest = Sha256::digest(&cbor::to_vec(signed_tx));
-        let mut tx_hash = [0u8; HASH_SIZE];
-        tx_hash.copy_from_slice(&digest);
 
         let root_hash = header
             .data_hash
-            .ok_or_else(|| Error::FreshnessVerificationFailed(anyhow!("root hash not found")))?;
+            .ok_or_else(|| Error::TransactionVerificationFailed(anyhow!("root hash not found")))?;
         let root_hash = match root_hash {
             TMHash::Sha256(hash) => hash,
             TMHash::None => {
-                return Err(Error::FreshnessVerificationFailed(anyhow!(
+                return Err(Error::TransactionVerificationFailed(anyhow!(
                     "root hash not found"
                 )));
             }
         };
 
-        merkle_proof.verify(root_hash, tx_hash).map_err(|err| {
-            Error::FreshnessVerificationFailed(anyhow!("failed to verify the proof: {}", err))
+        // Compute hash of the transaction.
+        let digest = Sha256::digest(&cbor::to_vec(signed_tx.clone()));
+        let mut tx_hash = [0u8; HASH_SIZE];
+        tx_hash.copy_from_slice(&digest);
+
+        // Decode raw proof as a CometBFT Merkle proof of inclusion.
+        let merkle_proof: merkle::Proof = cbor::from_slice(&proof.raw_proof).map_err(|err| {
+            Error::TransactionVerificationFailed(anyhow!("failed to decode Merkle proof: {}", err))
         })?;
 
-        info!(self.logger, "State freshness successfully verified");
+        merkle_proof.verify(root_hash, tx_hash).map_err(|err| {
+            Error::TransactionVerificationFailed(anyhow!("failed to verify Merkle proof: {}", err))
+        })?;
 
-        Ok(())
+        // Decode transaction.
+        let tx: Transaction = cbor::from_slice(signed_tx.blob.as_slice()).map_err(|err| {
+            Error::TransactionVerificationFailed(anyhow!("failed to decode transaction: {}", err))
+        })?;
+
+        Ok(tx)
     }
 
     fn verify(

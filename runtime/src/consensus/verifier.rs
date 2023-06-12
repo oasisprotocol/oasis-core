@@ -34,6 +34,9 @@ pub enum Error {
     #[error("freshness verification: {0}")]
     FreshnessVerificationFailed(#[source] anyhow::Error),
 
+    #[error("transaction verification: {0}")]
+    TransactionVerificationFailed(#[source] anyhow::Error),
+
     #[error("internal consensus verifier error")]
     Internal,
 }
@@ -46,7 +49,8 @@ impl Error {
             Error::TrustedStateLoadingFailed => 3,
             Error::ChainContextTransitionFailed(_) => 4,
             Error::FreshnessVerificationFailed(_) => 5,
-            Error::Internal => 6,
+            Error::TransactionVerificationFailed(_) => 6,
+            Error::Internal => 7,
         }
     }
 }

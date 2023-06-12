@@ -24,6 +24,12 @@ use crate::{
     identity::Identity,
 };
 
+/// A unique module name for the registry module.
+pub const MODULE_NAME: &str = "registry";
+
+/// The method name for freshness proofs.
+pub const METHOD_PROVE_FRESHNESS: &str = "registry.ProveFreshness";
+
 /// Attestation signature context.
 pub const ATTESTATION_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/node: TEE attestation signature";
 
