@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	tmcrypto "github.com/tendermint/tendermint/crypto"
+	cmtcrypto "github.com/cometbft/cometbft/crypto"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -19,7 +19,7 @@ import (
 func onEvidenceByzantineConsensus(
 	ctx *abciAPI.Context,
 	reason staking.SlashReason,
-	addr tmcrypto.Address,
+	addr cmtcrypto.Address,
 	height int64,
 	time time.Time,
 	power int64,

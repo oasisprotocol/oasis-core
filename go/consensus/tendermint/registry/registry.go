@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
 	"github.com/hashicorp/go-multierror"
-	tmabcitypes "github.com/tendermint/tendermint/abci/types"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmrpctypes "github.com/tendermint/tendermint/rpc/core/types"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -171,7 +171,7 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 
 func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Event, error) {
 	// Get block results at given height.
-	var results *tmrpctypes.ResultBlockResults
+	var results *cmtrpctypes.ResultBlockResults
 	results, err := sc.backend.GetBlockResults(ctx, height)
 	if err != nil {
 		sc.logger.Error("failed to get tendermint block results",
@@ -239,12 +239,12 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 
 // Implements api.ServiceClient.
 func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
-	events, nodeListEvents, err := EventsFromTendermint(tx, height, []tmabcitypes.Event{*ev})
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+	events, nodeListEvents, err := EventsFromTendermint(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("scheduler: failed to process tendermint events: %w", err)
 	}
@@ -281,9 +281,9 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 
 // EventsFromTendermint extracts registry events from tendermint events.
 func EventsFromTendermint(
-	tx tmtypes.Tx,
+	tx cmttypes.Tx,
 	height int64,
-	tmEvents []tmabcitypes.Event,
+	tmEvents []cmtabcitypes.Event,
 ) ([]*api.Event, []*NodeListEpochInternalEvent, error) {
 	var txHash hash.Hash
 	switch tx {
@@ -313,7 +313,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.RuntimeStartedEvent{}):
 				// Runtime started event.
 				var e api.RuntimeStartedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeStarted event: %w", err))
 					continue
 				}
@@ -322,7 +322,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.RuntimeSuspendedEvent{}):
 				// Runtime suspended event.
 				var e api.RuntimeSuspendedEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeSuspended event: %w", err))
 					continue
 				}
@@ -331,7 +331,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.EntityEvent{}):
 				// Entity event.
 				var e api.EntityEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Entity event: %w", err))
 					continue
 				}
@@ -340,7 +340,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.NodeEvent{}):
 				// Node event.
 				var e api.NodeEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Node event: %w", err))
 					continue
 				}
@@ -349,7 +349,7 @@ func EventsFromTendermint(
 			case eventsAPI.IsAttributeKind(key, &api.NodeUnfrozenEvent{}):
 				// Node unfrozen event.
 				var e api.NodeUnfrozenEvent
-				if err := eventsAPI.DecodeValue(string(val), &e); err != nil {
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
 					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
 					continue
 				}

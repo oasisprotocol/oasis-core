@@ -6,8 +6,7 @@ import (
 	"sort"
 	"time"
 
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -24,18 +23,18 @@ import (
 
 // GenesisProvider is a tendermint specific genesis document provider.
 type GenesisProvider interface {
-	GetTendermintGenesisDocument() (*tmtypes.GenesisDoc, error)
+	GetTendermintGenesisDocument() (*cmttypes.GenesisDoc, error)
 }
 
 // GetTendermintGenesisDocument returns the Tendermint genesis document corresponding to the Oasis
 // genesis document specified by the given genesis provider.
-func GetTendermintGenesisDocument(provider genesis.Provider) (*tmtypes.GenesisDoc, error) {
+func GetTendermintGenesisDocument(provider genesis.Provider) (*cmttypes.GenesisDoc, error) {
 	doc, err := provider.GetGenesisDocument()
 	if err != nil {
 		return nil, fmt.Errorf("tendermint: failed to obtain genesis document: %w", err)
 	}
 
-	var tmGenDoc *tmtypes.GenesisDoc
+	var tmGenDoc *cmttypes.GenesisDoc
 	if tmProvider, ok := provider.(GenesisProvider); ok {
 		// This is a single node config, because the genesis document was
 		// missing, probably in unit tests.
@@ -47,16 +46,11 @@ func GetTendermintGenesisDocument(provider genesis.Provider) (*tmtypes.GenesisDo
 		return nil, fmt.Errorf("tendermint: failed to create genesis document: %w", err)
 	}
 
-	// HACK: Certain test cases use TimeoutCommit < 1 sec, and care about the
-	// BFT view of time pulling ahead.
-	timeoutCommit := doc.Consensus.Parameters.TimeoutCommit
-	tmGenDoc.ConsensusParams.Block.TimeIotaMs = int64(timeoutCommit / time.Millisecond)
-
 	return tmGenDoc, nil
 }
 
 // genesisToTendermint converts the Oasis genesis block to Tendermint's format.
-func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
+func genesisToTendermint(d *genesis.Document) (*cmttypes.GenesisDoc, error) {
 	// WARNING: The AppState MUST be encoded as JSON since its type is
 	// json.RawMessage which requires it to be valid JSON. It may appear
 	// to work until you try to restore from an existing data directory.
@@ -113,27 +107,26 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 		return nil, fmt.Errorf("tendermint: unable to determine epoch interval")
 	}
 
-	var evCfg tmproto.EvidenceParams
+	var evCfg cmttypes.EvidenceParams
 	evCfg.MaxBytes = int64(d.Consensus.Parameters.MaxEvidenceSize)
 	evCfg.MaxAgeNumBlocks = debondingInterval * epochInterval
 	evCfg.MaxAgeDuration = time.Duration(evCfg.MaxAgeNumBlocks) * (d.Consensus.Parameters.TimeoutCommit + 1*time.Second)
 
-	doc := tmtypes.GenesisDoc{
+	doc := cmttypes.GenesisDoc{
 		ChainID:       TendermintChainID(d.ChainContext()),
 		GenesisTime:   d.Time,
 		InitialHeight: d.Height,
-		ConsensusParams: &tmproto.ConsensusParams{
-			Block: tmproto.BlockParams{
-				MaxBytes:   int64(d.Consensus.Parameters.MaxBlockSize),
-				MaxGas:     maxBlockGas,
-				TimeIotaMs: 1000,
+		ConsensusParams: &cmttypes.ConsensusParams{
+			Block: cmttypes.BlockParams{
+				MaxBytes: int64(d.Consensus.Parameters.MaxBlockSize),
+				MaxGas:   maxBlockGas,
 			},
 			Evidence: evCfg,
-			Validator: tmproto.ValidatorParams{
-				PubKeyTypes: []string{tmtypes.ABCIPubKeyTypeEd25519},
+			Validator: cmttypes.ValidatorParams{
+				PubKeyTypes: []string{cmttypes.ABCIPubKeyTypeEd25519},
 			},
-			Version: tmproto.VersionParams{
-				AppVersion: version.TendermintAppVersion,
+			Version: cmttypes.VersionParams{
+				App: version.TendermintAppVersion,
 			},
 		},
 		AppState: b,
@@ -148,9 +141,9 @@ func genesisToTendermint(d *genesis.Document) (*tmtypes.GenesisDoc, error) {
 }
 
 // convertValidators converts validators into Tendermint format.
-func convertValidators(d *genesis.Document) ([]tmtypes.GenesisValidator, error) {
+func convertValidators(d *genesis.Document) ([]cmttypes.GenesisValidator, error) {
 	var err error
-	var tmValidators []tmtypes.GenesisValidator
+	var tmValidators []cmttypes.GenesisValidator
 	vPerE := make(map[signature.PublicKey]int)
 	for _, v := range d.Registry.Nodes {
 		var openedNode node.Node
@@ -204,7 +197,7 @@ func convertValidators(d *genesis.Document) ([]tmtypes.GenesisValidator, error) 
 		}
 
 		pk := crypto.PublicKeyToTendermint(&openedNode.Consensus.ID)
-		validator := tmtypes.GenesisValidator{
+		validator := cmttypes.GenesisValidator{
 			Address: pk.Address(),
 			PubKey:  pk,
 			Power:   power,

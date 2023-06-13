@@ -2,8 +2,8 @@
 package crypto
 
 import (
-	"github.com/tendermint/tendermint/crypto"
-	tmed "github.com/tendermint/tendermint/crypto/ed25519"
+	"github.com/cometbft/cometbft/crypto"
+	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
@@ -12,15 +12,15 @@ var tendermintSignatureContext = signature.NewContext("oasis-core/tendermint")
 
 // PublicKeyToTendermint converts a signature.PublicKey to the
 // tendermint equivalent.
-func PublicKeyToTendermint(k *signature.PublicKey) tmed.PubKey {
-	tk := make(tmed.PubKey, tmed.PubKeySize)
+func PublicKeyToTendermint(k *signature.PublicKey) cmted25519.PubKey {
+	tk := make(cmted25519.PubKey, cmted25519.PubKeySize)
 	copy(tk[:], (*k)[:])
 	return tk
 }
 
 // PublicKeyFromTendermint converts a tendermint public key to a
 // signature.PublicKey.
-func PublicKeyFromTendermint(tk *tmed.PubKey) signature.PublicKey {
+func PublicKeyFromTendermint(tk *cmted25519.PubKey) signature.PublicKey {
 	var k signature.PublicKey
 	_ = k.UnmarshalBinary(tk.Bytes())
 	return k
@@ -61,5 +61,5 @@ func (s *tmSigner) Type() string {
 }
 
 func init() {
-	tmed.EnableOasisDomainSeparation(string(tendermintSignatureContext))
+	cmted25519.EnableOasisDomainSeparation(string(tendermintSignatureContext))
 }

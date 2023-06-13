@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cometbft/cometbft/abci/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/tendermint/tendermint/abci/types"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -349,11 +349,12 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		}
 	}
 
-	mux.logger.Debug("InitChain: initializing of applications complete", "num_collected_events", len(ctx.GetEvents()))
+	events := ctx.GetEvents()
+	mux.logger.Debug("InitChain: initializing of applications complete", "num_collected_events", len(events))
 
 	// Since returning emitted events doesn't work for InitChain() response yet,
 	// we store those and return them in BeginBlock().
-	evBinary := cbor.Marshal(ctx.GetEvents())
+	evBinary := cbor.Marshal(events)
 	err = ctx.State().Insert(ctx, []byte(stateKeyInitChainEvents), evBinary)
 	if err != nil {
 		panic(err)
@@ -506,11 +507,16 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 func (mux *abciMux) decodeTx(ctx *api.Context, rawTx []byte) (*transaction.Transaction, *transaction.SignedTransaction, error) {
 	if mux.state.haltMode {
-		ctx.Logger().Debug("executeTx: in halt, rejecting all transactions")
+		ctx.Logger().Debug("decodeTx: in halt, rejecting all transactions")
 		return nil, nil, fmt.Errorf("halt mode, rejecting all transactions")
 	}
 
 	params := mux.state.ConsensusParameters()
+	if params == nil {
+		ctx.Logger().Debug("decodeTx: state not yet initialized")
+		return nil, nil, consensus.ErrNoCommittedBlocks
+	}
+
 	if params.MaxTxSize > 0 && uint64(len(rawTx)) > params.MaxTxSize {
 		// This deliberately avoids logging the rawTx since spamming the
 		// logs is also bad.
@@ -799,9 +805,9 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	resp.Events = ctx.GetEvents()
 
 	// Update version to what we are actually running.
-	resp.ConsensusParamUpdates = &types.ConsensusParams{
-		Version: &tmproto.VersionParams{
-			AppVersion: version.TendermintAppVersion,
+	resp.ConsensusParamUpdates = &cmtproto.ConsensusParams{
+		Version: &cmtproto.VersionParams{
+			App: version.TendermintAppVersion,
 		},
 	}
 

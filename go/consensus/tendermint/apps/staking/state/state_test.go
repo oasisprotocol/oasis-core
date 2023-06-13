@@ -286,22 +286,22 @@ func TestRewardAndSlash(t *testing.T) {
 		require.Equal(abciAPI.EventTypeForApp(AppName), ev.Type, "all emitted events should be staking events")
 		require.Len(ev.Attributes, 1, "each event should have a single attribute")
 
-		switch string(ev.Attributes[0].Key) {
+		switch ev.Attributes[0].Key {
 		case "add_escrow":
 			var v staking.AddEscrowEvent
-			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+			err = events.DecodeValue(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed add escrow event")
 		case "transfer":
 			var v staking.TransferEvent
-			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+			err = events.DecodeValue(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed transfer event")
 		default:
 			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
 		}
 	}
-	require.Equal("add_escrow", string(evs[0].Attributes[0].Key), "first event should be an add escrow event")
-	require.Equal("transfer", string(evs[1].Attributes[0].Key), "second event should be a transfer event")
-	require.Equal("add_escrow", string(evs[2].Attributes[0].Key), "second event should be an add escrow event")
+	require.Equal("add_escrow", evs[0].Attributes[0].Key, "first event should be an add escrow event")
+	require.Equal("transfer", evs[1].Attributes[0].Key, "second event should be a transfer event")
+	require.Equal("add_escrow", evs[2].Attributes[0].Key, "second event should be an add escrow event")
 
 	// 100% gain.
 	delegatorAccount, err = s.Account(ctx, delegatorAddr)
@@ -358,9 +358,9 @@ func TestRewardAndSlash(t *testing.T) {
 	ev := evs[0]
 	require.Equal(abciAPI.EventTypeForApp(AppName), ev.Type, "slash event should be staking events")
 	require.Len(ev.Attributes, 1, "slash event should have a single attribute")
-	require.Equal(ev.Attributes[0].Key, []byte("take_escrow"), "event should be a slashing event")
+	require.Equal(ev.Attributes[0].Key, "take_escrow", "event should be a slashing event")
 	var v staking.TakeEscrowEvent
-	err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+	err = events.DecodeValue(ev.Attributes[0].Value, &v)
 	require.NoError(err, "malformed take escrow event")
 	require.Equal(v, staking.TakeEscrowEvent{
 		Owner:           escrowAddr,
@@ -393,22 +393,22 @@ func TestRewardAndSlash(t *testing.T) {
 		require.Equal(abciAPI.EventTypeForApp(AppName), ev.Type, "all emitted events should be staking events")
 		require.Len(ev.Attributes, 1, "each event should have a single attribute")
 
-		switch string(ev.Attributes[0].Key) {
+		switch ev.Attributes[0].Key {
 		case "add_escrow":
 			var v staking.AddEscrowEvent
-			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+			err = events.DecodeValue(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed add escrow event")
 		case "transfer":
 			var v staking.TransferEvent
-			err = events.DecodeValue(string(ev.Attributes[0].Value), &v)
+			err = events.DecodeValue(ev.Attributes[0].Value, &v)
 			require.NoError(err, "malformed transfer event")
 		default:
 			t.Fatalf("unexpected event key: %+v", ev.Attributes[0].Key)
 		}
 	}
-	require.Equal("add_escrow", string(evs[0].Attributes[0].Key), "first event should be an add escrow event")
-	require.Equal("transfer", string(evs[1].Attributes[0].Key), "second event should be a transfer event")
-	require.Equal("add_escrow", string(evs[2].Attributes[0].Key), "second event should be an add escrow event")
+	require.Equal("add_escrow", evs[0].Attributes[0].Key, "first event should be an add escrow event")
+	require.Equal("transfer", evs[1].Attributes[0].Key, "second event should be a transfer event")
+	require.Equal("add_escrow", evs[2].Attributes[0].Key, "second event should be an add escrow event")
 
 	// 5% gain.
 	escrowAccount, err = s.Account(ctx, escrowAddr)

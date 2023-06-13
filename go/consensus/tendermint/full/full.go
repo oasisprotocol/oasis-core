@@ -14,23 +14,23 @@ import (
 	"time"
 
 	dbm "github.com/cometbft/cometbft-db"
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
+	cmtconfig "github.com/cometbft/cometbft/config"
+	cmtmerkle "github.com/cometbft/cometbft/crypto/merkle"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmtlight "github.com/cometbft/cometbft/light"
+	cmtmempool "github.com/cometbft/cometbft/mempool"
+	cmtnode "github.com/cometbft/cometbft/node"
+	cmtp2p "github.com/cometbft/cometbft/p2p"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtproxy "github.com/cometbft/cometbft/proxy"
+	cmtcli "github.com/cometbft/cometbft/rpc/client/local"
+	cmtstate "github.com/cometbft/cometbft/state"
+	cmtstatesync "github.com/cometbft/cometbft/statesync"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/prometheus/client_golang/prometheus"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	tmabcitypes "github.com/tendermint/tendermint/abci/types"
-	tmconfig "github.com/tendermint/tendermint/config"
-	tmmerkle "github.com/tendermint/tendermint/crypto/merkle"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmlight "github.com/tendermint/tendermint/light"
-	tmmempool "github.com/tendermint/tendermint/mempool"
-	tmnode "github.com/tendermint/tendermint/node"
-	tmp2p "github.com/tendermint/tendermint/p2p"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmproxy "github.com/tendermint/tendermint/proxy"
-	tmcli "github.com/tendermint/tendermint/rpc/client/local"
-	tmstate "github.com/tendermint/tendermint/state"
-	tmstatesync "github.com/tendermint/tendermint/statesync"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -91,8 +91,8 @@ type fullService struct { // nolint: maligned
 	p2p p2pAPI.Service
 
 	upgrader      upgradeAPI.Backend
-	node          *tmnode.Node
-	client        *tmcli.Local
+	node          *cmtnode.Node
+	client        *cmtcli.Local
 	blockNotifier *pubsub.Broker
 	failMonitor   *failMonitor
 
@@ -228,7 +228,7 @@ func (t *fullService) SubmitTxWithProof(ctx context.Context, tx *transaction.Sig
 		hashes = append(hashes, hash[:])
 	}
 
-	_, proofs := tmmerkle.ProofsFromByteSlices(hashes)
+	_, proofs := cmtmerkle.ProofsFromByteSlices(hashes)
 
 	return &transaction.Proof{
 		Height:   data.Height,
@@ -236,16 +236,16 @@ func (t *fullService) SubmitTxWithProof(ctx context.Context, tx *transaction.Sig
 	}, nil
 }
 
-func (t *fullService) submitTx(ctx context.Context, tx *transaction.SignedTransaction) (*tmtypes.EventDataTx, error) {
+func (t *fullService) submitTx(ctx context.Context, tx *transaction.SignedTransaction) (*cmttypes.EventDataTx, error) {
 	// Subscribe to the transaction being included in a block.
 	data := cbor.Marshal(tx)
-	query := tmtypes.EventQueryTxFor(data)
+	query := cmttypes.EventQueryTxFor(data)
 	subID := t.newSubscriberID()
 	txSub, err := t.subscribe(subID, query)
 	if err != nil {
 		return nil, err
 	}
-	if ptrSub, ok := txSub.(*tendermintPubsubBuffer).tmSubscription.(*tmpubsub.Subscription); ok && ptrSub == nil {
+	if ptrSub, ok := txSub.(*tendermintPubsubBuffer).tmSubscription.(*cmtpubsub.Subscription); ok && ptrSub == nil {
 		t.Logger.Debug("broadcastTx: service has shut down. Cancel our context to recover")
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -272,7 +272,7 @@ func (t *fullService) submitTx(ctx context.Context, tx *transaction.SignedTransa
 	case v := <-recheckCh:
 		return nil, v
 	case v := <-txSub.Out():
-		data := v.Data().(tmtypes.EventDataTx)
+		data := v.Data().(cmttypes.EventDataTx)
 		if result := data.Result; !result.IsOK() {
 			return nil, errors.FromCode(result.GetCodespace(), result.GetCode(), result.GetLog())
 		}
@@ -290,14 +290,14 @@ func (t *fullService) broadcastTxRaw(data []byte) error {
 	mp := t.node.Mempool()
 
 	// Submit the transaction to mempool and wait for response.
-	ch := make(chan *tmabcitypes.Response, 1)
-	err := mp.CheckTx(tmtypes.Tx(data), func(rsp *tmabcitypes.Response) {
+	ch := make(chan *cmtabcitypes.Response, 1)
+	err := mp.CheckTx(cmttypes.Tx(data), func(rsp *cmtabcitypes.Response) {
 		ch <- rsp
 		close(ch)
-	}, tmmempool.TxInfo{})
+	}, cmtmempool.TxInfo{})
 	switch err {
 	case nil:
-	case tmmempool.ErrTxInCache:
+	case cmtmempool.ErrTxInCache:
 		// Transaction already in the mempool or was recently there.
 		return consensusAPI.ErrDuplicateTx
 	default:
@@ -318,12 +318,12 @@ func (t *fullService) newSubscriberID() string {
 
 // Implements consensusAPI.Backend.
 func (t *fullService) SubmitEvidence(ctx context.Context, evidence *consensusAPI.Evidence) error {
-	var protoEv tmproto.Evidence
+	var protoEv cmtproto.Evidence
 	if err := protoEv.Unmarshal(evidence.Meta); err != nil {
 		return fmt.Errorf("tendermint: malformed evidence while unmarshalling: %w", err)
 	}
 
-	ev, err := tmtypes.EvidenceFromProto(&protoEv)
+	ev, err := cmttypes.EvidenceFromProto(&protoEv)
 	if err != nil {
 		return fmt.Errorf("tendermint: malformed evidence while converting: %w", err)
 	}
@@ -335,19 +335,19 @@ func (t *fullService) SubmitEvidence(ctx context.Context, evidence *consensusAPI
 	return nil
 }
 
-func (t *fullService) subscribe(subscriber string, query tmpubsub.Query) (tmtypes.Subscription, error) {
+func (t *fullService) subscribe(subscriber string, query cmtpubsub.Query) (cmttypes.Subscription, error) {
 	// Note: The tendermint documentation claims using SubscribeUnbuffered can
 	// freeze the server, however, the buffered Subscribe can drop events, and
 	// force-unsubscribe the channel if processing takes too long.
 
-	subFn := func() (tmtypes.Subscription, error) {
+	subFn := func() (cmttypes.Subscription, error) {
 		sub, err := t.node.EventBus().SubscribeUnbuffered(t.ctx, subscriber, query)
 		if err != nil {
 			return nil, err
 		}
 		// Oh yes, this can actually return a nil subscription even though the
 		// error was also nil if the node is just shutting down.
-		if sub == (*tmpubsub.Subscription)(nil) {
+		if sub == (*cmtpubsub.Subscription)(nil) {
 			return nil, context.Canceled
 		}
 		return newTendermintPubsubBuffer(sub), nil
@@ -375,7 +375,7 @@ func (t *fullService) subscribe(subscriber string, query tmpubsub.Query) (tmtype
 	return subFn()
 }
 
-func (t *fullService) unsubscribe(subscriber string, query tmpubsub.Query) error {
+func (t *fullService) unsubscribe(subscriber string, query cmtpubsub.Query) error {
 	if t.started() {
 		return t.node.EventBus().Unsubscribe(t.ctx, subscriber, query)
 	}
@@ -522,8 +522,8 @@ func (t *fullService) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Blo
 }
 
 // Implements consensusAPI.Backend.
-func (t *fullService) WatchTendermintBlocks() (<-chan *tmtypes.Block, *pubsub.Subscription, error) {
-	typedCh := make(chan *tmtypes.Block)
+func (t *fullService) WatchTendermintBlocks() (<-chan *cmttypes.Block, *pubsub.Subscription, error) {
+	typedCh := make(chan *cmttypes.Block)
 	sub := t.blockNotifier.Subscribe()
 	sub.Unwrap(typedCh)
 
@@ -595,7 +595,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	}
 
 	// Create Tendermint node.
-	tenderConfig := tmconfig.DefaultConfig()
+	tenderConfig := cmtconfig.DefaultConfig()
 	_ = viper.Unmarshal(&tenderConfig)
 	tenderConfig.SetRoot(tendermintDataDir)
 	timeoutCommit := t.genesis.Consensus.Parameters.TimeoutCommit
@@ -605,7 +605,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	tenderConfig.Consensus.CreateEmptyBlocks = true
 	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
 	tenderConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = config.GlobalConfig.Consensus.Debug.UnsafeReplayRecoverCorruptedWAL && cmflags.DebugDontBlameOasis()
-	tenderConfig.Mempool.Version = tmconfig.MempoolV1
+	tenderConfig.Mempool.Version = cmtconfig.MempoolV1
 	tenderConfig.Instrumentation.Prometheus = true
 	tenderConfig.Instrumentation.PrometheusListenAddr = ""
 	tenderConfig.TxIndex.Indexer = "null"
@@ -662,7 +662,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		)
 		return err
 	}
-	tendermintGenesisProvider := func() (*tmtypes.GenesisDoc, error) {
+	tendermintGenesisProvider := func() (*cmttypes.GenesisDoc, error) {
 		return tmGenDoc, nil
 	}
 
@@ -677,7 +677,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	// HACK: Wrap the provider so we can extract the state database handle. This is required because
 	// Tendermint does not expose a way to access the state database and we need it to bypass some
 	// stupid things like pagination on the in-process "client".
-	wrapDbProvider := func(dbCtx *tmnode.DBContext) (dbm.DB, error) {
+	wrapDbProvider := func(dbCtx *cmtnode.DBContext) (dbm.DB, error) {
 		rawDB, derr := dbProvider(dbCtx)
 		if derr != nil {
 			return nil, derr
@@ -687,7 +687,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		switch dbCtx.ID {
 		case "state":
 			// Tendermint state database.
-			t.stateStore = tmstate.NewStore(db, tmstate.StoreOptions{})
+			t.stateStore = cmtstate.NewStore(db, cmtstate.StoreOptions{})
 		case "blockstore":
 			// Tendermint blockstore database.
 			t.blockStoreDB = db
@@ -697,7 +697,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		return db, nil
 	}
 
-	// HACK: tmnode.NewNode() triggers block replay and or ABCI chain
+	// HACK: cmtnode.NewNode() triggers block replay and or ABCI chain
 	// initialization, instead of t.node.Start().  This is a problem
 	// because at the time that lazyInit() is called, none of the ABCI
 	// applications are registered.
@@ -719,7 +719,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		}()
 
 		// Configure state sync if enabled.
-		var stateProvider tmstatesync.StateProvider
+		var stateProvider cmtstatesync.StateProvider
 		if config.GlobalConfig.Consensus.StateSync.Enabled {
 			t.Logger.Info("state sync enabled")
 
@@ -738,7 +738,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			// Create new state sync state provider.
 			cfg := lightAPI.ClientConfig{
 				GenesisDocument: tmGenDoc,
-				TrustOptions: tmlight.TrustOptions{
+				TrustOptions: cmtlight.TrustOptions{
 					Period: config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 					Height: int64(config.GlobalConfig.Consensus.StateSync.TrustHeight),
 					Hash:   tenderConfig.StateSync.TrustHashBytes(),
@@ -752,15 +752,15 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			}
 		}
 
-		t.node, err = tmnode.NewNode(tenderConfig,
+		t.node, err = cmtnode.NewNode(tenderConfig,
 			tendermintPV,
-			&tmp2p.NodeKey{PrivKey: crypto.SignerToTendermint(t.identity.P2PSigner)},
-			tmproxy.NewLocalClientCreator(t.mux.Mux()),
+			&cmtp2p.NodeKey{PrivKey: crypto.SignerToTendermint(t.identity.P2PSigner)},
+			cmtproxy.NewLocalClientCreator(t.mux.Mux()),
 			tendermintGenesisProvider,
 			wrapDbProvider,
-			tmnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
+			cmtnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
 			tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug),
-			tmnode.StateProvider(stateProvider),
+			cmtnode.StateProvider(stateProvider),
 		)
 		if err != nil {
 			return fmt.Errorf("tendermint: failed to create node: %w", err)
@@ -769,7 +769,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			// Sanity check for the above wrapDbProvider hack in case the DB provider changes.
 			return fmt.Errorf("tendermint: internal error: state database not set")
 		}
-		t.client = tmcli.New(t.node)
+		t.client = cmtcli.New(t.node)
 		t.failMonitor = newFailMonitor(t.ctx, t.Logger, t.node.ConsensusState().Wait)
 
 		// Register a halt hook that handles upgrades gracefully.
@@ -869,7 +869,7 @@ func (t *fullService) syncWorker() {
 }
 
 func (t *fullService) blockNotifierWorker() {
-	sub, err := t.node.EventBus().SubscribeUnbuffered(t.ctx, tmSubscriberID, tmtypes.EventQueryNewBlock)
+	sub, err := t.node.EventBus().SubscribeUnbuffered(t.ctx, tmSubscriberID, cmttypes.EventQueryNewBlock)
 	if err != nil {
 		t.Logger.Error("failed to subscribe to new block events",
 			"err", err,
@@ -878,10 +878,10 @@ func (t *fullService) blockNotifierWorker() {
 	}
 	// Oh yes, this can actually return a nil subscription even though the error was also
 	// nil if the node is just shutting down.
-	if sub == (*tmpubsub.Subscription)(nil) {
+	if sub == (*cmtpubsub.Subscription)(nil) {
 		return
 	}
-	defer t.node.EventBus().Unsubscribe(t.ctx, tmSubscriberID, tmtypes.EventQueryNewBlock) // nolint: errcheck
+	defer t.node.EventBus().Unsubscribe(t.ctx, tmSubscriberID, cmttypes.EventQueryNewBlock) // nolint: errcheck
 
 	for {
 		select {
@@ -889,7 +889,7 @@ func (t *fullService) blockNotifierWorker() {
 		case <-sub.Cancelled():
 			return
 		case v := <-sub.Out():
-			ev := v.Data().(tmtypes.EventDataNewBlock)
+			ev := v.Data().(cmttypes.EventDataNewBlock)
 			t.blockNotifier.Broadcast(ev.Block)
 		}
 	}
@@ -907,7 +907,7 @@ func (t *fullService) metrics() {
 	pubKey := t.identity.ConsensusSigner.Public()
 	myAddr := []byte(crypto.PublicKeyToTendermint(&pubKey).Address())
 	for {
-		var blk *tmtypes.Block
+		var blk *cmttypes.Block
 		select {
 		case <-t.node.Quit():
 			return
@@ -922,7 +922,7 @@ func (t *fullService) metrics() {
 		// Was block voted for by our node. Ignore if there was no previous block.
 		if blk.LastCommit != nil {
 			for _, sig := range blk.LastCommit.Signatures {
-				if sig.Absent() || sig.BlockIDFlag == tmtypes.BlockIDFlagNil {
+				if sig.Absent() || sig.BlockIDFlag == cmttypes.BlockIDFlagNil {
 					// Vote is missing, ignore.
 					continue
 				}

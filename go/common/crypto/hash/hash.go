@@ -10,7 +10,7 @@ import (
 	"errors"
 	"hash"
 
-	tmbytes "github.com/tendermint/tendermint/libs/bytes"
+	cmtbytes "github.com/cometbft/cometbft/libs/bytes"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
@@ -151,7 +151,7 @@ func NewFromBytes(data ...[]byte) (h Hash) {
 
 // LoadFromHexBytes creates a new hash by loading it from the given Tendermint
 // HexBytes byte array.
-func LoadFromHexBytes(data tmbytes.HexBytes) (h Hash) {
+func LoadFromHexBytes(data cmtbytes.HexBytes) (h Hash) {
 	_ = h.UnmarshalBinary(data[:])
 	return
 }

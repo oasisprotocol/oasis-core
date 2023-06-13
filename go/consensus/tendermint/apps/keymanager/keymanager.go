@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/tendermint/tendermint/abci/types"
+	"github.com/cometbft/cometbft/abci/types"
 	"golang.org/x/crypto/sha3"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"

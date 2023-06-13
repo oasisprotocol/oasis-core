@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"sync"
 
+	cmtlightprovider "github.com/cometbft/cometbft/light/provider"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/libp2p/go-libp2p/core"
-	tmlightprovider "github.com/tendermint/tendermint/light/provider"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -200,8 +200,8 @@ func (lp *lightClientProvider) MalevolentProvider(peerID string) {
 }
 
 // ReportEvidence implements api.Provider.
-func (lp *lightClientProvider) ReportEvidence(ctx context.Context, ev tmtypes.Evidence) error {
-	proto, err := tmtypes.EvidenceToProto(ev)
+func (lp *lightClientProvider) ReportEvidence(ctx context.Context, ev cmttypes.Evidence) error {
+	proto, err := cmttypes.EvidenceToProto(ev)
 	if err != nil {
 		return fmt.Errorf("failed to convert evidence: %w", err)
 	}
@@ -279,36 +279,36 @@ func (lp *lightClientProvider) ChainID() string {
 }
 
 // LightBlock implements api.Provider.
-func (lp *lightClientProvider) LightBlock(ctx context.Context, height int64) (*tmtypes.LightBlock, error) {
+func (lp *lightClientProvider) LightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
 	lb, _, err := lp.LightBlockWithPeerID(ctx, height)
 	return lb, err
 }
 
 // LightBlockWithPeerID implements api.Provider.
-func (lp *lightClientProvider) LightBlockWithPeerID(ctx context.Context, height int64) (*tmtypes.LightBlock, string, error) {
+func (lp *lightClientProvider) LightBlockWithPeerID(ctx context.Context, height int64) (*cmttypes.LightBlock, string, error) {
 	rsp, pf, err := lp.GetLightBlock(ctx, height)
 	switch {
 	case err == nil:
 	case errors.Is(err, consensus.ErrVersionNotFound):
-		return nil, "", tmlightprovider.ErrLightBlockNotFound
+		return nil, "", cmtlightprovider.ErrLightBlockNotFound
 	default:
-		return nil, "", tmlightprovider.ErrNoResponse
+		return nil, "", cmtlightprovider.ErrNoResponse
 	}
 
 	// Decode Tendermint-specific light block.
-	var protoLb tmproto.LightBlock
+	var protoLb cmtproto.LightBlock
 	if err = protoLb.Unmarshal(rsp.Meta); err != nil {
 		pf.RecordBadPeer()
-		return nil, "", tmlightprovider.ErrNoResponse
+		return nil, "", cmtlightprovider.ErrNoResponse
 	}
-	tlb, err := tmtypes.LightBlockFromProto(&protoLb)
+	tlb, err := cmttypes.LightBlockFromProto(&protoLb)
 	if err != nil {
 		pf.RecordBadPeer()
-		return nil, "", tmlightprovider.ErrNoResponse
+		return nil, "", cmtlightprovider.ErrNoResponse
 	}
 	if err = tlb.ValidateBasic(lp.chainID); err != nil {
 		pf.RecordFailure()
-		return nil, "", tmlightprovider.ErrNoResponse
+		return nil, "", cmtlightprovider.ErrNoResponse
 	}
 
 	return tlb, string(pf.PeerID()), nil

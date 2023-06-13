@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	dbm "github.com/cometbft/cometbft-db"
-	"github.com/tendermint/tendermint/node"
+	"github.com/cometbft/cometbft/node"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db/badger"
 )

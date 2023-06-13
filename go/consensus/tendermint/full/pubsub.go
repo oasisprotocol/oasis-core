@@ -3,27 +3,27 @@ package full
 import (
 	"github.com/eapache/channels"
 
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmttypes "github.com/cometbft/cometbft/types"
 )
 
-var _ tmtypes.Subscription = (*tendermintPubsubBuffer)(nil)
+var _ cmttypes.Subscription = (*tendermintPubsubBuffer)(nil)
 
 // tendermintPubsubBuffer is a wrapper around tendermint subscriptions.
 // Because unbuffered subscriptions are dangerous and can lead to deadlocks
 // if they're not drained, this wrapper shunts all events into its own buffer.
 type tendermintPubsubBuffer struct {
 	messageBuffer  *channels.InfiniteChannel
-	tmSubscription tmtypes.Subscription
-	outCh          chan tmpubsub.Message
+	tmSubscription cmttypes.Subscription
+	outCh          chan cmtpubsub.Message
 	cancelCh       chan struct{}
 }
 
-func newTendermintPubsubBuffer(tmSubscription tmtypes.Subscription) *tendermintPubsubBuffer {
+func newTendermintPubsubBuffer(tmSubscription cmttypes.Subscription) *tendermintPubsubBuffer {
 	ps := &tendermintPubsubBuffer{
 		messageBuffer:  channels.NewInfiniteChannel(),
 		tmSubscription: tmSubscription,
-		outCh:          make(chan tmpubsub.Message),
+		outCh:          make(chan cmtpubsub.Message),
 		cancelCh:       make(chan struct{}),
 	}
 
@@ -33,7 +33,7 @@ func newTendermintPubsubBuffer(tmSubscription tmtypes.Subscription) *tendermintP
 	return ps
 }
 
-func (ps *tendermintPubsubBuffer) Out() <-chan tmpubsub.Message {
+func (ps *tendermintPubsubBuffer) Out() <-chan cmtpubsub.Message {
 	return ps.outCh
 }
 
@@ -64,6 +64,6 @@ func (ps *tendermintPubsubBuffer) reader() {
 
 func (ps *tendermintPubsubBuffer) writer() {
 	for msg := range ps.messageBuffer.Out() {
-		ps.outCh <- *(msg.(*tmpubsub.Message))
+		ps.outCh <- *(msg.(*cmtpubsub.Message))
 	}
 }

@@ -6,10 +6,10 @@ import (
 	"context"
 	"fmt"
 
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
-	tmabcitypes "github.com/tendermint/tendermint/abci/types"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -91,15 +91,15 @@ func (sc *serviceClient) WatchEphemeralSecrets() (<-chan *api.SignedEncryptedEph
 
 // Implements api.ServiceClient.
 func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
-	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []tmpubsub.Query{app.QueryApp})
+	return tmapi.NewStaticServiceDescriptor(api.ModuleName, app.EventType, []cmtpubsub.Query{app.QueryApp})
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmtypes.Tx, ev *tmabcitypes.Event) error {
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.StatusUpdateEvent{}) {
 			var event api.StatusUpdateEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+			if err := events.DecodeValue(pair.GetValue(), &event); err != nil {
 				sc.logger.Error("worker: failed to get statuses from tag",
 					"err", err,
 				)
@@ -112,7 +112,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx tmty
 		}
 		if events.IsAttributeKind(pair.GetKey(), &api.EphemeralSecretPublishedEvent{}) {
 			var event api.EphemeralSecretPublishedEvent
-			if err := events.DecodeValue(string(pair.GetValue()), &event); err != nil {
+			if err := events.DecodeValue(pair.GetValue(), &event); err != nil {
 				sc.logger.Error("worker: failed to get ephemeral secret from tag",
 					"err", err,
 				)

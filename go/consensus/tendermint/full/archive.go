@@ -8,15 +8,15 @@ import (
 	"time"
 
 	dbm "github.com/cometbft/cometbft-db"
+	abcicli "github.com/cometbft/cometbft/abci/client"
+	cmtconfig "github.com/cometbft/cometbft/config"
+	cmtsync "github.com/cometbft/cometbft/libs/sync"
+	cmtnode "github.com/cometbft/cometbft/node"
+	cmtproxy "github.com/cometbft/cometbft/proxy"
+	cmtcore "github.com/cometbft/cometbft/rpc/core"
+	"github.com/cometbft/cometbft/state"
+	"github.com/cometbft/cometbft/store"
 	"github.com/spf13/viper"
-	abcicli "github.com/tendermint/tendermint/abci/client"
-	tmconfig "github.com/tendermint/tendermint/config"
-	tmsync "github.com/tendermint/tendermint/libs/sync"
-	tmnode "github.com/tendermint/tendermint/node"
-	tmproxy "github.com/tendermint/tendermint/proxy"
-	tmcore "github.com/tendermint/tendermint/rpc/core"
-	"github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/store"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
@@ -180,19 +180,19 @@ func NewArchive(
 
 	// Setup needed tendermint services.
 	logger := tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)
-	srv.abciClient = abcicli.NewLocalClient(new(tmsync.Mutex), srv.mux.Mux())
+	srv.abciClient = abcicli.NewLocalClient(new(cmtsync.Mutex), srv.mux.Mux())
 
 	dbProvider, err := db.GetProvider()
 	if err != nil {
 		return nil, err
 	}
-	tmConfig := tmconfig.DefaultConfig()
-	_ = viper.Unmarshal(&tmConfig)
-	tmConfig.SetRoot(filepath.Join(srv.dataDir, tmcommon.StateDir))
+	cmtConfig := cmtconfig.DefaultConfig()
+	_ = viper.Unmarshal(&cmtConfig)
+	cmtConfig.SetRoot(filepath.Join(srv.dataDir, tmcommon.StateDir))
 
 	// NOTE: DBContext uses a full tendermint config but the only thing that is actually used
 	// is the data dir field.
-	srv.blockStoreDB, err = dbProvider(&tmnode.DBContext{ID: "blockstore", Config: tmConfig})
+	srv.blockStoreDB, err = dbProvider(&cmtnode.DBContext{ID: "blockstore", Config: cmtConfig})
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func NewArchive(
 	// NOTE: DBContext uses a full tendermint config but the only thing that is actually used
 	// is the data dir field.
 	var stateDB dbm.DB
-	stateDB, err = dbProvider(&tmnode.DBContext{ID: "state", Config: tmConfig})
+	stateDB, err = dbProvider(&cmtnode.DBContext{ID: "state", Config: cmtConfig})
 	if err != nil {
 		return nil, err
 	}
@@ -214,8 +214,8 @@ func NewArchive(
 	}
 
 	// Setup minimal tendermint environment needed to support consensus queries.
-	tmcore.SetEnvironment(&tmcore.Environment{
-		ProxyAppQuery:    tmproxy.NewAppConnQuery(srv.abciClient),
+	cmtcore.SetEnvironment(&cmtcore.Environment{
+		ProxyAppQuery:    cmtproxy.NewAppConnQuery(srv.abciClient, nil),
 		ProxyAppMempool:  nil,
 		StateStore:       srv.stateStore,
 		BlockStore:       store.NewBlockStore(srv.blockStoreDB),
@@ -223,7 +223,7 @@ func NewArchive(
 		ConsensusState:   nil,
 		GenDoc:           tmGenDoc,
 		Logger:           logger,
-		Config:           *tmConfig.RPC,
+		Config:           *cmtConfig.RPC,
 		EventBus:         nil,
 		P2PPeers:         nil,
 		P2PTransport:     nil,

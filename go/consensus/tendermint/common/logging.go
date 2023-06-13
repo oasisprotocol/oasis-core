@@ -1,7 +1,7 @@
 package common
 
 import (
-	tmlog "github.com/tendermint/tendermint/libs/log"
+	tmlog "github.com/cometbft/cometbft/libs/log"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )

@@ -4,7 +4,7 @@ package staking
 import (
 	"fmt"
 
-	"github.com/tendermint/tendermint/abci/types"
+	"github.com/cometbft/cometbft/abci/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -99,9 +99,9 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	for _, evidence := range request.ByzantineValidators {
 		var reason staking.SlashReason
 		switch evidence.Type {
-		case types.EvidenceType_DUPLICATE_VOTE:
+		case types.MisbehaviorType_DUPLICATE_VOTE:
 			reason = staking.SlashConsensusEquivocation
-		case types.EvidenceType_LIGHT_CLIENT_ATTACK:
+		case types.MisbehaviorType_LIGHT_CLIENT_ATTACK:
 			reason = staking.SlashConsensusLightClientAttack
 		default:
 			ctx.Logger().Debug("ignoring unknown evidence type",

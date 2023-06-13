@@ -204,11 +204,11 @@ import (
 
 	_ "unsafe" // For go:linkname.
 
-	tmcrypto "github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/libs/tempfile"
-	"github.com/tendermint/tendermint/privval"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmtcrypto "github.com/cometbft/cometbft/crypto"
+	"github.com/cometbft/cometbft/libs/tempfile"
+	"github.com/cometbft/cometbft/privval"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
@@ -220,10 +220,10 @@ import (
 // implementation, all of the useful helpers are not exported, and neither is
 // `FilePVLastSignState.filePath`.
 
-//go:linkname checkVotesOnlyDifferByTimestamp github.com/tendermint/tendermint/privval.checkVotesOnlyDifferByTimestamp
+//go:linkname checkVotesOnlyDifferByTimestamp github.com/cometbft/cometbft/privval.checkVotesOnlyDifferByTimestamp
 func checkVotesOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.Time, bool)
 
-//go:linkname checkProposalsOnlyDifferByTimestamp github.com/tendermint/tendermint/privval.checkProposalsOnlyDifferByTimestamp
+//go:linkname checkProposalsOnlyDifferByTimestamp github.com/cometbft/cometbft/privval.checkProposalsOnlyDifferByTimestamp
 func checkProposalsOnlyDifferByTimestamp(lastSignBytes, newSignBytes []byte) (time.Time, bool)
 
 const privValFileName = "oasis_priv_validator.json"
@@ -235,11 +235,11 @@ const (
 	stepPrecommit int8 = 3
 )
 
-func voteToStep(vote *tmproto.Vote) int8 {
+func voteToStep(vote *cmtproto.Vote) int8 {
 	switch vote.Type {
-	case tmproto.PrevoteType:
+	case cmtproto.PrevoteType:
 		return stepPrevote
-	case tmproto.PrecommitType:
+	case cmtproto.PrecommitType:
 		return stepPrecommit
 	default:
 		panic("Unknown vote type")
@@ -254,11 +254,11 @@ type privVal struct {
 	signer   signature.Signer
 }
 
-func (pv *privVal) GetPubKey() (tmcrypto.PubKey, error) {
+func (pv *privVal) GetPubKey() (cmtcrypto.PubKey, error) {
 	return PublicKeyToTendermint(&pv.PublicKey), nil
 }
 
-func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
+func (pv *privVal) SignVote(chainID string, vote *cmtproto.Vote) error {
 	height, round, step := vote.Height, vote.Round, voteToStep(vote)
 
 	equivocation, err := pv.CheckHRS(height, round, step)
@@ -266,7 +266,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
 		return fmt.Errorf("tendermint/crypto: failed to check vote H/R/S: %w", err)
 	}
 
-	signBytes := tmtypes.VoteSignBytes(chainID, vote)
+	signBytes := cmttypes.VoteSignBytes(chainID, vote)
 	if equivocation {
 		if bytes.Equal(signBytes, pv.SignBytes) {
 			vote.Signature = pv.Signature
@@ -291,7 +291,7 @@ func (pv *privVal) SignVote(chainID string, vote *tmproto.Vote) error {
 	return nil
 }
 
-func (pv *privVal) SignProposal(chainID string, proposal *tmproto.Proposal) error {
+func (pv *privVal) SignProposal(chainID string, proposal *cmtproto.Proposal) error {
 	height, round, step := proposal.Height, proposal.Round, stepPropose
 
 	equivocation, err := pv.CheckHRS(height, round, step)
@@ -299,7 +299,7 @@ func (pv *privVal) SignProposal(chainID string, proposal *tmproto.Proposal) erro
 		return fmt.Errorf("tendermint/crypto: failed to check proposal H/R/S: %w", err)
 	}
 
-	signBytes := tmtypes.ProposalSignBytes(chainID, proposal)
+	signBytes := cmttypes.ProposalSignBytes(chainID, proposal)
 	if equivocation {
 		if bytes.Equal(signBytes, pv.SignBytes) {
 			proposal.Signature = pv.Signature
@@ -347,7 +347,7 @@ func (pv *privVal) save() error {
 
 // LoadOrGeneratePrivVal loads or generates a tendermint PrivValidator for an
 // Oasis node signature signer.
-func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.PrivValidator, error) {
+func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (cmttypes.PrivValidator, error) {
 	fn := filepath.Join(baseDir, privValFileName)
 
 	pv := &privVal{

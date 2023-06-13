@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"reflect"
 
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
-	tmabcitypes "github.com/tendermint/tendermint/abci/types"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 )
@@ -28,7 +28,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 
 	var (
 		cases   []reflect.SelectCase
-		queries []tmpubsub.Query
+		queries []cmtpubsub.Query
 	)
 	// Context cancellation.
 	const indexCtx = 0
@@ -86,7 +86,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 			return
 		case indexQueries:
 			// Subscribe to new query.
-			query := recv.Interface().(tmpubsub.Query)
+			query := recv.Interface().(cmtpubsub.Query)
 
 			logger.Debug("subscribing to new query",
 				"query", query,
@@ -101,7 +101,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 			}
 			// Oh yes, this can actually return a nil subscription even though the error was also
 			// nil if the node is just shutting down.
-			if sub == (*tmpubsub.Subscription)(nil) {
+			if sub == (*cmtpubsub.Subscription)(nil) {
 				continue
 			}
 
@@ -120,9 +120,9 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 					case v := <-sub.Out():
 						// Received an event.
 						switch ev := v.Data().(type) {
-						case tmtypes.EventDataNewBlockHeader:
+						case cmttypes.EventDataNewBlockHeader:
 							buffer.In() <- &api.ServiceEvent{Block: &ev}
-						case tmtypes.EventDataTx:
+						case cmttypes.EventDataTx:
 							buffer.In() <- &api.ServiceEvent{Tx: &ev}
 						default:
 						}
@@ -149,7 +149,7 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 				// Seen a block, now we are ready to process commands.
 				cases[indexCommands].Chan = reflect.ValueOf(sd.Commands())
 			}
-			height = recv.Interface().(*tmtypes.Block).Header.Height
+			height = recv.Interface().(*cmttypes.Block).Header.Height
 
 			if err := svc.DeliverBlock(ctx, height); err != nil {
 				logger.Error("failed to deliver block notification to service client",
@@ -161,13 +161,13 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 			// New service client event.
 			ev := recv.Interface().(*api.ServiceEvent)
 			var (
-				tx       tmtypes.Tx
-				tmEvents []tmabcitypes.Event
+				tx       cmttypes.Tx
+				tmEvents []cmtabcitypes.Event
 			)
 			switch {
 			case ev.Block != nil:
 				height = ev.Block.Header.Height
-				tmEvents = append([]tmabcitypes.Event{}, ev.Block.ResultBeginBlock.GetEvents()...)
+				tmEvents = append([]cmtabcitypes.Event{}, ev.Block.ResultBeginBlock.GetEvents()...)
 				tmEvents = append(tmEvents, ev.Block.ResultEndBlock.GetEvents()...)
 			case ev.Tx != nil:
 				height = ev.Tx.Height
@@ -191,8 +191,8 @@ func (t *fullService) serviceClientWorker(ctx context.Context, svc api.ServiceCl
 				// events not only those matching the query so we need to do a separate pass.
 				tagMap := make(map[string][]string)
 				for _, attr := range tmEv.Attributes {
-					compositeTag := fmt.Sprintf("%s.%s", tmEv.Type, string(attr.Key))
-					tagMap[compositeTag] = append(tagMap[compositeTag], string(attr.Value))
+					compositeTag := fmt.Sprintf("%s.%s", tmEv.Type, attr.Key)
+					tagMap[compositeTag] = append(tagMap[compositeTag], attr.Value)
 				}
 				if matches, _ := query.Matches(tagMap); !matches {
 					continue

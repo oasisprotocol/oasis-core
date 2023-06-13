@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	tmstate "github.com/tendermint/tendermint/state"
-	tmstatesync "github.com/tendermint/tendermint/statesync"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmtstate "github.com/cometbft/cometbft/state"
+	cmtstatesync "github.com/cometbft/cometbft/statesync"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -20,12 +20,12 @@ type stateProvider struct {
 	sync.Mutex
 
 	lc              lightAPI.Client
-	genesisDocument *tmtypes.GenesisDoc
+	genesisDocument *cmttypes.GenesisDoc
 
 	logger *logging.Logger
 }
 
-// Implements tmstatesync.StateProvider.
+// Implements cmtstatesync.StateProvider.
 func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, error) {
 	sp.Lock()
 	defer sp.Unlock()
@@ -38,8 +38,8 @@ func (sp *stateProvider) AppHash(ctx context.Context, height uint64) ([]byte, er
 	return lb.AppHash, nil
 }
 
-// Implements tmstatesync.StateProvider.
-func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*tmtypes.Commit, error) {
+// Implements cmtstatesync.StateProvider.
+func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*cmttypes.Commit, error) {
 	sp.Lock()
 	defer sp.Unlock()
 
@@ -50,14 +50,14 @@ func (sp *stateProvider) Commit(ctx context.Context, height uint64) (*tmtypes.Co
 	return lb.Commit, nil
 }
 
-// Implements tmstatesync.StateProvider.
-func (sp *stateProvider) State(ctx context.Context, height uint64) (tmstate.State, error) {
+// Implements cmtstatesync.StateProvider.
+func (sp *stateProvider) State(ctx context.Context, height uint64) (cmtstate.State, error) {
 	sp.Lock()
 	defer sp.Unlock()
 
-	state := tmstate.State{
+	state := cmtstate.State{
 		ChainID:       sp.genesisDocument.ChainID,
-		Version:       tmstate.InitStateVersion,
+		Version:       cmtstate.InitStateVersion,
 		InitialHeight: sp.genesisDocument.InitialHeight,
 	}
 	// XXX: This will fail in case an upgrade happened in-between.
@@ -73,15 +73,15 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (tmstate.Stat
 	// the validator set at the snapshot height then this only takes effect at height+2.
 	lastLightBlock, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height))
 	if err != nil {
-		return tmstate.State{}, err
+		return cmtstate.State{}, err
 	}
 	curLightBlock, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height)+1)
 	if err != nil {
-		return tmstate.State{}, err
+		return cmtstate.State{}, err
 	}
 	nextLightBlock, err := sp.lc.GetVerifiedLightBlock(ctx, int64(height)+2)
 	if err != nil {
-		return tmstate.State{}, err
+		return cmtstate.State{}, err
 	}
 	state.LastBlockHeight = lastLightBlock.Height
 	state.LastBlockTime = lastLightBlock.Time
@@ -96,17 +96,17 @@ func (sp *stateProvider) State(ctx context.Context, height uint64) (tmstate.Stat
 	// Fetch consensus parameters with light client verification.
 	params, err := sp.lc.GetVerifiedParameters(ctx, nextLightBlock.Height)
 	if err != nil {
-		return tmstate.State{}, fmt.Errorf("failed to fetch consensus parameters for height %d: %w",
+		return cmtstate.State{}, fmt.Errorf("failed to fetch consensus parameters for height %d: %w",
 			nextLightBlock.Height,
 			err,
 		)
 	}
-	state.ConsensusParams = *params
+	state.ConsensusParams = cmttypes.ConsensusParamsFromProto(*params)
 
 	return state, nil
 }
 
-func newStateProvider(ctx context.Context, chainContext string, cfg lightAPI.ClientConfig, p2p rpc.P2P) (tmstatesync.StateProvider, error) {
+func newStateProvider(ctx context.Context, chainContext string, cfg lightAPI.ClientConfig, p2p rpc.P2P) (cmtstatesync.StateProvider, error) {
 	lc, err := light.NewInternalClient(ctx, chainContext, p2p, cfg)
 	if err != nil {
 		return nil, err

@@ -5,16 +5,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
 )
 
 func TestServiceDescriptor(t *testing.T) {
 	require := require.New(t)
 
-	q1 := tmquery.MustParse("a='b'")
+	q1 := cmtquery.MustParse("a='b'")
 
-	sd := NewStaticServiceDescriptor("test", "test_type", []tmpubsub.Query{q1})
+	sd := NewStaticServiceDescriptor("test", "test_type", []cmtpubsub.Query{q1})
 	require.Equal("test", sd.Name())
 	require.Equal("test_type", sd.EventType())
 	recvQ1 := <-sd.Queries()

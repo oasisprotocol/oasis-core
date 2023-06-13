@@ -8,12 +8,12 @@ import (
 	"sync"
 
 	dbm "github.com/cometbft/cometbft-db"
-	tmlight "github.com/tendermint/tendermint/light"
-	tmlightprovider "github.com/tendermint/tendermint/light/provider"
-	tmlightstore "github.com/tendermint/tendermint/light/store"
-	tmlightdb "github.com/tendermint/tendermint/light/store/db"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmtlight "github.com/cometbft/cometbft/light"
+	cmtlightprovider "github.com/cometbft/cometbft/light/provider"
+	cmtlightstore "github.com/cometbft/cometbft/light/store"
+	cmtlightdb "github.com/cometbft/cometbft/light/store/db"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -50,7 +50,7 @@ type client struct {
 	consensus consensus.Backend
 	p2p       rpc.P2P
 
-	store tmlightstore.Store
+	store cmtlightstore.Store
 
 	lc        *lightClient
 	providers []api.Provider
@@ -81,7 +81,7 @@ func (c *client) GetStatus(ctx context.Context) (*consensus.LightClientStatus, e
 	}
 	status.OldestHeight = oldest
 	if oldest > -1 { // -1 indicates empty store.
-		var lb *tmtypes.LightBlock
+		var lb *cmttypes.LightBlock
 		lb, err = c.store.LightBlock(oldest)
 		if err != nil {
 			return nil, err
@@ -96,7 +96,7 @@ func (c *client) GetStatus(ctx context.Context) (*consensus.LightClientStatus, e
 	}
 	status.LatestHeight = latest
 	if latest > -1 { // -1 indicates empty store.
-		var lb *tmtypes.LightBlock
+		var lb *cmttypes.LightBlock
 		lb, err := c.store.LightBlock(latest)
 		if err != nil {
 			return nil, err
@@ -150,12 +150,12 @@ func (c *client) worker() {
 			return fmt.Errorf("failed to obtain block %d from consensus: %w", height, err)
 		}
 		// Convert to protobuff LightBlock.
-		var pb tmproto.LightBlock
+		var pb cmtproto.LightBlock
 		if err = pb.Unmarshal(lb.Meta); err != nil {
 			return fmt.Errorf("failed to unmarshal tendermint protobuff light block: %w", err)
 		}
 		// Convert to tendermint LightBlock.
-		tmLb, err := tmtypes.LightBlockFromProto(&pb)
+		tmLb, err := cmttypes.LightBlockFromProto(&pb)
 		if err != nil {
 			return fmt.Errorf("failed to convert protobuff light block into tendermint light block: %w", err)
 		}
@@ -194,21 +194,21 @@ func (c *client) worker() {
 	tmChainID := tmapi.TendermintChainID(chainCtx)
 	// Initialize a provider pool.
 	pool := p2pLight.NewLightClientProviderPool(c.ctx, chainCtx, tmChainID, c.p2p)
-	var providers []tmlightprovider.Provider
+	var providers []cmtlightprovider.Provider
 	for i := 0; i < numProviders; i++ {
 		p := pool.NewLightClientProvider()
 		providers = append(providers, p)
 		c.providers = append(c.providers, p)
 	}
-	tmc, err := tmlight.NewClientFromTrustedStore(
+	tmc, err := cmtlight.NewClientFromTrustedStore(
 		tmChainID,
 		config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 		providers[0],  // Primary provider.
 		providers[1:], // Witnesses.
 		c.store,
-		tmlight.MaxRetryAttempts(lcMaxRetryAttempts),
-		tmlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
-		tmlight.DisableProviderRemoval(),
+		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts),
+		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
+		cmtlight.DisableProviderRemoval(),
 	)
 	if err != nil {
 		c.logger.Error("failed to initialize tendermint light client", "err", err)
@@ -287,7 +287,7 @@ func (c *client) SubmitEvidence(ctx context.Context, evidence *consensus.Evidenc
 }
 
 // GetVerifiedLightBlock implements Client.
-func (c *client) GetVerifiedLightBlock(ctx context.Context, height int64) (*tmtypes.LightBlock, error) {
+func (c *client) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
 	select {
 	case <-c.initCh:
 	case <-ctx.Done():
@@ -298,7 +298,7 @@ func (c *client) GetVerifiedLightBlock(ctx context.Context, height int64) (*tmty
 }
 
 // GetVerifiedLightBlock implements Client.
-func (c *client) GetVerifiedParameters(ctx context.Context, height int64) (*tmproto.ConsensusParams, error) {
+func (c *client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
 	select {
 	case <-c.initCh:
 	case <-ctx.Done():
@@ -316,7 +316,7 @@ func New(ctx context.Context, dataDir string, genesis *genesisAPI.Document, c co
 	if err != nil {
 		return nil, err
 	}
-	store := tmlightdb.New(dbm.NewPrefixDB(tdb, []byte{}), "")
+	store := cmtlightdb.New(dbm.NewPrefixDB(tdb, []byte{}), "")
 
 	return &client{
 		ctx:       ctx,

@@ -4,8 +4,8 @@ import (
 	"crypto/rand"
 	"testing"
 
+	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/stretchr/testify/require"
-	tmed "github.com/tendermint/tendermint/crypto/ed25519"
 
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 )
@@ -17,7 +17,7 @@ func TestSignatureConversions(t *testing.T) {
 	tmSk := SignerToTendermint(signer)
 
 	pk := signer.Public()
-	tmPk := tmSk.PubKey().(tmed.PubKey)
+	tmPk := tmSk.PubKey().(cmted25519.PubKey)
 	require.Equal(t, pk[:], tmPk.Bytes(), "Private key: Public keys")
 
 	tmPk = PublicKeyToTendermint(&pk)

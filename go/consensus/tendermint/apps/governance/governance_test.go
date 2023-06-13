@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/require"
-	"github.com/tendermint/tendermint/abci/types"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"

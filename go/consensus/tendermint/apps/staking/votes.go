@@ -3,7 +3,7 @@ package staking
 import (
 	"encoding/hex"
 
-	"github.com/tendermint/tendermint/abci/types"
+	"github.com/cometbft/cometbft/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -14,7 +14,7 @@ import (
 func (app *stakingApplication) resolveEntityIDsFromVotes(
 	ctx *abciAPI.Context,
 	regState *registryState.MutableState,
-	lastCommitInfo types.LastCommitInfo,
+	lastCommitInfo types.CommitInfo,
 ) ([]signature.PublicKey, error) {
 	var entityIDs []signature.PublicKey
 	for _, a := range lastCommitInfo.Votes {

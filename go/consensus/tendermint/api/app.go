@@ -3,7 +3,7 @@ package api
 import (
 	"errors"
 
-	tmabcitypes "github.com/tendermint/tendermint/abci/types"
+	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -89,20 +89,20 @@ type Application interface {
 	// info from TendermintCore.
 	//
 	// Note: Errors are irrecoverable and will result in a panic.
-	InitChain(*Context, tmabcitypes.RequestInitChain, *genesis.Document) error
+	InitChain(*Context, cmtabcitypes.RequestInitChain, *genesis.Document) error
 
 	// BeginBlock signals the beginning of a block.
 	//
 	// Returned tags will be added to the current block.
 	//
 	// Note: Errors are irrecoverable and will result in a panic.
-	BeginBlock(*Context, tmabcitypes.RequestBeginBlock) error
+	BeginBlock(*Context, cmtabcitypes.RequestBeginBlock) error
 
 	// EndBlock signals the end of a block, returning changes to the
 	// validator set.
 	//
 	// Note: Errors are irrecoverable and will result in a panic.
-	EndBlock(*Context, tmabcitypes.RequestEndBlock) (tmabcitypes.ResponseEndBlock, error)
+	EndBlock(*Context, cmtabcitypes.RequestEndBlock) (cmtabcitypes.ResponseEndBlock, error)
 
 	// Commit is omitted because Applications will work on a cache of
 	// the state bound to the multiplexer.

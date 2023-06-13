@@ -3,8 +3,8 @@ package roothash
 import (
 	"fmt"
 
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
+	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
+	cmtquery "github.com/cometbft/cometbft/libs/pubsub/query"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -33,7 +33,7 @@ var (
 
 // QueryForRuntime returns a query for filtering transactions processed by the roothash application
 // limited to a specific runtime.
-func QueryForRuntime(runtimeID common.Namespace) tmpubsub.Query {
+func QueryForRuntime(runtimeID common.Namespace) cmtpubsub.Query {
 	ev := roothash.RuntimeIDAttribute{ID: runtimeID}
-	return tmquery.MustParse(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, ev.EventKind(), ev.EventValue()))
+	return cmtquery.MustParse(fmt.Sprintf("%s AND %s.%s='%s'", QueryApp, EventType, ev.EventKind(), ev.EventValue()))
 }

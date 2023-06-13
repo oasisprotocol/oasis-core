@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"time"
 
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -50,23 +50,23 @@ func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.
 	//
 	// This means that the vote is for the same height/round/step but for
 	// different block IDs.
-	blockID1 := tmtypes.BlockID{
+	blockID1 := cmttypes.BlockID{
 		Hash: []byte("blockhashblockhashblockhashbloc1"),
-		PartSetHeader: tmtypes.PartSetHeader{
+		PartSetHeader: cmttypes.PartSetHeader{
 			Total: 1000,
 			Hash:  []byte("partshashpartshashpartshashpart1"),
 		},
 	}
-	blockID2 := tmtypes.BlockID{
+	blockID2 := cmttypes.BlockID{
 		Hash: []byte("blockhashblockhashblockhashbloc1"),
-		PartSetHeader: tmtypes.PartSetHeader{
+		PartSetHeader: cmttypes.PartSetHeader{
 			Total: 1000,
 			Hash:  []byte("partshashpartshashpartshashpart2"),
 		},
 	}
 	chainID := api.TendermintChainID(genesis.ChainContext())
 
-	ev := &tmtypes.DuplicateVoteEvidence{
+	ev := &cmttypes.DuplicateVoteEvidence{
 		Timestamp:        blk.Time,
 		TotalVotingPower: totalVotingPower,
 		ValidatorPower:   votingPower,
@@ -74,7 +74,7 @@ func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.
 		VoteB:            makeVote(pv2, chainID, 0, blk.Height, 2, 1, blockID2, blk.Time),
 	}
 
-	proto, err := tmtypes.EvidenceToProto(ev)
+	proto, err := cmttypes.EvidenceToProto(ev)
 	if err != nil {
 		return nil, err
 	}
@@ -87,18 +87,18 @@ func MakeConsensusEquivocationEvidence(ident *identity.Identity, blk *consensus.
 }
 
 // makeVote copied from Tendermint test suite.
-func makeVote(val tmtypes.PrivValidator, chainID string, valIndex int32, height int64, round int32, step int, blockID tmtypes.BlockID, ts time.Time) *tmtypes.Vote {
+func makeVote(val cmttypes.PrivValidator, chainID string, valIndex int32, height int64, round int32, step int, blockID cmttypes.BlockID, ts time.Time) *cmttypes.Vote {
 	pk, err := val.GetPubKey()
 	if err != nil {
 		panic(err)
 	}
 	addr := pk.Address()
-	v := &tmtypes.Vote{
+	v := &cmttypes.Vote{
 		ValidatorAddress: addr,
 		ValidatorIndex:   valIndex,
 		Height:           height,
 		Round:            round,
-		Type:             tmproto.SignedMsgType(step),
+		Type:             cmtproto.SignedMsgType(step),
 		BlockID:          blockID,
 		Timestamp:        ts,
 	}

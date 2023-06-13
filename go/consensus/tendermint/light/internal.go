@@ -8,11 +8,11 @@ import (
 	"time"
 
 	dbm "github.com/cometbft/cometbft-db"
-	tmlight "github.com/tendermint/tendermint/light"
-	tmlightprovider "github.com/tendermint/tendermint/light/provider"
-	tmlightdb "github.com/tendermint/tendermint/light/store/db"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmtypes "github.com/tendermint/tendermint/types"
+	cmtlight "github.com/cometbft/cometbft/light"
+	cmtlightprovider "github.com/cometbft/cometbft/light/provider"
+	cmtlightdb "github.com/cometbft/cometbft/light/store/db"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -24,7 +24,7 @@ import (
 
 type lightClient struct {
 	// tmc is the Tendermint light client used for verifying headers.
-	tmc *tmlight.Client
+	tmc *cmtlight.Client
 }
 
 // GetLightBlock implements api.Client.
@@ -43,12 +43,12 @@ func (lc *lightClient) SubmitEvidence(ctx context.Context, evidence *consensus.E
 }
 
 // GetVerifiedLightBlock implements Client.
-func (lc *lightClient) GetVerifiedLightBlock(ctx context.Context, height int64) (*tmtypes.LightBlock, error) {
+func (lc *lightClient) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmttypes.LightBlock, error) {
 	return lc.tmc.VerifyLightBlockAtHeight(ctx, height, time.Now())
 }
 
 // GetVerifiedLightBlock implements Client.
-func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) (*tmproto.ConsensusParams, error) {
+func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
 	p, pf, err := lc.getPrimary().GetParameters(ctx, height)
 	if err != nil {
 		return nil, err
@@ -59,12 +59,13 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 	}
 
 	// Decode Tendermint-specific parameters.
-	var params tmproto.ConsensusParams
-	if err = params.Unmarshal(p.Meta); err != nil {
+	var paramsPB cmtproto.ConsensusParams
+	if err = paramsPB.Unmarshal(p.Meta); err != nil {
 		pf.RecordBadPeer()
 		return nil, fmt.Errorf("malformed parameters: %w", err)
 	}
-	if err = tmtypes.ValidateConsensusParams(params); err != nil {
+	params := cmttypes.ConsensusParamsFromProto(paramsPB)
+	if err = params.ValidateBasic(); err != nil {
 		pf.RecordBadPeer()
 		return nil, fmt.Errorf("malformed parameters: %w", err)
 	}
@@ -77,7 +78,7 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 	}
 
 	// Verify hash.
-	if localHash := tmtypes.HashConsensusParams(params); !bytes.Equal(localHash, l.ConsensusHash) {
+	if localHash := params.Hash(); !bytes.Equal(localHash, l.ConsensusHash) {
 		pf.RecordBadPeer()
 		return nil, fmt.Errorf("mismatched parameters hash (expected: %X got: %X)",
 			l.ConsensusHash,
@@ -85,7 +86,7 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 		)
 	}
 
-	return &params, nil
+	return &paramsPB, nil
 }
 
 func (lc *lightClient) getPrimary() api.Provider {
@@ -100,7 +101,7 @@ func NewInternalClient(ctx context.Context, chainContext string, p2p rpc.P2P, cf
 	pool := p2pLight.NewLightClientProviderPool(ctx, chainContext, cfg.GenesisDocument.ChainID, p2p)
 
 	initChCases := []reflect.SelectCase{}
-	var providers []tmlightprovider.Provider
+	var providers []cmtlightprovider.Provider
 	for i := 0; i < numProviders; i++ {
 		p := pool.NewLightClientProvider()
 
@@ -119,16 +120,16 @@ func NewInternalClient(ctx context.Context, chainContext string, p2p rpc.P2P, cf
 	providers[idx] = providers[len(providers)-1]
 	providers = providers[:len(providers)-1]
 
-	tmc, err := tmlight.NewClient(
+	tmc, err := cmtlight.NewClient(
 		ctx,
 		cfg.GenesisDocument.ChainID,
 		cfg.TrustOptions,
 		primary,   // Primary provider.
 		providers, // Witnesses.
-		tmlightdb.New(dbm.NewMemDB(), ""),
-		tmlight.MaxRetryAttempts(5), // TODO: Make this configurable.
-		tmlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
-		tmlight.DisableProviderRemoval(),
+		cmtlightdb.New(dbm.NewMemDB(), ""),
+		cmtlight.MaxRetryAttempts(5), // TODO: Make this configurable.
+		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
+		cmtlight.DisableProviderRemoval(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create light client: %w", err)
