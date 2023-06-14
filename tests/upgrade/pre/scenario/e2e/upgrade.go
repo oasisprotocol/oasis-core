@@ -25,7 +25,7 @@ import (
 
 // DumpRestoreUpgradeNetwork prepares, submits, and votes on a new network upgrade proposal,
 // waits for the network to halt and then wipes the consensus state.
-func DumpRestoreUpgradeNetwork(ctx context.Context, childEnv *env.Env, sc *e2e.E2E) error {
+func DumpRestoreUpgradeNetwork(ctx context.Context, childEnv *env.Env, sc *e2e.Scenario) error {
 	// Upgrade the network and wait for it to halt.
 	if err := UpgradeNetwork(ctx, childEnv, sc); err != nil {
 		return err
@@ -48,7 +48,7 @@ func DumpRestoreUpgradeNetwork(ctx context.Context, childEnv *env.Env, sc *e2e.E
 
 // UpgradeNetwork prepares, submits, and votes on a new network upgrade proposal,
 // and then waits for the network to halt.
-func UpgradeNetwork(ctx context.Context, childEnv *env.Env, sc *e2e.E2E) error {
+func UpgradeNetwork(ctx context.Context, childEnv *env.Env, sc *e2e.Scenario) error {
 	// Wait for client sync.
 	if len(sc.Net.Clients()) == 0 {
 		return fmt.Errorf("network upgrade requires at least one client node")
@@ -146,7 +146,7 @@ func UpgradeNetwork(ctx context.Context, childEnv *env.Env, sc *e2e.E2E) error {
 	return nil
 }
 
-func voteForProposal(ctx context.Context, sc *e2e.E2E, entity *oasis.Entity, proposalID uint64) error {
+func voteForProposal(ctx context.Context, sc *e2e.Scenario, entity *oasis.Entity, proposalID uint64) error {
 	// Query entity nonce.
 	account, err := sc.Net.ClientController().Staking.Account(ctx, &api.OwnerQuery{
 		Height: consensus.HeightLatest,

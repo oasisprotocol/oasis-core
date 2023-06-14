@@ -19,12 +19,12 @@ var (
 	TrustRootKeymanagerUpgrade scenario.Scenario = newTrustRootKeymanagerUpgradeImpl()
 
 	trustRootKeymanagerUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
-		runtime.RuntimeInsertKeyValueTx{Key: "key1", Value: "value1", Response: "", Encrypted: false},
-		runtime.RuntimeInsertKeyValueTx{Key: "key2", Value: "value2", Response: "", Encrypted: true},
-		runtime.RuntimeGetKeyValueTx{Key: "key1", Response: "value1", Encrypted: false},
-		runtime.RuntimeGetKeyValueTx{Key: "key1", Response: "", Encrypted: true},
-		runtime.RuntimeGetKeyValueTx{Key: "key2", Response: "", Encrypted: false},
-		runtime.RuntimeGetKeyValueTx{Key: "key2", Response: "value2", Encrypted: true},
+		runtime.InsertKeyValueTx{Key: "key1", Value: "value1", Response: "", Encrypted: false},
+		runtime.InsertKeyValueTx{Key: "key2", Value: "value2", Response: "", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "key1", Response: "value1", Encrypted: false},
+		runtime.GetKeyValueTx{Key: "key1", Response: "", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "key2", Response: "", Encrypted: false},
+		runtime.GetKeyValueTx{Key: "key2", Response: "value2", Encrypted: true},
 	})
 )
 
@@ -36,7 +36,7 @@ func newTrustRootKeymanagerUpgradeImpl() scenario.Scenario {
 	return &trustRootKeymanagerUpgradeImpl{
 		TrustRootImpl: *runtime.NewTrustRootImpl(
 			"keymanager-upgrade",
-			runtime.NewTestClient().WithScenario(trustRootKeymanagerUpgradeTestClientScenario),
+			runtime.NewKVTestClient().WithScenario(trustRootKeymanagerUpgradeTestClientScenario),
 		),
 	}
 }
@@ -89,7 +89,7 @@ func (sc *trustRootKeymanagerUpgradeImpl) Run(childEnv *env.Env) error {
 	}()
 
 	// Upgrade the network and wait for it to halt.
-	if err := e2e.DumpRestoreUpgradeNetwork(ctx, childEnv, &sc.E2E); err != nil {
+	if err := e2e.DumpRestoreUpgradeNetwork(ctx, childEnv, &sc.Scenario.Scenario); err != nil {
 		return err
 	}
 

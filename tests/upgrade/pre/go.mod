@@ -23,7 +23,7 @@ replace (
 )
 
 require (
-	github.com/oasisprotocol/oasis-core/go v0.2202.9-0.20230522110008-fe987852f5c1
+	github.com/oasisprotocol/oasis-core/go v0.2202.9-0.20230612125734-1b1d36faa054
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db

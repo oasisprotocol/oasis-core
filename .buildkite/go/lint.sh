@@ -17,3 +17,7 @@ set -euxo pipefail
 pushd go
   make lint
 popd
+
+pushd tests/upgrade
+  make lint
+popd

@@ -15,8 +15,8 @@ all: build
 
 # Build.
 build:
-	@$(ECHO) "$(MAGENTA)*** Building oasis-test-upgrade...$(OFF)"
-	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o oasis-test-upgrade
+	@$(ECHO) "$(MAGENTA)*** Building oasis-test-pre-upgrade...$(OFF)"
+	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o oasis-test-pre-upgrade
 
 # Format code.
 fmt:

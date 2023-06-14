@@ -9,7 +9,7 @@ import (
 // RegisterScenarios registers all end-to-end scenarios.
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
-	cmd.RegisterScenarioParams(runtime.RuntimeParamsDummy.Name(), runtime.RuntimeParamsDummy.Parameters())
+	cmd.RegisterScenarioParams(runtime.ParamsDummyScenario.Name(), runtime.ParamsDummyScenario.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{

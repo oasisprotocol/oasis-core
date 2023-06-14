@@ -21,7 +21,7 @@ var upgradeFlags = flag.NewFlagSet("", flag.ContinueOnError)
 // RegisterScenarios registers all end-to-end scenarios.
 func RegisterScenarios() error {
 	// Register non-scenario-specific parameters.
-	cmd.RegisterScenarioParams(e2e.E2eParamsDummy.Name(), e2e.E2eParamsDummy.Parameters())
+	cmd.RegisterScenarioParams(e2e.ParamsDummyScenario.Name(), e2e.ParamsDummyScenario.Parameters())
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{} {
