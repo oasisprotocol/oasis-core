@@ -28,3 +28,7 @@ pushd go
 
   make all GO_BUILD_E2E_COVERAGE=1
 popd
+
+pushd tests/upgrade
+  make all
+popd

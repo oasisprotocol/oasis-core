@@ -106,7 +106,7 @@ steps:
   ###########
   # Lint jobs
   ###########
-  - label: Lint Go node
+  - label: Lint Go
     command:
       - .buildkite/go/lint.sh
     retry:
@@ -131,7 +131,7 @@ steps:
   ############
   # Build jobs
   ############
-  - label: Build Go node
+  - label: Build Go
     key: build-go
     command:
       - .buildkite/go/build.sh
@@ -353,6 +353,34 @@ steps:
       <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin_sgx1
+
+  ##############################################
+  # E2E upgrade test - sgx1 (triggered manually)
+  ##############################################
+  - group: "E2E upgrade tests - sgx1"
+    depends_on:
+      - "build-go"
+    steps:
+      - block: "Confirm E2E upgrade tests run"
+        prompt: "Run E2E upgrade tests for this pull request"
+        blocked_state: passed
+
+      - label: E2E upgrade tests - sgx1
+        timeout_in_minutes: 60
+        command:
+          - .buildkite/scripts/download_e2e_test_artifacts.sh
+          - .buildkite/scripts/test_upgrade.sh
+        env:
+          # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
+          OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
+          OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
+          TEST_BASE_DIR: /tmp
+        agents:
+          queue: sgx1
+        retry:
+          <<: *retry_agent_failure
+        plugins:
+          <<: *docker_plugin_sgx1
 
   ####################################
   # Rust coverage job.

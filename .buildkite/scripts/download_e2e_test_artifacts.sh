@@ -21,8 +21,14 @@ download_artifact oasis-node.test go/oasis-node 755
 download_artifact oasis-test-runner go/oasis-test-runner 755
 download_artifact oasis-test-runner.test go/oasis-test-runner 755
 download_artifact oasis-remote-signer go/oasis-remote-signer 755
-download_artifact oasis-core-runtime-loader target/default/debug 755
 download_artifact example_signer_plugin go/oasis-test-runner/scenario/pluginsigner/example_signer_plugin 755
+
+# Upgrade test runners.
+download_artifact oasis-test-pre-upgrade tests/upgrade/pre 755
+download_artifact oasis-test-post-upgrade tests/upgrade/post 755
+
+# Runtime loader.
+download_artifact oasis-core-runtime-loader target/default/debug 755
 
 # Simple Key manager runtime.
 download_artifact simple-keymanager.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
