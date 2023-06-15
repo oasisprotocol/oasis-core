@@ -315,6 +315,21 @@ NodeLoop:
 	newDoc.KeyManager.Parameters.GasCosts[keymanager.GasOpUpdatePolicy] = newDoc.Registry.Parameters.GasCosts["update_keymanager"]
 	delete(newDoc.Registry.Parameters.GasCosts, "update_keymanager")
 
+	// Update registry parameters.
+	newDoc.Registry.Parameters.TEEFeatures = &node.TEEFeatures{
+		SGX: node.TEEFeaturesSGX{
+			PCS:                      true,
+			SignedAttestations:       true,
+			DefaultMaxAttestationAge: 1200, // ~2 hours at 6 sec per block.
+		},
+		FreshnessProofs: true,
+	}
+	newDoc.Registry.Parameters.GasCosts[registry.GasOpProveFreshness] = registry.DefaultGasCosts[registry.GasOpProveFreshness]
+	newDoc.Registry.Parameters.MaxRuntimeDeployments = 5
+
+	// Update governance parameters.
+	newDoc.Governance.Parameters.EnableChangeParametersProposal = true
+
 	return &newDoc, nil
 }
 
