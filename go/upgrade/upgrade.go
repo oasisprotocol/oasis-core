@@ -199,15 +199,7 @@ func (u *upgradeManager) checkStatus() error {
 
 // NOTE: Assumes lock is held.
 func (u *upgradeManager) flushDescriptorLocked() error {
-	// Delete the state if there's no pending upgrades.
-	if len(u.pending) == 0 {
-		if err := u.store.Delete(metadataStoreKey); err != persistent.ErrNotFound {
-			return err
-		}
-		return nil
-	}
-
-	// Otherwise go over pending upgrades and check if any are completed.
+	// Go over pending upgrades and check if any are completed.
 	var pending []*api.PendingUpgrade
 	for _, pu := range u.pending {
 		if pu.IsCompleted() {
@@ -219,6 +211,15 @@ func (u *upgradeManager) flushDescriptorLocked() error {
 		pending = append(pending, pu)
 	}
 	u.pending = pending
+
+	// Delete the state if there's no pending upgrades.
+	if len(u.pending) == 0 {
+		if err := u.store.Delete(metadataStoreKey); err != persistent.ErrNotFound {
+			return err
+		}
+		return nil
+	}
+
 	return u.store.PutCBOR(metadataStoreKey, u.pending)
 }
 
