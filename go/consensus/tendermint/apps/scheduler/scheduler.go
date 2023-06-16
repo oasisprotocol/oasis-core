@@ -80,7 +80,7 @@ func (app *schedulerApplication) OnRegister(state api.ApplicationState, md api.M
 
 func (app *schedulerApplication) OnCleanup() {}
 
-func (app *schedulerApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
+func (app *schedulerApplication) BeginBlock(ctx *api.Context) error {
 	// Check if any stake slashing has occurred in the staking layer.
 	// NOTE: This will NOT trigger for any slashing that happens as part of
 	//       any transactions being submitted to the chain.
@@ -301,7 +301,7 @@ func diffValidators(logger *logging.Logger, current, pending map[signature.Publi
 	return updates
 }
 
-func (app *schedulerApplication) EndBlock(ctx *api.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *schedulerApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	var resp types.ResponseEndBlock
 
 	state := schedulerState.NewMutableState(ctx.State())

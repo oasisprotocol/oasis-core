@@ -54,7 +54,7 @@ func (app *beaconApplication) OnRegister(state api.ApplicationState, md api.Mess
 func (app *beaconApplication) OnCleanup() {
 }
 
-func (app *beaconApplication) BeginBlock(ctx *api.Context, req types.RequestBeginBlock) error {
+func (app *beaconApplication) BeginBlock(ctx *api.Context) error {
 	state := beaconState.NewMutableState(ctx.State())
 
 	params, err := state.ConsensusParameters(ctx)
@@ -86,7 +86,7 @@ func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transa
 	return app.backend.ExecuteTx(ctx, state, params, tx)
 }
 
-func (app *beaconApplication) EndBlock(ctx *api.Context, req types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *beaconApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

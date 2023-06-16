@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/cometbft/cometbft/abci/types"
-
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -18,7 +16,6 @@ import (
 func (app *stakingApplication) resolveEntityIDFromProposer(
 	ctx *abciAPI.Context,
 	regState *registryState.MutableState,
-	request types.RequestBeginBlock,
 ) (*signature.PublicKey, error) {
 	proposerAddress := abciAPI.GetBlockProposer(ctx)
 	proposerNode, err := regState.NodeByConsensusAddress(ctx, proposerAddress)

@@ -127,7 +127,7 @@ func (app *governanceApplication) ExecuteMessage(ctx *api.Context, kind, msg int
 	}
 }
 
-func (app *governanceApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
+func (app *governanceApplication) BeginBlock(ctx *api.Context) error {
 	// Check if epoch has changed.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 	if !epochChanged {
@@ -501,7 +501,7 @@ func subShares(validatorVoteShares map[governance.Vote]quantity.Quantity, vote g
 	return nil
 }
 
-func (app *governanceApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *governanceApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	// Check if epoch has changed.
 	epochChanged, epoch := app.state.EpochChanged(ctx)
 	if !epochChanged {

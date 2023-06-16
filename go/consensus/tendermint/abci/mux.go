@@ -574,6 +574,8 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		api.SetBlockGasAccountant(ctx, api.NewNopGasAccountant())
 	}
 	api.SetBlockProposer(ctx, req.Header.ProposerAddress)
+	api.SetLastCommitInfo(ctx, req.LastCommitInfo)
+	api.SetValidatorMisbehavior(ctx, req.ByzantineValidators)
 
 	currentEpoch, err := mux.state.GetCurrentEpoch(ctx)
 	if err != nil {
@@ -602,7 +604,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	// Dispatch BeginBlock to all applications.
 	for _, app := range mux.appsByLexOrder {
-		if err := app.BeginBlock(ctx, req); err != nil {
+		if err := app.BeginBlock(ctx); err != nil {
 			mux.logger.Error("BeginBlock: fatal error in application",
 				"err", err,
 				"app", app.Name(),
@@ -755,7 +757,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	// Dispatch EndBlock to all applications.
 	resp := mux.BaseApplication.EndBlock(req)
 	for _, app := range mux.appsByLexOrder {
-		newResp, err := app.EndBlock(ctx, req)
+		newResp, err := app.EndBlock(ctx)
 		if err != nil {
 			mux.logger.Error("EndBlock: fatal error in application",
 				"err", err,

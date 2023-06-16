@@ -63,7 +63,7 @@ func (app *registryApplication) OnRegister(state api.ApplicationState, md api.Me
 func (app *registryApplication) OnCleanup() {
 }
 
-func (app *registryApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
+func (app *registryApplication) BeginBlock(ctx *api.Context) error {
 	// XXX: With PR#1889 this can be a differnet interval.
 	if changed, registryEpoch := app.state.EpochChanged(ctx); changed {
 		return app.onRegistryEpochChanged(ctx, registryEpoch)
@@ -153,7 +153,7 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	}
 }
 
-func (app *registryApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *registryApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

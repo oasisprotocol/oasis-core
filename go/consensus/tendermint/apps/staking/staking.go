@@ -57,12 +57,12 @@ func (app *stakingApplication) OnRegister(state api.ApplicationState, md api.Mes
 func (app *stakingApplication) OnCleanup() {
 }
 
-func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.RequestBeginBlock) error {
+func (app *stakingApplication) BeginBlock(ctx *api.Context) error {
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
 	// Look up the proposer's entity.
-	proposingEntity, err := app.resolveEntityIDFromProposer(ctx, regState, request)
+	proposingEntity, err := app.resolveEntityIDFromProposer(ctx, regState)
 	if err != nil {
 		return fmt.Errorf("failed to resolve proposer entity ID: %w", err)
 	}
@@ -70,8 +70,9 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 	// Go through all voters of the previous block and resolve entities.
 	// numEligibleValidators is how many total validators are in the validator set, while
 	// votingEntities is from the validators which actually voted.
-	numEligibleValidators := len(request.GetLastCommitInfo().Votes)
-	votingEntities, err := app.resolveEntityIDsFromVotes(ctx, regState, request.GetLastCommitInfo())
+	lastCommitInfo := api.GetLastCommitInfo(ctx)
+	numEligibleValidators := len(lastCommitInfo.Votes)
+	votingEntities, err := app.resolveEntityIDsFromVotes(ctx, regState, lastCommitInfo)
 	if err != nil {
 		return fmt.Errorf("failed to resolve entity IDs from votes: %w", err)
 	}
@@ -96,7 +97,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context, request types.Reques
 
 	// Iterate over any submitted evidence of a validator misbehaving. Note that
 	// the actual evidence has already been verified by Tendermint to be valid.
-	for _, evidence := range request.ByzantineValidators {
+	for _, evidence := range api.GetValidatorMisbehavior(ctx) {
 		var reason staking.SlashReason
 		switch evidence.Type {
 		case types.MisbehaviorType_DUPLICATE_VOTE:
@@ -211,7 +212,7 @@ func (app *stakingApplication) ExecuteTx(ctx *api.Context, tx *transaction.Trans
 	}
 }
 
-func (app *stakingApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *stakingApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
 	fees := stakingState.BlockFees(ctx)
 	if err := app.disburseFeesP(ctx, stakingState.NewMutableState(ctx.State()), stakingState.BlockProposer(ctx), &fees); err != nil {
 		return types.ResponseEndBlock{}, fmt.Errorf("disburse fees proposer: %w", err)

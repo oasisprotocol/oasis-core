@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -731,7 +730,7 @@ func TestBeginBlock(t *testing.T) {
 			EpochChanged: tc.isEpochChanged,
 		})
 
-		err = app.BeginBlock(ctx, types.RequestBeginBlock{})
+		err = app.BeginBlock(ctx)
 		require.NoError(err, tc.msg)
 
 		tc.check(ctx, state)
@@ -1048,7 +1047,7 @@ func TestEndBlock(t *testing.T) {
 			EpochChanged: tc.isEpochChanged,
 		})
 
-		_, err = app.EndBlock(ctx, types.RequestEndBlock{})
+		_, err = app.EndBlock(ctx)
 		require.NoError(err, tc.msg)
 
 		tc.check()
