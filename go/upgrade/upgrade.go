@@ -268,7 +268,7 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 		// startup made sure we're an appropriate binary for that.
 		if pu.UpgradeHeight == api.InvalidUpgradeHeight {
 			if currentEpoch < pu.Descriptor.Epoch {
-				return nil
+				continue
 			}
 			pu.UpgradeHeight = currentHeight
 			if err := u.flushDescriptorLocked(); err != nil {
