@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/cometbft/cometbft/abci/types"
-
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -46,7 +44,6 @@ func (impl *backendInsecure) OnBeginBlock(
 	ctx *api.Context,
 	state *beaconState.MutableState,
 	params *beacon.ConsensusParameters,
-	req types.RequestBeginBlock,
 ) error {
 	future, err := state.GetFutureEpoch(ctx)
 	if err != nil {
@@ -93,7 +90,7 @@ func (impl *backendInsecure) OnBeginBlock(
 	impl.app.doEmitEpochEvent(ctx, future.Epoch)
 
 	// Generate the beacon
-	return impl.onEpochChangeBeacon(ctx, state, params, future.Epoch, req)
+	return impl.onEpochChangeBeacon(ctx, state, params, future.Epoch)
 }
 
 func (impl *backendInsecure) scheduleEpochTransitionBlock(
@@ -112,31 +109,14 @@ func (impl *backendInsecure) onEpochChangeBeacon(
 	state *beaconState.MutableState,
 	params *beacon.ConsensusParameters,
 	epoch beacon.EpochTime,
-	req types.RequestBeginBlock,
 ) error {
 	var entropy []byte
 
 	entropyCtx := prodEntropyCtx
-	height := ctx.BlockHeight()
-	if height <= ctx.InitialHeight() {
-		// No meaningful previous commit, use the block hash.  This isn't
-		// fantastic, but it's only for one epoch.
-		ctx.Logger().Debug("onBeaconEpochChange: using block hash as entropy")
-		entropy = req.Hash
-	} else {
-		// Use the previous commit hash as the entropy input, under the theory
-		// that the merkle root of all the commits that went into the last
-		// block is harder for any single validator to game than the block
-		// hash.
-		//
-		// Note: This is still insecure, and is vulnerable to adversarial
-		// manipulation.  If this is a problem, don't use this backend.
-		ctx.Logger().Debug("onBeaconEpochChange: using commit hash as entropy")
-		entropy = req.Header.GetLastCommitHash()
-	}
-	if len(entropy) == 0 {
-		return fmt.Errorf("beacon: failed to obtain entropy")
-	}
+	// Use the block hash for entropy. This is insecure, and is vulnerable to adversarial
+	// manipulation.  If this is a problem, don't use this backend.
+	ctx.Logger().Debug("onBeaconEpochChange: using block hash as entropy")
+	entropy = insecureBlockEntropy(ctx)
 
 	b := GetBeacon(epoch, entropyCtx, entropy)
 

@@ -66,7 +66,7 @@ func (app *beaconApplication) BeginBlock(ctx *api.Context, req types.RequestBegi
 		return fmt.Errorf("beacon: failed to (re-)initialize backend: %w", err)
 	}
 
-	return app.backend.OnBeginBlock(ctx, state, params, req)
+	return app.backend.OnBeginBlock(ctx, state, params)
 }
 
 func (app *beaconApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
@@ -130,6 +130,23 @@ func (app *beaconApplication) onNewBeacon(ctx *api.Context, value []byte) error 
 // New constructs a new beacon application instance.
 func New() api.Application {
 	return &beaconApplication{}
+}
+
+// insecureBlockEntropy returns insecure entropy based on deterministic block data.
+//
+// Note that this is insecure and is vulnerable to adversarial manipulation.
+func insecureBlockEntropy(ctx *api.Context) []byte {
+	var blockHeight [8]byte
+	binary.LittleEndian.PutUint64(blockHeight[:], uint64(ctx.BlockHeight()))
+
+	var time [8]byte
+	binary.LittleEndian.PutUint64(time[:], uint64(ctx.Now().Unix()))
+
+	h := sha3.New256()
+	_, _ = h.Write(blockHeight[:])
+	_, _ = h.Write(time[:])
+	_, _ = h.Write(ctx.LastStateRootHash())
+	return h.Sum(nil)
 }
 
 // GetBeacon derives the actual beacon from the epoch and entropy source.

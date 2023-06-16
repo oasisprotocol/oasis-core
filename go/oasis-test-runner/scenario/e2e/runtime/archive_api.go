@@ -347,7 +347,7 @@ func (sc *archiveAPI) Run(childEnv *env.Env) error {
 		sc.Logger.Info("setting epoch",
 			"epoch", i,
 		)
-		if err = sc.Net.Controller().SetEpoch(ctx, i); err != nil {
+		if err = sc.Net.Controller().SetEpoch(ctx, i); err != nil && i != beacon.EpochTime(haltEpoch) {
 			return fmt.Errorf("failed to set epoch %d: %w", i, err)
 		}
 	}

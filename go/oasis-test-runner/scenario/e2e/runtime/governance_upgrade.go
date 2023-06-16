@@ -446,8 +446,10 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 
 		// Upgrade binary matches node binary, upgrade should work.
 		sc.Logger.Info("waiting for nodes to sync")
-		if err = sc.Net.Controller().WaitSync(sc.ctx); err != nil {
-			return fmt.Errorf("wait sync error: %w", err)
+		for _, n := range sc.Net.Nodes() {
+			if err = n.WaitReady(sc.ctx); err != nil {
+				return fmt.Errorf("failed to wait for a validator: %w", err)
+			}
 		}
 
 		// Check the consensus migration was run (test migration creates a new entity).
@@ -458,14 +460,6 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 		_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, idQuery)
 		if err != nil {
 			return fmt.Errorf("can't get registered test entity: %w", err)
-		}
-
-		// Wait for compute nodes to be ready.
-		sc.Logger.Info("waiting for compute nodes to be ready")
-		for _, n := range sc.Net.ComputeWorkers() {
-			if err = n.WaitReady(sc.ctx); err != nil {
-				return fmt.Errorf("failed to wait for a compute node: %w", err)
-			}
 		}
 	}
 

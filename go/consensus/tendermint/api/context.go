@@ -99,7 +99,7 @@ func NewContext(
 	currentTime time.Time,
 	gasAccountant GasAccountant,
 	appState ApplicationState,
-	state mkvs.Tree,
+	state mkvs.KeyValueTree,
 	blockHeight int64,
 	blockCtx *BlockContext,
 	initialHeight int64,
@@ -252,7 +252,7 @@ func (c *Context) Commit() *Context {
 
 	// Commit state.
 	// NOTE: Since isTransaction is true, we know that c.state is a mkvs.OverlayTree.
-	if err := c.state.(mkvs.OverlayTree).Commit(c); err != nil {
+	if _, err := c.state.(mkvs.OverlayTree).Commit(c); err != nil {
 		panic(fmt.Errorf("failed to commit overlay: %w", err))
 	}
 
@@ -402,6 +402,11 @@ func (c *Context) InitialHeight() int64 {
 // BlockHeight returns the current block height.
 func (c *Context) BlockHeight() int64 {
 	return c.blockHeight
+}
+
+// LastStateRootHash returns the last state root hash.
+func (c *Context) LastStateRootHash() []byte {
+	return c.appState.BlockHash()
 }
 
 // SetPriority sets the current priority.

@@ -17,6 +17,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.2.0
 	github.com/cometbft/cometbft v0.0.0-00010101000000-000000000000
 	github.com/cometbft/cometbft-db v0.7.0
+	github.com/cosmos/gogoproto v1.4.1
 	github.com/dgraph-io/badger/v3 v3.2103.4
 	github.com/eapache/channels v1.1.0
 	github.com/fxamacker/cbor/v2 v2.4.0
@@ -70,7 +71,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.0.4 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/cosmos/gogoproto v1.4.1 // indirect
 	github.com/creachadair/taskgroup v0.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect

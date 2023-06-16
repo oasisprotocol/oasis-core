@@ -359,16 +359,6 @@ func (bsc *BaseServiceClient) DeliverCommand(ctx context.Context, height int64, 
 	return nil
 }
 
-// BlockProposerKey is the block context key for storing the block proposer address.
-type BlockProposerKey struct{}
-
-// NewDefault returns a new default value for the given key.
-func (bpk BlockProposerKey) NewDefault() interface{} {
-	// This should never be called as a block proposer must always be created by the application
-	// multiplexer.
-	panic("no proposer address in block context")
-}
-
 type messageKind uint8
 
 // MessageStateSyncCompleted is the message kind for when the node successfully performs a state

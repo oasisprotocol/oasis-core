@@ -1,6 +1,7 @@
 package abci
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/cometbft/cometbft/abci/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	proto "github.com/cosmos/gogoproto/proto"
 	"github.com/eapache/channels"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -34,6 +37,90 @@ var _ api.ApplicationState = (*applicationState)(nil)
 // appStateDir is the subdirectory which contains ABCI state.
 const appStateDir = "abci-state"
 
+type proposalState struct {
+	// header is the partial proposal header (only set when we are the proposer).
+	header *cmtproto.Header
+	// txs is the set of proposed transactions (only set when we are the proposer).
+	txs [][]byte
+	// misbehavior is the set of proposed misbehavior evidence (only set when we are the proposer).
+	misbehavior []types.Misbehavior
+
+	// hash is the unique hash identifying this proposal. The hash is only available after the
+	// proposal has been generated and is otherwise empty.
+	hash []byte
+	// tree is the state used for executing this proposal.
+	tree mkvs.OverlayTree
+
+	// resultsBeginBlock are the results of running the BeginBlock hook.
+	resultsBeginBlock *types.ResponseBeginBlock
+	// resultsDeliverTx are the results of executing DeliverTx for all transactions.
+	resultsDeliverTx []*types.ResponseDeliverTx
+	// resultsEndBlock are the results of running the EndBlock hook.
+	resultsEndBlock *types.ResponseEndBlock
+}
+
+// isEqual returns true if the proposal is equal to the passed proposal.
+func (ps *proposalState) isEqual(
+	header *cmtproto.Header,
+	txs [][]byte,
+	misbehavior []types.Misbehavior,
+) bool {
+	if ps.header == nil {
+		return false
+	}
+	if !bytes.Equal(header.ProposerAddress, ps.header.ProposerAddress) {
+		return false
+	}
+	if len(txs) != len(ps.txs) {
+		return false
+	}
+	if len(misbehavior) != len(ps.misbehavior) {
+		return false
+	}
+	if !proto.Equal(header, ps.header) {
+		return false
+	}
+	for i := range txs {
+		if !bytes.Equal(txs[i], ps.txs[i]) {
+			return false
+		}
+	}
+	for i := range misbehavior {
+		if !proto.Equal(&misbehavior[i], &ps.misbehavior[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// reset resets the proposal state.
+func (ps *proposalState) reset() {
+	ps.header = nil
+	ps.txs = nil
+	ps.misbehavior = nil
+	ps.hash = nil
+	ps.tree = nil
+	ps.resultsBeginBlock = nil
+	ps.resultsDeliverTx = nil
+	ps.resultsEndBlock = nil
+}
+
+// needsExecution returns true iff the proposal has not yet been executed.
+func (ps *proposalState) needsExecution() bool {
+	return ps.resultsBeginBlock == nil || ps.resultsDeliverTx == nil || ps.resultsEndBlock == nil
+}
+
+// setResults sets the proposal execution results.
+func (ps *proposalState) setResults(
+	resultsBeginBlock *types.ResponseBeginBlock,
+	resultsDeliverTx []*types.ResponseDeliverTx,
+	resultsEndBlock *types.ResponseEndBlock,
+) {
+	ps.resultsBeginBlock = resultsBeginBlock
+	ps.resultsDeliverTx = resultsDeliverTx
+	ps.resultsEndBlock = resultsEndBlock
+}
+
 type applicationState struct { // nolint: maligned
 	logger *logging.Logger
 
@@ -42,10 +129,17 @@ type applicationState struct { // nolint: maligned
 
 	initialHeight uint64
 
-	stateRoot     storage.Root
-	storage       storage.LocalBackend
-	deliverTxTree mkvs.Tree
-	checkTxTree   mkvs.Tree
+	stateRoot storage.Root
+	storage   storage.LocalBackend
+
+	// proposal is the working proposal state.
+	proposal *proposalState
+
+	// canonicalState is the current canonical state.
+	canonicalState mkvs.Tree
+	// checkState is the state snapshot from the last canonical state with any modifications from
+	// transaction checks applied on top.
+	checkState mkvs.Tree
 
 	statePruner    StatePruner
 	prunerClosedCh chan struct{}
@@ -64,7 +158,6 @@ type applicationState struct { // nolint: maligned
 
 	timeSource beacon.Backend
 
-	haltMode   bool
 	haltEpoch  beacon.EpochTime
 	haltHeight uint64
 
@@ -80,22 +173,22 @@ func (s *applicationState) NewContext(mode api.ContextMode, now time.Time) *api.
 	defer s.blockLock.RUnlock()
 
 	var blockCtx *api.BlockContext
-	var state mkvs.Tree
+	var state mkvs.OverlayTree
 	blockHeight := int64(s.stateRoot.Version)
 	switch mode {
 	case api.ContextInitChain:
-		state = s.deliverTxTree
+		state = mkvs.NewOverlayWrapper(s.canonicalState)
 		// Configure block height so that current height will be correctly computed.
 		blockHeight = int64(s.initialHeight) - 1
 	case api.ContextCheckTx:
-		state = s.checkTxTree
+		state = mkvs.NewOverlayWrapper(s.checkState)
 	case api.ContextDeliverTx, api.ContextBeginBlock, api.ContextEndBlock:
-		state = s.deliverTxTree
+		state = s.proposal.tree
 		blockCtx = s.blockCtx
 	case api.ContextSimulateTx:
 		// Since simulation is running in parallel to any changes to the database, we make sure
 		// to create a separate in-memory tree at the given block height.
-		state = mkvs.NewWithRoot(nil, s.storage.NodeDB(), s.stateRoot, mkvs.WithoutWriteLog())
+		state = mkvs.NewOverlayWrapper(mkvs.NewWithRoot(nil, s.storage.NodeDB(), s.stateRoot, mkvs.WithoutWriteLog()))
 		now = s.blockTime
 	default:
 		panic(fmt.Errorf("context: invalid mode: %s (%d)", mode, mode))
@@ -249,46 +342,13 @@ func (s *applicationState) Upgrader() upgrade.Backend {
 	return s.upgrader
 }
 
-func (s *applicationState) shouldHalt(ctx *api.Context) bool {
-	blockHeight := s.BlockHeight()
-
-	// We care about the *next* block height, since this is called
-	// from the BeginBlock handler.
-	h := blockHeight + 1
-
-	// If there is a halt block height configured, and the height(+1)
-	// is greater than or equal to the height point, transition into
-	// the halting state.
-	if s.haltHeight != 0 && uint64(h) >= s.haltHeight {
-		s.logger.Info("shouldHalt: reached halt block height",
-			"block_height", h,
-			"halt_block_height", s.haltHeight,
-		)
-		s.haltMode = true
-	} else if s.haltEpoch > 0 {
-		// Otherwise, check to see if the epoch will be equal to
-		// the halt epoch (if any).
-		currentEpoch, err := s.GetEpoch(ctx, h)
-		if err != nil {
-			s.logger.Error("inHaltEpoch: failed to get epoch",
-				"err", err,
-				"block_height", h,
-			)
-			return false
-		}
-		s.haltMode = currentEpoch == s.haltEpoch
-	}
-
-	return s.haltMode
-}
-
 func (s *applicationState) doInitChain(now time.Time) error {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
 
 	// We use the height before the initial height for the state before the first block. Note that
 	// this tree is not persisted, we only need it to compute the root hash.
-	_, stateRootHash, err := s.deliverTxTree.Commit(s.ctx, s.stateRoot.Namespace, s.initialHeight-1, mkvs.NoPersist())
+	_, stateRootHash, err := s.canonicalState.Commit(s.ctx, s.stateRoot.Namespace, s.initialHeight-1, mkvs.NoPersist())
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
@@ -305,10 +365,10 @@ func (s *applicationState) doApplyStateSync(root storage.Root) error {
 
 	s.stateRoot = root
 
-	s.deliverTxTree.Close()
-	s.deliverTxTree = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
-	s.checkTxTree.Close()
-	s.checkTxTree = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
+	s.canonicalState.Close()
+	s.canonicalState = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
+	s.checkState.Close()
+	s.checkState = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
 
 	if err := s.doCommitOrInitChainLocked(time.Time{}); err != nil {
 		return err
@@ -321,7 +381,13 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
 
-	_, stateRootHash, err := s.deliverTxTree.Commit(s.ctx, s.stateRoot.Namespace, s.stateRoot.Version+1)
+	// Last proposal state becomes the canonical state.
+	canonicalState, _ := s.proposal.tree.Commit(s.ctx)
+	s.canonicalState = canonicalState.(mkvs.Tree)
+	s.proposal.reset()
+	s.proposal = nil
+
+	_, stateRootHash, err := s.canonicalState.Commit(s.ctx, s.stateRoot.Namespace, s.stateRoot.Version+1)
 	if err != nil {
 		return 0, fmt.Errorf("failed to commit: %w", err)
 	}
@@ -342,10 +408,10 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 		return 0, err
 	}
 
-	// Switch the CheckTx tree to the newly committed version. Note that this is safe as Tendermint
+	// Switch the check tree to the newly committed version. Note that this is safe as CometBFT
 	// holds the mempool lock while commit is in progress so no CheckTx can take place.
-	s.checkTxTree.Close()
-	s.checkTxTree = mkvs.NewWithRoot(nil, s.storage.NodeDB(), s.stateRoot, mkvs.WithoutWriteLog())
+	s.checkState.Close()
+	s.checkState = mkvs.NewWithRoot(nil, s.storage.NodeDB(), s.stateRoot, mkvs.WithoutWriteLog())
 
 	// Notify pruner and checkpointer of a new block.
 	s.prunerNotifyCh.In() <- s.stateRoot.Version
@@ -365,7 +431,7 @@ func (s *applicationState) doCommitOrInitChainLocked(now time.Time) error {
 
 	// Update cache of consensus parameters (the only places where consensus parameters can be
 	// changed are InitChain and EndBlock, so we can safely update the cache here).
-	state := abciState.NewMutableState(s.deliverTxTree)
+	state := abciState.NewMutableState(s.canonicalState)
 	params, err := state.ConsensusParameters(s.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load consensus parameters: %w", err)
@@ -385,6 +451,36 @@ func (s *applicationState) doCleanup() {
 		s.storage.Cleanup()
 		s.storage = nil
 	}
+}
+
+// resetProposal clears the current proposal state, replacing it with canonical state.
+func (s *applicationState) resetProposal() {
+	if s.proposal != nil {
+		s.proposal.reset()
+	}
+
+	s.proposal = &proposalState{
+		tree: mkvs.NewOverlay(s.canonicalState),
+	}
+}
+
+// closeProposal clears the current proposal state and sets the current proposal to nil.
+func (s *applicationState) closeProposal() {
+	s.proposal.reset()
+	s.proposal = nil
+}
+
+// resetProposalIfChanged checks whether the proposal has changed based on the passed hash and if it
+// has clears the current proposal state, replacing it with canonical state.
+//
+// Returns true when the proposal has been reset.
+func (s *applicationState) resetProposalIfChanged(h []byte) bool {
+	if s.proposal != nil && bytes.Equal(s.proposal.hash, h) {
+		return false
+	}
+
+	s.resetProposal()
+	return true
 }
 
 func (s *applicationState) updateMetrics() error {
@@ -559,8 +655,8 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 	latestVersion := stateRoot.Version
 
 	// Use the node database directly to avoid going through the syncer interface.
-	deliverTxTree := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
-	checkTxTree := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
+	canonicalState := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
+	checkState := mkvs.NewWithRoot(nil, ndb, *stateRoot, mkvs.WithoutWriteLog())
 
 	// Initialize the state pruner.
 	statePruner, err := newStatePruner(&cfg.Pruning, ndb)
@@ -580,8 +676,8 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 		ctx:                ctx,
 		cancelCtx:          cancelCtx,
 		initialHeight:      cfg.InitialHeight,
-		deliverTxTree:      deliverTxTree,
-		checkTxTree:        checkTxTree,
+		canonicalState:     canonicalState,
+		checkState:         checkState,
 		stateRoot:          *stateRoot,
 		storage:            ldb,
 		statePruner:        statePruner,

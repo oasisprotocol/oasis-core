@@ -31,6 +31,7 @@ type ApplicationState interface {
 	// InitialHeight returns the initial height.
 	InitialHeight() int64
 
+	// XXX: rename this to StateRootHash
 	// BlockHash returns the last committed block hash.
 	BlockHash() []byte
 
@@ -212,9 +213,9 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 	ms.cfg = cfg
 
 	if cfg.MaxBlockGas > 0 {
-		ms.blockCtx.Set(GasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
+		ms.blockCtx.Set(gasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
 	} else {
-		ms.blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
+		ms.blockCtx.Set(gasAccountantKey{}, NewNopGasAccountant())
 	}
 
 	if cfg.Genesis == nil {

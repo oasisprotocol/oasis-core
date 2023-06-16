@@ -149,8 +149,9 @@ func TestOverlay(t *testing.T) {
 	})
 
 	// Commit the overlay.
-	err = overlay.Commit(ctx)
+	innerTree, err := overlay.Commit(ctx)
 	require.NoError(t, err, "Commit")
+	require.Equal(t, tree, innerTree, "inner tree returned from Commit should be correct")
 
 	// Test that all keys can be fetched from an updated tree.
 	t.Run("Committed/Get", func(t *testing.T) {

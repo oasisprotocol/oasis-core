@@ -104,14 +104,24 @@ func NewNopGasAccountant() GasAccountant {
 	return nopGasAccountantImpl
 }
 
-// GasAccountantKey is the gas accountant block context key.
-type GasAccountantKey struct{}
+// gasAccountantKey is the gas accountant block context key.
+type gasAccountantKey struct{}
 
 // NewDefault returns a new default value for the given key.
-func (gak GasAccountantKey) NewDefault() interface{} {
+func (gak gasAccountantKey) NewDefault() interface{} {
 	// This should never be called as a gas accountant must always
 	// be created by the application multiplexer.
 	panic("gas: no gas accountant in block context")
+}
+
+// SetBlockGasAccountant sets the per-block gas accountant.
+func SetBlockGasAccountant(ctx *Context, ga GasAccountant) {
+	ctx.BlockContext().Set(gasAccountantKey{}, ga)
+}
+
+// GetBlockGasAccountant returns the per-block gas accountant.
+func GetBlockGasAccountant(ctx *Context) GasAccountant {
+	return ctx.BlockContext().Get(gasAccountantKey{}).(GasAccountant)
 }
 
 type compositeGasAccountant struct {

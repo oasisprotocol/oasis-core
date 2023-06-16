@@ -90,30 +90,30 @@ func (o *treeOverlay) NewIterator(ctx context.Context, options ...IteratorOption
 }
 
 // Implements OverlayTree.
-func (o *treeOverlay) Commit(ctx context.Context) error {
+func (o *treeOverlay) Commit(ctx context.Context) (KeyValueTree, error) {
 	it := o.overlay.NewIterator(ctx)
 	defer it.Close()
 
 	// Insert all items present in the overlay.
 	for it.Rewind(); it.Valid(); it.Next() {
 		if err := o.inner.Insert(ctx, it.Key(), it.Value()); err != nil {
-			return err
+			return nil, err
 		}
 		delete(o.dirty, string(it.Key()))
 	}
 	if it.Err() != nil {
-		return it.Err()
+		return nil, it.Err()
 	}
 
 	// Any remaining dirty items must have been removed.
 	for key := range o.dirty {
 		if err := o.inner.Remove(ctx, []byte(key)); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	o.dirty = make(map[string]bool)
 
-	return nil
+	return o.inner, nil
 }
 
 // Implements ClosableTree.
@@ -228,4 +228,19 @@ func (it *treeOverlayIterator) Close() {
 	it.key = nil
 	it.value = nil
 	it.tree = nil
+}
+
+type treeOverlayWrapper struct {
+	Tree
+}
+
+// Implements OverlayTree.
+func (tow *treeOverlayWrapper) Commit(ctx context.Context) (KeyValueTree, error) {
+	return tow.Tree, nil
+}
+
+// NewOverlayWrapper wraps an existing tree so it can behave as an overlay tree without any actual
+// overlay overhead.
+func NewOverlayWrapper(inner Tree) OverlayTree {
+	return &treeOverlayWrapper{inner}
 }
