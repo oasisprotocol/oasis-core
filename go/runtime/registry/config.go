@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -69,7 +70,7 @@ type RuntimeHostConfig struct {
 	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
 }
 
-func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
+func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
 	var cfg RuntimeConfig
 
 	haveSetRuntimes := len(config.GlobalConfig.Runtime.Paths) > 0
@@ -182,6 +183,7 @@ func newConfig(dataDir string, consensus consensus.Backend, ias ias.Endpoint) (*
 
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
 					HostInfo:          hostInfo,
+					CommonStore:       commonStore,
 					LoaderPath:        sgxLoader,
 					IAS:               ias,
 					PCS:               pc,

@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/aesm"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
@@ -35,6 +36,9 @@ const (
 	sandboxMountRuntime   = "/runtime"
 	sandboxMountSignature = "/runtime.sig"
 
+	// The service name for the common store to use for SGX-related persistent data.
+	serviceStoreName = "runtime_host_sgx"
+
 	// Runtime RAK initialization timeout.
 	//
 	// This can take a long time in deployments that run multiple
@@ -48,6 +52,9 @@ const (
 type Config struct {
 	// HostInfo provides information about the host environment.
 	HostInfo *protocol.HostInfo
+
+	// CommonStore is a handle to the node's common persistent store.
+	CommonStore *persistent.CommonStore
 
 	// LoaderPath is the path to the runtime loader binary.
 	LoaderPath string
@@ -155,7 +162,8 @@ type sgxProvisioner struct {
 	aesm      *aesm.Client
 	consensus consensus.Backend
 
-	logger *logging.Logger
+	logger       *logging.Logger
+	serviceStore *persistent.ServiceStore
 }
 
 func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte, error) {
@@ -429,12 +437,13 @@ func New(cfg Config) (host.Provisioner, error) {
 	initMetrics()
 
 	s := &sgxProvisioner{
-		cfg:       cfg,
-		ias:       cfg.IAS,
-		pcs:       cfg.PCS,
-		aesm:      aesm.NewClient(aesmdSocketPath),
-		consensus: cfg.Consensus,
-		logger:    logging.GetLogger("runtime/host/sgx"),
+		cfg:          cfg,
+		ias:          cfg.IAS,
+		pcs:          cfg.PCS,
+		aesm:         aesm.NewClient(aesmdSocketPath),
+		consensus:    cfg.Consensus,
+		logger:       logging.GetLogger("runtime/host/sgx"),
+		serviceStore: cfg.CommonStore.GetServiceStore(serviceStoreName),
 	}
 	p, err := sandbox.New(sandbox.Config{
 		GetSandboxConfig:  s.getSandboxConfig,
