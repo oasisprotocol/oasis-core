@@ -234,7 +234,7 @@ func (s *applicationState) BlockHeight() int64 {
 	return int64(height)
 }
 
-func (s *applicationState) BlockHash() []byte {
+func (s *applicationState) StateRootHash() []byte {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 

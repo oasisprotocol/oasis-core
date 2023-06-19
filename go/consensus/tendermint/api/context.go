@@ -406,7 +406,7 @@ func (c *Context) BlockHeight() int64 {
 
 // LastStateRootHash returns the last state root hash.
 func (c *Context) LastStateRootHash() []byte {
-	return c.appState.BlockHash()
+	return c.appState.StateRootHash()
 }
 
 // SetPriority sets the current priority.

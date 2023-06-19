@@ -275,7 +275,7 @@ func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
 		AppVersion:       version.TendermintAppVersion,
 		LastBlockHeight:  mux.state.BlockHeight(),
-		LastBlockAppHash: mux.state.BlockHash(),
+		LastBlockAppHash: mux.state.StateRootHash(),
 	}
 }
 
@@ -814,7 +814,7 @@ func (mux *abciMux) Commit() types.ResponseCommit {
 
 	mux.logger.Debug("Commit",
 		"block_height", mux.state.BlockHeight(),
-		"block_hash", hex.EncodeToString(mux.state.BlockHash()),
+		"state_root_hash", hex.EncodeToString(mux.state.StateRootHash()),
 		"last_retained_version", lastRetainedVersion,
 	)
 
@@ -824,7 +824,7 @@ func (mux *abciMux) Commit() types.ResponseCommit {
 	mux.maybeHaltForUpgrade()
 
 	return types.ResponseCommit{
-		Data:         mux.state.BlockHash(),
+		Data:         mux.state.StateRootHash(),
 		RetainHeight: int64(lastRetainedVersion),
 	}
 }
@@ -953,7 +953,7 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 
 	mux.logger.Debug("ABCI multiplexer initialized",
 		"block_height", state.BlockHeight(),
-		"block_hash", hex.EncodeToString(state.BlockHash()),
+		"state_root_hash", hex.EncodeToString(state.StateRootHash()),
 	)
 
 	return mux, nil

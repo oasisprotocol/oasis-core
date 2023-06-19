@@ -31,9 +31,8 @@ type ApplicationState interface {
 	// InitialHeight returns the initial height.
 	InitialHeight() int64
 
-	// XXX: rename this to StateRootHash
-	// BlockHash returns the last committed block hash.
-	BlockHash() []byte
+	// StateRootHash returns the last committed block hash.
+	StateRootHash() []byte
 
 	// ConsensusParameters returns the consensus parameters for the consensus backend itself.
 	//
@@ -105,8 +104,8 @@ type MockApplicationState interface {
 
 // MockApplicationStateConfig is the configuration for the mock application state.
 type MockApplicationStateConfig struct {
-	BlockHeight int64
-	BlockHash   []byte
+	BlockHeight   int64
+	StateRootHash []byte
 
 	BaseEpoch    beacon.EpochTime
 	CurrentEpoch beacon.EpochTime
@@ -144,8 +143,8 @@ func (ms *mockApplicationState) BlockHeight() int64 {
 	return ms.cfg.BlockHeight
 }
 
-func (ms *mockApplicationState) BlockHash() []byte {
-	return ms.cfg.BlockHash
+func (ms *mockApplicationState) StateRootHash() []byte {
+	return ms.cfg.StateRootHash
 }
 
 func (ms *mockApplicationState) BlockContext() *BlockContext {
