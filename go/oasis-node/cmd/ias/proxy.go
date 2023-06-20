@@ -99,8 +99,8 @@ func doProxy(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	tlsCertPath, tlsKeyPath := TLSCertPaths(dataDir)
-	cert, err := tlsCert.LoadOrGenerate(tlsCertPath, tlsKeyPath, iasProxy.CommonName)
+	_, tlsKeyPath := TLSCertPaths(dataDir)
+	cert, err := tlsCert.LoadFromKey(tlsKeyPath, iasProxy.CommonName)
 	if err != nil {
 		logger.Error("failed to load or generate TLS cert",
 			"err", err,
