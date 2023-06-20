@@ -314,7 +314,7 @@ environment variables to simplify instructions.
 
 ```
 export RUNTIME_BINARY=/workdir/target/default/debug/simple-keyvalue
-export SEED_NODE_ADDRESS=<seed-node-tendermint-addr>@127.0.0.1:20000
+export SEED_NODE_ADDRESS=<seed-node-cometbft-addr>@127.0.0.1:20000
 
 # Runtime node data dir.
 mkdir -m 0700 /tmp/runtime-example/runtime-node
@@ -333,9 +333,9 @@ oasis-node \
   --runtime.provisioner unconfined \
   --runtime.supported $RUNTIME_ID \
   --runtime.paths $RUNTIME_ID=$RUNTIME_BINARY \
-  --consensus.tendermint.debug.addr_book_lenient \
-  --consensus.tendermint.debug.allow_duplicate_ip \
-  --consensus.tendermint.p2p.seed $SEED_NODE_ADDRESS \
+  --consensus.cometbft.debug.addr_book_lenient \
+  --consensus.cometbft.debug.allow_duplicate_ip \
+  --consensus.cometbft.p2p.seed $SEED_NODE_ADDRESS \
   --debug.dont_blame_oasis \
   --debug.allow_test_keys
 ```

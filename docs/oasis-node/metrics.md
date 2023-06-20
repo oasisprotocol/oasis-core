@@ -42,7 +42,7 @@ The following metrics are currently reported:
 
 Name | Type | Description | Labels | Package
 -----|------|-------------|--------|--------
-oasis_abci_db_size | Gauge | Total size of the ABCI database (MiB). |  | [consensus/tendermint/abci](https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/abci/mux.go)
+oasis_abci_db_size | Gauge | Total size of the ABCI database (MiB). |  | [consensus/cometbft/abci](https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/cometbft/abci/mux.go)
 oasis_codec_size | Summary | CBOR codec message size (bytes). | call, module | [common/cbor](https://github.com/oasisprotocol/oasis-core/tree/master/go/common/cbor/codec.go)
 oasis_consensus_proposed_blocks | Counter | Number of blocks proposed by the node. | backend | [consensus/metrics](https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/metrics/metrics.go)
 oasis_consensus_signed_blocks | Counter | Number of blocks signed by the node. | backend | [consensus/metrics](https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/metrics/metrics.go)
@@ -121,11 +121,11 @@ oasis_worker_storage_synced_round | Gauge | The last round that was synced but n
 
 ## Consensus backends
 
-### Metrics Reported by *Tendermint*
+### Metrics Reported by *CometBFT*
 
-When `oasis-node` is configured to use [Tendermint][1] for BFT consensus, all
-Tendermint metrics are also reported. Consult
-[tendermint-core documentation][2] for a list of reported by Tendermint.
+When `oasis-node` is configured to use [CometBFT][1] for BFT consensus, all
+CometBFT metrics are also reported. Consult
+[CometBFT-core documentation][2] for a list of reported by CometBFT.
 
-[1]: ../consensus/README.md#tendermint
-[2]: https://docs.tendermint.com/main/tendermint-core/metrics.html
+[1]: ../consensus/README.md#cometbft
+[2]: https://docs.cometbft.com/main/cometbft-core/metrics.html
