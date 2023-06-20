@@ -15,16 +15,18 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 )
 
+// Keep the following two constants synced with the Rust part of the code in:
+// runtime/src/consensus/tendermint/verifier/mod.rs.
 const (
 	// LogEventTrustRootChangeNoTrust is the event emitted when a compute
 	// worker fails to initialize the verifier as there is not enough trust
 	// in the new light block.
-	LogEventTrustRootChangeNoTrust = "consensus/tendermint/verifier/chain_context/no_trust"
+	LogEventTrustRootChangeNoTrust = "consensus/cometbft/verifier/chain_context/no_trust"
 
 	// LogEventTrustRootChangeFailed is the event emitted when a compute
 	// worker fails to initialize the verifier as the new light block is
 	// invalid, e.g. has lower height than the last known trusted block.
-	LogEventTrustRootChangeFailed = "consensus/tendermint/verifier/chain_context/failed"
+	LogEventTrustRootChangeFailed = "consensus/cometbft/verifier/chain_context/failed"
 )
 
 var (

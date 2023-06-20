@@ -205,7 +205,7 @@ func VotingPowerFromStake(t *quantity.Quantity) (int64, error) {
 		// In some cases, especially in tests, staking is enabled but
 		// registration thresholds are zero.
 		// However, if they actually register with zero, give them one free vote
-		// power so that Tendermint doesn't treat it as a removal.
+		// power so that CometBFT doesn't treat it as a removal.
 		return 1, nil
 	}
 	powerBI := powerQ.ToBigInt()

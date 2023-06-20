@@ -134,8 +134,8 @@ type ConsensusFixture struct { // nolint: maligned
 	// PruneInterval is the prune interval.
 	PruneInterval time.Duration `json:"prune_interval"`
 
-	// TendermintRecoverCorruptedWAL enables automatic recovery of corrupted Tendermint's WAL.
-	TendermintRecoverCorruptedWAL bool `json:"tendermint_recover_corrupted_wal"`
+	// CometBFTRecoverCorruptedWAL enables automatic recovery of corrupted CometBFT's WAL.
+	CometBFTRecoverCorruptedWAL bool `json:"cometbft_recover_corrupted_wal"`
 
 	// SupplementarySanityInterval configures the sanity check application.
 	SupplementarySanityInterval uint64 `json:"supplementary_sanity_interval,omitempty"`

@@ -176,7 +176,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 
 	// Get latest roothash block.
 	var blk *block.Block
-	blk, err = getRoothashLatestBlock(ctx, b.tendermint.service, runtimeID)
+	blk, err = getRoothashLatestBlock(ctx, b.cometbft.service, runtimeID)
 	if err != nil {
 		panic(fmt.Errorf("failed getting latest roothash block: %w", err))
 	}
@@ -266,7 +266,7 @@ func doExecutorScenario(cmd *cobra.Command, args []string) { //nolint: gocyclo
 
 	}
 
-	if err = cbc.publishToChain(b.tendermint.service, b.identity); err != nil {
+	if err = cbc.publishToChain(b.cometbft.service, b.identity); err != nil {
 		panic(fmt.Sprintf("compute publish to chain failed: %+v", err))
 	}
 	logger.Debug("executor: commitment sent")

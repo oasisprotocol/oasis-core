@@ -1001,7 +1001,7 @@ func (w *Worker) handleNewBlock(blk *consensus.Block) {
 		}
 	}
 
-	// (Re)Load ephemeral secrets. When using Tendermint as a backend service the first load
+	// (Re)Load ephemeral secrets. When using CometBFT as a backend service the first load
 	// will probably fail as the verifier is one block behind.
 	if len(w.secrets) > 0 {
 		select {

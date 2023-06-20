@@ -18,9 +18,11 @@ use crate::{
 };
 
 /// Tendermint consensus backend name.
+/// Keep synced with go/consensus/cometbft/api/api.go.
 pub const BACKEND_NAME: &str = "tendermint";
 
 /// The domain separation context used by Oasis Core for Tendermint cryptography.
+/// Keep synced with go/consensus/cometbft/crypto/signature.go.
 pub const TENDERMINT_CONTEXT: &[u8] = b"oasis-core/tendermint";
 
 /// Convert an Oasis Core chain context into a Tendermint chain ID.

@@ -557,7 +557,10 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 				// Copy the map.
 				mkSubMap(mLog, "level")
 				for k, v := range mLevel {
-					m(mLog["level"])[k] = v
+					// Also replace any occurrences of 'tendermint' with
+					// 'cometbft' in the keys.
+					newK := strings.Replace(k, "tendermint", "cometbft", -1)
+					m(mLog["level"])[newK] = v
 				}
 			} else {
 				if sLevel, isString := level.(string); isString {

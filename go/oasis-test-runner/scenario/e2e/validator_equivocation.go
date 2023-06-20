@@ -15,8 +15,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	tmBadger "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/db/badger"
-	tendermintTests "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests"
+	tmBadger "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
+	cmtTests "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/tests"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -145,23 +145,23 @@ func (sc *validatorEquivocationImpl) Run(childEnv *env.Env) error { // nolint: g
 		return err
 	}
 
-	// Stop validator and load tendermint block from the DB.
+	// Stop validator and load CometBFT block from the DB.
 	// XXX: for constructing the equivocation evidence we need nanosecond precision
-	// timestemp of the block, as that is what tendermint uses for verifying the evidence.
+	// timestemp of the block, as that is what CometBFT uses for verifying the evidence.
 	// oasis-core CBOR encoding uses second precision timestamps, therefore block obtained
 	// via `ctrl.Consensus.GetBlock(...)` will have an invalid timestamp.
 	sc.Logger.Info("stopping validator")
 	if err = validator.Stop(); err != nil {
 		return fmt.Errorf("stopping validator: %w", err)
 	}
-	tmDb, err := tmBadger.New(filepath.Join(validator.DataDir(), "tendermint/data/blockstore.badger.db"), true)
+	tmDb, err := tmBadger.New(filepath.Join(validator.DataDir(), "cometbft/data/blockstore.badger.db"), true)
 	if err != nil {
-		return fmt.Errorf("tendermint badger db: %w", err)
+		return fmt.Errorf("CometBFT badger db: %w", err)
 	}
 	tmBlkStore := cmtstore.NewBlockStore(tmDb)
 	tmBlk := tmBlkStore.LoadBlock(1)
 	if tmBlk == nil {
-		return fmt.Errorf("loading tendermint block failed")
+		return fmt.Errorf("loading CometBFT block failed")
 	}
 	// Fix block time to nanosecond precision time.
 	blk.Time = tmBlk.Time
@@ -188,7 +188,7 @@ func (sc *validatorEquivocationImpl) Run(childEnv *env.Env) error { // nolint: g
 	sc.Logger.Info("submitting equivocation evidence")
 
 	// Prepare and submit equivocation evidence.
-	evidence, err := tendermintTests.MakeConsensusEquivocationEvidence(identity, blk, doc, 4, 1)
+	evidence, err := cmtTests.MakeConsensusEquivocationEvidence(identity, blk, doc, 4, 1)
 	if err != nil {
 		return fmt.Errorf("failed to make consensus equivocation evidence: %w", err)
 	}

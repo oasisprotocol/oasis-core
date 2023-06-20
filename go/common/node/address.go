@@ -122,7 +122,7 @@ func (a Address) MultiAddress() (multiaddr.Multiaddr, error) {
 	return multiaddr.NewMultiaddr(a.MultiAddressStr())
 }
 
-// ConsensusAddress represents a Tendermint consensus address that includes an
+// ConsensusAddress represents a CometBFT consensus address that includes an
 // ID and a TCP address.
 // NOTE: The consensus address ID could be different from the consensus ID
 // to allow using a sentry node's ID and address instead of the validator's.

@@ -20,8 +20,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
-	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -38,7 +38,7 @@ import (
 
 // Note: If you are here wanting to alter the genesis document used for
 // the node that is spun up as part of the tests, you really want
-// consensus/tendermint/tests/genesis/genesis.go.
+// consensus/cometbft/tests/genesis/genesis.go.
 func testDoc() genesis.Document {
 	return genesis.Document{
 		Height:  1,
@@ -80,7 +80,7 @@ func testDoc() genesis.Document {
 			},
 		},
 		Consensus: consensus.Genesis{
-			Backend: tendermint.BackendName,
+			Backend: cmt.BackendName,
 			Parameters: consensus.Parameters{
 				TimeoutCommit:     1 * time.Millisecond,
 				SkipTimeoutCommit: true,

@@ -166,7 +166,7 @@ type NetworkCfg struct { // nolint: maligned
 func (cfg *NetworkCfg) SetMockEpoch() {
 	cfg.Beacon.DebugMockBackend = true
 	if cfg.Beacon.InsecureParameters != nil {
-		cfg.Beacon.InsecureParameters.Interval = defaultEpochtimeTendermintInterval
+		cfg.Beacon.InsecureParameters.Interval = defaultEpochtimeCometBFTInterval
 	}
 }
 
@@ -174,7 +174,7 @@ func (cfg *NetworkCfg) SetMockEpoch() {
 func (cfg *NetworkCfg) SetInsecureBeacon() {
 	cfg.Beacon.Backend = beacon.BackendInsecure
 	if cfg.Beacon.InsecureParameters != nil {
-		cfg.Beacon.InsecureParameters.Interval = defaultEpochtimeTendermintInterval
+		cfg.Beacon.InsecureParameters.Interval = defaultEpochtimeCometBFTInterval
 	}
 }
 
@@ -474,7 +474,7 @@ func (net *Network) Start() error { // nolint: gocyclo
 
 		// HACK HACK HACK HACK HACK
 		//
-		// If you don't attempt to start the Tendermint Prometheus HTTP server
+		// If you don't attempt to start the CometBFT Prometheus HTTP server
 		// (even if it is doomed to fail due to node already listening on the
 		// port), and you launch all the validators near simultaneously, there
 		// is a high chance that at least one of the validators will get upset
@@ -753,7 +753,7 @@ func (net *Network) MakeGenesis() error {
 		"--chain.id", genesisTestHelpers.TestChainID,
 		"--initial_height", strconv.FormatInt(net.cfg.InitialHeight, 10),
 		"--consensus.backend", net.cfg.Consensus.Backend,
-		"--consensus.tendermint.timeout_commit", net.cfg.Consensus.Parameters.TimeoutCommit.String(),
+		"--consensus.cometbft.timeout_commit", net.cfg.Consensus.Parameters.TimeoutCommit.String(),
 		"--registry.enable_runtime_governance_models", "entity,runtime",
 		"--registry.debug.allow_unroutable_addresses", "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
@@ -769,7 +769,7 @@ func (net *Network) MakeGenesis() error {
 	switch net.cfg.Beacon.Backend {
 	case beacon.BackendInsecure:
 		args = append(args, []string{
-			"--" + genesis.CfgBeaconInsecureTendermintInterval, strconv.FormatInt(net.cfg.Beacon.InsecureParameters.Interval, 10),
+			"--" + genesis.CfgBeaconInsecureCometBFTInterval, strconv.FormatInt(net.cfg.Beacon.InsecureParameters.Interval, 10),
 		}...)
 	case beacon.BackendVRF:
 		args = append(args, []string{
@@ -974,7 +974,7 @@ func New(env *env.Env, cfg *NetworkCfg) (*Network, error) {
 			cfgCopy.Beacon.InsecureParameters = new(beacon.InsecureParameters)
 		}
 		if cfgCopy.Beacon.InsecureParameters.Interval == 0 {
-			cfgCopy.Beacon.InsecureParameters.Interval = defaultEpochtimeTendermintInterval
+			cfgCopy.Beacon.InsecureParameters.Interval = defaultEpochtimeCometBFTInterval
 		}
 	case beacon.BackendVRF:
 		if cfgCopy.Beacon.VRFParameters == nil {

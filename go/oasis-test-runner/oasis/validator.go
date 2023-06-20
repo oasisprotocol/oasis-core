@@ -157,7 +157,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 		return nil, fmt.Errorf("oasis/validator: failed to parse P2P IP address: %w", err)
 	}
 
-	// Load node's identity, so that we can pass the validator's Tendermint
+	// Load node's identity, so that we can pass the validator's CometBFT
 	// address to sentry node(s) to configure it as a private peer.
 	err = host.setProvisionedIdentity(false, fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators)))
 	if err != nil {

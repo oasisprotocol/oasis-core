@@ -88,7 +88,7 @@ func doVRFBeaconScenario(cmd *cobra.Command, args []string) {
 		_ = b.stop()
 	}()
 
-	baseBackend := b.tendermint.service.Beacon()
+	baseBackend := b.cometbft.service.Beacon()
 	backend, ok := baseBackend.(beacon.VRFBackend)
 	if !ok {
 		panic("beacon not configured for VRF backend")
@@ -168,7 +168,7 @@ func doVRFBeaconRound(
 			Pi:    pi.Proof[:],
 		}
 		tx := transaction.NewTransaction(0, nil, beacon.MethodVRFProve, proofPayload)
-		err = consensus.SignAndSubmitTx(ctx, b.tendermint.service, b.identity.NodeSigner, tx)
+		err = consensus.SignAndSubmitTx(ctx, b.cometbft.service, b.identity.NodeSigner, tx)
 		switch mode {
 		case ModeVRFBeaconHonest:
 			if err != nil {
@@ -246,7 +246,7 @@ func waitTillHeightAtLeast(
 	b *byzantine,
 	height int64,
 ) (int64, error) {
-	ch, sub, err := b.tendermint.service.WatchBlocks(ctx)
+	ch, sub, err := b.cometbft.service.WatchBlocks(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to watch blocks: %w", err)
 	}

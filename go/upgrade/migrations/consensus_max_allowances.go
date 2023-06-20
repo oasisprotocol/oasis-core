@@ -3,8 +3,8 @@ package migrations
 import (
 	"fmt"
 
-	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking/state"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 )
 
 const (

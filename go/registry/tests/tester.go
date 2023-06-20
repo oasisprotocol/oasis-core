@@ -27,7 +27,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -338,7 +338,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				nodeByConsensus, err = backend.GetNodeByConsensusAddress(
 					ctx,
 					&api.ConsensusAddressQuery{
-						Address: []byte(tmcrypto.PublicKeyToTendermint(&tn.Node.Consensus.ID).Address()),
+						Address: []byte(tmcrypto.PublicKeyToCometBFT(&tn.Node.Consensus.ID).Address()),
 						Height:  consensusAPI.HeightLatest,
 					},
 				)

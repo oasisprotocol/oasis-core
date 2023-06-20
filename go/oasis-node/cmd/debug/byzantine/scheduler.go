@@ -29,7 +29,7 @@ func schedulerNextElectionHeight(svc consensus.Backend, epoch beacon.EpochTime) 
 	}
 }
 
-func schedulerGetCommittee(ht *honestTendermint, height int64, kind scheduler.CommitteeKind, runtimeID common.Namespace) (*scheduler.Committee, error) {
+func schedulerGetCommittee(ht *honestCometBFT, height int64, kind scheduler.CommitteeKind, runtimeID common.Namespace) (*scheduler.Committee, error) {
 	committees, err := ht.service.Scheduler().GetCommittees(context.Background(), &scheduler.GetCommitteesRequest{
 		RuntimeID: runtimeID,
 		Height:    height,

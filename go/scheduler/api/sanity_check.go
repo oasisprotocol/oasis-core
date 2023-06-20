@@ -23,7 +23,7 @@ func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
 		// Instead, here's our own number that satisfies all current implementations' limits.
 		maxTotalVotingPower := int64(math.MaxInt64) / 8
 		if supplyPower > maxTotalVotingPower {
-			return fmt.Errorf("init chain: total supply power %d exceeds Tendermint voting power limit %d", supplyPower, maxTotalVotingPower)
+			return fmt.Errorf("init chain: total supply power %d exceeds CometBFT voting power limit %d", supplyPower, maxTotalVotingPower)
 		}
 	}
 

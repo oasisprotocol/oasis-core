@@ -1,7 +1,7 @@
 // Package logging implements support for structured logging.
 //
 // This package is inspired heavily by go-logging, kit/log and the
-// tendermint libs/log packages, and is oriented towards making
+// CometBFT libs/log packages, and is oriented towards making
 // the structured logging experience somewhat easier to use.
 package logging
 

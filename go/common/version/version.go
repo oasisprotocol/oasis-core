@@ -123,8 +123,8 @@ var (
 	//
 	// NOTE: Consensus protocol version compatibility is currently not directly
 	// checked in Oasis Core.
-	// It is converted to TendermintAppVersion whose compatibility is checked
-	// via Tendermint's version checks.
+	// It is converted to CometBFTAppVersion whose compatibility is checked
+	// via CometBFT's version checks.
 	ConsensusProtocol = Version{Major: 7, Minor: 0, Patch: 0}
 
 	// RuntimeHostProtocol versions the protocol between the Oasis node(s) and
@@ -137,14 +137,14 @@ var (
 	// committee members.
 	RuntimeCommitteeProtocol = Version{Major: 5, Minor: 0, Patch: 0}
 
-	// TendermintAppVersion is Tendermint ABCI application's version computed by
+	// CometBFTAppVersion is CometBFT ABCI application's version computed by
 	// masking non-major consensus protocol version segments to 0 to be
-	// compatible with Tendermint's version checks.
+	// compatible with CometBFT's version checks.
 	//
-	// NOTE: Tendermint's version checks compare the whole version uint64
+	// NOTE: CometBFT's version checks compare the whole version uint64
 	// directly. For example:
-	// https://github.com/tendermint/tendermint/blob/1635d1339c73ae6a82e062cd2dc7191b029efa14/state/validation.go#L21-L22.
-	TendermintAppVersion = ConsensusProtocol.MaskNonMajor().ToU64()
+	// https://github.com/cometbft/cometbft/blob/v0.37.1/state/validation.go#L21-L22
+	CometBFTAppVersion = ConsensusProtocol.MaskNonMajor().ToU64()
 
 	// Toolchain is the version of the Go compiler/standard library.
 	Toolchain = MustFromString(strings.TrimPrefix(runtime.Version(), "go"))

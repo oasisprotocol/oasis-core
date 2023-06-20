@@ -11,7 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
+	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
@@ -43,7 +43,7 @@ var (
 
 	nodeStateGlobs = []string{
 		"persistent-store.*.db",
-		tendermintCommon.StateDir,
+		cmtCommon.StateDir,
 		filepath.Join(runtimesGlob, history.DbFilename),
 	}
 
@@ -72,7 +72,7 @@ func doUnsafeReset(cmd *cobra.Command, args []string) {
 	}
 
 	// Do a state dir sanity check.
-	for _, f := range []string{tendermintCommon.StateDir, identity.NodeKeyPubFilename} {
+	for _, f := range []string{cmtCommon.StateDir, identity.NodeKeyPubFilename} {
 		glob := filepath.Join(dataDir, f)
 		matches, err := filepath.Glob(glob)
 		if err != nil {

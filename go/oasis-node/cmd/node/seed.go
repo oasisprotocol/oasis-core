@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	tmSeed "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/seed"
+	cmtSeed "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/seed"
 	controlApi "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisApi "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -33,8 +33,8 @@ type SeedNode struct {
 	genesis  genesisApi.Provider
 	identity *identity.Identity
 
-	tendermintSeed *tmSeed.Service
-	libp2pSeed     api.SeedService
+	cometbftSeed *cmtSeed.Service
+	libp2pSeed   api.SeedService
 }
 
 // Wait waits for the node to gracefully terminate. Callers MUST
@@ -131,15 +131,15 @@ func NewSeedNode() (node *SeedNode, err error) {
 	// Register the node as a node controller.
 	controlApi.RegisterService(node.grpcInternal.Server(), node)
 
-	// Initialize and start the Tendermint seed.
-	node.tendermintSeed, err = tmSeed.New(dataDir, node.identity, node.genesis)
+	// Initialize and start the CometBFT seed.
+	node.cometbftSeed, err = cmtSeed.New(dataDir, node.identity, node.genesis)
 	if err != nil {
 		return nil, err
 	}
-	node.svcMgr.Register(node.tendermintSeed)
+	node.svcMgr.Register(node.cometbftSeed)
 
-	if err = node.tendermintSeed.Start(); err != nil {
-		node.logger.Error("failed to start tendermint seed",
+	if err = node.cometbftSeed.Start(); err != nil {
+		node.logger.Error("failed to start cometbft seed",
 			"err", err,
 		)
 		return nil, err

@@ -132,9 +132,9 @@ var TxSourceMulti scenario.Scenario = &txSourceImpl{
 	consensusPruneMinKept:             100,
 	consensusPruneMaxKept:             1000,
 	enableCrashPoints:                 true,
-	// Nodes getting killed commonly result in corrupted tendermint WAL when the
+	// Nodes getting killed commonly result in corrupted CometBFT WAL when the
 	// node is restarted. Enable automatic corrupted WAL recovery for nodes.
-	tendermintRecoverCorruptedWAL: true,
+	cmtRecoverCorruptedWAL: true,
 	// Use 4 validators so that consensus can keep making progress when a node
 	// is being killed and restarted.
 	numValidatorNodes: 4,
@@ -168,7 +168,7 @@ type txSourceImpl struct { // nolint: maligned
 	consensusPruneMinKept             int64
 	consensusPruneMaxKept             int64
 
-	tendermintRecoverCorruptedWAL bool
+	cmtRecoverCorruptedWAL bool
 
 	enableCrashPoints bool
 
@@ -502,7 +502,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		f.Validators[i].Consensus.MinGasPrice = txSourceGasPrice
 		f.Validators[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		// Enable recovery from corrupted WAL.
-		f.Validators[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
+		f.Validators[i].Consensus.CometBFTRecoverCorruptedWAL = sc.cmtRecoverCorruptedWAL
 		// Ensure validator-0 does not have pruning enabled, so nodes taken down
 		// for long period can sync from it.
 		// Note: validator-0 is also never restarted.
@@ -515,7 +515,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.Keymanagers {
 		f.Keymanagers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		// Enable recovery from corrupted WAL.
-		f.Keymanagers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
+		f.Keymanagers[i].Consensus.CometBFTRecoverCorruptedWAL = sc.cmtRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.Keymanagers[i].Consensus, false)
 		if i > 0 && sc.enableCrashPoints {
 			f.Keymanagers[i].CrashPointsProbability = crashPointProbability
@@ -524,7 +524,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	for i := range f.ComputeWorkers {
 		f.ComputeWorkers[i].Consensus.SubmissionGasPrice = txSourceGasPrice
 		// Enable recovery from corrupted WAL.
-		f.ComputeWorkers[i].Consensus.TendermintRecoverCorruptedWAL = sc.tendermintRecoverCorruptedWAL
+		f.ComputeWorkers[i].Consensus.CometBFTRecoverCorruptedWAL = sc.cmtRecoverCorruptedWAL
 		sc.generateConsensusFixture(&f.ComputeWorkers[i].Consensus, false)
 		if i > 0 && sc.enableCrashPoints {
 			f.ComputeWorkers[i].CrashPointsProbability = crashPointProbability
@@ -695,7 +695,7 @@ func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
 
 			latestHeight := blk.Height
 
-			// Unfortunately, Tendermint doesn't store the priority anywhere,
+			// Unfortunately, CometBFT doesn't store the priority anywhere,
 			// so we need to kludge this a bit.
 			priority := map[string]int64{
 				"beacon":     100000,
@@ -858,7 +858,7 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 		consensusPruneDisabledProbability: sc.consensusPruneDisabledProbability,
 		consensusPruneMinKept:             sc.consensusPruneMinKept,
 		consensusPruneMaxKept:             sc.consensusPruneMaxKept,
-		tendermintRecoverCorruptedWAL:     sc.tendermintRecoverCorruptedWAL,
+		cmtRecoverCorruptedWAL:            sc.cmtRecoverCorruptedWAL,
 		enableCrashPoints:                 sc.enableCrashPoints,
 		numValidatorNodes:                 sc.numValidatorNodes,
 		numKeyManagerNodes:                sc.numKeyManagerNodes,

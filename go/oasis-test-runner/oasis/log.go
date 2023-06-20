@@ -2,8 +2,8 @@ package oasis
 
 import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
-	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
+	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -62,7 +62,7 @@ func LogAssertNoExecutionDiscrepancyDetected() log.WatcherHandlerFactory {
 // LogAssertPeerExchangeDisabled returns a handler which checks whether a peer
 // exchange disabled event was detected based on JSON log output.
 func LogAssertPeerExchangeDisabled() log.WatcherHandlerFactory {
-	return LogAssertEvent(tendermint.LogEventPeerExchangeDisabled, "peer exchange not disabled")
+	return LogAssertEvent(cmt.LogEventPeerExchangeDisabled, "peer exchange not disabled")
 }
 
 // LogAssertUpgradeIncompatibleBinary returns a handler which checks whether the binary was deemed

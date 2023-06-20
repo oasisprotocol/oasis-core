@@ -176,7 +176,7 @@ func (sc *kmEphemeralKeysImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	// Test that ephemeral key for the current epoch is available.
-	// When using Tendermint as a backend service we need to retry the query
+	// When using CometBFT as a backend service we need to retry the query
 	// because the verifier is probably one block behind.
 	sc.Logger.Info("testing ephemeral keys - current epoch",
 		"epoch", sigSecret.Secret.Epoch,

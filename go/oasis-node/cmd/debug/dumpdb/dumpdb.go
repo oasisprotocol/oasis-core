@@ -14,18 +14,18 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
+	abciState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
+	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon"
+	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
+	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager"
+	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
+	roothashApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
+	schedulerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler"
+	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
+	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
-	abciState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci/state"
-	tendermintAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	beaconApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon"
-	governanceApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance"
-	keymanagerApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/keymanager"
-	registryApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry"
-	roothashApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/roothash"
-	schedulerApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/scheduler"
-	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/staking"
-	tendermintCommon "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/common"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -105,7 +105,7 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 	ldb, _, stateRoot, err := abci.InitStateStorage(
 		ctx,
 		&abci.ApplicationConfig{
-			DataDir:             filepath.Join(dataDir, tendermintCommon.StateDir),
+			DataDir:             filepath.Join(dataDir, cmtCommon.StateDir),
 			StorageBackend:      storageDB.BackendNameBadgerDB, // No other backend for now.
 			MemoryOnlyStorage:   false,
 			ReadOnlyStorage:     viper.GetBool(cfgDumpReadOnlyDB),
@@ -371,7 +371,7 @@ func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis,
 		return nil, fmt.Errorf("dumpdb: failed to get consensus params: %w", err)
 	}
 	return &consensus.Genesis{
-		Backend:    tendermintAPI.BackendName,
+		Backend:    cmtAPI.BackendName,
 		Parameters: *params,
 	}, nil
 }
