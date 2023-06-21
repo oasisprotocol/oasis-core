@@ -4,7 +4,6 @@ import (
 	"crypto/sha512"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 	"github.com/stretchr/testify/require"
@@ -25,15 +24,14 @@ import (
 
 func TestPublishEphemeralSecret(t *testing.T) {
 	// Prepare key manager app.
-	now := time.Unix(1580461674, 0)
 	cfg := abciAPI.MockApplicationStateConfig{}
 	appState := abciAPI.NewMockApplicationState(&cfg)
 	app := keymanagerApplication{appState}
 
 	// Prepare abci contexts.
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
-	txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer txCtx.Close()
 
 	// Prepare states.

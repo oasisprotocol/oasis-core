@@ -3,7 +3,6 @@ package governance
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/require"
@@ -34,12 +33,11 @@ func TestInitChain(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{
 		BaseEpoch:    1,
 		CurrentEpoch: 80,
 	})
-	ctx := appState.NewContext(abciAPI.ContextInitChain, now)
+	ctx := appState.NewContext(abciAPI.ContextInitChain)
 	defer ctx.Close()
 
 	state := governanceState.NewMutableState(ctx.State())
@@ -280,13 +278,12 @@ func TestGenesis(t *testing.T) {
 	var err error
 	currentEpoch := beacon.EpochTime(80)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{
 		BlockHeight:  1000,
 		BaseEpoch:    1,
 		CurrentEpoch: currentEpoch,
 	})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	state := governanceState.NewMutableState(ctx.State())

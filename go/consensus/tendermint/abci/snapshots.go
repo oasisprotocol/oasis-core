@@ -263,7 +263,7 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 		mux.state.resetProposal()
 		defer mux.state.closeProposal()
 
-		ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
+		ctx := mux.state.NewContext(api.ContextEndBlock)
 		defer ctx.Close()
 
 		if _, err = mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {

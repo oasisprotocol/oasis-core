@@ -2,7 +2,6 @@ package staking
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -16,9 +15,8 @@ import (
 
 func TestChangeParameters(t *testing.T) {
 	// Prepare context.
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Setup state.

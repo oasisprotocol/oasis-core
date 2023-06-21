@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -35,9 +34,8 @@ func TestDelegationQueries(t *testing.T) {
 
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 
 	s := NewMutableState(ctx.State())
@@ -129,9 +127,8 @@ func TestDelegationQueries(t *testing.T) {
 func TestDebondingDelegation(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 	s := NewMutableState(ctx.State())
 
@@ -237,9 +234,8 @@ func TestRewardAndSlash(t *testing.T) {
 	_, err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100))
 	require.NoError(err, "debonding escrow deposit")
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	s := NewMutableState(ctx.State())
@@ -344,7 +340,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.Equal(mustInitQuantity(t, 300), escrowAccount.Escrow.Active.Balance, "reward late epoch - escrow active escrow")
 	require.Equal(mustInitQuantity(t, 100), escrowAccount.Escrow.Debonding.Balance, "reward late epoch - escrow debonding escrow")
 
-	ctx = appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx = appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Slash 40 base units
@@ -380,7 +376,7 @@ func TestRewardAndSlash(t *testing.T) {
 	require.NoError(err, "load common pool")
 	require.Equal(mustInitQuantityP(t, 9840), commonPool, "slash - common pool")
 
-	ctx = appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx = appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Epoch 10 is during the first step.
@@ -422,9 +418,8 @@ func TestRewardAndSlash(t *testing.T) {
 func TestEpochSigning(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 
 	s := NewMutableState(ctx.State())
@@ -475,9 +470,8 @@ func TestEpochSigning(t *testing.T) {
 }
 
 func TestProposalDeposits(t *testing.T) {
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 
 	// Prepare state.
@@ -552,14 +546,13 @@ func TestProposalDeposits(t *testing.T) {
 func TestComputeCommission(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 	s := NewMutableState(ctx.State())
 
 	// Prepare state.
-	ctxEB := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctxEB := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctxEB.Close()
 
 	for _, tc := range []struct {
@@ -640,9 +633,8 @@ func TestComputeCommission(t *testing.T) {
 func TestTransferFromCommon(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 
 	// Prepare state.
@@ -652,7 +644,7 @@ func TestTransferFromCommon(t *testing.T) {
 	pk2 := signature.NewPublicKey("bbbfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	addr2 := staking.NewAddress(pk2)
 
-	ctxEB := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctxEB := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctxEB.Close()
 	require.NoError(s.SetConsensusParameters(ctxEB, &staking.ConsensusParameters{
 		CommissionScheduleRules: staking.CommissionScheduleRules{
@@ -789,9 +781,8 @@ func TestTransferFromCommon(t *testing.T) {
 func TestTransfer(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 
 	// Prepare state.
@@ -853,7 +844,7 @@ func TestTransfer(t *testing.T) {
 	require.Empty(ctx.GetEvents(), "no events should be emitted")
 
 	// Transfer.
-	ctxEB := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctxEB := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctxEB.Close()
 	err = s.SetConsensusParameters(ctxEB, &staking.ConsensusParameters{
 		MinTransactBalance: *quantity.NewFromUint64(50),
@@ -887,9 +878,8 @@ func TestTransfer(t *testing.T) {
 func TestCommissionScheduleAccounts(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 	s := NewMutableState(ctx.State())
 

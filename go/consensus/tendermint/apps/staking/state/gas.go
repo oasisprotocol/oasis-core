@@ -130,7 +130,7 @@ func AuthenticateAndPayFees(
 	// Configure gas accountant on the context.
 	ctx.SetGasAccountant(abciAPI.NewCompositeGasAccountant(
 		abciAPI.NewGasAccountant(fee.Gas),
-		abciAPI.GetBlockGasAccountant(ctx),
+		ctx.BlockContext().GasAccountant,
 	))
 
 	return nil

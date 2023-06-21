@@ -69,7 +69,7 @@ type ApplicationState interface {
 	Upgrader() upgrade.Backend
 
 	// NewContext creates a new application processing context.
-	NewContext(mode ContextMode, now time.Time) *Context
+	NewContext(mode ContextMode) *Context
 }
 
 // ApplicationQueryState is minimum methods required to service
@@ -191,10 +191,10 @@ func (ms *mockApplicationState) ConsensusParameters() *consensusGenesis.Paramete
 	return &ms.cfg.Genesis.Consensus.Parameters
 }
 
-func (ms *mockApplicationState) NewContext(mode ContextMode, now time.Time) *Context {
+func (ms *mockApplicationState) NewContext(mode ContextMode) *Context {
 	c := &Context{
 		mode:          mode,
-		currentTime:   now,
+		currentTime:   ms.blockCtx.Time,
 		gasAccountant: NewNopGasAccountant(),
 		state:         ms.tree,
 		appState:      ms,
@@ -212,9 +212,9 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 	ms.cfg = cfg
 
 	if cfg.MaxBlockGas > 0 {
-		ms.blockCtx.Set(gasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
+		ms.blockCtx.GasAccountant = NewGasAccountant(cfg.MaxBlockGas)
 	} else {
-		ms.blockCtx.Set(gasAccountantKey{}, NewNopGasAccountant())
+		ms.blockCtx.GasAccountant = NewNopGasAccountant()
 	}
 
 	if cfg.Genesis == nil {
@@ -229,9 +229,10 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 func NewMockApplicationState(cfg *MockApplicationStateConfig) MockApplicationState {
 	tree := mkvs.New(nil, nil, storage.RootTypeState)
 
-	blockCtx := NewBlockContext()
 	m := &mockApplicationState{
-		blockCtx:           blockCtx,
+		blockCtx: NewBlockContext(BlockInfo{
+			Time: time.Unix(1580461674, 0),
+		}),
 		tree:               tree,
 		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
 	}

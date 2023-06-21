@@ -3,7 +3,6 @@ package governance
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -23,9 +22,8 @@ func TestSubmitProposal(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Setup staking state.
@@ -229,7 +227,7 @@ func TestSubmitProposal(t *testing.T) {
 		err = state.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting governance consensus parameters should not error")
 
-		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 		defer txCtx.Close()
 		txCtx.SetTxSigner(tc.txSigner)
 
@@ -259,9 +257,8 @@ func TestCastVote(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Setup state.
@@ -443,7 +440,7 @@ func TestCastVote(t *testing.T) {
 			},
 		},
 	} {
-		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 		defer txCtx.Close()
 		txCtx.SetTxSigner(tc.txSigner)
 

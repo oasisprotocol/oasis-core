@@ -2,7 +2,6 @@ package state
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -16,9 +15,8 @@ import (
 func TestEvidence(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 
 	s := NewMutableState(ctx.State())
@@ -117,9 +115,8 @@ func TestEvidence(t *testing.T) {
 func TestSeparateRuntimeRoots(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 
 	st := NewMutableState(ctx.State())

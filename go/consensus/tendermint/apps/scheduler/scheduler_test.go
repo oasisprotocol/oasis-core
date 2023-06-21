@@ -3,7 +3,6 @@ package scheduler
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/require"
@@ -87,9 +86,8 @@ func TestElectCommittee(t *testing.T) {
 
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := api.NewMockApplicationState(&api.MockApplicationStateConfig{})
-	ctx := appState.NewContext(api.ContextBeginBlock, now)
+	ctx := appState.NewContext(api.ContextBeginBlock)
 	defer ctx.Close()
 
 	app := &schedulerApplication{

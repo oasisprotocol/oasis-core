@@ -70,7 +70,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context) error {
 	// Go through all voters of the previous block and resolve entities.
 	// numEligibleValidators is how many total validators are in the validator set, while
 	// votingEntities is from the validators which actually voted.
-	lastCommitInfo := api.GetLastCommitInfo(ctx)
+	lastCommitInfo := ctx.BlockContext().LastCommitInfo
 	numEligibleValidators := len(lastCommitInfo.Votes)
 	votingEntities, err := app.resolveEntityIDsFromVotes(ctx, regState, lastCommitInfo)
 	if err != nil {
@@ -97,7 +97,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context) error {
 
 	// Iterate over any submitted evidence of a validator misbehaving. Note that
 	// the actual evidence has already been verified by Tendermint to be valid.
-	for _, evidence := range api.GetValidatorMisbehavior(ctx) {
+	for _, evidence := range ctx.BlockContext().ValidatorMisbehavior {
 		var reason staking.SlashReason
 		switch evidence.Type {
 		case types.MisbehaviorType_DUPLICATE_VOTE:

@@ -3,7 +3,6 @@ package roothash
 import (
 	"crypto/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -23,9 +22,8 @@ import (
 func TestLivenessProcessing(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Generate a private key for the single node in this test.

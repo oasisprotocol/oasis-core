@@ -223,8 +223,6 @@ type abciMux struct {
 	appsByLexOrder []api.Application
 	appBlessed     api.Application
 
-	currentTime time.Time
-
 	haltOnce  sync.Once
 	haltHooks []consensus.HaltHook
 
@@ -293,7 +291,13 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		panic("mux: invalid genesis application state")
 	}
 
-	mux.currentTime = st.Time
+	// Reset block context -- we don't really have a block but we need the time.
+	mux.state.blockLock.Lock()
+	mux.state.blockTime = st.Time
+	mux.state.blockCtx = api.NewBlockContext(api.BlockInfo{
+		Time: st.Time,
+	})
+	mux.state.blockLock.Unlock()
 
 	if st.Height != req.InitialHeight || uint64(st.Height) != mux.state.initialHeight {
 		panic(fmt.Errorf("mux: inconsistent initial height (genesis: %d abci: %d state: %d)", st.Height, req.InitialHeight, mux.state.initialHeight))
@@ -324,7 +328,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	// Call InitChain() on all applications.
 	mux.logger.Debug("InitChain: initializing applications")
 
-	ctx := mux.state.NewContext(api.ContextInitChain, mux.currentTime)
+	ctx := mux.state.NewContext(api.ContextInitChain)
 	defer ctx.Close()
 
 	for _, app := range mux.appsByLexOrder {
@@ -358,7 +362,7 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		panic(fmt.Errorf("mux: failed to set consensus parameters: %w", err))
 	}
 	// Since InitChain does not have a commit step, perform some state updates here.
-	if err = mux.state.doInitChain(st.Time); err != nil {
+	if err = mux.state.doInitChain(); err != nil {
 		panic(fmt.Errorf("mux: failed to init chain state: %w", err))
 	}
 
@@ -558,24 +562,25 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 		"block_height", blockHeight,
 	)
 
-	mux.currentTime = req.Header.Time
-
 	params := mux.state.ConsensusParameters()
 
-	// Create empty block context.
-	mux.state.blockCtx = api.NewBlockContext()
-	// Create BeginBlock context.
-	ctx := mux.state.NewContext(api.ContextBeginBlock, mux.currentTime)
-	defer ctx.Close()
-
+	// Reset block context for the new block.
+	blockCtx := api.NewBlockContext(api.BlockInfo{
+		Time:                 req.Header.Time,
+		ProposerAddress:      req.Header.ProposerAddress,
+		LastCommitInfo:       req.LastCommitInfo,
+		ValidatorMisbehavior: req.ByzantineValidators,
+	})
 	if params.MaxBlockGas > 0 {
-		api.SetBlockGasAccountant(ctx, api.NewGasAccountant(params.MaxBlockGas))
+		blockCtx.GasAccountant = api.NewGasAccountant(params.MaxBlockGas)
 	} else {
-		api.SetBlockGasAccountant(ctx, api.NewNopGasAccountant())
+		blockCtx.GasAccountant = api.NewNopGasAccountant()
 	}
-	api.SetBlockProposer(ctx, req.Header.ProposerAddress)
-	api.SetLastCommitInfo(ctx, req.LastCommitInfo)
-	api.SetValidatorMisbehavior(ctx, req.ByzantineValidators)
+	mux.state.blockCtx = blockCtx
+
+	// Create BeginBlock context.
+	ctx := mux.state.NewContext(api.ContextBeginBlock)
+	defer ctx.Close()
 
 	currentEpoch, err := mux.state.GetCurrentEpoch(ctx)
 	if err != nil {
@@ -656,7 +661,7 @@ func (mux *abciMux) notifyInvalidatedCheckTx(txHash hash.Hash, err error) {
 }
 
 func (mux *abciMux) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	ctx := mux.state.NewContext(api.ContextCheckTx, mux.currentTime)
+	ctx := mux.state.NewContext(api.ContextCheckTx)
 	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
@@ -703,7 +708,7 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 		return *resp
 	}
 
-	ctx := mux.state.NewContext(api.ContextDeliverTx, mux.currentTime)
+	ctx := mux.state.NewContext(api.ContextDeliverTx)
 	defer ctx.Close()
 
 	if err := mux.executeTx(ctx, req.Tx); err != nil {
@@ -751,7 +756,7 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		"block_height", mux.state.BlockHeight(),
 	)
 
-	ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
+	ctx := mux.state.NewContext(api.ContextEndBlock)
 	defer ctx.Close()
 
 	// Dispatch EndBlock to all applications.
@@ -794,14 +799,11 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		},
 	}
 
-	// Clear block context.
-	mux.state.blockCtx = nil
-
 	return resp
 }
 
 func (mux *abciMux) Commit() types.ResponseCommit {
-	lastRetainedVersion, err := mux.state.doCommit(mux.currentTime)
+	lastRetainedVersion, err := mux.state.doCommit()
 	if err != nil {
 		mux.logger.Error("Commit failed",
 			"err", err,
@@ -903,7 +905,7 @@ func (mux *abciMux) finishInitialization() error {
 
 		// Notify applications that state has been synced. This is used to make sure that things
 		// like pending upgrade descriptors are refreshed immediately.
-		ctx := mux.state.NewContext(api.ContextEndBlock, mux.currentTime)
+		ctx := mux.state.NewContext(api.ContextEndBlock)
 		defer ctx.Close()
 
 		if _, err := mux.md.Publish(ctx, api.MessageStateSyncCompleted, nil); err != nil {

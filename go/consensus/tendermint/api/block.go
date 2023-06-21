@@ -1,63 +1,58 @@
 package api
 
 import (
+	"time"
+
 	"github.com/cometbft/cometbft/abci/types"
 )
 
-// blockProposerKey is the block context key for storing the block proposer address.
-type blockProposerKey struct{}
+// BlockInfo contains information about a block which is always present in block context.
+type BlockInfo struct {
+	Time                 time.Time
+	ProposerAddress      []byte
+	LastCommitInfo       types.CommitInfo
+	ValidatorMisbehavior []types.Misbehavior
 
-// NewDefault returns a new default value for the given key.
-func (bpk blockProposerKey) NewDefault() interface{} {
-	// This should never be called as a block proposer must always be created by the application
-	// multiplexer.
-	panic("no proposer address in block context")
+	GasAccountant GasAccountant
 }
 
-// SetBlockProposer sets the block proposer address.
-func SetBlockProposer(ctx *Context, proposer []byte) {
-	ctx.BlockContext().Set(blockProposerKey{}, proposer)
+// BlockContextKey is an interface for a block context key.
+type BlockContextKey interface {
+	// NewDefault returns a new default value for the given key.
+	NewDefault() interface{}
 }
 
-// GetBlockProposer returns the block proposer address.
-func GetBlockProposer(ctx *Context) []byte {
-	return ctx.BlockContext().Get(blockProposerKey{}).([]byte)
+// BlockContext can be used to store arbitrary key/value pairs for state that
+// is needed while processing a block.
+//
+// When a block is committed, this context is automatically reset.
+type BlockContext struct {
+	BlockInfo
+
+	storage map[BlockContextKey]interface{}
 }
 
-// lastCommitInfoKey is the block context key for storing the last commit info.
-type lastCommitInfoKey struct{}
-
-// NewDefault returns a new default value for the given key.
-func (bpk lastCommitInfoKey) NewDefault() interface{} {
-	// This should never be called as it must always be created by the application multiplexer.
-	panic("no last commit info in block context")
+// Get returns the value stored under the given key (if any). If no value
+// currently exists, the NewDefault method is called on the key to produce a
+// default value and that value is stored.
+func (bc *BlockContext) Get(key BlockContextKey) interface{} {
+	v, ok := bc.storage[key]
+	if !ok {
+		v = key.NewDefault()
+		bc.storage[key] = v
+	}
+	return v
 }
 
-// SetLastCommitInfo sets the last commit info.
-func SetLastCommitInfo(ctx *Context, lastCommitInfo types.CommitInfo) {
-	ctx.BlockContext().Set(lastCommitInfoKey{}, lastCommitInfo)
+// Set overwrites the value stored under the given key.
+func (bc *BlockContext) Set(key BlockContextKey, value interface{}) {
+	bc.storage[key] = value
 }
 
-// GetLastCommitInfo returns the last commit info.
-func GetLastCommitInfo(ctx *Context) types.CommitInfo {
-	return ctx.BlockContext().Get(lastCommitInfoKey{}).(types.CommitInfo)
-}
-
-// validatorMisbehaviorKey is the block context key for storing the validator misbehavior info.
-type validatorMisbehaviorKey struct{}
-
-// NewDefault returns a new default value for the given key.
-func (bpk validatorMisbehaviorKey) NewDefault() interface{} {
-	// This should never be called as it must always be created by the application multiplexer.
-	panic("no validator misbehavior info in block context")
-}
-
-// SetValidatorMisbehavior sets the validator misbehavior info.
-func SetValidatorMisbehavior(ctx *Context, misbehavior []types.Misbehavior) {
-	ctx.BlockContext().Set(validatorMisbehaviorKey{}, misbehavior)
-}
-
-// GetValidatorMisbehavior returns the validator misbehavior info.
-func GetValidatorMisbehavior(ctx *Context) []types.Misbehavior {
-	return ctx.BlockContext().Get(validatorMisbehaviorKey{}).([]types.Misbehavior)
+// NewBlockContext creates a new block context.
+func NewBlockContext(blockInfo BlockInfo) *BlockContext {
+	return &BlockContext{
+		BlockInfo: blockInfo,
+		storage:   make(map[BlockContextKey]interface{}),
+	}
 }

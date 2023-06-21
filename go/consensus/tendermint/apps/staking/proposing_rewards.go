@@ -17,14 +17,14 @@ func (app *stakingApplication) resolveEntityIDFromProposer(
 	ctx *abciAPI.Context,
 	regState *registryState.MutableState,
 ) (*signature.PublicKey, error) {
-	proposerAddress := abciAPI.GetBlockProposer(ctx)
+	proposerAddress := ctx.BlockContext().ProposerAddress
 	proposerNode, err := regState.NodeByConsensusAddress(ctx, proposerAddress)
 	switch err {
 	case nil:
 	case registry.ErrNoSuchNode:
 		ctx.Logger().Warn("failed to get proposer node",
 			"err", err,
-			"address", hex.EncodeToString(abciAPI.GetBlockProposer(ctx)),
+			"address", hex.EncodeToString(proposerAddress),
 		)
 		return nil, nil
 	default:

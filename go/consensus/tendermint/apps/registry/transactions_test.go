@@ -2,7 +2,6 @@ package registry
 
 import (
 	"testing"
-	"time"
 
 	requirePkg "github.com/stretchr/testify/require"
 
@@ -26,10 +25,9 @@ import (
 func TestRegisterNode(t *testing.T) {
 	require := requirePkg.New(t)
 
-	now := time.Unix(1580461674, 0)
 	cfg := abciAPI.MockApplicationStateConfig{}
 	appState := abciAPI.NewMockApplicationState(&cfg)
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	var md abciAPI.NoopMessageDispatcher
@@ -470,7 +468,7 @@ func TestRegisterNode(t *testing.T) {
 			require.NoError(err, "MultiSignNode")
 
 			// Attempt to register the node.
-			txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+			txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 			defer txCtx.Close()
 			txCtx.SetTxSigner(tcd.nodeSigner.Public())
 			err = app.registerNode(txCtx, state, sigNode)
@@ -508,10 +506,9 @@ func TestRegisterRuntime(t *testing.T) {
 
 	require := requirePkg.New(t)
 
-	now := time.Unix(1580461674, 0)
 	cfg := abciAPI.MockApplicationStateConfig{}
 	appState := abciAPI.NewMockApplicationState(&cfg)
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	var md abciAPI.NoopMessageDispatcher
@@ -667,7 +664,7 @@ func TestRegisterRuntime(t *testing.T) {
 			}
 
 			// Attempt to register the runtime.
-			txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+			txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 			defer txCtx.Close()
 			txCtx.SetTxSigner(tcd.entitySigner.Public())
 			_, err = app.registerRuntime(txCtx, state, tcd.runtime)
@@ -688,10 +685,9 @@ func TestRegisterRuntime(t *testing.T) {
 }
 
 func TestProofFreshness(t *testing.T) {
-	now := time.Unix(1580461674, 0)
 	cfg := abciAPI.MockApplicationStateConfig{}
 	appState := abciAPI.NewMockApplicationState(&cfg)
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	var md abciAPI.NoopMessageDispatcher

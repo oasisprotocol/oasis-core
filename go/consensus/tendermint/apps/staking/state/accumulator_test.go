@@ -2,7 +2,6 @@ package state
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -15,9 +14,8 @@ import (
 func TestStakeAccumulatorCache(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	_, err := NewStakeAccumulatorCache(ctx)

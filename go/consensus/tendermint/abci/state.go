@@ -168,13 +168,16 @@ type applicationState struct { // nolint: maligned
 	metricsClosedCh chan struct{}
 }
 
-func (s *applicationState) NewContext(mode api.ContextMode, now time.Time) *api.Context {
+func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 	s.blockLock.RLock()
 	defer s.blockLock.RUnlock()
 
-	var blockCtx *api.BlockContext
-	var state mkvs.OverlayTree
+	var (
+		blockCtx *api.BlockContext
+		state    mkvs.OverlayTree
+	)
 	blockHeight := int64(s.stateRoot.Version)
+	now := s.blockTime
 	switch mode {
 	case api.ContextInitChain:
 		state = mkvs.NewOverlayWrapper(s.canonicalState)
@@ -185,11 +188,11 @@ func (s *applicationState) NewContext(mode api.ContextMode, now time.Time) *api.
 	case api.ContextDeliverTx, api.ContextBeginBlock, api.ContextEndBlock:
 		state = s.proposal.tree
 		blockCtx = s.blockCtx
+		now = blockCtx.Time
 	case api.ContextSimulateTx:
 		// Since simulation is running in parallel to any changes to the database, we make sure
 		// to create a separate in-memory tree at the given block height.
 		state = mkvs.NewOverlayWrapper(mkvs.NewWithRoot(nil, s.storage.NodeDB(), s.stateRoot, mkvs.WithoutWriteLog()))
-		now = s.blockTime
 	default:
 		panic(fmt.Errorf("context: invalid mode: %s (%d)", mode, mode))
 	}
@@ -342,7 +345,7 @@ func (s *applicationState) Upgrader() upgrade.Backend {
 	return s.upgrader
 }
 
-func (s *applicationState) doInitChain(now time.Time) error {
+func (s *applicationState) doInitChain() error {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
 
@@ -356,7 +359,7 @@ func (s *applicationState) doInitChain(now time.Time) error {
 	s.stateRoot.Hash = stateRootHash
 	s.stateRoot.Version = s.initialHeight - 1
 
-	return s.doCommitOrInitChainLocked(now)
+	return s.doCommitOrInitChainLocked()
 }
 
 func (s *applicationState) doApplyStateSync(root storage.Root) error {
@@ -370,14 +373,14 @@ func (s *applicationState) doApplyStateSync(root storage.Root) error {
 	s.checkState.Close()
 	s.checkState = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
 
-	if err := s.doCommitOrInitChainLocked(time.Time{}); err != nil {
+	if err := s.doCommitOrInitChainLocked(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *applicationState) doCommit(now time.Time) (uint64, error) {
+func (s *applicationState) doCommit() (uint64, error) {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
 
@@ -404,10 +407,12 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 	s.stateRoot.Hash = stateRootHash
 	s.stateRoot.Version++
 
-	if err := s.doCommitOrInitChainLocked(now); err != nil {
+	if err := s.doCommitOrInitChainLocked(); err != nil {
 		return 0, err
 	}
 
+	// Reset block context.
+	s.blockCtx = nil
 	// Switch the check tree to the newly committed version. Note that this is safe as CometBFT
 	// holds the mempool lock while commit is in progress so no CheckTx can take place.
 	s.checkState.Close()
@@ -426,8 +431,8 @@ func (s *applicationState) doCommit(now time.Time) (uint64, error) {
 }
 
 // Guarded by s.blockLock.
-func (s *applicationState) doCommitOrInitChainLocked(now time.Time) error {
-	s.blockTime = now
+func (s *applicationState) doCommitOrInitChainLocked() error {
+	s.blockTime = s.blockCtx.Time
 
 	// Update cache of consensus parameters (the only places where consensus parameters can be
 	// changed are InitChain and EndBlock, so we can safely update the cache here).
@@ -685,6 +690,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 		prunerNotifyCh:     channels.NewRingChannel(1),
 		pruneInterval:      cfg.Pruning.PruneInterval,
 		upgrader:           upgrader,
+		blockCtx:           api.NewBlockContext(api.BlockInfo{}),
 		haltEpoch:          cfg.HaltEpoch,
 		haltHeight:         cfg.HaltHeight,
 		minGasPrice:        minGasPrice,
@@ -695,7 +701,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 
 	// Refresh consensus parameters when loading state if we are past genesis.
 	if latestVersion >= s.initialHeight {
-		if err = s.doCommitOrInitChainLocked(time.Time{}); err != nil {
+		if err = s.doCommitOrInitChainLocked(); err != nil {
 			return nil, fmt.Errorf("state: failed to run initial state commit hook: %w", err)
 		}
 	}

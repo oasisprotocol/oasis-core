@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -54,9 +53,8 @@ func (s *testSubscriber) ExecuteMessage(ctx *api.Context, kind, msg interface{})
 func TestMessageDispatcher(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := api.NewMockApplicationState(&api.MockApplicationStateConfig{})
-	ctx := appState.NewContext(api.ContextBeginBlock, now)
+	ctx := appState.NewContext(api.ContextBeginBlock)
 	defer ctx.Close()
 
 	var md messageDispatcher

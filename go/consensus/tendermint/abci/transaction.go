@@ -4,8 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
-	"sync/atomic"
-	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -152,9 +150,7 @@ func (mux *abciMux) EstimateGas(caller signature.PublicKey, tx *transaction.Tran
 
 	// As opposed to other transaction dispatch entry points (CheckTx/DeliverTx), this method can
 	// be called in parallel to the consensus layer and to other invocations.
-	//
-	// For simulation mode, time will be filled in by NewContext from last block time.
-	ctx := mux.state.NewContext(api.ContextSimulateTx, time.Time{})
+	ctx := mux.state.NewContext(api.ContextSimulateTx)
 	defer ctx.Close()
 
 	// Modify transaction to include maximum possible gas in order to estimate the upper limit on
