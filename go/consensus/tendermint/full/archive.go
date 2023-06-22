@@ -165,7 +165,7 @@ func NewArchive(
 			Strategy:      abci.PruneNone,
 			PruneInterval: time.Hour * 100, // Irrelevant as pruning is disabled.
 		},
-		OwnTxSigner:         srv.identity.NodeSigner.Public(),
+		Identity:            srv.identity,
 		DisableCheckpointer: true,
 		InitialHeight:       uint64(srv.genesis.Height),
 		// ReadOnly should actually be preferable for archive but there is a badger issue with read-only:

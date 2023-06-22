@@ -193,6 +193,11 @@ func TestOverlay(t *testing.T) {
 	require.NoError(t, err, "Commit")
 	require.Equal(t, tree, innerTree, "inner tree returned from Commit should be correct")
 
+	// Make sure committing an already committed tree works just as well.
+	innerTree, err = overlay.Commit(ctx)
+	require.NoError(t, err, "Commit")
+	require.Equal(t, tree, innerTree, "inner tree returned from Commit should be correct")
+
 	// Test that all keys can be fetched from an updated tree.
 	t.Run("Committed/Get", func(t *testing.T) {
 		require := require.New(t)
