@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tidwall/btree"
+
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
@@ -12,7 +14,7 @@ var _ OverlayTree = (*treeOverlay)(nil)
 
 type treeOverlay struct {
 	inner   KeyValueTree
-	overlay Tree
+	overlay btree.Map[string, []byte]
 
 	dirty map[string]bool
 }
@@ -26,19 +28,14 @@ type treeOverlay struct {
 // The overlay is not safe for concurrent use.
 func NewOverlay(inner KeyValueTree) OverlayTree {
 	return &treeOverlay{
-		inner:   inner,
-		overlay: New(nil, nil, node.RootTypeState, WithoutWriteLog()),
-		dirty:   make(map[string]bool),
+		inner: inner,
+		dirty: make(map[string]bool),
 	}
 }
 
 // Implements KeyValueTree.
 func (o *treeOverlay) Insert(ctx context.Context, key, value []byte) error {
-	err := o.overlay.Insert(ctx, key, value)
-	if err != nil {
-		return err
-	}
-
+	o.overlay.Set(string(key), value)
 	o.dirty[string(key)] = true
 	return nil
 }
@@ -47,7 +44,8 @@ func (o *treeOverlay) Insert(ctx context.Context, key, value []byte) error {
 func (o *treeOverlay) Get(ctx context.Context, key []byte) ([]byte, error) {
 	// For dirty values, check the overlay.
 	if o.dirty[string(key)] {
-		return o.overlay.Get(ctx, key)
+		value, _ := o.overlay.Get(string(key))
+		return value, nil
 	}
 
 	// Otherwise fetch from inner tree.
@@ -58,7 +56,8 @@ func (o *treeOverlay) Get(ctx context.Context, key []byte) ([]byte, error) {
 func (o *treeOverlay) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 	// For dirty values, remove from the overlay.
 	if o.dirty[string(key)] {
-		return o.overlay.RemoveExisting(ctx, key)
+		value, _ := o.overlay.Delete(string(key))
+		return value, nil
 	}
 
 	value, err := o.inner.Get(ctx, key)
@@ -77,7 +76,8 @@ func (o *treeOverlay) RemoveExisting(ctx context.Context, key []byte) ([]byte, e
 func (o *treeOverlay) Remove(ctx context.Context, key []byte) error {
 	// Since we don't care about the previous value, we can just record an update.
 	o.dirty[string(key)] = true
-	return o.overlay.Remove(ctx, key)
+	o.overlay.Delete(string(key))
+	return nil
 }
 
 // Implements KeyValueTree.
@@ -85,24 +85,36 @@ func (o *treeOverlay) NewIterator(ctx context.Context, options ...IteratorOption
 	return &treeOverlayIterator{
 		tree:    o,
 		inner:   o.inner.NewIterator(ctx, options...),
-		overlay: o.overlay.NewIterator(ctx),
+		overlay: o.overlay.Iter(),
 	}
 }
 
 // Implements OverlayTree.
-func (o *treeOverlay) Commit(ctx context.Context) (KeyValueTree, error) {
-	it := o.overlay.NewIterator(ctx)
-	defer it.Close()
+func (o *treeOverlay) Copy(inner KeyValueTree) OverlayTree {
+	if inner == nil {
+		inner = o.inner
+	}
+	o2 := &treeOverlay{
+		inner: inner,
+		dirty: make(map[string]bool),
+	}
+	for k := range o.dirty {
+		o2.dirty[k] = true
+	}
+	overlay := o.overlay.Copy()
+	o2.overlay = *overlay
+	return o2
+}
 
+// Implements OverlayTree.
+func (o *treeOverlay) Commit(ctx context.Context) (KeyValueTree, error) {
 	// Insert all items present in the overlay.
-	for it.Rewind(); it.Valid(); it.Next() {
-		if err := o.inner.Insert(ctx, it.Key(), it.Value()); err != nil {
+	it := o.overlay.Iter()
+	for ok := it.First(); ok; ok = it.Next() {
+		if err := o.inner.Insert(ctx, []byte(it.Key()), it.Value()); err != nil {
 			return nil, err
 		}
-		delete(o.dirty, string(it.Key()))
-	}
-	if it.Err() != nil {
-		return nil, it.Err()
+		delete(o.dirty, it.Key())
 	}
 
 	// Any remaining dirty items must have been removed.
@@ -111,7 +123,9 @@ func (o *treeOverlay) Commit(ctx context.Context) (KeyValueTree, error) {
 			return nil, err
 		}
 	}
+
 	o.dirty = make(map[string]bool)
+	o.overlay.Clear()
 
 	return o.inner, nil
 }
@@ -122,18 +136,18 @@ func (o *treeOverlay) Close() {
 		return
 	}
 
-	o.overlay.Close()
+	o.overlay.Clear()
 
 	o.inner = nil
-	o.overlay = nil
 	o.dirty = nil
 }
 
 type treeOverlayIterator struct {
 	tree *treeOverlay
 
-	inner   Iterator
-	overlay Iterator
+	inner        Iterator
+	overlay      btree.MapIter[string, []byte]
+	overlayValid bool
 
 	key   node.Key
 	value []byte
@@ -141,41 +155,34 @@ type treeOverlayIterator struct {
 
 func (it *treeOverlayIterator) Valid() bool {
 	// If either iterator is valid, the merged iterator is valid.
-	return it.inner.Valid() || it.overlay.Valid()
+	return it.inner.Valid() || it.overlayValid
 }
 
 func (it *treeOverlayIterator) Err() error {
-	// If either iterator has an error, the merged iterator has an error.
-	if err := it.inner.Err(); err != nil {
-		return err
-	}
-	if err := it.overlay.Err(); err != nil {
-		return err
-	}
-	return nil
+	return it.inner.Err()
 }
 
 func (it *treeOverlayIterator) Rewind() {
 	it.inner.Rewind()
-	it.overlay.Rewind()
+	it.overlayValid = it.overlay.First()
 
 	it.updateIteratorPosition()
 }
 
 func (it *treeOverlayIterator) Seek(key node.Key) {
 	it.inner.Seek(key)
-	it.overlay.Seek(key)
+	it.overlayValid = it.overlay.Seek(string(key))
 
 	it.updateIteratorPosition()
 }
 
 func (it *treeOverlayIterator) Next() {
-	if !it.overlay.Valid() || (it.inner.Valid() && it.inner.Key().Compare(it.overlay.Key()) <= 0) {
+	if !it.overlayValid || (it.inner.Valid() && it.inner.Key().Compare(node.Key(it.overlay.Key())) <= 0) {
 		// Key of inner iterator is smaller or equal than the key of the overlay iterator.
 		it.inner.Next()
 	} else {
 		// Key of inner iterator is greater than the key of the overlay iterator.
-		it.overlay.Next()
+		it.overlayValid = it.overlay.Next()
 	}
 
 	it.updateIteratorPosition()
@@ -188,13 +195,13 @@ func (it *treeOverlayIterator) updateIteratorPosition() {
 	}
 
 	iKey := it.inner.Key()
-	oKey := it.overlay.Key()
+	oKey := node.Key(it.overlay.Key())
 
-	if it.inner.Valid() && (!it.overlay.Valid() || iKey.Compare(oKey) < 0) {
+	if it.inner.Valid() && (!it.overlayValid || iKey.Compare(oKey) < 0) {
 		// Key of inner iterator is smaller than the key of the overlay iterator.
 		it.key = iKey
 		it.value = it.inner.Value()
-	} else if it.overlay.Valid() {
+	} else if it.overlayValid {
 		// Key of overlay iterator is smaller than or equal to the key of the inner iterator.
 		it.key = oKey
 		it.value = it.overlay.Value()
@@ -223,7 +230,6 @@ func (it *treeOverlayIterator) GetProofBuilder() *syncer.ProofBuilder {
 
 func (it *treeOverlayIterator) Close() {
 	it.inner.Close()
-	it.overlay.Close()
 
 	it.key = nil
 	it.value = nil
@@ -232,6 +238,11 @@ func (it *treeOverlayIterator) Close() {
 
 type treeOverlayWrapper struct {
 	Tree
+}
+
+// Implements OverlayTree.
+func (tow *treeOverlayWrapper) Copy(inner KeyValueTree) OverlayTree {
+	panic("copy not supported")
 }
 
 // Implements OverlayTree.

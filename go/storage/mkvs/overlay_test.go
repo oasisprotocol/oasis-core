@@ -128,25 +128,65 @@ func TestOverlay(t *testing.T) {
 		{seek: node.Key("key A"), pos: -1},
 	}
 
-	// Test that all keys can be fetched from an updated overlay.
-	t.Run("Updates/Get", func(t *testing.T) {
-		require := require.New(t)
+	testUpdates := func(name string, overlay OverlayTree, items writelog.WriteLog, tests []testCase) {
+		// Test that all keys can be fetched from an updated overlay.
+		t.Run(name+"/Updates/Get", func(t *testing.T) {
+			require := require.New(t)
 
-		for _, item := range items {
-			var value []byte
-			value, err = overlay.Get(ctx, item.Key)
-			require.NoError(err, "Get")
-			require.Equal(item.Value, value, "value from overlay should be correct")
-		}
-	})
+			for _, item := range items {
+				var value []byte
+				value, err = overlay.Get(ctx, item.Key)
+				require.NoError(err, "Get")
+				require.Equal(item.Value, value, "value from overlay should be correct")
+			}
+		})
 
-	// Make sure that merged overlay iterator works.
-	t.Run("Updates/Iterator", func(t *testing.T) {
-		it := overlay.NewIterator(ctx)
-		defer it.Close()
+		// Make sure that merged overlay iterator works.
+		t.Run(name+"/Updates/Iterator", func(t *testing.T) {
+			it := overlay.NewIterator(ctx)
+			defer it.Close()
 
-		testIterator(t, items, it, tests)
-	})
+			testIterator(t, items, it, tests)
+		})
+	}
+
+	// Copy the overlay before commit.
+	overlayCopy := overlay.Copy(nil)
+
+	// Test that all the same operations work on both the copy and the original.
+	testUpdates("Original", overlay, items, tests)
+	testUpdates("Copy", overlayCopy, items, tests)
+
+	// Change the copy to make sure nothing leaks into the original overlay.
+	err = overlayCopy.Remove(ctx, []byte("key 7"))
+	require.NoError(t, err, "Remove")
+	err = overlayCopy.Insert(ctx, []byte("key 55"), []byte("fiftyfive"))
+	require.NoError(t, err, "Insert")
+
+	itemsCopy := writelog.WriteLog{
+		writelog.LogEntry{Key: []byte("key"), Value: []byte("first")},
+		writelog.LogEntry{Key: []byte("key 1"), Value: []byte("one")},
+		writelog.LogEntry{Key: []byte("key 5"), Value: []byte("fivey")},
+		writelog.LogEntry{Key: []byte("key 55"), Value: []byte("fiftyfive")},
+		writelog.LogEntry{Key: []byte("key 8"), Value: []byte("eight")},
+		writelog.LogEntry{Key: []byte("key 9"), Value: []byte("nine")},
+	}
+
+	testsCopy := []testCase{
+		{seek: node.Key("k"), pos: 0},
+		{seek: node.Key("key 1"), pos: 1},
+		{seek: node.Key("key 3"), pos: 2},
+		{seek: node.Key("key 4"), pos: 2},
+		{seek: node.Key("key 5"), pos: 2},
+		{seek: node.Key("key 6"), pos: 4},
+		{seek: node.Key("key 7"), pos: 4},
+		{seek: node.Key("key 8"), pos: 4},
+		{seek: node.Key("key 9"), pos: 5},
+		{seek: node.Key("key A"), pos: -1},
+	}
+
+	testUpdates("Original-Recheck", overlay, items, tests)
+	testUpdates("Copy-Recheck", overlayCopy, itemsCopy, testsCopy)
 
 	// Commit the overlay.
 	innerTree, err := overlay.Commit(ctx)

@@ -61,6 +61,14 @@ type OverlayTree interface {
 	KeyValueTree
 	ClosableTree
 
+	// Copy creates an isolated copy of the overlay tree.
+	//
+	// The passed tree is used as the underlying tree of the copy.
+	//
+	// In case the passed tree is nil, the underlying tree is shared by both copies (e.g. both
+	// copies commit to and read from the same tree instance).
+	Copy(inner KeyValueTree) OverlayTree
+
 	// Commit commits any modifications to the underlying tree.
 	//
 	// Returns the underlying tree on success.
