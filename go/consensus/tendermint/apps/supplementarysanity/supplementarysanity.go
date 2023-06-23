@@ -74,37 +74,39 @@ func (app *supplementarySanityApplication) InitChain(*api.Context, types.Request
 	return nil
 }
 
-func (app *supplementarySanityApplication) BeginBlock(*api.Context, types.RequestBeginBlock) error {
+func (app *supplementarySanityApplication) BeginBlock(*api.Context) error {
 	return nil
 }
 
-func (app *supplementarySanityApplication) EndBlock(ctx *api.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
-	return types.ResponseEndBlock{}, app.endBlockImpl(ctx, request)
+func (app *supplementarySanityApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
+	return types.ResponseEndBlock{}, app.endBlockImpl(ctx)
 }
 
-func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context, request types.RequestEndBlock) error {
-	if request.Height == 1 {
+func (app *supplementarySanityApplication) endBlockImpl(ctx *api.Context) error {
+	height := ctx.BlockHeight()
+
+	if height == 1 {
 		logger.Debug("skipping checks before InitChain")
 		return nil
 	}
 
-	newInterval := request.Height / app.interval
+	newInterval := height / app.interval
 	if newInterval != app.currentInterval {
-		min := request.Height % app.interval
+		min := height % app.interval
 		offset := rand.Int63n(app.interval-min) + min
 		app.currentInterval = newInterval
 		app.checkHeight = newInterval*app.interval + offset
 		logger.Debug("Entering new interval",
-			"height", request.Height,
+			"height", height,
 			"check_height", app.checkHeight,
 		)
 	}
 
-	if request.Height != app.checkHeight {
+	if height != app.checkHeight {
 		return nil
 	}
 
-	logger.Debug("checking this block", "height", request.Height)
+	logger.Debug("checking this block", "height", height)
 
 	now, err := app.state.GetEpoch(ctx, ctx.BlockHeight()+1)
 	if err != nil {

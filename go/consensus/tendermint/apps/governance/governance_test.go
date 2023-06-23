@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/require"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -159,9 +157,8 @@ func TestValidatorsEscrow(t *testing.T) {
 	require.NoError(err, "Mul")
 
 	// Setup state.
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 
 	registryState := registryState.NewMutableState(ctx.State())
@@ -180,9 +177,8 @@ func TestCloseProposal(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Setup staking state.
@@ -455,9 +451,8 @@ func TestExecuteProposal(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	defaultUpgradeProposal := governance.UpgradeProposal{
@@ -629,9 +624,8 @@ func TestBeginBlock(t *testing.T) {
 	var err error
 
 	// Prepare state.
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 	state := governanceState.NewMutableState(ctx.State())
 
@@ -731,7 +725,7 @@ func TestBeginBlock(t *testing.T) {
 			EpochChanged: tc.isEpochChanged,
 		})
 
-		err = app.BeginBlock(ctx, types.RequestBeginBlock{})
+		err = app.BeginBlock(ctx)
 		require.NoError(err, tc.msg)
 
 		tc.check(ctx, state)
@@ -743,9 +737,8 @@ func TestEndBlock(t *testing.T) {
 	var err error
 
 	// Prepare state.
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 	state := governanceState.NewMutableState(ctx.State())
 
@@ -1048,7 +1041,7 @@ func TestEndBlock(t *testing.T) {
 			EpochChanged: tc.isEpochChanged,
 		})
 
-		_, err = app.EndBlock(ctx, types.RequestEndBlock{})
+		_, err = app.EndBlock(ctx)
 		require.NoError(err, tc.msg)
 
 		tc.check()

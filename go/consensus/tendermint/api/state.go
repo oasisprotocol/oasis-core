@@ -31,8 +31,8 @@ type ApplicationState interface {
 	// InitialHeight returns the initial height.
 	InitialHeight() int64
 
-	// BlockHash returns the last committed block hash.
-	BlockHash() []byte
+	// StateRootHash returns the last committed block hash.
+	StateRootHash() []byte
 
 	// ConsensusParameters returns the consensus parameters for the consensus backend itself.
 	//
@@ -69,7 +69,7 @@ type ApplicationState interface {
 	Upgrader() upgrade.Backend
 
 	// NewContext creates a new application processing context.
-	NewContext(mode ContextMode, now time.Time) *Context
+	NewContext(mode ContextMode) *Context
 }
 
 // ApplicationQueryState is minimum methods required to service
@@ -104,8 +104,8 @@ type MockApplicationState interface {
 
 // MockApplicationStateConfig is the configuration for the mock application state.
 type MockApplicationStateConfig struct {
-	BlockHeight int64
-	BlockHash   []byte
+	BlockHeight   int64
+	StateRootHash []byte
 
 	BaseEpoch    beacon.EpochTime
 	CurrentEpoch beacon.EpochTime
@@ -143,8 +143,8 @@ func (ms *mockApplicationState) BlockHeight() int64 {
 	return ms.cfg.BlockHeight
 }
 
-func (ms *mockApplicationState) BlockHash() []byte {
-	return ms.cfg.BlockHash
+func (ms *mockApplicationState) StateRootHash() []byte {
+	return ms.cfg.StateRootHash
 }
 
 func (ms *mockApplicationState) BlockContext() *BlockContext {
@@ -191,10 +191,10 @@ func (ms *mockApplicationState) ConsensusParameters() *consensusGenesis.Paramete
 	return &ms.cfg.Genesis.Consensus.Parameters
 }
 
-func (ms *mockApplicationState) NewContext(mode ContextMode, now time.Time) *Context {
+func (ms *mockApplicationState) NewContext(mode ContextMode) *Context {
 	c := &Context{
 		mode:          mode,
-		currentTime:   now,
+		currentTime:   ms.blockCtx.Time,
 		gasAccountant: NewNopGasAccountant(),
 		state:         ms.tree,
 		appState:      ms,
@@ -212,9 +212,9 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 	ms.cfg = cfg
 
 	if cfg.MaxBlockGas > 0 {
-		ms.blockCtx.Set(GasAccountantKey{}, NewGasAccountant(cfg.MaxBlockGas))
+		ms.blockCtx.GasAccountant = NewGasAccountant(cfg.MaxBlockGas)
 	} else {
-		ms.blockCtx.Set(GasAccountantKey{}, NewNopGasAccountant())
+		ms.blockCtx.GasAccountant = NewNopGasAccountant()
 	}
 
 	if cfg.Genesis == nil {
@@ -229,9 +229,10 @@ func (ms *mockApplicationState) UpdateMockApplicationStateConfig(cfg *MockApplic
 func NewMockApplicationState(cfg *MockApplicationStateConfig) MockApplicationState {
 	tree := mkvs.New(nil, nil, storage.RootTypeState)
 
-	blockCtx := NewBlockContext()
 	m := &mockApplicationState{
-		blockCtx:           blockCtx,
+		blockCtx: NewBlockContext(BlockInfo{
+			Time: time.Unix(1580461674, 0),
+		}),
 		tree:               tree,
 		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
 	}

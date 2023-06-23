@@ -62,7 +62,9 @@ type OverlayTree interface {
 	ClosableTree
 
 	// Commit commits any modifications to the underlying tree.
-	Commit(ctx context.Context) error
+	//
+	// Returns the underlying tree on success.
+	Commit(ctx context.Context) (KeyValueTree, error)
 }
 
 // Tree is a general MKVS tree interface.

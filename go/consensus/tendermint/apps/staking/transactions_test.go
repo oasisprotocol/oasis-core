@@ -2,7 +2,6 @@ package staking
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -66,9 +65,8 @@ func TestReservedAddresses(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -82,7 +80,7 @@ func TestReservedAddresses(t *testing.T) {
 		state: appState,
 	}
 
-	txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer txCtx.Close()
 
 	// Create a new test public key, set it as the tx signer and create a new reserved address from it.
@@ -126,9 +124,8 @@ func TestAllow(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -293,7 +290,7 @@ func TestAllow(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 		defer txCtx.Close()
 		txCtx.SetTxSigner(tc.txSigner)
 
@@ -319,9 +316,8 @@ func TestWithdraw(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -597,7 +593,7 @@ func TestWithdraw(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 		defer txCtx.Close()
 		txCtx.SetTxSigner(tc.txSigner)
 
@@ -636,9 +632,8 @@ func TestAddEscrow(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -758,7 +753,7 @@ func TestAddEscrow(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 		defer txCtx.Close()
 		txCtx.SetTxSigner(tc.txSigner)
 
@@ -772,9 +767,8 @@ func TestAllowEscrowMessages(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -796,7 +790,7 @@ func TestAllowEscrowMessages(t *testing.T) {
 	})
 	require.NoError(err, "SetAccount")
 
-	txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer txCtx.Close()
 
 	// Add escrow transaction should be allowed.
@@ -864,9 +858,8 @@ func TestTransfer(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -964,7 +957,7 @@ func TestTransfer(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 		defer txCtx.Close()
 		txCtx.SetTxSigner(tc.txSigner)
 
@@ -977,9 +970,8 @@ func TestBurn(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -1051,7 +1043,7 @@ func TestBurn(t *testing.T) {
 		err = stakeState.SetConsensusParameters(ctx, tc.params)
 		require.NoError(err, "setting staking consensus parameters should not error")
 
-		txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+		txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 		defer txCtx.Close()
 		txCtx.SetTxSigner(tc.txSigner)
 
@@ -1064,9 +1056,8 @@ func TestAmendCommissionSchedule(t *testing.T) {
 	require := require.New(t)
 	var err error
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	stakeState := stakingState.NewMutableState(ctx.State())
@@ -1088,7 +1079,7 @@ func TestAmendCommissionSchedule(t *testing.T) {
 		state: appState,
 	}
 
-	txCtx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	txCtx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer txCtx.Close()
 
 	pk1 := signature.NewPublicKey("aaafffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")

@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"math"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -122,9 +121,8 @@ func TestMessagesGasEstimation(t *testing.T) {
 
 	genesisTestHelpers.SetTestChainContext()
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Configure the maximum amount of gas.
@@ -243,9 +241,8 @@ func TestEvidence(t *testing.T) {
 
 	genesisTestHelpers.SetTestChainContext()
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	// Generate a private key for the node in this test.
@@ -504,7 +501,7 @@ func TestEvidence(t *testing.T) {
 	var md testMsgDispatcher
 	app := rootHashApplication{appState, &md, nil}
 
-	ctx = appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx = appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 
 	for _, ev := range []struct {
@@ -648,9 +645,8 @@ func TestSubmitMsg(t *testing.T) {
 
 	genesisTestHelpers.SetTestChainContext()
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	var md testMsgDispatcher

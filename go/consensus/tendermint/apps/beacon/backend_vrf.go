@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/cometbft/cometbft/abci/types"
-
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -55,7 +53,6 @@ func (impl *backendVRF) OnBeginBlock(
 	ctx *api.Context,
 	state *beaconState.MutableState,
 	params *beacon.ConsensusParameters,
-	req types.RequestBeginBlock,
 ) error {
 	future, err := state.GetFutureEpoch(ctx)
 	if err != nil {
@@ -80,7 +77,7 @@ func (impl *backendVRF) OnBeginBlock(
 
 		vrfState = &beacon.VRFState{
 			Epoch:              epoch,
-			Alpha:              impl.newLowQualityAlpha(ctx, req, epoch),
+			Alpha:              impl.newLowQualityAlpha(ctx, epoch),
 			Pi:                 nil,
 			AlphaIsHighQuality: false,
 			SubmitAfter:        height + params.VRFParameters.ProofSubmissionDelay,
@@ -208,7 +205,7 @@ func (impl *backendVRF) OnBeginBlock(
 		vrfState.Alpha = impl.newHighQualityAlpha(ctx, vrfState)
 	} else {
 		// New alpha has insufficient proofs to allow elections.
-		vrfState.Alpha = impl.newLowQualityAlpha(ctx, req, vrfState.Epoch)
+		vrfState.Alpha = impl.newLowQualityAlpha(ctx, vrfState.Epoch)
 	}
 	vrfState.Pi = nil // Clear after the new alpha is derived.
 	if err = state.SetVRFState(ctx, vrfState); err != nil {
@@ -222,7 +219,7 @@ func (impl *backendVRF) OnBeginBlock(
 	// Instead of just using the block hash (which is probably ok),
 	// this could consider aggregating all of the beta values from
 	// VRF proofs, though that is also merely "probably ok".
-	entropy := GetBeacon(future.Epoch, prodEntropyCtx, req.Header.GetLastCommitHash())
+	entropy := GetBeacon(future.Epoch, prodEntropyCtx, insecureBlockEntropy(ctx))
 	if err = impl.app.onNewBeacon(ctx, entropy); err != nil {
 		return fmt.Errorf("beacon: failed to generate debug entropy")
 	}
@@ -466,7 +463,6 @@ func (impl *backendVRF) newHighQualityAlpha(
 
 func (impl *backendVRF) newLowQualityAlpha(
 	ctx *api.Context,
-	req types.RequestBeginBlock,
 	epoch beacon.EpochTime,
 ) []byte {
 	// This generates a low quality alpha for:
@@ -477,7 +473,7 @@ func (impl *backendVRF) newLowQualityAlpha(
 	// are only used to generate an actually good alpha, and not for actual
 	// elections.
 	h := impl.initAlphaCommon(ctx, epoch)
-	_, _ = h.Write(req.Header.GetLastCommitHash()) // XXX: Is this really required?
+	_, _ = h.Write(insecureBlockEntropy(ctx)) // XXX: Is this really required?
 	return h.Sum(nil)
 }
 

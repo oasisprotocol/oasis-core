@@ -227,27 +227,19 @@ func (sc *storageSyncImpl) Run(childEnv *env.Env) error { //nolint: gocyclo
 		return err
 	}
 
-	// Ensure GetStatus Runtime LastRetainedRound takes storage into account.
-	blk, err = ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
-		RuntimeID: runtimeID,
-		Round:     runtimeClient.RoundLatest,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get latest block: %w", err)
-	}
-	// Determine latest checkpoint.
-	lastCheckpoint = (blk.Header.Round / rt.Storage.CheckpointInterval) * rt.Storage.CheckpointInterval
-	sc.Logger.Info("determined last expected checkpoint round",
-		"round", lastCheckpoint,
-	)
-
+	// Ensure that LastRetainedRound returned by GetStatus has corresponding storage.
 	status, err := ctrl.GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting status for second late compute worker: %w", err)
 	}
+	lr := status.Runtimes[runtimeID].LastRetainedRound
 
-	if lr := status.Runtimes[runtimeID].LastRetainedRound; lr < lastCheckpoint {
-		return fmt.Errorf("last retained round (%d) below last checkpoint (%d)", lr, lastCheckpoint)
+	_, err = ctrl.RuntimeClient.GetTransactions(ctx, &runtimeClient.GetTransactionsRequest{
+		RuntimeID: runtimeID,
+		Round:     lr,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get last retained block transactions: %w", err)
 	}
 
 	// Wait a bit to give the logger in the node time to sync; the message has already been

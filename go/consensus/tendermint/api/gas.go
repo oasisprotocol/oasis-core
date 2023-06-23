@@ -104,16 +104,6 @@ func NewNopGasAccountant() GasAccountant {
 	return nopGasAccountantImpl
 }
 
-// GasAccountantKey is the gas accountant block context key.
-type GasAccountantKey struct{}
-
-// NewDefault returns a new default value for the given key.
-func (gak GasAccountantKey) NewDefault() interface{} {
-	// This should never be called as a gas accountant must always
-	// be created by the application multiplexer.
-	panic("gas: no gas accountant in block context")
-}
-
 type compositeGasAccountant struct {
 	accts []GasAccountant
 }

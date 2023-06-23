@@ -80,7 +80,7 @@ func (app *rootHashApplication) OnRegister(state tmapi.ApplicationState, md tmap
 func (app *rootHashApplication) OnCleanup() {
 }
 
-func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context, request types.RequestBeginBlock) error {
+func (app *rootHashApplication) BeginBlock(ctx *tmapi.Context) error {
 	// Check if rescheduling has taken place.
 	rescheduled := ctx.HasEvent(schedulerapp.AppName, &scheduler.ElectedEvent{})
 	// Check if there was an epoch transition.
@@ -474,7 +474,7 @@ func (app *rootHashApplication) onNewRuntime(ctx *tmapi.Context, runtime *regist
 	return nil
 }
 
-func (app *rootHashApplication) EndBlock(ctx *tmapi.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *rootHashApplication) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, error) {
 	state := roothashState.NewMutableState(ctx.State())
 
 	// Check if any runtimes require round timeouts to expire.

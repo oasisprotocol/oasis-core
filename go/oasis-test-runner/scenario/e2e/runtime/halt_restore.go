@@ -27,7 +27,7 @@ type haltRestoreImpl struct {
 	Scenario
 
 	suspendRuntime bool
-	haltEpoch      int
+	haltEpoch      beacon.EpochTime
 }
 
 func newHaltRestoreImpl(suspended bool) scenario.Scenario {
@@ -43,7 +43,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 			name,
 			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
-		haltEpoch:      haltEpoch,
+		haltEpoch:      beacon.EpochTime(haltEpoch),
 		suspendRuntime: suspended,
 	}
 }
@@ -130,11 +130,11 @@ func (sc *haltRestoreImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	sc.Logger.Info("transitioning to halt epoch",
 		"halt_epoch", sc.haltEpoch,
 	)
-	for i := nextEpoch; i <= beacon.EpochTime(sc.haltEpoch); i++ {
+	for i := nextEpoch; i <= sc.haltEpoch; i++ {
 		sc.Logger.Info("setting epoch",
 			"epoch", i,
 		)
-		if err = sc.Net.Controller().SetEpoch(ctx, i); err != nil {
+		if err = sc.Net.Controller().SetEpoch(ctx, i); err != nil && i != sc.haltEpoch {
 			return fmt.Errorf("failed to set epoch %d: %w", i, err)
 		}
 	}

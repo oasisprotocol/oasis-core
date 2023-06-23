@@ -1,8 +1,6 @@
 package beacon
 
 import (
-	"github.com/cometbft/cometbft/abci/types"
-
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
@@ -42,6 +40,6 @@ var (
 
 type internalBackend interface {
 	OnInitChain(*api.Context, *beaconState.MutableState, *beacon.ConsensusParameters, *genesis.Document) error
-	OnBeginBlock(*api.Context, *beaconState.MutableState, *beacon.ConsensusParameters, types.RequestBeginBlock) error
+	OnBeginBlock(*api.Context, *beaconState.MutableState, *beacon.ConsensusParameters) error
 	ExecuteTx(*api.Context, *beaconState.MutableState, *beacon.ConsensusParameters, *transaction.Transaction) error
 }

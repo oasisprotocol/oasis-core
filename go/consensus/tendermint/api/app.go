@@ -93,16 +93,14 @@ type Application interface {
 
 	// BeginBlock signals the beginning of a block.
 	//
-	// Returned tags will be added to the current block.
-	//
 	// Note: Errors are irrecoverable and will result in a panic.
-	BeginBlock(*Context, cmtabcitypes.RequestBeginBlock) error
+	BeginBlock(*Context) error
 
 	// EndBlock signals the end of a block, returning changes to the
 	// validator set.
 	//
 	// Note: Errors are irrecoverable and will result in a panic.
-	EndBlock(*Context, cmtabcitypes.RequestEndBlock) (cmtabcitypes.ResponseEndBlock, error)
+	EndBlock(*Context) (cmtabcitypes.ResponseEndBlock, error)
 
 	// Commit is omitted because Applications will work on a cache of
 	// the state bound to the multiplexer.

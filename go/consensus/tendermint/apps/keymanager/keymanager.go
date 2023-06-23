@@ -56,7 +56,7 @@ func (app *keymanagerApplication) OnRegister(state tmapi.ApplicationState, md tm
 
 func (app *keymanagerApplication) OnCleanup() {}
 
-func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context, request types.RequestBeginBlock) error {
+func (app *keymanagerApplication) BeginBlock(ctx *tmapi.Context) error {
 	if changed, epoch := app.state.EpochChanged(ctx); changed {
 		return app.onEpochChange(ctx, epoch)
 	}
@@ -90,7 +90,7 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 	}
 }
 
-func (app *keymanagerApplication) EndBlock(ctx *tmapi.Context, request types.RequestEndBlock) (types.ResponseEndBlock, error) {
+func (app *keymanagerApplication) EndBlock(ctx *tmapi.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

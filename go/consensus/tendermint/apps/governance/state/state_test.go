@@ -3,7 +3,6 @@ package state
 import (
 	"crypto/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -117,9 +116,8 @@ func initProposals(require *require.Assertions, ctx *abciAPI.Context, s *Mutable
 func TestProposals(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 
 	s := NewMutableState(ctx.State())
@@ -182,9 +180,8 @@ func TestProposals(t *testing.T) {
 func TestVotes(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 
 	s := NewMutableState(ctx.State())
@@ -259,9 +256,8 @@ func TestVotes(t *testing.T) {
 func TestPendingUpgrades(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextBeginBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
 	defer ctx.Close()
 
 	s := NewMutableState(ctx.State())

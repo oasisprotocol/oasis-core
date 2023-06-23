@@ -433,8 +433,10 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	sc.Logger.Info("waiting for network to come back up")
-	if err = sc.Net.Controller().WaitNodesRegistered(sc.ctx, len(sc.Net.Validators())); err != nil {
-		return err
+	for _, n := range sc.Net.Validators() {
+		if err = n.WaitReady(sc.ctx); err != nil {
+			return fmt.Errorf("failed to wait for a validator: %w", err)
+		}
 	}
 	sc.Logger.Info("final epoch advance")
 	if err = sc.nextEpoch(); err != nil {

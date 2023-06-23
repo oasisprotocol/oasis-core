@@ -3,7 +3,6 @@ package roothash
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -25,9 +24,8 @@ func TestOnEvidenceRuntimeEquivocation(t *testing.T) {
 
 	amount := quantity.NewFromUint64(100)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextDeliverTx, now)
+	ctx := appState.NewContext(abciAPI.ContextDeliverTx)
 	defer ctx.Close()
 
 	regState := registryState.NewMutableState(ctx.State())
@@ -165,9 +163,8 @@ func TestOnRuntimeIncorrectResults(t *testing.T) {
 
 	amount := quantity.NewFromUint64(100)
 
-	now := time.Unix(1580461674, 0)
 	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
-	ctx := appState.NewContext(abciAPI.ContextEndBlock, now)
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
 	defer ctx.Close()
 
 	regState := registryState.NewMutableState(ctx.State())

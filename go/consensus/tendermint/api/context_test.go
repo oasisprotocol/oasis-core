@@ -2,7 +2,6 @@ package api
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -30,7 +29,7 @@ func (ev *FooEvent) EventKind() string {
 func TestBlockContext(t *testing.T) {
 	require := require.New(t)
 
-	bc := NewBlockContext()
+	bc := NewBlockContext(BlockInfo{})
 
 	value := bc.Get(testBlockContextKey{})
 	require.EqualValues(42, value, "block context key should have default value")
@@ -43,9 +42,8 @@ func TestBlockContext(t *testing.T) {
 func TestChildContext(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := NewMockApplicationState(&MockApplicationStateConfig{})
-	ctx := appState.NewContext(ContextDeliverTx, now)
+	ctx := appState.NewContext(ContextDeliverTx)
 	defer ctx.Close()
 
 	var pk1 signature.PublicKey
@@ -77,7 +75,7 @@ func TestChildContext(t *testing.T) {
 	require.EqualValues(events, ctx.GetEvents(), "child events should propagate")
 
 	// Emitting an event should not propagate to parent in simulation mode.
-	ctx = appState.NewContext(ContextDeliverTx, now)
+	ctx = appState.NewContext(ContextDeliverTx)
 	defer ctx.Close()
 
 	child = ctx.WithSimulation()
@@ -94,9 +92,8 @@ func TestChildContext(t *testing.T) {
 func TestTransactionContext(t *testing.T) {
 	require := require.New(t)
 
-	now := time.Unix(1580461674, 0)
 	appState := NewMockApplicationState(&MockApplicationStateConfig{})
-	ctx := appState.NewContext(ContextDeliverTx, now)
+	ctx := appState.NewContext(ContextDeliverTx)
 	defer ctx.Close()
 
 	child := ctx.NewTransaction()
@@ -119,7 +116,7 @@ func TestTransactionContext(t *testing.T) {
 	require.EqualValues([]byte(nil), value, "state updates should not propagate unless committed")
 
 	// Emitted events and state updates should propagate if committed.
-	ctx = appState.NewContext(ContextDeliverTx, now)
+	ctx = appState.NewContext(ContextDeliverTx)
 	defer ctx.Close()
 
 	child = ctx.NewTransaction()
@@ -210,9 +207,8 @@ func TestNestedTransactionContext(t *testing.T) {
 		require.EqualValues([]byte("value2"), value, "child2 state should be committed")
 	}
 
-	now := time.Unix(1580461674, 0)
 	appState := NewMockApplicationState(&MockApplicationStateConfig{})
-	ctx := appState.NewContext(ContextDeliverTx, now)
+	ctx := appState.NewContext(ContextDeliverTx)
 	defer ctx.Close()
 
 	// Insert some top-level state.

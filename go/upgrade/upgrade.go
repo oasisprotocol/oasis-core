@@ -28,8 +28,9 @@ var (
 type upgradeManager struct {
 	sync.Mutex
 
-	store   *persistent.ServiceStore
-	pending []*api.PendingUpgrade
+	store      *persistent.ServiceStore
+	pending    []*api.PendingUpgrade
+	shouldStop bool
 
 	dataDir string
 
@@ -263,6 +264,12 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 	u.Lock()
 	defer u.Unlock()
 
+	// In case this method has been re-entered before the node has actually stopped, make sure that
+	// we don't simply proceed with the upgrade before stopping.
+	if u.shouldStop {
+		return api.ErrStopForUpgrade
+	}
+
 	for _, pu := range u.pending {
 		// If we haven't reached the upgrade epoch yet, we run normally;
 		// startup made sure we're an appropriate binary for that.
@@ -274,6 +281,7 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 			if err := u.flushDescriptorLocked(); err != nil {
 				return err
 			}
+			u.shouldStop = true // Ensure we really stop before proceeding.
 			return api.ErrStopForUpgrade
 		}
 
@@ -287,7 +295,7 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 			panic("consensus upgrade: UpgradeHeight is in the future but upgrade epoch seen already")
 		}
 
-		if !pu.HasStage(api.UpgradeStageConsensus) {
+		if !pu.HasStage(api.UpgradeStageConsensus) && privateCtx != nil {
 			u.logger.Warn("performing consensus upgrade",
 				"handler", pu.Descriptor.Handler,
 				logging.LogEvent, api.LogEventConsensusUpgrade,
