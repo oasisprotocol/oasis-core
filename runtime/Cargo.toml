@@ -56,7 +56,7 @@ impl-trait-for-tuples = "0.2.1"
 x509-parser = "0.14.0"
 oid-registry = "0.6.0"
 rsa = "0.6.1"
-base64-serde = "0.6.1"
+base64-serde = "0.7.0"
 lru = "0.9.0"
 async-trait = "0.1.66"
 
