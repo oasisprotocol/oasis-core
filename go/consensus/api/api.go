@@ -32,8 +32,8 @@ import (
 )
 
 const (
-	// moduleName is the module name used for error definitions.
-	moduleName = "consensus"
+	// ModuleName is the module name used for error definitions.
+	ModuleName = "consensus"
 
 	// HeightLatest is the height that represents the most recent block height.
 	HeightLatest int64 = 0
@@ -42,24 +42,29 @@ const (
 var (
 	// ErrNoCommittedBlocks is the error returned when there are no committed
 	// blocks and as such no state can be queried.
-	ErrNoCommittedBlocks = errors.New(moduleName, 1, "consensus: no committed blocks")
+	ErrNoCommittedBlocks = errors.New(ModuleName, 1, "consensus: no committed blocks")
 
 	// ErrOversizedTx is the error returned when the given transaction is too big to be processed.
-	ErrOversizedTx = errors.New(moduleName, 2, "consensus: oversized transaction")
+	ErrOversizedTx = errors.New(ModuleName, 2, "consensus: oversized transaction")
 
 	// ErrVersionNotFound is the error returned when the given version (height) cannot be found,
 	// possibly because it was pruned.
-	ErrVersionNotFound = errors.New(moduleName, 3, "consensus: version not found")
+	ErrVersionNotFound = errors.New(ModuleName, 3, "consensus: version not found")
 
 	// ErrUnsupported is the error returned when the given method is not supported by the consensus
 	// backend.
-	ErrUnsupported = errors.New(moduleName, 4, "consensus: method not supported")
+	ErrUnsupported = errors.New(ModuleName, 4, "consensus: method not supported")
 
 	// ErrDuplicateTx is the error returned when the transaction already exists in the mempool.
-	ErrDuplicateTx = errors.New(moduleName, 5, "consensus: duplicate transaction")
+	ErrDuplicateTx = errors.New(ModuleName, 5, "consensus: duplicate transaction")
 
 	// ErrInvalidArgument is the error returned when the request contains an invalid argument.
-	ErrInvalidArgument = errors.New(moduleName, 6, "consensus: invalid argument")
+	ErrInvalidArgument = errors.New(ModuleName, 6, "consensus: invalid argument")
+
+	// SystemMethods is a map of all system methods.
+	SystemMethods = map[transaction.MethodName]struct{}{
+		MethodMeta: {},
+	}
 )
 
 // FeatureMask is the consensus backend feature bitmask.

@@ -55,6 +55,11 @@ func (mux *abciMux) decodeTx(ctx *api.Context, rawTx []byte) (*transaction.Trans
 }
 
 func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txSize int) error {
+	// Handle special methods.
+	if _, isSystem := consensus.SystemMethods[tx.Method]; isSystem {
+		return mux.processSystemTx(ctx, tx)
+	}
+
 	// Lookup method handler.
 	app := mux.appsByMethod[tx.Method]
 	if app == nil {

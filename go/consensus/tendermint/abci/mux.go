@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -30,12 +31,6 @@ import (
 )
 
 const (
-	// StateKeyGenesisDigest is the state key where the genesis digest
-	// aka chain context is stored.
-	StateKeyGenesisDigest = "OasisGenesisDigest"
-
-	stateKeyInitChainEvents = "OasisInitChainEvents"
-
 	metricsUpdateInterval = 10 * time.Second
 
 	// LogEventABCIStateSyncComplete is a log event value that signals an ABCI state syncing
@@ -69,8 +64,8 @@ type ApplicationConfig struct { // nolint: maligned
 	DisableCheckpointer       bool
 	CheckpointerCheckInterval time.Duration
 
-	// OwnTxSigner is the transaction signer identity of the local node.
-	OwnTxSigner signature.PublicKey
+	// Identity is the local node identity.
+	Identity *identity.Identity
 
 	// MemoryOnlyStorage forces in-memory storage to be used for the state storage.
 	MemoryOnlyStorage bool
@@ -278,9 +273,7 @@ func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
 }
 
 func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChain {
-	mux.logger.Debug("InitChain",
-		"req", req,
-	)
+	mux.logger.Debug("InitChain")
 
 	// Sanity-check the genesis application state.
 	st, err := parseGenesisAppState(req)
@@ -303,15 +296,18 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		panic(fmt.Errorf("mux: inconsistent initial height (genesis: %d abci: %d state: %d)", st.Height, req.InitialHeight, mux.state.initialHeight))
 	}
 
+	ctx := mux.state.NewContext(api.ContextInitChain)
+	defer ctx.Close()
+
 	// Stick the digest of the genesis document into the state.
 	//
 	// This serves to keep bad things from happening if absolutely
 	// nothing writes to the state till the Commit() call, along with
 	// clearly separating chain instances based on the initialization
 	// state, forever.
+	state := abciState.NewMutableState(ctx.State())
 	chainContext := st.ChainContext()
-	err = mux.state.canonicalState.Insert(mux.state.ctx, []byte(StateKeyGenesisDigest), []byte(chainContext))
-	if err != nil {
+	if err = state.SetChainContext(ctx, chainContext); err != nil {
 		panic(err)
 	}
 
@@ -328,9 +324,6 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 	// Call InitChain() on all applications.
 	mux.logger.Debug("InitChain: initializing applications")
 
-	ctx := mux.state.NewContext(api.ContextInitChain)
-	defer ctx.Close()
-
 	for _, app := range mux.appsByLexOrder {
 		mux.logger.Debug("InitChain: calling InitChain on application",
 			"app", app.Name(),
@@ -345,19 +338,11 @@ func (mux *abciMux) InitChain(req types.RequestInitChain) types.ResponseInitChai
 		}
 	}
 
-	events := ctx.GetEvents()
-	mux.logger.Debug("InitChain: initializing of applications complete", "num_collected_events", len(events))
-
-	// Since returning emitted events doesn't work for InitChain() response yet,
-	// we store those and return them in BeginBlock().
-	evBinary := cbor.Marshal(events)
-	err = ctx.State().Insert(ctx, []byte(stateKeyInitChainEvents), evBinary)
-	if err != nil {
-		panic(err)
-	}
+	// Store events emitted during InitChain for later emission during the first block.
+	mux.state.initEvents = ctx.GetEvents()
+	mux.logger.Debug("InitChain: initializing of applications complete", "num_collected_events", len(mux.state.initEvents))
 
 	// Initialize consensus parameters.
-	state := abciState.NewMutableState(ctx.State())
 	if err = state.SetConsensusParameters(ctx, &st.Consensus.Parameters); err != nil {
 		panic(fmt.Errorf("mux: failed to set consensus parameters: %w", err))
 	}
@@ -397,12 +382,15 @@ func (mux *abciMux) PrepareProposal(req types.RequestPrepareProposal) types.Resp
 		})
 	}
 
+	// Make sure there will be enough space for any metadata transactions.
+	maxTxBytes := req.MaxTxBytes - consensus.BlockMetadataMaxSize
+
 	// Schedule an initial set of transactions.
 	txs := make([][]byte, 0, len(req.Txs))
 	var totalBytes int64
 	for _, tx := range req.Txs {
 		totalBytes += int64(len(tx))
-		if totalBytes > req.MaxTxBytes {
+		if totalBytes > maxTxBytes {
 			break
 		}
 		txs = append(txs, tx)
@@ -435,8 +423,22 @@ func (mux *abciMux) PrepareProposal(req types.RequestPrepareProposal) types.Resp
 			"height", req.Height,
 			"err", err,
 		)
+		mux.state.resetProposal()
 		return types.ResponsePrepareProposal{}
 	}
+
+	// Inject system transactions at the end of the block.
+	systemTxs, systemTxResults, err := mux.prepareSystemTxs()
+	if err != nil {
+		mux.logger.Error("failed to prepare system transactions",
+			"height", req.Height,
+			"err", err,
+		)
+		mux.state.resetProposal()
+		return types.ResponsePrepareProposal{}
+	}
+	txs = append(txs, systemTxs...)
+	mux.state.proposal.resultsDeliverTx = append(mux.state.proposal.resultsDeliverTx, systemTxResults...)
 
 	// Record proposal inputs so we can compare in ProcessProposal.
 	p := mux.state.proposal
@@ -624,27 +626,14 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	response := mux.BaseApplication.BeginBlock(req)
 
-	// Collect and return events from the application's BeginBlock calls.
-	response.Events = ctx.GetEvents()
-
-	// During the first block, also collect and prepend application events
-	// generated during InitChain to BeginBlock events.
+	// During the first block, also collect and prepend application events generated during
+	// InitChain to BeginBlock events.
 	if mux.state.BlockHeight() == 0 {
-		evBinary, err := ctx.State().Get(ctx, []byte(stateKeyInitChainEvents))
-		if err != nil {
-			panic(fmt.Errorf("mux: BeginBlock: failed to query init chain events: %w", err))
-		}
-		if evBinary != nil {
-			var events []types.Event
-			_ = cbor.Unmarshal(evBinary, &events)
-
-			response.Events = append(events, response.Events...)
-
-			if err := ctx.State().Remove(ctx, []byte(stateKeyInitChainEvents)); err != nil {
-				panic(fmt.Errorf("mux: BeginBlock: failed to remove init chain events: %w", err))
-			}
-		}
+		response.Events = append(response.Events, mux.state.initEvents...)
 	}
+
+	// Collect and return events from the application's BeginBlock calls.
+	response.Events = append(response.Events, ctx.GetEvents()...)
 
 	return response
 }
@@ -799,6 +788,11 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		},
 	}
 
+	// Validate system transactions included by the proposer.
+	if err := mux.validateSystemTxs(); err != nil {
+		panic(fmt.Errorf("proposed block has invalid system transactions: %w", err))
+	}
+
 	return resp
 }
 
@@ -935,14 +929,15 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 	// Ensure that if state is initialized it matches the genesis file. There could be a discrepancy
 	// in case someone copied over the state from one network but is using a genesis file from
 	// another.
-	chainContext, err := state.canonicalState.Get(ctx, []byte(StateKeyGenesisDigest))
+	cs := abciState.NewMutableState(state.canonicalState)
+	chainContext, err := cs.ChainContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch chain context from state: %w", err)
 	}
-	if len(chainContext) > 0 && string(chainContext) != cfg.ChainContext {
+	if len(chainContext) > 0 && chainContext != cfg.ChainContext {
 		return nil, fmt.Errorf("state chain context does not match genesis file (genesis: %s state: %s)",
 			cfg.ChainContext,
-			string(chainContext),
+			chainContext,
 		)
 	}
 

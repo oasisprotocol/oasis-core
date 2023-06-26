@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/cometbft/cometbft/abci/types"
+
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
 
 // BlockInfo contains information about a block which is always present in block context.
@@ -13,7 +15,8 @@ type BlockInfo struct {
 	LastCommitInfo       types.CommitInfo
 	ValidatorMisbehavior []types.Misbehavior
 
-	GasAccountant GasAccountant
+	GasAccountant      GasAccountant
+	SystemTransactions []*transaction.Transaction
 }
 
 // BlockContextKey is an interface for a block context key.

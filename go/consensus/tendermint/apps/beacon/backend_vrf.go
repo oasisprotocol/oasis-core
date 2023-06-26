@@ -12,7 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/tuplehash"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	abciState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/beacon/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
@@ -485,13 +485,13 @@ func MustGetChainContext(ctx *api.Context) []byte {
 	// Using panic on errors is ok because if this isn't present, something
 	// has went horrifically wrong (the key is inserted by the ABCI mux
 	// during initialization).
-	st := ctx.State()
-	b, err := st.Get(ctx, []byte(abci.StateKeyGenesisDigest))
+	state := abciState.NewMutableState(ctx.State())
+	b, err := state.ChainContext(ctx)
 	if err != nil {
 		panic("BUG: failed to get chain context: " + err.Error())
 	}
 	if len(b) == 0 {
 		panic("BUG: chain context length is 0")
 	}
-	return b
+	return []byte(b)
 }

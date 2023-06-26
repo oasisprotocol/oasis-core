@@ -557,7 +557,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		HaltEpoch:                 beaconAPI.EpochTime(config.GlobalConfig.Consensus.HaltEpoch),
 		HaltHeight:                config.GlobalConfig.Consensus.HaltHeight,
 		MinGasPrice:               config.GlobalConfig.Consensus.MinGasPrice,
-		OwnTxSigner:               t.identity.NodeSigner.Public(),
+		Identity:                  t.identity,
 		DisableCheckpointer:       config.GlobalConfig.Consensus.Checkpointer.Disabled,
 		CheckpointerCheckInterval: config.GlobalConfig.Consensus.Checkpointer.CheckInterval,
 		InitialHeight:             uint64(t.genesis.Height),

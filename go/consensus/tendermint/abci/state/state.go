@@ -11,10 +11,16 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
-// parametersKeyFmt is the key format used for consensus parameters.
-//
-// Value is CBOR-serialized consensusGenesis.Parameters.
-var parametersKeyFmt = keyformat.New(0xF1)
+var (
+	// chainContextKeyFmt is the key format used for storing the chain context.
+	//
+	// Value is the chain context.
+	chainContextKeyFmt = keyformat.New(0xF0)
+	// parametersKeyFmt is the key format used for consensus parameters.
+	//
+	// Value is CBOR-serialized consensusGenesis.Parameters.
+	parametersKeyFmt = keyformat.New(0xF1)
+)
 
 // ImmutableState is an immutable consensus backend state wrapper.
 type ImmutableState struct {
@@ -29,6 +35,15 @@ func NewImmutableState(ctx context.Context, state api.ApplicationQueryState, ver
 	}
 
 	return &ImmutableState{is}, nil
+}
+
+// ChainContext returns the stored chain context.
+func (s *ImmutableState) ChainContext(ctx context.Context) (string, error) {
+	chainContext, err := s.is.Get(ctx, chainContextKeyFmt.Encode())
+	if err != nil {
+		return "", api.UnavailableStateError(err)
+	}
+	return string(chainContext), nil
 }
 
 // ConsensusParameters returns the consensus parameters.
@@ -53,6 +68,17 @@ type MutableState struct {
 	*ImmutableState
 
 	ms mkvs.KeyValueTree
+}
+
+// SetChainContext sets the chain context.
+//
+// NOTE: This method must only be called from InitChain context.
+func (s *MutableState) SetChainContext(ctx context.Context, chainContext string) error {
+	if err := s.is.CheckContextMode(ctx, []api.ContextMode{api.ContextInitChain}); err != nil {
+		return err
+	}
+	err := s.ms.Insert(ctx, chainContextKeyFmt.Encode(), []byte(chainContext))
+	return api.UnavailableStateError(err)
 }
 
 // SetConsensusParameters sets the consensus parameters.

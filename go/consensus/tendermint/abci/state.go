@@ -17,7 +17,9 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
@@ -135,6 +137,10 @@ type applicationState struct { // nolint: maligned
 	// proposal is the working proposal state.
 	proposal *proposalState
 
+	// initState is the state that needs to be applied for chain initialization.
+	initState mkvs.OverlayTree
+	// initEvents are any events emitted during chain initialization.
+	initEvents []types.Event
 	// canonicalState is the current canonical state.
 	canonicalState mkvs.Tree
 	// checkState is the state snapshot from the last canonical state with any modifications from
@@ -164,6 +170,7 @@ type applicationState struct { // nolint: maligned
 	minGasPrice        quantity.Quantity
 	ownTxSigner        signature.PublicKey
 	ownTxSignerAddress staking.Address
+	identity           *identity.Identity
 
 	metricsClosedCh chan struct{}
 }
@@ -180,7 +187,11 @@ func (s *applicationState) NewContext(mode api.ContextMode) *api.Context {
 	now := s.blockTime
 	switch mode {
 	case api.ContextInitChain:
-		state = mkvs.NewOverlayWrapper(s.canonicalState)
+		if s.initState != nil {
+			panic(fmt.Errorf("context: init state already set, re-entering InitChain?"))
+		}
+		s.initState = mkvs.NewOverlay(mkvs.New(nil, nil, storage.RootTypeState, mkvs.WithoutWriteLog()))
+		state = s.initState
 		// Configure block height so that current height will be correctly computed.
 		blockHeight = int64(s.initialHeight) - 1
 	case api.ContextCheckTx:
@@ -349,6 +360,10 @@ func (s *applicationState) doInitChain() error {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
 
+	// Preserve init state for possible rollbacks until the first block is committed.
+	initStateCopy := s.initState.Copy(s.canonicalState)
+	_, _ = initStateCopy.Commit(s.ctx) // Commit into s.canonicalState.
+
 	// We use the height before the initial height for the state before the first block. Note that
 	// this tree is not persisted, we only need it to compute the root hash.
 	_, stateRootHash, err := s.canonicalState.Commit(s.ctx, s.stateRoot.Namespace, s.initialHeight-1, mkvs.NoPersist())
@@ -380,9 +395,26 @@ func (s *applicationState) doApplyStateSync(root storage.Root) error {
 	return nil
 }
 
+func (s *applicationState) workingStateRoot() (hash.Hash, error) {
+	// This is safe to do as we are operating on our own branch of state.
+	psKv, _ := s.proposal.tree.Commit(s.ctx)
+	ps := psKv.(mkvs.Tree)
+	// Only compute the root hash without persisting. In case this turns out to be the finalized
+	// state, the root hash will not need to be recomputed again.
+	_, stateRootHash, err := ps.Commit(s.ctx, s.stateRoot.Namespace, s.stateRoot.Version+1, mkvs.NoPersist())
+	return stateRootHash, err
+}
+
 func (s *applicationState) doCommit() (uint64, error) {
 	s.blockLock.Lock()
 	defer s.blockLock.Unlock()
+
+	// Clear init state after the first block is committed.
+	if s.initState != nil {
+		s.initState.Close()
+		s.initState = nil
+		s.initEvents = nil
+	}
 
 	// Last proposal state becomes the canonical state.
 	canonicalState, _ := s.proposal.tree.Commit(s.ctx)
@@ -467,6 +499,18 @@ func (s *applicationState) resetProposal() {
 	s.proposal = &proposalState{
 		tree: mkvs.NewOverlay(s.canonicalState),
 	}
+	// (Temporarily) replace canonical state. Note that this version is only used in case the
+	// proposal needs to be rolled back as otherwise the canonical state will be replaced with
+	// the proposal state.
+	if s.initState == nil {
+		// Normal block processing.
+		s.canonicalState = mkvs.NewWithRoot(nil, s.storage.NodeDB(), s.stateRoot, mkvs.WithoutWriteLog())
+	} else {
+		// When we have not yet processed the first block, we need to restore init state.
+		s.canonicalState = mkvs.New(nil, s.storage.NodeDB(), storage.RootTypeState, mkvs.WithoutWriteLog())
+		initStateCopy := s.initState.Copy(s.canonicalState)
+		_, _ = initStateCopy.Commit(s.ctx) // Commit into s.canonicalState.
+	}
 }
 
 // closeProposal clears the current proposal state and sets the current proposal to nil.
@@ -485,6 +529,7 @@ func (s *applicationState) resetProposalIfChanged(h []byte) bool {
 	}
 
 	s.resetProposal()
+	s.proposal.hash = h
 	return true
 }
 
@@ -694,8 +739,9 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 		haltEpoch:          cfg.HaltEpoch,
 		haltHeight:         cfg.HaltHeight,
 		minGasPrice:        minGasPrice,
-		ownTxSigner:        cfg.OwnTxSigner,
-		ownTxSignerAddress: staking.NewAddress(cfg.OwnTxSigner),
+		ownTxSigner:        cfg.Identity.NodeSigner.Public(),
+		ownTxSignerAddress: staking.NewAddress(cfg.Identity.NodeSigner.Public()),
+		identity:           cfg.Identity,
 		metricsClosedCh:    make(chan struct{}),
 	}
 
