@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -205,17 +206,12 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 	f := []func(fixture *oasis.NetworkFixture){
 		// First dump with too low genesis height.
 		func(fixture *oasis.NetworkFixture) {
-			// Make sure all nodes are started initially although we only need
-			// one compute worker. We have to start them as otherwise tendermint
-			// reset will fail.
-			for i := range fixture.ComputeWorkers {
-				fixture.ComputeWorkers[i].NoAutoStart = false
-			}
-			for i := range fixture.Clients {
-				fixture.Clients[i].NoAutoStart = false
-			}
+			// We only need one compute worker.
+			fixture.ComputeWorkers = fixture.ComputeWorkers[:1]
+			fixture.Clients = fixture.Clients[:0]
 
 			// Observe logs for invalid genesis block error messages.
+			fixture.ComputeWorkers[0].NoAutoStart = false
 			fixture.ComputeWorkers[0].LogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 				oasis.LogAssertEvent(LogEventTrustRootChangeFailed, "the verifier should emit invalid genesis block event"),
 			}
@@ -223,9 +219,12 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 
 		// Second dump without one validator.
 		func(fixture *oasis.NetworkFixture) {
-			// Remove one validator in the set so that trust validation will
-			// fail and observe logs for failure.
+			// Remove one validator so that trust validation will fail.
 			fixture.Validators = fixture.Validators[:2]
+			fixture.ComputeWorkers = fixture.ComputeWorkers[:1]
+			fixture.Clients = fixture.Clients[:0]
+
+			// Observe logs for not enough trust error messages.
 			fixture.ComputeWorkers[0].NoAutoStart = false
 			fixture.ComputeWorkers[0].LogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 				oasis.LogAssertEvent(LogEventTrustRootChangeNoTrust, "the verifier should emit not trusted chain event"),
@@ -271,7 +270,7 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 		if err = sc.Net.Start(); err != nil {
 			return err
 		}
-		if err = sc.Net.Controller().WaitNodesRegistered(ctx, len(sc.Net.Validators())); err != nil {
+		if err = sc.waitNodesSynced(); err != nil {
 			return err
 		}
 
@@ -285,15 +284,15 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 			return fmt.Errorf("chain context hasn't changed")
 		}
 
-		// Running network for few blocks so that compute workers have enough
-		// time to get ready.
-		_, err = sc.waitBlocks(ctx, 25)
-		if err != nil {
-			return err
-		}
-
 		// Starting the key/value runtime should now be a problem for compute
 		// workers as the verifier will never initialize.
+		func() {
+			waitCtx, cancel := context.WithTimeout(ctx, time.Minute)
+			defer cancel()
+
+			_ = sc.Net.ComputeWorkers()[0].WaitReady(waitCtx)
+		}()
+
 		if err := sc.Net.CheckLogWatchers(); err != nil {
 			return err
 		}
