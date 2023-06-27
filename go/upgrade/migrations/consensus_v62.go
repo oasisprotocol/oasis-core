@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
-	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/governance/state"
-	registryState "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/apps/registry/state"
+	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
+	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 

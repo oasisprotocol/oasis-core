@@ -17,7 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft"
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -540,10 +540,10 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		}
 	}
 
-	// Initialize Tendermint consensus backend.
-	node.Consensus, err = tendermint.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, node.Genesis)
+	// Initialize CometBFT consensus backend.
+	node.Consensus, err = cometbft.New(node.svcMgr.Ctx, node.dataDir, node.Identity, node.Upgrader, node.Genesis)
 	if err != nil {
-		logger.Error("failed to initialize tendermint service",
+		logger.Error("failed to initialize cometbft service",
 			"err", err,
 		)
 		return nil, err
@@ -576,10 +576,10 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 
-	// Initialize Tendermint light client.
-	node.LightClient, err = tendermint.NewLightClient(node.svcMgr.Ctx, node.dataDir, genesisDoc, node.Consensus, node.P2P)
+	// Initialize CometBFT light client.
+	node.LightClient, err = cometbft.NewLightClient(node.svcMgr.Ctx, node.dataDir, genesisDoc, node.Consensus, node.P2P)
 	if err != nil {
-		logger.Error("failed to initialize tendermint light client service",
+		logger.Error("failed to initialize cometbft light client service",
 			"err", err,
 		)
 		return nil, err

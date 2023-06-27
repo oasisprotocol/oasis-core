@@ -96,7 +96,7 @@ impl Verifier {
         runtime_id: Namespace,
         chain_context: String,
     ) -> Self {
-        let logger = get_logger("consensus/tendermint/verifier");
+        let logger = get_logger("consensus/cometbft/verifier");
         let (command_sender, command_receiver) = channel::unbounded();
         let runtime_version = protocol.get_config().version;
         let trusted_state_store =
@@ -495,7 +495,7 @@ impl Verifier {
         std::thread::spawn(move || {
             let _guard = self.tokio_runtime.enter(); // Ensure Tokio runtime is available.
 
-            let logger = get_logger("consensus/tendermint/verifier");
+            let logger = get_logger("consensus/cometbft/verifier");
             info!(logger, "Starting consensus verifier");
 
             // Try to initialize a couple of times as initially it may be the case that we have
@@ -800,7 +800,7 @@ impl Verifier {
                 info!(
                     self.logger,
                     "Not enough trust to accept new chain context";
-                    "log_event" => "consensus/tendermint/verifier/chain_context/no_trust",
+                    "log_event" => "consensus/cometbft/verifier/chain_context/no_trust",
                     "tally" => ?tally,
                 );
                 return Err(Error::ChainContextTransitionFailed(anyhow!(
@@ -811,7 +811,7 @@ impl Verifier {
                 info!(
                     self.logger,
                     "Failed to accept new chain context";
-                    "log_event" => "consensus/tendermint/verifier/chain_context/failed",
+                    "log_event" => "consensus/cometbft/verifier/chain_context/failed",
                     "error" => ?e,
                 );
                 return Err(Error::ChainContextTransitionFailed(anyhow!(

@@ -9,7 +9,7 @@ import (
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/crypto"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 )
 
 // Sentry is an Oasis sentry node.
@@ -196,7 +196,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		keymanagerIndices: cfg.KeymanagerIndices,
 		p2pPublicKey:      sentryP2PPublicKey,
 		tlsPublicKey:      sentryTLSPublicKey,
-		tmAddress:         crypto.PublicKeyToTendermint(&sentryP2PPublicKey).Address().String(),
+		tmAddress:         crypto.PublicKeyToCometBFT(&sentryP2PPublicKey).Address().String(),
 		consensusPort:     host.getProvisionedPort(nodePortConsensus),
 		controlPort:       host.getProvisionedPort("sentry-control"),
 		sentryPort:        host.getProvisionedPort("sentry-client"),

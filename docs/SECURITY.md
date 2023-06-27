@@ -44,14 +44,14 @@ expected.
 - Conditions under which compute nodes may cause a bogus transaction
   result to be accepted (committed to the blockchain) by the system.
 
-### Tendermint
+### CometBFT
 
-- Tendermint has its own vulnerability disclosure policy and bug
-  bounty, so in general issues in the core tendermint code should be
+- CometBFT has its own vulnerability disclosure policy and bug
+  bounty, so in general issues in the core CometBFT code should be
   reported
-  [there](https://github.com/tendermint/tendermint/blob/master/SECURITY.md).
+  [there](https://github.com/cometbft/cometbft/blob/master/SECURITY.md).
 
-- Oasis Labs code that misuses Tendermint code, i.e., in violation of
+- Oasis Core code that misuses CometBFT code, i.e., in violation of
   API/contract, would definitely be in scope.
 
 ### Discrepancy Detection

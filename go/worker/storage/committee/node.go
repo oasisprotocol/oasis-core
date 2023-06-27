@@ -273,7 +273,7 @@ func (n *Node) Name() string {
 	return "committee node"
 }
 
-// Start causes the worker to start responding to tendermint new block events.
+// Start causes the worker to start responding to CometBFT new block events.
 func (n *Node) Start() error {
 	go n.watchQuit()
 	go n.worker()

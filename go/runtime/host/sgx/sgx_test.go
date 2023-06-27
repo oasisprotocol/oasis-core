@@ -11,7 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	iasHttp "github.com/oasisprotocol/oasis-core/go/ias/http"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -72,7 +72,7 @@ func TestProvisionerSGX(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
 				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         tendermint.BackendName,
+					ConsensusBackend:         cmt.BackendName,
 					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
 				},
 				LoaderPath:            envRuntimeLoaderPath,
@@ -88,7 +88,7 @@ func TestProvisionerSGX(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
 				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         tendermint.BackendName,
+					ConsensusBackend:         cmt.BackendName,
 					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
 				},
 				LoaderPath:            envRuntimeLoaderPath,

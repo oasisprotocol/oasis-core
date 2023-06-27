@@ -19,7 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	tendermintTests "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests"
+	cmtTests "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/tests"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -1239,7 +1239,7 @@ func testSlashConsensusEquivocation(
 	require.NoError(err, "WatchBlocks")
 	defer blocksSub.Close()
 
-	// Broadcast evidence. This is Tendermint-specific, if we ever have more than one
+	// Broadcast evidence. This is CometBFT-specific, if we ever have more than one
 	// consensus backend, we need to change this part.
 	blk, err := consensus.GetBlock(ctx, 1)
 	require.NoError(err, "GetBlock")
@@ -1247,7 +1247,7 @@ func testSlashConsensusEquivocation(
 	genesis, err := consensus.GetGenesisDocument(ctx)
 	require.NoError(err, "GetGenesisDocument")
 
-	evidence, err := tendermintTests.MakeConsensusEquivocationEvidence(ident, blk, genesis, 1, 1)
+	evidence, err := cmtTests.MakeConsensusEquivocationEvidence(ident, blk, genesis, 1, 1)
 	require.NoError(err, "MakeConsensusEquivocationEvidence")
 	err = consensus.SubmitEvidence(ctx, evidence)
 	require.NoError(err, "SubmitEvidence")

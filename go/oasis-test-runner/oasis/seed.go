@@ -59,7 +59,7 @@ func (net *Network) NewSeed(cfg *SeedCfg) (*Seed, error) {
 
 	// Pre-provision the node identity, so that we can figure out what
 	// to pass all the actual nodes in advance, instead of having to
-	// start the node and fork out to `oasis-node debug tendermint show-node-id`.
+	// start the node and fork out to `oasis-node debug cometbft show-node-id`.
 	signerFactory, err := fileSigner.NewFactory(host.dir.String(), identity.RequiredSignerRoles...)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/seed: failed to create seed signer factory: %w", err)

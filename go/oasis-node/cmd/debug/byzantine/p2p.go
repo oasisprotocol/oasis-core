@@ -91,7 +91,7 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signatur
 	return <-responseCh
 }
 
-func (ph *p2pHandle) start(ht *honestTendermint, id *identity.Identity, chainContext string, runtimeID common.Namespace) error {
+func (ph *p2pHandle) start(ht *honestCometBFT, id *identity.Identity, chainContext string, runtimeID common.Namespace) error {
 	if ph.service != nil {
 		return fmt.Errorf("P2P service already started")
 	}

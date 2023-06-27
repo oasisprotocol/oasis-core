@@ -680,7 +680,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 			quotePolicyUpdated = false
 			runtimeInfoUpdated = false
 		case <-retryTicker.C:
-			// Retry updates if some of them failed. When using Tendermint as a backend service
+			// Retry updates if some of them failed. When using CometBFT as a backend service
 			// the host will see the new state one block before the consensus verifier as the former
 			// sees the block H after it is executed while the latter needs to trust the block H
 			// first by verifying the signatures which are only available after the block H+1

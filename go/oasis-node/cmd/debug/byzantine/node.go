@@ -32,7 +32,7 @@ type byzantine struct {
 
 	identity *identity.Identity
 
-	tendermint    *honestTendermint
+	cometbft      *honestCometBFT
 	p2p           *p2pHandle
 	storage       *storageWorker
 	storageClient storage.Backend
@@ -47,8 +47,8 @@ type byzantine struct {
 }
 
 func (b *byzantine) stop() error {
-	if err := b.tendermint.stop(); err != nil {
-		return fmt.Errorf("tendermint stop failed: %w", err)
+	if err := b.cometbft.stop(); err != nil {
+		return fmt.Errorf("cometbft stop failed: %w", err)
 	}
 
 	if err := b.p2p.stop(); err != nil {
@@ -64,7 +64,7 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 	logger.Debug("executor: received transactions", "transactions", txs)
 	// Get latest roothash block.
 	var block *block.Block
-	block, err := getRoothashLatestBlock(ctx, b.tendermint.service, b.runtimeID)
+	block, err := getRoothashLatestBlock(ctx, b.cometbft.service, b.runtimeID)
 	if err != nil {
 		return false, fmt.Errorf("failed getting latest roothash block: %w", err)
 	}
@@ -86,7 +86,7 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 		if err = cbc.createCommitment(b.identity, nil, commitment.FailureUnknown); err != nil {
 			panic(fmt.Sprintf("compute create failure indicating commitment failed: %+v", err))
 		}
-		if err = cbc.publishToChain(b.tendermint.service, b.identity); err != nil {
+		if err = cbc.publishToChain(b.cometbft.service, b.identity); err != nil {
 			panic(fmt.Sprintf("compute publish to chain failed: %+v", err))
 		}
 		return false, nil
@@ -144,15 +144,15 @@ func initializeAndRegisterByzantineNode(
 
 	b.chainContext = genesisDoc.ChainContext()
 
-	// Setup tendermint.
-	b.tendermint = newHonestTendermint(genesis)
-	if err = b.tendermint.start(b.identity, cmdCommon.DataDir()); err != nil {
-		return nil, fmt.Errorf("node tendermint start failed: %w", err)
+	// Setup CometBFT.
+	b.cometbft = newHonestCometBFT(genesis)
+	if err = b.cometbft.start(b.identity, cmdCommon.DataDir()); err != nil {
+		return nil, fmt.Errorf("node cometbft start failed: %w", err)
 	}
 
 	// Setup P2P.
 	b.p2p = newP2PHandle()
-	if err = b.p2p.start(b.tendermint, b.identity, b.chainContext, b.runtimeID); err != nil {
+	if err = b.p2p.start(b.cometbft, b.identity, b.chainContext, b.runtimeID); err != nil {
 		return nil, fmt.Errorf("P2P start failed: %w", err)
 	}
 
@@ -166,7 +166,7 @@ func initializeAndRegisterByzantineNode(
 
 	// Wait for activation epoch.
 	activationEpoch := beacon.EpochTime(viper.GetUint64(CfgActivationEpoch))
-	if err = waitForEpoch(b.tendermint.service, activationEpoch); err != nil {
+	if err = waitForEpoch(b.cometbft.service, activationEpoch); err != nil {
 		return nil, fmt.Errorf("waitForEpoch: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func initializeAndRegisterByzantineNode(
 		}
 	}
 	if err = registryRegisterNode(
-		b.tendermint.service,
+		b.cometbft.service,
 		b.identity,
 		cmdCommon.DataDir(),
 		getGrpcAddress(),
@@ -199,7 +199,7 @@ func initializeAndRegisterByzantineNode(
 		"wait_till", committeeStartEpoch,
 	)
 
-	if err = waitForEpoch(b.tendermint.service, committeeStartEpoch); err != nil {
+	if err = waitForEpoch(b.cometbft.service, committeeStartEpoch); err != nil {
 		return nil, fmt.Errorf("waitForEpoch(VRF electionDelay): %w", err)
 	}
 
@@ -208,7 +208,7 @@ func initializeAndRegisterByzantineNode(
 	)
 
 	// Get next election committee.
-	b.electionHeight, b.electionEpoch, err = schedulerNextElectionHeight(b.tendermint.service, committeeStartEpoch)
+	b.electionHeight, b.electionEpoch, err = schedulerNextElectionHeight(b.cometbft.service, committeeStartEpoch)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler next election height failed: %w", err)
 	}
@@ -216,7 +216,7 @@ func initializeAndRegisterByzantineNode(
 	b.logger.Debug("ensuring executor worker role")
 
 	// Ensure we have the expected executor worker role.
-	b.executorCommittee, err = schedulerGetCommittee(b.tendermint, b.electionHeight, scheduler.KindComputeExecutor, b.runtimeID)
+	b.executorCommittee, err = schedulerGetCommittee(b.cometbft, b.electionHeight, scheduler.KindComputeExecutor, b.runtimeID)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler get committee %s at height %d failed: %w", scheduler.KindComputeExecutor, b.electionHeight, err)
 	}

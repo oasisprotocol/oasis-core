@@ -19,7 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	commonNode "github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	"github.com/oasisprotocol/oasis-core/go/consensus/tendermint/abci"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -31,9 +31,9 @@ const (
 
 	validatorStartDelay = 3 * time.Second
 
-	defaultConsensusBackend            = "tendermint"
-	defaultEpochtimeTendermintInterval = 30
-	defaultInitialHeight               = 1
+	defaultConsensusBackend          = "tendermint"
+	defaultEpochtimeCometBFTInterval = 30
+	defaultInitialHeight             = 1
 
 	defaultConsensusTimeoutCommit = 1 * time.Second
 
@@ -202,7 +202,7 @@ func (n *Node) AddSeedNodesToConfigExcept(excludeSeedNodeName string) {
 			continue
 		}
 
-		tendermintSeed := commonNode.ConsensusAddress{
+		cometbftSeed := commonNode.ConsensusAddress{
 			ID: seed.p2pSigner,
 			Address: commonNode.Address{
 				IP:   net.ParseIP("127.0.0.1"),
@@ -217,7 +217,7 @@ func (n *Node) AddSeedNodesToConfigExcept(excludeSeedNodeName string) {
 			},
 		}
 
-		seedNodes = append(seedNodes, tendermintSeed.String())
+		seedNodes = append(seedNodes, cometbftSeed.String())
 		seedNodes = append(seedNodes, libp2pSeed.String())
 	}
 

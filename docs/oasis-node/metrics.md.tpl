@@ -42,11 +42,11 @@ The following metrics are currently reported:
 
 ## Consensus backends
 
-### Metrics Reported by *Tendermint*
+### Metrics Reported by *CometBFT*
 
-When `oasis-node` is configured to use [Tendermint][1] for BFT consensus, all
-Tendermint metrics are also reported. Consult
-[tendermint-core documentation][2] for a list of reported by Tendermint.
+When `oasis-node` is configured to use [CometBFT][1] for BFT consensus, all
+CometBFT metrics are also reported. Consult
+[CometBFT-core documentation][2] for a list of reported by CometBFT.
 
-[1]: ../consensus/README.md#tendermint
-[2]: https://docs.tendermint.com/main/tendermint-core/metrics.html
+[1]: ../consensus/README.md#cometbft
+[2]: https://docs.cometbft.com/main/cometbft-core/metrics.html

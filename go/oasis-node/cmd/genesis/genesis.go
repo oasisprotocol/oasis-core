@@ -27,8 +27,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
-	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -82,12 +82,12 @@ const (
 	CfgGovernanceEnableChangeParametersProposal = "governance.enable_change_parameters_proposal"
 
 	// Beacon config flags.
-	CfgBeaconBackend                    = "beacon.backend"
-	CfgBeaconDebugMockBackend           = "beacon.debug.mock_backend"
-	CfgBeaconInsecureTendermintInterval = "beacon.insecure.tendermint.interval"
-	CfgBeaconVRFAlphaThreshold          = "beacon.vrf.alpha_threshold"
-	CfgBeaconVRFInterval                = "beacon.vrf.interval"
-	CfgBeaconVRFProofSubmissionDelay    = "beacon.vrf.submission_delay"
+	CfgBeaconBackend                  = "beacon.backend"
+	CfgBeaconDebugMockBackend         = "beacon.debug.mock_backend"
+	CfgBeaconInsecureCometBFTInterval = "beacon.insecure.cometbft.interval"
+	CfgBeaconVRFAlphaThreshold        = "beacon.vrf.alpha_threshold"
+	CfgBeaconVRFInterval              = "beacon.vrf.interval"
+	CfgBeaconVRFProofSubmissionDelay  = "beacon.vrf.submission_delay"
 
 	// Roothash config flags.
 	cfgRoothashDebugDoNotSuspendRuntimes = "roothash.debug.do_not_suspend_runtimes"
@@ -99,14 +99,14 @@ const (
 	CfgStakingTokenSymbol        = "staking.token_symbol"
 	CfgStakingTokenValueExponent = "staking.token_value_exponent"
 
-	// Tendermint config flags.
-	cfgConsensusTimeoutCommit            = "consensus.tendermint.timeout_commit"
-	cfgConsensusSkipTimeoutCommit        = "consensus.tendermint.skip_timeout_commit"
-	cfgConsensusEmptyBlockInterval       = "consensus.tendermint.empty_block_interval"
-	cfgConsensusMaxTxSizeBytes           = "consensus.tendermint.max_tx_size"
-	cfgConsensusMaxBlockSizeBytes        = "consensus.tendermint.max_block_size"
-	cfgConsensusMaxBlockGas              = "consensus.tendermint.max_block_gas"
-	cfgConsensusMaxEvidenceSizeBytes     = "consensus.tendermint.max_evidence_size"
+	// CometBFT config flags.
+	cfgConsensusTimeoutCommit            = "consensus.cometbft.timeout_commit"
+	cfgConsensusSkipTimeoutCommit        = "consensus.cometbft.skip_timeout_commit"
+	cfgConsensusEmptyBlockInterval       = "consensus.cometbft.empty_block_interval"
+	cfgConsensusMaxTxSizeBytes           = "consensus.cometbft.max_tx_size"
+	cfgConsensusMaxBlockSizeBytes        = "consensus.cometbft.max_block_size"
+	cfgConsensusMaxBlockGas              = "consensus.cometbft.max_block_gas"
+	cfgConsensusMaxEvidenceSizeBytes     = "consensus.cometbft.max_evidence_size"
 	CfgConsensusStateCheckpointInterval  = "consensus.state_checkpoint.interval"
 	CfgConsensusStateCheckpointNumKept   = "consensus.state_checkpoint.num_kept"
 	CfgConsensusStateCheckpointChunkSize = "consensus.state_checkpoint.chunk_size"
@@ -257,7 +257,7 @@ func doInitGenesis(cmd *cobra.Command, args []string) {
 	switch doc.Beacon.Parameters.Backend {
 	case beacon.BackendInsecure:
 		doc.Beacon.Parameters.InsecureParameters = &beacon.InsecureParameters{
-			Interval: viper.GetInt64(CfgBeaconInsecureTendermintInterval),
+			Interval: viper.GetInt64(CfgBeaconInsecureCometBFTInterval),
 		}
 	case beacon.BackendVRF:
 		doc.Beacon.Parameters.VRFParameters = &beacon.VRFParameters{
@@ -820,7 +820,7 @@ func init() {
 	// Beacon config flags.
 	initGenesisFlags.String(CfgBeaconBackend, "insecure", "beacon backend")
 	initGenesisFlags.Bool(CfgBeaconDebugMockBackend, false, "use debug mock Epoch time backend")
-	initGenesisFlags.Int64(CfgBeaconInsecureTendermintInterval, 86400, "Epoch interval (in blocks)")
+	initGenesisFlags.Int64(CfgBeaconInsecureCometBFTInterval, 86400, "Epoch interval (in blocks)")
 	initGenesisFlags.Uint64(CfgBeaconVRFAlphaThreshold, 1, "Number of proofs required to allow runtime elections")
 	initGenesisFlags.Int64(CfgBeaconVRFInterval, 86300, "Epoch interval (in blocks)")
 	initGenesisFlags.Int64(CfgBeaconVRFProofSubmissionDelay, 43150, "Proof submission delay (in blocks)")
@@ -838,14 +838,14 @@ func init() {
 	initGenesisFlags.String(CfgStakingTokenSymbol, "", "token's ticker symbol")
 	initGenesisFlags.Uint8(CfgStakingTokenValueExponent, 0, "token value's base-10 exponent")
 
-	// Tendermint config flags.
-	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "tendermint commit timeout")
-	initGenesisFlags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip tendermint commit timeout")
-	initGenesisFlags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "tendermint empty block interval")
-	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "tendermint maximum transaction size (in bytes)")
-	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "tendermint maximum block size (in bytes)")
-	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "tendermint max gas used per block")
-	initGenesisFlags.String(cfgConsensusMaxEvidenceSizeBytes, "1mb", "tendermint max evidence size (in bytes)")
+	// CometBFT config flags.
+	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "cometbft commit timeout")
+	initGenesisFlags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip cometbft commit timeout")
+	initGenesisFlags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "cometbft empty block interval")
+	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "cometbft maximum transaction size (in bytes)")
+	initGenesisFlags.String(cfgConsensusMaxBlockSizeBytes, "21mb", "cometbft maximum block size (in bytes)")
+	initGenesisFlags.Uint64(cfgConsensusMaxBlockGas, 0, "cometbft max gas used per block")
+	initGenesisFlags.String(cfgConsensusMaxEvidenceSizeBytes, "1mb", "cometbft max evidence size (in bytes)")
 	initGenesisFlags.Uint64(CfgConsensusStateCheckpointInterval, 10000, "consensus state checkpoint interval (in blocks)")
 	initGenesisFlags.Uint64(CfgConsensusStateCheckpointNumKept, 2, "number of kept consensus state checkpoints")
 	initGenesisFlags.String(CfgConsensusStateCheckpointChunkSize, "8mb", "consensus state checkpoint chunk size (in bytes)")
@@ -853,7 +853,7 @@ func init() {
 	initGenesisFlags.StringSlice(cfgConsensusBlacklistPublicKey, nil, "blacklist public key")
 
 	// Consensus backend flag.
-	initGenesisFlags.String(cfgConsensusBackend, tendermint.BackendName, "consensus backend")
+	initGenesisFlags.String(cfgConsensusBackend, cmt.BackendName, "consensus backend")
 
 	_ = viper.BindPFlags(initGenesisFlags)
 	initGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")

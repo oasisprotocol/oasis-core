@@ -9,7 +9,7 @@ import (
 	"github.com/a8m/envsubst"
 	"gopkg.in/yaml.v3"
 
-	tm "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/config"
+	tm "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/config"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/config"
 	common "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/config"
@@ -108,7 +108,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("genesis: %w", err)
 	}
 	if err = c.Consensus.Validate(); err != nil {
-		return fmt.Errorf("tendermint: %w", err)
+		return fmt.Errorf("consensus: %w", err)
 	}
 	if err = c.Runtime.Validate(); err != nil {
 		return fmt.Errorf("runtime: %w", err)

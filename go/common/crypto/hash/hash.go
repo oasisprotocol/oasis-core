@@ -149,7 +149,7 @@ func NewFromBytes(data ...[]byte) (h Hash) {
 	return
 }
 
-// LoadFromHexBytes creates a new hash by loading it from the given Tendermint
+// LoadFromHexBytes creates a new hash by loading it from the given CometBFT
 // HexBytes byte array.
 func LoadFromHexBytes(data cmtbytes.HexBytes) (h Hash) {
 	_ = h.UnmarshalBinary(data[:])

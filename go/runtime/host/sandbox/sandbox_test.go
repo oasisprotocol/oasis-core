@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	tendermint "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/api"
+	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -38,7 +38,7 @@ func TestProvisionerSandbox(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
 				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         tendermint.BackendName,
+					ConsensusBackend:         cmt.BackendName,
 					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
 				},
 				InsecureNoSandbox: true,
@@ -51,7 +51,7 @@ func TestProvisionerSandbox(t *testing.T) {
 		tests.TestProvisioner(t, cfg, func() (host.Provisioner, error) {
 			return New(Config{
 				HostInfo: &protocol.HostInfo{
-					ConsensusBackend:         tendermint.BackendName,
+					ConsensusBackend:         cmt.BackendName,
 					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
 				},
 				SandboxBinaryPath: bwrapPath,

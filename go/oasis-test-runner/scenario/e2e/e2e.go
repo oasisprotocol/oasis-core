@@ -360,7 +360,7 @@ func (sc *Scenario) DumpRestoreNetwork(
 
 	// Reset all the state back to the vanilla state.
 	if err := sc.ResetConsensusState(childEnv, resetFlags); err != nil {
-		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean tendermint storage: %w", err)
+		return fmt.Errorf("scenario/e2e/dump_restore: failed to clean CometBFT storage: %w", err)
 	}
 
 	// Apply optional mapping function to the genesis document.

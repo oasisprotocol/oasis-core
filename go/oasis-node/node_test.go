@@ -24,7 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	tmTestGenesis "github.com/oasisprotocol/oasis-core/go/consensus/tendermint/tests/genesis"
+	tmTestGenesis "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/tests/genesis"
 	consensusTests "github.com/oasisprotocol/oasis-core/go/consensus/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	governanceTests "github.com/oasisprotocol/oasis-core/go/governance/tests"

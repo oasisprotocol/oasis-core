@@ -17,7 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity/tendermint"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/identity/cometbft"
 )
 
 const CfgDataDir = "datadir"
@@ -143,7 +143,7 @@ func doShowSentryTLSPubkey(cmd *cobra.Command, args []string) {
 
 // Register registers the client sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
-	tendermint.Register(identityCmd)
+	cometbft.Register(identityCmd)
 
 	identityCmd.PersistentFlags().AddFlagSet(datadirFlags)
 

@@ -10,7 +10,7 @@ consensus backend package should be consensus backend agnostic.
 For more details about the actual API that the consensus backends must provide
 see the [consensus backend API documentation].
 
-Currently the only supported consensus backend is [Tendermint], a BFT consensus
+Currently the only supported consensus backend is [CometBFT], a BFT consensus
 protocol. For this reason some API surfaces may not be fully consensus backend
 agnostic.
 
@@ -40,7 +40,7 @@ consensus backend agnostic).
 [`go/consensus`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus
 [`go/consensus/api`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/api
 [consensus backend API documentation]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/consensus/api?tab=doc
-[Tendermint]: https://tendermint.com/
+[CometBFT]: https://cometbft.com/
 [Epoch Time]: services/epochtime.md
 [Random Beacon]: services/beacon.md
 [Staking]: services/staking.md
@@ -52,62 +52,62 @@ consensus backend agnostic).
 [consensus transaction]: transactions.md
 <!-- markdownlint-enable line-length -->
 
-## Tendermint
+## CometBFT
 
-![Tendermint](../images/oasis-core-consensus-tendermint.svg)
+![CometBFT](../images/oasis-core-consensus-cometbft.svg)
 
-The Tendermint consensus backend lives in [`go/consensus/tendermint`].
+The CometBFT consensus backend lives in [`go/consensus/cometbft`].
 
-For more information about Tendermint itself see
-[the Tendermint Core developer documentation]. This section assumes familiarity
-with the Tendermint Core concepts and APIs. When used as an Oasis Core consensus
-backend, Tendermint Core is used as a library and thus lives in the same
+For more information about CometBFT itself see
+[the CometBFT Core developer documentation]. This section assumes familiarity
+with the CometBFT Core concepts and APIs. When used as an Oasis Core consensus
+backend, CometBFT Core is used as a library and thus lives in the same
 process.
 
-The Tendermint consensus backend is split into two major parts:
+The CometBFT consensus backend is split into two major parts:
 
 1. The first part is the **ABCI application** that represents the core logic
-   that is replicated by Tendermint Core among the network nodes using the
-   Tendermint BFT protocol for consensus.
+   that is replicated by CometBFT Core among the network nodes using the
+   CometBFT BFT protocol for consensus.
 
 1. The second part is the **query and transaction submission glue** that makes
    it easy to interact with the ABCI application, presenting everything via the
    Oasis Core Consensus interface.
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus/tendermint`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
-[the Tendermint Core developer documentation]: https://docs.tendermint.com/
+[`go/consensus/cometbft`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/cometbft
+[the CometBFT Core developer documentation]: https://docs.cometbft.com/
 <!-- markdownlint-enable line-length -->
 
 ### ABCI Application Multiplexer
 
-Tendermint Core consumes consensus layer logic via the [ABCI protocol], which
+CometBFT Core consumes consensus layer logic via the [ABCI protocol], which
 assumes a single application. Since we have multiple services that need to be
 provided by the consensus layer we use an _ABCI application multiplexer_ which
 performs some common functions and dispatches transactions to the appropriate
 service-specific handler.
 
-The multiplexer lives in [`go/consensus/tendermint/abci/mux.go`] with the
+The multiplexer lives in [`go/consensus/cometbft/abci/mux.go`] with the
 multiplexed applications, generally corresponding to services required by the
-_consensus layer_ interface living in [`go/consensus/tendermint/apps/<app>`].
+_consensus layer_ interface living in [`go/consensus/cometbft/apps/<app>`].
 
 <!-- markdownlint-disable line-length -->
-[ABCI protocol]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md
-[`go/consensus/tendermint/abci/mux.go`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/abci/mux.go
-[`go/consensus/tendermint/apps/<app>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/apps
+[ABCI protocol]: https://github.com/cometbft/cometbft/blob/master/spec/abci/abci.md
+[`go/consensus/cometbft/abci/mux.go`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/cometbft/abci/mux.go
+[`go/consensus/cometbft/apps/<app>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/cometbft/apps
 <!-- markdownlint-enable line-length -->
 
 ### State Storage
 
-All application state for the Tendermint consensus backend is stored using our
+All application state for the CometBFT consensus backend is stored using our
 [Merklized Key-Value Store].
 
 [Merklized Key-Value Store]: ../mkvs.md
 
 ### Service Implementations
 
-Service implementations for the Tendermint consensus backend live in
-[`go/consensus/tendermint/<service>`]. They provide the glue between the
+Service implementations for the CometBFT consensus backend live in
+[`go/consensus/cometbft/<service>`]. They provide the glue between the
 services running as part of the ABCI application multiplexer and the Oasis Core
 service APIs. The interfaces generally provide a read-only view of the consensus
 layer state at a given height. Internally, these perform queries against the
@@ -116,7 +116,7 @@ ABCI application state.
 #### Queries
 
 Queries do not use the [ABCI query functionality] as that would incur needless
-overhead for our use case (with Tendermint Core running in the same process).
+overhead for our use case (with CometBFT Core running in the same process).
 Instead, each multiplexed service provides its own `QueryFactory` which can be
 used to query state at a specific block height.
 
@@ -140,7 +140,7 @@ type Query interface {
 ```
 
 Implementations of this interface generally directly access the underlying ABCI
-state storage to answer queries. Tendermint implementations of Oasis Core
+state storage to answer queries. CometBFT implementations of Oasis Core
 consensus services generally follow the following pattern (example from the
 staking service API for querying `TotalSupply`):
 
@@ -156,22 +156,22 @@ func (s *staking) TotalSupply(ctx context.Context, height int64) (*quantity.Quan
 ```
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus/tendermint/<service>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
-[ABCI query functionality]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#query-1
+[`go/consensus/cometbft/<service>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/cometbft
+[ABCI query functionality]: https://github.com/cometbft/cometbft/blob/master/spec/abci/abci.md#query-1
 <!-- markdownlint-enable line-length -->
 
 #### Transactions
 
 Each [serialized signed Oasis Core transaction] directly corresponds to a
-[Tendermint transaction]. Submission is performed by pushing the serialized
+[CometBFT transaction]. Submission is performed by pushing the serialized
 transaction bytes into the [mempool] where it first undergoes basic checks and
-is then gossiped to the Tendermint P2P network.
+is then gossiped to the CometBFT P2P network.
 
 Handling of basic checks and transaction execution is performed by the ABCI
 application multiplexer mentioned above.
 
 <!-- markdownlint-disable line-length -->
 [serialized signed Oasis Core transaction]: transactions.md
-[Tendermint transaction]: https://docs.tendermint.com/main/tendermint-core/using-tendermint.html#transactions
-[mempool]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#mempool-connection
+[CometBFT transaction]: https://docs.cometbft.com/main/cometbft-core/using-cometbft.html#transactions
+[mempool]: https://github.com/cometbft/cometbft/blob/master/spec/abci/abci.md#mempool-connection
 <!-- markdownlint-enable line-length -->

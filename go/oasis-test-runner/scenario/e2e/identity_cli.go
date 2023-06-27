@@ -68,10 +68,10 @@ func (sc *identityCLIImpl) Run(childEnv *env.Env) error {
 	if err := sc.showTLSPubkey(childEnv, true); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
-	if err := sc.tendermintShowAddress(childEnv, "node"); err != nil {
+	if err := sc.cmtShowAddress(childEnv, "node"); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
-	if err := sc.tendermintShowAddress(childEnv, "consensus"); err != nil {
+	if err := sc.cmtShowAddress(childEnv, "consensus"); err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: %w", err)
 	}
 
@@ -112,17 +112,17 @@ func (sc *identityCLIImpl) showTLSPubkey(childEnv *env.Env, sentry bool) error {
 	return nil
 }
 
-func (sc *identityCLIImpl) tendermintShowAddress(childEnv *env.Env, addrName string) error {
+func (sc *identityCLIImpl) cmtShowAddress(childEnv *env.Env, addrName string) error {
 	subCmd := fmt.Sprintf("show-%s-address", addrName)
-	sc.Logger.Info(fmt.Sprintf("running tendermint %s", subCmd))
+	sc.Logger.Info(fmt.Sprintf("running CometBFT %s", subCmd))
 
 	args := []string{
-		"identity", "tendermint", subCmd,
+		"identity", "cometbft", subCmd,
 		"--" + cmdId.CfgDataDir, sc.dataDir,
 	}
 	nodeBinary, _ := sc.Flags.GetString(cfgNodeBinary)
 	if out, err := cli.RunSubCommandWithOutput(childEnv, sc.Logger, subCmd, nodeBinary, args); err != nil {
-		return fmt.Errorf("failed to get %s's tendermint address: error: %w output: %s", addrName, err, out.String())
+		return fmt.Errorf("failed to get %s's CometBFT address: error: %w output: %s", addrName, err, out.String())
 	}
 	return nil
 }
