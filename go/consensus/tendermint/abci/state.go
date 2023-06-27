@@ -397,7 +397,10 @@ func (s *applicationState) doApplyStateSync(root storage.Root) error {
 
 func (s *applicationState) workingStateRoot() (hash.Hash, error) {
 	// This is safe to do as we are operating on our own branch of state.
-	psKv, _ := s.proposal.tree.Commit(s.ctx)
+	psKv, err := s.proposal.tree.Commit(s.ctx)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("failed to commit: %w", err)
+	}
 	ps := psKv.(mkvs.Tree)
 	// Only compute the root hash without persisting. In case this turns out to be the finalized
 	// state, the root hash will not need to be recomputed again.
@@ -417,7 +420,10 @@ func (s *applicationState) doCommit() (uint64, error) {
 	}
 
 	// Last proposal state becomes the canonical state.
-	canonicalState, _ := s.proposal.tree.Commit(s.ctx)
+	canonicalState, err := s.proposal.tree.Commit(s.ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to commit: %w", err)
+	}
 	s.canonicalState = canonicalState.(mkvs.Tree)
 	s.proposal.reset()
 	s.proposal = nil
