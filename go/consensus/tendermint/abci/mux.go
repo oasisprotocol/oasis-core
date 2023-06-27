@@ -550,6 +550,14 @@ func (mux *abciMux) executeProposal(
 	return nil
 }
 
+// processProvableEvents adds any provable events generated in the given context to the per-block
+// provable events accumulator.
+func (mux *abciMux) processProvableEvents(ctx *api.Context) {
+	if pv := ctx.ProvableEvents(); len(pv) > 0 {
+		ctx.BlockContext().ProvableEvents = append(ctx.BlockContext().ProvableEvents, pv...)
+	}
+}
+
 func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	// Use cached results when available, otherwise reset proposal.
 	if !mux.state.resetProposalIfChanged(req.Hash) && !mux.state.proposal.needsExecution() {
@@ -634,6 +642,7 @@ func (mux *abciMux) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginB
 
 	// Collect and return events from the application's BeginBlock calls.
 	response.Events = append(response.Events, ctx.GetEvents()...)
+	mux.processProvableEvents(ctx)
 
 	return response
 }
@@ -711,6 +720,8 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 		}
 		module, code := errors.Code(err)
 
+		mux.processProvableEvents(ctx)
+
 		return types.ResponseDeliverTx{
 			Codespace: module,
 			Code:      code,
@@ -720,6 +731,8 @@ func (mux *abciMux) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverT
 			GasUsed:   int64(ctx.Gas().GasUsed()),
 		}
 	}
+
+	mux.processProvableEvents(ctx)
 
 	return types.ResponseDeliverTx{
 		Code:      types.CodeTypeOK,
@@ -778,8 +791,9 @@ func (mux *abciMux) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 		}
 	}
 
-	// Update tags.
+	// Collect and return events.
 	resp.Events = ctx.GetEvents()
+	mux.processProvableEvents(ctx)
 
 	// Update version to what we are actually running.
 	resp.ConsensusParamUpdates = &cmtproto.ConsensusParams{

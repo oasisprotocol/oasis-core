@@ -5,6 +5,7 @@ import (
 
 	"github.com/cometbft/cometbft/abci/types"
 
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
 
@@ -17,6 +18,7 @@ type BlockInfo struct {
 
 	GasAccountant      GasAccountant
 	SystemTransactions []*transaction.Transaction
+	ProvableEvents     []events.Provable
 }
 
 // BlockContextKey is an interface for a block context key.

@@ -7,6 +7,18 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
+// Provable is an interface implemented by event types which can be proven.
+type Provable interface {
+	// ShouldProve returns true iff the event should be included in the event proof tree.
+	ShouldProve() bool
+
+	// ProvableRepresentation returns the provable representation of an event.
+	//
+	// Since this representation is part of commitments that are included in consensus layer state
+	// any changes to this representation are consensus-breaking.
+	ProvableRepresentation() any
+}
+
 // TypedAttribute is an interface implemented by types which can be transparently used as event
 // attributes with CBOR-marshalled value.
 type TypedAttribute interface {

@@ -86,8 +86,9 @@ func NodeToP2PAddr(n *node.Node) (*cmtp2p.NetAddress, error) {
 
 // EventBuilder is a helper for constructing ABCI events.
 type EventBuilder struct {
-	app []byte
-	ev  types.Event
+	app      []byte
+	ev       types.Event
+	provable []events.Provable
 }
 
 // attribute appends a key/value pair to the event.
@@ -102,6 +103,9 @@ func (bld *EventBuilder) attribute(key, value string) *EventBuilder {
 
 // TypedAttribute appends a typed attribute to the event.
 func (bld *EventBuilder) TypedAttribute(value events.TypedAttribute) *EventBuilder {
+	if pv, ok := value.(events.Provable); ok && pv.ShouldProve() {
+		bld.provable = append(bld.provable, pv)
+	}
 	return bld.attribute(value.EventKind(), events.EncodeValue(value))
 }
 
@@ -119,6 +123,11 @@ func (bld *EventBuilder) Event() types.Event {
 	ev.Attributes = append(ev.Attributes, bld.ev.Attributes...)
 
 	return ev
+}
+
+// Provable returns a list of events that are provable.
+func (bld *EventBuilder) Provable() []events.Provable {
+	return bld.provable
 }
 
 // NewEventBuilder returns a new EventBuilder for the given ABCI app.

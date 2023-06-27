@@ -2,9 +2,11 @@ package abci
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/cometbft/cometbft/abci/types"
+	cmtmerkle "github.com/cometbft/cometbft/crypto/merkle"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -26,9 +28,14 @@ func (mux *abciMux) prepareSystemTxs() ([][]byte, []*types.ResponseDeliverTx, er
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to compute working state root: %w", err)
 	}
+	eventsRoot, err := mux.computeProvableEventsRoot()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to compute provable events root: %w", err)
+	}
 
 	blockMeta := consensus.NewBlockMetadataTx(&consensus.BlockMetadata{
-		StateRoot: stateRoot,
+		StateRoot:  stateRoot,
+		EventsRoot: eventsRoot,
 	})
 	sigBlockMeta, err := transaction.Sign(mux.state.identity.ConsensusSigner, blockMeta)
 	if err != nil {
@@ -117,8 +124,18 @@ func (mux *abciMux) validateSystemTxs() error {
 				return fmt.Errorf("invalid state root in block metadata (expected: %s got: %s)", stateRoot, meta.StateRoot)
 			}
 
+			// Verify provable events root.
+			eventsRoot, err := mux.computeProvableEventsRoot()
+			if err != nil {
+				return fmt.Errorf("failed to compute provable events root: %w", err)
+			}
+			if !bytes.Equal(eventsRoot, meta.EventsRoot) {
+				return fmt.Errorf("invalid events root in block metadata (expected: %x got: %x)", eventsRoot, meta.EventsRoot)
+			}
+
 			mux.logger.Debug("validated block metadata",
 				"state_root", meta.StateRoot,
+				"events_root", hex.EncodeToString(eventsRoot),
 			)
 		default:
 			return fmt.Errorf("unknown system method: %s", tx.Method)
@@ -129,4 +146,13 @@ func (mux *abciMux) validateSystemTxs() error {
 		return fmt.Errorf("missing required block metadata")
 	}
 	return nil
+}
+
+func (mux *abciMux) computeProvableEventsRoot() ([]byte, error) {
+	provable := mux.state.blockCtx.ProvableEvents
+	provableEvents := make([][]byte, len(provable))
+	for i, pe := range provable {
+		provableEvents[i] = cbor.Marshal(pe.ProvableRepresentation())
+	}
+	return cmtmerkle.HashFromByteSlices(provableEvents), nil
 }
