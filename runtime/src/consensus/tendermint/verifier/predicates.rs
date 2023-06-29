@@ -4,7 +4,7 @@ use crate::{
     common::namespace::Namespace,
     consensus::{
         beacon::EpochTime,
-        roothash::{Header, HeaderType},
+        roothash::Header,
         state::{
             beacon::ImmutableState as BeaconState, roothash::ImmutableState as RoothashState,
             ConsensusState,
@@ -111,21 +111,11 @@ pub fn verify_state_root(state: &ConsensusState, runtime_header: &Header) -> Res
 }
 
 /// Verifies that the epoch is consistent with consensus state.
-pub fn verify_epoch(
-    state: &ConsensusState,
-    runtime_header: &Header,
-    epoch: EpochTime,
-) -> Result<(), Error> {
+pub fn verify_epoch(state: &ConsensusState, epoch: EpochTime) -> Result<(), Error> {
     let beacon_state = BeaconState::new(&state);
-    let current_epoch = match runtime_header.header_type {
-        // Query future epoch as the epoch just changed in the epoch transition block.
-        HeaderType::EpochTransition => beacon_state.future_epoch().map_err(|err| {
-            Error::VerificationFailed(anyhow!("failed to retrieve future epoch: {}", err))
-        }),
-        _ => beacon_state
-            .epoch()
-            .map_err(|err| Error::VerificationFailed(anyhow!("failed to retrieve epoch: {}", err))),
-    }?;
+    let current_epoch = beacon_state
+        .epoch()
+        .map_err(|err| Error::VerificationFailed(anyhow!("failed to retrieve epoch: {}", err)))?;
 
     if current_epoch != epoch {
         return Err(Error::VerificationFailed(anyhow!(

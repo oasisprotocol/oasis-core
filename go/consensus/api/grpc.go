@@ -44,6 +44,8 @@ var (
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", int64(0))
 	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
 	methodGetTransactionsWithResults = serviceName.NewMethod("GetTransactionsWithResults", int64(0))
+	// methodGetTransactionsWithProofs is the GetTransactionsWithProofs method.
+	methodGetTransactionsWithProofs = serviceName.NewMethod("GetTransactionsWithProofs", int64(0))
 	// methodGetUnconfirmedTransactions is the GetUnconfirmedTransactions method.
 	methodGetUnconfirmedTransactions = serviceName.NewMethod("GetUnconfirmedTransactions", nil)
 	// methodGetGenesisDocument is the GetGenesisDocument method.
@@ -116,6 +118,10 @@ var (
 			{
 				MethodName: methodGetTransactionsWithResults.ShortName(),
 				Handler:    handlerGetTransactionsWithResults,
+			},
+			{
+				MethodName: methodGetTransactionsWithProofs.ShortName(),
+				Handler:    handlerGetTransactionsWithProofs,
 			},
 			{
 				MethodName: methodGetUnconfirmedTransactions.ShortName(),
@@ -417,6 +423,29 @@ func handlerGetTransactionsWithResults(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetTransactionsWithResults(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
+
+func handlerGetTransactionsWithProofs(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientBackend).GetTransactionsWithProofs(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetTransactionsWithProofs.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientBackend).GetTransactionsWithProofs(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -743,6 +772,14 @@ func (c *consensusClient) GetTransactions(ctx context.Context, height int64) ([]
 func (c *consensusClient) GetTransactionsWithResults(ctx context.Context, height int64) (*TransactionsWithResults, error) {
 	var rsp TransactionsWithResults
 	if err := c.conn.Invoke(ctx, methodGetTransactionsWithResults.FullName(), height, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *consensusClient) GetTransactionsWithProofs(ctx context.Context, height int64) (*TransactionsWithProofs, error) {
+	var rsp TransactionsWithProofs
+	if err := c.conn.Invoke(ctx, methodGetTransactionsWithProofs.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil

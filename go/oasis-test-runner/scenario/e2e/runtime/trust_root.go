@@ -354,5 +354,24 @@ func (sc *TrustRootImpl) Run(childEnv *env.Env) (err error) {
 		return err
 	}
 
-	return nil
+	// Run the test client again to verify that queries work correctly immediately after
+	// the transactions have been published.
+	queries := make([]interface{}, 0)
+	for i := 0; i < 5; i++ {
+		key := fmt.Sprintf("my_key_%d", i)
+		value := fmt.Sprintf("my_value_%d", i)
+
+		queries = append(queries,
+			InsertKeyValueTx{key, value, "", false, 0},
+			KeyValueQuery{key, value, roothash.RoundLatest},
+		)
+	}
+
+	sc.Logger.Info("starting a second test client to check if queries for the last round work")
+	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(NewTestClientScenario(queries))
+	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
+		return err
+	}
+
+	return sc.waitTestClient()
 }

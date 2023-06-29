@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use crossbeam::channel;
 use rand::{rngs::OsRng, Rng};
 use sha2::{Digest, Sha256};
-use slog::{error, info};
+use slog::{debug, error, info};
 use tendermint::merkle::HASH_SIZE;
 use tendermint_light_client::{
     builder::LightClientBuilder,
@@ -40,11 +40,12 @@ use crate::{
         },
         transaction::{Proof, SignedTransaction, Transaction},
         verifier::{self, verify_state_freshness, Error, TrustRoot},
-        Event, LightBlock, HEIGHT_LATEST,
+        BlockMetadata, Event, LightBlock, HEIGHT_LATEST, METHOD_META,
     },
     future::block_on,
     host::Host,
     protocol::Protocol,
+    storage::mkvs::{Root, RootType},
     types::{Body, EventKind, HostFetchConsensusEventsRequest, HostFetchConsensusEventsResponse},
 };
 
@@ -183,8 +184,12 @@ impl Verifier {
         instance: &mut Instance,
         height: u64,
     ) -> Result<ConsensusState, Error> {
-        let verified_block = self.verify_to_target(height, cache, instance)?;
-        let state_root = state_root_from_header(&verified_block.signed_header);
+        // Obtain an authoritative state root, either from the current block if it is already
+        // finalized or from the metadata transaction of the previous block.
+        let state_root = match self.verify_to_target(height, cache, instance) {
+            Ok(verified_block) => state_root_from_header(&verified_block.signed_header),
+            Err(_) => self.state_root_from_metadata(cache, instance, height - 1)?,
+        };
 
         Ok(ConsensusState::from_protocol(
             self.protocol.clone(),
@@ -193,12 +198,12 @@ impl Verifier {
         ))
     }
 
-    fn verify_consensus_only(
+    fn verify_consensus_block(
         &self,
         cache: &mut Cache,
         instance: &mut Instance,
         consensus_block: LightBlock,
-    ) -> Result<(LightBlockMeta, ConsensusState), Error> {
+    ) -> Result<LightBlockMeta, Error> {
         // Decode passed block as a Tendermint block.
         let lb_height = consensus_block.height;
         let untrusted_block =
@@ -223,15 +228,7 @@ impl Verifier {
             return Err(Error::VerificationFailed(anyhow!("header mismatch")));
         }
 
-        // Create consensus state accessor at the given block height.
-        let state_root = untrusted_block.get_state_root();
-        let state = ConsensusState::from_protocol(
-            self.protocol.clone(),
-            state_root.version + 1,
-            state_root,
-        );
-
-        Ok((untrusted_block, state))
+        Ok(untrusted_block)
     }
 
     /// Verify state freshness using RAK and nonces.
@@ -369,6 +366,49 @@ impl Verifier {
         Ok(tx)
     }
 
+    /// Fetch state root from block metadata transaction.
+    fn state_root_from_metadata(
+        &self,
+        cache: &mut Cache,
+        instance: &mut Instance,
+        height: u64,
+    ) -> Result<Root, Error> {
+        debug!(
+            self.logger,
+            "Fetching state root from block metadata transaction"
+        );
+
+        // Ask the host for block metadata transaction.
+        let io = Io::new(&self.protocol);
+        let stwp = io.fetch_block_metadata(height).map_err(|err| {
+            Error::StateRoot(anyhow!(
+                "failed to fetch block metadata transaction: {}",
+                err
+            ))
+        })?;
+
+        // Verify the transaction and the proof.
+        let tx = self.verify_transaction(cache, instance, &stwp.signed_tx, &stwp.proof)?;
+
+        if tx.method != METHOD_META {
+            return Err(Error::StateRoot(anyhow!("invalid method name")));
+        }
+
+        let meta: BlockMetadata = cbor::from_value(tx.body).map_err(|err| {
+            Error::StateRoot(anyhow!(
+                "failed to decode block metadata transaction: {}",
+                err
+            ))
+        })?;
+
+        Ok(Root {
+            namespace: Namespace::default(),
+            version: height,
+            root_type: RootType::State,
+            hash: meta.state_root,
+        })
+    }
+
     fn verify(
         &self,
         cache: &mut Cache,
@@ -382,44 +422,58 @@ impl Verifier {
         predicates::verify_round_advance(cache, &runtime_header, &consensus_block, epoch)?;
         predicates::verify_consensus_advance(cache, &consensus_block)?;
 
-        // Verify the consensus layer block first to obtain an authoritative state root.
-        let (consensus_block, state) =
-            self.verify_consensus_only(cache, instance, consensus_block)?;
-        cache.last_verified_height = state.height();
+        // Verify the consensus layer block.
+        let height = consensus_block.height;
+        let consensus_block = self.verify_consensus_block(cache, instance, consensus_block)?;
 
+        // Perform basic verifications.
         predicates::verify_time(&runtime_header, &consensus_block)?;
 
+        // Obtain an authoritative state root.
+        let state = self.consensus_state_at(cache, instance, height)?;
+
         // Check if we have already verified this runtime header to avoid re-verification.
-        if let Some(state_root) = cache.verified_state_roots.get(&runtime_header.round) {
-            if state_root == &runtime_header.state_root && epoch == cache.last_verified_epoch {
+        if let Some((state_root, state_epoch)) =
+            cache.verified_state_roots.get(&runtime_header.round)
+        {
+            if state_root == &runtime_header.state_root
+                && state_epoch == &epoch
+                && epoch == cache.last_verified_epoch
+            {
                 // Header and epoch matches, no need to perform re-verification.
+
+                // Cache last verified fields.
+                cache.last_verified_height = height;
+                cache.last_verified_round = runtime_header.round;
+
                 return Ok(state);
             }
 
             // Force full verification in case of cache mismatch.
         }
 
-        predicates::verify_state_root(&state, &runtime_header).or_else(|_| {
-            // It could happen that the runtime did not process any previous rounds (e.g. due to
-            // being a backup node or recently restarting). In this case the state could be out of
-            // date (due to Tendermint's state finalization delay) so we should try to use the
-            // latest state for verification.
-            let latest_state = self.latest_consensus_state(cache, instance)?;
-            predicates::verify_state_root(&latest_state, &runtime_header)
-        })?;
+        // Obtain an authoritative state root for full verification.
+        // Note that we cannot return the state at height+1 as the block might not have been
+        // finalized yet, and we won't be able to query block results such as events.
+        let next_state = self.consensus_state_at(cache, instance, height + 1)?;
 
-        predicates::verify_epoch(&state, &runtime_header, epoch)?;
+        // Perform full verification.
+        predicates::verify_state_root(&next_state, &runtime_header)?;
+        predicates::verify_epoch(&next_state, epoch)?;
 
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            self.verify_freshness_with_rak(&state, cache)?;
+            self.verify_freshness_with_rak(&next_state, cache)?;
         }
 
         // Cache verified state root and epoch.
         cache
             .verified_state_roots
-            .put(runtime_header.round, runtime_header.state_root);
+            .put(runtime_header.round, (runtime_header.state_root, epoch));
+
+        // Cache last verified fields.
+        cache.last_verified_height = height;
         cache.last_verified_round = runtime_header.round;
         cache.last_verified_epoch = epoch;
 
@@ -437,16 +491,19 @@ impl Verifier {
         // Perform basic verifications.
         predicates::verify_namespace(self.runtime_id, &runtime_header)?;
 
-        // Verify the consensus layer block first to obtain an authoritative state root.
-        let (consensus_block, state) =
-            self.verify_consensus_only(cache, instance, consensus_block)?;
+        // Verify the consensus layer block.
+        let height = consensus_block.height;
+        let consensus_block = self.verify_consensus_block(cache, instance, consensus_block)?;
 
+        // Perform basic verifications.
         predicates::verify_time(&runtime_header, &consensus_block)?;
 
+        // Obtain an authoritative state root.
+        let state = self.consensus_state_at(cache, instance, height)?;
+
         // Check if we have already verified this runtime header to avoid re-verification.
-        if let Some((state_root, state_epoch)) = cache
-            .verified_state_roots_queries
-            .get(&runtime_header.round)
+        if let Some((state_root, state_epoch)) =
+            cache.verified_state_roots.get(&runtime_header.round)
         {
             if state_root == &runtime_header.state_root && state_epoch == &epoch {
                 // Header and epoch matches, no need to perform re-verification.
@@ -456,12 +513,18 @@ impl Verifier {
             // Force full verification in case of cache mismatch.
         }
 
-        predicates::verify_state_root(&state, &runtime_header)?;
-        predicates::verify_epoch(&state, &runtime_header, epoch)?;
+        // Obtain an authoritative state root for full verification.
+        // Note that we cannot return the state at height+1 as the block might not have been
+        // finalized yet, and we won't be able to query block results such as events.
+        let next_state = self.consensus_state_at(cache, instance, height + 1)?;
+
+        // Perform full verification.
+        predicates::verify_state_root(&next_state, &runtime_header)?;
+        predicates::verify_epoch(&next_state, epoch)?;
 
         // Cache verified state root and epoch.
         cache
-            .verified_state_roots_queries
+            .verified_state_roots
             .put(runtime_header.round, (runtime_header.state_root, epoch));
 
         Ok(state)
@@ -503,7 +566,9 @@ impl Verifier {
 
     fn trust(&self, cache: &mut Cache, header: ComputeResultsHeader) -> Result<(), Error> {
         if let Some(state_root) = header.state_root {
-            cache.verified_state_roots.put(header.round, state_root);
+            cache
+                .verified_state_roots
+                .put(header.round, (state_root, cache.last_verified_epoch));
             cache.last_verified_round = header.round;
         }
 

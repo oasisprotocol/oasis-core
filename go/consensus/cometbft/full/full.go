@@ -4,7 +4,6 @@ package full
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -16,7 +15,6 @@ import (
 	dbm "github.com/cometbft/cometbft-db"
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtconfig "github.com/cometbft/cometbft/config"
-	cmtmerkle "github.com/cometbft/cometbft/crypto/merkle"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmtlight "github.com/cometbft/cometbft/light"
 	cmtmempool "github.com/cometbft/cometbft/mempool"
@@ -208,27 +206,18 @@ func (t *fullService) SubmitTxWithProof(ctx context.Context, tx *transaction.Sig
 		return nil, err
 	}
 
-	txs, err := t.GetTransactions(ctx, data.Height)
+	tps, err := t.GetTransactionsWithProofs(ctx, data.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	if data.Index >= uint32(len(txs)) {
+	if data.Index >= uint32(len(tps.Transactions)) {
 		return nil, fmt.Errorf("cometbft: invalid transaction index")
 	}
 
-	// CometBFT Merkle tree is computed over hashes and not over transactions.
-	hashes := make([][]byte, 0, len(txs))
-	for _, tx := range txs {
-		hash := sha256.Sum256(tx)
-		hashes = append(hashes, hash[:])
-	}
-
-	_, proofs := cmtmerkle.ProofsFromByteSlices(hashes)
-
 	return &transaction.Proof{
 		Height:   data.Height,
-		RawProof: cbor.Marshal(proofs[data.Index]),
+		RawProof: tps.Proofs[data.Index],
 	}, nil
 }
 

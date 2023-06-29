@@ -37,6 +37,9 @@ pub enum Error {
     #[error("transaction verification: {0}")]
     TransactionVerificationFailed(#[source] anyhow::Error),
 
+    #[error("state root: {0}")]
+    StateRoot(#[source] anyhow::Error),
+
     #[error("internal consensus verifier error")]
     Internal,
 }
@@ -50,7 +53,8 @@ impl Error {
             Error::ChainContextTransitionFailed(_) => 4,
             Error::FreshnessVerificationFailed(_) => 5,
             Error::TransactionVerificationFailed(_) => 6,
-            Error::Internal => 7,
+            Error::StateRoot(_) => 7,
+            Error::Internal => 8,
         }
     }
 }

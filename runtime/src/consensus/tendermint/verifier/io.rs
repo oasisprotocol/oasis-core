@@ -85,6 +85,21 @@ impl Io {
 
         Ok(SignedTransactionWithProof { signed_tx, proof })
     }
+
+    pub fn fetch_block_metadata(&self, height: u64) -> Result<SignedTransactionWithProof, IoError> {
+        let result = self
+            .protocol
+            .call_host(Body::HostFetchBlockMetadataTxRequest { height })
+            .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
+
+        // Extract proof from response.
+        let (signed_tx, proof) = match result {
+            Body::HostFetchBlockMetadataTxResponse { signed_tx, proof } => (signed_tx, proof),
+            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
+        };
+
+        Ok(SignedTransactionWithProof { signed_tx, proof })
+    }
 }
 
 impl components::io::Io for Io {

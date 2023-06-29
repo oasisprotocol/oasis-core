@@ -18,6 +18,7 @@ use oasis_core_runtime::{
         verifier::{TrustRoot, Verifier},
     },
     dispatcher::{PostInitState, PreInitState},
+    future::block_on,
     protocol::HostInfo,
     transaction::{
         dispatcher::{ExecuteBatchResult, ExecuteTxResult},
@@ -216,6 +217,17 @@ impl TxnDispatcher for Dispatcher {
         method: &str,
         args: Vec<u8>,
     ) -> Result<Vec<u8>, RuntimeError> {
+        // Verify consensus state and runtime state root integrity before execution.
+        // TODO: Make this async.
+        let _ = block_on(self.consensus_verifier.verify_for_query(
+            ctx.consensus_block.clone(),
+            ctx.header.clone(),
+            ctx.epoch,
+        ))?;
+
+        // Ensure the runtime is still ready to process requests.
+        ctx.protocol.ensure_initialized()?;
+
         let mut ctx = Context {
             core: &mut ctx,
             host_info: &self.host_info,
