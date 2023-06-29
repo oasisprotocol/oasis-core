@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.9 (2023-06-29)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/oasis-node/cmd/ias: Regenerate TLS certificate on startup
+  ([#5289](https://github.com/oasisprotocol/oasis-core/issues/5289))
+
+### Internal Changes
+
+- Bump Go to 1.20.2
+  ([#5228](https://github.com/oasisprotocol/oasis-core/issues/5228))
+
+- go: Bump go-libp2p to 0.28.1, go-libp2p-pubsub to 0.9.3
+  ([#5297](https://github.com/oasisprotocol/oasis-core/issues/5297))
+
 ## 22.2.8 (2023-04-20)
 
 | Protocol          | Version   |
