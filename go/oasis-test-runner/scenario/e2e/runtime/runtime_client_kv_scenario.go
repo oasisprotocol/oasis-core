@@ -109,6 +109,14 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 	}
 }
 
+// KeyValueQuery queries the value stored under the given key for the specified round from
+// the database, and verifies that the response (current value) contains the expected data.
+type KeyValueQuery struct {
+	Key      string
+	Response string
+	Round    uint64
+}
+
 // InsertKeyValueTx inserts a key/value pair to the database, and verifies that the response
 // (previous value) contains the expected data.
 type InsertKeyValueTx struct {
