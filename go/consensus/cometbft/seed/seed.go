@@ -2,6 +2,7 @@ package seed
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -125,6 +126,21 @@ func (s *Service) GetAddresses() ([]node.ConsensusAddress, error) {
 	return []node.ConsensusAddress{addr}, nil
 }
 
+func initSeedDataDir(dataDir string) (string, error) {
+	seedDataDir := filepath.Join(dataDir, "seed")
+
+	// Check if there is a legacy data directory and migrate it so we can get the old address book.
+	legacyDataDir := filepath.Join(dataDir, "tendermint-seed")
+	if fi, err := os.Stat(legacyDataDir); err == nil && fi.IsDir() {
+		_ = os.Rename(legacyDataDir, seedDataDir)
+	}
+
+	if err := tmcommon.InitDataDir(seedDataDir); err != nil {
+		return "", err
+	}
+	return seedDataDir, nil
+}
+
 // New creates a new seed node service.
 func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Provider) (*Service, error) {
 	var err error
@@ -138,8 +154,8 @@ func New(dataDir string, identity *identity.Identity, genesisProvider genesis.Pr
 		identity: identity,
 	}
 
-	seedDataDir := filepath.Join(dataDir, "cometbft-seed")
-	if err = tmcommon.InitDataDir(seedDataDir); err != nil {
+	seedDataDir, err := initSeedDataDir(dataDir)
+	if err != nil {
 		return nil, fmt.Errorf("cometbft/seed: failed to initialize data dir: %w", err)
 	}
 

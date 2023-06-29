@@ -37,7 +37,7 @@ import (
 var _ api.ApplicationState = (*applicationState)(nil)
 
 // appStateDir is the subdirectory which contains ABCI state.
-const appStateDir = "abci-state"
+const appStateDir = "state"
 
 type proposalState struct {
 	// header is the partial proposal header (only set when we are the proposer).

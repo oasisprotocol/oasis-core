@@ -154,7 +154,7 @@ func (sc *validatorEquivocationImpl) Run(childEnv *env.Env) error { // nolint: g
 	if err = validator.Stop(); err != nil {
 		return fmt.Errorf("stopping validator: %w", err)
 	}
-	tmDb, err := tmBadger.New(filepath.Join(validator.DataDir(), "cometbft/data/blockstore.badger.db"), true)
+	tmDb, err := tmBadger.New(filepath.Join(validator.DataDir(), "consensus/data/blockstore.badger.db"), true)
 	if err != nil {
 		return fmt.Errorf("CometBFT badger db: %w", err)
 	}
