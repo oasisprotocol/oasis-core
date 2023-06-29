@@ -29,7 +29,6 @@ import (
 	cmtstatesync "github.com/cometbft/cometbft/statesync"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/prometheus/client_golang/prometheus"
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -78,9 +77,6 @@ var (
 	_ api.Backend = (*fullService)(nil)
 
 	labelCometBFT = prometheus.Labels{"backend": "cometbft"}
-
-	// Flags has the configuration flags.
-	Flags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
 // fullService implements a full CometBFT node.
