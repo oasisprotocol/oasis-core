@@ -13,7 +13,7 @@ import (
 const (
 	// StateDir is the name of the directory located inside the node's data
 	// directory which contains the CometBFT state.
-	StateDir = "cometbft"
+	StateDir = "consensus"
 
 	// ConfigDir is the name of the CometBFT configuration directory.
 	ConfigDir = "config"
