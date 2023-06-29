@@ -118,6 +118,20 @@ func (cli *KVTestClient) workload(ctx context.Context) error {
 
 func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.Source64) error {
 	switch req := req.(type) {
+	case KeyValueQuery:
+		rsp, err := cli.sc.submitKeyValueRuntimeGetQuery(
+			ctx,
+			runtimeID,
+			req.Key,
+			req.Round,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to query k/v pair: %w", err)
+		}
+		if rsp != req.Response {
+			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
+		}
+
 	case InsertKeyValueTx:
 		rsp, err := cli.sc.submitKeyValueRuntimeInsertTx(
 			ctx,
