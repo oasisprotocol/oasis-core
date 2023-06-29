@@ -22,7 +22,8 @@ import (
 const (
 	computeIdentitySeedTemplate = "ekiden node worker %d"
 
-	ByzantineDefaultIdentitySeed = "ekiden byzantine node worker, luck=6" // Slot 3.
+	// ByzantineDefaultIdentitySeed for slot 3.
+	ByzantineDefaultIdentitySeed = "ekiden byzantine node worker, luck=6"
 	ByzantineSlot1IdentitySeed   = "ekiden byzantine node worker, luck=1"
 )
 

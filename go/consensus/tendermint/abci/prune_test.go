@@ -3,7 +3,6 @@ package abci
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -21,7 +20,7 @@ func TestPruneKeepN(t *testing.T) {
 	require := require.New(t)
 
 	// Create a new random temporary directory under /tmp.
-	dir, err := ioutil.TempDir("", "abci-prune.test.badger")
+	dir, err := os.MkdirTemp("", "abci-prune.test.badger")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 

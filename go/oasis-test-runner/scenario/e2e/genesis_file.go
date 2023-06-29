@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -236,7 +235,7 @@ func (s *genesisFileImpl) createUncanonicalGenesisFile(childEnv *env.Env, uncano
 	if err != nil {
 		return fmt.Errorf("failed to marshal genesis document: %w", err)
 	}
-	if err := ioutil.WriteFile(uncanonicalGenesisFilePath, rawUncanonical, 0o600); err != nil {
+	if err := os.WriteFile(uncanonicalGenesisFilePath, rawUncanonical, 0o600); err != nil {
 		return fmt.Errorf("failed to write mashalled genesis document to file: %w", err)
 	}
 

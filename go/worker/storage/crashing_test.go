@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -29,7 +28,7 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 		err error
 	)
 
-	cfg.DB, err = ioutil.TempDir("", "crashing.test.badgerdb")
+	cfg.DB, err = os.MkdirTemp("", "crashing.test.badgerdb")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(cfg.DB)
 

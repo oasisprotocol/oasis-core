@@ -2,7 +2,6 @@ package signer
 
 import (
 	"crypto/rand"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -17,7 +16,7 @@ import (
 func TestCompositeCtor(t *testing.T) {
 	require := require.New(t)
 
-	dataDir, err := ioutil.TempDir("", "oasis-node-test_signer_")
+	dataDir, err := os.MkdirTemp("", "oasis-node-test_signer_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dataDir)
 

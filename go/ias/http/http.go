@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -116,7 +115,7 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidenc
 	// Extract the pertinent parts of the response.
 	sig := []byte(resp.Header.Get("X-IASReport-Signature"))
 	certChain := []byte(resp.Header.Get("X-IASReport-Signing-Certificate"))
-	avr, err := ioutil.ReadAll(resp.Body)
+	avr, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("ias: failed to read response body: %w", err)
 	}
@@ -152,7 +151,7 @@ func (e *httpEndpoint) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, er
 	}
 
 	// Extract and parse the SigRL.
-	sigRL, err := ioutil.ReadAll(resp.Body)
+	sigRL, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("ias: failed to read response body: %w", err)
 	}

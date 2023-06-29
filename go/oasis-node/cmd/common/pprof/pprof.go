@@ -4,12 +4,13 @@ package pprof
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
 	"runtime"
+	"time"
+
 	runtimePprof "runtime/pprof"
 
 	flag "github.com/spf13/pflag"
@@ -43,7 +44,7 @@ func DumpHeapToFile(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to determine current working directory for memory profiler output: %w", err)
 	}
-	mprof, merr := ioutil.TempFile(wd, name+".*.pb")
+	mprof, merr := os.CreateTemp(wd, name+".*.pb")
 	if merr != nil {
 		return fmt.Errorf("failed to create file for memory profiler output: %w", merr)
 	}
@@ -82,7 +83,7 @@ func (p *pprofService) Start() error {
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	p.listener = listener
-	p.server = &http.Server{Handler: mux}
+	p.server = &http.Server{Handler: mux, ReadTimeout: 5 * time.Second}
 
 	go func() {
 		if err := p.server.Serve(p.listener); err != nil {

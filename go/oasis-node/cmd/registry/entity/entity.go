@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -181,7 +180,7 @@ func doUpdate(cmd *cobra.Command, args []string) {
 	}
 	for _, v := range viper.GetStringSlice(CfgNodeDescriptor) {
 		var b []byte
-		if b, err = ioutil.ReadFile(v); err != nil {
+		if b, err = os.ReadFile(v); err != nil {
 			logger.Error("failed to read node descriptor",
 				"err", err,
 				"path", v,
@@ -271,7 +270,7 @@ func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, ent *ent
 		)
 		os.Exit(1)
 	}
-	if err = ioutil.WriteFile(filepath.Join(dataDir, entityGenesisFilename), prettySigned, 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(dataDir, entityGenesisFilename), prettySigned, 0o600); err != nil {
 		logger.Error("failed to write signed entity genesis registration",
 			"err", err,
 		)

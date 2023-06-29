@@ -3,7 +3,6 @@ package process
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,7 +19,7 @@ func TestNakedSandbox(t *testing.T) {
 func testBindData(t *testing.T, factory func(Config) (Process, error), sandboxBinary string) {
 	require := require.New(t)
 
-	dir, err := ioutil.TempDir("", "oasis-runtime-host-sandbox-test_")
+	dir, err := os.MkdirTemp("", "oasis-runtime-host-sandbox-test_")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 

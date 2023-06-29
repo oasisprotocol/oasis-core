@@ -4,7 +4,6 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	flag "github.com/spf13/pflag"
@@ -96,7 +95,7 @@ func GetTxNonceAndFee() (uint64, *transaction.Fee) {
 func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction, signer signature.Signer) {
 	if viper.GetBool(CfgTxUnsigned) {
 		rawUnsignedTx := cbor.Marshal(tx)
-		if err := ioutil.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0o600); err != nil {
+		if err := os.WriteFile(viper.GetString(CfgTxFile), rawUnsignedTx, 0o600); err != nil {
 			logger.Error("failed to save unsigned transaction",
 				"err", err,
 			)
@@ -148,7 +147,7 @@ func SignAndSaveTx(ctx context.Context, tx *transaction.Transaction, signer sign
 		)
 		os.Exit(1)
 	}
-	if err = ioutil.WriteFile(viper.GetString(CfgTxFile), prettySigTx, 0o600); err != nil {
+	if err = os.WriteFile(viper.GetString(CfgTxFile), prettySigTx, 0o600); err != nil {
 		logger.Error("failed to save signed transaction",
 			"err", err,
 		)

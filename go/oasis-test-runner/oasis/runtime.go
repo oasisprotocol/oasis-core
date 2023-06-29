@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -360,7 +359,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	// Save runtime descriptor into file.
 	rtDescStr, _ := json.Marshal(rt.descriptor)
 	path := filepath.Join(rtDir.String(), rtDescriptorFile)
-	if err := ioutil.WriteFile(path, rtDescStr, 0o600); err != nil {
+	if err := os.WriteFile(path, rtDescStr, 0o600); err != nil {
 		return nil, fmt.Errorf("failed to write runtime descriptor to file: %w", err)
 	}
 

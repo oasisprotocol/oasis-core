@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -102,7 +101,7 @@ func doInitPolicy(cmd *cobra.Command, args []string) {
 	}
 
 	c := cbor.Marshal(p)
-	if err = ioutil.WriteFile(viper.GetString(CfgPolicyFile), c, 0o644); err != nil { // nolint: gosec
+	if err = os.WriteFile(viper.GetString(CfgPolicyFile), c, 0o644); err != nil { // nolint: gosec
 		logger.Error("failed to write key manager policy cbor file",
 			"err", err,
 			"CfgPolicyFile", viper.GetString(CfgPolicyFile),
@@ -230,7 +229,7 @@ func doSignPolicy(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if err = ioutil.WriteFile(viper.GetStringSlice(CfgPolicySigFile)[0], sigBytes, 0o600); err != nil {
+	if err = os.WriteFile(viper.GetStringSlice(CfgPolicySigFile)[0], sigBytes, 0o600); err != nil {
 		logger.Error("failed to write policy file signature",
 			"err", err,
 			"CfgPolicySigFile", viper.GetStringSlice(CfgPolicySigFile),
@@ -264,7 +263,7 @@ func signPolicyFromFlags() (*signature.Signature, error) {
 		return nil, errors.New("no private key file or test key provided")
 	}
 
-	policyBytes, err := ioutil.ReadFile(viper.GetString(CfgPolicyFile))
+	policyBytes, err := os.ReadFile(viper.GetString(CfgPolicyFile))
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +301,7 @@ func doVerifyPolicy(cmd *cobra.Command, args []string) {
 }
 
 func verifyPolicyFromFlags() error {
-	policyBytes, err := ioutil.ReadFile(viper.GetString(CfgPolicyFile))
+	policyBytes, err := os.ReadFile(viper.GetString(CfgPolicyFile))
 	if err != nil {
 		return err
 	}
@@ -329,7 +328,7 @@ func verifyPolicyFromFlags() error {
 	// signature file.
 	if !viper.GetBool(CfgPolicyIgnoreSig) {
 		for _, sigFile := range viper.GetStringSlice(CfgPolicySigFile) {
-			policySigBytes, err := ioutil.ReadFile(sigFile)
+			policySigBytes, err := os.ReadFile(sigFile)
 			if err != nil {
 				return err
 			}
@@ -348,7 +347,7 @@ func verifyPolicyFromFlags() error {
 	return nil
 }
 
-/// unmarshalPolicyChor checks whether given CBOR is a valid kmApi.PolicySGX struct.
+// / unmarshalPolicyChor checks whether given CBOR is a valid kmApi.PolicySGX struct.
 func unmarshalPolicyCBOR(pb []byte) (*kmApi.PolicySGX, error) {
 	var p *kmApi.PolicySGX = &kmApi.PolicySGX{}
 	if err := cbor.Unmarshal(pb, p); err != nil {
@@ -384,7 +383,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if err = ioutil.WriteFile(viper.GetString(CfgStatusFile), prettyStatus, 0o644); err != nil { // nolint: gosec
+	if err = os.WriteFile(viper.GetString(CfgStatusFile), prettyStatus, 0o644); err != nil { // nolint: gosec
 		logger.Error("failed to write key manager status json file",
 			"err", err,
 			"CfgStatusFile", viper.GetString(CfgStatusFile),
@@ -409,7 +408,7 @@ func doGenUpdate(cmd *cobra.Command, args []string) {
 	// signatures.
 	var signedPolicy kmApi.SignedPolicySGX
 
-	policyBytes, err := ioutil.ReadFile(viper.GetString(CfgPolicyFile))
+	policyBytes, err := os.ReadFile(viper.GetString(CfgPolicyFile))
 	if err != nil {
 		logger.Error("failed to read policy file",
 			"err", err,
@@ -425,7 +424,7 @@ func doGenUpdate(cmd *cobra.Command, args []string) {
 
 	for _, sigFile := range viper.GetStringSlice(CfgPolicySigFile) {
 		var policySigBytes []byte
-		if policySigBytes, err = ioutil.ReadFile(sigFile); err != nil {
+		if policySigBytes, err = os.ReadFile(sigFile); err != nil {
 			logger.Error("failed to read signature file",
 				"err", err,
 				"sig_file", sigFile,
@@ -471,7 +470,7 @@ func statusFromFlags() (*kmApi.Status, error) {
 	// Unmarshal KM policy and its signatures.
 	var signedPolicy *kmApi.SignedPolicySGX
 	if viper.GetString(CfgPolicyFile) != "" {
-		pb, err := ioutil.ReadFile(viper.GetString(CfgPolicyFile))
+		pb, err := os.ReadFile(viper.GetString(CfgPolicyFile))
 		if err != nil {
 			return nil, err
 		}
@@ -485,7 +484,7 @@ func statusFromFlags() (*kmApi.Status, error) {
 		}
 
 		for _, sigFile := range viper.GetStringSlice(CfgPolicySigFile) {
-			sigBytes, err := ioutil.ReadFile(sigFile)
+			sigBytes, err := os.ReadFile(sigFile)
 			if err != nil {
 				return nil, err
 			}

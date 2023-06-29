@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -206,13 +205,13 @@ func (k *PublicKey) LoadPEM(fn string, signer Signer) error {
 
 			copy((*k)[:], pubKey[:])
 
-			return ioutil.WriteFile(fn, buf, filePerm)
+			return os.WriteFile(fn, buf, filePerm)
 		}
 		return err
 	}
 	defer f.Close() // nolint: errcheck
 
-	buf, err := ioutil.ReadAll(f)
+	buf, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}

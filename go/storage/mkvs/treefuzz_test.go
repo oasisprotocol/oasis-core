@@ -3,7 +3,7 @@ package mkvs
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"sort"
 	"testing"
 
@@ -37,7 +37,7 @@ type Op struct {
 }
 
 func convertFromTestVector(fn string) []byte {
-	raw, err := ioutil.ReadFile(fn)
+	raw, err := os.ReadFile(fn)
 	if err != nil {
 		panic(err)
 	}

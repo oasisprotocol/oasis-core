@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,7 +28,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require := require.New(t)
 
 	// Generate some data.
-	dir, err := ioutil.TempDir("", "mkvs.checkpoint")
+	dir, err := os.MkdirTemp("", "mkvs.checkpoint")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
@@ -264,7 +263,7 @@ func TestOversizedChunks(t *testing.T) {
 	require := require.New(t)
 
 	// Generate some data.
-	dir, err := ioutil.TempDir("", "mkvs.checkpoint")
+	dir, err := os.MkdirTemp("", "mkvs.checkpoint")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
@@ -310,7 +309,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 	require := require.New(t)
 
 	// Generate some data.
-	dir, err := ioutil.TempDir("", "mkvs.checkpoint")
+	dir, err := os.MkdirTemp("", "mkvs.checkpoint")
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 

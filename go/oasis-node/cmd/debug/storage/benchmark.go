@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -54,7 +53,7 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 	// Initialize the data directory.
 	dataDir := cmdCommon.DataDir()
 	if dataDir == "" {
-		dataDir, err = ioutil.TempDir("", "storage-benchmark")
+		dataDir, err = os.MkdirTemp("", "storage-benchmark")
 		if err != nil {
 			logger.Error("failed to initialize data directory",
 				"err", err,

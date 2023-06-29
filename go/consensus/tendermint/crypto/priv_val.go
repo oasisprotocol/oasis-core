@@ -198,10 +198,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
 	_ "unsafe" // For go:linkname.
 
 	tmcrypto "github.com/tendermint/tendermint/crypto"
@@ -355,7 +355,7 @@ func LoadOrGeneratePrivVal(baseDir string, signer signature.Signer) (tmtypes.Pri
 		signer:   signer,
 	}
 
-	b, err := ioutil.ReadFile(fn)
+	b, err := os.ReadFile(fn)
 	if err == nil {
 		if err = json.Unmarshal(b, &pv); err != nil {
 			return nil, fmt.Errorf("tendermint/crypto: failed to parse private validator file: %w", err)

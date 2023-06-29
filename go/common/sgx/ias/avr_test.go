@@ -2,7 +2,7 @@ package ias
 
 import (
 	"encoding/base64"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -43,13 +43,13 @@ func testAVRv4(t *testing.T) {
 
 func loadAVRv4(t *testing.T) (raw, sig, certs []byte) {
 	var err error
-	raw, err = ioutil.ReadFile("testdata/avr_v4_body_sw_hardening_needed.json")
+	raw, err = os.ReadFile("testdata/avr_v4_body_sw_hardening_needed.json")
 	require.NoError(t, err, "Read test vector")
 
-	sig, err = ioutil.ReadFile("testdata/avr_v4_body_sw_hardening_needed.sig")
+	sig, err = os.ReadFile("testdata/avr_v4_body_sw_hardening_needed.sig")
 	require.NoError(t, err, "Read signature")
 
-	certs, err = ioutil.ReadFile("testdata/avr_certificates_urlencoded.pem")
+	certs, err = os.ReadFile("testdata/avr_certificates_urlencoded.pem")
 	require.NoError(t, err, "Read certificate chain")
 
 	return

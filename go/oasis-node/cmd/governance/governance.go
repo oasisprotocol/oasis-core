@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -109,7 +108,7 @@ func doGenSubmitProposal(cmd *cobra.Command, args []string) {
 	switch {
 	// Upgrade descriptor.
 	case viper.GetString(cfgProposalUpgradeDescriptor) != "":
-		descriptorBytes, err := ioutil.ReadFile(viper.GetString(cfgProposalUpgradeDescriptor))
+		descriptorBytes, err := os.ReadFile(viper.GetString(cfgProposalUpgradeDescriptor))
 		if err != nil {
 			logger.Error("failed to read upgrade descriptor",
 				"err", err,
