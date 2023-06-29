@@ -283,7 +283,7 @@ func (mgr *peerManager) peerProtocolWatcher() {
 		}
 
 		for _, p := range protocols {
-			if protocol.ID(p) == mgr.protocolID {
+			if p == mgr.protocolID {
 				mgr.AddPeer(peerID)
 			}
 		}
@@ -303,7 +303,7 @@ func (mgr *peerManager) peerProtocolWatcher() {
 			}
 
 			for _, p := range protocols {
-				if protocol.ID(p) == mgr.protocolID {
+				if p == mgr.protocolID {
 					mgr.AddPeer(evt.Peer)
 				}
 			}
