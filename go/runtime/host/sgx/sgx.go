@@ -427,6 +427,11 @@ func (s *sgxProvisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.
 	return s.sandbox.NewRuntime(ctx, cfg)
 }
 
+// Implements host.Provisioner.
+func (s *sgxProvisioner) Name() string {
+	return "sgx"
+}
+
 // New creates a new Intel SGX runtime provisioner.
 func New(cfg Config) (host.Provisioner, error) {
 	// Use a default RuntimeAttestInterval if none was provided.

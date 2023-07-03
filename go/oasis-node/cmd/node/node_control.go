@@ -331,6 +331,19 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 			}
 		}
 
+		// Fetch provisioner type.
+		_, provisioner, err := rt.Host(ctx)
+		switch {
+		case err != nil:
+			n.logger.Error("failed to fetch host configuration",
+				"err", err,
+			)
+		case provisioner != nil:
+			status.Provisioner = provisioner.Name()
+		default:
+			status.Provisioner = "none"
+		}
+
 		runtimes[rt.ID()] = status
 	}
 	return runtimes, nil

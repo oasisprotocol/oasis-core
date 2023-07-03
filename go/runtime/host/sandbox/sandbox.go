@@ -96,6 +96,11 @@ func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Run
 	return r, nil
 }
 
+// Implements host.Provisioner.
+func (p *provisioner) Name() string {
+	return "sandbox"
+}
+
 // abortRequest is a request to the runtime manager goroutine to abort the runtime.
 // In case of failures or if force flag is set, the runtime is restarted.
 type abortRequest struct {
