@@ -26,7 +26,7 @@ use crate::{
     consensus::{
         beacon::EpochTime,
         registry::METHOD_PROVE_FRESHNESS,
-        roothash::{ComputeResultsHeader, Header},
+        roothash::Header,
         state::ConsensusState,
         tendermint::{
             chain_id, decode_light_block, merkle, state_root_from_header,
@@ -564,17 +564,6 @@ impl Verifier {
         );
     }
 
-    fn trust(&self, cache: &mut Cache, header: ComputeResultsHeader) -> Result<(), Error> {
-        if let Some(state_root) = header.state_root {
-            cache
-                .verified_state_roots
-                .put(header.round, (state_root, cache.last_verified_epoch));
-            cache.last_verified_round = header.round;
-        }
-
-        Ok(())
-    }
-
     /// Start the verifier in a separate thread.
     pub fn start(self) {
         std::thread::spawn(move || {
@@ -753,11 +742,6 @@ impl Verifier {
                             runtime_header,
                             epoch,
                         ))
-                        .map_err(|_| Error::Internal)?;
-                }
-                Command::Trust(header, sender) => {
-                    sender
-                        .send(self.trust(&mut cache, header))
                         .map_err(|_| Error::Internal)?;
                 }
                 Command::LatestState(sender) => {

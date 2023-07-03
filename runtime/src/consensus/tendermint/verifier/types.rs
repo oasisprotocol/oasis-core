@@ -2,11 +2,8 @@ use tokio::sync::oneshot;
 
 use crate::{
     consensus::{
-        beacon::EpochTime,
-        roothash::{ComputeResultsHeader, Header},
-        state::ConsensusState,
-        verifier::Error,
-        Event, LightBlock,
+        beacon::EpochTime, roothash::Header, state::ConsensusState, verifier::Error, Event,
+        LightBlock,
     },
     types::EventKind,
 };
@@ -27,7 +24,6 @@ pub enum Command {
         oneshot::Sender<Result<ConsensusState, Error>>,
         bool,
     ),
-    Trust(ComputeResultsHeader, oneshot::Sender<Result<(), Error>>),
     LatestState(oneshot::Sender<Result<ConsensusState, Error>>),
     LatestHeight(oneshot::Sender<Result<u64, Error>>),
     StateAt(u64, oneshot::Sender<Result<ConsensusState, Error>>),

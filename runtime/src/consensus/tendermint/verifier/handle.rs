@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 use crate::{
     consensus::{
         beacon::EpochTime,
-        roothash::{ComputeResultsHeader, Header},
+        roothash::Header,
         state::ConsensusState,
         tendermint::decode_light_block,
         verifier::{self, Error},
@@ -118,15 +118,6 @@ impl verifier::Verifier for Handle {
         let (sender, receiver) = oneshot::channel();
         self.command_sender
             .send(Command::LatestHeight(sender))
-            .map_err(|_| Error::Internal)?;
-
-        receiver.await.map_err(|_| Error::Internal)?
-    }
-
-    async fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
-        let (sender, receiver) = oneshot::channel();
-        self.command_sender
-            .send(Command::Trust(header.clone(), sender))
             .map_err(|_| Error::Internal)?;
 
         receiver.await.map_err(|_| Error::Internal)?
