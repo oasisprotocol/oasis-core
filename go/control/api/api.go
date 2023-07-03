@@ -179,6 +179,9 @@ type RuntimeStatus struct {
 	Executor *executorWorker.Status `json:"executor,omitempty"`
 	// Storage contains the storage worker status in case this node is a storage node.
 	Storage *storageWorker.Status `json:"storage,omitempty"`
+
+	// Provisioner is the name of the runtime provisioner.
+	Provisioner string `json:"provisioner,omitempty"`
 }
 
 // SeedStatus is the status of the seed node.

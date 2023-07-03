@@ -42,6 +42,9 @@ type Provisioner interface {
 	// This method may return before the runtime is fully provisioned. The returned runtime will not
 	// be started automatically, you must call Start explicitly.
 	NewRuntime(ctx context.Context, cfg Config) (Runtime, error)
+
+	// Name returns the name of the provisioner.
+	Name() string
 }
 
 // Runtime is a provisioned runtime interface.

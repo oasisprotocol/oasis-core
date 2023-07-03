@@ -34,6 +34,11 @@ func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Run
 	return r, nil
 }
 
+// Implements host.Provisioner.
+func (p *provisioner) Name() string {
+	return "mock"
+}
+
 type runtime struct {
 	runtimeID common.Namespace
 
