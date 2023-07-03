@@ -202,8 +202,9 @@ func (sc *runtimeUpgradeImpl) ensureActiveVersion(ctx context.Context, v version
 				return fmt.Errorf("%s: failed to query status: %w", node.Name, err)
 			}
 
-			if status.Runtimes[rt.ID()].Provisioner != "sandbox" {
-				return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, rt.ID(), status.Runtimes[rt.ID()].Provisioner)
+			provisioner := status.Runtimes[rt.ID()].Provisioner
+			if provisioner != "sandbox" && provisioner != "sgx" {
+				return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, rt.ID(), provisioner)
 			}
 
 			cs := status.Runtimes[rt.ID()].Committee
