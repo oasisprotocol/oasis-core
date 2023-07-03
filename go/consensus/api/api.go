@@ -132,13 +132,6 @@ type ClientBackend interface {
 	// client verification.
 	GetLightBlock(ctx context.Context, height int64) (*LightBlock, error)
 
-	// GetLightBlockForState returns a light block for the state as of executing the consensus layer
-	// block at the specified height. Note that the height of the returned block may differ
-	// depending on consensus layer implementation details.
-	//
-	// In case light block for the given height is not yet available, it returns ErrVersionNotFound.
-	GetLightBlockForState(ctx context.Context, height int64) (*LightBlock, error)
-
 	// State returns a MKVS read syncer that can be used to read consensus state from a remote node
 	// and verify it against the trusted local root.
 	State() syncer.ReadSyncer

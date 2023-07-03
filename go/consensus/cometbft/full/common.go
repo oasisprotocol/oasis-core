@@ -13,7 +13,6 @@ import (
 	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
 	"github.com/cometbft/cometbft/state"
-	cmtstate "github.com/cometbft/cometbft/state"
 	"github.com/cometbft/cometbft/store"
 	cmttypes "github.com/cometbft/cometbft/types"
 
@@ -559,15 +558,6 @@ func (n *commonNode) GetBlock(ctx context.Context, height int64) (*consensusAPI.
 
 // Implements consensusAPI.Backend.
 func (n *commonNode) GetLightBlock(ctx context.Context, height int64) (*consensusAPI.LightBlock, error) {
-	return n.getLightBlock(ctx, height, false)
-}
-
-// Implements consensusAPI.Backend.
-func (n *commonNode) GetLightBlockForState(ctx context.Context, height int64) (*consensusAPI.LightBlock, error) {
-	return n.getLightBlock(ctx, height+1, true)
-}
-
-func (n *commonNode) getLightBlock(ctx context.Context, height int64, allowPending bool) (*consensusAPI.LightBlock, error) {
 	if err := n.ensureStarted(ctx); err != nil {
 		return nil, err
 	}
@@ -589,24 +579,8 @@ func (n *commonNode) getLightBlock(ctx context.Context, height int64, allowPendi
 	if err == nil && commit != nil && commit.Header != nil {
 		lb.SignedHeader = &commit.SignedHeader
 		tmHeight = commit.Header.Height
-	} else if allowPending {
-		// The specified height seems to be for the "next" block that has not yet been finalized. We
-		// construct a "pending" block instead (this block cannot be verified by a light client as
-		// it doesn't have any commits).
-		var state cmtstate.State
-		state, err = n.stateStore.Load()
-		if err != nil {
-			return nil, fmt.Errorf("cometbft: failed to fetch latest blockchain state: %w", err)
-		}
-
-		commit := cmttypes.NewCommit(height, 0, cmttypes.BlockID{}, nil)
-		var proposerAddr [20]byte
-		blk := state.MakeBlock(height, nil, commit, nil, proposerAddr[:])
-		lb.SignedHeader = &cmttypes.SignedHeader{
-			Header: &blk.Header,
-			Commit: commit,
-		}
 	}
+
 	protoLb, err := lb.ToProto()
 	if err != nil {
 		return nil, fmt.Errorf("cometbft: failed to convert light block: %w", err)
