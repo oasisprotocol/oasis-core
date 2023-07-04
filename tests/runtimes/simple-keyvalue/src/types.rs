@@ -32,12 +32,14 @@ pub enum CallOutput {
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct Key {
     pub key: String,
+    pub generation: u64,
 }
 
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
+    pub generation: u64,
 }
 
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
