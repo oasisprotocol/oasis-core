@@ -11,8 +11,8 @@ use tendermint_rpc::error::Error as RpcError;
 
 use crate::{
     consensus::{
-        tendermint::{decode_light_block, merkle::Proof, LightBlockMeta},
-        transaction::SignedTransaction,
+        tendermint::{decode_light_block, LightBlockMeta},
+        transaction::SignedTransactionWithProof,
         HEIGHT_LATEST,
     },
     protocol::Protocol,
@@ -69,7 +69,7 @@ impl Io {
     pub fn fetch_freshness_proof(
         &self,
         nonce: &Nonce,
-    ) -> Result<(SignedTransaction, u64, Proof), IoError> {
+    ) -> Result<SignedTransactionWithProof, IoError> {
         let result = self
             .protocol
             .call_host(Body::HostProveFreshnessRequest {
@@ -83,11 +83,22 @@ impl Io {
             _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
         };
 
-        // Decode raw proof as a Tendermint Merkle proof of inclusion.
-        let merkle_proof = cbor::from_slice(&proof.raw_proof)
+        Ok(SignedTransactionWithProof { signed_tx, proof })
+    }
+
+    pub fn fetch_block_metadata(&self, height: u64) -> Result<SignedTransactionWithProof, IoError> {
+        let result = self
+            .protocol
+            .call_host(Body::HostFetchBlockMetadataTxRequest { height })
             .map_err(|err| IoError::rpc(RpcError::server(err.to_string())))?;
 
-        Ok((signed_tx, proof.height, merkle_proof))
+        // Extract proof from response.
+        let (signed_tx, proof) = match result {
+            Body::HostFetchBlockMetadataTxResponse { signed_tx, proof } => (signed_tx, proof),
+            _ => return Err(IoError::rpc(RpcError::server("bad response".to_string()))),
+        };
+
+        Ok(SignedTransactionWithProof { signed_tx, proof })
     }
 }
 

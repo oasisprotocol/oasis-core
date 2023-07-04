@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use super::{
     beacon::EpochTime,
-    roothash::{ComputeResultsHeader, Header},
+    roothash::Header,
     state::{registry::ImmutableState as RegistryState, ConsensusState},
     Event, LightBlock,
 };
@@ -34,6 +34,12 @@ pub enum Error {
     #[error("freshness verification: {0}")]
     FreshnessVerificationFailed(#[source] anyhow::Error),
 
+    #[error("transaction verification: {0}")]
+    TransactionVerificationFailed(#[source] anyhow::Error),
+
+    #[error("state root: {0}")]
+    StateRoot(#[source] anyhow::Error),
+
     #[error("internal consensus verifier error")]
     Internal,
 }
@@ -46,7 +52,9 @@ impl Error {
             Error::TrustedStateLoadingFailed => 3,
             Error::ChainContextTransitionFailed(_) => 4,
             Error::FreshnessVerificationFailed(_) => 5,
-            Error::Internal => 6,
+            Error::TransactionVerificationFailed(_) => 6,
+            Error::StateRoot(_) => 7,
+            Error::Internal => 8,
         }
     }
 }
@@ -121,9 +129,6 @@ pub trait Verifier: Send + Sync {
 
     /// Return the latest known consensus layer height.
     async fn latest_height(&self) -> Result<u64, Error>;
-
-    /// Record the given (locally computed and thus verified) results header as trusted.
-    async fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -168,10 +173,6 @@ impl<T: ?Sized + Verifier> Verifier for Arc<T> {
 
     async fn latest_height(&self) -> Result<u64, Error> {
         Verifier::latest_height(&**self).await
-    }
-
-    async fn trust(&self, header: &ComputeResultsHeader) -> Result<(), Error> {
-        Verifier::trust(&**self, header).await
     }
 }
 

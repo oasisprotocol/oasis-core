@@ -120,6 +120,8 @@ type Body struct {
 	HostFetchTxBatchResponse         *HostFetchTxBatchResponse         `json:",omitempty"`
 	HostFetchGenesisHeightRequest    *HostFetchGenesisHeightRequest    `json:",omitempty"`
 	HostFetchGenesisHeightResponse   *HostFetchGenesisHeightResponse   `json:",omitempty"`
+	HostFetchBlockMetadataTxRequest  *HostFetchBlockMetadataTxRequest  `json:",omitempty"`
+	HostFetchBlockMetadataTxResponse *HostFetchBlockMetadataTxResponse `json:",omitempty"`
 	HostProveFreshnessRequest        *HostProveFreshnessRequest        `json:",omitempty"`
 	HostProveFreshnessResponse       *HostProveFreshnessResponse       `json:",omitempty"`
 	HostIdentityRequest              *HostIdentityRequest              `json:",omitempty"`
@@ -185,6 +187,9 @@ type Features struct {
 	// KeyManagerMasterSecretRotation is a feature specifying that the runtime supports rotating
 	// key manager's master secret.
 	KeyManagerMasterSecretRotation bool `json:"key_manager_master_secret_rotation,omitempty"`
+	// SameBlockConsensusValidation is a feature specifying that the runtime supports same-block
+	// consensus validation.
+	SameBlockConsensusValidation bool `json:"same_block_consensus_validation,omitempty"`
 }
 
 // HasScheduleControl returns true when the runtime supports the schedule control feature.
@@ -582,6 +587,22 @@ type HostFetchTxBatchRequest struct {
 type HostFetchTxBatchResponse struct {
 	// Batch is a batch of transactions.
 	Batch [][]byte `json:"batch,omitempty"`
+}
+
+// HostFetchBlockMetadataTxRequest is a request to the host to fetch the block metadata transaction
+// for the specified height, along with a proof of inclusion.
+type HostFetchBlockMetadataTxRequest struct {
+	// Height is the consensus block height.
+	Height uint64 `json:"height"`
+}
+
+// HostFetchBlockMetadataTxResponse is a response from the host fetching the block metadata
+// transaction, along with a proof of inclusion.
+type HostFetchBlockMetadataTxResponse struct {
+	// SignedTx is a signed block metadata transaction.
+	SignedTx *consensusTx.SignedTransaction `json:"signed_tx"`
+	// Proof of transaction inclusion in a block.
+	Proof *consensusTx.Proof `json:"proof"`
 }
 
 // HostProveFreshnessRequest is a request to host to prove state freshness.

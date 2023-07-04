@@ -2,11 +2,13 @@ package full
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"sync"
 	"sync/atomic"
 
 	dbm "github.com/cometbft/cometbft-db"
+	cmtmerkle "github.com/cometbft/cometbft/crypto/merkle"
 	cmtcore "github.com/cometbft/cometbft/rpc/core"
 	cmtcoretypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/jsonrpc/types"
@@ -16,6 +18,7 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -731,6 +734,32 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 		txsWithResults.Results = append(txsWithResults.Results, result)
 	}
 	return &txsWithResults, nil
+}
+
+// Implements consensusAPI.Backend.
+func (n *commonNode) GetTransactionsWithProofs(ctx context.Context, height int64) (*consensusAPI.TransactionsWithProofs, error) {
+	txs, err := n.GetTransactions(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	// CometBFT Merkle tree is computed over hashes and not over transactions.
+	hashes := make([][]byte, 0, len(txs))
+	for _, tx := range txs {
+		hash := sha256.Sum256(tx)
+		hashes = append(hashes, hash[:])
+	}
+
+	_, proofs := cmtmerkle.ProofsFromByteSlices(hashes)
+	rawProofs := make([][]byte, 0, len(proofs))
+	for _, p := range proofs {
+		rawProofs = append(rawProofs, cbor.Marshal(p))
+	}
+
+	return &consensusAPI.TransactionsWithProofs{
+		Transactions: txs,
+		Proofs:       rawProofs,
+	}, nil
 }
 
 // Implements consensusAPI.Backend.

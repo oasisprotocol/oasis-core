@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use crate::{
     consensus::{
         beacon::EpochTime,
-        roothash::{ComputeResultsHeader, Header},
+        roothash::Header,
         state::ConsensusState,
         tendermint::decode_light_block,
         verifier::{self, Error},
@@ -105,9 +105,5 @@ impl verifier::Verifier for NopVerifier {
 
     async fn latest_height(&self) -> Result<u64, Error> {
         Ok(self.fetch_light_block(HEIGHT_LATEST).await?.height)
-    }
-
-    async fn trust(&self, _header: &ComputeResultsHeader) -> Result<(), Error> {
-        Ok(())
     }
 }

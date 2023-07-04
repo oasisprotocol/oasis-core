@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -381,6 +382,47 @@ func (h *runtimeHostHandler) handleHostFetchTxBatch(
 	return &protocol.HostFetchTxBatchResponse{Batch: raw}, nil
 }
 
+func (h *runtimeHostHandler) handleHostFetchBlockMetadataTx(
+	ctx context.Context,
+	rq *protocol.HostFetchBlockMetadataTxRequest,
+) (*protocol.HostFetchBlockMetadataTxResponse, error) {
+	tps, err := h.consensus.GetTransactionsWithProofs(ctx, int64(rq.Height))
+	if err != nil {
+		return nil, err
+	}
+
+	// The block metadata transaction should be located at the end of the block.
+	for i := len(tps.Transactions) - 1; i >= 0; i-- {
+		rawTx := tps.Transactions[i]
+
+		var sigTx transaction.SignedTransaction
+		if err = cbor.Unmarshal(rawTx, &sigTx); err != nil {
+			continue
+		}
+
+		// Signature already verified by the validators, skipping.
+
+		var tx transaction.Transaction
+		if err = cbor.Unmarshal(sigTx.Blob, &tx); err != nil {
+			continue
+		}
+
+		if tx.Method != consensus.MethodMeta {
+			continue
+		}
+
+		return &protocol.HostFetchBlockMetadataTxResponse{
+			SignedTx: &sigTx,
+			Proof: &transaction.Proof{
+				Height:   int64(rq.Height),
+				RawProof: tps.Proofs[i],
+			},
+		}, nil
+	}
+
+	return nil, fmt.Errorf("block metadata transaction not found")
+}
+
 func (h *runtimeHostHandler) handleHostProveFreshness(
 	ctx context.Context,
 	rq *protocol.HostProveFreshnessRequest,
@@ -447,6 +489,9 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	case rq.HostFetchTxBatchRequest != nil:
 		// Transaction pool.
 		rsp.HostFetchTxBatchResponse, err = h.handleHostFetchTxBatch(ctx, rq.HostFetchTxBatchRequest)
+	case rq.HostFetchBlockMetadataTxRequest != nil:
+		// Block metadata.
+		rsp.HostFetchBlockMetadataTxResponse, err = h.handleHostFetchBlockMetadataTx(ctx, rq.HostFetchBlockMetadataTxRequest)
 	case rq.HostProveFreshnessRequest != nil:
 		// Prove freshness.
 		rsp.HostProveFreshnessResponse, err = h.handleHostProveFreshness(ctx, rq.HostProveFreshnessRequest)

@@ -684,12 +684,6 @@ impl Dispatcher {
             in_msgs_count: results.in_msgs_count.try_into().unwrap(),
         };
 
-        // Since we've computed the batch, we can trust it.
-        // TODO: Make this async.
-        tokio::runtime::Handle::current()
-            .block_on(state.consensus_verifier.trust(&header))
-            .expect("trusting a computed header must succeed");
-
         debug!(self.logger, "Transaction batch execution complete";
             "previous_hash" => ?header.previous_hash,
             "io_root" => ?header.io_root,

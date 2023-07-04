@@ -160,6 +160,10 @@ type ClientBackend interface {
 	// height.
 	GetTransactionsWithResults(ctx context.Context, height int64) (*TransactionsWithResults, error)
 
+	// GetTransactionsWithProofs returns a list of all transactions and their proofs of inclusion
+	// contained within a consensus block at a specific height.
+	GetTransactionsWithProofs(ctx context.Context, height int64) (*TransactionsWithProofs, error)
+
 	// GetUnconfirmedTransactions returns a list of transactions currently in the local node's
 	// mempool. These have not yet been included in a block.
 	GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error)
@@ -420,4 +424,12 @@ type GetSignerNonceRequest struct {
 type TransactionsWithResults struct {
 	Transactions [][]byte          `json:"transactions"`
 	Results      []*results.Result `json:"results"`
+}
+
+// TransactionsWithProofs is GetTransactionsWithProofs response.
+//
+// Proofs[i] is a proof of block inclusion for Transactions[i].
+type TransactionsWithProofs struct {
+	Transactions [][]byte `json:"transactions"`
+	Proofs       [][]byte `json:"proofs"`
 }

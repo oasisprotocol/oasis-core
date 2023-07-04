@@ -61,6 +61,7 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 
 	txs, err := backend.GetTransactions(ctx, status.LatestHeight)
 	require.NoError(err, "GetTransactions")
+	require.NotEmpty(txs, "number of transactions should be greater than zero")
 
 	txsWithResults, err := backend.GetTransactionsWithResults(ctx, status.LatestHeight)
 	require.NoError(err, "GetTransactionsWithResults")
@@ -73,6 +74,19 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 		txsWithResults.Results,
 		len(txsWithResults.Transactions),
 		"GetTransactionsWithResults.Results length mismatch",
+	)
+
+	txsWithProofs, err := backend.GetTransactionsWithProofs(ctx, status.LatestHeight)
+	require.NoError(err, "GetTransactionsWithProofs")
+	require.Len(
+		txsWithProofs.Transactions,
+		len(txs),
+		"GetTransactionsWithProofs.Transactions length mismatch",
+	)
+	require.Len(
+		txsWithProofs.Proofs,
+		len(txsWithProofs.Transactions),
+		"GetTransactionsWithProofs.Proofs length mismatch",
 	)
 
 	_, err = backend.GetUnconfirmedTransactions(ctx)
