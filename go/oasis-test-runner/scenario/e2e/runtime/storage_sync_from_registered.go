@@ -75,8 +75,7 @@ func (sc *storageSyncFromRegisteredImpl) Fixture() (*oasis.NetworkFixture, error
 	return f, nil
 }
 
-func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *storageSyncFromRegisteredImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	var nextEpoch beacon.EpochTime
 
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
@@ -88,7 +87,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if nextEpoch, err = sc.initialEpochTransitions(fixture); err != nil {
+	if nextEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 	nextEpoch++

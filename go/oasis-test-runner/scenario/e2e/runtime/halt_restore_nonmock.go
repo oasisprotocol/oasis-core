@@ -50,8 +50,7 @@ func (sc *haltRestoreNonMockImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *haltRestoreNonMockImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
-	ctx := context.Background()
+func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}

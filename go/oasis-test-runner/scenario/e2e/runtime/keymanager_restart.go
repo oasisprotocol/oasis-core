@@ -42,8 +42,7 @@ func (sc *kmRestartImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *kmRestartImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *kmRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}

@@ -200,7 +200,7 @@ func (sc *KmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.
 
 	// Grab a state dump and ensure all keymanager nodes have a matching
 	// checksum.
-	doc, err := ctrl.Consensus.StateToGenesis(context.Background(), 0)
+	doc, err := ctrl.Consensus.StateToGenesis(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to obtain consensus state: %w", err)
 	}
@@ -225,8 +225,7 @@ func (sc *KmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.
 	return nil
 }
 
-func (sc *KmUpgradeImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *KmUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {

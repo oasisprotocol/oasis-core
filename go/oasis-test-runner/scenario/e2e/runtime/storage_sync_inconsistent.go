@@ -114,11 +114,10 @@ func (sc *storageSyncInconsistentImpl) wipe(ctx context.Context, worker *oasis.N
 	return os.RemoveAll(persistent.GetPersistentStoreDBDir(worker.DataDir()))
 }
 
-func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
+func (sc *storageSyncInconsistentImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	compute0 := sc.Net.ComputeWorkers()[0]
 	messyWorker := sc.Net.ComputeWorkers()[sc.messyStorage]
 	sc.runtimeID = sc.Net.Runtimes()[1].ID()
-	ctx := context.Background()
 
 	if err := sc.Scenario.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
@@ -129,7 +128,7 @@ func (sc *storageSyncInconsistentImpl) Run(childEnv *env.Env) error {
 		return err
 	}
 
-	if _, err = sc.initialEpochTransitions(fixture); err != nil {
+	if _, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 

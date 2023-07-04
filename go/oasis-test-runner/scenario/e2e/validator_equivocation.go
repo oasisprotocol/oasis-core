@@ -85,7 +85,7 @@ func (sc *validatorEquivocationImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *validatorEquivocationImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+func (sc *validatorEquivocationImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -93,7 +93,6 @@ func (sc *validatorEquivocationImpl) Run(childEnv *env.Env) error { // nolint: g
 	ctrl := sc.Net.Controller()
 
 	sc.Logger.Info("waiting for network to come up")
-	ctx := context.Background()
 	if err := ctrl.WaitNodesRegistered(ctx, len(sc.Net.Validators())); err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 
 	fileSigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/file"
@@ -48,7 +49,7 @@ func (sc *identityCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }
 
-func (sc *identityCLIImpl) Run(childEnv *env.Env) error {
+func (sc *identityCLIImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Provision node's identity.
 	args := []string{
 		"identity", "init",

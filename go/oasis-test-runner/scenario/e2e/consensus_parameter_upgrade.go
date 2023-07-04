@@ -223,14 +223,11 @@ type consensusParameterUpgradeImpl struct {
 	currentEpoch beacon.EpochTime
 	entityNonce  uint64
 	entity       *oasis.Entity
-
-	ctx context.Context
 }
 
 func newConsensusParameterUpgradeImpl(name string, parameters *api.ChangeParametersProposal, upgradeChecker upgradeChecker) scenario.Scenario {
 	sc := &consensusParameterUpgradeImpl{
 		Scenario:       *NewScenario(name),
-		ctx:            context.Background(),
 		parameters:     parameters,
 		upgradeChecker: upgradeChecker,
 	}
@@ -244,7 +241,6 @@ func (sc *consensusParameterUpgradeImpl) Clone() scenario.Scenario {
 		upgradeChecker: sc.upgradeChecker,
 		currentEpoch:   sc.currentEpoch,
 		entityNonce:    sc.entityNonce,
-		ctx:            context.Background(),
 	}
 }
 
@@ -333,7 +329,7 @@ func (sc *consensusParameterUpgradeImpl) nextEpoch(ctx context.Context) error {
 }
 
 // Submits a proposal, votes for it and ensures the proposal is finalized.
-func (sc *consensusParameterUpgradeImpl) ensureProposalFinalized(content *api.ProposalContent) (*api.Proposal, error) {
+func (sc *consensusParameterUpgradeImpl) ensureProposalFinalized(ctx context.Context, content *api.ProposalContent) (*api.Proposal, error) {
 	// Submit proposal.
 	tx := api.NewSubmitProposalTx(sc.entityNonce, &transaction.Fee{Gas: 2000}, content)
 	sc.entityNonce++
@@ -342,13 +338,13 @@ func (sc *consensusParameterUpgradeImpl) ensureProposalFinalized(content *api.Pr
 		return nil, fmt.Errorf("failed signing submit proposal transaction: %w", err)
 	}
 	sc.Logger.Info("submitting proposal", "content", content)
-	err = sc.Net.Controller().Consensus.SubmitTx(sc.ctx, sigTx)
+	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed submitting proposal transaction: %w", err)
 	}
 
 	// Ensure proposal created.
-	aps, err := sc.Net.Controller().Governance.ActiveProposals(sc.ctx, consensus.HeightLatest)
+	aps, err := sc.Net.Controller().Governance.ActiveProposals(ctx, consensus.HeightLatest)
 	if err != nil {
 		return nil, fmt.Errorf("failed querying active proposals: %w", err)
 	}
@@ -375,13 +371,13 @@ func (sc *consensusParameterUpgradeImpl) ensureProposalFinalized(content *api.Pr
 		return nil, fmt.Errorf("failed signing cast vote transaction: %w", err)
 	}
 	sc.Logger.Info("submitting vote for proposal", "proposal", proposal, "vote", vote)
-	err = sc.Net.Controller().Consensus.SubmitTx(sc.ctx, sigTx)
+	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed submitting cast vote transaction: %w", err)
 	}
 
 	// Ensure vote was cast.
-	votes, err := sc.Net.Controller().Governance.Votes(sc.ctx,
+	votes, err := sc.Net.Controller().Governance.Votes(ctx,
 		&api.ProposalQuery{
 			Height:     consensus.HeightLatest,
 			ProposalID: aps[0].ID,
@@ -400,12 +396,12 @@ func (sc *consensusParameterUpgradeImpl) ensureProposalFinalized(content *api.Pr
 	// Transition to the epoch when proposal finalizes.
 	for ep := sc.currentEpoch + 1; ep < aps[0].ClosesAt+1; ep++ {
 		sc.Logger.Info("transitioning to epoch", "epoch", ep)
-		if err = sc.nextEpoch(sc.ctx); err != nil {
+		if err = sc.nextEpoch(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	p, err := sc.Net.Controller().Governance.Proposal(sc.ctx,
+	p, err := sc.Net.Controller().Governance.Proposal(ctx,
 		&api.ProposalQuery{
 			Height:     consensus.HeightLatest,
 			ProposalID: proposal.ID,
@@ -428,12 +424,10 @@ func (sc *consensusParameterUpgradeImpl) ensureProposalFinalized(content *api.Pr
 	return p, nil
 }
 
-func (sc *consensusParameterUpgradeImpl) Run(childEnv *env.Env) error {
+func (sc *consensusParameterUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	// Wait for the validators to come up.
 	sc.Logger.Info("waiting for validators to initialize",
@@ -445,12 +439,12 @@ func (sc *consensusParameterUpgradeImpl) Run(childEnv *env.Env) error {
 		}
 	}
 
-	if err := sc.nextEpoch(sc.ctx); err != nil {
+	if err := sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 
 	sc.entity = sc.Net.Entities()[1]
-	entityAcc, err := sc.Net.Controller().Staking.Account(sc.ctx,
+	entityAcc, err := sc.Net.Controller().Staking.Account(ctx,
 		&staking.OwnerQuery{
 			Height: consensus.HeightLatest,
 			Owner:  DeterministicEntity1,
@@ -463,7 +457,7 @@ func (sc *consensusParameterUpgradeImpl) Run(childEnv *env.Env) error {
 
 	// Run pre-upgrade checker.
 	sc.Logger.Info("running pre-upgrade checks")
-	if err = sc.upgradeChecker.PreUpgradeFn(sc.ctx, sc.Net.Controller()); err != nil {
+	if err = sc.upgradeChecker.PreUpgradeFn(ctx, sc.Net.Controller()); err != nil {
 		return err
 	}
 
@@ -471,20 +465,20 @@ func (sc *consensusParameterUpgradeImpl) Run(childEnv *env.Env) error {
 	content := &api.ProposalContent{
 		ChangeParameters: sc.parameters,
 	}
-	_, err = sc.ensureProposalFinalized(content)
+	_, err = sc.ensureProposalFinalized(ctx, content)
 	if err != nil {
 		return fmt.Errorf("upgrade proposal error: %w", err)
 	}
 
 	// Run post-upgrade checker.
 	sc.Logger.Info("running post-upgrade checks")
-	if err = sc.upgradeChecker.PostUpgradeFn(sc.ctx, sc.Net.Controller()); err != nil {
+	if err = sc.upgradeChecker.PostUpgradeFn(ctx, sc.Net.Controller()); err != nil {
 		return err
 	}
 
 	// Do one final epoch transition.
 	sc.Logger.Info("final epoch transition")
-	if err = sc.nextEpoch(sc.ctx); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 

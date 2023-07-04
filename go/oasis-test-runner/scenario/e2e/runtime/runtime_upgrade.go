@@ -232,8 +232,7 @@ func (sc *runtimeUpgradeImpl) ensureActiveVersion(ctx context.Context, v version
 	return nil
 }
 
-func (sc *runtimeUpgradeImpl) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
