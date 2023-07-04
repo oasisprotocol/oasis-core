@@ -6,32 +6,32 @@ import (
 
 var (
 	InsertKeyValueScenario = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key", "my_value", "", false},
-		GetKeyValueTx{"my_key", "my_value", false},
+		InsertKeyValueTx{"my_key", "my_value", "", false, 0},
+		GetKeyValueTx{"my_key", "my_value", false, 0},
 	})
 
 	RemoveKeyValueScenario = NewTestClientScenario([]interface{}{
-		GetKeyValueTx{"my_key", "my_value", false},
+		GetKeyValueTx{"my_key", "my_value", false, 0},
 	})
 
 	InsertTransferKeyValueScenario = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key", "my_value", "", false},
-		GetKeyValueTx{"my_key", "my_value", false},
+		InsertKeyValueTx{"my_key", "my_value", "", false, 0},
+		GetKeyValueTx{"my_key", "my_value", false, 0},
 		ConsensusTransferTx{},
 	})
 
 	InsertRemoveKeyValueEncScenario = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key", "my_value", "", true},
-		GetKeyValueTx{"my_key", "my_value", true},
-		RemoveKeyValueTx{"my_key", "my_value", true},
-		GetKeyValueTx{"my_key", "", true},
+		InsertKeyValueTx{"my_key", "my_value", "", true, 0},
+		GetKeyValueTx{"my_key", "my_value", true, 0},
+		RemoveKeyValueTx{"my_key", "my_value", true, 0},
+		GetKeyValueTx{"my_key", "", true, 0},
 	})
 
 	InsertRemoveKeyValueEncScenarioV2 = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key2", "my_value2", "", true},
-		GetKeyValueTx{"my_key2", "my_value2", true},
-		RemoveKeyValueTx{"my_key2", "my_value2", true},
-		GetKeyValueTx{"my_key2", "", true},
+		InsertKeyValueTx{"my_key2", "my_value2", "", true, 0},
+		GetKeyValueTx{"my_key2", "my_value2", true, 0},
+		RemoveKeyValueTx{"my_key2", "my_value2", true, 0},
+		GetKeyValueTx{"my_key2", "", true, 0},
 	})
 
 	SimpleKeyValueScenario = newSimpleKeyValueScenario(false)
@@ -60,10 +60,10 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 				response = fmt.Sprintf("hello_value_from_%s:%d", runtimeID, iter-1)
 			}
 
-			if err := submit(InsertKeyValueTx{key, value, response, false}); err != nil {
+			if err := submit(InsertKeyValueTx{key, value, response, false, 0}); err != nil {
 				return err
 			}
-			if err := submit(GetKeyValueTx{key, value, false}); err != nil {
+			if err := submit(GetKeyValueTx{key, value, false, 0}); err != nil {
 				return err
 			}
 
@@ -75,13 +75,13 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 				response = value
 			}
 
-			if err := submit(InsertKeyValueTx{key, value, response, false}); err != nil {
+			if err := submit(InsertKeyValueTx{key, value, response, false, 0}); err != nil {
 				return err
 			}
 			if err := submit(ConsensusTransferTx{}); err != nil {
 				return err
 			}
-			if err := submit(GetKeyValueTx{key, value, false}); err != nil {
+			if err := submit(GetKeyValueTx{key, value, false, 0}); err != nil {
 				return err
 			}
 
@@ -98,7 +98,7 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 		if err := submit(InsertMsg{inMsgKey, inMsgValue}); err != nil {
 			return err
 		}
-		if err := submit(GetKeyValueTx{inMsgKey, inMsgValue, false}); err != nil {
+		if err := submit(GetKeyValueTx{inMsgKey, inMsgValue, false, 0}); err != nil {
 			return err
 		}
 		if err := submit(ConsensusAccountsTx{}); err != nil {
@@ -112,25 +112,28 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 // InsertKeyValueTx inserts a key/value pair to the database, and verifies that the response
 // (previous value) contains the expected data.
 type InsertKeyValueTx struct {
-	Key       string
-	Value     string
-	Response  string
-	Encrypted bool
+	Key        string
+	Value      string
+	Response   string
+	Encrypted  bool
+	Generation uint64
 }
 
 // GetKeyValueTx retrieves the value stored under the given key from the database,
 // and verifies that the response (current value) contains the expected data.
 type GetKeyValueTx struct {
-	Key       string
-	Response  string
-	Encrypted bool
+	Key        string
+	Response   string
+	Encrypted  bool
+	Generation uint64
 }
 
 // RemoveKeyValueTx removes the value stored under the given key from the database.
 type RemoveKeyValueTx struct {
-	Key       string
-	Response  string
-	Encrypted bool
+	Key        string
+	Response   string
+	Encrypted  bool
+	Generation uint64
 }
 
 // InsertMsg inserts an incoming runtime message.

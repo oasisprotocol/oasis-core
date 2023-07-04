@@ -254,12 +254,10 @@ impl Methods {
     fn get_encryption_context(
         ctx: &mut TxContext,
         key: &[u8],
+        generation: u64,
     ) -> Result<EncryptionContext, String> {
         // Derive key pair ID based on key.
         let key_pair_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
-
-        // Always use keys from generation 0.
-        let generation = 0;
 
         // Fetch encryption keys.
         let result = ctx
@@ -282,7 +280,7 @@ impl Methods {
         //       to also generate a (deterministic) nonce.
         let nonce = [0u8; NONCE_SIZE];
 
-        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes())?;
+        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes(), args.generation)?;
         let existing = enc_ctx.insert(
             ctx.parent.core.runtime_state,
             args.key.as_bytes(),
@@ -300,7 +298,7 @@ impl Methods {
         if ctx.is_check_only() {
             return Ok(None);
         }
-        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes())?;
+        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes(), args.generation)?;
         let existing = enc_ctx.get(ctx.parent.core.runtime_state, args.key.as_bytes());
         existing
             .map(String::from_utf8)
@@ -313,7 +311,7 @@ impl Methods {
         if ctx.is_check_only() {
             return Ok(None);
         }
-        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes())?;
+        let enc_ctx = Self::get_encryption_context(ctx, args.key.as_bytes(), args.generation)?;
         let existing = enc_ctx.remove(ctx.parent.core.runtime_state, args.key.as_bytes());
         existing
             .map(String::from_utf8)

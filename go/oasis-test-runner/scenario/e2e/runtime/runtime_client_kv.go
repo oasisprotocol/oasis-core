@@ -126,6 +126,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 			req.Key,
 			req.Value,
 			req.Encrypted,
+			req.Generation,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert k/v pair: %w", err)
@@ -141,6 +142,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 			rng.Uint64(),
 			req.Key,
 			req.Encrypted,
+			req.Generation,
 		)
 		if err != nil {
 			return err
@@ -156,6 +158,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 			rng.Uint64(),
 			req.Key,
 			req.Encrypted,
+			req.Generation,
 		)
 		if err != nil {
 			return err
@@ -234,19 +237,23 @@ func (sc *Scenario) submitKeyValueRuntimeInsertTx(
 	nonce uint64,
 	key, value string,
 	encrypted bool,
+	generation uint64,
 ) (string, error) {
 	sc.Logger.Info("inserting k/v pair",
 		"key", key,
 		"value", value,
 		"encrypted", encrypted,
+		"generation", generation,
 	)
 
 	args := struct {
-		Key   string `json:"key"`
-		Value string `json:"value"`
+		Key        string `json:"key"`
+		Value      string `json:"value"`
+		Generation uint64 `json:"generation,omitempty"`
 	}{
-		Key:   key,
-		Value: value,
+		Key:        key,
+		Value:      value,
+		Generation: generation,
 	}
 
 	if encrypted {
@@ -261,16 +268,20 @@ func (sc *Scenario) submitKeyValueRuntimeGetTx(
 	nonce uint64,
 	key string,
 	encrypted bool,
+	generation uint64,
 ) (string, error) {
 	sc.Logger.Info("retrieving k/v pair",
 		"key", key,
 		"encrypted", encrypted,
+		"generation", generation,
 	)
 
 	args := struct {
-		Key string `json:"key"`
+		Key        string `json:"key"`
+		Generation uint64 `json:"generation,omitempty"`
 	}{
-		Key: key,
+		Key:        key,
+		Generation: generation,
 	}
 
 	if encrypted {
@@ -285,16 +296,20 @@ func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
 	nonce uint64,
 	key string,
 	encrypted bool,
+	generation uint64,
 ) (string, error) {
 	sc.Logger.Info("removing k/v pair",
 		"key", key,
 		"encrypted", encrypted,
+		"generation", generation,
 	)
 
 	args := struct {
-		Key string `json:"key"`
+		Key        string `json:"key"`
+		Generation uint64 `json:"generation,omitempty"`
 	}{
-		Key: key,
+		Key:        key,
+		Generation: generation,
 	}
 
 	if encrypted {
