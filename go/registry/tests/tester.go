@@ -1103,19 +1103,17 @@ func randomIdentity(rng *drbg.Drbg) *identity.Identity {
 		return signer
 	}
 
-	ident := &identity.Identity{
-		NodeSigner:      mustGenerateSigner(),
-		P2PSigner:       mustGenerateSigner(),
-		ConsensusSigner: mustGenerateSigner(),
-		VRFSigner:       mustGenerateSigner(),
-	}
-	ident.VRFSigner.(*memorySigner.Signer).UnsafeSetRole(signature.SignerVRF)
-
 	cert, err := tls.Generate(identity.CommonName)
 	if err != nil {
 		panic(err)
 	}
-	ident.SetTLSCertificate(cert)
+
+	ident := identity.WithTLSCertificate(cert)
+	ident.NodeSigner = mustGenerateSigner()
+	ident.P2PSigner = mustGenerateSigner()
+	ident.ConsensusSigner = mustGenerateSigner()
+	ident.VRFSigner = mustGenerateSigner()
+	ident.VRFSigner.(*memorySigner.Signer).UnsafeSetRole(signature.SignerVRF)
 
 	return ident
 }
@@ -1141,7 +1139,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 			nodeIdentity.P2PSigner,
 			nodeIdentity.ConsensusSigner,
 			nodeIdentity.VRFSigner,
-			nodeIdentity.GetTLSSigner(),
+			nodeIdentity.TLSSigner,
 		}
 		invalidIdentity := randomIdentity(rng)
 
@@ -1173,7 +1171,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		nod.Node.P2P.Addresses = append(nod.Node.P2P.Addresses, addr)
 		nod.Node.Consensus.ID = nodeIdentity.ConsensusSigner.Public()
 		// Generate dummy TLS certificate.
-		nod.Node.TLS.PubKey = nodeIdentity.GetTLSSigner().Public()
+		nod.Node.TLS.PubKey = nodeIdentity.TLSSigner.Public()
 
 		nod.SignedRegistration, err = node.MultiSignNode(nodeSigners, api.RegisterNodeSignatureContext, nod.Node)
 		if err != nil {
@@ -1235,7 +1233,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 					nodeIdentity.NodeSigner,
 					nodeIdentity.ConsensusSigner,
 					nodeIdentity.VRFSigner,
-					nodeIdentity.GetTLSSigner(),
+					nodeIdentity.TLSSigner,
 				},
 				api.RegisterNodeSignatureContext,
 				&invNode,
@@ -1300,7 +1298,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				nodeIdentity.NodeSigner,
 				nodeIdentity.P2PSigner,
 				nodeIdentity.VRFSigner,
-				nodeIdentity.GetTLSSigner(),
+				nodeIdentity.TLSSigner,
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode,
@@ -1317,14 +1315,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		invNode = *nod.Node
 		invNode.ID = invalidIdentity.NodeSigner.Public()
 		invNode.Consensus.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
+		invNode.TLS.PubKey = invalidIdentity.TLSSigner.Public()
 		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
 				invalidIdentity.ConsensusSigner,
 				nodeIdentity.P2PSigner,
 				invalidIdentity.VRFSigner,
-				invalidIdentity.GetTLSSigner(),
+				invalidIdentity.TLSSigner,
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode,
@@ -1341,14 +1339,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		invNode = *nod.Node
 		invNode.ID = invalidIdentity.NodeSigner.Public()
 		invNode.P2P.ID = invalidIdentity.ConsensusSigner.Public()
-		invNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
+		invNode.TLS.PubKey = invalidIdentity.TLSSigner.Public()
 		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				invalidIdentity.NodeSigner,
 				nodeIdentity.ConsensusSigner,
 				invalidIdentity.P2PSigner,
 				invalidIdentity.VRFSigner,
-				invalidIdentity.GetTLSSigner(),
+				invalidIdentity.TLSSigner,
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode,
@@ -1372,7 +1370,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				invalidIdentity.ConsensusSigner,
 				invalidIdentity.P2PSigner,
 				invalidIdentity.VRFSigner,
-				nodeIdentity.GetTLSSigner(),
+				nodeIdentity.TLSSigner,
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode,
@@ -1454,14 +1452,14 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 		newNode.VRF = node.VRFInfo{
 			ID: invalidIdentity.VRFSigner.Public(),
 		}
-		newNode.TLS.PubKey = invalidIdentity.GetTLSSigner().Public()
+		newNode.TLS.PubKey = invalidIdentity.TLSSigner.Public()
 		invNodeReg.signed, err = node.MultiSignNode(
 			[]signature.Signer{
 				nodeIdentity.NodeSigner,
 				invalidIdentity.ConsensusSigner,
 				invalidIdentity.P2PSigner,
 				invalidIdentity.VRFSigner,
-				invalidIdentity.GetTLSSigner(),
+				invalidIdentity.TLSSigner,
 			},
 			api.RegisterNodeSignatureContext,
 			newNode,
@@ -1483,7 +1481,7 @@ func (ent *TestEntity) NewTestNodes(nCompute int, idNonce []byte, runtimes []*no
 				nodeIdentity.ConsensusSigner,
 				nodeIdentity.P2PSigner,
 				nodeIdentity.VRFSigner,
-				nodeIdentity.GetTLSSigner(),
+				nodeIdentity.TLSSigner,
 			},
 			api.RegisterNodeSignatureContext,
 			&invNode,

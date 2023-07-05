@@ -73,7 +73,7 @@ func doNodeInit(cmd *cobra.Command, args []string) {
 		)
 		os.Exit(1)
 	}
-	if _, err = identity.LoadOrGenerate(dataDir, nodeSignerFactory, true); err != nil {
+	if _, err = identity.LoadOrGenerate(dataDir, nodeSignerFactory); err != nil {
 		logger.Error("failed to load or generate node identity",
 			"err", err,
 		)
@@ -114,7 +114,7 @@ func doShowPubkey(cmd *cobra.Command, args []string, sentry bool) {
 	case true:
 		rawCertificate = identity.TLSSentryClientCertificate.Certificate[0]
 	case false:
-		rawCertificate = identity.GetTLSCertificate().Certificate[0]
+		rawCertificate = identity.TLSCertificate.Certificate[0]
 	}
 	cert, err := x509.ParseCertificate(rawCertificate)
 	if err != nil {

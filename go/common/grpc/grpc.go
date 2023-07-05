@@ -640,7 +640,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		grpc.KeepaliveParams(serverKeepAliveParams),
 		grpc.ForceServerCodec(&CBORCodec{}),
 	}
-	if config.Identity != nil && config.Identity.GetTLSCertificate() != nil {
+	if config.Identity != nil && config.Identity.TLSCertificate != nil {
 		tlsConfig := &tls.Config{
 			ClientAuth: clientAuthType,
 			VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
@@ -651,7 +651,7 @@ func NewServer(config *ServerConfig) (*Server, error) {
 				})
 			},
 			GetCertificate: func(ch *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return config.Identity.GetTLSCertificate(), nil
+				return config.Identity.TLSCertificate, nil
 			},
 		}
 

@@ -289,8 +289,6 @@ func (km *Keymanager) ModifyConfig() error {
 		km.Config.Registration.Entity = filepath.Join(dir, "entity.json")
 	}
 
-	km.Config.Registration.RotateCerts = 1
-
 	km.Config.Mode = config.ModeKeyManager
 	km.Config.Runtime.Provisioner = km.runtimeProvisioner
 	km.Config.Runtime.SGXLoader = km.net.cfg.RuntimeSGXLoaderBinary
@@ -328,7 +326,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	err = host.setProvisionedIdentity(false, fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers)))
+	err = host.setProvisionedIdentity(fmt.Sprintf(keymanagerIdentitySeedTemplate, len(net.keymanagers)))
 	if err != nil {
 		return nil, fmt.Errorf("oasis/keymanager: failed to provision node identity: %w", err)
 	}

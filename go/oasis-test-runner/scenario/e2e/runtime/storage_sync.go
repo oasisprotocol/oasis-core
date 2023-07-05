@@ -47,10 +47,6 @@ func (sc *storageSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.Consensus.Parameters.StateCheckpointInterval = 10
 	f.Network.Consensus.Parameters.StateCheckpointNumKept = 2
 	f.Network.Consensus.Parameters.StateCheckpointChunkSize = 1024 * 1024
-	// Disable certificate rotation on validator nodes so we can more easily use them for sync.
-	for i := range f.Validators {
-		f.Validators[i].DisableCertRotation = true
-	}
 
 	// Make the first compute worker check for checkpoints more often.
 	f.ComputeWorkers[0].CheckpointCheckInterval = 1 * time.Second

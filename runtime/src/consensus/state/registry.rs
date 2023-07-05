@@ -131,7 +131,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("a40448052f74a1c0c2d47c2b01a433ad7f3782ea47dfe5575170fec2587569c9"),
+            hash: Hash::from("e665876318cda0ee2364ee7a36903f03db973c6a29666339971e8ed674a6eb12"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -163,7 +163,6 @@ mod test {
                     expiration: 32,
                     tls: TLSInfo{
                         pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
-                        next_pub_key: signature::PublicKey::from("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
                         ..Default::default()
                     },
                     p2p: P2PInfo{

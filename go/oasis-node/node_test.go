@@ -172,7 +172,7 @@ func newTestNode(t *testing.T) *testNode {
 	// Generate the test node identity.
 	nodeSignerFactory, err := fileSigner.NewFactory(dataDir, identity.RequiredSignerRoles...)
 	require.NoError(err, "create node file signer")
-	identity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory, false)
+	identity, err := identity.LoadOrGenerate(dataDir, nodeSignerFactory)
 	require.NoError(err, "create test node identity")
 	// Include node in entity.
 	entity.Nodes = append(entity.Nodes, identity.NodeSigner.Public())

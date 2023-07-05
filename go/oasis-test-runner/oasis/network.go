@@ -925,7 +925,7 @@ func (net *Network) GetCLIConfig() cli.Config {
 	return cfg
 }
 
-func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persistTLS bool) (signature.PublicKey, signature.PublicKey, *x509.Certificate, error) {
+func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string) (signature.PublicKey, signature.PublicKey, *x509.Certificate, error) {
 	if net.cfg.DeterministicIdentities && !net.cfg.RestoreIdentities {
 		if err := net.generateDeterministicNodeIdentity(dataDir, seed); err != nil {
 			return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to generate deterministic identity: %w", err)
@@ -936,7 +936,7 @@ func (net *Network) provisionNodeIdentity(dataDir *env.Dir, seed string, persist
 	if err != nil {
 		return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to create node file signer factory: %w", err)
 	}
-	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory, persistTLS)
+	nodeIdentity, err := identity.LoadOrGenerate(dataDir.String(), signerFactory)
 	if err != nil {
 		return signature.PublicKey{}, signature.PublicKey{}, nil, fmt.Errorf("oasis: failed to provision node identity: %w", err)
 	}

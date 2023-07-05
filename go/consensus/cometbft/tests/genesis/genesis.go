@@ -131,11 +131,6 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 	}
 	doc.Registry.Entities = append(doc.Registry.Entities, signedEnt)
 
-	// Include test node descriptor in registry genesis.
-	var nextPubKey signature.PublicKey
-	if s := identity.GetNextTLSSigner(); s != nil {
-		nextPubKey = s.Public()
-	}
 	var consensusAddr node.Address
 	if err = consensusAddr.FromIP(net.ParseIP("127.0.0.1"), 9999); err != nil { // Irrelevant address, as this is a single node network.
 		return nil, err
@@ -150,8 +145,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 		EntityID:   ent.ID,
 		Expiration: 2,
 		TLS: node.TLSInfo{
-			PubKey:     identity.GetTLSSigner().Public(),
-			NextPubKey: nextPubKey,
+			PubKey: identity.TLSSigner.Public(),
 		},
 		P2P: node.P2PInfo{
 			ID:        identity.P2PSigner.Public(),
@@ -176,7 +170,7 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 		identity.P2PSigner,
 		identity.ConsensusSigner,
 		identity.VRFSigner,
-		identity.GetTLSSigner(),
+		identity.TLSSigner,
 	}
 	signed, err := node.MultiSignNode(signers, registry.RegisterGenesisNodeSignatureContext, n)
 	if err != nil {

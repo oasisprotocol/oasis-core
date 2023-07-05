@@ -28,8 +28,6 @@ type Validator struct {
 	sentryPubKey  signature.PublicKey
 	consensusPort uint16
 	p2pPort       uint16
-
-	disableCertRotation bool
 }
 
 // ValidatorCfg is the Oasis validator provisioning configuration.
@@ -37,8 +35,6 @@ type ValidatorCfg struct {
 	NodeCfg
 
 	Sentries []*Sentry
-
-	DisableCertRotation bool
 }
 
 func (val *Validator) toGenesisArgs() []string {
@@ -101,12 +97,6 @@ func (val *Validator) ModifyConfig() error {
 		val.Config.Registration.Entity = filepath.Join(dir, "entity.json")
 	}
 
-	if val.disableCertRotation {
-		val.Config.Registration.RotateCerts = 0
-	} else {
-		val.Config.Registration.RotateCerts = 1
-	}
-
 	if len(val.sentries) > 0 {
 		val.Config.Consensus.P2P.DisablePeerExchange = true
 		val.AddSentriesToConfig(val.sentries)
@@ -126,11 +116,10 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 	}
 
 	val := &Validator{
-		Node:                host,
-		sentries:            cfg.Sentries,
-		consensusPort:       host.getProvisionedPort(nodePortConsensus),
-		p2pPort:             host.getProvisionedPort(nodePortP2P),
-		disableCertRotation: cfg.DisableCertRotation,
+		Node:          host,
+		sentries:      cfg.Sentries,
+		consensusPort: host.getProvisionedPort(nodePortConsensus),
+		p2pPort:       host.getProvisionedPort(nodePortP2P),
 	}
 
 	var consensusAddrs []interface{ String() string }
@@ -159,7 +148,7 @@ func (net *Network) NewValidator(cfg *ValidatorCfg) (*Validator, error) {
 
 	// Load node's identity, so that we can pass the validator's CometBFT
 	// address to sentry node(s) to configure it as a private peer.
-	err = host.setProvisionedIdentity(false, fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators)))
+	err = host.setProvisionedIdentity(fmt.Sprintf(validatorIdentitySeedTemplate, len(net.validators)))
 	if err != nil {
 		return nil, fmt.Errorf("oasis/validator: failed to provision node identity: %w", err)
 	}

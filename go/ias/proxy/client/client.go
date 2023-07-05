@@ -126,7 +126,7 @@ func New(identity *identity.Identity, addresses []string) (api.Endpoint, error) 
 			ServerPubKeys: pubKeys,
 			CommonName:    proxy.CommonName,
 			GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-				return identity.GetTLSCertificate(), nil
+				return identity.TLSCertificate, nil
 			},
 		})
 		if err != nil {

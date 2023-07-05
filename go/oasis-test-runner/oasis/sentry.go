@@ -74,8 +74,6 @@ func (sentry *Sentry) ModifyConfig() error {
 		sentry.Config.Consensus.SupplementarySanity.Interval = sentry.supplementarySanityInterval
 	}
 
-	sentry.Config.Registration.RotateCerts = 0
-
 	sentry.Config.Sentry.Enabled = true
 	sentry.Config.Sentry.Control.Port = sentry.controlPort
 
@@ -178,7 +176,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		)
 		return nil, fmt.Errorf("oasis/sentry: failed to create sentry file signer: %w", err)
 	}
-	sentryIdentity, err := identity.LoadOrGenerate(host.dir.String(), signerFactory, true)
+	sentryIdentity, err := identity.LoadOrGenerate(host.dir.String(), signerFactory)
 	if err != nil {
 		net.logger.Error("failed to provision sentry identity",
 			"err", err,
@@ -187,7 +185,7 @@ func (net *Network) NewSentry(cfg *SentryCfg) (*Sentry, error) {
 		return nil, fmt.Errorf("oasis/sentry: failed to provision sentry identity: %w", err)
 	}
 	sentryP2PPublicKey := sentryIdentity.P2PSigner.Public()
-	sentryTLSPublicKey := sentryIdentity.GetTLSSigner().Public()
+	sentryTLSPublicKey := sentryIdentity.TLSSigner.Public()
 
 	sentry := &Sentry{
 		Node:              host,

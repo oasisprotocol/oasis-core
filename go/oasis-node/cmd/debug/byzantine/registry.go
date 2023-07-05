@@ -39,7 +39,7 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 		EntityID:   entityID,
 		Expiration: 1000,
 		TLS: node.TLSInfo{
-			PubKey: id.GetTLSSigner().Public(),
+			PubKey: id.TLSSigner.Public(),
 		},
 		P2P: node.P2PInfo{
 			ID:        id.P2PSigner.Public(),
@@ -68,7 +68,7 @@ func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir 
 			id.P2PSigner,
 			id.ConsensusSigner,
 			id.VRFSigner,
-			id.GetTLSSigner(),
+			id.TLSSigner,
 		},
 		registry.RegisterGenesisNodeSignatureContext,
 		nodeDesc,
