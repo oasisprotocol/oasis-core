@@ -1,7 +1,7 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
-	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.1-oasis1
+	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.2-oasis1
 
 	// v1.5.0 has broken uint parsing, use my commit with fixes instead until
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
