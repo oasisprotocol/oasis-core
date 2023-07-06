@@ -2,6 +2,8 @@
 package scenario
 
 import (
+	"context"
+
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 )
@@ -37,5 +39,5 @@ type Scenario interface {
 	Init(childEnv *env.Env, net *oasis.Network) error
 
 	// Run runs the scenario.
-	Run(childEnv *env.Env) error
+	Run(ctx context.Context, childEnv *env.Env) error
 }

@@ -517,8 +517,8 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *txSourceImpl) manager(env *env.Env, errCh chan error) {
-	ctx, cancel := context.WithCancel(context.Background())
+func (sc *txSourceImpl) manager(ctx context.Context, env *env.Env, errCh chan error) {
+	ctx, cancel := context.WithCancel(ctx)
 	// Make sure we exit when the environment gets torn down.
 	stopCh := make(chan struct{})
 	env.AddOnCleanup(func() {
@@ -854,17 +854,15 @@ func (sc *txSourceImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *txSourceImpl) Run(childEnv *env.Env) error {
+func (sc *txSourceImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return fmt.Errorf("scenario net Start: %w", err)
 	}
 
 	// Wait for all nodes to be synced before we proceed.
-	if err := sc.waitNodesSynced(); err != nil {
+	if err := sc.waitNodesSynced(ctx); err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	sc.Logger.Info("waiting for network to come up")
 	if err := sc.Net.Controller().WaitNodesRegistered(ctx, sc.Net.NumRegisterNodes()); err != nil {
@@ -887,7 +885,7 @@ func (sc *txSourceImpl) Run(childEnv *env.Env) error {
 		}
 	}
 	// Start background scenario manager.
-	go sc.manager(childEnv, errCh)
+	go sc.manager(ctx, childEnv, errCh)
 
 	// Wait for any workload to terminate.
 	var err error

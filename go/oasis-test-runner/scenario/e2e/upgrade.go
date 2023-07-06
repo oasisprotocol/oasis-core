@@ -159,7 +159,6 @@ type nodeUpgradeImpl struct {
 
 	nodeCh <-chan *registry.NodeEvent
 
-	ctx          context.Context
 	currentEpoch beacon.EpochTime
 
 	handlerName    upgrade.HandlerName
@@ -178,9 +177,9 @@ func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string,
 	return filePath, nil
 }
 
-func (sc *nodeUpgradeImpl) nextEpoch() error {
+func (sc *nodeUpgradeImpl) nextEpoch(ctx context.Context) error {
 	sc.currentEpoch++
-	if err := sc.Net.Controller().SetEpoch(sc.ctx, sc.currentEpoch); err != nil {
+	if err := sc.Net.Controller().SetEpoch(ctx, sc.currentEpoch); err != nil {
 		// Errors can happen because an upgrade happens exactly during an epoch transition. So
 		// make sure to ignore them.
 		sc.Logger.Warn("failed to set epoch",
@@ -191,9 +190,9 @@ func (sc *nodeUpgradeImpl) nextEpoch() error {
 	return nil
 }
 
-func (sc *nodeUpgradeImpl) restart(wait bool) error {
+func (sc *nodeUpgradeImpl) restart(ctx context.Context, wait bool) error {
 	sc.Logger.Debug("restarting validator")
-	if err := sc.validator.Restart(sc.ctx); err != nil {
+	if err := sc.validator.Restart(ctx); err != nil {
 		return fmt.Errorf("can't restart validator: %w", err)
 	}
 
@@ -206,7 +205,7 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 		case ev := <-sc.nodeCh:
 			if ev.IsRegistration && ev.Node.ID.Equal(sc.validator.NodeID) {
 				// Nothing else is restarted, so no need to check for specifics here.
-				_ = sc.controller.WaitSync(sc.ctx)
+				_ = sc.controller.WaitSync(ctx)
 				return nil
 			}
 		case <-time.After(60 * time.Second):
@@ -218,7 +217,6 @@ func (sc *nodeUpgradeImpl) restart(wait bool) error {
 func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeChecker) scenario.Scenario {
 	sc := &nodeUpgradeImpl{
 		Scenario:       *NewScenario("node-upgrade-" + string(handlerName)),
-		ctx:            context.Background(),
 		handlerName:    handlerName,
 		upgradeChecker: upgradeChecker,
 	}
@@ -228,7 +226,6 @@ func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeC
 func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeImpl{
 		Scenario:       sc.Scenario.Clone(),
-		ctx:            context.Background(),
 		handlerName:    sc.handlerName,
 		upgradeChecker: sc.upgradeChecker,
 	}
@@ -267,7 +264,7 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return ff, nil
 }
 
-func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+func (sc *nodeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	var err error
 	var descPath string
 
@@ -276,15 +273,15 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	sc.Logger.Info("waiting for network to come up")
-	if err = sc.Net.Controller().WaitNodesRegistered(sc.ctx, len(sc.Net.Validators())); err != nil {
+	if err = sc.Net.Controller().WaitNodesRegistered(ctx, len(sc.Net.Validators())); err != nil {
 		return err
 	}
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 
 	var nodeSub pubsub.ClosableSubscription
-	sc.nodeCh, nodeSub, err = sc.Net.Controller().Registry.WatchNodes(sc.ctx)
+	sc.nodeCh, nodeSub, err = sc.Net.Controller().Registry.WatchNodes(ctx)
 	if err != nil {
 		return fmt.Errorf("can't subscribe to registry node events: %w", err)
 	}
@@ -303,12 +300,12 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	if err != nil {
 		return err
 	}
-	if err = sc.controller.WaitSync(sc.ctx); err != nil {
+	if err = sc.controller.WaitSync(ctx); err != nil {
 		return err
 	}
 
 	// Run pre-upgrade checker.
-	if err = sc.upgradeChecker.PreUpgradeFn(sc.ctx, sc.Net.Controller()); err != nil {
+	if err = sc.upgradeChecker.PreUpgradeFn(ctx, sc.Net.Controller()); err != nil {
 		return err
 	}
 
@@ -342,7 +339,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 		return fmt.Errorf("error submitting descriptor with nonexistent handler to node: %w", err)
 	}
 
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 	<-sc.validator.Exit()
@@ -351,7 +348,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 
 	// Try restarting the node. It should exit immediately now; on paper it can't handle the upgrade
 	// described in the descriptor.
-	if err = sc.restart(false); err != nil {
+	if err = sc.restart(ctx, false); err != nil {
 		return err
 	}
 	<-sc.validator.Exit()
@@ -398,7 +395,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	// Restart the node again, so we have the full set of validators.
-	if err = sc.restart(true); err != nil {
+	if err = sc.restart(ctx, true); err != nil {
 		return err
 	}
 
@@ -410,7 +407,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 			return fmt.Errorf("failed to submit upgrade descriptor to validator %d: %w", i, err)
 		}
 	}
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 
@@ -424,7 +421,7 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 			sc.Logger.Debug("waiting for validator to exit", "num", i)
 			<-val.Exit()
 			sc.Logger.Debug("restarting validator", "num", i)
-			if restartError := val.Restart(sc.ctx); err != nil {
+			if restartError := val.Restart(ctx); err != nil {
 				errCh <- restartError
 			}
 		}(i, val)
@@ -438,16 +435,16 @@ func (sc *nodeUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
 	}
 
 	sc.Logger.Info("waiting for network to come back up")
-	if err = sc.Net.Controller().WaitNodesRegistered(sc.ctx, len(sc.Net.Validators())); err != nil {
+	if err = sc.Net.Controller().WaitNodesRegistered(ctx, len(sc.Net.Validators())); err != nil {
 		return err
 	}
 	sc.Logger.Info("final epoch advance")
-	if err = sc.nextEpoch(); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 
 	// Run post-upgrade checker.
-	if err = sc.upgradeChecker.PostUpgradeFn(sc.ctx, sc.Net.Controller()); err != nil {
+	if err = sc.upgradeChecker.PostUpgradeFn(ctx, sc.Net.Controller()); err != nil {
 		return err
 	}
 

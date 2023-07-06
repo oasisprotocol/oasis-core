@@ -1,6 +1,7 @@
 package pluginsigner
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 
@@ -30,7 +31,7 @@ func (sc *basicImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *basicImpl) Run(childEnv *env.Env) error {
+func (sc *basicImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	roles := []signature.SignerRole{
 		signature.SignerEntity,
 		signature.SignerNode,

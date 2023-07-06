@@ -44,8 +44,6 @@ type governanceConsensusUpgradeImpl struct {
 	shouldCancelUpgrade   bool
 
 	entity *oasis.Entity
-
-	ctx context.Context
 }
 
 func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool) scenario.Scenario {
@@ -67,7 +65,6 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 		),
 		correctUpgradeVersion: correctUpgradeVersion,
 		shouldCancelUpgrade:   cancelUpgrade,
-		ctx:                   context.Background(),
 	}
 	return sc
 }
@@ -79,7 +76,6 @@ func (sc *governanceConsensusUpgradeImpl) Clone() scenario.Scenario {
 		entityNonce:           sc.entityNonce,
 		correctUpgradeVersion: sc.correctUpgradeVersion,
 		shouldCancelUpgrade:   sc.shouldCancelUpgrade,
-		ctx:                   context.Background(),
 	}
 }
 
@@ -186,7 +182,7 @@ func (sc *governanceConsensusUpgradeImpl) nextEpoch(ctx context.Context) error {
 }
 
 // Submits a proposal, votes for it and ensures the proposal is finalized.
-func (sc *governanceConsensusUpgradeImpl) ensureProposalFinalized(content *api.ProposalContent) (*api.Proposal, error) {
+func (sc *governanceConsensusUpgradeImpl) ensureProposalFinalized(ctx context.Context, content *api.ProposalContent) (*api.Proposal, error) {
 	// Submit proposal.
 	tx := api.NewSubmitProposalTx(sc.entityNonce, &transaction.Fee{Gas: 2000}, content)
 	sc.entityNonce++
@@ -195,13 +191,13 @@ func (sc *governanceConsensusUpgradeImpl) ensureProposalFinalized(content *api.P
 		return nil, fmt.Errorf("failed signing submit proposal transaction: %w", err)
 	}
 	sc.Logger.Info("submitting proposal", "content", content)
-	err = sc.Net.Controller().Consensus.SubmitTx(sc.ctx, sigTx)
+	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed submitting proposal transaction: %w", err)
 	}
 
 	// Ensure proposal created.
-	aps, err := sc.Net.Controller().Governance.ActiveProposals(sc.ctx, consensus.HeightLatest)
+	aps, err := sc.Net.Controller().Governance.ActiveProposals(ctx, consensus.HeightLatest)
 	if err != nil {
 		return nil, fmt.Errorf("failed querying active proposals: %w", err)
 	}
@@ -228,13 +224,13 @@ func (sc *governanceConsensusUpgradeImpl) ensureProposalFinalized(content *api.P
 		return nil, fmt.Errorf("failed signing cast vote transaction: %w", err)
 	}
 	sc.Logger.Info("submitting vote for proposal", "proposal", proposal, "vote", vote)
-	err = sc.Net.Controller().Consensus.SubmitTx(sc.ctx, sigTx)
+	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed submitting cast vote transaction: %w", err)
 	}
 
 	// Ensure vote was cast.
-	votes, err := sc.Net.Controller().Governance.Votes(sc.ctx,
+	votes, err := sc.Net.Controller().Governance.Votes(ctx,
 		&api.ProposalQuery{
 			Height:     consensus.HeightLatest,
 			ProposalID: aps[0].ID,
@@ -253,12 +249,12 @@ func (sc *governanceConsensusUpgradeImpl) ensureProposalFinalized(content *api.P
 	// Transition to the epoch when proposal finalizes.
 	for ep := sc.currentEpoch + 1; ep < aps[0].ClosesAt+1; ep++ {
 		sc.Logger.Info("transitioning to epoch", "epoch", ep)
-		if err = sc.nextEpoch(sc.ctx); err != nil {
+		if err = sc.nextEpoch(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	p, err := sc.Net.Controller().Governance.Proposal(sc.ctx,
+	p, err := sc.Net.Controller().Governance.Proposal(ctx,
 		&api.ProposalQuery{
 			Height:     consensus.HeightLatest,
 			ProposalID: proposal.ID,
@@ -281,8 +277,8 @@ func (sc *governanceConsensusUpgradeImpl) ensureProposalFinalized(content *api.P
 	return p, nil
 }
 
-func (sc *governanceConsensusUpgradeImpl) cancelUpgrade(proposalID uint64) error {
-	_, err := sc.ensureProposalFinalized(
+func (sc *governanceConsensusUpgradeImpl) cancelUpgrade(ctx context.Context, proposalID uint64) error {
+	_, err := sc.ensureProposalFinalized(ctx,
 		&api.ProposalContent{CancelUpgrade: &api.CancelUpgradeProposal{
 			ProposalID: proposalID,
 		}})
@@ -291,7 +287,7 @@ func (sc *governanceConsensusUpgradeImpl) cancelUpgrade(proposalID uint64) error
 	}
 
 	// Ensure pending upgrade was canceled.
-	pendingUpgrades, err := sc.Net.Controller().Governance.PendingUpgrades(sc.ctx, consensus.HeightLatest)
+	pendingUpgrades, err := sc.Net.Controller().Governance.PendingUpgrades(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query pending upgrades: %w", err)
 	}
@@ -302,8 +298,8 @@ func (sc *governanceConsensusUpgradeImpl) cancelUpgrade(proposalID uint64) error
 	return nil
 }
 
-func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
-	if err := sc.StartNetworkAndTestClient(sc.ctx, childEnv); err != nil {
+func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
+	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
 
@@ -315,7 +311,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	}
 
 	// Wait for the nodes.
-	if sc.currentEpoch, err = sc.initialEpochTransitions(fixture); err != nil {
+	if sc.currentEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 
@@ -324,7 +320,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 		return err
 	}
 
-	entityAcc, err := sc.Net.Controller().Staking.Account(sc.ctx,
+	entityAcc, err := sc.Net.Controller().Staking.Account(ctx,
 		&staking.OwnerQuery{
 			Height: consensus.HeightLatest,
 			Owner:  e2e.DeterministicEntity1,
@@ -368,13 +364,13 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 		},
 	}
 	// Submit upgrade proposal.
-	proposal, err := sc.ensureProposalFinalized(content)
+	proposal, err := sc.ensureProposalFinalized(ctx, content)
 	if err != nil {
 		return fmt.Errorf("upgrade proposal error: %w", err)
 	}
 
 	// Ensure pending upgrade exists.
-	pendingUpgrades, err := sc.Net.Controller().Governance.PendingUpgrades(sc.ctx, consensus.HeightLatest)
+	pendingUpgrades, err := sc.Net.Controller().Governance.PendingUpgrades(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("failed to query pending upgrades: %w", err)
 	}
@@ -384,7 +380,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 
 	// Cancel upgrade if configured so.
 	if sc.shouldCancelUpgrade {
-		if err = sc.cancelUpgrade(proposal.ID); err != nil {
+		if err = sc.cancelUpgrade(ctx, proposal.ID); err != nil {
 			return fmt.Errorf("cancel upgrade failure: %w", err)
 		}
 	}
@@ -400,7 +396,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 				sc.Logger.Info("waiting for node to exit", "node", nd.Name)
 				<-nd.Exit()
 				sc.Logger.Info("restarting node", "node", nd.Name)
-				if err = nd.Restart(sc.ctx); err != nil {
+				if err = nd.Restart(ctx); err != nil {
 					errCh <- err
 				}
 			}(i, nd)
@@ -411,7 +407,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 	for ep := sc.currentEpoch + 1; ep <= upgradeEpoch; ep++ {
 		sc.Logger.Info("transitioning to epoch", "epoch", ep)
 
-		if err = sc.nextEpoch(sc.ctx); err != nil {
+		if err = sc.nextEpoch(ctx); err != nil {
 			return err
 		}
 	}
@@ -446,7 +442,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 
 		// Upgrade binary matches node binary, upgrade should work.
 		sc.Logger.Info("waiting for nodes to sync")
-		if err = sc.Net.Controller().WaitSync(sc.ctx); err != nil {
+		if err = sc.Net.Controller().WaitSync(ctx); err != nil {
 			return fmt.Errorf("wait sync error: %w", err)
 		}
 
@@ -455,7 +451,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 			Height: consensus.HeightLatest,
 			ID:     migrations.TestEntity.ID,
 		}
-		_, err = sc.Net.Controller().Registry.GetEntity(sc.ctx, idQuery)
+		_, err = sc.Net.Controller().Registry.GetEntity(ctx, idQuery)
 		if err != nil {
 			return fmt.Errorf("can't get registered test entity: %w", err)
 		}
@@ -463,18 +459,18 @@ func (sc *governanceConsensusUpgradeImpl) Run(childEnv *env.Env) error { // noli
 		// Wait for compute nodes to be ready.
 		sc.Logger.Info("waiting for compute nodes to be ready")
 		for _, n := range sc.Net.ComputeWorkers() {
-			if err = n.WaitReady(sc.ctx); err != nil {
+			if err = n.WaitReady(ctx); err != nil {
 				return fmt.Errorf("failed to wait for a compute node: %w", err)
 			}
 		}
 	}
 
 	sc.Logger.Info("final epoch transition")
-	if err = sc.nextEpoch(sc.ctx); err != nil {
+	if err = sc.nextEpoch(ctx); err != nil {
 		return err
 	}
 
 	// Check that runtime still works after the upgrade.
 	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
-	return sc.Scenario.Run(childEnv)
+	return sc.Scenario.Run(ctx, childEnv)
 }

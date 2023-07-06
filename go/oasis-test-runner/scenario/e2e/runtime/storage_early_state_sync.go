@@ -107,12 +107,11 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *storageEarlyStateSyncImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+func (sc *storageEarlyStateSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	// Wait for validator nodes to register.

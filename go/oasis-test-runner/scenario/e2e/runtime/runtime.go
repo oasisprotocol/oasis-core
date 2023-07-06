@@ -373,8 +373,7 @@ func (sc *Scenario) waitTestClient() error {
 	return sc.checkTestClientLogs()
 }
 
-func (sc *Scenario) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *Scenario) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
@@ -565,9 +564,7 @@ func (sc *Scenario) StartNetworkAndWaitForClientSync(ctx context.Context) error 
 	return sc.waitForClientSync(ctx)
 }
 
-func (sc *Scenario) waitNodesSynced() error {
-	ctx := context.Background()
-
+func (sc *Scenario) waitNodesSynced(ctx context.Context) error {
 	checkSynced := func(n *oasis.Node) error {
 		c, err := oasis.NewController(n.SocketPath())
 		if err != nil {
@@ -588,6 +585,11 @@ func (sc *Scenario) waitNodesSynced() error {
 			return err
 		}
 	}
+	for _, n := range sc.Net.Keymanagers() {
+		if err := checkSynced(n.Node); err != nil {
+			return err
+		}
+	}
 	for _, n := range sc.Net.ComputeWorkers() {
 		if err := checkSynced(n.Node); err != nil {
 			return err
@@ -603,13 +605,11 @@ func (sc *Scenario) waitNodesSynced() error {
 	return nil
 }
 
-func (sc *Scenario) initialEpochTransitions(fixture *oasis.NetworkFixture) (beacon.EpochTime, error) {
-	return sc.initialEpochTransitionsWith(fixture, 0)
+func (sc *Scenario) initialEpochTransitions(ctx context.Context, fixture *oasis.NetworkFixture) (beacon.EpochTime, error) {
+	return sc.initialEpochTransitionsWith(ctx, fixture, 0)
 }
 
-func (sc *Scenario) initialEpochTransitionsWith(fixture *oasis.NetworkFixture, baseEpoch beacon.EpochTime) (beacon.EpochTime, error) {
-	ctx := context.Background()
-
+func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oasis.NetworkFixture, baseEpoch beacon.EpochTime) (beacon.EpochTime, error) {
 	epoch := baseEpoch + 1
 	advanceEpoch := func() error {
 		sc.Logger.Info("triggering epoch transition",

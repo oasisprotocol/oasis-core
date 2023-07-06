@@ -88,17 +88,16 @@ func (sc *runtimeDynamicImpl) epochTransition(ctx context.Context) error {
 	return nil
 }
 
-func (sc *runtimeDynamicImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	var rtNonce uint64
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	// Wait for all nodes to be synced before we proceed.
-	if err := sc.waitNodesSynced(); err != nil {
+	if err := sc.waitNodesSynced(ctx); err != nil {
 		return err
 	}
 

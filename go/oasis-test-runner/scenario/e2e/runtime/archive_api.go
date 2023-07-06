@@ -281,8 +281,7 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	return nil
 }
 
-func (sc *archiveAPI) Run(childEnv *env.Env) error {
-	ctx := context.Background()
+func (sc *archiveAPI) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
@@ -292,7 +291,7 @@ func (sc *archiveAPI) Run(childEnv *env.Env) error {
 		return err
 	}
 	var nextEpoch beacon.EpochTime
-	if nextEpoch, err = sc.initialEpochTransitions(fixture); err != nil {
+	if nextEpoch, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
 		return err
 	}
 	nextEpoch++ // Next, after initial transitions.

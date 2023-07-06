@@ -154,13 +154,13 @@ func (s *sentryImpl) dial(address string, clientOpts *cmnGrpc.ClientOptions) (*g
 	return conn, nil
 }
 
-func (s *sentryImpl) Run(childEnv *env.Env) error { // nolint: gocyclo
+func (s *sentryImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
 	// Run the basic runtime test.
-	if err := s.Scenario.Run(childEnv); err != nil {
+	if err := s.Scenario.Run(ctx, childEnv); err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), sentryChecksContextTimeout)
+	ctx, cancel := context.WithTimeout(ctx, sentryChecksContextTimeout)
 	defer cancel()
 
 	// Load identities and addresses used in the sanity checks.

@@ -3,7 +3,9 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"strconv"
+	"time"
+
+	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -12,17 +14,19 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
+	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
 )
 
 const (
 	// LogEventTrustRootChangeNoTrust is the event emitted when a compute
-	// worker fails to initialize the verifier as there is not enough trust
-	// in the new light block.
+	// worker or a key manager node fails to initialize the verifier as there
+	// is not enough trust in the new light block.
 	LogEventTrustRootChangeNoTrust = "consensus/tendermint/verifier/chain_context/no_trust"
 
 	// LogEventTrustRootChangeFailed is the event emitted when a compute
-	// worker fails to initialize the verifier as the new light block is
-	// invalid, e.g. has lower height than the last known trusted block.
+	// worker or a key manager node fails to initialize the verifier as
+	// the new light block is invalid, e.g. has lower height than the last
+	// known trusted block.
 	LogEventTrustRootChangeFailed = "consensus/tendermint/verifier/chain_context/failed"
 )
 
@@ -32,7 +36,7 @@ var (
 	// changes, e.g. on dump-restore network upgrades.
 	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl(
 		"change",
-		NewKVTestClient().WithScenario(InsertKeyValueScenario),
+		NewKVTestClient().WithScenario(InsertKeyValueEncScenario),
 		true,
 	)
 
@@ -41,7 +45,7 @@ var (
 	// consensus chain context changes.
 	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl(
 		"change-fails",
-		NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		NewKVTestClient().WithScenario(SimpleKeyValueEncScenario),
 		false,
 	)
 )
@@ -78,20 +82,20 @@ func (sc *trustRootChangeImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *trustRootChangeImpl) Run(childEnv *env.Env) error {
+func (sc *trustRootChangeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if !sc.happy {
-		return sc.unhappyRun(childEnv)
+		return sc.unhappyRun(ctx, childEnv)
 	}
-	return sc.happyRun(childEnv)
+	return sc.happyRun(ctx, childEnv)
 }
 
 // happyRun tests that trust is transferred to a new light block when consensus
 // chain context changes if validator set has enough votes.
 //
 // It consists of 3 steps:
-//   - Build a simple key/value runtime with an embedded trust root, register
-//     it to the network together with key manager runtime and test that
-//     everything works.
+//   - Build a simple key/value and key manager runtime with an embedded trust
+//     root, register them to the network together and test that everything
+//     works.
 //   - Do dump/restore procedure which simulates a real network upgrade.
 //     This step will stop the network, clear everything except runtime's
 //     local storage (we need it as the verifier has last trust root
@@ -101,18 +105,14 @@ func (sc *trustRootChangeImpl) Run(childEnv *env.Env) error {
 //   - Start the network and test if everything works.
 //   - Repeat last two points. Chain context transition can be done repeatedly,
 //     as long as new light blocks are trusted and valid.
-func (sc *trustRootChangeImpl) happyRun(childEnv *env.Env) (err error) {
-	ctx := context.Background()
-
+func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) (err error) {
 	// Step 1: Build a simple key/value runtime and start the network.
-	rebuild, err := sc.BuildRuntimeBinary(ctx, childEnv)
-	if err != nil {
+	if err = sc.PreRun(ctx, childEnv); err != nil {
 		return err
 	}
 	defer func() {
-		if err2 := rebuild(); err2 != nil {
-			err = fmt.Errorf("%w (original error: %s)", err2, err)
-		}
+		err2 := sc.PostRun(ctx, childEnv)
+		err = multierror.Append(err, err2).ErrorOrNil()
 	}()
 
 	// All chain contexts should be unique.
@@ -147,7 +147,7 @@ func (sc *trustRootChangeImpl) happyRun(childEnv *env.Env) (err error) {
 
 		// Test runtime to be sure that blocks get processed correctly.
 		// We do this by checking if key/value store was successfully restored.
-		if err := sc.startClientAndComputeWorkers(ctx, childEnv); err != nil {
+		if err := sc.startClientComputeAndKeyManagerNodes(ctx, childEnv); err != nil {
 			return err
 		}
 		if err := sc.startRestoredStateTestClient(ctx, childEnv, round); err != nil {
@@ -167,31 +167,28 @@ func (sc *trustRootChangeImpl) happyRun(childEnv *env.Env) (err error) {
 // light blocks when consensus chain context changes.
 //
 // It consists of 5 steps:
-//   - Build a simple key/value runtime with an embedded trust root, register
-//     it to the network together with key manager runtime and test that
-//     everything works.
+//   - Build a simple key/value and key manager runtime with an embedded trust
+//     root, register them to the network together and test that everything
+//     works.
 //   - Stop the network, set genesis height to 1 and reset the consensus state.
 //     This will cause a chain context change when the network will be started
 //     again. When doing state wipe be careful not to delete compute workers
-//     local storages as they contain sealed trusted roots.
-//   - Start the network. If everything works as expected, compute workers
-//     should never be ready as the verifier cannot transfer trust to light
-//     blocks on a new chain.
+//     and key manager local storages as they contain sealed trusted roots.
+//   - Start the network. If everything works as expected, key manager nodes
+//     should never be ready as the verifier cannot transfer trust the light
+//     blocks on a new chain. As a consequence, the runtime workers will get
+//     stuck waiting for available key manager.
 //   - Repeat last two points. This time set genesis height to something big
 //     and remove one validator from the set so that we can simulate what
 //     happens when the new validator set has only 2/3 of the voting power.
-func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
-	ctx := context.Background()
-
+func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env) (err error) {
 	// Step 1: Build a simple key/value runtime and start the network.
-	rebuild, err := sc.BuildRuntimeBinary(ctx, childEnv)
-	if err != nil {
+	if err = sc.PreRun(ctx, childEnv); err != nil {
 		return err
 	}
 	defer func() {
-		if err2 := rebuild(); err2 != nil {
-			err = fmt.Errorf("%w (original error: %s)", err2, err)
-		}
+		err2 := sc.PostRun(ctx, childEnv)
+		err = multierror.Append(err, err2).ErrorOrNil()
 	}()
 
 	chainContext, err := sc.chainContext(ctx)
@@ -205,18 +202,17 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 	f := []func(fixture *oasis.NetworkFixture){
 		// First dump with too low genesis height.
 		func(fixture *oasis.NetworkFixture) {
-			// Make sure all nodes are started initially although we only need
-			// one compute worker. We have to start them as otherwise tendermint
-			// reset will fail.
-			for i := range fixture.ComputeWorkers {
-				fixture.ComputeWorkers[i].NoAutoStart = false
-			}
-			for i := range fixture.Clients {
-				fixture.Clients[i].NoAutoStart = false
-			}
+			// We only need one compute worker and one key manager node.
+			fixture.Keymanagers = fixture.Keymanagers[:1]
+			fixture.ComputeWorkers = fixture.ComputeWorkers[:1]
+			fixture.Clients = fixture.Clients[:0]
+
+			// Start both nodes after dump-restore.
+			fixture.Keymanagers[0].NoAutoStart = false
+			fixture.ComputeWorkers[0].NoAutoStart = false
 
 			// Observe logs for invalid genesis block error messages.
-			fixture.ComputeWorkers[0].LogWatcherHandlerFactories = []log.WatcherHandlerFactory{
+			fixture.Keymanagers[0].LogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 				oasis.LogAssertEvent(LogEventTrustRootChangeFailed, "the verifier should emit invalid genesis block event"),
 			}
 		},
@@ -226,8 +222,18 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 			// Remove one validator in the set so that trust validation will
 			// fail and observe logs for failure.
 			fixture.Validators = fixture.Validators[:2]
+
+			// We only need one compute worker and one key manager node.
+			fixture.Keymanagers = fixture.Keymanagers[:1]
+			fixture.ComputeWorkers = fixture.ComputeWorkers[:1]
+			fixture.Clients = fixture.Clients[:0]
+
+			// Start both nodes after dump-restore.
+			fixture.Keymanagers[0].NoAutoStart = false
 			fixture.ComputeWorkers[0].NoAutoStart = false
-			fixture.ComputeWorkers[0].LogWatcherHandlerFactories = []log.WatcherHandlerFactory{
+
+			// Observe logs for not enough trust error messages.
+			fixture.Keymanagers[0].LogWatcherHandlerFactories = []log.WatcherHandlerFactory{
 				oasis.LogAssertEvent(LogEventTrustRootChangeNoTrust, "the verifier should emit not trusted chain event"),
 			}
 		},
@@ -285,77 +291,40 @@ func (sc *trustRootChangeImpl) unhappyRun(childEnv *env.Env) (err error) {
 			return fmt.Errorf("chain context hasn't changed")
 		}
 
-		// Running network for few blocks so that compute workers have enough
-		// time to get ready.
-		_, err = sc.waitBlocks(ctx, 25)
+		// The key manager should now have a problem starting the key manager
+		// runtime as the verifier will never initialize. As a consequence,
+		// the runtime worker will get stuck waiting for available key manager.
+		func() {
+			waitCtx, cancel := context.WithTimeout(ctx, time.Minute)
+			defer cancel()
+
+			_ = sc.Net.Keymanagers()[0].WaitReady(waitCtx)
+		}()
+
+		// Verify that the compute worker is stuck.
+		ctrl, err := oasis.NewController(sc.Net.ComputeWorkers()[0].SocketPath())
 		if err != nil {
 			return err
 		}
+		status, err := ctrl.GetStatus(ctx)
+		if err != nil {
+			return err
+		}
+		rtStatus, ok := status.Runtimes[sc.Net.Runtimes()[1].ID()]
+		if !ok {
+			return fmt.Errorf("runtime not supported by the compute worker")
+		}
+		if rtStatus.Committee.Status != commonWorker.StatusStateWaitingKeymanager {
+			return fmt.Errorf("compute worker should be waiting for available key manager")
+		}
 
-		// Starting the key/value runtime should now be a problem for compute
-		// workers as the verifier will never initialize.
+		// Verify that the key manager node failed to trust the new trust root.
 		if err := sc.Net.CheckLogWatchers(); err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-func (sc *TrustRootImpl) BuildRuntimeBinary(ctx context.Context, childEnv *env.Env) (func() error, error) {
-	// Start network with validators only, as configured in the fixture.
-	// We need those to produce blocks from which we pick one and use it
-	// as our embedded trust root.
-	if err := sc.Net.Start(); err != nil {
-		return nil, err
-	}
-	if err := sc.Net.Controller().WaitNodesRegistered(ctx, len(sc.Net.Validators())); err != nil {
-		return nil, err
-	}
-
-	// Pick one block and use it as an embedded trust root.
-	block, err := sc.waitBlocks(ctx, 3)
-	if err != nil {
-		return nil, err
-	}
-	chainContext, err := sc.chainContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	root := trustRoot{
-		height:       strconv.FormatInt(block.Height, 10),
-		hash:         block.Hash.Hex(),
-		runtimeID:    runtimeID.String(),
-		chainContext: chainContext,
-	}
-
-	// Build the runtime using given trust root. Observe that we are changing
-	// the binary here, so we need to rebuild the runtime when we are done.
-	rebuild, err := sc.buildRuntimeBinary(ctx, childEnv, root)
-	if err != nil {
-		return nil, err
-	}
-
-	// Once binary with the embedded root is built, we can register runtimes.
-	if err = sc.registerRuntimes(ctx, childEnv); err != nil {
-		return nil, err
-	}
-
-	// Test runtime to be sure that blocks get processed correctly.
-	// Remember that only validators are currently running.
-	if err = sc.startClientAndComputeWorkers(ctx, childEnv); err != nil {
-		return nil, err
-	}
-
-	// Test transactions.
-	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return nil, err
-	}
-	if err := sc.waitTestClient(); err != nil {
-		return nil, err
-	}
-
-	return rebuild, nil
 }
 
 func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oasis.NetworkFixture), g func(*genesis.Document)) error {
@@ -382,42 +351,11 @@ func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oas
 	return nil
 }
 
-func (sc *TrustRootImpl) startClientAndComputeWorkers(ctx context.Context, childEnv *env.Env) error {
-	// Start client and compute workers as they are not auto started.
-	sc.Logger.Info("starting clients and compute workers")
-	for _, n := range sc.Net.Clients() {
-		if err := n.Start(); err != nil {
-			return fmt.Errorf("failed to start node: %w", err)
-		}
-	}
-	for _, n := range sc.Net.ComputeWorkers() {
-		if err := n.Start(); err != nil {
-			return fmt.Errorf("failed to start node: %w", err)
-		}
-	}
-	sc.Logger.Info("waiting for compute workers to become ready")
-	for _, n := range sc.Net.ComputeWorkers() {
-		if err := n.WaitReady(ctx); err != nil {
-			return fmt.Errorf("failed to wait for a compute worker: %w", err)
-		}
-	}
-
-	// Setup a client controller as there is none due to the client node not
-	// being auto started.
-	ctrl, err := oasis.NewController(sc.Net.Clients()[0].SocketPath())
-	if err != nil {
-		return fmt.Errorf("failed to create client controller: %w", err)
-	}
-	sc.Net.SetClientController(ctrl)
-
-	return nil
-}
-
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueScenario)
-	if err := sc.Scenario.Run(childEnv); err != nil {
+	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
+	if err := sc.Scenario.Run(ctx, childEnv); err != nil {
 		return err
 	}
 	return nil

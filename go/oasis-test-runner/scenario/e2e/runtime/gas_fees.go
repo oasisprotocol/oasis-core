@@ -112,15 +112,13 @@ func (sc *gasFeesRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *gasFeesRuntimesImpl) Run(childEnv *env.Env) error {
+func (sc *gasFeesRuntimesImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-
 	// Wait for all nodes to be synced before we proceed.
-	if err := sc.waitNodesSynced(); err != nil {
+	if err := sc.waitNodesSynced(ctx); err != nil {
 		return err
 	}
 

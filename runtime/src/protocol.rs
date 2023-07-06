@@ -439,7 +439,10 @@ impl Protocol {
                 Box::new(handle)
             } else {
                 // Create a no-op verifier.
-                Box::new(tendermint::verifier::NopVerifier::new(self.clone()))
+                let verifier = tendermint::verifier::NopVerifier::new(self.clone());
+                verifier.start();
+
+                Box::new(verifier)
             };
 
         // Configure the host environment info.

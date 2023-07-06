@@ -10,8 +10,17 @@ var (
 		GetKeyValueTx{"my_key", "my_value", false},
 	})
 
+	InsertKeyValueEncScenario = NewTestClientScenario([]interface{}{
+		InsertKeyValueTx{"my_key", "my_value", "", true},
+		GetKeyValueTx{"my_key", "my_value", true},
+	})
+
 	RemoveKeyValueScenario = NewTestClientScenario([]interface{}{
 		GetKeyValueTx{"my_key", "my_value", false},
+	})
+
+	RemoveKeyValueEncScenario = NewTestClientScenario([]interface{}{
+		GetKeyValueTx{"my_key", "my_value", true},
 	})
 
 	InsertTransferKeyValueScenario = NewTestClientScenario([]interface{}{
@@ -34,12 +43,14 @@ var (
 		GetKeyValueTx{"my_key2", "", true},
 	})
 
-	SimpleKeyValueScenario = newSimpleKeyValueScenario(false)
+	SimpleKeyValueScenario = newSimpleKeyValueScenario(false, false)
 
-	SimpleKeyValueScenarioRepeated = newSimpleKeyValueScenario(true)
+	SimpleKeyValueEncScenario = newSimpleKeyValueScenario(false, true)
+
+	SimpleKeyValueScenarioRepeated = newSimpleKeyValueScenario(true, false)
 )
 
-func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
+func newSimpleKeyValueScenario(repeat bool, encrypted bool) TestClientScenario {
 	return func(submit func(req interface{}) error) error {
 		// Check whether Runtime ID is also set remotely.
 		//
@@ -60,10 +71,10 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 				response = fmt.Sprintf("hello_value_from_%s:%d", runtimeID, iter-1)
 			}
 
-			if err := submit(InsertKeyValueTx{key, value, response, false}); err != nil {
+			if err := submit(InsertKeyValueTx{key, value, response, encrypted}); err != nil {
 				return err
 			}
-			if err := submit(GetKeyValueTx{key, value, false}); err != nil {
+			if err := submit(GetKeyValueTx{key, value, encrypted}); err != nil {
 				return err
 			}
 
@@ -75,13 +86,13 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 				response = value
 			}
 
-			if err := submit(InsertKeyValueTx{key, value, response, false}); err != nil {
+			if err := submit(InsertKeyValueTx{key, value, response, encrypted}); err != nil {
 				return err
 			}
 			if err := submit(ConsensusTransferTx{}); err != nil {
 				return err
 			}
-			if err := submit(GetKeyValueTx{key, value, false}); err != nil {
+			if err := submit(GetKeyValueTx{key, value, encrypted}); err != nil {
 				return err
 			}
 
@@ -95,10 +106,10 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 			inMsgKey   = "in_msg"
 			inMsgValue = "hello world from inmsg"
 		)
-		if err := submit(InsertMsg{inMsgKey, inMsgValue}); err != nil {
+		if err := submit(InsertMsg{inMsgKey, inMsgValue, encrypted}); err != nil {
 			return err
 		}
-		if err := submit(GetKeyValueTx{inMsgKey, inMsgValue, false}); err != nil {
+		if err := submit(GetKeyValueTx{inMsgKey, inMsgValue, encrypted}); err != nil {
 			return err
 		}
 		if err := submit(ConsensusAccountsTx{}); err != nil {
@@ -107,6 +118,14 @@ func newSimpleKeyValueScenario(repeat bool) TestClientScenario {
 
 		return nil
 	}
+}
+
+// KeyValueQuery queries the value stored under the given key for the specified round from
+// the database, and verifies that the response (current value) contains the expected data.
+type KeyValueQuery struct {
+	Key      string
+	Response string
+	Round    uint64
 }
 
 // InsertKeyValueTx inserts a key/value pair to the database, and verifies that the response
@@ -135,8 +154,9 @@ type RemoveKeyValueTx struct {
 
 // InsertMsg inserts an incoming runtime message.
 type InsertMsg struct {
-	Key   string
-	Value string
+	Key       string
+	Value     string
+	Encrypted bool
 }
 
 // GetRuntimeIDTx retrieves the runtime ID.

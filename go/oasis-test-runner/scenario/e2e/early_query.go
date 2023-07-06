@@ -57,7 +57,7 @@ func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *earlyQueryImpl) Run(childEnv *env.Env) error {
+func (sc *earlyQueryImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Start the network.
 	var err error
 	if err = sc.Net.Start(); err != nil {
@@ -66,7 +66,7 @@ func (sc *earlyQueryImpl) Run(childEnv *env.Env) error {
 
 	// Perform some queries.
 	cs := sc.Net.Controller().Consensus
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	// StateToGenesis.
