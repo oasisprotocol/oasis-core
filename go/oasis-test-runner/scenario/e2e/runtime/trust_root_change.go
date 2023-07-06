@@ -38,7 +38,7 @@ var (
 	// changes, e.g. on dump-restore network upgrades.
 	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl(
 		"change",
-		NewKVTestClient().WithScenario(InsertKeyValueScenario),
+		NewKVTestClient().WithScenario(InsertKeyValueEncScenario),
 		true,
 	)
 
@@ -47,7 +47,7 @@ var (
 	// consensus chain context changes.
 	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl(
 		"change-fails",
-		NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		NewKVTestClient().WithScenario(SimpleKeyValueEncScenario),
 		false,
 	)
 )
@@ -355,7 +355,7 @@ func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oas
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
 	if err := sc.Scenario.Run(ctx, childEnv); err != nil {
 		return err
 	}

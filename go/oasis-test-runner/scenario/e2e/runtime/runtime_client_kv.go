@@ -188,6 +188,8 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 			rng.Uint64(),
 			req.Key,
 			req.Value,
+			req.Encrypted,
+			req.Generation,
 		)
 		if err != nil {
 			return err
@@ -352,21 +354,30 @@ func (sc *Scenario) submitKeyValueRuntimeInsertMsg(
 	id common.Namespace,
 	nonce uint64,
 	key, value string,
+	encrypted bool,
+	generation uint64,
 ) error {
-	sc.Logger.Info("submitting incoming runtime message")
+	sc.Logger.Info("submitting incoming runtime message",
+		"key", key,
+		"value", value,
+		"encrypted", encrypted,
+		"generation", generation,
+	)
 
-	err := sc.submitRuntimeInMsg(ctx, id, nonce, "insert", struct {
-		Key   string `json:"key"`
-		Value string `json:"value"`
+	args := struct {
+		Key        string `json:"key"`
+		Value      string `json:"value"`
+		Generation uint64 `json:"generation,omitempty"`
 	}{
-		Key:   key,
-		Value: value,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to submit insert incoming runtime message: %w", err)
+		Key:        key,
+		Value:      value,
+		Generation: generation,
 	}
 
-	return nil
+	if encrypted {
+		return sc.submitRuntimeInMsg(ctx, id, nonce, "enc_insert", args)
+	}
+	return sc.submitRuntimeInMsg(ctx, id, nonce, "insert", args)
 }
 
 func (sc *Scenario) submitAndDecodeRuntimeQuery(
