@@ -25,6 +25,10 @@ type PolicySGX struct {
 	// Enclaves is the per-key manager enclave ID access control policy.
 	Enclaves map[sgx.EnclaveIdentity]*EnclavePolicySGX `json:"enclaves"`
 
+	// MasterSecretRotationInterval is the time interval in epochs between master secret rotations.
+	// Zero disables rotations.
+	MasterSecretRotationInterval beacon.EpochTime `json:"master_secret_rotation_interval,omitempty"`
+
 	// MaxEphemeralSecretAge is the maximum age of an ephemeral secret in the number of epochs.
 	MaxEphemeralSecretAge beacon.EpochTime `json:"max_ephemeral_secret_age,omitempty"`
 }

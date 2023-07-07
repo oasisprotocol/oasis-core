@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 var (
@@ -23,10 +21,14 @@ var (
 	//
 	// Value is CBOR-serialized keymanager.ConsensusParameters.
 	parametersKeyFmt = keyformat.New(0x71)
+	// masterSecretKeyFmt is the key manager master secret key format.
+	//
+	// Value is CBOR-serialized key manager signed encrypted master secret.
+	masterSecretKeyFmt = keyformat.New(0x72, keyformat.H(&common.Namespace{}))
 	// ephemeralSecretKeyFmt is the key manager ephemeral secret key format.
 	//
 	// Value is CBOR-serialized key manager signed encrypted ephemeral secret.
-	ephemeralSecretKeyFmt = keyformat.New(0x72, keyformat.H(&common.Namespace{}), uint64(0))
+	ephemeralSecretKeyFmt = keyformat.New(0x73, keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable key manager state wrapper.
@@ -102,8 +104,24 @@ func (st *ImmutableState) Status(ctx context.Context, id common.Namespace) (*api
 	return &status, nil
 }
 
-func (st *ImmutableState) EphemeralSecret(ctx context.Context, id common.Namespace, epoch beacon.EpochTime) (*api.SignedEncryptedEphemeralSecret, error) {
-	data, err := st.is.Get(ctx, ephemeralSecretKeyFmt.Encode(&id, uint64(epoch)))
+func (st *ImmutableState) MasterSecret(ctx context.Context, id common.Namespace) (*api.SignedEncryptedMasterSecret, error) {
+	data, err := st.is.Get(ctx, masterSecretKeyFmt.Encode(&id))
+	if err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	if data == nil {
+		return nil, api.ErrNoSuchMasterSecret
+	}
+
+	var secret api.SignedEncryptedMasterSecret
+	if err := cbor.Unmarshal(data, &secret); err != nil {
+		return nil, abciAPI.UnavailableStateError(err)
+	}
+	return &secret, nil
+}
+
+func (st *ImmutableState) EphemeralSecret(ctx context.Context, id common.Namespace) (*api.SignedEncryptedEphemeralSecret, error) {
+	data, err := st.is.Get(ctx, ephemeralSecretKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -149,39 +167,14 @@ func (st *MutableState) SetStatus(ctx context.Context, status *api.Status) error
 	return abciAPI.UnavailableStateError(err)
 }
 
-func (st *MutableState) SetEphemeralSecret(ctx context.Context, secret *api.SignedEncryptedEphemeralSecret) error {
-	err := st.ms.Insert(ctx, ephemeralSecretKeyFmt.Encode(&secret.Secret.ID, uint64(secret.Secret.Epoch)), cbor.Marshal(secret))
+func (st *MutableState) SetMasterSecret(ctx context.Context, secret *api.SignedEncryptedMasterSecret) error {
+	err := st.ms.Insert(ctx, masterSecretKeyFmt.Encode(&secret.Secret.ID), cbor.Marshal(secret))
 	return abciAPI.UnavailableStateError(err)
 }
 
-// CleanEphemeralSecrets removes all ephemeral secrets before the given epoch.
-func (st *MutableState) CleanEphemeralSecrets(ctx context.Context, id common.Namespace, epoch beacon.EpochTime) error {
-	it := st.is.NewIterator(ctx)
-	defer it.Close()
-
-	hID := keyformat.PreHashed(id.Hash())
-
-	var toDelete []node.Key
-	for it.Seek(ephemeralSecretKeyFmt.Encode(&id)); it.Valid(); it.Next() {
-		var esID keyformat.PreHashed
-		var esEpoch beacon.EpochTime
-		if !ephemeralSecretKeyFmt.Decode(it.Key(), &esID, (*uint64)(&esEpoch)) {
-			break
-		}
-		if hID != esID || esEpoch >= epoch {
-			break
-		}
-		toDelete = append(toDelete, it.Key())
-	}
-	if it.Err() != nil {
-		return abciAPI.UnavailableStateError(it.Err())
-	}
-	for _, key := range toDelete {
-		if err := st.ms.Remove(ctx, key); err != nil {
-			return abciAPI.UnavailableStateError(err)
-		}
-	}
-	return nil
+func (st *MutableState) SetEphemeralSecret(ctx context.Context, secret *api.SignedEncryptedEphemeralSecret) error {
+	err := st.ms.Insert(ctx, ephemeralSecretKeyFmt.Encode(&secret.Secret.ID), cbor.Marshal(secret))
+	return abciAPI.UnavailableStateError(err)
 }
 
 // NewMutableState creates a new mutable key manager state wrapper.

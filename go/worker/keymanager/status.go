@@ -62,13 +62,6 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		pc = w.enclaveStatus.InitResponse.PolicyChecksum
 	}
 
-	es := api.EphemeralSecretStats{
-		NumLoaded:     w.numLoadedSecrets,
-		LastLoaded:    w.lastLoadedSecret,
-		NumGenerated:  w.numGeneratedSecrets,
-		LastGenerated: w.lastGeneratedSecret,
-	}
-
 	gs := w.globalStatus
 	ws := api.WorkerStatus{
 		Status:           ss,
@@ -78,7 +71,8 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		PrivatePeers:     ps,
 		Policy:           w.policy,
 		PolicyChecksum:   pc,
-		EphemeralSecrets: es,
+		MasterSecrets:    w.masterSecretStats,
+		EphemeralSecrets: w.ephemeralSecretStats,
 	}
 
 	return &api.Status{

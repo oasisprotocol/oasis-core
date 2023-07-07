@@ -9,7 +9,9 @@ use crate::{
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::{SignedEncryptedEphemeralSecret, SignedPolicySGX},
+        keymanager::{
+            SignedEncryptedEphemeralSecret, SignedEncryptedMasterSecret, SignedPolicySGX,
+        },
         state::StateError,
     },
     key_format,
@@ -29,7 +31,8 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 }
 
 key_format!(StatusKeyFmt, 0x70, Hash);
-key_format!(EphemeralSecretKeyFmt, 0x72, (Hash, EpochTime));
+key_format!(MasterSecretKeyFmt, 0x72, Hash);
+key_format!(EphemeralSecretKeyFmt, 0x73, Hash);
 
 /// Current key manager status.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
@@ -42,6 +45,8 @@ pub struct Status {
     pub is_secure: bool,
     /// Generation of the latest master secret.
     pub generation: u64,
+    /// Epoch of the last master secret rotation.
+    pub rotation_epoch: EpochTime,
     /// Key manager master secret verification checksum.
     pub checksum: Vec<u8>,
     /// List of currently active key manager node IDs.
@@ -80,15 +85,27 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
         Ok(result)
     }
 
+    /// Looks up a specific key manager master secret by its namespace identifier.
+    pub fn master_secret(
+        &self,
+        id: Namespace,
+    ) -> Result<Option<SignedEncryptedMasterSecret>, StateError> {
+        let h = Hash::digest_bytes(id.as_ref());
+        match self.mkvs.get(&MasterSecretKeyFmt(h).encode()) {
+            Ok(Some(b)) => Ok(Some(self.decode_master_secret(&b)?)),
+            Ok(None) => Ok(None),
+            Err(err) => Err(StateError::Unavailable(anyhow!(err))),
+        }
+    }
+
     /// Looks up a specific key manager ephemeral secret by its namespace identifier and epoch.
     pub fn ephemeral_secret(
         &self,
         id: Namespace,
-        epoch: EpochTime,
     ) -> Result<Option<SignedEncryptedEphemeralSecret>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
-        match self.mkvs.get(&EphemeralSecretKeyFmt((h, epoch)).encode()) {
-            Ok(Some(b)) => Ok(Some(self.decode_secret(&b)?)),
+        match self.mkvs.get(&EphemeralSecretKeyFmt(h).encode()) {
+            Ok(Some(b)) => Ok(Some(self.decode_ephemeral_secret(&b)?)),
             Ok(None) => Ok(None),
             Err(err) => Err(StateError::Unavailable(anyhow!(err))),
         }
@@ -98,7 +115,14 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
         cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))
     }
 
-    fn decode_secret(&self, data: &[u8]) -> Result<SignedEncryptedEphemeralSecret, StateError> {
+    fn decode_master_secret(&self, data: &[u8]) -> Result<SignedEncryptedMasterSecret, StateError> {
+        cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))
+    }
+
+    fn decode_ephemeral_secret(
+        &self,
+        data: &[u8],
+    ) -> Result<SignedEncryptedEphemeralSecret, StateError> {
         cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))
     }
 }
@@ -142,7 +166,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("770079d8f120597eb8c4d3d3dfd9cf9eb6c4b3adbe80fc579cbb312667aa8443"),
+            hash: Hash::from("a40448052f74a1c0c2d47c2b01a433ad7f3782ea47dfe5575170fec2587569c9"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -198,6 +222,7 @@ mod test {
                 is_initialized: false,
                 is_secure: false,
                 generation: 0,
+                rotation_epoch: 0,
                 checksum: vec![],
                 nodes: vec![],
                 policy: None,
@@ -208,6 +233,7 @@ mod test {
                 is_initialized: true,
                 is_secure: true,
                 generation: 0,
+                rotation_epoch: 0,
                 checksum: checksum,
                 nodes: vec![signer1, signer2],
                 policy: Some(SignedPolicySGX {
@@ -221,6 +247,7 @@ mod test {
                                 may_replicate: vec![keymanager_enclave2],
                             },
                         )]),
+                        master_secret_rotation_interval: 0,
                         max_ephemeral_secret_age: 10,
                     },
                     signatures: vec![
@@ -280,19 +307,9 @@ mod test {
 
         // Test ephemeral secret (happy path, invalid epoch, invalid runtime).
         let secret = keymanager_state
-            .ephemeral_secret(keymanager1, 1)
+            .ephemeral_secret(keymanager1)
             .expect("ephemeral secret query should work")
             .expect("ephemeral secret query should return a result");
         assert_eq!(secret, expected_secret, "invalid ephemeral secret");
-
-        let secret = keymanager_state
-            .ephemeral_secret(keymanager1, 2)
-            .expect("ephemeral secret query should work");
-        assert_ne!(secret, None, "invalid ephemeral secret");
-
-        let secret = keymanager_state
-            .ephemeral_secret(keymanager2, 1)
-            .expect("ephemeral secret query should work");
-        assert_eq!(secret, None, "invalid ephemeral secret");
     }
 }

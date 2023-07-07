@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"context"
+	"fmt"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -30,8 +32,24 @@ func (sc *kmRestartImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
+	// Speed up the test.
+	f.Network.Beacon.VRFParameters = &beacon.VRFParameters{
+		Interval:             10,
+		ProofSubmissionDelay: 2,
+	}
+
+	// This requires multiple keymanagers.
+	f.Keymanagers = []oasis.KeymanagerFixture{
+		{Runtime: 0, Entity: 1, Policy: 0},
+		{Runtime: 0, Entity: 1, Policy: 0},
+		{Runtime: 0, Entity: 1, Policy: 0},
+	}
+
 	// The round is allowed to fail until the keymanager becomes available after restart.
 	f.Network.DefaultLogWatcherHandlerFactories = nil
+
+	// Enable master secret rotation.
+	f.KeymanagerPolicies[0].MasterSecretRotationInterval = 1
 
 	return f, nil
 }
@@ -52,22 +70,18 @@ func (sc *kmRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
-	// XXX: currently assumes single keymanager.
-	km := sc.Net.Keymanagers()[0]
+	// Wait until 3 master secrets are generated.
+	if _, err := sc.waitMasterSecret(ctx, 2); err != nil {
+		return fmt.Errorf("master secret not generated: %w", err)
+	}
 
-	// Restart the key manager.
-	sc.Logger.Info("restarting the key manager")
-	if err := km.Restart(ctx); err != nil {
+	// Restart the key managers.
+	if err := sc.restartAndWaitKeymanagers(ctx, []int{0, 1, 2}); err != nil {
 		return err
 	}
 
-	// Wait for the key manager to be ready.
-	sc.Logger.Info("waiting for the key manager to become ready")
-	kmCtrl, err := oasis.NewController(km.SocketPath())
-	if err != nil {
-		return err
-	}
-	if err = kmCtrl.WaitReady(ctx); err != nil {
+	// Test if rotations still work.
+	if _, err := sc.waitMasterSecret(ctx, 5); err != nil {
 		return err
 	}
 
@@ -75,7 +89,7 @@ func (sc *kmRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// a second trip to the keymanager.
 	sc.Logger.Info("starting a second client to check if key manager works")
 	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
-	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
+	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
 		return err
 	}
 	return sc.waitTestClient()

@@ -8,7 +8,9 @@ use oasis_core_runtime::{
         namespace::Namespace,
     },
     consensus::{
-        beacon::EpochTime, keymanager::SignedEncryptedEphemeralSecret, state::keymanager::Status,
+        beacon::EpochTime,
+        keymanager::{SignedEncryptedEphemeralSecret, SignedEncryptedMasterSecret},
+        state::keymanager::Status,
     },
 };
 
@@ -22,8 +24,6 @@ const INIT_RESPONSE_CONTEXT: &[u8] = b"oasis-core/keymanager: init response";
 pub struct InitRequest {
     /// Key manager status.
     pub status: Status,
-    /// True iff the enclave may generate a new master secret.
-    pub may_generate: bool,
 }
 
 /// Key manager initialization response.
@@ -33,10 +33,17 @@ pub struct InitResponse {
     pub is_secure: bool,
     /// Checksum for validating replication.
     pub checksum: Vec<u8>,
+    /// Checksum for validating the next replication.
+    #[cbor(optional)]
+    pub next_checksum: Vec<u8>,
     /// Checksum for identifying policy.
     pub policy_checksum: Vec<u8>,
     /// Runtime signing key.
-    pub rsk: signature::PublicKey,
+    #[cbor(optional)]
+    pub rsk: Option<signature::PublicKey>,
+    /// Runtime signing key of the next replication.
+    #[cbor(optional)]
+    pub next_rsk: Option<signature::PublicKey>,
 }
 
 /// Signed InitResponse.
@@ -79,6 +86,9 @@ pub struct ReplicateMasterSecretRequest {
 pub struct ReplicateMasterSecretResponse {
     /// Master secret.
     pub master_secret: Secret,
+    /// Checksum of the preceding master secret.
+    #[cbor(optional)]
+    pub checksum: Vec<u8>,
 }
 
 /// Key manager ephemeral secret replication request.
@@ -97,6 +107,22 @@ pub struct ReplicateEphemeralSecretResponse {
     pub ephemeral_secret: Secret,
 }
 
+/// Generate master secret request.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct GenerateMasterSecretRequest {
+    /// Generation.
+    pub generation: u64,
+    /// Epoch time.
+    pub epoch: EpochTime,
+}
+
+/// Generate master secret response.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct GenerateMasterSecretResponse {
+    /// Signed encrypted master secret.
+    pub signed_secret: SignedEncryptedMasterSecret,
+}
+
 /// Generate ephemeral secret request.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct GenerateEphemeralSecretRequest {
@@ -109,6 +135,13 @@ pub struct GenerateEphemeralSecretRequest {
 pub struct GenerateEphemeralSecretResponse {
     /// Signed encrypted ephemeral secret.
     pub signed_secret: SignedEncryptedEphemeralSecret,
+}
+
+/// Load master secret request.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct LoadMasterSecretRequest {
+    /// Signed encrypted master secret.
+    pub signed_secret: SignedEncryptedMasterSecret,
 }
 
 /// Load ephemeral secret request.

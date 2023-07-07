@@ -65,6 +65,15 @@ impl AsRef<[u8]> for Secret {
     }
 }
 
+/// A secret with a checksum of the preceding secret.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct VerifiableSecret {
+    /// Secret.
+    pub secret: Secret,
+    /// Checksum of the preceding secret.
+    pub checksum: Vec<u8>,
+}
+
 /// A key pair managed by the key manager.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct KeyPair {

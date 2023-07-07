@@ -29,3 +29,19 @@ func TestSignVerify(t *testing.T) {
 	err = sigInitResponse.Verify(signer2.Public())
 	require.Error(err, "verification with different public key should fail")
 }
+
+func TestStatus(t *testing.T) {
+	require := require.New(t)
+
+	// Uninitialized key manager.
+	var s Status
+	require.Equal(uint64(0), s.NextGeneration())
+
+	// Key manager with one master secret generation.
+	s.Checksum = []byte{1, 2, 3}
+	require.Equal(uint64(1), s.NextGeneration())
+
+	// Key manager with ten master secret generations.
+	s.Generation = 9
+	require.Equal(uint64(10), s.NextGeneration())
+}

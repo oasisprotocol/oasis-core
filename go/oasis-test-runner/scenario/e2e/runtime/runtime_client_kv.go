@@ -103,6 +103,17 @@ func (cli *KVTestClient) workload(ctx context.Context) error {
 		return err
 	}
 
+	cli.sc.Logger.Info("waiting for key managers to generate the first master secret")
+
+	if _, err = cli.sc.waitMasterSecret(ctx, 0); err != nil {
+		return fmt.Errorf("first master secret not generated: %w", err)
+	}
+	// The CometBFT verifier is one block behind, so wait for an additional
+	// two blocks to ensure that the first secret has been loaded.
+	if _, err = cli.sc.waitBlocks(ctx, 2); err != nil {
+		return fmt.Errorf("failed to wait two blocks: %w", err)
+	}
+
 	cli.sc.Logger.Info("starting k/v runtime test client")
 
 	if err := cli.scenario(func(req interface{}) error {

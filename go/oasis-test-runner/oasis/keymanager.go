@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -33,14 +34,16 @@ type KeymanagerPolicy struct {
 
 	statusArgs []string
 
-	runtime *Runtime
-	serial  int
+	runtime          *Runtime
+	serial           int
+	rotationInterval beacon.EpochTime
 }
 
 // KeymanagerPolicyCfg is an Oasis key manager policy document configuration.
 type KeymanagerPolicyCfg struct {
-	Runtime *Runtime
-	Serial  int
+	Runtime                      *Runtime
+	Serial                       int
+	MasterSecretRotationInterval beacon.EpochTime
 }
 
 func (pol *KeymanagerPolicy) provisionStatusArgs() []string {
@@ -56,6 +59,7 @@ func (pol *KeymanagerPolicy) provision() error {
 		"--" + kmCmd.CfgPolicyFile, policyPath,
 		"--" + kmCmd.CfgPolicyID, pol.runtime.ID().String(),
 		"--" + kmCmd.CfgPolicySerial, strconv.Itoa(pol.serial),
+		"--" + kmCmd.CfgPolicyMasterSecretRotationInterval, strconv.FormatUint(uint64(pol.rotationInterval), 10),
 	}
 	if pol.runtime.teeHardware == node.TEEHardwareIntelSGX {
 		policyArgs = append(policyArgs, []string{
@@ -134,10 +138,11 @@ func (net *Network) NewKeymanagerPolicy(cfg *KeymanagerPolicyCfg) (*KeymanagerPo
 	}
 
 	newPol := &KeymanagerPolicy{
-		net:     net,
-		dir:     policyDir,
-		runtime: cfg.Runtime,
-		serial:  cfg.Serial,
+		net:              net,
+		dir:              policyDir,
+		runtime:          cfg.Runtime,
+		serial:           cfg.Serial,
+		rotationInterval: cfg.MasterSecretRotationInterval,
 	}
 	net.keymanagerPolicies = append(net.keymanagerPolicies, newPol)
 

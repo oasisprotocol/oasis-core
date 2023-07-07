@@ -284,8 +284,9 @@ func (f *RuntimeFixture) Create(netFixture *NetworkFixture, net *Network) (*Runt
 
 // KeymanagerPolicyFixture is a key manager policy fixture.
 type KeymanagerPolicyFixture struct {
-	Runtime int `json:"runtime"`
-	Serial  int `json:"serial"`
+	Runtime                      int              `json:"runtime"`
+	Serial                       int              `json:"serial"`
+	MasterSecretRotationInterval beacon.EpochTime `json:"master_secret_rotation_interval,omitempty"`
 }
 
 // Create instantiates the key manager policy described in the fixture.
@@ -296,8 +297,9 @@ func (f *KeymanagerPolicyFixture) Create(net *Network) (*KeymanagerPolicy, error
 	}
 
 	return net.NewKeymanagerPolicy(&KeymanagerPolicyCfg{
-		Runtime: runtime,
-		Serial:  f.Serial,
+		Runtime:                      runtime,
+		Serial:                       f.Serial,
+		MasterSecretRotationInterval: f.MasterSecretRotationInterval,
 	})
 }
 

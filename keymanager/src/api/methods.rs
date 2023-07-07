@@ -13,7 +13,11 @@ pub const METHOD_REPLICATE_EPHEMERAL_SECRET: &str = "replicate_ephemeral_secret"
 
 /// Name of the `init` local method.
 pub const LOCAL_METHOD_INIT: &str = "init";
+/// Name of the `generate_master_secret` local method.
+pub const LOCAL_METHOD_GENERATE_MASTER_SECRET: &str = "generate_master_secret";
 /// Name of the `generate_ephemeral_secret` local method.
 pub const LOCAL_METHOD_GENERATE_EPHEMERAL_SECRET: &str = "generate_ephemeral_secret";
+/// Name of the `load_master_secret` local method.
+pub const LOCAL_METHOD_LOAD_MASTER_SECRET: &str = "load_master_secret";
 /// Name of the `load_ephemeral_secret` local method.
 pub const LOCAL_METHOD_LOAD_EPHEMERAL_SECRET: &str = "load_ephemeral_secret";

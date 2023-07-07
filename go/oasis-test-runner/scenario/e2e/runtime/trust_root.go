@@ -187,7 +187,7 @@ func (sc *TrustRootImpl) updateKeyManagerPolicy(ctx context.Context, childEnv *e
 		}
 	}
 	sc.Logger.Info("initing KM policy")
-	if err := cli.Keymanager.InitPolicy(kmRt.ID(), 1, enclavePolicies, kmPolicyPath); err != nil {
+	if err := cli.Keymanager.InitPolicy(kmRt.ID(), 1, 0, enclavePolicies, kmPolicyPath); err != nil {
 		return err
 	}
 	sc.Logger.Info("signing KM policy")
@@ -212,27 +212,6 @@ func (sc *TrustRootImpl) updateKeyManagerPolicy(ctx context.Context, childEnv *e
 	}
 
 	return nil
-}
-
-func (sc *TrustRootImpl) waitBlocks(ctx context.Context, n int) (*consensus.Block, error) {
-	sc.Logger.Info("waiting for a block")
-
-	blockCh, blockSub, err := sc.Net.Controller().Consensus.WatchBlocks(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer blockSub.Close()
-
-	var blk *consensus.Block
-	for i := 0; i < n; i++ {
-		select {
-		case blk = <-blockCh:
-		case <-ctx.Done():
-			return nil, fmt.Errorf("timed out waiting for blocks")
-		}
-	}
-
-	return blk, nil
 }
 
 func (sc *TrustRootImpl) chainContext(ctx context.Context) (string, error) {

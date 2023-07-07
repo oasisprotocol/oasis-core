@@ -10,6 +10,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
@@ -21,8 +22,9 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// maxEphemeralSecretAge is the maximum age of an ephemeral secret in the number of epochs.
-const maxEphemeralSecretAge = 20
+// minProposalReplicationPercent is the minimum percentage of enclaves in the key manager committee
+// that must replicate the proposal for the next master secret before it is accepted.
+const minProposalReplicationPercent = 66
 
 var emptyHashSha3 = sha3.Sum256(nil)
 
@@ -79,6 +81,12 @@ func (app *keymanagerApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.
 			return api.ErrInvalidArgument
 		}
 		return app.updatePolicy(ctx, state, &sigPol)
+	case api.MethodPublishMasterSecret:
+		var sigSec api.SignedEncryptedMasterSecret
+		if err := cbor.Unmarshal(tx.Body, &sigSec); err != nil {
+			return api.ErrInvalidArgument
+		}
+		return app.publishMasterSecret(ctx, state, &sigSec)
 	case api.MethodPublishEphemeralSecret:
 		var sigSec api.SignedEncryptedEphemeralSecret
 		if err := cbor.Unmarshal(tx.Body, &sigSec); err != nil {
@@ -173,12 +181,23 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 			return fmt.Errorf("failed to query key manager status: %w", err)
 		}
 
-		newStatus := app.generateStatus(ctx, rt, oldStatus, nodes, params, epoch)
+		secret, err := state.MasterSecret(ctx, rt.ID)
+		if err != nil && err != api.ErrNoSuchMasterSecret {
+			ctx.Logger().Error("failed to query key manager master secret",
+				"id", rt.ID,
+				"err", err,
+			)
+			return fmt.Errorf("failed to query key manager master secret: %w", err)
+		}
+
+		newStatus := app.generateStatus(ctx, rt, oldStatus, secret, nodes, params, epoch)
 		if forceEmit || !bytes.Equal(cbor.Marshal(oldStatus), cbor.Marshal(newStatus)) {
 			ctx.Logger().Debug("status updated",
 				"id", newStatus.ID,
 				"is_initialized", newStatus.IsInitialized,
 				"is_secure", newStatus.IsSecure,
+				"generation", newStatus.Generation,
+				"rotation_epoch", newStatus.RotationEpoch,
 				"checksum", hex.EncodeToString(newStatus.Checksum),
 				"rsk", newStatus.RSK,
 				"nodes", newStatus.Nodes,
@@ -189,15 +208,6 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 				return fmt.Errorf("failed to set key manager status: %w", err)
 			}
 			toEmit = append(toEmit, newStatus)
-		}
-
-		// Clean ephemeral secrets.
-		// TODO: use max ephemeral secret age from the key manager policy
-		if epoch > maxEphemeralSecretAge {
-			expiryEpoch := epoch - maxEphemeralSecretAge
-			if err = state.CleanEphemeralSecrets(ctx, rt.ID, expiryEpoch); err != nil {
-				return fmt.Errorf("failed to clean ephemeral secrets: %w", err)
-			}
 		}
 	}
 
@@ -214,10 +224,11 @@ func (app *keymanagerApplication) onEpochChange(ctx *tmapi.Context, epoch beacon
 	return nil
 }
 
-func (app *keymanagerApplication) generateStatus(
+func (app *keymanagerApplication) generateStatus( // nolint: gocyclo
 	ctx *tmapi.Context,
 	kmrt *registry.Runtime,
 	oldStatus *api.Status,
+	secret *api.SignedEncryptedMasterSecret,
 	nodes []*node.Node,
 	params *registry.ConsensusParameters,
 	epoch beacon.EpochTime,
@@ -226,10 +237,25 @@ func (app *keymanagerApplication) generateStatus(
 		ID:            kmrt.ID,
 		IsInitialized: oldStatus.IsInitialized,
 		IsSecure:      oldStatus.IsSecure,
+		Generation:    oldStatus.Generation,
+		RotationEpoch: oldStatus.RotationEpoch,
 		Checksum:      oldStatus.Checksum,
 		Policy:        oldStatus.Policy,
 	}
 
+	// Data needed to count the nodes that have replicated the proposal for the next master secret.
+	var (
+		nextGeneration uint64
+		nextChecksum   []byte
+		nextRSK        *signature.PublicKey
+		updatedNodes   []signature.PublicKey
+	)
+	nextGeneration = status.NextGeneration()
+	if secret != nil && secret.Secret.Generation == nextGeneration && secret.Secret.Epoch == epoch {
+		nextChecksum = secret.Secret.Secret.Checksum
+	}
+
+	// Compute the policy hash to reject nodes that are not up-to-date.
 	var rawPolicy []byte
 	if status.Policy != nil {
 		rawPolicy = cbor.Marshal(status.Policy)
@@ -251,10 +277,11 @@ nextNode:
 			continue
 		}
 
+		secretReplicated := true
 		isInitialized := status.IsInitialized
 		isSecure := status.IsSecure
-		checksum := status.Checksum
 		RSK := status.RSK
+		nRSK := nextRSK
 
 		var numVersions int
 		for _, nodeRt := range n.Runtimes {
@@ -306,7 +333,6 @@ nextNode:
 				// The first version gets to be the source of truth.
 				isInitialized = true
 				isSecure = initResponse.IsSecure
-				checksum = initResponse.Checksum
 			}
 
 			// Skip nodes with mismatched status fields.
@@ -314,7 +340,13 @@ nextNode:
 				ctx.Logger().Error("Security status mismatch for runtime", vars...)
 				continue nextNode
 			}
-			if !bytes.Equal(initResponse.Checksum, checksum) {
+
+			// Skip nodes with mismatched checksum.
+			// Note that a node needs to register with an empty checksum if no master secrets
+			// have been generated so far. Otherwise, if secrets have been generated, the node
+			// needs to register with a checksum computed over all the secrets generated so far
+			// since the key manager's checksum is updated after every master secret rotation.
+			if !bytes.Equal(initResponse.Checksum, status.Checksum) {
 				ctx.Logger().Error("Checksum mismatch for runtime", vars...)
 				continue nextNode
 			}
@@ -332,6 +364,18 @@ nextNode:
 				continue nextNode
 			}
 
+			// Check if all versions have replicated the last master secret,
+			// derived the same RSK and are ready to move to the next generation.
+			if !bytes.Equal(initResponse.NextChecksum, nextChecksum) {
+				secretReplicated = false
+			}
+			if nRSK == nil {
+				nRSK = initResponse.NextRSK
+			}
+			if initResponse.NextRSK != nil && !initResponse.NextRSK.Equal(*nRSK) {
+				secretReplicated = false
+			}
+
 			numVersions++
 		}
 
@@ -341,17 +385,32 @@ nextNode:
 		if !isInitialized {
 			panic("the key manager must be initialized")
 		}
+		if secretReplicated {
+			nextRSK = nRSK
+			updatedNodes = append(updatedNodes, n.ID)
+		}
 
 		// If the key manager is not initialized, the first verified node gets to be the source
 		// of truth, every other node will sync off it.
 		if !status.IsInitialized {
 			status.IsInitialized = true
 			status.IsSecure = isSecure
-			status.Checksum = checksum
 		}
 		status.RSK = RSK
-
 		status.Nodes = append(status.Nodes, n.ID)
+	}
+
+	// Accept the proposal if the majority of the nodes have replicated
+	// the proposal for the next master secret.
+	if numNodes := len(status.Nodes); numNodes > 0 && nextChecksum != nil {
+		percent := len(updatedNodes) * 100 / numNodes
+		if percent >= minProposalReplicationPercent {
+			status.Generation = nextGeneration
+			status.RotationEpoch = epoch
+			status.Checksum = nextChecksum
+			status.RSK = nextRSK
+			status.Nodes = updatedNodes
+		}
 	}
 
 	return status

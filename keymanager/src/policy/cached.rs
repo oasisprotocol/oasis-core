@@ -31,7 +31,7 @@ lazy_static! {
 }
 
 const POLICY_STORAGE_KEY: &[u8] = b"keymanager_policy";
-const POLICY_SEAL_CONTEXT: &[u8] = b"Ekiden Keymanager Seal policy v0";
+const POLICY_SEAL_CONTEXT: &[u8] = b"oasis-core/keymanager: policy seal";
 
 /// Policy, which manages the key manager policy.
 pub struct Policy {
@@ -196,6 +196,7 @@ struct CachedPolicy {
     pub may_query: HashMap<Namespace, HashSet<EnclaveIdentity>>,
     pub may_replicate: HashSet<EnclaveIdentity>,
     pub may_replicate_from: HashSet<EnclaveIdentity>,
+    pub master_secret_rotation_interval: EpochTime,
     pub max_ephemeral_secret_age: EpochTime,
 }
 
@@ -242,6 +243,7 @@ impl CachedPolicy {
             }
         }
 
+        cached_policy.master_secret_rotation_interval = policy.master_secret_rotation_interval;
         cached_policy.max_ephemeral_secret_age = policy.max_ephemeral_secret_age;
 
         Ok(cached_policy)

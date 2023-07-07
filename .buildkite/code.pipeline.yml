@@ -218,7 +218,7 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     branches: "!master !stable/*"
-    parallelism: 3
+    parallelism: 4
     timeout_in_minutes: 20
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
@@ -227,7 +227,7 @@ steps:
       - export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"
       - export CC_x86_64_fortanix_unknown_sgx=clang-11
       # Only run runtime scenarios as others do not use SGX.
-      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-ephemeral-keys
+      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-.+
     artifact_paths:
       - coverage-merged-e2e-*.txt
       - /tmp/e2e/**/*.log

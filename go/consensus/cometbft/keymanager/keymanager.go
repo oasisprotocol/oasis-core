@@ -32,9 +32,10 @@ type serviceClient struct {
 
 	logger *logging.Logger
 
-	querier        *app.QueryFactory
-	statusNotifier *pubsub.Broker
-	secretNotifier *pubsub.Broker
+	querier           *app.QueryFactory
+	statusNotifier    *pubsub.Broker
+	mstSecretNotifier *pubsub.Broker
+	ephSecretNotifier *pubsub.Broker
 }
 
 func (sc *serviceClient) GetStatus(ctx context.Context, query *registry.NamespaceQuery) (*api.Status, error) {
@@ -72,17 +73,34 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	return q.Genesis(ctx)
 }
 
-func (sc *serviceClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceEpochQuery) (*api.SignedEncryptedEphemeralSecret, error) {
+func (sc *serviceClient) GetMasterSecret(ctx context.Context, query *registry.NamespaceQuery) (*api.SignedEncryptedMasterSecret, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.EphemeralSecret(ctx, query.ID, query.Epoch)
+	return q.MasterSecret(ctx, query.ID)
+}
+
+func (sc *serviceClient) GetEphemeralSecret(ctx context.Context, query *registry.NamespaceQuery) (*api.SignedEncryptedEphemeralSecret, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.EphemeralSecret(ctx, query.ID)
+}
+
+func (sc *serviceClient) WatchMasterSecrets() (<-chan *api.SignedEncryptedMasterSecret, *pubsub.Subscription) {
+	sub := sc.mstSecretNotifier.Subscribe()
+	ch := make(chan *api.SignedEncryptedMasterSecret)
+	sub.Unwrap(ch)
+
+	return ch, sub
 }
 
 func (sc *serviceClient) WatchEphemeralSecrets() (<-chan *api.SignedEncryptedEphemeralSecret, *pubsub.Subscription) {
-	sub := sc.secretNotifier.Subscribe()
+	sub := sc.ephSecretNotifier.Subscribe()
 	ch := make(chan *api.SignedEncryptedEphemeralSecret)
 	sub.Unwrap(ch)
 
@@ -110,6 +128,17 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 				sc.statusNotifier.Broadcast(status)
 			}
 		}
+		if events.IsAttributeKind(pair.GetKey(), &api.MasterSecretPublishedEvent{}) {
+			var event api.MasterSecretPublishedEvent
+			if err := events.DecodeValue(pair.GetValue(), &event); err != nil {
+				sc.logger.Error("worker: failed to get master secret from tag",
+					"err", err,
+				)
+				continue
+			}
+
+			sc.mstSecretNotifier.Broadcast(event.Secret)
+		}
 		if events.IsAttributeKind(pair.GetKey(), &api.EphemeralSecretPublishedEvent{}) {
 			var event api.EphemeralSecretPublishedEvent
 			if err := events.DecodeValue(pair.GetValue(), &event); err != nil {
@@ -119,7 +148,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 				continue
 			}
 
-			sc.secretNotifier.Broadcast(event.Secret)
+			sc.ephSecretNotifier.Broadcast(event.Secret)
 		}
 	}
 	return nil
@@ -133,9 +162,11 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 		return nil, fmt.Errorf("cometbft/keymanager: failed to register app: %w", err)
 	}
 
-	sc := &serviceClient{
-		logger:  logging.GetLogger("cometbft/keymanager"),
-		querier: a.QueryFactory().(*app.QueryFactory),
+	sc := serviceClient{
+		logger:            logging.GetLogger("cometbft/keymanager"),
+		querier:           a.QueryFactory().(*app.QueryFactory),
+		mstSecretNotifier: pubsub.NewBroker(false),
+		ephSecretNotifier: pubsub.NewBroker(false),
 	}
 	sc.statusNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		statuses, err := sc.GetStatuses(ctx, consensus.HeightLatest)
@@ -151,7 +182,6 @@ func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
 			wr <- v
 		}
 	})
-	sc.secretNotifier = pubsub.NewBroker(false)
 
-	return sc, nil
+	return &sc, nil
 }

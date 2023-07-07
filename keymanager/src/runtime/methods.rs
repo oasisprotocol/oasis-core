@@ -22,7 +22,10 @@ use oasis_core_runtime::{
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::{EncryptedEphemeralSecret, EncryptedSecret, SignedEncryptedEphemeralSecret},
+        keymanager::{
+            EncryptedEphemeralSecret, EncryptedMasterSecret, EncryptedSecret,
+            SignedEncryptedEphemeralSecret, SignedEncryptedMasterSecret,
+        },
         state::{
             beacon::ImmutableState as BeaconState,
             keymanager::{ImmutableState as KeyManagerState, Status},
@@ -38,17 +41,20 @@ use oasis_core_runtime::{
 use crate::{
     api::{
         EphemeralKeyRequest, GenerateEphemeralSecretRequest, GenerateEphemeralSecretResponse,
-        InitRequest, InitResponse, KeyManagerError, LoadEphemeralSecretRequest, LongTermKeyRequest,
+        GenerateMasterSecretRequest, GenerateMasterSecretResponse, InitRequest, InitResponse,
+        KeyManagerError, LoadEphemeralSecretRequest, LoadMasterSecretRequest, LongTermKeyRequest,
         ReplicateEphemeralSecretRequest, ReplicateEphemeralSecretResponse,
         ReplicateMasterSecretRequest, ReplicateMasterSecretResponse, SignedInitResponse,
     },
-    client::{KeyManagerClient, RemoteClient},
+    client::RemoteClient,
     crypto::{
-        kdf::Kdf, pack_runtime_id_epoch, unpack_encrypted_secret_nonce, KeyPair, Secret,
-        SignedPublicKey, SECRET_SIZE,
+        kdf::{Kdf, State},
+        pack_runtime_id_epoch, pack_runtime_id_generation_epoch, unpack_encrypted_secret_nonce,
+        KeyPair, Secret, SignedPublicKey, SECRET_SIZE,
     },
     policy::Policy,
     runtime::context::Context as KmContext,
+    secrets::{KeyManagerSecretProvider, SecretProvider},
 };
 
 /// Maximum age of an ephemeral key in the number of epochs.
@@ -74,44 +80,19 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
     let policy = Policy::global();
     let policy_checksum = policy.init(storage, status.policy)?;
 
-    // Always verify the runtime.
+    // Initialize or update the KDF.
+    let generation = status.generation;
+    let checksum = status.checksum;
+    let nodes = status.nodes;
+    let epoch = consensus_epoch(ctx)?;
+    let client = key_manager_client_for_replication(ctx);
+    let provider = KeyManagerSecretProvider::new(client, nodes);
+
     let kdf = Kdf::global();
-    kdf.set_runtime_id(runtime_id)?;
-
-    // Load master secrets if not already loaded. It is intended that manual intervention
-    // by the operator is required to remove/alter persisted secrets.
-    kdf.load_master_secrets(storage, &runtime_id)?;
-
-    // Replicate the missing secrets.
-    let next_generation = kdf.next_generation();
-    if !status.checksum.is_empty() && next_generation <= status.generation {
-        for generation in next_generation..=status.generation {
-            let secret = fetch_master_secret(ctx, generation, &status.nodes)?;
-            kdf.add_master_secret(storage, &runtime_id, secret, generation)?;
-        }
-    }
-
-    // TODO: Allow enclaves to generate master secrets for all generations.
-    if status.checksum.is_empty() && kdf.next_generation() == 0 {
-        // A master secret is not set, and there is no checksum in the
-        // request. Either this key manager instance has never been
-        // initialized, or our view of the external state is not current.
-        if !req.may_generate {
-            return Err(KeyManagerError::ReplicationRequired.into());
-        }
-
-        let secret = Secret::generate();
-        let generation = 0;
-        kdf.add_master_secret(storage, &runtime_id, secret, generation)?;
-    }
-
-    // Master secrets should now be synced unless someone did an internal state reset.
-    // It is also possible that new secrets were loaded, but we don't care about any
-    // of that as we always HAVE to check if the current state matches the global one.
-    let (checksum, rsk) = kdf.status(&runtime_id, status.checksum.clone(), status.generation)?;
+    let state = kdf.init(storage, runtime_id, generation, checksum, epoch, &provider)?;
 
     // State is up-to-date, build the response and sign it with the RAK.
-    sign_init_response(ctx, checksum, policy_checksum, rsk)
+    sign_init_response(ctx, state, policy_checksum)
 }
 
 /// See `Kdf::get_or_create_keys`.
@@ -189,7 +170,12 @@ pub fn replicate_master_secret(
 
     let master_secret =
         Kdf::global().replicate_master_secret(ctx.untrusted_local_storage, req.generation)?;
-    Ok(ReplicateMasterSecretResponse { master_secret })
+    let checksum = Kdf::load_checksum(ctx.untrusted_local_storage, req.generation);
+
+    Ok(ReplicateMasterSecretResponse {
+        master_secret,
+        checksum,
+    })
 }
 
 /// See `Kdf::replicate_ephemeral_secret`.
@@ -204,39 +190,94 @@ pub fn replicate_ephemeral_secret(
     Ok(ReplicateEphemeralSecretResponse { ephemeral_secret })
 }
 
-/// Generate an ephemeral secret and encrypt it with key manager REK keys.
-pub fn generate_ephemeral_secret(
+/// Generate a master secret and encrypt it using the key manager's REK keys.
+pub fn generate_master_secret(
     ctx: &mut RpcContext,
-    req: &GenerateEphemeralSecretRequest,
-) -> Result<GenerateEphemeralSecretResponse> {
-    // Allow to generate secret for the next epoch only.
+    req: &GenerateMasterSecretRequest,
+) -> Result<GenerateMasterSecretResponse> {
+    let kdf = Kdf::global();
+    let runtime_id = kdf.runtime_id()?;
+
+    // Allow generating a secret for the next epoch only.
     let epoch = consensus_epoch(ctx)? + 1;
     if epoch != req.epoch {
         return Err(KeyManagerError::InvalidEpoch(epoch, req.epoch).into());
     }
 
+    // Generate a secret and encrypt it.
+    // Note that the checksum can be computed for the next generation only.
+    let generation = req.generation;
+    let secret = Secret::generate();
+    let checksum = kdf.checksum_master_secret_proposal(runtime_id, &secret, generation)?;
+    let additional_data = pack_runtime_id_generation_epoch(&runtime_id, generation, epoch);
+    let secret = encrypt_secret(ctx, secret, checksum, additional_data, runtime_id)?;
+
+    // Sign the secret.
+    let signer: Arc<dyn Signer> = ctx.identity.clone();
+    let secret = EncryptedMasterSecret {
+        runtime_id,
+        generation,
+        epoch,
+        secret,
+    };
+    let signed_secret = SignedEncryptedMasterSecret::new(secret, &signer)?;
+
+    Ok(GenerateMasterSecretResponse { signed_secret })
+}
+
+/// Generate an ephemeral secret and encrypt it using the key manager's REK keys.
+pub fn generate_ephemeral_secret(
+    ctx: &mut RpcContext,
+    req: &GenerateEphemeralSecretRequest,
+) -> Result<GenerateEphemeralSecretResponse> {
+    let kdf = Kdf::global();
+    let runtime_id = kdf.runtime_id()?;
+
+    // Allow generating a secret for the next epoch only.
+    let epoch = consensus_epoch(ctx)? + 1;
+    if epoch != req.epoch {
+        return Err(KeyManagerError::InvalidEpoch(epoch, req.epoch).into());
+    }
+
+    // Generate a secret and encrypt it.
+    let secret = Secret::generate();
+    let checksum = Kdf::checksum_ephemeral_secret(&runtime_id, &secret, epoch);
+    let additional_data = pack_runtime_id_epoch(&runtime_id, epoch);
+    let secret = encrypt_secret(ctx, secret, checksum, additional_data, runtime_id)?;
+
+    // Sign the secret.
+    let signer: Arc<dyn Signer> = ctx.identity.clone();
+    let secret = EncryptedEphemeralSecret {
+        runtime_id,
+        epoch,
+        secret,
+    };
+    let signed_secret = SignedEncryptedEphemeralSecret::new(secret, &signer)?;
+
+    Ok(GenerateEphemeralSecretResponse { signed_secret })
+}
+
+/// Encrypt a secret using the Deoxys-II MRAE algorithm and the key manager's REK keys.
+fn encrypt_secret(
+    ctx: &mut RpcContext,
+    secret: Secret,
+    checksum: Vec<u8>,
+    additional_data: Vec<u8>,
+    runtime_id: Namespace,
+) -> Result<EncryptedSecret> {
     // Fetch REK keys of the key manager committee members.
-    let runtime_id = Kdf::global()
-        .runtime_id()
-        .ok_or(KeyManagerError::NotInitialized)?;
     let rek_keys = key_manager_rek_keys(ctx, runtime_id)?;
     let rek_keys: HashSet<_> = rek_keys.values().collect();
-
     // Abort if our REK hasn't been published.
     if rek_keys.get(&ctx.identity.public_rek()).is_none() {
         return Err(KeyManagerError::REKNotPublished.into());
     }
-
-    // Generate a random encryption key, a random secret and encrypt the latter with REK keys.
+    // Encrypt the secret.
     let priv_key = x25519::PrivateKey::generate();
     let pub_key = x25519::PublicKey::from(&priv_key);
     let mut nonce = Nonce::generate();
-    let secret = Secret::generate();
     let plaintext = secret.0.to_vec();
-    let additional_data = pack_runtime_id_epoch(&runtime_id, epoch);
     let mut ciphertexts = HashMap::new();
-    let checksum = Kdf::checksum_ephemeral_secret(&secret, &runtime_id, epoch);
-
     for &rek in rek_keys.iter() {
         nonce.increment()?;
 
@@ -252,20 +293,29 @@ pub fn generate_ephemeral_secret(
         ciphertexts.insert(*rek, ciphertext);
     }
 
-    // Sign the secret.
-    let signer: Arc<dyn Signer> = ctx.identity.clone();
-    let secret = EncryptedEphemeralSecret {
-        runtime_id,
-        epoch,
-        secret: EncryptedSecret {
-            checksum,
-            pub_key,
-            ciphertexts,
-        },
-    };
-    let signed_secret = SignedEncryptedEphemeralSecret::new(secret, &signer)?;
+    Ok(EncryptedSecret {
+        checksum,
+        pub_key,
+        ciphertexts,
+    })
+}
 
-    Ok(GenerateEphemeralSecretResponse { signed_secret })
+/// Decrypt and store a proposal for the next master secret.
+pub fn load_master_secret(ctx: &mut RpcContext, req: &LoadMasterSecretRequest) -> Result<()> {
+    let signed_secret = validate_signed_master_secret(ctx, &req.signed_secret)?;
+
+    let secret = match decrypt_master_secret(ctx, &signed_secret)? {
+        Some(secret) => secret,
+        None => return Ok(()),
+    };
+
+    Kdf::global().add_master_secret_proposal(
+        ctx.untrusted_local_storage,
+        &signed_secret.runtime_id,
+        secret,
+        signed_secret.generation,
+        &signed_secret.secret.checksum,
+    )
 }
 
 /// Decrypt and store an ephemeral secret. If decryption fails, try to replicate the secret
@@ -277,19 +327,64 @@ pub fn load_ephemeral_secret(ctx: &mut RpcContext, req: &LoadEphemeralSecretRequ
         Some(secret) => secret,
         None => {
             let nodes = nodes_with_ephemeral_secret(ctx, &signed_secret)?;
-            fetch_ephemeral_secret(ctx, signed_secret.epoch, nodes)?
+            let client = key_manager_client_for_replication(ctx);
+
+            KeyManagerSecretProvider::new(client, nodes)
+                .ephemeral_secret_iter(signed_secret.epoch)
+                .find(|secret| {
+                    let checksum = Kdf::checksum_ephemeral_secret(
+                        &signed_secret.runtime_id,
+                        secret,
+                        signed_secret.epoch,
+                    );
+                    checksum == signed_secret.secret.checksum
+                })
+                .ok_or(KeyManagerError::EphemeralSecretNotReplicated(
+                    signed_secret.epoch,
+                ))?
         }
     };
 
-    let checksum =
-        Kdf::checksum_ephemeral_secret(&secret, &signed_secret.runtime_id, signed_secret.epoch);
-    if checksum != signed_secret.secret.checksum {
-        return Err(KeyManagerError::EphemeralSecretChecksumMismatch.into());
+    Kdf::global().add_ephemeral_secret(
+        &signed_secret.runtime_id,
+        secret,
+        signed_secret.epoch,
+        &signed_secret.secret.checksum,
+    )
+}
+
+/// Decrypt master secret with local REK key.
+fn decrypt_master_secret(
+    ctx: &mut RpcContext,
+    secret: &EncryptedMasterSecret,
+) -> Result<Option<Secret>> {
+    let generation = secret.generation;
+    let epoch = secret.epoch;
+    let runtime_id = secret.runtime_id;
+    let rek = ctx.identity.public_rek();
+
+    let ciphertext = match secret.secret.ciphertexts.get(&rek) {
+        Some(ciphertext) => ciphertext,
+        None => return Ok(None),
+    };
+
+    let (ciphertext, nonce) =
+        unpack_encrypted_secret_nonce(ciphertext).ok_or(KeyManagerError::InvalidCiphertext)?;
+    let additional_data = pack_runtime_id_generation_epoch(&runtime_id, generation, epoch);
+    let plaintext = ctx.identity.box_open(
+        &nonce,
+        ciphertext,
+        additional_data,
+        &secret.secret.pub_key.0,
+    )?;
+
+    if plaintext.len() != SECRET_SIZE {
+        return Err(KeyManagerError::InvalidCiphertext.into());
     }
 
-    Kdf::global().add_ephemeral_secret(secret, signed_secret.epoch);
+    let secret = Secret(plaintext.try_into().expect("slice with incorrect length"));
 
-    Ok(())
+    Ok(Some(secret))
 }
 
 /// Decrypt ephemeral secret with local REK key.
@@ -325,42 +420,6 @@ fn decrypt_ephemeral_secret(
     Ok(Some(secret))
 }
 
-/// Fetch master secret from another key manager enclave.
-fn fetch_master_secret(
-    ctx: &mut RpcContext,
-    generation: u64,
-    nodes: &Vec<signature::PublicKey>,
-) -> Result<Secret> {
-    let km_client = key_manager_client_for_replication(ctx);
-    for node in nodes.iter() {
-        km_client.set_nodes(vec![*node]);
-        let result = block_on(km_client.replicate_master_secret(generation));
-        if let Ok(secret) = result {
-            return Ok(secret);
-        }
-    }
-
-    Err(KeyManagerError::MasterSecretNotReplicated(generation).into())
-}
-
-/// Fetch ephemeral secret from another key manager enclave.
-fn fetch_ephemeral_secret(
-    ctx: &mut RpcContext,
-    epoch: EpochTime,
-    nodes: Vec<signature::PublicKey>,
-) -> Result<Secret> {
-    let km_client = key_manager_client_for_replication(ctx);
-    for node in nodes.iter() {
-        km_client.set_nodes(vec![*node]);
-        let result = block_on(km_client.replicate_ephemeral_secret(epoch));
-        if let Ok(secret) = result {
-            return Ok(secret);
-        }
-    }
-
-    Err(KeyManagerError::EphemeralSecretNotReplicated(epoch).into())
-}
-
 /// Key manager client for master and ephemeral secret replication.
 fn key_manager_client_for_replication(ctx: &mut RpcContext) -> RemoteClient {
     let rctx = runtime_context!(ctx, KmContext);
@@ -383,16 +442,17 @@ fn key_manager_client_for_replication(ctx: &mut RpcContext) -> RemoteClient {
 /// Create init response and sign it with RAK.
 fn sign_init_response(
     ctx: &mut RpcContext,
-    checksum: Vec<u8>,
+    state: State,
     policy_checksum: Vec<u8>,
-    rsk: signature::PublicKey,
 ) -> Result<SignedInitResponse> {
     let is_secure = BUILD_INFO.is_secure && !Policy::unsafe_skip();
     let init_response = InitResponse {
         is_secure,
-        checksum,
+        checksum: state.checksum,
+        next_checksum: state.next_checksum,
         policy_checksum,
-        rsk,
+        rsk: state.signing_key,
+        next_rsk: state.next_signing_key,
     };
     let signer: Arc<dyn Signer> = ctx.identity.clone();
     SignedInitResponse::new(init_response, &signer)
@@ -473,6 +533,21 @@ fn validate_height_freshness(ctx: &RpcContext, height: Option<u64>) -> Result<()
     Ok(())
 }
 
+/// Verify that the master secret has been published in the consensus layer.
+fn validate_signed_master_secret(
+    ctx: &RpcContext,
+    signed_secret: &SignedEncryptedMasterSecret,
+) -> Result<EncryptedMasterSecret> {
+    let consensus_state = block_on(ctx.consensus_verifier.latest_state())?;
+    let km_state = KeyManagerState::new(&consensus_state);
+    let published_signed_secret = km_state
+        .master_secret(signed_secret.secret.runtime_id)?
+        .filter(|published_signed_secret| published_signed_secret == signed_secret)
+        .ok_or(KeyManagerError::MasterSecretNotPublished)?;
+
+    Ok(published_signed_secret.secret)
+}
+
 /// Validate that the ephemeral secret has been published in the consensus layer.
 fn validate_signed_ephemeral_secret(
     ctx: &RpcContext,
@@ -481,7 +556,7 @@ fn validate_signed_ephemeral_secret(
     let consensus_state = block_on(ctx.consensus_verifier.latest_state())?;
     let km_state = KeyManagerState::new(&consensus_state);
     let published_signed_secret = km_state
-        .ephemeral_secret(signed_secret.secret.runtime_id, signed_secret.secret.epoch)?
+        .ephemeral_secret(signed_secret.secret.runtime_id)?
         .filter(|published_signed_secret| published_signed_secret == signed_secret)
         .ok_or(KeyManagerError::EphemeralSecretNotPublished)?;
 

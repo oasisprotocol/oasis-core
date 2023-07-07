@@ -156,7 +156,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				},
 			})
 			fixture.KeymanagerPolicies = []oasis.KeymanagerPolicyFixture{
-				{Runtime: 0, Serial: 1},
+				{Runtime: 0, Serial: 1, MasterSecretRotationInterval: 0},
 			}
 			fixture.Keymanagers = []oasis.KeymanagerFixture{
 				{Runtime: 0, Entity: 1, RuntimeProvisioner: runtimeProvisioner},

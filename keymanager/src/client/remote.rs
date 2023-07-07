@@ -34,7 +34,7 @@ use crate::{
         METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
         METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
-    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey},
+    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
     policy::{set_trusted_policy_signers, verify_policy_and_trusted_signers, TrustedPolicySigners},
 };
 
@@ -456,7 +456,10 @@ impl KeyManagerClient for RemoteClient {
         Ok(key)
     }
 
-    async fn replicate_master_secret(&self, generation: u64) -> Result<Secret, KeyManagerError> {
+    async fn replicate_master_secret(
+        &self,
+        generation: u64,
+    ) -> Result<VerifiableSecret, KeyManagerError> {
         let height = self
             .inner
             .consensus_verifier
@@ -475,7 +478,10 @@ impl KeyManagerClient for RemoteClient {
             )
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))
-            .map(|rsp: ReplicateMasterSecretResponse| rsp.master_secret)
+            .map(|rsp: ReplicateMasterSecretResponse| VerifiableSecret {
+                secret: rsp.master_secret,
+                checksum: rsp.checksum,
+            })
     }
 
     async fn replicate_ephemeral_secret(

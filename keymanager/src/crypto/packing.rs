@@ -20,8 +20,6 @@ const EPOCH_SIZE: usize = 8;
 const GENERATION_SIZE: usize = 8;
 /// The size of an encrypted secret.
 const SECRET_STORAGE_SIZE: usize = SECRET_SIZE + TAG_SIZE + NONCE_SIZE;
-/// The size of an encrypted generation.
-const GENERATION_STORAGE_SIZE: usize = GENERATION_SIZE + TAG_SIZE + NONCE_SIZE;
 
 /// Concatenate runtime ID and epoch (runtime_id || epoch)
 /// into a byte vector using little-endian byte order.
@@ -152,26 +150,6 @@ pub fn unpack_encrypted_secret_nonce(data: &Vec<u8>) -> Option<(Vec<u8>, [u8; NO
     Some((ciphertext, nonce))
 }
 
-/// Unpack the concatenation of encrypted generation and nonce (ciphertext || nonce).
-pub fn unpack_encrypted_generation_nonce(data: &Vec<u8>) -> Option<(Vec<u8>, [u8; NONCE_SIZE])> {
-    if data.len() != GENERATION_STORAGE_SIZE {
-        return None;
-    }
-
-    let ciphertext = data
-        .get(..GENERATION_STORAGE_SIZE - NONCE_SIZE)
-        .unwrap()
-        .to_vec();
-
-    let nonce: [u8; NONCE_SIZE] = data
-        .get(GENERATION_STORAGE_SIZE - NONCE_SIZE..)
-        .unwrap()
-        .try_into()
-        .expect("slice with incorrect length");
-
-    Some((ciphertext, nonce))
-}
-
 #[cfg(test)]
 mod test {
     use oasis_core_runtime::{
@@ -198,7 +176,6 @@ mod test {
 
         let d2 = DeoxysII::new(&key);
         let encrypted_secret = d2.seal(&nonce, secret, vec![]);
-        let encrypted_generation = d2.seal(&nonce, generation.to_le_bytes(), vec![]);
 
         let data = crypto::pack_runtime_id_epoch(&runtime_id, epoch);
         let res = crypto::unpack_runtime_id_epoch(data).expect("data should unpack");
@@ -224,13 +201,6 @@ mod test {
         let data = crypto::pack_ciphertext_nonce(&encrypted_secret, &Nonce::new(nonce));
         let res = crypto::unpack_encrypted_secret_nonce(&data).expect("data should unpack");
         assert_eq!((encrypted_secret, nonce), res);
-
-        let res = crypto::unpack_encrypted_secret_nonce(&vec![1, 2, 3]);
-        assert_eq!(None, res);
-
-        let data = crypto::pack_ciphertext_nonce(&encrypted_generation, &Nonce::new(nonce));
-        let res = crypto::unpack_encrypted_generation_nonce(&data).expect("data should unpack");
-        assert_eq!((encrypted_generation, nonce), res);
 
         let res = crypto::unpack_encrypted_secret_nonce(&vec![1, 2, 3]);
         assert_eq!(None, res);

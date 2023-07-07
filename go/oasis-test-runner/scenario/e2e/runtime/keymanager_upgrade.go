@@ -149,7 +149,7 @@ func (sc *KmUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	}
 
 	sc.Logger.Info("initing updated KM policy")
-	if err := cli.Keymanager.InitPolicy(oldKMRuntime.ID(), 2, enclavePolicies, kmPolicyPath); err != nil {
+	if err := cli.Keymanager.InitPolicy(oldKMRuntime.ID(), 2, 0, enclavePolicies, kmPolicyPath); err != nil {
 		return err
 	}
 	sc.Logger.Info("signing updated KM policy")

@@ -3,7 +3,6 @@ package keymanager
 import (
 	"context"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/state"
@@ -14,7 +13,8 @@ import (
 type Query interface {
 	Status(context.Context, common.Namespace) (*keymanager.Status, error)
 	Statuses(context.Context) ([]*keymanager.Status, error)
-	EphemeralSecret(context.Context, common.Namespace, beacon.EpochTime) (*keymanager.SignedEncryptedEphemeralSecret, error)
+	MasterSecret(context.Context, common.Namespace) (*keymanager.SignedEncryptedMasterSecret, error)
+	EphemeralSecret(context.Context, common.Namespace) (*keymanager.SignedEncryptedEphemeralSecret, error)
 	Genesis(context.Context) (*keymanager.Genesis, error)
 }
 
@@ -44,8 +44,12 @@ func (kq *keymanagerQuerier) Statuses(ctx context.Context) ([]*keymanager.Status
 	return kq.state.Statuses(ctx)
 }
 
-func (kq *keymanagerQuerier) EphemeralSecret(ctx context.Context, id common.Namespace, epoch beacon.EpochTime) (*keymanager.SignedEncryptedEphemeralSecret, error) {
-	return kq.state.EphemeralSecret(ctx, id, epoch)
+func (kq *keymanagerQuerier) MasterSecret(ctx context.Context, id common.Namespace) (*keymanager.SignedEncryptedMasterSecret, error) {
+	return kq.state.MasterSecret(ctx, id)
+}
+
+func (kq *keymanagerQuerier) EphemeralSecret(ctx context.Context, id common.Namespace) (*keymanager.SignedEncryptedEphemeralSecret, error) {
+	return kq.state.EphemeralSecret(ctx, id)
 }
 
 func (app *keymanagerApplication) QueryFactory() interface{} {

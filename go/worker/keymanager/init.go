@@ -57,10 +57,10 @@ func New(
 		enabled:             enabled,
 		mayGenerate:         config.GlobalConfig.Keymanager.MayGenerate,
 		initEnclaveDoneCh:   make(chan *api.SignedInitResponse, 1),
-		loadSecretCh:        make(chan struct{}, 1),
-		genSecretCh:         make(chan struct{}, 1),
-		genSecretDoneCh:     make(chan bool, 1),
-		genSecretHeight:     int64(math.MaxInt64),
+		genMstSecDoneCh:     make(chan bool, 1),
+		genMstSecEpoch:      math.MaxUint64,
+		genEphSecDoneCh:     make(chan bool, 1),
+		genSecHeight:        int64(math.MaxInt64),
 	}
 
 	if !w.enabled {
@@ -85,9 +85,11 @@ func New(
 		w.privatePeers[peerID] = struct{}{}
 	}
 
+	// Parse runtime ID.
 	if err := w.runtimeID.UnmarshalHex(config.GlobalConfig.Keymanager.RuntimeID); err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to parse runtime ID: %w", err)
 	}
+	w.runtimeLabel = w.runtimeID.String()
 
 	var err error
 	w.roleProvider, err = r.NewRuntimeRoleProvider(node.RoleKeyManager, w.runtimeID)

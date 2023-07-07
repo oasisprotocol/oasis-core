@@ -7,7 +7,7 @@ use oasis_core_runtime::consensus::beacon::EpochTime;
 
 use crate::{
     api::KeyManagerError,
-    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey},
+    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
 };
 
 /// Key manager client interface.
@@ -55,7 +55,10 @@ pub trait KeyManagerClient: Send + Sync {
     ) -> Result<SignedPublicKey, KeyManagerError>;
 
     /// Get a copy of the master secret for replication.
-    async fn replicate_master_secret(&self, generation: u64) -> Result<Secret, KeyManagerError>;
+    async fn replicate_master_secret(
+        &self,
+        generation: u64,
+    ) -> Result<VerifiableSecret, KeyManagerError>;
 
     /// Get a copy of the ephemeral secret for replication.
     async fn replicate_ephemeral_secret(&self, epoch: EpochTime)
@@ -100,7 +103,10 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         KeyManagerClient::get_public_ephemeral_key(&**self, key_pair_id, epoch).await
     }
 
-    async fn replicate_master_secret(&self, generation: u64) -> Result<Secret, KeyManagerError> {
+    async fn replicate_master_secret(
+        &self,
+        generation: u64,
+    ) -> Result<VerifiableSecret, KeyManagerError> {
         KeyManagerClient::replicate_master_secret(&**self, generation).await
     }
 

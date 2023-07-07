@@ -114,18 +114,32 @@ type WorkerStatus struct {
 	// PolicyChecksum is the checksum of the key manager policy.
 	PolicyChecksum []byte `json:"policy_checksum"`
 
+	// MasterSecrets are the master secret generation and replication stats.
+	MasterSecrets MasterSecretStats `json:"master_secrets"`
 	// EphemeralSecrets are the ephemeral secret generation and replication stats.
 	EphemeralSecrets EphemeralSecretStats `json:"ephemeral_secrets"`
 }
 
+// MasterSecretStats are the master secret generation and replication stats.
+type MasterSecretStats struct {
+	// NumLoaded is the number of loaded secrets.
+	NumLoaded int `json:"num_loaded"`
+	// LastLoaded is the generation of the last loaded secret.
+	LastLoaded uint64 `json:"last_loaded_generation"`
+	// NumGenerated is the number of generated secrets.
+	NumGenerated int `json:"num_generated"`
+	// LastGenerated is the generation of the last generated secret.
+	LastGenerated uint64 `json:"last_generated_generation"`
+}
+
 // EphemeralSecretStats are the ephemeral secret generation and replication stats.
 type EphemeralSecretStats struct {
-	// NumLoaded is the number of loaded ephemeral secrets.
+	// NumLoaded is the number of loaded secrets.
 	NumLoaded int `json:"num_loaded"`
-	// LastLoaded is the epoch of the last loaded ephemeral secret.
+	// LastLoaded is the epoch of the last loaded secret.
 	LastLoaded beacon.EpochTime `json:"last_loaded_epoch"`
-	// NumGenerated is the number of generated ephemeral secrets.
+	// NumGenerated is the number of generated secrets.
 	NumGenerated int `json:"num_generated"`
-	// LastGenerated is the epoch of the last generated ephemeral secret.
+	// LastGenerated is the epoch of the last generated secret.
 	LastGenerated beacon.EpochTime `json:"last_generated_epoch"`
 }
