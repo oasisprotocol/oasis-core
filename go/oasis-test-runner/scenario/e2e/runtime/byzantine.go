@@ -464,7 +464,7 @@ func (sc *byzantineImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Start watching for runtime blocks.
-	blkCh, blkSub, err := sc.Net.ClientController().RuntimeClient.WatchBlocks(ctx, runtimeID)
+	blkCh, blkSub, err := sc.Net.ClientController().RuntimeClient.WatchBlocks(ctx, KeyValueRuntimeID)
 	if err != nil {
 		return fmt.Errorf("failed to watch blocks: %w", err)
 	}
@@ -477,7 +477,7 @@ func (sc *byzantineImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	sc.Logger.Info("getting genesis block")
 
-	genesisBlk, err := sc.Net.ClientController().RuntimeClient.GetGenesisBlock(ctx, runtimeID)
+	genesisBlk, err := sc.Net.ClientController().RuntimeClient.GetGenesisBlock(ctx, KeyValueRuntimeID)
 	if err != nil {
 		return fmt.Errorf("failed to get genesis block: %w", err)
 	}
@@ -547,7 +547,7 @@ WatchBlocksLoop:
 
 	// Wait for all compute nodes to be synced.
 	blk, err := sc.Net.ClientController().RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
-		RuntimeID: runtimeID,
+		RuntimeID: KeyValueRuntimeID,
 		Round:     runtimeClient.RoundLatest,
 	})
 	if err != nil {

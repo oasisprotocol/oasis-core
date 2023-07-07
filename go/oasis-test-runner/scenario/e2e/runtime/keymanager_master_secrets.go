@@ -76,23 +76,23 @@ func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err 
 	}()
 
 	// Test that only one master secret is generated if rotations are disabled.
-	if _, err = sc.waitMasterSecret(ctx, 0); err != nil {
+	if _, err = sc.WaitMasterSecret(ctx, 0); err != nil {
 		return fmt.Errorf("master secret not generated: %w", err)
 	}
-	if err = sc.waitEpochs(ctx, 5); err != nil {
+	if err = sc.WaitEpochs(ctx, 5); err != nil {
 		return err
 	}
 
 	sc.Logger.Info("verifying that exactly one master secret has been generated")
 
-	status, err := sc.keymanagerStatus(ctx)
+	status, err := sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
 	if !status.IsInitialized || len(status.Checksum) == 0 || status.Generation != 0 {
 		return fmt.Errorf("exactly one master secret should be generated if rotation is disabled %+v", status)
 	}
-	secret, err := sc.keymanagerMasterSecret(ctx)
+	secret, err := sc.MasterSecret(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,44 +101,44 @@ func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err 
 	}
 
 	// Enable master secret rotations.
-	if err = sc.updateRotationInterval(ctx, sc.nonce, childEnv, 1); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, 1); err != nil {
 		return err
 	}
 	sc.nonce++
-	if _, err = sc.waitMasterSecret(ctx, 3); err != nil {
+	if _, err = sc.WaitMasterSecret(ctx, 3); err != nil {
 		return err
 	}
 
 	// Test if all key managers can derive keys from all master secrets.
-	if err = sc.compareLongtermPublicKeys(ctx, []int{0, 1, 2}); err != nil {
+	if err = sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2}); err != nil {
 		return err
 	}
 
 	// Test master secrets if only two/one manager is running.
-	if err = sc.stopKeymanagers(ctx, []int{2}); err != nil {
+	if err = sc.StopKeymanagers(ctx, []int{2}); err != nil {
 		return err
 	}
-	if _, err = sc.waitMasterSecret(ctx, 4); err != nil {
+	if _, err = sc.WaitMasterSecret(ctx, 4); err != nil {
 		return err
 	}
-	if err = sc.stopKeymanagers(ctx, []int{1}); err != nil {
+	if err = sc.StopKeymanagers(ctx, []int{1}); err != nil {
 		return err
 	}
-	if _, err = sc.waitMasterSecret(ctx, 6); err != nil {
+	if _, err = sc.WaitMasterSecret(ctx, 6); err != nil {
 		return err
 	}
 
 	// Check how frequently secrets are rotated.
 	interval := beacon.EpochTime(3)
-	if err = sc.updateRotationInterval(ctx, sc.nonce, childEnv, interval); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, interval); err != nil {
 		return err
 	}
 	sc.nonce++
-	prev, err := sc.waitMasterSecret(ctx, 7)
+	prev, err := sc.WaitMasterSecret(ctx, 7)
 	if err != nil {
 		return err
 	}
-	next, err := sc.waitMasterSecret(ctx, 8)
+	next, err := sc.WaitMasterSecret(ctx, 8)
 	if err != nil {
 		return err
 	}
@@ -147,16 +147,16 @@ func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err 
 	}
 
 	// Disable master secret rotations.
-	if err = sc.updateRotationInterval(ctx, sc.nonce, childEnv, 0); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, 0); err != nil {
 		return err
 	}
 	sc.nonce++
-	if err = sc.waitEpochs(ctx, 3); err != nil {
+	if err = sc.WaitEpochs(ctx, 3); err != nil {
 		return err
 	}
 
 	// No more secrets should be generated.
-	status, err = sc.keymanagerStatus(ctx)
+	status, err = sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (sc *kmMasterSecretsImpl) monitorMasterSecrets(ctx context.Context) (func()
 			case next = <-mstCh:
 			}
 
-			if next.Secret.ID != keymanagerID {
+			if next.Secret.ID != KeyManagerRuntimeID {
 				continue
 			}
 
@@ -273,7 +273,7 @@ func (sc *kmMasterSecretsImpl) monitorMasterSecrets(ctx context.Context) (func()
 			case next = <-stCh:
 			}
 
-			if next.ID != keymanagerID {
+			if next.ID != KeyManagerRuntimeID {
 				continue
 			}
 

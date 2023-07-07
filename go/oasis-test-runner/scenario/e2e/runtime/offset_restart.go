@@ -61,7 +61,7 @@ func (sc *offsetRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 

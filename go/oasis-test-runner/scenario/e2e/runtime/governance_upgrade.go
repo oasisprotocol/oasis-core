@@ -316,7 +316,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 	}
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -435,7 +435,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 
 		// Ensure genesis was exported and matches on all nodes.
 		sc.Logger.Info("gathering exported genesis files")
-		_, err = sc.GetExportedGenesisFiles(false)
+		_, err = sc.ExportedGenesisFiles(false)
 		if err != nil {
 			return fmt.Errorf("failure getting exported genesis files: %w", err)
 		}

@@ -66,22 +66,22 @@ func (sc *kmRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Wait for the client to exit.
-	if err := sc.WaitTestClientOnly(); err != nil {
+	if err := sc.WaitTestClient(); err != nil {
 		return err
 	}
 
 	// Wait until 3 master secrets are generated.
-	if _, err := sc.waitMasterSecret(ctx, 2); err != nil {
+	if _, err := sc.WaitMasterSecret(ctx, 2); err != nil {
 		return fmt.Errorf("master secret not generated: %w", err)
 	}
 
 	// Restart the key managers.
-	if err := sc.restartAndWaitKeymanagers(ctx, []int{0, 1, 2}); err != nil {
+	if err := sc.RestartAndWaitKeymanagers(ctx, []int{0, 1, 2}); err != nil {
 		return err
 	}
 
 	// Test if rotations still work.
-	if _, err := sc.waitMasterSecret(ctx, 5); err != nil {
+	if _, err := sc.WaitMasterSecret(ctx, 5); err != nil {
 		return err
 	}
 
@@ -89,8 +89,5 @@ func (sc *kmRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// a second trip to the keymanager.
 	sc.Logger.Info("starting a second client to check if key manager works")
 	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
-	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	return sc.waitTestClient()
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

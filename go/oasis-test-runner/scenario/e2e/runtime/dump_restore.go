@@ -154,7 +154,7 @@ func (sc *dumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 

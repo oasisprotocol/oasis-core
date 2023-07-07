@@ -97,19 +97,19 @@ func (sc *kmReplicateManyImpl) Run(ctx context.Context, childEnv *env.Env) error
 	}
 
 	// Wait until master secrets are generated.
-	if _, err := sc.waitMasterSecret(ctx, generation); err != nil {
+	if _, err := sc.WaitMasterSecret(ctx, generation); err != nil {
 		return err
 	}
 
 	// Start the last two key managers.
-	if err := sc.startKeymanagers(ctx, []int{2, 3}); err != nil {
+	if err := sc.StartKeymanagers(ctx, []int{2, 3}); err != nil {
 		return err
 	}
 
 	// Wait until all secrets are replicated.
 	start := time.Now()
 
-	if err := sc.waitKeymanagers(ctx, []int{2, 3}); err != nil {
+	if err := sc.WaitKeymanagers(ctx, []int{2, 3}); err != nil {
 		return err
 	}
 
@@ -118,16 +118,16 @@ func (sc *kmReplicateManyImpl) Run(ctx context.Context, childEnv *env.Env) error
 	)
 
 	// Compare public keys.
-	if err := sc.compareLongtermPublicKeys(ctx, []int{0, 1, 2, 3}); err != nil {
+	if err := sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2, 3}); err != nil {
 		return err
 	}
 
 	// Verify that secret can be generated after replication.
-	status, err := sc.keymanagerStatus(ctx)
+	status, err := sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
-	status, err = sc.waitMasterSecret(ctx, status.Generation+2)
+	status, err = sc.WaitMasterSecret(ctx, status.Generation+2)
 	if err != nil {
 		return err
 	}

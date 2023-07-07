@@ -118,13 +118,13 @@ func (sc *gasFeesRuntimesImpl) Run(ctx context.Context, childEnv *env.Env) error
 	}
 
 	// Wait for all nodes to be synced before we proceed.
-	if err := sc.waitNodesSynced(ctx); err != nil {
+	if err := sc.WaitNodesSynced(ctx); err != nil {
 		return err
 	}
 
 	// Submit a runtime transaction to check whether transaction processing works.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, 0, "hello", "non-free world", false, 0); err != nil {
+	if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, 0, "hello", "non-free world", false, 0); err != nil {
 		return err
 	}
 

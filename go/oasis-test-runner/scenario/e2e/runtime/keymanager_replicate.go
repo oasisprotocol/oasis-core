@@ -8,6 +8,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -71,12 +72,12 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Wait until 3 master secrets are generated.
-	if _, err := sc.waitMasterSecret(ctx, 2); err != nil {
+	if _, err := sc.WaitMasterSecret(ctx, 2); err != nil {
 		return fmt.Errorf("master secret not generated: %w", err)
 	}
 
 	// Make sure exactly two key managers were generating secrets.
-	status, err := sc.keymanagerStatus(ctx)
+	status, err := sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
@@ -91,12 +92,12 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Generate another 3 master secrets.
-	if _, err = sc.waitMasterSecret(ctx, 5); err != nil {
+	if _, err = sc.WaitMasterSecret(ctx, 5); err != nil {
 		return fmt.Errorf("master secret not generated: %w", err)
 	}
 
 	// Make sure the first key manager was generating secrets.
-	status, err = sc.keymanagerStatus(ctx)
+	status, err = sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	// Start key managers that are not running and wait until they replicate
 	// master secrets from the first one.
-	if err = sc.startAndWaitKeymanagers(ctx, []int{1, 2, 3}); err != nil {
+	if err = sc.StartAndWaitKeymanagers(ctx, []int{1, 2, 3}); err != nil {
 		return err
 	}
 
@@ -129,13 +130,13 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	// Wait few blocks so that the key managers transition to the new secret and register
 	// with the latest checksum. The latter can take some time.
-	if _, err = sc.waitBlocks(ctx, 8); err != nil {
+	if _, err = sc.WaitBlocks(ctx, 8); err != nil {
 		return err
 	}
 
 	// Check if checksums match.
 	for idx := range sc.Net.Keymanagers() {
-		initRsp, err := sc.keymanagerInitResponse(ctx, idx)
+		initRsp, err := sc.KeymanagerInitResponse(ctx, idx)
 		if err != nil {
 			return err
 		}
@@ -147,9 +148,34 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// If we came this far than all key managers should have the same state.
 	// Let's test if they replicated the same secrets by fetching long-term
 	// public keys for all generations.
-	if err := sc.compareLongtermPublicKeys(ctx, []int{0, 1, 2, 3}); err != nil {
+	if err := sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2, 3}); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (sc *kmReplicateImpl) waitKeymanagerStatuses(ctx context.Context, n int) (*keymanager.Status, error) {
+	sc.Logger.Info("waiting for key manager status", "n", n)
+
+	stCh, stSub, err := sc.Net.Controller().Keymanager.WatchStatuses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer stSub.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case status := <-stCh:
+			if !status.ID.Equal(&KeyManagerRuntimeID) {
+				continue
+			}
+			n--
+			if n <= 0 {
+				return status, nil
+			}
+		}
+	}
 }

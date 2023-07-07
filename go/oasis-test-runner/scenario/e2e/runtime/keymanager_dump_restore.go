@@ -70,7 +70,7 @@ func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err er
 	}
 
 	// Wait until the first master secret is generated.
-	if _, err = sc.waitMasterSecret(ctx, 0); err != nil {
+	if _, err = sc.WaitMasterSecret(ctx, 0); err != nil {
 		return err
 	}
 
@@ -92,7 +92,7 @@ func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err er
 	}
 
 	// Make sure the last secret was not preserved.
-	secret, err := sc.keymanagerMasterSecret(ctx)
+	secret, err := sc.MasterSecret(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err er
 	}
 
 	// Make sure the manager is initialized.
-	status, err := sc.keymanagerStatus(ctx)
+	status, err := sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
@@ -110,21 +110,21 @@ func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err er
 	}
 
 	// Start both key manager nodes.
-	if err = sc.startAndWaitKeymanagers(ctx, []int{0, 1}); err != nil {
+	if err = sc.StartAndWaitKeymanagers(ctx, []int{0, 1}); err != nil {
 		return err
 	}
 
 	// Test master secret rotations. To enable them, update the rotation interval in the policy.
-	if err = sc.updateRotationInterval(ctx, sc.nonce, childEnv, 1); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, 1); err != nil {
 		return err
 	}
 	sc.nonce++
-	if _, err = sc.waitMasterSecret(ctx, 3); err != nil {
+	if _, err = sc.WaitMasterSecret(ctx, 3); err != nil {
 		return err
 	}
 
 	// Test if all key managers can derive keys from all master secrets.
-	if err = sc.compareLongtermPublicKeys(ctx, []int{0, 1}); err != nil {
+	if err = sc.CompareLongtermPublicKeys(ctx, []int{0, 1}); err != nil {
 		return err
 	}
 

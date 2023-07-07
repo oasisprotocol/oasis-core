@@ -21,83 +21,19 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-func (sc *Scenario) waitKeymanagers(ctx context.Context, idxs []int) error {
-	sc.Logger.Info("waiting for the key managers to become ready", "ids", fmt.Sprintf("%+v", idxs))
-
-	kms := sc.Net.Keymanagers()
-	for _, idx := range idxs {
-		kmCtrl, err := oasis.NewController(kms[idx].SocketPath())
-		if err != nil {
-			return err
-		}
-		if err = kmCtrl.WaitReady(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (sc *Scenario) startKeymanagers(ctx context.Context, idxs []int) error {
-	sc.Logger.Info("starting the key managers", "ids", fmt.Sprintf("%+v", idxs))
-
-	kms := sc.Net.Keymanagers()
-	for _, idx := range idxs {
-		if err := kms[idx].Start(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (sc *Scenario) stopKeymanagers(ctx context.Context, idxs []int) error {
-	sc.Logger.Info("stopping the key managers", "ids", fmt.Sprintf("%+v", idxs))
-
-	kms := sc.Net.Keymanagers()
-	for _, idx := range idxs {
-		if err := kms[idx].Stop(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (sc *Scenario) restartKeymanagers(ctx context.Context, idxs []int) error {
-	sc.Logger.Info("restarting the key managers", "ids", fmt.Sprintf("%+v", idxs))
-
-	kms := sc.Net.Keymanagers()
-	for _, idx := range idxs {
-		if err := kms[idx].Restart(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (sc *Scenario) startAndWaitKeymanagers(ctx context.Context, idxs []int) error {
-	if err := sc.startKeymanagers(ctx, idxs); err != nil {
-		return err
-	}
-	return sc.waitKeymanagers(ctx, idxs)
-}
-
-func (sc *Scenario) restartAndWaitKeymanagers(ctx context.Context, idxs []int) error {
-	if err := sc.restartKeymanagers(ctx, idxs); err != nil {
-		return err
-	}
-	return sc.waitKeymanagers(ctx, idxs)
-}
-
-func (sc *Scenario) keymanagerStatus(ctx context.Context) (*keymanager.Status, error) {
+// KeyManagerStatus returns the latest key manager status.
+func (sc *Scenario) KeyManagerStatus(ctx context.Context) (*keymanager.Status, error) {
 	return sc.Net.ClientController().Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
-		ID:     keymanagerID,
+		ID:     KeyManagerRuntimeID,
 	})
 }
 
-func (sc *Scenario) keymanagerMasterSecret(ctx context.Context) (*keymanager.SignedEncryptedMasterSecret, error) {
+// MasterSecret returns the key manager master secret.
+func (sc *Scenario) MasterSecret(ctx context.Context) (*keymanager.SignedEncryptedMasterSecret, error) {
 	secret, err := sc.Net.ClientController().Keymanager.GetMasterSecret(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
-		ID:     keymanagerID,
+		ID:     KeyManagerRuntimeID,
 	})
 	if err == keymanager.ErrNoSuchMasterSecret {
 		return nil, nil
@@ -105,66 +41,8 @@ func (sc *Scenario) keymanagerMasterSecret(ctx context.Context) (*keymanager.Sig
 	return secret, err
 }
 
-func (sc *Scenario) keymanagerInitResponse(ctx context.Context, idx int) (*keymanager.InitResponse, error) {
-	kms := sc.Net.Keymanagers()
-	if kmLen := len(kms); kmLen <= idx {
-		return nil, fmt.Errorf("expected more than %d keymanager, have: %v", idx, kmLen)
-	}
-	km := kms[idx]
-
-	ctrl, err := oasis.NewController(km.SocketPath())
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract ExtraInfo.
-	node, err := ctrl.Registry.GetNode(
-		ctx,
-		&registry.IDQuery{
-			ID: km.NodeID,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	rt := node.GetRuntime(keymanagerID, version.Version{})
-	if rt == nil {
-		return nil, fmt.Errorf("key manager is missing keymanager runtime from descriptor")
-	}
-	var signedInitResponse keymanager.SignedInitResponse
-	if err = cbor.Unmarshal(rt.ExtraInfo, &signedInitResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal extrainfo")
-	}
-
-	return &signedInitResponse.InitResponse, nil
-}
-
-func (sc *kmReplicateImpl) waitKeymanagerStatuses(ctx context.Context, n int) (*keymanager.Status, error) {
-	sc.Logger.Info("waiting for key manager status", "n", n)
-
-	stCh, stSub, err := sc.Net.Controller().Keymanager.WatchStatuses(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer stSub.Close()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case status := <-stCh:
-			if !status.ID.Equal(&keymanagerID) {
-				continue
-			}
-			n--
-			if n <= 0 {
-				return status, nil
-			}
-		}
-	}
-}
-
-func (sc *Scenario) waitMasterSecret(ctx context.Context, generation uint64) (*keymanager.Status, error) {
+// WaitMasterSecret waits until the specified generation of the master secret is generated.
+func (sc *Scenario) WaitMasterSecret(ctx context.Context, generation uint64) (*keymanager.Status, error) {
 	sc.Logger.Info("waiting for master secret", "generation", generation)
 
 	mstCh, mstSub, err := sc.Net.Controller().Keymanager.WatchMasterSecrets(ctx)
@@ -185,7 +63,7 @@ func (sc *Scenario) waitMasterSecret(ctx context.Context, generation uint64) (*k
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case secret := <-mstCh:
-			if !secret.Secret.ID.Equal(&keymanagerID) {
+			if !secret.Secret.ID.Equal(&KeyManagerRuntimeID) {
 				continue
 			}
 
@@ -195,7 +73,7 @@ func (sc *Scenario) waitMasterSecret(ctx context.Context, generation uint64) (*k
 				"num_ciphertexts", len(secret.Secret.Secret.Ciphertexts),
 			)
 		case status := <-stCh:
-			if !status.ID.Equal(&keymanagerID) {
+			if !status.ID.Equal(&KeyManagerRuntimeID) {
 				continue
 			}
 			if status.NextGeneration() == 0 {
@@ -219,7 +97,8 @@ func (sc *Scenario) waitMasterSecret(ctx context.Context, generation uint64) (*k
 	}
 }
 
-func (sc *Scenario) waitEphemeralSecrets(ctx context.Context, n int) (*keymanager.SignedEncryptedEphemeralSecret, error) {
+// WaitEphemeralSecrets waits for the specified number of ephemeral secrets to be generated.
+func (sc *Scenario) WaitEphemeralSecrets(ctx context.Context, n int) (*keymanager.SignedEncryptedEphemeralSecret, error) {
 	sc.Logger.Info("waiting ephemeral secrets", "n", n)
 
 	ephCh, ephSub, err := sc.Net.Controller().Keymanager.WatchEphemeralSecrets(ctx)
@@ -242,12 +121,13 @@ func (sc *Scenario) waitEphemeralSecrets(ctx context.Context, n int) (*keymanage
 	return secret, nil
 }
 
-func (sc *Scenario) updateRotationInterval(ctx context.Context, nonce uint64, childEnv *env.Env, rotationInterval beacon.EpochTime) error {
+// UpdateRotationInterval updates the master secret rotation interval in the key manager policy.
+func (sc *Scenario) UpdateRotationInterval(ctx context.Context, nonce uint64, childEnv *env.Env, rotationInterval beacon.EpochTime) error {
 	sc.Logger.Info("updating master secret rotation interval in the key manager policy",
 		"interval", rotationInterval,
 	)
 
-	status, err := sc.keymanagerStatus(ctx)
+	status, err := sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
@@ -259,7 +139,7 @@ func (sc *Scenario) updateRotationInterval(ctx context.Context, nonce uint64, ch
 		policy.Serial++
 	} else {
 		policy.Serial = 1
-		policy.ID = keymanagerID
+		policy.ID = KeyManagerRuntimeID
 		policy.Enclaves = make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
 	}
 	policy.MasterSecretRotationInterval = rotationInterval
@@ -300,13 +180,15 @@ func (sc *Scenario) updateRotationInterval(ctx context.Context, nonce uint64, ch
 	return nil
 }
 
-func (sc *Scenario) compareLongtermPublicKeys(ctx context.Context, idxs []int) error {
+// CompareLongtermPublicKeys compares long-term public keys generated by the specified
+// key manager nodes.
+func (sc *Scenario) CompareLongtermPublicKeys(ctx context.Context, idxs []int) error {
 	chainContext, err := sc.Net.Controller().Consensus.GetChainContext(ctx)
 	if err != nil {
 		return err
 	}
 
-	status, err := sc.keymanagerStatus(ctx)
+	status, err := sc.KeyManagerStatus(ctx)
 	if err != nil {
 		return err
 	}
@@ -317,7 +199,7 @@ func (sc *Scenario) compareLongtermPublicKeys(ctx context.Context, idxs []int) e
 		generation = status.Generation - 1
 	}
 
-	sc.Logger.Info("comparing the key managers for master secrets",
+	sc.Logger.Info("comparing long-term public keys generated by the key managers",
 		"ids", idxs,
 		"generation", generation,
 	)
@@ -366,4 +248,39 @@ func (sc *Scenario) compareLongtermPublicKeys(ctx context.Context, idxs []int) e
 	}
 
 	return nil
+}
+
+// KeymanagerInitResponse returns InitResponse of the specified key manager node.
+func (sc *Scenario) KeymanagerInitResponse(ctx context.Context, idx int) (*keymanager.InitResponse, error) {
+	kms := sc.Net.Keymanagers()
+	if kmLen := len(kms); kmLen <= idx {
+		return nil, fmt.Errorf("expected more than %d keymanager, have: %v", idx, kmLen)
+	}
+	km := kms[idx]
+
+	ctrl, err := oasis.NewController(km.SocketPath())
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract ExtraInfo.
+	node, err := ctrl.Registry.GetNode(
+		ctx,
+		&registry.IDQuery{
+			ID: km.NodeID,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	rt := node.GetRuntime(KeyManagerRuntimeID, version.Version{})
+	if rt == nil {
+		return nil, fmt.Errorf("key manager is missing keymanager runtime from descriptor")
+	}
+	var signedInitResponse keymanager.SignedInitResponse
+	if err = cbor.Unmarshal(rt.ExtraInfo, &signedInitResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal extrainfo")
+	}
+
+	return &signedInitResponse.InitResponse, nil
 }

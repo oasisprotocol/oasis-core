@@ -65,10 +65,10 @@ func newSimpleKeyValueScenario(repeat bool, encrypted bool) TestClientScenario {
 		for iter := 0; ; iter++ {
 			// Test simple [set,get] calls.
 			key := "hello_key"
-			value := fmt.Sprintf("hello_value_from_%s:%d", runtimeID, iter)
+			value := fmt.Sprintf("hello_value_from_%s:%d", KeyValueRuntimeID, iter)
 			response := ""
 			if iter > 0 {
-				response = fmt.Sprintf("hello_value_from_%s:%d", runtimeID, iter-1)
+				response = fmt.Sprintf("hello_value_from_%s:%d", KeyValueRuntimeID, iter-1)
 			}
 
 			if err := submit(InsertKeyValueTx{key, value, response, encrypted, 0}); err != nil {

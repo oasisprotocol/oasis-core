@@ -119,7 +119,7 @@ func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) 
 
 	// All chain contexts should be unique.
 	chainContexts := make(map[string]struct{})
-	c, err := sc.chainContext(ctx)
+	c, err := sc.ChainContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) 
 
 		// Assert that chain context has changed. Test is meaningless if this
 		// doesn't happen.
-		c, err = sc.chainContext(ctx)
+		c, err = sc.ChainContext(ctx)
 		if err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env
 		err = multierror.Append(err, err2).ErrorOrNil()
 	}()
 
-	chainContext, err := sc.chainContext(ctx)
+	chainContext, err := sc.ChainContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -278,13 +278,13 @@ func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env
 		if err = sc.Net.Start(); err != nil {
 			return err
 		}
-		if err = sc.waitNodesSynced(ctx); err != nil {
+		if err = sc.WaitNodesSynced(ctx); err != nil {
 			return err
 		}
 
 		// Assert that chain context has changed. Test is meaningless if this
 		// doesn't happen.
-		newChainContext, err := sc.chainContext(ctx)
+		newChainContext, err := sc.ChainContext(ctx)
 		if err != nil {
 			return err
 		}

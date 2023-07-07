@@ -105,12 +105,12 @@ func (cli *KVTestClient) workload(ctx context.Context) error {
 
 	cli.sc.Logger.Info("waiting for key managers to generate the first master secret")
 
-	if _, err = cli.sc.waitMasterSecret(ctx, 0); err != nil {
+	if _, err = cli.sc.WaitMasterSecret(ctx, 0); err != nil {
 		return fmt.Errorf("first master secret not generated: %w", err)
 	}
 	// The CometBFT verifier is one block behind, so wait for an additional
 	// two blocks to ensure that the first secret has been loaded.
-	if _, err = cli.sc.waitBlocks(ctx, 2); err != nil {
+	if _, err = cli.sc.WaitBlocks(ctx, 2); err != nil {
 		return fmt.Errorf("failed to wait two blocks: %w", err)
 	}
 
@@ -132,7 +132,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 	case KeyValueQuery:
 		rsp, err := cli.sc.submitKeyValueRuntimeGetQuery(
 			ctx,
-			runtimeID,
+			KeyValueRuntimeID,
 			req.Key,
 			req.Round,
 		)
@@ -146,7 +146,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 	case InsertKeyValueTx:
 		rsp, err := cli.sc.submitKeyValueRuntimeInsertTx(
 			ctx,
-			runtimeID,
+			KeyValueRuntimeID,
 			rng.Uint64(),
 			req.Key,
 			req.Value,
@@ -163,7 +163,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 	case GetKeyValueTx:
 		rsp, err := cli.sc.submitKeyValueRuntimeGetTx(
 			ctx,
-			runtimeID,
+			KeyValueRuntimeID,
 			rng.Uint64(),
 			req.Key,
 			req.Encrypted,
@@ -179,7 +179,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 	case RemoveKeyValueTx:
 		rsp, err := cli.sc.submitKeyValueRuntimeRemoveTx(
 			ctx,
-			runtimeID,
+			KeyValueRuntimeID,
 			rng.Uint64(),
 			req.Key,
 			req.Encrypted,
@@ -195,7 +195,7 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 	case InsertMsg:
 		err := cli.sc.submitKeyValueRuntimeInsertMsg(
 			ctx,
-			runtimeID,
+			KeyValueRuntimeID,
 			rng.Uint64(),
 			req.Key,
 			req.Value,
@@ -207,19 +207,19 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 		}
 
 	case GetRuntimeIDTx:
-		_, err := cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, runtimeID, rng.Uint64())
+		_, err := cli.sc.submitKeyValueRuntimeGetRuntimeIDTx(ctx, KeyValueRuntimeID, rng.Uint64())
 		if err != nil {
 			return err
 		}
 
 	case ConsensusTransferTx:
-		err := cli.sc.submitConsensusTransferTx(ctx, runtimeID, rng.Uint64(), staking.Transfer{})
+		err := cli.sc.submitConsensusTransferTx(ctx, KeyValueRuntimeID, rng.Uint64(), staking.Transfer{})
 		if err != nil {
 			return err
 		}
 
 	case ConsensusAccountsTx:
-		err := cli.sc.submitConsensusAccountsTx(ctx, runtimeID, rng.Uint64())
+		err := cli.sc.submitConsensusAccountsTx(ctx, KeyValueRuntimeID, rng.Uint64())
 		if err != nil {
 			return err
 		}

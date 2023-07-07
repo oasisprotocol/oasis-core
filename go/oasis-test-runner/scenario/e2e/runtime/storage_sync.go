@@ -93,7 +93,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	}
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -106,7 +106,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, drbg.Uint64(), "checkpoint", fmt.Sprintf("my cp %d", i), false, 0); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), "checkpoint", fmt.Sprintf("my cp %d", i), false, 0); err != nil {
 			return err
 		}
 	}
@@ -117,13 +117,13 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		return fmt.Errorf("failed to connect with the first compute node: %w", err)
 	}
 
-	cps, err := ctrl.Storage.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: runtimeID})
+	cps, err := ctrl.Storage.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1, Namespace: KeyValueRuntimeID})
 	if err != nil {
 		return fmt.Errorf("failed to get checkpoints: %w", err)
 	}
 
 	blk, err := ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
-		RuntimeID: runtimeID,
+		RuntimeID: KeyValueRuntimeID,
 		Round:     runtimeClient.RoundLatest,
 	})
 	if err != nil {
@@ -147,7 +147,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	var validCps int
 	for checkpoint := rt.Storage.CheckpointInterval; checkpoint <= lastCheckpoint; checkpoint += rt.Storage.CheckpointInterval {
 		blk, err = ctrl.RuntimeClient.GetBlock(ctx, &runtimeClient.GetBlockRequest{
-			RuntimeID: runtimeID,
+			RuntimeID: KeyValueRuntimeID,
 			Round:     checkpoint,
 		})
 		if err != nil {
@@ -183,7 +183,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		sc.Logger.Info("submitting large transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, drbg.Uint64(), fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, false, 0); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, false, 0); err != nil {
 			return err
 		}
 	}
@@ -230,10 +230,10 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	if err != nil {
 		return fmt.Errorf("error getting status for second late compute worker: %w", err)
 	}
-	lr := status.Runtimes[runtimeID].LastRetainedRound
+	lr := status.Runtimes[KeyValueRuntimeID].LastRetainedRound
 
 	_, err = ctrl.RuntimeClient.GetTransactions(ctx, &runtimeClient.GetTransactionsRequest{
-		RuntimeID: runtimeID,
+		RuntimeID: KeyValueRuntimeID,
 		Round:     lr,
 	})
 	if err != nil {

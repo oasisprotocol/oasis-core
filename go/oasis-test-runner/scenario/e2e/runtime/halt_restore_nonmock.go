@@ -61,7 +61,7 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 	}
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -79,7 +79,7 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 	_, _, _ = reflect.Select(exitChs)
 
 	sc.Logger.Info("gathering exported genesis files")
-	files, err := sc.GetExportedGenesisFiles(true)
+	files, err := sc.ExportedGenesisFiles(true)
 	if err != nil {
 		return fmt.Errorf("failure getting exported genesis files: %w", err)
 	}
@@ -139,5 +139,5 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
-	return sc.WaitTestClientOnly()
+	return sc.WaitTestClient()
 }

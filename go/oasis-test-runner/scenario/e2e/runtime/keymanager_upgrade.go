@@ -47,7 +47,7 @@ func (sc *KmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Load the upgraded keymanager binary.
-	newKmBinaries := sc.resolveRuntimeBinaries("simple-keymanager-upgrade")
+	newKmBinaries := sc.ResolveRuntimeBinaries(KeyManagerRuntimeUpgradeBinary)
 	// Setup the upgraded runtime.
 	kmRuntimeFix := f.Runtimes[0]
 	if kmRuntimeFix.Kind != registry.KindKeyManager {
@@ -228,17 +228,16 @@ func (sc *KmUpgradeImpl) ensureReplicationWorked(ctx context.Context, km *oasis.
 func (sc *KmUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
-	if err := sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
+	// Start the network and run the test client.
+	if err := sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}
-	sc.Logger.Info("waiting for client to exit")
-	// Wait for the client to exit.
-	if err := sc.WaitTestClientOnly(); err != nil {
+	if err := sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
 		return err
 	}
 
 	// Fetch nonce.
-	nonce, err := sc.GetTestEntityNonce(ctx)
+	nonce, err := sc.TestEntityNonce(ctx)
 	if err != nil {
 		return err
 	}
@@ -329,8 +328,5 @@ OUTER:
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
 	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
-	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	return sc.waitTestClient()
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

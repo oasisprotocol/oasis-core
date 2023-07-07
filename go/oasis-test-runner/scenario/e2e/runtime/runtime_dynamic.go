@@ -97,7 +97,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
 	// Wait for all nodes to be synced before we proceed.
-	if err := sc.waitNodesSynced(ctx); err != nil {
+	if err := sc.WaitNodesSynced(ctx); err != nil {
 		return err
 	}
 
@@ -259,7 +259,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, rtNonce, "hello", fmt.Sprintf("world %d", i), false, 0); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, rtNonce, "hello", fmt.Sprintf("world %d", i), false, 0); err != nil {
 			return err
 		}
 		rtNonce++
@@ -367,7 +367,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, rtNonce, "hello", "final world", false, 0); err != nil {
+	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, rtNonce, "hello", "final world", false, 0); err != nil {
 		return err
 	}
 	rtNonce++
@@ -548,7 +548,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, rtNonce, "hello", "final world for sure", false, 0); err != nil {
+	if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, rtNonce, "hello", "final world for sure", false, 0); err != nil {
 		return err
 	}
 

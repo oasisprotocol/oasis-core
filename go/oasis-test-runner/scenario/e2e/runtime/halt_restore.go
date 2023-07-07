@@ -85,7 +85,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	nextEpoch++ // Next, after initial transitions.
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -150,7 +150,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	_, _, _ = reflect.Select(exitChs)
 
 	sc.Logger.Info("gathering exported genesis files")
-	files, err := sc.GetExportedGenesisFiles(true)
+	files, err := sc.ExportedGenesisFiles(true)
 	if err != nil {
 		return fmt.Errorf("failure getting exported genesis files: %w", err)
 	}
@@ -229,8 +229,5 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	if _, err = sc.initialEpochTransitionsWith(ctx, fixture, genesisDoc.Beacon.Base); err != nil {
 		return err
 	}
-	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	return sc.WaitTestClientOnly()
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

@@ -78,7 +78,7 @@ func (sc *lateStartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return fmt.Errorf("failed to create controller for client: %w", err)
 	}
 	err = ctrl.RuntimeClient.SubmitTxNoWait(ctx, &api.SubmitTxRequest{
-		RuntimeID: runtimeID,
+		RuntimeID: KeyValueRuntimeID,
 		Data: cbor.Marshal(&TxnCall{
 			Method: "insert",
 			Args: struct {
@@ -94,7 +94,7 @@ func (sc *lateStartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return fmt.Errorf("expected error: %v, got: %v", api.ErrNotSynced, err)
 	}
 	_, err = ctrl.RuntimeClient.SubmitTx(ctx, &api.SubmitTxRequest{
-		RuntimeID: runtimeID,
+		RuntimeID: KeyValueRuntimeID,
 		Data: cbor.Marshal(&TxnCall{
 			Method: "insert",
 			Args: struct {
@@ -116,11 +116,8 @@ func (sc *lateStartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	sc.Logger.Info("Starting the basic test client")
 	// Explicitly wait for the client to sync, before starting the client.
-	if err = sc.waitForClientSync(ctx); err != nil {
+	if err = sc.WaitForClientSync(ctx); err != nil {
 		return err
 	}
-	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	return sc.waitTestClient()
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

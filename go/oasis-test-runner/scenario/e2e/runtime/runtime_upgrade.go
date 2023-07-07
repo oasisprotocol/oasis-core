@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
 )
 
 // RuntimeUpgrade is the runtime upgrade scenario.
@@ -61,7 +60,7 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Load the upgraded runtime binary.
-	newRuntimeBinaries := sc.resolveRuntimeBinaries("simple-keyvalue-upgrade")
+	newRuntimeBinaries := sc.ResolveRuntimeBinaries(KeyValueRuntimeUpgradeBinary)
 
 	// Setup the upgraded runtime (first is keymanager, others should be generic compute).
 	runtimeFix := f.Runtimes[computeIndex]
@@ -179,59 +178,6 @@ func (sc *runtimeUpgradeImpl) applyUpgradePolicy(childEnv *env.Env) error {
 	return nil
 }
 
-func (sc *runtimeUpgradeImpl) ensureActiveVersion(ctx context.Context, v version.Version) error {
-	ctx, cancel := context.WithTimeout(ctx, versionActivationTimeout)
-	defer cancel()
-
-	rt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
-
-	sc.Logger.Info("ensuring that all compute workers have the correct active version",
-		"version", v,
-	)
-
-	for _, node := range sc.Net.ComputeWorkers() {
-		nodeCtrl, err := oasis.NewController(node.SocketPath())
-		if err != nil {
-			return fmt.Errorf("%s: failed to create controller: %w", node.Name, err)
-		}
-
-		// Wait for the version to become active and ensure no suspension observed.
-		for {
-			status, err := nodeCtrl.GetStatus(ctx)
-			if err != nil {
-				return fmt.Errorf("%s: failed to query status: %w", node.Name, err)
-			}
-
-			provisioner := status.Runtimes[rt.ID()].Provisioner
-			if provisioner != "sandbox" && provisioner != "sgx" {
-				return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, rt.ID(), provisioner)
-			}
-
-			cs := status.Runtimes[rt.ID()].Committee
-			if cs == nil {
-				return fmt.Errorf("%s: missing status for runtime '%s'", node.Name, rt.ID())
-			}
-
-			if cs.ActiveVersion == nil {
-				return fmt.Errorf("%s: no version is active", node.Name)
-			}
-			// Retry if not yet activated.
-			if cs.ActiveVersion.ToU64() < v.ToU64() {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			if *cs.ActiveVersion != v {
-				return fmt.Errorf("%s: unexpected active version (expected: %s got: %s)", node.Name, v, cs.ActiveVersion)
-			}
-			if cs.Status != commonWorker.StatusStateReady {
-				return fmt.Errorf("%s: runtime is not ready (got: %s)", node.Name, cs.Status)
-			}
-			break
-		}
-	}
-	return nil
-}
-
 func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 
@@ -240,12 +186,13 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	}
 	sc.Logger.Info("waiting for client to exit")
 	// Wait for the client to exit.
-	if err := sc.WaitTestClientOnly(); err != nil {
+	if err := sc.WaitTestClient(); err != nil {
 		return err
 	}
 
 	// Make sure the old version is active on all compute nodes.
-	if err := sc.ensureActiveVersion(ctx, version.MustFromString("0.0.0")); err != nil {
+	newRt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
+	if err := sc.EnsureActiveVersion(ctx, newRt, version.MustFromString("0.0.0")); err != nil {
 		return err
 	}
 
@@ -263,7 +210,6 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Update runtime to include the new enclave identity.
 	sc.Logger.Info("updating runtime descriptor")
-	newRt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
 	newRtDsc := newRt.ToRuntimeDescriptor()
 	newRtDsc.Deployments[1].ValidFrom = upgradeEpoch
 
@@ -285,15 +231,12 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	}
 
 	// Make sure the new version is active.
-	if err := sc.ensureActiveVersion(ctx, version.MustFromString("0.1.0")); err != nil {
+	if err := sc.EnsureActiveVersion(ctx, newRt, version.MustFromString("0.1.0")); err != nil {
 		return err
 	}
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
 	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
-	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	return sc.waitTestClient()
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

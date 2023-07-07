@@ -163,9 +163,5 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Run client to ensure runtime works.
 	sc.Logger.Info("Starting the basic client")
-	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-
-	return sc.waitTestClient()
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }
