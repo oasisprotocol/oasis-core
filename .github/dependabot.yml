@@ -27,9 +27,14 @@ updates:
       - c:deps
       - golang
     ignore:
-      # Tendermint is manualy kept up to date.
-      - dependency-name: github.com/tendermint/tendermint
-      - dependency-name: github.com/tendermint/tm-db
+      # CometBFT is manualy kept up to date.
+      - dependency-name: github.com/cometbft/cometbft
+      - dependency-name: github.com/cometbft/cometbft-db
+    groups:
+      # Group all libp2p dependency updates together.
+      libp2p:
+        patterns:
+          - "github.com/libp2p*"
 
   # Manage Rust pacakge versions.
   - package-ecosystem: cargo
