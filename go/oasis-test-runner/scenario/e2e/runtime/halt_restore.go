@@ -41,7 +41,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 	return &haltRestoreImpl{
 		Scenario: *NewScenario(
 			name,
-			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
+			NewTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 		haltEpoch:      beacon.EpochTime(haltEpoch),
 		suspendRuntime: suspended,
@@ -220,7 +220,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		return err
 	}
 
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {

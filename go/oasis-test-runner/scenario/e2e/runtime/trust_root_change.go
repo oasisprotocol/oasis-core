@@ -38,7 +38,7 @@ var (
 	// changes, e.g. on dump-restore network upgrades.
 	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl(
 		"change",
-		NewKVTestClient().WithScenario(InsertKeyValueEncScenario),
+		NewTestClient().WithScenario(InsertKeyValueEncScenario),
 		true,
 	)
 
@@ -47,7 +47,7 @@ var (
 	// consensus chain context changes.
 	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl(
 		"change-fails",
-		NewKVTestClient().WithScenario(SimpleKeyValueEncScenario),
+		NewTestClient().WithScenario(SimpleKeyValueEncScenario),
 		false,
 	)
 )
@@ -59,7 +59,7 @@ type trustRootChangeImpl struct {
 	happy bool
 }
 
-func newTrustRootChangeImpl(name string, testClient TestClient, happy bool) *trustRootChangeImpl {
+func newTrustRootChangeImpl(name string, testClient *TestClient, happy bool) *trustRootChangeImpl {
 	// We will use 3 validators inherited from trust root scenario fixture
 	// to test what happens if the new validator set doesn't have enough
 	// voting power after chain context changes. Since all validators have
@@ -355,7 +355,7 @@ func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oas
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
 	if err := sc.Scenario.Run(ctx, childEnv); err != nil {
 		return err
 	}

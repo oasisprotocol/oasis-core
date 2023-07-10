@@ -35,7 +35,7 @@ func NewKmUpgradeImpl() scenario.Scenario {
 	return &KmUpgradeImpl{
 		Scenario: *NewScenario(
 			"keymanager-upgrade",
-			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }
@@ -327,6 +327,6 @@ OUTER:
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
 	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

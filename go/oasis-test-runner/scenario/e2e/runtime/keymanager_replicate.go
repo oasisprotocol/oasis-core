@@ -25,7 +25,7 @@ func newKmReplicateImpl() scenario.Scenario {
 	return &kmReplicateImpl{
 		Scenario: *NewScenario(
 			"keymanager-replication",
-			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }

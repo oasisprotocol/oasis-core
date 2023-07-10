@@ -26,7 +26,7 @@ func newStorageSyncImpl() scenario.Scenario {
 	return &storageSyncImpl{
 		Scenario: *NewScenario(
 			"storage-sync",
-			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+			NewTestClient().WithScenario(SimpleKeyValueScenario),
 		),
 	}
 }

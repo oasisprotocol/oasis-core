@@ -44,7 +44,7 @@ func newKmEphemeralSecretsImpl() scenario.Scenario {
 	return &kmEphemeralSecretsImpl{
 		Scenario: *NewScenario(
 			"keymanager-ephemeral-secrets",
-			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }

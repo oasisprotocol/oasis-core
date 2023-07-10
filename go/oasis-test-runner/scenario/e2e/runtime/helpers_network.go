@@ -29,11 +29,11 @@ func (sc *Scenario) StartNetworkAndTestClient(ctx context.Context, childEnv *env
 
 // StartTestClient initializes and starts the runtime test client.
 func (sc *Scenario) StartTestClient(ctx context.Context, childEnv *env.Env) error {
-	if err := sc.testClient.Init(sc); err != nil {
+	if err := sc.TestClient.Init(sc); err != nil {
 		return fmt.Errorf("failed to initialize test client: %w", err)
 	}
 
-	if err := sc.testClient.Start(ctx, childEnv); err != nil {
+	if err := sc.TestClient.Start(ctx, childEnv); err != nil {
 		return fmt.Errorf("failed to start test client: %w", err)
 	}
 
@@ -114,7 +114,7 @@ func (sc *Scenario) WaitForClientSync(ctx context.Context) error {
 // WaitTestClient waits for the runtime test client to finish its work.
 func (sc *Scenario) WaitTestClient() error {
 	sc.Logger.Info("waiting for test client to exit")
-	return sc.testClient.Wait()
+	return sc.TestClient.Wait()
 }
 
 // WaitTestClientAndCheckLogs waits for the runtime test client to finish its work

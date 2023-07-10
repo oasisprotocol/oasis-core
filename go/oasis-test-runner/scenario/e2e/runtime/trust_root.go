@@ -23,14 +23,14 @@ import (
 // TrustRoot is the consensus trust root verification scenario.
 var TrustRoot scenario.Scenario = NewTrustRootImpl(
 	"simple",
-	NewKVTestClient().WithScenario(SimpleKeyValueEncScenario),
+	NewTestClient().WithScenario(SimpleKeyValueEncScenario),
 )
 
 type TrustRootImpl struct {
 	Scenario
 }
 
-func NewTrustRootImpl(name string, testClient TestClient) *TrustRootImpl {
+func NewTrustRootImpl(name string, testClient *TestClient) *TrustRootImpl {
 	fullName := "trust-root/" + name
 	sc := &TrustRootImpl{
 		Scenario: *NewScenario(fullName, testClient),
@@ -263,7 +263,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 	}
 
 	sc.Logger.Info("starting a second test client to check if queries for the last round work")
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(NewTestClientScenario(queries))
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(NewTestClientScenario(queries))
 	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }
 

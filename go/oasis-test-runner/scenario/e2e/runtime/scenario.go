@@ -38,13 +38,13 @@ var (
 	// Runtime is the basic network + client test case with runtime support.
 	Runtime scenario.Scenario = NewScenario(
 		"runtime",
-		NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+		NewTestClient().WithScenario(SimpleKeyValueScenario),
 	)
 
 	// RuntimeEncryption is the basic network + client with encryption test case.
 	RuntimeEncryption scenario.Scenario = NewScenario(
 		"runtime-encryption",
-		NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 	)
 
 	// DefaultRuntimeLogWatcherHandlerFactories is a list of default log watcher
@@ -60,7 +60,7 @@ var (
 type Scenario struct {
 	e2e.Scenario
 
-	testClient TestClient
+	TestClient *TestClient
 
 	// This disables the random initial epoch for tests that are extremely
 	// sensitive to the initial epoch.  Ideally this shouldn't be set for
@@ -80,7 +80,7 @@ type Scenario struct {
 }
 
 // NewScenario creates a new base scenario for oasis-node runtime end-to-end tests.
-func NewScenario(name string, testClient TestClient) *Scenario {
+func NewScenario(name string, testClient *TestClient) *Scenario {
 	// Empty scenario name is used for registering global parameters only.
 	fullName := "runtime"
 	if name != "" {
@@ -89,7 +89,7 @@ func NewScenario(name string, testClient TestClient) *Scenario {
 
 	sc := &Scenario{
 		Scenario:   *e2e.NewScenario(fullName),
-		testClient: testClient,
+		TestClient: testClient,
 	}
 	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
@@ -105,13 +105,13 @@ func NewScenario(name string, testClient TestClient) *Scenario {
 }
 
 func (sc *Scenario) Clone() scenario.Scenario {
-	var testClient TestClient
-	if sc.testClient != nil {
-		testClient = sc.testClient.Clone()
+	var testClient *TestClient
+	if sc.TestClient != nil {
+		testClient = sc.TestClient.Clone()
 	}
 	return &Scenario{
 		Scenario:                  sc.Scenario.Clone(),
-		testClient:                testClient,
+		TestClient:                testClient,
 		debugNoRandomInitialEpoch: sc.debugNoRandomInitialEpoch,
 		debugWeakAlphaOk:          sc.debugWeakAlphaOk,
 	}

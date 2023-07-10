@@ -30,7 +30,7 @@ func newHistoryReindexImpl() scenario.Scenario {
 	return &historyReindexImpl{
 		Scenario: *NewScenario(
 			"history-reindex",
-			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }

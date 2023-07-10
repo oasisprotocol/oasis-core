@@ -15,8 +15,9 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-// KVTestClient is a client that exercises the simple key-value test runtime.
-type KVTestClient struct {
+// TestClient is a client that exercises a pre-determined workload against
+// the simple key-value runtime.
+type TestClient struct {
 	sc *Scenario
 
 	seed     string
@@ -27,12 +28,14 @@ type KVTestClient struct {
 	errCh    chan error
 }
 
-func (cli *KVTestClient) Init(scenario *Scenario) error {
+// Init initializes the test client.
+func (cli *TestClient) Init(scenario *Scenario) error {
 	cli.sc = scenario
 	return nil
 }
 
-func (cli *KVTestClient) Start(ctx context.Context, childEnv *env.Env) error {
+// Start starts the test client in a background.
+func (cli *TestClient) Start(ctx context.Context, childEnv *env.Env) error {
 	cli.ctx = ctx
 
 	subCtx, cancelFn := context.WithCancel(ctx)
@@ -46,7 +49,8 @@ func (cli *KVTestClient) Start(ctx context.Context, childEnv *env.Env) error {
 	return nil
 }
 
-func (cli *KVTestClient) Wait() error {
+// Wait waits the client to finish its work.
+func (cli *TestClient) Wait() error {
 	var err error
 
 	// Wait for the network to fail, the context to be canceled, or the
@@ -63,7 +67,8 @@ func (cli *KVTestClient) Wait() error {
 	return err
 }
 
-func (cli *KVTestClient) Stop() error {
+// Stop stops the client.
+func (cli *TestClient) Stop() error {
 	// Kill the workload.
 	cli.cancelFn()
 
@@ -76,24 +81,27 @@ func (cli *KVTestClient) Stop() error {
 	}
 }
 
-func (cli *KVTestClient) Clone() TestClient {
-	return &KVTestClient{
+// Clone returns a clone of a test client instance, in a state that is ready for Init.
+func (cli *TestClient) Clone() *TestClient {
+	return &TestClient{
 		seed:     cli.seed,
 		scenario: cli.scenario,
 	}
 }
 
-func (cli *KVTestClient) WithSeed(seed string) *KVTestClient {
+// WithSeed sets the seed.
+func (cli *TestClient) WithSeed(seed string) *TestClient {
 	cli.seed = seed
 	return cli
 }
 
-func (cli *KVTestClient) WithScenario(scenario TestClientScenario) *KVTestClient {
+// WithScenario sets the scenario.
+func (cli *TestClient) WithScenario(scenario TestClientScenario) *TestClient {
 	cli.scenario = scenario
 	return cli
 }
 
-func (cli *KVTestClient) workload(ctx context.Context) error {
+func (cli *TestClient) workload(ctx context.Context) error {
 	// Initialize the nonce DRBG.
 	rng, err := drbgFromSeed(
 		[]byte("oasis-core/oasis-test-runner/e2e/runtime/test-client"),
@@ -127,7 +135,7 @@ func (cli *KVTestClient) workload(ctx context.Context) error {
 	return nil
 }
 
-func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.Source64) error {
+func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Source64) error {
 	switch req := req.(type) {
 	case KeyValueQuery:
 		rsp, err := cli.sc.submitKeyValueRuntimeGetQuery(
@@ -231,8 +239,8 @@ func (cli *KVTestClient) submit(ctx context.Context, req interface{}, rng rand.S
 	return nil
 }
 
-func NewKVTestClient() *KVTestClient {
-	return &KVTestClient{
+func NewTestClient() *TestClient {
+	return &TestClient{
 		seed:     "seed",
 		scenario: func(submit func(req interface{}) error) error { return nil },
 	}
