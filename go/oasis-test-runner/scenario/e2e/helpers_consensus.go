@@ -206,6 +206,20 @@ func (sc *Scenario) RegisterEntity(ctx context.Context, childEnv *env.Env, cli *
 	return nil
 }
 
+// RegisterRuntime registers the specified runtime.
+func (sc *Scenario) RegisterRuntime(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rt registry.Runtime, nonce uint64) error {
+	txPath := uniqueFilepath(childEnv.Dir(), fmt.Sprintf("register_runtime_%s.json", rt.ID))
+	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rt, nonce, txPath); err != nil {
+		return fmt.Errorf("failed to generate register runtime tx: %w", err)
+	}
+
+	if err := cli.Consensus.SubmitTx(txPath); err != nil {
+		return fmt.Errorf("failed to register runtime: %w", err)
+	}
+
+	return nil
+}
+
 // uniqueFilepath joins any number of path elements into a single path, checks if a file exists
 // at that path, and if it does, appends a unique suffix to the filename to ensure the returned
 // path is not already in use.

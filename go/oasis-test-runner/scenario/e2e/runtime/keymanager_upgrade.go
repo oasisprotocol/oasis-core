@@ -277,14 +277,10 @@ func (sc *KmUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	rtDsc := newRt.ToRuntimeDescriptor()
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
 	rtDsc.Deployments = append(oldRtDsc.Deployments, rtDsc.Deployments...) // Add old deployment.
-	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rtDsc, sc.nonce, kmTxPath); err != nil {
-		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
+	if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, sc.nonce); err != nil {
+		return err
 	}
 	sc.nonce++
-	if err = cli.Consensus.SubmitTx(kmTxPath); err != nil {
-		return fmt.Errorf("failed to update KM runtime: %w", err)
-	}
 
 	// Wait for the new node to register.
 	sc.Logger.Info("waiting for new keymanager node to register",

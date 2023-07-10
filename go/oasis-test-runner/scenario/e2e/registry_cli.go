@@ -660,15 +660,9 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 	// Empty genesis state root.
 	testRuntime.Genesis.StateRoot.Empty()
 
-	// Generate register runtime transaction.
-	registerTxPath := filepath.Join(childEnv.Dir(), "registry_runtime_register.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), testRuntime, 0, registerTxPath); err != nil {
-		return fmt.Errorf("failed to generate runtime register tx: %w", err)
-	}
-
-	// Submit register runtime transaction.
-	if err = cli.Consensus.SubmitTx(registerTxPath); err != nil {
-		return fmt.Errorf("failed to submit runtime register tx: %w", err)
+	// Register runtime.
+	if err = sc.RegisterRuntime(ctx, childEnv, cli, testRuntime, 0); err != nil {
+		return err
 	}
 
 	// List runtimes.

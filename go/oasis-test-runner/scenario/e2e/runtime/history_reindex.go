@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -141,14 +140,10 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Register runtime.
 	compRt := sc.Net.Runtimes()[rtIdx]
-	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
 	rtDsc := compRt.ToRuntimeDescriptor()
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRt.ToRuntimeDescriptor(), 0, txPath); err != nil {
-		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
-	}
-	if err = cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register compute runtime: %w", err)
+	if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, 0); err != nil {
+		return err
 	}
 
 	// Wait for the compute worker to be ready.

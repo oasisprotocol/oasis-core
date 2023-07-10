@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -70,22 +69,6 @@ func (sc *TrustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	return f, nil
-}
-
-func (sc *TrustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rt *oasis.Runtime, validFrom beacon.EpochTime, nonce uint64) error {
-	dsc := rt.ToRuntimeDescriptor()
-	dsc.Deployments[0].ValidFrom = validFrom
-
-	txPath := filepath.Join(childEnv.Dir(), fmt.Sprintf("register_runtime_%s.json", rt.ID()))
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), dsc, nonce, txPath); err != nil {
-		return fmt.Errorf("failed to generate register runtime tx: %w", err)
-	}
-
-	if err := cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register runtime: %w", err)
-	}
-
-	return nil
 }
 
 func (sc *TrustRootImpl) updateKeyManagerPolicy(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, nonce uint64) error {
@@ -186,7 +169,9 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 
 	// Register the runtimes.
 	for _, rt := range sc.Net.Runtimes() {
-		if err = sc.registerRuntime(ctx, childEnv, cli, rt, epoch+2, nonce); err != nil {
+		rtDsc := rt.ToRuntimeDescriptor()
+		rtDsc.Deployments[0].ValidFrom = epoch + 2
+		if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, nonce); err != nil {
 			return err
 		}
 		nonce++

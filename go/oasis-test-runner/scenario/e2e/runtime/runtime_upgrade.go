@@ -212,15 +212,10 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	sc.Logger.Info("updating runtime descriptor")
 	newRtDsc := newRt.ToRuntimeDescriptor()
 	newRtDsc.Deployments[1].ValidFrom = upgradeEpoch
-
-	newTxPath := filepath.Join(childEnv.Dir(), "register_update_compute_runtime.json")
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), newRtDsc, sc.nonce, newTxPath); err != nil {
-		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
+	if err = sc.RegisterRuntime(ctx, childEnv, cli, newRtDsc, sc.nonce); err != nil {
+		return err
 	}
 	sc.nonce++
-	if err := cli.Consensus.SubmitTx(newTxPath); err != nil {
-		return fmt.Errorf("failed to update compute runtime: %w", err)
-	}
 
 	// Wait for activation epoch.
 	sc.Logger.Info("waiting for runtime upgrade epoch",

@@ -130,14 +130,10 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	kmRt := sc.Net.Runtimes()[0]
 	rtDsc := kmRt.ToRuntimeDescriptor()
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
-	kmTxPath := filepath.Join(childEnv.Dir(), "register_km_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rtDsc, nonce, kmTxPath); err != nil {
-		return fmt.Errorf("failed to generate register KM runtime tx: %w", err)
+	if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, nonce); err != nil {
+		return err
 	}
 	nonce++
-	if err = cli.Consensus.SubmitTx(kmTxPath); err != nil {
-		return fmt.Errorf("failed to register KM runtime: %w", err)
-	}
 
 	// Generate and update the new keymanager runtime's policy.
 	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
@@ -221,14 +217,10 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	compRt := sc.Net.Runtimes()[1]
 	compRtDesc := compRt.ToRuntimeDescriptor()
 	compRtDesc.Deployments[0].ValidFrom = epoch + 1
-	txPath := filepath.Join(childEnv.Dir(), "register_compute_runtime.json")
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
-		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
+	if err = sc.RegisterRuntime(ctx, childEnv, cli, compRtDesc, nonce); err != nil {
+		return err
 	}
 	nonce++
-	if err = cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register compute runtime: %w", err)
-	}
 
 	// Wait for compute workers to become ready.
 	sc.Logger.Info("waiting for compute workers to initialize",
@@ -538,13 +530,10 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		return fmt.Errorf("failed to escrow stake: %w", err)
 	}
 	// Update the runtime governance model.
-	if err = cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), compRtDesc, nonce, txPath); err != nil {
-		return fmt.Errorf("failed to generate register compute runtime tx: %w", err)
+	if err = sc.RegisterRuntime(ctx, childEnv, cli, compRtDesc, nonce); err != nil {
+		return err
 	}
 	nonce++ // nolint: ineffassign
-	if err = cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register compute runtime: %w", err)
-	}
 
 	// Submit a runtime transaction to check whether the runtimes got resumed.
 	sc.Logger.Info("submitting transaction to runtime")
