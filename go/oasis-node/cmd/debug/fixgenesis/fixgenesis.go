@@ -26,7 +26,8 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-const cfgNewGenesis = "genesis.new_file"
+// CfgNewGenesisFile is the flag used to specify a new genesis file.
+const CfgNewGenesisFile = "genesis.new_file"
 
 var (
 	fixGenesisCmd = &cobra.Command{
@@ -83,7 +84,7 @@ func doFixGenesis(cmd *cobra.Command, args []string) {
 	}
 
 	// Write out the new genesis document.
-	w, shouldClose, err := cmdCommon.GetOutputWriter(cmd, cfgNewGenesis)
+	w, shouldClose, err := cmdCommon.GetOutputWriter(cmd, CfgNewGenesisFile)
 	if err != nil {
 		logger.Error("failed to get writer for fixed genesis file",
 			"err", err,
@@ -449,6 +450,6 @@ func Register(parentCmd *cobra.Command) {
 }
 
 func init() {
-	newGenesisFlag.String(cfgNewGenesis, "genesis_fixed.json", "path to fixed genesis document")
+	newGenesisFlag.String(CfgNewGenesisFile, "genesis_fixed.json", "path to fixed genesis document")
 	_ = viper.BindPFlags(newGenesisFlag)
 }
