@@ -5,7 +5,7 @@ to contribute, and this document should not be considered encompassing.
 
 If you have a general question on how to use and deploy our software, please
 read our [General Documentation](https://docs.oasis.io) or join our
-[Oasis Network Community server on Discord](https://discord.gg/oasisprotocol).
+[Oasis Network Community server on Discord](https://oasis.io/discord).
 
 For concrete feature requests and/or bug reports, please file an issue in this
 repository as described below.
