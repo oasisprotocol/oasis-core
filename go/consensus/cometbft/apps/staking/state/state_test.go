@@ -185,6 +185,119 @@ func TestDebondingDelegation(t *testing.T) {
 	require.EqualValues(expectedDds, dds, "expected debonding delegations should exist")
 }
 
+func TestRewardsWithoutEnoughInCommonPool(t *testing.T) {
+	require := require.New(t)
+
+	delegatorSigner, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(err, "generating delegator signer")
+	delegatorAddr := staking.NewAddress(delegatorSigner.Public())
+	delegatorAccount := &staking.Account{}
+	delegatorAccount.General.Nonce = 10
+	err = delegatorAccount.General.Balance.FromBigInt(big.NewInt(300))
+	require.NoError(err, "initialize delegator account general balance")
+
+	escrowSigner, err := memorySigner.NewSigner(rand.Reader)
+	require.NoError(err, "generating escrow signer")
+	escrowAddr := staking.NewAddress(escrowSigner.Public())
+	escrowAddrAsList := []staking.Address{escrowAddr}
+	escrowAccount := &staking.Account{}
+	escrowAccount.Escrow.CommissionSchedule = staking.CommissionSchedule{
+		Rates: []staking.CommissionRateStep{
+			{
+				Start: 0,
+				Rate:  mustInitQuantity(t, 20_000), // 20%
+			},
+		},
+		Bounds: []staking.CommissionRateBoundStep{
+			{
+				Start:   0,
+				RateMin: mustInitQuantity(t, 0),
+				RateMax: mustInitQuantity(t, 100_000),
+			},
+		},
+	}
+	err = escrowAccount.Escrow.CommissionSchedule.PruneAndValidate(
+		&staking.CommissionScheduleRules{
+			RateChangeInterval: 10,
+			RateBoundLead:      30,
+			MaxRateSteps:       4,
+			MaxBoundSteps:      12,
+		}, 0)
+	require.NoError(err, "prune and validate commission schedule")
+
+	del := &staking.Delegation{}
+	_, err = escrowAccount.Escrow.Active.Deposit(&del.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100))
+	require.NoError(err, "active escrow deposit")
+
+	var deb staking.DebondingDelegation
+	deb.DebondEndTime = 21
+	_, err = escrowAccount.Escrow.Debonding.Deposit(&deb.Shares, &delegatorAccount.General.Balance, mustInitQuantityP(t, 100))
+	require.NoError(err, "debonding escrow deposit")
+
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextEndBlock)
+	defer ctx.Close()
+
+	s := NewMutableState(ctx.State())
+
+	err = s.SetConsensusParameters(ctx, &staking.ConsensusParameters{
+		DebondingInterval: 21,
+		RewardSchedule: []staking.RewardStep{
+			{
+				Until: 30,
+				Scale: mustInitQuantity(t, 1000),
+			},
+			{
+				Until: 40,
+				Scale: mustInitQuantity(t, 500),
+			},
+		},
+		CommissionScheduleRules: staking.CommissionScheduleRules{
+			RateChangeInterval: 10,
+			RateBoundLead:      30,
+			MaxRateSteps:       4,
+			MaxBoundSteps:      12,
+		},
+	})
+	require.NoError(err, "SetConsensusParameters")
+	// Init common pool with insufficient balance on purpose.
+	err = s.SetCommonPool(ctx, mustInitQuantityP(t, 300))
+	require.NoError(err, "SetCommonPool")
+
+	err = s.SetAccount(ctx, delegatorAddr, delegatorAccount)
+	require.NoError(err, "SetAccount")
+	err = s.SetAccount(ctx, escrowAddr, escrowAccount)
+	require.NoError(err, "SetAccount")
+	err = s.SetDelegation(ctx, delegatorAddr, escrowAddr, del)
+	require.NoError(err, "SetDelegation")
+	err = s.SetDebondingDelegation(ctx, delegatorAddr, escrowAddr, 1, &deb)
+	require.NoError(err, "SetDebondingDelegation")
+
+	require.NoError(s.AddRewards(ctx, 10, mustInitQuantityP(t, 100_000), escrowAddrAsList), "add rewards 1")
+	evs := ctx.GetEvents()
+	require.Len(evs, 3, "adding rewards should emit 3 events")
+
+	require.NoError(s.AddRewards(ctx, 30, mustInitQuantityP(t, 100_000), escrowAddrAsList), "add rewards 2")
+	evs = ctx.GetEvents()
+	require.Len(evs, 6, "adding rewards should emit 3 new events")
+
+	require.NoError(s.AddRewards(ctx, 35, mustInitQuantityP(t, 100_000), escrowAddrAsList), "add rewards 3")
+	evs = ctx.GetEvents()
+	require.Len(evs, 6, "adding rewards with not enough in common pool should not emit any new events")
+
+	require.NoError(s.AddRewards(ctx, 38, mustInitQuantityP(t, 80_000), escrowAddrAsList), "add rewards 4")
+	evs = ctx.GetEvents()
+	require.Len(evs, 6, "adding rewards with not enough in common pool should not emit any new events")
+
+	require.NoError(s.AddRewardSingleAttenuated(ctx, 10, mustInitQuantityP(t, 10_000), 5, 10, escrowAddr), "add rewards attenuated 1")
+	evs = ctx.GetEvents()
+	require.Len(evs, 9, "adding attenuated rewards should emit 3 new events")
+
+	require.NoError(s.AddRewardSingleAttenuated(ctx, 10, mustInitQuantityP(t, 100_000), 5, 10, escrowAddr), "add rewards attenuated 2")
+	evs = ctx.GetEvents()
+	require.Len(evs, 9, "adding attenuated rewards with not enough in common pool should not emit any new events")
+}
+
 func TestRewardAndSlash(t *testing.T) {
 	require := require.New(t)
 

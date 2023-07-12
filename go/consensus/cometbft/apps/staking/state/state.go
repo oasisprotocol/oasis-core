@@ -1164,11 +1164,8 @@ func (s *MutableState) DiscardGovernanceDeposit(
 }
 
 // AddRewards computes and transfers a staking reward to active escrow accounts.
-// If an error occurs, the pool and affected accounts are left in an invalid state.
-// This may fail due to the common pool running out of stake. In this case, the
-// returned error's cause will be `staking.ErrInsufficientBalance`, and it should
-// be safe for the caller to roll back to an earlier state tree and continue from
-// there.
+// If the common pool runs out, the rewards that are too big to be paid out are
+// skipped and no error is returned.
 func (s *MutableState) AddRewards(
 	ctx *abciAPI.Context,
 	time beacon.EpochTime,
@@ -1216,6 +1213,11 @@ func (s *MutableState) AddRewards(
 		}
 
 		if q.IsZero() {
+			continue
+		}
+
+		if q.Cmp(commonPool) == 1 {
+			// Not enough balance left in common pool, skip.
 			continue
 		}
 
@@ -1346,6 +1348,11 @@ func (s *MutableState) AddRewardSingleAttenuated(
 	}
 
 	if q.IsZero() {
+		return nil
+	}
+
+	if q.Cmp(commonPool) == 1 {
+		// Not enough balance left in common pool, skip.
 		return nil
 	}
 
