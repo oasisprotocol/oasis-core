@@ -6,6 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 )
 
@@ -62,10 +63,17 @@ func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
 		pc = w.enclaveStatus.InitResponse.PolicyChecksum
 	}
 
+	var aw *version.Version
+	if w.rtStatus != nil {
+		aw = &w.rtStatus.version
+	}
+
 	gs := w.globalStatus
 	ws := api.WorkerStatus{
 		Status:           ss,
+		ActiveVersion:    aw,
 		MayGenerate:      w.mayGenerate,
+		RuntimeID:        &w.runtimeID,
 		ClientRuntimes:   rts,
 		AccessList:       al,
 		PrivatePeers:     ps,
