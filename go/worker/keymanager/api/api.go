@@ -7,6 +7,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 )
 
@@ -95,6 +96,9 @@ type Status struct {
 type WorkerStatus struct {
 	// Status is a concise status of the key manager worker.
 	Status StatusState `json:"status"`
+
+	// ActiveVersion is the currently active version.
+	ActiveVersion *version.Version `json:"active_version"`
 
 	// MayGenerate returns whether the enclave can generate a master secret.
 	MayGenerate bool `json:"may_generate"`
