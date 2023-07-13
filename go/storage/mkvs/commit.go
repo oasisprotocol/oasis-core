@@ -111,7 +111,7 @@ func (t *tree) commitWithHooks(
 		}
 
 		log = append(log, writelog.LogEntry{Key: entry.key, Value: entry.value})
-		if len(entry.value) == 0 {
+		if entry.value == nil {
 			logAnns = append(logAnns, writelog.LogEntryAnnotation{InsertedNode: nil})
 		} else {
 			logAnns = append(logAnns, writelog.LogEntryAnnotation{InsertedNode: entry.insertedLeaf})
