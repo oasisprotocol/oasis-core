@@ -15,6 +15,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -188,4 +191,45 @@ func (sc *Scenario) ExportedGenesisFiles(skipCompute bool) ([]string, error) {
 	}
 
 	return files, nil
+}
+
+// RegisterEntity registers the specified entity.
+func (sc *Scenario) RegisterEntity(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, ent *oasis.Entity, nonce uint64) error {
+	txPath := uniqueFilepath(filepath.Join(childEnv.Dir(), "register_entity.json"))
+	if err := cli.Registry.GenerateRegisterEntityTx(ent.Dir(), nonce, txPath); err != nil {
+		return fmt.Errorf("failed to generate register entity tx: %w", err)
+	}
+	if err := cli.Consensus.SubmitTx(txPath); err != nil {
+		return fmt.Errorf("failed to submit register entity tx: %w", err)
+	}
+
+	return nil
+}
+
+// uniqueFilepath joins any number of path elements into a single path, checks if a file exists
+// at that path, and if it does, appends a unique suffix to the filename to ensure the returned
+// path is not already in use.
+func uniqueFilepath(elem ...string) string {
+	path := filepath.Join(elem...)
+	if !fileExists(path) {
+		return path
+	}
+
+	dir, filename := filepath.Split(path)
+	extension := filepath.Ext(filename)
+	prefix := filename[:len(filename)-len(extension)]
+
+	for suffix := 1; ; suffix++ {
+		newFilename := fmt.Sprintf("%s_%d%s", prefix, suffix, extension)
+		newPath := filepath.Join(dir, newFilename)
+		if !fileExists(newPath) {
+			return newPath
+		}
+	}
+}
+
+// fileExists returns true iff the named file exists.
+func fileExists(name string) bool {
+	_, err := os.Stat(name)
+	return err == nil
 }
