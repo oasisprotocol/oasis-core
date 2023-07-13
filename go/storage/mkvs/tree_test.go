@@ -1165,6 +1165,47 @@ func testSize(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	require.True(t, newSize > size, "Size should be greater than before")
 }
 
+func testEmptyValueWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
+	ctx := context.Background()
+
+	// Populate the tree.
+	tree := New(nil, ndb, node.RootTypeState)
+	err := tree.Insert(ctx, []byte("foo"), []byte("bar"))
+	require.NoError(t, err, "Insert")
+	err = tree.Insert(ctx, []byte("bar"), []byte(""))
+	require.NoError(t, err, "Insert")
+	writeLog, rootHash, err := tree.Commit(ctx, testNs, 0)
+	require.NoError(t, err, "Commit")
+
+	// Ensure no nil entries returned.
+	for _, entry := range writeLog {
+		require.NotNil(t, entry.Value)
+	}
+
+	startRoot := node.Root{
+		Namespace: testNs,
+		Version:   0,
+		Type:      node.RootTypeState,
+	}
+	startRoot.Hash.Empty()
+
+	endRoot := node.Root{
+		Namespace: testNs,
+		Hash:      rootHash,
+		Version:   0,
+		Type:      node.RootTypeState,
+	}
+
+	// Fetch write log from database.
+	wli, err := ndb.GetWriteLog(ctx, startRoot, endRoot)
+	require.NoError(t, err, "GetWriteLog")
+	writeLog = foldWriteLogIterator(t, wli)
+
+	for _, entry := range writeLog {
+		require.NotNil(t, entry.Value)
+	}
+}
+
 func testMergeWriteLog(t *testing.T, ndb db.NodeDB, factory NodeDBFactory) {
 	ctx := context.Background()
 
@@ -2224,6 +2265,7 @@ func testBackend(
 		{"DebugDump", testDebugDumpLocal},
 		{"OnCommitHooks", testOnCommitHooks},
 		{"CommitNoPersist", testCommitNoPersist},
+		{"EmptyValueWriteLog", testEmptyValueWriteLog},
 		{"MergeWriteLog", testMergeWriteLog},
 		{"HasRoot", testHasRoot},
 		{"GetRootsForVersion", testGetRootsForVersion},
