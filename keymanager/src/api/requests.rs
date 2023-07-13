@@ -164,6 +164,7 @@ pub struct LongTermKeyRequest {
     /// Key pair ID.
     pub key_pair_id: KeyPairId,
     /// Generation.
+    #[cbor(optional)]
     pub generation: u64,
 }
 
