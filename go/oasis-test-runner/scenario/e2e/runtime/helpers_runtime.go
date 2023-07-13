@@ -128,55 +128,137 @@ func (sc *Scenario) BuildAllRuntimes(ctx context.Context, childEnv *env.Env, tru
 	return sc.BuildRuntimes(ctx, childEnv, runtimes, trustRoot)
 }
 
-// EnsureActiveVersion ensures that all compute workers have the correct active version
-// of the given runtime.
-func (sc *Scenario) EnsureActiveVersion(ctx context.Context, rt *oasis.Runtime, v version.Version) error {
+// EnsureActiveVersionForComputeWorker ensures that the specified compute worker
+// has the correct active version of the given runtime.
+func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, node *oasis.Compute, rt *oasis.Runtime, v version.Version) error {
 	ctx, cancel := context.WithTimeout(ctx, versionActivationTimeout)
 	defer cancel()
 
+	sc.Logger.Info("ensuring that the compute worker has the correct active version",
+		"version", v,
+	)
+
+	nodeCtrl, err := oasis.NewController(node.SocketPath())
+	if err != nil {
+		return fmt.Errorf("%s: failed to create controller: %w", node.Name, err)
+	}
+
+	// Wait for the version to become active and ensure no suspension observed.
+	for {
+		status, err := nodeCtrl.GetStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("%s: failed to query status: %w", node.Name, err)
+		}
+
+		provisioner := status.Runtimes[rt.ID()].Provisioner
+		if provisioner != "sandbox" && provisioner != "sgx" {
+			return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, rt.ID(), provisioner)
+		}
+
+		cs := status.Runtimes[rt.ID()].Committee
+		if cs == nil {
+			return fmt.Errorf("%s: missing status for runtime '%s'", node.Name, rt.ID())
+		}
+
+		if cs.ActiveVersion == nil {
+			return fmt.Errorf("%s: no version is active", node.Name)
+		}
+		// Retry if not yet activated.
+		if cs.ActiveVersion.ToU64() < v.ToU64() {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if *cs.ActiveVersion != v {
+			return fmt.Errorf("%s: unexpected active version (expected: %s got: %s)", node.Name, v, cs.ActiveVersion)
+		}
+		if cs.Status != commonWorker.StatusStateReady {
+			return fmt.Errorf("%s: runtime is not ready (got: %s)", node.Name, cs.Status)
+		}
+		break
+	}
+
+	return nil
+}
+
+// EnsureActiveVersionForComputeWorkers ensures that all compute workers
+// have the correct active version of the given runtime.
+func (sc *Scenario) EnsureActiveVersionForComputeWorkers(ctx context.Context, rt *oasis.Runtime, v version.Version) error {
 	sc.Logger.Info("ensuring that all compute workers have the correct active version",
+		"runtime_id", rt.ID(),
 		"version", v,
 	)
 
 	for _, node := range sc.Net.ComputeWorkers() {
-		nodeCtrl, err := oasis.NewController(node.SocketPath())
-		if err != nil {
-			return fmt.Errorf("%s: failed to create controller: %w", node.Name, err)
-		}
-
-		// Wait for the version to become active and ensure no suspension observed.
-		for {
-			status, err := nodeCtrl.GetStatus(ctx)
-			if err != nil {
-				return fmt.Errorf("%s: failed to query status: %w", node.Name, err)
-			}
-
-			provisioner := status.Runtimes[rt.ID()].Provisioner
-			if provisioner != "sandbox" && provisioner != "sgx" {
-				return fmt.Errorf("%s: unexpected runtime provisioner for runtime '%s': %s", node.Name, rt.ID(), provisioner)
-			}
-
-			cs := status.Runtimes[rt.ID()].Committee
-			if cs == nil {
-				return fmt.Errorf("%s: missing status for runtime '%s'", node.Name, rt.ID())
-			}
-
-			if cs.ActiveVersion == nil {
-				return fmt.Errorf("%s: no version is active", node.Name)
-			}
-			// Retry if not yet activated.
-			if cs.ActiveVersion.ToU64() < v.ToU64() {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			if *cs.ActiveVersion != v {
-				return fmt.Errorf("%s: unexpected active version (expected: %s got: %s)", node.Name, v, cs.ActiveVersion)
-			}
-			if cs.Status != commonWorker.StatusStateReady {
-				return fmt.Errorf("%s: runtime is not ready (got: %s)", node.Name, cs.Status)
-			}
-			break
+		if err := sc.EnsureActiveVersionForComputeWorker(ctx, node, rt, v); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+// EnsureActiveVersionForKeyManager ensures that the specified key manager
+// has the correct active version of the given runtime.
+func (sc *Scenario) EnsureActiveVersionForKeyManager(ctx context.Context, node *oasis.Keymanager, id common.Namespace, v version.Version) error {
+	ctx, cancel := context.WithTimeout(ctx, versionActivationTimeout)
+	defer cancel()
+
+	sc.Logger.Info("ensuring that the key manager has the correct active version",
+		"node", node.Name,
+		"runtime_id", id,
+		"version", v,
+	)
+
+	nodeCtrl, err := oasis.NewController(node.SocketPath())
+	if err != nil {
+		return fmt.Errorf("%s: failed to create controller: %w", node.Name, err)
+	}
+
+	// Wait for the version to become active.
+	for {
+		status, err := nodeCtrl.GetStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("%s: failed to query status: %w", node.Name, err)
+		}
+
+		if status.Keymanager == nil {
+			return fmt.Errorf("%s: missing key manager status", node.Name)
+		}
+
+		ws := status.Keymanager.WorkerStatus
+		if !id.Equal(ws.RuntimeID) {
+			return fmt.Errorf("%s: unsupported runtime (expected: %s got: %s)", node.Name, ws.RuntimeID, id)
+		}
+
+		if ws.ActiveVersion == nil {
+			return fmt.Errorf("%s: no version is active", node.Name)
+		}
+		// Retry if not yet activated.
+		if ws.ActiveVersion.ToU64() < v.ToU64() {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if *ws.ActiveVersion != v {
+			return fmt.Errorf("%s: unexpected active version (expected: %s got: %s)", node.Name, v, ws.ActiveVersion)
+		}
+		break
+	}
+
+	return nil
+}
+
+// EnsureActiveVersionForKeyManagers ensures that all key managers
+// have the correct active version of the given runtime.
+func (sc *Scenario) EnsureActiveVersionForKeyManagers(ctx context.Context, id common.Namespace, v version.Version) error {
+	sc.Logger.Info("ensuring that all key managers have the correct active version",
+		"runtime_id", id,
+		"version", v,
+	)
+
+	for _, node := range sc.Net.Keymanagers() {
+		if err := sc.EnsureActiveVersionForKeyManager(ctx, node, id, v); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

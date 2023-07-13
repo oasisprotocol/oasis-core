@@ -192,7 +192,7 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Make sure the old version is active on all compute nodes.
 	newRt := sc.Net.Runtimes()[sc.upgradedRuntimeIndex]
-	if err := sc.EnsureActiveVersion(ctx, newRt, version.MustFromString("0.0.0")); err != nil {
+	if err := sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.0.0")); err != nil {
 		return err
 	}
 
@@ -231,7 +231,7 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	}
 
 	// Make sure the new version is active.
-	if err := sc.EnsureActiveVersion(ctx, newRt, version.MustFromString("0.1.0")); err != nil {
+	if err := sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.1.0")); err != nil {
 		return err
 	}
 
