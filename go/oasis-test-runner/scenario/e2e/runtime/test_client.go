@@ -20,8 +20,10 @@ import (
 type TestClient struct {
 	sc *Scenario
 
-	seed     string
 	scenario TestClientScenario
+
+	seed string
+	rng  rand.Source64
 
 	ctx      context.Context
 	cancelFn context.CancelFunc
@@ -92,6 +94,7 @@ func (cli *TestClient) Clone() *TestClient {
 // WithSeed sets the seed.
 func (cli *TestClient) WithSeed(seed string) *TestClient {
 	cli.seed = seed
+	cli.rng = nil
 	return cli
 }
 
@@ -102,30 +105,33 @@ func (cli *TestClient) WithScenario(scenario TestClientScenario) *TestClient {
 }
 
 func (cli *TestClient) workload(ctx context.Context) error {
-	// Initialize the nonce DRBG.
-	rng, err := drbgFromSeed(
-		[]byte("oasis-core/oasis-test-runner/e2e/runtime/test-client"),
-		[]byte(cli.seed),
-	)
-	if err != nil {
-		return err
+	if cli.rng == nil {
+		// Initialize the nonce DRBG.
+		rng, err := drbgFromSeed(
+			[]byte("oasis-core/oasis-test-runner/e2e/runtime/test-client"),
+			[]byte(cli.seed),
+		)
+		if err != nil {
+			return err
+		}
+		cli.rng = rng
 	}
 
 	cli.sc.Logger.Info("waiting for key managers to generate the first master secret")
 
-	if _, err = cli.sc.WaitMasterSecret(ctx, 0); err != nil {
+	if _, err := cli.sc.WaitMasterSecret(ctx, 0); err != nil {
 		return fmt.Errorf("first master secret not generated: %w", err)
 	}
 	// The CometBFT verifier is one block behind, so wait for an additional
 	// two blocks to ensure that the first secret has been loaded.
-	if _, err = cli.sc.WaitBlocks(ctx, 2); err != nil {
+	if _, err := cli.sc.WaitBlocks(ctx, 2); err != nil {
 		return fmt.Errorf("failed to wait two blocks: %w", err)
 	}
 
 	cli.sc.Logger.Info("starting k/v runtime test client")
 
 	if err := cli.scenario(func(req interface{}) error {
-		return cli.submit(ctx, req, rng)
+		return cli.submit(ctx, req, cli.rng)
 	}); err != nil {
 		return err
 	}
