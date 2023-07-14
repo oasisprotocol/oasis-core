@@ -201,9 +201,7 @@ steps:
       - "build-rust-runtimes"
     command:
       - .buildkite/go/test_and_coverage.sh
-    artifact_paths:
-      - coverage-*.txt
-      - /tmp/oasis-node-test_*/test-node.log
+      - buildkite-agent artifact upload "coverage-*.txt;/tmp/oasis-node-test_*/test-node.log"
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -228,11 +226,7 @@ steps:
       - export CC_x86_64_fortanix_unknown_sgx=clang-11
       # Only run runtime scenarios as others do not use SGX.
       - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-.+
-    artifact_paths:
-      - coverage-merged-e2e-*.txt
-      - /tmp/e2e/**/*.log
-      - /tmp/e2e/**/genesis.json
-      - /tmp/e2e/**/runtime_genesis.json
+      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
       OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
@@ -260,9 +254,7 @@ steps:
       - cargo install --locked --path tools
       # Only run runtime scenarios as others do not use SGX.
       - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/.*
-    artifact_paths:
-      - coverage-merged-e2e-*.txt
-      - /tmp/e2e/**/*.log
+      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
       OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
@@ -290,11 +282,7 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh
-    artifact_paths:
-      - coverage-merged-e2e-*.txt
-      - /tmp/e2e/**/*.log
-      - /tmp/e2e/**/genesis.json
-      - /tmp/e2e/**/runtime_genesis.json
+      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
     env:
       OASIS_E2E_COVERAGE: enable
       # Since the trust-root scenarios are tested in SGX mode (for which they are actually relevant)
@@ -316,11 +304,7 @@ steps:
     command:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/txsource-multi-short
-    artifact_paths:
-      - coverage-merged-e2e-*.txt
-      - /tmp/e2e/**/*.log
-      - /tmp/e2e/**/genesis.json
-      - /tmp/e2e/**/runtime_genesis.json
+      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -337,13 +321,11 @@ steps:
     timeout_in_minutes: 20
     command:
       - .buildkite/scripts/sgx_ias_tests.sh
+      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
     # A unique string to identify the step. The value is available in the
     # BUILDKITE_STEP_KEY and is used to ensure the generated coverage file
     # names are unique across this pipeline.
     key: sgx-ias
-    artifact_paths:
-      - coverage-merged-e2e-*.txt
-      - /tmp/e2e/**/*.log
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
