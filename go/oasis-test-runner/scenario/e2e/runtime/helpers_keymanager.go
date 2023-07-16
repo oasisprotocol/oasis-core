@@ -249,6 +249,43 @@ func (sc *Scenario) KeymanagerInitResponse(ctx context.Context, idx int) (*keyma
 	return &signedInitResponse.InitResponse, nil
 }
 
+// UpdateEnclavePolicies updates enclave policies with a new runtime deployment.
+func (sc *Scenario) UpdateEnclavePolicies(rt *oasis.Runtime, deploymentIndex int, policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX) {
+	enclaveID := rt.GetEnclaveIdentity(deploymentIndex)
+	if enclaveID == nil {
+		return
+	}
+
+	switch rt.Kind() {
+	case registry.KindKeyManager:
+		// Allow key manager runtime to replicate from all existing key managers.
+		for _, policy := range policies {
+			policy.MayReplicate = append(policy.MayReplicate, *enclaveID)
+		}
+
+		// Allow all runtimes to query the new key manager runtime.
+		newPolicy := keymanager.EnclavePolicySGX{
+			MayQuery:     make(map[common.Namespace][]sgx.EnclaveIdentity),
+			MayReplicate: make([]sgx.EnclaveIdentity, 0),
+		}
+		for _, policy := range policies {
+			for rt, enclaves := range policy.MayQuery {
+				// Allowing duplicates, not important.
+				newPolicy.MayQuery[rt] = append(newPolicy.MayQuery[rt], enclaves...)
+			}
+		}
+
+		policies[*enclaveID] = &newPolicy
+	case registry.KindCompute:
+		// Allow compute runtime to query all existing key managers.
+		for _, policy := range policies {
+			policy.MayQuery[rt.ID()] = append(policy.MayQuery[rt.ID()], *enclaveID)
+		}
+	default:
+		// Skip other kinds.
+	}
+}
+
 // BuildAllEnclavePolicies builds enclave policies for all key manager runtimes.
 //
 // Policies are built from the fixture and adhere to the following rules:

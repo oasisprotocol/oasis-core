@@ -973,7 +973,7 @@ func verifyNodeRuntimeChanges(
 					continue
 				}
 
-				logger.Error("RegisterNode: trying to update runtimes, current version is misssing in new set",
+				logger.Error("RegisterNode: trying to update runtimes, current version is missing in new set",
 					"runtime_id", id,
 					"version", version,
 				)
