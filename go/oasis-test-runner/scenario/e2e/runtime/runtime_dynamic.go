@@ -3,17 +3,13 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -136,55 +132,14 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	nonce++
 
 	// Generate and update the new keymanager runtime's policy.
-	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
-	kmPolicySig1Path := filepath.Join(childEnv.Dir(), "km_policy_sig1.pem")
-	kmPolicySig2Path := filepath.Join(childEnv.Dir(), "km_policy_sig2.pem")
-	kmPolicySig3Path := filepath.Join(childEnv.Dir(), "km_policy_sig3.pem")
-	kmUpdateTxPath := filepath.Join(childEnv.Dir(), "km_gen_update.json")
-	sc.Logger.Info("building KM SGX policy enclave policies map")
-	enclavePolicies := make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
-	kmRtEncID := kmRt.GetEnclaveIdentity(0)
-	var havePolicy bool
-	if kmRtEncID != nil {
-		enclavePolicies[*kmRtEncID] = &keymanager.EnclavePolicySGX{}
-		enclavePolicies[*kmRtEncID].MayQuery = make(map[common.Namespace][]sgx.EnclaveIdentity)
-		enclavePolicies[*kmRtEncID].MayReplicate = []sgx.EnclaveIdentity{}
-		for _, rt := range sc.Net.Runtimes() {
-			if rt.Kind() != registry.KindCompute {
-				continue
-			}
-			if eid := rt.GetEnclaveIdentity(0); eid != nil {
-				enclavePolicies[*kmRtEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
-				// This is set only in SGX mode.
-				havePolicy = true
-			}
-		}
-	}
-	sc.Logger.Info("initing KM policy")
-	if err = cli.Keymanager.InitPolicy(kmRt.ID(), 1, 0, enclavePolicies, kmPolicyPath); err != nil {
+	policies, err := sc.BuildEnclavePolicies(childEnv)
+	if err != nil {
 		return err
 	}
-	sc.Logger.Info("signing KM policy")
-	if err = cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
-		return err
-	}
-	if err = cli.Keymanager.SignPolicy("2", kmPolicyPath, kmPolicySig2Path); err != nil {
-		return err
-	}
-	if err = cli.Keymanager.SignPolicy("3", kmPolicyPath, kmPolicySig3Path); err != nil {
-		return err
-	}
-	if havePolicy {
-		// In SGX mode, we can update the policy as intended.
-		sc.Logger.Info("updating KM policy")
-		if err = cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
-			return err
-		}
-		nonce++
-		if err = cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
-			return fmt.Errorf("failed to update KM policy: %w", err)
-		}
-	} else {
+	switch policies {
+	case nil:
+		sc.Logger.Info("no SGX runtimes, skipping policy update")
+
 		// In non-SGX mode, the policy update fails with a policy checksum
 		// mismatch (the non-SGX KM returns an empty policy), so we need to
 		// do an epoch transition instead (to complete the KM runtime
@@ -192,6 +147,12 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		if err = sc.epochTransition(ctx); err != nil {
 			return err
 		}
+	default:
+		// In SGX mode, we can update the policy as intended.
+		if err = sc.ApplyKeyManagerPolicy(ctx, childEnv, cli, 0, policies, nonce); err != nil {
+			return err
+		}
+		nonce++
 	}
 
 	// Wait for key manager nodes to register, then make another epoch transition.

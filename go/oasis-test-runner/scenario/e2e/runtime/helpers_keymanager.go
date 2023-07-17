@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -23,7 +23,7 @@ import (
 
 // KeyManagerStatus returns the latest key manager status.
 func (sc *Scenario) KeyManagerStatus(ctx context.Context) (*keymanager.Status, error) {
-	return sc.Net.ClientController().Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
+	return sc.Net.Controller().Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     KeyManagerRuntimeID,
 	})
@@ -31,7 +31,7 @@ func (sc *Scenario) KeyManagerStatus(ctx context.Context) (*keymanager.Status, e
 
 // MasterSecret returns the key manager master secret.
 func (sc *Scenario) MasterSecret(ctx context.Context) (*keymanager.SignedEncryptedMasterSecret, error) {
-	secret, err := sc.Net.ClientController().Keymanager.GetMasterSecret(ctx, &registry.NamespaceQuery{
+	secret, err := sc.Net.Controller().Keymanager.GetMasterSecret(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     KeyManagerRuntimeID,
 	})
@@ -122,59 +122,23 @@ func (sc *Scenario) WaitEphemeralSecrets(ctx context.Context, n int) (*keymanage
 }
 
 // UpdateRotationInterval updates the master secret rotation interval in the key manager policy.
-func (sc *Scenario) UpdateRotationInterval(ctx context.Context, nonce uint64, childEnv *env.Env, rotationInterval beacon.EpochTime) error {
+func (sc *Scenario) UpdateRotationInterval(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rotationInterval beacon.EpochTime, nonce uint64) error {
 	sc.Logger.Info("updating master secret rotation interval in the key manager policy",
 		"interval", rotationInterval,
 	)
 
 	status, err := sc.KeyManagerStatus(ctx)
-	if err != nil {
+	if err != nil && err != keymanager.ErrNoSuchStatus {
 		return err
 	}
 
-	// Update the policy, or create a new one if it doesn't already exist.
-	var policy keymanager.PolicySGX
+	var policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX
 	if status != nil && status.Policy != nil {
-		policy = status.Policy.Policy
-		policy.Serial++
-	} else {
-		policy.Serial = 1
-		policy.ID = KeyManagerRuntimeID
-		policy.Enclaves = make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
-	}
-	policy.MasterSecretRotationInterval = rotationInterval
-
-	// Sign and publish the new policy.
-	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
-	kmPolicySig1Path := filepath.Join(childEnv.Dir(), "km_policy_sig1.pem")
-	kmPolicySig2Path := filepath.Join(childEnv.Dir(), "km_policy_sig2.pem")
-	kmPolicySig3Path := filepath.Join(childEnv.Dir(), "km_policy_sig3.pem")
-	kmUpdateTxPath := filepath.Join(childEnv.Dir(), "km_gen_update.json")
-
-	sc.Logger.Info("saving key manager policy")
-	raw := cbor.Marshal(policy)
-	if err = os.WriteFile(kmPolicyPath, raw, 0o644); err != nil { // nolint: gosec
-		return err
+		policies = status.Policy.Policy.Enclaves
 	}
 
-	sc.Logger.Info("signing key manager policy")
-	cli := cli.New(childEnv, sc.Net, sc.Logger)
-	if err := cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
+	if err := sc.ApplyKeyManagerPolicy(ctx, childEnv, cli, rotationInterval, policies, nonce); err != nil {
 		return err
-	}
-	if err := cli.Keymanager.SignPolicy("2", kmPolicyPath, kmPolicySig2Path); err != nil {
-		return err
-	}
-	if err := cli.Keymanager.SignPolicy("3", kmPolicyPath, kmPolicySig3Path); err != nil {
-		return err
-	}
-
-	sc.Logger.Info("updating key manager policy")
-	if err := cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
-		return err
-	}
-	if err := cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
-		return fmt.Errorf("failed to update key manager policy: %w", err)
 	}
 
 	return nil
@@ -283,4 +247,145 @@ func (sc *Scenario) KeymanagerInitResponse(ctx context.Context, idx int) (*keyma
 	}
 
 	return &signedInitResponse.InitResponse, nil
+}
+
+// BuildAllEnclavePolicies builds enclave policies for all key manager runtimes.
+//
+// Policies are built from the fixture and adhere to the following rules:
+//   - Each SGX runtime must have only one deployment and a distinct enclave identity.
+//   - Key manager enclaves are not allowed to replicate the master secrets.
+//   - All compute runtime enclaves are allowed to query key manager enclaves.
+func (sc *Scenario) BuildAllEnclavePolicies(childEnv *env.Env) (map[common.Namespace]map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
+	sc.Logger.Info("building key manager SGX policy enclave policies map")
+
+	kmPolicies := make(map[common.Namespace]map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
+
+	// Each SGX runtime must have only one deployment.
+	for _, rt := range sc.Net.Runtimes() {
+		if len(rt.ToRuntimeDescriptor().Deployments) != 1 {
+			return nil, fmt.Errorf("runtime should have only one deployment")
+		}
+	}
+
+	// Each SGX runtime must have a distinct enclave identity.
+	enclaveIDs := make(map[string]struct{})
+	for _, rt := range sc.Net.Runtimes() {
+		enclaveID := rt.GetEnclaveIdentity(0)
+		if enclaveID == nil {
+			continue
+		}
+		enclaveIDText, err := enclaveID.MarshalText()
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal enclave identity: %w", err)
+		}
+		if _, ok := enclaveIDs[string(enclaveIDText)]; ok {
+			return nil, fmt.Errorf("enclave identities are not unique")
+		}
+		enclaveIDs[string(enclaveIDText)] = struct{}{}
+	}
+
+	// Prepare empty policies for all key managers.
+	for _, rt := range sc.Net.Runtimes() {
+		if rt.Kind() != registry.KindKeyManager {
+			continue
+		}
+
+		enclaveID := rt.GetEnclaveIdentity(0)
+		if enclaveID == nil {
+			continue
+		}
+
+		if _, ok := kmPolicies[rt.ID()]; ok {
+			return nil, fmt.Errorf("duplicate key manager runtime: %s", rt.ID())
+		}
+
+		kmPolicies[rt.ID()] = map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX{
+			*enclaveID: {
+				MayQuery:     make(map[common.Namespace][]sgx.EnclaveIdentity),
+				MayReplicate: make([]sgx.EnclaveIdentity, 0),
+			},
+		}
+	}
+
+	// Allow all compute runtime enclaves to query key manager enclave.
+	for _, rt := range sc.Net.Runtimes() {
+		if rt.Kind() != registry.KindCompute {
+			continue
+		}
+
+		enclaveID := rt.GetEnclaveIdentity(0)
+		if enclaveID == nil {
+			continue
+		}
+
+		// Skip if the key manager runtime is not available.
+		kmRtID := rt.ToRuntimeDescriptor().KeyManager
+		policies, ok := kmPolicies[*kmRtID]
+		if !ok {
+			continue
+		}
+
+		for _, policy := range policies {
+			policy.MayQuery[rt.ID()] = append(policy.MayQuery[rt.ID()], *enclaveID)
+		}
+	}
+
+	return kmPolicies, nil
+}
+
+// BuildEnclavePolicies builds enclave policies for the simple key manager runtime.
+//
+// If the simple key manager runtime does not exist or is not running on an SGX platform,
+// it returns nil.
+func (sc *Scenario) BuildEnclavePolicies(childEnv *env.Env) (map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
+	policies, err := sc.BuildAllEnclavePolicies(childEnv)
+	if err != nil {
+		return nil, err
+	}
+	return policies[KeyManagerRuntimeID], nil
+}
+
+// ApplyKeyManagerPolicy applies the given policy to the simple key manager runtime.
+func (sc *Scenario) ApplyKeyManagerPolicy(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rotationInterval beacon.EpochTime, policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, nonce uint64) error {
+	status, err := sc.KeyManagerStatus(ctx)
+	if err != nil && err != keymanager.ErrNoSuchStatus {
+		return err
+	}
+
+	serial := uint32(1)
+	if status != nil && status.Policy != nil {
+		serial = status.Policy.Policy.Serial + 1
+	}
+
+	dir := childEnv.Dir()
+	policyPath := filepath.Join(dir, "km_policy.cbor")
+	sig1Path := filepath.Join(dir, "km_policy_sig1.pem")
+	sig2Path := filepath.Join(dir, "km_policy_sig2.pem")
+	sig3Path := filepath.Join(dir, "km_policy_sig3.pem")
+	txPath := filepath.Join(dir, "km_gen_update.json")
+
+	sc.Logger.Info("generating key manager policy")
+	if err := cli.Keymanager.InitPolicy(KeyManagerRuntimeID, serial, rotationInterval, policies, policyPath); err != nil {
+		return err
+	}
+	sc.Logger.Info("signing key manager policy")
+	if err := cli.Keymanager.SignPolicy("1", policyPath, sig1Path); err != nil {
+		return err
+	}
+	if err := cli.Keymanager.SignPolicy("2", policyPath, sig2Path); err != nil {
+		return err
+	}
+	if err := cli.Keymanager.SignPolicy("3", policyPath, sig3Path); err != nil {
+		return err
+	}
+
+	sc.Logger.Info("updating key manager policy")
+	if err := cli.Keymanager.GenUpdate(nonce, policyPath, []string{sig1Path, sig2Path, sig3Path}, txPath); err != nil {
+		return err
+	}
+	if err := cli.Consensus.SubmitTx(txPath); err != nil {
+		return fmt.Errorf("failed to update key manager policy: %w", err)
+	}
+
+	return nil
 }

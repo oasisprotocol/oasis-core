@@ -7,6 +7,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
@@ -20,8 +21,6 @@ var KeymanagerDumpRestore scenario.Scenario = newKmDumpRestoreImpl()
 
 type kmDumpRestoreImpl struct {
 	Scenario
-
-	nonce uint64
 }
 
 func newKmDumpRestoreImpl() scenario.Scenario {
@@ -64,6 +63,8 @@ func (sc *kmDumpRestoreImpl) Clone() scenario.Scenario {
 }
 
 func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err error) { // nolint: gocyclo
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
+
 	// Start the network.
 	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
@@ -85,6 +86,8 @@ func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err er
 	if err = sc.DumpRestoreNetwork(childEnv, fixture, false, nil, nil); err != nil {
 		return err
 	}
+
+	cli.SetConfig(sc.Net.GetCLIConfig())
 
 	// Start the network.
 	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
@@ -115,10 +118,9 @@ func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err er
 	}
 
 	// Test master secret rotations. To enable them, update the rotation interval in the policy.
-	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, 1); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, childEnv, cli, 1, 0); err != nil {
 		return err
 	}
-	sc.nonce++
 	if _, err = sc.WaitMasterSecret(ctx, 3); err != nil {
 		return err
 	}

@@ -3,19 +3,14 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/hashicorp/go-multierror"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
@@ -71,61 +66,6 @@ func (sc *TrustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *TrustRootImpl) updateKeyManagerPolicy(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, nonce uint64) error {
-	// Generate and update the new keymanager runtime's policy.
-	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
-	kmPolicySig1Path := filepath.Join(childEnv.Dir(), "km_policy_sig1.pem")
-	kmPolicySig2Path := filepath.Join(childEnv.Dir(), "km_policy_sig2.pem")
-	kmPolicySig3Path := filepath.Join(childEnv.Dir(), "km_policy_sig3.pem")
-	kmUpdateTxPath := filepath.Join(childEnv.Dir(), "km_gen_update.json")
-	sc.Logger.Info("building KM SGX policy enclave policies map")
-	enclavePolicies := make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
-	kmRt := sc.Net.Runtimes()[0]
-	kmRtEncID := kmRt.GetEnclaveIdentity(0)
-	var havePolicy bool
-	if kmRtEncID != nil {
-		enclavePolicies[*kmRtEncID] = &keymanager.EnclavePolicySGX{}
-		enclavePolicies[*kmRtEncID].MayQuery = make(map[common.Namespace][]sgx.EnclaveIdentity)
-		enclavePolicies[*kmRtEncID].MayReplicate = []sgx.EnclaveIdentity{}
-		for _, rt := range sc.Net.Runtimes() {
-			if rt.Kind() != registry.KindCompute {
-				continue
-			}
-			if eid := rt.GetEnclaveIdentity(0); eid != nil {
-				enclavePolicies[*kmRtEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
-				// This is set only in SGX mode.
-				havePolicy = true
-			}
-		}
-	}
-	sc.Logger.Info("initing KM policy")
-	if err := cli.Keymanager.InitPolicy(kmRt.ID(), 1, 0, enclavePolicies, kmPolicyPath); err != nil {
-		return err
-	}
-	sc.Logger.Info("signing KM policy")
-	if err := cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
-		return err
-	}
-	if err := cli.Keymanager.SignPolicy("2", kmPolicyPath, kmPolicySig2Path); err != nil {
-		return err
-	}
-	if err := cli.Keymanager.SignPolicy("3", kmPolicyPath, kmPolicySig3Path); err != nil {
-		return err
-	}
-	if havePolicy {
-		// In SGX mode, we can update the policy as intended.
-		sc.Logger.Info("updating KM policy")
-		if err := cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
-			return err
-		}
-		if err := cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
-			return fmt.Errorf("failed to update KM policy: %w", err)
-		}
-	}
-
-	return nil
-}
-
 // PreRun starts the network, prepares a trust root, builds simple key/value and key manager
 // runtimes, prepares runtime bundles, and runs the test client.
 func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err error) {
@@ -178,8 +118,18 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 	}
 
 	// Update the key manager policy.
-	if err = sc.updateKeyManagerPolicy(ctx, childEnv, cli, nonce); err != nil {
+	policies, err := sc.BuildEnclavePolicies(childEnv)
+	if err != nil {
 		return err
+	}
+	switch policies {
+	case nil:
+		sc.Logger.Info("no SGX runtimes, skipping policy update")
+	default:
+		if err = sc.ApplyKeyManagerPolicy(ctx, childEnv, cli, 0, policies, nonce); err != nil {
+			return fmt.Errorf("updating policies: %w", err)
+		}
+		nonce++ // nolint: ineffassign
 	}
 
 	// Start all the required workers.

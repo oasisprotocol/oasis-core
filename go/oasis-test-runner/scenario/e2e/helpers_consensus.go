@@ -83,7 +83,7 @@ func (sc *Scenario) ChainContext(ctx context.Context) (string, error) {
 func (sc *Scenario) TrustRoot(ctx context.Context) (*TrustRoot, error) {
 	sc.Logger.Info("preparing trust root")
 
-	block, err := sc.WaitBlocks(ctx, 5)
+	block, err := sc.WaitBlocks(ctx, 3)
 	if err != nil {
 		return nil, err
 	}

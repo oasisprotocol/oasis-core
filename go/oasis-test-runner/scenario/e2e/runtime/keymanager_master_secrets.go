@@ -9,6 +9,7 @@ import (
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 )
 
@@ -59,6 +60,8 @@ func (sc *kmMasterSecretsImpl) Clone() scenario.Scenario {
 }
 
 func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err error) { // nolint: gocyclo
+	cli := cli.New(childEnv, sc.Net, sc.Logger)
+
 	// Start the network.
 	if err = sc.Net.Start(); err != nil {
 		return err
@@ -101,7 +104,7 @@ func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err 
 	}
 
 	// Enable master secret rotations.
-	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, 1); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, childEnv, cli, 1, sc.nonce); err != nil {
 		return err
 	}
 	sc.nonce++
@@ -130,7 +133,7 @@ func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err 
 
 	// Check how frequently secrets are rotated.
 	interval := beacon.EpochTime(3)
-	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, interval); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, childEnv, cli, interval, sc.nonce); err != nil {
 		return err
 	}
 	sc.nonce++
@@ -147,7 +150,7 @@ func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err 
 	}
 
 	// Disable master secret rotations.
-	if err = sc.UpdateRotationInterval(ctx, sc.nonce, childEnv, 0); err != nil {
+	if err = sc.UpdateRotationInterval(ctx, childEnv, cli, 0, sc.nonce); err != nil {
 		return err
 	}
 	sc.nonce++
