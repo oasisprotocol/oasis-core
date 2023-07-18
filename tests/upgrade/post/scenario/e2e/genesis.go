@@ -8,11 +8,12 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
+	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 )
 
 // FixExportedGenesisFile fixes the first exported genesis file and returns a path to the fixed file.
-func FixExportedGenesisFile(childEnv *env.Env, sc *e2e.Scenario) (string, error) {
+func FixExportedGenesisFile(childEnv *env.Env, cli *cli.Helpers, sc *e2e.Scenario) (string, error) {
 	sc.Logger.Info("searching for exported genesis file")
 
 	exportedGenFilePath, err := findExportedGenesisFile(sc.Net.Nodes())
@@ -23,7 +24,7 @@ func FixExportedGenesisFile(childEnv *env.Env, sc *e2e.Scenario) (string, error)
 	sc.Logger.Info("fixing exported genesis file", "path", exportedGenFilePath)
 
 	fixedGenFilePath := filepath.Join(childEnv.Dir(), "genesis-fixed.json")
-	if err := sc.RunFixGenesisCmd(childEnv, exportedGenFilePath, fixedGenFilePath); err != nil {
+	if err := cli.Debug.FixGenesis(exportedGenFilePath, fixedGenFilePath); err != nil {
 		return "", fmt.Errorf("failed to fix exported genesis file: %+w", err)
 	}
 

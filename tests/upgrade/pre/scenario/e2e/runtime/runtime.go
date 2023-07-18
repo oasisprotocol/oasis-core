@@ -13,7 +13,7 @@ func RegisterScenarios() error {
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{
-		TrustRootKeymanagerUpgrade,
+		SecureUpgrade,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err
