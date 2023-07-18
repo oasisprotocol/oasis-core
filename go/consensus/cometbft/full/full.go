@@ -580,40 +580,40 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 	}
 
 	// Create CometBFT node.
-	tenderConfig := cmtconfig.DefaultConfig()
-	_ = viper.Unmarshal(&tenderConfig)
-	tenderConfig.SetRoot(cometbftDataDir)
+	cometConfig := cmtconfig.DefaultConfig()
+	_ = viper.Unmarshal(&cometConfig)
+	cometConfig.SetRoot(cometbftDataDir)
 	timeoutCommit := t.genesis.Consensus.Parameters.TimeoutCommit
 	emptyBlockInterval := t.genesis.Consensus.Parameters.EmptyBlockInterval
-	tenderConfig.Consensus.TimeoutCommit = timeoutCommit
-	tenderConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.Parameters.SkipTimeoutCommit
-	tenderConfig.Consensus.CreateEmptyBlocks = true
-	tenderConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
-	tenderConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = config.GlobalConfig.Consensus.Debug.UnsafeReplayRecoverCorruptedWAL && cmflags.DebugDontBlameOasis()
-	tenderConfig.Mempool.Version = cmtconfig.MempoolV1
-	tenderConfig.Instrumentation.Prometheus = true
-	tenderConfig.Instrumentation.PrometheusListenAddr = ""
-	tenderConfig.TxIndex.Indexer = "null"
-	tenderConfig.P2P.ListenAddress = config.GlobalConfig.Consensus.ListenAddress
-	tenderConfig.P2P.ExternalAddress = config.GlobalConfig.Consensus.ExternalAddress
-	tenderConfig.P2P.PexReactor = !config.GlobalConfig.Consensus.P2P.DisablePeerExchange
-	tenderConfig.P2P.MaxNumInboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumInboundPeers
-	tenderConfig.P2P.MaxNumOutboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumOutboundPeers
-	tenderConfig.P2P.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
-	tenderConfig.P2P.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
-	tenderConfig.P2P.PersistentPeers = strings.Join(persistentPeers, ",")
-	tenderConfig.P2P.PersistentPeersMaxDialPeriod = config.GlobalConfig.Consensus.P2P.PersistenPeersMaxDialPeriod
-	tenderConfig.P2P.UnconditionalPeerIDs = strings.Join(unconditionalPeers, ",")
-	tenderConfig.P2P.Seeds = strings.Join(seeds, ",")
-	tenderConfig.P2P.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
-	tenderConfig.P2P.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
-	tenderConfig.RPC.ListenAddress = ""
+	cometConfig.Consensus.TimeoutCommit = timeoutCommit
+	cometConfig.Consensus.SkipTimeoutCommit = t.genesis.Consensus.Parameters.SkipTimeoutCommit
+	cometConfig.Consensus.CreateEmptyBlocks = true
+	cometConfig.Consensus.CreateEmptyBlocksInterval = emptyBlockInterval
+	cometConfig.Consensus.DebugUnsafeReplayRecoverCorruptedWAL = config.GlobalConfig.Consensus.Debug.UnsafeReplayRecoverCorruptedWAL && cmflags.DebugDontBlameOasis()
+	cometConfig.Mempool.Version = cmtconfig.MempoolV1
+	cometConfig.Instrumentation.Prometheus = true
+	cometConfig.Instrumentation.PrometheusListenAddr = ""
+	cometConfig.TxIndex.Indexer = "null"
+	cometConfig.P2P.ListenAddress = config.GlobalConfig.Consensus.ListenAddress
+	cometConfig.P2P.ExternalAddress = config.GlobalConfig.Consensus.ExternalAddress
+	cometConfig.P2P.PexReactor = !config.GlobalConfig.Consensus.P2P.DisablePeerExchange
+	cometConfig.P2P.MaxNumInboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumInboundPeers
+	cometConfig.P2P.MaxNumOutboundPeers = config.GlobalConfig.Consensus.P2P.MaxNumOutboundPeers
+	cometConfig.P2P.SendRate = config.GlobalConfig.Consensus.P2P.SendRate
+	cometConfig.P2P.RecvRate = config.GlobalConfig.Consensus.P2P.RecvRate
+	cometConfig.P2P.PersistentPeers = strings.Join(persistentPeers, ",")
+	cometConfig.P2P.PersistentPeersMaxDialPeriod = config.GlobalConfig.Consensus.P2P.PersistenPeersMaxDialPeriod
+	cometConfig.P2P.UnconditionalPeerIDs = strings.Join(unconditionalPeers, ",")
+	cometConfig.P2P.Seeds = strings.Join(seeds, ",")
+	cometConfig.P2P.AddrBookStrict = !(config.GlobalConfig.Consensus.Debug.P2PAddrBookLenient && cmflags.DebugDontBlameOasis())
+	cometConfig.P2P.AllowDuplicateIP = config.GlobalConfig.Consensus.Debug.P2PAllowDuplicateIP && cmflags.DebugDontBlameOasis()
+	cometConfig.RPC.ListenAddress = ""
 
 	if len(sentryUpstreamAddrs) > 0 {
 		t.Logger.Info("Acting as a cometbft sentry", "addrs", sentryUpstreamAddrs)
 
 		// Append upstream addresses to persistent, private and unconditional peers.
-		tenderConfig.P2P.PersistentPeers += "," + strings.Join(sentryUpstreamAddrs, ",")
+		cometConfig.P2P.PersistentPeers += "," + strings.Join(sentryUpstreamAddrs, ",")
 
 		var sentryUpstreamIDs []string
 		for _, addr := range sentryUpstreamAddrs {
@@ -625,11 +625,11 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		}
 
 		sentryUpstreamIDsStr := strings.Join(sentryUpstreamIDs, ",")
-		tenderConfig.P2P.PrivatePeerIDs += "," + sentryUpstreamIDsStr
-		tenderConfig.P2P.UnconditionalPeerIDs += "," + sentryUpstreamIDsStr
+		cometConfig.P2P.PrivatePeerIDs += "," + sentryUpstreamIDsStr
+		cometConfig.P2P.UnconditionalPeerIDs += "," + sentryUpstreamIDsStr
 	}
 
-	if !tenderConfig.P2P.PexReactor {
+	if !cometConfig.P2P.PexReactor {
 		t.Logger.Info("pex reactor disabled",
 			logging.LogEvent, api.LogEventPeerExchangeDisabled,
 		)
@@ -717,8 +717,8 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			t.Unlock()
 
 			// Enable state sync in the configuration.
-			tenderConfig.StateSync.Enable = true
-			tenderConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.StateSync.TrustHash
+			cometConfig.StateSync.Enable = true
+			cometConfig.StateSync.TrustHash = config.GlobalConfig.Consensus.StateSync.TrustHash
 
 			// Create new state sync state provider.
 			cfg := lightAPI.ClientConfig{
@@ -726,7 +726,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 				TrustOptions: cmtlight.TrustOptions{
 					Period: config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 					Height: int64(config.GlobalConfig.Consensus.StateSync.TrustHeight),
-					Hash:   tenderConfig.StateSync.TrustHashBytes(),
+					Hash:   cometConfig.StateSync.TrustHashBytes(),
 				},
 			}
 			if stateProvider, err = newStateProvider(t.ctx, t.genesis.ChainContext(), cfg, t.p2p); err != nil {
@@ -737,13 +737,13 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 			}
 		}
 
-		t.node, err = cmtnode.NewNode(tenderConfig,
+		t.node, err = cmtnode.NewNode(cometConfig,
 			cometbftPV,
 			&cmtp2p.NodeKey{PrivKey: crypto.SignerToCometBFT(t.identity.P2PSigner)},
 			cmtproxy.NewLocalClientCreator(t.mux.Mux()),
 			cometbftGenesisProvider,
 			wrapDbProvider,
-			cmtnode.DefaultMetricsProvider(tenderConfig.Instrumentation),
+			cmtnode.DefaultMetricsProvider(cometConfig.Instrumentation),
 			tmcommon.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug),
 			cmtnode.StateProvider(stateProvider),
 		)
