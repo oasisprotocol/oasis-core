@@ -363,7 +363,7 @@ func (c *client) CallMulti(
 	}
 
 	// Create a worker pool.
-	pool := workerpool.New("p2p/rpc")
+	pool := workerpool.New("p2p/rpc", nil)
 	pool.Resize(co.maxParallelRequests)
 	defer pool.Stop()
 
@@ -384,11 +384,11 @@ func (c *client) CallMulti(
 	for _, peer := range peers {
 		peer := peer // Make sure goroutine below operates on the right instance.
 
-		pool.Submit(func() {
+		pool.Submit(func() error {
 			// Abort early in case we are done.
 			select {
 			case <-peerCtx.Done():
-				return
+				return nil
 			default:
 			}
 
@@ -396,6 +396,7 @@ func (c *client) CallMulti(
 			pf, err := c.timeCall(peerCtx, peer, &request, rsp, co.maxPeerResponseTime)
 
 			resultCh <- result{rsp, pf, err}
+			return nil
 		})
 	}
 

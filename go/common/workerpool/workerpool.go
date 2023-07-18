@@ -4,15 +4,55 @@ package workerpool
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/eapache/channels"
 
+	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
+type expBackoff struct {
+	lock sync.Mutex
+
+	backoff *backoff.ExponentialBackOff
+	timeout time.Duration
+}
+
+func (b *expBackoff) Success() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.backoff.Reset()
+	b.timeout = 0
+}
+
+func (b *expBackoff) Failure() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.timeout = b.backoff.NextBackOff()
+}
+
+func (b *expBackoff) Timeout() time.Duration {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	return b.timeout
+}
+
+// BackoffConfig is the configuration for the backoff mechanism for the workers.
+type BackoffConfig struct {
+	// MinTimeout is the minimum timeout to wait in case of failures.
+	MinTimeout time.Duration
+	// MaxTimeout is the maximum timeout to wait in case of repeated failures.
+	MaxTimeout time.Duration
+}
+
 type jobDescriptor struct {
 	terminate  bool
-	job        func()
+	job        func() error
 	completeCh chan struct{}
 }
 
@@ -24,6 +64,7 @@ type jobDescriptor struct {
 type Pool struct { // nolint: maligned
 	lock        sync.Mutex
 	workerGroup sync.WaitGroup
+	backoff     *expBackoff
 
 	name string
 
@@ -92,7 +133,7 @@ func (p *Pool) Quit() <-chan struct{} {
 
 // Submit adds a task to the pool's queue and returns a channel that will be closed
 // once the task is complete.
-func (p *Pool) Submit(job func()) <-chan struct{} {
+func (p *Pool) Submit(job func() error) <-chan struct{} {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -119,6 +160,15 @@ func (p *Pool) worker() {
 	defer p.workerGroup.Done()
 
 	for {
+		// Wait for the backoff period if configured.
+		if p.backoff != nil {
+			select {
+			case <-p.stopCh:
+				return
+			case <-time.After(p.backoff.Timeout()):
+			}
+		}
+
 		select {
 		case <-p.stopCh:
 			return
@@ -130,14 +180,30 @@ func (p *Pool) worker() {
 			if job.terminate {
 				return
 			}
-			job.job()
+			err := job.job()
+			// Submit backoff feedback if configured.
+			if p.backoff != nil {
+				switch err {
+				case nil:
+					p.backoff.Success()
+				default:
+					p.backoff.Failure()
+				}
+			}
 			close(job.completeCh)
 		}
 	}
 }
 
+// PoolConfig is the configuration for a worker pool.
+type PoolConfig struct {
+	// Backoff is the (optional) backoff configuration.
+	// Defaults to no backoff if unset.
+	Backoff *BackoffConfig
+}
+
 // New creates and returns a new worker pool with one worker goroutine.
-func New(name string) *Pool {
+func New(name string, cfg *PoolConfig) *Pool {
 	pool := &Pool{
 		name:         name,
 		currentCount: 1,
@@ -145,6 +211,16 @@ func New(name string) *Pool {
 		stopCh:       make(chan struct{}),
 		quitCh:       make(chan struct{}),
 		logger:       logging.GetLogger(fmt.Sprintf("workerpool/%s", name)),
+	}
+
+	if cfg != nil && cfg.Backoff != nil {
+		backoff := cmnBackoff.NewExponentialBackOff()
+		backoff.InitialInterval = cfg.Backoff.MinTimeout
+		backoff.MaxInterval = cfg.Backoff.MaxTimeout
+		backoff.Reset()
+		pool.backoff = &expBackoff{
+			backoff: backoff,
+		}
 	}
 
 	pool.workerGroup.Add(1)

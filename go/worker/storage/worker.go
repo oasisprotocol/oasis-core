@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
@@ -59,7 +60,15 @@ func New(
 		return s, nil
 	}
 
-	s.fetchPool = workerpool.New("storage_fetch")
+	s.fetchPool = workerpool.New(
+		"storage_fetch",
+		&workerpool.PoolConfig{
+			Backoff: &workerpool.BackoffConfig{
+				MinTimeout: 10 * time.Millisecond,
+				MaxTimeout: 2 * time.Second,
+			},
+		},
+	)
 	s.fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 
 	var checkpointerCfg *checkpoint.CheckpointerConfig
