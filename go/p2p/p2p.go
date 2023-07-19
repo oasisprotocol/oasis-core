@@ -67,9 +67,10 @@ func DebugForceAllowUnroutableAddresses() {
 type p2p struct {
 	sync.RWMutex
 
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	quitCh    chan struct{}
+	ctx             context.Context
+	ctxCancel       context.CancelFunc
+	quitCh          chan struct{}
+	metricsClosedCh chan struct{}
 
 	chainContext string
 	signer       signature.Signer
@@ -100,6 +101,8 @@ func (p *p2p) Start() error {
 	// Unfortunately, we cannot start the host as libp2p starts everything on construction.
 	// However, we can start everything else.
 	p.peerMgr.Start()
+	go p.metricsWorker()
+
 	return nil
 }
 
@@ -111,7 +114,7 @@ func (p *p2p) Stop() {
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	wg.Add(2)
+	wg.Add(3)
 
 	go func() {
 		defer wg.Done()
@@ -121,6 +124,11 @@ func (p *p2p) Stop() {
 	go func() {
 		defer wg.Done()
 		_ = p.host.Close() // This blocks until the host stops.
+	}()
+
+	go func() {
+		defer wg.Done()
+		<-p.metricsClosedCh
 	}()
 }
 
@@ -414,6 +422,7 @@ func New(identity *identity.Identity, consensus consensus.Backend, store *persis
 		ctx:               ctx,
 		ctxCancel:         ctxCancel,
 		quitCh:            make(chan struct{}),
+		metricsClosedCh:   make(chan struct{}),
 		chainContext:      chainContext,
 		signer:            identity.P2PSigner,
 		host:              host,
