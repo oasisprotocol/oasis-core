@@ -65,7 +65,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	c := sc.Net.ClientController().RuntimeClient
 
-	blkCh, sub, err := c.WatchBlocks(ctx, runtimeID)
+	blkCh, sub, err := c.WatchBlocks(ctx, KeyValueRuntimeID)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	//     contain message results of the consensus transfer.
 	sc.Logger.Debug("submitting consensus_transfer runtime transaction")
 	var txMetaResponse *api.SubmitTxMetaResponse
-	if txMetaResponse, err = sc.submitConsensusXferTxMeta(ctx, runtimeID, staking.Transfer{}, 0); err != nil {
+	if txMetaResponse, err = sc.submitConsensusXferTxMeta(ctx, KeyValueRuntimeID, staking.Transfer{}, 0); err != nil {
 		return err
 	}
 	if _, err = unpackRawTxResp(txMetaResponse.Output); err != nil {
@@ -110,7 +110,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, childEnv *env.Env) error 
 					return fmt.Errorf("expected normal round, got: %d", ht)
 				}
 				txs, err := c.GetTransactions(ctx, &api.GetTransactionsRequest{
-					RuntimeID: runtimeID,
+					RuntimeID: KeyValueRuntimeID,
 					Round:     round,
 				})
 				if err != nil {

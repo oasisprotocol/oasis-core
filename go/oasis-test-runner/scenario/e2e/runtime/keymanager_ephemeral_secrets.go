@@ -44,7 +44,7 @@ func newKmEphemeralSecretsImpl() scenario.Scenario {
 	return &kmEphemeralSecretsImpl{
 		Scenario: *NewScenario(
 			"keymanager-ephemeral-secrets",
-			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }
@@ -81,7 +81,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	// Fetch runtime to know on which TEE platform the key manager is running.
 	rt, err := sc.Net.ClientController().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{
 		Height: consensus.HeightLatest,
-		ID:     keymanagerID,
+		ID:     KeyManagerRuntimeID,
 	})
 	if err != nil {
 		return err
@@ -112,14 +112,14 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	}
 
 	// Wait until the first key manager is ready.
-	if err = sc.waitKeymanagers(ctx, []int{0}); err != nil {
+	if err = sc.WaitKeymanagers(ctx, []int{0}); err != nil {
 		return err
 	}
 
 	// Wait until the first ephemeral secret is published.
 	sc.Logger.Info("waiting for the first ephemeral secret")
 
-	sigSecret, err := sc.waitEphemeralSecrets(ctx, 1)
+	sigSecret, err := sc.WaitEphemeralSecrets(ctx, 1)
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	}
 
 	// Restart the first key manager.
-	if err = sc.restartAndWaitKeymanagers(ctx, []int{0}); err != nil {
+	if err = sc.RestartAndWaitKeymanagers(ctx, []int{0}); err != nil {
 		return err
 	}
 
@@ -184,7 +184,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	// Wait until the next ephemeral secret is published.
 	sc.Logger.Info("waiting for the first ephemeral secret")
 
-	sigSecret, err = sc.waitEphemeralSecrets(ctx, 1)
+	sigSecret, err = sc.WaitEphemeralSecrets(ctx, 1)
 	if err != nil {
 		return err
 	}
@@ -217,7 +217,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	}
 
 	// Start other key managers.
-	if err = sc.startAndWaitKeymanagers(ctx, []int{1, 2}); err != nil {
+	if err = sc.StartAndWaitKeymanagers(ctx, []int{1, 2}); err != nil {
 		return err
 	}
 
@@ -340,7 +340,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("encrypting plaintext")
 	ciphertext, err := sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -356,7 +356,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext")
 	decrypted, err := sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -375,7 +375,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext with wrong epoch")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch-1,
 		keyPairID,
@@ -391,7 +391,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext with wrong key pair id")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		"wrong key pair id",
@@ -412,7 +412,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("encrypting plaintext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -428,7 +428,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -455,7 +455,7 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 	keyPairID string,
 	plaintext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "encrypt", struct {
+	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, nonce, "encrypt", struct {
 		Epoch     uint64 `json:"epoch"`
 		KeyPairID string `json:"key_pair_id"`
 		Plaintext []byte `json:"plaintext"`
@@ -484,7 +484,7 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 	keyPairID string,
 	ciphertext []byte,
 ) ([]byte, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, runtimeID, nonce, "decrypt", struct {
+	rawRsp, err := sc.submitRuntimeTx(ctx, KeyValueRuntimeID, nonce, "decrypt", struct {
 		Epoch      uint64 `json:"epoch"`
 		KeyPairID  string `json:"key_pair_id"`
 		Ciphertext []byte `json:"ciphertext"`
@@ -508,7 +508,7 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 func (sc *kmEphemeralSecretsImpl) checkNumberOfKeyManagers(ctx context.Context, n int) error {
 	status, err := sc.Net.Controller().Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
-		ID:     keymanagerID,
+		ID:     KeyManagerRuntimeID,
 	})
 	if err != nil {
 		return err

@@ -793,7 +793,7 @@ func (sc *txSourceImpl) startWorkload(childEnv *env.Env, errCh chan error, name 
 		"--" + flags.CfgDebugTestEntity,
 		"--" + commonGrpc.CfgLogDebug,
 		"--" + flags.CfgGenesisFile, sc.Net.GenesisPath(),
-		"--" + workload.CfgRuntimeID, runtimeID.String(),
+		"--" + workload.CfgRuntimeID, KeyValueRuntimeID.String(),
 		"--" + txsource.CfgWorkload, name,
 		"--" + txsource.CfgTimeLimit, sc.timeLimit.String(),
 		"--" + txsource.CfgSeed, sc.seed,
@@ -875,7 +875,7 @@ func (sc *txSourceImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Wait for all nodes to be synced before we proceed.
-	if err := sc.waitNodesSynced(ctx); err != nil {
+	if err := sc.WaitNodesSynced(ctx); err != nil {
 		return err
 	}
 

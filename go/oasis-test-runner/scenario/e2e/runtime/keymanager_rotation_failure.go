@@ -83,13 +83,13 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, childEnv *env.Env) err
 
 	for i := 0; i < 3; i++ {
 		// Start the third key manager.
-		if err := sc.startKeymanagers(ctx, []int{1, 2}); err != nil {
+		if err := sc.StartKeymanagers(ctx, []int{1, 2}); err != nil {
 			return err
 		}
 
 		// Verify that master secret generation works.
 		generation := uint64(2*i + 1)
-		status, err := sc.waitMasterSecret(ctx, generation)
+		status, err := sc.WaitMasterSecret(ctx, generation)
 		if err != nil {
 			return fmt.Errorf("master secret was not generated: %w", err)
 		}
@@ -102,12 +102,12 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, childEnv *env.Env) err
 
 		// Give key managers enough time to apply the last proposal and register with the latests
 		// checksum. This process can take several blocks.
-		if _, err := sc.waitBlocks(ctx, 5); err != nil {
+		if _, err := sc.WaitBlocks(ctx, 5); err != nil {
 			return err
 		}
 
 		// Stop two key managers, leaving only 33% of the committee members to be active.
-		if err := sc.stopKeymanagers(ctx, []int{1, 2}); err != nil {
+		if err := sc.StopKeymanagers(ctx, []int{1, 2}); err != nil {
 			return err
 		}
 
@@ -125,7 +125,7 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, childEnv *env.Env) err
 	}
 
 	// Verify that master secret generation works after the third key manager is deregistered.
-	status, err := sc.waitMasterSecret(ctx, 6)
+	status, err := sc.WaitMasterSecret(ctx, 6)
 	if err != nil {
 		return err
 	}

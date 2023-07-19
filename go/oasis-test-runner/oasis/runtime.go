@@ -149,23 +149,36 @@ func (rt *Runtime) BundlePaths() []string {
 	return paths
 }
 
-// RefreshRuntimeBundles makes sure the generated runtime bundles are refreshed.
-func (rt *Runtime) RefreshRuntimeBundles() error {
-	for i, deployCfg := range rt.cfgSave.deployments {
-		fn := rt.bundlePath(i)
-
-		// Remove the generated bundle (if any).
-		if err := os.Remove(fn); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-
-		deployCfg.bundle = nil
-		deployCfg.mrEnclave = nil
+// RefreshRuntimeBundle makes sure the generated runtime bundle is refreshed.
+func (rt *Runtime) RefreshRuntimeBundle(deploymentIndex int) error {
+	if deploymentIndex < 0 || deploymentIndex >= len(rt.cfgSave.deployments) {
+		return fmt.Errorf("invalid deployment index")
 	}
 
+	fn := rt.bundlePath(deploymentIndex)
+
+	// Remove the generated bundle (if any).
+	if err := os.Remove(fn); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	deployCfg := rt.cfgSave.deployments[deploymentIndex]
+	deployCfg.bundle = nil
+	deployCfg.mrEnclave = nil
+
 	// Generate a fresh bundle.
-	_, err := rt.ToRuntimeBundles()
+	_, err := rt.toRuntimeBundle(deploymentIndex)
 	return err
+}
+
+// RefreshRuntimeBundles makes sure the generated runtime bundles are refreshed.
+func (rt *Runtime) RefreshRuntimeBundles() error {
+	for i := range rt.cfgSave.deployments {
+		if err := rt.RefreshRuntimeBundle(i); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ToRuntimeBundles serializes the runtime to disk and returns the bundle.
@@ -183,6 +196,10 @@ func (rt *Runtime) ToRuntimeBundles() ([]*bundle.Bundle, error) {
 }
 
 func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) {
+	if deploymentIndex < 0 || deploymentIndex >= len(rt.cfgSave.deployments) {
+		return nil, fmt.Errorf("invalid deployment index")
+	}
+
 	deployCfg := rt.cfgSave.deployments[deploymentIndex]
 	fn := rt.bundlePath(deploymentIndex)
 	switch _, err := os.Stat(fn); err {

@@ -28,7 +28,7 @@ func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
 		Scenario: *NewScenario(
 			"node-shutdown",
-			NewKVTestClient().WithScenario(SimpleKeyValueScenario),
+			NewTestClient().WithScenario(SimpleKeyValueScenario),
 		),
 	}
 	return sc
@@ -64,7 +64,7 @@ func (sc *nodeShutdownImpl) Run(ctx context.Context, childEnv *env.Env) error { 
 	}
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -88,10 +88,10 @@ func (sc *nodeShutdownImpl) Run(ctx context.Context, childEnv *env.Env) error { 
 	if status.Consensus.Status != consensusAPI.StatusStateReady {
 		return fmt.Errorf("node consensus status should be '%s', got: '%s'", consensusAPI.StatusStateReady, status.Consensus.Status)
 	}
-	if status.Runtimes[runtimeID].Committee == nil {
+	if status.Runtimes[KeyValueRuntimeID].Committee == nil {
 		return fmt.Errorf("node committee status missing")
 	}
-	if st := status.Runtimes[runtimeID].Committee.Status; st != api.StatusStateReady {
+	if st := status.Runtimes[KeyValueRuntimeID].Committee.Status; st != api.StatusStateReady {
 		return fmt.Errorf("node compute worker status should be '%s', got: '%s'", api.StatusStateReady, st)
 	}
 	if status.Registration.Descriptor == nil {

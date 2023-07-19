@@ -81,7 +81,7 @@ func (sc *runtimePruneImpl) Run(ctx context.Context, childEnv *env.Env) error {
 			"seq", i,
 		)
 
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, runtimeID, uint64(i), "hello", fmt.Sprintf("world %d", i), false, 0); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, uint64(i), "hello", fmt.Sprintf("world %d", i), false, 0); err != nil {
 			return err
 		}
 	}
@@ -92,7 +92,7 @@ func (sc *runtimePruneImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Once the transactions are complete, check if blocks got pruned.
 	sc.Logger.Info("fetching latest block")
 	latestBlk, err := c.GetBlock(ctx, &api.GetBlockRequest{
-		RuntimeID: runtimeID,
+		RuntimeID: KeyValueRuntimeID,
 		Round:     api.RoundLatest,
 	})
 	if err != nil {
@@ -104,7 +104,7 @@ func (sc *runtimePruneImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	)
 	for i := uint64(0); i <= latestBlk.Header.Round; i++ {
 		_, err = c.GetBlock(ctx, &api.GetBlockRequest{
-			RuntimeID: runtimeID,
+			RuntimeID: KeyValueRuntimeID,
 			Round:     i,
 		})
 		if i <= latestBlk.Header.Round-pruneNumKept {

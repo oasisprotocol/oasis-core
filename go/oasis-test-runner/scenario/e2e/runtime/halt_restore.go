@@ -41,7 +41,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 	return &haltRestoreImpl{
 		Scenario: *NewScenario(
 			name,
-			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
+			NewTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 		haltEpoch:      beacon.EpochTime(haltEpoch),
 		suspendRuntime: suspended,
@@ -85,7 +85,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	nextEpoch++ // Next, after initial transitions.
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -150,7 +150,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	_, _, _ = reflect.Select(exitChs)
 
 	sc.Logger.Info("gathering exported genesis files")
-	files, err := sc.GetExportedGenesisFiles(true)
+	files, err := sc.ExportedGenesisFiles(true)
 	if err != nil {
 		return fmt.Errorf("failure getting exported genesis files: %w", err)
 	}
@@ -220,7 +220,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		return err
 	}
 
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
@@ -229,8 +229,5 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 	if _, err = sc.initialEpochTransitionsWith(ctx, fixture, genesisDoc.Beacon.Base); err != nil {
 		return err
 	}
-	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	return sc.WaitTestClientOnly()
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

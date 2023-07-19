@@ -20,7 +20,7 @@ import (
 var ArchiveAPI scenario.Scenario = &archiveAPI{
 	Scenario: *NewScenario(
 		"archive-api",
-		NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
+		NewTestClient().WithScenario(InsertTransferKeyValueScenario),
 	),
 }
 
@@ -240,7 +240,7 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	// Test runtime queries.
 	rtClient := archiveCtrl.RuntimeClient
 	sc.Logger.Info("testing runtime GetBlock")
-	blk, err := rtClient.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
+	blk, err := rtClient.GetBlock(ctx, &api.GetBlockRequest{RuntimeID: KeyValueRuntimeID, Round: api.RoundLatest})
 	if err != nil {
 		return fmt.Errorf("runtime GetBlock: %w", err)
 	}
@@ -249,31 +249,31 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	}
 
 	sc.Logger.Info("testing runtime GetEvents")
-	_, err = rtClient.GetEvents(ctx, &api.GetEventsRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
+	_, err = rtClient.GetEvents(ctx, &api.GetEventsRequest{RuntimeID: KeyValueRuntimeID, Round: api.RoundLatest})
 	if err != nil {
 		return fmt.Errorf("runtime GetEvents: %w", err)
 	}
 
 	sc.Logger.Info("testing runtime GetLastRetainBlock")
-	_, err = rtClient.GetLastRetainedBlock(ctx, runtimeID)
+	_, err = rtClient.GetLastRetainedBlock(ctx, KeyValueRuntimeID)
 	if err != nil {
 		return fmt.Errorf("runtime GetLastRetainedBlock: %w", err)
 	}
 
 	sc.Logger.Info("testing runtime GetTransactions")
-	_, err = rtClient.GetTransactions(ctx, &api.GetTransactionsRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
+	_, err = rtClient.GetTransactions(ctx, &api.GetTransactionsRequest{RuntimeID: KeyValueRuntimeID, Round: api.RoundLatest})
 	if err != nil {
 		return fmt.Errorf("runtime GetTransactions: %w", err)
 	}
 
 	sc.Logger.Info("testing runtime GetTransactionsWithResults")
-	_, err = rtClient.GetTransactionsWithResults(ctx, &api.GetTransactionsRequest{RuntimeID: runtimeID, Round: api.RoundLatest})
+	_, err = rtClient.GetTransactionsWithResults(ctx, &api.GetTransactionsRequest{RuntimeID: KeyValueRuntimeID, Round: api.RoundLatest})
 	if err != nil {
 		return fmt.Errorf("runtime GetTransactionsWithResults: %w", err)
 	}
 
 	sc.Logger.Info("testing runtime WatchBlocks")
-	_, sub, err := rtClient.WatchBlocks(ctx, runtimeID)
+	_, sub, err := rtClient.WatchBlocks(ctx, KeyValueRuntimeID)
 	if err != nil {
 		return fmt.Errorf("runtime WatchBlocks: %w", err)
 	}
@@ -298,7 +298,7 @@ func (sc *archiveAPI) Run(ctx context.Context, childEnv *env.Env) error {
 
 	// Wait for the client to exit.
 	sc.Logger.Info("waiting for test client to exit")
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 

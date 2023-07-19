@@ -195,7 +195,7 @@ func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeC
 	return nil
 }
 
-func (r *runtime) submitRuntimeRquest(ctx context.Context, rtc runtimeClient.RuntimeClient, req *TxnCall) (*TxnOutput, uint64, error) {
+func (r *runtime) submitRuntimeRequest(ctx context.Context, rtc runtimeClient.RuntimeClient, req *TxnCall) (*TxnOutput, uint64, error) {
 	var rsp TxnOutput
 	rtx := &runtimeClient.SubmitTxRequest{
 		RuntimeID: r.runtimeID,
@@ -243,7 +243,7 @@ func (r *runtime) doInsertRequest(ctx context.Context, rng *rand.Rand, rtc runti
 			Value: value,
 		},
 	}
-	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRequest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit insert request failure",
 			"request", req,
@@ -293,7 +293,7 @@ func (r *runtime) doGetRequest(ctx context.Context, rng *rand.Rand, rtc runtimeC
 			Key: key,
 		},
 	}
-	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRequest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit get request failure",
 			"request", req,
@@ -340,7 +340,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 			Key: key,
 		},
 	}
-	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRequest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit remove request failure",
 			"request", req,
@@ -577,7 +577,7 @@ func (r *runtime) doWithdrawRequest(ctx context.Context, rng *rand.Rand, rtc run
 			},
 		},
 	}
-	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRequest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit withdraw request failure",
 			"request", req,
@@ -621,7 +621,7 @@ func (r *runtime) doTransferRequest(ctx context.Context, rng *rand.Rand, rtc run
 			},
 		},
 	}
-	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRequest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit transfer request failure",
 			"request", req,
@@ -665,7 +665,7 @@ func (r *runtime) doAddEscrowRequest(ctx context.Context, rng *rand.Rand, rtc ru
 			},
 		},
 	}
-	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRequest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit add escrow request failure",
 			"request", req,
@@ -711,7 +711,7 @@ func (r *runtime) doReclaimEscrowRequest(ctx context.Context, rng *rand.Rand, rt
 			},
 		},
 	}
-	rsp, round, err := r.submitRuntimeRquest(ctx, rtc, req)
+	rsp, round, err := r.submitRuntimeRequest(ctx, rtc, req)
 	if err != nil {
 		r.Logger.Error("Submit reclaim escrow request failure",
 			"request", req,

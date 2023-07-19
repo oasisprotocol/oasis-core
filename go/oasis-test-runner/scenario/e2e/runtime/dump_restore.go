@@ -54,7 +54,7 @@ func newDumpRestoreImpl(
 	sc := &dumpRestoreImpl{
 		Scenario: *NewScenario(
 			name,
-			NewKVTestClient().WithScenario(InsertKeyValueScenario),
+			NewTestClient().WithScenario(InsertKeyValueScenario),
 		),
 		mapGenesisDocumentFn: mapGenesisDocumentFn,
 	}
@@ -154,7 +154,7 @@ func (sc *dumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -188,6 +188,6 @@ func (sc *dumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Check that everything works with restored state.
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 	return sc.Scenario.Run(ctx, childEnv)
 }

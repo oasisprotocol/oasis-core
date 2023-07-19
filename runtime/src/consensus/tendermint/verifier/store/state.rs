@@ -10,6 +10,7 @@ use crate::{
     common::{
         namespace::Namespace,
         sgx::{seal, EnclaveIdentity},
+        version::Version,
     },
     consensus::verifier::{Error, TrustRoot},
     protocol::ProtocolUntrustedLocalStorage,
@@ -93,7 +94,7 @@ impl TrustedStateStore {
     ///
     /// Panics in case the light store does not have any blocks or if insertion to the underlying
     /// runtime's untrusted local store fails.
-    pub fn save(&self, store: &Box<dyn LightStore>) {
+    pub fn save(&self, runtime_version: Version, store: &Box<dyn LightStore>) {
         let lowest_block = store.lowest(Status::Trusted).unwrap();
         let highest_block = store.highest(Status::Trusted).unwrap();
 
@@ -116,18 +117,22 @@ impl TrustedStateStore {
 
         // Store the trusted state.
         self.untrusted_local_store
-            .insert(Self::derive_storage_key(), sealed)
+            .insert(Self::derive_storage_key(runtime_version), sealed)
             .unwrap();
     }
 
     /// Attempts to load previously sealed trusted state.
     ///
     /// If no sealed trusted state is available, it returns state based on the passed trust root.
-    pub fn load(&self, trust_root: &TrustRoot) -> Result<TrustedState, Error> {
+    pub fn load(
+        &self,
+        runtime_version: Version,
+        trust_root: &TrustRoot,
+    ) -> Result<TrustedState, Error> {
         // Attempt to load the previously sealed trusted state.
         let untrusted_value = self
             .untrusted_local_store
-            .get(Self::derive_storage_key())
+            .get(Self::derive_storage_key(runtime_version))
             .map_err(|_| Error::TrustedStateLoadingFailed)?;
         if untrusted_value.is_empty() {
             return Ok(TrustedState {
@@ -149,13 +154,14 @@ impl TrustedStateStore {
         Ok(trusted_state)
     }
 
-    fn derive_storage_key() -> Vec<u8> {
+    fn derive_storage_key(runtime_version: Version) -> Vec<u8> {
         // Namespace storage key by MRENCLAVE as we can only unseal our own sealed data and we need
         // to support upgrades. We assume that an upgrade will include an up-to-date trusted state
         // anyway.
         format!(
-            "{}.{:x}",
+            "{}.{}.{:x}",
             TRUSTED_STATE_STORAGE_KEY_PREFIX,
+            u64::from(runtime_version),
             EnclaveIdentity::current()
                 .map(|eid| eid.mr_enclave)
                 .unwrap_or_default()

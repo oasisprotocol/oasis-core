@@ -66,6 +66,8 @@ func (s *genesisFileImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
+	cli := cli.New(childEnv, s.Net, s.Logger)
+
 	// Manually provision genesis file.
 	s.Logger.Info("manually provisioning genesis file before starting the network")
 	if err := s.Net.MakeGenesis(); err != nil {
@@ -75,7 +77,7 @@ func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	cfg := s.Net.Config()
 	cfg.GenesisFile = s.Net.GenesisPath()
 
-	if _, err := s.runGenesisCheckCmd(childEnv, s.Net.GenesisPath()); err != nil {
+	if _, err := cli.Genesis.Check(s.Net.GenesisPath()); err != nil {
 		return fmt.Errorf("e2e/genesis-file: running genesis check failed: %w", err)
 	}
 	s.Logger.Info("manually provisioned genesis file passed genesis check command")
@@ -92,25 +94,18 @@ func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Dump network state to a genesis file.
 	s.Logger.Info("dumping network state to genesis file")
 	dumpPath := filepath.Join(childEnv.Dir(), "genesis_dump.json")
-	args := []string{
-		"genesis", "dump",
-		"--height", "0",
-		"--genesis.file", dumpPath,
-		"--address", "unix:" + s.Net.Validators()[0].SocketPath(),
-	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, s.Logger, "genesis-file", s.Net.Config().NodeBinary, args)
-	if err != nil {
-		return fmt.Errorf("e2e/genesis-file: failed to dump state: error: %w output: %s", err, out.String())
+	if err := cli.Genesis.Dump(dumpPath); err != nil {
+		return fmt.Errorf("e2e/genesis-file: failed to dump state: %w", err)
 	}
 
-	if _, err = s.runGenesisCheckCmd(childEnv, dumpPath); err != nil {
+	if _, err := cli.Genesis.Check(dumpPath); err != nil {
 		return fmt.Errorf("e2e/genesis-file: running genesis check failed: %w", err)
 	}
 	s.Logger.Info("genesis file from dumped network state passed genesis check command")
 
 	// Check if the latest Mainnet genesis file passes genesis check.
 	latestMainnetGenesis := filepath.Join(childEnv.Dir(), "genesis_mainnet.json")
-	if err = s.downloadGenesisFile(childEnv, latestMainnetGenesis); err != nil {
+	if err := s.downloadGenesisFile(childEnv, latestMainnetGenesis); err != nil {
 		return fmt.Errorf("e2e/genesis-file: failed to download latest Mainnet genesis "+
 			"file at '%s': %w", genesisURL, err)
 	}
@@ -121,14 +116,14 @@ func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if genesisNeedsUpgrade {
 		// When upgrade is needed, run fix-genesis.
 		latestMainnetGenesisFixed = filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
-		if err = s.RunFixGenesisCmd(childEnv, latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
+		if err := cli.Debug.FixGenesis(latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
 			return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
 				"file at '%s': %w", genesisURL, err)
 		}
 	} else {
 		latestMainnetGenesisFixed = latestMainnetGenesis
 	}
-	checkOut, err := s.runGenesisCheckCmd(childEnv, latestMainnetGenesisFixed)
+	checkOut, err := cli.Genesis.Check(latestMainnetGenesisFixed)
 	switch {
 	case err != nil:
 		return fmt.Errorf("e2e/genesis-file: running genesis check for the latest Mainnet"+
@@ -152,7 +147,7 @@ func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err = s.createUncanonicalGenesisFile(childEnv, uncanonicalGenesis); err != nil {
 		return fmt.Errorf("e2e/genesis-file: creating uncanonical genesis file failed: %w", err)
 	}
-	_, err = s.runGenesisCheckCmd(childEnv, uncanonicalGenesis)
+	_, err = cli.Genesis.Check(uncanonicalGenesis)
 	expectedError := "genesis file is not in canonical form, see the diff on stderr"
 	switch {
 	case err == nil:
@@ -170,36 +165,6 @@ func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		s.Logger.Info("uncanonical genesis file didn't pass genesis check command")
 	}
 
-	return nil
-}
-
-func (s *genesisFileImpl) runGenesisCheckCmd(childEnv *env.Env, genesisFilePath string) (string, error) {
-	args := []string{
-		"genesis", "check",
-		"--genesis.file", genesisFilePath,
-		"--debug.dont_blame_oasis",
-		"--debug.allow_test_keys",
-	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, s.Logger, "genesis-file", s.Net.Config().NodeBinary, args)
-	if err != nil {
-		return "", fmt.Errorf("genesis check failed: error: %w output: %s", err, out.String())
-	}
-	return out.String(), nil
-}
-
-// RunFixGenesisCmd runs the 'fix-genesis' command.
-func (s *Scenario) RunFixGenesisCmd(childEnv *env.Env, genesisFilePath, fixedGenesisFilePath string) error {
-	args := []string{
-		"debug", "fix-genesis",
-		"--genesis.file", genesisFilePath,
-		"--genesis.new_file", fixedGenesisFilePath,
-		"--debug.dont_blame_oasis",
-		"--debug.allow_test_keys",
-	}
-	out, err := cli.RunSubCommandWithOutput(childEnv, s.Logger, "genesis-file", s.Net.Config().NodeBinary, args)
-	if err != nil {
-		return fmt.Errorf("debug fix-genesis failed: error: %w output: %s", err, out.String())
-	}
 	return nil
 }
 

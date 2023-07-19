@@ -639,7 +639,9 @@ impl Verifier {
         // Build a light client using the embedded trust root or trust root
         // stored in the local store.
         info!(self.logger, "Loading trusted state");
-        let trusted_state: TrustedState = self.trusted_state_store.load(&self.trust_root)?;
+        let trusted_state: TrustedState = self
+            .trusted_state_store
+            .load(self.runtime_version, &self.trust_root)?;
 
         // Verify if we can trust light blocks from a new chain if the consensus
         // chain context changes.
@@ -696,7 +698,8 @@ impl Verifier {
         // processing any requests.
         let verified_block = self.verify_to_target(HEIGHT_LATEST, &mut cache, &mut instance)?;
 
-        self.trusted_state_store.save(&instance.state.light_store);
+        self.trusted_state_store
+            .save(self.runtime_version, &instance.state.light_store);
 
         let mut last_saved_verified_block_height =
             verified_block.signed_header.header.height.value();
@@ -770,7 +773,8 @@ impl Verifier {
             if let Some(last_verified_block) = cache.last_verified_block.as_ref() {
                 let last_height = last_verified_block.signed_header.header.height.into();
                 if last_height - last_saved_verified_block_height > TRUSTED_STATE_SAVE_INTERVAL {
-                    self.trusted_state_store.save(&instance.state.light_store);
+                    self.trusted_state_store
+                        .save(self.runtime_version, &instance.state.light_store);
                     last_saved_verified_block_height = last_height;
                 }
             }

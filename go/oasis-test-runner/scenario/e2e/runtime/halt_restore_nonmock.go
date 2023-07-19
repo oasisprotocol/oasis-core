@@ -25,7 +25,7 @@ func newHaltRestoreNonMockImpl() scenario.Scenario {
 	return &haltRestoreNonMockImpl{
 		Scenario: *NewScenario(
 			name,
-			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
+			NewTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 		haltEpoch: 8,
 	}
@@ -61,7 +61,7 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 	}
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -79,7 +79,7 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 	_, _, _ = reflect.Select(exitChs)
 
 	sc.Logger.Info("gathering exported genesis files")
-	files, err := sc.GetExportedGenesisFiles(true)
+	files, err := sc.ExportedGenesisFiles(true)
 	if err != nil {
 		return fmt.Errorf("failure getting exported genesis files: %w", err)
 	}
@@ -133,11 +133,11 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 		return err
 	}
 
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {
 		return err
 	}
-	return sc.WaitTestClientOnly()
+	return sc.WaitTestClient()
 }

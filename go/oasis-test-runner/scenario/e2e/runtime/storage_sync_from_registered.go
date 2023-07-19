@@ -26,7 +26,7 @@ func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
 		Scenario: *NewScenario(
 			"storage-sync-registered",
-			NewKVTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
 		),
 	}
 }
@@ -93,7 +93,7 @@ func (sc *storageSyncFromRegisteredImpl) Run(ctx context.Context, childEnv *env.
 	nextEpoch++
 
 	// Wait for the client to exit.
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -182,9 +182,6 @@ func (sc *storageSyncFromRegisteredImpl) Run(ctx context.Context, childEnv *env.
 
 	// Run the client again.
 	sc.Logger.Info("starting a second client to check if runtime works with compute worker 1")
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
-	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	return sc.waitTestClient()
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

@@ -19,7 +19,7 @@ func newOffsetRestartImpl() scenario.Scenario {
 	sc := &offsetRestartImpl{
 		Scenario: *NewScenario(
 			"offset-restart",
-			NewKVTestClient().WithScenario(InsertTransferKeyValueScenario),
+			NewTestClient().WithScenario(InsertTransferKeyValueScenario),
 		),
 	}
 	return sc
@@ -61,7 +61,7 @@ func (sc *offsetRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.WaitTestClientOnly(); err != nil {
+	if err = sc.WaitTestClient(); err != nil {
 		return err
 	}
 
@@ -89,6 +89,6 @@ func (sc *offsetRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// if these disconnected after the client node had already seen them, thereby
 	// hanging the network (no transactions could be submitted).
 	sc.Logger.Info("network back up, trying to run client again")
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
 	return sc.Scenario.Run(ctx, childEnv)
 }

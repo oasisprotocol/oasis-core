@@ -51,7 +51,7 @@ func newKeyManagerRPCClient(chainContext string) (*keyManagerRPCClient, error) {
 		return nil, err
 	}
 
-	pid := protocol.NewRuntimeProtocolID(chainContext, keymanagerID, kmp2p.KeyManagerProtocolID, kmp2p.KeyManagerProtocolVersion)
+	pid := protocol.NewRuntimeProtocolID(chainContext, KeyManagerRuntimeID, kmp2p.KeyManagerProtocolID, kmp2p.KeyManagerProtocolVersion)
 	client := rpc.NewClient(host, pid)
 
 	return &keyManagerRPCClient{
@@ -84,7 +84,7 @@ func (c *keyManagerRPCClient) addKeyManagerAddrToHost(km *oasis.Keymanager) (pee
 func (c *keyManagerRPCClient) fetchPublicKey(ctx context.Context, generation uint64, peerID peer.ID) (*x25519.PublicKey, error) {
 	args := keymanager.LongTermKeyRequest{
 		Height:     nil,
-		ID:         keymanagerID,
+		ID:         KeyManagerRuntimeID,
 		KeyPairID:  keymanager.KeyPairID{1, 2, 3},
 		Generation: generation,
 	}
@@ -129,7 +129,7 @@ func (c *keyManagerRPCClient) fetchPublicKey(ctx context.Context, generation uin
 func (c *keyManagerRPCClient) fetchEphemeralPublicKey(ctx context.Context, epoch beacon.EpochTime, peerID peer.ID) (*x25519.PublicKey, error) {
 	args := keymanager.EphemeralKeyRequest{
 		Height:    nil,
-		ID:        keymanagerID,
+		ID:        KeyManagerRuntimeID,
 		KeyPairID: keymanager.KeyPairID{1, 2, 3},
 		Epoch:     epoch,
 	}

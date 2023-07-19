@@ -38,7 +38,7 @@ var (
 	// changes, e.g. on dump-restore network upgrades.
 	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl(
 		"change",
-		NewKVTestClient().WithScenario(InsertKeyValueEncScenario),
+		NewTestClient().WithScenario(InsertKeyValueEncScenario),
 		true,
 	)
 
@@ -47,7 +47,7 @@ var (
 	// consensus chain context changes.
 	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl(
 		"change-fails",
-		NewKVTestClient().WithScenario(SimpleKeyValueEncScenario),
+		NewTestClient().WithScenario(SimpleKeyValueEncScenario),
 		false,
 	)
 )
@@ -59,7 +59,7 @@ type trustRootChangeImpl struct {
 	happy bool
 }
 
-func newTrustRootChangeImpl(name string, testClient TestClient, happy bool) *trustRootChangeImpl {
+func newTrustRootChangeImpl(name string, testClient *TestClient, happy bool) *trustRootChangeImpl {
 	// We will use 3 validators inherited from trust root scenario fixture
 	// to test what happens if the new validator set doesn't have enough
 	// voting power after chain context changes. Since all validators have
@@ -119,7 +119,7 @@ func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) 
 
 	// All chain contexts should be unique.
 	chainContexts := make(map[string]struct{})
-	c, err := sc.chainContext(ctx)
+	c, err := sc.ChainContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) 
 
 		// Assert that chain context has changed. Test is meaningless if this
 		// doesn't happen.
-		c, err = sc.chainContext(ctx)
+		c, err = sc.ChainContext(ctx)
 		if err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env
 		err = multierror.Append(err, err2).ErrorOrNil()
 	}()
 
-	chainContext, err := sc.chainContext(ctx)
+	chainContext, err := sc.ChainContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -278,13 +278,13 @@ func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env
 		if err = sc.Net.Start(); err != nil {
 			return err
 		}
-		if err = sc.waitNodesSynced(ctx); err != nil {
+		if err = sc.WaitNodesSynced(ctx); err != nil {
 			return err
 		}
 
 		// Assert that chain context has changed. Test is meaningless if this
 		// doesn't happen.
-		newChainContext, err := sc.chainContext(ctx)
+		newChainContext, err := sc.ChainContext(ctx)
 		if err != nil {
 			return err
 		}
@@ -355,7 +355,7 @@ func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oas
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	sc.Scenario.testClient = NewKVTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
 	if err := sc.Scenario.Run(ctx, childEnv); err != nil {
 		return err
 	}

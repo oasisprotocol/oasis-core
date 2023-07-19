@@ -3,42 +3,28 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strconv"
 
 	"github.com/hashicorp/go-multierror"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
-	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/rust"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 )
 
 // TrustRoot is the consensus trust root verification scenario.
 var TrustRoot scenario.Scenario = NewTrustRootImpl(
 	"simple",
-	NewKVTestClient().WithScenario(SimpleKeyValueEncScenario),
+	NewTestClient().WithScenario(SimpleKeyValueEncScenario),
 )
-
-type trustRoot struct {
-	height       string
-	hash         string
-	chainContext string
-}
 
 type TrustRootImpl struct {
 	Scenario
 }
 
-func NewTrustRootImpl(name string, testClient TestClient) *TrustRootImpl {
+func NewTrustRootImpl(name string, testClient *TestClient) *TrustRootImpl {
 	fullName := "trust-root/" + name
 	sc := &TrustRootImpl{
 		Scenario: *NewScenario(fullName, testClient),
@@ -80,171 +66,6 @@ func (sc *TrustRootImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *TrustRootImpl) buildRuntimes(ctx context.Context, childEnv *env.Env, runtimes map[common.Namespace]string, trustRoot *trustRoot) error {
-	// Determine the required directories for building the runtime with an embedded trust root.
-	buildDir, _ := sc.Flags.GetString(cfgRuntimeSourceDir)
-	targetDir, _ := sc.Flags.GetString(cfgRuntimeTargetDir)
-	if buildDir == "" || targetDir == "" {
-		return fmt.Errorf("runtime build dir and/or target dir not configured")
-	}
-
-	// Determine TEE hardware.
-	teeHardware, err := sc.getTEEHardware()
-	if err != nil {
-		return err
-	}
-
-	// Prepare the builder.
-	builder := rust.NewBuilder(childEnv, buildDir, targetDir, teeHardware)
-
-	// Build runtimes one by one.
-	var errs *multierror.Error
-	for runtimeID, runtimeBinary := range runtimes {
-		switch trustRoot {
-		case nil:
-			sc.Logger.Info("building runtime without embedded trust root",
-				"runtime_id", runtimeID,
-				"runtime_binary", runtimeBinary,
-			)
-		default:
-			sc.Logger.Info("building runtime with embedded trust root",
-				"runtime_id", runtimeID,
-				"runtime_binary", runtimeBinary,
-				"trust_root_height", trustRoot.hash,
-				"trust_root_hash", trustRoot.hash,
-				"trust_root_chainContext", trustRoot.chainContext,
-			)
-
-			// Prepare environment.
-			builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT", trustRoot.height)
-			builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_HASH", trustRoot.hash)
-			builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_CHAIN_CONTEXT", trustRoot.chainContext)
-			builder.SetEnv("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID", runtimeID.String())
-		}
-
-		// Build a new runtime with the given trust root embedded.
-		if err = builder.Build(runtimeBinary); err != nil {
-			errs = multierror.Append(errs, err)
-		}
-	}
-	if err = errs.ErrorOrNil(); err != nil {
-		return fmt.Errorf("failed to build runtimes: %w", err)
-	}
-
-	return nil
-}
-
-func (sc *TrustRootImpl) buildAllRuntimes(ctx context.Context, childEnv *env.Env, trustRoot *trustRoot) error {
-	runtimes := map[common.Namespace]string{
-		runtimeID:    runtimeBinary,
-		keymanagerID: keyManagerBinary,
-	}
-
-	return sc.buildRuntimes(ctx, childEnv, runtimes, trustRoot)
-}
-
-func (sc *TrustRootImpl) registerRuntime(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rt *oasis.Runtime, validFrom beacon.EpochTime, nonce uint64) error {
-	dsc := rt.ToRuntimeDescriptor()
-	dsc.Deployments[0].ValidFrom = validFrom
-
-	txPath := filepath.Join(childEnv.Dir(), fmt.Sprintf("register_runtime_%s.json", rt.ID()))
-	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), dsc, nonce, txPath); err != nil {
-		return fmt.Errorf("failed to generate register runtime tx: %w", err)
-	}
-
-	if err := cli.Consensus.SubmitTx(txPath); err != nil {
-		return fmt.Errorf("failed to register runtime: %w", err)
-	}
-
-	return nil
-}
-
-func (sc *TrustRootImpl) updateKeyManagerPolicy(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, nonce uint64) error {
-	// Generate and update the new keymanager runtime's policy.
-	kmPolicyPath := filepath.Join(childEnv.Dir(), "km_policy.cbor")
-	kmPolicySig1Path := filepath.Join(childEnv.Dir(), "km_policy_sig1.pem")
-	kmPolicySig2Path := filepath.Join(childEnv.Dir(), "km_policy_sig2.pem")
-	kmPolicySig3Path := filepath.Join(childEnv.Dir(), "km_policy_sig3.pem")
-	kmUpdateTxPath := filepath.Join(childEnv.Dir(), "km_gen_update.json")
-	sc.Logger.Info("building KM SGX policy enclave policies map")
-	enclavePolicies := make(map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
-	kmRt := sc.Net.Runtimes()[0]
-	kmRtEncID := kmRt.GetEnclaveIdentity(0)
-	var havePolicy bool
-	if kmRtEncID != nil {
-		enclavePolicies[*kmRtEncID] = &keymanager.EnclavePolicySGX{}
-		enclavePolicies[*kmRtEncID].MayQuery = make(map[common.Namespace][]sgx.EnclaveIdentity)
-		enclavePolicies[*kmRtEncID].MayReplicate = []sgx.EnclaveIdentity{}
-		for _, rt := range sc.Net.Runtimes() {
-			if rt.Kind() != registry.KindCompute {
-				continue
-			}
-			if eid := rt.GetEnclaveIdentity(0); eid != nil {
-				enclavePolicies[*kmRtEncID].MayQuery[rt.ID()] = []sgx.EnclaveIdentity{*eid}
-				// This is set only in SGX mode.
-				havePolicy = true
-			}
-		}
-	}
-	sc.Logger.Info("initing KM policy")
-	if err := cli.Keymanager.InitPolicy(kmRt.ID(), 1, 0, enclavePolicies, kmPolicyPath); err != nil {
-		return err
-	}
-	sc.Logger.Info("signing KM policy")
-	if err := cli.Keymanager.SignPolicy("1", kmPolicyPath, kmPolicySig1Path); err != nil {
-		return err
-	}
-	if err := cli.Keymanager.SignPolicy("2", kmPolicyPath, kmPolicySig2Path); err != nil {
-		return err
-	}
-	if err := cli.Keymanager.SignPolicy("3", kmPolicyPath, kmPolicySig3Path); err != nil {
-		return err
-	}
-	if havePolicy {
-		// In SGX mode, we can update the policy as intended.
-		sc.Logger.Info("updating KM policy")
-		if err := cli.Keymanager.GenUpdate(nonce, kmPolicyPath, []string{kmPolicySig1Path, kmPolicySig2Path, kmPolicySig3Path}, kmUpdateTxPath); err != nil {
-			return err
-		}
-		if err := cli.Consensus.SubmitTx(kmUpdateTxPath); err != nil {
-			return fmt.Errorf("failed to update KM policy: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (sc *TrustRootImpl) chainContext(ctx context.Context) (string, error) {
-	sc.Logger.Info("fetching consensus chain context")
-
-	cc, err := sc.Net.Controller().Consensus.GetChainContext(ctx)
-	if err != nil {
-		return "", err
-	}
-	return cc, nil
-}
-
-func (sc *TrustRootImpl) trustRoot(ctx context.Context) (*trustRoot, error) {
-	sc.Logger.Info("preparing trust root")
-
-	// Let the network run for few blocks to select a suitable trust root.
-	block, err := sc.waitBlocks(ctx, 5)
-	if err != nil {
-		return nil, err
-	}
-
-	chainContext, err := sc.chainContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &trustRoot{
-		height:       strconv.FormatInt(block.Height, 10),
-		hash:         block.Hash.Hex(),
-		chainContext: chainContext,
-	}, nil
-}
-
 // PreRun starts the network, prepares a trust root, builds simple key/value and key manager
 // runtimes, prepares runtime bundles, and runs the test client.
 func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err error) {
@@ -262,13 +83,13 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 	}
 
 	// Pick one block and use it as an embedded trust root.
-	trustRoot, err := sc.trustRoot(ctx)
+	trustRoot, err := sc.TrustRoot(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Build simple key/value and key manager runtimes.
-	if err = sc.buildAllRuntimes(ctx, childEnv, trustRoot); err != nil {
+	if err = sc.BuildAllRuntimes(ctx, childEnv, trustRoot); err != nil {
 		return err
 	}
 
@@ -288,15 +109,27 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 
 	// Register the runtimes.
 	for _, rt := range sc.Net.Runtimes() {
-		if err = sc.registerRuntime(ctx, childEnv, cli, rt, epoch+2, nonce); err != nil {
+		rtDsc := rt.ToRuntimeDescriptor()
+		rtDsc.Deployments[0].ValidFrom = epoch + 2
+		if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, nonce); err != nil {
 			return err
 		}
 		nonce++
 	}
 
 	// Update the key manager policy.
-	if err = sc.updateKeyManagerPolicy(ctx, childEnv, cli, nonce); err != nil {
+	policies, err := sc.BuildEnclavePolicies(childEnv)
+	if err != nil {
 		return err
+	}
+	switch policies {
+	case nil:
+		sc.Logger.Info("no SGX runtimes, skipping policy update")
+	default:
+		if err = sc.ApplyKeyManagerPolicy(ctx, childEnv, cli, 0, policies, nonce); err != nil {
+			return fmt.Errorf("updating policies: %w", err)
+		}
+		nonce++ // nolint: ineffassign
 	}
 
 	// Start all the required workers.
@@ -305,20 +138,13 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 	}
 
 	// Run the test client workload to ensure that blocks get processed correctly.
-	if err = sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-	if err = sc.waitTestClient(); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }
 
 // PostRun re-builds simple key/value and key manager runtimes.
 func (sc *TrustRootImpl) PostRun(ctx context.Context, childEnv *env.Env) error {
 	// In the end, always rebuild all runtimes as we are changing binaries in one of the steps.
-	return sc.buildAllRuntimes(ctx, childEnv, nil)
+	return sc.BuildAllRuntimes(ctx, childEnv, nil)
 }
 
 func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error) {
@@ -333,7 +159,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 	sc.Logger.Info("testing query latest block")
 	_, err = sc.submitKeyValueRuntimeGetQuery(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		"hello_key",
 		roothash.RoundLatest,
 	)
@@ -341,7 +167,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 		return err
 	}
 
-	latestBlk, err := sc.Net.ClientController().Roothash.GetLatestBlock(ctx, &roothash.RuntimeRequest{RuntimeID: runtimeID, Height: consensus.HeightLatest})
+	latestBlk, err := sc.Net.ClientController().Roothash.GetLatestBlock(ctx, &roothash.RuntimeRequest{RuntimeID: KeyValueRuntimeID, Height: consensus.HeightLatest})
 	if err != nil {
 		return err
 	}
@@ -349,7 +175,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 	sc.Logger.Info("testing query for past round", "round", round)
 	_, err = sc.submitKeyValueRuntimeGetQuery(
 		ctx,
-		runtimeID,
+		KeyValueRuntimeID,
 		"hello_key",
 		round,
 	)
@@ -372,12 +198,8 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 	}
 
 	sc.Logger.Info("starting a second test client to check if queries for the last round work")
-	sc.Scenario.testClient = NewKVTestClient().WithSeed("seed2").WithScenario(NewTestClientScenario(queries))
-	if err := sc.startTestClientOnly(ctx, childEnv); err != nil {
-		return err
-	}
-
-	return sc.waitTestClient()
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(NewTestClientScenario(queries))
+	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }
 
 func (sc *TrustRootImpl) startClientComputeAndKeyManagerNodes(ctx context.Context, childEnv *env.Env) error {
