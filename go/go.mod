@@ -56,8 +56,8 @@ require (
 	golang.org/x/crypto v0.11.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/net v0.10.0
-	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f
-	google.golang.org/grpc v1.53.0
+	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
+	google.golang.org/grpc v1.56.2
 	google.golang.org/grpc/security/advancedtls v0.0.0-20221004221323-12db695f1648
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -92,7 +92,7 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/glog v1.0.0 // indirect
+	github.com/golang/glog v1.1.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
