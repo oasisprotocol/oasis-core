@@ -9,6 +9,7 @@ if [[ $BUILDKITE_RETRY_COUNT == 0 ]]; then
     ./.buildkite/scripts/test_e2e.sh \
         --metrics.address $METRICS_PUSH_ADDR \
         --metrics.labels instance=$BUILDKITE_PIPELINE_NAME-$BUILDKITE_BUILD_NUMBER \
+        --scenario_timeout 900m \
         --scenario e2e/runtime/txsource-multi \
         "$@"
 else
