@@ -21,6 +21,6 @@ sp800-185 = "0.2.0"
 thiserror = "1.0"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 x25519-dalek = "1.1.0"
-tokio = { version = "~1.26.0", features = ["rt"] }
+tokio = { version = "1.29.1", features = ["rt"] }
 zeroize = "1.4.2"
 async-trait = "0.1.66"
