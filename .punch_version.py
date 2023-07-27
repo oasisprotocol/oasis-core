@@ -1,3 +1,3 @@
 year = '22'
 minor = 2
-micro = 9
+micro = 10
