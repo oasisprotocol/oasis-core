@@ -72,8 +72,8 @@ func translateKnownP2P(in []string) ([]string, uint) {
 
 	var numUnknown uint
 
-	out := make([]string, len(in))
-	for idx, p2pOld := range in {
+	out := []string{}
+	for _, p2pOld := range in {
 		var p2pNew string
 
 		if knownNew, isKnown := known[p2pOld]; isKnown {
@@ -87,7 +87,7 @@ func translateKnownP2P(in []string) ([]string, uint) {
 			numUnknown++
 		}
 
-		out[idx] = p2pNew
+		out = append(out, p2pNew)
 	}
 
 	return out, numUnknown
@@ -131,6 +131,23 @@ func convertP2P(i interface{}, oldS string, newS string) []string {
 		logger.Warn(fmt.Sprintf("%s is now %s, but instead of Tendermint P2P addresses we now use P2P public keys here, however, all the addresses in this section of your config file have known translation mappings and were automatically translated for you", oldS, newS))
 	}
 
+	return out
+}
+
+// AppendLibp2pAddrs appends the corresponding libp2p seed node address (which
+// differs only in the port number) for each Tendermint seed node address.
+func appendLibp2pAddrs(in []string) []string {
+	out := []string{}
+	for _, addr := range in {
+		out = append(out, addr)
+
+		idxOfColon := strings.Index(addr, ":")
+		if idxOfColon != -1 {
+			entry := addr[0:idxOfColon]
+			p2pRT := entry + ":9200"
+			out = append(out, p2pRT)
+		}
+	}
 	return out
 }
 
@@ -306,7 +323,7 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 								continue
 							} else if pk == "seed" {
 								mkSubMap(newCfg, "p2p")
-								m(newCfg["p2p"])["seeds"] = convertP2P(pv, "consensus.tendermint.p2p.seed", "p2p.seeds")
+								m(newCfg["p2p"])["seeds"] = appendLibp2pAddrs(convertP2P(pv, "consensus.tendermint.p2p.seed", "p2p.seeds"))
 								delete(m(m(tendermint)["p2p"]), pk)
 								continue
 							}
