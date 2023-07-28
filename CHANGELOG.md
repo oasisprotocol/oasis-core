@@ -12,6 +12,27 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.10 (2023-07-27)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/storage/mkvs: Fix commit of nil entries
+  ([#5321](https://github.com/oasisprotocol/oasis-core/issues/5321))
+
+### Internal Changes
+
+- go/oasis-test-runner: Build key manager runtime with trust root
+  ([#5308](https://github.com/oasisprotocol/oasis-core/issues/5308))
+
+  The runtime trust-root scenarios now build not only the simple key/value
+  but also the key manager runtime with an embedded trust root.
+
 ## 22.2.9 (2023-06-29)
 
 | Protocol          | Version   |
