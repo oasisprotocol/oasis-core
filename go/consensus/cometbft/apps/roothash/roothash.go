@@ -540,6 +540,12 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 	round := rtState.CurrentBlock.Header.Round + 1
 	pool := rtState.ExecutorPool
 
+	// Remember the index of the transaction scheduler within the committee.
+	schedulerIdx, err := pool.Committee.TransactionSchedulerIdx(pool.Round)
+	if err != nil {
+		return err
+	}
+
 	// Initialize per-epoch liveness statistics.
 	if rtState.LivenessStatistics == nil {
 		rtState.LivenessStatistics = roothash.NewLivenessStatistics(len(pool.Committee.Members))
@@ -573,7 +579,9 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 			"round", round,
 		)
 
+		// Record that the round was finalized and that the scheduler received enough commitments.
 		livenessStats.TotalRounds++
+		livenessStats.FinalizedProposals[schedulerIdx]++
 
 		ec := commit.ToDDResult().(*commitment.ExecutorCommitment)
 
@@ -756,6 +764,9 @@ func (app *rootHashApplication) tryFinalizeExecutorCommits( //nolint: gocyclo
 		return nil
 	default:
 	}
+
+	// Record that the scheduler did not receive enough commitments.
+	livenessStats.MissedProposals[schedulerIdx]++
 
 	// Something else went wrong, emit empty error block.
 	ctx.Logger().Debug("round failed",

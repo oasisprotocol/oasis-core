@@ -331,6 +331,11 @@ pub struct ExecutorParameters {
     /// to be considered live. Nodes not satisfying this may be penalized.
     #[cbor(optional)]
     pub min_live_rounds_percent: u8,
+    /// Maximum percentage of proposed rounds in an epoch that can fail for a node
+    /// to be considered live. Nodes not satisfying this may be penalized. Zero means
+    /// that all proposed rounds can fail.
+    #[cbor(optional)]
+    pub max_missed_proposals_percent: u8,
     /// Minimum number of live rounds in an epoch for the liveness calculations to be considered for
     /// evaluation.
     #[cbor(optional)]
@@ -768,7 +773,7 @@ mod tests {
                     },
                     ..Default::default()
                 }),
-		    ("r2F2GCpiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZGtpbmQCZ2dlbmVzaXOiZXJvdW5kGCtqc3RhdGVfcm9vdFggseUhAZ+3vd413IH+55BlYQy937jvXCXihJg2aBkqbQ1nc3Rha2luZ6FycmV3YXJkX2JhZF9yZXN1bHRzCmdzdG9yYWdlo3NjaGVja3BvaW50X2ludGVydmFsGCFzY2hlY2twb2ludF9udW1fa2VwdAZ1Y2hlY2twb2ludF9jaHVua19zaXplGGVoZXhlY3V0b3Koamdyb3VwX3NpemUJbG1heF9tZXNzYWdlcwVtcm91bmRfdGltZW91dAZxZ3JvdXBfYmFja3VwX3NpemUIcmFsbG93ZWRfc3RyYWdnbGVycwdybWF4X2xpdmVuZXNzX2ZhaWxzAnRtaW5fbGl2ZV9yb3VuZHNfZXZhbAN3bWluX2xpdmVfcm91bmRzX3BlcmNlbnQEaWVudGl0eV9pZFggEjRWeJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABrY29uc3RyYWludHOhAaEBo2ltYXhfbm9kZXOhZWxpbWl0Cm1taW5fcG9vbF9zaXploWVsaW1pdAVtdmFsaWRhdG9yX3NldKBrZGVwbG95bWVudHOBpGN0ZWVLdmVyc2lvbiB0ZWVndmVyc2lvbqJlbWFqb3IYLGVwYXRjaAFqdmFsaWRfZnJvbQBvYnVuZGxlX2NoZWNrc3VtWCABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAWtrZXlfbWFuYWdlclgggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFsdGVlX2hhcmR3YXJlAW10eG5fc2NoZWR1bGVypW5tYXhfYmF0Y2hfc2l6ZRknEG9tYXhfaW5fbWVzc2FnZXMYIHNiYXRjaF9mbHVzaF90aW1lb3V0GjuaygB0bWF4X2JhdGNoX3NpemVfYnl0ZXMaAJiWgHVwcm9wb3NlX2JhdGNoX3RpbWVvdXQBcGFkbWlzc2lvbl9wb2xpY3mhcGVudGl0eV93aGl0ZWxpc3ShaGVudGl0aWVzoVggEjRWeJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChaW1heF9ub2Rlc6IBAwQBcGdvdmVybmFuY2VfbW9kZWwD",
+		    ("r2F2GCpiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZGtpbmQCZ2dlbmVzaXOiZXJvdW5kGCtqc3RhdGVfcm9vdFggseUhAZ+3vd413IH+55BlYQy937jvXCXihJg2aBkqbQ1nc3Rha2luZ6FycmV3YXJkX2JhZF9yZXN1bHRzCmdzdG9yYWdlo3NjaGVja3BvaW50X2ludGVydmFsGCFzY2hlY2twb2ludF9udW1fa2VwdAZ1Y2hlY2twb2ludF9jaHVua19zaXplGGVoZXhlY3V0b3Kpamdyb3VwX3NpemUJbG1heF9tZXNzYWdlcwVtcm91bmRfdGltZW91dAZxZ3JvdXBfYmFja3VwX3NpemUIcmFsbG93ZWRfc3RyYWdnbGVycwdybWF4X2xpdmVuZXNzX2ZhaWxzAXRtaW5fbGl2ZV9yb3VuZHNfZXZhbAJ3bWluX2xpdmVfcm91bmRzX3BlcmNlbnQEeBxtYXhfbWlzc2VkX3Byb3Bvc2Fsc19wZXJjZW50A2llbnRpdHlfaWRYIBI0VniQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa2NvbnN0cmFpbnRzoQGhAaNpbWF4X25vZGVzoWVsaW1pdAptbWluX3Bvb2xfc2l6ZaFlbGltaXQFbXZhbGlkYXRvcl9zZXSga2RlcGxveW1lbnRzgaRjdGVlS3ZlcnNpb24gdGVlZ3ZlcnNpb26iZW1ham9yGCxlcGF0Y2gBanZhbGlkX2Zyb20Ab2J1bmRsZV9jaGVja3N1bVggAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQFra2V5X21hbmFnZXJYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABbHRlZV9oYXJkd2FyZQFtdHhuX3NjaGVkdWxlcqVubWF4X2JhdGNoX3NpemUZJxBvbWF4X2luX21lc3NhZ2VzGCBzYmF0Y2hfZmx1c2hfdGltZW91dBo7msoAdG1heF9iYXRjaF9zaXplX2J5dGVzGgCYloB1cHJvcG9zZV9iYXRjaF90aW1lb3V0AXBhZG1pc3Npb25fcG9saWN5oXBlbnRpdHlfd2hpdGVsaXN0oWhlbnRpdGllc6FYIBI0VniQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoWltYXhfbm9kZXOiAQMEAXBnb3Zlcm5hbmNlX21vZGVsAw==",
                 Runtime {
                     v: 42,
                     id: Namespace::from("8000000000000000000000000000000000000000000000000000000000000000"),
@@ -797,8 +802,9 @@ mod tests {
                         round_timeout: 6,
                         max_messages: 5,
                         min_live_rounds_percent: 4,
-                        min_live_rounds_eval: 3,
-                        max_liveness_fails: 2,
+                        max_missed_proposals_percent: 3,
+                        min_live_rounds_eval: 2,
+                        max_liveness_fails: 1,
                     },
                     txn_scheduler: TxnSchedulerParameters{
                         batch_flush_timeout: 1_000_000_000,

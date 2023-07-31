@@ -149,28 +149,42 @@ type Committee struct {
 	ValidFor beacon.EpochTime `json:"valid_for"`
 }
 
-// Workers returns committee nodes with Worker role.
-func (c *Committee) Workers() []*CommitteeNode {
-	var workers []*CommitteeNode
+// TransactionSchedulerIdx returns the index of the transaction scheduler
+// within the committee for the provided round.
+func (c *Committee) TransactionSchedulerIdx(round uint64) (int, error) {
+	var (
+		total  uint64
+		worker uint64
+	)
+
 	for _, member := range c.Members {
 		if member.Role != RoleWorker {
 			continue
 		}
-		workers = append(workers, member)
+		total++
 	}
-	return workers
+
+	for idx, member := range c.Members {
+		if member.Role != RoleWorker {
+			continue
+		}
+		if worker == round%total {
+			return idx, nil
+		}
+		worker++
+	}
+
+	return 0, fmt.Errorf("no workers in committee")
 }
 
 // TransactionScheduler returns the transaction scheduler of the committee
 // based on the provided round.
 func (c *Committee) TransactionScheduler(round uint64) (*CommitteeNode, error) {
-	workers := c.Workers()
-	numNodes := uint64(len(workers))
-	if numNodes == 0 {
-		return nil, fmt.Errorf("no workers in committee")
+	idx, err := c.TransactionSchedulerIdx(round)
+	if err != nil {
+		return nil, err
 	}
-	schedulerIdx := round % numNodes
-	return workers[schedulerIdx], nil
+	return c.Members[idx], nil
 }
 
 // String returns a string representation of a Committee.

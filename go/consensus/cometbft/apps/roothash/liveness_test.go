@@ -39,6 +39,7 @@ func TestLivenessProcessing(t *testing.T) {
 		Executor: registry.ExecutorParameters{
 			MinLiveRoundsForEvaluation: 10,
 			MinLiveRoundsPercent:       90,
+			MaxMissedProposalsPercent:  0, // Disabled.
 			MaxLivenessFailures:        4,
 		},
 	}
@@ -74,8 +75,10 @@ func TestLivenessProcessing(t *testing.T) {
 			Round:     0,
 		},
 		LivenessStatistics: &roothash.LivenessStatistics{
-			TotalRounds: 100,
-			LiveRounds:  []uint64{91},
+			TotalRounds:        100,
+			LiveRounds:         []uint64{91}, // At least 90 required.
+			FinalizedProposals: []uint64{80},
+			MissedProposals:    []uint64{21}, // At most 20 allowed.
 		},
 	}
 	err = roothashState.SetRuntimeState(ctx, rtState)
@@ -131,6 +134,65 @@ func TestLivenessProcessing(t *testing.T) {
 
 	// When node is live again, fault counter should decrease.
 	rtState.LivenessStatistics.LiveRounds[0] = 91 // At least 90 required.
+	err = processLivenessStatistics(ctx, epoch, rtState)
+	require.NoError(err, "processLivenessStatistics")
+	status, err = registryState.NodeStatus(ctx, sk.Public())
+	require.NoError(err, "NodeStatus")
+	require.False(status.IsSuspended(runtime.ID, epoch), "node should not be suspended")
+	require.Len(status.Faults, 0, "there should be no faults")
+
+	// Start tracking proposer liveness.
+	rtState.Runtime.Executor.MaxMissedProposalsPercent = 20
+
+	// When node is proposing, everything should be left as is, no faults should be recorded.
+	rtState.LivenessStatistics.MissedProposals[0] = 20 // At most 20 allowed.
+	err = processLivenessStatistics(ctx, epoch, rtState)
+	require.NoError(err, "processLivenessStatistics")
+	status, err = registryState.NodeStatus(ctx, sk.Public())
+	require.NoError(err, "NodeStatus")
+	require.False(status.IsSuspended(runtime.ID, epoch), "node should not be suspended")
+
+	// When node is not proposing, it should be suspended, there should be one fault.
+	rtState.LivenessStatistics.MissedProposals[0] = 21 // At most 20 allowed.
+	err = processLivenessStatistics(ctx, epoch, rtState)
+	require.NoError(err, "processLivenessStatistics")
+	status, err = registryState.NodeStatus(ctx, sk.Public())
+	require.NoError(err, "NodeStatus")
+	require.True(status.IsSuspended(runtime.ID, epoch), "node should be suspended")
+	require.EqualValues(1, status.Faults[runtime.ID].Failures, "there should be one fault")
+	require.EqualValues(epoch+2, status.Faults[runtime.ID].SuspendedUntil, "suspension time should be set")
+
+	// Bump epoch so the node is no longer suspended.
+	epoch += 2
+
+	// When node is not proposing again, fault counter should increase.
+	rtState.LivenessStatistics.MissedProposals[0] = 21 // At most 20 allowed.
+	err = processLivenessStatistics(ctx, epoch, rtState)
+	require.NoError(err, "processLivenessStatistics")
+	status, err = registryState.NodeStatus(ctx, sk.Public())
+	require.NoError(err, "NodeStatus")
+	require.True(status.IsSuspended(runtime.ID, epoch), "node should be suspended")
+	require.EqualValues(2, status.Faults[runtime.ID].Failures, "there should be two faults")
+	require.EqualValues(epoch+4, status.Faults[runtime.ID].SuspendedUntil, "suspension time should be set")
+
+	// Bump epoch so the node is no longer suspended.
+	epoch += 4
+
+	// When node is proposing again, fault counter should decrease.
+	rtState.LivenessStatistics.MissedProposals[0] = 20 // At most 20 allowed.
+	err = processLivenessStatistics(ctx, epoch, rtState)
+	require.NoError(err, "processLivenessStatistics")
+	status, err = registryState.NodeStatus(ctx, sk.Public())
+	require.NoError(err, "NodeStatus")
+	require.True(status.IsSuspended(runtime.ID, epoch), "node should be suspended")
+	require.EqualValues(1, status.Faults[runtime.ID].Failures, "there should be one fault")
+	require.EqualValues(epoch+2, status.Faults[runtime.ID].SuspendedUntil, "suspension time should be set")
+
+	// Bump epoch so the node is no longer suspended.
+	epoch += 2
+
+	// When node is proposing again, fault counter should decrease.
+	rtState.LivenessStatistics.MissedProposals[0] = 0 // At most 20 allowed.
 	err = processLivenessStatistics(ctx, epoch, rtState)
 	require.NoError(err, "processLivenessStatistics")
 	status, err = registryState.NodeStatus(ctx, sk.Public())
