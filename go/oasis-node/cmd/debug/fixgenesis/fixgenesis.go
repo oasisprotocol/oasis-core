@@ -25,8 +25,12 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-// CfgNewGenesisFile is the flag used to specify a new genesis file.
-const CfgNewGenesisFile = "genesis.new_file"
+const (
+	// CfgNewGenesisFile is the flag used to specify a new genesis file.
+	CfgNewGenesisFile = "genesis.new_file"
+
+	cfgNewChainID = "genesis.new_chain_id"
+)
 
 var (
 	fixGenesisCmd = &cobra.Command{
@@ -35,7 +39,7 @@ var (
 		Run:   doFixGenesis,
 	}
 
-	newGenesisFlag = flag.NewFlagSet("", flag.ContinueOnError)
+	genesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	logger = logging.GetLogger("cmd/debug/fix-genesis")
 
@@ -329,6 +333,17 @@ NodeLoop:
 	// Update governance parameters.
 	newDoc.Governance.Parameters.EnableChangeParametersProposal = true
 
+	// Automatically update the chain ID and base epoch when set.
+	if newChainID := viper.GetString(cfgNewChainID); newChainID != "" {
+		newDoc.ChainID = newChainID
+		newDoc.Beacon.Base++
+
+		// Update extra data to be as specified in the initial network genesis block.
+		newDoc.ExtraData = map[string][]byte{
+			"quote": []byte("Quis custodiet ipsos custodes? [submitted by Oasis Community Member Daniyar Borangaziyev]"),
+		}
+	}
+
 	return &newDoc, nil
 }
 
@@ -442,11 +457,12 @@ func fixupBurnAddress(newDoc *genesis.Document) error {
 // Register registers the fix-genesis sub-command and all of it's children.
 func Register(parentCmd *cobra.Command) {
 	fixGenesisCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
-	fixGenesisCmd.PersistentFlags().AddFlagSet(newGenesisFlag)
+	fixGenesisCmd.PersistentFlags().AddFlagSet(genesisFlags)
 	parentCmd.AddCommand(fixGenesisCmd)
 }
 
 func init() {
-	newGenesisFlag.String(CfgNewGenesisFile, "genesis_fixed.json", "path to fixed genesis document")
-	_ = viper.BindPFlags(newGenesisFlag)
+	genesisFlags.String(CfgNewGenesisFile, "genesis_fixed.json", "path to fixed genesis document")
+	genesisFlags.String(cfgNewChainID, "", "optional new chain ID")
+	_ = viper.BindPFlags(genesisFlags)
 }
