@@ -44,9 +44,17 @@ func TestEncoderDecoder(t *testing.T) {
 	err = dec.Decode(&x)
 	require.NoError(err, "Decode")
 	require.EqualValues(42, x, "decoded value should be correct")
+
+	err = enc.Encode(32)
+	require.NoError(err, "Encode")
+
+	dec = NewDecoderRPC(&buf)
+	err = dec.Decode(&x)
+	require.NoError(err, "Decode")
+	require.EqualValues(32, x, "decoded value should be correct")
 }
 
-func TestDecodeUnknowField(t *testing.T) {
+func TestDecodeUnknownField(t *testing.T) {
 	require := require.New(t)
 
 	type a struct {
@@ -69,4 +77,7 @@ func TestDecodeUnknowField(t *testing.T) {
 
 	err = UnmarshalTrusted(raw, &dec)
 	require.NoError(err, "unknown fields from trusted sources should pass")
+
+	err = UnmarshalRPC(raw, &dec)
+	require.NoError(err, "unknown fields from RPC should pass")
 }
