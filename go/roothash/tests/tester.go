@@ -422,7 +422,11 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 			require.NoError(err, "GetRuntimeState")
 			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
 			require.EqualValues(1, state.LivenessStatistics.TotalRounds)
-			require.Len(state.LivenessStatistics.LiveRounds, len(s.executorCommittee.workers)+len(s.executorCommittee.backupWorkers))
+
+			numNodes := len(s.executorCommittee.workers) + len(s.executorCommittee.backupWorkers)
+			require.Len(state.LivenessStatistics.LiveRounds, numNodes)
+			require.Len(state.LivenessStatistics.FinalizedProposals, numNodes)
+			require.Len(state.LivenessStatistics.MissedProposals, numNodes)
 
 			goodRoundsPerNode := make(map[signature.PublicKey]uint64)
 			for i, member := range state.ExecutorPool.Committee.Members {
@@ -434,6 +438,16 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 				// commitments and there were no discrepancies.
 				require.EqualValues(1, v, "LiveRounds(%s)", nodeID)
 			}
+
+			finalizedProposals := make([]uint64, numNodes)
+			missedProposals := make([]uint64, numNodes)
+
+			schedulerIdx, err := s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 1)
+			require.NoError(err, "TransactionSchedulerIdx")
+			finalizedProposals[schedulerIdx]++ // The first round has been finalized.
+
+			require.EqualValues(finalizedProposals, state.LivenessStatistics.FinalizedProposals, "there should be one finalized proposal")
+			require.EqualValues(missedProposals, state.LivenessStatistics.MissedProposals, "there should be no failed proposals")
 
 			// Nothing more to do after the block was received.
 			return
@@ -520,6 +534,25 @@ WaitForRoundTimeoutBlocks:
 			require.NoError(err, "GetRuntimeState")
 			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
 			require.EqualValues(1, state.LivenessStatistics.TotalRounds, "timed out round should not count for liveness")
+
+			numNodes := len(s.executorCommittee.workers) + len(s.executorCommittee.backupWorkers)
+			require.Len(state.LivenessStatistics.LiveRounds, numNodes)
+			require.Len(state.LivenessStatistics.FinalizedProposals, numNodes)
+			require.Len(state.LivenessStatistics.MissedProposals, numNodes)
+
+			finalizedProposals := make([]uint64, numNodes)
+			missedProposals := make([]uint64, numNodes)
+
+			schedulerIdx, err := s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 2)
+			require.NoError(err, "TransactionSchedulerIdx")
+			finalizedProposals[schedulerIdx]++ // The first round has been finalized.
+
+			schedulerIdx, err = s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 1)
+			require.NoError(err, "TransactionSchedulerIdx")
+			missedProposals[schedulerIdx]++ // The second round failed due to a timeout.
+
+			require.EqualValues(finalizedProposals, state.LivenessStatistics.FinalizedProposals, "there should be one finalized proposal")
+			require.EqualValues(missedProposals, state.LivenessStatistics.MissedProposals, "there should be one failed proposal")
 
 			// Nothing more to do after the block was received.
 			return
@@ -678,9 +711,9 @@ WaitForProposerTimeoutBlocks:
 
 	tx := api.NewRequestProposerTimeoutTx(0, nil, s.rt.Runtime.ID, child.Header.Round)
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, timeoutNode.Signer, tx)
-	require.NoError(err, "ExectutorTimeout")
+	require.NoError(err, "ExecutorTimeout")
 
-	// Ensure that the round was finalized.
+	// Ensure that the round failed due to a proposer timeout.
 	for {
 		select {
 		case blk := <-ch:
@@ -694,6 +727,37 @@ WaitForProposerTimeoutBlocks:
 			// Next round must be a failure.
 			require.EqualValues(child.Header.Round+1, header.Round, "block round")
 			require.EqualValues(block.RoundFailed, header.HeaderType, "block header type must be RoundFailed")
+
+			// Check that the liveness statistics were computed correctly.
+			state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
+				RuntimeID: header.Namespace,
+				Height:    blk.Height,
+			})
+			require.NoError(err, "GetRuntimeState")
+			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
+
+			numNodes := len(s.executorCommittee.workers) + len(s.executorCommittee.backupWorkers)
+			require.Len(state.LivenessStatistics.LiveRounds, numNodes)
+			require.Len(state.LivenessStatistics.FinalizedProposals, numNodes)
+			require.Len(state.LivenessStatistics.MissedProposals, numNodes)
+
+			finalizedProposals := make([]uint64, numNodes)
+			missedProposals := make([]uint64, numNodes)
+
+			schedulerIdx, err := s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 3)
+			require.NoError(err, "TransactionSchedulerIdx")
+			finalizedProposals[schedulerIdx]++ // The first round has been finalized.
+
+			schedulerIdx, err = s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 2)
+			require.NoError(err, "TransactionSchedulerIdx")
+			missedProposals[schedulerIdx]++ // The second round failed due to a timeout.
+
+			schedulerIdx, err = s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 1)
+			require.NoError(err, "TransactionSchedulerIdx")
+			missedProposals[schedulerIdx]++ // The third round failed due to a proposer timeout.
+
+			require.EqualValues(finalizedProposals, state.LivenessStatistics.FinalizedProposals, "there should be one finalized proposal")
+			require.EqualValues(missedProposals, state.LivenessStatistics.MissedProposals, "there should be two failed proposals")
 
 			// Nothing more to do after the failed block was received.
 			return

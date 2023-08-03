@@ -101,6 +101,11 @@ type ExecutorParameters struct {
 	// penalized.
 	MinLiveRoundsPercent uint8 `json:"min_live_rounds_percent,omitempty"`
 
+	// MaxMissedProposalsPercent is the maximum percentage of proposed rounds in an epoch that
+	// can fail for a node to be considered live. Nodes not satisfying this may be penalized.
+	// Zero means that all proposed rounds can fail.
+	MaxMissedProposalsPercent uint8 `json:"max_missed_proposals_percent,omitempty"`
+
 	// MinLiveRoundsForEvaluation is the minimum number of live rounds in an epoch for the liveness
 	// calculations to be considered for evaluation.
 	MinLiveRoundsForEvaluation uint64 `json:"min_live_rounds_eval,omitempty"`

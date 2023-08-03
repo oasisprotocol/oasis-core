@@ -95,6 +95,16 @@ func (app *rootHashApplication) executorProposerTimeout(
 		return err
 	}
 
+	// Record that the scheduler did not propose.
+	schedulerIdx, err := rtState.ExecutorPool.Committee.TransactionSchedulerIdx(rpt.Round)
+	if err != nil {
+		return err
+	}
+	if rtState.LivenessStatistics == nil {
+		rtState.LivenessStatistics = roothash.NewLivenessStatistics(len(rtState.ExecutorPool.Committee.Members))
+	}
+	rtState.LivenessStatistics.MissedProposals[schedulerIdx]++
+
 	// Timeout triggered by executor node, emit empty error block.
 	ctx.Logger().Debug("proposer round timeout",
 		"round", rpt.Round,
