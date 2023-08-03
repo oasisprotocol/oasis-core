@@ -53,9 +53,20 @@ var (
 		MaxMapPairs:      2147483647, // Maximum allowed.
 	}
 
+	// decOptionsRPC are decoding options for gRPC endpoints. They are only used when explicitly
+	// requested by using the UnmarshalRPC method.
+	decOptionsRPC = cbor.DecOptions{
+		DupMapKey:        cbor.DupMapKeyEnforcedAPF,
+		IndefLength:      cbor.IndefLengthForbidden,
+		TagsMd:           cbor.TagsForbidden,
+		MaxArrayElements: 10_000_000, // Usually limited by blob size limits anyway.
+		MaxMapPairs:      10_000_000, // Usually limited by blob size limits anyway.
+	}
+
 	encMode        cbor.EncMode
 	decMode        cbor.DecMode
 	decModeTrusted cbor.DecMode
+	decModeRPC     cbor.DecMode
 )
 
 func init() {
@@ -67,6 +78,9 @@ func init() {
 		panic(err)
 	}
 	if decModeTrusted, err = decOptionsTrusted.DecMode(); err != nil {
+		panic(err)
+	}
+	if decModeRPC, err = decOptionsRPC.DecMode(); err != nil {
 		panic(err)
 	}
 }
@@ -100,6 +114,17 @@ func UnmarshalTrusted(data []byte, dst interface{}) error {
 	return decModeTrusted.Unmarshal(data, dst)
 }
 
+// UnmarshalRPC deserializes a CBOR byte vector into a given type.
+//
+// This method is suitable for RPC endpoints as it relaxes some decoding restrictions.
+func UnmarshalRPC(data []byte, dst interface{}) error {
+	if data == nil {
+		return nil
+	}
+
+	return decModeRPC.Unmarshal(data, dst)
+}
+
 // MustUnmarshal deserializes a CBOR byte vector into a given type.
 // Panics if unmarshal fails.
 func MustUnmarshal(data []byte, dst interface{}) {
@@ -116,4 +141,9 @@ func NewEncoder(w io.Writer) *cbor.Encoder {
 // NewDecoder creates a new CBOR decoder.
 func NewDecoder(r io.Reader) *cbor.Decoder {
 	return decMode.NewDecoder(r)
+}
+
+// NewDecoderRPC creates a new CBOR decoder with relaxed decoding restrictions.
+func NewDecoderRPC(r io.Reader) *cbor.Decoder {
+	return decModeRPC.NewDecoder(r)
 }
