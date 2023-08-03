@@ -56,7 +56,7 @@ func (c *MessageReader) Read(msg interface{}) error {
 
 	// Decode message bytes.
 	r := io.LimitReader(c.reader, int64(length))
-	dec := NewDecoder(r)
+	dec := NewDecoderRPC(r)
 	if err := dec.Decode(msg); err != nil {
 		return err
 	}

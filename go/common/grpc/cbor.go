@@ -17,7 +17,7 @@ func (c *CBORCodec) Marshal(v interface{}) ([]byte, error) {
 }
 
 func (c *CBORCodec) Unmarshal(data []byte, v interface{}) error {
-	return cbor.Unmarshal(data, v)
+	return cbor.UnmarshalRPC(data, v)
 }
 
 func (c *CBORCodec) Name() string {
