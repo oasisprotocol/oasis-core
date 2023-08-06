@@ -120,7 +120,7 @@ mod test {
 
     #[test]
     fn test_registry_state_interop() {
-        // Keep in sync with go/consensus/tendermint/apps/registry/state/interop/interop.go.
+        // Keep in sync with go/consensus/cometbft/apps/registry/state/interop/interop.go.
         // If mock consensus state changes, update the root hash bellow.
         // See protocol server stdout for hash.
         // To make the hash show up during tests, run "cargo test" as
