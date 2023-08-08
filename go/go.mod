@@ -34,7 +34,7 @@ require (
 	github.com/hashicorp/go-plugin v1.4.5
 	github.com/hpcloud/tail v1.0.0
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/libp2p/go-libp2p v0.29.1
+	github.com/libp2p/go-libp2p v0.29.2
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/multiformats/go-multiaddr v0.10.1
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220708102147-0a8a51822cae
@@ -173,7 +173,7 @@ require (
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-19 v0.3.3 // indirect
 	github.com/quic-go/qtls-go1-20 v0.2.3 // indirect
-	github.com/quic-go/quic-go v0.36.3 // indirect
+	github.com/quic-go/quic-go v0.36.4 // indirect
 	github.com/quic-go/webtransport-go v0.5.3 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0 // indirect
