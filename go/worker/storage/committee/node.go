@@ -1247,9 +1247,11 @@ mainLoop:
 				syncingRounds[item.round].retry(item.thisRoot.Type)
 			} else {
 				heap.Push(outOfOrderDoneDiffs, item)
+				// Item was successfully processed, trigger more round fetches.
+				// This ensures that new rounds are processed as fast as possible
+				// when we're syncing and are far behind.
+				triggerRoundFetches()
 			}
-
-			triggerRoundFetches()
 
 		case finalized := <-n.finalizeCh:
 			// If finalization failed, things start falling apart.
