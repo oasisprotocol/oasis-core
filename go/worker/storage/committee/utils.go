@@ -3,6 +3,7 @@ package committee
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -104,4 +105,45 @@ func (h *heartbeat) reset() {
 
 	// Gobble the first tick, which is immediate.
 	<-h.C
+}
+
+type expBackoff struct {
+	lock sync.Mutex
+
+	backoff *backoff.ExponentialBackOff
+	t       time.Duration
+}
+
+func newBackoff(minTimeout time.Duration, maxTimeout time.Duration) *expBackoff {
+	// Backoff configuration for syncing failures.
+	backoff := cmnBackoff.NewExponentialBackOff()
+	backoff.InitialInterval = minTimeout
+	backoff.MaxInterval = maxTimeout
+	backoff.Reset()
+
+	return &expBackoff{
+		backoff: backoff,
+	}
+}
+
+func (b *expBackoff) success() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.backoff.Reset()
+	b.t = 0
+}
+
+func (b *expBackoff) failure() {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.t = b.backoff.NextBackOff()
+}
+
+func (b *expBackoff) timeout() time.Duration {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	return b.t
 }

@@ -387,7 +387,7 @@ func (n *Node) GetLastSynced() (uint64, storageApi.Root, storageApi.Root) {
 	return n.syncedState.Round, io, state
 }
 
-func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
+func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) *fetchedDiff {
 	result := &fetchedDiff{
 		fetched:  false,
 		pf:       rpc.NewNopPeerFeedback(),
@@ -395,12 +395,6 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 		prevRoot: prevRoot,
 		thisRoot: thisRoot,
 	}
-	defer func() {
-		select {
-		case n.diffCh <- result:
-		case <-n.ctx.Done():
-		}
-	}()
 	// Check if the new root doesn't already exist.
 	if !n.localStorage.NodeDB().HasRoot(thisRoot) {
 		result.fetched = true
@@ -422,14 +416,14 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 			defer cancel()
 
 			rsp, pf, err := n.storageSync.GetDiff(ctx, &storageSync.GetDiffRequest{StartRoot: prevRoot, EndRoot: thisRoot})
-			if err != nil {
-				result.err = err
-				return
-			}
+			result.err = err
 			result.pf = pf
-			result.writeLog = rsp.WriteLog
+			if rsp != nil {
+				result.writeLog = rsp.WriteLog
+			}
 		}
 	}
+	return result
 }
 
 func (n *Node) finalize(summary *blockSummary) {
@@ -1016,6 +1010,9 @@ func (n *Node) worker() { // nolint: gocyclo
 	heartbeat := heartbeat{}
 	heartbeat.reset()
 
+	// Backoff configuration for syncing failures.
+	backoff := newBackoff(10*time.Millisecond, 2*time.Second)
+
 	triggerRoundFetches := func() {
 		for i := lastFullyAppliedRound + 1; i <= latestBlockRound; i++ {
 			syncing, ok := syncingRounds[i]
@@ -1066,10 +1063,27 @@ func (n *Node) worker() { // nolint: gocyclo
 				if !syncing.outstanding.contains(rootType) && syncing.awaitingRetry.contains(rootType) {
 					syncing.scheduleDiff(rootType)
 					fetcherGroup.Add(1)
+					select {
+					case <-time.After(backoff.timeout()):
+					case <-n.ctx.Done():
+						return
+					}
 					n.fetchPool.Submit(func(round uint64, prevRoot, thisRoot storageApi.Root) func() {
 						return func() {
 							defer fetcherGroup.Done()
-							n.fetchDiff(round, prevRoot, thisRoot)
+							result := n.fetchDiff(round, prevRoot, thisRoot)
+							// Backoff feedback.
+							switch result.err {
+							case nil:
+								backoff.success()
+							default:
+								backoff.failure()
+							}
+
+							select {
+							case n.diffCh <- result:
+							case <-n.ctx.Done():
+							}
 						}
 					}(this.Round, prevRoots[i], this.Roots[i]))
 				}
