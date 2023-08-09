@@ -12,6 +12,28 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.11 (2023-08-09)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/common/cbor: Relax CBOR decoding for gRPC/RHP endpoints
+  ([#5335](https://github.com/oasisprotocol/oasis-core/issues/5335))
+
+### Internal Changes
+
+- go: Bump golang.org/x/net to 0.13.0
+  ([#5337](https://github.com/oasisprotocol/oasis-core/issues/5337))
+
+- go: Bump go-libp2p to 0.29.2
+  ([#5338](https://github.com/oasisprotocol/oasis-core/issues/5338),
+   [#5339](https://github.com/oasisprotocol/oasis-core/issues/5339))
+
 ## 22.2.10 (2023-07-27)
 
 | Protocol          | Version   |
