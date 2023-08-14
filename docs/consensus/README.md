@@ -75,7 +75,7 @@ The Tendermint consensus backend is split into two major parts:
    Oasis Core Consensus interface.
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus/tendermint`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
+[`go/consensus/tendermint`]: https://github.com/oasisprotocol/oasis-core/tree/stable/22.2.x/go/consensus/tendermint
 [the Tendermint Core developer documentation]: https://docs.tendermint.com/
 <!-- markdownlint-enable line-length -->
 
@@ -93,8 +93,8 @@ _consensus layer_ interface living in [`go/consensus/tendermint/apps/<app>`].
 
 <!-- markdownlint-disable line-length -->
 [ABCI protocol]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md
-[`go/consensus/tendermint/abci/mux.go`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/abci/mux.go
-[`go/consensus/tendermint/apps/<app>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint/apps
+[`go/consensus/tendermint/abci/mux.go`]: https://github.com/oasisprotocol/oasis-core/tree/stable/22.2.x/go/consensus/tendermint/abci/mux.go
+[`go/consensus/tendermint/apps/<app>`]: https://github.com/oasisprotocol/oasis-core/tree/stable/22.2.x/go/consensus/tendermint/apps
 <!-- markdownlint-enable line-length -->
 
 ### State Storage
@@ -156,7 +156,7 @@ func (s *staking) TotalSupply(ctx context.Context, height int64) (*quantity.Quan
 ```
 
 <!-- markdownlint-disable line-length -->
-[`go/consensus/tendermint/<service>`]: https://github.com/oasisprotocol/oasis-core/tree/master/go/consensus/tendermint
+[`go/consensus/tendermint/<service>`]: https://github.com/oasisprotocol/oasis-core/tree/stable/22.2.x/go/consensus/tendermint
 [ABCI query functionality]: https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#query-1
 <!-- markdownlint-enable line-length -->
 
