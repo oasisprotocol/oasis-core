@@ -23,7 +23,7 @@ func (n *Node) startRuntimeTrustSyncLocked(rt host.RichRuntime) {
 	syncOp := func() error {
 		blk, err := n.commonNode.Consensus.GetBlock(ctx, consensus.HeightLatest)
 		if err != nil {
-			n.logger.Warn("failed to retrieve consensus block for runtiem light client sync",
+			n.logger.Warn("failed to retrieve consensus block for runtime light client sync",
 				"err", err,
 			)
 			return err

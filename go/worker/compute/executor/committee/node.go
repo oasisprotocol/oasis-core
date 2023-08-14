@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -47,61 +45,6 @@ var (
 	abortTimeout = 5 * time.Second
 	// getInfoTimeout is the maximum time the runtime can spend replying to GetInfo.
 	getInfoTimeout = 5 * time.Second
-)
-
-var (
-	discrepancyDetectedCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "oasis_worker_execution_discrepancy_detected_count",
-			Help: "Number of detected execute discrepancies.",
-		},
-		[]string{"runtime"},
-	)
-	abortedBatchCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "oasis_worker_aborted_batch_count",
-			Help: "Number of aborted batches.",
-		},
-		[]string{"runtime"},
-	)
-	storageCommitLatency = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "oasis_worker_storage_commit_latency",
-			Help: "Latency of storage commit calls (state + outputs) (seconds).",
-		},
-		[]string{"runtime"},
-	)
-	batchProcessingTime = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "oasis_worker_batch_processing_time",
-			Help: "Time it takes for a batch to finalize (seconds).",
-		},
-		[]string{"runtime"},
-	)
-	batchRuntimeProcessingTime = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "oasis_worker_batch_runtime_processing_time",
-			Help: "Time it takes for a batch to be processed by the runtime (seconds).",
-		},
-		[]string{"runtime"},
-	)
-	batchSize = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Name: "oasis_worker_batch_size",
-			Help: "Number of transactions in a batch.",
-		},
-		[]string{"runtime"},
-	)
-	nodeCollectors = []prometheus.Collector{
-		discrepancyDetectedCount,
-		abortedBatchCount,
-		storageCommitLatency,
-		batchProcessingTime,
-		batchRuntimeProcessingTime,
-		batchSize,
-	}
-
-	metricsOnce sync.Once
 )
 
 // Node is a committee node.
@@ -198,12 +141,6 @@ func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) 
 	sub.Unwrap(ch)
 
 	return ch, sub
-}
-
-func (n *Node) getMetricLabels() prometheus.Labels {
-	return prometheus.Labels{
-		"runtime": n.commonNode.Runtime.ID().String(),
-	}
 }
 
 func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposal) error {
@@ -1552,9 +1489,7 @@ func NewNode(
 	commonCfg commonWorker.Config,
 	roleProvider registration.RoleProvider,
 ) (*Node, error) {
-	metricsOnce.Do(func() {
-		prometheus.MustRegister(nodeCollectors...)
-	})
+	initMetrics()
 
 	committeeTopic := p2pProtocol.NewTopicKindCommitteeID(commonNode.ChainContext, commonNode.Runtime.ID())
 
