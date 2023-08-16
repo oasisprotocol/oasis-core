@@ -23,6 +23,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
@@ -139,9 +140,9 @@ type NodeHooks interface {
 	// Guarded by CrossNode.
 	HandleEpochTransitionLocked(*EpochSnapshot)
 	// Guarded by CrossNode.
-	HandleNewBlockEarlyLocked(*block.Block)
+	HandleNewBlockEarlyLocked(*runtime.BlockInfo)
 	// Guarded by CrossNode.
-	HandleNewBlockLocked(*block.Block)
+	HandleNewBlockLocked(*runtime.BlockInfo)
 	// Guarded by CrossNode.
 	HandleNewEventLocked(*roothash.Event)
 	// Guarded by CrossNode.
@@ -518,8 +519,15 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		n.KeyManagerClient.SetKeyManagerID(n.CurrentDescriptor.KeyManager)
 	}
 
+	bi := &runtime.BlockInfo{
+		RuntimeBlock:     n.CurrentBlock,
+		ConsensusBlock:   n.CurrentConsensusBlock,
+		Epoch:            n.CurrentEpoch,
+		ActiveDescriptor: n.CurrentDescriptor,
+	}
+
 	for _, hooks := range n.hooks {
-		hooks.HandleNewBlockEarlyLocked(blk)
+		hooks.HandleNewBlockEarlyLocked(bi)
 	}
 
 	// Perform actions based on block type.
@@ -551,17 +559,12 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		n.handleSuspendLocked(height)
 	default:
 		n.logger.Error("invalid block type",
-			"block", blk,
+			"block", bi.RuntimeBlock,
 		)
 		return
 	}
 
-	err = n.TxPool.ProcessBlock(&txpool.BlockInfo{
-		RuntimeBlock:     n.CurrentBlock,
-		ConsensusBlock:   n.CurrentConsensusBlock,
-		Epoch:            n.CurrentEpoch,
-		ActiveDescriptor: n.CurrentDescriptor,
-	})
+	err = n.TxPool.ProcessBlock(bi)
 	if err != nil {
 		n.logger.Error("failed to process block in transaction pool",
 			"err", err,
@@ -577,7 +580,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		n.logger.Error("failed to query incoming messages",
 			"err", err,
 			"height", height,
-			"round", blk.Header.Round,
+			"round", bi.RuntimeBlock.Header.Round,
 		)
 		return
 	}
@@ -589,7 +592,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 	}
 
 	for _, hooks := range n.hooks {
-		hooks.HandleNewBlockLocked(blk)
+		hooks.HandleNewBlockLocked(bi)
 	}
 }
 

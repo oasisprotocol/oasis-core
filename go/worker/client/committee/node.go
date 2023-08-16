@@ -17,6 +17,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -86,11 +87,11 @@ func (n *Node) HandleEpochTransitionLocked(*committee.EpochSnapshot) {
 }
 
 // HandleNewBlockEarlyLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
+func (n *Node) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
 }
 
 // HandleNewBlockLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockLocked(*block.Block) {
+func (n *Node) HandleNewBlockLocked(*runtime.BlockInfo) {
 }
 
 // HandleNewEventLocked is guarded by CrossNode.

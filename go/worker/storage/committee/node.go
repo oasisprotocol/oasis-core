@@ -21,6 +21,7 @@ import (
 	registryApi "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
@@ -347,14 +348,14 @@ func (n *Node) HandleEpochTransitionLocked(*committee.EpochSnapshot) {
 }
 
 // HandleNewBlockEarlyLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
+func (n *Node) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
 	// Nothing to do here.
 }
 
 // HandleNewBlockLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockLocked(blk *block.Block) {
+func (n *Node) HandleNewBlockLocked(bi *runtime.BlockInfo) {
 	// Notify the state syncer that there is a new block.
-	n.blockCh.In() <- blk
+	n.blockCh.In() <- bi.RuntimeBlock
 }
 
 // HandleNewEventLocked is guarded by CrossNode.

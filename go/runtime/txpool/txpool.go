@@ -9,16 +9,14 @@ import (
 
 	"github.com/eapache/channels"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -109,7 +107,7 @@ type TransactionPool interface {
 	GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int)
 
 	// ProcessBlock updates the last known runtime block information.
-	ProcessBlock(bi *BlockInfo) error
+	ProcessBlock(bi *runtime.BlockInfo) error
 
 	// ProcessIncomingMessages loads transactions from incoming messages into the pool.
 	ProcessIncomingMessages(inMsgs []*message.IncomingMessage) error
@@ -144,21 +142,6 @@ type TransactionPublisher interface {
 	// the caller. If PublishTx is called for the same transaction more quickly, the transaction
 	// may be dropped and not published.
 	GetMinRepublishInterval() time.Duration
-}
-
-// BlockInfo contains information related to the given runtime block.
-type BlockInfo struct {
-	// RuntimeBlock is the runtime block.
-	RuntimeBlock *block.Block
-
-	// ConsensusBlock is the consensus light block the runtime block belongs to.
-	ConsensusBlock *consensus.LightBlock
-
-	// Epoch is the epoch the runtime block belongs to.
-	Epoch beacon.EpochTime
-
-	// ActiveDescriptor is the runtime descriptor active for the runtime block.
-	ActiveDescriptor *registry.Runtime
 }
 
 type txPool struct {
@@ -199,7 +182,7 @@ type txPool struct {
 	proposedTxs     map[hash.Hash]*TxQueueMeta
 
 	blockInfoLock      sync.Mutex
-	blockInfo          *BlockInfo
+	blockInfo          *runtime.BlockInfo
 	lastBlockProcessed time.Time
 	lastRecheckRound   uint64
 
@@ -397,7 +380,7 @@ HASH_LOOP:
 	return txs, missingTxs
 }
 
-func (t *txPool) ProcessBlock(bi *BlockInfo) error {
+func (t *txPool) ProcessBlock(bi *runtime.BlockInfo) error {
 	t.blockInfoLock.Lock()
 	defer t.blockInfoLock.Unlock()
 
@@ -434,7 +417,7 @@ func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) erro
 	return nil
 }
 
-func (t *txPool) updateScheduler(bi *BlockInfo) error {
+func (t *txPool) updateScheduler(bi *runtime.BlockInfo) error {
 	// Reset ticker to the new interval.
 	t.schedulerTicker.Reset(bi.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
 
@@ -463,7 +446,7 @@ func (t *txPool) PendingCheckSize() int {
 	return t.checkTxQueue.size()
 }
 
-func (t *txPool) getCurrentBlockInfo() (*BlockInfo, time.Time, error) {
+func (t *txPool) getCurrentBlockInfo() (*runtime.BlockInfo, time.Time, error) {
 	t.blockInfoLock.Lock()
 	defer t.blockInfoLock.Unlock()
 

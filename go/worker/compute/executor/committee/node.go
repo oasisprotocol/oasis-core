@@ -23,6 +23,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -284,7 +285,7 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 
 // HandleNewBlockEarlyLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
+func (n *Node) HandleNewBlockEarlyLocked(bi *runtime.BlockInfo) {
 	crash.Here(crashPointRoothashReceiveAfter)
 
 	// If we have seen a new block while a batch was processing, we need to
@@ -296,8 +297,8 @@ func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 
 // HandleNewBlockLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewBlockLocked(blk *block.Block) {
-	header := blk.Header
+func (n *Node) HandleNewBlockLocked(bi *runtime.BlockInfo) {
+	header := bi.RuntimeBlock.Header
 
 	// Cancel old round context, start a new one.
 	if n.roundCancelCtx != nil {
@@ -364,9 +365,9 @@ func (n *Node) HandleNewBlockLocked(blk *block.Block) {
 	n.proposingTimeout = false
 
 	// Check if we are a proposer and if so try to immediately schedule a new batch.
-	if n.commonNode.Group.GetEpochSnapshot().IsTransactionScheduler(blk.Header.Round) {
+	if n.commonNode.Group.GetEpochSnapshot().IsTransactionScheduler(header.Round) {
 		n.logger.Info("we are a transaction scheduler",
-			"round", blk.Header.Round,
+			"round", header.Round,
 		)
 
 		n.commonNode.TxPool.WakeupScheduler()
