@@ -152,6 +152,8 @@ func RegisterScenarios() error {
 		MinTransactBalance,
 		// Consensus governance update parameters tests.
 		ChangeParametersMinCommissionRate,
+		// Consensus governance change reward schedule test.
+		ChangeParametersRewardSchedule,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

@@ -1224,6 +1224,9 @@ type ConsensusParameterChanges struct {
 	// DebondingInterval is the new debonding interval.
 	DebondingInterval *beacon.EpochTime `json:"debonding_interval,omitempty"`
 
+	// RewardSchedule is the new reward schedule.
+	RewardSchedule *[]RewardStep `json:"reward_schedule,omitempty"`
+
 	// GasCosts are the new gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
 
@@ -1264,6 +1267,9 @@ type ConsensusParameterChanges struct {
 func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
 	if c.DebondingInterval != nil {
 		params.DebondingInterval = *c.DebondingInterval
+	}
+	if c.RewardSchedule != nil {
+		params.RewardSchedule = *c.RewardSchedule
 	}
 	if c.GasCosts != nil {
 		params.GasCosts = c.GasCosts
