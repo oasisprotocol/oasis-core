@@ -8,7 +8,7 @@ use chrono::prelude::*;
 use lazy_static::lazy_static;
 use oid_registry::{OID_PKCS1_RSAENCRYPTION, OID_PKCS1_SHA256WITHRSA};
 use percent_encoding;
-use rsa::{padding::PaddingScheme, pkcs1::DecodeRsaPublicKey, Hash, PublicKey, RsaPublicKey};
+use rsa::{pkcs1::DecodeRsaPublicKey, pkcs1v15::Pkcs1v15Sign, RsaPublicKey};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
 use sha2::{digest::Update as _, Digest, Sha256};
@@ -453,11 +453,11 @@ fn validate_avr_signature(
 
     // Validate the actual signature.
     let leaf_pk = extract_certificate_rsa_public_key(&leaf)?;
-    let padding = PaddingScheme::new_pkcs1v15_sign(Some(Hash::SHA2_256));
+    let scheme = Pkcs1v15Sign::new::<sha2::Sha256>();
     let digest = Sha256::new().chain(message).finalize();
     let signature = base64::decode(signature)?;
     leaf_pk
-        .verify(padding, &digest, &signature)
+        .verify(scheme, &digest, &signature)
         .map_err(|_| AVRError::InvalidSignature)?;
     Ok(())
 }
@@ -478,13 +478,13 @@ fn check_certificate_rsa_signature(cert: &X509Certificate, public_key: &RsaPubli
     if cert.signature_algorithm.algorithm != OID_PKCS1_SHA256WITHRSA {
         return false;
     }
-    let padding = PaddingScheme::new_pkcs1v15_sign(Some(Hash::SHA2_256));
+    let scheme = Pkcs1v15Sign::new::<sha2::Sha256>();
     let digest = Sha256::new()
         .chain(cert.tbs_certificate.as_ref())
         .finalize();
 
     public_key
-        .verify(padding, &digest, &cert.signature_value.data)
+        .verify(scheme, &digest, &cert.signature_value.data)
         .is_ok()
 }
 
