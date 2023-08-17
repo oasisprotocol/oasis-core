@@ -43,7 +43,7 @@ fn derive_symmetric_key(public: &PublicKey, private: &StaticSecret) -> [u8; KEY_
 /// Generates a public/private key pair suitable for use with
 /// `derive_symmetric_key`, `box_seal`, and `box_open`.
 pub fn generate_key_pair() -> (PublicKey, StaticSecret) {
-    let sk = StaticSecret::new(OsRng);
+    let sk = StaticSecret::random_from_rng(OsRng);
     let pk = PublicKey::from(&sk);
 
     (pk, sk)
