@@ -38,9 +38,6 @@ impl PrivateKey {
 impl From<[u8; PRIVATE_KEY_LENGTH]> for PrivateKey {
     /// Load private key from a byte array.
     fn from(bytes: [u8; PRIVATE_KEY_LENGTH]) -> PrivateKey {
-        // We must clamp to match previous x25519-dalek behavior and the test vectors.
-        let bytes = curve25519_dalek::scalar::clamp_integer(bytes);
-
         PrivateKey(x25519_dalek::StaticSecret::from(bytes))
     }
 }
