@@ -56,8 +56,7 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 				EntityID:   entitySigner.Public(),
 				Expiration: 32,
 				TLS: node.TLSInfo{
-					PubKey:     signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
-					NextPubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1"),
+					PubKey: signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"),
 				},
 				P2P: node.P2PInfo{
 					ID:        signature.NewPublicKey("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3"),

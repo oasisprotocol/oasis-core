@@ -118,8 +118,8 @@ type IdentityStatus struct {
 	// Consensus is the consensus public key.
 	Consensus signature.PublicKey `json:"consensus"`
 
-	// TLS are the public keys used for TLS connections.
-	TLS []signature.PublicKey `json:"tls"`
+	// TLS is the public key used for TLS connections.
+	TLS signature.PublicKey `json:"tls"`
 }
 
 // RegistrationStatus is the node registration status.

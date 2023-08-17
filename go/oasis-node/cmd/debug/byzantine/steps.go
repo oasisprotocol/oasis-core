@@ -25,7 +25,7 @@ func initDefaultIdentity(dataDir string) (*identity.Identity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("identity NewFactory: %w", err)
 	}
-	id, err := identity.LoadOrGenerate(dataDir, signerFactory, false)
+	id, err := identity.LoadOrGenerate(dataDir, signerFactory)
 	if err != nil {
 		return nil, fmt.Errorf("identity LoadOrGenerate: %w", err)
 	}

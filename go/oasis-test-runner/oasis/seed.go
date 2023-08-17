@@ -42,8 +42,6 @@ func (seed *Seed) ModifyConfig() error {
 
 	seed.Config.P2P.Port = seed.libp2pSeedPort
 
-	seed.Config.Registration.RotateCerts = 1
-
 	seed.AddSeedNodesToConfigExcept(seed.Name)
 
 	return nil
@@ -64,7 +62,7 @@ func (net *Network) NewSeed(cfg *SeedCfg) (*Seed, error) {
 	if err != nil {
 		return nil, fmt.Errorf("oasis/seed: failed to create seed signer factory: %w", err)
 	}
-	seedIdentity, err := identity.LoadOrGenerate(host.dir.String(), signerFactory, false)
+	seedIdentity, err := identity.LoadOrGenerate(host.dir.String(), signerFactory)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/seed: failed to provision seed identity: %w", err)
 	}

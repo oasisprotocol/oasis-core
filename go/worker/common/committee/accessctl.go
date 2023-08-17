@@ -20,15 +20,6 @@ func (ap AccessPolicy) AddRulesForNodes(policy *accessctl.Policy, nodes []*node.
 		for _, action := range ap.Actions {
 			policy.Allow(subject, action)
 		}
-
-		// Make sure to also allow the node to perform actions after it has
-		// rotated its TLS certificates.
-		if node.TLS.NextPubKey.IsValid() {
-			subject := accessctl.SubjectFromPublicKey(node.TLS.NextPubKey)
-			for _, action := range ap.Actions {
-				policy.Allow(subject, action)
-			}
-		}
 	}
 }
 
@@ -53,15 +44,6 @@ func (ap AccessPolicy) AddRulesForNodeRoles(
 			subject := accessctl.SubjectFromPublicKey(n.TLS.PubKey)
 			for _, action := range ap.Actions {
 				policy.Allow(subject, action)
-			}
-
-			// Make sure to also allow the node to perform actions after is has
-			// rotated its TLS certificates.
-			if n.TLS.NextPubKey.IsValid() {
-				subject := accessctl.SubjectFromPublicKey(n.TLS.NextPubKey)
-				for _, action := range ap.Actions {
-					policy.Allow(subject, action)
-				}
 			}
 		}
 	}

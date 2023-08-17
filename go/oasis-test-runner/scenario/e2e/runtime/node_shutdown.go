@@ -49,9 +49,6 @@ func (sc *nodeShutdownImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Make sure the tested nodes can terminate early.
 	f.ComputeWorkers[0].AllowEarlyTermination = true
 	f.ComputeWorkers[1].AllowEarlyTermination = true
-	// Disable cert rotation, as we will try to register with duplicate keys.
-	f.ComputeWorkers[1].DisableCertRotation = true
-	f.ComputeWorkers[2].DisableCertRotation = true
 
 	return f, nil
 }

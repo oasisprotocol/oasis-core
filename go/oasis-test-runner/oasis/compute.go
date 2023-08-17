@@ -39,7 +39,6 @@ type Compute struct { // nolint: maligned
 	sentryIndices []int
 
 	storageBackend          string
-	disableCertRotation     bool
 	disablePublicRPC        bool
 	checkpointSyncDisabled  bool
 	checkpointCheckInterval time.Duration
@@ -65,7 +64,6 @@ type ComputeCfg struct {
 	SentryIndices []int
 
 	StorageBackend          string
-	DisableCertRotation     bool
 	DisablePublicRPC        bool
 	CheckpointSyncDisabled  bool
 	CheckpointCheckInterval time.Duration
@@ -165,12 +163,6 @@ func (worker *Compute) ModifyConfig() error {
 		worker.Config.Registration.Entity = filepath.Join(dir, "entity.json")
 	}
 
-	if worker.disableCertRotation {
-		worker.Config.Registration.RotateCerts = 0
-	} else {
-		worker.Config.Registration.RotateCerts = 1
-	}
-
 	worker.Config.Mode = config.ModeCompute
 	worker.Config.Runtime.Provisioner = worker.runtimeProvisioner
 	worker.Config.Runtime.SGXLoader = worker.net.cfg.RuntimeSGXLoaderBinary
@@ -206,7 +198,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	err = host.setProvisionedIdentity(cfg.DisableCertRotation, fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers)))
+	err = host.setProvisionedIdentity(fmt.Sprintf(computeIdentitySeedTemplate, len(net.computeWorkers)))
 	if err != nil {
 		return nil, fmt.Errorf("oasis/compute: failed to provision node identity: %w", err)
 	}
@@ -241,7 +233,6 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		Node:                    host,
 		storageBackend:          cfg.StorageBackend,
 		sentryIndices:           cfg.SentryIndices,
-		disableCertRotation:     cfg.DisableCertRotation,
 		disablePublicRPC:        cfg.DisablePublicRPC,
 		checkpointSyncDisabled:  cfg.CheckpointSyncDisabled,
 		checkpointCheckInterval: cfg.CheckpointCheckInterval,

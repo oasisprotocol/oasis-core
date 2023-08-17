@@ -425,7 +425,7 @@ func (n *Node) SetConsensusStateSync(cfg *ConsensusStateSyncCfg) {
 	n.consensusStateSync = cfg
 }
 
-func (n *Node) setProvisionedIdentity(persistTLS bool, seed string) error {
+func (n *Node) setProvisionedIdentity(seed string) error {
 	if len(seed) < 1 {
 		seed = n.Name
 	}
@@ -433,7 +433,7 @@ func (n *Node) setProvisionedIdentity(persistTLS bool, seed string) error {
 		return nil
 	}
 
-	nodeSigner, p2pSigner, sentryCert, err := n.net.provisionNodeIdentity(n.dir, seed, persistTLS)
+	nodeSigner, p2pSigner, sentryCert, err := n.net.provisionNodeIdentity(n.dir, seed)
 	if err != nil {
 		return err
 	}

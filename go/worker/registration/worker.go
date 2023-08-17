@@ -14,7 +14,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/accessctl"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -334,13 +333,11 @@ func (w *Worker) registrationLoop() { // nolint: gocyclo
 	defer entitySub.Close()
 
 	var (
-		epoch                beacon.EpochTime = beacon.EpochInvalid
-		lastTLSRotationEpoch beacon.EpochTime
+		epoch beacon.EpochTime = beacon.EpochInvalid
 
 		reregisterHeight int64 = math.MaxInt64
 
-		tlsRotationPending = true
-		first              = true
+		first = true
 	)
 Loop:
 	for {
@@ -362,34 +359,6 @@ Loop:
 			)
 		case epoch = <-ch:
 			// Epoch updated, check if we can submit a registration.
-
-			// Check if we need to rotate the node's TLS certificate.
-			if !w.identity.DoNotRotateTLS && !tlsRotationPending {
-				// Per how many epochs should we do rotations?
-				// TODO: Make this time-based instead.
-				rotateTLSCertsPer := beacon.EpochTime(config.GlobalConfig.Registration.RotateCerts)
-				if rotateTLSCertsPer != 0 && (epoch-lastTLSRotationEpoch) >= rotateTLSCertsPer {
-					// Rotate node TLS certificates.
-					err := w.identity.RotateCertificates()
-					if err != nil {
-						w.logger.Error("node TLS certificate rotation failed",
-							"new_epoch", epoch,
-							"err", err,
-						)
-					} else {
-						pub1 := w.identity.GetTLSSigner().Public()
-						pub2 := w.identity.GetNextTLSSigner().Public()
-						tlsRotationPending = true
-
-						w.logger.Info("node TLS certificates have been rotated",
-							"new_epoch", epoch,
-							"new_pub1", accessctl.SubjectFromPublicKey(pub1),
-							"new_pub2", accessctl.SubjectFromPublicKey(pub2),
-						)
-					}
-				}
-			}
-
 			if delayReregistration {
 				// Derive the re-registration delay.
 				epochHeight, err := w.beacon.GetEpochBlock(w.ctx, epoch)
@@ -564,12 +533,6 @@ Loop:
 				}
 			}
 		}()
-
-		// Do not perform TLS rotation unless we have successfully (re-)registered.
-		if tlsRotationPending {
-			lastTLSRotationEpoch = epoch
-			tlsRotationPending = false
-		}
 	}
 }
 
@@ -872,19 +835,13 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (er
 		"node_id", identityPublic.String(),
 	)
 
-	var nextPubKey signature.PublicKey
-	if s := w.identity.GetNextTLSSigner(); s != nil {
-		nextPubKey = s.Public()
-	}
-
 	nodeDesc := node.Node{
 		Versioned:  cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:         identityPublic,
 		EntityID:   w.entityID,
 		Expiration: uint64(epoch) + 2,
 		TLS: node.TLSInfo{
-			PubKey:     w.identity.GetTLSSigner().Public(),
-			NextPubKey: nextPubKey,
+			PubKey: w.identity.TLSSigner.Public(),
 		},
 		P2P: node.P2PInfo{
 			ID: w.identity.P2PSigner.Public(),
@@ -956,7 +913,7 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (er
 		w.identity.P2PSigner,
 		w.identity.ConsensusSigner,
 		w.identity.VRFSigner,
-		w.identity.GetTLSSigner(),
+		w.identity.TLSSigner,
 	}
 	if !w.identity.NodeSigner.Public().Equal(w.registrationSigner.Public()) {
 		// In the case where the registration signer is the entity signer
@@ -1102,10 +1059,6 @@ func New(
 	err = serviceStore.GetCBOR(deregistrationRequestStoreKey, &storedDeregister)
 	if err != nil && err != persistent.ErrNotFound {
 		return nil, err
-	}
-
-	if config.GlobalConfig.Registration.RotateCerts != 0 && identity.DoNotRotateTLS {
-		return nil, fmt.Errorf("node TLS certificate rotation must not be enabled if using pre-generated TLS certificates")
 	}
 
 	w := &Worker{

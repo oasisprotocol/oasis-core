@@ -59,10 +59,9 @@ func NewServerTCP(cert *tls.Certificate, installWrapper bool) (*cmnGrpc.Server, 
 	config := &cmnGrpc.ServerConfig{
 		Name:           "internal",
 		Port:           uint16(viper.GetInt(CfgServerPort)),
-		Identity:       &identity.Identity{},
+		Identity:       identity.WithTLSCertificate(cert),
 		InstallWrapper: installWrapper,
 	}
-	config.Identity.SetTLSCertificate(cert)
 	return cmnGrpc.NewServer(config)
 }
 

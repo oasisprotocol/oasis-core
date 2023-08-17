@@ -86,7 +86,7 @@ func loadOrGenerateIdentity(dataDir string, logger *logging.Logger) (*identity.I
 		)
 		return nil, err
 	}
-	identity, err := identity.LoadOrGenerate(dataDir, signerFactory, false)
+	identity, err := identity.LoadOrGenerate(dataDir, signerFactory)
 	if err != nil {
 		logger.Error("failed to load/generate identity",
 			"err", err,
@@ -98,7 +98,7 @@ func loadOrGenerateIdentity(dataDir string, logger *logging.Logger) (*identity.I
 		"node_pk", identity.NodeSigner.Public(),
 		"p2p_pk", identity.P2PSigner.Public(),
 		"consensus_pk", identity.ConsensusSigner.Public(),
-		"tls_pk", identity.GetTLSSigner().Public(),
+		"tls_pk", identity.TLSSigner.Public(),
 	)
 
 	return identity, nil

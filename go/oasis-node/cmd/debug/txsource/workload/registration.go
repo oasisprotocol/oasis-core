@@ -109,7 +109,7 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 		Expiration: 0,
 		Roles:      availableRoles[rng.Intn(len(availableRoles))],
 		TLS: node.TLSInfo{
-			PubKey: nodeIdentity.GetTLSSigner().Public(),
+			PubKey: nodeIdentity.TLSSigner.Public(),
 		},
 		P2P: node.P2PInfo{
 			ID: nodeIdentity.P2PSigner.Public(),
@@ -144,7 +144,7 @@ func signNode(identity *identity.Identity, nodeDesc *node.Node) (*node.MultiSign
 			identity.NodeSigner,
 			identity.P2PSigner,
 			identity.ConsensusSigner,
-			identity.GetTLSSigner(),
+			identity.TLSSigner,
 			identity.VRFSigner,
 		},
 		registry.RegisterNodeSignatureContext,
@@ -236,7 +236,7 @@ func (r *registration) Run( // nolint: gocyclo
 			if err != nil {
 				return fmt.Errorf("failed to create a temporary directory: %w", err)
 			}
-			ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory(), false)
+			ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
 			if err != nil {
 				return fmt.Errorf("failed generating account node identity: %w", err)
 			}

@@ -108,7 +108,7 @@ func (net *Network) NewByzantine(cfg *ByzantineCfg) (*Byzantine, error) {
 	}
 
 	// Pre-provision the node identity so that we can update the entity.
-	host.nodeSigner, host.p2pSigner, host.sentryCert, err = net.provisionNodeIdentity(host.dir, cfg.IdentitySeed, false)
+	host.nodeSigner, host.p2pSigner, host.sentryCert, err = net.provisionNodeIdentity(host.dir, cfg.IdentitySeed)
 	if err != nil {
 		return nil, fmt.Errorf("oasis/byzantine: failed to provision node identity: %w", err)
 	}

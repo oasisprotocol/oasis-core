@@ -186,11 +186,10 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	svrCfg := &grpc.ServerConfig{
 		Name:             "remote-signer",
 		Port:             uint16(viper.GetInt(cmdGrpc.CfgServerPort)),
-		Identity:         &identity.Identity{},
+		Identity:         identity.WithTLSCertificate(cert),
 		AuthFunc:         peerCertAuth.AuthFunc,
 		ClientCommonName: clientCommonName,
 	}
-	svrCfg.Identity.SetTLSCertificate(cert)
 	svr, err := grpc.NewServer(svrCfg)
 	if err != nil {
 		logger.Error("failed to instantiate gRPC server",

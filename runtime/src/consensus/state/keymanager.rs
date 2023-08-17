@@ -155,7 +155,7 @@ mod test {
 
     #[test]
     fn test_keymanager_state_interop() {
-        // Keep in sync with go/consensus/tendermint/apps/keymanager/state/interop/interop.go.
+        // Keep in sync with go/consensus/cometbft/apps/keymanager/state/interop/interop.go.
         // If mock consensus state changes, update the root hash bellow.
         // See protocol server stdout for hash.
         // To make the hash show up during tests, run "cargo test" as
@@ -166,7 +166,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("a40448052f74a1c0c2d47c2b01a433ad7f3782ea47dfe5575170fec2587569c9"),
+            hash: Hash::from("e665876318cda0ee2364ee7a36903f03db973c6a29666339971e8ed674a6eb12"),
             ..Default::default()
         };
         let mkvs = Tree::builder()

@@ -81,7 +81,7 @@ func (net *Network) NewClient(cfg *ClientCfg) (*Client, error) {
 	}
 
 	// Pre-provision the node identity so that we can identify the entity.
-	err = host.setProvisionedIdentity(false, fmt.Sprintf(clientIdentitySeedTemplate, len(net.clients)))
+	err = host.setProvisionedIdentity(fmt.Sprintf(clientIdentitySeedTemplate, len(net.clients)))
 	if err != nil {
 		return nil, fmt.Errorf("oasis/client: failed to provision node identity: %w", err)
 	}

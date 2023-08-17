@@ -153,8 +153,8 @@ func (nv2 *nodeV2) ToV3() *Node {
 		Consensus:       nv2.Consensus,
 		Runtimes:        nv2.Runtimes,
 		SoftwareVersion: nv2.SoftwareVersion,
-		Roles:           nv2.Roles & ^roleReserved3,                                      // Clear consensus-rpc role.
-		TLS:             TLSInfo{PubKey: nv2.TLS.PubKey, NextPubKey: nv2.TLS.NextPubKey}, // Migrate to new TLS Info.
+		Roles:           nv2.Roles & ^roleReserved3,      // Clear consensus-rpc role.
+		TLS:             TLSInfo{PubKey: nv2.TLS.PubKey}, // Migrate to new TLS Info.
 	}
 	if nv2.VRF != nil {
 		nv3.VRF = *nv2.VRF
@@ -435,10 +435,6 @@ type Runtime struct {
 type TLSInfo struct {
 	// PubKey is the public key used for establishing TLS connections.
 	PubKey signature.PublicKey `json:"pub_key"`
-
-	// NextPubKey is the public key that will be used for establishing TLS connections after
-	// certificate rotation (if enabled).
-	NextPubKey signature.PublicKey `json:"next_pub_key,omitempty"`
 }
 
 // nodeV2TLSInfo is TLSInfo used in version 2 node descriptors.
@@ -446,9 +442,9 @@ type nodeV2TLSInfo struct {
 	// PubKey is the public key used for establishing TLS connections.
 	PubKey signature.PublicKey `json:"pub_key"`
 
-	// NextPubKey is the public key that will be used for establishing TLS connections after
-	// certificate rotation (if enabled).
-	NextPubKey signature.PublicKey `json:"next_pub_key,omitempty"`
+	// DeprecatedNextPubKey is the public key that would be used for establishing TLS connections after
+	// certificate rotation, which was removed.
+	DeprecatedNextPubKey signature.PublicKey `json:"next_pub_key,omitempty"`
 
 	// DeprecatedAddresses contains information about node's TLS addresses, which were used
 	// in previous versions of oasis-core and removed in V3.
@@ -457,15 +453,7 @@ type nodeV2TLSInfo struct {
 
 // Equal compares vs another TLSInfo for equality.
 func (t *TLSInfo) Equal(other *TLSInfo) bool {
-	if !t.PubKey.Equal(other.PubKey) {
-		return false
-	}
-
-	if !t.NextPubKey.Equal(other.NextPubKey) {
-		return false
-	}
-
-	return true
+	return t.PubKey.Equal(other.PubKey)
 }
 
 // P2PInfo contains information for connecting to this node via P2P transport.

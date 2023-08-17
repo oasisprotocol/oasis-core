@@ -63,14 +63,14 @@ func CreateCertificate(t *testing.T) (*tls.Certificate, *x509.Certificate) {
 	require.NoError(err, "Failed to create a temporary directory")
 	defer os.RemoveAll(dataDir)
 
-	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory(), false)
+	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
 	require.NoError(err, "Failed to generate a new identity")
-	require.Len(ident.GetTLSCertificate().Certificate, 1, "The generated identity contains more than 1 TLS certificate in the chain")
+	require.Len(ident.TLSCertificate.Certificate, 1, "The generated identity contains more than 1 TLS certificate in the chain")
 
-	x509Cert, err := x509.ParseCertificate(ident.GetTLSCertificate().Certificate[0])
+	x509Cert, err := x509.ParseCertificate(ident.TLSCertificate.Certificate[0])
 	require.NoError(err, "Failed to parse X.509 certificate from TLS certificate")
 
-	return ident.GetTLSCertificate(), x509Cert
+	return ident.TLSCertificate, x509Cert
 }
 
 // PingQuery is the PingServer query.

@@ -175,7 +175,7 @@ func (n *Node) getIdentityStatus() control.IdentityStatus {
 	return control.IdentityStatus{
 		Node:      n.Identity.NodeSigner.Public(),
 		Consensus: n.Identity.ConsensusSigner.Public(),
-		TLS:       n.Identity.GetTLSPubKeys(),
+		TLS:       n.Identity.TLSSigner.Public(),
 	}
 }
 

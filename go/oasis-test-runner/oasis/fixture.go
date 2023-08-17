@@ -172,8 +172,6 @@ type ValidatorFixture struct { // nolint: maligned
 
 	EnableProfiling bool `json:"enable_profiling"`
 
-	DisableCertRotation bool `json:"disable_cert_rotation"`
-
 	Entity int `json:"entity"`
 
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
@@ -209,8 +207,7 @@ func (f *ValidatorFixture) Create(net *Network) (*Validator, error) {
 			Entity:                      entity,
 			ExtraArgs:                   f.ExtraArgs,
 		},
-		Sentries:            sentries,
-		DisableCertRotation: f.DisableCertRotation,
+		Sentries: sentries,
 	})
 }
 
@@ -383,9 +380,8 @@ type ComputeWorkerFixture struct {
 
 	EnableProfiling bool `json:"enable_profiling"`
 
-	StorageBackend      string `json:"storage_backend,omitempty"`
-	DisableCertRotation bool   `json:"disable_cert_rotation"`
-	DisablePublicRPC    bool   `json:"disable_public_rpc"`
+	StorageBackend   string `json:"storage_backend,omitempty"`
+	DisablePublicRPC bool   `json:"disable_public_rpc"`
 
 	// Consensus contains configuration for the consensus backend.
 	Consensus ConsensusFixture `json:"consensus"`
@@ -436,7 +432,6 @@ func (f *ComputeWorkerFixture) Create(net *Network) (*Compute, error) {
 		// The checkpoint syncing flag is intentionally flipped here.
 		// Syncing should normally be enabled, but normally disabled in tests.
 		CheckpointSyncDisabled: !f.CheckpointSyncEnabled,
-		DisableCertRotation:    f.DisableCertRotation,
 		DisablePublicRPC:       f.DisablePublicRPC,
 		Runtimes:               f.Runtimes,
 		RuntimeConfig:          f.RuntimeConfig,

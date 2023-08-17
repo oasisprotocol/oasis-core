@@ -63,10 +63,6 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	f.Network.Consensus.Parameters.StateCheckpointInterval = 10
 	f.Network.Consensus.Parameters.StateCheckpointNumKept = 2
 	f.Network.Consensus.Parameters.StateCheckpointChunkSize = 1024 * 1024
-	// Disable certificate rotation on validator nodes so we can more easily use them for sync.
-	for i := range f.Validators {
-		f.Validators[i].DisableCertRotation = true
-	}
 	// No need for key managers.
 	f.Runtimes = f.Runtimes[1:]
 	f.Runtimes[0].Keymanager = -1

@@ -506,7 +506,6 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 	// Replace our testNode fields with the generated one, so we can just marshal both nodes and compare the output afterwards.
 	testNode.ID = n.ID
 	testNode.TLS.PubKey = n.TLS.PubKey
-	testNode.TLS.NextPubKey = n.TLS.NextPubKey
 	testNode.P2P.ID = n.P2P.ID
 	testNode.Consensus.ID = n.Consensus.ID
 	testNode.VRF = n.VRF
@@ -529,7 +528,6 @@ func (sc *registryCLIImpl) initNode(childEnv *env.Env, ent *entity.Entity, entDi
 
 	// TLS keys are regenerated each time, so replace them with new ones.
 	testNode.TLS.PubKey = n.TLS.PubKey
-	testNode.TLS.NextPubKey = n.TLS.NextPubKey
 	testNodeStr, _ = json.Marshal(testNode)
 
 	nStr, _ = json.Marshal(n)

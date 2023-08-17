@@ -176,7 +176,7 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 			identity.P2PSigner,
 			identity.ConsensusSigner,
 			identity.VRFSigner,
-			identity.GetTLSSigner(),
+			identity.TLSSigner,
 		}
 		sigNode, err := node.MultiSignNode(nodeSigners, registry.RegisterNodeSignatureContext, nodeDesc)
 		if err != nil {
