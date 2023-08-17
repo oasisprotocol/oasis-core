@@ -11,7 +11,7 @@ use percent_encoding;
 use rsa::{padding::PaddingScheme, pkcs1::DecodeRsaPublicKey, Hash, PublicKey, RsaPublicKey};
 use serde_json;
 use sgx_isa::{AttributesFlags, Report};
-use sha2::{Digest, Sha256};
+use sha2::{digest::Update as _, Digest, Sha256};
 use thiserror::Error;
 use x509_parser::prelude::*;
 
