@@ -1,16 +1,13 @@
 //! Deoxys-II-256-128 MRAE primitives implementation.
 use anyhow::Result;
+use hmac::{Hmac, Mac};
 use rand::rngs::OsRng;
+use sha2::Sha512_256;
 use x25519_dalek::{PublicKey, StaticSecret};
 
-pub use super::deoxysii_rust::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE};
+pub use deoxysii::{DeoxysII, KEY_SIZE, NONCE_SIZE, TAG_SIZE};
 
-use super::{
-    hmac::{Hmac, Mac, NewMac},
-    sha2::Sha512Trunc256,
-};
-
-type Kdf = Hmac<Sha512Trunc256>;
+type Kdf = Hmac<Sha512_256>;
 
 /// An abstract Deoxys-II-256-128 box opener.
 pub trait Opener: Send + Sync {
@@ -43,7 +40,7 @@ fn derive_symmetric_key(public: &PublicKey, private: &StaticSecret) -> [u8; KEY_
 /// Generates a public/private key pair suitable for use with
 /// `derive_symmetric_key`, `box_seal`, and `box_open`.
 pub fn generate_key_pair() -> (PublicKey, StaticSecret) {
-    let sk = StaticSecret::new(OsRng);
+    let sk = StaticSecret::random_from_rng(OsRng);
     let pk = PublicKey::from(&sk);
 
     (pk, sk)

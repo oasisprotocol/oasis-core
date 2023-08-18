@@ -1,5 +1,5 @@
 //! Signature types.
-use std::{cmp::Ordering, io::Cursor};
+use std::{cmp::Ordering, convert::TryInto, io::Cursor};
 
 use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -7,9 +7,8 @@ use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     scalar::Scalar,
 };
-use ed25519_dalek::{self, Signer as _};
+use ed25519_dalek::{self, Digest as _, Sha512, Signer as _};
 use rand::rngs::OsRng;
-use sha2::{Digest as _, Sha512};
 use thiserror::Error;
 use zeroize::Zeroize;
 
@@ -51,19 +50,17 @@ static CURVE_ORDER: &[u64] = &[
 ];
 
 /// An Ed25519 private key.
-pub struct PrivateKey(pub ed25519_dalek::Keypair);
+pub struct PrivateKey(pub ed25519_dalek::SigningKey);
 
 impl PrivateKey {
     /// Generates a new private key pair.
     pub fn generate() -> Self {
-        let mut rng = OsRng {};
-
-        PrivateKey(ed25519_dalek::Keypair::generate(&mut rng))
+        PrivateKey(ed25519_dalek::SigningKey::generate(&mut OsRng))
     }
 
     /// Convert this private key into bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = self.0.secret.to_bytes();
+        let mut bytes = self.0.to_bytes();
         let bvec = bytes.to_vec();
         bytes.zeroize();
         bvec
@@ -74,28 +71,26 @@ impl PrivateKey {
     /// # Panics
     ///
     /// This method will panic in case the passed bytes do not have the correct length.
-    pub fn from_bytes(mut bytes: Vec<u8>) -> PrivateKey {
-        let secret = ed25519_dalek::SecretKey::from_bytes(&bytes).unwrap();
-        bytes.zeroize();
-        #[allow(clippy::needless_borrow)]
-        let public = (&secret).into();
+    pub fn from_bytes(bytes: Vec<u8>) -> PrivateKey {
+        let mut sk = bytes.try_into().unwrap();
+        let secret = ed25519_dalek::SigningKey::from_bytes(&sk);
+        sk.zeroize();
 
-        PrivateKey(ed25519_dalek::Keypair { secret, public })
+        PrivateKey(secret)
     }
 
     /// Generate a new private key from a test key seed.
     pub fn from_test_seed(seed: String) -> Self {
-        let seed = Hash::digest_bytes(seed.as_bytes());
-        let secret = ed25519_dalek::SecretKey::from_bytes(seed.as_ref()).unwrap();
-        #[allow(clippy::needless_borrow)]
-        let pk: ed25519_dalek::PublicKey = (&secret).into();
+        let mut seed = Hash::digest_bytes(seed.as_bytes());
+        let sk = Self::from_bytes(seed.as_ref().to_vec());
+        seed.zeroize();
 
-        PrivateKey(ed25519_dalek::Keypair { secret, public: pk })
+        sk
     }
 
     /// Returns the public key.
     pub fn public_key(&self) -> PublicKey {
-        PublicKey(self.0.public.to_bytes())
+        PublicKey(self.0.verifying_key().to_bytes())
     }
 }
 
@@ -137,11 +132,9 @@ impl Signature {
         // TODO/perf:
         //  * PublicKey could just be an EdwardsPoint.
         //  * Could cache the results of is_small_order() in PublicKey.
-        let A = CompressedEdwardsY::from_slice(pk.as_ref());
-        let A = match A.decompress() {
-            Some(point) => point,
-            None => return Err(SignatureError::PointDecompression.into()),
-        };
+        let A = CompressedEdwardsY::from_slice(pk.as_ref())
+            .map_err(|_| SignatureError::PointDecompression)?;
+        let A = A.decompress().ok_or(SignatureError::PointDecompression)?;
         if A.is_small_order() {
             return Err(SignatureError::SmallOrderA.into());
         }
@@ -155,11 +148,9 @@ impl Signature {
         let R_bits = &sig_slice[..32];
         let S_bits = &sig_slice[32..];
 
-        let R = CompressedEdwardsY::from_slice(R_bits);
-        let R = match R.decompress() {
-            Some(point) => point,
-            None => return Err(SignatureError::PointDecompression.into()),
-        };
+        let R = CompressedEdwardsY::from_slice(R_bits)
+            .map_err(|_| SignatureError::PointDecompression)?;
+        let R = R.decompress().ok_or(SignatureError::PointDecompression)?;
         if R.is_small_order() {
             return Err(SignatureError::SmallOrderR.into());
         }
@@ -169,6 +160,7 @@ impl Signature {
         }
         let mut S: [u8; 32] = [0u8; 32];
         S.copy_from_slice(S_bits);
+        #[allow(deprecated)] // S is only used for vartime_double_scalar_mul_basepoint.
         let S = Scalar::from_bits(S);
 
         // k = H(R,A,m)

@@ -345,7 +345,7 @@ impl Verifier {
         };
 
         // Compute hash of the transaction.
-        let digest = Sha256::digest(&cbor::to_vec(signed_tx.clone()));
+        let digest = Sha256::digest(cbor::to_vec(signed_tx.clone()));
         let mut tx_hash = [0u8; HASH_SIZE];
         tx_hash.copy_from_slice(&digest);
 

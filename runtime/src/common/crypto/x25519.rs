@@ -20,7 +20,7 @@ pub struct PrivateKey(pub x25519_dalek::StaticSecret);
 impl PrivateKey {
     /// Generate a new private key.
     pub fn generate() -> Self {
-        PrivateKey(x25519_dalek::StaticSecret::new(OsRng))
+        PrivateKey(x25519_dalek::StaticSecret::random_from_rng(OsRng))
     }
 
     /// Compute corresponding public key.

@@ -1703,11 +1703,11 @@ mod tests {
                 generation: 0,
                 epoch: 8935419451,
                 // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
-                lk_sk: "702c5a25ff1149591cf7bca763fbe647a43939f43330a8fd331305d73e489b7c",
+                lk_sk: "762c5a25ff1149591cf7bca763fbe647a43939f43330a8fd331305d73e489bbc",
                 lk_pk: "66013b5ad263b4fa504e8682371fbfa102d18cc1e1b811bc125603b1abc9487b",
-                // lk_sk: "a009036a2a796c3bf1ae498e7055b481bc5965f9ff013c25270b1a61c8da125d",
+                // lk_sk: "a009036a2a796c3bf1ae498e7055b481bc5965f9ff013c25270b1a61c8da129d",
                 // lk_pk: "14dc0e45265d8bb23479b742b39528eb10bec264c5c9f74b8c2f51638f3a7239",
-                ek_sk: "70b65768679884c84dc0cd406a852a15e9ab40291f23c35215d0ea402dbf5955",
+                ek_sk: "77b65768679884c84dc0cd406a852a15e9ab40291f23c35215d0ea402dbf5915",
                 ek_pk: "0b7f41d8b1896fee21e294e1e03078ad6efd5136d1ecf8a029d83ac5e87eca38",
             },
             // Different master and ephemeral secret.
@@ -1720,11 +1720,11 @@ mod tests {
                 generation: 0,
                 epoch: 8935419451,
                 // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
-                lk_sk: "5045ff4735a1fc7cbdb729d7cfb9349a11e664bf3198e78b9b714bf7dffe984e",
+                lk_sk: "5245ff4735a1fc7cbdb729d7cfb9349a11e664bf3198e78b9b714bf7dffe98ce",
                 lk_pk: "ba3de0b2d206d7c8c46c3cf82bdf7ea6a6db1c768207ed54f54d08a72c65101e",
-                // lk_sk: "885c1651dc64af6965ef2ed5d690d2110cfce0353f4d263cb6e894db847d4468",
+                // lk_sk: "8f5c1651dc64af6965ef2ed5d690d2110cfce0353f4d263cb6e894db847d4468",
                 // lk_pk: "4260efb7dcc4e5655139477e991e5a124243740644e7f937680cd015e8645d1a",
-                ek_sk: "6877eab1ce46ca610a2ca3c7d5fa560049ac55ccc6e95cad3aa2ac108c3f8659",
+                ek_sk: "6e77eab1ce46ca610a2ca3c7d5fa560049ac55ccc6e95cad3aa2ac108c3f8659",
                 ek_pk: "2b11099802017aaf256631ad309c01f35647433ace0f9eb30e0059dfb1d8773d",
             },
             // Different runtime ID.
@@ -1737,11 +1737,11 @@ mod tests {
                 generation: 0,
                 epoch: 8935419451,
                 // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
-                lk_sk: "e03a8c8e86024934e84d61d789ae7b292a0124bd7cedb1ac740e750391936150",
+                lk_sk: "e03a8c8e86024934e84d61d789ae7b292a0124bd7cedb1ac740e7503919361d0",
                 lk_pk: "09761afffa3ef10c7a62390e81bca3c217c7cde216c9660c0f69d3709439587b",
                 // lk_sk: "e8c587d47625d6d7b213fcc4db3ddda295cf5bf6458165aedd293afea89f7a49",
                 // lk_pk: "1733d7cd352941d2fad73d73e4bcc88ee9d94a6872a2c0ce0431ba20616eed75",
-                ek_sk: "10dc53440e825f2ed1a9d584223deae2d07a0440f9dec306e7ebc81568fb6070",
+                ek_sk: "14dc53440e825f2ed1a9d584223deae2d07a0440f9dec306e7ebc81568fb6070",
                 ek_pk: "f1cf258fc81c72b6bf8ce552e1f9823b0def9d0892d54083adad56a09acada61",
             },
             // Different key pair ID.
@@ -1754,11 +1754,11 @@ mod tests {
                 generation: 0,
                 epoch: 8935419451,
                 // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
-                lk_sk: "a82089503a2b9f2804ee61dcc8ddc3c52f49be9aa6545d235ede885597d12d7a",
+                lk_sk: "ab2089503a2b9f2804ee61dcc8ddc3c52f49be9aa6545d235ede885597d12dba",
                 lk_pk: "a0d546af1faf39e45171830d8779b1744f1b2407b3dcad5d454d1cdcfe7b7276",
-                // lk_sk: "7034c6b9054b726286732bf6e8f0e8075e1d0ee3610a7fe9a188afba4fe97b6a",
+                // lk_sk: "7034c6b9054b726286732bf6e8f0e8075e1d0ee3610a7fe9a188afba4fe97baa",
                 // lk_pk: "d03ff12b41e83913433c4b57d919d05c18661ef1c6ac014568ad2efc67e48f40",
-                ek_sk: "905bc45eb9d1b0e543f0fe37a9d9827dd21bc02e70a538ee9a95cbb18a769f68",
+                ek_sk: "945bc45eb9d1b0e543f0fe37a9d9827dd21bc02e70a538ee9a95cbb18a769fa8",
                 ek_pk: "ec6dc8616acfedaf9ba2a2853a4eb286befab6e7e3beda3f5bce68a344ddaa13",
             },
             // Different epoch.
@@ -1771,11 +1771,11 @@ mod tests {
                 generation: 0,
                 epoch: 943032087,
                 // FIXME: Replace the values when the long-term key derivation is fixed (see FIXME above).
-                lk_sk: "702c5a25ff1149591cf7bca763fbe647a43939f43330a8fd331305d73e489b7c",
+                lk_sk: "762c5a25ff1149591cf7bca763fbe647a43939f43330a8fd331305d73e489bbc",
                 lk_pk: "66013b5ad263b4fa504e8682371fbfa102d18cc1e1b811bc125603b1abc9487b",
-                // lk_sk: "a009036a2a796c3bf1ae498e7055b481bc5965f9ff013c25270b1a61c8da125d",
+                // lk_sk: "a009036a2a796c3bf1ae498e7055b481bc5965f9ff013c25270b1a61c8da129d",
                 // lk_pk: "14dc0e45265d8bb23479b742b39528eb10bec264c5c9f74b8c2f51638f3a7239",
-                ek_sk: "a05eaa02f85225b5618dd3bdf15984601d80558947a9a51b9c3a141f16979f6e",
+                ek_sk: "a15eaa02f85225b5618dd3bdf15984601d80558947a9a51b9c3a141f16979fae",
                 ek_pk: "026d01541e41af210cbb482de8b0a7ea772757e53bf3dbe5008e43f95db49d64",
             },
         ];

@@ -1,7 +1,7 @@
 //! Hash type.
 use std::convert::TryInto;
 
-use sha2::{Digest, Sha512Trunc256};
+use sha2::{Digest, Sha512_256};
 
 use crate::common::key_format::KeyFormatAtom;
 
@@ -11,14 +11,14 @@ impl Hash {
     /// Compute a digest of the passed slice of bytes.
     pub fn digest_bytes(data: &[u8]) -> Hash {
         let mut result = [0u8; 32];
-        result[..].copy_from_slice(Sha512Trunc256::digest(data).as_ref());
+        result[..].copy_from_slice(Sha512_256::digest(data).as_ref());
 
         Hash(result)
     }
 
     /// Compute a digest of the passed slices of bytes.
     pub fn digest_bytes_list(data: &[&[u8]]) -> Hash {
-        let mut ctx = Sha512Trunc256::new();
+        let mut ctx = Sha512_256::new();
         for datum in data {
             ctx.update(datum);
         }

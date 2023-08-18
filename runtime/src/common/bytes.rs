@@ -11,7 +11,7 @@
 macro_rules! impl_bytes {
     ($name:ident, $size:expr, $doc:expr) => {
         #[doc=$doc]
-        #[derive(Clone, Copy)]
+        #[derive(Clone, Copy, zeroize::Zeroize)]
         pub struct $name(pub [u8; $size]);
 
         impl $name {
