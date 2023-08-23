@@ -138,12 +138,12 @@ func TestSeparateRuntimeRoots(t *testing.T) {
 	err = blk.Header.IORoot.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000002")
 	require.NoError(err, "UnmarshalHex")
 	err = st.SetRuntimeState(ctx, &api.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1,
-		LastNormalRound:    0,
-		LastNormalHeight:   1,
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1,
+		LastNormalRound:  0,
+		LastNormalHeight: 1,
 	})
 	require.NoError(err, "SetRuntimeState")
 
@@ -186,12 +186,12 @@ func TestPastRuntimeRoots(t *testing.T) {
 	err = blk.Header.IORoot.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000002")
 	require.NoError(err, "UnmarshalHex")
 	err = st.SetRuntimeState(ctx, &api.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1,
-		LastNormalRound:    0,
-		LastNormalHeight:   1,
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1,
+		LastNormalRound:  0,
+		LastNormalHeight: 1,
 	})
 	require.NoError(err, "SetRuntimeState")
 
@@ -226,12 +226,12 @@ func TestPastRuntimeRoots(t *testing.T) {
 	err = blk1.Header.IORoot.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000004")
 	require.NoError(err, "UnmarshalHex")
 	err = st.SetRuntimeState(ctx, &api.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk1,
-		CurrentBlockHeight: 2,
-		LastNormalRound:    1,
-		LastNormalHeight:   2,
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk1,
+		LastBlockHeight:  2,
+		LastNormalRound:  1,
+		LastNormalHeight: 2,
 	})
 	require.NoError(err, "SetRuntimeState")
 
@@ -256,12 +256,12 @@ func TestPastRuntimeRoots(t *testing.T) {
 	err = blk2.Header.IORoot.UnmarshalHex("0000000000000000000000000000000000000000000000000000000000000006")
 	require.NoError(err, "UnmarshalHex")
 	err = st.SetRuntimeState(ctx, &api.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk2,
-		CurrentBlockHeight: 3,
-		LastNormalRound:    2,
-		LastNormalHeight:   3,
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk2,
+		LastBlockHeight:  3,
+		LastNormalRound:  2,
+		LastNormalHeight: 3,
 	})
 	require.NoError(err, "SetRuntimeState")
 

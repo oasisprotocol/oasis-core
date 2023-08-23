@@ -2,6 +2,7 @@ package registry
 
 import (
 	"testing"
+	"time"
 
 	requirePkg "github.com/stretchr/testify/require"
 
@@ -806,10 +807,10 @@ func TestRegisterRuntime(t *testing.T) {
 					RoundTimeout: 5,
 				},
 				TxnScheduler: registry.TxnSchedulerParameters{
-					BatchFlushTimeout: 100_000_000,
+					BatchFlushTimeout: time.Second,
 					MaxBatchSize:      100,
 					MaxBatchSizeBytes: 100_000_000,
-					ProposerTimeout:   2,
+					ProposerTimeout:   2 * time.Second,
 				},
 				Deployments: []*registry.VersionInfo{
 					{

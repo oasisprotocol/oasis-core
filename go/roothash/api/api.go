@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -28,6 +29,8 @@ const (
 
 	// RoundInvalid is a special round number that refers to an invalid round.
 	RoundInvalid uint64 = math.MaxUint64
+	// TimeoutNever is the timeout value that never expires.
+	TimeoutNever int64 = 0
 
 	// LogEventExecutionDiscrepancyDetected is a log event value that signals
 	// an execution discrepancy has been detected.
@@ -59,8 +62,8 @@ var (
 	// ErrRuntimeSuspended is the error returned when the passed runtime is suspended.
 	ErrRuntimeSuspended = errors.New(ModuleName, 5, "roothash: runtime is suspended")
 
-	// ErrProposerTimeoutNotAllowed is the error returned when proposer timeout is not allowed.
-	ErrProposerTimeoutNotAllowed = errors.New(ModuleName, 6, "roothash: proposer timeout not allowed")
+	// ErrNoCommittee is the error returned when there is no committee.
+	ErrNoCommittee = errors.New(ModuleName, 6, "roothash: no committee")
 
 	// ErrMaxMessagesTooBig is the error returned when the MaxMessages parameter is set to a value
 	// larger than the MaxRuntimeMessages specified in consensus parameters.
@@ -90,9 +93,6 @@ var (
 	// MethodExecutorCommit is the method name for executor commit submission.
 	MethodExecutorCommit = transaction.NewMethodName(ModuleName, "ExecutorCommit", ExecutorCommit{})
 
-	// MethodExecutorProposerTimeout is the method name for executor proposer timeout.
-	MethodExecutorProposerTimeout = transaction.NewMethodName(ModuleName, "ExecutorProposerTimeout", ExecutorProposerTimeoutRequest{})
-
 	// MethodEvidence is the method name for submitting evidence of node misbehavior.
 	MethodEvidence = transaction.NewMethodName(ModuleName, "Evidence", Evidence{})
 
@@ -102,7 +102,6 @@ var (
 	// Methods is a list of all methods supported by the roothash backend.
 	Methods = []transaction.MethodName{
 		MethodExecutorCommit,
-		MethodExecutorProposerTimeout,
 		MethodEvidence,
 		MethodSubmitMsg,
 	}
@@ -194,20 +193,6 @@ func NewExecutorCommitTx(nonce uint64, fee *transaction.Fee, runtimeID common.Na
 	})
 }
 
-// ExecutorProposerTimeoutRequest is an executor proposer timeout request.
-type ExecutorProposerTimeoutRequest struct {
-	ID    common.Namespace `json:"id"`
-	Round uint64           `json:"round"`
-}
-
-// NewRequestProposerTimeoutTx creates a new request proposer timeout transaction.
-func NewRequestProposerTimeoutTx(nonce uint64, fee *transaction.Fee, runtimeID common.Namespace, round uint64) *transaction.Transaction {
-	return transaction.NewTransaction(nonce, fee, MethodExecutorProposerTimeout, &ExecutorProposerTimeoutRequest{
-		ID:    runtimeID,
-		Round: round,
-	})
-}
-
 // SubmitMsg is the argument set for the SubmitMsg method.
 type SubmitMsg struct {
 	// ID is the destination runtime ID.
@@ -291,6 +276,10 @@ func (ev *EquivocationExecutorEvidence) ValidateBasic(id common.Namespace) error
 
 	if !ev.CommitA.NodeID.Equal(ev.CommitB.NodeID) {
 		return fmt.Errorf("equivocation executor evidence signature public keys don't match")
+	}
+
+	if ev.CommitA.Header.SchedulerID != ev.CommitB.Header.SchedulerID {
+		return fmt.Errorf("equivocation evidence scheduler IDs don't match")
 	}
 
 	if ev.CommitA.Header.Header.Round != ev.CommitB.Header.Header.Round {
@@ -383,13 +372,18 @@ func NewEvidenceTx(nonce uint64, fee *transaction.Fee, evidence *Evidence) *tran
 
 // RuntimeState is the per-runtime state.
 type RuntimeState struct {
-	Runtime   *registry.Runtime `json:"runtime"`
-	Suspended bool              `json:"suspended,omitempty"`
+	// Runtime is the latest per-epoch runtime descriptor.
+	Runtime *registry.Runtime `json:"runtime"`
+	// Suspended is a flag indicating whether the runtime is currently suspended.
+	Suspended bool `json:"suspended,omitempty"`
 
+	// GenesisBlock is the runtime's first block.
 	GenesisBlock *block.Block `json:"genesis_block"`
 
-	CurrentBlock       *block.Block `json:"current_block"`
-	CurrentBlockHeight int64        `json:"current_block_height"`
+	// LastBlock is the runtime's most recently generated block.
+	LastBlock *block.Block `json:"last_block"`
+	// LastBlockHeight is the height at which the runtime's most recent block was generated.
+	LastBlockHeight int64 `json:"last_block_height"`
 
 	// LastNormalRound is the runtime round which was normally processed by the runtime. This is
 	// also the round that contains the message results for the last processed runtime messages.
@@ -397,11 +391,15 @@ type RuntimeState struct {
 	// LastNormalHeight is the consensus block height corresponding to LastNormalRound.
 	LastNormalHeight int64 `json:"last_normal_height"`
 
-	// ExecutorPool contains the executor commitment pool.
-	ExecutorPool *commitment.Pool `json:"executor_pool"`
+	// Committee is the committee the executor pool is collecting commitments for.
+	Committee *scheduler.Committee `json:"committee,omitempty"`
+	// CommitmentPool collects the executor commitments.
+	CommitmentPool *commitment.Pool `json:"commitment_pool,omitempty"`
+	// NextTimeout is the time at which the round is scheduled for forced finalization.
+	NextTimeout int64 `json:"timeout,omitempty"`
 
 	// LivenessStatistics contains the liveness statistics for the current epoch.
-	LivenessStatistics *LivenessStatistics `json:"liveness_stats"`
+	LivenessStatistics *LivenessStatistics `json:"liveness_stats,omitempty"`
 }
 
 // AnnotatedBlock is an annotated roothash block.
@@ -427,6 +425,8 @@ func (e *ExecutorCommittedEvent) EventKind() string {
 
 // ExecutionDiscrepancyDetectedEvent is an execute discrepancy detected event.
 type ExecutionDiscrepancyDetectedEvent struct {
+	// Rank is the rank of the transaction scheduler.
+	Rank uint64 `json:"rank"`
 	// Timeout signals whether the discrepancy was due to a timeout.
 	Timeout bool `json:"timeout"`
 }

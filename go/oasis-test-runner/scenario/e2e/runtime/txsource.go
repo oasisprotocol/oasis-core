@@ -448,8 +448,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 		// at the same time.
 		f.Runtimes[1].Executor.AllowedStragglers = 1
 
-		// Lower proposer and round timeouts as nodes are expected to go offline for longer time.
-		f.Runtimes[1].TxnScheduler.ProposerTimeout = 4
+		// Lower round timeouts as nodes are expected to go offline for longer time.
 		f.Runtimes[1].Executor.RoundTimeout = 10
 	}
 

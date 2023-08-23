@@ -105,44 +105,40 @@ func (app *schedulerApplication) debugForceRoles(
 		return true, elected
 	}
 
-	var (
-		mustBeScheduler    *scheduler.CommitteeNode
-		mustNotBeScheduler []*scheduler.CommitteeNode
-		mayBeAny           []*scheduler.CommitteeNode
-	)
+	reordered := make([]*scheduler.CommitteeNode, len(elected))
+	queue := make([]*scheduler.CommitteeNode, 0, len(elected))
 
-	for i, n := range elected {
-		committeeNode := elected[i]
-		if ri, ok := state.params[n.PublicKey]; ok {
-			if ri.IsScheduler {
-				if mustBeScheduler != nil {
-					ctx.Logger().Error("already have a forced scheduler",
-						"existing", mustBeScheduler.PublicKey,
-						"new", n.PublicKey,
-					)
-					return false, nil
-				}
-				mustBeScheduler = committeeNode
-			} else {
-				mustNotBeScheduler = append(mustNotBeScheduler, committeeNode)
-			}
-		} else {
-			mayBeAny = append(mayBeAny, committeeNode)
+	for _, n := range elected {
+		ri, ok := state.params[n.PublicKey]
+		if !ok {
+			queue = append(queue, n)
+			continue
 		}
-	}
 
-	if mustBeScheduler == nil {
-		if len(mayBeAny) == 0 && len(mustNotBeScheduler) > 0 {
-			ctx.Logger().Error("can't fulfil not committee scheduler requirements")
+		if ri.Index >= uint64(len(reordered)) {
+			ctx.Logger().Error("invalid worker index",
+				"index", ri.Index,
+			)
 			return false, nil
 		}
-		mustBeScheduler = mayBeAny[0]
-		mayBeAny = mayBeAny[1:]
+
+		if reordered[ri.Index] != nil {
+			ctx.Logger().Error("duplicate worker index",
+				"index", ri.Index,
+			)
+			return false, nil
+		}
+
+		reordered[ri.Index] = n
 	}
 
-	elected = []*scheduler.CommitteeNode{mustBeScheduler}
-	elected = append(elected, mustNotBeScheduler...)
-	elected = append(elected, mayBeAny...)
+	for i, n := range reordered {
+		if n != nil {
+			continue
+		}
+		reordered[i] = queue[0]
+		queue = queue[1:]
+	}
 
-	return true, elected
+	return true, reordered
 }

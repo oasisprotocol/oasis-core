@@ -11,11 +11,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothashAPI "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -63,24 +61,19 @@ type entityStats struct {
 	// Rounds entity node was a proposer.
 	roundsProposer uint64
 
-	// How many times entity node proposed a timeout.
-	proposedTimeout uint64
-
 	// How many good blocks committed while being primary worker.
-	committeedGoodBlocksPrimary uint64
+	committedGoodBlocksPrimary uint64
 	// How many bad blocs committed while being primary worker.
-	committeedBadBlocksPrimary uint64
+	committedBadBlocksPrimary uint64
 	// How many good blocks committed while being backup worker.
-	committeedGoodBlocksBackup uint64
+	committedGoodBlocksBackup uint64
 	// How many bad blocks committed while being backup worker.
-	committeedBadBlocksBackup uint64
+	committedBadBlocksBackup uint64
 
 	// How many rounds missed committing a block while being a primary worker.
 	missedPrimary uint64
 	// How many rounds missed committing a block while being a backup worker (and discrepancy detection was invoked).
 	missedBackup uint64
-	// How many rounds proposer timeout was triggered while being the proposer.
-	missedProposer uint64
 }
 
 func (s *stats) prepareEntitiesOutput() {
@@ -100,8 +93,6 @@ func (s *stats) prepareEntitiesOutput() {
 		"Bckp Bad commit",
 		"Primary missed",
 		"Bckp missed",
-		"Proposer missed",
-		"Proposed timeout",
 	}
 
 	for entity, stats := range s.entities {
@@ -113,15 +104,13 @@ func (s *stats) prepareEntitiesOutput() {
 			strconv.FormatUint(stats.roundsBackup, 10),
 			strconv.FormatUint(stats.roundsProposer, 10),
 			strconv.FormatUint(stats.roundsPrimaryRequired, 10),
-			strconv.FormatUint(stats.committeedGoodBlocksPrimary, 10),
-			strconv.FormatUint(stats.committeedBadBlocksPrimary, 10),
+			strconv.FormatUint(stats.committedGoodBlocksPrimary, 10),
+			strconv.FormatUint(stats.committedBadBlocksPrimary, 10),
 			strconv.FormatUint(stats.roundsBackupRequired, 10),
-			strconv.FormatUint(stats.committeedGoodBlocksBackup, 10),
-			strconv.FormatUint(stats.committeedBadBlocksBackup, 10),
+			strconv.FormatUint(stats.committedGoodBlocksBackup, 10),
+			strconv.FormatUint(stats.committedBadBlocksBackup, 10),
 			strconv.FormatUint(stats.missedPrimary, 10),
 			strconv.FormatUint(stats.missedBackup, 10),
-			strconv.FormatUint(stats.missedProposer, 10),
-			strconv.FormatUint(stats.proposedTimeout, 10),
 		)
 		s.entitiesOutput = append(s.entitiesOutput, line)
 	}
@@ -233,7 +222,7 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 	signature.SetChainContext(chainCtx)
 
 	logger.Info("gathering statistics",
-		"rumtime_id", runtimeID,
+		"runtime_id", runtimeID,
 		"start_height", startHeight,
 		"end_height", endHeight,
 	)
@@ -296,51 +285,6 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 			os.Exit(1)
 		}
 
-		var proposerTimeout bool
-		if currentRound != blk.Header.Round && currentCommittee != nil {
-			// If new round, check for proposer timeout.
-			// Need to look at submitted transactions if round failure was caused by a proposer timeout.
-			var rsp *consensusAPI.TransactionsWithResults
-			if rsp, err = consensus.GetTransactionsWithResults(ctx, height); err != nil {
-				logger.Error("failed to get transactions",
-					"err", err,
-					"height", height,
-				)
-				os.Exit(1)
-			}
-			for i := 0; i < len(rsp.Transactions); i++ {
-				// Ignore failed txs.
-				if !rsp.Results[i].IsSuccess() {
-					continue
-				}
-				var sigTx transaction.SignedTransaction
-				if err = cbor.Unmarshal(rsp.Transactions[i], &sigTx); err != nil {
-					cmdCommon.EarlyLogAndExit(err)
-				}
-				var tx transaction.Transaction
-				if err = sigTx.Open(&tx); err != nil {
-					cmdCommon.EarlyLogAndExit(err)
-				}
-				// Ignore non proposer timeout txs.
-				if tx.Method != roothashAPI.MethodExecutorProposerTimeout {
-					continue
-				}
-				var xc roothashAPI.ExecutorProposerTimeoutRequest
-				if err = cbor.Unmarshal(tx.Body, &xc); err != nil {
-					cmdCommon.EarlyLogAndExit(err)
-				}
-				// Ignore txs of other runtimes.
-				if xc.ID != runtimeID {
-					continue
-				}
-				// Proposer timeout triggered the round failure, update stats.
-				stats.entities[nodeToEntity[sigTx.Signature.PublicKey]].proposedTimeout++
-				stats.entities[nodeToEntity[currentScheduler.PublicKey]].missedProposer++
-				proposerTimeout = true
-				break
-			}
-		}
-
 		// Go over events before updating potential new round committee info.
 		// Even if round transition happened at this height, all events emitted
 		// at this height belong to the previous round.
@@ -382,10 +326,6 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 				if blk.Header.HeaderType == block.EpochTransition || blk.Header.HeaderType == block.Suspended {
 					continue
 				}
-				// Skip if proposer timeout.
-				if proposerTimeout {
-					continue
-				}
 
 				// Update stats.
 			OUTER:
@@ -407,11 +347,11 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 						}
 						switch member.Role {
 						case schedulerAPI.RoleWorker:
-							stats.entities[entity].committeedGoodBlocksPrimary++
+							stats.entities[entity].committedGoodBlocksPrimary++
 							continue OUTER
 						case schedulerAPI.RoleBackupWorker:
 							if roundDiscrepancy {
-								stats.entities[entity].committeedGoodBlocksBackup++
+								stats.entities[entity].committedGoodBlocksBackup++
 								continue OUTER
 							}
 						}
@@ -424,11 +364,11 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 						}
 						switch member.Role {
 						case schedulerAPI.RoleWorker:
-							stats.entities[entity].committeedBadBlocksPrimary++
+							stats.entities[entity].committedBadBlocksPrimary++
 							continue OUTER
 						case schedulerAPI.RoleBackupWorker:
 							if roundDiscrepancy {
-								stats.entities[entity].committeedBadBlocksBackup++
+								stats.entities[entity].committedBadBlocksBackup++
 								continue OUTER
 							}
 
@@ -457,11 +397,7 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 			case block.EpochTransition:
 				stats.epochTransitionRounds++
 			case block.RoundFailed:
-				if proposerTimeout {
-					stats.proposerTimeoutedRounds++
-				} else {
-					stats.failedRounds++
-				}
+				stats.failedRounds++
 			case block.Suspended:
 				stats.suspendedRounds++
 				currentCommittee = nil
@@ -484,7 +420,7 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 				)
 				os.Exit(1)
 			}
-			if state.ExecutorPool == nil {
+			if state.Committee == nil || state.CommitmentPool == nil {
 				// No committee - election failed(?)
 				logger.Warn("unexpected missing committee for runtime",
 					"height", height,
@@ -494,8 +430,8 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 				continue
 			}
 			// Set committee info.
-			currentCommittee = state.ExecutorPool.Committee
-			currentScheduler, err = currentCommittee.TransactionScheduler(currentRound)
+			currentCommittee = state.Committee
+			currentScheduler, err = currentCommittee.Scheduler(currentRound, 0)
 			if err != nil {
 				logger.Error("failed to query transaction scheduler",
 					"err", err,

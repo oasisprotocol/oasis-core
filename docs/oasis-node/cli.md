@@ -83,7 +83,7 @@ node):
           "batch_flush_timeout": 1000000000,
           "max_batch_size": 100,
           "max_batch_size_bytes": 1048576,
-          "propose_batch_timeout": 2
+          "propose_batch_timeout": 2000000000
         },
         "storage": {
           "group_size": 3,

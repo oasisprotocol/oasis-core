@@ -65,17 +65,14 @@ func TestLivenessProcessing(t *testing.T) {
 	require.NoError(err, "SetConsensusParameters")
 	blk := block.NewGenesisBlock(runtime.ID, 0)
 	rtState := &roothash.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1,
-		LastNormalRound:    0,
-		LastNormalHeight:   1,
-		ExecutorPool: &commitment.Pool{
-			Runtime:   &runtime,
-			Committee: &executorCommittee,
-			Round:     0,
-		},
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1,
+		LastNormalRound:  0,
+		LastNormalHeight: 1,
+		Committee:        &executorCommittee,
+		CommitmentPool:   commitment.NewPool(),
 		LivenessStatistics: &roothash.LivenessStatistics{
 			TotalRounds:        100,
 			LiveRounds:         []uint64{91}, // At least 90 required.

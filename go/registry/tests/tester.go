@@ -980,7 +980,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	re.MustNotRegister(t, consensus)
 	// Any updates to runtime parameters should fail for runtime-governed runtimes.
 	re.Runtime.GovernanceModel = api.GovernanceRuntime
-	re.Runtime.TxnScheduler.ProposerTimeout = 6
+	re.Runtime.TxnScheduler.ProposerTimeout = 2 * time.Second
 	re.MustNotRegister(t, consensus)
 
 	re, err = NewTestRuntime([]byte("Runtime re-registration test 2"), entity, true)
@@ -1835,7 +1835,7 @@ func NewTestRuntime(seed []byte, ent *TestEntity, isKeyManager bool) (*TestRunti
 			BatchFlushTimeout: 20 * time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
-			ProposerTimeout:   5,
+			ProposerTimeout:   40 * time.Second,
 		},
 		AdmissionPolicy: api.RuntimeAdmissionPolicy{
 			AnyNode: &api.AnyNodeRuntimeAdmissionPolicy{},

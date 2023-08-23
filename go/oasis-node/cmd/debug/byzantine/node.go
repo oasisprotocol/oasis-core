@@ -58,35 +58,30 @@ func (b *byzantine) stop() error {
 	return nil
 }
 
-func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *computeBatchContext, mode ExecutorMode) (bool, error) {
+func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *computeBatchContext, block *block.Block, mode ExecutorMode) (bool, error) {
 	// Receive transactions.
 	txs := cbc.receiveTransactions(b.p2p, time.Second)
 	logger.Debug("executor: received transactions", "transactions", txs)
-	// Get latest roothash block.
-	var block *block.Block
-	block, err := getRoothashLatestBlock(ctx, b.cometbft.service, b.runtimeID)
-	if err != nil {
-		return false, fmt.Errorf("failed getting latest roothash block: %w", err)
-	}
 
 	// Include transactions that nobody else has when configured to do so.
 	if viper.GetBool(CfgExecutorProposeBogusTx) {
 		logger.Debug("executor scheduler: including bogus transactions")
-		txs = append(txs, []byte("this is a bogus transction nr. 1"))
+		txs = append(txs, []byte("this is a bogus transition nr. 1"))
 	}
 
 	// Prepare proposal.
-	if err = cbc.prepareProposal(ctx, block, txs, b.identity); err != nil {
+	if err := cbc.prepareProposal(ctx, block, txs, b.identity); err != nil {
 		panic(fmt.Sprintf("executor proposing batch: %+v", err))
 	}
 
 	if mode == ModeExecutorFailureIndicating {
 		// Submit failure indicating commitment and stop.
 		logger.Debug("executor failure indicating: submitting commitment and stopping")
-		if err = cbc.createCommitment(b.identity, nil, commitment.FailureUnknown); err != nil {
+		schedulerID := b.identity.NodeSigner.Public()
+		if err := cbc.createCommitment(b.identity, schedulerID, nil, commitment.FailureUnknown); err != nil {
 			panic(fmt.Sprintf("compute create failure indicating commitment failed: %+v", err))
 		}
-		if err = cbc.publishToChain(b.cometbft.service, b.identity); err != nil {
+		if err := cbc.publishToChain(b.cometbft.service, b.identity); err != nil {
 			panic(fmt.Sprintf("compute publish to chain failed: %+v", err))
 		}
 		return false, nil
@@ -96,16 +91,17 @@ func (b *byzantine) receiveAndScheduleTransactions(ctx context.Context, cbc *com
 	cbc.publishProposal(ctx, b.p2p, b.electionEpoch)
 	logger.Debug("executor scheduler: dispatched transactions", "transactions", txs)
 
-	// If we're in ModeExecutorWrong, stop after publishing the batch.
-	return mode != ModeExecutorWrong, nil
+	// If we're in ModeExecutorRunaway, stop after publishing the batch.
+	return mode != ModeExecutorRunaway, nil
 }
 
 func initializeAndRegisterByzantineNode(
 	runtimeID common.Namespace,
 	nodeRoles node.RolesMask,
 	expectedExecutorRole scheduler.Role,
-	shouldBeExecutorProposer bool,
+	shouldBePrimaryScheduler bool,
 	noCommittees bool,
+	round uint64,
 ) (*byzantine, error) {
 	var err error
 	b := &byzantine{
@@ -211,25 +207,24 @@ func initializeAndRegisterByzantineNode(
 		return nil, fmt.Errorf("scheduler next election height failed: %w", err)
 	}
 
-	b.logger.Debug("ensuring executor worker role")
-
-	// Ensure we have the expected executor worker role.
 	b.executorCommittee, err = schedulerGetCommittee(b.cometbft, b.electionHeight, scheduler.KindComputeExecutor, b.runtimeID)
 	if err != nil {
 		return nil, fmt.Errorf("scheduler get committee %s at height %d failed: %w", scheduler.KindComputeExecutor, b.electionHeight, err)
 	}
 
+	// Ensure we have the expected executor worker role.
+	b.logger.Debug("ensuring executor worker role")
 	if err = schedulerCheckScheduled(b.executorCommittee, b.identity.NodeSigner.Public(), expectedExecutorRole); err != nil {
 		return nil, fmt.Errorf("scheduler check scheduled failed: %w", err)
 	}
 	b.logger.Debug("executor schedule ok")
 
-	// Ensure we have the expected executor transaction scheduler role.
-	isTxScheduler := schedulerCheckTxScheduler(b.executorCommittee, b.identity.NodeSigner.Public(), 0)
-	if shouldBeExecutorProposer != isTxScheduler {
-		return nil, fmt.Errorf("not in expected executor transaction scheduler role")
+	// Ensure we have the expected executor primary scheduler role.
+	isPrimaryScheduler := schedulerCheckPrimaryScheduler(b.executorCommittee, b.identity.NodeSigner.Public(), round)
+	if shouldBePrimaryScheduler != isPrimaryScheduler {
+		return nil, fmt.Errorf("not in expected executor primary scheduler role")
 	}
-	b.logger.Debug("executor tx scheduler role ok")
+	b.logger.Debug("executor primary scheduler role ok")
 
 	// Create a stateless storage client.
 	b.storageClient = client.NewStatelessStorage(b.p2p.service, b.chainContext, b.runtimeID)

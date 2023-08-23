@@ -87,12 +87,38 @@ func checkRootHash(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	blocks := make(map[common.Namespace]*block.Block)
 	runtimesByID := make(map[common.Namespace]*roothash.RuntimeState)
 	for _, rt := range runtimes {
-		blocks[rt.Runtime.ID] = rt.CurrentBlock
+		blocks[rt.Runtime.ID] = rt.LastBlock
 		runtimesByID[rt.Runtime.ID] = rt
 	}
 	err = roothash.SanityCheckBlocks(blocks)
 	if err != nil {
 		return fmt.Errorf("SanityCheckBlocks: %w", err)
+	}
+
+	// Check runtime states.
+	for id, rtState := range runtimesByID {
+		switch rtState.Suspended {
+		case true:
+			if rtState.Committee != nil {
+				return fmt.Errorf("suspended runtime %s should not have a committee", id)
+			}
+			if rtState.CommitmentPool != nil {
+				return fmt.Errorf("suspended runtime %s should not gather executor commitments", id)
+			}
+			if rtState.LivenessStatistics != nil {
+				return fmt.Errorf("suspended runtime %s should not gather statistics", id)
+			}
+			if rtState.NextTimeout != roothash.TimeoutNever {
+				return fmt.Errorf("round timeout for suspended runtime %s should not be scheduled at %d", id, rtState.NextTimeout)
+			}
+		case false:
+			if rtState.Committee == nil {
+				return fmt.Errorf("non-suspended runtime %s should have a committee", id)
+			}
+			if rtState.CommitmentPool == nil {
+				return fmt.Errorf("non-suspended runtime %s should gather executor commitments", id)
+			}
+		}
 	}
 
 	// Make sure that runtime timeout state is consistent with actual timeouts.
@@ -102,11 +128,17 @@ func checkRootHash(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	}
 	for i, id := range runtimeIDs {
 		height := heights[i]
-		if height < ctx.BlockHeight() {
+		if height < ctx.BlockHeight()+1 { // Current height is ctx.BlockHeight() + 1
 			return fmt.Errorf("round timeout for runtime %s was scheduled at %d but did not trigger", id, height)
 		}
-		if !runtimesByID[id].ExecutorPool.IsTimeout(height) {
-			return fmt.Errorf("runtime %s scheduled for timeout at %d but would not actually trigger", id, height)
+		if rtState := runtimesByID[id]; rtState.NextTimeout != height {
+			return fmt.Errorf("round timeout for runtime %s was scheduled at %d instead of %d", id, height, rtState.NextTimeout)
+		}
+		delete(runtimesByID, id)
+	}
+	for id, rtState := range runtimesByID {
+		if rtState.NextTimeout != roothash.TimeoutNever {
+			return fmt.Errorf("round timeout for runtime %s is not scheduled at %d", id, rtState.NextTimeout)
 		}
 	}
 

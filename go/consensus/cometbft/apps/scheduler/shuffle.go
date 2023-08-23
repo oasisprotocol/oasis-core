@@ -164,6 +164,8 @@ func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 		return nil
 	}
 
+	// Workers must be listed before backup workers, as other parts of the code depend on this
+	// order for better performance.
 	committeeRoles := []scheduler.Role{
 		scheduler.RoleWorker,
 		scheduler.RoleBackupWorker,

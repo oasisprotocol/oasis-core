@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
+
+	"golang.org/x/exp/maps"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
@@ -16,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
-	p2pError "github.com/oasisprotocol/oasis-core/go/p2p/error"
 	p2pProtocol "github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -26,6 +28,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
+	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -34,13 +37,8 @@ import (
 )
 
 var (
-	errSeenNewerBlock     = fmt.Errorf("executor: seen newer block")
-	errRuntimeAborted     = fmt.Errorf("executor: runtime aborted batch processing")
-	errBatchTooLarge      = p2pError.Permanent(fmt.Errorf("executor: batch too large"))
 	errMsgFromNonTxnSched = fmt.Errorf("executor: received txn scheduler dispatch msg from non-txn scheduler")
 
-	// proposeTimeoutDelay is the duration to wait before submitting the propose timeout request.
-	proposeTimeoutDelay = 2 * time.Second
 	// abortTimeout is the duration to wait for the runtime to abort.
 	abortTimeout = 5 * time.Second
 	// getInfoTimeout is the maximum time the runtime can spend replying to GetInfo.
@@ -53,11 +51,6 @@ type Node struct { // nolint: maligned
 	runtimeVersion       version.Version
 	runtimeTrustSynced   bool
 	runtimeTrustSyncCncl context.CancelFunc
-
-	// Guarded by .commonNode.CrossNode.
-	proposingTimeout bool
-	missingTxsCancel context.CancelFunc
-	pendingProposals *pendingProposals
 
 	commonNode   *committee.Node
 	commonCfg    commonWorker.Config
@@ -72,22 +65,36 @@ type Node struct { // nolint: maligned
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
-	// Mutable and shared with common node's worker.
-	// Guarded by .commonNode.CrossNode.
-	state NodeState
-	// Context valid until the next round.
-	// Guarded by .commonNode.CrossNode.
-	roundCtx       context.Context
-	roundCancelCtx context.CancelFunc
-
-	commitPool commitment.Pool
-
 	storage storage.LocalBackend
 	txSync  txsync.Client
 
+	// Global, used by every round worker.
+
+	state            NodeState
 	stateTransitions *pubsub.Broker
-	// Bump this when we need to change what the worker selects over.
-	reselect chan struct{}
+	proposals        *proposalQueue
+	committee        *scheduler.Committee
+	commitPool       *commitment.Pool
+
+	blockInfoCh           chan *runtime.BlockInfo
+	processedBatchCh      chan *processedBatch
+	discrepancyCh         chan *discrepancyEvent
+	schedulerCommitmentCh chan *commitment.ExecutorCommitment
+	reselectCh            chan struct{}
+
+	txCh <-chan []*txpool.PendingCheckTransaction
+	ecCh <-chan *commitment.ExecutorCommitment
+
+	// Local, set and used by every round worker.
+
+	rt            host.RichRuntime
+	epoch         *committee.EpochSnapshot
+	blockInfo     *runtime.BlockInfo
+	rtState       *roothash.RuntimeState
+	roundResults  *roothash.RoundResults
+	submitted     map[uint64]struct{}
+	rank          uint64
+	proposedBatch *proposedBatch
 
 	logger *logging.Logger
 }
@@ -143,46 +150,15 @@ func (n *Node) WatchStateTransitions() (<-chan NodeState, *pubsub.Subscription) 
 	return ch, sub
 }
 
-func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposal) error {
-	rt, err := n.commonNode.Runtime.ActiveDescriptor(ctx)
-	if err != nil {
-		n.logger.Warn("failed to fetch active runtime descriptor",
-			"err", err,
-		)
-		// Do not forward the proposal further as we are unable to validate it.
-		return p2pError.Permanent(err)
-	}
-
-	// Do a quick check on the batch size.
-	if uint64(len(proposal.Batch)) > rt.TxnScheduler.MaxBatchSize {
-		n.logger.Warn("received proposed batch contained too many transactions",
-			"max_batch_size", rt.TxnScheduler.MaxBatchSize,
-			"batch_size", len(proposal.Batch),
-		)
-		// Do not forward the proposal further as it seems invalid.
-		return errBatchTooLarge
-	}
-
-	batch := &unresolvedBatch{
-		proposal:          proposal,
-		maxBatchSizeBytes: rt.TxnScheduler.MaxBatchSizeBytes,
-	}
-
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-	return n.handleProposalLocked(batch)
-}
-
-func (n *Node) bumpReselect() {
+func (n *Node) reselect() {
 	select {
-	case n.reselect <- struct{}{}:
+	case n.reselectCh <- struct{}{}:
 	default:
 		// If there's one already queued, we don't need to do anything.
 	}
 }
 
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) transitionLocked(state NodeState) {
+func (n *Node) transitionState(state NodeState) {
 	n.logger.Info("state transition",
 		"current_state", n.state,
 		"new_state", state,
@@ -205,209 +181,118 @@ func (n *Node) transitionLocked(state NodeState) {
 
 	n.state = state
 	n.stateTransitions.Broadcast(state)
-	// Restart our worker's select in case our state-specific channels have changed.
-	n.bumpReselect()
 }
 
-// HandleEpochTransitionLocked implements NodeHooks.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
-	switch {
-	case epoch.IsExecutorWorker(), epoch.IsExecutorBackupWorker():
-		n.transitionLocked(StateWaitingForBatch{})
-	default:
-		n.transitionLocked(StateNotReady{})
-	}
+func (n *Node) transitionStateToProcessing(ctx context.Context, proposal *commitment.Proposal, rank uint64, batch transaction.RawBatch) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
+	n.transitionState(StateProcessingBatch{
+		mode:           protocol.ExecutionModeExecute,
+		rank:           rank,
+		batchStartTime: time.Now(),
+		cancelFn:       cancel,
+		done:           done,
+	})
+
+	// Request the worker host to process a batch. This is done in a separate
+	// goroutine so that the runtime worker can continue processing events.
+	go func() {
+		defer close(done)
+		n.startProcessingBatch(ctx, proposal, rank, batch)
+	}()
 }
 
-// HandleNewBlockEarlyLocked implements NodeHooks.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(bi *runtime.BlockInfo) {
-	crash.Here(crashPointRoothashReceiveAfter)
-
-	// If we have seen a new block while a batch was processing, we need to
-	// abort it no matter what as any processed state may be invalid.
-	n.abortBatchLocked(errSeenNewerBlock)
-	// Update our availability.
-	n.nudgeAvailabilityLocked(false)
-}
-
-// HandleNewBlockLocked implements NodeHooks.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewBlockLocked(bi *runtime.BlockInfo) {
-	header := bi.RuntimeBlock.Header
-
-	// Cancel old round context, start a new one.
-	if n.roundCancelCtx != nil {
-		(n.roundCancelCtx)()
-	}
-	n.roundCtx, n.roundCancelCtx = context.WithCancel(n.ctx)
-
-	clearProposalQueue := true
-
-	// Perform actions based on current state.
-	switch state := n.state.(type) {
-	case StateWaitingForTxs:
-		// Stop waiting for transactions and start a new round.
-		n.logger.Warn("considering previous proposal invalid due to missing transactions")
-		n.transitionLocked(StateWaitingForBatch{})
-	case StateWaitingForEvent:
-		// Block finalized without the need for a backup worker.
-		n.logger.Info("considering the round finalized",
-			"round", header.Round,
-			"header_hash", header.EncodedHash(),
-		)
-		n.transitionLocked(StateWaitingForBatch{})
-	case StateWaitingForFinalize:
-		func() {
-			defer n.transitionLocked(StateWaitingForBatch{})
-
-			// A new block means the round has been finalized.
-			n.logger.Info("considering the round finalized",
-				"round", header.Round,
-				"header_hash", header.EncodedHash(),
-				"header_type", header.HeaderType,
-			)
-			if header.HeaderType != block.Normal {
-				return
-			}
-			if !header.IORoot.Equal(&state.proposedIORoot) {
-				n.logger.Error("proposed batch was not finalized",
-					"header_io_root", header.IORoot,
-					"proposed_io_root", state.proposedIORoot,
-					"header_type", header.HeaderType,
-					"batch_size", len(state.txHashes),
-				)
-				return
-			}
-
-			// Record time taken for successfully processing a batch.
-			batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(state.batchStartTime).Seconds())
-
-			n.logger.Debug("removing processed batch from queue",
-				"batch_size", len(state.txHashes),
-				"io_root", header.IORoot,
-			)
-			// Remove processed transactions from queue.
-			n.commonNode.TxPool.HandleTxsUsed(state.txHashes)
-		}()
-	}
-
-	// Clear proposal queue.
-	if clearProposalQueue {
-		n.commonNode.TxPool.ClearProposedBatch()
-	}
-
-	// Clear the potentially set "is proposing timeout" flag from the previous round.
-	n.proposingTimeout = false
-
-	// Check if we are a proposer and if so try to immediately schedule a new batch.
-	if n.commonNode.Group.GetEpochSnapshot().IsTransactionScheduler(header.Round) {
-		n.logger.Info("we are a transaction scheduler",
-			"round", header.Round,
-		)
-
-		n.commonNode.TxPool.WakeupScheduler()
-	}
-
-	// Check if we have any pending proposals and attempt to handle them.
-	n.handlePendingProposalsLocked()
-}
-
-func (n *Node) proposeTimeoutLocked(roundCtx context.Context) error {
-	// Do not propose a timeout if we are already proposing it.
-	// The flag will get cleared on the next round or if the propose timeout
-	// tx fails.
-	if n.proposingTimeout {
-		return nil
-	}
-
-	if n.commonNode.CurrentBlock == nil {
-		return fmt.Errorf("executor: propose timeout error, nil block")
-	}
-	rt, err := n.commonNode.Runtime.ActiveDescriptor(roundCtx)
-	if err != nil {
-		return err
-	}
-	proposerTimeout := rt.TxnScheduler.ProposerTimeout
-	currentBlockHeight := n.commonNode.CurrentBlockHeight
-	if n.commonNode.Height < currentBlockHeight+proposerTimeout {
-		n.logger.Debug("executor: proposer timeout not reached yet",
-			"height", n.commonNode.Height,
-			"current_block_height", currentBlockHeight,
-			"proposer_timeout", proposerTimeout,
-		)
-		return nil
-	}
-
-	n.logger.Debug("executor requesting proposer timeout",
-		"height", n.commonNode.Height,
-		"current_block_height", currentBlockHeight,
-		"proposer_timeout", proposerTimeout,
+func (n *Node) transitionStateToProcessingFailure(
+	proposal *commitment.Proposal,
+	rank uint64,
+	bytes uint64,
+	maxBytes uint64,
+	batchSize uint64,
+	maxBatchSize uint64,
+) {
+	n.logger.Debug("batch too large",
+		"bytes", bytes,
+		"max_bytes", maxBytes,
+		"batch_size", batchSize,
+		"max_batch_size", maxBatchSize,
 	)
-	n.proposingTimeout = true
-	tx := roothash.NewRequestProposerTimeoutTx(0, nil, n.commonNode.Runtime.ID(), n.commonNode.CurrentBlock.Header.Round)
-	go func(round uint64) {
-		// Wait a bit before actually proposing a timeout, to give the current
-		// scheduler some time to propose a batch in case it just received it.
-		//
-		// This prevents triggering a timeout when there is a long period
-		// of no transactions, as without this artificial delay, the non
-		// scheduler nodes would be faster in proposing a timeout than the
-		// scheduler node proposing a batch.
-		select {
-		case <-time.After(proposeTimeoutDelay):
-		case <-roundCtx.Done():
-			n.logger.Info("not requesting proposer timeout, round context canceled")
+
+	cancel := func() {}
+	done := make(chan struct{})
+	close(done)
+
+	n.transitionState(StateProcessingBatch{
+		mode:           protocol.ExecutionModeExecute,
+		rank:           rank,
+		batchStartTime: time.Now(),
+		cancelFn:       cancel,
+		done:           done,
+	})
+
+	// Submit response to the round worker.
+	n.processedBatchCh <- &processedBatch{
+		proposal: proposal,
+		rank:     rank,
+		computed: nil,
+		raw:      nil,
+	}
+}
+
+func (n *Node) updateState(ctx context.Context, minRank uint64, maxRank uint64, discrepancy bool) {
+	switch state := n.state.(type) {
+	case StateWaitingForBatch:
+		// Nothing to be done here.
+	case StateWaitingForTxs:
+		switch {
+		case state.rank < minRank || state.rank > maxRank:
+			// Rank ouf ot bounds; stop fetching.
+			state.Cancel()
+			n.transitionState(StateWaitingForBatch{})
+		case state.maxBytes > 0 && state.bytes > state.maxBytes:
+			// Some transactions have been received, but the batch is too large; stop fetching and
+			// submit failure.
+			state.Cancel()
+
+			// All workers should indicate failure immediately.
+			n.transitionStateToProcessingFailure(state.proposal, state.rank, state.bytes, state.maxBytes, state.batchSize, state.maxBatchSize)
+		case len(state.txs) == 0:
+			// All transactions have been received; stop fetching and start processing.
+			state.Cancel()
+
+			// The backup workers should process only if the discrepancy was detected.
+			if !n.epoch.IsExecutorWorker() && n.epoch.IsExecutorBackupWorker() && !discrepancy {
+				n.transitionState(StateWaitingForEvent{
+					proposal: state.proposal,
+					rank:     state.rank,
+					batch:    state.batch,
+				})
+				return
+			}
+
+			n.transitionStateToProcessing(ctx, state.proposal, state.rank, state.batch)
+		default:
+			// Keep on waiting for transactions.
+		}
+	case StateWaitingForEvent:
+		if state.rank < minRank || state.rank > maxRank {
+			// Rank ouf ot bounds; stop fetching.
+			n.transitionState(StateWaitingForBatch{})
 			return
 		}
-
-		// Make sure we are still in the right state/round.
-		n.commonNode.CrossNode.Lock()
-		// Make sure we are still in the right state.
-		var invalidState bool
-		switch n.state.(type) {
-		case StateWaitingForBatch, StateWaitingForTxs:
-		default:
-			invalidState = true
-		}
-		// Make sure we are still processing the right round.
-		if round != n.commonNode.CurrentBlock.Header.Round {
-			invalidState = true
-		}
-		if invalidState {
-			n.logger.Info("not requesting proposer timeout",
-				"height", n.commonNode.Height,
-				"current_block_round", n.commonNode.CurrentBlock.Header.Round,
-				"proposing_round", round,
-				"state", n.state,
-			)
-			n.commonNode.CrossNode.Unlock()
+		if discrepancy {
+			// Discrepancy detected; stop waiting and start processing.
+			n.transitionStateToProcessing(ctx, state.proposal, state.rank, state.batch)
 			return
 		}
-		n.commonNode.CrossNode.Unlock()
-
-		err := consensus.SignAndSubmitTx(roundCtx, n.commonNode.Consensus, n.commonNode.Identity.NodeSigner, tx)
-		switch err {
-		case nil:
-			n.logger.Info("executor timeout request finalized",
-				"height", n.commonNode.Height,
-				"current_block_height", currentBlockHeight,
-				"proposer_timeout", proposerTimeout,
-			)
-		default:
-			n.logger.Error("failed to submit executor timeout request",
-				"height", n.commonNode.Height,
-				"current_block_height", currentBlockHeight,
-				"err", err,
-			)
-			n.commonNode.CrossNode.Lock()
-			n.proposingTimeout = false
-			n.commonNode.CrossNode.Unlock()
+	case StateProcessingBatch:
+		if state.rank < minRank || state.rank > maxRank {
+			// Rank ouf ot bounds; stop processing.
+			n.abortBatch(&state)
+			n.transitionState(StateWaitingForBatch{})
+			return
 		}
-	}(n.commonNode.CurrentBlock.Header.Round)
-
-	return nil
+	}
 }
 
 func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*roothash.RuntimeState, *roothash.RoundResults, error) {
@@ -435,58 +320,49 @@ func (n *Node) getRtStateAndRoundResults(ctx context.Context, height int64) (*ro
 	return state, roundResults, nil
 }
 
-func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
+func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
+	n.logger.Debug("trying to schedule a batch",
+		"round", round,
+		"rank", n.rank,
+		"force", force,
+		"state", n.state.Name(),
+	)
 
 	// Check if we are in a suitable state for scheduling a batch.
 	switch n.state.(type) {
 	case StateWaitingForBatch:
-		// We are waiting for a batch.
-	case StateWaitingForTxs:
-		// We are waiting for transactions. Note that this means we are not a transaction
-		// scheduler and so we won't actually be able to schedule anything. But we should still
-		// propose a timeout if the transaction scheduler proposed something that nobody has.
 	default:
-		n.logger.Debug("not scheduling a batch, incorrect state", "state", n.state)
-		return
-	}
-	if n.commonNode.CurrentBlock == nil {
-		n.logger.Debug("not scheduling a batch, no blocks")
 		return
 	}
 
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-	// If we are not an executor worker in this epoch, we don't need to do anything.
-	if !epoch.IsExecutorWorker() {
-		n.logger.Debug("not scheduling a batch, not an executor")
+	// Schedule only once.
+	if _, ok := n.submitted[n.rank]; ok {
+		n.logger.Debug("not scheduling, commitment already submitted")
+		return
+	}
+
+	// Only executor workers are permitted to schedule batches.
+	if !n.epoch.IsExecutorWorker() {
+		n.logger.Debug("not scheduling, not an executor")
 		return
 	}
 
 	// If the next block will be an epoch transition block, do not propose anything as it will be
 	// reverted anyway (since the committee will change).
-	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(n.roundCtx, n.commonNode.CurrentBlockHeight)
+	epochState, err := n.commonNode.Consensus.Beacon().GetFutureEpoch(ctx, n.blockInfo.ConsensusBlock.Height) // TODO: is this height ok?
 	if err != nil {
 		n.logger.Error("failed to fetch future epoch state",
 			"err", err,
 		)
 		return
 	}
-	if epochState != nil && epochState.Height == n.commonNode.CurrentBlockHeight+1 {
-		n.logger.Debug("not scheduling a batch, next consensus block is an epoch transition")
-		return
-	}
-
-	rtState, roundResults, err := n.getRtStateAndRoundResults(n.roundCtx, n.commonNode.CurrentBlockHeight)
-	if err != nil {
-		n.logger.Debug("not scheduling a batch",
-			"err", err,
-		)
+	if epochState != nil && epochState.Height == n.blockInfo.ConsensusBlock.Height+1 { // TODO: is this height ok?
+		n.logger.Debug("not scheduling, next consensus block is an epoch transition")
 		return
 	}
 
 	// Fetch incoming message queue metadata to see if there's any queued messages.
-	inMsgMeta, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueueMeta(n.roundCtx, &roothash.RuntimeRequest{
+	inMsgMeta, err := n.commonNode.Consensus.RootHash().GetIncomingMessageQueueMeta(ctx, &roothash.RuntimeRequest{
 		RuntimeID: n.commonNode.Runtime.ID(),
 		// We make the check at the latest height even though we will later only look at the last
 		// height. This will make sure that any messages eventually get processed even if there are
@@ -502,14 +378,9 @@ func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
 	}
 
 	// Check what the runtime supports.
-	rt := n.commonNode.GetHostedRuntime()
-	if rt == nil {
-		n.logger.Debug("not scheduling a batch, the runtime is not yet ready")
-		return
-	}
-	rtInfo, err := rt.GetInfo(n.roundCtx)
+	rtInfo, err := n.rt.GetInfo(ctx)
 	if err != nil {
-		n.logger.Warn("not scheduling a batch, the runtime is broken",
+		n.logger.Warn("not scheduling, the runtime is broken",
 			"err", err,
 		)
 		return
@@ -526,42 +397,40 @@ func (n *Node) handleScheduleBatch(force bool) { // nolint: gocyclo
 	switch {
 	case len(batch) > 0:
 		// We have some transactions, schedule batch.
-	case force && len(roundResults.Messages) > 0:
+	case force && len(n.roundResults.Messages) > 0:
 		// We have runtime message results (and batch timeout expired), schedule batch.
 	case force && inMsgMeta.Size > 0:
 		// We have queued incoming runtime messages (and batch timeout expired), schedule batch.
-	case rtState.LastNormalRound == rtState.GenesisBlock.Header.Round:
+	case n.rtState.LastNormalRound == n.rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
-	case force && rtState.LastNormalHeight < epoch.GetEpochHeight():
+	case force && n.rtState.LastNormalHeight < n.epoch.GetEpochHeight():
 		// No block in this epoch processed by runtime yet, schedule batch.
 	default:
 		// No need to schedule a batch.
+		n.logger.Debug("not scheduling, no transactions")
 		return
 	}
 
-	// If we are an executor and not a scheduler try proposing a timeout.
-	if !epoch.IsTransactionScheduler(n.commonNode.CurrentBlock.Header.Round) {
-		n.logger.Debug("considering to propose a timeout",
-			"round", n.commonNode.CurrentBlock.Header.Round,
-			"batch_size", len(batch),
-			"round_results", roundResults,
-		)
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 
-		if err := n.proposeTimeoutLocked(n.roundCtx); err != nil {
-			n.logger.Error("error proposing a timeout",
-				"err", err,
-			)
-		}
+	n.transitionState(StateProcessingBatch{
+		mode:           protocol.ExecutionModeSchedule,
+		rank:           n.rank,
+		batchStartTime: time.Now(),
+		cancelFn:       cancel,
+		done:           done,
+	})
 
-		// If we are not a transaction scheduler, we can't really schedule.
-		n.logger.Debug("not scheduling a batch, not a transaction scheduler")
-		return
-	}
-
-	n.startRuntimeBatchSchedulingLocked(rtState, roundResults, rt, batch)
+	// Request the worker host to schedule a batch. This is done in a separate
+	// goroutine so that the runtime worker can continue processing events.
+	go func() {
+		defer close(done)
+		n.startSchedulingBatch(ctx, batch)
+	}()
 }
 
-func (n *Node) schedulerStoreTransactions(ctx context.Context, blk *block.Block, inputWriteLog storage.WriteLog, inputRoot hash.Hash) error {
+func (n *Node) storeTransactions(ctx context.Context, blk *block.Block, inputWriteLog storage.WriteLog, inputRoot hash.Hash) error {
 	var emptyRoot hash.Hash
 	emptyRoot.Empty()
 
@@ -576,134 +445,80 @@ func (n *Node) schedulerStoreTransactions(ctx context.Context, blk *block.Block,
 	})
 }
 
-func (n *Node) schedulerCreateProposalLocked(ctx context.Context, inputRoot hash.Hash, txHashes []hash.Hash) (*commitment.Proposal, error) {
-	blk := n.commonNode.CurrentBlock
-
-	// Create new proposal.
-	proposal := &commitment.Proposal{
-		NodeID: n.commonNode.Identity.NodeSigner.Public(),
-		Header: commitment.ProposalHeader{
-			Round:        blk.Header.Round + 1,
-			PreviousHash: blk.Header.EncodedHash(),
-			BatchHash:    inputRoot,
-		},
-		Batch: txHashes,
-	}
-	if err := proposal.Sign(n.commonNode.Identity.NodeSigner, blk.Header.Namespace); err != nil {
-		return nil, fmt.Errorf("failed to sign proposal header: %w", err)
+func (n *Node) publishProposal(ctx context.Context, proposal *commitment.Proposal) error {
+	if err := proposal.Sign(n.commonNode.Identity.NodeSigner, n.commonNode.Runtime.ID()); err != nil {
+		return fmt.Errorf("failed to sign proposal header: %w", err)
 	}
 
 	n.logger.Debug("dispatching a new batch proposal",
-		"input_root", inputRoot,
-		"batch_size", len(txHashes),
+		"input_root", proposal.Header.BatchHash,
+		"batch_size", len(proposal.Batch),
 	)
 
 	n.commonNode.P2P.Publish(ctx, n.committeeTopic, &p2p.CommitteeMessage{
-		Epoch:    n.commonNode.CurrentEpoch,
+		Epoch:    n.blockInfo.Epoch,
 		Proposal: proposal,
 	})
+
 	crash.Here(crashPointBatchPublishAfter)
-	return proposal, nil
+
+	return nil
 }
 
-func (n *Node) startRuntimeBatchSchedulingLocked(
-	rtState *roothash.RuntimeState,
-	roundResults *roothash.RoundResults,
-	rt host.RichRuntime,
-	batch []*txpool.TxQueueMeta,
-) {
-	n.logger.Debug("asking runtime to schedule batch",
-		"initial_batch_size", len(batch),
+func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueueMeta) {
+	// This method runs within its own goroutine and is always stopped before the runtime
+	// worker finishes. Therefore, it is safe to read local round variables (block info, ...).
+	n.logger.Debug("scheduling batch",
+		"batch_size", len(batch),
 	)
 
-	// Create batch processing context and channel for receiving the response.
-	ctx, cancel := context.WithCancel(n.roundCtx)
-	done := make(chan *processedBatch, 1)
+	initialBatch := make([][]byte, 0, len(batch))
+	for _, tx := range batch {
+		initialBatch = append(initialBatch, tx.Raw())
+	}
 
-	batchStartTime := time.Now()
-	n.transitionLocked(StateProcessingBatch{&unresolvedBatch{}, batchStartTime, cancel, done, protocol.ExecutionModeSchedule})
-
-	// Request the worker host to process a batch. This is done in a separate
-	// goroutine so that the committee node can continue processing blocks.
-	blk := n.commonNode.CurrentBlock
-	consensusBlk := n.commonNode.CurrentConsensusBlock
-	epoch := n.commonNode.CurrentEpoch
-
-	go func() {
-		defer close(done)
-
-		initialBatch := make([][]byte, 0, len(batch))
-		for _, tx := range batch {
-			initialBatch = append(initialBatch, tx.Raw())
-		}
-
-		// Ask the runtime to execute the batch.
-		rsp, err := n.runtimeExecuteTxBatch(
-			ctx,
-			rt,
-			protocol.ExecutionModeSchedule,
-			epoch,
-			consensusBlk,
-			blk,
-			rtState,
-			roundResults,
-			hash.Hash{}, // IORoot is ignored as it is yet to be determined.
-			initialBatch,
+	// Ask the runtime to execute the batch.
+	rsp, err := n.runtimeExecuteTxBatch(
+		ctx,
+		n.rt,
+		protocol.ExecutionModeSchedule,
+		n.blockInfo.Epoch,
+		n.blockInfo.ConsensusBlock,
+		n.blockInfo.RuntimeBlock,
+		n.rtState,
+		n.roundResults,
+		hash.Hash{}, // IORoot is ignored as it is yet to be determined.
+		initialBatch,
+	)
+	if err != nil {
+		n.logger.Error("runtime batch execution failed",
+			"err", err,
 		)
-		if err != nil {
-			n.logger.Error("runtime batch execution failed",
-				"err", err,
-			)
-			return
-		}
+		return
+	}
 
-		// Remove any rejected transactions.
-		n.commonNode.TxPool.HandleTxsUsed(rsp.TxRejectHashes)
-		// Mark any proposed transactions.
-		n.commonNode.TxPool.PromoteProposedBatch(rsp.TxHashes)
+	// Remove any rejected transactions.
+	n.commonNode.TxPool.HandleTxsUsed(rsp.TxRejectHashes)
+	// Mark any proposed transactions.
+	_, _ = n.commonNode.TxPool.PromoteProposedBatch(rsp.TxHashes)
 
-		// Submit response to the executor worker.
-		done <- &processedBatch{
-			computed:        &rsp.Batch,
-			txHashes:        rsp.TxHashes,
-			txInputRoot:     rsp.TxInputRoot,
-			txInputWriteLog: rsp.TxInputWriteLog,
-		}
-	}()
-}
+	// Create new proposal.
+	proposal := commitment.Proposal{
+		NodeID: n.commonNode.Identity.NodeSigner.Public(),
+		Header: commitment.ProposalHeader{
+			Round:        n.blockInfo.RuntimeBlock.Header.Round + 1,
+			PreviousHash: n.blockInfo.RuntimeBlock.Header.EncodedHash(),
+			BatchHash:    rsp.TxInputRoot,
+		},
+		Batch: rsp.TxHashes,
+	}
 
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) maybeStartProcessingBatchLocked(batch *unresolvedBatch) {
-	epoch := n.commonNode.Group.GetEpochSnapshot()
-
-	switch {
-	case epoch.IsExecutorWorker():
-		// Worker, start processing immediately.
-		n.startProcessingBatchLocked(batch)
-	case epoch.IsExecutorBackupWorker():
-		// Backup worker, wait for discrepancy event.
-		state, ok := n.state.(StateWaitingForBatch)
-		if ok && state.discrepancyDetected {
-			// We have already received a discrepancy event, start processing immediately.
-			n.logger.Info("already received a discrepancy event, start processing batch")
-			n.startProcessingBatchLocked(batch)
-			return
-		}
-
-		// Immediately resolve the batch so that we are ready when needed.
-		switch resolvedBatch, err := n.resolveBatchLocked(batch, StateWaitingForEvent{batch}); {
-		case err != nil:
-			// TODO: We should indicate failure.
-			return
-		case resolvedBatch == nil:
-			// Missing transactions, batch processing will start once all are available.
-			return
-		}
-
-		n.transitionLocked(StateWaitingForEvent{batch: batch})
-	default:
-		// Currently not a member of an executor committee, log.
-		n.logger.Debug("not an executor committee member, ignoring batch")
+	// Submit response to the executor worker.
+	n.processedBatchCh <- &processedBatch{
+		proposal:        &proposal,
+		rank:            n.rank,
+		computed:        &rsp.Batch,
+		txInputWriteLog: rsp.TxInputWriteLog,
 	}
 }
 
@@ -901,146 +716,88 @@ func (n *Node) runtimeExecuteTxBatch(
 	return rsp.RuntimeExecuteTxBatchResponse, nil
 }
 
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) startProcessingBatchLocked(batch *unresolvedBatch) {
-	if n.commonNode.CurrentBlock == nil {
-		panic("attempted to start processing batch with a nil block")
-	}
-
-	// Try to resolve the batch first.
-	resolvedBatch, err := n.resolveBatchLocked(batch, StateWaitingForTxs{batch})
-	switch {
-	case err != nil:
-		// TODO: We should indicate failure.
-		return
-	case resolvedBatch == nil:
-		// Missing transactions, we will be called again once all are available.
-		return
-	}
-
+func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Proposal, rank uint64, batch transaction.RawBatch) {
+	// This method runs within its own goroutine and is always stopped before the runtime
+	// worker finishes. Therefore, it is safe to read local round variables (block info, ...).
 	n.logger.Debug("processing batch",
-		"batch_size", len(resolvedBatch),
+		"batch_size", len(batch),
 	)
 
-	// Create batch processing context and channel for receiving the response.
-	ctx, cancel := context.WithCancel(n.roundCtx)
-	done := make(chan *processedBatch, 1)
+	// Optionally start local storage replication in parallel to batch dispatch.
+	replicateCh := n.startLocalStorageReplication(ctx, n.blockInfo.RuntimeBlock, proposal.Header.BatchHash, batch)
 
-	batchStartTime := time.Now()
-	n.transitionLocked(StateProcessingBatch{batch, batchStartTime, cancel, done, protocol.ExecutionModeExecute})
-
-	rt := n.commonNode.GetHostedRuntime()
-	if rt == nil {
-		// This should not happen as we only register to be an executor worker
-		// once the hosted runtime is ready.
-		n.logger.Error("received a batch while hosted runtime is not yet initialized")
-		n.abortBatchLocked(errRuntimeAborted)
+	// Ask the runtime to execute the batch.
+	rsp, err := n.runtimeExecuteTxBatch(
+		ctx,
+		n.rt,
+		protocol.ExecutionModeExecute,
+		n.blockInfo.Epoch,
+		n.blockInfo.ConsensusBlock,
+		n.blockInfo.RuntimeBlock,
+		n.rtState,
+		n.roundResults,
+		proposal.Header.BatchHash,
+		batch,
+	)
+	if err != nil {
+		n.logger.Error("runtime batch execution failed",
+			"err", err,
+		)
 		return
 	}
 
-	// Request the worker host to process a batch. This is done in a separate
-	// goroutine so that the committee node can continue processing blocks.
-	blk := n.commonNode.CurrentBlock
-	consensusBlk := n.commonNode.CurrentConsensusBlock
-	height := n.commonNode.CurrentBlockHeight
-	epoch := n.commonNode.CurrentEpoch
-
-	go func() {
-		defer close(done)
-
-		state, roundResults, err := n.getRtStateAndRoundResults(ctx, height)
+	// Wait for replication to complete before proposing a batch to ensure that we can cleanly
+	// apply any updates.
+	select {
+	case <-ctx.Done():
+		return
+	case err = <-replicateCh:
 		if err != nil {
-			n.logger.Error("failed to query runtime state and last round results",
-				"err", err,
-				"height", height,
-				"round", blk.Header.Round,
-			)
-			return
-		}
-
-		// Optionally start local storage replication in parallel to batch dispatch.
-		replicateCh := n.startLocalStorageReplication(ctx, blk, batch.hash(), resolvedBatch)
-
-		// Ask the runtime to execute the batch.
-		rsp, err := n.runtimeExecuteTxBatch(
-			ctx,
-			rt,
-			protocol.ExecutionModeExecute,
-			epoch,
-			consensusBlk,
-			blk,
-			state,
-			roundResults,
-			batch.hash(),
-			resolvedBatch,
-		)
-		if err != nil {
-			n.logger.Error("runtime batch execution failed",
+			n.logger.Error("local storage replication failed",
 				"err", err,
 			)
 			return
 		}
+	}
 
-		// Wait for replication to complete before proposing a batch to ensure that we can cleanly
-		// apply any updates.
-		select {
-		case <-ctx.Done():
-			return
-		case err = <-replicateCh:
-			if err != nil {
-				n.logger.Error("local storage replication failed",
-					"err", err,
-				)
-				return
-			}
-		}
-
-		// Submit response to the executor worker.
-		done <- &processedBatch{
-			computed: &rsp.Batch,
-			raw:      resolvedBatch,
-			txHashes: rsp.TxHashes,
-		}
-	}()
+	// Submit response to the round worker.
+	n.processedBatchCh <- &processedBatch{
+		proposal: proposal,
+		rank:     rank,
+		computed: &rsp.Batch,
+		raw:      batch,
+	}
 }
 
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) abortBatchLocked(reason error) {
-	state, ok := n.state.(StateProcessingBatch)
-	if !ok {
-		// We can only abort if a batch is being processed.
-		return
+func (n *Node) abortBatch(state *StateProcessingBatch) {
+	n.logger.Warn("aborting processing batch")
+
+	// Stop processing.
+	state.Cancel()
+
+	// Discard the result if there was any.
+	select {
+	case <-n.processedBatchCh:
+	default:
 	}
-
-	n.logger.Warn("aborting batch",
-		"reason", reason,
-	)
-
-	// Cancel the batch processing context and wait for it to finish.
-	state.cancel()
 
 	crash.Here(crashPointBatchAbortAfter)
 
 	abortedBatchCount.With(n.getMetricLabels()).Inc()
-	// After the batch has been aborted, we must wait for the round to be
-	// finalized.
-	n.transitionLocked(StateWaitingForFinalize{
-		batchStartTime: state.batchStartTime,
-	})
 }
 
 func (n *Node) proposeBatch(
 	roundCtx context.Context,
 	lastHeader *block.Header,
-	unresolved *unresolvedBatch,
 	processed *processedBatch,
 ) {
 	crash.Here(crashPointBatchProposeBefore)
 
 	batch := processed.computed
-	epoch := n.commonNode.Group.GetEpochSnapshot()
 
 	n.logger.Debug("proposing batch",
+		"scheduler_id", processed.proposal.NodeID,
+		"node_id", n.commonNode.Identity.NodeSigner.Public(),
 		"batch_size", len(processed.raw),
 		"io_root", *batch.Header.IORoot,
 		"state_root", *batch.Header.StateRoot,
@@ -1054,22 +811,17 @@ func (n *Node) proposeBatch(
 	ec := &commitment.ExecutorCommitment{
 		NodeID: n.commonNode.Identity.NodeSigner.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
+			SchedulerID:  processed.proposal.NodeID,
 			Header:       batch.Header,
 			RAKSignature: &rakSig,
 		},
 	}
 	// If we are the transaction scheduler also include all the emitted messages.
-	if epoch.IsTransactionScheduler(lastHeader.Round) {
+	if ec.NodeID.Equal(ec.Header.SchedulerID) {
 		ec.Messages = batch.Messages
 	}
 
-	var inputRoot hash.Hash
-	switch {
-	case unresolved.proposal == nil:
-		inputRoot = processed.txInputRoot
-	default:
-		inputRoot = unresolved.hash()
-	}
+	inputRoot := processed.proposal.Header.BatchHash
 
 	// Commit I/O and state write logs to storage.
 	storageErr := func() error {
@@ -1116,48 +868,55 @@ func (n *Node) proposeBatch(
 	}
 
 	// Submit commitment.
-	n.commonNode.CrossNode.Lock()
-	defer n.commonNode.CrossNode.Unlock()
-
 	// Make sure we are still in the right state/round.
 	state, ok := n.state.(StateProcessingBatch)
-	if !ok || lastHeader.Round != n.commonNode.CurrentBlock.Header.Round {
+	if !ok || lastHeader.Round != n.blockInfo.RuntimeBlock.Header.Round {
 		n.logger.Error("new state or round since started proposing batch",
 			"state", state,
-			"round", n.commonNode.CurrentBlock.Header.Round,
+			"round", n.blockInfo.RuntimeBlock.Header.Round,
 			"expected_round", lastHeader.Round,
 		)
 		return
 	}
+
+	n.logger.Debug("sign and submit the commitment",
+		"commit", ec,
+	)
 
 	if err := n.signAndSubmitCommitment(roundCtx, ec); err != nil {
 		n.logger.Error("failed to sign and submit the commitment",
 			"commit", ec,
 			"err", err,
 		)
-		n.abortBatchLocked(err)
+		n.abortBatch(&state)
+		return
+	}
+
+	n.submitted[processed.rank] = struct{}{}
+
+	if storageErr != nil {
+		n.abortBatch(&state)
+		n.transitionState(StateWaitingForBatch{})
 		return
 	}
 
 	// Due to backwards compatibility with runtimes that don't provide transaction hashes as output
 	// we need to manually compute them here.
-	if len(processed.raw) > 0 && len(processed.txHashes) == 0 {
-		processed.txHashes = make([]hash.Hash, 0, len(processed.raw))
+	txHashes := processed.proposal.Batch
+	if len(processed.raw) > 0 && len(txHashes) == 0 {
+		txHashes = make([]hash.Hash, 0, len(processed.raw))
 		for _, tx := range processed.raw {
-			processed.txHashes = append(processed.txHashes, hash.NewFromBytes(tx))
+			txHashes = append(txHashes, hash.NewFromBytes(tx))
 		}
 	}
 
-	switch storageErr {
-	case nil:
-		n.transitionLocked(StateWaitingForFinalize{
-			batchStartTime: state.batchStartTime,
-			proposedIORoot: *ec.Header.Header.IORoot,
-			txHashes:       processed.txHashes,
-		})
-	default:
-		n.abortBatchLocked(storageErr)
+	n.proposedBatch = &proposedBatch{
+		batchStartTime: state.batchStartTime,
+		proposedIORoot: *ec.Header.Header.IORoot,
+		txHashes:       txHashes,
 	}
+
+	n.transitionState(StateWaitingForBatch{})
 
 	crash.Here(crashPointBatchProposeAfter)
 }
@@ -1189,30 +948,127 @@ func (n *Node) signAndSubmitCommitment(roundCtx context.Context, ec *commitment.
 	return nil
 }
 
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) handleProposalLocked(batch *unresolvedBatch) error {
-	n.logger.Debug("handling a new batch proposal",
-		"proposer", batch.proposal.NodeID,
-		"round", batch.proposal.Header.Round,
+func (n *Node) processProposal(ctx context.Context, proposal *commitment.Proposal, rank uint64, discrepancy bool) {
+	n.logger.Debug("trying to process a proposal",
+		"scheduler", proposal.NodeID,
+		"round", proposal.Header.Round,
+		"rank", rank,
+		"discrepancy", discrepancy,
 	)
 
-	// TODO: Handle proposal equivocation.
+	// Check if we are in a suitable state for processing a proposal.
+	switch n.state.(type) {
+	case StateWaitingForBatch:
+	default:
+		n.logger.Debug("not processing, invalid state",
+			"state", n.state.Name(),
+		)
+		return
+	}
 
-	if _, ok := n.state.(StateWaitingForBatch); !ok { //nolint:revive
-		// Currently not waiting for batch.
-	} else if epoch := n.commonNode.Group.GetEpochSnapshot(); !epoch.IsExecutorMember() { //nolint:revive
-		// Currently not an executor committee member.
-	} else {
-		// Maybe process if we have the correct block.
-		currentHash := n.commonNode.CurrentBlock.Header.EncodedHash()
-		if currentHash.Equal(&batch.proposal.Header.PreviousHash) {
-			n.maybeStartProcessingBatchLocked(batch)
-			return nil // Forward proposal.
+	// Process only once.
+	if _, ok := n.submitted[rank]; ok {
+		n.logger.Debug("not processing, commitment already submitted")
+		return
+	}
+
+	switch discrepancy {
+	case true:
+		// Only backup executor workers are permitted to process batches.
+		if !n.epoch.IsExecutorBackupWorker() {
+			n.logger.Debug("not processing, not a backup executor")
+			return
+		}
+	case false:
+		// All workers are allowed to process batches. The only difference is that the backup
+		// execution workers will wait for a discrepancy event before beginning execution.
+	}
+
+	n.logger.Debug("attempting to resolve batch")
+
+	// Try to resolve the batch first.
+	// TODO: Add metrics for how long it takes to receive the complete batch.
+	resolvedBatch, missingTxs := n.commonNode.TxPool.PromoteProposedBatch(proposal.Batch)
+
+	// Compute batch size.
+	batchSize := uint64(len(proposal.Batch))
+	bytes := uint64(0)
+	for _, tx := range resolvedBatch {
+		if tx == nil {
+			continue
+		}
+		bytes += uint64(tx.Size())
+	}
+
+	// Submit failure if the batch is invalid.
+	// The scheduler is violating the protocol and should be punished.
+	maxBatchSize := n.blockInfo.ActiveDescriptor.TxnScheduler.MaxBatchSize
+	maxBytes := n.blockInfo.ActiveDescriptor.TxnScheduler.MaxBatchSizeBytes
+	if batchSize > maxBatchSize || maxBytes > 0 && bytes > maxBytes {
+		n.transitionStateToProcessingFailure(proposal, rank, bytes, maxBytes, batchSize, maxBatchSize)
+		return
+	}
+
+	// Prepare the batch. If some transactions are missing, they will be filled latter.
+	batch := make(transaction.RawBatch, 0, len(resolvedBatch))
+	for _, tx := range resolvedBatch {
+		switch tx {
+		case nil:
+			batch = append(batch, nil)
+		default:
+			batch = append(batch, tx.Raw())
 		}
 	}
 
-	// When checks fail, add proposal into the queue of pending proposals for later retry.
-	return n.addPendingProposalLocked(batch)
+	// Missing transactions, we will wait until all are received.
+	if len(missingTxs) > 0 {
+		n.logger.Debug("some transactions are missing", "num_missing", len(missingTxs))
+
+		txHashes := maps.Keys(missingTxs)
+
+		subCtx, cancelFn := context.WithCancel(ctx)
+		done := make(chan struct{})
+
+		n.transitionState(StateWaitingForTxs{
+			proposal:     proposal,
+			rank:         rank,
+			batch:        batch,
+			txs:          missingTxs,
+			bytes:        bytes,
+			maxBytes:     maxBytes,
+			batchSize:    batchSize,
+			maxBatchSize: maxBatchSize,
+			cancelFn:     cancelFn,
+			done:         done,
+		})
+
+		go func() {
+			defer close(done)
+			n.requestMissingTransactions(subCtx, txHashes)
+		}()
+
+		return
+	}
+
+	// TODO: Handle proposal equivocation.
+
+	// Maybe process if we have the correct block.
+	currentHash := n.blockInfo.RuntimeBlock.Header.EncodedHash()
+	if !currentHash.Equal(&proposal.Header.PreviousHash) {
+		return
+	}
+
+	// The backup workers should process only if the discrepancy was detected.
+	if !n.epoch.IsExecutorWorker() && n.epoch.IsExecutorBackupWorker() && !discrepancy {
+		n.transitionState(StateWaitingForEvent{
+			proposal: proposal,
+			rank:     rank,
+			batch:    batch,
+		})
+		return
+	}
+
+	n.transitionStateToProcessing(ctx, proposal, rank, batch)
 }
 
 // nudgeAvailabilityLocked checks whether the executor worker should declare itself available.
@@ -1320,82 +1176,142 @@ func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
 	n.nudgeAvailabilityLocked(true)
 }
 
-func (n *Node) handleProcessedBatch(batch *processedBatch, processingCh chan *processedBatch) {
-	n.commonNode.CrossNode.Lock()
-
-	// To avoid stale events, check if the stored state is still valid.
-	// XXX: processingCh not changing ensures we are in the same state and not
-	// in a "new" processing batch state. This also ensures that the round did
-	// not change.
+func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) {
 	state, ok := n.state.(StateProcessingBatch)
-	if !ok || state.done != processingCh {
-		n.commonNode.CrossNode.Unlock()
+	if !ok {
+		// Should not be possible, as we always drain the channel once we transition
+		// to a different state.
+		n.logger.Error("failed to handle processed batch, invalid state",
+			"state", n.state,
+		)
 		return
 	}
-	roundCtx := n.roundCtx
-	lastHeader := n.commonNode.CurrentBlock.Header
+	lastHeader := n.blockInfo.RuntimeBlock.Header
 
-	switch {
-	case batch == nil || batch.computed == nil:
-		// There was an issue during batch processing.
-	case state.mode == protocol.ExecutionModeSchedule:
-		// Scheduling was processed successfully.
-		n.logger.Info("runtime has finished scheduling a batch",
-			"input_root", batch.txInputRoot,
-			"tx_hashes", batch.txHashes,
+	// Check if there was an issue during batch processing.
+	if batch.computed == nil {
+		n.logger.Warn("worker has aborted batch processing")
+
+		n.abortBatch(&state)
+		n.transitionState(StateWaitingForBatch{})
+
+		commit := &commitment.ExecutorCommitment{
+			NodeID: n.commonNode.Identity.NodeSigner.Public(),
+			Header: commitment.ExecutorCommitmentHeader{
+				SchedulerID: batch.proposal.NodeID,
+				Header: commitment.ComputeResultsHeader{
+					Round:        lastHeader.Round + 1,
+					PreviousHash: lastHeader.EncodedHash(),
+				},
+			},
+		}
+		commit.Header.SetFailure(commitment.FailureUnknown)
+
+		n.logger.Debug("submitting failure indicating commitment",
+			"commitment", commit,
 		)
-		err := n.schedulerStoreTransactions(roundCtx, n.commonNode.CurrentBlock, batch.txInputWriteLog, batch.txInputRoot)
+		if err := n.signAndSubmitCommitment(ctx, commit); err != nil {
+			n.logger.Error("failed to sign and submit the commitment",
+				"commit", commit,
+				"err", err,
+			)
+			return
+		}
+
+		n.submitted[batch.rank] = struct{}{}
+		return
+	}
+
+	// Check if scheduling was processed successfully.
+	if state.mode == protocol.ExecutionModeSchedule {
+		n.logger.Info("runtime has finished scheduling a batch",
+			"input_root", batch.proposal.Header.BatchHash,
+			"tx_hashes", batch.proposal.Batch,
+		)
+		err := n.storeTransactions(ctx, n.blockInfo.RuntimeBlock, batch.txInputWriteLog, batch.proposal.Header.BatchHash)
 		if err != nil {
 			n.logger.Error("failed to store transaction",
 				"err", err,
 			)
-			break
+			return
 		}
 
-		// Create and submit a proposal.
-		_, err = n.schedulerCreateProposalLocked(roundCtx, batch.txInputRoot, batch.txHashes)
+		// Sign and submit the proposal to P2P network.
+		err = n.publishProposal(ctx, batch.proposal)
 		if err != nil {
-			n.logger.Error("failed to create proposal",
+			n.logger.Error("failed to sign and publish proposal",
 				"err", err,
 			)
-			break
+			return
 		}
-		fallthrough
-	default:
-		// Batch was processed successfully.
-		stateBatch := state.batch
-		n.commonNode.CrossNode.Unlock()
-		n.logger.Info("worker has finished processing a batch")
-		n.proposeBatch(roundCtx, &lastHeader, stateBatch, batch)
+	}
+
+	// Batch was processed successfully.
+	n.logger.Info("worker has finished processing a batch")
+	n.proposeBatch(ctx, &lastHeader, batch)
+}
+
+func (n *Node) handleRoundStarted() {
+	n.logger.Debug("starting round worker",
+		"round", n.blockInfo.RuntimeBlock.Header.Round+1,
+	)
+
+	n.logger.Info("considering the round finalized",
+		"round", n.blockInfo.RuntimeBlock.Header.Round,
+		"header_hash", n.blockInfo.RuntimeBlock.Header.EncodedHash(),
+		"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
+	)
+	if n.blockInfo.RuntimeBlock.Header.HeaderType != block.Normal {
 		return
 	}
 
-	defer n.commonNode.CrossNode.Unlock()
-
-	// Unsuccessful batch processing.
-	n.logger.Warn("worker has aborted batch processing")
-	commit := &commitment.ExecutorCommitment{
-		NodeID: n.commonNode.Identity.NodeSigner.Public(),
-		Header: commitment.ExecutorCommitmentHeader{
-			Header: commitment.ComputeResultsHeader{
-				Round:        lastHeader.Round + 1,
-				PreviousHash: lastHeader.EncodedHash(),
-			},
-		},
+	if n.proposedBatch == nil {
+		return
 	}
-	commit.Header.SetFailure(commitment.FailureUnknown)
 
-	n.logger.Debug("submitting failure indicating commitment",
-		"commitment", commit,
-	)
-	if err := n.signAndSubmitCommitment(roundCtx, commit); err != nil {
-		n.logger.Error("failed to sign and submit the commitment",
-			"commit", commit,
-			"err", err,
+	if !n.blockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
+		n.logger.Error("proposed batch was not finalized",
+			"header_io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+			"proposed_io_root", n.proposedBatch.proposedIORoot,
+			"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
+			"batch_size", len(n.proposedBatch.txHashes),
 		)
+		return
 	}
 
-	n.abortBatchLocked(errRuntimeAborted)
+	// Record time taken for successfully processing a batch.
+	batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.proposedBatch.batchStartTime).Seconds())
+
+	n.logger.Debug("removing processed batch from queue",
+		"batch_size", len(n.proposedBatch.txHashes),
+		"io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+	)
+
+	// Remove processed transactions from queue.
+	n.commonNode.TxPool.HandleTxsUsed(n.proposedBatch.txHashes)
+}
+
+func (n *Node) handleRoundEnded() {
+	n.logger.Debug("stopping round worker",
+		"round", n.blockInfo.RuntimeBlock.Header.Round+1,
+	)
+
+	switch state := n.state.(type) {
+	case StateWaitingForBatch:
+		// Nothing to do here.
+		return
+	case StateWaitingForTxs:
+		// Stop waiting for transactions.
+		n.logger.Warn("considering the round failed due to missing transactions")
+		state.Cancel()
+	case StateWaitingForEvent:
+		// Block finalized without the need for a backup worker.
+		n.logger.Info("considering the round finalized without backup worker")
+	case StateProcessingBatch:
+		n.abortBatch(&state)
+	}
+
+	n.transitionState(StateWaitingForBatch{})
 }
 
 func (n *Node) worker() {
@@ -1410,18 +1326,20 @@ func (n *Node) worker() {
 		return
 	}
 
-	n.logger.Info("starting committee node")
+	n.logger.Info("starting worker")
+
+	var (
+		err   error
+		txSub pubsub.ClosableSubscription
+		ecSub pubsub.ClosableSubscription
+	)
 
 	// Subscribe to notifications of new transactions being available in the pool.
-	txSub, txCh := n.commonNode.TxPool.WatchCheckedTransactions()
+	txSub, n.txCh = n.commonNode.TxPool.WatchCheckedTransactions()
 	defer txSub.Close()
 
-	// Subscribe to scheduler notifications.
-	schedSub, schedCh := n.commonNode.TxPool.WatchScheduler()
-	defer schedSub.Close()
-
 	// Subscribe to gossiped executor commitments.
-	ecCh, ecSub, err := n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx)
+	n.ecCh, ecSub, err = n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx)
 	if err != nil {
 		n.logger.Error("failed to subscribe to executor commitments",
 			"err", err,
@@ -1447,17 +1365,27 @@ func (n *Node) worker() {
 		}
 	}()
 
+	// (Re)Start the runtime worker every time a runtime block is finalized.
+	var (
+		wg sync.WaitGroup
+		bi *runtime.BlockInfo
+	)
 	for {
-		// Check if we are currently processing a batch. In this case, we also
-		// need to select over the result channel.
-		var processingDoneCh chan *processedBatch
-
 		func() {
-			n.commonNode.CrossNode.Lock()
-			defer n.commonNode.CrossNode.Unlock()
+			wg.Add(1)
+			defer wg.Wait()
 
-			if stateProcessing, ok := n.state.(StateProcessingBatch); ok {
-				processingDoneCh = stateProcessing.done
+			ctx, cancel := context.WithCancel(n.ctx)
+			defer cancel()
+
+			go func() {
+				defer wg.Done()
+				n.roundWorker(ctx, bi)
+			}()
+
+			select {
+			case <-n.stopCh:
+			case bi = <-n.blockInfoCh:
 			}
 		}()
 
@@ -1465,20 +1393,178 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case batch := <-processingDoneCh:
-			// Batch processing has finished.
-			n.handleProcessedBatch(batch, processingDoneCh)
-		case force := <-schedCh:
-			// Attempt scheduling.
-			n.handleScheduleBatch(force)
-		case txs := <-txCh:
-			// Check any queued transactions.
-			n.handleNewCheckedTransactions(txs)
-		case ec := <-ecCh:
-			// Process observed executor commitments.
-			n.handleObservedExecutorCommitment(ec)
-		case <-n.reselect:
-			// Recalculate select set.
+		default:
+		}
+	}
+}
+
+func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
+	if bi == nil {
+		return
+	}
+	n.blockInfo = bi
+	round := bi.RuntimeBlock.Header.Round + 1
+
+	n.handleRoundStarted()
+	defer n.handleRoundEnded()
+
+	// Clear last proposal.
+	n.proposedBatch = nil
+
+	// Clear proposal queue.
+	n.commonNode.TxPool.ClearProposedBatch()
+
+	// Prune proposals.
+	n.proposals.Prune(round)
+
+	// Need to be an executor committee member.
+	n.epoch = n.commonNode.Group.GetEpochSnapshot()
+	if !n.epoch.IsExecutorMember() {
+		n.logger.Debug("skipping round, not an executor member",
+			"round", round,
+		)
+		return
+	}
+
+	// This should never fail as we only register to be an executor worker
+	// once the hosted runtime is ready.
+	n.rt = n.commonNode.GetHostedRuntime()
+	if n.rt == nil {
+		n.logger.Error("skipping round, hosted runtime is not yet initialized")
+		return
+	}
+
+	// Fetch state and round results upfront.
+	var err error
+	n.rtState, n.roundResults, err = n.getRtStateAndRoundResults(ctx, bi.ConsensusBlock.Height)
+	if err != nil {
+		n.logger.Debug("skipping round, failed to fetch state and round results",
+			"err", err,
+		)
+		return
+	}
+
+	// Prepare flush timer for the primary transaction scheduler.
+	flush := false
+	flushTimer := time.NewTimer(bi.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
+	defer flushTimer.Stop()
+
+	// Compute node's rank when scheduling transactions.
+	id := n.commonNode.Identity.NodeSigner.Public()
+	n.committee = n.epoch.GetExecutorCommittee().Committee
+	n.rank, err = n.committee.SchedulerRank(round, id)
+	if err != nil {
+		n.rank = math.MaxUint64
+	}
+
+	n.logger.Debug("node is an executor member",
+		"round", round,
+		"rank", n.rank,
+		"worker", n.epoch.IsExecutorWorker(),
+		"backup_worker", n.epoch.IsExecutorBackupWorker(),
+	)
+
+	// Track the pool's highest rank to prevent committing to worse-ranked proposals
+	// that will be rejected by the pool.
+	poolRank := uint64(math.MaxUint64)
+
+	// Allow only the highest-ranked scheduler to propose immediately.
+	schedulerRank := uint64(0)
+
+	// The ticker determines when we are allowed to commit to proposals from schedulers
+	// with lower ranks.
+	schedulerDelay := n.rtState.Runtime.TxnScheduler.ProposerTimeout
+	schedulerRankTicker := NewLinearRankTicker(uint64(bi.RuntimeBlock.Header.Timestamp), schedulerDelay, n.rank)
+	schedulerRankTicker.Start()
+	defer schedulerRankTicker.Stop()
+
+	// Remember if discrepancy was detected.
+	var discrepancy *discrepancyEvent
+
+	// Reset submitted proposals/commitments.
+	n.submitted = make(map[uint64]struct{})
+
+	// Reset commitment pool for early discrepancy detection.
+	n.commitPool = commitment.NewPool()
+
+	// Main loop.
+	for {
+		// Update state, propose or schedule.
+		switch discrepancy {
+		case nil:
+			limit := min(schedulerRank, poolRank, n.rank)
+			proposal, rank, ok := n.proposals.Best(round, 0, limit, n.submitted)
+			switch {
+			case ok && rank < n.rank:
+				// Commit to a proposal with a higher rank.
+				n.updateState(ctx, 0, rank, false)
+				n.processProposal(ctx, proposal, rank, false)
+			case n.rank <= schedulerRank:
+				// Try to schedule a batch.
+				n.updateState(ctx, 0, n.rank, false)
+				n.scheduleBatch(ctx, round, flush)
+			}
+		default:
+			n.updateState(ctx, discrepancy.rank, discrepancy.rank, true)
+
+			limit := discrepancy.rank
+			proposal, rank, ok := n.proposals.Best(round, limit, limit, n.submitted)
+			switch {
+			case ok:
+				// Try to process the discrepant proposal.
+				n.processProposal(ctx, proposal, rank, true)
+			case n.rank == discrepancy.rank:
+				// Try to schedule a batch.
+				n.scheduleBatch(ctx, round, true)
+			}
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				n.logger.Debug("exiting round, context canceled")
+				return
+			case txs := <-n.txCh:
+				// Check any queued transactions.
+				n.handleNewCheckedTransactions(txs)
+			case discrepancy = <-n.discrepancyCh:
+				// Discrepancy has been detected.
+				n.handleDiscrepancy(ctx, discrepancy)
+			case ec := <-n.ecCh:
+				// Process observed executor commitments.
+				n.handleObservedExecutorCommitment(ctx, ec)
+				continue
+			case batch := <-n.processedBatchCh:
+				// Batch processing has finished.
+				n.handleProcessedBatch(ctx, batch)
+			case schedulerRank = <-schedulerRankTicker.C():
+				// Scheduler rank decreased, try to schedule/process again.
+				n.logger.Debug("scheduler rank has changed",
+					"rank", schedulerRank,
+				)
+			case ec := <-n.schedulerCommitmentCh:
+				// Pool rank increased, no need to schedule/process again.
+				if ec.Header.Header.Round != round {
+					continue
+				}
+				rank, err := n.committee.SchedulerRank(round, ec.Header.SchedulerID)
+				if err != nil {
+					continue
+				}
+				poolRank = rank
+				n.logger.Debug("pool rank has changed",
+					"rank", poolRank,
+				)
+				continue
+			case <-flushTimer.C:
+				// Force scheduling for primary transaction scheduler.
+				n.logger.Debug("scheduling is now forced")
+				flush = true
+			case <-n.reselectCh:
+				// Try again.
+			}
+
+			break
 		}
 	}
 }
@@ -1496,21 +1582,25 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		commonNode:       commonNode,
-		commonCfg:        commonCfg,
-		roleProvider:     roleProvider,
-		committeeTopic:   committeeTopic,
-		pendingProposals: newPendingProposals(),
-		ctx:              ctx,
-		cancelCtx:        cancel,
-		stopCh:           make(chan struct{}),
-		quitCh:           make(chan struct{}),
-		initCh:           make(chan struct{}),
-		state:            StateNotReady{},
-		txSync:           txsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID()),
-		stateTransitions: pubsub.NewBroker(false),
-		reselect:         make(chan struct{}, 1),
-		logger:           logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
+		commonNode:            commonNode,
+		commonCfg:             commonCfg,
+		roleProvider:          roleProvider,
+		committeeTopic:        committeeTopic,
+		proposals:             newPendingProposals(),
+		ctx:                   ctx,
+		cancelCtx:             cancel,
+		stopCh:                make(chan struct{}),
+		quitCh:                make(chan struct{}),
+		initCh:                make(chan struct{}),
+		state:                 StateWaitingForBatch{},
+		txSync:                txsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID()),
+		stateTransitions:      pubsub.NewBroker(false),
+		blockInfoCh:           make(chan *runtime.BlockInfo, 1),
+		discrepancyCh:         make(chan *discrepancyEvent, 1),
+		processedBatchCh:      make(chan *processedBatch, 1),
+		schedulerCommitmentCh: make(chan *commitment.ExecutorCommitment, 1),
+		reselectCh:            make(chan struct{}, 1),
+		logger:                logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	// Register prune handler.

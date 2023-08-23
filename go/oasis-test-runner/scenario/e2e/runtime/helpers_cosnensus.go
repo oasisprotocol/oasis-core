@@ -112,7 +112,7 @@ func (sc *Scenario) initialEpochTransitionsWith(ctx context.Context, fixture *oa
 			}
 		}
 		if !sc.debugNoRandomInitialEpoch {
-			// To prevent people from writing tests that depend on very precicse
+			// To prevent people from writing tests that depend on very precise
 			// timekeeping by epoch, randomize the start epoch slightly.
 			//
 			// If this causes your test to fail, it is not this code that is

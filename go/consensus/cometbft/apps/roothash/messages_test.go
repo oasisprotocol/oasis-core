@@ -105,12 +105,12 @@ func initRuntimeGenesisBlock(require *require.Assertions, ctx *abciAPI.Context, 
 
 	state := roothashState.NewMutableState(ctx.State())
 	err = state.SetRuntimeState(ctx, &roothash.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1,
-		LastNormalRound:    0,
-		LastNormalHeight:   1,
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1,
+		LastNormalRound:  0,
+		LastNormalHeight: 1,
 	})
 	require.NoError(err, "SetRuntimeState")
 
@@ -127,12 +127,12 @@ func advanceRuntimeState(require *require.Assertions, ctx *abciAPI.Context, gene
 
 	state := roothashState.NewMutableState(ctx.State())
 	err = state.SetRuntimeState(ctx, &roothash.RuntimeState{
-		Runtime:            runtime,
-		GenesisBlock:       genesisBlock,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: int64(round + 1),
-		LastNormalRound:    round,
-		LastNormalHeight:   int64(round + 1),
+		Runtime:          runtime,
+		GenesisBlock:     genesisBlock,
+		LastBlock:        blk,
+		LastBlockHeight:  int64(round + 1),
+		LastNormalRound:  round,
+		LastNormalHeight: int64(round + 1),
 	})
 	require.NoError(err, "SetRuntimeState")
 

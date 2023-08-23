@@ -93,8 +93,8 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 			TxnScheduler: registry.TxnSchedulerParameters{
 				MaxBatchSize:      100,
 				MaxBatchSizeBytes: 1024 * 1024,
-				BatchFlushTimeout: 1 * time.Second,
-				ProposerTimeout:   10,
+				BatchFlushTimeout: time.Second,
+				ProposerTimeout:   2 * time.Second,
 			},
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

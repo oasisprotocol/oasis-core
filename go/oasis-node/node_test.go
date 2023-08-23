@@ -76,7 +76,7 @@ var (
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
 			BatchFlushTimeout: 20 * time.Second,
-			ProposerTimeout:   20,
+			ProposerTimeout:   40 * time.Second,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

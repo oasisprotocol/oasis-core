@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
@@ -31,8 +32,9 @@ const (
 	CfgVersionFakeEnclaveID = "runtime.version.fake_enclave_id"
 	// CfgActivationEpoch configures the epoch at which the Byzantine node activates.
 	CfgActivationEpoch = "activation_epoch"
-	// CfgSchedulerRoleExpected configures if the executor scheduler role is expected.
-	CfgSchedulerRoleExpected = "executor.scheduler_role_expected"
+	// CfgPrimarySchedulerExpected configures whether it is expected for the executor to act
+	// as the primary scheduler.
+	CfgPrimarySchedulerExpected = "executor.primary_scheduler_expected"
 	// CfgExecutorMode configures the byzantine executor mode.
 	CfgExecutorMode = "executor.mode"
 	// CfgExecutorProposeBogusTx configures whether the executor in scheduler role should propose
@@ -50,12 +52,14 @@ type ExecutorMode uint32
 // Executor modes.
 const (
 	ModeExecutorHonest            ExecutorMode = 0
-	ModeExecutorWrong             ExecutorMode = 1
-	ModeExecutorStraggler         ExecutorMode = 2
-	ModeExecutorFailureIndicating ExecutorMode = 3
+	ModeExecutorDishonest         ExecutorMode = 1
+	ModeExecutorRunaway           ExecutorMode = 2
+	ModeExecutorStraggler         ExecutorMode = 3
+	ModeExecutorFailureIndicating ExecutorMode = 4
 
 	modeExecutorHonestString            = "executor_honest"
-	modeExecutorWrongString             = "executor_wrong"
+	modeExecutorDishonestString         = "executor_dishonest"
+	modeExecutorRunawayString           = "executor_runaway"
 	modeExecutorStragglerString         = "executor_straggler"
 	modeExecutorFailureIndicatingString = "executor_failure_indicating"
 )
@@ -65,8 +69,10 @@ func (m ExecutorMode) String() string {
 	switch m {
 	case ModeExecutorHonest:
 		return modeExecutorHonestString
-	case ModeExecutorWrong:
-		return modeExecutorWrongString
+	case ModeExecutorDishonest:
+		return modeExecutorDishonestString
+	case ModeExecutorRunaway:
+		return modeExecutorRunawayString
 	case ModeExecutorStraggler:
 		return modeExecutorStragglerString
 	case ModeExecutorFailureIndicating:
@@ -81,8 +87,10 @@ func (m *ExecutorMode) FromString(str string) error {
 	switch strings.ToLower(str) {
 	case modeExecutorHonestString:
 		*m = ModeExecutorHonest
-	case modeExecutorWrongString:
-		*m = ModeExecutorWrong
+	case modeExecutorDishonestString:
+		*m = ModeExecutorDishonest
+	case modeExecutorRunawayString:
+		*m = ModeExecutorRunaway
 	case modeExecutorStragglerString:
 		*m = ModeExecutorStraggler
 	case modeExecutorFailureIndicatingString:
@@ -134,13 +142,15 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 		panic(err)
 	}
 
-	isTxScheduler := viper.GetBool(CfgSchedulerRoleExpected)
+	round := uint64(3)
+	isTxScheduler := viper.GetBool(CfgPrimarySchedulerExpected)
 	b, err := initializeAndRegisterByzantineNode(
 		runtimeID,
 		node.RoleComputeWorker,
 		scheduler.RoleWorker,
 		isTxScheduler,
 		false,
+		round,
 	)
 	if err != nil {
 		panic(fmt.Sprintf("error initializing node: %+v", err))
@@ -154,31 +164,39 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 		return
 	}
 
+	// Get the latest roothash block.
+	var blk *block.Block
+	blk, err = getRoothashLatestBlock(ctx, b.cometbft.service, runtimeID)
+	if err != nil {
+		panic(fmt.Errorf("failed getting latest roothash block: %w", err))
+	}
+	if blk.Header.Round != round-1 {
+		panic(fmt.Errorf("latest roothash block has invalid round (expected %d, got %d)", round-1, blk.Header.Round))
+	}
+
+	var schedulerID signature.PublicKey
 	cbc := newComputeBatchContext(b.chainContext, runtimeID)
 	switch isTxScheduler {
 	case true:
 		// If we are the transaction scheduler, we wait for transactions and schedule them.
 		var cont bool
-		cont, err = b.receiveAndScheduleTransactions(ctx, cbc, executorMode)
+		cont, err = b.receiveAndScheduleTransactions(ctx, cbc, blk, executorMode)
 		if err != nil {
-			panic(fmt.Sprintf("comptue transaction scheduling failed: %+v", err))
+			panic(fmt.Sprintf("compute transaction scheduling failed: %+v", err))
 		}
 		if !cont {
 			return
 		}
+
+		schedulerID = b.identity.NodeSigner.Public()
 	case false:
 		// If we are not the scheduler, receive transactions and the proposal.
 		if err = cbc.receiveProposal(b.p2p); err != nil {
 			panic(fmt.Sprintf("compute receive proposal failed: %+v", err))
 		}
 		logger.Debug("executor: received proposal", "proposal", cbc.proposal)
-	}
 
-	// Get latest roothash block.
-	var blk *block.Block
-	blk, err = getRoothashLatestBlock(ctx, b.cometbft.service, runtimeID)
-	if err != nil {
-		panic(fmt.Errorf("failed getting latest roothash block: %w", err))
+		schedulerID = cbc.proposal.NodeID
 	}
 
 	if err = cbc.openTrees(ctx, blk, b.storageClient); err != nil {
@@ -215,7 +233,7 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 			// Unsupported condition.
 			panic(fmt.Sprintf("unsupported number of transactions: %d", len(cbc.txs)))
 		}
-	case ModeExecutorWrong:
+	case ModeExecutorDishonest:
 		// Alter the state incorrectly.
 		if err = cbc.stateTree.Insert(ctx, []byte("hello_key"), []byte("wrong")); err != nil {
 			panic(fmt.Sprintf("compute state tree set failed: %+v", err))
@@ -256,11 +274,11 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 
 	switch executorMode {
 	case ModeExecutorFailureIndicating:
-		if err = cbc.createCommitment(b.identity, b.rak, commitment.FailureUnknown); err != nil {
+		if err = cbc.createCommitment(b.identity, schedulerID, b.rak, commitment.FailureUnknown); err != nil {
 			panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 		}
 	default:
-		if err = cbc.createCommitment(b.identity, b.rak, commitment.FailureNone); err != nil {
+		if err = cbc.createCommitment(b.identity, schedulerID, b.rak, commitment.FailureNone); err != nil {
 			panic(fmt.Sprintf("compute create commitment failed: %+v", err))
 		}
 
@@ -290,7 +308,7 @@ func init() {
 	fs.String(CfgRuntimeID, defaultRuntimeIDHex, "runtime ID byzantine node participates in")
 	fs.String(CfgVersionFakeEnclaveID, "", "fake runtime enclave identity")
 	fs.Uint64(CfgActivationEpoch, 0, "epoch at which the Byzantine node should activate")
-	fs.Bool(CfgSchedulerRoleExpected, false, "is executor node expected to be scheduler or not")
+	fs.Bool(CfgPrimarySchedulerExpected, false, "is executor node expected to be primary scheduler or not")
 	fs.String(CfgExecutorMode, ModeExecutorHonest.String(), "configures executor mode")
 	fs.Bool(CfgExecutorProposeBogusTx, false, "whether the executor should propose bogus transactions")
 	fs.String(CfgVRFBeaconMode, ModeVRFBeaconHonest.String(), "configures VRF beacon mode")

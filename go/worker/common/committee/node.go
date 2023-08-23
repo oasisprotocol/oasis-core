@@ -3,6 +3,7 @@ package committee
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -200,7 +201,6 @@ type Node struct {
 	CurrentConsensusBlock *consensus.LightBlock
 	CurrentDescriptor     *registry.Runtime
 	CurrentEpoch          beacon.EpochTime
-	Height                int64
 
 	logger *logging.Logger
 }
@@ -306,9 +306,16 @@ func (n *Node) GetStatus() (*api.Status, error) {
 		}
 	}
 
+	status.SchedulerRank = math.MaxUint64
+
 	epoch := n.Group.GetEpochSnapshot()
 	if cmte := epoch.GetExecutorCommittee(); cmte != nil {
 		status.ExecutorRoles = cmte.Roles
+
+		// Include scheduler rank.
+		if rank, err := cmte.Committee.SchedulerRank(status.LatestRound+1, epoch.identity.NodeSigner.Public()); err != nil {
+			status.SchedulerRank = rank
+		}
 
 		// Include liveness statistics if the node is an executor committee member.
 		if epoch.IsExecutorMember() {
@@ -327,7 +334,6 @@ func (n *Node) GetStatus() (*api.Status, error) {
 			}
 		}
 	}
-	status.IsTransactionScheduler = epoch.IsTransactionScheduler(status.LatestRound)
 
 	status.Peers = n.P2P.Peers(n.Runtime.ID())
 
@@ -680,16 +686,6 @@ func (n *Node) worker() {
 	}
 	atomic.StoreUint32(&n.keymanagerAvailable, 1)
 
-	// Start watching consensus blocks.
-	consensusBlocks, consensusBlocksSub, err := n.Consensus.WatchBlocks(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to subscribe to consensus blocks",
-			"err", err,
-		)
-		return
-	}
-	defer consensusBlocksSub.Close()
-
 	// Start watching roothash blocks.
 	blocks, blocksSub, err := n.Consensus.RootHash().WatchBlocks(n.ctx, n.Runtime.ID())
 	if err != nil {
@@ -756,15 +752,6 @@ func (n *Node) worker() {
 		case <-n.stopCh:
 			n.logger.Info("termination requested")
 			return
-		case blk := <-consensusBlocks:
-			if blk == nil {
-				return
-			}
-			func() {
-				n.CrossNode.Lock()
-				defer n.CrossNode.Unlock()
-				n.Height = blk.Height
-			}()
 		case blk := <-blocks:
 			// We are initialized after we have received the first block. This makes sure that any
 			// history reindexing has been completed.

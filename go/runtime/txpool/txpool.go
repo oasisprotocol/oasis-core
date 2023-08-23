@@ -74,8 +74,11 @@ type TransactionPool interface {
 	SubmitProposedBatch(batch [][]byte)
 
 	// PromoteProposedBatch promotes the specified transactions that are already in the transaction
-	// pool into the current proposal queue.
-	PromoteProposedBatch(batch []hash.Hash)
+	// pool into the current proposal queue and returns a set of known transactions.
+	//
+	// For any missing transactions nil will be returned in their place and the map of missing
+	// transactions will be populated accordingly.
+	PromoteProposedBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int)
 
 	// ClearProposedBatch clears the proposal queue.
 	ClearProposedBatch()
@@ -111,13 +114,6 @@ type TransactionPool interface {
 
 	// ProcessIncomingMessages loads transactions from incoming messages into the pool.
 	ProcessIncomingMessages(inMsgs []*message.IncomingMessage) error
-
-	// WakeupScheduler explicitly notifies subscribers that they should attempt scheduling.
-	WakeupScheduler()
-
-	// WatchScheduler subscribes to notifications about when to attempt scheduling. The emitted
-	// boolean flag indicates whether the batch flush timeout expired.
-	WatchScheduler() (pubsub.ClosableSubscription, <-chan bool)
 
 	// WatchCheckedTransactions subscribes to notifications about new transactions being available
 	// in the transaction pool for scheduling.
@@ -175,9 +171,6 @@ type txPool struct {
 	localQueue           *localQueue
 	mainQueue            *mainQueue
 
-	schedulerTicker   *time.Ticker
-	schedulerNotifier *pubsub.Broker
-
 	proposedTxsLock sync.Mutex
 	proposedTxs     map[hash.Hash]*TxQueueMeta
 
@@ -193,7 +186,6 @@ func (t *txPool) Start() error {
 	go t.checkWorker()
 	go t.republishWorker()
 	go t.recheckWorker()
-	go t.flushWorker()
 	return nil
 }
 
@@ -296,7 +288,7 @@ func (t *txPool) SubmitProposedBatch(batch [][]byte) {
 	}
 }
 
-func (t *txPool) PromoteProposedBatch(batch []hash.Hash) {
+func (t *txPool) PromoteProposedBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int) {
 	txs, missingTxs := t.GetKnownBatch(batch)
 	if len(missingTxs) > 0 {
 		t.logger.Debug("promoted proposed batch contains missing transactions",
@@ -313,6 +305,8 @@ func (t *txPool) PromoteProposedBatch(batch []hash.Hash) {
 		}
 		t.proposedTxs[tx.Hash()] = tx
 	}
+
+	return txs, missingTxs
 }
 
 func (t *txPool) ClearProposedBatch() {
@@ -389,11 +383,6 @@ func (t *txPool) ProcessBlock(bi *runtime.BlockInfo) error {
 		close(t.initCh)
 		fallthrough
 	case bi.RuntimeBlock.Header.HeaderType == block.EpochTransition:
-		// Handle scheduler updates.
-		if err := t.updateScheduler(bi); err != nil {
-			return fmt.Errorf("failed to update scheduler: %w", err)
-		}
-
 		// Force recheck on epoch transitions.
 		t.recheckTxCh.In() <- struct{}{}
 	default:
@@ -415,24 +404,6 @@ func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) erro
 	t.rimQueue.Load(inMsgs)
 	rimQueueSize.With(t.getMetricLabels()).Set(float64(t.rimQueue.size()))
 	return nil
-}
-
-func (t *txPool) updateScheduler(bi *runtime.BlockInfo) error {
-	// Reset ticker to the new interval.
-	t.schedulerTicker.Reset(bi.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
-
-	return nil
-}
-
-func (t *txPool) WakeupScheduler() {
-	t.schedulerNotifier.Broadcast(false)
-}
-
-func (t *txPool) WatchScheduler() (pubsub.ClosableSubscription, <-chan bool) {
-	sub := t.schedulerNotifier.Subscribe()
-	ch := make(chan bool)
-	sub.Unwrap(ch)
-	return sub, ch
 }
 
 func (t *txPool) WatchCheckedTransactions() (pubsub.ClosableSubscription, <-chan []*PendingCheckTransaction) {
@@ -627,7 +598,6 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 		// Notify subscribers that we have received new transactions.
 		t.checkTxNotifier.Broadcast(newTxs)
-		t.schedulerNotifier.Broadcast(false)
 	}
 
 	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.inner.size()))
@@ -865,22 +835,6 @@ func (t *txPool) recheck() {
 	}
 }
 
-func (t *txPool) flushWorker() {
-	// Wait for initialization to make sure that we have the scheduler available.
-	if err := t.ensureInitialized(); err != nil {
-		return
-	}
-
-	for {
-		select {
-		case <-t.stopCh:
-			return
-		case <-t.schedulerTicker.C:
-			t.schedulerNotifier.Broadcast(true)
-		}
-	}
-}
-
 // New creates a new transaction pool instance.
 func New(
 	runtimeID common.Namespace,
@@ -925,8 +879,6 @@ func New(
 		rimQueue:             rq,
 		localQueue:           lq,
 		mainQueue:            mq,
-		schedulerTicker:      time.NewTicker(1 * time.Hour),
-		schedulerNotifier:    pubsub.NewBroker(false),
 		proposedTxs:          make(map[hash.Hash]*TxQueueMeta),
 		republishCh:          channels.NewRingChannel(1),
 	}, nil

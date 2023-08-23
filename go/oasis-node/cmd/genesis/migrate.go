@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -347,6 +348,21 @@ NodeLoop:
 
 	// Add a sensible default for the MaxPastRootsStored parameter.
 	newDoc.RootHash.Parameters.MaxPastRootsStored = 1200
+
+	// Update runtime parameters.
+	rts := make([]*registry.Runtime, 0, len(newDoc.Registry.Runtimes)+len(newDoc.Registry.SuspendedRuntimes))
+	rts = append(rts, newDoc.Registry.Runtimes...)
+	rts = append(rts, newDoc.Registry.SuspendedRuntimes...)
+
+	for _, rt := range rts {
+		if !rt.IsCompute() {
+			continue
+		}
+		rt.TxnScheduler.ProposerTimeout = 5 * time.Second
+		if rt.TxnScheduler.BatchFlushTimeout > rt.TxnScheduler.ProposerTimeout {
+			rt.TxnScheduler.ProposerTimeout = rt.TxnScheduler.BatchFlushTimeout
+		}
+	}
 
 	return &newDoc, nil
 }

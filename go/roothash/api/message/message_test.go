@@ -25,6 +25,7 @@ func TestMessageHash(t *testing.T) {
 	rt := newTestRuntime()
 	require.NotNil(rt, "newTestRuntime")
 
+	// NOTE: These cases should be synced with tests in runtime/src/consensus/roothash/messages.rs.
 	for _, tc := range []struct {
 		msgs         []Message
 		expectedHash string
@@ -39,8 +40,8 @@ func TestMessageHash(t *testing.T) {
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
-		}}}}, "ac8ff938607f234f0db60dc2e81897f50c3918cc51998c633a0f3f2b98374db1"},
-		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "67da1da17b12c398d4dec165480df73c244740f8fb876f59a76cd29e30056b6d"},
+		}}}}, "e6e170fb771583147255e0c96dc88615d4fd2fd28488ae489df01da201affe72"},
+		{[]Message{{Registry: &RegistryMessage{UpdateRuntime: rt}}}, "03e77fbeda1a2291c87c06c59335a49fe18852266d58608c1ddec8ef64209458"},
 		{[]Message{
 			{
 				Governance: &GovernanceMessage{
@@ -117,10 +118,10 @@ func newTestRuntime() *registry.Runtime {
 			MaxMessages:       32,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			BatchFlushTimeout: 20 * time.Second,
+			BatchFlushTimeout: time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
-			ProposerTimeout:   5,
+			ProposerTimeout:   2 * time.Second,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{

@@ -139,7 +139,9 @@ type Committee struct {
 	// Kind is the functionality a committee exists to provide.
 	Kind CommitteeKind `json:"kind"`
 
-	// Members is the committee members.
+	// Members is a collection of committee members.
+	//
+	// The order of committee members is consistent, with workers always preceding backup workers.
 	Members []*CommitteeNode `json:"members"`
 
 	// RuntimeID is the runtime ID that this committee is for.
@@ -149,42 +151,113 @@ type Committee struct {
 	ValidFor beacon.EpochTime `json:"valid_for"`
 }
 
-// TransactionSchedulerIdx returns the index of the transaction scheduler
-// within the committee for the provided round.
-func (c *Committee) TransactionSchedulerIdx(round uint64) (int, error) {
-	var (
-		total  uint64
-		worker uint64
-	)
-
-	for _, member := range c.Members {
-		if member.Role != RoleWorker {
-			continue
+// IsMember returns true iff the given node is a member of the committee.
+func (c *Committee) IsMember(id signature.PublicKey) bool {
+	for _, n := range c.Members {
+		if n.PublicKey == id {
+			return true
 		}
-		total++
 	}
-
-	for idx, member := range c.Members {
-		if member.Role != RoleWorker {
-			continue
-		}
-		if worker == round%total {
-			return idx, nil
-		}
-		worker++
-	}
-
-	return 0, fmt.Errorf("no workers in committee")
+	return false
 }
 
-// TransactionScheduler returns the transaction scheduler of the committee
-// based on the provided round.
-func (c *Committee) TransactionScheduler(round uint64) (*CommitteeNode, error) {
-	idx, err := c.TransactionSchedulerIdx(round)
+// IsWorker returns true iff the given node is a worker in the committee.
+func (c *Committee) IsWorker(id signature.PublicKey) bool {
+	for _, n := range c.Members {
+		if n.Role != RoleWorker {
+			// Workers are listed before backup workers.
+			return false
+		}
+		if n.PublicKey == id {
+			return true
+		}
+	}
+	return false
+}
+
+// IsBackupWorker returns true iff the given node is a backup worker in the committee.
+func (c *Committee) IsBackupWorker(id signature.PublicKey) bool {
+	for i := len(c.Members) - 1; i >= 0; i-- {
+		n := c.Members[i]
+		if n.Role != RoleBackupWorker {
+			// Backup workers are listed after workers.
+			return false
+		}
+		if n.PublicKey == id {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Scheduler returns the scheduler with the given rank in the committee's scheduling order
+// for the given round.
+//
+// If no scheduler with the given rank is found, it returns an error.
+func (c *Committee) Scheduler(round uint64, rank uint64) (*CommitteeNode, error) {
+	idx, err := c.SchedulerIdx(round, rank)
 	if err != nil {
 		return nil, err
 	}
 	return c.Members[idx], nil
+}
+
+// SchedulerIdx returns the index of the scheduler with the given rank in the committee's
+// scheduling order for the given round.
+//
+// If no scheduler with the given rank is found, it returns an error.
+func (c *Committee) SchedulerIdx(round uint64, rank uint64) (int, error) {
+	var total uint64
+
+	for _, n := range c.Members {
+		if n.Role != RoleWorker {
+			// Workers are listed before backup workers.
+			break
+		}
+		total++
+	}
+
+	if rank >= total {
+		return 0, fmt.Errorf("no worker with the given rank in the committee")
+	}
+
+	idx := (rank + total - round%total) % total
+
+	return int(idx), nil
+}
+
+// SchedulerRank returns the position (index) of a node with the given public key in the committee's
+// scheduling order for the given round. A lower rank indicates higher scheduling priority.
+//
+// If the node is not a worker in the committee and, therefore, not allowed to schedule transactions
+// for the given round, it returns an error.
+func (c *Committee) SchedulerRank(round uint64, id signature.PublicKey) (uint64, error) {
+	var (
+		total    uint64
+		idx      uint64
+		isWorker bool
+	)
+
+	for _, n := range c.Members {
+		if n.Role != RoleWorker {
+			// Workers are listed before backup workers.
+			break
+		}
+		if n.PublicKey == id {
+			isWorker = true
+			idx = total
+		}
+		total++
+	}
+
+	if !isWorker {
+		return 0, fmt.Errorf("node is not a worker in the committee")
+	}
+
+	rank := (round + idx) % total
+
+	return rank, nil
 }
 
 // String returns a string representation of a Committee.
@@ -377,11 +450,12 @@ func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
 // node is elected as.
 type ForceElectCommitteeRole struct {
 	// Kind is the kind of committee to force-elect the node into.
-	Kind CommitteeKind `json:"kind"`
+	Kind CommitteeKind `json:"kind,omitempty"`
 	// Roles are the roles that the given node is force elected as.
-	Roles []Role `json:"roles"`
-	// IsScheduler is true iff the node should be set as the scheduler.
-	IsScheduler bool `json:"is_scheduler,omitempty"`
+	Roles []Role `json:"roles,omitempty"`
+	// Index is the position of the given node in the committee's worker group if it has
+	// the worker role.
+	Index uint64 `json:"index,omitempty"`
 }
 
 // HasRole returns true whether the force election configuration specifies a given role.

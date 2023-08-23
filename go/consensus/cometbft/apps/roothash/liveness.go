@@ -16,7 +16,7 @@ import (
 // processLivenessStatistics checks the liveness statistics for the last epoch and penalizes any
 // nodes that didn't satisfy the liveness condition.
 func processLivenessStatistics(ctx *tmapi.Context, epoch beacon.EpochTime, rtState *roothash.RuntimeState) error {
-	if rtState.ExecutorPool == nil || rtState.LivenessStatistics == nil || rtState.Suspended {
+	if rtState.Committee == nil || rtState.CommitmentPool == nil || rtState.LivenessStatistics == nil || rtState.Suspended {
 		return nil
 	}
 
@@ -49,7 +49,7 @@ func processLivenessStatistics(ctx *tmapi.Context, epoch beacon.EpochTime, rtSta
 		missedProposals    uint64
 	}
 	statsPerNode := make(map[signature.PublicKey]*Stats)
-	for i, member := range rtState.ExecutorPool.Committee.Members {
+	for i, member := range rtState.Committee.Members {
 		stats, ok := statsPerNode[member.PublicKey]
 		if !ok {
 			stats = &Stats{}

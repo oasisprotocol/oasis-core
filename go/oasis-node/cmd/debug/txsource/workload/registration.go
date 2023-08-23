@@ -60,10 +60,10 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace, epoch beacon.
 			MaxMessages:  32,
 		},
 		TxnScheduler: registry.TxnSchedulerParameters{
-			BatchFlushTimeout: 1 * time.Second,
+			BatchFlushTimeout: time.Second,
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
-			ProposerTimeout:   5,
+			ProposerTimeout:   2 * time.Second,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
