@@ -15,6 +15,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -218,6 +220,109 @@ func (sc *Scenario) RegisterRuntime(ctx context.Context, childEnv *env.Env, cli 
 	}
 
 	return nil
+}
+
+// EnsureProposalFinalized submits a proposal, votes for it and ensures the
+// proposal is finalized.
+func (sc *Scenario) EnsureProposalFinalized(ctx context.Context, content *governance.ProposalContent, entity *oasis.Entity, entityNonce uint64, currentEpoch beacon.EpochTime) (*governance.Proposal, uint64, beacon.EpochTime, error) {
+	// Submit proposal.
+	tx := governance.NewSubmitProposalTx(entityNonce, &transaction.Fee{Gas: 2000}, content)
+	entityNonce++
+	sigTx, err := transaction.Sign(entity.Signer(), tx)
+	if err != nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("failed signing submit proposal transaction: %w", err)
+	}
+	sc.Logger.Info("submitting proposal", "content", content)
+	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
+	if err != nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("failed submitting proposal transaction: %w", err)
+	}
+
+	// Ensure proposal created.
+	aps, err := sc.Net.Controller().Governance.ActiveProposals(ctx, consensus.HeightLatest)
+	if err != nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("failed querying active proposals: %w", err)
+	}
+	var proposal *governance.Proposal
+	for _, p := range aps {
+		if p.Content.Equals(content) {
+			proposal = p
+			break
+		}
+	}
+	if proposal == nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("submitted proposal %v not found", content)
+	}
+
+	// Vote for the proposal.
+	vote := governance.ProposalVote{
+		ID:   proposal.ID,
+		Vote: governance.VoteYes,
+	}
+	tx = governance.NewCastVoteTx(entityNonce, &transaction.Fee{Gas: 2000}, &vote)
+	entityNonce++
+	sigTx, err = transaction.Sign(entity.Signer(), tx)
+	if err != nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("failed signing cast vote transaction: %w", err)
+	}
+	sc.Logger.Info("submitting vote for proposal", "proposal", proposal, "vote", vote)
+	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
+	if err != nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("failed submitting cast vote transaction: %w", err)
+	}
+
+	// Ensure vote was cast.
+	votes, err := sc.Net.Controller().Governance.Votes(ctx,
+		&governance.ProposalQuery{
+			Height:     consensus.HeightLatest,
+			ProposalID: aps[0].ID,
+		},
+	)
+	if err != nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("failed queying votes: %w", err)
+	}
+	if l := len(votes); l != 1 {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("expected one vote, got: %v", l)
+	}
+	if vote := votes[0].Vote; vote != governance.VoteYes {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("expected vote Yes, got: %s", string(vote))
+	}
+
+	// Transition to the epoch when proposal finalizes.
+	for ep := currentEpoch + 1; ep < aps[0].ClosesAt+1; ep++ {
+		sc.Logger.Info("transitioning to epoch", "epoch", ep)
+		currentEpoch++
+		if err = sc.Net.Controller().SetEpoch(ctx, currentEpoch); err != nil {
+			// Errors can happen because an upgrade happens exactly during
+			// an epoch transition.  So make sure to ignore them.
+			sc.Logger.Warn("failed to set epoch",
+				"epoch", currentEpoch,
+				"err", err,
+			)
+		}
+	}
+
+	p, err := sc.Net.Controller().Governance.Proposal(ctx,
+		&governance.ProposalQuery{
+			Height:     consensus.HeightLatest,
+			ProposalID: proposal.ID,
+		},
+	)
+	if err != nil {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("failed to query proposal: %w", err)
+	}
+	sc.Logger.Info("got proposal",
+		"state", p.State.String(),
+		"results", p.Results,
+		"len", len(p.Results),
+		"invalid", p.InvalidVotes,
+	)
+	// Ensure proposal finalized.
+	if p.State == governance.StateActive || p.State == governance.StateFailed {
+		return nil, entityNonce, currentEpoch, fmt.Errorf("expected finalized proposal, proposal state: %v", p.State)
+	}
+
+	return p, entityNonce, currentEpoch, nil
 }
 
 // uniqueFilepath joins any number of path elements into a single path, checks if a file exists

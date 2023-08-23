@@ -18,6 +18,9 @@ const (
 	// EpochInvalid is the placeholder invalid epoch.
 	EpochInvalid EpochTime = 0xffffffffffffffff // ~50 quadrillion years away.
 
+	// EpochMax is the end of time.
+	EpochMax EpochTime = 0xfffffffffffffffe
+
 	// BackendInsecure is the name of the insecure backend.
 	BackendInsecure = "insecure"
 

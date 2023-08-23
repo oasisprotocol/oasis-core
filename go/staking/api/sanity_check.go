@@ -42,12 +42,28 @@ func (p *ConsensusParameters) SanityCheck() error {
 		return fmt.Errorf("minimum commission %v/%v over unity", p.CommissionScheduleRules, CommissionRateDenominator)
 	}
 
+	// Reward schedule steps must be sequential.
+	var prevUntil beacon.EpochTime
+	for _, step := range p.RewardSchedule {
+		if !step.Scale.IsValid() || step.Scale.Cmp(RewardAmountDenominator) == 1 {
+			return fmt.Errorf("reward scale must be a non-negative integer smaller than %s", RewardAmountDenominator.String())
+		}
+		if step.Until == beacon.EpochInvalid {
+			return fmt.Errorf("reward until field must be a valid epoch")
+		}
+		if step.Until <= prevUntil {
+			return fmt.Errorf("reward schedule steps must be sequential (previous is %d, current is %d)", prevUntil, step.Until)
+		}
+		prevUntil = step.Until
+	}
+
 	return nil
 }
 
 // SanityCheck performs a sanity check on the consensus parameter changes.
 func (c *ConsensusParameterChanges) SanityCheck() error {
 	if c.DebondingInterval == nil &&
+		c.RewardSchedule == nil &&
 		c.GasCosts == nil &&
 		c.MinDelegationAmount == nil &&
 		c.MinTransferAmount == nil &&

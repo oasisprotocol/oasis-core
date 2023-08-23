@@ -45,6 +45,94 @@ func TestConsensusParameters(t *testing.T) {
 		FeeSplitWeightNextPropose: mustInitQuantity(t, 0),
 	}
 	require.Error(degenerateFeeSplit.SanityCheck(), "consensus parameters with degenerate fee split should be invalid")
+
+	// Reward schedule steps.
+	r1 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule:     nil,
+	}
+	require.NoError(r1.SanityCheck(), "nil reward schedule should be valid")
+
+	r2 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule:     []RewardStep{},
+	}
+	require.NoError(r2.SanityCheck(), "empty reward schedule should be valid")
+
+	r3 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule: []RewardStep{
+			{10, mustInitQuantity(t, 10_000_000)},
+			{20, mustInitQuantity(t, 5_000_000)},
+			{30, mustInitQuantity(t, 1_000_000)},
+		},
+	}
+	require.NoError(r3.SanityCheck(), "sequential reward schedule should be valid")
+
+	r4 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule: []RewardStep{
+			{30, mustInitQuantity(t, 1_000_000)},
+			{10, mustInitQuantity(t, 10_000_000)},
+			{20, mustInitQuantity(t, 5_000_000)},
+		},
+	}
+	require.Error(r4.SanityCheck(), "non-sequential reward schedule should be invalid")
+
+	r5 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule: []RewardStep{
+			{10, mustInitQuantity(t, 10_000_000)},
+			{20, mustInitQuantity(t, 5_000_000)},
+			{5, mustInitQuantity(t, 1_000_000)},
+		},
+	}
+	require.Error(r5.SanityCheck(), "another non-sequential reward schedule should be invalid")
+
+	r6 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule: []RewardStep{
+			{api.EpochMax, mustInitQuantity(t, 1_000_000)},
+		},
+	}
+	require.NoError(r6.SanityCheck(), "reward schedule with only one step should be valid")
+
+	r7 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule: []RewardStep{
+			{api.EpochInvalid, mustInitQuantity(t, 1_000_000)},
+		},
+	}
+	require.Error(r7.SanityCheck(), "reward schedule with invalid epoch in until field should be invalid")
+
+	r8 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule: []RewardStep{
+			{10, mustInitQuantity(t, 10_000_000)},
+			{10, mustInitQuantity(t, 5_000_000)},
+		},
+	}
+	require.Error(r8.SanityCheck(), "reward schedule steps should not have same until field")
+
+	over := RewardAmountDenominator.Clone()
+	require.False(over.IsZero())
+	require.NoError(over.Add(quantity.NewFromUint64(1)))
+	r9 := ConsensusParameters{
+		Thresholds:         validThresholds,
+		FeeSplitWeightVote: mustInitQuantity(t, 1),
+		RewardSchedule: []RewardStep{
+			{10, *over},
+		},
+	}
+	require.Error(r9.SanityCheck(), "reward schedule step scale should not be greater than the reward amount denominator")
 }
 
 func TestThresholdKind(t *testing.T) {

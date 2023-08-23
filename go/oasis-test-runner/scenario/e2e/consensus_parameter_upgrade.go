@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/governance/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -328,102 +327,6 @@ func (sc *consensusParameterUpgradeImpl) nextEpoch(ctx context.Context) error {
 	return nil
 }
 
-// Submits a proposal, votes for it and ensures the proposal is finalized.
-func (sc *consensusParameterUpgradeImpl) ensureProposalFinalized(ctx context.Context, content *api.ProposalContent) (*api.Proposal, error) {
-	// Submit proposal.
-	tx := api.NewSubmitProposalTx(sc.entityNonce, &transaction.Fee{Gas: 2000}, content)
-	sc.entityNonce++
-	sigTx, err := transaction.Sign(sc.entity.Signer(), tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed signing submit proposal transaction: %w", err)
-	}
-	sc.Logger.Info("submitting proposal", "content", content)
-	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
-	if err != nil {
-		return nil, fmt.Errorf("failed submitting proposal transaction: %w", err)
-	}
-
-	// Ensure proposal created.
-	aps, err := sc.Net.Controller().Governance.ActiveProposals(ctx, consensus.HeightLatest)
-	if err != nil {
-		return nil, fmt.Errorf("failed querying active proposals: %w", err)
-	}
-	var proposal *api.Proposal
-	for _, p := range aps {
-		if p.Content.Equals(content) {
-			proposal = p
-			break
-		}
-	}
-	if proposal == nil {
-		return nil, fmt.Errorf("submitted proposal %v not found", content)
-	}
-
-	// Vote for the proposal.
-	vote := api.ProposalVote{
-		ID:   proposal.ID,
-		Vote: api.VoteYes,
-	}
-	tx = api.NewCastVoteTx(sc.entityNonce, &transaction.Fee{Gas: 2000}, &vote)
-	sc.entityNonce++
-	sigTx, err = transaction.Sign(sc.entity.Signer(), tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed signing cast vote transaction: %w", err)
-	}
-	sc.Logger.Info("submitting vote for proposal", "proposal", proposal, "vote", vote)
-	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
-	if err != nil {
-		return nil, fmt.Errorf("failed submitting cast vote transaction: %w", err)
-	}
-
-	// Ensure vote was cast.
-	votes, err := sc.Net.Controller().Governance.Votes(ctx,
-		&api.ProposalQuery{
-			Height:     consensus.HeightLatest,
-			ProposalID: aps[0].ID,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed queying votes: %w", err)
-	}
-	if l := len(votes); l != 1 {
-		return nil, fmt.Errorf("expected one vote, got: %v", l)
-	}
-	if vote := votes[0].Vote; vote != api.VoteYes {
-		return nil, fmt.Errorf("expected vote Yes, got: %s", string(vote))
-	}
-
-	// Transition to the epoch when proposal finalizes.
-	for ep := sc.currentEpoch + 1; ep < aps[0].ClosesAt+1; ep++ {
-		sc.Logger.Info("transitioning to epoch", "epoch", ep)
-		if err = sc.nextEpoch(ctx); err != nil {
-			return nil, err
-		}
-	}
-
-	p, err := sc.Net.Controller().Governance.Proposal(ctx,
-		&api.ProposalQuery{
-			Height:     consensus.HeightLatest,
-			ProposalID: proposal.ID,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query proposal: %w", err)
-	}
-	sc.Logger.Info("got proposal",
-		"state", p.State.String(),
-		"results", p.Results,
-		"len", len(p.Results),
-		"invalid", p.InvalidVotes,
-	)
-	// Ensure proposal finalized.
-	if p.State == api.StateActive || p.State == api.StateFailed {
-		return nil, fmt.Errorf("expected finalized proposal, proposal state: %v", p.State)
-	}
-
-	return p, nil
-}
-
 func (sc *consensusParameterUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
@@ -465,7 +368,7 @@ func (sc *consensusParameterUpgradeImpl) Run(ctx context.Context, childEnv *env.
 	content := &api.ProposalContent{
 		ChangeParameters: sc.parameters,
 	}
-	_, err = sc.ensureProposalFinalized(ctx, content)
+	_, sc.entityNonce, sc.currentEpoch, err = sc.EnsureProposalFinalized(ctx, content, sc.entity, sc.entityNonce, sc.currentEpoch)
 	if err != nil {
 		return fmt.Errorf("upgrade proposal error: %w", err)
 	}
