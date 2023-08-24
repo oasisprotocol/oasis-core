@@ -12,6 +12,42 @@ linters-settings:
     # Enable once suggested fixes are shown: https://github.com/golangci/golangci-lint/issues/2134
     #enable:
     #  - fieldalignment
+  depguard:
+    rules:
+      main:
+        files:
+          - $all
+        allow:
+          - $gostd
+          - github.com/a8m/envsubst
+          - github.com/btcsuite/btcutil
+          - github.com/cenkalti/backoff/v4
+          - github.com/cometbft/cometbft
+          - github.com/cosmos/gogoproto/proto
+          - github.com/dgraph-io/badger/v3
+          - github.com/eapache/channels
+          - github.com/fxamacker/cbor/v2
+          - github.com/gammazero/deque
+          - github.com/go-kit/log
+          - github.com/goki/go-difflib
+          - github.com/golang/protobu
+          - github.com/golang/snappy
+          - github.com/google/btree
+          - github.com/hashicorp/go-hclog
+          - github.com/hashicorp/go-plugin
+          - github.com/hpcloud/tail
+          - github.com/ipfs/go-log/v2
+          - github.com/libp2p/go-libp2p
+          - github.com/multiformats/go-multiaddr
+          - github.com/oasisprotocol
+          - github.com/olekukonko/tablewriter
+          - github.com/powerman/rpc-codec
+          - github.com/prometheus
+          - github.com/seccomp/libseccomp-golang
+          - github.com/spf13
+          - github.com/stretchr
+          - github.com/tidwall/btree
+          - github.com/tyler-smith/go-bip39
 
 linters:
   disable-all: true

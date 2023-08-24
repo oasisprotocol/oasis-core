@@ -34,11 +34,11 @@ jobs:
           # e.g. "Merge 3e621938d65caaa67f8e35d145335d889d470fc8 into 19a39b2f66cd7a165082d1486b2f1eb36ec2354a".
           ref: ${{ github.event.pull_request.head.sha }}
           # Fetch all history so gitlint can check the relevant commits.
-          fetch-depth: '0'
+          fetch-depth: "0"
       - name: Set up Python 3
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Set up Node.js 12
         uses: actions/setup-node@v3
         with:
@@ -46,7 +46,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.20.x"
+          go-version: "1.21.x"
       - name: Set up Rust
         run: rustup show
       - name: Install dependencies

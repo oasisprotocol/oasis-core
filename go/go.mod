@@ -66,8 +66,8 @@ require (
 require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/btcsuite/btcd v0.20.1-beta // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
-	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
@@ -141,7 +141,7 @@ require (
 	github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
-	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
+	github.com/mitchellh/go-testing-interface v0.0.0-20171004221916-a61a99592b77 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -195,4 +195,4 @@ require (
 	lukechampine.com/blake3 v1.2.1 // indirect
 )
 
-go 1.19
+go 1.21
