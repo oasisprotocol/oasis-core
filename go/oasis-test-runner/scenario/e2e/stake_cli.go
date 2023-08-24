@@ -629,11 +629,7 @@ func (sc *stakeCLIImpl) testAmendCommissionSchedule(ctx context.Context, childEn
 	if err := sc.checkCommissionScheduleRates(ctx, childEnv, src, rates); err != nil {
 		return err
 	}
-	if err := sc.checkCommissionScheduleRateBounds(ctx, childEnv, src, bounds); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.checkCommissionScheduleRateBounds(ctx, childEnv, src, bounds)
 }
 
 // testAllowWithdraw tests setting an allowance and withdrawing.
@@ -691,13 +687,9 @@ func (sc *stakeCLIImpl) testAllowWithdraw(ctx context.Context, childEnv *env.Env
 	expectedGeneralBalance = mustInitQuantity(
 		transferAmount - feeAmount + withdrawAmount,
 	)
-	if err = sc.checkGeneralAccount(
+	return sc.checkGeneralAccount(
 		ctx, childEnv, beneficiary, &api.GeneralAccount{Balance: expectedGeneralBalance, Nonce: 1},
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }
 
 func (sc *stakeCLIImpl) getInfo(childEnv *env.Env) error {

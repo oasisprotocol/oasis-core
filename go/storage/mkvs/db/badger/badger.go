@@ -1142,10 +1142,8 @@ func (s *badgerSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
 			}
 		}
 	}
-	if err = s.batch.bat.Set(nodeKey, data); err != nil {
-		return err
-	}
-	return nil
+
+	return s.batch.bat.Set(nodeKey, data)
 }
 
 func (s *badgerSubtree) VisitCleanNode(node.Depth, *node.Pointer) error {

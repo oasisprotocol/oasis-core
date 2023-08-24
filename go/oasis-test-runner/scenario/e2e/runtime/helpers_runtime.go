@@ -392,11 +392,7 @@ func (sc *Scenario) UpgradeComputeRuntime(ctx context.Context, childEnv *env.Env
 	}
 
 	// Make sure the new version is active.
-	if err := sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.1.0")); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.1.0"))
 }
 
 // UpgradeKeyManagerFixture select the first key manager runtime and prepares it for the upgrade.
@@ -506,11 +502,7 @@ OUTER:
 	}
 
 	// Make sure the new version is active on the second key manager node.
-	if err := sc.EnsureActiveVersionForKeyManager(ctx, newKm, newRt.ID(), version.MustFromString("0.1.0")); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.EnsureActiveVersionForKeyManager(ctx, newKm, newRt.ID(), version.MustFromString("0.1.0"))
 }
 
 func (sc *Scenario) ensureReplicationWorked(ctx context.Context, km *oasis.Keymanager, rt *oasis.Runtime) error {
@@ -542,23 +534,18 @@ func (sc *Scenario) ensureReplicationWorked(ctx context.Context, km *oasis.Keyma
 	if err != nil {
 		return fmt.Errorf("failed to obtain consensus state: %w", err)
 	}
-	if err = func() error {
-		for _, status := range doc.KeyManager.Statuses {
-			if !status.ID.Equal(&nodeRt.ID) {
-				continue
-			}
-			if !status.IsInitialized {
-				return fmt.Errorf("key manager failed to initialize")
-			}
-			if !bytes.Equal(status.Checksum, signedInitResponse.InitResponse.Checksum) {
-				return fmt.Errorf("key manager failed to replicate, checksum mismatch")
-			}
-			return nil
-		}
-		return fmt.Errorf("consensus state missing km status")
-	}(); err != nil {
-		return err
-	}
 
-	return nil
+	for _, status := range doc.KeyManager.Statuses {
+		if !status.ID.Equal(&nodeRt.ID) {
+			continue
+		}
+		if !status.IsInitialized {
+			return fmt.Errorf("key manager failed to initialize")
+		}
+		if !bytes.Equal(status.Checksum, signedInitResponse.InitResponse.Checksum) {
+			return fmt.Errorf("key manager failed to replicate, checksum mismatch")
+		}
+		return nil
+	}
+	return fmt.Errorf("consensus state missing km status")
 }

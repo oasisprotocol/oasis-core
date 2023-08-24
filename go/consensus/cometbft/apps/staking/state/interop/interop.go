@@ -185,11 +185,7 @@ func InitializeTestStakingState(ctx context.Context, mkvs mkvs.Tree) error {
 	if err := state.SetLastBlockFees(ctx, quantity.NewFromUint64(33)); err != nil {
 		return err
 	}
-	if err := state.SetGovernanceDeposits(ctx, quantity.NewFromUint64(12)); err != nil {
-		return err
-	}
-
-	return nil
+	return state.SetGovernanceDeposits(ctx, quantity.NewFromUint64(12))
 }
 
 func init() {

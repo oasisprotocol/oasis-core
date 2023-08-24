@@ -82,8 +82,8 @@ func (c *Client) transact(ctx context.Context, request *Request) (*Response, err
 			rsp <- err
 			return
 		}
-		len := binary.LittleEndian.Uint32(buf)
-		buf = make([]byte, len)
+		length := binary.LittleEndian.Uint32(buf)
+		buf = make([]byte, length)
 		if _, err := io.ReadFull(conn, buf); err != nil {
 			rsp <- err
 			return

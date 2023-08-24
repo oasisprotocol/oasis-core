@@ -173,9 +173,9 @@ func TestFileCheckpointCreator(t *testing.T) {
 			require.True(errors.Is(err, ErrChunkProofVerificationFailed))
 			// Restorer should be reset.
 			break
-		} else {
-			require.NoError(err, "RestoreChunk")
 		}
+
+		require.NoError(err, "RestoreChunk")
 	}
 
 	// Try to correctly restore.

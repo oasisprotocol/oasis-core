@@ -45,9 +45,5 @@ func (d *Document) SanityCheck() error {
 	if err := d.Scheduler.SanityCheck(&d.Staking.TotalSupply); err != nil {
 		return err
 	}
-	if err := d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits); err != nil {
-		return err
-	}
-
-	return nil
+	return d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits)
 }

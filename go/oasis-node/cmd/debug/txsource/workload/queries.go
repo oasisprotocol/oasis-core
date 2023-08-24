@@ -296,7 +296,7 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 		it := state.NewIterator(ctx, mkvs.IteratorPrefetch(100))
 		defer it.Close()
 
-		for it.Rewind(); it.Valid(); it.Next() {
+		for it.Rewind(); it.Valid(); it.Next() { //nolint:revive
 		}
 		if err := it.Err(); err != nil {
 			return fmt.Errorf("consensus state iteration failed: %w", err)

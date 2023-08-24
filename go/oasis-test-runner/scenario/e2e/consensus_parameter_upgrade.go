@@ -381,9 +381,5 @@ func (sc *consensusParameterUpgradeImpl) Run(ctx context.Context, _ *env.Env) er
 
 	// Do one final epoch transition.
 	sc.Logger.Info("final epoch transition")
-	if err = sc.nextEpoch(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.nextEpoch(ctx)
 }

@@ -79,11 +79,7 @@ func (b *commonStoreBackend) Backup(_ context.Context, nsPeers map[string][]peer
 	}
 
 	// Store addresses.
-	if err := b.bucket.PutCBOR([]byte(b.key), data); err != nil {
-		return err
-	}
-
-	return nil
+	return b.bucket.PutCBOR([]byte(b.key), data)
 }
 
 // Restore implements PeerBackup.

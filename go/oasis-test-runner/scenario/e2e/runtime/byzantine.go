@@ -582,7 +582,7 @@ ComputeWorkerSyncLoop:
 				state := mkvs.NewWithRoot(ctrl.Storage, nil, root)
 				it := state.NewIterator(storageCtx)
 
-				for it.Rewind(); it.Valid(); it.Next() {
+				for it.Rewind(); it.Valid(); it.Next() { //nolint:revive
 				}
 				err = it.Err()
 				it.Close()

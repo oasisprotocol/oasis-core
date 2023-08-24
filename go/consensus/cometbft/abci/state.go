@@ -388,11 +388,7 @@ func (s *applicationState) doApplyStateSync(root storage.Root) error {
 	s.checkState.Close()
 	s.checkState = mkvs.NewWithRoot(nil, s.storage.NodeDB(), root, mkvs.WithoutWriteLog())
 
-	if err := s.doCommitOrInitChainLocked(); err != nil {
-		return err
-	}
-
-	return nil
+	return s.doCommitOrInitChainLocked()
 }
 
 func (s *applicationState) workingStateRoot() (hash.Hash, error) {

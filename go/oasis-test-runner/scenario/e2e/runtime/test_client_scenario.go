@@ -112,11 +112,7 @@ func newSimpleKeyValueScenario(repeat bool, encrypted bool) TestClientScenario {
 		if err := submit(GetKeyValueTx{inMsgKey, inMsgValue, encrypted, 0}); err != nil {
 			return err
 		}
-		if err := submit(ConsensusAccountsTx{}); err != nil {
-			return err
-		}
-
-		return nil
+		return submit(ConsensusAccountsTx{})
 	}
 }
 

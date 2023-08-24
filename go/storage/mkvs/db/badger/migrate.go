@@ -1224,11 +1224,7 @@ func (v5 *v5Migrator) pruneVersion(version uint64) error {
 	// Save progress.
 	v5.meta.LastPrunedVersion = &version
 
-	if err = v5.flush(false); err != nil {
-		return err
-	}
-
-	return nil
+	return v5.flush(false)
 }
 
 func (v5 *v5Migrator) pruneWriteLog(version uint64, oldRoot typedHash) error {

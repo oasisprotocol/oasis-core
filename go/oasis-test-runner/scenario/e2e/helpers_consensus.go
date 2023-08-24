@@ -64,10 +64,7 @@ func (sc *Scenario) WaitEpochs(ctx context.Context, n beacon.EpochTime) error {
 	if err != nil {
 		return err
 	}
-	if err := sc.Net.ClientController().Beacon.WaitEpoch(ctx, epoch+n); err != nil {
-		return err
-	}
-	return nil
+	return sc.Net.ClientController().Beacon.WaitEpoch(ctx, epoch+n)
 }
 
 // ChainContext returns the consensus chain context.

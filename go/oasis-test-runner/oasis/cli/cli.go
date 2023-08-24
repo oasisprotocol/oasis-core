@@ -134,10 +134,7 @@ func RunSubCommand(env *env.Env, logger *logging.Logger, name, binary string, ar
 	if err != nil {
 		return err
 	}
-	if err = cmd.Wait(); err != nil {
-		return err
-	}
-	return nil
+	return cmd.Wait()
 }
 
 // RunSubCommandWithOutput launches an oasis-node subcommand and waits for it to complete.

@@ -80,7 +80,7 @@ func (p *Pool) Stop() {
 		close(p.stopCh)
 	})
 
-	for range p.jobCh.Out() {
+	for range p.jobCh.Out() { //nolint:revive
 		// Clear the channel to close all go routines and prevent memory leaks.
 	}
 }

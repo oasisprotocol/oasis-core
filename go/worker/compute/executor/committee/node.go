@@ -1260,9 +1260,9 @@ func (n *Node) handleProposalLocked(batch *unresolvedBatch) error {
 
 	// TODO: Handle proposal equivocation.
 
-	if _, ok := n.state.(StateWaitingForBatch); !ok {
+	if _, ok := n.state.(StateWaitingForBatch); !ok { //nolint:revive
 		// Currently not waiting for batch.
-	} else if epoch := n.commonNode.Group.GetEpochSnapshot(); !epoch.IsExecutorMember() {
+	} else if epoch := n.commonNode.Group.GetEpochSnapshot(); !epoch.IsExecutorMember() { //nolint:revive
 		// Currently not an executor committee member.
 	} else {
 		// Maybe process if we have the correct block.

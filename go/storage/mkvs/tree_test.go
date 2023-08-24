@@ -1724,7 +1724,7 @@ func testPruneLoneRootsShared2(t *testing.T, ndb db.NodeDB, _ NodeDBFactory) {
 	it := tree.NewIterator(ctx)
 	defer it.Close()
 
-	for it.Rewind(); it.Valid(); it.Next() {
+	for it.Rewind(); it.Valid(); it.Next() { //nolint:revive
 		// Just iterate over the whole tree. If the tree is not consistent
 		// this iteration will throw an error that a node is missing.
 	}

@@ -74,11 +74,7 @@ func (bnd *TCBBundle) verifyQEIdentity(
 	if err != nil {
 		return fmt.Errorf("pcs/tcb: invalid QE identity: %w", err)
 	}
-	if err = qeInfo.verify(qe); err != nil {
-		return err
-	}
-
-	return nil
+	return qeInfo.verify(qe)
 }
 
 // verifyTCBInfo verifies the TCB level and the FMSPC.

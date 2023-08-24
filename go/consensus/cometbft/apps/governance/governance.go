@@ -474,11 +474,7 @@ func (app *governanceApplication) closeProposal(
 		"invalid_votes", proposal.InvalidVotes,
 		"stake_threshold", params.StakeThreshold,
 	)
-	if err := proposal.CloseProposal(totalVotingStake, params.StakeThreshold); err != nil {
-		return err
-	}
-
-	return nil
+	return proposal.CloseProposal(totalVotingStake, params.StakeThreshold)
 }
 
 func addShares(validatorVoteShares map[governance.Vote]quantity.Quantity, vote governance.Vote, amount quantity.Quantity) error {

@@ -912,9 +912,5 @@ func (sc *txSourceImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
-	if err = sc.Net.CheckLogWatchers(); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.Net.CheckLogWatchers()
 }

@@ -147,11 +147,7 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, _ *env.Env) error {
 	// If we came this far than all key managers should have the same state.
 	// Let's test if they replicated the same secrets by fetching long-term
 	// public keys for all generations.
-	if err := sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2, 3}); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2, 3})
 }
 
 func (sc *kmReplicateImpl) waitKeymanagerStatuses(ctx context.Context, n int) (*keymanager.Status, error) {

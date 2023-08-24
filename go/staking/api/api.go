@@ -719,11 +719,7 @@ func (p *SharePool) Withdraw(stakeDst, shareSrc, shareAmount *quantity.Quantity)
 		return err
 	}
 
-	if err = quantity.Move(stakeDst, &p.Balance, baseUnits); err != nil {
-		return err
-	}
-
-	return nil
+	return quantity.Move(stakeDst, &p.Balance, baseUnits)
 }
 
 // ThresholdKind is the kind of staking threshold.

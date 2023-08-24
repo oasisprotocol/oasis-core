@@ -64,9 +64,5 @@ func (sc *basicImpl) Run(_ context.Context, _ *env.Env) error {
 	}
 
 	// Run basic common signer tests.
-	if err = signerTests.BasicTests(sf, sc.logger, roles); err != nil {
-		return err
-	}
-
-	return nil
+	return signerTests.BasicTests(sf, sc.logger, roles)
 }

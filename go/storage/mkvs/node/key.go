@@ -189,7 +189,7 @@ func (k Key) CommonPrefixLen(keyBitLen Depth, k2 Key, k2bitLen Depth) (bitLength
 
 	// Compute the common prefix byte-wise.
 	i := Depth(0)
-	for ; i < Depth(minKeyLen) && k[i] == k2[i]; i++ {
+	for ; i < Depth(minKeyLen) && k[i] == k2[i]; i++ { //nolint:revive
 	}
 
 	// Prefixes match i bytes and maybe some more bits below.

@@ -176,8 +176,5 @@ func (impl *backendInsecure) doTxSetEpoch(
 		"is_check_only", ctx.IsCheckOnly(),
 	)
 
-	if err := state.SetFutureEpoch(ctx, epoch, height+1); err != nil {
-		return err
-	}
-	return nil
+	return state.SetFutureEpoch(ctx, epoch, height+1)
 }

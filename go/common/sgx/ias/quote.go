@@ -210,9 +210,6 @@ func (q *Quote) UnmarshalBinary(data []byte) error {
 	if err := q.Body.UnmarshalBinary(data[:quoteBodyLen]); err != nil {
 		return err
 	}
-	if err := q.Report.UnmarshalBinary(data[quoteBodyLen:]); err != nil {
-		return err
-	}
 
-	return nil
+	return q.Report.UnmarshalBinary(data[quoteBodyLen:])
 }

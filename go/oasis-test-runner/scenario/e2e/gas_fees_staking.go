@@ -245,11 +245,7 @@ func (sc *gasFeesImpl) runTests(ctx context.Context) error {
 		)
 	}
 
-	if err := sc.Net.CheckLogWatchers(); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.Net.CheckLogWatchers()
 }
 
 func (sc *gasFeesImpl) getInitialCommonPoolBalance(ctx context.Context) (*quantity.Quantity, error) {

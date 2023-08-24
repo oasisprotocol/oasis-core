@@ -119,10 +119,10 @@ func doIsSynced(cmd *cobra.Command, _ []string) {
 	if synced {
 		fmt.Println("node completed initial syncing")
 		os.Exit(0)
-	} else {
-		fmt.Println("node has not completed initial syncing")
-		os.Exit(1)
 	}
+
+	fmt.Println("node has not completed initial syncing")
+	os.Exit(1)
 }
 
 func doWaitSync(cmd *cobra.Command, _ []string) {

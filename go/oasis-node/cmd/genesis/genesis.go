@@ -619,11 +619,7 @@ func appendStakingState(doc *genesis.Document, statePath string) error {
 		st.State.TokenValueExponent = tokenValueExponent
 	}
 
-	if err = st.AppendTo(doc); err != nil {
-		return err
-	}
-
-	return nil
+	return st.AppendTo(doc)
 }
 
 func doDumpGenesis(cmd *cobra.Command, _ []string) {

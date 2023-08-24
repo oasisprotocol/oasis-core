@@ -266,10 +266,7 @@ func (agg *Aggregate) SetVersion(active version.Version, next *version.Version) 
 	if err := agg.setActiveVersionLocked(active); err != nil {
 		return err
 	}
-	if err := agg.setNextVersionLocked(next); err != nil {
-		return err
-	}
-	return nil
+	return agg.setNextVersionLocked(next)
 }
 
 func (agg *Aggregate) setActiveVersionLocked(version version.Version) error {

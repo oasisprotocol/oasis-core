@@ -60,15 +60,12 @@ func (mtb *minTransactBalanceImpl) fundFromTestEntity(ctx context.Context, nonce
 	if err != nil {
 		return fmt.Errorf("test entity: %w", err)
 	}
-	if err = mtb.signAndSubmitTx(ctx, teSigner, staking.NewTransferTx(nonce, &transaction.Fee{
+	return mtb.signAndSubmitTx(ctx, teSigner, staking.NewTransferTx(nonce, &transaction.Fee{
 		Gas: 1300,
 	}, &staking.Transfer{
 		To:     to,
 		Amount: *quantity.NewFromUint64(amount),
-	})); err != nil {
-		return err
-	}
-	return nil
+	}))
 }
 
 func (mtb *minTransactBalanceImpl) getAccountAndCheckNonce(ctx context.Context, addr staking.Address, _ uint64) (*staking.Account, error) {

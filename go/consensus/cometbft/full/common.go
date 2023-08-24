@@ -145,11 +145,7 @@ func (n *commonNode) start() error {
 		return fmt.Errorf("cometbft/common_node: not in initialized state")
 	}
 
-	if err := n.mux.Start(); err != nil {
-		return err
-	}
-
-	return nil
+	return n.mux.Start()
 }
 
 func (n *commonNode) finishStart() {
