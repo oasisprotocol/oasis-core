@@ -2,10 +2,9 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
-
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -113,8 +112,7 @@ func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) 
 		return err
 	}
 	defer func() {
-		err2 := sc.PostRun(ctx, childEnv)
-		err = multierror.Append(err, err2).ErrorOrNil()
+		err = errors.Join(err, sc.PostRun(ctx, childEnv))
 	}()
 
 	// All chain contexts should be unique.
@@ -189,8 +187,7 @@ func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env
 		return err
 	}
 	defer func() {
-		err2 := sc.PostRun(ctx, childEnv)
-		err = multierror.Append(err, err2).ErrorOrNil()
+		err = errors.Join(err, sc.PostRun(ctx, childEnv))
 	}()
 
 	chainContext, err := sc.ChainContext(ctx)

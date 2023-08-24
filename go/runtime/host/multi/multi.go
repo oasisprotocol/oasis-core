@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
@@ -177,16 +176,14 @@ func (agg *Aggregate) UpdateCapabilityTEE(ctx context.Context) error {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
-	var errs *multierror.Error
+	var err error
 	if agg.active != nil {
-		err := agg.active.host.UpdateCapabilityTEE(ctx)
-		errs = multierror.Append(errs, err)
+		err = errors.Join(err, agg.active.host.UpdateCapabilityTEE(ctx))
 	}
 	if agg.next != nil {
-		err := agg.next.host.UpdateCapabilityTEE(ctx)
-		errs = multierror.Append(errs, err)
+		err = errors.Join(err, agg.next.host.UpdateCapabilityTEE(ctx))
 	}
-	return errs.ErrorOrNil()
+	return err
 }
 
 // WatchEvents implements host.Runtime.

@@ -2,9 +2,8 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
-	"github.com/hashicorp/go-multierror"
 
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -152,8 +151,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 		return err
 	}
 	defer func() {
-		err2 := sc.PostRun(ctx, childEnv)
-		err = multierror.Append(err, err2).ErrorOrNil()
+		err = errors.Join(err, sc.PostRun(ctx, childEnv))
 	}()
 
 	sc.Logger.Info("testing query latest block")

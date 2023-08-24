@@ -3,11 +3,10 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
-
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -89,7 +88,6 @@ func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtim
 	builder := rust.NewBuilder(childEnv, buildDir, targetDir, teeHardware)
 
 	// Build runtimes one by one.
-	var errs *multierror.Error
 	for runtimeID, runtimeBinary := range runtimes {
 		switch trustRoot {
 		case nil:
@@ -114,11 +112,9 @@ func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtim
 		}
 
 		// Build a new runtime with the given trust root embedded.
-		if err = builder.Build(runtimeBinary); err != nil {
-			errs = multierror.Append(errs, err)
-		}
+		err = errors.Join(err, builder.Build(runtimeBinary))
 	}
-	if err = errs.ErrorOrNil(); err != nil {
+	if err != nil {
 		return fmt.Errorf("failed to build runtimes: %w", err)
 	}
 

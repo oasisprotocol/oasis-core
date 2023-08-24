@@ -3,13 +3,13 @@ package staking
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -342,7 +342,7 @@ func EventsFromCometBFT(
 				// Take escrow event.
 				var e api.TakeEscrowEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("staking: corrupt TakeEscrow event: %w", err))
 					continue
 				}
 
@@ -352,7 +352,7 @@ func EventsFromCometBFT(
 				// Transfer event.
 				var e api.TransferEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Transfer event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("staking: corrupt Transfer event: %w", err))
 					continue
 				}
 
@@ -362,7 +362,7 @@ func EventsFromCometBFT(
 				// Reclaim escrow event.
 				var e api.ReclaimEscrowEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("staking: corrupt ReclaimEscrow event: %w", err))
 					continue
 				}
 
@@ -372,7 +372,7 @@ func EventsFromCometBFT(
 				// Add escrow event.
 				var e api.AddEscrowEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AddEscrow event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("staking: corrupt AddEscrow event: %w", err))
 					continue
 				}
 
@@ -382,7 +382,7 @@ func EventsFromCometBFT(
 				// Debonding start escrow event.
 				var e api.DebondingStartEscrowEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt DebondingStart escrow event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("staking: corrupt DebondingStart escrow event: %w", err))
 					continue
 				}
 
@@ -392,7 +392,7 @@ func EventsFromCometBFT(
 				// Burn event.
 				var e api.BurnEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt Burn event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("staking: corrupt Burn event: %w", err))
 					continue
 				}
 
@@ -402,14 +402,14 @@ func EventsFromCometBFT(
 				// Allowance change event.
 				var e api.AllowanceChangeEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("staking: corrupt AllowanceChange event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("staking: corrupt AllowanceChange event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, AllowanceChange: &e}
 				events = append(events, evt)
 			default:
-				errs = multierror.Append(errs, fmt.Errorf("staking: unknown event type: key: %s, val: %s", key, val))
+				errs = errors.Join(errs, fmt.Errorf("staking: unknown event type: key: %s, val: %s", key, val))
 			}
 		}
 	}

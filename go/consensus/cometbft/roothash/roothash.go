@@ -3,6 +3,7 @@ package roothash
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
@@ -757,7 +757,7 @@ EventLoop:
 				// Finalized event.
 				var e api.FinalizedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt Finalized event: %w", err))
 					continue EventLoop
 				}
 
@@ -766,7 +766,7 @@ EventLoop:
 				// An execution discrepancy has been detected.
 				var e api.ExecutionDiscrepancyDetectedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutionDiscrepancyDetected event: %w", err))
 					continue EventLoop
 				}
 
@@ -775,7 +775,7 @@ EventLoop:
 				// An executor commit has been processed.
 				var e api.ExecutorCommittedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt ExecutorComitted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt ExecutorComitted event: %w", err))
 					continue EventLoop
 				}
 
@@ -784,29 +784,29 @@ EventLoop:
 				// Incoming message processed event.
 				var e api.InMsgProcessedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt InMsgProcessed event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt InMsgProcessed event: %w", err))
 					continue EventLoop
 				}
 
 				ev = &api.Event{InMsgProcessed: &e}
 			case eventsAPI.IsAttributeKind(key, &api.RuntimeIDAttribute{}):
 				if runtimeID != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: duplicate runtime ID attribute"))
+					errs = errors.Join(errs, fmt.Errorf("roothash: duplicate runtime ID attribute"))
 					continue EventLoop
 				}
 				rtAttribute := api.RuntimeIDAttribute{}
 				if err := eventsAPI.DecodeValue(val, &rtAttribute); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("roothash: corrupt runtime ID: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("roothash: corrupt runtime ID: %w", err))
 					continue EventLoop
 				}
 				runtimeID = &rtAttribute.ID
 			default:
-				errs = multierror.Append(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
+				errs = errors.Join(errs, fmt.Errorf("roothash: unknown event type: key: %s, val: %s", key, val))
 			}
 		}
 
 		if runtimeID == nil {
-			errs = multierror.Append(errs, fmt.Errorf("roothash: missing runtime ID attribute"))
+			errs = errors.Join(errs, fmt.Errorf("roothash: missing runtime ID attribute"))
 			continue
 		}
 		if ev != nil {

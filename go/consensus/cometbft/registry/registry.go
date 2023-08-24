@@ -3,6 +3,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
@@ -10,7 +11,6 @@ import (
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/eapache/channels"
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -314,7 +314,7 @@ func EventsFromCometBFT(
 				// Runtime started event.
 				var e api.RuntimeStartedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeStarted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("registry: corrupt RuntimeStarted event: %w", err))
 					continue
 				}
 
@@ -323,7 +323,7 @@ func EventsFromCometBFT(
 				// Runtime suspended event.
 				var e api.RuntimeSuspendedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt RuntimeSuspended event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("registry: corrupt RuntimeSuspended event: %w", err))
 					continue
 				}
 
@@ -332,7 +332,7 @@ func EventsFromCometBFT(
 				// Entity event.
 				var e api.EntityEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Entity event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("registry: corrupt Entity event: %w", err))
 					continue
 				}
 
@@ -341,7 +341,7 @@ func EventsFromCometBFT(
 				// Node event.
 				var e api.NodeEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt Node event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("registry: corrupt Node event: %w", err))
 					continue
 				}
 
@@ -350,7 +350,7 @@ func EventsFromCometBFT(
 				// Node unfrozen event.
 				var e api.NodeUnfrozenEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("registry: corrupt NodeUnfrozen event: %w", err))
 					continue
 				}
 				events = append(events, &api.Event{Height: height, TxHash: txHash, NodeUnfrozenEvent: &e})

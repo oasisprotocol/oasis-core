@@ -1,9 +1,8 @@
 package abci
 
 import (
+	"errors"
 	"fmt"
-
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 )
@@ -33,7 +32,7 @@ func (md *messageDispatcher) Publish(ctx *api.Context, kind, msg interface{}) (i
 	var errs error
 	for _, ms := range md.subscriptions[kind] {
 		if resp, err := ms.ExecuteMessage(ctx, kind, msg); err != nil {
-			errs = multierror.Append(errs, err)
+			errs = errors.Join(errs, err)
 		} else {
 			switch {
 			case resp != nil && result == nil:
