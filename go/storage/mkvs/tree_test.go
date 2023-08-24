@@ -25,14 +25,14 @@ import (
 
 const (
 	insertItems  = 1000
-	allItemsRoot = "2187c55627819b60069888ba86f83dc2a9f50c827624b0e31e31261806300ede"
+	allItemsRoot = "2187c55627819b60069888ba86f83dc2a9f50c827624b0e31e31261806300ede" // #nosec G101
 
 	insertItemsShort  = 500
-	allItemsRootShort = "cf6e9b6a26e10a8218b8658ac9302af1a4c1ae4e1b1a7633860a0f81fb759495"
+	allItemsRootShort = "cf6e9b6a26e10a8218b8658ac9302af1a4c1ae4e1b1a7633860a0f81fb759495" // #nosec G101
 
 	longKey          = "Unlock the potential of your data without compromising security or privacy"
 	longValue        = "The platform that puts data privacy first. From sharing medical records, to analyzing personal financial information, to training machine learning models, the Oasis platform supports applications that use even the most sensitive data without compromising privacy or performance."
-	allLongItemsRoot = "d829bb244a709bacf33bc2d8b4a016592e5310a10910aa980ef91cb3b4347dcb"
+	allLongItemsRoot = "d829bb244a709bacf33bc2d8b4a016592e5310a10910aa980ef91cb3b4347dcb" // #nosec G101
 )
 
 var (

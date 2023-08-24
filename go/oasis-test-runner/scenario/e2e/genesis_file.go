@@ -23,11 +23,11 @@ import (
 const (
 	// Mainnet genesis dump at height: 11645601.
 	genesisURL    = "https://oasis-artifacts.s3.us-east-2.amazonaws.com/genesis_mainnet_dump_11645601.json"
-	genesisSHA256 = "16386902d822227d0ba1e011ab84a754a48c61457e06240986f9c00e84895459"
+	genesisSHA256 = "16386902d822227d0ba1e011ab84a754a48c61457e06240986f9c00e84895459" // #nosec G101
 
 	genesisNeedsUpgrade = true
 	// Only relevant if genesis file doesn't need upgrade.
-	genesisDocumentHash = "b11b369e0da5bb230b220127f5e7b242d385ef8c6f54906243f30af63c815535"
+	genesisDocumentHash = "b11b369e0da5bb230b220127f5e7b242d385ef8c6f54906243f30af63c815535" // #nosec G101
 )
 
 // GenesisFile is the scenario for testing the correctness of marshalled genesis

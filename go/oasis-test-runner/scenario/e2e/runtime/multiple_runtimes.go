@@ -18,7 +18,7 @@ const (
 	// cfgNumComputeRuntimes is the number of runtimes, all with common runtimeBinary registered.
 	cfgNumComputeRuntimes = "num_compute_runtimes"
 	// cfgNumComputeRuntimeTxns is the number of insert test transactions sent to each runtime.
-	cfgNumComputeRuntimeTxns = "num_compute_runtime_txns"
+	cfgNumComputeRuntimeTxns = "num_compute_runtime_txns" // #nosec G101
 	// cfgNumComputeWorkers is the number of compute workers.
 	cfgNumComputeWorkers = "num_compute_workers"
 	// cfgExecutorGroupSize is the number of executor nodes.

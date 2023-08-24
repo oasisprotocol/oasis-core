@@ -83,7 +83,7 @@ var (
 	RPCMethodGetPublicKey = "get_public_key"
 
 	// RPCMethodGetPublicEphemeralKey is the name of the `get_public_ephemeral_key` method.
-	RPCMethodGetPublicEphemeralKey = "get_public_ephemeral_key"
+	RPCMethodGetPublicEphemeralKey = "get_public_ephemeral_key" // #nosec G101
 
 	// RPCMethodGenerateMasterSecret is the name of the `generate_master_secret` RPC method.
 	RPCMethodGenerateMasterSecret = "generate_master_secret"

@@ -59,10 +59,10 @@ const (
 	feeGas = 10000
 
 	// Testing source account public key (hex-encoded).
-	srcPubkeyHex = "4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
+	srcPubkeyHex = "4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35" // #nosec G101
 
 	// Testing escrow account public key (hex-encoded).
-	escrowPubkeyHex = "6ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
+	escrowPubkeyHex = "6ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35" // #nosec G101
 )
 
 var (
