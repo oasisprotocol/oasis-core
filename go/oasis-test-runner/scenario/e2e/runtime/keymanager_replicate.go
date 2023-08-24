@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"

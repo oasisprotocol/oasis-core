@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/libp2p/go-libp2p/core"
-	"golang.org/x/exp/slices"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 
