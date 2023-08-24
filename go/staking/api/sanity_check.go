@@ -154,7 +154,7 @@ func SanityCheckDelegations(addr Address, account *Account, delegations map[Addr
 				delegatorAddr, addr,
 			)
 		}
-		_ = shares.Add(&delegation.Shares)
+		_ = shares.Add(&delegation.Shares) //nolint:gosec
 		numDelegations++
 	}
 
@@ -195,7 +195,7 @@ func SanityCheckDebondingDelegations(addr Address, account *Account, delegations
 			)
 		}
 		for _, delegation := range dels {
-			_ = shares.Add(&delegation.Shares)
+			_ = shares.Add(&delegation.Shares) //nolint:gosec
 			numDebondingDelegations++
 		}
 	}
@@ -232,7 +232,7 @@ func SanityCheckAccountShares(
 	var shares quantity.Quantity
 	var numDelegations uint64
 	for _, d := range delegations {
-		_ = shares.Add(&d.Shares)
+		_ = shares.Add(&d.Shares) //nolint:gosec
 		numDelegations++
 	}
 	// Account's total active shares in escrow should match delegations.
@@ -257,7 +257,7 @@ func SanityCheckAccountShares(
 	var numDebondingDelegations uint64
 	for _, dels := range debondingDelegations {
 		for _, d := range dels {
-			_ = debondingShares.Add(&d.Shares)
+			_ = debondingShares.Add(&d.Shares) //nolint:gosec
 			numDebondingDelegations++
 		}
 	}

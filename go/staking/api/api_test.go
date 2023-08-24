@@ -194,8 +194,8 @@ func TestStakeThreshold(t *testing.T) {
 		{StakeThreshold{}, StakeThreshold{Constant: &c2}, false},
 		{StakeThreshold{}, StakeThreshold{}, false},
 	} {
-		require.True(t.a.Equal(&t.b) == t.equal, "stake threshold equality should work (a == b)")
-		require.True(t.b.Equal(&t.a) == t.equal, "stake threshold equality should work (b == a)")
+		require.True(t.a.Equal(&t.b) == t.equal, "stake threshold equality should work (a == b)") //nolint:gosec
+		require.True(t.b.Equal(&t.a) == t.equal, "stake threshold equality should work (b == a)") //nolint:gosec
 	}
 }
 

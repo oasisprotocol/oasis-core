@@ -124,19 +124,19 @@ func (app *stakingApplication) initLedger(
 			return fmt.Errorf("cometbft/staking: non-empty stake accumulator in genesis for account %s", addr)
 		}
 
-		if err := totalSupply.Add(&acct.General.Balance); err != nil {
+		if err := totalSupply.Add(&acct.General.Balance); err != nil { //nolint:gosec
 			ctx.Logger().Error("InitChain: failed to add general balance",
 				"err", err,
 			)
 			return fmt.Errorf("cometbft/staking: failed to add general balance: %w", err)
 		}
-		if err := totalSupply.Add(&acct.Escrow.Active.Balance); err != nil {
+		if err := totalSupply.Add(&acct.Escrow.Active.Balance); err != nil { //nolint:gosec
 			ctx.Logger().Error("InitChain: failed to add active escrow balance",
 				"err", err,
 			)
 			return fmt.Errorf("cometbft/staking: failed to add active escrow balance: %w", err)
 		}
-		if err := totalSupply.Add(&acct.Escrow.Debonding.Balance); err != nil {
+		if err := totalSupply.Add(&acct.Escrow.Debonding.Balance); err != nil { //nolint:gosec
 			ctx.Logger().Error("InitChain: failed to add debonding escrow balance",
 				"err", err,
 			)
@@ -194,7 +194,7 @@ func (app *stakingApplication) initDelegations(ctx *abciAPI.Context, state *stak
 					delegatorAddr, escrowAddr,
 				)
 			}
-			if err := delegationShares.Add(&delegation.Shares); err != nil {
+			if err := delegationShares.Add(&delegation.Shares); err != nil { //nolint:gosec
 				ctx.Logger().Error("InitChain: failed to add delegation shares",
 					"err", err,
 				)
@@ -250,7 +250,7 @@ func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, st
 						delegatorAddr, escrowAddr, idx,
 					)
 				}
-				if err := debondingShares.Add(&delegation.Shares); err != nil {
+				if err := debondingShares.Add(&delegation.Shares); err != nil { //nolint:gosec
 					ctx.Logger().Error("InitChain: failed to add debonding delegation shares",
 						"err", err,
 					)

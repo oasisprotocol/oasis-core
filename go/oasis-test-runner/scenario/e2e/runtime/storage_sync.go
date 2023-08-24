@@ -155,7 +155,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 			}
 			var found bool
 			for _, root := range blk.Header.StorageRoots() {
-				if root.Equal(&cp.Root) {
+				if root.Equal(&cp.Root) { //nolint:gosec
 					found = true
 					break
 				}

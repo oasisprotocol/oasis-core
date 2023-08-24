@@ -204,7 +204,7 @@ func TestVerifyRegisterNodeArgs(t *testing.T) {
 		signedNode, err := node.MultiSignNode(
 			nodeSigners,
 			RegisterGenesisNodeSignatureContext,
-			&tc.n,
+			&tc.n, //nolint:gosec
 		)
 		require.NoError(err, "singing node")
 		_, _, err = VerifyRegisterNodeArgs(context.Background(), params, logger, signedNode, entity, time.Now(), 1, false, false, beacon.EpochTime(10), rtLookup, ndLookup)

@@ -392,7 +392,7 @@ func (app *governanceApplication) closeProposal(
 			// Skip non-validator votes.
 			continue
 		}
-		validatorVotes[vote.Voter] = &vote.Vote
+		validatorVotes[vote.Voter] = &vote.Vote //nolint:gosec
 		if err = addShares(validatorVoteShares[vote.Voter], vote.Vote, escrow.TotalShares); err != nil {
 			return fmt.Errorf("failed to add shares: %w", err)
 		}
@@ -416,7 +416,7 @@ func (app *governanceApplication) closeProposal(
 			}
 			delegationToValidator = true
 			validatorVote := validatorVotes[to]
-			if validatorVote == &vote.Vote {
+			if validatorVote == &vote.Vote { //nolint:gosec
 				// Vote matches the delegated validator vote.
 				continue
 			}
@@ -612,7 +612,7 @@ func (app *governanceApplication) EndBlock(ctx *api.Context) (types.ResponseEndB
 			if err = stakingState.TransferFromGovernanceDeposits(
 				ctx,
 				proposal.Submitter,
-				&proposal.Deposit,
+				&proposal.Deposit, //nolint:gosec
 			); err != nil {
 				ctx.Logger().Error("failed to transfer from governance deposits",
 					"err", err,
@@ -626,7 +626,7 @@ func (app *governanceApplication) EndBlock(ctx *api.Context) (types.ResponseEndB
 			// Proposal rejected, deposit is transferred into the common pool.
 			if err = stakingState.DiscardGovernanceDeposit(
 				ctx,
-				&proposal.Deposit,
+				&proposal.Deposit, //nolint:gosec
 			); err != nil {
 				return types.ResponseEndBlock{},
 					fmt.Errorf("consensus/governance: failed to discard proposal deposit: %w", err)

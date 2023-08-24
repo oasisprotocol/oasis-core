@@ -80,7 +80,7 @@ func SanityCheckProposals(proposals []*Proposal, epoch beacon.EpochTime, governa
 			if p.Content.Upgrade != nil && p.Content.Upgrade.Epoch < epoch {
 				return fmt.Errorf("proposal %v: active proposal with past upgrade epoch", p.ID)
 			}
-			if err := activeProposalDeposits.Add(&p.Deposit); err != nil {
+			if err := activeProposalDeposits.Add(&p.Deposit); err != nil { //nolint:gosec
 				return fmt.Errorf("activeProposalDeposits.Add(Deposit): %w", err)
 			}
 

@@ -425,7 +425,7 @@ func (sc *gasFeesImpl) testStakingGas(
 		}
 
 		if t.checkOk {
-			_ = totalFees.Add(&t.fee.Amount)
+			_ = totalFees.Add(&t.fee.Amount) //nolint:gosec
 		}
 	}
 

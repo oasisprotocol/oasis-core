@@ -417,7 +417,7 @@ func (q *queries) doRegistryQueries(ctx context.Context, height int64) error {
 		node, err = q.registry.GetNodeByConsensusAddress(
 			ctx,
 			&registry.ConsensusAddressQuery{
-				Address: []byte(tmcrypto.PublicKeyToCometBFT(&nod.Consensus.ID).Address()), Height: height,
+				Address: []byte(tmcrypto.PublicKeyToCometBFT(&nod.Consensus.ID).Address()), Height: height, //nolint:gosec
 			},
 		)
 		if err != nil {

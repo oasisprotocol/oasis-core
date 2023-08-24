@@ -588,7 +588,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 		if sc.trackedRuntime[ev.RuntimeID] == nil {
 			continue
 		}
-		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round, false); err != nil {
+		if err = sc.processFinalizedEvent(ctx, height, ev.RuntimeID, &ev.Finalized.Round, false); err != nil { //nolint:gosec
 			return fmt.Errorf("roothash: failed to process finalized event: %w", err)
 		}
 	}

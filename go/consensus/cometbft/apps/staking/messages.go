@@ -64,19 +64,19 @@ func (app *stakingApplication) changeParameters(ctx *api.Context, msg interface{
 			}
 			var updated bool
 			for i, bound := range acc.Escrow.CommissionSchedule.Bounds {
-				if changes.MinCommissionRate.Cmp(&bound.RateMin) > 0 {
+				if changes.MinCommissionRate.Cmp(&bound.RateMin) > 0 { //nolint:gosec
 					// Update the minimum rate bound, to be at least the minimum bound.
 					acc.Escrow.CommissionSchedule.Bounds[i].RateMin = *changes.MinCommissionRate.Clone()
 					updated = true
 				}
-				if changes.MinCommissionRate.Cmp(&bound.RateMax) > 0 {
+				if changes.MinCommissionRate.Cmp(&bound.RateMax) > 0 { //nolint:gosec
 					// Update the maximum rate bound, to be at least the minimum bound.
 					acc.Escrow.CommissionSchedule.Bounds[i].RateMax = *changes.MinCommissionRate.Clone()
 					updated = true
 				}
 			}
 			for i, rate := range acc.Escrow.CommissionSchedule.Rates {
-				if changes.MinCommissionRate.Cmp(&rate.Rate) > 0 {
+				if changes.MinCommissionRate.Cmp(&rate.Rate) > 0 { //nolint:gosec
 					// Update the rate, to be at least the minimum bound.
 					acc.Escrow.CommissionSchedule.Rates[i].Rate = *changes.MinCommissionRate.Clone()
 					updated = true

@@ -270,9 +270,9 @@ func TestPendingUpgrades(t *testing.T) {
 		if proposal.Content.Upgrade == nil {
 			continue
 		}
-		err := s.SetPendingUpgrade(ctx, proposal.ID, &proposal.Content.Upgrade.Descriptor)
+		err := s.SetPendingUpgrade(ctx, proposal.ID, &proposal.Content.Upgrade.Descriptor) //nolint:gosec
 		require.NoError(err, "SetPendingUpgrade()")
-		expectedPendingUpgrades = append(expectedPendingUpgrades, &proposal.Content.Upgrade.Descriptor)
+		expectedPendingUpgrades = append(expectedPendingUpgrades, &proposal.Content.Upgrade.Descriptor) //nolint:gosec
 	}
 
 	pendingUpgrades, err := s.PendingUpgrades(ctx)

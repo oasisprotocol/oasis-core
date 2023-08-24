@@ -246,13 +246,13 @@ func GenesisState() api.Genesis {
 	// Adjust common pool for the remaining balance.
 	remainingBalance := state.TotalSupply.Clone()
 	for _, acc := range state.Ledger {
-		if err := remainingBalance.Sub(&acc.General.Balance); err != nil {
+		if err := remainingBalance.Sub(&acc.General.Balance); err != nil { //nolint:gosec
 			panic(err)
 		}
-		if err := remainingBalance.Sub(&acc.Escrow.Active.Balance); err != nil {
+		if err := remainingBalance.Sub(&acc.Escrow.Active.Balance); err != nil { //nolint:gosec
 			panic(err)
 		}
-		if err := remainingBalance.Sub(&acc.Escrow.Debonding.Balance); err != nil {
+		if err := remainingBalance.Sub(&acc.Escrow.Debonding.Balance); err != nil { //nolint:gosec
 			panic(err)
 		}
 	}
@@ -262,7 +262,7 @@ func GenesisState() api.Genesis {
 	for addr, dels := range state.Delegations {
 		totalShares := quantity.NewQuantity()
 		for _, del := range dels {
-			if err := totalShares.Add(&del.Shares); err != nil {
+			if err := totalShares.Add(&del.Shares); err != nil { //nolint:gosec
 				panic(err)
 			}
 		}
@@ -272,7 +272,7 @@ func GenesisState() api.Genesis {
 		totalShares := quantity.NewQuantity()
 		for _, debDelList := range debDelLists {
 			for _, debDel := range debDelList {
-				if err := totalShares.Add(&debDel.Shares); err != nil {
+				if err := totalShares.Add(&debDel.Shares); err != nil { //nolint:gosec
 					panic(err)
 				}
 			}

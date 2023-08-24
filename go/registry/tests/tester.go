@@ -338,7 +338,7 @@ func testRegistryEntityNodes( // nolint: gocyclo
 				nodeByConsensus, err = backend.GetNodeByConsensusAddress(
 					ctx,
 					&api.ConsensusAddressQuery{
-						Address: []byte(tmcrypto.PublicKeyToCometBFT(&tn.Node.Consensus.ID).Address()),
+						Address: []byte(tmcrypto.PublicKeyToCometBFT(&tn.Node.Consensus.ID).Address()), //nolint:gosec
 						Height:  consensusAPI.HeightLatest,
 					},
 				)
