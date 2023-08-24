@@ -17,7 +17,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/cometbft/cometbft v0.0.0-00010101000000-000000000000
 	github.com/cometbft/cometbft-db v0.7.0
-	github.com/cosmos/gogoproto v1.4.1
+	github.com/cosmos/gogoproto v1.4.11
 	github.com/dgraph-io/badger/v3 v3.2103.4
 	github.com/eapache/channels v1.1.0
 	github.com/fxamacker/cbor/v2 v2.4.0
@@ -56,7 +56,7 @@ require (
 	golang.org/x/crypto v0.12.0
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	golang.org/x/net v0.14.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230525234030-28d5490b6b19
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230815205213-6bfd019c3878
 	google.golang.org/grpc v1.57.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20221004221323-12db695f1648
 	google.golang.org/protobuf v1.31.0
@@ -96,6 +96,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/orderedcode v0.0.1 // indirect
