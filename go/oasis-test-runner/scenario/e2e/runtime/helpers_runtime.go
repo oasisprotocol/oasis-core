@@ -71,7 +71,7 @@ func (sc *Scenario) ResolveRuntimeBinary(runtimeBinary string, tee node.TEEHardw
 }
 
 // BuildRuntimes builds the specified runtime binaries using the provided trust root, if given.
-func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtimes map[common.Namespace]string, trustRoot *e2e.TrustRoot) error {
+func (sc *Scenario) BuildRuntimes(childEnv *env.Env, runtimes map[common.Namespace]string, trustRoot *e2e.TrustRoot) error {
 	// Determine the required directories for building the runtime with an embedded trust root.
 	buildDir, targetDir, err := sc.BuildTargetDirs()
 	if err != nil {
@@ -122,13 +122,13 @@ func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtim
 }
 
 // BuildAllRuntimes builds all runtime binaries, i.e. the key/value and the key manager runtime.
-func (sc *Scenario) BuildAllRuntimes(ctx context.Context, childEnv *env.Env, trustRoot *e2e.TrustRoot) error {
+func (sc *Scenario) BuildAllRuntimes(childEnv *env.Env, trustRoot *e2e.TrustRoot) error {
 	runtimes := map[common.Namespace]string{
 		KeyValueRuntimeID:   KeyValueRuntimeBinary,
 		KeyManagerRuntimeID: KeyManagerRuntimeBinary,
 	}
 
-	return sc.BuildRuntimes(ctx, childEnv, runtimes, trustRoot)
+	return sc.BuildRuntimes(childEnv, runtimes, trustRoot)
 }
 
 // EnsureActiveVersionForComputeWorker ensures that the specified compute worker
@@ -328,7 +328,7 @@ func (sc *Scenario) EnableRuntimeDeployment(ctx context.Context, childEnv *env.E
 		"valid_from", newRtDpl.ValidFrom,
 	)
 
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, newRtDsc, nonce); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, newRtDsc, nonce); err != nil {
 		return err
 	}
 	nonce++ // nolint: ineffassign

@@ -1,8 +1,6 @@
 package keymanager
 
 import (
-	"context"
-
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -11,7 +9,7 @@ import (
 )
 
 // GetStatus returns the key manager worker status.
-func (w *Worker) GetStatus(ctx context.Context) (*api.Status, error) {
+func (w *Worker) GetStatus() (*api.Status, error) {
 	var initialized, stopped bool
 	select {
 	case <-w.Initialized():

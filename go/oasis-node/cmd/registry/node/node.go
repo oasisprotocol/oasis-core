@@ -89,7 +89,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, registry.Backend) {
 	return conn, client
 }
 
-func doInit(cmd *cobra.Command, args []string) { // nolint: gocyclo
+func doInit(*cobra.Command, []string) { // nolint: gocyclo
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -271,7 +271,7 @@ func argsToRolesMask() (node.RolesMask, error) {
 	return rolesMask, nil
 }
 
-func doList(cmd *cobra.Command, args []string) {
+func doList(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -309,7 +309,7 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doIsRegistered(cmd *cobra.Command, args []string) {
+func doIsRegistered(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

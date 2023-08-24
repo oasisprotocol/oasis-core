@@ -34,7 +34,7 @@ type registryAuthenticator struct {
 	initCh   chan struct{}
 }
 
-func (auth *registryAuthenticator) VerifyEvidence(ctx context.Context, evidence *ias.Evidence) error {
+func (auth *registryAuthenticator) VerifyEvidence(evidence *ias.Evidence) error {
 	<-auth.initCh
 
 	// TODO: This could/should do something clever with respect to verifying

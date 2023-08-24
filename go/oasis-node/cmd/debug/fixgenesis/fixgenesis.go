@@ -17,7 +17,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -43,7 +42,7 @@ var (
 	errOldNodeDesc = errors.New("deprecated node descriptor")
 )
 
-func doFixGenesis(cmd *cobra.Command, args []string) {
+func doFixGenesis(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -127,7 +126,7 @@ type oldNodeDesc struct {
 	DeprecatedBeacon cbor.RawMessage `json:"beacon,omitempty"`
 }
 
-func openSignedNode(context signature.Context, sn *node.MultiSignedNode) (*node.Node, error) {
+func openSignedNode(_ signature.Context, sn *node.MultiSignedNode) (*node.Node, error) {
 	var (
 		node node.Node
 		err  error
@@ -221,7 +220,6 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 		entities,
 		nodes,
 		runtimes,
-		newDoc.Staking.Parameters.Thresholds,
 		newDoc.Staking.Ledger,
 	)
 	if err != nil {
@@ -338,7 +336,6 @@ func computeStakeClaims(
 	entities []*entity.Entity,
 	nodes []*node.Node,
 	runtimes []*registry.Runtime,
-	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
 	accounts map[staking.Address]*staking.Account,
 ) (map[staking.Address]*staking.EscrowAccount, error) {
 	computedStakeClaims := make(map[staking.Address]*staking.EscrowAccount)

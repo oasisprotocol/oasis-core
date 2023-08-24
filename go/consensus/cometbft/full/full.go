@@ -195,7 +195,7 @@ func (t *fullService) SubmitTx(ctx context.Context, tx *transaction.SignedTransa
 }
 
 // Implements consensusAPI.Backend.
-func (t *fullService) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
+func (t *fullService) SubmitTxNoWait(_ context.Context, tx *transaction.SignedTransaction) error {
 	return t.broadcastTxRaw(cbor.Marshal(tx))
 }
 
@@ -374,7 +374,7 @@ func (t *fullService) SubmissionManager() consensusAPI.SubmissionManager {
 }
 
 // Implements consensusAPI.Backend.
-func (t *fullService) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
+func (t *fullService) GetUnconfirmedTransactions(context.Context) ([][]byte, error) {
 	mempoolTxs := t.node.Mempool().ReapMaxTxs(-1)
 	txs := make([][]byte, 0, len(mempoolTxs))
 	for _, v := range mempoolTxs {

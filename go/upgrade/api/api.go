@@ -233,21 +233,21 @@ func (pu *PendingUpgrade) PushStage(stage UpgradeStage) {
 type Backend interface {
 	// SubmitDescriptor submits the serialized descriptor to the upgrade manager
 	// which then schedules and manages the upgrade.
-	SubmitDescriptor(context.Context, *Descriptor) error
+	SubmitDescriptor(*Descriptor) error
 
 	// PendingUpgrades returns pending upgrades.
-	PendingUpgrades(context.Context) ([]*PendingUpgrade, error)
+	PendingUpgrades() ([]*PendingUpgrade, error)
 
 	// HasPendingUpgradeAt returns whether there is a pending upgrade at a specified height.
-	HasPendingUpgradeAt(context.Context, int64) (bool, error)
+	HasPendingUpgradeAt(int64) (bool, error)
 
 	// CancelUpgrade cancels a specific pending upgrade, unless it is already in progress.
-	CancelUpgrade(context.Context, *Descriptor) error
+	CancelUpgrade(*Descriptor) error
 
 	// GetUpgrade returns the pending upgrade (if any) that has the given descriptor.
 	//
 	// In case no such upgrade exists, this returns ErrUpgradeNotFound.
-	GetUpgrade(context.Context, *Descriptor) (*PendingUpgrade, error)
+	GetUpgrade(*Descriptor) (*PendingUpgrade, error)
 
 	// StartupUpgrade performs the startup portion of the upgrade.
 	// It is idempotent with respect to the current upgrade descriptor.

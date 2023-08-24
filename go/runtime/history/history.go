@@ -63,15 +63,15 @@ func (h *nopHistory) RuntimeID() common.Namespace {
 	return h.runtimeID
 }
 
-func (h *nopHistory) Commit(blk *roothash.AnnotatedBlock, roundResults *roothash.RoundResults, notify bool) error {
+func (h *nopHistory) Commit(*roothash.AnnotatedBlock, *roothash.RoundResults, bool) error {
 	return errNopHistory
 }
 
-func (h *nopHistory) ConsensusCheckpoint(height int64) error {
+func (h *nopHistory) ConsensusCheckpoint(int64) error {
 	return errNopHistory
 }
 
-func (h *nopHistory) StorageSyncCheckpoint(ctx context.Context, round uint64) error {
+func (h *nopHistory) StorageSyncCheckpoint(uint64) error {
 	return errNopHistory
 }
 
@@ -83,7 +83,7 @@ func (h *nopHistory) WatchBlocks() (<-chan *roothash.AnnotatedBlock, pubsub.Clos
 	return nil, nil, errNopHistory
 }
 
-func (h *nopHistory) WaitRoundSynced(ctx context.Context, round uint64) (uint64, error) {
+func (h *nopHistory) WaitRoundSynced(context.Context, uint64) (uint64, error) {
 	return 0, errNopHistory
 }
 
@@ -91,23 +91,23 @@ func (h *nopHistory) LastConsensusHeight() (int64, error) {
 	return 0, errNopHistory
 }
 
-func (h *nopHistory) GetCommittedBlock(ctx context.Context, round uint64) (*block.Block, error) {
+func (h *nopHistory) GetCommittedBlock(context.Context, uint64) (*block.Block, error) {
 	return nil, errNopHistory
 }
 
-func (h *nopHistory) GetBlock(ctx context.Context, round uint64) (*block.Block, error) {
+func (h *nopHistory) GetBlock(context.Context, uint64) (*block.Block, error) {
 	return nil, errNopHistory
 }
 
-func (h *nopHistory) GetAnnotatedBlock(ctx context.Context, round uint64) (*roothash.AnnotatedBlock, error) {
+func (h *nopHistory) GetAnnotatedBlock(context.Context, uint64) (*roothash.AnnotatedBlock, error) {
 	return nil, errNopHistory
 }
 
-func (h *nopHistory) GetEarliestBlock(ctx context.Context) (*block.Block, error) {
+func (h *nopHistory) GetEarliestBlock(context.Context) (*block.Block, error) {
 	return nil, errNopHistory
 }
 
-func (h *nopHistory) GetRoundResults(ctx context.Context, round uint64) (*roothash.RoundResults, error) {
+func (h *nopHistory) GetRoundResults(context.Context, uint64) (*roothash.RoundResults, error) {
 	return nil, errNopHistory
 }
 
@@ -175,7 +175,7 @@ func (h *runtimeHistory) ConsensusCheckpoint(height int64) error {
 	return h.db.consensusCheckpoint(height)
 }
 
-func (h *runtimeHistory) StorageSyncCheckpoint(ctx context.Context, round uint64) error {
+func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
 	if !h.haveLocalStorageWorker {
 		panic("received storage sync checkpoint when local storage worker is disabled")
 	}

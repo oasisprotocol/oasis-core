@@ -102,11 +102,11 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	// EpochTransitionBlock was successful. Otherwise this may leave the
 	// committees set to nil and cause a crash.
 	t.Run("SuccessfulRound", func(t *testing.T) {
-		testSuccessfulRound(t, backend, consensus, identity, rtStates)
+		testSuccessfulRound(t, backend, consensus, rtStates)
 	})
 
 	t.Run("RoundTimeout", func(t *testing.T) {
-		testRoundTimeout(t, backend, consensus, identity, rtStates)
+		testRoundTimeout(t, backend, consensus, rtStates)
 	})
 
 	t.Run("ProposerTimeout", func(t *testing.T) {
@@ -114,7 +114,7 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	})
 
 	t.Run("RoundTimeoutWithEpochTransition", func(t *testing.T) {
-		testRoundTimeoutWithEpochTransition(t, backend, consensus, identity, rtStates)
+		testRoundTimeoutWithEpochTransition(t, backend, consensus, rtStates)
 	})
 
 	t.Run("EquivocationEvidence", func(t *testing.T) {
@@ -258,13 +258,13 @@ func (s *runtimeState) testEpochTransitionBlock(t *testing.T, consensus consensu
 	}
 }
 
-func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
 	for _, state := range states {
-		state.testSuccessfulRound(t, backend, consensus, identity)
+		state.testSuccessfulRound(t, backend, consensus)
 	}
 }
 
-func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus consensusAPI.Backend, identity *identity.Identity, child *block.Block) (
+func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus consensusAPI.Backend, child *block.Block) (
 	parent *block.Block,
 	executorCommits []commitment.ExecutorCommitment,
 	executorNodes []*registryTests.TestNode,
@@ -281,7 +281,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	var ns common.Namespace
 	copy(ns[:], rt.Runtime.ID[:])
 
-	storageBackend, err := storage.NewLocalBackend(dataDir, ns, identity)
+	storageBackend, err := storage.NewLocalBackend(dataDir, ns)
 	require.NoError(err, "storage.New")
 	defer storageBackend.Cleanup()
 
@@ -349,7 +349,7 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	return
 }
 
-func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
@@ -366,7 +366,7 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	defer cancel()
 
 	// Generate and submit all executor commitments.
-	parent, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, identity, child)
+	parent, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child)
 	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits)
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
@@ -457,13 +457,13 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	}
 }
 
-func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
 	for _, state := range states {
-		state.testRoundTimeout(t, backend, consensus, identity)
+		state.testRoundTimeout(t, backend, consensus)
 	}
 }
 
-func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
@@ -480,7 +480,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 	defer cancel()
 
 	// Only submit a single commitment to cause a timeout.
-	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, identity, child)
+	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child)
 	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
@@ -562,13 +562,13 @@ WaitForRoundTimeoutBlocks:
 	}
 }
 
-func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
 	for _, state := range states {
-		state.testRoundTimeoutWithEpochTransition(t, backend, consensus, identity)
+		state.testRoundTimeoutWithEpochTransition(t, backend, consensus)
 	}
 }
 
-func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
+func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
@@ -585,7 +585,7 @@ func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend
 	defer cancel()
 
 	// Only submit a single commitment to cause a timeout.
-	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, identity, child)
+	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child)
 	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
@@ -875,7 +875,7 @@ func MustTransitionEpoch(
 	}
 }
 
-func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity, states []*runtimeState) {
+func testSubmitEquivocationEvidence(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, _ *identity.Identity, states []*runtimeState) {
 	require := require.New(t)
 
 	ctx := context.Background()

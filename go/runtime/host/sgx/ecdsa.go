@@ -92,7 +92,7 @@ func (ec *teeStateECDSA) verifyBundle(quote pcs.Quote, quotePolicy *pcs.QuotePol
 	}
 }
 
-func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
+func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, _ string) ([]byte, error) {
 	rawQuote, err := sp.aesm.GetQuoteEx(ctx, ec.key, report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get quote: %w", err)

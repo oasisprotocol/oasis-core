@@ -126,13 +126,13 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	kmRt := sc.Net.Runtimes()[0]
 	rtDsc := kmRt.ToRuntimeDescriptor()
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, nonce); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, rtDsc, nonce); err != nil {
 		return err
 	}
 	nonce++
 
 	// Generate and update the new keymanager runtime's policy.
-	policies, err := sc.BuildEnclavePolicies(childEnv)
+	policies, err := sc.BuildEnclavePolicies()
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	compRt := sc.Net.Runtimes()[1]
 	compRtDesc := compRt.ToRuntimeDescriptor()
 	compRtDesc.Deployments[0].ValidFrom = epoch + 1
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, compRtDesc, nonce); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, compRtDesc, nonce); err != nil {
 		return err
 	}
 	nonce++
@@ -491,7 +491,7 @@ func (sc *runtimeDynamicImpl) Run(ctx context.Context, childEnv *env.Env) error 
 		return fmt.Errorf("failed to escrow stake: %w", err)
 	}
 	// Update the runtime governance model.
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, compRtDesc, nonce); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, compRtDesc, nonce); err != nil {
 		return err
 	}
 	nonce++ // nolint: ineffassign

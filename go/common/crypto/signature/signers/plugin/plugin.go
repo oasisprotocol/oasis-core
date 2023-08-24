@@ -175,7 +175,7 @@ func (wf *wrapperFactory) EnsureRole(role signature.SignerRole) error {
 	return nil
 }
 
-func (wf *wrapperFactory) Generate(role signature.SignerRole, _rng io.Reader) (signature.Signer, error) {
+func (wf *wrapperFactory) Generate(role signature.SignerRole, _ io.Reader) (signature.Signer, error) {
 	if role == signature.SignerVRF {
 		return nil, signature.ErrVRFNotSupported
 	}
@@ -271,13 +271,13 @@ type signerPlugin struct {
 	impl Signer
 }
 
-func (p *signerPlugin) Server(_broker *plugin.MuxBroker) (interface{}, error) {
+func (p *signerPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
 	return &rpcServer{
 		impl: p.impl,
 	}, nil
 }
 
-func (signerPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (signerPlugin) Client(_ *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &rpcClient{
 		client: c,
 	}, nil

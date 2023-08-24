@@ -17,10 +17,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
-	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	genesisTests "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/storage"
@@ -41,7 +38,7 @@ var (
 	storageBenchmarkFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
-func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
+func doBenchmark(_ *cobra.Command, _ []string) { // nolint: gocyclo
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -68,19 +65,9 @@ func doBenchmark(cmd *cobra.Command, args []string) { // nolint: gocyclo
 		defer os.RemoveAll(dataDir)
 	}
 
-	// Create an identity.
-	genesisTests.SetTestChainContext()
-	ident, err := identity.LoadOrGenerate(dataDir, memorySigner.NewFactory())
-	if err != nil {
-		logger.Error("failed to generate a new identity",
-			"err", err,
-		)
-		return
-	}
-
 	var ns common.Namespace
 
-	storage, err := storage.NewLocalBackend(dataDir, ns, ident)
+	storage, err := storage.NewLocalBackend(dataDir, ns)
 	if err != nil {
 		logger.Error("failed to initialize storage",
 			"err", err,

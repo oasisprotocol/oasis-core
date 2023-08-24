@@ -115,7 +115,6 @@ func unpackRawTxResp(rawRsp []byte) (cbor.RawMessage, error) {
 
 func (sc *Scenario) submitConsensusXferTxMeta(
 	ctx context.Context,
-	id common.Namespace,
 	xfer staking.Transfer,
 	nonce uint64,
 ) (*runtimeClient.SubmitTxMetaResponse, error) {

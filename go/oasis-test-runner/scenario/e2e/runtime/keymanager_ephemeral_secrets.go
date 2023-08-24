@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
@@ -71,7 +70,7 @@ func (sc *kmEphemeralSecretsImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
+func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { // nolint: gocyclo
 	// Start the network, but no need to start the client. Just ensure it
 	// is synced.
 	if err := sc.Scenario.StartNetworkAndWaitForClientSync(ctx); err != nil {
@@ -340,7 +339,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("encrypting plaintext")
 	ciphertext, err := sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
-		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -356,7 +354,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext")
 	decrypted, err := sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -375,7 +372,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext with wrong epoch")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch-1,
 		keyPairID,
@@ -391,7 +387,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext with wrong key pair id")
 	decrypted, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		"wrong key pair id",
@@ -412,7 +407,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("encrypting plaintext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeEncryptTx(
 		ctx,
-		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -428,7 +422,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 	sc.Logger.Info("decrypting ciphertext with invalid epoch")
 	_, err = sc.submitKeyValueRuntimeDecryptTx(
 		ctx,
-		KeyValueRuntimeID,
 		rng.Uint64(),
 		epoch,
 		keyPairID,
@@ -449,7 +442,6 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, childEnv *env.Env) er
 
 func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 	ctx context.Context,
-	id common.Namespace,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,
@@ -478,7 +470,6 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeEncryptTx(
 
 func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 	ctx context.Context,
-	id common.Namespace,
 	nonce uint64,
 	epoch beacon.EpochTime,
 	keyPairID string,

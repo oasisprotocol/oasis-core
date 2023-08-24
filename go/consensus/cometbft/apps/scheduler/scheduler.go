@@ -211,7 +211,6 @@ func (app *schedulerApplication) BeginBlock(ctx *api.Context) error {
 		for _, kind := range kinds {
 			if err = app.electAllCommittees(
 				ctx,
-				app.state,
 				params,
 				beaconState,
 				beaconParameters,
@@ -267,7 +266,7 @@ func (app *schedulerApplication) ExecuteMessage(ctx *api.Context, kind, msg inte
 	}
 }
 
-func (app *schedulerApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+func (app *schedulerApplication) ExecuteTx(*api.Context, *transaction.Transaction) error {
 	return fmt.Errorf("cometbft/scheduler: unexpected transaction")
 }
 
@@ -413,7 +412,6 @@ func GetPerm(beacon []byte, runtimeID common.Namespace, rngCtx []byte, nrNodes i
 // Operates on consensus connection.
 func (app *schedulerApplication) electAllCommittees(
 	ctx *api.Context,
-	appState api.ApplicationQueryState,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
@@ -428,7 +426,6 @@ func (app *schedulerApplication) electAllCommittees(
 	for _, runtime := range runtimes {
 		if err := app.electCommittee(
 			ctx,
-			appState,
 			schedulerParameters,
 			beaconState,
 			beaconParameters,

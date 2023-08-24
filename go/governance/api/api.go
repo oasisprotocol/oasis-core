@@ -195,7 +195,7 @@ func (cu *CancelUpgradeProposal) Equals(other *CancelUpgradeProposal) bool {
 
 // PrettyPrint writes a pretty-printed representation of CancelUpgradeProposal
 // to the given writer.
-func (cu CancelUpgradeProposal) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (cu CancelUpgradeProposal) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sProposal ID: %d\n", prefix, cu.ProposalID)
 }
 
@@ -232,7 +232,7 @@ func (p *ChangeParametersProposal) Equals(other *ChangeParametersProposal) bool 
 
 // PrettyPrint writes a pretty-printed representation of ChangeParametersProposal to the given
 // writer.
-func (p *ChangeParametersProposal) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (p *ChangeParametersProposal) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sModule: %s\n", prefix, p.Module)
 	fmt.Fprintf(w, "%sChanges: %v\n", prefix, p.Changes)
 }
@@ -264,7 +264,7 @@ type ProposalVote struct {
 
 // PrettyPrint writes a pretty-printed representation of ProposalVote to the
 // given writer.
-func (pv ProposalVote) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (pv ProposalVote) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sProposal ID: %d\n", prefix, pv.ID)
 	fmt.Fprintf(w, "%sVote:        %s\n", prefix, pv.Vote)
 }

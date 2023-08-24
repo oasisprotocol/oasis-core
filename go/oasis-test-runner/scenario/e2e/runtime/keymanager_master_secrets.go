@@ -118,13 +118,13 @@ func (sc *kmMasterSecretsImpl) Run(ctx context.Context, childEnv *env.Env) (err 
 	}
 
 	// Test master secrets if only two/one manager is running.
-	if err = sc.StopKeymanagers(ctx, []int{2}); err != nil {
+	if err = sc.StopKeymanagers([]int{2}); err != nil {
 		return err
 	}
 	if _, err = sc.WaitMasterSecret(ctx, 4); err != nil {
 		return err
 	}
-	if err = sc.StopKeymanagers(ctx, []int{1}); err != nil {
+	if err = sc.StopKeymanagers([]int{1}); err != nil {
 		return err
 	}
 	if _, err = sc.WaitMasterSecret(ctx, 6); err != nil {

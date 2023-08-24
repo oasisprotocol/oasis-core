@@ -806,7 +806,6 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 func (app *registryApplication) proveFreshness(
 	ctx *api.Context,
 	state *registryState.MutableState,
-	blob [32]byte,
 ) error {
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {

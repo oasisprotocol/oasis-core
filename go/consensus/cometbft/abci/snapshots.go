@@ -14,7 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
-func (mux *abciMux) ListSnapshots(req types.RequestListSnapshots) types.ResponseListSnapshots {
+func (mux *abciMux) ListSnapshots(types.RequestListSnapshots) types.ResponseListSnapshots {
 	// Get a list of all current checkpoints.
 	cps, err := mux.state.storage.Checkpointer().GetCheckpoints(mux.state.ctx, &checkpoint.GetCheckpointsRequest{
 		Version: 1,
@@ -234,7 +234,7 @@ func (mux *abciMux) ApplySnapshotChunk(req types.RequestApplySnapshotChunk) type
 
 	// Check if we are done with the restoration. In this case, finalize the root.
 	if done {
-		err = mux.state.storage.NodeDB().Finalize(mux.state.ctx, []storageApi.Root{cp.Root})
+		err = mux.state.storage.NodeDB().Finalize([]storageApi.Root{cp.Root})
 		if err != nil {
 			mux.logger.Error("failed to finalize restored root",
 				"err", err,

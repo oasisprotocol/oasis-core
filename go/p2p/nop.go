@@ -51,20 +51,20 @@ func (p *nopP2P) Addresses() []node.Address {
 }
 
 // Implements api.Service.
-func (p *nopP2P) Peers(runtimeID common.Namespace) []string {
+func (p *nopP2P) Peers(common.Namespace) []string {
 	return nil
 }
 
 // Implements api.Service.
-func (p *nopP2P) Publish(ctx context.Context, topic string, msg interface{}) {
+func (p *nopP2P) Publish(context.Context, string, interface{}) {
 }
 
 // Implements api.Service.
-func (p *nopP2P) RegisterHandler(topic string, handler api.Handler) {
+func (p *nopP2P) RegisterHandler(string, api.Handler) {
 }
 
 // Implements api.Service.
-func (p *nopP2P) BlockPeer(peerID core.PeerID) {
+func (p *nopP2P) BlockPeer(core.PeerID) {
 }
 
 // Implements api.Service.
@@ -78,11 +78,11 @@ func (p *nopP2P) PeerManager() api.PeerManager {
 }
 
 // Implements api.Service.
-func (p *nopP2P) RegisterProtocol(pid core.ProtocolID, min int, total int) {
+func (p *nopP2P) RegisterProtocol(core.ProtocolID, int, int) {
 }
 
 // Implements api.Service.
-func (p *nopP2P) RegisterProtocolServer(srv rpc.Server) {
+func (p *nopP2P) RegisterProtocolServer(rpc.Server) {
 }
 
 // Implements api.Service.

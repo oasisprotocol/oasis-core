@@ -24,7 +24,7 @@ type Scenario interface {
 
 	// PreInit performs initial scenario initialization. It is guaranteed to be called before
 	// a new fixture is initialized in Fixture.
-	PreInit(childEnv *env.Env) error
+	PreInit() error
 
 	// Fixture returns a network fixture to use for this scenario.
 	//

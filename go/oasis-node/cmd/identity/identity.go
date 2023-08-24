@@ -51,7 +51,7 @@ var (
 	logger = logging.GetLogger("cmd/identity")
 )
 
-func doNodeInit(cmd *cobra.Command, args []string) {
+func doNodeInit(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -83,7 +83,7 @@ func doNodeInit(cmd *cobra.Command, args []string) {
 	fmt.Printf("Generated identity files in: %s\n", dataDir)
 }
 
-func doShowPubkey(cmd *cobra.Command, args []string, sentry bool) {
+func doShowPubkey(_ *cobra.Command, _ []string, sentry bool) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

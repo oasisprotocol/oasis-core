@@ -38,9 +38,7 @@ var (
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.Namespace, nil
-		}).WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
-		return true, nil
-	})
+		}).WithAccessControl(cmnGrpc.AccessControlAlways)
 
 	// MethodWatchPings is the WatchPings method.
 	MethodWatchPings = serviceName.NewMethod("WatchPings", PingQuery{}).
@@ -50,9 +48,7 @@ var (
 				return common.Namespace{}, errInvalidRequestType
 			}
 			return r.Namespace, nil
-		}).WithAccessControl(func(ctx context.Context, req interface{}) (bool, error) {
-		return true, nil
-	})
+		}).WithAccessControl(cmnGrpc.AccessControlAlways)
 )
 
 // CreateCertificate creates gRPC TLS certificate for testing.
@@ -88,18 +84,18 @@ type PingServer interface {
 }
 
 type pingServer struct {
-	authFunc func(ctx context.Context, fullMethodName string, req interface{}) error
+	authFunc func(ctx context.Context, req interface{}) error
 }
 
-func (s *pingServer) AuthFunc(ctx context.Context, fullMethodName string, req interface{}) error {
-	return s.authFunc(ctx, fullMethodName, req)
+func (s *pingServer) AuthFunc(ctx context.Context, req interface{}) error {
+	return s.authFunc(ctx, req)
 }
 
-func (s *pingServer) Ping(ctx context.Context, query *PingQuery) (*PingResponse, error) {
+func (s *pingServer) Ping(context.Context, *PingQuery) (*PingResponse, error) {
 	return &PingResponse{}, nil
 }
 
-func (s *pingServer) WatchPings(ctx context.Context, query *PingQuery) (<-chan *PingResponse, pubsub.ClosableSubscription, error) {
+func (s *pingServer) WatchPings(ctx context.Context, _ *PingQuery) (<-chan *PingResponse, pubsub.ClosableSubscription, error) {
 	pingNotifier := pubsub.NewBroker(true)
 	go func() {
 		for {
@@ -124,7 +120,7 @@ func RegisterService(server *grpc.Server, service PingServer) {
 }
 
 // NewPingServer retruns a new Ping server.
-func NewPingServer(authFunc func(ctx context.Context, fullMethodName string, req interface{}) error) PingServer {
+func NewPingServer(authFunc func(ctx context.Context, req interface{}) error) PingServer {
 	ps := &pingServer{authFunc}
 	return ps
 }
@@ -137,7 +133,7 @@ func NewPingClient(conn *grpc.ClientConn) PingClient {
 // PingClient is a testing PingServer client.
 type PingClient interface {
 	Ping(ctx context.Context, in *PingQuery, opts ...grpc.CallOption) (*PingResponse, error)
-	WatchPings(ctx context.Context, in *PingQuery, opts ...grpc.CallOption) (<-chan *PingResponse, pubsub.ClosableSubscription, error)
+	WatchPings(ctx context.Context) (<-chan *PingResponse, pubsub.ClosableSubscription, error)
 	MissingMethod(ctx context.Context, in *PingQuery, opts ...grpc.CallOption) (*PingResponse, error)
 }
 
@@ -154,7 +150,7 @@ func (c *pingClient) Ping(ctx context.Context, in *PingQuery, opts ...grpc.CallO
 	return out, nil
 }
 
-func (c *pingClient) WatchPings(ctx context.Context, in *PingQuery, opts ...grpc.CallOption) (<-chan *PingResponse, pubsub.ClosableSubscription, error) {
+func (c *pingClient) WatchPings(ctx context.Context) (<-chan *PingResponse, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.cc.NewStream(ctx, &ServiceDesc.Streams[0], MethodWatchPings.FullName())

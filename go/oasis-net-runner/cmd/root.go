@@ -105,7 +105,7 @@ func initRootEnv(cmd *cobra.Command) (*env.Env, error) {
 	return env, nil
 }
 
-func runRoot(cmd *cobra.Command, args []string) error {
+func runRoot(cmd *cobra.Command, _ []string) error {
 	cmd.SilenceUsage = true
 
 	// Initialize the base dir, logging, etc.
@@ -166,7 +166,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func doDumpFixture(cmd *cobra.Command, args []string) {
+func doDumpFixture(*cobra.Command, []string) {
 	f, err := fixtures.GetFixture()
 	if err != nil {
 		common.EarlyLogAndExit(err)

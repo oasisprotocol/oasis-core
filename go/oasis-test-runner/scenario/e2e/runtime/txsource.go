@@ -181,7 +181,7 @@ type txSourceImpl struct { // nolint: maligned
 	seed string
 }
 
-func (sc *txSourceImpl) PreInit(childEnv *env.Env) error {
+func (sc *txSourceImpl) PreInit() error {
 	// Generate a new random seed and log it so we can reproduce the run.
 	// Use existing seed, if it already exists.
 	if sc.seed == "" {

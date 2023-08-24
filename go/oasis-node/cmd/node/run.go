@@ -18,7 +18,7 @@ type runnableNode interface {
 }
 
 // Run runs the Oasis node.
-func Run(cmd *cobra.Command, args []string) {
+func Run(_ *cobra.Command, _ []string) {
 	cmdCommon.SetIsNodeCmd(true)
 
 	var (

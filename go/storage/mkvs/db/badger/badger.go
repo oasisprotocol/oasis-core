@@ -476,7 +476,7 @@ func (d *badgerNodeDB) GetEarliestVersion() uint64 {
 	return d.meta.getEarliestVersion()
 }
 
-func (d *badgerNodeDB) GetRootsForVersion(ctx context.Context, version uint64) (roots []node.Root, err error) {
+func (d *badgerNodeDB) GetRootsForVersion(version uint64) (roots []node.Root, err error) {
 	// If the version is earlier than the earliest version, we don't have the roots.
 	if version < d.meta.getEarliestVersion() {
 		return nil, nil
@@ -528,7 +528,7 @@ func (d *badgerNodeDB) HasRoot(root node.Root) bool {
 	return exists
 }
 
-func (d *badgerNodeDB) Finalize(ctx context.Context, roots []node.Root) error { // nolint: gocyclo
+func (d *badgerNodeDB) Finalize(roots []node.Root) error { // nolint: gocyclo
 	if d.readOnly {
 		return api.ErrReadOnly
 	}
@@ -949,7 +949,7 @@ type badgerBatch struct {
 	updatedNodes []updatedNode
 }
 
-func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, subtreeRoot *node.Pointer) api.Subtree {
+func (ba *badgerBatch) MaybeStartSubtree(subtree api.Subtree, _ node.Depth, _ *node.Pointer) api.Subtree {
 	if subtree == nil {
 		return &badgerSubtree{batch: ba}
 	}
@@ -1125,7 +1125,7 @@ type badgerSubtree struct {
 	batch *badgerBatch
 }
 
-func (s *badgerSubtree) PutNode(depth node.Depth, ptr *node.Pointer) error {
+func (s *badgerSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
 	data, err := ptr.Node.MarshalBinary()
 	if err != nil {
 		return err
@@ -1148,7 +1148,7 @@ func (s *badgerSubtree) PutNode(depth node.Depth, ptr *node.Pointer) error {
 	return nil
 }
 
-func (s *badgerSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) error {
+func (s *badgerSubtree) VisitCleanNode(node.Depth, *node.Pointer) error {
 	return nil
 }
 

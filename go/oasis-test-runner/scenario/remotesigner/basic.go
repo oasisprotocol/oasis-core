@@ -100,7 +100,13 @@ func (sc *basicImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 	childEnv.AddTermOnCleanup(cmd)
-	time.Sleep(2 * time.Second) // TODO: Is this needed?
+
+	// TODO: Is this needed?
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(2 * time.Second):
+	}
 
 	// Initialize a client.
 	sc.logger.Info("initializing in-process client")
@@ -117,7 +123,6 @@ func (sc *basicImpl) Run(ctx context.Context, childEnv *env.Env) error {
 			ClientCertificate: clientCert,
 			ServerCertificate: serverCert,
 		},
-		signature.SignerRoles...,
 	)
 	if err != nil {
 		return err

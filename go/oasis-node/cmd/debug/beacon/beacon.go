@@ -49,7 +49,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, beacon.Backend) {
 	return conn, client
 }
 
-func doBeaconStatus(cmd *cobra.Command, args []string) {
+func doBeaconStatus(cmd *cobra.Command, _ []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 

@@ -76,7 +76,7 @@ func TLSCertPaths(dataDir string) (string, string) {
 	return certPath, keyPath
 }
 
-func doProxy(cmd *cobra.Command, args []string) {
+func doProxy(cmd *cobra.Command, _ []string) {
 	var startOk bool
 	defer func() {
 		if !startOk {

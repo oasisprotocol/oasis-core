@@ -82,7 +82,7 @@ func ensureDataDir() (string, error) {
 	return dataDir, nil
 }
 
-func doServerInit(cmd *cobra.Command, args []string) {
+func doServerInit(*cobra.Command, []string) {
 	if _, _, err := serverInit(true); err != nil {
 		logger.Error("failed to initialize server keys",
 			"err", err,
@@ -133,7 +133,7 @@ func serverInit(provisionKeys bool) (signature.SignerFactory, *goTls.Certificate
 	return sf, cert, nil
 }
 
-func doClientInit(cmd *cobra.Command, args []string) {
+func doClientInit(*cobra.Command, []string) {
 	if err := func() error {
 		dataDir, err := ensureDataDir()
 		if err != nil {
@@ -154,7 +154,7 @@ func doClientInit(cmd *cobra.Command, args []string) {
 	}
 }
 
-func runRoot(cmd *cobra.Command, args []string) error {
+func runRoot(*cobra.Command, []string) error {
 	// Initialize all of the server keys.
 	sf, cert, err := serverInit(false)
 	if err != nil {

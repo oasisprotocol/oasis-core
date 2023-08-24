@@ -69,7 +69,7 @@ func (sc *Scenario) Parameters() *env.ParameterFlagSet {
 }
 
 // PreInit implements scenario.Scenario.
-func (sc *Scenario) PreInit(childEnv *env.Env) error {
+func (sc *Scenario) PreInit() error {
 	return nil
 }
 
@@ -102,7 +102,7 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 // Init implements scenario.Scenario.
-func (sc *Scenario) Init(childEnv *env.Env, net *oasis.Network) error {
+func (sc *Scenario) Init(_ *env.Env, net *oasis.Network) error {
 	sc.Net = net
 	return nil
 }

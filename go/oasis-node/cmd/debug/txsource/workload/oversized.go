@@ -41,11 +41,11 @@ func (*oversized) NeedsFunds() bool {
 func (o *oversized) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
-	conn *grpc.ClientConn,
+	_ *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
-	validatorEntities []signature.Signer,
+	_ []signature.Signer,
 ) error {
 	// Initialize base workload.
 	o.BaseWorkload.Init(cnsc, sm, fundingAccount)

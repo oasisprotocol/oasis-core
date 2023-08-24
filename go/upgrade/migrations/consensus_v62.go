@@ -21,11 +21,11 @@ var _ Handler = (*v62Handler)(nil)
 
 type v62Handler struct{}
 
-func (th *v62Handler) StartupUpgrade(ctx *Context) error {
+func (th *v62Handler) StartupUpgrade() error {
 	return nil
 }
 
-func (th *v62Handler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) error {
+func (th *v62Handler) ConsensusUpgrade(privateCtx interface{}) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:

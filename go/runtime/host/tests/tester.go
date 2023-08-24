@@ -32,7 +32,7 @@ const (
 type mockMessageHandler struct{}
 
 // Implements host.Handler.
-func (h *mockMessageHandler) Handle(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+func (h *mockMessageHandler) Handle(context.Context, *protocol.Body) (*protocol.Body, error) {
 	return nil, fmt.Errorf("method not supported")
 }
 
@@ -104,7 +104,7 @@ func mockKeyManagerPolicyRequest() (*protocol.Body, error) {
 func testBasic(t *testing.T, cfg host.Config, p host.Provisioner) {
 	require := require.New(t)
 
-	r, err := p.NewRuntime(context.Background(), cfg)
+	r, err := p.NewRuntime(cfg)
 	require.NoError(err, "NewRuntime")
 	err = r.Start()
 	require.NoError(err, "Start")
@@ -151,7 +151,7 @@ func testBasic(t *testing.T, cfg host.Config, p host.Provisioner) {
 func testRestart(t *testing.T, cfg host.Config, p host.Provisioner) {
 	require := require.New(t)
 
-	r, err := p.NewRuntime(context.Background(), cfg)
+	r, err := p.NewRuntime(cfg)
 	require.NoError(err, "NewRuntime")
 	err = r.Start()
 	require.NoError(err, "Start")

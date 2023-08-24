@@ -167,7 +167,7 @@ func (sc *serviceClient) GetIncomingMessageQueue(ctx context.Context, request *a
 }
 
 // Implements api.Backend.
-func (sc *serviceClient) WatchBlocks(ctx context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchBlocks(_ context.Context, id common.Namespace) (<-chan *api.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 
 	sub := notifiers.blockNotifier.SubscribeEx(-1, func(ch channels.Channel) {
@@ -224,7 +224,7 @@ func (sc *serviceClient) WatchAllBlocks() (<-chan *block.Block, *pubsub.Subscrip
 }
 
 // Implements api.Backend.
-func (sc *serviceClient) WatchEvents(ctx context.Context, id common.Namespace) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchEvents(_ context.Context, id common.Namespace) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	notifiers := sc.getRuntimeNotifiers(id)
 	sub := notifiers.eventNotifier.Subscribe()
 	ch := make(chan *api.Event)
@@ -240,7 +240,7 @@ func (sc *serviceClient) WatchEvents(ctx context.Context, id common.Namespace) (
 }
 
 // Implements api.Backend.
-func (sc *serviceClient) WatchExecutorCommitments(ctx context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchExecutorCommitments(_ context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
 	sub := sc.ecNotifier.Subscribe()
 	ch := make(chan *commitment.ExecutorCommitment)
 	sub.Unwrap(ch)
@@ -835,7 +835,7 @@ func (ph *pruneHandler) trackRuntime(bh api.BlockHistory) {
 }
 
 // Implements api.StatePruneHandler.
-func (ph *pruneHandler) Prune(ctx context.Context, version uint64) error {
+func (ph *pruneHandler) Prune(_ context.Context, version uint64) error {
 	ph.Lock()
 	defer ph.Unlock()
 
@@ -860,7 +860,6 @@ func (ph *pruneHandler) Prune(ctx context.Context, version uint64) error {
 // New constructs a new CometBFT-based root hash backend.
 func New(
 	ctx context.Context,
-	dataDir string,
 	backend tmapi.Backend,
 ) (ServiceClient, error) {
 	// Create the general executor commitment notifier.

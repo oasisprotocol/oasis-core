@@ -111,7 +111,7 @@ func (app *stakingApplication) BeginBlock(ctx *api.Context) error {
 			continue
 		}
 
-		if err = onEvidenceByzantineConsensus(ctx, reason, evidence.Validator.Address, evidence.Height, evidence.Time, evidence.Validator.Power); err != nil {
+		if err = onEvidenceByzantineConsensus(ctx, reason, evidence.Validator.Address); err != nil {
 			return err
 		}
 	}

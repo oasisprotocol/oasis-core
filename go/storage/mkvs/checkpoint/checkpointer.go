@@ -137,7 +137,7 @@ func (c *checkpointer) checkpoint(ctx context.Context, version uint64, params *C
 
 	var roots []node.Root
 	if c.cfg.GetRoots == nil {
-		roots, err = c.ndb.GetRootsForVersion(ctx, version)
+		roots, err = c.ndb.GetRootsForVersion(version)
 	} else {
 		roots, err = c.cfg.GetRoots(ctx, version)
 	}

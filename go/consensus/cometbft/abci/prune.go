@@ -95,12 +95,12 @@ type statePrunerInitializer interface {
 
 type nonePruner struct{}
 
-func (p *nonePruner) Prune(ctx context.Context, latestVersion uint64) error {
+func (p *nonePruner) Prune(context.Context, uint64) error {
 	// Nothing to prune.
 	return nil
 }
 
-func (p *nonePruner) RegisterHandler(handler api.StatePruneHandler) {
+func (p *nonePruner) RegisterHandler(api.StatePruneHandler) {
 }
 
 func (p *nonePruner) GetLastRetainedVersion() uint64 {

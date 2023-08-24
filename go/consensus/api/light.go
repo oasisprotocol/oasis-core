@@ -17,7 +17,7 @@ type LightService interface {
 	LightClient
 
 	// GetStatus returns the current status overview.
-	GetStatus(ctx context.Context) (*LightClientStatus, error)
+	GetStatus() (*LightClientStatus, error)
 }
 
 // LightClient is a consensus light client interface.

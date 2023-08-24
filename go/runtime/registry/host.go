@@ -75,7 +75,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 		rtCfg.MessageHandler = msgHandler
 
 		// Provision the runtime.
-		if rts[version], err = provisioner.NewRuntime(ctx, rtCfg); err != nil {
+		if rts[version], err = provisioner.NewRuntime(rtCfg); err != nil {
 			return nil, nil, fmt.Errorf("failed to provision runtime version %s: %w", version, err)
 		}
 	}
@@ -119,7 +119,7 @@ func (n *RuntimeHostNode) WaitHostedRuntime(ctx context.Context) (host.RichRunti
 }
 
 // GetHostedRuntimeCapabilityTEE returns the CapabilityTEE for a specific runtime version.
-func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE(ctx context.Context, version version.Version) (*node.CapabilityTEE, error) {
+func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE(version version.Version) (*node.CapabilityTEE, error) {
 	n.Lock()
 	agg := n.agg
 	n.Unlock()
@@ -128,15 +128,15 @@ func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE(ctx context.Context, ver
 		return nil, fmt.Errorf("runtime not available")
 	}
 
-	rt, err := agg.GetVersion(ctx, version)
+	rt, err := agg.GetVersion(version)
 	if err != nil {
 		return nil, err
 	}
-	return rt.GetCapabilityTEE(ctx)
+	return rt.GetCapabilityTEE()
 }
 
 // SetHostedRuntimeVersion sets the currently active and next versions for the hosted runtime.
-func (n *RuntimeHostNode) SetHostedRuntimeVersion(ctx context.Context, active version.Version, next *version.Version) error {
+func (n *RuntimeHostNode) SetHostedRuntimeVersion(active version.Version, next *version.Version) error {
 	n.Lock()
 	agg := n.agg
 	n.Unlock()
@@ -145,7 +145,7 @@ func (n *RuntimeHostNode) SetHostedRuntimeVersion(ctx context.Context, active ve
 		return fmt.Errorf("runtime not available")
 	}
 
-	return agg.SetVersion(ctx, active, next)
+	return agg.SetVersion(active, next)
 }
 
 // RuntimeHostHandlerFactory is an interface that can be used to create new runtime handlers and
@@ -177,13 +177,13 @@ var (
 // RuntimeHostHandlerEnvironment is the host environment interface.
 type RuntimeHostHandlerEnvironment interface {
 	// GetKeyManagerClient returns the key manager client for this runtime.
-	GetKeyManagerClient(ctx context.Context) (runtimeKeymanager.Client, error)
+	GetKeyManagerClient() (runtimeKeymanager.Client, error)
 
 	// GetTxPool returns the transaction pool for this runtime.
-	GetTxPool(ctx context.Context) (txpool.TransactionPool, error)
+	GetTxPool() (txpool.TransactionPool, error)
 
 	// GetNodeIdentity returns the identity of a node running this runtime.
-	GetNodeIdentity(ctx context.Context) (*identity.Identity, error)
+	GetNodeIdentity() (*identity.Identity, error)
 
 	// GetLightClient returns the consensus light client.
 	GetLightClient() (consensus.LightClient, error)
@@ -204,7 +204,7 @@ func (h *runtimeHostHandler) handleHostRPCCall(
 	switch rq.Endpoint {
 	case runtimeKeymanager.EnclaveRPCEndpoint:
 		// Call into the remote key manager.
-		kmCli, err := h.env.GetKeyManagerClient(ctx)
+		kmCli, err := h.env.GetKeyManagerClient()
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +267,6 @@ func (h *runtimeHostHandler) handleHostStorageSync(
 }
 
 func (h *runtimeHostHandler) handleHostLocalStorageGet(
-	ctx context.Context,
 	rq *protocol.HostLocalStorageGetRequest,
 ) (*protocol.HostLocalStorageGetResponse, error) {
 	value, err := h.runtime.LocalStorage().Get(rq.Key)
@@ -278,7 +277,6 @@ func (h *runtimeHostHandler) handleHostLocalStorageGet(
 }
 
 func (h *runtimeHostHandler) handleHostLocalStorageSet(
-	ctx context.Context,
 	rq *protocol.HostLocalStorageSetRequest,
 ) (*protocol.Empty, error) {
 	if err := h.runtime.LocalStorage().Set(rq.Key, rq.Value); err != nil {
@@ -355,7 +353,6 @@ func (h *runtimeHostHandler) handleHostFetchConsensusEvents(
 
 func (h *runtimeHostHandler) handleHostFetchGenesisHeight(
 	ctx context.Context,
-	rq *protocol.HostFetchGenesisHeightRequest,
 ) (*protocol.HostFetchGenesisHeightResponse, error) {
 	doc, err := h.consensus.GetGenesisDocument(ctx)
 	if err != nil {
@@ -365,10 +362,9 @@ func (h *runtimeHostHandler) handleHostFetchGenesisHeight(
 }
 
 func (h *runtimeHostHandler) handleHostFetchTxBatch(
-	ctx context.Context,
 	rq *protocol.HostFetchTxBatchRequest,
 ) (*protocol.HostFetchTxBatchResponse, error) {
-	txPool, err := h.env.GetTxPool(ctx)
+	txPool, err := h.env.GetTxPool()
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +423,7 @@ func (h *runtimeHostHandler) handleHostProveFreshness(
 	ctx context.Context,
 	rq *protocol.HostProveFreshnessRequest,
 ) (*protocol.HostProveFreshnessResponse, error) {
-	identity, err := h.env.GetNodeIdentity(ctx)
+	identity, err := h.env.GetNodeIdentity()
 	if err != nil {
 		return nil, err
 	}
@@ -443,11 +439,8 @@ func (h *runtimeHostHandler) handleHostProveFreshness(
 	}, nil
 }
 
-func (h *runtimeHostHandler) handleHostIdentity(
-	ctx context.Context,
-	rq *protocol.HostIdentityRequest,
-) (*protocol.HostIdentityResponse, error) {
-	identity, err := h.env.GetNodeIdentity(ctx)
+func (h *runtimeHostHandler) handleHostIdentity() (*protocol.HostIdentityResponse, error) {
+	identity, err := h.env.GetNodeIdentity()
 	if err != nil {
 		return nil, err
 	}
@@ -473,10 +466,10 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 		rsp.HostStorageSyncResponse, err = h.handleHostStorageSync(ctx, rq.HostStorageSyncRequest)
 	case rq.HostLocalStorageGetRequest != nil:
 		// Local storage get.
-		rsp.HostLocalStorageGetResponse, err = h.handleHostLocalStorageGet(ctx, rq.HostLocalStorageGetRequest)
+		rsp.HostLocalStorageGetResponse, err = h.handleHostLocalStorageGet(rq.HostLocalStorageGetRequest)
 	case rq.HostLocalStorageSetRequest != nil:
 		// Local storage set.
-		rsp.HostLocalStorageSetResponse, err = h.handleHostLocalStorageSet(ctx, rq.HostLocalStorageSetRequest)
+		rsp.HostLocalStorageSetResponse, err = h.handleHostLocalStorageSet(rq.HostLocalStorageSetRequest)
 	case rq.HostFetchConsensusBlockRequest != nil:
 		// Consensus light client.
 		rsp.HostFetchConsensusBlockResponse, err = h.handleHostFetchConsensusBlock(ctx, rq.HostFetchConsensusBlockRequest)
@@ -485,10 +478,10 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 		rsp.HostFetchConsensusEventsResponse, err = h.handleHostFetchConsensusEvents(ctx, rq.HostFetchConsensusEventsRequest)
 	case rq.HostFetchGenesisHeightRequest != nil:
 		// Consensus genesis height.
-		rsp.HostFetchGenesisHeightResponse, err = h.handleHostFetchGenesisHeight(ctx, rq.HostFetchGenesisHeightRequest)
+		rsp.HostFetchGenesisHeightResponse, err = h.handleHostFetchGenesisHeight(ctx)
 	case rq.HostFetchTxBatchRequest != nil:
 		// Transaction pool.
-		rsp.HostFetchTxBatchResponse, err = h.handleHostFetchTxBatch(ctx, rq.HostFetchTxBatchRequest)
+		rsp.HostFetchTxBatchResponse, err = h.handleHostFetchTxBatch(rq.HostFetchTxBatchRequest)
 	case rq.HostFetchBlockMetadataTxRequest != nil:
 		// Block metadata.
 		rsp.HostFetchBlockMetadataTxResponse, err = h.handleHostFetchBlockMetadataTx(ctx, rq.HostFetchBlockMetadataTxRequest)
@@ -497,7 +490,7 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 		rsp.HostProveFreshnessResponse, err = h.handleHostProveFreshness(ctx, rq.HostProveFreshnessRequest)
 	case rq.HostIdentityRequest != nil:
 		// Host identity.
-		rsp.HostIdentityResponse, err = h.handleHostIdentity(ctx, rq.HostIdentityRequest)
+		rsp.HostIdentityResponse, err = h.handleHostIdentity()
 	default:
 		err = errMethodNotSupported
 	}

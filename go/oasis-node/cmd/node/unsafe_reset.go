@@ -53,7 +53,7 @@ var (
 	logger = logging.GetLogger("cmd/unsafe-reset")
 )
 
-func doUnsafeReset(cmd *cobra.Command, args []string) {
+func doUnsafeReset(*cobra.Command, []string) {
 	var ok bool
 	defer func() {
 		if !ok {

@@ -196,7 +196,7 @@ func (sc *Scenario) ExportedGenesisFiles(skipCompute bool) ([]string, error) {
 }
 
 // RegisterEntity registers the specified entity.
-func (sc *Scenario) RegisterEntity(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, ent *oasis.Entity, nonce uint64) error {
+func (sc *Scenario) RegisterEntity(childEnv *env.Env, cli *cli.Helpers, ent *oasis.Entity, nonce uint64) error {
 	txPath := uniqueFilepath(filepath.Join(childEnv.Dir(), "register_entity.json"))
 	if err := cli.Registry.GenerateRegisterEntityTx(ent.Dir(), nonce, txPath); err != nil {
 		return fmt.Errorf("failed to generate register entity tx: %w", err)
@@ -209,7 +209,7 @@ func (sc *Scenario) RegisterEntity(ctx context.Context, childEnv *env.Env, cli *
 }
 
 // RegisterRuntime registers the specified runtime.
-func (sc *Scenario) RegisterRuntime(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rt registry.Runtime, nonce uint64) error {
+func (sc *Scenario) RegisterRuntime(childEnv *env.Env, cli *cli.Helpers, rt registry.Runtime, nonce uint64) error {
 	txPath := uniqueFilepath(childEnv.Dir(), fmt.Sprintf("register_runtime_%s.json", rt.ID))
 	if err := cli.Registry.GenerateRegisterRuntimeTx(childEnv.Dir(), rt, nonce, txPath); err != nil {
 		return fmt.Errorf("failed to generate register runtime tx: %w", err)

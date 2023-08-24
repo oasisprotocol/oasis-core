@@ -41,7 +41,7 @@ func (sc *seedAPI) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *seedAPI) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
+func (sc *seedAPI) Run(ctx context.Context, _ *env.Env) error { // nolint: gocyclo
 	if err := sc.Net.Start(); err != nil {
 		return fmt.Errorf("net Start: %w", err)
 	}

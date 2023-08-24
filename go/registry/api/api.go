@@ -368,7 +368,7 @@ func (e *NodeListEpochEvent) EventValue() string {
 }
 
 // DecodeValue decodes the attribute event value.
-func (e *NodeListEpochEvent) DecodeValue(value string) error {
+func (e *NodeListEpochEvent) DecodeValue(string) error {
 	return nil
 }
 

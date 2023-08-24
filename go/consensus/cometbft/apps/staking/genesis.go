@@ -286,7 +286,7 @@ func (app *stakingApplication) initDebondingDelegations(ctx *abciAPI.Context, st
 }
 
 // InitChain initializes the chain from genesis.
-func (app *stakingApplication) InitChain(ctx *abciAPI.Context, request types.RequestInitChain, doc *genesis.Document) error {
+func (app *stakingApplication) InitChain(ctx *abciAPI.Context, _ types.RequestInitChain, doc *genesis.Document) error {
 	st := &doc.Staking
 
 	var (

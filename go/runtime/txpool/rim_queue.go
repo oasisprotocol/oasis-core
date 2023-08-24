@@ -21,7 +21,7 @@ func newRimQueue() *rimQueue {
 	}
 }
 
-func (rq *rimQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
+func (rq *rimQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
 	// Runtimes instead get transactions from the incoming messages.
 	return nil
 }
@@ -32,7 +32,7 @@ func (rq *rimQueue) GetTxByHash(h hash.Hash) *TxQueueMeta {
 	return rq.txs[h]
 }
 
-func (rq *rimQueue) HandleTxsUsed(hashes []hash.Hash) {
+func (rq *rimQueue) HandleTxsUsed([]hash.Hash) {
 	// The roothash module manages the incoming message queue on its own, so we don't do anything here.
 }
 

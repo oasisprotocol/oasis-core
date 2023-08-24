@@ -57,7 +57,7 @@ func (sc *earlyQueryImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *earlyQueryImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *earlyQueryImpl) Run(ctx context.Context, _ *env.Env) error {
 	// Start the network.
 	var err error
 	if err = sc.Net.Start(); err != nil {

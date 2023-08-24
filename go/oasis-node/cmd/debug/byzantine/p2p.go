@@ -42,12 +42,12 @@ func (h *txMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return tx, nil
 }
 
-func (h *txMsgHandler) AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}) error {
+func (h *txMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, interface{}) error {
 	// Everyone is allowed to publish transactions.
 	return nil
 }
 
-func (h *txMsgHandler) HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *txMsgHandler) HandleMessage(_ context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
 	if isOwn {
 		return nil
 	}
@@ -72,13 +72,13 @@ func (h *committeeMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return &dec, nil
 }
 
-func (h *committeeMsgHandler) AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}) error {
+func (h *committeeMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, interface{}) error {
 	// The Byzantine node itself isn't especially robust. We assume that
 	// the other nodes are honest.
 	return nil
 }
 
-func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *committeeMsgHandler) HandleMessage(_ context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
 	if isOwn {
 		return nil
 	}

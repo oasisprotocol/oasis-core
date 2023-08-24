@@ -24,7 +24,7 @@ func NewInMemoryBackend() *InMemoryBackend {
 }
 
 // Delete implements PeerBackup.
-func (b *InMemoryBackend) Delete(ctx context.Context) error {
+func (b *InMemoryBackend) Delete(context.Context) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -33,7 +33,7 @@ func (b *InMemoryBackend) Delete(ctx context.Context) error {
 }
 
 // Backup implements PeerBackup.
-func (b *InMemoryBackend) Backup(ctx context.Context, nsPeers map[string][]peer.AddrInfo) error {
+func (b *InMemoryBackend) Backup(_ context.Context, nsPeers map[string][]peer.AddrInfo) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -42,7 +42,7 @@ func (b *InMemoryBackend) Backup(ctx context.Context, nsPeers map[string][]peer.
 }
 
 // Restore implements PeerBackup.
-func (b *InMemoryBackend) Restore(ctx context.Context) (map[string][]peer.AddrInfo, error) {
+func (b *InMemoryBackend) Restore(context.Context) (map[string][]peer.AddrInfo, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

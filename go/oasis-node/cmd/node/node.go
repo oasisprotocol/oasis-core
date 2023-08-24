@@ -174,7 +174,7 @@ func (n *Node) startRuntimeServices() error {
 			"epoch", epoch,
 			"block_height", blockHeight,
 		)
-		if err = n.dumpGenesis(ctx, blockHeight, epoch); err != nil {
+		if err = n.dumpGenesis(ctx, blockHeight); err != nil {
 			n.logger.Error("halt hook: failed to dump genesis",
 				"err", err,
 			)
@@ -256,7 +256,6 @@ func (n *Node) initRuntimeWorkers() error {
 
 	// Initialize the registration worker.
 	n.RegistrationWorker, err = registration.New(
-		n.dataDir,
 		n.Consensus.Beacon(),
 		n.Consensus.Registry(),
 		n.Identity,
@@ -282,7 +281,6 @@ func (n *Node) initRuntimeWorkers() error {
 	n.BeaconWorker, err = workerBeacon.New(
 		n.Identity,
 		n.Consensus,
-		n.commonStore,
 		n.RegistrationWorker,
 	)
 	if err != nil {
@@ -295,7 +293,6 @@ func (n *Node) initRuntimeWorkers() error {
 		n.grpcInternal,
 		n.CommonWorker,
 		n.RegistrationWorker,
-		n.Genesis,
 	)
 	if err != nil {
 		return err
@@ -305,7 +302,6 @@ func (n *Node) initRuntimeWorkers() error {
 	// Initialize the key manager worker.
 	n.KeymanagerWorker, err = workerKeymanager.New(
 		n.CommonWorker,
-		n.IAS,
 		n.RegistrationWorker,
 		n.Consensus.KeyManager(),
 	)
@@ -332,7 +328,7 @@ func (n *Node) initRuntimeWorkers() error {
 	n.svcMgr.Register(n.ClientWorker)
 
 	// Commit storage settings to the registered runtimes.
-	err = n.RuntimeRegistry.FinishInitialization(n.svcMgr.Ctx)
+	err = n.RuntimeRegistry.FinishInitialization()
 	if err != nil {
 		return err
 	}
@@ -397,7 +393,7 @@ func (n *Node) startRuntimeWorkers() error {
 	return nil
 }
 
-func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64, epoch beacon.EpochTime) error {
+func (n *Node) dumpGenesis(ctx context.Context, blockHeight int64) error {
 	doc, err := n.Consensus.StateToGenesis(ctx, blockHeight)
 	if err != nil {
 		return fmt.Errorf("dumpGenesis: failed to get genesis: %w", err)

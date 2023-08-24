@@ -227,7 +227,7 @@ func (s *BootstrapTestSuite) TestDiscovery() {
 }
 
 // HandleRequest is a malicious seed which doesn't respect the protocol.
-func (s *BootstrapTestSuite) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *BootstrapTestSuite) HandleRequest(_ context.Context, _ string, body cbor.RawMessage) (interface{}, error) {
 	var req DiscoverRequest
 	if err := cbor.Unmarshal(body, &req); err != nil {
 		return nil, ErrBadRequest

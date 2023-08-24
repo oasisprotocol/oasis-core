@@ -72,17 +72,17 @@ func (d *dummyUpgradeChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Con
 
 type noOpUpgradeChecker struct{}
 
-func (n *noOpUpgradeChecker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (n *noOpUpgradeChecker) PreUpgradeFn(context.Context, *oasis.Controller) error {
 	return nil
 }
 
-func (n *noOpUpgradeChecker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (n *noOpUpgradeChecker) PostUpgradeFn(context.Context, *oasis.Controller) error {
 	return nil
 }
 
 type upgradeV62Checker struct{}
 
-func (n *upgradeV62Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (n *upgradeV62Checker) PreUpgradeFn(context.Context, *oasis.Controller) error {
 	return nil
 }
 

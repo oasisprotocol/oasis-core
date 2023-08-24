@@ -109,7 +109,7 @@ type (
 
 type ApplyResponse struct{}
 
-func (db *Database) Apply(request ApplyRequest, response *ApplyResponse) error {
+func (db *Database) Apply(request ApplyRequest, _ *ApplyResponse) error {
 	if l := len(request); l != 1 {
 		return fmt.Errorf("Apply: invalid number of requests: %d", l)
 	}

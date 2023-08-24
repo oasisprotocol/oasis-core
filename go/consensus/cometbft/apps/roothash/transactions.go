@@ -12,7 +12,6 @@ import (
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -23,23 +22,20 @@ func (app *rootHashApplication) getRuntimeState(
 	ctx *abciAPI.Context,
 	state *roothashState.MutableState,
 	id common.Namespace,
-) (*roothash.RuntimeState, commitment.NodeLookup, error) {
+) (*roothash.RuntimeState, error) {
 	// Fetch current runtime state.
 	rtState, err := state.RuntimeState(ctx, id)
 	if err != nil {
-		return nil, nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
+		return nil, fmt.Errorf("roothash: failed to fetch runtime state: %w", err)
 	}
 	if rtState.Suspended {
-		return nil, nil, roothash.ErrRuntimeSuspended
+		return nil, roothash.ErrRuntimeSuspended
 	}
 	if rtState.ExecutorPool == nil {
-		return nil, nil, roothash.ErrNoExecutorPool
+		return nil, roothash.ErrNoExecutorPool
 	}
 
-	// Create node lookup.
-	nl := registryState.NewMutableState(ctx.State())
-
-	return rtState, nl, nil
+	return rtState, nil
 }
 
 func (app *rootHashApplication) executorProposerTimeout(
@@ -68,7 +64,7 @@ func (app *rootHashApplication) executorProposerTimeout(
 		return nil
 	}
 
-	rtState, nl, err := app.getRuntimeState(ctx, state, rpt.ID)
+	rtState, err := app.getRuntimeState(ctx, state, rpt.ID)
 	if err != nil {
 		return err
 	}
@@ -86,7 +82,7 @@ func (app *rootHashApplication) executorProposerTimeout(
 	}
 
 	// Ensure request is valid.
-	if err = rtState.ExecutorPool.CheckProposerTimeout(ctx, rtState.CurrentBlock, nl, ctx.TxSigner(), rpt.Round); err != nil {
+	if err = rtState.ExecutorPool.CheckProposerTimeout(rtState.CurrentBlock, ctx.TxSigner(), rpt.Round); err != nil {
 		ctx.Logger().Debug("failed requesting proposer round timeout",
 			"err", err,
 			"round", rtState.CurrentBlock.Header.Round,
@@ -151,10 +147,11 @@ func (app *rootHashApplication) executorCommit(
 		return err
 	}
 
-	rtState, nl, err := app.getRuntimeState(ctx, state, cc.ID)
+	rtState, err := app.getRuntimeState(ctx, state, cc.ID)
 	if err != nil {
 		return err
 	}
+	nl := registryState.NewMutableState(ctx.State())
 
 	// Account for gas consumed by messages.
 	msgGasAccountant := func(msgs []message.Message) error {
@@ -242,7 +239,7 @@ func (app *rootHashApplication) submitEvidence(
 		return nil
 	}
 
-	rtState, _, err := app.getRuntimeState(ctx, state, evidence.ID)
+	rtState, err := app.getRuntimeState(ctx, state, evidence.ID)
 	if err != nil {
 		return err
 	}
@@ -352,7 +349,7 @@ func (app *rootHashApplication) submitMsg(
 		return nil
 	}
 
-	rtState, _, err := app.getRuntimeState(ctx, state, msg.ID)
+	rtState, err := app.getRuntimeState(ctx, state, msg.ID)
 	if err != nil {
 		return err
 	}

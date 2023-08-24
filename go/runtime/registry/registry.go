@@ -60,7 +60,7 @@ type Registry interface {
 	Cleanup()
 
 	// FinishInitialization finalizes setup for all runtimes.
-	FinishInitialization(ctx context.Context) error
+	FinishInitialization() error
 }
 
 // Runtime is the running node's supported runtime interface.
@@ -389,7 +389,7 @@ func (r *runtime) watchUpdates(ctx context.Context) {
 	}
 }
 
-func (r *runtime) finishInitialization(ctx context.Context) error {
+func (r *runtime) finishInitialization() error {
 	r.Lock()
 	defer r.Unlock()
 
@@ -467,12 +467,12 @@ func (r *runtimeRegistry) Cleanup() {
 	}
 }
 
-func (r *runtimeRegistry) FinishInitialization(ctx context.Context) error {
+func (r *runtimeRegistry) FinishInitialization() error {
 	r.RLock()
 	defer r.RUnlock()
 
 	for _, rt := range r.runtimes {
-		if err := rt.finishInitialization(ctx); err != nil {
+		if err := rt.finishInitialization(); err != nil {
 			return err
 		}
 	}

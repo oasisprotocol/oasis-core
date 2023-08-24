@@ -16,7 +16,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, request types.RequestInitChain, doc *genesis.Document) error {
+func (app *keymanagerApplication) InitChain(ctx *tmapi.Context, _ types.RequestInitChain, doc *genesis.Document) error {
 	st := doc.KeyManager
 
 	b, _ := json.Marshal(st)

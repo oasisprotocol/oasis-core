@@ -155,7 +155,7 @@ func (e *EpochSnapshot) Nodes() nodes.NodeDescriptorLookup {
 // Node looks up a node descriptor.
 //
 // Implements commitment.NodeLookup.
-func (e *EpochSnapshot) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
+func (e *EpochSnapshot) Node(_ context.Context, id signature.PublicKey) (*node.Node, error) {
 	n := e.nodes.Lookup(id)
 	if n == nil {
 		return nil, registry.ErrNoSuchNode
@@ -216,7 +216,7 @@ func (g *Group) RoundTransition() {
 // Suspend processes a runtime suspension that just happened.
 //
 // Resumption will be processed as a regular epoch transition.
-func (g *Group) Suspend(ctx context.Context) {
+func (g *Group) Suspend() {
 	g.Lock()
 	defer g.Unlock()
 

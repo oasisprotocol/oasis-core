@@ -42,13 +42,13 @@ func NewStaticPriceDiscovery(price uint64) (PriceDiscovery, error) {
 	return pd, nil
 }
 
-func (pd *staticPriceDiscovery) GasPrice(ctx context.Context) (*quantity.Quantity, error) {
+func (pd *staticPriceDiscovery) GasPrice(context.Context) (*quantity.Quantity, error) {
 	return pd.price.Clone(), nil
 }
 
 type noOpPriceDiscovery struct{}
 
-func (pd *noOpPriceDiscovery) GasPrice(ctx context.Context) (*quantity.Quantity, error) {
+func (pd *noOpPriceDiscovery) GasPrice(context.Context) (*quantity.Quantity, error) {
 	return nil, transaction.ErrMethodNotSupported
 }
 
@@ -301,16 +301,16 @@ func (m *NoOpSubmissionManager) PriceDiscovery() PriceDiscovery {
 }
 
 // EstimateGasAndSetFee implements SubmissionManager.
-func (m *NoOpSubmissionManager) EstimateGasAndSetFee(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+func (m *NoOpSubmissionManager) EstimateGasAndSetFee(context.Context, signature.Signer, *transaction.Transaction) error {
 	return transaction.ErrMethodNotSupported
 }
 
 // SignAndSubmitTx implements SubmissionManager.
-func (m *NoOpSubmissionManager) SignAndSubmitTx(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) error {
+func (m *NoOpSubmissionManager) SignAndSubmitTx(context.Context, signature.Signer, *transaction.Transaction) error {
 	return transaction.ErrMethodNotSupported
 }
 
 // SignAndSubmitTxWithProof implements SubmissionManager.
-func (m *NoOpSubmissionManager) SignAndSubmitTxWithProof(ctx context.Context, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
+func (m *NoOpSubmissionManager) SignAndSubmitTxWithProof(context.Context, signature.Signer, *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
 	return nil, nil, transaction.ErrMethodNotSupported
 }

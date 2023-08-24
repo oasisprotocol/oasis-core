@@ -438,7 +438,7 @@ func (s *applicationState) doCommit() (uint64, error) {
 		Type:      storage.RootTypeState,
 		Hash:      stateRootHash,
 	}
-	if err = s.storage.NodeDB().Finalize(s.ctx, []storage.Root{newStateRoot}); err != nil {
+	if err = s.storage.NodeDB().Finalize([]storage.Root{newStateRoot}); err != nil {
 		return 0, fmt.Errorf("failed to finalize height %d: %w", newStateRoot.Version, err)
 	}
 
@@ -620,7 +620,7 @@ func (s *applicationState) pruneWorker() {
 }
 
 // InitStateStorage initializes the internal ABCI state storage.
-func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.LocalBackend, storage.NodeDB, *storage.Root, error) {
+func InitStateStorage(cfg *ApplicationConfig) (storage.LocalBackend, storage.NodeDB, *storage.Root, error) {
 	baseDir := filepath.Join(cfg.DataDir, appStateDir)
 	switch cfg.ReadOnlyStorage {
 	case true:
@@ -670,7 +670,7 @@ func InitStateStorage(ctx context.Context, cfg *ApplicationConfig) (storage.Loca
 
 	// Figure out the latest version/hash if any, and use that as the block height/hash.
 	latestVersion, _ := ndb.GetLatestVersion()
-	roots, err := ndb.GetRootsForVersion(ctx, latestVersion)
+	roots, err := ndb.GetRootsForVersion(latestVersion)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -704,7 +704,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 	}
 
 	// Initialize the state storage.
-	ldb, ndb, stateRoot, err := InitStateStorage(ctx, cfg)
+	ldb, ndb, stateRoot, err := InitStateStorage(cfg)
 	if err != nil {
 		return nil, err
 	}

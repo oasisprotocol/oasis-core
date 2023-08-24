@@ -75,7 +75,7 @@ func (sc *kmRotationFailureImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *kmRotationFailureImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
 	// Start the first two key managers.
 	if err := sc.Net.Start(); err != nil {
 		return err
@@ -83,7 +83,7 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, childEnv *env.Env) err
 
 	for i := 0; i < 3; i++ {
 		// Start the third key manager.
-		if err := sc.StartKeymanagers(ctx, []int{1, 2}); err != nil {
+		if err := sc.StartKeymanagers([]int{1, 2}); err != nil {
 			return err
 		}
 
@@ -107,7 +107,7 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, childEnv *env.Env) err
 		}
 
 		// Stop two key managers, leaving only 33% of the committee members to be active.
-		if err := sc.StopKeymanagers(ctx, []int{1, 2}); err != nil {
+		if err := sc.StopKeymanagers([]int{1, 2}); err != nil {
 			return err
 		}
 

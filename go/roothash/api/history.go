@@ -34,7 +34,7 @@ type BlockHistory interface {
 
 	// StorageSyncCheckpoint records the last storage round which was synced
 	// to runtime storage.
-	StorageSyncCheckpoint(ctx context.Context, round uint64) error
+	StorageSyncCheckpoint(round uint64) error
 
 	// LastStorageSyncedRound returns the last runtime round which was synced to storage.
 	LastStorageSyncedRound() (uint64, error)

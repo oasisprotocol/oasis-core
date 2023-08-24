@@ -94,7 +94,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, registry.Backend) {
 	return conn, client
 }
 
-func doInit(cmd *cobra.Command, args []string) {
+func doInit(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -143,7 +143,7 @@ func doInit(cmd *cobra.Command, args []string) {
 	)
 }
 
-func doUpdate(cmd *cobra.Command, args []string) {
+func doUpdate(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -280,7 +280,7 @@ func signAndWriteEntityGenesis(dataDir string, signer signature.Signer, ent *ent
 	return nil
 }
 
-func doGenRegister(cmd *cobra.Command, args []string) {
+func doGenRegister(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -311,7 +311,7 @@ func doGenRegister(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, signer)
 }
 
-func doGenDeregister(cmd *cobra.Command, args []string) {
+func doGenDeregister(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -325,7 +325,7 @@ func doGenDeregister(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doList(cmd *cobra.Command, args []string) {
+func doList(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

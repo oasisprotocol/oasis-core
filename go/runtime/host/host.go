@@ -41,7 +41,7 @@ type Provisioner interface {
 	//
 	// This method may return before the runtime is fully provisioned. The returned runtime will not
 	// be started automatically, you must call Start explicitly.
-	NewRuntime(ctx context.Context, cfg Config) (Runtime, error)
+	NewRuntime(cfg Config) (Runtime, error)
 
 	// Name returns the name of the provisioner.
 	Name() string
@@ -57,7 +57,7 @@ type Runtime interface {
 
 	// GetCapabilityTEE retrieves the CapabilityTEE of the runtime. It may be nil in case the
 	// runtime is not running inside a TEE.
-	GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error)
+	GetCapabilityTEE() (*node.CapabilityTEE, error)
 
 	// Call sends a request message to the runtime over the Runtime Host Protocol and waits for the
 	// response (which may be a failure).

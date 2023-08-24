@@ -49,7 +49,7 @@ func (c *consensusMock) Populate(ctx context.Context, ndb db.NodeDB) (*node.Root
 	if err != nil {
 		return nil, fmt.Errorf("consensus-mock: failed to committ tree: %w", err)
 	}
-	if err = ndb.Finalize(ctx, []node.Root{testRoot}); err != nil {
+	if err = ndb.Finalize([]node.Root{testRoot}); err != nil {
 		return nil, fmt.Errorf("consensus-mock: failed to finalize test root: %w", err)
 	}
 

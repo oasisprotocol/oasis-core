@@ -116,7 +116,7 @@ func doNewFactory(signerBackend, signerDir string, roles ...signature.SignerRole
 			config.ServerCertificate = serverCert
 		}
 
-		return remoteSigner.NewFactory(config, roles...)
+		return remoteSigner.NewFactory(config)
 	case pluginSigner.SignerName:
 		config := &pluginSigner.FactoryConfig{
 			Name:   viper.GetString(cfgSignerPluginName),

@@ -168,7 +168,7 @@ func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	return nil
 }
 
-func (s *genesisFileImpl) downloadGenesisFile(childEnv *env.Env, path string) error {
+func (s *genesisFileImpl) downloadGenesisFile(_ *env.Env, path string) error {
 	// Get the data.
 	resp, err := http.Get(genesisURL)
 	if err != nil {
@@ -205,7 +205,7 @@ func (s *genesisFileImpl) downloadGenesisFile(childEnv *env.Env, path string) er
 	return nil
 }
 
-func (s *genesisFileImpl) createUncanonicalGenesisFile(childEnv *env.Env, uncanonicalGenesisFilePath string) error {
+func (s *genesisFileImpl) createUncanonicalGenesisFile(_ *env.Env, uncanonicalGenesisFilePath string) error {
 	provider, err := genesisFile.NewFileProvider(s.Net.GenesisPath())
 	if err != nil {
 		return fmt.Errorf("failed to open genesis file: %w", err)

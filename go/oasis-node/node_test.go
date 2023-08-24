@@ -324,12 +324,12 @@ func testBeacon(t *testing.T, node *testNode) {
 	beaconTests.BeaconImplementationTests(t, timeSource)
 }
 
-func testStorage(t *testing.T, node *testNode) {
+func testStorage(t *testing.T, _ *testNode) {
 	dataDir, err := os.MkdirTemp("", "oasis-storage-test_")
 	require.NoError(t, err, "TempDir")
 	defer os.RemoveAll(dataDir)
 
-	backend, err := storageWorker.NewLocalBackend(dataDir, testRuntimeID, node.Identity)
+	backend, err := storageWorker.NewLocalBackend(dataDir, testRuntimeID)
 	require.NoError(t, err, "storage.New")
 	defer backend.Cleanup()
 
@@ -356,7 +356,7 @@ func testSchedulerClient(t *testing.T, node *testNode) {
 }
 
 func testStaking(t *testing.T, node *testNode) {
-	stakingTests.StakingImplementationTests(t, node.Consensus.Staking(), node.Consensus, node.Identity, node.entity, node.entitySigner, testRuntimeID)
+	stakingTests.StakingImplementationTests(t, node.Consensus.Staking(), node.Consensus, node.Identity, node.entity, testRuntimeID)
 }
 
 func testStakingClient(t *testing.T, node *testNode) {

@@ -66,7 +66,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, control.DebugController) {
 	return conn, client
 }
 
-func doSetEpoch(cmd *cobra.Command, args []string) {
+func doSetEpoch(cmd *cobra.Command, _ []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
@@ -81,7 +81,7 @@ func doSetEpoch(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doWaitNodes(cmd *cobra.Command, args []string) {
+func doWaitNodes(cmd *cobra.Command, _ []string) {
 	conn, client := doConnect(cmd)
 	defer conn.Close()
 
@@ -99,7 +99,7 @@ func doWaitNodes(cmd *cobra.Command, args []string) {
 	logger.Info("enough nodes have been registered")
 }
 
-func doWaitReady(cmd *cobra.Command, args []string) {
+func doWaitReady(cmd *cobra.Command, _ []string) {
 	conn, client := cmdControl.DoConnect(cmd)
 	defer conn.Close()
 

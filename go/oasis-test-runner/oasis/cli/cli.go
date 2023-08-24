@@ -99,7 +99,7 @@ func (h *Helpers) UnsafeReset(dataDir string, preserveRuntimeStorage, preserveLo
 // StartSubCommand launches an oasis-node subcommand.
 //
 // It does not wait for the subcommand to complete.
-func StartSubCommand(childEnv *env.Env, logger *logging.Logger, name, binary string, args []string, stdout, stderr io.Writer) (*exec.Cmd, error) {
+func StartSubCommand(_ *env.Env, logger *logging.Logger, _, binary string, args []string, stdout, stderr io.Writer) (*exec.Cmd, error) {
 	cmd := exec.Command(binary, args...)
 	cmd.SysProcAttr = env.CmdAttrs
 	cmd.Stdout = stdout

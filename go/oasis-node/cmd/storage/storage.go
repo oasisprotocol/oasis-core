@@ -150,7 +150,7 @@ func parseRuntimes(args []string) ([]common.Namespace, error) {
 	return runtimes, nil
 }
 
-func doMigrate(cmd *cobra.Command, args []string) error {
+func doMigrate(_ *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
 	ctx := context.Background()
 
@@ -199,7 +199,7 @@ func doMigrate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func doCheck(cmd *cobra.Command, args []string) error {
+func doCheck(_ *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
 	ctx := context.Background()
 
@@ -238,7 +238,7 @@ func doCheck(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func doRenameNs(cmd *cobra.Command, args []string) error {
+func doRenameNs(_ *cobra.Command, args []string) error {
 	dataDir := cmdCommon.DataDir()
 
 	if len(args) != 2 {

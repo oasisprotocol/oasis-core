@@ -15,28 +15,28 @@ var errUnsupported = fmt.Errorf("unsupported: p2p is disabled")
 type nopPeerManager struct{}
 
 // Implements PeerManager.
-func (*nopPeerManager) AddPeer(peerID peer.ID) {
+func (*nopPeerManager) AddPeer(peer.ID) {
 }
 
 // Implements PeerManager.
-func (*nopPeerManager) GetBestPeers(opts ...BestPeersOption) []peer.ID {
+func (*nopPeerManager) GetBestPeers(...BestPeersOption) []peer.ID {
 	return nil
 }
 
 // Implements PeerManager.
-func (*nopPeerManager) RecordBadPeer(peerID peer.ID) {
+func (*nopPeerManager) RecordBadPeer(peer.ID) {
 }
 
 // Implements PeerManager.
-func (*nopPeerManager) RecordFailure(peerID peer.ID, latency time.Duration) {
+func (*nopPeerManager) RecordFailure(peer.ID, time.Duration) {
 }
 
 // Implements PeerManager.
-func (*nopPeerManager) RecordSuccess(peerID peer.ID, latency time.Duration) {
+func (*nopPeerManager) RecordSuccess(peer.ID, time.Duration) {
 }
 
 // Implements PeerManager.
-func (*nopPeerManager) RemovePeer(peerID peer.ID) {
+func (*nopPeerManager) RemovePeer(peer.ID) {
 }
 
 // Implements PeersUpdates.
@@ -48,39 +48,42 @@ type nopClient struct{}
 
 // Implements Client.
 func (c *nopClient) Call(
-	ctx context.Context,
-	peer peer.ID,
-	method string,
-	body, rsp interface{},
-	opts ...CallOption,
+	context.Context,
+	peer.ID,
+	string,
+	interface{},
+	interface{},
+	...CallOption,
 ) (PeerFeedback, error) {
 	return nil, errUnsupported
 }
 
 // Implements Client.
 func (c *nopClient) CallOne(
-	ctx context.Context,
-	peers []peer.ID,
-	method string,
-	body, rsp interface{},
-	opts ...CallOption,
+	context.Context,
+	[]peer.ID,
+	string,
+	interface{},
+	interface{},
+	...CallOption,
 ) (PeerFeedback, error) {
 	return nil, errUnsupported
 }
 
 // Implements Client.
 func (c *nopClient) CallMulti(
-	ctx context.Context,
-	peers []peer.ID,
-	method string,
-	body, rspTyp interface{},
-	opts ...CallMultiOption,
+	context.Context,
+	[]peer.ID,
+	string,
+	interface{},
+	interface{},
+	...CallMultiOption,
 ) ([]interface{}, []PeerFeedback, error) {
 	return nil, nil, errUnsupported
 }
 
 // Implements Client.
-func (c *nopClient) RegisterListener(l ClientListener) {}
+func (c *nopClient) RegisterListener(ClientListener) {}
 
 // Implements Client.
-func (c *nopClient) UnregisterListener(l ClientListener) {}
+func (c *nopClient) UnregisterListener(ClientListener) {}

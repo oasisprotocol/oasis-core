@@ -1,7 +1,6 @@
 package fixtures
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -294,7 +293,7 @@ func getLatestVersionAndStateRoot(db mkvsAPI.NodeDB) (uint64, *hash.Hash, error)
 	if !exists {
 		return 0, nil, fmt.Errorf("no version found in runtime state db: %v", dbVersion)
 	}
-	rts, err := db.GetRootsForVersion(context.Background(), dbVersion)
+	rts, err := db.GetRootsForVersion(dbVersion)
 	if err != nil {
 		return 0, nil, err
 	}

@@ -463,7 +463,7 @@ type PrettySigned struct {
 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
-func (p PrettySigned) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (p PrettySigned) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	data, err := json.MarshalIndent(p, prefix, "  ")
 	if err != nil {
 		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
@@ -579,7 +579,7 @@ type PrettyMultiSigned struct {
 
 // PrettyPrint writes a pretty-printed representation of the type to the
 // given writer.
-func (p PrettyMultiSigned) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (p PrettyMultiSigned) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	data, err := json.MarshalIndent(p, prefix, "  ")
 	if err != nil {
 		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)

@@ -14,7 +14,7 @@ type service struct {
 	txPool txpool.TransactionPool
 }
 
-func (s *service) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *service) HandleRequest(_ context.Context, method string, body cbor.RawMessage) (interface{}, error) {
 	switch method {
 	case MethodGetTxs:
 		var rq GetTxsRequest
@@ -22,13 +22,13 @@ func (s *service) HandleRequest(ctx context.Context, method string, body cbor.Ra
 			return nil, rpc.ErrBadRequest
 		}
 
-		return s.handleGetTxs(ctx, &rq)
+		return s.handleGetTxs(&rq)
 	default:
 		return nil, rpc.ErrMethodNotSupported
 	}
 }
 
-func (s *service) handleGetTxs(ctx context.Context, request *GetTxsRequest) (*GetTxsResponse, error) {
+func (s *service) handleGetTxs(request *GetTxsRequest) (*GetTxsResponse, error) {
 	var rsp GetTxsResponse
 	switch {
 	case len(request.Txs) == 0:

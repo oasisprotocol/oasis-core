@@ -8,7 +8,6 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
@@ -61,7 +60,6 @@ func (w *Worker) Name() string {
 func New(
 	identity *identity.Identity,
 	consensus consensus.Backend,
-	store *persistent.CommonStore,
 	registrationWorker *registration.Worker,
 ) (*Worker, error) {
 	var (

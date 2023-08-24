@@ -99,11 +99,11 @@ func TestHistory(t *testing.T) {
 	require.NoError(err, "LastConsensusHeight")
 	require.EqualValues(50, lastHeight)
 
-	err = history.StorageSyncCheckpoint(ctx, 12)
+	err = history.StorageSyncCheckpoint(12)
 	require.Error(err, "StorageSyncCheckpoint should fail for non-indexed round")
-	err = history.StorageSyncCheckpoint(ctx, 10)
+	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
-	err = history.StorageSyncCheckpoint(ctx, 5)
+	err = history.StorageSyncCheckpoint(5)
 	require.Error(err, "StorageSyncCheckpoint should fail for lower height")
 
 	lastRound, err = history.LastStorageSyncedRound()
@@ -150,7 +150,7 @@ func TestHistory(t *testing.T) {
 	require.Equal(runtimeID, history.RuntimeID())
 
 	// Storage sync checkpoint is not persisted.
-	err = history.StorageSyncCheckpoint(ctx, 10)
+	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint should work")
 
 	lastHeight, err = history.LastConsensusHeight()
@@ -236,7 +236,7 @@ func TestWatchBlocks(t *testing.T) {
 	testWatchBlocks(t, history, 0)
 
 	// Commit storage checkpoint.
-	err = history.StorageSyncCheckpoint(ctx, 10)
+	err = history.StorageSyncCheckpoint(10)
 	require.NoError(err, "StorageSyncCheckpoint")
 
 	// Block should be received.
@@ -266,7 +266,7 @@ func TestWatchBlocks(t *testing.T) {
 	require.EqualValues(10, r, "WaitRoundSynced")
 
 	// Committing storage checkpoint should panic.
-	assert.Panics(t, func() { _ = history.StorageSyncCheckpoint(ctx, 10) }, "StorageSyncCheckpoint should panic")
+	assert.Panics(t, func() { _ = history.StorageSyncCheckpoint(10) }, "StorageSyncCheckpoint should panic")
 }
 
 type testPruneHandler struct {
@@ -277,7 +277,7 @@ type testPruneHandler struct {
 	batches      []int
 }
 
-func (h *testPruneHandler) Prune(ctx context.Context, rounds []uint64) error {
+func (h *testPruneHandler) Prune(_ context.Context, rounds []uint64) error {
 	// NOTE: Users must ensure that accessing prunedRounds is safe (e.g., that
 	//       no more pruning happens using this handler before prunedRounds is
 	//       accessed from a different goroutine).
@@ -341,7 +341,7 @@ func TestHistoryPrune(t *testing.T) {
 		err = history.Commit(&blk, roundResults, true)
 		require.NoError(err, "Commit")
 
-		err = history.StorageSyncCheckpoint(ctx, blk.Block.Header.Round)
+		err = history.StorageSyncCheckpoint(blk.Block.Header.Round)
 		require.NoError(err, "StorageSyncCheckpoint")
 	}
 
@@ -399,7 +399,7 @@ func TestHistoryPrune(t *testing.T) {
 
 type testPruneFailingHandler struct{}
 
-func (h *testPruneFailingHandler) Prune(ctx context.Context, rounds []uint64) error {
+func (h *testPruneFailingHandler) Prune(context.Context, []uint64) error {
 	return fmt.Errorf("thou shall not pass")
 }
 
@@ -435,7 +435,7 @@ func TestHistoryPruneError(t *testing.T) {
 		err = history.Commit(&blk, nil, true)
 		require.NoError(err, "Commit")
 
-		err = history.StorageSyncCheckpoint(ctx, blk.Block.Header.Round)
+		err = history.StorageSyncCheckpoint(blk.Block.Header.Round)
 		require.NoError(err, "StorageSyncCheckpoint")
 	}
 

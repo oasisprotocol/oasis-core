@@ -195,7 +195,7 @@ func (pv ProtocolVersions) String() string {
 
 // PrettyPrint writes a pretty-printed representation of ProtocolVersions to the
 // given writer.
-func (pv ProtocolVersions) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (pv ProtocolVersions) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sConsensus Protocol: %s\n", prefix, pv.ConsensusProtocol)
 	fmt.Fprintf(w, "%sRuntime Host Protocol: %s\n", prefix, pv.RuntimeHostProtocol)
 	fmt.Fprintf(w, "%sRuntime Committee Protocol: %s\n", prefix, pv.RuntimeCommitteeProtocol)

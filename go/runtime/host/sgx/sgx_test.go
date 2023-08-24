@@ -103,7 +103,7 @@ func TestProvisionerSGX(t *testing.T) {
 func testAttestationWorker(t *testing.T, cfg host.Config, p host.Provisioner) {
 	require := require.New(t)
 
-	r, err := p.NewRuntime(context.Background(), cfg)
+	r, err := p.NewRuntime(cfg)
 	require.NoError(err, "NewRuntime")
 	err = r.Start()
 	require.NoError(err, "Start")

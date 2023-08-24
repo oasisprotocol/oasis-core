@@ -7,7 +7,6 @@
 package upgrade
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
@@ -38,7 +37,7 @@ type upgradeManager struct {
 }
 
 // Implements api.Backend.
-func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.Descriptor) error {
+func (u *upgradeManager) SubmitDescriptor(descriptor *api.Descriptor) error {
 	if descriptor == nil {
 		return api.ErrBadDescriptor
 	}
@@ -67,7 +66,7 @@ func (u *upgradeManager) SubmitDescriptor(ctx context.Context, descriptor *api.D
 }
 
 // Implements api.Backend.
-func (u *upgradeManager) PendingUpgrades(ctx context.Context) ([]*api.PendingUpgrade, error) {
+func (u *upgradeManager) PendingUpgrades() ([]*api.PendingUpgrade, error) {
 	u.Lock()
 	defer u.Unlock()
 
@@ -75,7 +74,7 @@ func (u *upgradeManager) PendingUpgrades(ctx context.Context) ([]*api.PendingUpg
 }
 
 // Implements api.Backend.
-func (u *upgradeManager) HasPendingUpgradeAt(ctx context.Context, height int64) (bool, error) {
+func (u *upgradeManager) HasPendingUpgradeAt(height int64) (bool, error) {
 	u.Lock()
 	defer u.Unlock()
 
@@ -93,7 +92,7 @@ func (u *upgradeManager) HasPendingUpgradeAt(ctx context.Context, height int64) 
 }
 
 // Implements api.Backend.
-func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Descriptor) error {
+func (u *upgradeManager) CancelUpgrade(descriptor *api.Descriptor) error {
 	if descriptor == nil {
 		return api.ErrBadDescriptor
 	}
@@ -126,7 +125,7 @@ func (u *upgradeManager) CancelUpgrade(ctx context.Context, descriptor *api.Desc
 }
 
 // Implements api.Backend.
-func (u *upgradeManager) GetUpgrade(ctx context.Context, descriptor *api.Descriptor) (*api.PendingUpgrade, error) {
+func (u *upgradeManager) GetUpgrade(descriptor *api.Descriptor) (*api.PendingUpgrade, error) {
 	if descriptor == nil {
 		return nil, api.ErrBadDescriptor
 	}
@@ -245,12 +244,11 @@ func (u *upgradeManager) StartupUpgrade() error {
 			"handler", pu.Descriptor.Handler,
 			logging.LogEvent, api.LogEventStartupUpgrade,
 		)
-		migrationCtx := migrations.NewContext(pu, u.dataDir)
 		handler, err := migrations.GetHandler(pu.Descriptor.Handler)
 		if err != nil {
 			return err
 		}
-		if err := handler.StartupUpgrade(migrationCtx); err != nil {
+		if err := handler.StartupUpgrade(); err != nil {
 			return err
 		}
 		pu.PushStage(api.UpgradeStageStartup)
@@ -301,12 +299,11 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 				logging.LogEvent, api.LogEventConsensusUpgrade,
 			)
 
-			migrationCtx := migrations.NewContext(pu, u.dataDir)
 			handler, err := migrations.GetHandler(pu.Descriptor.Handler)
 			if err != nil {
 				return err
 			}
-			if err := handler.ConsensusUpgrade(migrationCtx, privateCtx); err != nil {
+			if err := handler.ConsensusUpgrade(privateCtx); err != nil {
 				return err
 			}
 		}

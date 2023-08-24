@@ -14,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -26,7 +25,6 @@ import (
 // New constructs a new key manager worker.
 func New(
 	commonWorker *workerCommon.Worker,
-	ias ias.Endpoint,
 	r *registration.Worker,
 	backend api.Backend,
 ) (*Worker, error) {

@@ -88,7 +88,7 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 	}
 
 	// Build simple key/value and key manager runtimes.
-	if err = sc.BuildAllRuntimes(ctx, childEnv, trustRoot); err != nil {
+	if err = sc.BuildAllRuntimes(childEnv, trustRoot); err != nil {
 		return err
 	}
 
@@ -110,14 +110,14 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 	for _, rt := range sc.Net.Runtimes() {
 		rtDsc := rt.ToRuntimeDescriptor()
 		rtDsc.Deployments[0].ValidFrom = epoch + 2
-		if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, nonce); err != nil {
+		if err = sc.RegisterRuntime(childEnv, cli, rtDsc, nonce); err != nil {
 			return err
 		}
 		nonce++
 	}
 
 	// Update the key manager policy.
-	policies, err := sc.BuildEnclavePolicies(childEnv)
+	policies, err := sc.BuildEnclavePolicies()
 	if err != nil {
 		return err
 	}
@@ -141,9 +141,9 @@ func (sc *TrustRootImpl) PreRun(ctx context.Context, childEnv *env.Env) (err err
 }
 
 // PostRun re-builds simple key/value and key manager runtimes.
-func (sc *TrustRootImpl) PostRun(ctx context.Context, childEnv *env.Env) error {
+func (sc *TrustRootImpl) PostRun(_ context.Context, childEnv *env.Env) error {
 	// In the end, always rebuild all runtimes as we are changing binaries in one of the steps.
-	return sc.BuildAllRuntimes(ctx, childEnv, nil)
+	return sc.BuildAllRuntimes(childEnv, nil)
 }
 
 func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error) {
@@ -200,7 +200,7 @@ func (sc *TrustRootImpl) Run(ctx context.Context, childEnv *env.Env) (err error)
 	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }
 
-func (sc *TrustRootImpl) startClientComputeAndKeyManagerNodes(ctx context.Context, childEnv *env.Env) error {
+func (sc *TrustRootImpl) startClientComputeAndKeyManagerNodes(ctx context.Context, _ *env.Env) error {
 	// Start client, compute workers and key manager nodes as they are not auto-started.
 	sc.Logger.Info("starting clients, compute workers and key managers")
 	for _, n := range sc.Net.Clients() {

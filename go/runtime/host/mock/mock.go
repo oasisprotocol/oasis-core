@@ -26,7 +26,7 @@ type provisioner struct{}
 var CheckTxFailInput = []byte("checktx-mock-fail")
 
 // Implements host.Provisioner.
-func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Runtime, error) {
+func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	r := &runtime{
 		runtimeID: cfg.Bundle.Manifest.ID,
 		notifier:  pubsub.NewBroker(false),
@@ -51,7 +51,7 @@ func (r *runtime) ID() common.Namespace {
 }
 
 // Implements host.Runtime.
-func (r *runtime) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
+func (r *runtime) GetInfo(context.Context) (*protocol.RuntimeInfoResponse, error) {
 	return &protocol.RuntimeInfoResponse{
 		ProtocolVersion: version.RuntimeHostProtocol,
 		RuntimeVersion:  version.MustFromString("0.0.0"),
@@ -64,7 +64,7 @@ func (r *runtime) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, e
 }
 
 // Implements host.Runtime.
-func (r *runtime) GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+func (r *runtime) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 	return nil, nil
 }
 
@@ -185,12 +185,12 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 }
 
 // Implements host.Runtime.
-func (r *runtime) UpdateCapabilityTEE(ctx context.Context) error {
+func (r *runtime) UpdateCapabilityTEE(context.Context) error {
 	return nil
 }
 
 // Implements host.Runtime.
-func (r *runtime) WatchEvents(ctx context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
+func (r *runtime) WatchEvents(context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *host.Event)
 	sub := r.notifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -207,7 +207,7 @@ func (r *runtime) Start() error {
 }
 
 // Implements host.Runtime.
-func (r *runtime) Abort(ctx context.Context, force bool) error {
+func (r *runtime) Abort(context.Context, bool) error {
 	return nil
 }
 

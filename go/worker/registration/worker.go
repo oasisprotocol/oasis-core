@@ -1003,7 +1003,7 @@ func (w *Worker) WillNeverRegister() bool {
 }
 
 // GetRegistrationSigner loads the signing credentials as configured by this package's flags.
-func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
+func GetRegistrationSigner(identity *identity.Identity) (signature.PublicKey, signature.Signer, error) {
 	var defaultPk signature.PublicKey
 
 	// If the test entity is enabled, use the entity signing key for signing
@@ -1035,7 +1035,6 @@ func GetRegistrationSigner(logger *logging.Logger, dataDir string, identity *ide
 
 // New constructs a new worker node registration service.
 func New(
-	dataDir string,
 	beacon beacon.Backend,
 	registry registry.Backend,
 	identity *identity.Identity,
@@ -1050,7 +1049,7 @@ func New(
 
 	serviceStore := store.GetServiceStore(DBBucketName)
 
-	entityID, registrationSigner, err := GetRegistrationSigner(logger, dataDir, identity)
+	entityID, registrationSigner, err := GetRegistrationSigner(identity)
 	if err != nil {
 		return nil, err
 	}

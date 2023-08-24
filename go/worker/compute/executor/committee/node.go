@@ -284,7 +284,7 @@ func (n *Node) HandleEpochTransitionLocked(epoch *committee.EpochSnapshot) {
 
 // HandleNewBlockEarlyLocked implements NodeHooks.
 // Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(blk *block.Block) {
+func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 	crash.Here(crashPointRoothashReceiveAfter)
 
 	// If we have seen a new block while a batch was processing, we need to
@@ -1306,7 +1306,7 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 				}
 
 				// Obtain CapabilityTEE for the given runtime version.
-				capabilityTEE, err := n.commonNode.GetHostedRuntimeCapabilityTEE(n.ctx, version)
+				capabilityTEE, err := n.commonNode.GetHostedRuntimeCapabilityTEE(version)
 				if err != nil {
 					n.logger.Warn("failed to get CapabilityTEE for hosted runtime, skipping",
 						"err", err,

@@ -83,7 +83,7 @@ func (sc *serviceClient) GetCommittees(ctx context.Context, request *api.GetComm
 	return runtimeCommittees, nil
 }
 
-func (sc *serviceClient) WatchCommittees(ctx context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchCommittees(_ context.Context) (<-chan *api.Committee, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Committee)
 	sub := sc.notifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -106,7 +106,7 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.ElectedEvent{}) {
 			var e api.ElectedEvent
@@ -142,7 +142,7 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 }
 
 // New constructs a new CometBFT-based scheduler Backend instance.
-func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
+func New(backend tmapi.Backend) (ServiceClient, error) {
 	// Initialze and register the CometBFT service component.
 	a := app.New()
 	if err := backend.RegisterApplication(a); err != nil {

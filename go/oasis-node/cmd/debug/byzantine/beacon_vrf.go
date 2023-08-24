@@ -67,7 +67,7 @@ func (m *VRFBeaconMode) FromString(s string) error {
 	return nil
 }
 
-func doVRFBeaconScenario(cmd *cobra.Command, args []string) {
+func doVRFBeaconScenario(*cobra.Command, []string) {
 	ctx := context.Background()
 
 	var runtimeID common.Namespace

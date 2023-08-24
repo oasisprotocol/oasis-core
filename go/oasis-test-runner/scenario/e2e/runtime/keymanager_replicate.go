@@ -64,7 +64,7 @@ func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *kmReplicateImpl) Run(ctx context.Context, _ *env.Env) error {
 	// Start the first two key managers.
 	if err := sc.Net.Start(); err != nil {
 		return err

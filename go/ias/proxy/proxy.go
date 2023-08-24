@@ -16,16 +16,14 @@ var _ api.Endpoint = (*proxyEndpoint)(nil)
 
 // Authenticator is the interface used to authenticate gRPC requests.
 type Authenticator interface {
-	// VerifyEvidence returns nil iff the signer's evidenice may attest
+	// VerifyEvidence returns nil iff the signer's evidence may attest
 	// via the gRPC server.
-	//
-	// Caller authentication information may be derived from the context.
-	VerifyEvidence(ctx context.Context, evidence *api.Evidence) error
+	VerifyEvidence(evidence *api.Evidence) error
 }
 
 type noOpAuthenticator struct{}
 
-func (n *noOpAuthenticator) VerifyEvidence(ctx context.Context, evidence *api.Evidence) error {
+func (n *noOpAuthenticator) VerifyEvidence(*api.Evidence) error {
 	return nil
 }
 
@@ -37,7 +35,7 @@ type proxyEndpoint struct {
 }
 
 func (p *proxyEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidence) (*ias.AVRBundle, error) {
-	if err := p.authenticator.VerifyEvidence(ctx, evidence); err != nil {
+	if err := p.authenticator.VerifyEvidence(evidence); err != nil {
 		p.logger.Warn("failed to authenticate IAS VerifyEvidence request",
 			"err", err,
 		)

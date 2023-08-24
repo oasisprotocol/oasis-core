@@ -308,7 +308,7 @@ func (n *Node) Initialized() <-chan struct{} {
 }
 
 // GetStatus returns the storage committee node status.
-func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
+func (n *Node) GetStatus(context.Context) (*api.Status, error) {
 	n.syncedLock.RLock()
 	defer n.syncedLock.RUnlock()
 
@@ -336,13 +336,13 @@ func (n *Node) GetLocalStorage() storageApi.LocalBackend {
 
 // NodeHooks implementation.
 
-func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
+func (n *Node) HandlePeerTx(context.Context, []byte) error {
 	// Nothing to do here.
 	return nil
 }
 
 // HandleEpochTransitionLocked is guarded by CrossNode.
-func (n *Node) HandleEpochTransitionLocked(snapshot *committee.EpochSnapshot) {
+func (n *Node) HandleEpochTransitionLocked(*committee.EpochSnapshot) {
 	// Nothing to do here.
 }
 
@@ -363,7 +363,7 @@ func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
 }
 
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
-func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
+func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
 	// Nothing to do here.
 }
 
@@ -433,7 +433,7 @@ func (n *Node) fetchDiff(round uint64, prevRoot, thisRoot storageApi.Root) {
 }
 
 func (n *Node) finalize(summary *blockSummary) {
-	err := n.localStorage.NodeDB().Finalize(n.ctx, summary.Roots)
+	err := n.localStorage.NodeDB().Finalize(summary.Roots)
 	switch err {
 	case nil:
 		n.logger.Debug("storage round finalized",
@@ -506,7 +506,7 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 					return fmt.Errorf("failed to fill in version %d: %w", v, err)
 				}
 
-				err = n.localStorage.NodeDB().Finalize(n.ctx, []storageApi.Root{{
+				err = n.localStorage.NodeDB().Finalize([]storageApi.Root{{
 					Namespace: rt.ID,
 					Version:   v + 1,
 					Type:      storageApi.RootTypeState,
@@ -551,7 +551,7 @@ func (n *Node) flushSyncedState(summary *blockSummary) (uint64, error) {
 	defer n.syncedLock.Unlock()
 
 	n.syncedState = *summary
-	if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.ctx, n.syncedState.Round); err != nil {
+	if err := n.commonNode.Runtime.History().StorageSyncCheckpoint(n.syncedState.Round); err != nil {
 		return 0, err
 	}
 
@@ -879,7 +879,7 @@ func (n *Node) worker() { // nolint: gocyclo
 						return
 					}
 
-					err = n.localStorage.NodeDB().Finalize(n.ctx, []storageApi.Root{{
+					err = n.localStorage.NodeDB().Finalize([]storageApi.Root{{
 						Namespace: n.commonNode.Runtime.ID(),
 						Version:   v + 1,
 						Type:      storageApi.RootTypeState,

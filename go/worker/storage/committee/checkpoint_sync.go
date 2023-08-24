@@ -405,7 +405,7 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 			syncState.Roots = append(syncState.Roots, check.Root)
 			remainingRoots.remove(check.Root.Type)
 			if remainingRoots.isEmpty() {
-				if err = n.localStorage.NodeDB().Finalize(n.ctx, syncState.Roots); err != nil {
+				if err = n.localStorage.NodeDB().Finalize(syncState.Roots); err != nil {
 					n.logger.Error("can't finalize version after all checkpoints restored",
 						"err", err,
 						"version", prevVersion,

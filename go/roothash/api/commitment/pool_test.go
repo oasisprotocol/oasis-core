@@ -26,7 +26,7 @@ type staticNodeLookup struct {
 	runtime *node.Runtime
 }
 
-func (n *staticNodeLookup) Node(ctx context.Context, id signature.PublicKey) (*node.Node, error) {
+func (n *staticNodeLookup) Node(_ context.Context, id signature.PublicKey) (*node.Node, error) {
 	return &node.Node{
 		Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
 		ID:        id,
@@ -65,7 +65,7 @@ func TestPoolDefault(t *testing.T) {
 	_, err = pool.ProcessCommitments(false)
 	require.Error(t, err, "ProcessCommitments")
 	require.Equal(t, ErrNoCommittee, err)
-	err = pool.CheckProposerTimeout(context.Background(), blk, &staticNodeLookup{}, sk.Public(), 0)
+	err = pool.CheckProposerTimeout(blk, sk.Public(), 0)
 	require.Error(t, err, "CheckProposerTimeout")
 	require.Equal(t, ErrNoCommittee, err)
 }
@@ -111,7 +111,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 	}
 
 	// Generate a commitment.
-	childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+	childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 	nl := &staticNodeLookup{
 		runtime: &node.Runtime{
@@ -133,7 +133,7 @@ func TestPoolSingleCommitment(t *testing.T) {
 		{"MissingInMessagesHash", func(ec *ExecutorCommitment) { ec.Header.Header.InMessagesHash = nil }, ErrBadExecutorCommitment},
 		{"BadFailureIndicating", func(ec *ExecutorCommitment) { ec.Header.Failure = FailureUnknown }, ErrBadExecutorCommitment},
 	} {
-		_, _, invalidEc := generateExecutorCommitment(t, pool.Round)
+		_, _, invalidEc := generateExecutorCommitment(pool.Round)
 
 		tc.fn(&invalidEc)
 
@@ -251,7 +251,7 @@ func TestPoolSingleCommitmentTEE(t *testing.T) {
 	}
 
 	// Generate a commitment.
-	childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+	childBlk, _, ec := generateExecutorCommitment(pool.Round)
 	rakSig, err := signature.Sign(skRAK, ComputeResultsHeaderSignatureContext, cbor.Marshal(ec.Header.Header))
 	require.NoError(t, err, "Sign")
 	ec.Header.RAKSignature = &rakSig.Signature
@@ -309,7 +309,7 @@ func TestPoolStragglers(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -354,7 +354,7 @@ func TestPoolStragglers(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec.NodeID = sk1.Public()
 		err := ec.Sign(sk1, rt.ID)
@@ -387,7 +387,7 @@ func TestPoolStragglers(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -430,7 +430,7 @@ func TestPoolStragglers(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -486,7 +486,7 @@ func TestPoolStragglers(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -555,7 +555,7 @@ func TestPoolTwoCommitments(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -773,7 +773,7 @@ func TestPoolManyCommitments(t *testing.T) {
 			Round:     0,
 		}
 
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -805,7 +805,7 @@ func TestPoolManyCommitments(t *testing.T) {
 			Round:     0,
 		}
 
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec2 := ec
 		ec2.NodeID = sk2.Public()
@@ -838,7 +838,7 @@ func TestPoolManyCommitments(t *testing.T) {
 			Discrepancy: true,
 		}
 
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec4 := ec
 		ec4.NodeID = sk4.Public()
@@ -872,7 +872,7 @@ func TestPoolManyCommitments(t *testing.T) {
 			Discrepancy: true,
 		}
 
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec4 := ec
 		ec4.NodeID = sk4.Public()
@@ -926,7 +926,7 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		}
 
 		// Generate an executor commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		// Generate a valid commitment.
 		ec1 := ec
@@ -1010,7 +1010,7 @@ func TestPoolFailureIndicatingCommitment(t *testing.T) {
 		}
 
 		// Generate an executor commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		// Generate a valid commitment.
 		ec1 := ec
@@ -1132,7 +1132,7 @@ func TestPoolSerialization(t *testing.T) {
 	}
 
 	// Generate a commitment.
-	childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+	childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 	ec.NodeID = sk.Public()
 	err = ec.Sign(sk, rt.ID)
@@ -1175,7 +1175,7 @@ func TestTryFinalize(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -1235,7 +1235,7 @@ func TestTryFinalize(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 
 		ec1 := ec
 		ec1.NodeID = sk1.Public()
@@ -1337,7 +1337,7 @@ func TestExecutorTimeoutRequest(t *testing.T) {
 				expectedError: nil,
 			},
 		} {
-			err := pool.CheckProposerTimeout(ctx, childBlk, nl, tc.signer.Public(), tc.round)
+			err := pool.CheckProposerTimeout(childBlk, tc.signer.Public(), tc.round)
 			switch tc.expectedError {
 			case nil:
 				require.NoError(err, "CheckProposerTimeout unexpected error")
@@ -1347,7 +1347,7 @@ func TestExecutorTimeoutRequest(t *testing.T) {
 		}
 
 		// Generate a commitment.
-		childBlk, _, ec := generateExecutorCommitment(t, pool.Round)
+		childBlk, _, ec := generateExecutorCommitment(pool.Round)
 		ec.NodeID = sk1.Public()
 		err := ec.Sign(sk1, rt.ID)
 		require.NoError(err, "ec.Sign")
@@ -1356,7 +1356,7 @@ func TestExecutorTimeoutRequest(t *testing.T) {
 		require.NoError(err, "AddExecutorCommitment")
 
 		// Timeout after commitment should fail.
-		err = pool.CheckProposerTimeout(ctx, childBlk, nl, sk2.Public(), 0)
+		err = pool.CheckProposerTimeout(childBlk, sk2.Public(), 0)
 		require.Error(err, "CheckProposerTimeout commitment exists")
 		require.Equal(ErrAlreadyCommitted, err, "CheckProposerTimeout commitment exists")
 	})
@@ -1423,7 +1423,7 @@ func generateMockCommittee(t *testing.T, rtTemplate *registry.Runtime) (
 	return
 }
 
-func generateExecutorCommitment(t *testing.T, round uint64) (*block.Block, *block.Block, ExecutorCommitment) {
+func generateExecutorCommitment(round uint64) (*block.Block, *block.Block, ExecutorCommitment) {
 	var id common.Namespace
 	childBlk := block.NewGenesisBlock(id, round)
 	parentBlk := block.NewEmptyBlock(childBlk, 1, block.Normal)
@@ -1468,7 +1468,7 @@ func setupDiscrepancy(
 	}
 
 	// Generate a commitment.
-	childBlk, parentBlk, ec := generateExecutorCommitment(t, pool.Round)
+	childBlk, parentBlk, ec := generateExecutorCommitment(pool.Round)
 
 	ec1 := ec
 	ec1.NodeID = sk1.Public()

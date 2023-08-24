@@ -234,7 +234,7 @@ func (n *commonNode) initialize() error {
 	n.svcMgr.RegisterCleanupOnly(n.registry, "registry backend")
 
 	var scStaking tmstaking.ServiceClient
-	if scStaking, err = tmstaking.New(n.ctx, n.parentNode); err != nil {
+	if scStaking, err = tmstaking.New(n.parentNode); err != nil {
 		n.Logger.Error("staking: failed to initialize staking backend",
 			"err", err,
 		)
@@ -245,7 +245,7 @@ func (n *commonNode) initialize() error {
 	n.svcMgr.RegisterCleanupOnly(n.staking, "staking backend")
 
 	var scScheduler tmscheduler.ServiceClient
-	if scScheduler, err = tmscheduler.New(n.ctx, n.parentNode); err != nil {
+	if scScheduler, err = tmscheduler.New(n.parentNode); err != nil {
 		n.Logger.Error("scheduler: failed to initialize scheduler backend",
 			"err", err,
 		)
@@ -256,7 +256,7 @@ func (n *commonNode) initialize() error {
 	n.svcMgr.RegisterCleanupOnly(n.scheduler, "scheduler backend")
 
 	var scRootHash tmroothash.ServiceClient
-	if scRootHash, err = tmroothash.New(n.ctx, n.dataDir, n.parentNode); err != nil {
+	if scRootHash, err = tmroothash.New(n.ctx, n.parentNode); err != nil {
 		n.Logger.Error("roothash: failed to initialize roothash backend",
 			"err", err,
 		)
@@ -267,7 +267,7 @@ func (n *commonNode) initialize() error {
 	n.svcMgr.RegisterCleanupOnly(n.roothash, "roothash backend")
 
 	var scGovernance tmgovernance.ServiceClient
-	if scGovernance, err = tmgovernance.New(n.ctx, n.parentNode); err != nil {
+	if scGovernance, err = tmgovernance.New(n.parentNode); err != nil {
 		n.Logger.Error("governance: failed to initialize governance backend",
 			"err", err,
 		)
@@ -397,12 +397,12 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetGenesisDocument(ctx context.Context) (*genesisAPI.Document, error) {
+func (n *commonNode) GetGenesisDocument(context.Context) (*genesisAPI.Document, error) {
 	return n.genesis, nil
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetChainContext(ctx context.Context) (string, error) {
+func (n *commonNode) GetChainContext(context.Context) (string, error) {
 	return n.genesis.ChainContext(), nil
 }
 
@@ -457,7 +457,7 @@ func (n *commonNode) TransactionAuthHandler() consensusAPI.TransactionAuthHandle
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
+func (n *commonNode) EstimateGas(_ context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
 	return n.mux.EstimateGas(req.Signer, req.Transaction)
 }
 
@@ -896,37 +896,37 @@ func (n *commonNode) WatchCometBFTBlocks() (<-chan *cmttypes.Block, *pubsub.Subs
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetNextBlockState(ctx context.Context) (*consensusAPI.NextBlockState, error) {
+func (n *commonNode) GetNextBlockState(context.Context) (*consensusAPI.NextBlockState, error) {
 	return nil, consensusAPI.ErrUnsupported
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) SubmitEvidence(ctx context.Context, evidence *consensusAPI.Evidence) error {
+func (n *commonNode) SubmitEvidence(context.Context, *consensusAPI.Evidence) error {
 	return consensusAPI.ErrUnsupported
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) SubmitTx(ctx context.Context, tx *transaction.SignedTransaction) error {
+func (n *commonNode) SubmitTx(context.Context, *transaction.SignedTransaction) error {
 	return consensusAPI.ErrUnsupported
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) SubmitTxNoWait(ctx context.Context, tx *transaction.SignedTransaction) error {
+func (n *commonNode) SubmitTxNoWait(context.Context, *transaction.SignedTransaction) error {
 	return consensusAPI.ErrUnsupported
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) SubmitTxWithProof(ctx context.Context, tx *transaction.SignedTransaction) (*transaction.Proof, error) {
+func (n *commonNode) SubmitTxWithProof(context.Context, *transaction.SignedTransaction) (*transaction.Proof, error) {
 	return nil, consensusAPI.ErrUnsupported
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) GetUnconfirmedTransactions(ctx context.Context) ([][]byte, error) {
+func (n *commonNode) GetUnconfirmedTransactions(context.Context) ([][]byte, error) {
 	return nil, consensusAPI.ErrUnsupported
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) WatchBlocks(ctx context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
+func (n *commonNode) WatchBlocks(context.Context) (<-chan *consensusAPI.Block, pubsub.ClosableSubscription, error) {
 	return nil, nil, consensusAPI.ErrUnsupported
 }
 
@@ -936,7 +936,7 @@ func (n *commonNode) SubmissionManager() consensusAPI.SubmissionManager {
 }
 
 // Implements consensusAPI.Backend.
-func (n *commonNode) RegisterP2PService(p2p p2pAPI.Service) error {
+func (n *commonNode) RegisterP2PService(p2pAPI.Service) error {
 	return consensusAPI.ErrUnsupported
 }
 

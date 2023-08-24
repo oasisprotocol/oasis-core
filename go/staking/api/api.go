@@ -506,7 +506,7 @@ type ReclaimEscrow struct {
 
 // PrettyPrint writes a pretty-printed representation of ReclaimEscrow to the
 // given writer.
-func (re ReclaimEscrow) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (re ReclaimEscrow) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	fmt.Fprintf(w, "%sFrom:   %s\n", prefix, re.Account)
 
 	fmt.Fprintf(w, "%sShares: %s\n", prefix, re.Shares)
@@ -828,7 +828,7 @@ func (st StakeThreshold) String() string {
 
 // PrettyPrint writes a pretty-printed representation of StakeThreshold to the
 // given writer.
-func (st StakeThreshold) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (st StakeThreshold) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	switch {
 	case st.Global != nil:
 		fmt.Fprintf(w, "%s- Global: %s\n", prefix, *st.Global)

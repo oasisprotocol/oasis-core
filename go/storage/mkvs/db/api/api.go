@@ -96,7 +96,7 @@ type NodeDB interface {
 	GetEarliestVersion() uint64
 
 	// GetRootsForVersion returns a list of roots stored under the given version.
-	GetRootsForVersion(ctx context.Context, version uint64) ([]node.Root, error)
+	GetRootsForVersion(version uint64) ([]node.Root, error)
 
 	// StartMultipartInsert prepares the database for a batch insert job from multiple chunks.
 	// Batches from this call onwards will keep track of inserted nodes so that they can be
@@ -123,7 +123,7 @@ type NodeDB interface {
 
 	// Finalize finalizes the version comprising the passed list of finalized roots.
 	// All non-finalized roots can be discarded.
-	Finalize(ctx context.Context, roots []node.Root) error
+	Finalize(roots []node.Root) error
 
 	// Prune removes all roots recorded under the given version.
 	//
@@ -194,7 +194,7 @@ func (b *BaseBatch) OnCommit(hook func()) {
 	b.onCommitHooks = append(b.onCommitHooks, hook)
 }
 
-func (b *BaseBatch) Commit(root node.Root) error {
+func (b *BaseBatch) Commit(node.Root) error {
 	for _, hook := range b.onCommitHooks {
 		hook()
 	}
@@ -210,11 +210,11 @@ func NewNopNodeDB() (NodeDB, error) {
 	return &nopNodeDB{}, nil
 }
 
-func (d *nopNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, error) {
+func (d *nopNodeDB) GetNode(node.Root, *node.Pointer) (node.Node, error) {
 	return nil, ErrNodeNotFound
 }
 
-func (d *nopNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node.Root) (writelog.Iterator, error) {
+func (d *nopNodeDB) GetWriteLog(context.Context, node.Root, node.Root) (writelog.Iterator, error) {
 	return nil, ErrWriteLogNotFound
 }
 
@@ -226,15 +226,15 @@ func (d *nopNodeDB) GetEarliestVersion() uint64 {
 	return 0
 }
 
-func (d *nopNodeDB) GetRootsForVersion(ctx context.Context, version uint64) ([]node.Root, error) {
+func (d *nopNodeDB) GetRootsForVersion(uint64) ([]node.Root, error) {
 	return nil, nil
 }
 
-func (d *nopNodeDB) HasRoot(root node.Root) bool {
+func (d *nopNodeDB) HasRoot(node.Root) bool {
 	return false
 }
 
-func (d *nopNodeDB) StartMultipartInsert(version uint64) error {
+func (d *nopNodeDB) StartMultipartInsert(uint64) error {
 	return nil
 }
 
@@ -242,11 +242,11 @@ func (d *nopNodeDB) AbortMultipartInsert() error {
 	return nil
 }
 
-func (d *nopNodeDB) Finalize(ctx context.Context, roots []node.Root) error {
+func (d *nopNodeDB) Finalize([]node.Root) error {
 	return nil
 }
 
-func (d *nopNodeDB) Prune(ctx context.Context, version uint64) error {
+func (d *nopNodeDB) Prune(context.Context, uint64) error {
 	return nil
 }
 
@@ -266,19 +266,19 @@ type nopBatch struct {
 	BaseBatch
 }
 
-func (d *nopNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) (Batch, error) {
+func (d *nopNodeDB) NewBatch(node.Root, uint64, bool) (Batch, error) {
 	return &nopBatch{}, nil
 }
 
-func (b *nopBatch) MaybeStartSubtree(subtree Subtree, depth node.Depth, subtreeRoot *node.Pointer) Subtree {
+func (b *nopBatch) MaybeStartSubtree(Subtree, node.Depth, *node.Pointer) Subtree {
 	return &nopSubtree{}
 }
 
-func (b *nopBatch) PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.Annotations) error {
+func (b *nopBatch) PutWriteLog(writelog.WriteLog, writelog.Annotations) error {
 	return nil
 }
 
-func (b *nopBatch) RemoveNodes(nodes []node.Node) error {
+func (b *nopBatch) RemoveNodes([]node.Node) error {
 	return nil
 }
 
@@ -288,11 +288,11 @@ func (b *nopBatch) Reset() {
 // nopSubtree is a no-op subtree.
 type nopSubtree struct{}
 
-func (s *nopSubtree) PutNode(depth node.Depth, ptr *node.Pointer) error {
+func (s *nopSubtree) PutNode(node.Depth, *node.Pointer) error {
 	return nil
 }
 
-func (s *nopSubtree) VisitCleanNode(depth node.Depth, ptr *node.Pointer) error {
+func (s *nopSubtree) VisitCleanNode(node.Depth, *node.Pointer) error {
 	return nil
 }
 

@@ -435,7 +435,7 @@ func newSanityCheckRuntimeLookup(runtimes, suspendedRuntimes []*Runtime) (Runtim
 	}, nil
 }
 
-func (r *sanityCheckRuntimeLookup) Runtime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) Runtime(_ context.Context, id common.Namespace) (*Runtime, error) {
 	rt, ok := r.runtimes[id]
 	if !ok {
 		return nil, fmt.Errorf("runtime not found")
@@ -443,7 +443,7 @@ func (r *sanityCheckRuntimeLookup) Runtime(ctx context.Context, id common.Namesp
 	return rt, nil
 }
 
-func (r *sanityCheckRuntimeLookup) SuspendedRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) SuspendedRuntime(_ context.Context, id common.Namespace) (*Runtime, error) {
 	srt, ok := r.suspendedRuntimes[id]
 	if !ok {
 		return nil, ErrNoSuchRuntime
@@ -451,7 +451,7 @@ func (r *sanityCheckRuntimeLookup) SuspendedRuntime(ctx context.Context, id comm
 	return srt, nil
 }
 
-func (r *sanityCheckRuntimeLookup) AnyRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) AnyRuntime(_ context.Context, id common.Namespace) (*Runtime, error) {
 	rt, ok := r.runtimes[id]
 	if !ok {
 		srt, ok := r.suspendedRuntimes[id]
@@ -463,11 +463,11 @@ func (r *sanityCheckRuntimeLookup) AnyRuntime(ctx context.Context, id common.Nam
 	return rt, nil
 }
 
-func (r *sanityCheckRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) AllRuntimes(context.Context) ([]*Runtime, error) {
 	return r.allRuntimes, nil
 }
 
-func (r *sanityCheckRuntimeLookup) Runtimes(ctx context.Context) ([]*Runtime, error) {
+func (r *sanityCheckRuntimeLookup) Runtimes(context.Context) ([]*Runtime, error) {
 	runtimes := make([]*Runtime, 0, len(r.runtimes))
 	for _, r := range r.runtimes {
 		runtimes = append(runtimes, r)
@@ -482,7 +482,7 @@ type sanityCheckNodeLookup struct {
 	nodesList []*node.Node
 }
 
-func (n *sanityCheckNodeLookup) NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
+func (n *sanityCheckNodeLookup) NodeBySubKey(_ context.Context, key signature.PublicKey) (*node.Node, error) {
 	node, ok := n.nodes[key]
 	if !ok {
 		return nil, ErrNoSuchNode
@@ -490,6 +490,6 @@ func (n *sanityCheckNodeLookup) NodeBySubKey(ctx context.Context, key signature.
 	return node, nil
 }
 
-func (n *sanityCheckNodeLookup) Nodes(ctx context.Context) ([]*node.Node, error) {
+func (n *sanityCheckNodeLookup) Nodes(context.Context) ([]*node.Node, error) {
 	return n.nodesList, nil
 }

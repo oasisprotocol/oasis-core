@@ -95,7 +95,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, governance.Backend) {
 	return conn, client
 }
 
-func doGenSubmitProposal(cmd *cobra.Command, args []string) {
+func doGenSubmitProposal(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -152,7 +152,7 @@ func doGenSubmitProposal(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doGenCastVote(cmd *cobra.Command, args []string) {
+func doGenCastVote(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -182,7 +182,7 @@ func doGenCastVote(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doProposalInfo(cmd *cobra.Command, args []string) {
+func doProposalInfo(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -213,7 +213,7 @@ func doProposalInfo(cmd *cobra.Command, args []string) {
 	fmt.Println(string(prettyProposal))
 }
 
-func doProposalVotes(cmd *cobra.Command, args []string) {
+func doProposalVotes(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -244,7 +244,7 @@ func doProposalVotes(cmd *cobra.Command, args []string) {
 	fmt.Println(string(prettyVotes))
 }
 
-func doListProposals(cmd *cobra.Command, args []string) {
+func doListProposals(cmd *cobra.Command, _ []string) {
 	var err error
 	if err = cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)

@@ -12,7 +12,7 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 )
 
-func (app *beaconApplication) InitChain(ctx *api.Context, req types.RequestInitChain, doc *genesis.Document) error {
+func (app *beaconApplication) InitChain(ctx *api.Context, _ types.RequestInitChain, doc *genesis.Document) error {
 	params := &doc.Beacon.Parameters
 
 	// Note: If we ever decide that we need a beacon for the 0th epoch

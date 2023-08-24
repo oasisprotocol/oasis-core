@@ -659,7 +659,7 @@ func (sc *registryCLIImpl) testRuntime(ctx context.Context, childEnv *env.Env, c
 	testRuntime.Genesis.StateRoot.Empty()
 
 	// Register runtime.
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, testRuntime, 0); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, testRuntime, 0); err != nil {
 		return err
 	}
 

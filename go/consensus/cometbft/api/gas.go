@@ -78,7 +78,7 @@ func NewGasAccountant(maxUsedGas transaction.Gas) GasAccountant {
 
 type nopGasAccountant struct{}
 
-func (ga *nopGasAccountant) UseGas(multiplier int, op transaction.Op, costs transaction.Costs) error {
+func (ga *nopGasAccountant) UseGas(multiplier int, _ transaction.Op, _ transaction.Costs) error {
 	if multiplier < 0 {
 		panic("gas: multiplier must be >= 0")
 	}

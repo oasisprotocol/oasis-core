@@ -103,7 +103,7 @@ func (fc *fileCreator) CreateCheckpoint(ctx context.Context, root node.Root, chu
 	return meta, nil
 }
 
-func (fc *fileCreator) GetCheckpoints(ctx context.Context, request *GetCheckpointsRequest) ([]*Metadata, error) {
+func (fc *fileCreator) GetCheckpoints(_ context.Context, request *GetCheckpointsRequest) ([]*Metadata, error) {
 	// Currently we only support a single version so we report no checkpoints for other versions.
 	if request.Version != checkpointVersion {
 		return []*Metadata{}, nil
@@ -137,7 +137,7 @@ func (fc *fileCreator) GetCheckpoints(ctx context.Context, request *GetCheckpoin
 	return cps, nil
 }
 
-func (fc *fileCreator) GetCheckpoint(ctx context.Context, version uint16, root node.Root) (*Metadata, error) {
+func (fc *fileCreator) GetCheckpoint(_ context.Context, version uint16, root node.Root) (*Metadata, error) {
 	// Currently we only support a single version.
 	if version != checkpointVersion {
 		return nil, ErrCheckpointNotFound
@@ -161,7 +161,7 @@ func (fc *fileCreator) GetCheckpoint(ctx context.Context, version uint16, root n
 	return &cp, nil
 }
 
-func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, version uint16, root node.Root) error {
+func (fc *fileCreator) DeleteCheckpoint(_ context.Context, version uint16, root node.Root) error {
 	// Currently we only support a single version.
 	if version != checkpointVersion {
 		return ErrCheckpointNotFound
@@ -200,7 +200,7 @@ func (fc *fileCreator) DeleteCheckpoint(ctx context.Context, version uint16, roo
 	return nil
 }
 
-func (fc *fileCreator) GetCheckpointChunk(ctx context.Context, chunk *ChunkMetadata, w io.Writer) error {
+func (fc *fileCreator) GetCheckpointChunk(_ context.Context, chunk *ChunkMetadata, w io.Writer) error {
 	// Currently we only support a single version.
 	if chunk.Version != checkpointVersion {
 		return ErrChunkNotFound

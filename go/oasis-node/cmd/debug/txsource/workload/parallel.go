@@ -48,11 +48,11 @@ func (p *parallel) NeedsFunds() bool {
 func (p *parallel) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
-	conn *grpc.ClientConn,
+	_ *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
-	validatorEntities []signature.Signer,
+	_ []signature.Signer,
 ) error {
 	// Initialize base workload.
 	p.BaseWorkload.Init(cnsc, sm, fundingAccount)

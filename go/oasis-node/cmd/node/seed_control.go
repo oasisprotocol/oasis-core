@@ -12,43 +12,43 @@ import (
 var _ control.NodeController = (*SeedNode)(nil)
 
 // RequestShutdown implements control.NodeController.
-func (n *SeedNode) RequestShutdown(ctx context.Context, wait bool) error {
+func (n *SeedNode) RequestShutdown(context.Context, bool) error {
 	n.Stop()
 	return nil
 }
 
 // WaitReady implements control.NodeController.
-func (n *SeedNode) WaitReady(ctx context.Context) error {
+func (n *SeedNode) WaitReady(context.Context) error {
 	return control.ErrNotImplemented
 }
 
 // IsReady implements control.NodeController.
-func (n *SeedNode) IsReady(ctx context.Context) (bool, error) {
+func (n *SeedNode) IsReady(context.Context) (bool, error) {
 	return false, control.ErrNotImplemented
 }
 
 // WaitSync implements control.NodeController.
-func (n *SeedNode) WaitSync(ctx context.Context) error {
+func (n *SeedNode) WaitSync(context.Context) error {
 	return control.ErrNotImplemented
 }
 
 // IsSynced implements control.NodeController.
-func (n *SeedNode) IsSynced(ctx context.Context) (bool, error) {
+func (n *SeedNode) IsSynced(context.Context) (bool, error) {
 	return false, control.ErrNotImplemented
 }
 
 // UpgradeBinary implements control.NodeController.
-func (n *SeedNode) UpgradeBinary(ctx context.Context, descriptor *upgrade.Descriptor) error {
+func (n *SeedNode) UpgradeBinary(context.Context, *upgrade.Descriptor) error {
 	return control.ErrNotImplemented
 }
 
 // CancelUpgrade implements control.NodeController.
-func (n *SeedNode) CancelUpgrade(ctx context.Context, descriptor *upgrade.Descriptor) error {
+func (n *SeedNode) CancelUpgrade(context.Context, *upgrade.Descriptor) error {
 	return control.ErrNotImplemented
 }
 
 // GetStatus implements control.NodeController.
-func (n *SeedNode) GetStatus(ctx context.Context) (*control.Status, error) {
+func (n *SeedNode) GetStatus(_ context.Context) (*control.Status, error) {
 	tmAddresses, err := n.cometbftSeed.GetAddresses()
 	if err != nil {
 		return nil, err

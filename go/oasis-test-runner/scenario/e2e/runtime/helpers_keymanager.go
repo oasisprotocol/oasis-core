@@ -292,7 +292,7 @@ func (sc *Scenario) UpdateEnclavePolicies(rt *oasis.Runtime, deploymentIndex int
 //   - Each SGX runtime must have only one deployment and a distinct enclave identity.
 //   - Key manager enclaves are not allowed to replicate the master secrets.
 //   - All compute runtime enclaves are allowed to query key manager enclaves.
-func (sc *Scenario) BuildAllEnclavePolicies(childEnv *env.Env) (map[common.Namespace]map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
+func (sc *Scenario) BuildAllEnclavePolicies() (map[common.Namespace]map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
 	sc.Logger.Info("building key manager SGX policy enclave policies map")
 
 	kmPolicies := make(map[common.Namespace]map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
@@ -374,8 +374,8 @@ func (sc *Scenario) BuildAllEnclavePolicies(childEnv *env.Env) (map[common.Names
 //
 // If the simple key manager runtime does not exist or is not running on an SGX platform,
 // it returns nil.
-func (sc *Scenario) BuildEnclavePolicies(childEnv *env.Env) (map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
-	policies, err := sc.BuildAllEnclavePolicies(childEnv)
+func (sc *Scenario) BuildEnclavePolicies() (map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
+	policies, err := sc.BuildAllEnclavePolicies()
 	if err != nil {
 		return nil, err
 	}

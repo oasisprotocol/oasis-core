@@ -29,7 +29,7 @@ func (a *assertBase) String() string {
 
 type assertBaseHandler assertBase
 
-func (h *assertBaseHandler) Line(line string) error {
+func (h *assertBaseHandler) Line(string) error {
 	return nil
 }
 

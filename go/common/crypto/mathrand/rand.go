@@ -20,7 +20,7 @@ type rngAdapter struct {
 	off    int
 }
 
-func (a *rngAdapter) Seed(seed int64) {
+func (a *rngAdapter) Seed(int64) {
 	panic("mathrand: Seed is not supported")
 }
 

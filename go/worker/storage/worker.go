@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -38,7 +37,6 @@ func New(
 	grpcInternal *grpc.Server,
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
-	genesis genesis.Provider,
 ) (*Worker, error) {
 	enabled := config.GlobalConfig.Mode.HasLocalStorage()
 	if config.GlobalConfig.Mode == config.ModeArchive && len(commonWorker.GetRuntimes()) > 0 {
@@ -71,7 +69,7 @@ func New(
 
 	// Start storage node for every runtime.
 	for id, rt := range s.commonWorker.GetRuntimes() {
-		if err := s.registerRuntime(commonWorker.DataDir, rt, checkpointerCfg); err != nil {
+		if err := s.registerRuntime(rt, checkpointerCfg); err != nil {
 			return nil, fmt.Errorf("failed to create storage worker for runtime %s: %w", id, err)
 		}
 	}
@@ -82,7 +80,7 @@ func New(
 	return s, nil
 }
 
-func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
+func (w *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
 	id := commonNode.Runtime.ID()
 	w.logger.Info("registering new runtime",
 		"runtime_id", id,
@@ -100,7 +98,7 @@ func (w *Worker) registerRuntime(dataDir string, commonNode *committeeCommon.Nod
 		}
 	}
 
-	localStorage, err := NewLocalBackend(commonNode.Runtime.DataDir(), id, commonNode.Identity)
+	localStorage, err := NewLocalBackend(commonNode.Runtime.DataDir(), id)
 	if err != nil {
 		return fmt.Errorf("can't create local storage backend: %w", err)
 	}

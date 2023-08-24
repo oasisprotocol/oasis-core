@@ -76,7 +76,7 @@ func (sc *serviceClient) ConsensusParameters(ctx context.Context, height int64) 
 	return q.ConsensusParameters(ctx)
 }
 
-func (sc *serviceClient) GetBaseEpoch(ctx context.Context) (beaconAPI.EpochTime, error) {
+func (sc *serviceClient) GetBaseEpoch(context.Context) (beaconAPI.EpochTime, error) {
 	return sc.baseEpoch, nil
 }
 
@@ -168,7 +168,7 @@ func (sc *serviceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTim
 	}
 }
 
-func (sc *serviceClient) WatchEpochs(ctx context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchEpochs(_ context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -176,7 +176,7 @@ func (sc *serviceClient) WatchEpochs(ctx context.Context) (<-chan beaconAPI.Epoc
 	return typedCh, sub, nil
 }
 
-func (sc *serviceClient) WatchLatestEpoch(ctx context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchLatestEpoch(context.Context) (<-chan beaconAPI.EpochTime, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan beaconAPI.EpochTime)
 	sub := sc.epochNotifier.SubscribeBuffered(1)
 	sub.Unwrap(typedCh)
@@ -202,7 +202,7 @@ func (sc *serviceClient) GetVRFState(ctx context.Context, height int64) (*beacon
 	return q.VRFState(ctx)
 }
 
-func (sc *serviceClient) WatchLatestVRFEvent(ctx context.Context) (<-chan *beaconAPI.VRFEvent, *pubsub.Subscription, error) {
+func (sc *serviceClient) WatchLatestVRFEvent(context.Context) (<-chan *beaconAPI.VRFEvent, *pubsub.Subscription, error) {
 	typedCh := make(chan *beaconAPI.VRFEvent)
 	sub := sc.vrfNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -281,7 +281,7 @@ func (sc *serviceClient) DeliverBlock(ctx context.Context, height int64) error {
 	return nil
 }
 
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		key := pair.GetKey()
 		val := pair.GetValue()

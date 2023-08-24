@@ -315,7 +315,7 @@ func (q *queries) doConsensusQueries(ctx context.Context, rng *rand.Rand, height
 
 // doSchedulerQueries does GetCommittees and GetValidator queries for the
 // provided height.
-func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height int64) error {
+func (q *queries) doSchedulerQueries(ctx context.Context, _ *rand.Rand, height int64) error {
 	q.logger.Debug("doing scheduler queries",
 		"height", height,
 	)
@@ -367,7 +367,7 @@ func (q *queries) doSchedulerQueries(ctx context.Context, rng *rand.Rand, height
 }
 
 // doRegistryQueries does registry queries for the provided height.
-func (q *queries) doRegistryQueries(ctx context.Context, rng *rand.Rand, height int64) error {
+func (q *queries) doRegistryQueries(ctx context.Context, height int64) error {
 	q.logger.Debug("doing registry queries",
 		"height", height,
 	)
@@ -623,7 +623,7 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 }
 
 // doGovernanceQueries does governance queries at the provided height.
-func (q *queries) doGovernanceQueries(ctx context.Context, rng *rand.Rand, height int64) error {
+func (q *queries) doGovernanceQueries(ctx context.Context, _ *rand.Rand, height int64) error {
 	q.logger.Debug("doing governance queries",
 		"height", height,
 	)
@@ -725,7 +725,7 @@ func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 	return nil
 }
 
-func (q *queries) doControlQueries(ctx context.Context, rng *rand.Rand) error {
+func (q *queries) doControlQueries(ctx context.Context, _ *rand.Rand) error {
 	q.logger.Debug("doing node control queries")
 
 	_, err := q.control.GetStatus(ctx)
@@ -780,7 +780,7 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 	if err := q.doSchedulerQueries(ctx, rng, height); err != nil {
 		return fmt.Errorf("scheduler queries error: %w", err)
 	}
-	if err := q.doRegistryQueries(ctx, rng, height); err != nil {
+	if err := q.doRegistryQueries(ctx, height); err != nil {
 		return fmt.Errorf("registry queries error: %w", err)
 	}
 	if err := q.doStakingQueries(ctx, rng, height); err != nil {
@@ -814,9 +814,9 @@ func (q *queries) Run(
 	rng *rand.Rand,
 	conn *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
-	sm consensus.SubmissionManager,
-	fundingAccount signature.Signer,
-	validatorEntities []signature.Signer,
+	_ consensus.SubmissionManager,
+	_ signature.Signer,
+	_ []signature.Signer,
 ) error {
 	var err error
 	ctx := context.Background()

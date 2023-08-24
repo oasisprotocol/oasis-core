@@ -86,7 +86,7 @@ func testQueueTx(
 	runtimeID common.Namespace,
 	stateCh <-chan committee.NodeState,
 	commonNode *commonCommittee.Node,
-	rtNode *committee.Node,
+	_ *committee.Node,
 	roothash roothash.Backend,
 	st storage.Backend,
 ) {

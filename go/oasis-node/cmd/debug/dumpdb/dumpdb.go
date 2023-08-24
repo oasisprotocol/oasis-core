@@ -59,7 +59,7 @@ var (
 	logger = logging.GetLogger("cmd/debug/dumpdb")
 )
 
-func doDumpDB(cmd *cobra.Command, args []string) {
+func doDumpDB(cmd *cobra.Command, _ []string) {
 	var ok bool
 	defer func() {
 		if !ok {
@@ -103,7 +103,6 @@ func doDumpDB(cmd *cobra.Command, args []string) {
 	// Hope you have backups if you ever run into this.
 	ctx := context.Background()
 	ldb, _, stateRoot, err := abci.InitStateStorage(
-		ctx,
 		&abci.ApplicationConfig{
 			DataDir:             filepath.Join(dataDir, cmtCommon.StateDir),
 			StorageBackend:      storageDB.BackendNameBadgerDB, // No other backend for now.
@@ -393,7 +392,7 @@ func (qs *dumpQueryState) BlockHeight() int64 {
 	return qs.height
 }
 
-func (qs *dumpQueryState) GetEpoch(ctx context.Context, blockHeight int64) (beacon.EpochTime, error) {
+func (qs *dumpQueryState) GetEpoch(context.Context, int64) (beacon.EpochTime, error) {
 	// This is only required because certain registry backend queries
 	// need the epoch to filter out expired nodes.  It is not
 	// implemented because acquiring a full state dump does not

@@ -115,7 +115,7 @@ func NewClient(h host.Host, seed peer.AddrInfo, opts ...ClientOption) discovery.
 }
 
 // Advertise implements discovery.Advertiser and discovery.Discovery.
-func (c *client) Advertise(ctx context.Context, ns string, opts ...discovery.Option) (time.Duration, error) {
+func (c *client) Advertise(ctx context.Context, ns string, _ ...discovery.Option) (time.Duration, error) {
 	req := AdvertiseRequest{
 		Namespace: ns,
 	}

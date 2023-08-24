@@ -129,7 +129,7 @@ func (sc *storageEarlyStateSyncImpl) Run(ctx context.Context, childEnv *env.Env)
 	compRt := sc.Net.Runtimes()[0]
 	compRtDesc := compRt.ToRuntimeDescriptor()
 	compRtDesc.Deployments[0].ValidFrom = epoch + 1
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, compRtDesc, 0); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, compRtDesc, 0); err != nil {
 		return err
 	}
 

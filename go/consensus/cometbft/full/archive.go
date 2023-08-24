@@ -119,12 +119,12 @@ func (srv *archiveService) GetStatus(ctx context.Context) (*consensusAPI.Status,
 }
 
 // Implements consensusAPI.Backend.
-func (srv *archiveService) EstimateGas(ctx context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
+func (srv *archiveService) EstimateGas(context.Context, *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
 	return 0, consensusAPI.ErrUnsupported
 }
 
 // Implements consensusAPI.Backend.
-func (srv *archiveService) GetSignerNonce(ctx context.Context, req *consensusAPI.GetSignerNonceRequest) (uint64, error) {
+func (srv *archiveService) GetSignerNonce(context.Context, *consensusAPI.GetSignerNonceRequest) (uint64, error) {
 	return 0, consensusAPI.ErrUnsupported
 }
 

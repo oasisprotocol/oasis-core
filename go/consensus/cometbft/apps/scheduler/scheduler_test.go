@@ -792,7 +792,6 @@ func TestElectCommittee(t *testing.T) {
 
 		err := app.electCommittee(
 			ctx,
-			app.state,
 			schedulerParameters,
 			beaconState,
 			beaconParameters,

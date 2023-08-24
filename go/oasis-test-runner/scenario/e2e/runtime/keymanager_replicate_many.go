@@ -83,7 +83,7 @@ func (sc *kmReplicateManyImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *kmReplicateManyImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *kmReplicateManyImpl) Run(ctx context.Context, _ *env.Env) error {
 	// Fetch the number of secrets to replicate.
 	n, _ := sc.Flags.GetUint64(cfgNumMasterSecrets)
 	if n == 0 {
@@ -102,7 +102,7 @@ func (sc *kmReplicateManyImpl) Run(ctx context.Context, childEnv *env.Env) error
 	}
 
 	// Start the last two key managers.
-	if err := sc.StartKeymanagers(ctx, []int{2, 3}); err != nil {
+	if err := sc.StartKeymanagers([]int{2, 3}); err != nil {
 		return err
 	}
 

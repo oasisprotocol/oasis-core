@@ -49,7 +49,7 @@ func ClientImplementationTests(
 	t.Run("FailSubmitTx", func(t *testing.T) {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 		defer cancelFunc()
-		testFailSubmitTransaction(ctx, t, runtimeID, client, testInput)
+		testFailSubmitTransaction(ctx, t, runtimeID, client)
 	})
 }
 
@@ -76,7 +76,6 @@ func testFailSubmitTransaction(
 	t *testing.T,
 	runtimeID common.Namespace,
 	c api.RuntimeClient,
-	input string,
 ) {
 	// Failures during CheckTx.
 	resp, err := c.SubmitTxMeta(ctx, &api.SubmitTxRequest{Data: mock.CheckTxFailInput, RuntimeID: runtimeID})

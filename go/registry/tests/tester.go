@@ -947,7 +947,7 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 			rtMap[rt.Runtime.ID] = rt.Runtime
 			rt.MustRegister(t, backend, consensus)
 		case false:
-			rt.MustNotRegister(t, backend, consensus)
+			rt.MustNotRegister(t, consensus)
 		}
 
 		rtMapByName[tc.name] = rt.Runtime
@@ -974,14 +974,14 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	re.MustRegister(t, backend, consensus)
 	// Runtime to consensus governance transition should fail.
 	re.Runtime.GovernanceModel = api.GovernanceConsensus
-	re.MustNotRegister(t, backend, consensus)
+	re.MustNotRegister(t, consensus)
 	// Runtime back to entity governance transition should fail.
 	re.Runtime.GovernanceModel = api.GovernanceEntity
-	re.MustNotRegister(t, backend, consensus)
+	re.MustNotRegister(t, consensus)
 	// Any updates to runtime parameters should fail for runtime-governed runtimes.
 	re.Runtime.GovernanceModel = api.GovernanceRuntime
 	re.Runtime.TxnScheduler.ProposerTimeout = 6
-	re.MustNotRegister(t, backend, consensus)
+	re.MustNotRegister(t, consensus)
 
 	re, err = NewTestRuntime([]byte("Runtime re-registration test 2"), entity, true)
 	require.NoError(err, "NewTestRuntime (re-registration test 2)")
@@ -994,17 +994,17 @@ func testRegistryRuntime(t *testing.T, backend api.Backend, consensus consensusA
 	re.MustRegister(t, backend, consensus)
 	// Non-compute runtimes cannot transition to runtime governance.
 	re.Runtime.GovernanceModel = api.GovernanceRuntime
-	re.MustNotRegister(t, backend, consensus)
+	re.MustNotRegister(t, consensus)
 	// Entity to consensus governance transition should fail for KM runtimes too.
 	re.Runtime.GovernanceModel = api.GovernanceConsensus
-	re.MustNotRegister(t, backend, consensus)
+	re.MustNotRegister(t, consensus)
 
 	re, err = NewTestRuntime([]byte("Runtime re-registration test 3"), entity, false)
 	require.NoError(err, "NewTestRuntime (re-registration test 3)")
 	re.MustRegister(t, backend, consensus)
 	// Entity to consensus governance transition should fail.
 	re.Runtime.GovernanceModel = api.GovernanceConsensus
-	re.MustNotRegister(t, backend, consensus)
+	re.MustNotRegister(t, consensus)
 
 	// No way to de-register the runtime or the controlling entity, so it will be left there.
 
@@ -1615,7 +1615,7 @@ func (rt *TestRuntime) MustRegister(t *testing.T, backend api.Backend, consensus
 }
 
 // MustNotRegister attempts to register the TestRuntime with the provided registry and expects failure.
-func (rt *TestRuntime) MustNotRegister(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (rt *TestRuntime) MustNotRegister(t *testing.T, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
 	tx := api.NewRegisterRuntimeTx(0, nil, rt.Runtime)

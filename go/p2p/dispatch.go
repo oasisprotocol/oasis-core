@@ -56,7 +56,7 @@ type queuedMsg struct {
 	msg    interface{}
 }
 
-func (h *topicHandler) topicMessageValidator(ctx context.Context, unused core.PeerID, envelope *pubsub.Message) bool {
+func (h *topicHandler) topicMessageValidator(_ context.Context, _ core.PeerID, envelope *pubsub.Message) bool {
 	// Tease apart the pubsub message envelope and convert it to
 	// the expected format.
 

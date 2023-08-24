@@ -23,7 +23,7 @@ type teeStateEPID struct {
 	quoteType *cmnIAS.SignatureType
 }
 
-func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error) {
+func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, _ version.Version) ([]byte, error) {
 	qi, err := sp.aesm.InitQuote(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error while getting quote info from AESMD: %w", err)

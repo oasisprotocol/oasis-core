@@ -117,7 +117,7 @@ func (sc *Scenario) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *Scenario) PreInit(childEnv *env.Env) error {
+func (sc *Scenario) PreInit() error {
 	return nil
 }
 

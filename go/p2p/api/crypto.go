@@ -23,7 +23,7 @@ func (s *p2pSigner) Bytes() ([]byte, error) {
 	return nil, errCryptoNotSupported
 }
 
-func (s *p2pSigner) Equals(other libp2pCrypto.Key) bool {
+func (s *p2pSigner) Equals(libp2pCrypto.Key) bool {
 	return false
 }
 

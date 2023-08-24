@@ -84,8 +84,8 @@ var (
 
 func handlerGetBaseEpoch(
 	srv interface{},
-	ctx context.Context, //nolint: revive
-	dec func(interface{}) error,
+	ctx context.Context,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -126,7 +126,7 @@ func handlerGetEpoch(
 
 func handlerGetFutureEpoch(
 	srv interface{},
-	ctx context.Context, //nolint: revive
+	ctx context.Context,
 	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
@@ -370,7 +370,7 @@ func (c *beaconClient) WatchEpochs(ctx context.Context) (<-chan EpochTime, pubsu
 	return ch, sub, nil
 }
 
-func (c *beaconClient) WatchLatestEpoch(ctx context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error) {
+func (c *beaconClient) WatchLatestEpoch(context.Context) (<-chan EpochTime, pubsub.ClosableSubscription, error) {
 	// The only thing that uses this is the registration worker, and it
 	// is not over gRPC.
 	return nil, nil, fmt.Errorf("beacon: gRPC method not implemented")

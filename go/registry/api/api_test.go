@@ -24,7 +24,7 @@ type mockNodeLookup struct {
 	nodesList []*node.Node
 }
 
-func (n *mockNodeLookup) NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error) {
+func (n *mockNodeLookup) NodeBySubKey(_ context.Context, key signature.PublicKey) (*node.Node, error) {
 	for _, nd := range n.nodesList {
 		if nd.ID.Equal(key) {
 			return nd, nil
@@ -42,7 +42,7 @@ func (n *mockNodeLookup) NodeBySubKey(ctx context.Context, key signature.PublicK
 	return nil, ErrNoSuchNode
 }
 
-func (n *mockNodeLookup) Nodes(ctx context.Context) ([]*node.Node, error) {
+func (n *mockNodeLookup) Nodes(context.Context) ([]*node.Node, error) {
 	return n.nodesList, nil
 }
 
@@ -50,26 +50,26 @@ type mockRuntimeLookup struct {
 	runtimes map[common.Namespace]*Runtime
 }
 
-func (rl *mockRuntimeLookup) Runtime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+func (rl *mockRuntimeLookup) Runtime(context.Context, common.Namespace) (*Runtime, error) {
 	panic("not implemented")
 }
 
-func (rl *mockRuntimeLookup) SuspendedRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+func (rl *mockRuntimeLookup) SuspendedRuntime(context.Context, common.Namespace) (*Runtime, error) {
 	panic("not implemented")
 }
 
-func (rl *mockRuntimeLookup) AnyRuntime(ctx context.Context, id common.Namespace) (*Runtime, error) {
+func (rl *mockRuntimeLookup) AnyRuntime(_ context.Context, id common.Namespace) (*Runtime, error) {
 	if rl.runtimes[id] != nil {
 		return rl.runtimes[id], nil
 	}
 	return nil, ErrNoSuchRuntime
 }
 
-func (rl *mockRuntimeLookup) AllRuntimes(ctx context.Context) ([]*Runtime, error) {
+func (rl *mockRuntimeLookup) AllRuntimes(context.Context) ([]*Runtime, error) {
 	panic("not implemented")
 }
 
-func (rl *mockRuntimeLookup) Runtimes(ctx context.Context) ([]*Runtime, error) {
+func (rl *mockRuntimeLookup) Runtimes(context.Context) ([]*Runtime, error) {
 	panic("not implemented")
 }
 

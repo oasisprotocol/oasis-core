@@ -110,7 +110,7 @@ func (sc *storageSyncInconsistentImpl) waitForSegment(ctx context.Context, worke
 	}
 }
 
-func (sc *storageSyncInconsistentImpl) wipe(ctx context.Context, worker *oasis.Node) error {
+func (sc *storageSyncInconsistentImpl) wipe(worker *oasis.Node) error {
 	return os.RemoveAll(persistent.GetPersistentStoreDBDir(worker.DataDir()))
 }
 
@@ -168,7 +168,7 @@ func (sc *storageSyncInconsistentImpl) Run(ctx context.Context, childEnv *env.En
 	if err = messyWorker.Stop(); err != nil {
 		return err
 	}
-	if err = sc.wipe(ctx, messyWorker.Node); err != nil {
+	if err = sc.wipe(messyWorker.Node); err != nil {
 		return err
 	}
 

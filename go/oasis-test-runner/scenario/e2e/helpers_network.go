@@ -208,7 +208,7 @@ func (sc *Scenario) DumpRestoreNetwork(
 	return nil
 }
 
-func (sc *Scenario) dumpDatabase(childEnv *env.Env, fixture *oasis.NetworkFixture, exportPath string) error {
+func (sc *Scenario) dumpDatabase(childEnv *env.Env, _ *oasis.NetworkFixture, exportPath string) error {
 	// Load the existing export.
 	eFp, err := genesisFile.NewFileProvider(exportPath)
 	if err != nil {

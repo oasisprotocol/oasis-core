@@ -155,7 +155,7 @@ func (ms *mockApplicationState) GetBaseEpoch() (beacon.EpochTime, error) {
 	return ms.cfg.BaseEpoch, nil
 }
 
-func (ms *mockApplicationState) GetEpoch(ctx context.Context, blockHeight int64) (beacon.EpochTime, error) {
+func (ms *mockApplicationState) GetEpoch(context.Context, int64) (beacon.EpochTime, error) {
 	return ms.cfg.CurrentEpoch, nil
 }
 
@@ -163,11 +163,11 @@ func (ms *mockApplicationState) LastRetainedVersion() (int64, error) {
 	return ms.cfg.Genesis.Height, nil
 }
 
-func (ms *mockApplicationState) GetCurrentEpoch(ctx context.Context) (beacon.EpochTime, error) {
+func (ms *mockApplicationState) GetCurrentEpoch(context.Context) (beacon.EpochTime, error) {
 	return ms.cfg.CurrentEpoch, nil
 }
 
-func (ms *mockApplicationState) EpochChanged(ctx *Context) (bool, beacon.EpochTime) {
+func (ms *mockApplicationState) EpochChanged(*Context) (bool, beacon.EpochTime) {
 	return ms.cfg.EpochChanged, ms.cfg.CurrentEpoch
 }
 
@@ -299,7 +299,7 @@ func NewImmutableState(ctx context.Context, state ApplicationQueryState, version
 	}
 
 	ndb := state.Storage().NodeDB()
-	roots, err := ndb.GetRootsForVersion(ctx, uint64(version))
+	roots, err := ndb.GetRootsForVersion(uint64(version))
 	if err != nil {
 		return nil, err
 	}

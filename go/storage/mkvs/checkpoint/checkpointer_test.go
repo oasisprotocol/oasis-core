@@ -57,7 +57,7 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 			root.Version = round
 			root.Hash = rootHash
 
-			err = ndb.Finalize(ctx, []node.Root{root})
+			err = ndb.Finalize([]node.Root{root})
 			require.NoError(err, "Finalize")
 		}
 	} else {
@@ -85,7 +85,7 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 				// Simulate early block fetch failing.
 				return nil, fmt.Errorf("version not found")
 			}
-			return ndb.GetRootsForVersion(ctx, version)
+			return ndb.GetRootsForVersion(version)
 		},
 	})
 	require.NoError(err, "NewCheckpointer")
@@ -108,7 +108,7 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 		root.Version = round
 		root.Hash = rootHash
 
-		err = ndb.Finalize(ctx, []node.Root{root})
+		err = ndb.Finalize([]node.Root{root})
 		require.NoError(err, "Finalize")
 		cp.NotifyNewVersion(round)
 

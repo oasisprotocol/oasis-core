@@ -78,7 +78,7 @@ type provisioner struct {
 }
 
 // Implements host.Provisioner.
-func (p *provisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Runtime, error) {
+func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	id := cfg.Bundle.Manifest.ID
 
 	r := &sandboxedRuntime{
@@ -144,7 +144,7 @@ func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeIn
 		if r.conn == nil {
 			return errRuntimeNotReady
 		}
-		rsp, err = r.conn.GetInfo(ctx)
+		rsp, err = r.conn.GetInfo()
 		return err
 	}
 
@@ -154,7 +154,7 @@ func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeIn
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+func (r *sandboxedRuntime) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 	r.RLock()
 	defer r.RUnlock()
 
@@ -197,7 +197,7 @@ func (r *sandboxedRuntime) UpdateCapabilityTEE(ctx context.Context) error {
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) WatchEvents(ctx context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
+func (r *sandboxedRuntime) WatchEvents(context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *host.Event)
 	sub := r.notifier.Subscribe()
 	sub.Unwrap(typedCh)

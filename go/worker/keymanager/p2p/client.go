@@ -6,7 +6,6 @@ import (
 	"github.com/libp2p/go-libp2p/core"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
@@ -46,7 +45,7 @@ func (c *client) CallEnclave(ctx context.Context, request *CallEnclaveRequest, p
 }
 
 // NewClient creates a new keymanager protocol client.
-func NewClient(p2p p2p.Service, consensus consensus.Backend, chainContext string, keymanagerID common.Namespace) Client {
+func NewClient(p2p p2p.Service, chainContext string, keymanagerID common.Namespace) Client {
 	pid := protocol.NewRuntimeProtocolID(chainContext, keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion)
 	mgr := rpc.NewPeerManager(p2p, pid, rpc.WithStickyPeers(true))
 	rc := rpc.NewClient(p2p.Host(), pid)

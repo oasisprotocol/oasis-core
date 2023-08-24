@@ -16,7 +16,7 @@ type RootCache struct {
 
 // GetTree gets a tree entry from the cache by the root iff present, or creates
 // a new tree with the specified root in the node database.
-func (rc *RootCache) GetTree(ctx context.Context, root Root) (mkvs.Tree, error) {
+func (rc *RootCache) GetTree(root Root) (mkvs.Tree, error) {
 	return mkvs.NewWithRoot(nil, rc.localDB, root), nil
 }
 
