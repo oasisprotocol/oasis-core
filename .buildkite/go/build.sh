@@ -30,5 +30,5 @@ pushd go
 popd
 
 pushd tests/upgrade
-  make all
+  OASIS_GO=go1.20.2 make all
 popd

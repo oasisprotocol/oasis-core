@@ -14,6 +14,9 @@ ARG RUST_NIGHTLY_VERSION=2023-01-16
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 
+# Legacy package versions (upgrade tests).
+ARG LEGACY_GO_VERSION=1.20.2
+
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
@@ -57,6 +60,10 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
 RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
+    # Install legacy Go version.
+    go install golang.org/dl/go${LEGACY_GO_VERSION}@latest && \
+    go${LEGACY_GO_VERSION} download && \
+    # Prepare folder for binaries.
     mkdir -p /go/bin && \
     # Install a specific version of protoc-gen-go.
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \
