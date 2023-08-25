@@ -173,7 +173,7 @@ func TestNodeDescriptorV2(t *testing.T) {
 	err = v3.ValidateBasic(false)
 	require.NoError(err, "ValidateBasic")
 	require.True(v3.HasRoles(RoleComputeWorker))
-	require.False(v3.HasRoles(roleReserved2))
+	require.False(v3.HasRoles(roleReserved3))
 }
 
 func TestNodeSerialization(t *testing.T) {

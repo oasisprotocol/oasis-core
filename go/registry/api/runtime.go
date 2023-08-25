@@ -285,7 +285,7 @@ func (s *RuntimeStakingParameters) ValidateBasic(runtimeKind RuntimeKind) error 
 	}
 	for kind, q := range s.Thresholds {
 		switch kind {
-		case staking.KindNodeCompute:
+		case staking.KindNodeCompute, staking.KindNodeObserver:
 			if runtimeKind != KindCompute {
 				return fmt.Errorf("unsupported staking threshold kind for runtime: %s", kind)
 			}

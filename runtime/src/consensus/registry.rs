@@ -186,8 +186,8 @@ impl RolesMask {
     pub const ROLE_EMPTY: RolesMask = RolesMask(0);
     /// Compute worker role.
     pub const ROLE_COMPUTE_WORKER: RolesMask = RolesMask(1 << 0);
-    /// Reserved role (storage role in v1 descriptors).
-    pub const ROLE_RESERVED_2: RolesMask = RolesMask(1 << 1);
+    /// Observer role.
+    pub const ROLE_OBSERVER: RolesMask = RolesMask(1 << 1);
     /// Key manager role.
     pub const ROLE_KEY_MANAGER: RolesMask = RolesMask(1 << 2);
     /// Validator role.
@@ -198,11 +198,8 @@ impl RolesMask {
     pub const ROLE_STORAGE_RPC: RolesMask = RolesMask(1 << 5);
 
     // Bits of the Oasis node roles bitmask that are reserved and must not be used.
-    pub const ROLES_RESERVED: RolesMask = RolesMask(
-        u32::MAX & !((Self::ROLE_STORAGE_RPC.0 << 1) - 1)
-            | Self::ROLE_RESERVED_2.0
-            | Self::ROLE_RESERVED_3.0,
-    );
+    pub const ROLES_RESERVED: RolesMask =
+        RolesMask(u32::MAX & !((Self::ROLE_STORAGE_RPC.0 << 1) - 1) | Self::ROLE_RESERVED_3.0);
 }
 
 impl PartialOrd for RolesMask {

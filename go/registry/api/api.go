@@ -149,7 +149,7 @@ var (
 		node.RoleStorageRPC
 
 	// ComputeRuntimeAllowedRoles are the Node roles that allow compute runtimes.
-	ComputeRuntimeAllowedRoles = node.RoleComputeWorker
+	ComputeRuntimeAllowedRoles = node.RoleComputeWorker | node.RoleObserver
 
 	// KeyManagerRuntimeAllowedRoles are the Node roles that allow key manager runtimes.
 	KeyManagerRuntimeAllowedRoles = node.RoleKeyManager
@@ -1580,6 +1580,9 @@ func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.
 		}
 		if n.HasRoles(node.RoleComputeWorker) {
 			roleThresholds = append(roleThresholds, staking.KindNodeCompute)
+		}
+		if n.HasRoles(node.RoleObserver) {
+			roleThresholds = append(roleThresholds, staking.KindNodeObserver)
 		}
 
 		rtThresholds := rt.Staking.Thresholds

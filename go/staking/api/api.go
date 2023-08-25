@@ -727,10 +727,10 @@ type ThresholdKind int
 
 // nolint: revive
 const (
-	KindEntity        ThresholdKind = 0
-	KindNodeValidator ThresholdKind = 1
-	KindNodeCompute   ThresholdKind = 2
-	// Threshold kind 3 is reserved for future use.
+	KindEntity            ThresholdKind = 0
+	KindNodeValidator     ThresholdKind = 1
+	KindNodeCompute       ThresholdKind = 2
+	KindNodeObserver      ThresholdKind = 3
 	KindNodeKeyManager    ThresholdKind = 4
 	KindRuntimeCompute    ThresholdKind = 5
 	KindRuntimeKeyManager ThresholdKind = 6
@@ -738,6 +738,7 @@ const (
 	KindEntityName            = "entity"
 	KindNodeValidatorName     = "node-validator"
 	KindNodeComputeName       = "node-compute"
+	KindNodeObserverName      = "observer"
 	KindNodeKeyManagerName    = "node-keymanager"
 	KindRuntimeComputeName    = "runtime-compute"
 	KindRuntimeKeyManagerName = "runtime-keymanager"
@@ -748,6 +749,7 @@ var ThresholdKinds = []ThresholdKind{
 	KindEntity,
 	KindNodeValidator,
 	KindNodeCompute,
+	KindNodeObserver,
 	KindNodeKeyManager,
 	KindRuntimeCompute,
 	KindRuntimeKeyManager,
@@ -762,6 +764,8 @@ func (k ThresholdKind) String() string {
 		return KindNodeValidatorName
 	case KindNodeCompute:
 		return KindNodeComputeName
+	case KindNodeObserver:
+		return KindNodeObserverName
 	case KindNodeKeyManager:
 		return KindNodeKeyManagerName
 	case KindRuntimeCompute:
@@ -787,6 +791,8 @@ func (k *ThresholdKind) UnmarshalText(text []byte) error {
 		*k = KindNodeValidator
 	case KindNodeComputeName:
 		*k = KindNodeCompute
+	case KindNodeObserverName:
+		*k = KindNodeObserver
 	case KindNodeKeyManagerName:
 		*k = KindNodeKeyManager
 	case KindRuntimeComputeName:
