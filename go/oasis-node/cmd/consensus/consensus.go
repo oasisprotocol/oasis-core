@@ -114,7 +114,7 @@ func loadUnsignedTx() *transaction.Transaction {
 	return &tx
 }
 
-func doSubmitTx(cmd *cobra.Command, args []string) {
+func doSubmitTx(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -132,7 +132,7 @@ func doSubmitTx(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doShowTx(cmd *cobra.Command, args []string) {
+func doShowTx(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -148,7 +148,7 @@ func doShowTx(cmd *cobra.Command, args []string) {
 	sigTx.PrettyPrint(ctx, "", os.Stdout)
 }
 
-func doEstimateGas(cmd *cobra.Command, args []string) {
+func doEstimateGas(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -176,7 +176,7 @@ func doEstimateGas(cmd *cobra.Command, args []string) {
 	fmt.Println(gas)
 }
 
-func doNextBlockState(cmd *cobra.Command, args []string) {
+func doNextBlockState(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

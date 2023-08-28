@@ -264,7 +264,7 @@ func (mux *abciMux) registerHaltHook(hook consensus.HaltHook) {
 	mux.haltHooks = append(mux.haltHooks, hook)
 }
 
-func (mux *abciMux) Info(req types.RequestInfo) types.ResponseInfo {
+func (mux *abciMux) Info(types.RequestInfo) types.ResponseInfo {
 	return types.ResponseInfo{
 		AppVersion:       version.CometBFTAppVersion,
 		LastBlockHeight:  mux.state.BlockHeight(),

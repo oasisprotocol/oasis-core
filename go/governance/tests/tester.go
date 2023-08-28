@@ -118,7 +118,7 @@ func assertAccountBalance(
 	require.EqualValues(expectedBalance, &acc.General.Balance, "account should have expected balance")
 }
 
-func testBadProposals(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testBadProposals(t *testing.T, _ api.Backend, consensus consensusAPI.Backend, _ *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -145,7 +145,7 @@ func testBadProposals(t *testing.T, backend api.Backend, consensus consensusAPI.
 	require.Equal(api.ErrInvalidArgument, err, "SubmitProposalTx")
 }
 
-func testBadVotes(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
+func testBadVotes(t *testing.T, _ api.Backend, consensus consensusAPI.Backend, testState *governanceTestsState) {
 	require := require.New(t)
 	ctx := context.Background()
 

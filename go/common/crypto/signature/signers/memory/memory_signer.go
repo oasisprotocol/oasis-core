@@ -40,7 +40,7 @@ func NewFactory() signature.SignerFactory {
 }
 
 // EnsureRole is a no-op for testing expedience.
-func (fac *Factory) EnsureRole(role signature.SignerRole) error {
+func (fac *Factory) EnsureRole(signature.SignerRole) error {
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (fac *Factory) Generate(role signature.SignerRole, rng io.Reader) (signatur
 }
 
 // Load will return an error, as the factory does not support persistence.
-func (fac *Factory) Load(role signature.SignerRole) (signature.Signer, error) {
+func (fac *Factory) Load(signature.SignerRole) (signature.Signer, error) {
 	return nil, signature.ErrNotExist
 }
 

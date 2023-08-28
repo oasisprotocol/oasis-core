@@ -34,7 +34,7 @@ type testService struct {
 	id int
 }
 
-func (s *testService) HandleRequest(ctx context.Context, method string, body cbor.RawMessage) (interface{}, error) {
+func (s *testService) HandleRequest(_ context.Context, method string, body cbor.RawMessage) (interface{}, error) {
 	if method != testMethod {
 		return nil, fmt.Errorf("unsupported method")
 	}
@@ -59,19 +59,19 @@ type testListener struct {
 	badPeers  int
 }
 
-func (l *testListener) RecordSuccess(peerID core.PeerID, latency time.Duration) {
+func (l *testListener) RecordSuccess(core.PeerID, time.Duration) {
 	l.mu.Lock()
 	l.successes++
 	l.mu.Unlock()
 }
 
-func (l *testListener) RecordFailure(peerID core.PeerID, latency time.Duration) {
+func (l *testListener) RecordFailure(core.PeerID, time.Duration) {
 	l.mu.Lock()
 	l.failures++
 	l.mu.Unlock()
 }
 
-func (l *testListener) RecordBadPeer(peerID core.PeerID) {
+func (l *testListener) RecordBadPeer(core.PeerID) {
 	l.mu.Lock()
 	l.badPeers++
 	l.mu.Unlock()

@@ -76,7 +76,7 @@ func (n *Node) Initialized() <-chan struct{} {
 	return n.initCh
 }
 
-func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
+func (n *Node) HandlePeerTx(context.Context, []byte) error {
 	// Nothing to do here.
 	return nil
 }
@@ -90,7 +90,7 @@ func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
 }
 
 // HandleNewBlockLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockLocked(blk *block.Block) {
+func (n *Node) HandleNewBlockLocked(*block.Block) {
 }
 
 // HandleNewEventLocked is guarded by CrossNode.

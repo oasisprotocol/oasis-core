@@ -23,7 +23,7 @@ const (
 )
 
 // rejectAll is an auth function that rejects all requests.
-func rejectAll(ctx context.Context, fullMethodName string, req interface{}) error {
+func rejectAll(context.Context, interface{}) error {
 	return status.Errorf(codes.PermissionDenied, "rejecting all")
 }
 
@@ -114,7 +114,7 @@ func testAuth(t *testing.T, testCase *testCase) {
 	}
 
 	// Test WatchPings.
-	ch, sub, err := client.WatchPings(ctx, pingQuery)
+	ch, sub, err := client.WatchPings(ctx)
 	require.NoError(err, "Calling WatchPings shouldn't fail")
 	defer sub.Close()
 

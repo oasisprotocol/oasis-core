@@ -76,14 +76,14 @@ type nopReadSyncer struct{}
 // NopReadSyncer is a no-op read syncer.
 var NopReadSyncer = &nopReadSyncer{}
 
-func (r *nopReadSyncer) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
+func (r *nopReadSyncer) SyncGet(context.Context, *GetRequest) (*ProofResponse, error) {
 	return nil, ErrUnsupported
 }
 
-func (r *nopReadSyncer) SyncGetPrefixes(ctx context.Context, request *GetPrefixesRequest) (*ProofResponse, error) {
+func (r *nopReadSyncer) SyncGetPrefixes(context.Context, *GetPrefixesRequest) (*ProofResponse, error) {
 	return nil, ErrUnsupported
 }
 
-func (r *nopReadSyncer) SyncIterate(ctx context.Context, request *IterateRequest) (*ProofResponse, error) {
+func (r *nopReadSyncer) SyncIterate(context.Context, *IterateRequest) (*ProofResponse, error) {
 	return nil, ErrUnsupported
 }

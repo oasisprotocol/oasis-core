@@ -32,7 +32,7 @@ type testSubscriber struct {
 }
 
 // Implements api.MessageSubscriber.
-func (s *testSubscriber) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (s *testSubscriber) ExecuteMessage(_ *api.Context, _, msg interface{}) (interface{}, error) {
 	switch m := msg.(type) {
 	case *testMessage:
 		s.msgs = append(s.msgs, m.foo)

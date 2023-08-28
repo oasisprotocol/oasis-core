@@ -792,7 +792,6 @@ func TestElectCommittee(t *testing.T) {
 
 		err := app.electCommittee(
 			ctx,
-			app.state,
 			schedulerParameters,
 			beaconState,
 			beaconParameters,
@@ -800,7 +799,7 @@ func TestElectCommittee(t *testing.T) {
 			nil,
 			nil,
 			tc.validatorEntities,
-			&tc.rt,
+			&tc.rt, //nolint:gosec
 			nodes,
 			tc.kind,
 		)

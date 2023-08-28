@@ -290,7 +290,7 @@ func (s *sgxProvisioner) hostInitializer(ctx context.Context, hp *sandbox.HostIn
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 	var capabilityTEE *node.CapabilityTEE
-	if capabilityTEE, err = s.updateCapabilityTEE(ctx, s.logger, ts, hp.Connection); err != nil {
+	if capabilityTEE, err = s.updateCapabilityTEE(ctx, ts, hp.Connection); err != nil {
 		return nil, fmt.Errorf("failed to initialize TEE: %w", err)
 	}
 
@@ -337,7 +337,7 @@ func (s *sgxProvisioner) updateTargetInfo(ctx context.Context, targetInfo []byte
 	return err
 }
 
-func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, logger *logging.Logger, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
+func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, conn protocol.Connection) (*node.CapabilityTEE, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeRAKTimeout)
 	defer cancel()
 
@@ -401,7 +401,7 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitial
 		// Update CapabilityTEE.
 		logger.Info("regenerating CapabilityTEE")
 
-		capabilityTEE, err := s.updateCapabilityTEE(context.Background(), logger, ts, hp.Connection)
+		capabilityTEE, err := s.updateCapabilityTEE(context.Background(), ts, hp.Connection)
 		if err != nil {
 			logger.Error("failed to regenerate CapabilityTEE",
 				"err", err,
@@ -418,13 +418,13 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitial
 }
 
 // Implements host.Provisioner.
-func (s *sgxProvisioner) NewRuntime(ctx context.Context, cfg host.Config) (host.Runtime, error) {
+func (s *sgxProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	// Make sure to return an error early if the SGX runtime loader is not configured.
 	if s.cfg.LoaderPath == "" {
 		return nil, fmt.Errorf("SGX loader binary path is not configured")
 	}
 
-	return s.sandbox.NewRuntime(ctx, cfg)
+	return s.sandbox.NewRuntime(cfg)
 }
 
 // Implements host.Provisioner.

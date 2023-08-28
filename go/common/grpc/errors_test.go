@@ -29,15 +29,15 @@ type ErrorTestService interface {
 
 type errorTestServer struct{}
 
-func (s *errorTestServer) ErrorTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
+func (s *errorTestServer) ErrorTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error) {
 	return &ErrorTestResponse{}, errTest
 }
 
-func (s *errorTestServer) ErrorTestWithContext(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
+func (s *errorTestServer) ErrorTestWithContext(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error) {
 	return &ErrorTestResponse{}, errors.WithContext(errTest, "my test context")
 }
 
-func (s *errorTestServer) ErrorStatusTest(ctx context.Context, req *ErrorTestRequest) (*ErrorTestResponse, error) {
+func (s *errorTestServer) ErrorStatusTest(context.Context, *ErrorTestRequest) (*ErrorTestResponse, error) {
 	return nil, io.ErrUnexpectedEOF
 }
 

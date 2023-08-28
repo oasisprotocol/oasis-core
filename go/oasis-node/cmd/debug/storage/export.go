@@ -36,7 +36,7 @@ var (
 	storageExportFlags = flag.NewFlagSet("", flag.ContinueOnError)
 )
 
-func doExport(cmd *cobra.Command, args []string) {
+func doExport(*cobra.Command, []string) {
 	var ok bool
 	defer func() {
 		if !ok {

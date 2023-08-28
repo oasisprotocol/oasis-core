@@ -41,7 +41,7 @@ func TestPruneKeepN(t *testing.T) {
 		var rootHash hash.Hash
 		_, rootHash, err = tree.Commit(ctx, common.Namespace{}, i)
 		require.NoError(err, "Commit")
-		err = ndb.Finalize(ctx, []mkvsNode.Root{{Namespace: common.Namespace{}, Version: i, Type: mkvsNode.RootTypeState, Hash: rootHash}})
+		err = ndb.Finalize([]mkvsNode.Root{{Namespace: common.Namespace{}, Version: i, Type: mkvsNode.RootTypeState, Hash: rootHash}})
 		require.NoError(err, "Finalize")
 	}
 

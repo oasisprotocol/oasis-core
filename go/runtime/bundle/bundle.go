@@ -90,11 +90,7 @@ func (bnd *Bundle) Validate() error {
 	_ = f.Close()
 
 	// Make sure the SGX signature is valid if it exists.
-	if err := bnd.verifySgxSignature(); err != nil {
-		return err
-	}
-
-	return nil
+	return bnd.verifySgxSignature()
 }
 
 // Add adds/overwrites a file to/in the bundle.

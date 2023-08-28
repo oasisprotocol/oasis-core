@@ -124,6 +124,12 @@ define ENSURE_GIT_VERSION_EQUALS_PUNCH_VERSION =
 	fi
 endef
 
+# Golangci-lint binary to use for all Golangci-lint commands.
+export OASIS_GOLANGCI_LINT ?= golangci-lint
+
+# Golangci-lint command prefix to use in all Golangci-lint commands.
+GOLANGCI_LINT := env -u GOPATH $(OASIS_GOLANGCI_LINT)
+
 # Go binary to use for all Go commands.
 export OASIS_GO ?= go
 

@@ -271,7 +271,7 @@ func initRootEnv(cmd *cobra.Command) (*env.Env, error) {
 	return env, nil
 }
 
-func runRoot(cmd *cobra.Command, args []string) error { // nolint: gocyclo
+func runRoot(cmd *cobra.Command, _ []string) error { // nolint: gocyclo
 	cmd.SilenceUsage = true
 
 	// Workaround for viper bug: https://github.com/spf13/viper/issues/233
@@ -487,7 +487,7 @@ func doScenario(ctx context.Context, childEnv *env.Env, sc scenario.Scenario) (e
 		}
 	}()
 
-	if err = sc.PreInit(childEnv); err != nil {
+	if err = sc.PreInit(); err != nil {
 		err = fmt.Errorf("root: failed to pre-initialize scenario: %w", err)
 		return
 	}
@@ -565,7 +565,7 @@ func doCleanup(childEnv *env.Env) (err error) {
 	return
 }
 
-func runList(cmd *cobra.Command, args []string) {
+func runList(*cobra.Command, []string) {
 	scNames := common.GetScenarioNames()
 	switch len(scNames) {
 	case 0:

@@ -49,7 +49,7 @@ type multiPingServer struct {
 	multiPingCount uint32
 }
 
-func (s *multiPingServer) Ping(ctx context.Context) (*MultiPingUnaryResponse, error) {
+func (s *multiPingServer) Ping(context.Context) (*MultiPingUnaryResponse, error) {
 	atomic.AddUint32(&s.pingCount, 1)
 	return &MultiPingUnaryResponse{}, nil
 }

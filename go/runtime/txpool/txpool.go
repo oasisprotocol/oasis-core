@@ -69,7 +69,7 @@ type TransactionPool interface {
 	SubmitTx(ctx context.Context, tx []byte, meta *TransactionMeta) (*protocol.CheckTxResult, error)
 
 	// SubmitTxNoWait adds the transaction into the transaction pool and returns immediately.
-	SubmitTxNoWait(ctx context.Context, tx []byte, meta *TransactionMeta) error
+	SubmitTxNoWait(tx []byte, meta *TransactionMeta) error
 
 	// SubmitProposedBatch adds the given (possibly new) transaction batch into the current
 	// proposal queue.
@@ -224,7 +224,7 @@ func (t *txPool) Quit() <-chan struct{} {
 
 func (t *txPool) SubmitTx(ctx context.Context, rawTx []byte, meta *TransactionMeta) (*protocol.CheckTxResult, error) {
 	notifyCh := make(chan *protocol.CheckTxResult, 1)
-	err := t.submitTx(ctx, rawTx, meta, notifyCh)
+	err := t.submitTx(rawTx, meta, notifyCh)
 	if err != nil {
 		close(notifyCh)
 		return nil, err
@@ -241,11 +241,11 @@ func (t *txPool) SubmitTx(ctx context.Context, rawTx []byte, meta *TransactionMe
 	}
 }
 
-func (t *txPool) SubmitTxNoWait(ctx context.Context, tx []byte, meta *TransactionMeta) error {
-	return t.submitTx(ctx, tx, meta, nil)
+func (t *txPool) SubmitTxNoWait(tx []byte, meta *TransactionMeta) error {
+	return t.submitTx(tx, meta, nil)
 }
 
-func (t *txPool) submitTx(ctx context.Context, rawTx []byte, meta *TransactionMeta, notifyCh chan *protocol.CheckTxResult) error {
+func (t *txPool) submitTx(rawTx []byte, meta *TransactionMeta, notifyCh chan *protocol.CheckTxResult) error {
 	tx := &TxQueueMeta{
 		raw:       rawTx,
 		hash:      hash.NewFromBytes(rawTx),
@@ -298,7 +298,7 @@ func (t *txPool) addToCheckQueue(pct *PendingCheckTransaction) error {
 func (t *txPool) SubmitProposedBatch(batch [][]byte) {
 	// Also ingest into the regular pool (may fail).
 	for _, rawTx := range batch {
-		_ = t.SubmitTxNoWait(context.Background(), rawTx, &TransactionMeta{Local: false})
+		_ = t.SubmitTxNoWait(rawTx, &TransactionMeta{Local: false})
 	}
 
 	t.proposedTxsLock.Lock()

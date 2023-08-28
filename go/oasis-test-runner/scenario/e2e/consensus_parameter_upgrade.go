@@ -327,7 +327,7 @@ func (sc *consensusParameterUpgradeImpl) nextEpoch(ctx context.Context) error {
 	return nil
 }
 
-func (sc *consensusParameterUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *consensusParameterUpgradeImpl) Run(ctx context.Context, _ *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -381,9 +381,5 @@ func (sc *consensusParameterUpgradeImpl) Run(ctx context.Context, childEnv *env.
 
 	// Do one final epoch transition.
 	sc.Logger.Info("final epoch transition")
-	if err = sc.nextEpoch(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.nextEpoch(ctx)
 }

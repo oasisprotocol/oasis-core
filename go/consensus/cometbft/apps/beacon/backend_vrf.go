@@ -389,7 +389,7 @@ func (impl *backendVRF) doSetEpochTx(
 
 func (impl *backendVRF) updateNodeStatus(
 	ctx *api.Context,
-	state *beaconState.MutableState,
+	_ *beaconState.MutableState,
 	nextEpoch beacon.EpochTime,
 ) error {
 	registryState := registryState.NewMutableState(ctx.State())

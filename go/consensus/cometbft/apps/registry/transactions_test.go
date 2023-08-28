@@ -701,14 +701,12 @@ func TestProofFreshness(t *testing.T) {
 		requirePkg.NoError(t, err, "registry.SetConsensusParameters")
 	}
 
-	var blob [32]byte
-
 	t.Run("happy path", func(t *testing.T) {
 		require := requirePkg.New(t)
 
 		setTEEFeaturesFn(&node.TEEFeatures{FreshnessProofs: true})
 
-		err := app.proveFreshness(ctx, state, blob)
+		err := app.proveFreshness(ctx, state)
 		require.NoError(err, "freshness proofs should succeed")
 	})
 
@@ -718,14 +716,14 @@ func TestProofFreshness(t *testing.T) {
 		// Freshness proofs disabled.
 		setTEEFeaturesFn(&node.TEEFeatures{FreshnessProofs: false})
 
-		err := app.proveFreshness(ctx, state, blob)
+		err := app.proveFreshness(ctx, state)
 		require.Error(err, "freshness proofs should not be enabled")
 		require.Equal(registry.ErrInvalidArgument, err)
 
 		// No TEE features.
 		setTEEFeaturesFn(nil)
 
-		err = app.proveFreshness(ctx, state, blob)
+		err = app.proveFreshness(ctx, state)
 		require.Error(err, "freshness proofs should not be enabled")
 		require.Equal(registry.ErrInvalidArgument, err)
 	})

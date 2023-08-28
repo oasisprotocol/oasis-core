@@ -718,7 +718,7 @@ func (rtg *RuntimeGenesis) Equal(cmp *RuntimeGenesis) bool {
 
 // SanityCheck does basic sanity checking of RuntimeGenesis.
 // isGenesis is true, if it is called during consensus chain init.
-func (rtg *RuntimeGenesis) SanityCheck(isGenesis bool) error {
+func (rtg *RuntimeGenesis) SanityCheck(bool) error {
 	return nil
 }
 

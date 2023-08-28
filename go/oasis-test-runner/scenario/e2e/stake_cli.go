@@ -59,10 +59,10 @@ const (
 	feeGas = 10000
 
 	// Testing source account public key (hex-encoded).
-	srcPubkeyHex = "4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
+	srcPubkeyHex = "4ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35" // #nosec G101
 
 	// Testing escrow account public key (hex-encoded).
-	escrowPubkeyHex = "6ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35"
+	escrowPubkeyHex = "6ea5328f943ef6f66daaed74cb0e99c3b1c45f76307b425003dbc7cb3638ed35" // #nosec G101
 )
 
 var (
@@ -629,11 +629,7 @@ func (sc *stakeCLIImpl) testAmendCommissionSchedule(ctx context.Context, childEn
 	if err := sc.checkCommissionScheduleRates(ctx, childEnv, src, rates); err != nil {
 		return err
 	}
-	if err := sc.checkCommissionScheduleRateBounds(ctx, childEnv, src, bounds); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.checkCommissionScheduleRateBounds(ctx, childEnv, src, bounds)
 }
 
 // testAllowWithdraw tests setting an allowance and withdrawing.
@@ -691,13 +687,9 @@ func (sc *stakeCLIImpl) testAllowWithdraw(ctx context.Context, childEnv *env.Env
 	expectedGeneralBalance = mustInitQuantity(
 		transferAmount - feeAmount + withdrawAmount,
 	)
-	if err = sc.checkGeneralAccount(
+	return sc.checkGeneralAccount(
 		ctx, childEnv, beneficiary, &api.GeneralAccount{Balance: expectedGeneralBalance, Nonce: 1},
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }
 
 func (sc *stakeCLIImpl) getInfo(childEnv *env.Env) error {

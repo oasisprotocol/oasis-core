@@ -185,7 +185,7 @@ func (r *peerRegistry) handleNodes(nodes []*node.Node, reset bool) {
 
 	peers := make(map[core.PeerID]*peerData)
 	for _, n := range nodes {
-		info, err := p2pInfoToAddrInfo(&n.P2P)
+		info, err := p2pInfoToAddrInfo(&n.P2P) //nolint:gosec
 		if err != nil {
 			r.logger.Error("failed to convert node to node info",
 				"err", err,

@@ -31,17 +31,17 @@ type workerEnvironment struct {
 }
 
 // GetKeyManagerClient implements RuntimeHostHandlerEnvironment.
-func (env *workerEnvironment) GetKeyManagerClient(ctx context.Context) (runtimeKeymanager.Client, error) {
+func (env *workerEnvironment) GetKeyManagerClient() (runtimeKeymanager.Client, error) {
 	return env.kmCli, nil
 }
 
 // GetTxPool implements RuntimeHostHandlerEnvironment.
-func (env *workerEnvironment) GetTxPool(ctx context.Context) (txpool.TransactionPool, error) {
+func (env *workerEnvironment) GetTxPool() (txpool.TransactionPool, error) {
 	return nil, fmt.Errorf("method not supported")
 }
 
 // GetIdentity implements RuntimeHostHandlerEnvironment.
-func (env *workerEnvironment) GetNodeIdentity(ctx context.Context) (*identity.Identity, error) {
+func (env *workerEnvironment) GetNodeIdentity() (*identity.Identity, error) {
 	return env.w.commonWorker.Identity, nil
 }
 

@@ -286,7 +286,7 @@ func (n *Node) AddHooks(hooks NodeHooks) {
 }
 
 // GetStatus returns the common committee node status.
-func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
+func (n *Node) GetStatus() (*api.Status, error) {
 	n.CrossNode.Lock()
 	defer n.CrossNode.Unlock()
 
@@ -372,11 +372,11 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 }
 
 // Guarded by n.CrossNode.
-func (n *Node) handleSuspendLocked(height int64) {
+func (n *Node) handleSuspendLocked(int64) {
 	n.logger.Warn("runtime has been suspended")
 
 	// Suspend group.
-	n.Group.Suspend(n.ctx)
+	n.Group.Suspend()
 
 	epoch := n.Group.GetEpochSnapshot()
 	for _, hooks := range n.hooks {
@@ -445,7 +445,7 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		}
 	}
 
-	if err := n.SetHostedRuntimeVersion(n.ctx, activeVersion, nextVersion); err != nil {
+	if err := n.SetHostedRuntimeVersion(activeVersion, nextVersion); err != nil {
 		n.logger.Error("failed to activate runtime version(s)",
 			"err", err,
 			"version", activeVersion,

@@ -26,7 +26,7 @@ func newLocalQueue() *localQueue {
 	}
 }
 
-func (lq *localQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
+func (lq *localQueue) GetSchedulingSuggestion(uint32) []*TxQueueMeta {
 	lq.l.Lock()
 	defer lq.l.Unlock()
 	return append([]*TxQueueMeta(nil), lq.txs...)

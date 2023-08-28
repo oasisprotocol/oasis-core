@@ -214,7 +214,7 @@ func (sc *changeRewardScheduleImpl) fetchEscrowBalance(owner staking.Address) (*
 	return &a.Escrow.Active.Balance, nil
 }
 
-func (sc *changeRewardScheduleImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *changeRewardScheduleImpl) Run(ctx context.Context, _ *env.Env) error {
 	sc.ctx = ctx
 
 	if err := sc.Net.Start(); err != nil {

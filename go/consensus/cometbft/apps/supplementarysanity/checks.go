@@ -20,7 +20,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-func checkEpochTime(ctx *abciAPI.Context, now beacon.EpochTime) error {
+func checkEpochTime(_ *abciAPI.Context, now beacon.EpochTime) error {
 	if now == beacon.EpochInvalid {
 		return fmt.Errorf("current epoch is invalid")
 	}
@@ -75,7 +75,7 @@ func checkRegistry(ctx *abciAPI.Context, now beacon.EpochTime) error {
 	return nil
 }
 
-func checkRootHash(ctx *abciAPI.Context, now beacon.EpochTime) error {
+func checkRootHash(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	st := roothashState.NewMutableState(ctx.State())
 
 	// Check blocks.
@@ -254,7 +254,7 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error { //nolint: 
 	return nil
 }
 
-func checkKeyManager(ctx *abciAPI.Context, now beacon.EpochTime) error {
+func checkKeyManager(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	st := keymanagerState.NewMutableState(ctx.State())
 
 	statuses, err := st.Statuses(ctx)
@@ -339,7 +339,7 @@ func checkHalt(*abciAPI.Context, beacon.EpochTime) error {
 	return nil
 }
 
-func checkStakeClaims(ctx *abciAPI.Context, now beacon.EpochTime) error {
+func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	regSt := registryState.NewMutableState(ctx.State())
 	stakingSt := stakingState.NewMutableState(ctx.State())
 

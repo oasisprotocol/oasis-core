@@ -406,11 +406,8 @@ func (s *Signature) UnmarshalPEM(data []byte) error {
 	if blk.Type != sigPEMType {
 		return fmt.Errorf("signature: expected different PEM block (expected: %s got: %s)", sigPEMType, blk.Type)
 	}
-	if err := s.Signature.UnmarshalBinary(blk.Bytes); err != nil {
-		return err
-	}
 
-	return nil
+	return s.Signature.UnmarshalBinary(blk.Bytes)
 }
 
 // Signed is a signed blob.
@@ -463,7 +460,7 @@ type PrettySigned struct {
 
 // PrettyPrint writes a pretty-printed representation of the type
 // to the given writer.
-func (p PrettySigned) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (p PrettySigned) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	data, err := json.MarshalIndent(p, prefix, "  ")
 	if err != nil {
 		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)
@@ -579,7 +576,7 @@ type PrettyMultiSigned struct {
 
 // PrettyPrint writes a pretty-printed representation of the type to the
 // given writer.
-func (p PrettyMultiSigned) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+func (p PrettyMultiSigned) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
 	data, err := json.MarshalIndent(p, prefix, "  ")
 	if err != nil {
 		fmt.Fprintf(w, "%s<error: %s>\n", prefix, err)

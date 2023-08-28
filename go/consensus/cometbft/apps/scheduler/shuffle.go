@@ -44,7 +44,7 @@ func getPrevVRFState(
 
 func shuffleValidators(
 	ctx *api.Context,
-	appState api.ApplicationQueryState,
+	_ api.ApplicationQueryState,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,
@@ -148,7 +148,6 @@ func shuffleValidatorsByEntropy(
 
 func (app *schedulerApplication) electCommittee( //nolint: gocyclo
 	ctx *api.Context,
-	appState api.ApplicationQueryState,
 	schedulerParameters *scheduler.ConsensusParameters,
 	beaconState *beaconState.MutableState,
 	beaconParameters *beacon.ConsensusParameters,

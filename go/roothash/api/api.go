@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
@@ -632,7 +631,7 @@ var DefaultGasCosts = transaction.Costs{
 
 // VerifyRuntimeParameters verifies whether the runtime parameters are valid in the context of the
 // roothash service.
-func VerifyRuntimeParameters(logger *logging.Logger, rt *registry.Runtime, params *ConsensusParameters) error {
+func VerifyRuntimeParameters(rt *registry.Runtime, params *ConsensusParameters) error {
 	if rt.Executor.MaxMessages > params.MaxRuntimeMessages {
 		return ErrMaxMessagesTooBig
 	}

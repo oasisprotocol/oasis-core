@@ -368,7 +368,7 @@ func (e *NodeListEpochEvent) EventValue() string {
 }
 
 // DecodeValue decodes the attribute event value.
-func (e *NodeListEpochEvent) DecodeValue(value string) error {
+func (e *NodeListEpochEvent) DecodeValue(string) error {
 	return nil
 }
 
@@ -980,7 +980,7 @@ func verifyNodeRuntimeChanges(
 				return false
 			}
 
-			if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) {
+			if !verifyRuntimeCapabilities(logger, &currentRuntime.Capabilities, &newRuntime.Capabilities) { //nolint:gosec
 				curRtJSON, _ := json.Marshal(currentRuntime)
 				newRtJSON, _ := json.Marshal(newRuntime)
 				logger.Error("RegisterNode: trying to update runtimes, runtime Capabilities changed",

@@ -113,7 +113,7 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *serviceClient) DeliverEvent(_ context.Context, _ int64, _ cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	for _, pair := range ev.GetAttributes() {
 		if events.IsAttributeKind(pair.GetKey(), &api.StatusUpdateEvent{}) {
 			var event api.StatusUpdateEvent

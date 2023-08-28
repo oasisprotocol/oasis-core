@@ -2,8 +2,7 @@ package keymanager
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 

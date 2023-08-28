@@ -117,7 +117,7 @@ func printJSON(m map[string]Metric) {
 
 var metrics = map[string]Metric{}
 
-func doExtractMetrics(cmd *cobra.Command, args []string) {
+func doExtractMetrics(*cobra.Command, []string) {
 	searchDir := viper.GetString(CfgCodebasePath)
 	fset := token.NewFileSet() // positions are relative to fset
 	err := filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {

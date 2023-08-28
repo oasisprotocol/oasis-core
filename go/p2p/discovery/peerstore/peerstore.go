@@ -349,7 +349,7 @@ func (s *Store) Stop() {
 }
 
 // cleanup removes peers which registration expired.
-func (s *Store) cleanup(ctx context.Context) error {
+func (s *Store) cleanup(_ context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

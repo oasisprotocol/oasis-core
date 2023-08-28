@@ -22,7 +22,7 @@ func (app *governanceApplication) completeStateSync(ctx *api.Context) (interface
 	// Apply all pending upgrades locally.
 	if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
 		for _, pu := range pendingUpgrades {
-			switch err = upgrader.SubmitDescriptor(ctx, pu); err {
+			switch err = upgrader.SubmitDescriptor(pu); err {
 			case nil, upgrade.ErrAlreadyPending:
 			default:
 				ctx.Logger().Error("failed to locally apply the upgrade descriptor",

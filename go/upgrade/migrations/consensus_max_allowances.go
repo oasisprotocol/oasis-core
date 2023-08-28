@@ -17,11 +17,11 @@ var _ Handler = (*maxAllowances16Handler)(nil)
 
 type maxAllowances16Handler struct{}
 
-func (th *maxAllowances16Handler) StartupUpgrade(ctx *Context) error {
+func (th *maxAllowances16Handler) StartupUpgrade() error {
 	return nil
 }
 
-func (th *maxAllowances16Handler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) error {
+func (th *maxAllowances16Handler) ConsensusUpgrade(privateCtx interface{}) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:

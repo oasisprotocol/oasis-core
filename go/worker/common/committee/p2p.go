@@ -24,12 +24,12 @@ func (h *txMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return tx, nil
 }
 
-func (h *txMsgHandler) AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}) error {
+func (h *txMsgHandler) AuthorizeMessage(context.Context, signature.PublicKey, interface{}) error {
 	// Everyone is allowed to publish transactions.
 	return nil
 }
 
-func (h *txMsgHandler) HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey, msg interface{}, isOwn bool) error {
 	// Ignore own messages as those are handled separately.
 	if isOwn {
 		return nil

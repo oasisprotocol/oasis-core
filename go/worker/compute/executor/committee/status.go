@@ -1,13 +1,11 @@
 package committee
 
 import (
-	"context"
-
 	"github.com/oasisprotocol/oasis-core/go/worker/compute/executor/api"
 )
 
 // GetStatus returns the executor committee node status.
-func (n *Node) GetStatus(ctx context.Context) (*api.Status, error) {
+func (n *Node) GetStatus() (*api.Status, error) {
 	n.commonNode.CrossNode.Lock()
 	defer n.commonNode.CrossNode.Unlock()
 

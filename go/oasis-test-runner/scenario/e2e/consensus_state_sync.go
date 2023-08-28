@@ -55,7 +55,7 @@ func (sc *consensusStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *consensusStateSyncImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *consensusStateSyncImpl) Run(ctx context.Context, _ *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}

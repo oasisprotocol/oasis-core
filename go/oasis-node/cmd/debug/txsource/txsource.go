@@ -44,7 +44,7 @@ var (
 	}
 )
 
-func doRun(cmd *cobra.Command, args []string) error {
+func doRun(cmd *cobra.Command, _ []string) error {
 	cmd.SilenceUsage = true
 
 	config.GlobalConfig.Common.Log.Level = make(map[string]string)

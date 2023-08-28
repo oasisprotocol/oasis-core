@@ -152,7 +152,7 @@ var (
 	logger = logging.GetLogger("cmd/genesis")
 )
 
-func doInitGenesis(cmd *cobra.Command, args []string) {
+func doInitGenesis(*cobra.Command, []string) {
 	var ok bool
 	defer func() {
 		if !ok {
@@ -619,14 +619,10 @@ func appendStakingState(doc *genesis.Document, statePath string) error {
 		st.State.TokenValueExponent = tokenValueExponent
 	}
 
-	if err = st.AppendTo(doc); err != nil {
-		return err
-	}
-
-	return nil
+	return st.AppendTo(doc)
 }
 
-func doDumpGenesis(cmd *cobra.Command, args []string) {
+func doDumpGenesis(cmd *cobra.Command, _ []string) {
 	ctx := context.Background()
 
 	if err := cmdCommon.Init(); err != nil {
@@ -685,7 +681,7 @@ func doDumpGenesis(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doCheckGenesis(cmd *cobra.Command, args []string) {
+func doCheckGenesis(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

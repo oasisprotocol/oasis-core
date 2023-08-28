@@ -565,7 +565,7 @@ func (g *governanceWorkload) NeedsFunds() bool {
 func (g *governanceWorkload) Run(
 	gracefulExit context.Context,
 	rng *rand.Rand,
-	conn *grpc.ClientConn,
+	_ *grpc.ClientConn,
 	cnsc consensus.ClientBackend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,

@@ -1,18 +1,21 @@
 FROM ubuntu:22.04
 
 # Package versions.
-ARG GO_VERSION=1.20.2
+ARG GO_VERSION=1.21.0
 ARG GO_NANCY_VERSION=1.0.33
 ARG GO_NANCY_CHECKSUM=a4bf5290d41b095c04f941ed5380674770c79d59735e33b1bd07a5cd5fbb135d
 ARG GO_PROTOC_VERSION=3.6.1
 ARG GO_PROTOC_GEN_GO_VERSION=1.21.0
-ARG GOLANGCILINT_VERSION=1.51.2
+ARG GOLANGCILINT_VERSION=1.54.2
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
-ARG GOFUMPT_VERSION=v0.4.0
-ARG GOIMPORTS_VERSION=v0.7.0
+ARG GOFUMPT_VERSION=v0.5.0
+ARG GOIMPORTS_VERSION=v0.12.0
 ARG RUST_NIGHTLY_VERSION=2023-01-16
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
+
+# Legacy package versions (upgrade tests).
+ARG LEGACY_GO_VERSION=1.20.2
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -57,6 +60,10 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
 RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz && \
+    # Install legacy Go version.
+    go install golang.org/dl/go${LEGACY_GO_VERSION}@latest && \
+    go${LEGACY_GO_VERSION} download && \
+    # Prepare folder for binaries.
     mkdir -p /go/bin && \
     # Install a specific version of protoc-gen-go.
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v${GO_PROTOC_GEN_GO_VERSION} && \

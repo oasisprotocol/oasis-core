@@ -48,7 +48,7 @@ func (sc *runtimeMessageImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *runtimeMessageImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *runtimeMessageImpl) Run(ctx context.Context, _ *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	//     contain message results of the consensus transfer.
 	sc.Logger.Debug("submitting consensus_transfer runtime transaction")
 	var txMetaResponse *api.SubmitTxMetaResponse
-	if txMetaResponse, err = sc.submitConsensusXferTxMeta(ctx, KeyValueRuntimeID, staking.Transfer{}, 0); err != nil {
+	if txMetaResponse, err = sc.submitConsensusXferTxMeta(ctx, staking.Transfer{}, 0); err != nil {
 		return err
 	}
 	if _, err = unpackRawTxResp(txMetaResponse.Output); err != nil {

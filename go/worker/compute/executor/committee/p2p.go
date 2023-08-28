@@ -23,7 +23,7 @@ func (h *committeeMsgHandler) DecodeMessage(msg []byte) (interface{}, error) {
 	return &dec, nil
 }
 
-func (h *committeeMsgHandler) AuthorizeMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}) error {
+func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signature.PublicKey, msg interface{}) error {
 	cm := msg.(*p2p.CommitteeMessage) // Ensured by DecodeMessage.
 
 	epoch := h.n.commonNode.Group.GetEpochSnapshot()
@@ -56,7 +56,7 @@ func (h *committeeMsgHandler) AuthorizeMessage(ctx context.Context, peerID signa
 	return nil
 }
 
-func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *committeeMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey, msg interface{}, isOwn bool) error {
 	cm := msg.(*p2p.CommitteeMessage) // Ensured by DecodeMessage.
 
 	switch {
@@ -89,7 +89,7 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, peerID signatur
 }
 
 // HandlePeerTx implements NodeHooks.
-func (n *Node) HandlePeerTx(ctx context.Context, tx []byte) error {
+func (n *Node) HandlePeerTx(context.Context, []byte) error {
 	// Nothing to do here.
 	return nil
 }

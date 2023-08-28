@@ -271,7 +271,7 @@ func PendingUpgradesFromProposals(proposals []*Proposal, epoch beacon.EpochTime)
 	var pendingUpgrades []*upgrade.Descriptor
 	var proposalIDs []uint64
 	for _, p := range acceptedProposals {
-		pendingUpgrades = append(pendingUpgrades, &p.Content.Upgrade.Descriptor)
+		pendingUpgrades = append(pendingUpgrades, &p.Content.Upgrade.Descriptor) //nolint:gosec
 		proposalIDs = append(proposalIDs, p.ID)
 	}
 	return pendingUpgrades, proposalIDs

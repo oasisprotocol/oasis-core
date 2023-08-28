@@ -8,7 +8,7 @@ import (
 
 var _ api.StorageWorker = (*Worker)(nil)
 
-func (w *Worker) GetLastSyncedRound(ctx context.Context, request *api.GetLastSyncedRoundRequest) (*api.GetLastSyncedRoundResponse, error) {
+func (w *Worker) GetLastSyncedRound(_ context.Context, request *api.GetLastSyncedRoundRequest) (*api.GetLastSyncedRoundResponse, error) {
 	node := w.runtimes[request.RuntimeID]
 	if node == nil {
 		return nil, api.ErrRuntimeNotFound
@@ -22,7 +22,7 @@ func (w *Worker) GetLastSyncedRound(ctx context.Context, request *api.GetLastSyn
 	}, nil
 }
 
-func (w *Worker) PauseCheckpointer(ctx context.Context, request *api.PauseCheckpointerRequest) error {
+func (w *Worker) PauseCheckpointer(_ context.Context, request *api.PauseCheckpointerRequest) error {
 	node := w.runtimes[request.RuntimeID]
 	if node == nil {
 		return api.ErrRuntimeNotFound

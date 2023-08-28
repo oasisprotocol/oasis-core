@@ -37,7 +37,7 @@ func (cli *TestClient) Init(scenario *Scenario) error {
 }
 
 // Start starts the test client in a background.
-func (cli *TestClient) Start(ctx context.Context, childEnv *env.Env) error {
+func (cli *TestClient) Start(ctx context.Context, _ *env.Env) error {
 	cli.ctx = ctx
 
 	subCtx, cancelFn := context.WithCancel(ctx)

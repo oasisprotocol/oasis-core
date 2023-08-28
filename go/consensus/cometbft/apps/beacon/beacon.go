@@ -47,7 +47,7 @@ func (app *beaconApplication) Dependencies() []string {
 	return nil
 }
 
-func (app *beaconApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
+func (app *beaconApplication) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
 	app.state = state
 }
 
@@ -69,7 +69,7 @@ func (app *beaconApplication) BeginBlock(ctx *api.Context) error {
 	return app.backend.OnBeginBlock(ctx, state, params)
 }
 
-func (app *beaconApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (app *beaconApplication) ExecuteMessage(*api.Context, interface{}, interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("beacon: unexpected message")
 }
 
@@ -86,7 +86,7 @@ func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transa
 	return app.backend.ExecuteTx(ctx, state, params, tx)
 }
 
-func (app *beaconApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
+func (app *beaconApplication) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

@@ -31,11 +31,11 @@ func (sc *identityCLIImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *identityCLIImpl) PreInit(childEnv *env.Env) error {
+func (sc *identityCLIImpl) PreInit() error {
 	return nil
 }
 
-func (sc *identityCLIImpl) Init(childEnv *env.Env, net *oasis.Network) error {
+func (sc *identityCLIImpl) Init(childEnv *env.Env, _ *oasis.Network) error {
 	dataDir, err := childEnv.NewSubDir("test-identity")
 	if err != nil {
 		return fmt.Errorf("scenario/e2e/identity_cli: init failed to create subdir: %w", err)
@@ -49,7 +49,7 @@ func (sc *identityCLIImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }
 
-func (sc *identityCLIImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *identityCLIImpl) Run(_ context.Context, childEnv *env.Env) error {
 	// Provision node's identity.
 	args := []string{
 		"identity", "init",

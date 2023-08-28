@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -65,7 +64,7 @@ func (sc *kmReplicateImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *kmReplicateImpl) Run(ctx context.Context, _ *env.Env) error {
 	// Start the first two key managers.
 	if err := sc.Net.Start(); err != nil {
 		return err
@@ -148,11 +147,7 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// If we came this far than all key managers should have the same state.
 	// Let's test if they replicated the same secrets by fetching long-term
 	// public keys for all generations.
-	if err := sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2, 3}); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2, 3})
 }
 
 func (sc *kmReplicateImpl) waitKeymanagerStatuses(ctx context.Context, n int) (*keymanager.Status, error) {

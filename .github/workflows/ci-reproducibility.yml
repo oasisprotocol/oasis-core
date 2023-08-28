@@ -22,7 +22,6 @@ env:
   JEMALLOC_CHECKSUM: 34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 
 jobs:
-
   build-code:
     # NOTE: This name appears in GitHub's Checks API.
     name: build
@@ -40,7 +39,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.20.x"
+          go-version: "1.21.x"
       - name: Set up Rust
         working-directory: build${{ matrix.build_number }}
         run: rustup show

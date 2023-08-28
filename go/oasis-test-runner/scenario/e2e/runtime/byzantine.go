@@ -453,7 +453,7 @@ func (sc *byzantineImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *byzantineImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *byzantineImpl) Run(ctx context.Context, _ *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
@@ -582,7 +582,7 @@ ComputeWorkerSyncLoop:
 				state := mkvs.NewWithRoot(ctrl.Storage, nil, root)
 				it := state.NewIterator(storageCtx)
 
-				for it.Rewind(); it.Valid(); it.Next() {
+				for it.Rewind(); it.Valid(); it.Next() { //nolint:revive
 				}
 				err = it.Err()
 				it.Close()

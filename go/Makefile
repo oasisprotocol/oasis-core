@@ -69,7 +69,7 @@ fmt:
 # Lint.
 lint:
 	@$(ECHO) "$(CYAN)*** Running Go linters...$(OFF)"
-	@env -u GOPATH golangci-lint run --timeout 4m
+	@$(GOLANGCI_LINT) run --timeout 4m
 
 lint-mod-tidy:
 	@$(ECHO) "$(CYAN)*** Checking go mod tidy...$(OFF)"

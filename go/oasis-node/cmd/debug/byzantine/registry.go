@@ -8,15 +8,14 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
-func registryRegisterNode(svc consensus.Backend, id *identity.Identity, dataDir string, addresses, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
-	entityID, registrationSigner, err := registration.GetRegistrationSigner(logging.GetLogger("cmd/byzantine/registration"), dataDir, id)
+func registryRegisterNode(svc consensus.Backend, id *identity.Identity, p2pAddresses []node.Address, runtimeID common.Namespace, capabilities *node.Capabilities, roles node.RolesMask) error {
+	entityID, registrationSigner, err := registration.GetRegistrationSigner(id)
 	if err != nil {
 		return fmt.Errorf("registration GetRegistrationSigner: %w", err)
 	}

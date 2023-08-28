@@ -43,7 +43,7 @@ func (sc *multipleSeeds) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *multipleSeeds) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
+func (sc *multipleSeeds) Run(ctx context.Context, _ *env.Env) error { // nolint: gocyclo
 	if err := sc.Net.Start(); err != nil {
 		return fmt.Errorf("net Start: %w", err)
 	}

@@ -179,8 +179,6 @@ func initializeAndRegisterByzantineNode(
 	if err = registryRegisterNode(
 		b.cometbft.service,
 		b.identity,
-		cmdCommon.DataDir(),
-		getGrpcAddress(),
 		b.p2p.service.Addresses(),
 		b.runtimeID,
 		b.capabilities,

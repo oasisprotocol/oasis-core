@@ -31,7 +31,7 @@ func (sc *basicImpl) Clone() scenario.Scenario {
 	}
 }
 
-func (sc *basicImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *basicImpl) Run(_ context.Context, _ *env.Env) error {
 	roles := []signature.SignerRole{
 		signature.SignerEntity,
 		signature.SignerNode,
@@ -64,9 +64,5 @@ func (sc *basicImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	}
 
 	// Run basic common signer tests.
-	if err = signerTests.BasicTests(sf, sc.logger, roles); err != nil {
-		return err
-	}
-
-	return nil
+	return signerTests.BasicTests(sf, sc.logger, roles)
 }

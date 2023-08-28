@@ -164,7 +164,7 @@ func (app *governanceApplication) BeginBlock(ctx *api.Context) error {
 
 	// Check if the upgrade descriptor is installed in the node and has been executed.
 	if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
-		switch pu, err := upgrader.GetUpgrade(ctx, ud); err {
+		switch pu, err := upgrader.GetUpgrade(ud); err {
 		case nil:
 			// Upgrade exists, make sure it is in the process of being applied.
 			if !pu.HasStage(upgrade.UpgradeStageStartup) {
@@ -240,7 +240,7 @@ func (app *governanceApplication) executeProposal(ctx *api.Context, state *gover
 
 		// Locally apply the upgrade proposal.
 		if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
-			if err = upgrader.SubmitDescriptor(ctx, &proposal.Content.Upgrade.Descriptor); err != nil {
+			if err = upgrader.SubmitDescriptor(&proposal.Content.Upgrade.Descriptor); err != nil {
 				ctx.Logger().Error("failed to locally apply the upgrade descriptor",
 					"err", err,
 					"descriptor", proposal.Content.Upgrade.Descriptor,
@@ -266,7 +266,7 @@ func (app *governanceApplication) executeProposal(ctx *api.Context, state *gover
 
 		// Locally cancel the upgrade proposal.
 		if upgrader := ctx.AppState().Upgrader(); upgrader != nil {
-			if err = upgrader.CancelUpgrade(ctx, &upgradeProposal.Descriptor); err != nil {
+			if err = upgrader.CancelUpgrade(&upgradeProposal.Descriptor); err != nil {
 				ctx.Logger().Error("failed to locally cancel the upgrade",
 					"err", err,
 					"descriptor", upgradeProposal.Descriptor,
@@ -392,7 +392,7 @@ func (app *governanceApplication) closeProposal(
 			// Skip non-validator votes.
 			continue
 		}
-		validatorVotes[vote.Voter] = &vote.Vote
+		validatorVotes[vote.Voter] = &vote.Vote //nolint:gosec
 		if err = addShares(validatorVoteShares[vote.Voter], vote.Vote, escrow.TotalShares); err != nil {
 			return fmt.Errorf("failed to add shares: %w", err)
 		}
@@ -416,7 +416,7 @@ func (app *governanceApplication) closeProposal(
 			}
 			delegationToValidator = true
 			validatorVote := validatorVotes[to]
-			if validatorVote == &vote.Vote {
+			if validatorVote == &vote.Vote { //nolint:gosec
 				// Vote matches the delegated validator vote.
 				continue
 			}
@@ -474,11 +474,7 @@ func (app *governanceApplication) closeProposal(
 		"invalid_votes", proposal.InvalidVotes,
 		"stake_threshold", params.StakeThreshold,
 	)
-	if err := proposal.CloseProposal(totalVotingStake, params.StakeThreshold); err != nil {
-		return err
-	}
-
-	return nil
+	return proposal.CloseProposal(totalVotingStake, params.StakeThreshold)
 }
 
 func addShares(validatorVoteShares map[governance.Vote]quantity.Quantity, vote governance.Vote, amount quantity.Quantity) error {
@@ -612,7 +608,7 @@ func (app *governanceApplication) EndBlock(ctx *api.Context) (types.ResponseEndB
 			if err = stakingState.TransferFromGovernanceDeposits(
 				ctx,
 				proposal.Submitter,
-				&proposal.Deposit,
+				&proposal.Deposit, //nolint:gosec
 			); err != nil {
 				ctx.Logger().Error("failed to transfer from governance deposits",
 					"err", err,
@@ -626,7 +622,7 @@ func (app *governanceApplication) EndBlock(ctx *api.Context) (types.ResponseEndB
 			// Proposal rejected, deposit is transferred into the common pool.
 			if err = stakingState.DiscardGovernanceDeposit(
 				ctx,
-				&proposal.Deposit,
+				&proposal.Deposit, //nolint:gosec
 			); err != nil {
 				return types.ResponseEndBlock{},
 					fmt.Errorf("consensus/governance: failed to discard proposal deposit: %w", err)

@@ -453,7 +453,7 @@ func handlerGetTransactionsWithProofs(
 func handlerGetUnconfirmedTransactions(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -541,7 +541,7 @@ func handlerStateSyncIterate(
 func handlerGetGenesisDocument(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -560,7 +560,7 @@ func handlerGetGenesisDocument(
 func handlerGetChainContext(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -579,7 +579,7 @@ func handlerGetChainContext(
 func handlerGetStatus(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -598,7 +598,7 @@ func handlerGetStatus(
 func handlerGetNextBlockState(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {

@@ -81,11 +81,7 @@ func (s *EncryptedMasterSecret) SanityCheck(generation uint64, epoch beacon.Epoc
 		return fmt.Errorf("keymanager: sanity check failed: master secret contains an invalid epoch: (expected: %d, got: %d)", epoch, s.Epoch)
 	}
 
-	if err := s.Secret.SanityCheck(reks); err != nil {
-		return err
-	}
-
-	return nil
+	return s.Secret.SanityCheck(reks)
 }
 
 // EncryptedEphemeralSecret is an encrypted ephemeral secret.
@@ -106,11 +102,7 @@ func (s *EncryptedEphemeralSecret) SanityCheck(epoch beacon.EpochTime, reks map[
 		return fmt.Errorf("keymanager: sanity check failed: ephemeral secret contains an invalid epoch: (expected: %d, got: %d)", epoch, s.Epoch)
 	}
 
-	if err := s.Secret.SanityCheck(reks); err != nil {
-		return err
-	}
-
-	return nil
+	return s.Secret.SanityCheck(reks)
 }
 
 // SignedEncryptedMasterSecret is a RAK signed encrypted master secret.

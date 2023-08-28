@@ -34,7 +34,7 @@ func NewOverlay(inner KeyValueTree) OverlayTree {
 }
 
 // Implements KeyValueTree.
-func (o *treeOverlay) Insert(ctx context.Context, key, value []byte) error {
+func (o *treeOverlay) Insert(_ context.Context, key, value []byte) error {
 	o.overlay.Set(string(key), value)
 	o.dirty[string(key)] = true
 	return nil
@@ -73,7 +73,7 @@ func (o *treeOverlay) RemoveExisting(ctx context.Context, key []byte) ([]byte, e
 }
 
 // Implements KeyValueTree.
-func (o *treeOverlay) Remove(ctx context.Context, key []byte) error {
+func (o *treeOverlay) Remove(_ context.Context, key []byte) error {
 	// Since we don't care about the previous value, we can just record an update.
 	o.dirty[string(key)] = true
 	o.overlay.Delete(string(key))
@@ -241,12 +241,12 @@ type treeOverlayWrapper struct {
 }
 
 // Implements OverlayTree.
-func (tow *treeOverlayWrapper) Copy(inner KeyValueTree) OverlayTree {
+func (tow *treeOverlayWrapper) Copy(KeyValueTree) OverlayTree {
 	panic("copy not supported")
 }
 
 // Implements OverlayTree.
-func (tow *treeOverlayWrapper) Commit(ctx context.Context) (KeyValueTree, error) {
+func (tow *treeOverlayWrapper) Commit(context.Context) (KeyValueTree, error) {
 	return tow.Tree, nil
 }
 

@@ -39,7 +39,7 @@ func NewCommonStoreBackend(cs *persistent.CommonStore, bucket string, key string
 }
 
 // Delete implements PeerBackup.
-func (b *commonStoreBackend) Delete(ctx context.Context) error {
+func (b *commonStoreBackend) Delete(context.Context) error {
 	if b.bucket == nil {
 		return nil
 	}
@@ -48,7 +48,7 @@ func (b *commonStoreBackend) Delete(ctx context.Context) error {
 }
 
 // Backup implements PeerBackup.
-func (b *commonStoreBackend) Backup(ctx context.Context, nsPeers map[string][]peer.AddrInfo) error {
+func (b *commonStoreBackend) Backup(_ context.Context, nsPeers map[string][]peer.AddrInfo) error {
 	if b.bucket == nil {
 		return nil
 	}
@@ -79,15 +79,11 @@ func (b *commonStoreBackend) Backup(ctx context.Context, nsPeers map[string][]pe
 	}
 
 	// Store addresses.
-	if err := b.bucket.PutCBOR([]byte(b.key), data); err != nil {
-		return err
-	}
-
-	return nil
+	return b.bucket.PutCBOR([]byte(b.key), data)
 }
 
 // Restore implements PeerBackup.
-func (b *commonStoreBackend) Restore(ctx context.Context) (map[string][]peer.AddrInfo, error) {
+func (b *commonStoreBackend) Restore(_ context.Context) (map[string][]peer.AddrInfo, error) {
 	if b.bucket == nil {
 		return map[string][]peer.AddrInfo{}, nil
 	}

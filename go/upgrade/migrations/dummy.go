@@ -38,11 +38,11 @@ func init() {
 
 type dummyMigrationHandler struct{}
 
-func (th *dummyMigrationHandler) StartupUpgrade(ctx *Context) error {
+func (th *dummyMigrationHandler) StartupUpgrade() error {
 	return nil
 }
 
-func (th *dummyMigrationHandler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) error {
+func (th *dummyMigrationHandler) ConsensusUpgrade(privateCtx interface{}) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:

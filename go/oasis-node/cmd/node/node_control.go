@@ -104,13 +104,13 @@ func (n *Node) IsSynced(ctx context.Context) (bool, error) {
 }
 
 // UpgradeBinary implements control.NodeController.
-func (n *Node) UpgradeBinary(ctx context.Context, descriptor *upgrade.Descriptor) error {
-	return n.Upgrader.SubmitDescriptor(ctx, descriptor)
+func (n *Node) UpgradeBinary(_ context.Context, descriptor *upgrade.Descriptor) error {
+	return n.Upgrader.SubmitDescriptor(descriptor)
 }
 
 // CancelUpgrade implements control.NodeController.
-func (n *Node) CancelUpgrade(ctx context.Context, descriptor *upgrade.Descriptor) error {
-	return n.Upgrader.CancelUpgrade(ctx, descriptor)
+func (n *Node) CancelUpgrade(_ context.Context, descriptor *upgrade.Descriptor) error {
+	return n.Upgrader.CancelUpgrade(descriptor)
 }
 
 // GetStatus implements control.NodeController.
@@ -120,7 +120,7 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		return nil, fmt.Errorf("failed to get consensus status: %w", err)
 	}
 
-	lcs, err := n.getLightClientStatus(ctx)
+	lcs, err := n.getLightClientStatus()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get light client status: %w", err)
 	}
@@ -135,12 +135,12 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 		return nil, fmt.Errorf("failed to get runtime status: %w", err)
 	}
 
-	kms, err := n.getKeymanagerStatus(ctx)
+	kms, err := n.getKeymanagerStatus()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key manager worker status: %w", err)
 	}
 
-	pendingUpgrades, err := n.getPendingUpgrades(ctx)
+	pendingUpgrades, err := n.getPendingUpgrades()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending upgrades: %w", err)
 	}
@@ -183,8 +183,8 @@ func (n *Node) getConsensusStatus(ctx context.Context) (*consensus.Status, error
 	return n.Consensus.GetStatus(ctx)
 }
 
-func (n *Node) getLightClientStatus(ctx context.Context) (*consensus.LightClientStatus, error) {
-	return n.LightClient.GetStatus(ctx)
+func (n *Node) getLightClientStatus() (*consensus.LightClientStatus, error) {
+	return n.LightClient.GetStatus()
 }
 
 func (n *Node) getRegistrationStatus(ctx context.Context) (*control.RegistrationStatus, error) {
@@ -300,7 +300,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 
 		// Fetch common committee worker status.
 		if rtNode := n.CommonWorker.GetRuntime(rt.ID()); rtNode != nil {
-			status.Committee, err = rtNode.GetStatus(ctx)
+			status.Committee, err = rtNode.GetStatus()
 			if err != nil {
 				n.logger.Error("failed to fetch common committee worker status",
 					"err", err,
@@ -311,7 +311,7 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 
 		// Fetch executor worker status.
 		if execNode := n.ExecutorWorker.GetRuntime(rt.ID()); execNode != nil {
-			status.Executor, err = execNode.GetStatus(ctx)
+			status.Executor, err = execNode.GetStatus()
 			if err != nil {
 				n.logger.Error("failed to fetch executor worker status",
 					"err", err,
@@ -349,15 +349,15 @@ func (n *Node) getRuntimeStatus(ctx context.Context) (map[common.Namespace]contr
 	return runtimes, nil
 }
 
-func (n *Node) getKeymanagerStatus(ctx context.Context) (*keymanagerWorker.Status, error) {
+func (n *Node) getKeymanagerStatus() (*keymanagerWorker.Status, error) {
 	if n.KeymanagerWorker == nil || !n.KeymanagerWorker.Enabled() {
 		return nil, nil
 	}
-	return n.KeymanagerWorker.GetStatus(ctx)
+	return n.KeymanagerWorker.GetStatus()
 }
 
-func (n *Node) getPendingUpgrades(ctx context.Context) ([]*upgrade.PendingUpgrade, error) {
-	return n.Upgrader.PendingUpgrades(ctx)
+func (n *Node) getPendingUpgrades() ([]*upgrade.PendingUpgrade, error) {
+	return n.Upgrader.PendingUpgrades()
 }
 
 func (n *Node) getP2PStatus() *p2p.Status {

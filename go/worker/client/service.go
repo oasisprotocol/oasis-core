@@ -103,7 +103,7 @@ func (s *service) CheckTx(ctx context.Context, request *api.CheckTxRequest) erro
 }
 
 // Implements api.RuntimeClient.
-func (s *service) WatchBlocks(ctx context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
+func (s *service) WatchBlocks(_ context.Context, runtimeID common.Namespace) (<-chan *roothash.AnnotatedBlock, pubsub.ClosableSubscription, error) {
 	rt, err := s.w.commonWorker.RuntimeRegistry.GetRuntime(runtimeID)
 	if err != nil {
 		return nil, nil, err

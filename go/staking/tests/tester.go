@@ -13,7 +13,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
@@ -40,7 +39,7 @@ type accountData struct {
 
 // update updates additional data about a staking account or returns a testing
 // error.
-func (a *accountData) update(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (a *accountData) update(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
 	require.NotNil(a.Address, "accountData update: address must be defined")
@@ -83,12 +82,12 @@ func (a accountDataList) getAccount(index int) accountData {
 // update updates the i-th accountData in the list or panics.
 //
 // NOTE: Indexing is 1-based, NOT 0-based.
-func (a accountDataList) update(index int, t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (a accountDataList) update(index int, t *testing.T, backend api.Backend) {
 	i := index - 1
 	if i < 0 || i >= len(a) {
 		panic(fmt.Sprintf("Account with index: %d doesn't exist", index))
 	}
-	a[i].update(t, backend, consensus)
+	a[i].update(t, backend)
 }
 
 // stakingTestsState holds the current state of staking tests.
@@ -100,7 +99,7 @@ type stakingTestsState struct {
 }
 
 // update updates staking tests' state or returns a testing error.
-func (s *stakingTestsState) update(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (s *stakingTestsState) update(t *testing.T, backend api.Backend) {
 	require := require.New(t)
 
 	totalSupply, err := backend.TotalSupply(context.Background(), consensusAPI.HeightLatest)
@@ -112,13 +111,13 @@ func (s *stakingTestsState) update(t *testing.T, backend api.Backend, consensus 
 	s.commonPool = commonPool
 
 	for i := 1; i <= NumAccounts; i++ {
-		s.accounts.update(i, t, backend, consensus)
+		s.accounts.update(i, t, backend)
 	}
 }
 
 // newStakingTestsState returns a new staking tests' state or returns a testing
 // error.
-func newStakingTestsState(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) (state *stakingTestsState) {
+func newStakingTestsState(t *testing.T, backend api.Backend) (state *stakingTestsState) {
 	state = &stakingTestsState{}
 	accountDataList := make([]accountData, NumAccounts)
 	for i := 0; i < NumAccounts; i++ {
@@ -127,7 +126,7 @@ func newStakingTestsState(t *testing.T, backend api.Backend, consensus consensus
 		}
 	}
 	state.accounts = accountDataList
-	state.update(t, backend, consensus)
+	state.update(t, backend)
 	return
 }
 
@@ -145,7 +144,6 @@ func StakingImplementationTests(
 	consensus consensusAPI.Backend,
 	identity *identity.Identity,
 	entity *entity.Entity,
-	entitySigner signature.Signer,
 	runtimeID common.Namespace,
 ) {
 	for _, tc := range []struct {
@@ -164,14 +162,14 @@ func StakingImplementationTests(
 		{"EscrowSelf", testSelfEscrow},
 		{"Allowance", testAllowance},
 	} {
-		state := newStakingTestsState(t, backend, consensus)
+		state := newStakingTestsState(t, backend)
 		t.Run(tc.n, func(t *testing.T) { tc.fn(t, state, backend, consensus) })
 	}
 
 	// Separate test as it requires some arguments that others don't.
 	t.Run("SlashConsensusEquivocation", func(t *testing.T) {
-		state := newStakingTestsState(t, backend, consensus)
-		testSlashConsensusEquivocation(t, state, backend, consensus, identity, entity, entitySigner, runtimeID)
+		state := newStakingTestsState(t, backend)
+		testSlashConsensusEquivocation(t, state, backend, consensus, identity, entity, runtimeID)
 	})
 }
 
@@ -192,12 +190,12 @@ func StakingClientImplementationTests(t *testing.T, backend api.Backend, consens
 		{"EscrowSelf", testSelfEscrow},
 		{"Allowance", testAllowance},
 	} {
-		state := newStakingTestsState(t, backend, consensus)
+		state := newStakingTestsState(t, backend)
 		t.Run(tc.n, func(t *testing.T) { tc.fn(t, state, backend, consensus) })
 	}
 }
 
-func testThresholds(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testThresholds(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
 	require := require.New(t)
 
 	for _, kind := range []api.ThresholdKind{
@@ -214,7 +212,7 @@ func testThresholds(t *testing.T, state *stakingTestsState, backend api.Backend,
 	}
 }
 
-func testCommonPool(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testCommonPool(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
 	require := require.New(t)
 
 	commonPool, err := backend.CommonPool(context.Background(), consensusAPI.HeightLatest)
@@ -225,7 +223,7 @@ func testCommonPool(t *testing.T, state *stakingTestsState, backend api.Backend,
 	require.EqualValues(commonPool, &commonPoolAcc.General.Balance, "CommonPool Account - initial value should match")
 }
 
-func testLastBlockFees(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testLastBlockFees(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
 	require := require.New(t)
 
 	lastBlockFees, err := backend.LastBlockFees(context.Background(), consensusAPI.HeightLatest)
@@ -237,7 +235,7 @@ func testLastBlockFees(t *testing.T, state *stakingTestsState, backend api.Backe
 	require.True(lastBlockFeesAcc.General.Balance.IsZero(), "LastBlockFees Account - initial value")
 }
 
-func testGovernanceDeposits(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testGovernanceDeposits(t *testing.T, _ *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
 	require := require.New(t)
 
 	governanceDeposits, err := backend.GovernanceDeposits(context.Background(), consensusAPI.HeightLatest)
@@ -249,7 +247,7 @@ func testGovernanceDeposits(t *testing.T, state *stakingTestsState, backend api.
 	require.True(governanceDepositsAcc.General.Balance.IsZero(), "GovernaceDeposits Account - initial value")
 }
 
-func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend, consensus consensusAPI.Backend) {
+func testDelegations(t *testing.T, state *stakingTestsState, backend api.Backend, _ consensusAPI.Backend) {
 	require := require.New(t)
 
 	accts := state.accounts
@@ -467,7 +465,7 @@ func testSelfTransfer(t *testing.T, state *stakingTestsState, backend api.Backen
 
 func testTransferHelper(
 	t *testing.T,
-	state *stakingTestsState,
+	_ *stakingTestsState,
 	backend api.Backend,
 	consensus consensusAPI.Backend,
 	srcAccData, destAccData accountData,
@@ -710,7 +708,7 @@ func testSelfEscrow(t *testing.T, state *stakingTestsState, backend api.Backend,
 
 func testEscrowHelper( // nolint: gocyclo
 	t *testing.T,
-	state *stakingTestsState,
+	_ *stakingTestsState,
 	backend api.Backend,
 	consensus consensusAPI.Backend,
 	srcAccData, destAccData accountData,
@@ -1040,7 +1038,7 @@ func testAllowance(t *testing.T, state *stakingTestsState, backend api.Backend, 
 
 func testAllowanceHelper(
 	t *testing.T,
-	state *stakingTestsState,
+	_ *stakingTestsState,
 	backend api.Backend,
 	consensus consensusAPI.Backend,
 	srcAccData, destAccData accountData,
@@ -1187,7 +1185,6 @@ func testSlashConsensusEquivocation(
 	consensus consensusAPI.Backend,
 	ident *identity.Identity,
 	ent *entity.Entity,
-	entSigner signature.Signer,
 	runtimeID common.Namespace,
 ) {
 	ctx := context.Background()

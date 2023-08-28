@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"math"
-	"time"
 
 	cmtcrypto "github.com/cometbft/cometbft/crypto"
 
@@ -20,9 +19,6 @@ func onEvidenceByzantineConsensus(
 	ctx *abciAPI.Context,
 	reason staking.SlashReason,
 	addr cmtcrypto.Address,
-	height int64,
-	time time.Time,
-	power int64,
 ) error {
 	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())

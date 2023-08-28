@@ -1,11 +1,11 @@
 package logging
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/multierr"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -46,7 +46,7 @@ func (t turduckens) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 	var err error
 	tur := turducken{}
 	for i := 0; i < int(t); i++ {
-		err = multierr.Append(err, enc.AppendObject(tur))
+		err = errors.Join(err, enc.AppendObject(tur))
 	}
 	return err
 }

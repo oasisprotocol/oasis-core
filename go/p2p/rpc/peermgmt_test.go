@@ -18,7 +18,7 @@ type testP2P struct {
 }
 
 // BlockPeer implements P2P.
-func (*testP2P) BlockPeer(peerID peer.ID) {
+func (*testP2P) BlockPeer(peer.ID) {
 }
 
 // Host implements P2P.
@@ -27,7 +27,7 @@ func (t *testP2P) Host() host.Host {
 }
 
 // RegisterProtocol implements P2P.
-func (*testP2P) RegisterProtocol(p protocol.ID, min int, total int) {
+func (*testP2P) RegisterProtocol(protocol.ID, int, int) {
 }
 
 func TestWatchUpdates(t *testing.T) {

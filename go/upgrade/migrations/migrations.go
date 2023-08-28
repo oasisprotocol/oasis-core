@@ -25,7 +25,7 @@ var (
 type Handler interface {
 	// StartupUpgrade is called by the upgrade manager to perform
 	// the node startup portion of the upgrade.
-	StartupUpgrade(*Context) error
+	StartupUpgrade() error
 
 	// ConsensusUpgrade is called by the upgrade manager to perform
 	// the consensus portion of the upgrade. The interface argument is
@@ -34,7 +34,7 @@ type Handler interface {
 	//
 	// This method will be called twice, once in BeginBlock and once in
 	// EndBlock.
-	ConsensusUpgrade(*Context, interface{}) error
+	ConsensusUpgrade(interface{}) error
 }
 
 // Context defines the common context used by migration handlers.

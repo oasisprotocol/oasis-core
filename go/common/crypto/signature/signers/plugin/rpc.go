@@ -31,11 +31,11 @@ type RPCContextSignArgs struct {
 	Message    []byte
 }
 
-func (m *rpcServer) Initialize(args *RPCInitArgs, resp *interface{}) error {
+func (m *rpcServer) Initialize(args *RPCInitArgs, _ *interface{}) error {
 	return m.impl.Initialize(args.Config, args.Roles...)
 }
 
-func (m *rpcServer) Load(args *RPCLoadArgs, resp *interface{}) error {
+func (m *rpcServer) Load(args *RPCLoadArgs, _ *interface{}) error {
 	return m.impl.Load(args.Role, args.MustGenerate)
 }
 

@@ -23,7 +23,7 @@ type restorer struct {
 }
 
 // Implements Restorer.
-func (rs *restorer) StartRestore(ctx context.Context, checkpoint *Metadata) error {
+func (rs *restorer) StartRestore(_ context.Context, checkpoint *Metadata) error {
 	rs.Lock()
 	defer rs.Unlock()
 
@@ -40,7 +40,7 @@ func (rs *restorer) StartRestore(ctx context.Context, checkpoint *Metadata) erro
 	return nil
 }
 
-func (rs *restorer) AbortRestore(ctx context.Context) error {
+func (rs *restorer) AbortRestore(context.Context) error {
 	rs.Lock()
 	defer rs.Unlock()
 

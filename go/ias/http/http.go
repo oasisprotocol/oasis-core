@@ -132,7 +132,7 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidenc
 	}, nil
 }
 
-func (e *httpEndpoint) GetSPIDInfo(ctx context.Context) (*api.SPIDInfo, error) {
+func (e *httpEndpoint) GetSPIDInfo(context.Context) (*api.SPIDInfo, error) {
 	return &e.spidInfo, nil
 }
 
@@ -178,7 +178,7 @@ type mockEndpoint struct {
 	spidInfo api.SPIDInfo
 }
 
-func (e *mockEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidence) (*ias.AVRBundle, error) {
+func (e *mockEndpoint) VerifyEvidence(_ context.Context, evidence *api.Evidence) (*ias.AVRBundle, error) {
 	if len(evidence.Nonce) > ias.NonceMaxLen {
 		return nil, fmt.Errorf("ias: invalid nonce length")
 	}
@@ -193,11 +193,11 @@ func (e *mockEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidenc
 	}, nil
 }
 
-func (e *mockEndpoint) GetSPIDInfo(ctx context.Context) (*api.SPIDInfo, error) {
+func (e *mockEndpoint) GetSPIDInfo(context.Context) (*api.SPIDInfo, error) {
 	return &e.spidInfo, nil
 }
 
-func (e *mockEndpoint) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, error) {
+func (e *mockEndpoint) GetSigRL(context.Context, uint32) ([]byte, error) {
 	return nil, nil
 }
 

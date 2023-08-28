@@ -73,7 +73,7 @@ func (c *client) Start() error {
 	return nil
 }
 
-func (c *client) GetStatus(ctx context.Context) (*consensus.LightClientStatus, error) {
+func (c *client) GetStatus() (*consensus.LightClientStatus, error) {
 	status := &consensus.LightClientStatus{}
 	oldest, err := c.store.FirstLightBlockHeight()
 	if err != nil {

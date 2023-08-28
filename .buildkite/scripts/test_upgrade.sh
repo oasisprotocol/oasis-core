@@ -11,11 +11,6 @@
 # https://buildkite.com/docs/pipelines/writing-build-scripts
 set -euxo pipefail
 
-# Install Go version needed to build the stable branch.
-# See: https://github.com/lucas-clemente/quic-go/wiki/quic-go-and-Go-versions
-go install golang.org/dl/go1.19.10@latest
-go1.19.10 download
-
 # Branches to test.
 pre_upgrade_git_branch="stable/22.2.x"
 post_upgrade_git_branch="master"

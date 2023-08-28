@@ -3,11 +3,10 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
-
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -72,7 +71,7 @@ func (sc *Scenario) ResolveRuntimeBinary(runtimeBinary string, tee node.TEEHardw
 }
 
 // BuildRuntimes builds the specified runtime binaries using the provided trust root, if given.
-func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtimes map[common.Namespace]string, trustRoot *e2e.TrustRoot) error {
+func (sc *Scenario) BuildRuntimes(childEnv *env.Env, runtimes map[common.Namespace]string, trustRoot *e2e.TrustRoot) error {
 	// Determine the required directories for building the runtime with an embedded trust root.
 	buildDir, targetDir, err := sc.BuildTargetDirs()
 	if err != nil {
@@ -89,7 +88,6 @@ func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtim
 	builder := rust.NewBuilder(childEnv, buildDir, targetDir, teeHardware)
 
 	// Build runtimes one by one.
-	var errs *multierror.Error
 	for runtimeID, runtimeBinary := range runtimes {
 		switch trustRoot {
 		case nil:
@@ -114,11 +112,9 @@ func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtim
 		}
 
 		// Build a new runtime with the given trust root embedded.
-		if err = builder.Build(runtimeBinary); err != nil {
-			errs = multierror.Append(errs, err)
-		}
+		err = errors.Join(err, builder.Build(runtimeBinary))
 	}
-	if err = errs.ErrorOrNil(); err != nil {
+	if err != nil {
 		return fmt.Errorf("failed to build runtimes: %w", err)
 	}
 
@@ -126,13 +122,13 @@ func (sc *Scenario) BuildRuntimes(ctx context.Context, childEnv *env.Env, runtim
 }
 
 // BuildAllRuntimes builds all runtime binaries, i.e. the key/value and the key manager runtime.
-func (sc *Scenario) BuildAllRuntimes(ctx context.Context, childEnv *env.Env, trustRoot *e2e.TrustRoot) error {
+func (sc *Scenario) BuildAllRuntimes(childEnv *env.Env, trustRoot *e2e.TrustRoot) error {
 	runtimes := map[common.Namespace]string{
 		KeyValueRuntimeID:   KeyValueRuntimeBinary,
 		KeyManagerRuntimeID: KeyManagerRuntimeBinary,
 	}
 
-	return sc.BuildRuntimes(ctx, childEnv, runtimes, trustRoot)
+	return sc.BuildRuntimes(childEnv, runtimes, trustRoot)
 }
 
 // EnsureActiveVersionForComputeWorker ensures that the specified compute worker
@@ -332,7 +328,7 @@ func (sc *Scenario) EnableRuntimeDeployment(ctx context.Context, childEnv *env.E
 		"valid_from", newRtDpl.ValidFrom,
 	)
 
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, newRtDsc, nonce); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, newRtDsc, nonce); err != nil {
 		return err
 	}
 	nonce++ // nolint: ineffassign
@@ -396,11 +392,7 @@ func (sc *Scenario) UpgradeComputeRuntime(ctx context.Context, childEnv *env.Env
 	}
 
 	// Make sure the new version is active.
-	if err := sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.1.0")); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.EnsureActiveVersionForComputeWorkers(ctx, newRt, version.MustFromString("0.1.0"))
 }
 
 // UpgradeKeyManagerFixture select the first key manager runtime and prepares it for the upgrade.
@@ -510,11 +502,7 @@ OUTER:
 	}
 
 	// Make sure the new version is active on the second key manager node.
-	if err := sc.EnsureActiveVersionForKeyManager(ctx, newKm, newRt.ID(), version.MustFromString("0.1.0")); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.EnsureActiveVersionForKeyManager(ctx, newKm, newRt.ID(), version.MustFromString("0.1.0"))
 }
 
 func (sc *Scenario) ensureReplicationWorked(ctx context.Context, km *oasis.Keymanager, rt *oasis.Runtime) error {
@@ -546,23 +534,18 @@ func (sc *Scenario) ensureReplicationWorked(ctx context.Context, km *oasis.Keyma
 	if err != nil {
 		return fmt.Errorf("failed to obtain consensus state: %w", err)
 	}
-	if err = func() error {
-		for _, status := range doc.KeyManager.Statuses {
-			if !status.ID.Equal(&nodeRt.ID) {
-				continue
-			}
-			if !status.IsInitialized {
-				return fmt.Errorf("key manager failed to initialize")
-			}
-			if !bytes.Equal(status.Checksum, signedInitResponse.InitResponse.Checksum) {
-				return fmt.Errorf("key manager failed to replicate, checksum mismatch")
-			}
-			return nil
-		}
-		return fmt.Errorf("consensus state missing km status")
-	}(); err != nil {
-		return err
-	}
 
-	return nil
+	for _, status := range doc.KeyManager.Statuses {
+		if !status.ID.Equal(&nodeRt.ID) {
+			continue
+		}
+		if !status.IsInitialized {
+			return fmt.Errorf("key manager failed to initialize")
+		}
+		if !bytes.Equal(status.Checksum, signedInitResponse.InitResponse.Checksum) {
+			return fmt.Errorf("key manager failed to replicate, checksum mismatch")
+		}
+		return nil
+	}
+	return fmt.Errorf("consensus state missing km status")
 }

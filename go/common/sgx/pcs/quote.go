@@ -489,7 +489,7 @@ func (qs *QuoteSignatureECDSA_P256) Verify(
 
 	// Verify quote header and ISV report body signature.
 	attPkWithTag := append([]byte{0x04}, qs.AttestationPublicKey[:]...) // Add SEC 1 tag (uncompressed).
-	x, y := elliptic.Unmarshal(elliptic.P256(), attPkWithTag)
+	x, y := elliptic.Unmarshal(elliptic.P256(), attPkWithTag)           //nolint:staticcheck
 	if x == nil {
 		return fmt.Errorf("pcs/quote: invalid attestation public key")
 	}

@@ -55,14 +55,14 @@ func (app *supplementarySanityApplication) QueryFactory() interface{} {
 	return nil
 }
 
-func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
+func (app *supplementarySanityApplication) OnRegister(state api.ApplicationState, _ api.MessageDispatcher) {
 	app.state = state
 }
 
 func (app *supplementarySanityApplication) OnCleanup() {
 }
 
-func (app *supplementarySanityApplication) ExecuteMessage(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
+func (app *supplementarySanityApplication) ExecuteMessage(*api.Context, interface{}, interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("supplementarysanity: unexpected message")
 }
 

@@ -32,7 +32,7 @@ var (
 func handlerGetAddresses(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {

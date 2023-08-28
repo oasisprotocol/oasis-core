@@ -98,7 +98,7 @@ func handlerRequestShutdown(
 func handlerWaitSync(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -117,7 +117,7 @@ func handlerWaitSync(
 func handlerIsSynced(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -136,7 +136,7 @@ func handlerIsSynced(
 func handlerWaitReady(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -155,7 +155,7 @@ func handlerWaitReady(
 func handlerIsReady(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
@@ -220,7 +220,7 @@ func handlerCancelUpgrade(
 func handlerGetStatus(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {

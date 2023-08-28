@@ -249,10 +249,10 @@ func (app *rootHashApplication) suspendUnpaidRuntime(
 
 func (app *rootHashApplication) prepareNewCommittees(
 	ctx *tmapi.Context,
-	epoch beacon.EpochTime,
+	_ beacon.EpochTime,
 	rtState *roothash.RuntimeState,
 	schedState *schedulerState.MutableState,
-	regState *registryState.MutableState,
+	_ *registryState.MutableState,
 ) (
 	executorPool *commitment.Pool,
 	empty bool,
@@ -360,7 +360,7 @@ func (app *rootHashApplication) verifyRuntimeUpdate(ctx *tmapi.Context, rt *regi
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}
 
-	return roothash.VerifyRuntimeParameters(ctx.Logger(), rt, params)
+	return roothash.VerifyRuntimeParameters(rt, params)
 }
 
 func (app *rootHashApplication) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {

@@ -45,7 +45,7 @@ func makeWriteLogLess(wl api.WriteLog) func(i, j int) bool {
 
 func prepareWriteLog(values [][]byte) api.WriteLog {
 	var wl api.WriteLog
-	for i, v := range testValues {
+	for i, v := range values {
 		wl = append(wl, api.LogEntry{Key: []byte(strconv.Itoa(i)), Value: v})
 	}
 	return wl

@@ -172,7 +172,7 @@ func getDebondingDelegationsTo(
 	return delegations
 }
 
-func doInfo(cmd *cobra.Command, args []string) {
+func doInfo(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -260,7 +260,7 @@ func doInfo(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doList(cmd *cobra.Command, args []string) {
+func doList(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -306,7 +306,7 @@ func doList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doPubkey2Address(cmd *cobra.Command, args []string) {
+func doPubkey2Address(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

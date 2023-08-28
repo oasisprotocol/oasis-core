@@ -522,7 +522,7 @@ func initCmpLogger() error {
 	return nil
 }
 
-func runCmp(cmd *cobra.Command, args []string) {
+func runCmp(cmd *cobra.Command, _ []string) {
 	if err := initCmpLogger(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

@@ -92,7 +92,7 @@ type Connection interface {
 	Close()
 
 	// GetInfo retrieves the runtime information.
-	GetInfo(ctx context.Context) (*RuntimeInfoResponse, error)
+	GetInfo() (*RuntimeInfoResponse, error)
 
 	// Call sends a request to the other side and returns the response or error.
 	Call(ctx context.Context, body *Body) (*Body, error)
@@ -110,7 +110,7 @@ type Connection interface {
 	// state.
 	//
 	// Only one of InitHost/InitGuest can be called otherwise the method may panic.
-	InitGuest(ctx context.Context, conn net.Conn) error
+	InitGuest(conn net.Conn) error
 }
 
 // HostInfo contains the information about the host environment that is sent to the runtime during
@@ -260,7 +260,7 @@ func (c *connection) Close() {
 }
 
 // Implements Connection.
-func (c *connection) GetInfo(ctx context.Context) (*RuntimeInfoResponse, error) {
+func (c *connection) GetInfo() (*RuntimeInfoResponse, error) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -515,7 +515,7 @@ func (c *connection) initConn(conn net.Conn) {
 }
 
 // Implements Connection.
-func (c *connection) InitGuest(ctx context.Context, conn net.Conn) error {
+func (c *connection) InitGuest(conn net.Conn) error {
 	c.initConn(conn)
 
 	// Transition the protocol state to Ready.

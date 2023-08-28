@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/config"
 
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -32,7 +31,6 @@ func GetLocalBackendDBDir(dataDir, backend string) string {
 func NewLocalBackend(
 	dataDir string,
 	namespace common.Namespace,
-	identity *identity.Identity,
 ) (api.LocalBackend, error) {
 	cfg := &api.Config{
 		Backend:      strings.ToLower(config.GlobalConfig.Storage.Backend),

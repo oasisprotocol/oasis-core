@@ -90,7 +90,7 @@ func (impl *backendInsecure) OnBeginBlock(
 	impl.app.doEmitEpochEvent(ctx, future.Epoch)
 
 	// Generate the beacon
-	return impl.onEpochChangeBeacon(ctx, state, params, future.Epoch)
+	return impl.onEpochChangeBeacon(ctx, future.Epoch)
 }
 
 func (impl *backendInsecure) scheduleEpochTransitionBlock(
@@ -106,8 +106,6 @@ func (impl *backendInsecure) scheduleEpochTransitionBlock(
 
 func (impl *backendInsecure) onEpochChangeBeacon(
 	ctx *api.Context,
-	state *beaconState.MutableState,
-	params *beacon.ConsensusParameters,
 	epoch beacon.EpochTime,
 ) error {
 	var entropy []byte
@@ -178,8 +176,5 @@ func (impl *backendInsecure) doTxSetEpoch(
 		"is_check_only", ctx.IsCheckOnly(),
 	)
 
-	if err := state.SetFutureEpoch(ctx, epoch, height+1); err != nil {
-		return err
-	}
-	return nil
+	return state.SetFutureEpoch(ctx, epoch, height+1)
 }

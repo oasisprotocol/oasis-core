@@ -471,9 +471,7 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 
 // CheckProposerTimeout verifies executor timeout request conditions.
 func (p *Pool) CheckProposerTimeout(
-	ctx context.Context,
 	block *block.Block,
-	nl NodeLookup,
 	id signature.PublicKey,
 	round uint64,
 ) error {

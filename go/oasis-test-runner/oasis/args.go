@@ -136,7 +136,7 @@ func (args *argBuilder) appendDebugTestEntity() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) appendNetwork(net *Network) *argBuilder {
+func (args *argBuilder) appendNetwork(*Network) *argBuilder {
 	args = args.grpcLogDebug()
 	return args
 }
@@ -171,7 +171,7 @@ func (args *argBuilder) byzantineRuntimeID(runtimeID common.Namespace) *argBuild
 	return args
 }
 
-func (args *argBuilder) merge(configDir string) []string {
+func (args *argBuilder) merge(string) []string {
 	output := []string{}
 	shipped := map[string][]string{}
 	multiValued := map[string][][]string{}

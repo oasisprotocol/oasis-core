@@ -77,7 +77,7 @@ func (km *KeyManagerClientWrapper) SetKeyManagerID(id *common.Namespace) {
 		km.cli = nil
 		km.nt = nil
 	default:
-		km.cli = keymanagerP2P.NewClient(km.p2p, km.consensus, km.chainContext, *id)
+		km.cli = keymanagerP2P.NewClient(km.p2p, km.chainContext, *id)
 		km.nt = newKeyManagerNodeTracker(km.p2p, km.consensus, *id)
 		km.nt.Start()
 	}

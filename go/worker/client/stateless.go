@@ -30,15 +30,15 @@ func (s *statelessStorage) SyncIterate(ctx context.Context, request *storage.Ite
 	return rsp, err
 }
 
-func (s *statelessStorage) GetDiff(ctx context.Context, request *storage.GetDiffRequest) (storage.WriteLogIterator, error) {
+func (s *statelessStorage) GetDiff(context.Context, *storage.GetDiffRequest) (storage.WriteLogIterator, error) {
 	return nil, storage.ErrUnsupported
 }
 
-func (s *statelessStorage) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
+func (s *statelessStorage) GetCheckpoints(context.Context, *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
 	return nil, storage.ErrUnsupported
 }
 
-func (s *statelessStorage) GetCheckpointChunk(ctx context.Context, chunk *checkpoint.ChunkMetadata, w io.Writer) error {
+func (s *statelessStorage) GetCheckpointChunk(context.Context, *checkpoint.ChunkMetadata, io.Writer) error {
 	return storage.ErrUnsupported
 }
 

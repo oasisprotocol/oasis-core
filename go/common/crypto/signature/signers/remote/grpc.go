@@ -67,16 +67,16 @@ type ProveRequest struct {
 
 // Backend is the remote signer backend interface.
 type Backend interface {
-	PublicKeys(context.Context) ([]PublicKey, error)
-	Sign(context.Context, *SignRequest) ([]byte, error)
-	Prove(context.Context, *ProveRequest) ([]byte, error)
+	PublicKeys() ([]PublicKey, error)
+	Sign(*SignRequest) ([]byte, error)
+	Prove(*ProveRequest) ([]byte, error)
 }
 
 type wrapper struct {
 	signers map[signature.SignerRole]signature.Signer
 }
 
-func (w *wrapper) PublicKeys(ctx context.Context) ([]PublicKey, error) {
+func (w *wrapper) PublicKeys() ([]PublicKey, error) {
 	var resp []PublicKey
 	for _, v := range signature.SignerRoles { // Return in consistent order.
 		if signer := w.signers[v]; signer != nil {
@@ -89,7 +89,7 @@ func (w *wrapper) PublicKeys(ctx context.Context) ([]PublicKey, error) {
 	return resp, nil
 }
 
-func (w *wrapper) Sign(ctx context.Context, req *SignRequest) ([]byte, error) {
+func (w *wrapper) Sign(req *SignRequest) ([]byte, error) {
 	signer, ok := w.signers[req.Role]
 	if !ok {
 		return nil, signature.ErrNotExist
@@ -97,7 +97,7 @@ func (w *wrapper) Sign(ctx context.Context, req *SignRequest) ([]byte, error) {
 	return signer.ContextSign(signature.Context(req.Context), req.Message)
 }
 
-func (w *wrapper) Prove(ctx context.Context, req *ProveRequest) ([]byte, error) {
+func (w *wrapper) Prove(req *ProveRequest) ([]byte, error) {
 	signer, ok := w.signers[req.Role]
 	if !ok {
 		return nil, signature.ErrNotExist
@@ -115,18 +115,18 @@ func (w *wrapper) Prove(ctx context.Context, req *ProveRequest) ([]byte, error) 
 func handlerPublicKeys(
 	srv interface{},
 	ctx context.Context,
-	dec func(interface{}) error,
+	_ func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
 	if interceptor == nil {
-		return srv.(Backend).PublicKeys(ctx)
+		return srv.(Backend).PublicKeys()
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodPublicKeys.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).PublicKeys(ctx)
+		return srv.(Backend).PublicKeys()
 	}
 	return interceptor(ctx, nil, info, handler)
 }
@@ -142,14 +142,14 @@ func handlerSign(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).Sign(ctx, &req)
+		return srv.(Backend).Sign(&req)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodSign.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).Sign(ctx, req.(*SignRequest))
+		return srv.(Backend).Sign(req.(*SignRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
@@ -165,14 +165,14 @@ func handlerProve(
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(Backend).Prove(ctx, &req)
+		return srv.(Backend).Prove(&req)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodProve.FullName(),
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(Backend).Prove(ctx, req.(*ProveRequest))
+		return srv.(Backend).Prove(req.(*ProveRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
 }
@@ -212,7 +212,7 @@ func (rf *remoteFactory) EnsureRole(role signature.SignerRole) error {
 	return nil
 }
 
-func (rf *remoteFactory) Generate(role signature.SignerRole, rng io.Reader) (signature.Signer, error) {
+func (rf *remoteFactory) Generate(signature.SignerRole, io.Reader) (signature.Signer, error) {
 	return nil, fmt.Errorf("signature/signer/remote: key re-generation prohibited")
 }
 
@@ -280,7 +280,7 @@ func (fc *FactoryConfig) IsLocal() bool {
 }
 
 // NewFactory creates a new factory with the specified roles.
-func NewFactory(config interface{}, roles ...signature.SignerRole) (signature.SignerFactory, error) {
+func NewFactory(config interface{}) (signature.SignerFactory, error) {
 	cfg, ok := config.(*FactoryConfig)
 	if !ok {
 		return nil, fmt.Errorf("signature/signer/remote: invalid remote signer configuration provided")

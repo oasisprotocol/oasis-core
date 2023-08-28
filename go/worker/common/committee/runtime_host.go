@@ -28,17 +28,17 @@ type nodeEnvironment struct {
 }
 
 // GetKeyManagerClient implements RuntimeHostHandlerEnvironment.
-func (env *nodeEnvironment) GetKeyManagerClient(ctx context.Context) (runtimeKeymanager.Client, error) {
+func (env *nodeEnvironment) GetKeyManagerClient() (runtimeKeymanager.Client, error) {
 	return env.n.KeyManagerClient, nil
 }
 
 // GetTxPool implements RuntimeHostHandlerEnvironment.
-func (env *nodeEnvironment) GetTxPool(ctx context.Context) (txpool.TransactionPool, error) {
+func (env *nodeEnvironment) GetTxPool() (txpool.TransactionPool, error) {
 	return env.n.TxPool, nil
 }
 
 // GetIdentity implements RuntimeHostHandlerEnvironment.
-func (env *nodeEnvironment) GetNodeIdentity(ctx context.Context) (*identity.Identity, error) {
+func (env *nodeEnvironment) GetNodeIdentity() (*identity.Identity, error) {
 	return env.n.Identity, nil
 }
 

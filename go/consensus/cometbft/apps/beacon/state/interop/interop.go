@@ -15,9 +15,5 @@ func InitializeTestBeaconState(ctx context.Context, mkvs mkvs.Tree) error {
 	if err := state.SetEpoch(ctx, 42, 13); err != nil {
 		return err
 	}
-	if err := state.SetFutureEpoch(ctx, 43, 15); err != nil {
-		return err
-	}
-
-	return nil
+	return state.SetFutureEpoch(ctx, 43, 15)
 }

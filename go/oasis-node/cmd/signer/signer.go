@@ -26,7 +26,7 @@ var (
 	logger = logging.GetLogger("cmd/signer")
 )
 
-func doExport(cmd *cobra.Command, args []string) {
+func doExport(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

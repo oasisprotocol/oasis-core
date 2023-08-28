@@ -102,7 +102,7 @@ func doConnectOnly(cmd *cobra.Command) (*grpc.ClientConn, control.NodeController
 	return conn, client
 }
 
-func doIsSynced(cmd *cobra.Command, args []string) {
+func doIsSynced(cmd *cobra.Command, _ []string) {
 	conn, client := DoConnect(cmd)
 	defer conn.Close()
 
@@ -119,13 +119,13 @@ func doIsSynced(cmd *cobra.Command, args []string) {
 	if synced {
 		fmt.Println("node completed initial syncing")
 		os.Exit(0)
-	} else {
-		fmt.Println("node has not completed initial syncing")
-		os.Exit(1)
 	}
+
+	fmt.Println("node has not completed initial syncing")
+	os.Exit(1)
 }
 
-func doWaitSync(cmd *cobra.Command, args []string) {
+func doWaitSync(cmd *cobra.Command, _ []string) {
 	conn, client := DoConnect(cmd)
 	defer conn.Close()
 
@@ -141,7 +141,7 @@ func doWaitSync(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doShutdown(cmd *cobra.Command, args []string) {
+func doShutdown(cmd *cobra.Command, _ []string) {
 	conn, client := DoConnect(cmd)
 	defer conn.Close()
 
@@ -154,7 +154,7 @@ func doShutdown(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doClearDeregister(cmd *cobra.Command, args []string) {
+func doClearDeregister(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -267,7 +267,7 @@ func doCancelUpgrade(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doStatus(cmd *cobra.Command, args []string) {
+func doStatus(cmd *cobra.Command, _ []string) {
 	conn, client := DoConnect(cmd)
 	defer conn.Close()
 

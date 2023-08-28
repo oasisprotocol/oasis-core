@@ -356,17 +356,17 @@ type ServiceClient interface {
 type BaseServiceClient struct{}
 
 // DeliverBlock implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverBlock(ctx context.Context, height int64) error {
+func (bsc *BaseServiceClient) DeliverBlock(context.Context, int64) error {
 	return nil
 }
 
 // DeliverEvent implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *types.Event) error {
+func (bsc *BaseServiceClient) DeliverEvent(context.Context, int64, cmttypes.Tx, *types.Event) error {
 	return nil
 }
 
 // DeliverCommand implements ServiceClient.
-func (bsc *BaseServiceClient) DeliverCommand(ctx context.Context, height int64, cmd interface{}) error {
+func (bsc *BaseServiceClient) DeliverCommand(context.Context, int64, interface{}) error {
 	return nil
 }
 

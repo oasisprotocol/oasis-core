@@ -60,18 +60,15 @@ func (mtb *minTransactBalanceImpl) fundFromTestEntity(ctx context.Context, nonce
 	if err != nil {
 		return fmt.Errorf("test entity: %w", err)
 	}
-	if err = mtb.signAndSubmitTx(ctx, teSigner, staking.NewTransferTx(nonce, &transaction.Fee{
+	return mtb.signAndSubmitTx(ctx, teSigner, staking.NewTransferTx(nonce, &transaction.Fee{
 		Gas: 1300,
 	}, &staking.Transfer{
 		To:     to,
 		Amount: *quantity.NewFromUint64(amount),
-	})); err != nil {
-		return err
-	}
-	return nil
+	}))
 }
 
-func (mtb *minTransactBalanceImpl) getAccountAndCheckNonce(ctx context.Context, addr staking.Address, expected uint64) (*staking.Account, error) {
+func (mtb *minTransactBalanceImpl) getAccountAndCheckNonce(ctx context.Context, addr staking.Address, _ uint64) (*staking.Account, error) {
 	query := staking.OwnerQuery{
 		Owner:  addr,
 		Height: consensus.HeightLatest,
@@ -116,7 +113,7 @@ func (mtb *minTransactBalanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (mtb *minTransactBalanceImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (mtb *minTransactBalanceImpl) Run(ctx context.Context, _ *env.Env) error {
 	// Start the network
 	if err := mtb.Net.Start(); err != nil {
 		return err

@@ -126,9 +126,5 @@ func (sc *kmDumpRestoreImpl) Run(ctx context.Context, childEnv *env.Env) (err er
 	}
 
 	// Test if all key managers can derive keys from all master secrets.
-	if err = sc.CompareLongtermPublicKeys(ctx, []int{0, 1}); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.CompareLongtermPublicKeys(ctx, []int{0, 1})
 }

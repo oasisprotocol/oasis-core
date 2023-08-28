@@ -103,7 +103,7 @@ func (ba *databaseBackend) Initialized() <-chan struct{} {
 }
 
 func (ba *databaseBackend) SyncGet(ctx context.Context, request *api.GetRequest) (*api.ProofResponse, error) {
-	tree, err := ba.rootCache.GetTree(ctx, request.Tree.Root)
+	tree, err := ba.rootCache.GetTree(request.Tree.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (ba *databaseBackend) SyncGet(ctx context.Context, request *api.GetRequest)
 }
 
 func (ba *databaseBackend) SyncGetPrefixes(ctx context.Context, request *api.GetPrefixesRequest) (*api.ProofResponse, error) {
-	tree, err := ba.rootCache.GetTree(ctx, request.Tree.Root)
+	tree, err := ba.rootCache.GetTree(request.Tree.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (ba *databaseBackend) SyncGetPrefixes(ctx context.Context, request *api.Get
 }
 
 func (ba *databaseBackend) SyncIterate(ctx context.Context, request *api.IterateRequest) (*api.ProofResponse, error) {
-	tree, err := ba.rootCache.GetTree(ctx, request.Tree.Root)
+	tree, err := ba.rootCache.GetTree(request.Tree.Root)
 	if err != nil {
 		return nil, err
 	}

@@ -26,7 +26,7 @@ type Seed struct { // nolint: maligned
 	libp2pSeedPort uint16
 }
 
-func (seed *Seed) AddArgs(args *argBuilder) error {
+func (seed *Seed) AddArgs(*argBuilder) error {
 	return nil
 }
 

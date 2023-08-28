@@ -143,7 +143,7 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 			)
 			return registry.ErrInvalidArgument
 		}
-		if err := app.proveFreshness(ctx, state, blob); err != nil {
+		if err := app.proveFreshness(ctx, state); err != nil {
 			return err
 		}
 		return nil
@@ -153,7 +153,7 @@ func (app *registryApplication) ExecuteTx(ctx *api.Context, tx *transaction.Tran
 	}
 }
 
-func (app *registryApplication) EndBlock(ctx *api.Context) (types.ResponseEndBlock, error) {
+func (app *registryApplication) EndBlock(*api.Context) (types.ResponseEndBlock, error) {
 	return types.ResponseEndBlock{}, nil
 }
 

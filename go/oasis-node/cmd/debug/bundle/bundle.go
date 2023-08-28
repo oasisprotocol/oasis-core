@@ -52,7 +52,7 @@ var (
 	logger = logging.GetLogger("cmd/debug/bundle")
 )
 
-func doInit(cmd *cobra.Command, args []string) error {
+func doInit(*cobra.Command, []string) error {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -143,7 +143,7 @@ func doInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func doInfo(cmd *cobra.Command, args []string) error {
+func doInfo(*cobra.Command, []string) error {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

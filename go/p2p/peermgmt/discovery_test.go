@@ -140,7 +140,7 @@ func (s *DiscoveryTestSuite) discoveryCount() int {
 	return s.discoveryCounter
 }
 
-func (s *DiscoveryTestSuite) FindPeers(ctx context.Context, ns string, opts ...discovery.Option) (<-chan peer.AddrInfo, error) {
+func (s *DiscoveryTestSuite) FindPeers(_ context.Context, ns string, _ ...discovery.Option) (<-chan peer.AddrInfo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -159,7 +159,7 @@ func (s *DiscoveryTestSuite) FindPeers(ctx context.Context, ns string, opts ...d
 	return ch, nil
 }
 
-func (s *DiscoveryTestSuite) Advertise(ctx context.Context, ns string, opts ...discovery.Option) (time.Duration, error) {
+func (s *DiscoveryTestSuite) Advertise(_ context.Context, ns string, _ ...discovery.Option) (time.Duration, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

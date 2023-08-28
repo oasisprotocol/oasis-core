@@ -142,7 +142,7 @@ func (sc *historyReindexImpl) Run(ctx context.Context, childEnv *env.Env) error 
 	compRt := sc.Net.Runtimes()[rtIdx]
 	rtDsc := compRt.ToRuntimeDescriptor()
 	rtDsc.Deployments[0].ValidFrom = epoch + 1
-	if err = sc.RegisterRuntime(ctx, childEnv, cli, rtDsc, 0); err != nil {
+	if err = sc.RegisterRuntime(childEnv, cli, rtDsc, 0); err != nil {
 		return err
 	}
 

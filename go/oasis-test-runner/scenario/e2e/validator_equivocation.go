@@ -85,7 +85,7 @@ func (sc *validatorEquivocationImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *validatorEquivocationImpl) Run(ctx context.Context, childEnv *env.Env) error { // nolint: gocyclo
+func (sc *validatorEquivocationImpl) Run(ctx context.Context, _ *env.Env) error { // nolint: gocyclo
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}

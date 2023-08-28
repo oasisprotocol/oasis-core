@@ -92,7 +92,7 @@ var (
 	logger = logging.GetLogger("cmd/keymanager")
 )
 
-func doInitPolicy(cmd *cobra.Command, args []string) {
+func doInitPolicy(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -213,7 +213,7 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 	}, nil
 }
 
-func doSignPolicy(cmd *cobra.Command, args []string) {
+func doSignPolicy(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -292,7 +292,7 @@ func signPolicyFromFlags() (*signature.Signature, error) {
 	}, nil
 }
 
-func doVerifyPolicy(cmd *cobra.Command, args []string) {
+func doVerifyPolicy(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -368,7 +368,7 @@ func unmarshalPolicyCBOR(pb []byte) (*kmApi.PolicySGX, error) {
 	return p, nil
 }
 
-func doInitStatus(cmd *cobra.Command, args []string) {
+func doInitStatus(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -401,7 +401,7 @@ func doInitStatus(cmd *cobra.Command, args []string) {
 	)
 }
 
-func doGenUpdate(cmd *cobra.Command, args []string) {
+func doGenUpdate(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

@@ -173,9 +173,9 @@ func TestFileCheckpointCreator(t *testing.T) {
 			require.True(errors.Is(err, ErrChunkProofVerificationFailed))
 			// Restorer should be reset.
 			break
-		} else {
-			require.NoError(err, "RestoreChunk")
 		}
+
+		require.NoError(err, "RestoreChunk")
 	}
 
 	// Try to correctly restore.
@@ -216,7 +216,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 			require.True(errors.Is(err, ErrChunkAlreadyRestored))
 		}
 	}
-	err = ndb2.Finalize(ctx, []node.Root{root})
+	err = ndb2.Finalize([]node.Root{root})
 	require.NoError(err, "Finalize")
 
 	// Verify that everything has been restored.
@@ -368,7 +368,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 			Type:      node.RootTypeState,
 			Hash:      rootHash1,
 		}
-		err = ndb1.Finalize(ctx, []node.Root{root1})
+		err = ndb1.Finalize([]node.Root{root1})
 		require.NoError(err, "Finalize")
 		tree1.Close()
 
@@ -383,7 +383,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 				Type:      node.RootTypeState,
 				Hash:      rootHash2,
 			}
-			err = ndb2.Finalize(ctx, []node.Root{root2})
+			err = ndb2.Finalize([]node.Root{root2})
 			require.NoError(err, "Finalize")
 			tree2.Close()
 		}
@@ -420,7 +420,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 		_, err = rs.RestoreChunk(ctx, uint64(i), &buf)
 		require.NoError(err, "RestoreChunk")
 	}
-	err = ndb2.Finalize(ctx, []node.Root{root})
+	err = ndb2.Finalize([]node.Root{root})
 	require.NoError(err, "Finalize")
 
 	// Now attempt to prune everything up to (but excluding) the current root.
@@ -452,7 +452,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 			Type:      node.RootTypeState,
 			Hash:      rootHash1,
 		}
-		err = ndb1.Finalize(ctx, []node.Root{root1})
+		err = ndb1.Finalize([]node.Root{root1})
 		require.NoError(err, "Finalize")
 		tree1.Close()
 
@@ -466,7 +466,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 			Type:      node.RootTypeState,
 			Hash:      rootHash2,
 		}
-		err = ndb2.Finalize(ctx, []node.Root{root2})
+		err = ndb2.Finalize([]node.Root{root2})
 		require.NoError(err, "Finalize")
 		tree2.Close()
 

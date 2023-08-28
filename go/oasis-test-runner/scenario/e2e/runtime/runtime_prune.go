@@ -59,7 +59,7 @@ func (sc *runtimePruneImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return f, nil
 }
 
-func (sc *runtimePruneImpl) Run(ctx context.Context, childEnv *env.Env) error {
+func (sc *runtimePruneImpl) Run(ctx context.Context, _ *env.Env) error {
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}

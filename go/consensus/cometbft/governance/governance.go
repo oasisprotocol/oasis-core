@@ -3,13 +3,13 @@ package governance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	cmtabcitypes "github.com/cometbft/cometbft/abci/types"
 	cmtpubsub "github.com/cometbft/cometbft/libs/pubsub"
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -144,7 +144,7 @@ func (sc *serviceClient) GetEvents(ctx context.Context, height int64) ([]*api.Ev
 	return events, nil
 }
 
-func (sc *serviceClient) WatchEvents(ctx context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
+func (sc *serviceClient) WatchEvents(context.Context) (<-chan *api.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *api.Event)
 	sub := sc.eventNotifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -170,7 +170,7 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 }
 
 // Implements api.ServiceClient.
-func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
+func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
 		return fmt.Errorf("governance: failed to process cometbft events: %w", err)
@@ -215,7 +215,7 @@ func EventsFromCometBFT(
 				// Proposal submitted event.
 				var e api.ProposalSubmittedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalSubmitted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("governance: corrupt ProposalSubmitted event: %w", err))
 					continue
 				}
 
@@ -225,7 +225,7 @@ func EventsFromCometBFT(
 				//  Proposal executed event.
 				var e api.ProposalExecutedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalExecuted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("governance: corrupt ProposalExecuted event: %w", err))
 					continue
 				}
 
@@ -235,7 +235,7 @@ func EventsFromCometBFT(
 				// Proposal finalized event.
 				var e api.ProposalFinalizedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt ProposalFinalized event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("governance: corrupt ProposalFinalized event: %w", err))
 					continue
 				}
 
@@ -245,14 +245,14 @@ func EventsFromCometBFT(
 				// Vote event.
 				var e api.VoteEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = multierror.Append(errs, fmt.Errorf("governance: corrupt Vote event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("governance: corrupt Vote event: %w", err))
 					continue
 				}
 
 				evt := &api.Event{Height: height, TxHash: txHash, Vote: &e}
 				events = append(events, evt)
 			default:
-				errs = multierror.Append(errs, fmt.Errorf("governance: unknown event type: key: %s, val: %s", key, val))
+				errs = errors.Join(errs, fmt.Errorf("governance: unknown event type: key: %s, val: %s", key, val))
 			}
 		}
 	}
@@ -261,7 +261,7 @@ func EventsFromCometBFT(
 }
 
 // New constructs a new CometBFT backed governance Backend instance.
-func New(ctx context.Context, backend tmapi.Backend) (ServiceClient, error) {
+func New(backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the CometBFT service component.
 	a := app.New()
 	if err := backend.RegisterApplication(a); err != nil {

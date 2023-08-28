@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
@@ -134,14 +133,14 @@ func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoRespons
 }
 
 // GetCapabilityTEE implements host.Runtime.
-func (agg *Aggregate) GetCapabilityTEE(ctx context.Context) (*node.CapabilityTEE, error) {
+func (agg *Aggregate) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
 	if agg.active == nil {
 		return nil, ErrNoActiveVersion
 	}
-	return agg.active.host.GetCapabilityTEE(ctx)
+	return agg.active.host.GetCapabilityTEE()
 }
 
 // Call implements host.Runtime.
@@ -177,20 +176,18 @@ func (agg *Aggregate) UpdateCapabilityTEE(ctx context.Context) error {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
-	var errs *multierror.Error
+	var err error
 	if agg.active != nil {
-		err := agg.active.host.UpdateCapabilityTEE(ctx)
-		errs = multierror.Append(errs, err)
+		err = errors.Join(err, agg.active.host.UpdateCapabilityTEE(ctx))
 	}
 	if agg.next != nil {
-		err := agg.next.host.UpdateCapabilityTEE(ctx)
-		errs = multierror.Append(errs, err)
+		err = errors.Join(err, agg.next.host.UpdateCapabilityTEE(ctx))
 	}
-	return errs.ErrorOrNil()
+	return err
 }
 
 // WatchEvents implements host.Runtime.
-func (agg *Aggregate) WatchEvents(ctx context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
+func (agg *Aggregate) WatchEvents(context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
 	typedCh := make(chan *host.Event)
 	sub := agg.notifier.Subscribe()
 	sub.Unwrap(typedCh)
@@ -235,7 +232,7 @@ func (agg *Aggregate) Stop() {
 }
 
 // GetVersion retrieves the runtime host for the specified version.
-func (agg *Aggregate) GetVersion(ctx context.Context, version version.Version) (host.Runtime, error) {
+func (agg *Aggregate) GetVersion(version version.Version) (host.Runtime, error) {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
@@ -256,7 +253,7 @@ func (agg *Aggregate) GetVersion(ctx context.Context, version version.Version) (
 //   - Start the newly active version if it exists.
 //   - Do nothing if the next version is already the requested version.
 //   - Start the next version if it exists.
-func (agg *Aggregate) SetVersion(ctx context.Context, active version.Version, next *version.Version) error {
+func (agg *Aggregate) SetVersion(active version.Version, next *version.Version) error {
 	agg.l.Lock()
 	defer agg.l.Unlock()
 
@@ -266,16 +263,13 @@ func (agg *Aggregate) SetVersion(ctx context.Context, active version.Version, ne
 		"next", next,
 	)
 
-	if err := agg.setActiveVersionLocked(ctx, active); err != nil {
+	if err := agg.setActiveVersionLocked(active); err != nil {
 		return err
 	}
-	if err := agg.setNextVersionLocked(ctx, next); err != nil {
-		return err
-	}
-	return nil
+	return agg.setNextVersionLocked(next)
 }
 
-func (agg *Aggregate) setActiveVersionLocked(ctx context.Context, version version.Version) error {
+func (agg *Aggregate) setActiveVersionLocked(version version.Version) error {
 	// Contract: agg.l already locked for write.
 
 	next := agg.hosts[version]
@@ -375,7 +369,7 @@ func (agg *Aggregate) stopActiveLocked() {
 	agg.active = nil
 }
 
-func (agg *Aggregate) setNextVersionLocked(ctx context.Context, maybeVersion *version.Version) error {
+func (agg *Aggregate) setNextVersionLocked(maybeVersion *version.Version) error {
 	// Contract: agg.l already locked for write.
 
 	// The next version could become unscheduled, in this case tear it down.

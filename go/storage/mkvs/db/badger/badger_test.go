@@ -245,15 +245,15 @@ func testFinalize(ctx *test) {
 	restoreCheckpoint(ctx, ctx.ckMeta, ctx.ckNodes)
 
 	// Test parameter sanity checking first.
-	err := ctx.badgerdb.Finalize(ctx.ctx, nil)
+	err := ctx.badgerdb.Finalize(nil)
 	ctx.require.Error(err, "Finalize with no roots should fail")
 
 	bogusRoot := ctx.ckMeta.Root
 	bogusRoot.Version++
-	err = ctx.badgerdb.Finalize(ctx.ctx, []node.Root{ctx.ckMeta.Root, bogusRoot})
+	err = ctx.badgerdb.Finalize([]node.Root{ctx.ckMeta.Root, bogusRoot})
 	ctx.require.Error(err, "Finalize with roots from different versions should fail")
 
-	err = ctx.badgerdb.Finalize(ctx.ctx, []node.Root{ctx.ckMeta.Root})
+	err = ctx.badgerdb.Finalize([]node.Root{ctx.ckMeta.Root})
 	ctx.require.NoError(err, "Finalize()")
 
 	verifyNodes(ctx.require, ctx.badgerdb, ctx.ckNodes)
@@ -280,7 +280,7 @@ func testExistingNodes(ctx *test) {
 
 	// Restore first checkpoint. The database is empty.
 	restoreCheckpoint(ctx, ctx.ckMeta, ctx.ckNodes)
-	err := ctx.badgerdb.Finalize(ctx.ctx, []node.Root{ctx.ckMeta.Root})
+	err := ctx.badgerdb.Finalize([]node.Root{ctx.ckMeta.Root})
 	ctx.require.NoError(err, "Finalize()")
 	verifyNodes(ctx.require, ctx.badgerdb, ctx.ckNodes)
 
@@ -369,13 +369,13 @@ func TestFinalizeBasic(t *testing.T) {
 	defer ndb.Close()
 
 	root1 := fillDB(ctx, require, testValues, nil, 1, 2, ndb)
-	err = ndb.Finalize(ctx, []node.Root{root1})
+	err = ndb.Finalize([]node.Root{root1})
 	require.NoError(err, "Finalize({root1})")
 
 	// Finalize a corrupted root.
 	currentValues := offset(testValues)
 	root2 := fillDB(ctx, require, currentValues, &root1, 2, 3, ndb)
 	root2.Hash[3]++
-	err = ndb.Finalize(ctx, []node.Root{root2})
+	err = ndb.Finalize([]node.Root{root2})
 	require.Errorf(err, "mkvs: root not found", "Finalize({root2-broken})")
 }

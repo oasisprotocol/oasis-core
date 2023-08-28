@@ -133,7 +133,7 @@ var (
 	}
 )
 
-func doAccountInfo(cmd *cobra.Command, args []string) {
+func doAccountInfo(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -216,7 +216,7 @@ func doAccountInfo(cmd *cobra.Command, args []string) {
 	fmt.Printf("Nonce: %d\n", acct.General.Nonce)
 }
 
-func doAccountNonce(cmd *cobra.Command, args []string) {
+func doAccountNonce(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -239,7 +239,7 @@ func doAccountNonce(cmd *cobra.Command, args []string) {
 	fmt.Println(acct.General.Nonce)
 }
 
-func doValidateAddress(cmd *cobra.Command, args []string) {
+func doValidateAddress(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -262,7 +262,7 @@ func doValidateAddress(cmd *cobra.Command, args []string) {
 	}
 }
 
-func doAccountTransfer(cmd *cobra.Command, args []string) {
+func doAccountTransfer(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -290,7 +290,7 @@ func doAccountTransfer(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doAccountBurn(cmd *cobra.Command, args []string) {
+func doAccountBurn(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -312,7 +312,7 @@ func doAccountBurn(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doAccountEscrow(cmd *cobra.Command, args []string) {
+func doAccountEscrow(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -340,7 +340,7 @@ func doAccountEscrow(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doAccountReclaimEscrow(cmd *cobra.Command, args []string) {
+func doAccountReclaimEscrow(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -402,7 +402,7 @@ func scanBoundStep(dst *api.CommissionRateBoundStep, raw string) error {
 	return nil
 }
 
-func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
+func doAccountAmendCommissionSchedule(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -446,7 +446,7 @@ func doAccountAmendCommissionSchedule(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doAccountAllow(cmd *cobra.Command, args []string) {
+func doAccountAllow(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -483,7 +483,7 @@ func doAccountAllow(cmd *cobra.Command, args []string) {
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func doAccountWithdraw(cmd *cobra.Command, args []string) {
+func doAccountWithdraw(*cobra.Command, []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}

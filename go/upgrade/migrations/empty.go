@@ -10,12 +10,12 @@ var _ Handler = (*emptyHandler)(nil)
 
 type emptyHandler struct{}
 
-func (th *emptyHandler) StartupUpgrade(ctx *Context) error {
+func (th *emptyHandler) StartupUpgrade() error {
 	// Nothing to do.
 	return nil
 }
 
-func (th *emptyHandler) ConsensusUpgrade(ctx *Context, privateCtx interface{}) error {
+func (th *emptyHandler) ConsensusUpgrade(interface{}) error {
 	// Nothing to do.
 	return nil
 }

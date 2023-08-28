@@ -455,7 +455,7 @@ func (c *roothashClient) GetIncomingMessageQueue(ctx context.Context, request *I
 	return rsp, nil
 }
 
-func (c *roothashClient) TrackRuntime(ctx context.Context, history BlockHistory) error {
+func (c *roothashClient) TrackRuntime(context.Context, BlockHistory) error {
 	return ErrInvalidArgument
 }
 

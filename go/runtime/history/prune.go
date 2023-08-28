@@ -65,10 +65,10 @@ func newPrunerBase() prunerBase {
 
 type nonePruner struct{}
 
-func (p *nonePruner) RegisterHandler(handler PruneHandler) {
+func (p *nonePruner) RegisterHandler(PruneHandler) {
 }
 
-func (p *nonePruner) Prune(ctx context.Context, latestRound uint64) error {
+func (p *nonePruner) Prune(context.Context, uint64) error {
 	return nil
 }
 

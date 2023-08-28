@@ -12,7 +12,7 @@ import (
 )
 
 func TestProtocolID(t *testing.T) {
-	chainContext := "d19ea2397fde0eba4b429f05443cced640c1f866c6df43f07132f1cdf6516c84"
+	chainContext := "d19ea2397fde0eba4b429f05443cced640c1f866c6df43f07132f1cdf6516c84" // #nosec G101
 	version := version.Version{Major: 1, Minor: 2, Patch: 3}
 
 	t.Run("NewProtocolID", func(t *testing.T) {

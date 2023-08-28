@@ -41,7 +41,7 @@ var (
 	logger = logging.GetLogger("cmd/protocol_server")
 )
 
-func doProtoServer(cmd *cobra.Command, args []string) {
+func doProtoServer(*cobra.Command, []string) {
 	svcMgr := background.NewServiceManager(logger)
 	defer svcMgr.Cleanup()
 

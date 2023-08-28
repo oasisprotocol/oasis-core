@@ -377,7 +377,7 @@ func (r *runtime) doRemoveRequest(ctx context.Context, rng *rand.Rand, rtc runti
 	return nil
 }
 
-func (r *runtime) doInMsgRequest(ctx context.Context, rng *rand.Rand, rtc runtimeClient.RuntimeClient) error {
+func (r *runtime) doInMsgRequest(ctx context.Context, rng *rand.Rand, _ runtimeClient.RuntimeClient) error {
 	key := r.generateVal(rng, false)
 	value := r.generateVal(rng, false)
 
@@ -782,7 +782,7 @@ func (r *runtime) Run(
 	cnsc consensus.ClientBackend,
 	sm consensus.SubmissionManager,
 	fundingAccount signature.Signer,
-	validatorEntities []signature.Signer,
+	_ []signature.Signer,
 ) error {
 	// Initialize base workload.
 	r.BaseWorkload.Init(cnsc, sm, fundingAccount)

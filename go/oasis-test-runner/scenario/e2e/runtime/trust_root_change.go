@@ -2,10 +2,9 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
-
-	"github.com/hashicorp/go-multierror"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -113,8 +112,7 @@ func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) 
 		return err
 	}
 	defer func() {
-		err2 := sc.PostRun(ctx, childEnv)
-		err = multierror.Append(err, err2).ErrorOrNil()
+		err = errors.Join(err, sc.PostRun(ctx, childEnv))
 	}()
 
 	// All chain contexts should be unique.
@@ -158,11 +156,7 @@ func (sc *trustRootChangeImpl) happyRun(ctx context.Context, childEnv *env.Env) 
 	}
 
 	// Check logs whether any issues were detected.
-	if err := sc.Net.CheckLogWatchers(); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.Net.CheckLogWatchers()
 }
 
 // unhappyRun tests that trust is never transferred to untrusted or invalid
@@ -189,8 +183,7 @@ func (sc *trustRootChangeImpl) unhappyRun(ctx context.Context, childEnv *env.Env
 		return err
 	}
 	defer func() {
-		err2 := sc.PostRun(ctx, childEnv)
-		err = multierror.Append(err, err2).ErrorOrNil()
+		err = errors.Join(err, sc.PostRun(ctx, childEnv))
 	}()
 
 	chainContext, err := sc.ChainContext(ctx)
@@ -345,19 +338,12 @@ func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oas
 		e2e.PreserveComputeWorkerRuntimeStorage: true, // default, needed
 		e2e.PreserveKeymanagerLocalStorage:      true, // default, needed
 	}
-	if err = sc.DumpRestoreNetwork(childEnv, fixture, false, g, resetFlags); err != nil {
-		return err
-	}
-
-	return nil
+	return sc.DumpRestoreNetwork(childEnv, fixture, false, g, resetFlags)
 }
 
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
 	sc.Scenario.TestClient = NewTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
-	if err := sc.Scenario.Run(ctx, childEnv); err != nil {
-		return err
-	}
-	return nil
+	return sc.Scenario.Run(ctx, childEnv)
 }

@@ -59,7 +59,7 @@ func (sc *remoteSignerImpl) Parameters() *env.ParameterFlagSet {
 	return sc.flags
 }
 
-func (sc *remoteSignerImpl) PreInit(childEnv *env.Env) error {
+func (sc *remoteSignerImpl) PreInit() error {
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (sc *remoteSignerImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }
 
-func (sc *remoteSignerImpl) Init(childEnv *env.Env, net *oasis.Network) error {
+func (sc *remoteSignerImpl) Init(*env.Env, *oasis.Network) error {
 	return nil
 }
 

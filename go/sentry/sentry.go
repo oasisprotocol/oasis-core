@@ -23,7 +23,7 @@ type backend struct {
 	identity  *identity.Identity
 }
 
-func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error) {
+func (b *backend) GetAddresses(context.Context) (*api.SentryAddresses, error) {
 	// Consensus addresses.
 	consensusAddrs, err := b.consensus.GetAddresses()
 	if err != nil {
@@ -37,8 +37,6 @@ func (b *backend) GetAddresses(ctx context.Context) (*api.SentryAddresses, error
 		Consensus: consensusAddrs,
 	}, nil
 }
-
-// func (b *backend) GetPolicyChecker(ctx context.Context, service cmnGrpc.ServiceName) (*policy.DynamicRuntimePolicyChecker, error) {
 
 // New constructs a new sentry Backend instance.
 func New(

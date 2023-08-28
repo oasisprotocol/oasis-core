@@ -86,23 +86,23 @@ func (mh *testMigrationHelper) GetRootForHash(root hash.Hash, version uint64) ([
 	}}, nil
 }
 
-func (mh *testMigrationHelper) Display(msg string) {
+func (mh *testMigrationHelper) Display(string) {
 	// Nothing to do here for testing.
 }
 
-func (mh *testMigrationHelper) DisplayStepBegin(msg string) {
+func (mh *testMigrationHelper) DisplayStepBegin(string) {
 	// Nothing to do here for testing.
 }
 
-func (mh *testMigrationHelper) DisplayStepEnd(msg string) {
+func (mh *testMigrationHelper) DisplayStepEnd(string) {
 	// Nothing to do here for testing.
 }
 
-func (mh *testMigrationHelper) DisplayStep(msg string) {
+func (mh *testMigrationHelper) DisplayStep(string) {
 	// Nothing to do here for testing.
 }
 
-func (mh *testMigrationHelper) DisplayProgress(msg string, current, total uint64) {
+func (mh *testMigrationHelper) DisplayProgress(string, uint64, uint64) {
 	// Nothing to fo here for testing.
 }
 
@@ -130,7 +130,7 @@ func TestBadgerV5MigrationSimple(t *testing.T) {
 		Type:      node.RootTypeState,
 		Hash:      tc.PendingRoot,
 	}
-	err = ndb.Finalize(ctx, []node.Root{finalRoot})
+	err = ndb.Finalize([]node.Root{finalRoot})
 	require.NoError(t, err, "Finalize")
 
 	checkContents(ctx, t, ndb, finalRoot, testData)
@@ -178,7 +178,7 @@ func TestBadgerV5MigrationChunks(t *testing.T) {
 		Hash:      tc.PendingRoot,
 	}
 	bdb.multipartVersion = 2 // Simulate state in the middle of a chunk restore.
-	err = ndb.Finalize(ctx, []node.Root{finalRoot})
+	err = ndb.Finalize([]node.Root{finalRoot})
 	require.NoError(t, err, "Finalize")
 
 	require.Equal(t, false, checkMultipart(), "checkMultipart-2")
@@ -236,7 +236,7 @@ func TestBadgerV5MigrationCrashMeta(t *testing.T) {
 		Type:      node.RootTypeState,
 		Hash:      tc.PendingRoot,
 	}
-	err = ndb.Finalize(ctx, []node.Root{finalRoot})
+	err = ndb.Finalize([]node.Root{finalRoot})
 	require.NoError(t, err, "Finalize")
 
 	checkContents(ctx, t, ndb, finalRoot, testData)
@@ -286,7 +286,7 @@ func TestBadgerV5SharedRoots(t *testing.T) {
 
 	// Finalize all the rounds first.
 	for round := uint64(2); round < rounds; round++ {
-		err = ndb.Finalize(ctx, []node.Root{
+		err = ndb.Finalize([]node.Root{
 			{
 				Namespace: testNs,
 				Version:   round,
@@ -362,7 +362,7 @@ func TestBadgerV5ToEmpty(t *testing.T) {
 
 	// Finalize all the rounds first.
 	for round := uint64(2); round < rounds; round++ {
-		err = ndb.Finalize(ctx, []node.Root{
+		err = ndb.Finalize([]node.Root{
 			{
 				Namespace: testNs,
 				Version:   round,

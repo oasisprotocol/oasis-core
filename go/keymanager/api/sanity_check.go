@@ -35,11 +35,7 @@ func (g *Genesis) SanityCheck() error {
 		return fmt.Errorf("keymanager: sanity check failed: %w", err)
 	}
 
-	if err := SanityCheckStatuses(g.Statuses); err != nil {
-		return err
-	}
-
-	return nil
+	return SanityCheckStatuses(g.Statuses)
 }
 
 // SanityCheck performs a sanity check on the consensus parameters.

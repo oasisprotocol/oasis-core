@@ -140,7 +140,7 @@ func (sc *Scenario) checkTestClientLogs() error {
 }
 
 // StartKeymanagers starts the specified key manager nodes.
-func (sc *Scenario) StartKeymanagers(ctx context.Context, idxs []int) error {
+func (sc *Scenario) StartKeymanagers(idxs []int) error {
 	sc.Logger.Info("starting the key managers", "ids", fmt.Sprintf("%+v", idxs))
 
 	kms := sc.Net.Keymanagers()
@@ -153,7 +153,7 @@ func (sc *Scenario) StartKeymanagers(ctx context.Context, idxs []int) error {
 }
 
 // StopKeymanagers stops the specified key manager nodes.
-func (sc *Scenario) StopKeymanagers(ctx context.Context, idxs []int) error {
+func (sc *Scenario) StopKeymanagers(idxs []int) error {
 	sc.Logger.Info("stopping the key managers", "ids", fmt.Sprintf("%+v", idxs))
 
 	kms := sc.Net.Keymanagers()
@@ -198,7 +198,7 @@ func (sc *Scenario) WaitKeymanagers(ctx context.Context, idxs []int) error {
 // StartAndWaitKeymanagers starts the specified key manager nodes and waits
 // for them to become ready.
 func (sc *Scenario) StartAndWaitKeymanagers(ctx context.Context, idxs []int) error {
-	if err := sc.StartKeymanagers(ctx, idxs); err != nil {
+	if err := sc.StartKeymanagers(idxs); err != nil {
 		return err
 	}
 	return sc.WaitKeymanagers(ctx, idxs)
