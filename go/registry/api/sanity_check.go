@@ -493,3 +493,7 @@ func (n *sanityCheckNodeLookup) NodeBySubKey(_ context.Context, key signature.Pu
 func (n *sanityCheckNodeLookup) Nodes(context.Context) ([]*node.Node, error) {
 	return n.nodesList, nil
 }
+
+func (n *sanityCheckNodeLookup) GetEntityNodes(context.Context, signature.PublicKey) ([]*node.Node, error) {
+	return nil, fmt.Errorf("entity node lookup not supported")
+}

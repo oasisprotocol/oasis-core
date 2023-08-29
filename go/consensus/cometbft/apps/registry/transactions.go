@@ -235,89 +235,10 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 		}
 	}
 
-	// Check runtime's whitelist.
+	// Verify admission policies for all node's runtimes are satisfied.
 	for _, rt := range paidRuntimes {
-		if rt.AdmissionPolicy.EntityWhitelist == nil {
-			continue
-		}
-		wcfg, entIsWhitelisted := rt.AdmissionPolicy.EntityWhitelist.Entities[newNode.EntityID]
-		if !entIsWhitelisted {
-			ctx.Logger().Debug("RegisterNode: node's entity not in a runtime's whitelist",
-				"entity_id", newNode.EntityID,
-				"runtime_id", rt.ID,
-				"node_id", newNode.ID,
-			)
-			return registry.ErrForbidden
-		}
-		if len(wcfg.MaxNodes) == 0 {
-			continue
-		}
-
-		// Map is present and non-empty, check per-role restrictions
-		// on the maximum number of nodes per entity.
-
-		// Iterate over all valid roles (each entry in the map can
-		// only have a single role).
-		for _, role := range node.Roles() {
-			if !newNode.HasRoles(role) {
-				// Skip unset roles.
-				continue
-			}
-
-			maxNodes, exists := wcfg.MaxNodes[role]
-			if !exists {
-				// No such role found in whitelist.
-				ctx.Logger().Debug("RegisterNode: runtime's whitelist does not allow nodes with given role",
-					"role", role.String(),
-					"runtime_id", rt.ID,
-					"node_id", newNode.ID,
-				)
-				return registry.ErrForbidden
-			}
-			if maxNodes == 0 {
-				// No nodes of this type are allowed.
-				ctx.Logger().Debug("RegisterNode: runtime's whitelist does not allow nodes with given role",
-					"role", role.String(),
-					"runtime_id", rt.ID,
-				)
-				return registry.ErrForbidden
-			}
-
-			// Count existing nodes owned by entity.
-			nodes, grr := state.GetEntityNodes(ctx, newNode.EntityID)
-			if grr != nil {
-				ctx.Logger().Error("RegisterNode: failed to query entity nodes",
-					"err", grr,
-					"entity_id", newNode.EntityID,
-				)
-				return grr
-			}
-			var curNodes uint16
-			for _, n := range nodes {
-				if n.ID.Equal(newNode.ID) || n.IsExpired(uint64(epoch)) || !n.HasRuntime(rt.ID) {
-					// Skip existing node when re-registering.  Also skip
-					// expired nodes and nodes that haven't registered
-					// for the same runtime.
-					continue
-				}
-
-				if n.HasRoles(role) {
-					curNodes++
-				}
-
-				// The check is inside the for loop, so we can stop as
-				// soon as possible once we're over the limit.
-				if curNodes+1 > maxNodes {
-					// Too many nodes with given role already registered.
-					ctx.Logger().Error("RegisterNode: too many nodes with given role already registered for runtime",
-						"role", role.String(),
-						"runtime_id", rt.ID,
-						"node_id", newNode.ID,
-						"num_registered_nodes", curNodes,
-					)
-					return registry.ErrForbidden
-				}
-			}
+		if err = rt.AdmissionPolicy.Verify(ctx, state, newNode, rt, epoch); err != nil {
+			return err
 		}
 	}
 

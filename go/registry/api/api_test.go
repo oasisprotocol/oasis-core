@@ -46,6 +46,10 @@ func (n *mockNodeLookup) Nodes(context.Context) ([]*node.Node, error) {
 	return n.nodesList, nil
 }
 
+func (n *mockNodeLookup) GetEntityNodes(context.Context, signature.PublicKey) ([]*node.Node, error) {
+	panic("not implemented")
+}
+
 type mockRuntimeLookup struct {
 	runtimes map[common.Namespace]*Runtime
 }

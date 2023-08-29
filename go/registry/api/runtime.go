@@ -204,29 +204,6 @@ func (s *StorageParameters) ValidateBasic() error {
 	return nil
 }
 
-// AnyNodeRuntimeAdmissionPolicy allows any node to register.
-type AnyNodeRuntimeAdmissionPolicy struct{}
-
-// EntityWhitelistRuntimeAdmissionPolicy allows only whitelisted entities' nodes to register.
-type EntityWhitelistRuntimeAdmissionPolicy struct {
-	Entities map[signature.PublicKey]EntityWhitelistConfig `json:"entities"`
-}
-
-type EntityWhitelistConfig struct {
-	// MaxNodes is the maximum number of nodes that an entity can register under
-	// the given runtime for a specific role. If the map is empty or absent, the
-	// number of nodes is unlimited. If the map is present and non-empty, the
-	// the number of nodes is restricted to the specified maximum (where zero
-	// means no nodes allowed), any missing roles imply zero nodes.
-	MaxNodes map[node.RolesMask]uint16 `json:"max_nodes,omitempty"`
-}
-
-// RuntimeAdmissionPolicy is a specification of which nodes are allowed to register for a runtime.
-type RuntimeAdmissionPolicy struct {
-	AnyNode         *AnyNodeRuntimeAdmissionPolicy         `json:"any_node,omitempty"`
-	EntityWhitelist *EntityWhitelistRuntimeAdmissionPolicy `json:"entity_whitelist,omitempty"`
-}
-
 // SchedulingConstraints are the node scheduling constraints.
 //
 // Multiple fields may be set in which case the ALL the constraints must be satisfied.
@@ -481,6 +458,10 @@ func (r *Runtime) ValidateBasic(strictVersion bool) error {
 
 	if err := r.Staking.ValidateBasic(r.Kind); err != nil {
 		return fmt.Errorf("bad staking parameters: %w", err)
+	}
+
+	if err := r.AdmissionPolicy.ValidateBasic(); err != nil {
+		return err
 	}
 
 	if r.GovernanceModel < 1 || r.GovernanceModel > GovernanceMax {

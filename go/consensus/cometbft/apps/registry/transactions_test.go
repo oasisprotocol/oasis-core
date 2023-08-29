@@ -303,6 +303,167 @@ func TestRegisterNode(t *testing.T) {
 			false,
 			false,
 		},
+		// Compute node on whitelist.
+		{
+			"ComputeNodeOnWhitelist",
+			func(tcd *testCaseData) {
+				rt := registry.Runtime{
+					Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:              common.NewTestNamespaceFromSeed([]byte("consensus/cometbft/apps/registry: runtime: ComputeNodeOnWhitelist"), 0),
+					Kind:            registry.KindCompute,
+					GovernanceModel: registry.GovernanceEntity,
+					AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+						EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
+							Entities: map[signature.PublicKey]registry.EntityWhitelistConfig{
+								tcd.node.EntityID: {},
+							},
+						},
+					},
+				}
+				_ = state.SetRuntime(ctx, &rt, false)
+
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
+					{ID: rt.ID},
+				}
+			},
+			nil,
+			true,
+			true,
+		},
+		// Compute node not on whitelist.
+		{
+			"ComputeNodeNotOnWhitelist",
+			func(tcd *testCaseData) {
+				// Generate a random entity ID.
+				sig := memorySigner.NewTestSigner("consensus/cometbft/apps/registry: random signer 1")
+
+				rt := registry.Runtime{
+					Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:              common.NewTestNamespaceFromSeed([]byte("consensus/cometbft/apps/registry: runtime: ComputeNodeNotOnWhitelist"), 0),
+					Kind:            registry.KindCompute,
+					GovernanceModel: registry.GovernanceEntity,
+					AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+						EntityWhitelist: &registry.EntityWhitelistRuntimeAdmissionPolicy{
+							Entities: map[signature.PublicKey]registry.EntityWhitelistConfig{
+								sig.Public(): {},
+							},
+						},
+					},
+				}
+				_ = state.SetRuntime(ctx, &rt, false)
+
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
+					{ID: rt.ID},
+				}
+			},
+			nil,
+			false,
+			false,
+		},
+		// Observer node on per-role whitelist.
+		{
+			"ObserverNodeOnPerRoleWhitelist",
+			func(tcd *testCaseData) {
+				rt := registry.Runtime{
+					Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:              common.NewTestNamespaceFromSeed([]byte("consensus/cometbft/apps/registry: runtime: ObserverNodeOnPerRoleWhitelist"), 0),
+					Kind:            registry.KindCompute,
+					GovernanceModel: registry.GovernanceEntity,
+					AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+						PerRole: map[node.RolesMask]registry.PerRoleAdmissionPolicy{
+							node.RoleObserver: {
+								EntityWhitelist: &registry.EntityWhitelistRoleAdmissionPolicy{
+									Entities: map[signature.PublicKey]registry.EntityWhitelistRoleConfig{
+										tcd.node.EntityID: {},
+									},
+								},
+							},
+						},
+					},
+				}
+				_ = state.SetRuntime(ctx, &rt, false)
+
+				tcd.node.AddRoles(node.RoleObserver)
+				tcd.node.Runtimes = []*node.Runtime{
+					{ID: rt.ID},
+				}
+			},
+			nil,
+			true,
+			true,
+		},
+		// Observer node not on per-role whitelist.
+		{
+			"ObserverNodeNotOnPerRoleWhitelist",
+			func(tcd *testCaseData) {
+				// Generate a random entity ID.
+				sig := memorySigner.NewTestSigner("consensus/cometbft/apps/registry: random signer 1")
+
+				rt := registry.Runtime{
+					Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:              common.NewTestNamespaceFromSeed([]byte("consensus/cometbft/apps/registry: runtime: ObserverNodeNotOnPerRoleWhitelist"), 0),
+					Kind:            registry.KindCompute,
+					GovernanceModel: registry.GovernanceEntity,
+					AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+						PerRole: map[node.RolesMask]registry.PerRoleAdmissionPolicy{
+							node.RoleObserver: {
+								EntityWhitelist: &registry.EntityWhitelistRoleAdmissionPolicy{
+									Entities: map[signature.PublicKey]registry.EntityWhitelistRoleConfig{
+										sig.Public(): {},
+									},
+								},
+							},
+						},
+					},
+				}
+				_ = state.SetRuntime(ctx, &rt, false)
+
+				tcd.node.AddRoles(node.RoleObserver)
+				tcd.node.Runtimes = []*node.Runtime{
+					{ID: rt.ID},
+				}
+			},
+			nil,
+			false,
+			false,
+		},
+		// Compute node not on per-role whitelist, but per-role whitelist only set for observer nodes.
+		{
+			"ComputeNodeNotOnPerRoleWhitelist",
+			func(tcd *testCaseData) {
+				// Generate a random entity ID.
+				sig := memorySigner.NewTestSigner("consensus/cometbft/apps/registry: random signer 1")
+
+				rt := registry.Runtime{
+					Versioned:       cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+					ID:              common.NewTestNamespaceFromSeed([]byte("consensus/cometbft/apps/registry: runtime: ComputeNodeNotOnPerRoleWhitelist"), 0),
+					Kind:            registry.KindCompute,
+					GovernanceModel: registry.GovernanceEntity,
+					AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+						PerRole: map[node.RolesMask]registry.PerRoleAdmissionPolicy{
+							node.RoleObserver: { // Note: The node will register with compute role.
+								EntityWhitelist: &registry.EntityWhitelistRoleAdmissionPolicy{
+									Entities: map[signature.PublicKey]registry.EntityWhitelistRoleConfig{
+										sig.Public(): {},
+									},
+								},
+							},
+						},
+					},
+				}
+				_ = state.SetRuntime(ctx, &rt, false)
+
+				tcd.node.AddRoles(node.RoleComputeWorker)
+				tcd.node.Runtimes = []*node.Runtime{
+					{ID: rt.ID},
+				}
+			},
+			nil,
+			true,
+			true,
+		},
 		// Updating a node should be allowed.
 		{
 			"UpdateValidator",
