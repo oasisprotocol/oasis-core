@@ -571,6 +571,10 @@ type ConsensusParameters struct {
 
 	// MaxEvidenceAge is the maximum age of submitted evidence in the number of rounds.
 	MaxEvidenceAge uint64 `json:"max_evidence_age"`
+
+	// MaxPastRootsStored is the maximum number of past runtime state and I/O
+	// roots that are stored in the consensus state.
+	MaxPastRootsStored uint64 `json:"max_past_roots_stored,omitempty"`
 }
 
 // ConsensusParameterChanges are allowed roothash consensus parameter changes.
@@ -586,6 +590,10 @@ type ConsensusParameterChanges struct {
 
 	// MaxEvidenceAge is the new maximum evidence age.
 	MaxEvidenceAge *uint64 `json:"max_evidence_age"`
+
+	// MaxPastRootsStored is the new maximum number of past runtime state and I/O
+	// roots that are stored in the consensus state.
+	MaxPastRootsStored *uint64 `json:"max_past_roots_stored,omitempty"`
 }
 
 // Apply applies changes to the given consensus parameters.
@@ -601,6 +609,9 @@ func (c *ConsensusParameterChanges) Apply(params *ConsensusParameters) error {
 	}
 	if c.MaxEvidenceAge != nil {
 		params.MaxEvidenceAge = *c.MaxEvidenceAge
+	}
+	if c.MaxPastRootsStored != nil {
+		params.MaxPastRootsStored = *c.MaxPastRootsStored
 	}
 	return nil
 }
@@ -639,4 +650,15 @@ func VerifyRuntimeParameters(rt *registry.Runtime, params *ConsensusParameters) 
 		return ErrMaxInMessagesTooBig
 	}
 	return nil
+}
+
+// RoundRoots holds the per-round state and I/O roots that are stored in
+// consensus state.
+type RoundRoots struct {
+	// Serialize this struct as an array with two elements to save space in
+	// the consensus state.
+	_ struct{} `cbor:",toarray"` //nolint
+
+	StateRoot hash.Hash
+	IORoot    hash.Hash
 }

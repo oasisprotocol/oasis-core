@@ -50,7 +50,8 @@ func (c *ConsensusParameterChanges) SanityCheck() error {
 	if c.GasCosts == nil &&
 		c.MaxRuntimeMessages == nil &&
 		c.MaxInRuntimeMessages == nil &&
-		c.MaxEvidenceAge == nil {
+		c.MaxEvidenceAge == nil &&
+		c.MaxPastRootsStored == nil {
 		return fmt.Errorf("consensus parameter changes should not be empty")
 	}
 	return nil

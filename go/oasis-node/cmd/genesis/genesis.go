@@ -94,6 +94,7 @@ const (
 	cfgRoothashDebugBypassStake          = "roothash.debug.bypass_stake" // nolint: gosec
 	CfgRoothashMaxRuntimeMessages        = "roothash.max_runtime_messages"
 	CfgRoothashMaxInRuntimeMessages      = "roothash.max_in_runtime_messages"
+	CfgRoothashMaxPastRootsStored        = "roothash.max_past_roots_stored"
 
 	// Staking config flags.
 	CfgStakingTokenSymbol        = "staking.token_symbol"
@@ -509,6 +510,7 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 			DebugBypassStake:          viper.GetBool(cfgRoothashDebugBypassStake),
 			MaxRuntimeMessages:        viper.GetUint32(CfgRoothashMaxRuntimeMessages),
 			MaxInRuntimeMessages:      viper.GetUint32(CfgRoothashMaxInRuntimeMessages),
+			MaxPastRootsStored:        viper.GetUint64(CfgRoothashMaxPastRootsStored),
 			GasCosts:                  roothash.DefaultGasCosts, // TODO: Make these configurable.
 		},
 	}
@@ -831,6 +833,7 @@ func init() {
 	initGenesisFlags.Bool(cfgRoothashDebugBypassStake, false, "bypass all roothash stake checks and operations (UNSAFE)")
 	initGenesisFlags.Uint32(CfgRoothashMaxRuntimeMessages, 128, "maximum number of runtime messages submitted in a round")
 	initGenesisFlags.Uint32(CfgRoothashMaxInRuntimeMessages, 128, "maximum number of ququed incoming runtime messages")
+	initGenesisFlags.Uint64(CfgRoothashMaxPastRootsStored, 1200, "maximum number of past runtime state and I/O roots stored in consensus state")
 	_ = initGenesisFlags.MarkHidden(cfgRoothashDebugDoNotSuspendRuntimes)
 	_ = initGenesisFlags.MarkHidden(cfgRoothashDebugBypassStake)
 

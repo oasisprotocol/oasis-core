@@ -131,6 +131,12 @@ func (app *rootHashApplication) changeParameters(ctx *api.Context, msg interface
 	if err != nil {
 		return nil, fmt.Errorf("roothash: failed to load consensus parameters: %w", err)
 	}
+	var needToDeletePastRoots bool
+	if changes.MaxPastRootsStored != nil && *changes.MaxPastRootsStored < params.MaxPastRootsStored {
+		// If we've reduced the number of past roots stored, we need to delete
+		// the excess when applying the new parameters.
+		needToDeletePastRoots = true
+	}
 	if err = changes.SanityCheck(); err != nil {
 		return nil, fmt.Errorf("roothash: failed to validate consensus parameter changes: %w", err)
 	}
@@ -143,6 +149,13 @@ func (app *rootHashApplication) changeParameters(ctx *api.Context, msg interface
 
 	// Apply changes.
 	if apply {
+		if needToDeletePastRoots {
+			err = state.ShrinkPastRoots(ctx, params.MaxPastRootsStored)
+			if err != nil {
+				return nil, fmt.Errorf("roothash: failed to shrink past stored roots: %w", err)
+			}
+		}
+
 		if err = state.SetConsensusParameters(ctx, params); err != nil {
 			return nil, fmt.Errorf("roothash: failed to update consensus parameters: %w", err)
 		}
