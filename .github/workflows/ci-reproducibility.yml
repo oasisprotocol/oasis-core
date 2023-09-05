@@ -31,7 +31,7 @@ jobs:
         build_number: [1, 2]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # NOTE: We make a git checkout to a unique directory for each build to
           # catch reproducibility issues with code in different local paths.

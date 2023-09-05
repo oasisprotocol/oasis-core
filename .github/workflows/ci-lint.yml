@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # Check out pull request's HEAD commit instead of the merge commit to
           # prevent gitlint from failing due to too long commit message titles,
@@ -93,7 +93,7 @@ jobs:
         # Always run this step so that all linting errors can be seen at once.
         if: always()
       - name: Ensure a clean code checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           clean: true
         if: always()
