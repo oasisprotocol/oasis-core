@@ -1,5 +1,4 @@
-// Package fixgenesis implements the fix-genesis command.
-package fixgenesis
+package genesis
 
 import (
 	"encoding/json"
@@ -15,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -33,20 +31,18 @@ const (
 )
 
 var (
-	fixGenesisCmd = &cobra.Command{
-		Use:   "fix-genesis",
-		Short: "fix a genesis document",
-		Run:   doFixGenesis,
+	migrateGenesisCmd = &cobra.Command{
+		Use:   "migrate",
+		Short: "migrate a genesis document from a previous release",
+		Run:   doMigrateGenesis,
 	}
 
-	genesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
-
-	logger = logging.GetLogger("cmd/debug/fix-genesis")
+	migrateGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	errOldNodeDesc = errors.New("deprecated node descriptor")
 )
 
-func doFixGenesis(cmd *cobra.Command, _ []string) {
+func doMigrateGenesis(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -454,15 +450,8 @@ func fixupBurnAddress(newDoc *genesis.Document) error {
 	return nil
 }
 
-// Register registers the fix-genesis sub-command and all of it's children.
-func Register(parentCmd *cobra.Command) {
-	fixGenesisCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
-	fixGenesisCmd.PersistentFlags().AddFlagSet(genesisFlags)
-	parentCmd.AddCommand(fixGenesisCmd)
-}
-
 func init() {
-	genesisFlags.String(CfgNewGenesisFile, "genesis_fixed.json", "path to fixed genesis document")
-	genesisFlags.String(cfgNewChainID, "", "optional new chain ID")
-	_ = viper.BindPFlags(genesisFlags)
+	migrateGenesisFlags.String(CfgNewGenesisFile, "genesis_new.json", "path to migrated genesis document")
+	migrateGenesisFlags.String(cfgNewChainID, "", "optional new chain ID")
+	_ = viper.BindPFlags(migrateGenesisFlags)
 }

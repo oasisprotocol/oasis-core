@@ -6,6 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/stake"
 )
 
@@ -50,6 +51,28 @@ func (g *GenesisHelpers) Dump(
 
 	if out, err := g.runSubCommandWithOutput("genesis-dump", args); err != nil {
 		return fmt.Errorf("failed to run 'genesis dump': error: %w output: %s", err, out.String())
+	}
+
+	return nil
+}
+
+// Migrate is a wrapper for "genesis migrate" subcommand.
+func (g *GenesisHelpers) Migrate(
+	genesisFilePath string,
+	newGenesisFilePath string,
+) error {
+	g.logger.Info("migrating genesis file")
+
+	args := []string{
+		"genesis", "migrate",
+		"--" + flags.CfgGenesisFile, genesisFilePath,
+		"--" + genesis.CfgNewGenesisFile, newGenesisFilePath,
+		"--" + flags.CfgDebugDontBlameOasis,
+		"--" + common.CfgDebugAllowTestKeys,
+	}
+
+	if out, err := g.runSubCommandWithOutput("genesis-migrate", args); err != nil {
+		return fmt.Errorf("failed to run 'genesis migrate': error: %w output: %s", err, out.String())
 	}
 
 	return nil

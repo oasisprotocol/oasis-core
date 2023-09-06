@@ -753,10 +753,14 @@ func Register(parentCmd *cobra.Command) {
 	dumpGenesisCmd.PersistentFlags().AddFlagSet(cmdGrpc.ClientFlags)
 	checkGenesisCmd.Flags().AddFlagSet(checkGenesisFlags)
 
+	migrateGenesisCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
+	migrateGenesisCmd.PersistentFlags().AddFlagSet(migrateGenesisFlags)
+
 	for _, v := range []*cobra.Command{
 		initGenesisCmd,
 		dumpGenesisCmd,
 		checkGenesisCmd,
+		migrateGenesisCmd,
 	} {
 		genesisCmd.AddCommand(v)
 	}

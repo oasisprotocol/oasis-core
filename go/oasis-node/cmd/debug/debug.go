@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/byzantine"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/control"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/dumpdb"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/fixgenesis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/storage"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/debug/txsource"
 )
@@ -24,7 +23,6 @@ func Register(parentCmd *cobra.Command) {
 	storage.Register(debugCmd)
 	byzantine.Register(debugCmd)
 	txsource.Register(debugCmd)
-	fixgenesis.Register(debugCmd)
 	control.Register(debugCmd)
 	dumpdb.Register(debugCmd)
 	beacon.Register(debugCmd)

@@ -53,7 +53,6 @@ type Helpers struct {
 	Consensus  *ConsensusHelpers
 	Registry   *RegistryHelpers
 	Keymanager *KeymanagerHelpers
-	Debug      *DebugHelpers
 	Genesis    *GenesisHelpers
 }
 
@@ -70,7 +69,6 @@ func New(env *env.Env, factory Factory, logger *logging.Logger) *Helpers {
 		Consensus:   &ConsensusHelpers{base},
 		Registry:    &RegistryHelpers{base},
 		Keymanager:  &KeymanagerHelpers{base},
-		Debug:       &DebugHelpers{base},
 		Genesis:     &GenesisHelpers{base},
 	}
 }
