@@ -1,5 +1,4 @@
-// Package fixgenesis implements the fix-genesis command.
-package fixgenesis
+package genesis
 
 import (
 	"encoding/json"
@@ -15,7 +14,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -25,24 +23,26 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-// CfgNewGenesisFile is the flag used to specify a new genesis file.
-const CfgNewGenesisFile = "genesis.new_file"
+const (
+	// CfgNewGenesisFile is the flag used to specify a new genesis file.
+	CfgNewGenesisFile = "genesis.new_file"
+
+	cfgNewChainID = "genesis.new_chain_id"
+)
 
 var (
-	fixGenesisCmd = &cobra.Command{
-		Use:   "fix-genesis",
-		Short: "fix a genesis document",
-		Run:   doFixGenesis,
+	migrateGenesisCmd = &cobra.Command{
+		Use:   "migrate",
+		Short: "migrate a genesis document from a previous release",
+		Run:   doMigrateGenesis,
 	}
 
-	newGenesisFlag = flag.NewFlagSet("", flag.ContinueOnError)
-
-	logger = logging.GetLogger("cmd/debug/fix-genesis")
+	migrateGenesisFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	errOldNodeDesc = errors.New("deprecated node descriptor")
 )
 
-func doFixGenesis(cmd *cobra.Command, _ []string) {
+func doMigrateGenesis(cmd *cobra.Command, _ []string) {
 	if err := cmdCommon.Init(); err != nil {
 		cmdCommon.EarlyLogAndExit(err)
 	}
@@ -329,6 +329,17 @@ NodeLoop:
 	// Update governance parameters.
 	newDoc.Governance.Parameters.EnableChangeParametersProposal = true
 
+	// Automatically update the chain ID and base epoch when set.
+	if newChainID := viper.GetString(cfgNewChainID); newChainID != "" {
+		newDoc.ChainID = newChainID
+		newDoc.Beacon.Base++
+
+		// Update extra data to be as specified in the initial network genesis block.
+		newDoc.ExtraData = map[string][]byte{
+			"quote": []byte("Quis custodiet ipsos custodes? [submitted by Oasis Community Member Daniyar Borangaziyev]"),
+		}
+	}
+
 	return &newDoc, nil
 }
 
@@ -439,14 +450,8 @@ func fixupBurnAddress(newDoc *genesis.Document) error {
 	return nil
 }
 
-// Register registers the fix-genesis sub-command and all of it's children.
-func Register(parentCmd *cobra.Command) {
-	fixGenesisCmd.PersistentFlags().AddFlagSet(flags.GenesisFileFlags)
-	fixGenesisCmd.PersistentFlags().AddFlagSet(newGenesisFlag)
-	parentCmd.AddCommand(fixGenesisCmd)
-}
-
 func init() {
-	newGenesisFlag.String(CfgNewGenesisFile, "genesis_fixed.json", "path to fixed genesis document")
-	_ = viper.BindPFlags(newGenesisFlag)
+	migrateGenesisFlags.String(CfgNewGenesisFile, "genesis_new.json", "path to migrated genesis document")
+	migrateGenesisFlags.String(cfgNewChainID, "", "optional new chain ID")
+	_ = viper.BindPFlags(migrateGenesisFlags)
 }

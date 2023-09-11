@@ -24,6 +24,7 @@ func FixExportedGenesisFile(childEnv *env.Env, cli *cli.Helpers, sc *e2e.Scenari
 	sc.Logger.Info("fixing exported genesis file", "path", exportedGenFilePath)
 
 	fixedGenFilePath := filepath.Join(childEnv.Dir(), "genesis-fixed.json")
+	// TODO: Change to cli.Genesis.Migrate once merged to master.
 	if err := cli.Debug.FixGenesis(exportedGenFilePath, fixedGenFilePath); err != nil {
 		return "", fmt.Errorf("failed to fix exported genesis file: %+w", err)
 	}

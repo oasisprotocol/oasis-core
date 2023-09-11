@@ -116,7 +116,7 @@ func (s *genesisFileImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if genesisNeedsUpgrade {
 		// When upgrade is needed, run fix-genesis.
 		latestMainnetGenesisFixed = filepath.Join(childEnv.Dir(), "genesis_mainnet_fixed.json")
-		if err := cli.Debug.FixGenesis(latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
+		if err := cli.Genesis.Migrate(latestMainnetGenesis, latestMainnetGenesisFixed); err != nil {
 			return fmt.Errorf("e2e/genesis-file: failed run fix-genesis on latest Mainnet genesis "+
 				"file at '%s': %w", genesisURL, err)
 		}

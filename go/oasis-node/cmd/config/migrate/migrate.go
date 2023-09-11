@@ -295,6 +295,13 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 								delete(m(m(m(tendermint)["seed"])["debug"]), "disable_addr_book_from_genesis")
 							}
 						}
+					} else if k == "state_sync" {
+						if _, ok = m(v)["consensus_node"]; ok {
+							logger.Info("consensus.state_sync.consensus_node is no longer needed")
+							delete(m(v), "consensus_node")
+						}
+						m(newCfg["consensus"])["state_sync"] = v
+						delete(m(tendermint), "state_sync")
 					} else if k == "sentry" {
 						if upaddr, ok := m(v)["upstream_address"]; ok {
 							m(newCfg["consensus"])["sentry_upstream_addresses"] = convertP2P(upaddr, "consensus.tendermint.sentry.upstream_address", "consensus.sentry_upstream_addresses")

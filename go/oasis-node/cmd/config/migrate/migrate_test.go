@@ -124,6 +124,15 @@ consensus:
 
       disable_peer_exchange: true
 
+    state_sync:
+      enabled: false
+      trust_height: 4692334
+      trust_hash: "2d9dd35e7254a6c5c87f49d0646ee359f06f460b72278ad3ac17130bd9a7ec19"
+      consensus_node:
+        - "xAMjfJDcUFUcwgZGEQuOdux8gAdc+IFEqccB2LHdGjU=@34.86.145.181:9001"
+        - "DbYomffhISzQ4Nd6O2RX0PBPzbt0U8996IjH4oifOPM=@35.221.19.64:9001"
+
+
 runtime:
   mode: "client"
   environment: sgx
@@ -490,6 +499,10 @@ func TestConfigMigrationComplex(t *testing.T) {
 	require.Equal(newConfig.Consensus.P2P.DisablePeerExchange, true)
 	require.Equal(newConfig.Consensus.Prune.Strategy, "keep_n")
 	require.Equal(newConfig.Consensus.Prune.NumKept, uint64(86400))
+	require.Equal(newConfig.Consensus.StateSync.Enabled, false)
+	require.Equal(newConfig.Consensus.StateSync.TrustPeriod, 24*time.Hour)
+	require.Equal(newConfig.Consensus.StateSync.TrustHeight, uint64(4692334))
+	require.Equal(newConfig.Consensus.StateSync.TrustHash, "2d9dd35e7254a6c5c87f49d0646ee359f06f460b72278ad3ac17130bd9a7ec19")
 	require.Equal(newConfig.Storage.Backend, "badger")
 	require.Equal(newConfig.Storage.CheckpointSyncDisabled, true)
 	require.Equal(newConfig.Storage.Checkpointer.Enabled, true)

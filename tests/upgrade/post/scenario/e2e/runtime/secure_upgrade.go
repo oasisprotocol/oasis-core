@@ -160,10 +160,10 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	// Build simple key/value and key manager runtimes.
 	defer func() {
-		err2 := sc.BuildAllRuntimes(ctx, childEnv, nil)
+		err2 := sc.BuildAllRuntimes(childEnv, nil)
 		err = multierror.Append(err, err2).ErrorOrNil()
 	}()
-	if err = sc.BuildAllRuntimes(ctx, childEnv, trustRoot); err != nil {
+	if err = sc.BuildAllRuntimes(childEnv, trustRoot); err != nil {
 		return err
 	}
 
@@ -205,7 +205,7 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	if err != nil {
 		return nil
 	}
-	if err = sc.RegisterEntity(ctx, childEnv, cli, ent, nonce); err != nil {
+	if err = sc.RegisterEntity(childEnv, cli, ent, nonce); err != nil {
 		return err
 	}
 

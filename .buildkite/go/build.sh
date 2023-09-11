@@ -30,5 +30,8 @@ pushd go
 popd
 
 pushd tests/upgrade
-  OASIS_GO=go1.20.2 make all
+  # Use legacy Go toolchain for pre-upgrade tests.
+  OASIS_GO=go1.20.2 make -C pre
+  # Use regular Go toolchain for post-upgrade tests.
+  make -C post
 popd
