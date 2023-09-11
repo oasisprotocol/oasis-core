@@ -604,9 +604,13 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 
 // Guarded by n.CrossNode.
 func (n *Node) handleRuntimeHostEventLocked(ev *host.Event) {
-	if ev.Started != nil {
+	switch {
+	case ev.Started != nil:
 		atomic.StoreUint32(&n.hostedRuntimeProvisioned, 1)
+	case ev.FailedToStart != nil, ev.Stopped != nil:
+		atomic.StoreUint32(&n.hostedRuntimeProvisioned, 0)
 	}
+
 	for _, hooks := range n.hooks {
 		hooks.HandleRuntimeHostEventLocked(ev)
 	}
