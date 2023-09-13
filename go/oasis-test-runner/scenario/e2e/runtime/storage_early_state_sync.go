@@ -53,6 +53,7 @@ func (sc *storageEarlyStateSyncImpl) Fixture() (*oasis.NetworkFixture, error) {
 				staking.KindEntity:            *quantity.NewFromUint64(0),
 				staking.KindNodeValidator:     *quantity.NewFromUint64(0),
 				staking.KindNodeCompute:       *quantity.NewFromUint64(0),
+				staking.KindNodeObserver:      *quantity.NewFromUint64(0),
 				staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
 				staking.KindRuntimeCompute:    *quantity.NewFromUint64(1000),
 				staking.KindRuntimeKeyManager: *quantity.NewFromUint64(1000),

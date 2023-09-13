@@ -149,7 +149,7 @@ var (
 		node.RoleStorageRPC
 
 	// ComputeRuntimeAllowedRoles are the Node roles that allow compute runtimes.
-	ComputeRuntimeAllowedRoles = node.RoleComputeWorker
+	ComputeRuntimeAllowedRoles = node.RoleComputeWorker | node.RoleObserver
 
 	// KeyManagerRuntimeAllowedRoles are the Node roles that allow key manager runtimes.
 	KeyManagerRuntimeAllowedRoles = node.RoleKeyManager
@@ -395,8 +395,12 @@ type NodeLookup interface {
 	// NodeBySubKey looks up a specific node by its consensus, P2P or TLS key.
 	NodeBySubKey(ctx context.Context, key signature.PublicKey) (*node.Node, error)
 
-	// Returns a list of all nodes.
+	// Nodes returns a list of all registered nodes.
 	Nodes(ctx context.Context) ([]*node.Node, error)
+
+	// GetEntityNodes returns nodes registered by given entity.
+	// Note that this returns both active and expired nodes.
+	GetEntityNodes(ctx context.Context, id signature.PublicKey) ([]*node.Node, error)
 }
 
 // RuntimeLookup interface implements various ways for the verification
@@ -1143,43 +1147,10 @@ func VerifyRuntime( // nolint: gocyclo
 		return err // ValidateDeployments handles wrapping, yay.
 	}
 
-	// Ensure there's a valid admission policy.
-	if !common.ExactlyOneTrue(rt.AdmissionPolicy.AnyNode != nil, rt.AdmissionPolicy.EntityWhitelist != nil) {
-		logger.Error("RegisterRuntime: invalid admission policy. exactly one policy should be non-nil",
-			"admission_policy", rt.AdmissionPolicy,
-		)
-		return fmt.Errorf("%w: invalid admission policy", ErrInvalidArgument)
-	}
-
 	// Using runtime governance for non-compute runtimes is invalid.
 	if rt.GovernanceModel == GovernanceRuntime && rt.Kind != KindCompute {
 		logger.Error("RegisterRuntime: runtime governance can only be used with compute runtimes")
 		return fmt.Errorf("%w: runtime governance can only be used with compute runtimes", ErrInvalidArgument)
-	}
-
-	// Ensure valid whitelist if present.
-	if rt.AdmissionPolicy.EntityWhitelist != nil {
-		for ent, wc := range rt.AdmissionPolicy.EntityWhitelist.Entities {
-			// Entity ID should be valid.
-			if !ent.IsValid() {
-				logger.Error("RegisterRuntime: invalid entity ID in whitelist",
-					"entity_id", ent,
-				)
-				return fmt.Errorf("%w: invalid entity ID in entity whitelist", ErrInvalidArgument)
-			}
-			// MaxNodes map should contain only single roles as keys.
-			if wc.MaxNodes != nil {
-				for role := range wc.MaxNodes {
-					if !role.IsSingleRole() {
-						logger.Error("RegisterRuntime: non-single role in entity whitelist max nodes map",
-							"entity_id", ent,
-							"role", role,
-						)
-						return fmt.Errorf("%w: non-single role in entity whitelist max nodes map", ErrInvalidArgument)
-					}
-				}
-			}
-		}
 	}
 
 	return nil
@@ -1580,6 +1551,9 @@ func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.
 		}
 		if n.HasRoles(node.RoleComputeWorker) {
 			roleThresholds = append(roleThresholds, staking.KindNodeCompute)
+		}
+		if n.HasRoles(node.RoleObserver) {
+			roleThresholds = append(roleThresholds, staking.KindNodeObserver)
 		}
 
 		rtThresholds := rt.Staking.Thresholds

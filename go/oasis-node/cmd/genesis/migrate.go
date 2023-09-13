@@ -148,7 +148,7 @@ func openSignedNode(_ signature.Context, sn *node.MultiSignedNode) (*node.Node, 
 	return nil, fmt.Errorf("unable to open signed node: %w", err) // Original error
 }
 
-func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
+func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) { //nolint: gocyclo
 	// Create the new genesis document template.
 	newDoc := oldDoc
 
@@ -169,6 +169,11 @@ func updateGenesisDoc(oldDoc genesis.Document) (*genesis.Document, error) {
 				acc.General.Allowances[bene] = newDoc.Staking.TotalSupply
 			}
 		}
+	}
+
+	// Add global observer stake threshold (based on compute node threshold) if needed.
+	if _, exists := newDoc.Staking.Parameters.Thresholds[staking.KindNodeObserver]; !exists {
+		newDoc.Staking.Parameters.Thresholds[staking.KindNodeObserver] = newDoc.Staking.Parameters.Thresholds[staking.KindNodeCompute]
 	}
 
 	// Collect runtimes.

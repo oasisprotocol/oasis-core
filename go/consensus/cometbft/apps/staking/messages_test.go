@@ -29,6 +29,7 @@ func TestChangeParameters(t *testing.T) {
 			staking.KindEntity:            *quantity.NewFromUint64(1),
 			staking.KindNodeValidator:     *quantity.NewFromUint64(1),
 			staking.KindNodeCompute:       *quantity.NewFromUint64(1),
+			staking.KindNodeObserver:      *quantity.NewFromUint64(1),
 			staking.KindNodeKeyManager:    *quantity.NewFromUint64(1),
 			staking.KindRuntimeCompute:    *quantity.NewFromUint64(1),
 			staking.KindRuntimeKeyManager: *quantity.NewFromUint64(1),

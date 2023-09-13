@@ -25,6 +25,7 @@ func TestConsensusParameters(t *testing.T) {
 		KindEntity:            *quantity.NewQuantity(),
 		KindNodeValidator:     *quantity.NewQuantity(),
 		KindNodeCompute:       *quantity.NewQuantity(),
+		KindNodeObserver:      *quantity.NewQuantity(),
 		KindNodeKeyManager:    *quantity.NewQuantity(),
 		KindRuntimeCompute:    *quantity.NewQuantity(),
 		KindRuntimeKeyManager: *quantity.NewQuantity(),

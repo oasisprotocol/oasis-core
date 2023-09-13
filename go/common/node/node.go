@@ -179,8 +179,8 @@ type RolesMask uint32
 const (
 	// RoleComputeWorker is the compute worker role.
 	RoleComputeWorker RolesMask = 1 << 0
-	// roleReserved2 is the reserved role (storage role in v1 descriptors).
-	roleReserved2 RolesMask = 1 << 1
+	// RoleObserver is the observer role.
+	RoleObserver RolesMask = 1 << 1
 	// RoleKeyManager is the the key manager role.
 	RoleKeyManager RolesMask = 1 << 2
 	// RoleValidator is the validator role.
@@ -192,11 +192,12 @@ const (
 
 	// RoleReserved are all the bits of the Oasis node roles bitmask
 	// that are reserved and must not be used.
-	RoleReserved RolesMask = ((1<<32)-1) & ^((RoleStorageRPC<<1)-1) | roleReserved2 | roleReserved3
+	RoleReserved RolesMask = ((1<<32)-1) & ^((RoleStorageRPC<<1)-1) | roleReserved3
 
 	// Human friendly role names:
 
 	RoleComputeWorkerName = "compute"
+	RoleObserverName      = "observer"
 	RoleKeyManagerName    = "key-manager"
 	RoleValidatorName     = "validator"
 	RoleStorageRPCName    = "storage-rpc"
@@ -208,6 +209,7 @@ const (
 func Roles() (roles []RolesMask) {
 	return []RolesMask{
 		RoleComputeWorker,
+		RoleObserver,
 		RoleKeyManager,
 		RoleValidator,
 		RoleStorageRPC,
@@ -228,6 +230,9 @@ func (m RolesMask) String() string {
 	var ret []string
 	if m&RoleComputeWorker != 0 {
 		ret = append(ret, RoleComputeWorkerName)
+	}
+	if m&RoleObserver != 0 {
+		ret = append(ret, RoleObserverName)
 	}
 	if m&RoleKeyManager != 0 {
 		ret = append(ret, RoleKeyManagerName)
@@ -265,6 +270,11 @@ func (m *RolesMask) UnmarshalText(text []byte) error {
 				return err
 			}
 			*m |= RoleComputeWorker
+		case RoleObserverName:
+			if err := checkDuplicateRole(RoleObserver, *m); err != nil {
+				return err
+			}
+			*m |= RoleObserver
 		case RoleKeyManagerName:
 			if err := checkDuplicateRole(RoleKeyManager, *m); err != nil {
 				return err

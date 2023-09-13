@@ -100,6 +100,7 @@ func getNodeDesc(rng *rand.Rand, nodeIdentity *identity.Identity, entityID signa
 	// exist.
 	availableRoles := []node.RolesMask{
 		node.RoleComputeWorker,
+		node.RoleObserver,
 	}
 
 	nodeDesc := node.Node{
