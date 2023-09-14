@@ -535,7 +535,7 @@ electLoop:
 				if err != nil {
 					return nil, fmt.Errorf("failed to fetch escrow balance for account %s: %w", entAddr, err)
 				}
-				power, err = scheduler.VotingPowerFromStake(stake)
+				power, err = scheduler.VotingPowerFromStake(stake, params.VotingPowerDistribution)
 				if err != nil {
 					return nil, fmt.Errorf("computing voting power for account %s with balance %v: %w",
 						entAddr, stake, err,

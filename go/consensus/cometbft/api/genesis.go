@@ -174,7 +174,7 @@ func convertValidators(d *genesis.Document) ([]cmttypes.GenesisValidator, error)
 				// have an account in the ledger at all.
 				stake = &quantity.Quantity{}
 			}
-			power, err = scheduler.VotingPowerFromStake(stake)
+			power, err = scheduler.VotingPowerFromStake(stake, d.Scheduler.Parameters.VotingPowerDistribution)
 			if err != nil {
 				return nil, fmt.Errorf("cometbft: computing voting power for entity %s with account %s and stake %v: %w",
 					openedNode.EntityID,
