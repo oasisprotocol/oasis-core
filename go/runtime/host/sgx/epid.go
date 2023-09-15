@@ -17,13 +17,14 @@ import (
 )
 
 type teeStateEPID struct {
-	runtimeID common.Namespace
+	teeStateImplCommon
+
 	epidGID   uint32
 	spid      cmnIAS.SPID
 	quoteType *cmnIAS.SignatureType
 }
 
-func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, _ version.Version) ([]byte, error) {
+func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error) {
 	qi, err := sp.aesm.InitQuote(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error while getting quote info from AESMD: %w", err)
@@ -35,6 +36,7 @@ func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID 
 	}
 
 	ep.runtimeID = runtimeID
+	ep.version = version
 	ep.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
 	ep.spid = spidInfo.SPID
 	ep.quoteType = &spidInfo.QuoteSignatureType
@@ -68,15 +70,49 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 		return nil, fmt.Errorf("error while getting quote: %w", err)
 	}
 
+	// Get current quote policy from the consensus layer.
+	var quotePolicy *cmnIAS.QuotePolicy
+	var policies *sgxQuote.Policy
+	policies, err = ep.getQuotePolicies(ctx, sp)
+	if err != nil {
+		return nil, err
+	}
+	if policies != nil {
+		quotePolicy = policies.IAS
+	}
+
 	evidence := ias.Evidence{
-		RuntimeID: ep.runtimeID,
-		Quote:     quote,
-		Nonce:     nonce,
+		RuntimeID:                  ep.runtimeID,
+		Quote:                      quote,
+		Nonce:                      nonce,
+		MinTCBEvaluationDataNumber: quotePolicy.MinTCBEvaluationDataNumber,
 	}
 
 	avrBundle, err := sp.ias.VerifyEvidence(ctx, &evidence)
 	if err != nil {
 		return nil, fmt.Errorf("error while verifying attestation evidence: %w", err)
+	}
+
+	// Decode the AVR so we can do further checks.
+	avr, decErr := cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
+	if decErr == nil && avr.TCBEvaluationDataNumber < quotePolicy.MinTCBEvaluationDataNumber {
+		// Retry again with early updating.
+		evidence.EarlyTCBUpdate = true
+		avrBundle, err = sp.ias.VerifyEvidence(ctx, &evidence)
+		if err != nil {
+			return nil, fmt.Errorf("error while verifying attestation evidence with early update: %w", err)
+		}
+		avr, decErr = cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
+	}
+	if decErr != nil {
+		return nil, fmt.Errorf("unable to decode AVR: %w", decErr)
+	}
+	if avr.TCBEvaluationDataNumber < quotePolicy.MinTCBEvaluationDataNumber {
+		return nil, fmt.Errorf(
+			"AVR TCB data evaluation number invalid (%v < %v)",
+			avr.TCBEvaluationDataNumber,
+			quotePolicy.MinTCBEvaluationDataNumber,
+		)
 	}
 
 	// Prepare quote structure.
@@ -97,21 +133,18 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 		// If we are here, presumably the AVR is well-formed (VerifyEvidence
 		// succeeded).  Since this is more than likely the AVR indicating
 		// rejection, deserialize it and log some pertinent details.
-		avr, decErr := cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
-		if decErr == nil {
-			switch avr.ISVEnclaveQuoteStatus {
-			case cmnIAS.QuoteOK, cmnIAS.QuoteSwHardeningNeeded:
-				// That's odd, the quote checks out as ok.  Can't
-				// really get further information.
-			default:
-				// This probably has to do with the never-ending series of
-				// speculative execution trashfires, so log the vulns and
-				// quote status.
-				sp.logger.Error("attestation likely rejected by IAS",
-					"quote_status", avr.ISVEnclaveQuoteStatus.String(),
-					"advisory_ids", avr.AdvisoryIDs,
-				)
-			}
+		switch avr.ISVEnclaveQuoteStatus {
+		case cmnIAS.QuoteOK, cmnIAS.QuoteSwHardeningNeeded:
+			// That's odd, the quote checks out as ok.  Can't
+			// really get further information.
+		default:
+			// This probably has to do with the never-ending series of
+			// speculative execution trashfires, so log the vulns and
+			// quote status.
+			sp.logger.Error("attestation likely rejected by IAS",
+				"quote_status", avr.ISVEnclaveQuoteStatus.String(),
+				"advisory_ids", avr.AdvisoryIDs,
+			)
 		}
 
 		return nil, fmt.Errorf("error while configuring AVR: %w", err)

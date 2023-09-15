@@ -57,6 +57,8 @@ enum AVRError {
     Disabled,
     #[error("blacklisted IAS quote GID")]
     BlacklistedGID,
+    #[error("TCB evaluation data number is invalid")]
+    TCBEvaluationDataNumberInvalid,
 }
 
 pub const QUOTE_CONTEXT_LEN: usize = 8;
@@ -134,6 +136,10 @@ pub struct QuotePolicy {
     /// List of blocked platform EPID group IDs.
     #[cbor(optional)]
     pub gid_blacklist: Vec<u32>,
+
+    /// The minimum TCB evaluation data number that should be accepted.
+    #[cbor(optional)]
+    pub min_tcb_evaluation_data_number: u32,
 }
 
 /// Decoded quote body.
@@ -212,6 +218,16 @@ impl ParsedAVR {
         match self.body["isvEnclaveQuoteBody"].as_str() {
             Some(quote_body) => Ok(quote_body.to_string()),
             None => Err(AVRError::MissingQuoteBody.into()),
+        }
+    }
+
+    fn tcb_evaluation_data_number(&self) -> Result<u32> {
+        match self.body["tcbEvaluationDataNumber"].as_u64() {
+            None => Ok(0),
+            Some(eval_num) if eval_num > u32::MAX.into() => {
+                Err(AVRError::TCBEvaluationDataNumberInvalid.into())
+            }
+            Some(eval_num) => Ok(eval_num as u32),
         }
     }
 
@@ -307,6 +323,12 @@ pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
         return Err(AVRError::DebugEnclave.into());
     } else if !is_debug && allow_debug {
         return Err(AVRError::ProductionEnclave.into());
+    }
+
+    // If the minimum TCB evaluation data number is present in the policy,
+    // then the report's shouldn't be too low.
+    if avr_body.tcb_evaluation_data_number()? < policy.min_tcb_evaluation_data_number {
+        return Err(AVRError::TCBEvaluationDataNumberInvalid.into());
     }
 
     // Force-ratchet the clock forward, to at least the time in the AVR.
@@ -532,5 +554,153 @@ mod tests {
         // Test timestamp validation while we're at it.
         let timestamp = parse_avr_timestamp("2018-03-30T22:02:26.123456").unwrap();
         assert_eq!(timestamp, SIG_AT as i64);
+    }
+
+    #[test]
+    fn test_decode_avr_v4() {
+        const AVR: &[u8] = include_bytes!(
+            "../../../../go/common/sgx/ias/testdata/avr_v4_body_sw_hardening_needed.json"
+        );
+        const SIG: &[u8] = include_bytes!(
+            "../../../../go/common/sgx/ias/testdata/avr_v4_body_sw_hardening_needed.sig"
+        );
+        const SIG_AT: u64 = 1589188875; // 2020-05-11T09:21:15
+        const ID: &str = "323119119247496566074708526703373820736";
+        const NONCE: &str = "biNMqBAuTPF2hp/0fXa4P3splRkLHJf0";
+        const EPID_PSEUDONYM: &str = "uAFRLXADu90LsPq9Btgx8MWUPOzmDHE51pwLlUlU3hzFUk2EmvWpF6fZsyokOVkQUJ0UwZk0nCF8XPaCcSmLwqXAzLa+n/K7TdwlxKofEyTgG8da8mmrShNoFw3BSD74wSA4aAc753IfrbnnmuYk00lkmSUOTzqsqHlAORcweqg=";
+
+        let result = validate_avr_signature(IAS_CERT_CHAIN, AVR, SIG, SIG_AT);
+        assert!(result.is_ok());
+
+        let raw_avr = AVR {
+            body: AVR.to_vec(),
+            signature: SIG.to_vec(),
+            certificate_chain: IAS_CERT_CHAIN.to_vec(),
+        };
+        let avr = ParsedAVR::new(&raw_avr).expect("parsing raw AVR should succeed");
+        assert_eq!(avr.body["id"].as_str().expect("id should be present"), ID);
+        assert_eq!(
+            avr.timestamp().expect("timestamp should exist"),
+            SIG_AT as i64
+        );
+        assert_eq!(
+            avr.body["version"].as_u64().expect("version should exist"),
+            4
+        );
+        assert_eq!(
+            avr.isv_enclave_quote_status()
+                .expect("isv enclave quote status should exist"),
+            "SW_HARDENING_NEEDED"
+        );
+
+        let isv_enclave_quote_body = base64::decode(
+            avr.isv_enclave_quote_body()
+                .expect("isv enclave quote body should exist"),
+        )
+        .expect("decoding isv enclave quote body should succeed");
+        assert_eq!(isv_enclave_quote_body.len(), 432);
+        assert!(avr.body.get("revocationReason").is_none());
+        assert!(avr.body.get("pseManifestStatus").is_none());
+        assert!(avr.body.get("pseManifestHash").is_none());
+        assert!(avr.body.get("platformInfoBlob").is_none());
+        assert_eq!(
+            avr.body["nonce"].as_str().expect("nonce should exist"),
+            NONCE
+        );
+        assert_eq!(
+            avr.body["epidPseudonym"]
+                .as_str()
+                .expect("epid pseudonym should exist"),
+            EPID_PSEUDONYM
+        );
+        assert_eq!(
+            avr.body["advisoryURL"]
+                .as_str()
+                .expect("advisory URL should exist"),
+            "https://security-center.intel.com"
+        );
+        for (avr_id, known_id) in avr.body["advisoryIDs"]
+            .as_array()
+            .expect("advisory ID array should exist")
+            .iter()
+            .zip(["INTEL-SA-00334"])
+        {
+            assert_eq!(
+                avr_id.as_str().expect("advisory ID should be a string"),
+                known_id
+            );
+        }
+    }
+
+    #[test]
+    fn test_decode_avr_v5() {
+        const AVR: &[u8] = include_bytes!(
+            "../../../../go/common/sgx/ias/testdata/avr_v5_body_sw_hardening_needed.json"
+        );
+        const SIG: &[u8] = include_bytes!(
+            "../../../../go/common/sgx/ias/testdata/avr_v5_body_sw_hardening_needed.sig"
+        );
+        const SIG_AT: u64 = 1695829918; // 2023-09-27T15:51:58
+        const ID: &str = "325753020347524304899139732345489823748";
+        const EPID_PSEUDONYM: &str = "twLvZuBD1sOHsNPsHGbZOVlGh9rXw9XzVQTVKUuvsqypw0iWcFKwR7aNoHmDSoeFc/+pH6LLCI2bQBKx/ygwXphePD4GTTRwBi9EIBFRlURTk4p4NosbA7xcCG4hRuCDaEKPtAX6XHjNKEvWA+4f1aAfD7jwOtGAzHeaqBldaD8=";
+
+        let result = validate_avr_signature(IAS_CERT_CHAIN, AVR, SIG, SIG_AT);
+        assert!(result.is_ok());
+
+        let raw_avr = AVR {
+            body: AVR.to_vec(),
+            signature: SIG.to_vec(),
+            certificate_chain: IAS_CERT_CHAIN.to_vec(),
+        };
+        let avr = ParsedAVR::new(&raw_avr).expect("parsing raw AVR should succeed");
+        assert_eq!(avr.body["id"].as_str().expect("id should be present"), ID);
+        assert_eq!(
+            avr.timestamp().expect("timestamp should exist"),
+            SIG_AT as i64
+        );
+        assert_eq!(
+            avr.body["version"].as_u64().expect("version should exist"),
+            5
+        );
+        assert_eq!(
+            avr.isv_enclave_quote_status()
+                .expect("isv enclave quote status should exist"),
+            "SW_HARDENING_NEEDED"
+        );
+
+        let isv_enclave_quote_body = base64::decode(
+            avr.isv_enclave_quote_body()
+                .expect("isv enclave quote body should exist"),
+        )
+        .expect("decoding isv enclave quote body should succeed");
+        assert_eq!(isv_enclave_quote_body.len(), 432);
+        assert!(avr.body.get("revocationReason").is_none());
+        assert!(avr.body.get("pseManifestStatus").is_none());
+        assert!(avr.body.get("pseManifestHash").is_none());
+        assert!(avr.body.get("platformInfoBlob").is_none());
+        assert!(avr.body.get("nonce").is_none());
+        assert_eq!(
+            avr.body["epidPseudonym"]
+                .as_str()
+                .expect("epid pseudonym should exist"),
+            EPID_PSEUDONYM
+        );
+        assert_eq!(
+            avr.body["advisoryURL"]
+                .as_str()
+                .expect("advisory URL should exist"),
+            "https://security-center.intel.com"
+        );
+        for (avr_id, known_id) in avr.body["advisoryIDs"]
+            .as_array()
+            .expect("advisory ID array should exist")
+            .iter()
+            .zip(["INTEL-SA-00334", "INTEL-SA-00615"])
+        {
+            assert_eq!(
+                avr_id.as_str().expect("advisory ID should be a string"),
+                known_id
+            );
+        }
     }
 }

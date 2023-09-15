@@ -33,12 +33,15 @@ var (
 const (
 	// iasAPISubscriptionKeyHeader is the header IAS V4 endpoint uses for client
 	// authentication.
-	iasAPISubscriptionKeyHeader = "Ocp-Apim-Subscription-Key"
-	iasAPITimeout               = 10 * time.Second
-	iasAPIProductionBaseURL     = "https://api.trustedservices.intel.com/sgx"
-	iasAPITestingBaseURL        = "https://api.trustedservices.intel.com/sgx/dev"
-	iasAPIAttestationReportPath = "/attestation/v4/report"
-	iasAPISigRLPath             = "/attestation/v4/sigrl/"
+	iasAPISubscriptionKeyHeader   = "Ocp-Apim-Subscription-Key"
+	iasAPITimeout                 = 10 * time.Second
+	iasAPIProductionBaseURL       = "https://api.trustedservices.intel.com/sgx"
+	iasAPITestingBaseURL          = "https://api.trustedservices.intel.com/sgx/dev"
+	iasAPIv4AttestationReportPath = "/attestation/v4/report"
+	iasAPIv5AttestationReportPath = "/attestation/v5/report"
+	iasAPISigRLPath               = "/attestation/v5/sigrl/"
+	iasAPIAVRTCBUpdateParam       = "update"
+	iasAPIAVRTCBUpdateValueEarly  = "early"
 )
 
 type httpEndpoint struct {
@@ -50,9 +53,18 @@ type httpEndpoint struct {
 	spidInfo api.SPIDInfo
 }
 
-func (e *httpEndpoint) doIASRequest(ctx context.Context, method, uPath, bodyType string, body io.Reader) (*http.Response, error) {
+func (e *httpEndpoint) doIASRequest(ctx context.Context, method, uPath, bodyType string, body io.Reader, query ...string) (*http.Response, error) {
 	u := *e.baseURL
 	u.Path = path.Join(u.Path, uPath)
+
+	if len(query)%2 != 0 {
+		return nil, fmt.Errorf("ias request error: invalid number of query parameter items")
+	}
+	queryValues := url.Values{}
+	for i := 0; i < len(query); i += 2 {
+		queryValues.Set(query[i], query[i+1])
+	}
+	u.RawQuery = queryValues.Encode()
 
 	req, err := http.NewRequest(method, u.String(), body)
 	if err != nil {
@@ -92,6 +104,12 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidenc
 		return nil, err
 	}
 
+	// Determine API version needed.
+	iasAPIAttestationReportPath := iasAPIv4AttestationReportPath
+	if evidence.EarlyTCBUpdate || evidence.MinTCBEvaluationDataNumber > 0 {
+		iasAPIAttestationReportPath = iasAPIv5AttestationReportPath
+	}
+
 	// Encode the payload in the format that IAS wants.
 	reqPayload, err := json.Marshal(&iasEvidencePayload{
 		ISVEnclaveQuote: evidence.Quote,
@@ -103,7 +121,11 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidenc
 	}
 
 	// Dispatch the request via HTTP.
-	resp, err := e.doIASRequest(ctx, http.MethodPost, iasAPIAttestationReportPath, "application/json", bytes.NewReader(reqPayload))
+	query := []string{}
+	if evidence.EarlyTCBUpdate {
+		query = []string{iasAPIAVRTCBUpdateParam, iasAPIAVRTCBUpdateValueEarly}
+	}
+	resp, err := e.doIASRequest(ctx, http.MethodPost, iasAPIAttestationReportPath, "application/json", bytes.NewReader(reqPayload), query...)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
