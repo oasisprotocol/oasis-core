@@ -15,6 +15,9 @@ set -euxo pipefail
 pre_upgrade_git_branch="stable/22.2.x"
 post_upgrade_git_branch="master"
 
+# Go version to use for pre-upgrade code.
+pre_upgrade_go_version="1.19.10"
+
 # Working directories.
 workdir=$PWD
 tmpdir=${TEST_BASE_DIR:-"/tmp"}
@@ -35,7 +38,7 @@ echo "Downloading and building oasis-core ${pre_upgrade_git_branch} branch"
 
 git clone https://github.com/oasisprotocol/oasis-core -b "${pre_upgrade_git_branch}" "${pre_upgrade_datadir}/oasis-core"
 pushd "${pre_upgrade_datadir}/oasis-core"
-    OASIS_GO=go1.19.10 make
+    OASIS_GO=go${pre_upgrade_go_version} make
 popd
 
 echo "Downloading and building oasis-core ${post_upgrade_git_branch} branch"
@@ -50,7 +53,8 @@ if [[ "${BUILDKITE:-""}" == "" ]]; then
     echo "Building pre/post upgrade test runners..."
 
     pushd "$workdir/tests/upgrade"
-        make
+        OASIS_GO=go${pre_upgrade_go_version} make -C pre
+        make -C post
     popd
 fi
 
