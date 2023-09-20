@@ -2,12 +2,12 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -160,8 +160,7 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	// Build simple key/value and key manager runtimes.
 	defer func() {
-		err2 := sc.BuildAllRuntimes(childEnv, nil)
-		err = multierror.Append(err, err2).ErrorOrNil()
+		err = errors.Join(err, sc.BuildAllRuntimes(childEnv, nil))
 	}()
 	if err = sc.BuildAllRuntimes(childEnv, trustRoot); err != nil {
 		return err

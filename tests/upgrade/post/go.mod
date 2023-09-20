@@ -15,10 +15,7 @@ replace (
 	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/curve25519-voi/primitives/ed25519 v0.0.0-20210505121811-294cf0fbfb43
 )
 
-require (
-	github.com/hashicorp/go-multierror v1.1.1
-	github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230920070429-552416e8e4e9
-)
+require github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230920070429-552416e8e4e9
 
 require (
 	github.com/a8m/envsubst v1.4.2 // indirect
@@ -74,7 +71,6 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/gtank/merlin v0.1.1 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v1.4.0 // indirect
 	github.com/hashicorp/go-plugin v1.4.6 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.5 // indirect
