@@ -48,6 +48,24 @@ impl Default for PrivateKey {
     }
 }
 
+impl AsRef<[u8]> for PrivateKey {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl From<PrivateKey> for x25519_dalek::StaticSecret {
+    fn from(sk: PrivateKey) -> Self {
+        sk.0.clone() // `sk` will be zeroized on drop, so clone is ok.
+    }
+}
+
+impl From<x25519_dalek::StaticSecret> for PrivateKey {
+    fn from(sk: x25519_dalek::StaticSecret) -> Self {
+        Self(sk)
+    }
+}
+
 impl cbor::Encode for PrivateKey {
     fn into_cbor_value(self) -> cbor::Value {
         cbor::to_value(self.0.to_bytes())
@@ -61,9 +79,9 @@ impl cbor::Decode for PrivateKey {
 
     fn try_from_cbor_value(value: cbor::Value) -> Result<Self, cbor::DecodeError> {
         let mut bytes: [u8; PRIVATE_KEY_LENGTH] = cbor::Decode::try_from_cbor_value(value)?;
-        let pk = PrivateKey(x25519_dalek::StaticSecret::from(bytes));
+        let sk = PrivateKey(x25519_dalek::StaticSecret::from(bytes));
         bytes.zeroize();
-        Ok(pk)
+        Ok(sk)
     }
 }
 
@@ -88,6 +106,24 @@ impl From<&PrivateKey> for PublicKey {
 impl Default for PublicKey {
     fn default() -> Self {
         Self::from([0; PUBLIC_KEY_LENGTH])
+    }
+}
+
+impl AsRef<[u8]> for PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl From<PublicKey> for x25519_dalek::PublicKey {
+    fn from(pk: PublicKey) -> Self {
+        pk.0
+    }
+}
+
+impl From<x25519_dalek::PublicKey> for PublicKey {
+    fn from(pk: x25519_dalek::PublicKey) -> Self {
+        Self(pk)
     }
 }
 

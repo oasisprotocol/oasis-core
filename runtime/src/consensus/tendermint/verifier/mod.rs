@@ -169,8 +169,15 @@ impl Verifier {
         cache: &mut Cache,
         instance: &mut Instance,
     ) -> Result<ConsensusState, Error> {
+        // When latest state is requested we always perform same-block execution verification.
         let height = self.latest_consensus_height(cache)?;
-        self.consensus_state_at(cache, instance, height)
+        let state_root = self.state_root_from_metadata(cache, instance, height)?;
+
+        Ok(ConsensusState::from_protocol(
+            self.protocol.clone(),
+            state_root.version,
+            state_root,
+        ))
     }
 
     fn latest_consensus_height(&self, cache: &Cache) -> Result<u64, Error> {
