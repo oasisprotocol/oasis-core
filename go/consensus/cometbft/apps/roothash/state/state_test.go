@@ -146,14 +146,6 @@ func TestSeparateRuntimeRoots(t *testing.T) {
 		LastNormalHeight:   1,
 	})
 	require.NoError(err, "SetRuntimeState")
-
-	stateRoot, err := st.StateRoot(ctx, runtime.ID)
-	require.NoError(err, "StateRoot")
-	require.EqualValues(blk.Header.StateRoot, stateRoot)
-
-	ioRoot, err := st.IORoot(ctx, runtime.ID)
-	require.NoError(err, "IORoot")
-	require.EqualValues(blk.Header.IORoot, ioRoot)
 }
 
 func TestPastRuntimeRoots(t *testing.T) {
@@ -194,14 +186,6 @@ func TestPastRuntimeRoots(t *testing.T) {
 		LastNormalHeight:   1,
 	})
 	require.NoError(err, "SetRuntimeState")
-
-	stateRoot, err := st.StateRoot(ctx, runtime.ID)
-	require.NoError(err, "StateRoot")
-	require.EqualValues(blk.Header.StateRoot, stateRoot)
-
-	ioRoot, err := st.IORoot(ctx, runtime.ID)
-	require.NoError(err, "IORoot")
-	require.EqualValues(blk.Header.IORoot, ioRoot)
 
 	roots, err := st.PastRoundRoots(ctx, runtime.ID)
 	require.NoError(err, "PastRoundRoots")

@@ -31,14 +31,6 @@ var (
 	//
 	// Key format is: 0x24 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
 	evidenceKeyFmt = keyformat.New(0x24, keyformat.H(&common.Namespace{}), uint64(0), &hash.Hash{})
-	// stateRootKeyFmt is the key format used for runtime state roots.
-	//
-	// Value is the runtime's latest state root.
-	stateRootKeyFmt = keyformat.New(0x25, keyformat.H(&common.Namespace{}))
-	// ioRootKeyFmt is the key format used for runtime I/O roots.
-	//
-	// Value is the runtime's latest I/O root.
-	ioRootKeyFmt = keyformat.New(0x26, keyformat.H(&common.Namespace{}))
 	// lastRoundResultsKeyFmt is the key format used for last normal round results.
 	//
 	// Value is CBOR-serialized roothash.RoundResults.
@@ -151,32 +143,6 @@ func (s *ImmutableState) LastRoundResults(ctx context.Context, id common.Namespa
 		return nil, api.UnavailableStateError(err)
 	}
 	return &results, nil
-}
-
-func (s *ImmutableState) getRoot(ctx context.Context, id common.Namespace, kf *keyformat.KeyFormat) (hash.Hash, error) {
-	raw, err := s.is.Get(ctx, kf.Encode(&id))
-	if err != nil {
-		return hash.Hash{}, api.UnavailableStateError(err)
-	}
-	if raw == nil {
-		return hash.Hash{}, roothash.ErrInvalidRuntime
-	}
-
-	var h hash.Hash
-	if err = h.UnmarshalBinary(raw); err != nil {
-		return hash.Hash{}, api.UnavailableStateError(err)
-	}
-	return h, nil
-}
-
-// StateRoot returns the state root for a specific runtime.
-func (s *ImmutableState) StateRoot(ctx context.Context, id common.Namespace) (hash.Hash, error) {
-	return s.getRoot(ctx, id, stateRootKeyFmt)
-}
-
-// IORoot returns the state root for a specific runtime.
-func (s *ImmutableState) IORoot(ctx context.Context, id common.Namespace) (hash.Hash, error) {
-	return s.getRoot(ctx, id, ioRootKeyFmt)
 }
 
 // Runtimes returns the list of all roothash runtime states.
@@ -385,18 +351,6 @@ func NewMutableState(tree mkvs.KeyValueTree) *MutableState {
 // SetRuntimeState sets a runtime's roothash state.
 func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.RuntimeState) error {
 	if err := s.ms.Insert(ctx, runtimeKeyFmt.Encode(&state.Runtime.ID), cbor.Marshal(state)); err != nil {
-		return api.UnavailableStateError(err)
-	}
-
-	// Store the current state and I/O roots separately to make them easier to retrieve when
-	// constructing proofs of runtime state.
-	stateRoot, _ := state.CurrentBlock.Header.StateRoot.MarshalBinary()
-	ioRoot, _ := state.CurrentBlock.Header.IORoot.MarshalBinary()
-
-	if err := s.ms.Insert(ctx, stateRootKeyFmt.Encode(&state.Runtime.ID), stateRoot); err != nil {
-		return api.UnavailableStateError(err)
-	}
-	if err := s.ms.Insert(ctx, ioRootKeyFmt.Encode(&state.Runtime.ID), ioRoot); err != nil {
 		return api.UnavailableStateError(err)
 	}
 
