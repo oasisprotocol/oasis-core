@@ -168,7 +168,7 @@ func (sc *validatorEquivocationImpl) Run(ctx context.Context, _ *env.Env) error 
 	// Escrow some to the entity.
 	sc.Logger.Info("escrowing to validator entity")
 	_, testEntitySigner, _ := entity.TestEntity()
-	tx := staking.NewAddEscrowTx(0, &transaction.Fee{Gas: 1000}, &staking.Escrow{Account: entAddr, Amount: mustInitQuantity(100)})
+	tx := staking.NewAddEscrowTx(0, &transaction.Fee{Gas: 1000}, &staking.Escrow{Account: entAddr, Amount: *quantity.NewFromUint64(100)})
 	sigTx, err := transaction.Sign(testEntitySigner, tx)
 	if err != nil {
 		return fmt.Errorf("failed to sign escrow tx: %w", err)

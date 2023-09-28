@@ -44,38 +44,44 @@ var (
 	registerOrDeregisterFlags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	entityCmd = &cobra.Command{
-		Use:   "entity",
-		Short: "entity registry backend utilities",
+		Use:        "entity",
+		Short:      "entity registry backend utilities",
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	initCmd = &cobra.Command{
-		Use:   "init",
-		Short: "initialize an entity",
-		Run:   doInit,
+		Use:        "init",
+		Short:      "initialize an entity",
+		Run:        doInit,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	updateCmd = &cobra.Command{
-		Use:   "update",
-		Short: "update an entity",
-		Run:   doUpdate,
+		Use:        "update",
+		Short:      "update an entity",
+		Run:        doUpdate,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	registerCmd = &cobra.Command{
-		Use:   "gen_register",
-		Short: "generate a register entity transaction",
-		Run:   doGenRegister,
+		Use:        "gen_register",
+		Short:      "generate a register entity transaction",
+		Run:        doGenRegister,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	deregisterCmd = &cobra.Command{
-		Use:   "gen_deregister",
-		Short: "generate a deregister entity transaction",
-		Run:   doGenDeregister,
+		Use:        "gen_deregister",
+		Short:      "generate a deregister entity transaction",
+		Run:        doGenDeregister,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	listCmd = &cobra.Command{
-		Use:   "list",
-		Short: "list registered entities",
-		Run:   doList,
+		Use:        "list",
+		Short:      "list registered entities",
+		Run:        doList,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	logger = logging.GetLogger("cmd/registry/entity")

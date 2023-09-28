@@ -10,8 +10,9 @@ import (
 )
 
 var registryCmd = &cobra.Command{
-	Use:   "registry",
-	Short: "registry backend utilities",
+	Use:        "registry",
+	Short:      "registry backend utilities",
+	Deprecated: "use the `oasis` CLI instead.",
 }
 
 // Register registers the registry sub-command and all of it's children.

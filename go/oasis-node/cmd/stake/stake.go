@@ -28,26 +28,30 @@ const CfgPublicKey = "public_key"
 
 var (
 	stakeCmd = &cobra.Command{
-		Use:   "stake",
-		Short: "staking backend utilities",
+		Use:        "stake",
+		Short:      "staking backend utilities",
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	infoCmd = &cobra.Command{
-		Use:   "info",
-		Short: "query the common staking info",
-		Run:   doInfo,
+		Use:        "info",
+		Short:      "query the common staking info",
+		Run:        doInfo,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	listCmd = &cobra.Command{
-		Use:   "list",
-		Short: "list accounts",
-		Run:   doList,
+		Use:        "list",
+		Short:      "list accounts",
+		Run:        doList,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	pubkey2AddressCmd = &cobra.Command{
-		Use:   "pubkey2address",
-		Short: "convert a public key (e.g. entity's ID) to an account address",
-		Run:   doPubkey2Address,
+		Use:        "pubkey2address",
+		Short:      "convert a public key (e.g. entity's ID) to an account address",
+		Run:        doPubkey2Address,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	logger = logging.GetLogger("cmd/stake")

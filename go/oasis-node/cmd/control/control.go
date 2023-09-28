@@ -46,9 +46,10 @@ var (
 	}
 
 	controlClearDeregisterCmd = &cobra.Command{
-		Use:   "clear-deregister",
-		Short: "clear the forced node deregistration flag",
-		Run:   doClearDeregister,
+		Use:        "clear-deregister",
+		Short:      "clear the forced node deregistration flag",
+		Run:        doClearDeregister,
+		Deprecated: "it should not longer be necessary.",
 	}
 
 	controlUpgradeBinaryCmd = &cobra.Command{
@@ -71,9 +72,10 @@ var (
 	}
 
 	controlRuntimeStatsCmd = &cobra.Command{
-		Use:   "runtime-stats <runtime-id> [<start-height> [<end-height>]]",
-		Short: "show runtime statistics",
-		Run:   doRuntimeStats,
+		Use:        "runtime-stats <runtime-id> [<start-height> [<end-height>]]",
+		Short:      "show runtime statistics",
+		Run:        doRuntimeStats,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	logger = logging.GetLogger("cmd/control")

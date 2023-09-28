@@ -114,10 +114,6 @@ func RegisterScenarios() error {
 
 	// Register default scenarios which are executed, if no test names provided.
 	for _, s := range []scenario.Scenario{
-		// Registry CLI test.
-		RegistryCLI,
-		// Stake CLI test.
-		StakeCLI,
 		// Gas fees tests.
 		GasFeesStaking,
 		GasFeesStakingDumpRestore,
