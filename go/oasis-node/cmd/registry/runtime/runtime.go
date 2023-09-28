@@ -36,20 +36,23 @@ var (
 	registerFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 
 	runtimeCmd = &cobra.Command{
-		Use:   "runtime",
-		Short: "runtime registry backend utilities",
+		Use:        "runtime",
+		Short:      "runtime registry backend utilities",
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	registerCmd = &cobra.Command{
-		Use:   "gen_register",
-		Short: "generate a register runtime transaction",
-		Run:   doGenRegister,
+		Use:        "gen_register",
+		Short:      "generate a register runtime transaction",
+		Run:        doGenRegister,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	listCmd = &cobra.Command{
-		Use:   "list",
-		Short: "list registered runtimes",
-		Run:   doList,
+		Use:        "list",
+		Short:      "list registered runtimes",
+		Run:        doList,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	logger = logging.GetLogger("cmd/registry/runtime")

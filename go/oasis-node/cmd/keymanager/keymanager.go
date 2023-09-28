@@ -55,38 +55,44 @@ var (
 	policySigFileFlag = flag.NewFlagSet("", flag.ContinueOnError)
 
 	keyManagerCmd = &cobra.Command{
-		Use:   "keymanager",
-		Short: "keymanager utilities",
+		Use:        "keymanager",
+		Short:      "keymanager utilities",
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	initPolicyCmd = &cobra.Command{
-		Use:   "init_policy",
-		Short: "generate keymanager policy file",
-		Run:   doInitPolicy,
+		Use:        "init_policy",
+		Short:      "generate keymanager policy file",
+		Run:        doInitPolicy,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	signPolicyCmd = &cobra.Command{
-		Use:   "sign_policy",
-		Short: "sign keymanager policy file",
-		Run:   doSignPolicy,
+		Use:        "sign_policy",
+		Short:      "sign keymanager policy file",
+		Run:        doSignPolicy,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	verifyPolicyCmd = &cobra.Command{
-		Use:   "verify_policy",
-		Short: "verify keymanager policy file and (optionally) its signature",
-		Run:   doVerifyPolicy,
+		Use:        "verify_policy",
+		Short:      "verify keymanager policy file and (optionally) its signature",
+		Run:        doVerifyPolicy,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	initStatusCmd = &cobra.Command{
-		Use:   "init_status",
-		Short: "generate keymanager status file",
-		Run:   doInitStatus,
+		Use:        "init_status",
+		Short:      "generate keymanager status file",
+		Run:        doInitStatus,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	genUpdateCmd = &cobra.Command{
-		Use:   "gen_update",
-		Short: "generate a update transaction",
-		Run:   doGenUpdate,
+		Use:        "gen_update",
+		Short:      "generate a update transaction",
+		Run:        doGenUpdate,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	logger = logging.GetLogger("cmd/keymanager")

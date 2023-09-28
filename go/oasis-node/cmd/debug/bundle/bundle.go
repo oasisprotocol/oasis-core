@@ -33,20 +33,23 @@ const (
 
 var (
 	bundleCmd = &cobra.Command{
-		Use:   "bundle",
-		Short: "manipulate runtime bundles",
+		Use:        "bundle",
+		Short:      "manipulate runtime bundles",
+		Deprecated: "use the `orc` tool instead.",
 	}
 
 	initCmd = &cobra.Command{
-		Use:   "init",
-		Short: "create a runtime bundle",
-		RunE:  doInit,
+		Use:        "init",
+		Short:      "create a runtime bundle",
+		RunE:       doInit,
+		Deprecated: "use `orc init` instead.",
 	}
 
 	infoCmd = &cobra.Command{
-		Use:   "info",
-		Short: "inspect a runtime bundle",
-		RunE:  doInfo,
+		Use:        "info",
+		Short:      "inspect a runtime bundle",
+		RunE:       doInfo,
+		Deprecated: "use `orc show` instead.",
 	}
 
 	logger = logging.GetLogger("cmd/debug/bundle")

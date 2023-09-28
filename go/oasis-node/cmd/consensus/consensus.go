@@ -31,31 +31,36 @@ var (
 	signerPub string
 
 	consensusCmd = &cobra.Command{
-		Use:   "consensus",
-		Short: "consensus backend commands",
+		Use:        "consensus",
+		Short:      "consensus backend commands",
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	submitTxCmd = &cobra.Command{
-		Use:   "submit_tx",
-		Short: "Submit a pre-signed transaction",
-		Run:   doSubmitTx,
+		Use:        "submit_tx",
+		Short:      "Submit a pre-signed transaction",
+		Run:        doSubmitTx,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	showTxCmd = &cobra.Command{
-		Use:   "show_tx",
-		Short: "Show the content a pre-signed transaction",
-		Run:   doShowTx,
+		Use:        "show_tx",
+		Short:      "Show the content a pre-signed transaction",
+		Run:        doShowTx,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	estimateGasCmd = &cobra.Command{
-		Use:   "estimate_gas",
-		Short: "Estimate how much gas a transaction will use",
-		Run:   doEstimateGas,
+		Use:        "estimate_gas",
+		Short:      "Estimate how much gas a transaction will use",
+		Run:        doEstimateGas,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	nextBlockStateCmd = &cobra.Command{
-		Use: "next_block_state",
-		Run: doNextBlockState,
+		Use:        "next_block_state",
+		Run:        doNextBlockState,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	logger = logging.GetLogger("cmd/consensus")

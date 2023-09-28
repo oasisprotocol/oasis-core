@@ -51,26 +51,30 @@ var (
 	flags = flag.NewFlagSet("", flag.ContinueOnError)
 
 	nodeCmd = &cobra.Command{
-		Use:   "node",
-		Short: "node registry backend utilities",
+		Use:        "node",
+		Short:      "node registry backend utilities",
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	initCmd = &cobra.Command{
-		Use:   "init",
-		Short: "initialize a node",
-		Run:   doInit,
+		Use:        "init",
+		Short:      "initialize a node",
+		Run:        doInit,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	listCmd = &cobra.Command{
-		Use:   "list",
-		Short: "list registered nodes",
-		Run:   doList,
+		Use:        "list",
+		Short:      "list registered nodes",
+		Run:        doList,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	isRegisteredCmd = &cobra.Command{
-		Use:   "is-registered",
-		Short: "check whether the node is registered",
-		Run:   doIsRegistered,
+		Use:        "is-registered",
+		Short:      "check whether the node is registered",
+		Run:        doIsRegistered,
+		Deprecated: "use the `oasis` CLI instead.",
 	}
 
 	logger = logging.GetLogger("cmd/registry/node")

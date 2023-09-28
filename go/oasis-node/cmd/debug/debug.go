@@ -14,8 +14,9 @@ import (
 )
 
 var debugCmd = &cobra.Command{
-	Use:   "debug",
-	Short: "debug utilities",
+	Use:    "debug",
+	Short:  "debug utilities",
+	Hidden: true,
 }
 
 // Register registers the debug sub-command and all of it's children.
