@@ -61,6 +61,8 @@ func TestLivenessProcessing(t *testing.T) {
 
 	// Initialize roothash state.
 	roothashState := roothashState.NewMutableState(ctx.State())
+	err = roothashState.SetConsensusParameters(ctx, &roothash.ConsensusParameters{})
+	require.NoError(err, "SetConsensusParameters")
 	blk := block.NewGenesisBlock(runtime.ID, 0)
 	rtState := &roothash.RuntimeState{
 		Runtime:            &runtime,

@@ -345,6 +345,9 @@ NodeLoop:
 		}
 	}
 
+	// Add a sensible default for the MaxPastRootsStored parameter.
+	newDoc.RootHash.Parameters.MaxPastRootsStored = 1200
+
 	return &newDoc, nil
 }
 

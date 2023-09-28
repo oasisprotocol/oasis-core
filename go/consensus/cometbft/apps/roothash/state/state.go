@@ -51,6 +51,13 @@ var (
 	//
 	// Value is CBOR-serialized message.IncomingMessage.
 	inMsgQueueKeyFmt = keyformat.New(0x29, keyformat.H(&common.Namespace{}), uint64(0))
+	// pastRootsFmt is the key format for previous state and I/O runtime roots.
+	//
+	// Key format is: 0x2a H(<runtime-id>) <round>
+	// Value is CBOR-serialized roothash.RoundRoots for that round and runtime.
+	// The maximum number of rounds that this map stores is defined by the
+	// roothash consensus parameters as MaxPastRootsStored.
+	pastRootsFmt = keyformat.New(0x2a, keyformat.H(&common.Namespace{}), uint64(0))
 )
 
 // ImmutableState is the immutable roothash state wrapper.
@@ -270,6 +277,95 @@ func (s *ImmutableState) IncomingMessageQueue(ctx context.Context, runtimeID com
 	return msgs, nil
 }
 
+// RoundRoots returns the state and I/O roots for the given runtime ID and round.
+//
+// If no roots are present for the given runtime and round, nil is returned.
+func (s *ImmutableState) RoundRoots(ctx context.Context, runtimeID common.Namespace, round uint64) (*roothash.RoundRoots, error) {
+	raw, err := s.is.Get(ctx, pastRootsFmt.Encode(&runtimeID, round))
+	if err != nil {
+		return nil, api.UnavailableStateError(err)
+	}
+	if raw == nil {
+		// No roots present for given runtime and round.
+		return nil, nil
+	}
+
+	var roots roothash.RoundRoots
+	if err = cbor.Unmarshal(raw, &roots); err != nil {
+		return nil, api.UnavailableStateError(err)
+	}
+	return &roots, nil
+}
+
+// PastRoundRoots returns the state and I/O roots stored for the given runtime ID.
+//
+// The number of rounds returned is less than or equal to MaxPastRootsStored,
+// as defined in the roothash consensus parameters.
+// Keys of the returned map hold the round numbers and the values hold the
+// two roots for each round.
+func (s *ImmutableState) PastRoundRoots(ctx context.Context, runtimeID common.Namespace) (map[uint64]roothash.RoundRoots, error) {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	// We need to pre-hash the runtime ID, so we can compare it below.
+	hID := keyformat.PreHashed(runtimeID.Hash())
+
+	// Round -> [state, I/O] roots.
+	ret := make(map[uint64]roothash.RoundRoots)
+	for it.Seek(pastRootsFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
+		var (
+			rtID  keyformat.PreHashed
+			round uint64
+		)
+		if !pastRootsFmt.Decode(it.Key(), &rtID, &round) {
+			break
+		}
+		if rtID != hID {
+			break
+		}
+
+		var roots roothash.RoundRoots
+		if err := cbor.Unmarshal(it.Value(), &roots); err != nil {
+			return nil, api.UnavailableStateError(err)
+		}
+
+		ret[round] = roots
+	}
+
+	return ret, nil
+}
+
+// PastRoundRootsCount returns the number of past state and I/O roots in storage
+// for the given runtime ID.
+//
+// This is more efficient than calling len(PastRoundRoots(runtimeID)), as it
+// avoids deserialization.
+func (s *ImmutableState) PastRoundRootsCount(ctx context.Context, runtimeID common.Namespace) uint64 {
+	it := s.is.NewIterator(ctx)
+	defer it.Close()
+
+	// We need to pre-hash the runtime ID, so we can compare it below.
+	hID := keyformat.PreHashed(runtimeID.Hash())
+
+	var count uint64
+	for it.Seek(pastRootsFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
+		var (
+			rtID  keyformat.PreHashed
+			round uint64
+		)
+		if !pastRootsFmt.Decode(it.Key(), &rtID, &round) {
+			break
+		}
+		if rtID != hID {
+			break
+		}
+
+		count++
+	}
+
+	return count
+}
+
 // MutableState is the mutable roothash state wrapper.
 type MutableState struct {
 	*ImmutableState
@@ -303,6 +399,93 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 	if err := s.ms.Insert(ctx, ioRootKeyFmt.Encode(&state.Runtime.ID), ioRoot); err != nil {
 		return api.UnavailableStateError(err)
 	}
+
+	// Clean previously stored state and I/O roots if we're over the maximum.
+	params, err := s.ConsensusParameters(ctx)
+	if err != nil {
+		return api.UnavailableStateError(err)
+	}
+	maxStored := params.MaxPastRootsStored
+
+	// Add state and I/O roots for this round if enabled.
+	if maxStored > 0 {
+		newRound := state.CurrentBlock.Header.Round
+		newRoots := cbor.Marshal(roothash.RoundRoots{
+			StateRoot: state.CurrentBlock.Header.StateRoot,
+			IORoot:    state.CurrentBlock.Header.IORoot,
+		})
+
+		// Delete the oldest root to make room for the new one.
+		if newRound >= maxStored {
+			if err = s.ms.Remove(ctx, pastRootsFmt.Encode(&state.Runtime.ID, newRound-maxStored)); err != nil {
+				return api.UnavailableStateError(err)
+			}
+		}
+
+		if err = s.ms.Insert(ctx, pastRootsFmt.Encode(&state.Runtime.ID, newRound), newRoots); err != nil {
+			return api.UnavailableStateError(err)
+		}
+	}
+
+	return nil
+}
+
+// ShrinkPastRoots deletes extra past stored roots for all runtimes that have
+// over the given number of stored roots.
+//
+// This is used when reducing the MaxPastRootsStored consensus parameter in
+// changeParameters() in go/consensus/cometbft/apps/roothash/messages.go.
+func (s *MutableState) ShrinkPastRoots(ctx context.Context, max uint64) error {
+	// Go through all runtimes, so we can delete extra stored past
+	// roots for each one, where it's needed.
+	runtimes, err := s.Runtimes(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range runtimes {
+		id := r.Runtime.ID
+		numStoredRoots := s.PastRoundRootsCount(ctx, id)
+		if numStoredRoots <= max {
+			// Nothing to delete.
+			continue
+		}
+
+		numPastRootsToDelete := numStoredRoots - max
+
+		it := s.is.NewIterator(ctx)
+
+		// We need to pre-hash the runtime ID, so we can compare it below.
+		hID := keyformat.PreHashed(id.Hash())
+
+		keysToRemove := make([][]byte, 0, numPastRootsToDelete)
+		for it.Seek(pastRootsFmt.Encode(&id)); it.Valid(); it.Next() {
+			if uint64(len(keysToRemove)) >= numPastRootsToDelete {
+				break
+			}
+
+			var (
+				runtimeID keyformat.PreHashed
+				round     uint64
+			)
+			if !pastRootsFmt.Decode(it.Key(), &runtimeID, &round) {
+				break
+			}
+			if runtimeID != hID {
+				break
+			}
+
+			keysToRemove = append(keysToRemove, it.Key())
+		}
+		it.Close()
+
+		for _, key := range keysToRemove {
+			if err := s.ms.Remove(ctx, key); err != nil {
+				return api.UnavailableStateError(err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -347,12 +530,18 @@ func (s *MutableState) RemoveExpiredEvidence(ctx context.Context, runtimeID comm
 	it := s.is.NewIterator(ctx)
 	defer it.Close()
 
+	// We need to pre-hash the runtime ID, so we can compare it below.
+	hID := keyformat.PreHashed(runtimeID.Hash())
+
 	var toDelete [][]byte
 	for it.Seek(evidenceKeyFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
-		var runtimeID keyformat.PreHashed
+		var rtID keyformat.PreHashed
 		var round uint64
 		var hash hash.Hash
-		if !evidenceKeyFmt.Decode(it.Key(), &runtimeID, &round, &hash) {
+		if !evidenceKeyFmt.Decode(it.Key(), &rtID, &round, &hash) {
+			break
+		}
+		if rtID != hID {
 			break
 		}
 		if round > minRound {
