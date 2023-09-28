@@ -446,6 +446,16 @@ func (g *governanceWorkload) doChangeParametersProposal() error { // nolint: goc
 		if randBool() {
 			pc.MaxValidators = &params.MaxValidators
 		}
+		if randBool() {
+			newPD := params.VotingPowerDistribution
+			switch params.VotingPowerDistribution {
+			case scheduler.VotingPowerDistributionLinear:
+				newPD = scheduler.VotingPowerDistributionSqrt
+			default:
+				newPD = scheduler.VotingPowerDistributionLinear
+			}
+			pc.VotingPowerDistribution = &newPD
+		}
 		shouldFail = pc.SanityCheck() != nil
 		module = scheduler.ModuleName
 		changes = cbor.Marshal(pc)

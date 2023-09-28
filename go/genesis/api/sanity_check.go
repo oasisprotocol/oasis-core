@@ -42,7 +42,7 @@ func (d *Document) SanityCheck() error {
 	if err := d.KeyManager.SanityCheck(); err != nil {
 		return err
 	}
-	if err := d.Scheduler.SanityCheck(&d.Staking.TotalSupply); err != nil {
+	if err := d.Scheduler.SanityCheck(&d.Staking.TotalSupply, d.Scheduler.Parameters.VotingPowerDistribution); err != nil {
 		return err
 	}
 	return d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits)

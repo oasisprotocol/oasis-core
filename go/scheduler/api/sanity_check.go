@@ -9,13 +9,13 @@ import (
 )
 
 // SanityCheck does basic sanity checking on the genesis state.
-func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity) error {
+func (g *Genesis) SanityCheck(stakingTotalSupply *quantity.Quantity, votingPowerDistribution VotingPowerDistribution) error {
 	if err := g.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("scheduler: sanity check failed: %w", err)
 	}
 
 	if !g.Parameters.DebugBypassStake {
-		supplyPower, err := VotingPowerFromStake(stakingTotalSupply)
+		supplyPower, err := VotingPowerFromStake(stakingTotalSupply, votingPowerDistribution)
 		if err != nil {
 			return fmt.Errorf("scheduler: sanity check failed: total supply would break voting power computation: %w", err)
 		}
@@ -42,7 +42,8 @@ func (p *ConsensusParameters) SanityCheck() error {
 // SanityCheck performs a sanity check on the consensus parameter changes.
 func (c *ConsensusParameterChanges) SanityCheck() error {
 	if c.MinValidators == nil &&
-		c.MaxValidators == nil {
+		c.MaxValidators == nil &&
+		c.VotingPowerDistribution == nil {
 		return fmt.Errorf("consensus parameter changes should not be empty")
 	}
 	return nil

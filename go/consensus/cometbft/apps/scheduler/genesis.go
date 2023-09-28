@@ -109,7 +109,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 					err,
 				)
 			}
-			expectedPower, err = scheduler.VotingPowerFromStake(&account.Escrow.Active.Balance)
+			expectedPower, err = scheduler.VotingPowerFromStake(&account.Escrow.Active.Balance, doc.Scheduler.Parameters.VotingPowerDistribution)
 			if err != nil {
 				ctx.Logger().Error("computing voting power from stake failed",
 					"err", err,
@@ -162,7 +162,7 @@ func (app *schedulerApplication) InitChain(ctx *abciAPI.Context, req types.Reque
 	}
 
 	if !doc.Scheduler.Parameters.DebugBypassStake {
-		supplyPower, err := scheduler.VotingPowerFromStake(&doc.Staking.TotalSupply)
+		supplyPower, err := scheduler.VotingPowerFromStake(&doc.Staking.TotalSupply, doc.Scheduler.Parameters.VotingPowerDistribution)
 		if err != nil {
 			return fmt.Errorf("init chain: total supply would break voting power computation: %w", err)
 		}
