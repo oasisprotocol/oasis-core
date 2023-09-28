@@ -4,6 +4,7 @@ package ias
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -99,8 +100,29 @@ func doProxy(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	_, tlsKeyPath := TLSCertPaths(dataDir)
+	tlsCertPath, tlsKeyPath := TLSCertPaths(dataDir)
 	cert, err := tlsCert.LoadFromKey(tlsKeyPath, iasProxy.CommonName)
+	switch {
+	case err == nil:
+	case errors.Is(err, os.ErrNotExist):
+		// Loading node's persistent TLS private key failed, generate a new
+		// private key and the corresponding TLS certificate.
+		cert, err = tlsCert.Generate(iasProxy.CommonName)
+		if err != nil {
+			logger.Error("failed to load or generate TLS cert",
+				"err", err,
+			)
+			return
+		}
+	default:
+		logger.Error("failed to load or generate TLS cert",
+			"err", err,
+		)
+		return
+	}
+
+	// Save re-generated TLS certificate (and private key) to disk.
+	err = tlsCert.Save(tlsCertPath, tlsKeyPath, cert)
 	if err != nil {
 		logger.Error("failed to load or generate TLS cert",
 			"err", err,
