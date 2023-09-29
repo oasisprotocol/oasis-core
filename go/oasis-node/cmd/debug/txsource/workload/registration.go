@@ -39,7 +39,7 @@ const (
 	registryNodeMaxEpochUpdate    = 5
 	registryRtOwnerChangeInterval = 20
 
-	registryIterationTimeout = 60 * time.Second
+	registryIterationTimeout = 120 * time.Second
 )
 
 type registration struct {
