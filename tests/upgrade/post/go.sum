@@ -510,8 +510,8 @@ github.com/oasisprotocol/cometbft v0.37.2-oasis1 h1:7yr/5f0vV1bQLKoZHFhs3mcHay3n
 github.com/oasisprotocol/cometbft v0.37.2-oasis1/go.mod h1:w7GZmT0jJ/i9Uz9ZWtzE3chuNZ3phUboSrFzPZIoYts=
 github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce h1:/pEpMk55wH0X+E5zedGEMOdLuWmV8P4+4W3+LZaM6kg=
 github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce/go.mod h1:hVoHR2EVESiICEMbg137etN/Lx+lSrHPTD39Z/uE+2s=
-github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230920070429-552416e8e4e9 h1:9E3URKR7qg/vOye48DHv9H69CiEScfD0GNoQ2wf/Tow=
-github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230920070429-552416e8e4e9/go.mod h1:CeemhnWf6t4rzR5LFw6AZVzJjRuuAhkvdR85LtDSKXQ=
+github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230929144903-b7b7d53011ce h1:UuroiNFD9UaPmv0h8sDItkuVqTJ7hmgdQTsO82WVfAg=
+github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230929144903-b7b7d53011ce/go.mod h1:CeemhnWf6t4rzR5LFw6AZVzJjRuuAhkvdR85LtDSKXQ=
 github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661 h1:MB73kGMtuMGS+6VDoU/mitzff7Cu+aZo9ta5wabuxVA=
 github.com/oasisprotocol/safeopen v0.0.0-20200528085122-e01cfdfc7661/go.mod h1:SwBxaVibf6Sr2IZ6M3WnUue0yp8dPLAo1riQRNQ60+g=
 github.com/oklog/run v1.0.0 h1:Ru7dDtJNOyC66gQ5dQmaCa0qIsAUFY3sFpK1Xk8igrw=
