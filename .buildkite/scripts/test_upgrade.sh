@@ -16,7 +16,7 @@ pre_upgrade_git_branch="stable/22.2.x"
 post_upgrade_git_branch="master"
 
 # Go version to use for pre-upgrade code.
-pre_upgrade_go_version="1.19.10"
+pre_upgrade_go_version="1.20.2"
 
 # Working directories.
 workdir=$PWD
