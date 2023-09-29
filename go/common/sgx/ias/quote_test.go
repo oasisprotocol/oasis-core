@@ -13,7 +13,7 @@ func TestQuote(t *testing.T) {
 	SetAllowDebugEnclaves()
 	defer UnsetAllowDebugEnclaves()
 
-	raw, sig, certs := loadAVRv4(t)
+	raw, sig, certs := loadAVR(t, 4)
 	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
 	require.NoError(t, err, "DecodeAVR")
 

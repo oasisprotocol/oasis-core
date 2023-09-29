@@ -14,13 +14,11 @@ import (
 	sgxQuote "github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
 type teeStateECDSA struct {
-	runtimeID common.Namespace
-	version   version.Version
+	teeStateImplCommon
 
 	key *aesm.AttestationKeyID
 
@@ -129,23 +127,13 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 
 	// Get current quote policy from the consensus layer.
 	var quotePolicy *pcs.QuotePolicy
-	rt, err := sp.consensus.Registry().GetRuntime(ctx, &registry.GetRuntimeQuery{
-		Height:           consensus.HeightLatest,
-		ID:               ec.runtimeID,
-		IncludeSuspended: true,
-	})
+	var policies *sgxQuote.Policy
+	policies, err = ec.getQuotePolicies(ctx, sp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query runtime descriptor: %w", err)
+		return nil, err
 	}
-	if d := rt.DeploymentForVersion(ec.version); d != nil {
-		var sc node.SGXConstraints
-		if err = cbor.Unmarshal(d.TEE, &sc); err != nil {
-			return nil, fmt.Errorf("malformed runtime SGX constraints: %w", err)
-		}
-
-		if sc.Policy != nil {
-			quotePolicy = sc.Policy.PCS
-		}
+	if policies != nil {
+		quotePolicy = policies.PCS
 	}
 
 	// Verify the quote so we can catch errors early (the runtime and later consensus layer will

@@ -75,12 +75,15 @@ func initFakeCapabilitiesSGX(nodeID signature.PublicKey) (signature.Signer, *nod
 	}
 
 	// Manage AVRBundle's Body.
-	body, _ := json.Marshal(&ias.AttestationVerificationReport{
+	body, err := json.Marshal(&ias.AttestationVerificationReport{
 		Version:               4,
 		Timestamp:             time.Now().UTC().Format(ias.TimestampFormat),
 		ISVEnclaveQuoteStatus: ias.QuoteOK,
 		ISVEnclaveQuoteBody:   quoteBinary,
 	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("error marshaling AVR body into JSON: %w", err)
+	}
 
 	// Generate attestation signature.
 	h := node.HashAttestation(quote.Report.ReportData[:], nodeID, 1, nil)

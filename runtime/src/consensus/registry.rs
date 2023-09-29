@@ -566,6 +566,7 @@ impl SGXConstraints {
                     disabled: false,
                     allowed_quote_statuses: allowed_quote_statuses.clone(),
                     gid_blacklist: Vec::new(),
+                    min_tcb_evaluation_data_number: 0,
                 }),
                 ..Default::default()
             },

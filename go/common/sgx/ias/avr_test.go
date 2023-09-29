@@ -2,6 +2,7 @@ package ias
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 func TestAVR(t *testing.T) {
 	t.Run("Version_4", testAVRv4)
+	t.Run("Version_5", testAVRv5)
 }
 
 func testAVRv4(t *testing.T) {
@@ -18,7 +20,7 @@ func testAVRv4(t *testing.T) {
 	SetAllowDebugEnclaves()
 	defer UnsetAllowDebugEnclaves()
 
-	raw, sig, certs := loadAVRv4(t)
+	raw, sig, certs := loadAVR(t, 4)
 
 	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
 	require.NoError(t, err, "DecodeAVR")
@@ -41,12 +43,40 @@ func testAVRv4(t *testing.T) {
 	require.EqualValues(t, avr.AdvisoryIDs, []string{"INTEL-SA-00334"}, "advisoryIDs")
 }
 
-func loadAVRv4(t *testing.T) (raw, sig, certs []byte) {
+func testAVRv5(t *testing.T) {
+	// TODO: Generate and test production AVR without debug bit.
+	SetAllowDebugEnclaves()
+	defer UnsetAllowDebugEnclaves()
+
+	raw, sig, certs := loadAVR(t, 5)
+
+	avr, err := DecodeAVR(raw, sig, certs, IntelTrustRoots, time.Now())
+	require.NoError(t, err, "DecodeAVR")
+
+	require.Equal(t, "325753020347524304899139732345489823748", avr.ID, "id")
+	require.Equal(t, "2023-09-27T15:51:58.044803", avr.Timestamp, "timestamp")
+	require.Equal(t, 5, avr.Version, "version")
+	require.Equal(t, QuoteSwHardeningNeeded, avr.ISVEnclaveQuoteStatus, "isvEnclaveQuoteStatus")
+	require.Len(t, avr.ISVEnclaveQuoteBody, 432, "isvEnclaveQuoteBody")
+	require.Nil(t, avr.RevocationReason, "revocationReason")
+	require.Nil(t, avr.PSEManifestStatus, "pseManifestStatus")
+	require.Equal(t, "", avr.PSEManifestHash, "pseManifestHash")
+	require.Equal(t, "", avr.PlatformInfoBlob, "platformInfoBlob")
+	require.Equal(t, "", avr.Nonce, "nonce")
+
+	epidPseudonym, _ := base64.StdEncoding.DecodeString("twLvZuBD1sOHsNPsHGbZOVlGh9rXw9XzVQTVKUuvsqypw0iWcFKwR7aNoHmDSoeFc/+pH6LLCI2bQBKx/ygwXphePD4GTTRwBi9EIBFRlURTk4p4NosbA7xcCG4hRuCDaEKPtAX6XHjNKEvWA+4f1aAfD7jwOtGAzHeaqBldaD8=")
+	require.Equal(t, epidPseudonym, avr.EPIDPseudonym, "epidPseudonym")
+
+	require.Equal(t, avr.AdvisoryURL, "https://security-center.intel.com", "advisoryURL")
+	require.EqualValues(t, avr.AdvisoryIDs, []string{"INTEL-SA-00334", "INTEL-SA-00615"}, "advisoryIDs")
+}
+
+func loadAVR(t *testing.T, version int) (raw, sig, certs []byte) {
 	var err error
-	raw, err = os.ReadFile("testdata/avr_v4_body_sw_hardening_needed.json")
+	raw, err = os.ReadFile(fmt.Sprintf("testdata/avr_v%v_body_sw_hardening_needed.json", version))
 	require.NoError(t, err, "Read test vector")
 
-	sig, err = os.ReadFile("testdata/avr_v4_body_sw_hardening_needed.sig")
+	sig, err = os.ReadFile(fmt.Sprintf("testdata/avr_v%v_body_sw_hardening_needed.sig", version))
 	require.NoError(t, err, "Read signature")
 
 	certs, err = os.ReadFile("testdata/avr_certificates_urlencoded.pem")
