@@ -15,7 +15,7 @@ replace (
 	golang.org/x/crypto/ed25519 => github.com/oasisprotocol/curve25519-voi/primitives/ed25519 v0.0.0-20210505121811-294cf0fbfb43
 )
 
-require github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230920070429-552416e8e4e9
+require github.com/oasisprotocol/oasis-core/go v0.2202.1-0.20230929144903-b7b7d53011ce
 
 require (
 	github.com/a8m/envsubst v1.4.2 // indirect
