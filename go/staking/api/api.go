@@ -738,7 +738,7 @@ const (
 	KindEntityName            = "entity"
 	KindNodeValidatorName     = "node-validator"
 	KindNodeComputeName       = "node-compute"
-	KindNodeObserverName      = "observer"
+	KindNodeObserverName      = "node-observer"
 	KindNodeKeyManagerName    = "node-keymanager"
 	KindRuntimeComputeName    = "runtime-compute"
 	KindRuntimeKeyManagerName = "runtime-keymanager"
