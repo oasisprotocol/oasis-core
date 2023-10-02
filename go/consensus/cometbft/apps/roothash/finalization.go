@@ -15,7 +15,6 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -184,22 +183,19 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	schedulerVote := sc.Commitment.ToVote()
 	for i, n := range rtState.Committee.Members {
 		vote, ok := sc.Votes[n.PublicKey]
-		// Make sure to not include nodes in multiple roles multiple times.
-		_, wasSeen := seen[n.PublicKey]
-		seen[n.PublicKey] = struct{}{}
 		switch {
-		case !ok && n.Role == scheduler.RoleBackupWorker && !pool.Discrepancy && !wasSeen:
-			// This is a backup worker only that did not submit a commitment and there was no
-			// discrepancy. Count the worker as live.
-			//
-			// Note that this skips the case where the node is both primary and backup and the
-			// primary did not commit as that should be treated as failure.
-			livenessStats.LiveRounds[i]++
+		case !ok:
 			continue
-		case !ok || vote == nil || wasSeen:
+		case vote == nil:
+			// Skip failures.
 			continue
-		default:
 		}
+
+		// Make sure to not include nodes in multiple roles multiple times.
+		if _, ok := seen[n.PublicKey]; ok {
+			continue
+		}
+		seen[n.PublicKey] = struct{}{}
 
 		// Resolve the entity owning the node.
 		var node *node.Node

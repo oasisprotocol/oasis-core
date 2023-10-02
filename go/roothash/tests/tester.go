@@ -513,25 +513,22 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 	// Check that the liveness statistics were computed correctly.
 	livenessStatistics := s.livenessStatisticsDiff(t, ctx, backend, parent.Height)
 
-	goodRoundsPerNode := make(map[signature.PublicKey]uint64)
-	for i, member := range s.executorCommittee.committee.Members {
-		goodRoundsPerNode[member.PublicKey] += livenessStatistics.LiveRounds[i]
-	}
-
-	for nodeID, v := range goodRoundsPerNode {
-		// Workers and backup workers should be considered live as everyone submitted
-		// commitments and there were no discrepancies.
-		require.EqualValues(1, v, "LiveRounds(%s)", nodeID)
-	}
-
+	liveRounds := make([]uint64, len(livenessStatistics.LiveRounds))
 	finalizedProposals := make([]uint64, len(livenessStatistics.FinalizedProposals))
 	missedProposals := make([]uint64, len(livenessStatistics.MissedProposals))
+
+	// All workers and none backup workers should be considered live as every worker submitted
+	// a commitment and there were no discrepancies.
+	for i := range s.executorCommittee.workers {
+		liveRounds[i] = 1
+	}
 
 	schedulerIdx, err := s.executorCommittee.committee.SchedulerIdx(parent.Block.Header.Round, 0)
 	require.NoError(err, "SchedulerIdx")
 	finalizedProposals[schedulerIdx]++
 
 	require.Equal(uint64(1), livenessStatistics.TotalRounds, "there should be one finalized round")
+	require.EqualValues(liveRounds, livenessStatistics.LiveRounds, "there should be no live members")
 	require.EqualValues(finalizedProposals, livenessStatistics.FinalizedProposals, "there should be one finalized proposal")
 	require.EqualValues(missedProposals, livenessStatistics.MissedProposals, "there should be no failed proposals")
 }

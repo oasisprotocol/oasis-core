@@ -131,7 +131,21 @@ func TestLivenessProcessing(t *testing.T) {
 	// Bump epoch so the node is no longer suspended.
 	epoch += 2
 
-	// When node is live again, fault counter should decrease.
+	// When node is a backup worker, fault counter should not change.
+	rtState.Committee.Members[0].Role = scheduler.RoleBackupWorker
+	rtState.LivenessStatistics.LiveRounds[0] = 91 // At least 90 required.
+	err = processLivenessStatistics(ctx, epoch, rtState)
+	require.NoError(err, "processLivenessStatistics")
+	status, err = registryState.NodeStatus(ctx, sk.Public())
+	require.NoError(err, "NodeStatus")
+	require.False(status.IsSuspended(runtime.ID, epoch), "node should not be suspended")
+	require.EqualValues(1, status.Faults[runtime.ID].Failures, "there should be one fault")
+
+	// Bump epoch so the node is no longer suspended.
+	epoch += 2
+
+	// When node is worker again, fault counter should decrease.
+	rtState.Committee.Members[0].Role = scheduler.RoleWorker
 	rtState.LivenessStatistics.LiveRounds[0] = 91 // At least 90 required.
 	err = processLivenessStatistics(ctx, epoch, rtState)
 	require.NoError(err, "processLivenessStatistics")
