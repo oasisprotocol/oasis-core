@@ -38,6 +38,7 @@ func DumpRestoreUpgradeNetwork(ctx context.Context, childEnv *env.Env, sc *e2e.S
 		e2e.PreserveComputeWorkerLocalStorage:   true,
 		e2e.PreserveComputeWorkerRuntimeStorage: true, // default, needed
 		e2e.PreserveKeymanagerLocalStorage:      true, // default, needed
+		e2e.PreserveClientLocalStorage:          true,
 	}
 	if err := sc.ResetConsensusState(childEnv, resetFlags); err != nil {
 		return fmt.Errorf("failed to wipe storage: %w", err)
