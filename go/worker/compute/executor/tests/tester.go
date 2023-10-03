@@ -158,7 +158,7 @@ func nextRuntimeBlock(ch <-chan *roothash.AnnotatedBlock, allowEmpty bool) (*api
 		select {
 		case blk, ok := <-ch:
 			if !ok {
-				return nil, fmt.Errorf("block channel closed")
+				return nil, fmt.Errorf("runtime block channel closed")
 			}
 			if !allowEmpty && blk.Block.Header.IORoot.IsEmpty() {
 				// Skip blocks without transactions.

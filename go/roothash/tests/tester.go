@@ -1001,7 +1001,7 @@ func nextRuntimeBlock(ch <-chan *api.AnnotatedBlock, start *block.Block) (*api.A
 		select {
 		case blk, ok := <-ch:
 			if !ok {
-				return nil, fmt.Errorf("block channel closed")
+				return nil, fmt.Errorf("runtime block channel closed")
 			}
 			if start != nil && blk.Block.Header.Round < start.Header.Round {
 				continue
@@ -1019,7 +1019,7 @@ func nextConsensusBlock(ch <-chan *consensusAPI.Block) (*consensusAPI.Block, err
 		select {
 		case blk, ok := <-ch:
 			if !ok {
-				return nil, fmt.Errorf("block channel closed")
+				return nil, fmt.Errorf("consensus block channel closed")
 			}
 			return blk, nil
 		case <-time.After(recvTimeout):

@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/rust"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
 )
 
@@ -548,4 +549,52 @@ func (sc *Scenario) ensureReplicationWorked(ctx context.Context, km *oasis.Keyma
 		return nil
 	}
 	return fmt.Errorf("consensus state missing km status")
+}
+
+func (sc *Scenario) WaitNextRuntimeBlock(ch <-chan *roothash.AnnotatedBlock) (*roothash.AnnotatedBlock, error) {
+	sc.Logger.Info("waiting for next runtime block")
+
+	timer := time.NewTimer(10 * time.Second)
+
+	for {
+		select {
+		case blk, ok := <-ch:
+			if !ok {
+				return nil, fmt.Errorf("runtime block channel closed")
+			}
+			return blk, nil
+		case <-timer.C:
+			return nil, fmt.Errorf("failed to receive runtime block")
+		}
+	}
+}
+
+func (sc *Scenario) WaitRuntimeBlock(ch <-chan *roothash.AnnotatedBlock, round uint64) (*roothash.AnnotatedBlock, error) {
+	sc.Logger.Info("waiting for runtime block",
+		"round", round,
+	)
+
+	timer := time.NewTimer(10 * time.Second)
+
+	for {
+		select {
+		case blk, ok := <-ch:
+			if !ok {
+				return nil, fmt.Errorf("runtime block channel closed")
+			}
+			sc.Logger.Info("new runtime block",
+				"round", blk.Block.Header.Round,
+			)
+			if blk.Block.Header.Round > round {
+				return nil, fmt.Errorf("runtime block round in the past")
+			}
+			if blk.Block.Header.Round < round {
+				// Skip old rounds.
+				continue
+			}
+			return blk, nil
+		case <-timer.C:
+			return nil, fmt.Errorf("failed to receive runtime block")
+		}
+	}
 }

@@ -396,15 +396,17 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	batch := n.commonNode.TxPool.GetSchedulingSuggestion(rtInfo.Features.ScheduleControl.InitialBatchSize)
 	defer n.commonNode.TxPool.FinishScheduling()
 	switch {
+	case force:
+		// Batch flush timeout expired, schedule empty batch.
 	case len(batch) > 0:
 		// We have some transactions, schedule batch.
-	case force && len(n.roundResults.Messages) > 0:
+	case len(n.roundResults.Messages) > 0:
 		// We have runtime message results (and batch timeout expired), schedule batch.
-	case force && inMsgMeta.Size > 0:
+	case inMsgMeta.Size > 0:
 		// We have queued incoming runtime messages (and batch timeout expired), schedule batch.
 	case n.rtState.LastNormalRound == n.rtState.GenesisBlock.Header.Round:
 		// This is the runtime genesis, schedule batch.
-	case force && n.rtState.LastNormalHeight < n.epoch.GetEpochHeight():
+	case n.rtState.LastNormalHeight < n.epoch.GetEpochHeight():
 		// No block in this epoch processed by runtime yet, schedule batch.
 	default:
 		// No need to schedule a batch.

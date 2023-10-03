@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"time"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -14,12 +13,8 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-var (
-	// RuntimeMessage is the runtime message scenario.
-	RuntimeMessage scenario.Scenario = newRuntimeMessage()
-
-	waitTimeout = 10 * time.Second
-)
+// RuntimeMessage is the runtime message scenario.
+var RuntimeMessage scenario.Scenario = newRuntimeMessage()
 
 type runtimeMessageImpl struct {
 	Scenario
@@ -91,50 +86,47 @@ func (sc *runtimeMessageImpl) Run(ctx context.Context, _ *env.Env) error {
 	)
 	latestRound := txMetaResponse.Round
 
-	sc.Logger.Debug("watching runtime round transitions")
-	var reachedMsgRound bool
-	for {
-		select {
-		case blk := <-blkCh:
-			round := blk.Block.Header.Round
-			sc.Logger.Debug("round transition", "round", round, "header", blk.Block.Header)
-			switch {
-			case round < latestRound:
-				// Skip old rounds.
-				continue
-			case round > latestRound+1:
-				// Only two rounds are expected.
-				return fmt.Errorf("unexpected runtime round: %d", round)
-			default:
-				if ht := blk.Block.Header.HeaderType; ht != block.Normal {
-					return fmt.Errorf("expected normal round, got: %d", ht)
-				}
-				txs, err := c.GetTransactions(ctx, &api.GetTransactionsRequest{
-					RuntimeID: KeyValueRuntimeID,
-					Round:     round,
-				})
-				if err != nil {
-					return err
-				}
-				switch round {
-				case latestRound:
-					// Round with the submitted consensus_transfer transaction.
-					if len(txs) != 1 {
-						return fmt.Errorf("expected 1 transaction at round: %d, got: %d", round, len(txs))
-					}
-				case latestRound + 1:
-					// Round with no transactions - triggered due to message results.
-					if len(txs) != 0 {
-						return fmt.Errorf("expected 0 transactions at round: %d, got: %d", round, len(txs))
-					}
-					reachedMsgRound = true
-				}
-			}
-		case <-time.After(waitTimeout):
-			if !reachedMsgRound {
-				return fmt.Errorf("timed out waiting for runtime rounds")
-			}
-			return nil
-		}
+	// Round with the submitted consensus_transfer transaction.
+	blk, err := sc.WaitRuntimeBlock(blkCh, latestRound)
+	if err != nil {
+		return err
 	}
+	if ht := blk.Block.Header.HeaderType; ht != block.Normal {
+		return fmt.Errorf("expected normal round, got: %d", ht)
+	}
+
+	txs, err := c.GetTransactions(ctx, &api.GetTransactionsRequest{
+		RuntimeID: blk.Block.Header.Namespace,
+		Round:     blk.Block.Header.Round,
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(txs) != 1 {
+		return fmt.Errorf("expected 1 transaction at round: %d, got: %d", blk.Block.Header.Round, len(txs))
+	}
+
+	// Round with no transactions - triggered due to message results.
+	blk, err = sc.WaitRuntimeBlock(blkCh, blk.Block.Header.Round+1)
+	if err != nil {
+		return err
+	}
+	if ht := blk.Block.Header.HeaderType; ht != block.Normal {
+		return fmt.Errorf("expected normal round, got: %d", ht)
+	}
+
+	txs, err = c.GetTransactions(ctx, &api.GetTransactionsRequest{
+		RuntimeID: blk.Block.Header.Namespace,
+		Round:     blk.Block.Header.Round,
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(txs) != 0 {
+		return fmt.Errorf("expected 0 transactions at round: %d, got: %d", blk.Block.Header.Round, len(txs))
+	}
+
+	return nil
 }
