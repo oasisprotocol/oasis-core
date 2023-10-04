@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	dbName = "cometbft/light"
+	dbName = "consensus/light"
 
 	// numProviders is the number of libp2p backed CometBFT light-block providers to be instantiated.
 	numProviders = 3
