@@ -15,7 +15,7 @@ the [consensus service API documentation].
 ## Resources
 
 The registry service manages different kinds of resources which are described
-from a high level perspective in this section.
+from a high level perspective in this chapter.
 
 ### Entities and Nodes
 

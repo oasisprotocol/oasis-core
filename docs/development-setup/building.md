@@ -1,6 +1,6 @@
 # Building
 
-This section contains a description of steps required to build Oasis Core.
+This chapter contains a description of steps required to build Oasis Core.
 Before proceeding, make sure to look at the [prerequisites] required for running
 an Oasis Core environment.
 
