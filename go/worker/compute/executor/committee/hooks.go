@@ -53,8 +53,9 @@ func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
 	switch {
 	case ev.ExecutionDiscrepancyDetected != nil:
 		n.NotifyDiscrepancy(&discrepancyEvent{
-			rank:   ev.ExecutionDiscrepancyDetected.Rank,
-			height: uint64(ev.Height),
+			rank:          ev.ExecutionDiscrepancyDetected.Rank,
+			height:        uint64(ev.Height),
+			authoritative: true,
 		})
 	case ev.ExecutorCommitted != nil:
 		n.NotifySchedulerCommitment(&ev.ExecutorCommitted.Commit)

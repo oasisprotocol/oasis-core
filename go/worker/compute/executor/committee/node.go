@@ -92,6 +92,7 @@ type Node struct { // nolint: maligned
 	blockInfo     *runtime.BlockInfo
 	rtState       *roothash.RuntimeState
 	roundResults  *roothash.RoundResults
+	discrepancy   *discrepancyEvent
 	submitted     map[uint64]struct{}
 	rank          uint64
 	proposedBatch *proposedBatch
@@ -1478,19 +1479,17 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 	schedulerRankTicker.Start()
 	defer schedulerRankTicker.Stop()
 
-	// Remember if discrepancy was detected.
-	var discrepancy *discrepancyEvent
+	// Reset discrepancy detection.
+	n.discrepancy = nil
+	n.commitPool = commitment.NewPool()
 
 	// Reset submitted proposals/commitments.
 	n.submitted = make(map[uint64]struct{})
 
-	// Reset commitment pool for early discrepancy detection.
-	n.commitPool = commitment.NewPool()
-
 	// Main loop.
 	for {
 		// Update state, propose or schedule.
-		switch discrepancy {
+		switch n.discrepancy {
 		case nil:
 			limit := min(schedulerRank, poolRank, n.rank)
 			proposal, rank, ok := n.proposals.Best(round, 0, limit, n.submitted)
@@ -1505,15 +1504,15 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 				n.scheduleBatch(ctx, round, flush)
 			}
 		default:
-			n.updateState(ctx, discrepancy.rank, discrepancy.rank, true)
+			n.updateState(ctx, n.discrepancy.rank, n.discrepancy.rank, true)
 
-			limit := discrepancy.rank
+			limit := n.discrepancy.rank
 			proposal, rank, ok := n.proposals.Best(round, limit, limit, n.submitted)
 			switch {
 			case ok:
 				// Try to process the discrepant proposal.
 				n.processProposal(ctx, proposal, rank, true)
-			case n.rank == discrepancy.rank:
+			case n.rank == n.discrepancy.rank:
 				// Try to schedule a batch.
 				n.scheduleBatch(ctx, round, true)
 			}
@@ -1527,7 +1526,7 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 			case txs := <-n.txCh:
 				// Check any queued transactions.
 				n.handleNewCheckedTransactions(txs)
-			case discrepancy = <-n.discrepancyCh:
+			case discrepancy := <-n.discrepancyCh:
 				// Discrepancy has been detected.
 				n.handleDiscrepancy(ctx, discrepancy)
 			case ec := <-n.ecCh:

@@ -8,8 +8,9 @@ import (
 )
 
 type discrepancyEvent struct {
-	rank   uint64
-	height uint64
+	rank          uint64
+	height        uint64
+	authoritative bool
 }
 
 func (n *Node) NotifyDiscrepancy(info *discrepancyEvent) {
@@ -23,10 +24,11 @@ func (n *Node) NotifyDiscrepancy(info *discrepancyEvent) {
 	n.discrepancyCh <- info
 }
 
-func (n *Node) handleDiscrepancy(ctx context.Context, info *discrepancyEvent) {
+func (n *Node) handleDiscrepancy(ctx context.Context, ev *discrepancyEvent) {
 	n.logger.Warn("execution discrepancy detected",
-		"rank", info.rank,
-		"height", info.height,
+		"rank", ev.rank,
+		"height", ev.height,
+		"authoritative", ev.authoritative,
 	)
 
 	crash.Here(crashPointDiscrepancyDetectedAfter)
@@ -34,25 +36,50 @@ func (n *Node) handleDiscrepancy(ctx context.Context, info *discrepancyEvent) {
 	discrepancyDetectedCount.With(n.getMetricLabels()).Inc()
 
 	// Make sure that the runtime has synced this consensus block.
-	err := n.rt.ConsensusSync(ctx, info.height)
+	err := n.rt.ConsensusSync(ctx, ev.height)
 	if err != nil {
 		n.logger.Warn("failed to ask the runtime to sync the latest consensus block",
 			"err", err,
-			"height", info.height,
+			"height", ev.height,
 		)
 	}
+
+	// Always prioritize authoritative discrepancy events because they originate
+	// from the consensus layer, are final, and limited to at most one per round.
+	// Non-authoritative events, on the other hand, are merely estimates used
+	// by the backup workers.
+	if n.discrepancy != nil && n.discrepancy.authoritative {
+		return
+	}
+
+	n.discrepancy = ev
 }
 
 func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitment.ExecutorCommitment) {
+	// Don't do anything if we are not a backup worker or we are an executor worker.
+	id := n.commonNode.Identity.NodeSigner.Public()
+	if !n.committee.IsBackupWorker(id) || n.committee.IsWorker(id) {
+		return
+	}
+
 	n.logger.Debug("observed executor commitment",
 		"commitment", ec,
 	)
 
 	// TODO: Handle equivocation detection.
 
+	// Don't do anything if the discrepancy has already been detected.
+	if n.commitPool.Discrepancy {
+		n.logger.Debug("ignoring bad observed executor commitment, discrepancy already detected",
+			"node_id", ec.NodeID,
+		)
+		return
+	}
+
+	// Verify and add the commitment.
 	rt := n.epoch.GetRuntime()
 	if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, rt, n.committee.ValidFor, ec, nil, n.epoch); err != nil {
-		n.logger.Debug("ignoring bad observed executor commitment",
+		n.logger.Debug("ignoring bad observed executor commitment, verification failed",
 			"err", err,
 			"node_id", ec.NodeID,
 		)
@@ -60,7 +87,7 @@ func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitm
 	}
 
 	if err := n.commitPool.AddVerifiedExecutorCommitment(n.committee, ec); err != nil {
-		n.logger.Debug("ignoring bad observed executor commitment",
+		n.logger.Debug("ignoring bad observed executor commitment, insertion failed",
 			"err", err,
 			"node_id", ec.NodeID,
 		)
@@ -75,7 +102,8 @@ func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitm
 	n.logger.Warn("observed commitments indicate discrepancy")
 
 	n.NotifyDiscrepancy(&discrepancyEvent{
-		rank:   n.commitPool.HighestRank,
-		height: uint64(n.blockInfo.ConsensusBlock.Height),
+		rank:          n.commitPool.HighestRank,
+		height:        uint64(n.blockInfo.ConsensusBlock.Height),
+		authoritative: false,
 	})
 }
