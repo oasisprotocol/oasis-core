@@ -200,8 +200,8 @@ steps:
     depends_on:
       - "build-rust-runtimes"
     command:
+      - trap 'buildkite-agent artifact upload "coverage-*.txt;/tmp/oasis-node-test_*/test-node.log"' EXIT
       - .buildkite/go/test_and_coverage.sh
-      - buildkite-agent artifact upload "coverage-*.txt;/tmp/oasis-node-test_*/test-node.log"
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -217,16 +217,15 @@ steps:
       - "build-rust-runtimes"
     branches: "!master !stable/*"
     parallelism: 5
-    timeout_in_minutes: 20
     command:
+      - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.
       - cargo install --locked --path tools
       - export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"
       - export CC_x86_64_fortanix_unknown_sgx=clang-11
       # Only run runtime scenarios as others do not use SGX.
-      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-.+
-      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
+      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-.+
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
       OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
@@ -247,14 +246,13 @@ steps:
       - "build-rust-runtimes"
     branches: master stable/*
     parallelism: 20
-    timeout_in_minutes: 20
     command:
+      - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       # Needed as the trust-root test rebuilds the enclave with embedded trust root data.
       - cargo install --locked --path tools
       # Only run runtime scenarios as others do not use SGX.
-      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/.*
-      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
+      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/.*
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
       OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
@@ -278,11 +276,10 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     parallelism: 30
-    timeout_in_minutes: 20
     command:
+      - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_e2e.sh
-      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
+      - .buildkite/scripts/test_e2e.sh --timeout 20m
     env:
       OASIS_E2E_COVERAGE: enable
       # Since the trust-root scenarios are tested in SGX mode (for which they are actually relevant)
@@ -300,11 +297,10 @@ steps:
       - "build-go"
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
-    timeout_in_minutes: 20
     command:
+      - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts.sh
-      - .buildkite/scripts/test_e2e.sh --scenario e2e/runtime/txsource-multi-short
-      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
+      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/txsource-multi-short
     env:
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -318,10 +314,9 @@ steps:
   ###########################################
   - label: E2E tests - sgx1 - IAS
     branches: master stable/*
-    timeout_in_minutes: 20
     command:
-      - .buildkite/scripts/sgx_ias_tests.sh
-      - buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"
+      - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
+      - .buildkite/scripts/sgx_ias_tests.sh --timeout 20m
     # A unique string to identify the step. The value is available in the
     # BUILDKITE_STEP_KEY and is used to ensure the generated coverage file
     # names are unique across this pipeline.

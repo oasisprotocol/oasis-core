@@ -20,4 +20,4 @@ export OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES=1
 export OASIS_TEE_HARDWARE=intel-sgx
 
 make all
-.buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption
+.buildkite/scripts/test_e2e.sh --scenario e2e/runtime/runtime-encryption "$@"
