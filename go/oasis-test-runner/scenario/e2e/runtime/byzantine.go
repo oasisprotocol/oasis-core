@@ -23,51 +23,66 @@ import (
 )
 
 var (
-	// We force the result of each election such that the byzantine node
-	// will be elected as:
-	//  * Executor: Non-scheduler worker
-	//  * Executor+Scheduler: Scheduler worker
-	//  * Storage: Storage worker
+	// primarySchedulerIndex is the index of the highest-ranked scheduler in round 3
+	// when the committee consists of 2 workers.
+	//
+	// Formula: `rank = (round + idx) % num_workers`.
+	primarySchedulerIndex uint64 = 1
+	// backupSchedulerIndex in the index of the second-ranked scheduler in round 3
+	// when the committee consists of 2 workers.
+	//
+	// Formula: `rank = (round + idx) % num_workers`.
+	backupSchedulerIndex uint64
+)
 
-	// ByzantineExecutorHonest is the byzantine executor honest scenario.
+var (
+	// We force the result of each election such that the byzantine node will be elected
+	// as primary/backup worker, primary/backup scheduler, storage worker, or combination
+	// of these roles.
+
+	// ByzantineExecutorHonest is a scenario in which the Byzantine node acts
+	// as the primary worker, backup scheduler, and is honest.
 	ByzantineExecutorHonest scenario.Scenario = newByzantineImpl(
-		"executor-honest",
+		"primary-worker/backup-scheduler/honest",
 		"executor",
 		nil,
-		oasis.ByzantineDefaultIdentitySeed,
+		oasis.ByzantineSlot1IdentitySeed,
 		false,
 		nil,
 		nil,
 		scheduler.ForceElectCommitteeRole{
 			Kind:  scheduler.KindComputeExecutor,
 			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: backupSchedulerIndex,
 		},
 	)
-	// ByzantineExecutorSchedulerHonest is the byzantine executor scheduler honest scenario.
+	// ByzantineExecutorSchedulerHonest is a scenario in which the Byzantine node acts
+	// as the primary worker, primary scheduler, and is honest.
 	ByzantineExecutorSchedulerHonest scenario.Scenario = newByzantineImpl(
-		"executor-scheduler-honest",
+		"primary-worker/primary-scheduler/honest",
 		"executor",
 		nil,
-		oasis.ByzantineSlot1IdentitySeed,
+		oasis.ByzantineDefaultIdentitySeed,
 		false,
 		nil,
 		[]oasis.Argument{
-			{Name: byzantine.CfgSchedulerRoleExpected},
+			{Name: byzantine.CfgPrimarySchedulerExpected},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind:        scheduler.KindComputeExecutor,
-			Roles:       []scheduler.Role{scheduler.RoleWorker},
-			IsScheduler: true,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: primarySchedulerIndex,
 		},
 	)
-	// ByzantineExecutorWrong is the byzantine executor wrong scenario.
-	ByzantineExecutorWrong scenario.Scenario = newByzantineImpl(
-		"executor-wrong",
+	// ByzantineExecutorDishonest is a scenario in which the Byzantine node acts
+	// as the primary worker, backup scheduler, and is dishonest.
+	ByzantineExecutorDishonest scenario.Scenario = newByzantineImpl(
+		"primary-worker/backup-scheduler/dishonest",
 		"executor",
 		[]log.WatcherHandlerFactory{
 			// Wrong commitment should trigger discrepancy detection, but the round shouldn't fail.
-			oasis.LogAssertNoTimeouts(),
 			oasis.LogAssertNoRoundFailures(),
+			oasis.LogAssertNoTimeouts(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
@@ -79,25 +94,29 @@ var (
 			staking.SlashRuntimeLiveness:         1,
 		},
 		[]oasis.Argument{
-			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorDishonest.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
 			Kind:  scheduler.KindComputeExecutor,
 			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: backupSchedulerIndex,
 		},
 	)
-	// ByzantineExecutorSchedulerWrong is the byzantine executor wrong scheduler scenario.
-	ByzantineExecutorSchedulerWrong scenario.Scenario = newByzantineImpl(
-		"executor-scheduler-wrong",
+	// ByzantineExecutorSchedulerRunaway is a scenario in which the Byzantine node acts
+	// as the primary worker, primary scheduler, and runs away after publishes a proposal.
+	ByzantineExecutorSchedulerRunaway scenario.Scenario = newByzantineImpl(
+		"primary-worker/primary-scheduler/runaway",
 		"executor",
 		[]log.WatcherHandlerFactory{
-			// Invalid proposed batch should trigger round failure in first round (proposer timeout).
-			// In round two timeout and discrepancy detection should be triggered.
-			oasis.LogAssertRoundFailures(),
+			// The Byzantine node will publish a proposal but won't submit a commitment.
+			// The backup schedulers should recognize this and submit their own proposals.
+			// Since stragglers are not permitted, the round timeout will elapse, triggering
+			// discrepancy detection, but the round itself shouldn't fail.
+			oasis.LogAssertNoRoundFailures(),
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
-		oasis.ByzantineSlot1IdentitySeed,
+		oasis.ByzantineDefaultIdentitySeed,
 		false,
 		// Byzantine node entity should be slashed once for liveness (not participating in second
 		// round).
@@ -105,22 +124,25 @@ var (
 			staking.SlashRuntimeLiveness: 1,
 		},
 		[]oasis.Argument{
-			{Name: byzantine.CfgSchedulerRoleExpected},
-			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorWrong.String()}},
+			{Name: byzantine.CfgPrimarySchedulerExpected},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorRunaway.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind:        scheduler.KindComputeExecutor,
-			Roles:       []scheduler.Role{scheduler.RoleWorker},
-			IsScheduler: true,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: primarySchedulerIndex,
 		},
 	)
-	// ByzantineExecutorSchedulerBogus is the byzantine executor scheduler with bogus txs scenario.
+	// ByzantineExecutorSchedulerBogus is a scenario in which the Byzantine node acts
+	// as the primary worker, primary scheduler, and schedules bogus transactions.
 	ByzantineExecutorSchedulerBogus scenario.Scenario = newByzantineImpl(
-		"executor-scheduler-bogus",
+		"primary-worker/primary-scheduler/bogus",
 		"executor",
 		[]log.WatcherHandlerFactory{
-			// Invalid proposed batch should trigger round failure in first round (proposer timeout).
-			// In round two timeout and discrepancy detection should be triggered.
+			// The Byzantine node will publish a bogus proposal and submit a commitment.
+			// Other workers will see the proposal but won't have all transactions to commit
+			// to it. This will trigger the first round timeout, leading to a discrepancy
+			// resolution that will time out and fail, ultimately causing the round to fail.
 			oasis.LogAssertRoundFailures(),
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
@@ -133,21 +155,23 @@ var (
 			staking.SlashRuntimeLiveness: 1,
 		},
 		[]oasis.Argument{
-			{Name: byzantine.CfgSchedulerRoleExpected},
+			{Name: byzantine.CfgPrimarySchedulerExpected},
 			{Name: byzantine.CfgExecutorProposeBogusTx},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind:        scheduler.KindComputeExecutor,
-			Roles:       []scheduler.Role{scheduler.RoleWorker},
-			IsScheduler: true,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: primarySchedulerIndex,
 		},
 	)
-	// ByzantineExecutorStraggler is the byzantine executor straggler scenario.
+	// ByzantineExecutorStraggler is a scenario in which the Byzantine node acts
+	// as the primary worker, backup scheduler, and a straggler.
 	ByzantineExecutorStraggler scenario.Scenario = newByzantineImpl(
-		"executor-straggler",
+		"primary-worker/backup-scheduler/straggler",
 		"executor",
 		[]log.WatcherHandlerFactory{
-			// Straggler should trigger timeout and discrepancy detection, but the round shouldn't fail.
+			// Straggler should trigger timeout and discrepancy detection, but the round shouldn't
+			// fail.
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertNoRoundFailures(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
@@ -164,18 +188,97 @@ var (
 		scheduler.ForceElectCommitteeRole{
 			Kind:  scheduler.KindComputeExecutor,
 			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: backupSchedulerIndex,
 		},
 	)
-	// ByzantineExecutorStragglerBackup is the byzantine executor straggler scenario where the
-	// byzantine node is both primary and backup.
-	ByzantineExecutorStragglerBackup scenario.Scenario = newByzantineImpl(
-		"executor-straggler-backup",
+	// ByzantineExecutorSchedulerStraggler is a scenario in which the Byzantine node acts
+	// as the primary worker, primary scheduler, and a straggler.
+	ByzantineExecutorSchedulerStraggler scenario.Scenario = newByzantineImpl(
+		"primary-worker/primary-scheduler/straggler",
+		"executor",
+		[]log.WatcherHandlerFactory{
+			// Straggler should trigger timeout and discrepancy detection, but the round shouldn't
+			// fail.
+			oasis.LogAssertTimeouts(),
+			oasis.LogAssertNoRoundFailures(),
+			oasis.LogAssertExecutionDiscrepancyDetected(),
+		},
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+		// Byzantine node entity should be slashed once for liveness.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
+		[]oasis.Argument{
+			{Name: byzantine.CfgPrimarySchedulerExpected},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: primarySchedulerIndex,
+		},
+	)
+	// ByzantineExecutorStragglerAllowed is a scenario in which the Byzantine node acts
+	// as the primary worker, backup scheduler, and a straggler. One straggler is allowed.
+	ByzantineExecutorStragglerAllowed scenario.Scenario = newByzantineImpl(
+		"primary-worker/backup-scheduler/straggler-allowed",
+		"executor",
+		nil,
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+		// Byzantine node entity should be slashed once for liveness.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
+		[]oasis.Argument{
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: backupSchedulerIndex,
+		},
+		withCustomRuntimeConfig(func(rt *oasis.RuntimeFixture) {
+			rt.Executor.AllowedStragglers = 1
+		}),
+	)
+	// ByzantineExecutorSchedulerStragglerAllowed is a scenario in which the Byzantine node acts
+	// as the primary worker, primary scheduler, and a straggler. One straggler is allowed.
+	ByzantineExecutorSchedulerStragglerAllowed scenario.Scenario = newByzantineImpl(
+		"primary-worker/primary-scheduler/straggler-allowed",
+		"executor",
+		nil,
+		oasis.ByzantineDefaultIdentitySeed,
+		false,
+		// Byzantine node entity should be slashed once for liveness.
+		map[staking.SlashReason]uint64{
+			staking.SlashRuntimeLiveness: 1,
+		},
+		[]oasis.Argument{
+			{Name: byzantine.CfgPrimarySchedulerExpected},
+			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
+		},
+		scheduler.ForceElectCommitteeRole{
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: primarySchedulerIndex,
+		},
+		withCustomRuntimeConfig(func(rt *oasis.RuntimeFixture) {
+			// One straggler is allowed.
+			rt.Executor.AllowedStragglers = 1
+		}),
+	)
+	// ByzantineExecutorBackupStraggler is a scenario in which the Byzantine node acts
+	// as the primary and backup worker, backup scheduler, and a straggler.
+	ByzantineExecutorBackupStraggler scenario.Scenario = newByzantineImpl(
+		"primary-backup-worker/backup-scheduler/straggler",
 		"executor",
 		[]log.WatcherHandlerFactory{
 			// Straggler should trigger timeout, but no discrepancies or round failures.
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertNoRoundFailures(),
-			oasis.LogAssertNoExecutionDiscrepancyDetected(),
+			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
 		oasis.ByzantineDefaultIdentitySeed,
 		false,
@@ -189,49 +292,51 @@ var (
 		scheduler.ForceElectCommitteeRole{
 			Kind:  scheduler.KindComputeExecutor,
 			Roles: []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker},
+			Index: backupSchedulerIndex,
 		},
 		withCustomRuntimeConfig(func(rt *oasis.RuntimeFixture) {
-			// One straggler is allowed.
-			rt.Executor.AllowedStragglers = 1
 			// One byzantine node is in the backup committee so we need more to not fail.
 			rt.Executor.GroupBackupSize = 3
 		}),
 	)
-	// ByzantineExecutorSchedulerStraggler is the byzantine executor scheduler straggler scenario.
-	ByzantineExecutorSchedulerStraggler scenario.Scenario = newByzantineImpl(
-		"executor-scheduler-straggler",
+	// ByzantineExecutorBackupSchedulerStraggler is a scenario in which the Byzantine node acts
+	// as the primary and backup worker, primary scheduler, and a straggler.
+	ByzantineExecutorBackupSchedulerStraggler scenario.Scenario = newByzantineImpl(
+		"primary-backup-worker/primary-scheduler/straggler",
 		"executor",
 		[]log.WatcherHandlerFactory{
-			// Scheduler straggler should trigger round failure in first round (proposer timeout).
-			// In round two timeout and discrepancy detection should be triggered.
-			oasis.LogAssertRoundFailures(),
+			// Straggler should trigger timeout, but no discrepancies or round failures.
 			oasis.LogAssertTimeouts(),
+			oasis.LogAssertNoRoundFailures(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
-		oasis.ByzantineSlot1IdentitySeed,
+		oasis.ByzantineDefaultIdentitySeed,
 		false,
-		// Byzantine node entity should be slashed once for liveness (not participating in second
-		// round).
+		// Byzantine node entity should be slashed once for liveness.
 		map[staking.SlashReason]uint64{
 			staking.SlashRuntimeLiveness: 1,
 		},
 		[]oasis.Argument{
-			{Name: byzantine.CfgSchedulerRoleExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorStraggler.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind:        scheduler.KindComputeExecutor,
-			Roles:       []scheduler.Role{scheduler.RoleWorker},
-			IsScheduler: true,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker, scheduler.RoleBackupWorker},
+			Index: primarySchedulerIndex,
 		},
+		withCustomRuntimeConfig(func(rt *oasis.RuntimeFixture) {
+			// One byzantine node is in the backup committee so we need more to not fail.
+			rt.Executor.GroupBackupSize = 3
+		}),
 	)
-	// ByzantineExecutorFailureIndicating is the byzantine executor that submits failure indicating
-	// commitments scenario.
+	// ByzantineExecutorFailureIndicating is a scenario in which the Byzantine node acts
+	// as the primary worker, backup scheduler, and submits failure indicating commitment.
 	ByzantineExecutorFailureIndicating scenario.Scenario = newByzantineImpl(
-		"executor-failure-indicating",
+		"primary-worker/backup-scheduler/failure-indicating",
 		"executor",
 		[]log.WatcherHandlerFactory{
-			// Failure indicating executor should trigger discrepancy detection, but the round shouldn't fail.
+			// Failure indicating executor should trigger discrepancy detection, but the round
+			// shouldn't fail.
 			oasis.LogAssertNoTimeouts(),
 			oasis.LogAssertNoRoundFailures(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
@@ -248,16 +353,18 @@ var (
 		scheduler.ForceElectCommitteeRole{
 			Kind:  scheduler.KindComputeExecutor,
 			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: backupSchedulerIndex,
 		},
 	)
-	// ByzantineExecutorSchedulerFailureIndicating is the byzantine executor scheduler failure indicating scenario.
+	// ByzantineExecutorSchedulerFailureIndicating is a scenario in which the Byzantine node acts
+	// as the primary worker, primary scheduler, and submits failure indicating commitment.
 	ByzantineExecutorSchedulerFailureIndicating scenario.Scenario = newByzantineImpl(
-		"executor-scheduler-failure-indicating",
+		"primary-worker/primary-scheduler/failure-indicating",
 		"executor",
 		[]log.WatcherHandlerFactory{
-			// Failure indicating scheduler submitts a failure indicating commitment and doesn't propagate the batch.
-			// This triggers a timeout, discrepancy detection and results in round failure.
-			oasis.LogAssertRoundFailures(),
+			// Proposal from failure indicating scheduler will be rejected. The round will not fail
+			// as the backup scheduler's proposal will be accepted after discrepancy resolution.
+			oasis.LogAssertNoRoundFailures(),
 			oasis.LogAssertTimeouts(),
 			oasis.LogAssertExecutionDiscrepancyDetected(),
 		},
@@ -269,19 +376,19 @@ var (
 			staking.SlashRuntimeLiveness: 1,
 		},
 		[]oasis.Argument{
-			{Name: byzantine.CfgSchedulerRoleExpected},
+			{Name: byzantine.CfgPrimarySchedulerExpected},
 			{Name: byzantine.CfgExecutorMode, Values: []string{byzantine.ModeExecutorFailureIndicating.String()}},
 		},
 		scheduler.ForceElectCommitteeRole{
-			Kind:        scheduler.KindComputeExecutor,
-			Roles:       []scheduler.Role{scheduler.RoleWorker},
-			IsScheduler: true,
+			Kind:  scheduler.KindComputeExecutor,
+			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: primarySchedulerIndex,
 		},
 	)
 	// ByzantineExecutorCorruptGetDiff is the byzantine executor node scenario that corrupts GetDiff
 	// responses.
 	ByzantineExecutorCorruptGetDiff scenario.Scenario = newByzantineImpl(
-		"executor-corrupt-getdiff",
+		"primary-worker/backup-scheduler/corrupt-getdiff",
 		"executor",
 		// There should be no discrepancy or round failures.
 		nil,
@@ -295,6 +402,7 @@ var (
 		scheduler.ForceElectCommitteeRole{
 			Kind:  scheduler.KindComputeExecutor,
 			Roles: []scheduler.Role{scheduler.RoleWorker},
+			Index: backupSchedulerIndex,
 		},
 	)
 )
@@ -493,6 +601,9 @@ WatchBlocksLoop:
 			if blk.Block.Header.HeaderType != block.Normal || blk.Block.Header.Round <= genesisBlk.Header.Round {
 				continue
 			}
+			sc.Logger.Info("successful round",
+				"round", blk.Block.Header.Round,
+			)
 
 			break WatchBlocksLoop
 		case <-time.After(120 * time.Second):

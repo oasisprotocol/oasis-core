@@ -44,6 +44,19 @@ type runtimeState struct {
 	executorCommittee *testCommittee
 }
 
+type commitmentEvent struct {
+	commits []commitment.ExecutorCommitment
+}
+
+type discrepancyEvent struct {
+	timeout bool
+	rank    uint64
+}
+
+type finalizedEvent struct {
+	round uint64
+}
+
 // RootHashImplementationTests exercises the basic functionality of a
 // roothash backend.
 func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, identity *identity.Identity) {
@@ -66,7 +79,6 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 	// Populate the registry.
 	runtimes := make([]*registryTests.TestRuntime, 0, nrRuntimes)
 	for i := 0; i < nrRuntimes; i++ {
-		t.Logf("Generating runtime: %d", i)
 		seed := append([]byte{}, seedBase...)
 		seed = append(seed, byte(i))
 
@@ -107,10 +119,6 @@ func RootHashImplementationTests(t *testing.T, backend api.Backend, consensus co
 
 	t.Run("RoundTimeout", func(t *testing.T) {
 		testRoundTimeout(t, backend, consensus, rtStates)
-	})
-
-	t.Run("ProposerTimeout", func(t *testing.T) {
-		testProposerTimeout(t, backend, consensus, rtStates)
 	})
 
 	t.Run("RoundTimeoutWithEpochTransition", func(t *testing.T) {
@@ -264,10 +272,10 @@ func testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusA
 	}
 }
 
-func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus consensusAPI.Backend, child *block.Block) (
-	parent *block.Block,
-	executorCommits []commitment.ExecutorCommitment,
-	executorNodes []*registryTests.TestNode,
+func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus consensusAPI.Backend, child *block.Block, rank uint64) (
+	*block.Block,
+	[]commitment.ExecutorCommitment,
+	[]*registryTests.TestNode,
 ) {
 	require := require.New(t)
 
@@ -301,11 +309,8 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	_, ioRootHash, err := tree.Commit(ctx)
 	require.NoError(err, "tree.Commit")
 
-	var emptyRoot hash.Hash
-	emptyRoot.Empty()
-
 	// Create the new block header that the nodes will commit to.
-	parent = &block.Block{
+	parent := &block.Block{
 		Header: block.Header{
 			Version:      0,
 			Namespace:    child.Header.Namespace,
@@ -323,12 +328,22 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	msgsHash.Empty()
 	inMsgsHash.Empty()
 
+	// Gather executor nodes, starting with the scheduler.
+	schedulerIdx, ok := executorCommittee.committee.SchedulerIdx(parent.Header.Round, rank)
+	require.True(ok, "SchedulerIdx")
+	schedulerID := executorCommittee.workers[schedulerIdx].Signer.Public()
+
+	executorNodes := make([]*registryTests.TestNode, 0, len(executorCommittee.workers))
+	executorNodes = append(executorNodes, executorCommittee.workers[schedulerIdx:]...)
+	executorNodes = append(executorNodes, executorCommittee.workers[:schedulerIdx]...)
+
 	// Generate all the executor commitments.
-	executorNodes = append([]*registryTests.TestNode{}, executorCommittee.workers...)
+	executorCommits := make([]commitment.ExecutorCommitment, 0, len(executorNodes))
 	for _, node := range executorNodes {
 		ec := commitment.ExecutorCommitment{
 			NodeID: node.Signer.Public(),
 			Header: commitment.ExecutorCommitmentHeader{
+				SchedulerID: schedulerID,
 				Header: commitment.ComputeResultsHeader{
 					Round:           parent.Header.Round,
 					PreviousHash:    parent.Header.PreviousHash,
@@ -346,220 +361,383 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 
 		executorCommits = append(executorCommits, ec)
 	}
-	return
+
+	return parent, executorCommits, executorNodes
+}
+
+// getEvents returns runtime events at specified block height.
+func (s *runtimeState) getEvents(ctx context.Context, backend api.Backend, height int64) ([]*api.Event, error) {
+	evs, err := backend.GetEvents(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]*api.Event, 0, len(evs))
+	for _, ev := range evs {
+		if ev.RuntimeID != s.rt.Runtime.ID {
+			continue
+		}
+		filtered = append(filtered, ev)
+	}
+
+	return filtered, nil
+}
+
+// verifyEvents verifies that executor commitment, discrepancy detection and round finalized events
+// were emitted at the given height.
+func (s *runtimeState) verifyEvents(t *testing.T, ctx context.Context, backend api.Backend, height int64, ce *commitmentEvent, de *discrepancyEvent, fe *finalizedEvent) {
+	require := require.New(t)
+
+	numEvents := 0
+	if ce != nil {
+		numEvents += len(ce.commits)
+	}
+	if de != nil {
+		numEvents++
+	}
+	if fe != nil {
+		numEvents++
+	}
+
+	evts, err := s.getEvents(ctx, backend, height)
+	require.NoError(err, "getEvents")
+	require.Len(evts, numEvents, "should have all events")
+
+	if ce != nil {
+		for _, commit := range ce.commits {
+			ev := evts[0]
+			evts = evts[1:]
+			require.NotNil(ev.ExecutorCommitted, fmt.Sprintf("unexpected event: %+v", ev))
+			require.EqualValues(commit, ev.ExecutorCommitted.Commit, "executor commitment should match")
+		}
+	}
+
+	if de != nil {
+		ev := evts[0]
+		evts = evts[1:]
+		require.NotNil(ev.ExecutionDiscrepancyDetected, fmt.Sprintf("unexpected event: %+v", ev))
+		require.Equal(de.timeout, ev.ExecutionDiscrepancyDetected.Timeout, "timeout should match")
+		require.Equal(de.rank, ev.ExecutionDiscrepancyDetected.Rank, "rank should match")
+	}
+
+	if fe != nil {
+		ev := evts[0]
+		require.NotNil(ev.Finalized, fmt.Sprintf("unexpected event: %+v", ev))
+		require.Equal(fe.round, ev.Finalized.Round, "round should match")
+	}
+}
+
+// livenessStatistics fetches liveness statistics at the specified height.
+func (s *runtimeState) livenessStatistics(t *testing.T, ctx context.Context, backend api.Backend, height int64) *api.LivenessStatistics {
+	require := require.New(t)
+
+	state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
+		RuntimeID: s.rt.Runtime.ID,
+		Height:    height,
+	})
+	require.NoError(err, "GetRuntimeState")
+
+	numNodes := len(s.executorCommittee.workers) + len(s.executorCommittee.backupWorkers)
+	if state.LivenessStatistics == nil {
+		return api.NewLivenessStatistics(numNodes)
+	}
+
+	require.Len(state.LivenessStatistics.LiveRounds, numNodes)
+	require.Len(state.LivenessStatistics.FinalizedProposals, numNodes)
+	require.Len(state.LivenessStatistics.MissedProposals, numNodes)
+
+	return state.LivenessStatistics
+}
+
+// livenessStatisticsDiff returns the differences in liveness statistics caused by a block
+// at the specified height.
+func (s *runtimeState) livenessStatisticsDiff(t *testing.T, ctx context.Context, backend api.Backend, height int64) *api.LivenessStatistics {
+	before := s.livenessStatistics(t, ctx, backend, height-1)
+	after := s.livenessStatistics(t, ctx, backend, height)
+
+	after.TotalRounds -= before.TotalRounds
+	for i, v := range before.FinalizedProposals {
+		after.FinalizedProposals[i] -= v
+	}
+	for i, v := range before.LiveRounds {
+		after.LiveRounds[i] -= v
+	}
+	for i, v := range before.MissedProposals {
+		after.MissedProposals[i] -= v
+	}
+
+	return after
 }
 
 func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
-		RuntimeID: s.rt.Runtime.ID,
-		Height:    consensusAPI.HeightLatest,
-	})
-	require.NoError(err, "GetLatestBlock")
-
-	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
-	require.NoError(err, "WatchBlocks")
-	defer sub.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
+	ch, sub, err := backend.WatchBlocks(ctx, s.rt.Runtime.ID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
+
+	// Fetch the last block.
+	child, err := nextRuntimeBlock(ch, nil)
+	require.NoError(err, "nextRuntimeBlock")
+
 	// Generate and submit all executor commitments.
-	parent, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child)
+	blk, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child.Block, 0)
 	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits)
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
 
 	// Ensure that the round was finalized.
-	for {
-		select {
-		case blk := <-ch:
-			header := blk.Block.Header
+	parent, err := nextRuntimeBlock(ch, nil)
+	require.NoError(err, "nextRuntimeBlock")
 
-			// Ensure that WatchBlocks uses the correct latest block.
-			require.True(header.Round >= child.Header.Round, "WatchBlocks must start at child block")
+	require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+	require.EqualValues(block.Normal, parent.Block.Header.HeaderType, "block header type must be Normal")
 
-			if header.Round == child.Header.Round {
-				require.EqualValues(child.Header, header, "old block is equal")
-				continue
-			}
+	// Can't directly compare headers, some backends rewrite the timestamp.
+	require.EqualValues(blk.Header.Version, parent.Block.Header.Version, "block version")
+	require.EqualValues(blk.Header.Namespace, parent.Block.Header.Namespace, "block namespace")
+	require.EqualValues(blk.Header.Round, parent.Block.Header.Round, "block round")
+	// Timestamp
+	require.EqualValues(blk.Header.HeaderType, parent.Block.Header.HeaderType, "block header type")
+	require.EqualValues(blk.Header.PreviousHash, parent.Block.Header.PreviousHash, "block previous hash")
+	require.EqualValues(blk.Header.IORoot, parent.Block.Header.IORoot, "block I/O root")
+	require.EqualValues(blk.Header.StateRoot, parent.Block.Header.StateRoot, "block root hash")
 
-			// Can't directly compare headers, some backends rewrite the timestamp.
-			require.EqualValues(parent.Header.Version, header.Version, "block version")
-			require.EqualValues(parent.Header.Namespace, header.Namespace, "block namespace")
-			require.EqualValues(parent.Header.Round, header.Round, "block round")
-			// Timestamp
-			require.EqualValues(parent.Header.HeaderType, header.HeaderType, "block header type")
-			require.EqualValues(parent.Header.PreviousHash, header.PreviousHash, "block previous hash")
-			require.EqualValues(parent.Header.IORoot, header.IORoot, "block I/O root")
-			require.EqualValues(parent.Header.StateRoot, header.StateRoot, "block root hash")
+	// There should be executor commitment events for all commitments and one finalized event.
+	height := parent.Height
+	s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits}, nil, &finalizedEvent{parent.Block.Header.Round})
 
-			// There should be merge commitment events for all commitments.
-			evts, err := backend.GetEvents(ctx, blk.Height)
-			require.NoError(err, "GetEvents")
-			// Executor commit event + Finalized event.
-			require.Len(evts, len(executorCommits)+1, "should have all events")
-			// First event is Finalized.
-			fev := evts[0].Finalized
-			require.EqualValues(header.Round, fev.Round, "finalized event should have the right round")
-			for i, ev := range evts[1:] {
-				switch {
-				case ev.ExecutorCommitted != nil:
-					// Executor commitment event.
-					require.EqualValues(executorCommits[i], ev.ExecutorCommitted.Commit, "executor commitment event should have the right commitment")
-				default:
-					// There should be no other event types.
-					t.Fatalf("unexpected event: %+v", ev)
-				}
-			}
+	// Check that the liveness statistics were computed correctly.
+	livenessStatistics := s.livenessStatisticsDiff(t, ctx, backend, parent.Height)
 
-			// Check that the liveness statistics were computed correctly.
-			state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
-				RuntimeID: header.Namespace,
-				Height:    blk.Height,
-			})
-			require.NoError(err, "GetRuntimeState")
-			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
-			require.EqualValues(1, state.LivenessStatistics.TotalRounds)
+	liveRounds := make([]uint64, len(livenessStatistics.LiveRounds))
+	finalizedProposals := make([]uint64, len(livenessStatistics.FinalizedProposals))
+	missedProposals := make([]uint64, len(livenessStatistics.MissedProposals))
 
-			numNodes := len(s.executorCommittee.workers) + len(s.executorCommittee.backupWorkers)
-			require.Len(state.LivenessStatistics.LiveRounds, numNodes)
-			require.Len(state.LivenessStatistics.FinalizedProposals, numNodes)
-			require.Len(state.LivenessStatistics.MissedProposals, numNodes)
-
-			goodRoundsPerNode := make(map[signature.PublicKey]uint64)
-			for i, member := range state.ExecutorPool.Committee.Members {
-				goodRoundsPerNode[member.PublicKey] += state.LivenessStatistics.LiveRounds[i]
-			}
-
-			for nodeID, v := range goodRoundsPerNode {
-				// Workers and backup workers should be considered live as everyone submitted
-				// commitments and there were no discrepancies.
-				require.EqualValues(1, v, "LiveRounds(%s)", nodeID)
-			}
-
-			finalizedProposals := make([]uint64, numNodes)
-			missedProposals := make([]uint64, numNodes)
-
-			schedulerIdx, err := s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 1)
-			require.NoError(err, "TransactionSchedulerIdx")
-			finalizedProposals[schedulerIdx]++ // The first round has been finalized.
-
-			require.EqualValues(finalizedProposals, state.LivenessStatistics.FinalizedProposals, "there should be one finalized proposal")
-			require.EqualValues(missedProposals, state.LivenessStatistics.MissedProposals, "there should be no failed proposals")
-
-			// Nothing more to do after the block was received.
-			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive block")
-		}
+	// All workers and none backup workers should be considered live as every worker submitted
+	// a commitment and there were no discrepancies.
+	for i := range s.executorCommittee.workers {
+		liveRounds[i] = 1
 	}
+
+	schedulerIdx, ok := s.executorCommittee.committee.SchedulerIdx(parent.Block.Header.Round, 0)
+	require.True(ok, "SchedulerIdx")
+	finalizedProposals[schedulerIdx]++
+
+	require.Equal(uint64(1), livenessStatistics.TotalRounds, "there should be one finalized round")
+	require.EqualValues(liveRounds, livenessStatistics.LiveRounds, "there should be no live members")
+	require.EqualValues(finalizedProposals, livenessStatistics.FinalizedProposals, "there should be one finalized proposal")
+	require.EqualValues(missedProposals, livenessStatistics.MissedProposals, "there should be no failed proposals")
 }
 
 func testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
 	for _, state := range states {
-		state.testRoundTimeout(t, backend, consensus)
+		for _, rank := range []uint64{0, 1, 2} {
+			state.testRoundTimeout(t, backend, consensus, rank)
+		}
 	}
 }
 
-func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
+func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, rank uint64) {
 	require := require.New(t)
-
-	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
-		RuntimeID: s.rt.Runtime.ID,
-		Height:    consensusAPI.HeightLatest,
-	})
-	require.NoError(err, "GetLatestBlock")
-
-	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
-	require.NoError(err, "WatchBlocks")
-	defer sub.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
 	defer cancel()
 
-	// Only submit a single commitment to cause a timeout.
-	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child)
-	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
-	require.NoError(err, "ExecutorCommit")
-
-	// Wait for RoundTimeout consensus blocks to pass.
-	consBlkCh, consBlkSub, err := consensus.WatchBlocks(context.Background())
+	ch, sub, err := backend.WatchBlocks(ctx, s.rt.Runtime.ID)
 	require.NoError(err, "WatchBlocks")
-	defer consBlkSub.Close()
+	defer sub.Close()
 
-	var startBlock int64
-WaitForRoundTimeoutBlocks:
-	for {
-		select {
-		case blk := <-consBlkCh:
-			if blk == nil {
-				t.Fatalf("block channel closed before reaching round timeout")
-			}
-			if startBlock == 0 {
-				startBlock = blk.Height
-			}
-			// We wait for 2.5*RoundTimeout blocks as the first timeout will trigger discrepancy
-			// resolution and the second timeout (slightly longer) will trigger a round failure.
-			if blk.Height-startBlock > (25*s.rt.Runtime.Executor.RoundTimeout)/10 {
-				break WaitForRoundTimeoutBlocks
-			}
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive consensus block")
-		}
+	// Fetch the last block.
+	child, err := nextRuntimeBlock(ch, nil)
+	require.NoError(err, "nextRuntimeBlock")
+
+	// verifyLivenessStatistics verifies liveness statistics, i.e. that the scheduler missed
+	// a proposal because of the round timeout.
+	verifyLivenessStatistics := func(blk *api.AnnotatedBlock) {
+		livenessStatistics := s.livenessStatisticsDiff(t, ctx, backend, blk.Height)
+
+		liveRounds := make([]uint64, len(livenessStatistics.LiveRounds))
+		finalizedProposals := make([]uint64, len(livenessStatistics.FinalizedProposals))
+		missedProposals := make([]uint64, len(livenessStatistics.MissedProposals))
+
+		var schedulerIdx int
+		schedulerIdx, ok := s.executorCommittee.committee.SchedulerIdx(blk.Block.Header.Round, 0)
+		require.True(ok, "SchedulerIdx")
+		missedProposals[schedulerIdx]++
+
+		require.Zero(livenessStatistics.TotalRounds, "there should be no finalized rounds")
+		require.EqualValues(liveRounds, livenessStatistics.LiveRounds, "there should be no live members")
+		require.EqualValues(finalizedProposals, livenessStatistics.FinalizedProposals, "there should be no new finalized proposals")
+		require.EqualValues(missedProposals, livenessStatistics.MissedProposals, "there should be one extra missed proposal")
 	}
 
-	// Ensure that the round failed due to a timeout.
-	for {
-		select {
-		case blk := <-ch:
-			header := blk.Block.Header
+	var parent *api.AnnotatedBlock
 
-			// Skip initial round.
-			if header.Round == child.Header.Round {
-				continue
-			}
+	t.Run(fmt.Sprintf("Single commitment, scheduler rank %d", rank), func(t *testing.T) {
+		// Submit one commitment and wait for a double timeout (worker + backup worker timeout).
+		_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child.Block, rank)
+		require.Equal(executorCommits[0].NodeID, executorCommits[0].Header.SchedulerID)
 
-			// Next round must be a failure.
-			require.EqualValues(child.Header.Round+1, header.Round, "block round")
-			require.EqualValues(block.RoundFailed, header.HeaderType, "block header type must be RoundFailed")
+		tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
+		err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
+		require.NoError(err, "ExecutorCommit")
 
-			// Check that the liveness statistics were computed correctly.
-			state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
-				RuntimeID: header.Namespace,
-				Height:    blk.Height,
-			})
-			require.NoError(err, "GetRuntimeState")
-			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
-			require.EqualValues(1, state.LivenessStatistics.TotalRounds, "timed out round should not count for liveness")
+		// Ensure that the round failed.
+		parent, err = nextRuntimeBlock(ch, nil)
+		require.NoError(err, "nextRuntimeBlock")
 
-			numNodes := len(s.executorCommittee.workers) + len(s.executorCommittee.backupWorkers)
-			require.Len(state.LivenessStatistics.LiveRounds, numNodes)
-			require.Len(state.LivenessStatistics.FinalizedProposals, numNodes)
-			require.Len(state.LivenessStatistics.MissedProposals, numNodes)
+		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
 
-			finalizedProposals := make([]uint64, numNodes)
-			missedProposals := make([]uint64, numNodes)
+		// Check that round was finalized after 2.5*RoundTimeout blocks.
+		height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
+		s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:1]}, nil, nil)
 
-			schedulerIdx, err := s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 2)
-			require.NoError(err, "TransactionSchedulerIdx")
-			finalizedProposals[schedulerIdx]++ // The first round has been finalized.
+		// Check that discrepancy resolution started after RoundTimeout blocks.
+		height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
+		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
 
-			schedulerIdx, err = s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 1)
-			require.NoError(err, "TransactionSchedulerIdx")
-			missedProposals[schedulerIdx]++ // The second round failed due to a timeout.
+		// Check that the liveness statistics were computed correctly.
+		verifyLivenessStatistics(parent)
 
-			require.EqualValues(finalizedProposals, state.LivenessStatistics.FinalizedProposals, "there should be one finalized proposal")
-			require.EqualValues(missedProposals, state.LivenessStatistics.MissedProposals, "there should be one failed proposal")
+		child = parent
+	})
 
-			// Nothing more to do after the block was received.
-			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive runtime block")
+	t.Run(fmt.Sprintf("Discrepant commitments, scheduler rank %d", rank), func(t *testing.T) {
+		// Submit two discrepant commitments to immediately trigger discrepancy resolution
+		// and wait for a single timeout (backup worker timeout).
+		_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child.Block, rank)
+		require.Equal(executorCommits[0].NodeID, executorCommits[0].Header.SchedulerID)
+
+		// Corrupt one commitment.
+		executorCommits[0].Header.Header.InMessagesCount++
+		err = executorCommits[0].Sign(executorNodes[0].Signer, s.rt.Runtime.ID)
+		require.NoError(err, "ec.Sign")
+
+		tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:2])
+		err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
+		require.NoError(err, "ExecutorCommit")
+
+		// Ensure that the round failed.
+		parent, err = nextRuntimeBlock(ch, nil)
+		require.NoError(err, "nextRuntimeBlock")
+
+		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
+
+		// Backup schedulers should wait for a double timeout.
+		switch rank {
+		case 0:
+			// Check that round was finalized after 1.5*RoundTimeout blocks and that discrepancy
+			// resolution started immediately.
+			height := parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
+			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, &discrepancyEvent{false, rank}, nil)
+		default:
+			// Check that round was finalized after 2.5*RoundTimeout blocks.
+			height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
+			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, nil, nil)
+
+			// Check that discrepancy resolution started after RoundTimeout blocks.
+			height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
+			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
+
 		}
-	}
+
+		// Check that the liveness statistics were updated correctly.
+		verifyLivenessStatistics(parent)
+
+		child = parent
+	})
+
+	t.Run(fmt.Sprintf("Single failure, scheduler rank %d", rank), func(t *testing.T) {
+		// Submit one failure based on a proposal from the primary scheduler and wait for
+		// a double timeout (worker timeout + backup worker timeout).
+		_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child.Block, rank)
+		require.Equal(executorCommits[0].NodeID, executorCommits[0].Header.SchedulerID)
+
+		// Change one commitment to a failure.
+		commitmentToFailure(&executorCommits[1])
+		err = executorCommits[1].Sign(executorNodes[1].Signer, s.rt.Runtime.ID)
+		require.NoError(err, "ec.Sign")
+
+		tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:2])
+		err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
+		require.NoError(err, "ExecutorCommit")
+
+		// Ensure that the round failed.
+		parent, err = nextRuntimeBlock(ch, nil)
+		require.NoError(err, "nextRuntimeBlock")
+
+		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
+
+		// Check that round was finalized after 2.5*RoundTimeout blocks.
+		height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
+		s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, nil, nil)
+
+		// Check that discrepancy resolution started after RoundTimeout blocks.
+		height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
+		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
+
+		// Check that the liveness statistics were computed correctly.
+		verifyLivenessStatistics(parent)
+
+		child = parent
+	})
+
+	t.Run(fmt.Sprintf("Numerous failures, scheduler rank %d", rank), func(t *testing.T) {
+		// Submit enough failures based on a proposal from the primary scheduler to immediately
+		// trigger discrepancy resolution and wait for a single timeout (backup worker timeout).
+		_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child.Block, rank)
+		require.Equal(executorCommits[0].NodeID, executorCommits[0].Header.SchedulerID)
+
+		// Change commitments to failures.
+		commitmentToFailure(&executorCommits[1])
+		err = executorCommits[1].Sign(executorNodes[1].Signer, s.rt.Runtime.ID)
+		require.NoError(err, "ec.Sign")
+
+		commitmentToFailure(&executorCommits[2])
+		err = executorCommits[2].Sign(executorNodes[2].Signer, s.rt.Runtime.ID)
+		require.NoError(err, "ec.Sign")
+
+		tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:3])
+		err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
+		require.NoError(err, "ExecutorCommit")
+
+		// Ensure that the round failed.
+		parent, err = nextRuntimeBlock(ch, nil)
+		require.NoError(err, "nextRuntimeBlock")
+
+		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
+
+		// Backup schedulers should wait for a double timeout.
+		switch rank {
+		case 0:
+			// Check that round was finalized after 1.5*RoundTimeout blocks and that discrepancy
+			// resolution started immediately.
+			height := parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
+			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:3]}, &discrepancyEvent{false, rank}, nil)
+		default:
+			// Check that round was finalized after 2.5*RoundTimeout blocks.
+			height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
+			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:3]}, nil, nil)
+
+			// Check that discrepancy resolution started after RoundTimeout blocks.
+			height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
+			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
+
+		}
+
+		// Check that the liveness statistics were updated correctly.
+		verifyLivenessStatistics(parent)
+
+		child = parent
+	})
 }
 
 func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
@@ -571,200 +749,49 @@ func testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, cons
 func (s *runtimeState) testRoundTimeoutWithEpochTransition(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
 	require := require.New(t)
 
-	child, err := backend.GetLatestBlock(context.Background(), &api.RuntimeRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
+	defer cancel()
+
+	ch, sub, err := backend.WatchBlocks(ctx, s.rt.Runtime.ID)
+	require.NoError(err, "WatchBlocks")
+	defer sub.Close()
+
+	blk, err := backend.GetLatestBlock(ctx, &api.RuntimeRequest{
 		RuntimeID: s.rt.Runtime.ID,
 		Height:    consensusAPI.HeightLatest,
 	})
 	require.NoError(err, "GetLatestBlock")
 
-	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
-	require.NoError(err, "WatchBlocks")
-	defer sub.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*recvTimeout)
-	defer cancel()
+	// Fetch the last block.
+	child, err := nextRuntimeBlock(ch, blk) // WatchBlocks has latency, so wait for the last epoch transition block to be sent to the channel.
+	require.NoError(err, "nextRuntimeBlock")
 
 	// Only submit a single commitment to cause a timeout.
-	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child)
+	_, executorCommits, executorNodes := s.generateExecutorCommitments(t, consensus, child.Block, 0)
 	tx := api.NewExecutorCommitTx(0, nil, s.rt.Runtime.ID, executorCommits[:1])
 	err = consensusAPI.SignAndSubmitTx(ctx, consensus, executorNodes[0].Signer, tx)
 	require.NoError(err, "ExecutorCommit")
 
-	consBlkCh, consBlkSub, err := consensus.WatchBlocks(context.Background())
+	// Wait few consensus blocks.
+	consCh, consSub, err := consensus.WatchBlocks(ctx)
 	require.NoError(err, "WatchBlocks")
-	defer consBlkSub.Close()
+	defer consSub.Close()
 
-	var startBlock int64
-WaitForRoundTimeoutBlocks:
-	for {
-		select {
-		case blk := <-consBlkCh:
-			if blk == nil {
-				t.Fatalf("block channel closed before reaching round timeout")
-			}
-			if startBlock == 0 {
-				startBlock = blk.Height
-			}
-			if blk.Height-startBlock > s.rt.Runtime.Executor.RoundTimeout/2 {
-				break WaitForRoundTimeoutBlocks
-			}
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive consensus block")
-		}
+	for i := 0; i < int(s.rt.Runtime.Executor.RoundTimeout/2); i++ {
+		_, err = nextConsensusBlock(consCh)
+		require.NoError(err, "nextConsensusBlock")
 	}
 
 	// Trigger an epoch transition while the timeout is armed.
 	timeSource := consensus.Beacon().(beacon.SetableBackend)
 	beaconTests.MustAdvanceEpoch(t, timeSource)
 
-	// Ensure that the epoch transition was processed correctly.
-	for {
-		select {
-		case blk := <-ch:
-			header := blk.Block.Header
+	// Next round must be an epoch transition.
+	parent, err := nextRuntimeBlock(ch, nil)
+	require.NoError(err, "nextRuntimeBlock")
 
-			// Skip initial rounds.
-			if header.Round <= child.Header.Round {
-				continue
-			}
-
-			// Next round must be an epoch transition.
-			require.EqualValues(child.Header.Round+1, header.Round, "block round")
-			require.EqualValues(block.EpochTransition, header.HeaderType, "block header type must be EpochTransition")
-
-			// Nothing more to do after the block was received.
-			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive runtime block")
-		}
-	}
-}
-
-func testProposerTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend, states []*runtimeState) {
-	for _, state := range states {
-		state.testProposerTimeout(t, backend, consensus)
-	}
-}
-
-func (s *runtimeState) testProposerTimeout(t *testing.T, backend api.Backend, consensus consensusAPI.Backend) {
-	require := require.New(t)
-	ctx := context.Background()
-
-	child, err := backend.GetLatestBlock(ctx, &api.RuntimeRequest{
-		RuntimeID: s.rt.Runtime.ID,
-		Height:    consensusAPI.HeightLatest,
-	})
-	require.NoError(err, "GetLatestBlock")
-
-	ch, sub, err := backend.WatchBlocks(context.Background(), s.rt.Runtime.ID)
-	require.NoError(err, "WatchBlocks")
-	defer sub.Close()
-
-	// Wait for enough blocks so we can force trigger a timeout.
-	consBlkCh, blocksSub, err := consensus.WatchBlocks(ctx)
-	require.NoError(err, "consensus.WatchBlocks")
-	defer blocksSub.Close()
-
-	var startBlock int64
-WaitForProposerTimeoutBlocks:
-	for {
-		select {
-		case blk := <-consBlkCh:
-			if blk == nil {
-				t.Fatalf("block channel closed before reaching round timeout")
-			}
-			if startBlock == 0 {
-				// XXX: Would be better to get the height of the latest roothash block,
-				// and wait based on that. But we don't get that height unless we
-				// Watch roothash blocks.
-				startBlock = blk.Height
-			}
-
-			// Wait for enough blocks so that proposer timeout is allowed.
-			if blk.Height >= startBlock+s.rt.Runtime.TxnScheduler.ProposerTimeout {
-				break WaitForProposerTimeoutBlocks
-			}
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive consensus block")
-		}
-	}
-
-	// Get scheduler at round.
-	var scheduler *scheduler.CommitteeNode
-	scheduler, err = s.executorCommittee.committee.TransactionScheduler(child.Header.Round)
-	require.NoError(err, "roothash.TransactionScheduler")
-
-	// Select node to trigger timeout.
-	var timeoutNode *registryTests.TestNode
-	for _, node := range s.executorCommittee.workers {
-		// Take first node that isn't the scheduler.
-		if !node.Signer.Public().Equal(scheduler.PublicKey) {
-			nd := node
-			timeoutNode = nd
-			break
-		}
-	}
-	require.NotNil(timeoutNode, "No nodes that aren't transaction scheduler among test nodes")
-
-	ctx, cancel := context.WithTimeout(ctx, 5*recvTimeout)
-	defer cancel()
-
-	tx := api.NewRequestProposerTimeoutTx(0, nil, s.rt.Runtime.ID, child.Header.Round)
-	err = consensusAPI.SignAndSubmitTx(ctx, consensus, timeoutNode.Signer, tx)
-	require.NoError(err, "ExecutorTimeout")
-
-	// Ensure that the round failed due to a proposer timeout.
-	for {
-		select {
-		case blk := <-ch:
-			header := blk.Block.Header
-
-			// Skip initial round.
-			if header.Round == child.Header.Round {
-				continue
-			}
-
-			// Next round must be a failure.
-			require.EqualValues(child.Header.Round+1, header.Round, "block round")
-			require.EqualValues(block.RoundFailed, header.HeaderType, "block header type must be RoundFailed")
-
-			// Check that the liveness statistics were computed correctly.
-			state, err := backend.GetRuntimeState(ctx, &api.RuntimeRequest{
-				RuntimeID: header.Namespace,
-				Height:    blk.Height,
-			})
-			require.NoError(err, "GetRuntimeState")
-			require.NotNil(state.LivenessStatistics, "liveness statistics should be set")
-
-			numNodes := len(s.executorCommittee.workers) + len(s.executorCommittee.backupWorkers)
-			require.Len(state.LivenessStatistics.LiveRounds, numNodes)
-			require.Len(state.LivenessStatistics.FinalizedProposals, numNodes)
-			require.Len(state.LivenessStatistics.MissedProposals, numNodes)
-
-			finalizedProposals := make([]uint64, numNodes)
-			missedProposals := make([]uint64, numNodes)
-
-			schedulerIdx, err := s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 3)
-			require.NoError(err, "TransactionSchedulerIdx")
-			finalizedProposals[schedulerIdx]++ // The first round has been finalized.
-
-			schedulerIdx, err = s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 2)
-			require.NoError(err, "TransactionSchedulerIdx")
-			missedProposals[schedulerIdx]++ // The second round failed due to a timeout.
-
-			schedulerIdx, err = s.executorCommittee.committee.TransactionSchedulerIdx(header.Round - 1)
-			require.NoError(err, "TransactionSchedulerIdx")
-			missedProposals[schedulerIdx]++ // The third round failed due to a proposer timeout.
-
-			require.EqualValues(finalizedProposals, state.LivenessStatistics.FinalizedProposals, "there should be one finalized proposal")
-			require.EqualValues(missedProposals, state.LivenessStatistics.MissedProposals, "there should be two failed proposals")
-
-			// Nothing more to do after the failed block was received.
-			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive block")
-		}
-	}
+	require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+	require.EqualValues(block.EpochTransition, parent.Block.Header.HeaderType, "block header type must be EpochTransition")
 }
 
 type testCommittee struct {
@@ -851,7 +878,7 @@ func MustTransitionEpoch(
 	ctx, cancel := context.WithTimeout(context.Background(), recvTimeout)
 	defer cancel()
 
-	blocksCh, sub, err := roothash.WatchBlocks(context.Background(), runtimeID)
+	ch, sub, err := roothash.WatchBlocks(ctx, runtimeID)
 	require.NoError(err, "WatchBlocks")
 	defer sub.Close()
 
@@ -860,17 +887,14 @@ func MustTransitionEpoch(
 	// on the off chance that we are already past the epoch transition
 	// block being broadcast.
 	for {
-		select {
-		case annBlk := <-blocksCh:
-			blkEpoch, err := backend.GetEpoch(ctx, annBlk.Height)
-			require.NoError(err, "GetEpoch")
-			if blkEpoch < epoch {
-				continue
-			}
+		blk, err := nextRuntimeBlock(ch, nil)
+		require.NoError(err, "nextRuntimeBlock")
 
+		blkEpoch, err := backend.GetEpoch(ctx, blk.Height)
+		require.NoError(err, "GetEpoch")
+
+		if blkEpoch >= epoch {
 			return
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive epoch transition block")
 		}
 	}
 }
@@ -969,4 +993,46 @@ WaitLoop:
 	})
 	require.NoError(err, "staking.Account(runtimeAddr)")
 	require.EqualValues(escrow.Amount, runtimeAcc.General.Balance, "Runtime account expected salshed balance")
+}
+
+// nextRuntimeBlock return the next runtime block starting at the given block.
+func nextRuntimeBlock(ch <-chan *api.AnnotatedBlock, start *block.Block) (*api.AnnotatedBlock, error) {
+	for {
+		select {
+		case blk, ok := <-ch:
+			if !ok {
+				return nil, fmt.Errorf("runtime block channel closed")
+			}
+			if start != nil && blk.Block.Header.Round < start.Header.Round {
+				continue
+			}
+			return blk, nil
+		case <-time.After(recvTimeout):
+			return nil, fmt.Errorf("failed to receive runtime block")
+		}
+	}
+}
+
+// nextConsensusBlock return the next consensus block.
+func nextConsensusBlock(ch <-chan *consensusAPI.Block) (*consensusAPI.Block, error) {
+	for {
+		select {
+		case blk, ok := <-ch:
+			if !ok {
+				return nil, fmt.Errorf("consensus block channel closed")
+			}
+			return blk, nil
+		case <-time.After(recvTimeout):
+			return nil, fmt.Errorf("failed to receive consensus block")
+		}
+	}
+}
+
+// commitmentToFailure transforms the given executor commitment to a failure.
+func commitmentToFailure(commit *commitment.ExecutorCommitment) {
+	commit.Header.Failure = commitment.FailureUnknown
+	commit.Header.Header.IORoot = nil
+	commit.Header.Header.StateRoot = nil
+	commit.Header.Header.MessagesHash = nil
+	commit.Header.Header.InMessagesHash = nil
 }

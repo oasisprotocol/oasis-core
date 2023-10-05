@@ -76,7 +76,7 @@ var (
 			MaxBatchSize:      1,
 			MaxBatchSizeBytes: 1024,
 			BatchFlushTimeout: 20 * time.Second,
-			ProposerTimeout:   20,
+			ProposerTimeout:   40 * time.Second,
 		},
 		AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 			AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
@@ -356,7 +356,7 @@ func testSchedulerClient(t *testing.T, node *testNode) {
 }
 
 func testStaking(t *testing.T, node *testNode) {
-	stakingTests.StakingImplementationTests(t, node.Consensus.Staking(), node.Consensus, node.Identity, node.entity, testRuntimeID)
+	stakingTests.StakingImplementationTests(t, node.Consensus.Staking(), node.Consensus, node.Identity, node.entity)
 }
 
 func testStakingClient(t *testing.T, node *testNode) {

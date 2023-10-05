@@ -95,8 +95,8 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 			TxnScheduler: registry.TxnSchedulerParameters{
 				MaxBatchSize:      100,
 				MaxBatchSizeBytes: 1024 * 1024,
-				BatchFlushTimeout: 1 * time.Second,
-				ProposerTimeout:   10,
+				BatchFlushTimeout: time.Second,
+				ProposerTimeout:   2 * time.Second,
 			},
 			AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
@@ -287,18 +287,9 @@ func (sc *runtimeGovernanceImpl) Run(ctx context.Context, _ *env.Env) error {
 	rtNonce++
 
 	// Wait for next round.
-	for {
-		select {
-		case blk := <-blkCh:
-			sc.Logger.Debug("round transition", "round", blk.Block.Header.Round)
-			if blk.Block.Header.Round <= meta.Round {
-				continue
-			}
-		case <-time.After(waitTimeout):
-			return fmt.Errorf("timed out waiting for runtime rounds")
-		}
-
-		break
+	_, err = sc.WaitRuntimeBlock(blkCh, meta.Round+1)
+	if err != nil {
+		return err
 	}
 
 	// Verify that the descriptor was updated.
@@ -344,19 +335,11 @@ func (sc *runtimeGovernanceImpl) Run(ctx context.Context, _ *env.Env) error {
 		return err
 	}
 
-	// Wait for next round.
-	for {
-		select {
-		case blk := <-blkCh:
-			sc.Logger.Debug("round transition", "round", blk.Block.Header.Round)
-			if blk.Block.Header.Round <= meta.Round {
-				continue
-			}
-		case <-time.After(waitTimeout):
-			return fmt.Errorf("timed out waiting for runtime rounds")
-		}
-
-		break
+	// The bogus update should cause the runtime to panic, which will result
+	// in no more blocks being produced.
+	blk, err := sc.WaitRuntimeBlock(blkCh, meta.Round+1)
+	if err == nil {
+		return fmt.Errorf("unexpected round %d, the bogus update should cause the runtime to panic", blk.Block.Header.Round)
 	}
 
 	sc.Logger.Info("checking that the update didn't succeed")

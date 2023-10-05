@@ -27,7 +27,7 @@ func PublicKeyToPeerID(pk signature.PublicKey) (core.PeerID, error) {
 }
 
 // PublicKeyMapToPeerIDs converts a map of public keys to a list of peer identifiers.
-func PublicKeyMapToPeerIDs(pks map[signature.PublicKey]bool) ([]core.PeerID, error) {
+func PublicKeyMapToPeerIDs(pks map[signature.PublicKey]struct{}) ([]core.PeerID, error) {
 	ids := make([]core.PeerID, 0, len(pks))
 	for pk := range pks {
 		id, err := PublicKeyToPeerID(pk)

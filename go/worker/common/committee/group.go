@@ -37,8 +37,8 @@ type CommitteeInfo struct { // nolint: revive
 	Indices    []int
 	Roles      []scheduler.Role
 	Committee  *scheduler.Committee
-	PublicKeys map[signature.PublicKey]bool
-	Peers      map[signature.PublicKey]bool
+	PublicKeys map[signature.PublicKey]struct{}
+	Peers      map[signature.PublicKey]struct{}
 }
 
 // HasRole checks whether the node has the given role.
@@ -134,19 +134,6 @@ func (e *EpochSnapshot) IsExecutorBackupWorker() bool {
 	return e.executorCommittee.HasRole(scheduler.RoleBackupWorker)
 }
 
-// IsTransactionScheduler checks if the current node is a a transaction scheduler
-// at the specific runtime round.
-func (e *EpochSnapshot) IsTransactionScheduler(round uint64) bool {
-	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
-		return false
-	}
-	scheduler, err := e.executorCommittee.Committee.TransactionScheduler(round)
-	if err != nil {
-		return false
-	}
-	return scheduler.PublicKey.Equal(e.identity.NodeSigner.Public())
-}
-
 // Nodes returns a node descriptor lookup interface.
 func (e *EpochSnapshot) Nodes() nodes.NodeDescriptorLookup {
 	return e.nodes
@@ -161,22 +148,6 @@ func (e *EpochSnapshot) Node(_ context.Context, id signature.PublicKey) (*node.N
 		return nil, registry.ErrNoSuchNode
 	}
 	return n, nil
-}
-
-// VerifyTxnSchedulerSigner verifies that the given signature comes from
-// the transaction scheduler at provided round.
-func (e *EpochSnapshot) VerifyTxnSchedulerSigner(id signature.PublicKey, round uint64) error {
-	if e.executorCommittee == nil || e.executorCommittee.Committee == nil {
-		return fmt.Errorf("epoch: no active transaction scheduler")
-	}
-	scheduler, err := e.executorCommittee.Committee.TransactionScheduler(round)
-	if err != nil {
-		return fmt.Errorf("epoch: error getting transaction scheduler: %w", err)
-	}
-	if !scheduler.PublicKey.Equal(id) {
-		return fmt.Errorf("epoch: signature is not from the transaction scheduler at round: %d", round)
-	}
-	return nil
 }
 
 // Group encapsulates communication with a group of nodes in the runtime committees.
@@ -270,10 +241,10 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 			roles   []scheduler.Role
 			indices []int
 		)
-		publicKeys := make(map[signature.PublicKey]bool)
-		peers := make(map[signature.PublicKey]bool)
+		publicKeys := make(map[signature.PublicKey]struct{})
+		peers := make(map[signature.PublicKey]struct{})
 		for index, member := range cm.Members {
-			publicKeys[member.PublicKey] = true
+			publicKeys[member.PublicKey] = struct{}{}
 			if member.PublicKey.Equal(publicIdentity) {
 				roles = append(roles, member.Role)
 				indices = append(indices, index)
@@ -285,7 +256,7 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 				return fmt.Errorf("group: failed to fetch node info: %w", err)
 			}
 
-			peers[n.P2P.ID] = true
+			peers[n.P2P.ID] = struct{}{}
 		}
 
 		ci := &CommitteeInfo{

@@ -73,14 +73,14 @@ func (knw *kmNodeWatcher) watchNodes() {
 
 		// Rebuild the access policy, something has changed.
 		var nodes []*node.Node
-		peers := make(map[signature.PublicKey]bool)
+		peers := make(map[signature.PublicKey]struct{})
 		for id := range activeNodes {
 			n := watcher.Lookup(id)
 			if n == nil {
 				continue
 			}
 			nodes = append(nodes, n)
-			peers[n.P2P.ID] = true
+			peers[n.P2P.ID] = struct{}{}
 		}
 
 		knw.w.setAccessList(knw.w.runtimeID, nodes)

@@ -42,7 +42,7 @@ func TestRuntimeSerialization(t *testing.T) {
 			AdmissionPolicy: RuntimeAdmissionPolicy{
 				AnyNode: &AnyNodeRuntimeAdmissionPolicy{},
 			},
-		}, "q2F2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAbXR4bl9zY2hlZHVsZXKkbm1heF9iYXRjaF9zaXplAHNiYXRjaF9mbHVzaF90aW1lb3V0AHRtYXhfYmF0Y2hfc2l6ZV9ieXRlcwB1cHJvcG9zZV9iYXRjaF90aW1lb3V0AHBhZG1pc3Npb25fcG9saWN5oWhhbnlfbm9kZaBwZ292ZXJuYW5jZV9tb2RlbAA="},
+		}, "qmF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA=="},
 		{Runtime{
 			AdmissionPolicy: RuntimeAdmissionPolicy{
 				AnyNode: &AnyNodeRuntimeAdmissionPolicy{},
@@ -54,7 +54,7 @@ func TestRuntimeSerialization(t *testing.T) {
 				RewardSlashEquvocationRuntimePercent: 0,
 				MinInMessageFee:                      quantity.Quantity{},
 			},
-		}, "q2F2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAbXR4bl9zY2hlZHVsZXKkbm1heF9iYXRjaF9zaXplAHNiYXRjaF9mbHVzaF90aW1lb3V0AHRtYXhfYmF0Y2hfc2l6ZV9ieXRlcwB1cHJvcG9zZV9iYXRjaF90aW1lb3V0AHBhZG1pc3Npb25fcG9saWN5oWhhbnlfbm9kZaBwZ292ZXJuYW5jZV9tb2RlbAA="},
+		}, "qmF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA=="},
 		{Runtime{
 			AdmissionPolicy: RuntimeAdmissionPolicy{
 				AnyNode: &AnyNodeRuntimeAdmissionPolicy{},
@@ -66,7 +66,7 @@ func TestRuntimeSerialization(t *testing.T) {
 				RewardSlashEquvocationRuntimePercent: 0,
 				MinInMessageFee:                      quantity.Quantity{},
 			},
-		}, "rGF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0YWtpbmehcnJld2FyZF9iYWRfcmVzdWx0cwpnc3RvcmFnZaNzY2hlY2twb2ludF9pbnRlcnZhbABzY2hlY2twb2ludF9udW1fa2VwdAB1Y2hlY2twb2ludF9jaHVua19zaXplAGhleGVjdXRvcqVqZ3JvdXBfc2l6ZQBsbWF4X21lc3NhZ2VzAG1yb3VuZF90aW1lb3V0AHFncm91cF9iYWNrdXBfc2l6ZQByYWxsb3dlZF9zdHJhZ2dsZXJzAGllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbHRlZV9oYXJkd2FyZQBtdHhuX3NjaGVkdWxlcqRubWF4X2JhdGNoX3NpemUAc2JhdGNoX2ZsdXNoX3RpbWVvdXQAdG1heF9iYXRjaF9zaXplX2J5dGVzAHVwcm9wb3NlX2JhdGNoX3RpbWVvdXQAcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA=="},
+		}, "q2F2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0YWtpbmehcnJld2FyZF9iYWRfcmVzdWx0cwpnc3RvcmFnZaNzY2hlY2twb2ludF9pbnRlcnZhbABzY2hlY2twb2ludF9udW1fa2VwdAB1Y2hlY2twb2ludF9jaHVua19zaXplAGhleGVjdXRvcqVqZ3JvdXBfc2l6ZQBsbWF4X21lc3NhZ2VzAG1yb3VuZF90aW1lb3V0AHFncm91cF9iYWNrdXBfc2l6ZQByYWxsb3dlZF9zdHJhZ2dsZXJzAGllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbHRlZV9oYXJkd2FyZQBwYWRtaXNzaW9uX3BvbGljeaFoYW55X25vZGWgcGdvdmVybmFuY2VfbW9kZWwA"},
 		{Runtime{
 			Versioned: cbor.NewVersioned(42),
 			EntityID:  signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000"),
@@ -101,11 +101,11 @@ func TestRuntimeSerialization(t *testing.T) {
 				MaxLivenessFailures:        1,
 			},
 			TxnScheduler: TxnSchedulerParameters{
-				BatchFlushTimeout: 1 * time.Second,
+				BatchFlushTimeout: time.Second,
 				MaxBatchSize:      10_000,
 				MaxBatchSizeBytes: 10_000_000,
 				MaxInMessages:     32,
-				ProposerTimeout:   1,
+				ProposerTimeout:   2 * time.Second,
 			},
 			Storage: StorageParameters{
 				CheckpointInterval:  33,
@@ -145,7 +145,7 @@ func TestRuntimeSerialization(t *testing.T) {
 				RewardSlashEquvocationRuntimePercent: 0,
 				MinInMessageFee:                      quantity.Quantity{},
 			},
-		}, "r2F2GCpiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZGtpbmQCZ2dlbmVzaXOiZXJvdW5kGCtqc3RhdGVfcm9vdFggseUhAZ+3vd413IH+55BlYQy937jvXCXihJg2aBkqbQ1nc3Rha2luZ6FycmV3YXJkX2JhZF9yZXN1bHRzCmdzdG9yYWdlo3NjaGVja3BvaW50X2ludGVydmFsGCFzY2hlY2twb2ludF9udW1fa2VwdAZ1Y2hlY2twb2ludF9jaHVua19zaXplGGVoZXhlY3V0b3Kpamdyb3VwX3NpemUJbG1heF9tZXNzYWdlcwVtcm91bmRfdGltZW91dAZxZ3JvdXBfYmFja3VwX3NpemUIcmFsbG93ZWRfc3RyYWdnbGVycwdybWF4X2xpdmVuZXNzX2ZhaWxzAXRtaW5fbGl2ZV9yb3VuZHNfZXZhbAJ3bWluX2xpdmVfcm91bmRzX3BlcmNlbnQEeBxtYXhfbWlzc2VkX3Byb3Bvc2Fsc19wZXJjZW50A2llbnRpdHlfaWRYIBI0VniQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa2NvbnN0cmFpbnRzoQGhAaNpbWF4X25vZGVzoWVsaW1pdAptbWluX3Bvb2xfc2l6ZaFlbGltaXQFbXZhbGlkYXRvcl9zZXSga2RlcGxveW1lbnRzgaRjdGVlS3ZlcnNpb24gdGVlZ3ZlcnNpb26iZW1ham9yGCxlcGF0Y2gBanZhbGlkX2Zyb20Ab2J1bmRsZV9jaGVja3N1bVggAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQFra2V5X21hbmFnZXJYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABbHRlZV9oYXJkd2FyZQFtdHhuX3NjaGVkdWxlcqVubWF4X2JhdGNoX3NpemUZJxBvbWF4X2luX21lc3NhZ2VzGCBzYmF0Y2hfZmx1c2hfdGltZW91dBo7msoAdG1heF9iYXRjaF9zaXplX2J5dGVzGgCYloB1cHJvcG9zZV9iYXRjaF90aW1lb3V0AXBhZG1pc3Npb25fcG9saWN5oXBlbnRpdHlfd2hpdGVsaXN0oWhlbnRpdGllc6FYIBI0VniQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoWltYXhfbm9kZXOiAQMEAXBnb3Zlcm5hbmNlX21vZGVsAw=="},
+		}, "r2F2GCpiaWRYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZGtpbmQCZ2dlbmVzaXOiZXJvdW5kGCtqc3RhdGVfcm9vdFggseUhAZ+3vd413IH+55BlYQy937jvXCXihJg2aBkqbQ1nc3Rha2luZ6FycmV3YXJkX2JhZF9yZXN1bHRzCmdzdG9yYWdlo3NjaGVja3BvaW50X2ludGVydmFsGCFzY2hlY2twb2ludF9udW1fa2VwdAZ1Y2hlY2twb2ludF9jaHVua19zaXplGGVoZXhlY3V0b3Kpamdyb3VwX3NpemUJbG1heF9tZXNzYWdlcwVtcm91bmRfdGltZW91dAZxZ3JvdXBfYmFja3VwX3NpemUIcmFsbG93ZWRfc3RyYWdnbGVycwdybWF4X2xpdmVuZXNzX2ZhaWxzAXRtaW5fbGl2ZV9yb3VuZHNfZXZhbAJ3bWluX2xpdmVfcm91bmRzX3BlcmNlbnQEeBxtYXhfbWlzc2VkX3Byb3Bvc2Fsc19wZXJjZW50A2llbnRpdHlfaWRYIBI0VniQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa2NvbnN0cmFpbnRzoQGhAaNpbWF4X25vZGVzoWVsaW1pdAptbWluX3Bvb2xfc2l6ZaFlbGltaXQFbXZhbGlkYXRvcl9zZXSga2RlcGxveW1lbnRzgaRjdGVlS3ZlcnNpb24gdGVlZ3ZlcnNpb26iZW1ham9yGCxlcGF0Y2gBanZhbGlkX2Zyb20Ab2J1bmRsZV9jaGVja3N1bVggAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQFra2V5X21hbmFnZXJYIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABbHRlZV9oYXJkd2FyZQFtdHhuX3NjaGVkdWxlcqVubWF4X2JhdGNoX3NpemUZJxBvbWF4X2luX21lc3NhZ2VzGCBzYmF0Y2hfZmx1c2hfdGltZW91dBo7msoAdG1heF9iYXRjaF9zaXplX2J5dGVzGgCYloB1cHJvcG9zZV9iYXRjaF90aW1lb3V0Gnc1lABwYWRtaXNzaW9uX3BvbGljeaFwZW50aXR5X3doaXRlbGlzdKFoZW50aXRpZXOhWCASNFZ4kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKFpbWF4X25vZGVzogEDBAFwZ292ZXJuYW5jZV9tb2RlbAM="},
 	} {
 		enc := cbor.Marshal(tc.rr)
 		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
@@ -206,11 +206,11 @@ func TestVerifyRuntime(t *testing.T) {
 					MaxLivenessFailures:        1,
 				},
 				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: 1 * time.Second,
+					BatchFlushTimeout: time.Second,
 					MaxBatchSize:      10_000,
 					MaxBatchSizeBytes: 10_000_000,
 					MaxInMessages:     32,
-					ProposerTimeout:   2,
+					ProposerTimeout:   2 * time.Second,
 				},
 				Storage: StorageParameters{
 					CheckpointInterval:  33,
@@ -289,11 +289,11 @@ func TestVerifyRuntime(t *testing.T) {
 					MaxLivenessFailures:        1,
 				},
 				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: 1 * time.Second,
+					BatchFlushTimeout: time.Second,
 					MaxBatchSize:      10_000,
 					MaxBatchSizeBytes: 10_000_000,
 					MaxInMessages:     32,
-					ProposerTimeout:   2,
+					ProposerTimeout:   2 * time.Second,
 				},
 				Storage: StorageParameters{
 					CheckpointInterval:  33,
@@ -388,11 +388,11 @@ func TestVerifyRuntime(t *testing.T) {
 					MaxLivenessFailures:        1,
 				},
 				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: 1 * time.Second,
+					BatchFlushTimeout: time.Second,
 					MaxBatchSize:      10_000,
 					MaxBatchSizeBytes: 10_000_000,
 					MaxInMessages:     32,
-					ProposerTimeout:   2,
+					ProposerTimeout:   2 * time.Second,
 				},
 				Storage: StorageParameters{
 					CheckpointInterval:  33,
@@ -488,11 +488,11 @@ func TestVerifyRuntime(t *testing.T) {
 					MaxLivenessFailures:        1,
 				},
 				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: 1 * time.Second,
+					BatchFlushTimeout: time.Second,
 					MaxBatchSize:      10_000,
 					MaxBatchSizeBytes: 10_000_000,
 					MaxInMessages:     32,
-					ProposerTimeout:   2,
+					ProposerTimeout:   2 * time.Second,
 				},
 				Storage: StorageParameters{
 					CheckpointInterval:  33,
@@ -591,11 +591,11 @@ func TestVerifyRuntime(t *testing.T) {
 					MaxLivenessFailures:        1,
 				},
 				TxnScheduler: TxnSchedulerParameters{
-					BatchFlushTimeout: 1 * time.Second,
+					BatchFlushTimeout: time.Second,
 					MaxBatchSize:      10_000,
 					MaxBatchSizeBytes: 10_000_000,
 					MaxInMessages:     32,
-					ProposerTimeout:   2,
+					ProposerTimeout:   2 * time.Second,
 				},
 				Storage: StorageParameters{
 					CheckpointInterval:  33,

@@ -22,7 +22,6 @@ import (
 	schedulerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
-	"github.com/oasisprotocol/oasis-core/go/governance/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -166,17 +165,14 @@ func TestMessagesGasEstimation(t *testing.T) {
 	require.NoError(err, "SetConsensusParameters")
 	blk := block.NewGenesisBlock(runtime.ID, 0)
 	err = roothashState.SetRuntimeState(ctx, &roothash.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1,
-		LastNormalRound:    0,
-		LastNormalHeight:   1,
-		ExecutorPool: &commitment.Pool{
-			Runtime:   &runtime,
-			Committee: &executorCommittee,
-			Round:     0,
-		},
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1,
+		LastNormalRound:  0,
+		LastNormalHeight: 1,
+		Committee:        &executorCommittee,
+		CommitmentPool:   commitment.NewPool(),
 	})
 	require.NoError(err, "SetRuntimeState")
 
@@ -197,9 +193,9 @@ func TestMessagesGasEstimation(t *testing.T) {
 		// Each update_runtime message costs 3000 gas.
 		{Registry: &message.RegistryMessage{UpdateRuntime: &registry.Runtime{}}},
 		// Each cast vote message costs 1000 gas.
-		{Governance: &message.GovernanceMessage{CastVote: &api.ProposalVote{}}},
+		{Governance: &message.GovernanceMessage{CastVote: &governance.ProposalVote{}}},
 		// Each submit proposal message costs 2000 gas.
-		{Governance: &message.GovernanceMessage{SubmitProposal: &api.ProposalContent{}}},
+		{Governance: &message.GovernanceMessage{SubmitProposal: &governance.ProposalContent{}}},
 	}
 	msgsHash := message.MessagesHash(msgs)
 
@@ -209,6 +205,7 @@ func TestMessagesGasEstimation(t *testing.T) {
 	ec := commitment.ExecutorCommitment{
 		NodeID: sk.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
+			SchedulerID: sk.Public(),
 			Header: commitment.ComputeResultsHeader{
 				Round:          newBlk.Header.Round,
 				PreviousHash:   newBlk.Header.PreviousHash,
@@ -338,45 +335,36 @@ func TestEvidence(t *testing.T) {
 	blk := block.NewGenesisBlock(runtime.ID, 0)
 	blk.Header.Round = 99
 	err = roothashState.SetRuntimeState(ctx, &roothash.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1000,
-		LastNormalRound:    99,
-		LastNormalHeight:   1000,
-		ExecutorPool: &commitment.Pool{
-			Runtime:   &runtime,
-			Committee: &executorCommittee,
-			Round:     99,
-		},
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1000,
+		LastNormalRound:  99,
+		LastNormalHeight: 1000,
+		Committee:        &executorCommittee,
+		CommitmentPool:   commitment.NewPool(),
 	})
 	require.NoError(err, "SetRuntimeState")
 	err = roothashState.SetRuntimeState(ctx, &roothash.RuntimeState{
-		Runtime:            &runtimeNoSlashing,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1000,
-		LastNormalRound:    99,
-		LastNormalHeight:   1000,
-		ExecutorPool: &commitment.Pool{
-			Runtime:   &runtime,
-			Committee: &executorCommittee,
-			Round:     99,
-		},
+		Runtime:          &runtimeNoSlashing,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1000,
+		LastNormalRound:  99,
+		LastNormalHeight: 1000,
+		Committee:        &executorCommittee,
+		CommitmentPool:   commitment.NewPool(),
 	})
 	require.NoError(err, "SetRuntimeState")
 	err = roothashState.SetRuntimeState(ctx, &roothash.RuntimeState{
-		Runtime:            &runtimeZeroSlashing,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1000,
-		LastNormalRound:    99,
-		LastNormalHeight:   1000,
-		ExecutorPool: &commitment.Pool{
-			Runtime:   &runtime,
-			Committee: &executorCommittee,
-			Round:     99,
-		},
+		Runtime:          &runtimeZeroSlashing,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1000,
+		LastNormalRound:  99,
+		LastNormalHeight: 1000,
+		Committee:        &executorCommittee,
+		CommitmentPool:   commitment.NewPool(),
 	})
 	require.NoError(err, "SetRuntimeState")
 
@@ -697,17 +685,14 @@ func TestSubmitMsg(t *testing.T) {
 	require.NoError(err, "SetConsensusParameters")
 	blk := block.NewGenesisBlock(runtime.ID, 0)
 	rtState := roothash.RuntimeState{
-		Runtime:            &runtime,
-		GenesisBlock:       blk,
-		CurrentBlock:       blk,
-		CurrentBlockHeight: 1,
-		LastNormalRound:    0,
-		LastNormalHeight:   1,
-		ExecutorPool: &commitment.Pool{
-			Runtime:   &runtime,
-			Committee: &executorCommittee,
-			Round:     0,
-		},
+		Runtime:          &runtime,
+		GenesisBlock:     blk,
+		LastBlock:        blk,
+		LastBlockHeight:  1,
+		LastNormalRound:  0,
+		LastNormalHeight: 1,
+		CommitmentPool:   commitment.NewPool(),
+		Committee:        &executorCommittee,
 	}
 	err = roothashState.SetRuntimeState(ctx, &rtState)
 	require.NoError(err, "SetRuntimeState")

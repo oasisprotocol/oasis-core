@@ -75,10 +75,7 @@ func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.Pu
 	return fmt.Errorf("we're not scheduled")
 }
 
-func schedulerCheckTxScheduler(committee *scheduler.Committee, nodeID signature.PublicKey, round uint64) bool {
-	scheduler, err := committee.TransactionScheduler(round)
-	if err != nil {
-		panic(err)
-	}
-	return scheduler.PublicKey.Equal(nodeID)
+func schedulerCheckPrimaryScheduler(committee *scheduler.Committee, nodeID signature.PublicKey, round uint64) bool {
+	rank, ok := committee.SchedulerRank(round, nodeID)
+	return ok && rank == 0
 }

@@ -117,8 +117,9 @@ type Status struct {
 
 	// ExecutorRoles are the node's roles in the executor committee.
 	ExecutorRoles []scheduler.Role `json:"executor_roles"`
-	// IsTransactionScheduler indicates whether the node is a transaction scheduler in this round.
-	IsTransactionScheduler bool `json:"is_txn_scheduler"`
+	// SchedulerRank is the position (index) of the node in the committee's scheduling order
+	// for the next round.
+	SchedulerRank uint64 `json:"scheduler_rank"`
 	// Liveness is the node's liveness status for the current epoch.
 	Liveness *LivenessStatus `json:"liveness,omitempty"`
 

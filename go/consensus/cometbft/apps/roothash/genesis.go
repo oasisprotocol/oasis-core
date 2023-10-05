@@ -70,8 +70,8 @@ func (rq *rootHashQuerier) Genesis(ctx context.Context) (*roothashAPI.Genesis, e
 
 		rtState := roothashAPI.GenesisRuntimeState{
 			RuntimeGenesis: registryAPI.RuntimeGenesis{
-				StateRoot: rt.CurrentBlock.Header.StateRoot,
-				Round:     rt.CurrentBlock.Header.Round,
+				StateRoot: rt.LastBlock.Header.StateRoot,
+				Round:     rt.LastBlock.Header.Round,
 			},
 			MessageResults: lastRoundResults.Messages,
 		}

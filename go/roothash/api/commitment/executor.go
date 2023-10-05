@@ -86,6 +86,10 @@ const (
 
 // ExecutorCommitmentHeader is the header of an executor commitment.
 type ExecutorCommitmentHeader struct {
+	// SchedulerID is the public key of the node that scheduled transactions
+	// and prepared the proposal.
+	SchedulerID signature.PublicKey `json:"scheduler_id"`
+
 	// Header is the compute results header.
 	Header ComputeResultsHeader `json:"header"`
 

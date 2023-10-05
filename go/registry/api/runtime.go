@@ -139,20 +139,20 @@ func (e *ExecutorParameters) ValidateBasic() error {
 type TxnSchedulerParameters struct {
 	// BatchFlushTimeout denotes, if using the "simple" algorithm, how long to
 	// wait for a scheduled batch.
-	BatchFlushTimeout time.Duration `json:"batch_flush_timeout"`
+	BatchFlushTimeout time.Duration `json:"batch_flush_timeout,omitempty"`
 
 	// MaxBatchSize denotes what is the max size of a scheduled batch.
-	MaxBatchSize uint64 `json:"max_batch_size"`
+	MaxBatchSize uint64 `json:"max_batch_size,omitempty"`
 
 	// MaxBatchSizeBytes denote what is the max size of a scheduled batch in bytes.
-	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes"`
+	MaxBatchSizeBytes uint64 `json:"max_batch_size_bytes,omitempty"`
 
 	// MaxInMessages specifies the maximum size of the incoming message queue.
 	MaxInMessages uint32 `json:"max_in_messages,omitempty"`
 
-	// ProposerTimeout denotes the timeout (in consensus blocks) for scheduler
-	// to propose a batch.
-	ProposerTimeout int64 `json:"propose_batch_timeout"`
+	// ProposerTimeout denotes how long to wait before accepting proposal from
+	// the next backup scheduler.
+	ProposerTimeout time.Duration `json:"propose_batch_timeout,omitempty"`
 }
 
 // ValidateBasic performs basic transaction scheduler parameter validity checks.
@@ -167,8 +167,11 @@ func (t *TxnSchedulerParameters) ValidateBasic() error {
 	if t.MaxBatchSizeBytes < 1024 {
 		return fmt.Errorf("transaction scheduler max batch bytes size parameter too small")
 	}
-	if t.ProposerTimeout < 2 {
+	if t.ProposerTimeout < time.Second {
 		return fmt.Errorf("transaction scheduler proposer timeout parameter too small")
+	}
+	if t.BatchFlushTimeout > t.ProposerTimeout {
+		return fmt.Errorf("transaction scheduler batch flush timeout parameter greater than proposer timeout parameter")
 	}
 
 	return nil

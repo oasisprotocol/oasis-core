@@ -17,6 +17,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -76,6 +77,7 @@ func (n *Node) Initialized() <-chan struct{} {
 	return n.initCh
 }
 
+// HandlePeerTx is guarded by CrossNode.
 func (n *Node) HandlePeerTx(context.Context, []byte) error {
 	// Nothing to do here.
 	return nil
@@ -83,22 +85,27 @@ func (n *Node) HandlePeerTx(context.Context, []byte) error {
 
 // HandleEpochTransitionLocked is guarded by CrossNode.
 func (n *Node) HandleEpochTransitionLocked(*committee.EpochSnapshot) {
+	// Nothing to do here.
 }
 
 // HandleNewBlockEarlyLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockEarlyLocked(*block.Block) {
+func (n *Node) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
+	// Nothing to do here.
 }
 
 // HandleNewBlockLocked is guarded by CrossNode.
-func (n *Node) HandleNewBlockLocked(*block.Block) {
+func (n *Node) HandleNewBlockLocked(*runtime.BlockInfo) {
+	// Nothing to do here.
 }
 
 // HandleNewEventLocked is guarded by CrossNode.
 func (n *Node) HandleNewEventLocked(*roothash.Event) {
+	// Nothing to do here.
 }
 
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
 func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
+	// Nothing to do here.
 }
 
 func (n *Node) SubmitTx(ctx context.Context, tx []byte) (<-chan *api.SubmitTxResult, *protocol.Error, error) {

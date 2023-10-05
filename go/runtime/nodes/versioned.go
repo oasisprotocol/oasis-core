@@ -85,7 +85,7 @@ func (nw *versionedNodeDescriptorWatcher) BumpVersion(version int64) {
 	defer nw.Unlock()
 
 	if !nw.frozen {
-		panic("committee: BumpVersion called on an unfrozed node descriptor watcher")
+		panic("committee: BumpVersion called on an unfrozen node descriptor watcher")
 	}
 	nw.version = version
 

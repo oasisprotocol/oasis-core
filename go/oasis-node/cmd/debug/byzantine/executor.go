@@ -222,12 +222,14 @@ ReceiveProposal:
 }
 
 func (cbc *computeBatchContext) openTrees(ctx context.Context, blk *block.Block, rs syncer.ReadSyncer) error {
-	cbc.ioTree = transaction.NewTree(nil, storage.Root{
+	emptyRoot := storage.Root{
 		Namespace: cbc.runtimeID,
 		Version:   cbc.proposal.Header.Round,
 		Type:      storage.RootTypeIO,
-		Hash:      cbc.proposal.Header.BatchHash,
-	})
+	}
+	emptyRoot.Hash.Empty()
+
+	cbc.ioTree = transaction.NewTree(nil, emptyRoot)
 
 	// Add all transactions to the I/O tree.
 	for _, tx := range cbc.txs {
@@ -300,6 +302,7 @@ func (cbc *computeBatchContext) commitTrees(ctx context.Context) error {
 
 func (cbc *computeBatchContext) createCommitment(
 	id *identity.Identity,
+	schedulerID signature.PublicKey,
 	rak signature.Signer,
 	failure commitment.ExecutorCommitmentFailure,
 ) error {
@@ -318,7 +321,8 @@ func (cbc *computeBatchContext) createCommitment(
 	ec := &commitment.ExecutorCommitment{
 		NodeID: id.NodeSigner.Public(),
 		Header: commitment.ExecutorCommitmentHeader{
-			Header: header,
+			SchedulerID: schedulerID,
+			Header:      header,
 		},
 	}
 	if rak != nil {

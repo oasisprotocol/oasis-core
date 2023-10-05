@@ -9,16 +9,14 @@ import (
 
 	"github.com/eapache/channels"
 
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
+	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -76,8 +74,11 @@ type TransactionPool interface {
 	SubmitProposedBatch(batch [][]byte)
 
 	// PromoteProposedBatch promotes the specified transactions that are already in the transaction
-	// pool into the current proposal queue.
-	PromoteProposedBatch(batch []hash.Hash)
+	// pool into the current proposal queue and returns a set of known transactions.
+	//
+	// For any missing transactions nil will be returned in their place and the map of missing
+	// transactions will be populated accordingly.
+	PromoteProposedBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int)
 
 	// ClearProposedBatch clears the proposal queue.
 	ClearProposedBatch()
@@ -109,17 +110,10 @@ type TransactionPool interface {
 	GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int)
 
 	// ProcessBlock updates the last known runtime block information.
-	ProcessBlock(bi *BlockInfo) error
+	ProcessBlock(bi *runtime.BlockInfo) error
 
 	// ProcessIncomingMessages loads transactions from incoming messages into the pool.
 	ProcessIncomingMessages(inMsgs []*message.IncomingMessage) error
-
-	// WakeupScheduler explicitly notifies subscribers that they should attempt scheduling.
-	WakeupScheduler()
-
-	// WatchScheduler subscribes to notifications about when to attempt scheduling. The emitted
-	// boolean flag indicates whether the batch flush timeout expired.
-	WatchScheduler() (pubsub.ClosableSubscription, <-chan bool)
 
 	// WatchCheckedTransactions subscribes to notifications about new transactions being available
 	// in the transaction pool for scheduling.
@@ -144,21 +138,6 @@ type TransactionPublisher interface {
 	// the caller. If PublishTx is called for the same transaction more quickly, the transaction
 	// may be dropped and not published.
 	GetMinRepublishInterval() time.Duration
-}
-
-// BlockInfo contains information related to the given runtime block.
-type BlockInfo struct {
-	// RuntimeBlock is the runtime block.
-	RuntimeBlock *block.Block
-
-	// ConsensusBlock is the consensus light block the runtime block belongs to.
-	ConsensusBlock *consensus.LightBlock
-
-	// Epoch is the epoch the runtime block belongs to.
-	Epoch beacon.EpochTime
-
-	// ActiveDescriptor is the runtime descriptor active for the runtime block.
-	ActiveDescriptor *registry.Runtime
 }
 
 type txPool struct {
@@ -192,14 +171,11 @@ type txPool struct {
 	localQueue           *localQueue
 	mainQueue            *mainQueue
 
-	schedulerTicker   *time.Ticker
-	schedulerNotifier *pubsub.Broker
-
 	proposedTxsLock sync.Mutex
 	proposedTxs     map[hash.Hash]*TxQueueMeta
 
 	blockInfoLock      sync.Mutex
-	blockInfo          *BlockInfo
+	blockInfo          *runtime.BlockInfo
 	lastBlockProcessed time.Time
 	lastRecheckRound   uint64
 
@@ -210,7 +186,6 @@ func (t *txPool) Start() error {
 	go t.checkWorker()
 	go t.republishWorker()
 	go t.recheckWorker()
-	go t.flushWorker()
 	return nil
 }
 
@@ -313,7 +288,7 @@ func (t *txPool) SubmitProposedBatch(batch [][]byte) {
 	}
 }
 
-func (t *txPool) PromoteProposedBatch(batch []hash.Hash) {
+func (t *txPool) PromoteProposedBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int) {
 	txs, missingTxs := t.GetKnownBatch(batch)
 	if len(missingTxs) > 0 {
 		t.logger.Debug("promoted proposed batch contains missing transactions",
@@ -330,6 +305,8 @@ func (t *txPool) PromoteProposedBatch(batch []hash.Hash) {
 		}
 		t.proposedTxs[tx.Hash()] = tx
 	}
+
+	return txs, missingTxs
 }
 
 func (t *txPool) ClearProposedBatch() {
@@ -397,7 +374,7 @@ HASH_LOOP:
 	return txs, missingTxs
 }
 
-func (t *txPool) ProcessBlock(bi *BlockInfo) error {
+func (t *txPool) ProcessBlock(bi *runtime.BlockInfo) error {
 	t.blockInfoLock.Lock()
 	defer t.blockInfoLock.Unlock()
 
@@ -406,11 +383,6 @@ func (t *txPool) ProcessBlock(bi *BlockInfo) error {
 		close(t.initCh)
 		fallthrough
 	case bi.RuntimeBlock.Header.HeaderType == block.EpochTransition:
-		// Handle scheduler updates.
-		if err := t.updateScheduler(bi); err != nil {
-			return fmt.Errorf("failed to update scheduler: %w", err)
-		}
-
 		// Force recheck on epoch transitions.
 		t.recheckTxCh.In() <- struct{}{}
 	default:
@@ -434,24 +406,6 @@ func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) erro
 	return nil
 }
 
-func (t *txPool) updateScheduler(bi *BlockInfo) error {
-	// Reset ticker to the new interval.
-	t.schedulerTicker.Reset(bi.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
-
-	return nil
-}
-
-func (t *txPool) WakeupScheduler() {
-	t.schedulerNotifier.Broadcast(false)
-}
-
-func (t *txPool) WatchScheduler() (pubsub.ClosableSubscription, <-chan bool) {
-	sub := t.schedulerNotifier.Subscribe()
-	ch := make(chan bool)
-	sub.Unwrap(ch)
-	return sub, ch
-}
-
 func (t *txPool) WatchCheckedTransactions() (pubsub.ClosableSubscription, <-chan []*PendingCheckTransaction) {
 	sub := t.checkTxNotifier.Subscribe()
 	ch := make(chan []*PendingCheckTransaction)
@@ -463,7 +417,7 @@ func (t *txPool) PendingCheckSize() int {
 	return t.checkTxQueue.size()
 }
 
-func (t *txPool) getCurrentBlockInfo() (*BlockInfo, time.Time, error) {
+func (t *txPool) getCurrentBlockInfo() (*runtime.BlockInfo, time.Time, error) {
 	t.blockInfoLock.Lock()
 	defer t.blockInfoLock.Unlock()
 
@@ -644,7 +598,6 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 
 		// Notify subscribers that we have received new transactions.
 		t.checkTxNotifier.Broadcast(newTxs)
-		t.schedulerNotifier.Broadcast(false)
 	}
 
 	mainQueueSize.With(t.getMetricLabels()).Set(float64(t.mainQueue.inner.size()))
@@ -882,22 +835,6 @@ func (t *txPool) recheck() {
 	}
 }
 
-func (t *txPool) flushWorker() {
-	// Wait for initialization to make sure that we have the scheduler available.
-	if err := t.ensureInitialized(); err != nil {
-		return
-	}
-
-	for {
-		select {
-		case <-t.stopCh:
-			return
-		case <-t.schedulerTicker.C:
-			t.schedulerNotifier.Broadcast(true)
-		}
-	}
-}
-
 // New creates a new transaction pool instance.
 func New(
 	runtimeID common.Namespace,
@@ -942,8 +879,6 @@ func New(
 		rimQueue:             rq,
 		localQueue:           lq,
 		mainQueue:            mq,
-		schedulerTicker:      time.NewTicker(1 * time.Hour),
-		schedulerNotifier:    pubsub.NewBroker(false),
 		proposedTxs:          make(map[hash.Hash]*TxQueueMeta),
 		republishCh:          channels.NewRingChannel(1),
 	}, nil

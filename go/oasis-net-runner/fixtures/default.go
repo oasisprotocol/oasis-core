@@ -225,8 +225,8 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				TxnScheduler: registry.TxnSchedulerParameters{
 					MaxBatchSize:      1000,
 					MaxBatchSizeBytes: 16 * 1024 * 1024, // 16 MiB
-					BatchFlushTimeout: 1 * time.Second,
-					ProposerTimeout:   20,
+					BatchFlushTimeout: time.Second,
+					ProposerTimeout:   2 * time.Second,
 				},
 				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
 					AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},

@@ -222,11 +222,11 @@ mod tests {
                 ..Default::default()
             },
             txn_scheduler: registry::TxnSchedulerParameters {
-                batch_flush_timeout: 20000000000, // 20 seconds.
+                batch_flush_timeout: 1_000_000_000, // 1 second.
                 max_batch_size: 1,
                 max_batch_size_bytes: 1024,
                 max_in_messages: 0,
-                propose_batch_timeout: 5,
+                propose_batch_timeout: 2_000_000_000, // 2 seconds.
             },
             storage: registry::StorageParameters {
                 checkpoint_interval: 0,
@@ -306,14 +306,15 @@ mod tests {
                     0,
                     RegistryMessage::UpdateRuntime(registry::Runtime::default()),
                 ))],
-                "ac8ff938607f234f0db60dc2e81897f50c3918cc51998c633a0f3f2b98374db1",
+                // FIXME: Change to e6e170fb771583147255e0c96dc88615d4fd2fd28488ae489df01da201affe72 once cbor is fixed.
+                "baf9eeaa4860e363a9c27d99555839afc535f0cd32d23dc640f0f020677460e0",
             ),
             (
                 vec![Message::Registry(Versioned::new(
                     0,
                     RegistryMessage::UpdateRuntime(rt),
                 ))],
-                "67da1da17b12c398d4dec165480df73c244740f8fb876f59a76cd29e30056b6d",
+                "03e77fbeda1a2291c87c06c59335a49fe18852266d58608c1ddec8ef64209458",
             ),
             (
                 vec![Message::Governance(Versioned::new(

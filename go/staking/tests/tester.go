@@ -12,14 +12,12 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmtTests "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/tests"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
@@ -144,7 +142,6 @@ func StakingImplementationTests(
 	consensus consensusAPI.Backend,
 	identity *identity.Identity,
 	entity *entity.Entity,
-	runtimeID common.Namespace,
 ) {
 	for _, tc := range []struct {
 		n  string
@@ -169,7 +166,7 @@ func StakingImplementationTests(
 	// Separate test as it requires some arguments that others don't.
 	t.Run("SlashConsensusEquivocation", func(t *testing.T) {
 		state := newStakingTestsState(t, backend)
-		testSlashConsensusEquivocation(t, state, backend, consensus, identity, entity, runtimeID)
+		testSlashConsensusEquivocation(t, state, backend, consensus, identity, entity)
 	})
 }
 
@@ -1185,7 +1182,6 @@ func testSlashConsensusEquivocation(
 	consensus consensusAPI.Backend,
 	ident *identity.Identity,
 	ent *entity.Entity,
-	runtimeID common.Namespace,
 ) {
 	ctx := context.Background()
 	require := require.New(t)
@@ -1231,11 +1227,6 @@ func testSlashConsensusEquivocation(
 		t.Fatalf("failed to receive escrow event")
 	}
 
-	// Subscribe to roothash blocks.
-	blocksCh, blocksSub, err := consensus.RootHash().WatchBlocks(ctx, runtimeID)
-	require.NoError(err, "WatchBlocks")
-	defer blocksSub.Close()
-
 	// Broadcast evidence. This is CometBFT-specific, if we ever have more than one
 	// consensus backend, we need to change this part.
 	blk, err := consensus.GetBlock(ctx, 1)
@@ -1269,12 +1260,4 @@ WaitLoop:
 		}
 	}
 	// XXX: no freezing is configured for this.
-
-	// Wait for roothash block as re-scheduling must have taken place due to slashing.
-	select {
-	case blk := <-blocksCh:
-		require.Equal(block.EpochTransition, blk.Block.Header.HeaderType)
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive roothash block")
-	}
 }

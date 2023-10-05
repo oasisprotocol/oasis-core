@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
@@ -16,6 +17,91 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
+
+func fetchRuntimeMessages(
+	ctx *tmapi.Context,
+	state *roothashState.MutableState,
+	runtimeID common.Namespace,
+	limit uint32,
+) ([]*message.IncomingMessage, error) {
+	if limit == 0 {
+		return []*message.IncomingMessage{}, nil
+	}
+
+	msgs, err := state.IncomingMessageQueue(ctx, runtimeID, 0, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch incoming message queue: %w", err)
+	}
+
+	return msgs, nil
+}
+
+func verifyRuntimeMessages(
+	ctx *tmapi.Context,
+	msgs []*message.IncomingMessage,
+	h *hash.Hash,
+) error {
+	if inMsgsHash := message.InMessagesHash(msgs); !inMsgsHash.Equal(h) {
+		ctx.Logger().Debug("failed to verify incoming messages hash",
+			"in_msgs_hash", inMsgsHash,
+			"ec_in_msgs_hash", *h,
+		)
+
+		return fmt.Errorf("failed to verify incoming messages hash")
+	}
+
+	return nil
+}
+
+func (app *rootHashApplication) removeRuntimeMessages(
+	ctx *tmapi.Context,
+	state *roothashState.MutableState,
+	runtimeID common.Namespace,
+	msgs []*message.IncomingMessage,
+	round uint64,
+) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+
+	// Remove processed messages from the incoming message queue.
+	meta, err := state.IncomingMessageQueueMeta(ctx, runtimeID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch incoming message queue metadata: %w", err)
+	}
+
+	for _, msg := range msgs {
+		err = state.RemoveIncomingMessageFromQueue(ctx, runtimeID, msg.ID)
+		if err != nil {
+			return fmt.Errorf("failed to remove processed incoming message from queue: %w", err)
+		}
+
+		if meta.Size == 0 {
+			// This should NEVER happen.
+			return tmapi.UnavailableStateError(fmt.Errorf("inconsistent queue size (state corruption?)"))
+		}
+		meta.Size--
+
+		ctx.EmitEvent(
+			tmapi.NewEventBuilder(app.Name()).
+				TypedAttribute(&roothash.InMsgProcessedEvent{
+					ID:     msg.ID,
+					Round:  round,
+					Caller: msg.Caller,
+					Tag:    msg.Tag,
+				}).
+				TypedAttribute(&roothash.RuntimeIDAttribute{ID: runtimeID}),
+		)
+	}
+
+	// Update the incoming message queue meta.
+	err = state.SetIncomingMessageQueueMeta(ctx, runtimeID, meta)
+	if err != nil {
+		return fmt.Errorf("failed to set incoming message queue metadata: %w", err)
+	}
+
+	return nil
+}
 
 func (app *rootHashApplication) processRuntimeMessages(
 	ctx *tmapi.Context,
@@ -82,7 +168,7 @@ func (app *rootHashApplication) processRuntimeMessages(
 	return events, nil
 }
 
-func (app *rootHashApplication) doBeforeSchedule(ctx *api.Context, msg interface{}) (interface{}, error) {
+func (app *rootHashApplication) doBeforeSchedule(ctx *tmapi.Context, msg interface{}) (interface{}, error) {
 	epoch := msg.(beacon.EpochTime)
 
 	ctx.Logger().Debug("processing liveness statistics before scheduling",
@@ -109,7 +195,7 @@ func (app *rootHashApplication) doBeforeSchedule(ctx *api.Context, msg interface
 	return nil, nil
 }
 
-func (app *rootHashApplication) changeParameters(ctx *api.Context, msg interface{}, apply bool) (interface{}, error) {
+func (app *rootHashApplication) changeParameters(ctx *tmapi.Context, msg interface{}, apply bool) (interface{}, error) {
 	// Unmarshal changes and check if they should be applied to this module.
 	proposal, ok := msg.(*governance.ChangeParametersProposal)
 	if !ok {

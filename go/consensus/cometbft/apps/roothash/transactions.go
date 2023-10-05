@@ -5,13 +5,13 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/api"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -31,92 +31,14 @@ func (app *rootHashApplication) getRuntimeState(
 	if rtState.Suspended {
 		return nil, roothash.ErrRuntimeSuspended
 	}
-	if rtState.ExecutorPool == nil {
+	if rtState.Committee == nil {
+		return nil, roothash.ErrNoCommittee
+	}
+	if rtState.CommitmentPool == nil {
 		return nil, roothash.ErrNoExecutorPool
 	}
 
 	return rtState, nil
-}
-
-func (app *rootHashApplication) executorProposerTimeout(
-	ctx *abciAPI.Context,
-	state *roothashState.MutableState,
-	rpt *roothash.ExecutorProposerTimeoutRequest,
-) error {
-	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this transaction.
-	params, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		ctx.Logger().Error("failed to fetch consensus parameters",
-			"err", err,
-		)
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, roothash.GasOpProposerTimeout, params.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early for simulation as we only need gas accounting.
-	if ctx.IsSimulation() {
-		return nil
-	}
-
-	rtState, err := app.getRuntimeState(ctx, state, rpt.ID)
-	if err != nil {
-		return err
-	}
-
-	// Ensure enough blocks have passed since round start.
-	proposerTimeout := rtState.Runtime.TxnScheduler.ProposerTimeout
-	currentBlockHeight := rtState.CurrentBlockHeight
-	if height := ctx.BlockHeight(); height < currentBlockHeight+proposerTimeout {
-		ctx.Logger().Debug("failed requesting proposer round timeout, timeout not allowed yet",
-			"height", height,
-			"current_block_height", currentBlockHeight,
-			"proposer_timeout", proposerTimeout,
-		)
-		return roothash.ErrProposerTimeoutNotAllowed
-	}
-
-	// Ensure request is valid.
-	if err = rtState.ExecutorPool.CheckProposerTimeout(rtState.CurrentBlock, ctx.TxSigner(), rpt.Round); err != nil {
-		ctx.Logger().Debug("failed requesting proposer round timeout",
-			"err", err,
-			"round", rtState.CurrentBlock.Header.Round,
-			"request", rpt,
-		)
-		return err
-	}
-
-	// Record that the scheduler did not propose.
-	schedulerIdx, err := rtState.ExecutorPool.Committee.TransactionSchedulerIdx(rpt.Round)
-	if err != nil {
-		return err
-	}
-	if rtState.LivenessStatistics == nil {
-		rtState.LivenessStatistics = roothash.NewLivenessStatistics(len(rtState.ExecutorPool.Committee.Members))
-	}
-	rtState.LivenessStatistics.MissedProposals[schedulerIdx]++
-
-	// Timeout triggered by executor node, emit empty error block.
-	ctx.Logger().Debug("proposer round timeout",
-		"round", rpt.Round,
-		"err", err,
-		logging.LogEvent, roothash.LogEventRoundFailed,
-	)
-	if err = app.emitEmptyBlock(ctx, rtState, block.RoundFailed); err != nil {
-		return fmt.Errorf("failed to emit empty block: %w", err)
-	}
-
-	// Update runtime state.
-	if err = state.SetRuntimeState(ctx, rtState); err != nil {
-		return fmt.Errorf("failed to set runtime state: %w", err)
-	}
-
-	return nil
 }
 
 func (app *rootHashApplication) executorCommit(
@@ -147,10 +69,19 @@ func (app *rootHashApplication) executorCommit(
 		return err
 	}
 
+	// Return early if there are no commitments.
+	if len(cc.Commits) == 0 {
+		return nil
+	}
+
+	// Fetch the latest runtime state.
 	rtState, err := app.getRuntimeState(ctx, state, cc.ID)
 	if err != nil {
 		return err
 	}
+	prevRank := rtState.CommitmentPool.HighestRank
+
+	// Node lookup needed for RAK-attestation.
 	nl := registryState.NewMutableState(ctx.State())
 
 	// Account for gas consumed by messages.
@@ -163,20 +94,30 @@ func (app *rootHashApplication) executorCommit(
 		return msgErr
 	}
 
+	// Verify and add commitments to the pool.
 	for _, commit := range cc.Commits {
-		if err = rtState.ExecutorPool.AddExecutorCommitment(
-			ctx,
-			rtState.CurrentBlock,
-			nl,
-			&commit, // nolint: gosec
-			msgGasAccountant,
-		); err != nil {
-			ctx.Logger().Debug("failed to add compute commitment to round",
+		if err = commitment.VerifyExecutorCommitment(ctx, rtState.LastBlock, rtState.Runtime, rtState.Committee.ValidFor, &commit, msgGasAccountant, nl); err != nil { // nolint: gosec
+			ctx.Logger().Debug("failed to verify executor commitment",
 				"err", err,
-				"round", rtState.CurrentBlock.Header.Round,
+				"round", commit.Header.Header.Round,
 			)
 			return err
 		}
+
+		if err := rtState.CommitmentPool.AddVerifiedExecutorCommitment(rtState.Committee, &commit); err != nil { // nolint: gosec
+			ctx.Logger().Debug("failed to add executor commitment",
+				"err", err,
+				"round", commit.Header.Header.Round,
+			)
+			return err
+		}
+
+		ctx.Logger().Debug("executor commitment added to pool",
+			"round", commit.Header.Header.Round,
+			"node_id", commit.NodeID,
+			"scheduler_id", commit.Header.SchedulerID,
+			"failure", commit.IsIndicatingFailure(),
+		)
 	}
 
 	// Return early for simulation as we only need gas accounting.
@@ -184,12 +125,31 @@ func (app *rootHashApplication) executorCommit(
 		return nil
 	}
 
-	// Try to finalize round.
-	if err = app.tryFinalizeBlock(ctx, rtState, false); err != nil {
-		ctx.Logger().Error("failed to finalize block",
-			"err", err,
+	// Commit changes made to the pool.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
+	state = roothashState.NewMutableState(ctx.State())
+
+	// Check if higher-ranked scheduler submitted a commitment.
+	if prevRank != rtState.CommitmentPool.HighestRank {
+		ctx.Logger().Debug("transaction scheduler has changed",
+			"prev_rank", prevRank,
+			"new_rank", rtState.CommitmentPool.HighestRank,
 		)
-		return err
+
+		// Re-arm round timeout. Give workers enough time to submit commitments.
+		prevTimeout := rtState.NextTimeout
+		rtState.NextTimeout = ctx.BlockHeight() + 1 + rtState.Runtime.Executor.RoundTimeout // Current height is ctx.BlockHeight() + 1
+
+		if err := rearmRoundTimeout(ctx, cc.ID, prevTimeout, rtState.NextTimeout); err != nil {
+			return err
+		}
+	}
+
+	// Update runtime state.
+	if err := state.SetRuntimeState(ctx, rtState); err != nil {
+		return fmt.Errorf("failed to set runtime state: %w", err)
 	}
 
 	// Emit events for all accepted commits.
@@ -200,6 +160,11 @@ func (app *rootHashApplication) executorCommit(
 				TypedAttribute(&roothash.RuntimeIDAttribute{ID: cc.ID}),
 		)
 	}
+
+	ctx.Commit()
+
+	// Try to finalize the runtime during the end block.
+	api.RegisterRuntimeForFinalization(ctx, cc.ID)
 
 	return nil
 }
@@ -267,10 +232,10 @@ func (app *rootHashApplication) submitEvidence(
 	case evidence.EquivocationExecutor != nil:
 		commitA := evidence.EquivocationExecutor.CommitA
 
-		if commitA.Header.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+		if commitA.Header.Header.Round+params.MaxEvidenceAge < rtState.LastBlock.Header.Round {
 			ctx.Logger().Debug("Evidence: commitment equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
-				"current_round", rtState.CurrentBlock.Header.Round,
+				"current_round", rtState.LastBlock.Header.Round,
 				"max_evidence_age", params.MaxEvidenceAge,
 			)
 			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)
@@ -280,10 +245,10 @@ func (app *rootHashApplication) submitEvidence(
 	case evidence.EquivocationProposal != nil:
 		proposalA := evidence.EquivocationProposal.ProposalA
 
-		if proposalA.Header.Round+params.MaxEvidenceAge < rtState.CurrentBlock.Header.Round {
+		if proposalA.Header.Round+params.MaxEvidenceAge < rtState.LastBlock.Header.Round {
 			ctx.Logger().Debug("Evidence: proposal equivocation evidence expired",
 				"evidence", evidence.EquivocationExecutor,
-				"current_round", rtState.CurrentBlock.Header.Round,
+				"current_round", rtState.LastBlock.Header.Round,
 				"max_evidence_age", params.MaxEvidenceAge,
 			)
 			return fmt.Errorf("%w: equivocation evidence expired", roothash.ErrInvalidEvidence)

@@ -3,6 +3,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	beaconTests "github.com/oasisprotocol/oasis-core/go/beacon/tests"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
@@ -97,11 +99,8 @@ func testQueueTx(
 	require.NoError(t, err, "WatchBlocks")
 	defer sub.Close()
 
-	select {
-	case <-blocksCh:
-	case <-time.After(recvTimeout):
-		t.Fatalf("failed to receive block")
-	}
+	_, err = nextRuntimeBlock(blocksCh, true)
+	require.NoError(t, err, "nextRuntimeBlock")
 
 	// Include a timestamp so each test invocation uses a unique transaction.
 	testTx := []byte("hello world at: " + time.Now().String())
@@ -113,63 +112,61 @@ func testQueueTx(
 	// Node should transition to ProcessingBatch state.
 	waitForNodeTransition(t, stateCh, committee.ProcessingBatch)
 
-	// Node should transition to WaitingForFinalize state.
-	waitForNodeTransition(t, stateCh, committee.WaitingForFinalize)
-
 	// Node should transition to WaitingForBatch state and a block should be
 	// finalized containing our batch.
 	waitForNodeTransition(t, stateCh, committee.WaitingForBatch)
 
-blockLoop:
-	for {
-		select {
-		case annBlk := <-blocksCh:
-			blk := annBlk.Block
-			require.EqualValues(t, block.Normal, blk.Header.HeaderType)
+	// Fetch the first non-empty block.
+	blk, err := nextRuntimeBlock(blocksCh, false)
+	require.NoError(t, err, "failed to receive a block containing transaction")
+	require.EqualValues(t, block.Normal, blk.Block.Header.HeaderType)
 
-			if blk.Header.IORoot.IsEmpty() {
-				// Skip blocks without transactions.
-				continue
-			}
+	// Check that correct block was generated.
+	tree := transaction.NewTree(st, storage.Root{
+		Namespace: blk.Block.Header.Namespace,
+		Version:   blk.Block.Header.Round,
+		Type:      storage.RootTypeIO,
+		Hash:      blk.Block.Header.IORoot,
+	})
+	defer tree.Close()
 
-			// Check that correct block was generated.
-			tree := transaction.NewTree(st, storage.Root{
-				Namespace: blk.Header.Namespace,
-				Version:   blk.Header.Round,
-				Type:      storage.RootTypeIO,
-				Hash:      blk.Header.IORoot,
-			})
-			defer tree.Close()
+	var txs []*transaction.Transaction
+	txs, err = tree.GetTransactions(ctx)
+	require.NoError(t, err, "GetTransactions")
+	require.Len(t, txs, 1, "there should be one transaction")
+	require.EqualValues(t, testTx, txs[0].Input)
+	// NOTE: Mock host produces output equal to input.
+	require.EqualValues(t, testTx, txs[0].Output)
 
-			var txs []*transaction.Transaction
-			txs, err = tree.GetTransactions(ctx)
-			require.NoError(t, err, "GetTransactions")
-			require.Len(t, txs, 1, "there should be one transaction")
-			require.EqualValues(t, testTx, txs[0].Input)
-			// NOTE: Mock host produces output equal to input.
-			require.EqualValues(t, testTx, txs[0].Output)
-
-			// NOTE: Mock host produces an empty state root.
-			var stateRoot hash.Hash
-			stateRoot.Empty()
-			require.EqualValues(t, stateRoot, blk.Header.StateRoot)
-			break blockLoop
-		case <-time.After(recvTimeout):
-			t.Fatalf("failed to receive block")
-		}
-	}
+	// NOTE: Mock host produces an empty state root.
+	var stateRoot hash.Hash
+	stateRoot.Empty()
+	require.EqualValues(t, stateRoot, blk.Block.Header.StateRoot)
 
 	// Submitting the same transaction should not result in a new block.
 	_, err = commonNode.TxPool.SubmitTx(ctx, testTx, &txpool.TransactionMeta{Local: false})
 	require.Error(t, err, "duplicate transaction should be rejected")
 
-blockLoop2:
+	// Fetch the first non-empty block.
+	_, err = nextRuntimeBlock(blocksCh, true)
+	require.Error(t, err, "unexpected block as a result of a duplicate transaction")
+}
+
+// nextRuntimeBlock return the next (non-empty) runtime block.
+func nextRuntimeBlock(ch <-chan *roothash.AnnotatedBlock, allowEmpty bool) (*api.AnnotatedBlock, error) {
 	for {
 		select {
-		case <-blocksCh:
-			t.Fatal("unexpected block as a result of a duplicate transaction")
+		case blk, ok := <-ch:
+			if !ok {
+				return nil, fmt.Errorf("runtime block channel closed")
+			}
+			if !allowEmpty && blk.Block.Header.IORoot.IsEmpty() {
+				// Skip blocks without transactions.
+				continue
+			}
+			return blk, nil
 		case <-time.After(recvTimeout):
-			break blockLoop2
+			return nil, fmt.Errorf("failed to receive runtime block")
 		}
 	}
 }

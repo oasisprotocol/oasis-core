@@ -50,13 +50,13 @@ func (h *committeeMsgHandler) AuthorizeMessage(_ context.Context, peerID signatu
 		return fmt.Errorf("executor committee is not yet known")
 	}
 
-	if !committee.Peers[peerID] {
+	if _, ok := committee.Peers[peerID]; !ok {
 		return p2pError.Permanent(fmt.Errorf("peer is not authorized to publish committee messages"))
 	}
 	return nil
 }
 
-func (h *committeeMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey, msg interface{}, isOwn bool) error {
+func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.PublicKey, msg interface{}, isOwn bool) error {
 	cm := msg.(*p2p.CommitteeMessage) // Ensured by DecodeMessage.
 
 	switch {
@@ -65,16 +65,19 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, _ signature.Pub
 		if isOwn {
 			return nil
 		}
+
 		crash.Here(crashPointBatchReceiveAfter)
 
 		proposal := cm.Proposal
 		epoch := h.n.commonNode.Group.GetEpochSnapshot()
 
-		// Before opening the signed dispatch message, verify that it was actually signed by the
-		// current transaction scheduler.
-		if err := epoch.VerifyTxnSchedulerSigner(proposal.NodeID, proposal.Header.Round-1); err != nil {
-			// Not signed by the transaction scheduler for the round, do not forward.
-			return errMsgFromNonTxnSched
+		// Before opening the signed dispatch message, verify that it was actually signed by one
+		// of the transaction schedulers.
+		committee := epoch.GetExecutorCommittee().Committee
+		rank, ok := committee.SchedulerRank(proposal.Header.Round, proposal.NodeID)
+		if !ok {
+			// Invalid scheduler, do not forward.
+			return p2pError.Permanent(errMsgFromNonTxnSched)
 		}
 
 		// Transaction scheduler checks out, verify signature.
@@ -82,14 +85,22 @@ func (h *committeeMsgHandler) HandleMessage(ctx context.Context, _ signature.Pub
 			return p2pError.Permanent(err)
 		}
 
-		return h.n.processProposal(ctx, proposal)
+		h.n.logger.Debug("received a proposal",
+			"node_id", proposal.NodeID,
+			"rank", rank,
+			"batch_size", len(proposal.Batch),
+		)
+
+		// Add to the queue.
+		if err := h.n.proposals.Add(proposal, rank); err != nil {
+			return err
+		}
+
+		// Notify the worker about the new proposal.
+		h.n.reselect()
+
+		return nil
 	default:
 		return p2pError.ErrUnhandledMessage
 	}
-}
-
-// HandlePeerTx implements NodeHooks.
-func (n *Node) HandlePeerTx(context.Context, []byte) error {
-	// Nothing to do here.
-	return nil
 }

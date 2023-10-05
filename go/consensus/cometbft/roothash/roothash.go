@@ -554,7 +554,7 @@ func (sc *serviceClient) DeliverCommand(ctx context.Context, height int64, cmd i
 		}
 
 		// Emit latest block.
-		if err := sc.processFinalizedEvent(ctx, rs.CurrentBlockHeight, tr.runtimeID, nil, false); err != nil {
+		if err := sc.processFinalizedEvent(ctx, rs.LastBlockHeight, tr.runtimeID, nil, false); err != nil {
 			sc.logger.Warn("failed to emit latest block",
 				"err", err,
 				"runtime_id", tr.runtimeID,

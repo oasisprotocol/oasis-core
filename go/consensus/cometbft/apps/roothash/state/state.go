@@ -390,8 +390,8 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 
 	// Store the current state and I/O roots separately to make them easier to retrieve when
 	// constructing proofs of runtime state.
-	stateRoot, _ := state.CurrentBlock.Header.StateRoot.MarshalBinary()
-	ioRoot, _ := state.CurrentBlock.Header.IORoot.MarshalBinary()
+	stateRoot, _ := state.LastBlock.Header.StateRoot.MarshalBinary()
+	ioRoot, _ := state.LastBlock.Header.IORoot.MarshalBinary()
 
 	if err := s.ms.Insert(ctx, stateRootKeyFmt.Encode(&state.Runtime.ID), stateRoot); err != nil {
 		return api.UnavailableStateError(err)
@@ -409,10 +409,10 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 
 	// Add state and I/O roots for this round if enabled.
 	if maxStored > 0 {
-		newRound := state.CurrentBlock.Header.Round
+		newRound := state.LastBlock.Header.Round
 		newRoots := cbor.Marshal(roothash.RoundRoots{
-			StateRoot: state.CurrentBlock.Header.StateRoot,
-			IORoot:    state.CurrentBlock.Header.IORoot,
+			StateRoot: state.LastBlock.Header.StateRoot,
+			IORoot:    state.LastBlock.Header.IORoot,
 		})
 
 		// Delete the oldest root to make room for the new one.

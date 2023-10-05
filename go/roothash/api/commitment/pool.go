@@ -2,7 +2,9 @@ package commitment
 
 import (
 	"context"
+	"math"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
@@ -35,23 +37,13 @@ var (
 	ErrInvalidMessages = p2pError.Permanent(errors.New(moduleName, 13, "roothash/commitment: invalid messages"))
 	// Error code 14 is reserved for future use.
 	ErrTimeoutNotCorrectRound = errors.New(moduleName, 15, "roothash/commitment: timeout not for correct round")
-	ErrNodeIsScheduler        = errors.New(moduleName, 16, "roothash/commitment: node is scheduler")
-	ErrInvalidRound           = errors.New(moduleName, 17, "roothash/commitment: invalid round")
-	ErrNoProposerCommitment   = errors.New(moduleName, 18, "roothash/commitment: no proposer commitment")
-	ErrBadProposerCommitment  = errors.New(moduleName, 19, "roothash/commitment: bad proposer commitment")
+	ErrInvalidRound           = errors.New(moduleName, 16, "roothash/commitment: invalid round")
+	ErrNoSchedulerCommitment  = errors.New(moduleName, 17, "roothash/commitment: no scheduler commitment")
+	ErrBadSchedulerCommitment = errors.New(moduleName, 18, "roothash/commitment: bad scheduler commitment")
 )
 
-const (
-	// TimeoutNever is the timeout value that never expires.
-	TimeoutNever = 0
-
-	// Backup worker round timeout stretch factor (15/10 = 1.5).
-	backupWorkerTimeoutFactorNumerator   = 15
-	backupWorkerTimeoutFactorDenominator = 10
-
-	// LogEventDiscrepancyMajorityFailure is a log event value that dependency resoluton with majority failure.
-	LogEventDiscrepancyMajorityFailure = "pool/discrepancy_majority_failure"
-)
+// LogEventDiscrepancyMajorityFailure is a log event value that dependency resolution with majority failure.
+const LogEventDiscrepancyMajorityFailure = "pool/discrepancy_majority_failure"
 
 var logger *logging.Logger = logging.GetLogger("roothash/commitment/pool")
 
@@ -65,134 +57,50 @@ type NodeLookup interface {
 // for gas accounting.
 type MessageValidator func(msgs []message.Message) error
 
-// Pool is a serializable pool of commitments that can be used to perform
-// discrepancy detection.
+// Pool is a serializable pool of scheduler commitments that can be used to perform discrepancy
+// detection and resolution.
 //
 // The pool is not safe for concurrent use.
 type Pool struct {
-	// Runtime is the runtime descriptor this pool is collecting the
-	// commitments for.
-	Runtime *registry.Runtime `json:"runtime"`
-	// Committee is the committee this pool is collecting the commitments for.
-	Committee *scheduler.Committee `json:"committee"`
-	// Round is the current protocol round.
-	Round uint64 `json:"round"`
-	// ExecuteCommitments are the commitments in the pool iff Committee.Kind
-	// is scheduler.KindComputeExecutor.
-	ExecuteCommitments map[signature.PublicKey]*ExecutorCommitment `json:"execute_commitments,omitempty"`
+	// HighestRank is the rank of the highest-ranked scheduler among those who have submitted
+	// a commitment for their own proposal. The maximum value indicates that no scheduler
+	// has submitted a commitment.
+	HighestRank uint64 `json:"highest_rank,omitempty"`
+	// SchedulerCommitments is a map that groups scheduler commitments and worker votes
+	// by the scheduler's rank.
+	SchedulerCommitments map[uint64]*SchedulerCommitment `json:"scheduler_commitments,omitempty"`
 	// Discrepancy is a flag signalling that a discrepancy has been detected.
-	Discrepancy bool `json:"discrepancy"`
-	// NextTimeout is the time when the next call to TryFinalize(true) should
-	// be scheduled to be executed. Zero means that no timeout is to be scheduled.
-	NextTimeout int64 `json:"next_timeout"`
-
-	// memberSet is a cached committee member set. It will be automatically
-	// constructed based on the passed Committee.
-	memberSet map[signature.PublicKey]bool
-
-	// workerSet is a cached committee worker set. It will be automatically
-	// constructed based on the passed Committee.
-	workerSet map[signature.PublicKey]bool
+	Discrepancy bool `json:"discrepancy,omitempty"`
 }
 
-func (p *Pool) computeMemberSets() {
-	if p.Committee == nil {
-		return
-	}
-
-	p.memberSet = make(map[signature.PublicKey]bool, len(p.Committee.Members))
-	p.workerSet = make(map[signature.PublicKey]bool)
-	for _, m := range p.Committee.Members {
-		p.memberSet[m.PublicKey] = true
-		if m.Role == scheduler.RoleWorker {
-			p.workerSet[m.PublicKey] = true
-		}
+// NewPool creates a new pool without any commitments and with .
+func NewPool() *Pool {
+	return &Pool{
+		HighestRank: math.MaxUint64,
 	}
 }
 
-func (p *Pool) isMember(id signature.PublicKey) bool {
-	if p.Committee == nil {
-		return false
-	}
-
-	if len(p.memberSet) == 0 {
-		p.computeMemberSets()
-	}
-
-	return p.memberSet[id]
-}
-
-func (p *Pool) isWorker(id signature.PublicKey) bool {
-	if p.Committee == nil {
-		return false
-	}
-
-	if len(p.workerSet) == 0 {
-		p.computeMemberSets()
-	}
-
-	return p.workerSet[id]
-}
-
-func (p *Pool) isScheduler(id signature.PublicKey) bool {
-	if p.Committee == nil {
-		return false
-	}
-	scheduler, err := p.Committee.TransactionScheduler(p.Round)
-	if err != nil {
-		return false
-	}
-
-	return scheduler.PublicKey.Equal(id)
-}
-
-// ResetCommitments resets the commitments in the pool, clears the discrepancy flag and the next
-// timeout height.
-func (p *Pool) ResetCommitments(round uint64) {
-	p.Round = round
-	if p.ExecuteCommitments == nil || len(p.ExecuteCommitments) > 0 {
-		p.ExecuteCommitments = make(map[signature.PublicKey]*ExecutorCommitment)
-	}
-	p.Discrepancy = false
-	p.NextTimeout = TimeoutNever
-}
-
-func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
+// VerifyExecutorCommitment verifies the given executor commitment.
+func VerifyExecutorCommitment( // nolint: gocyclo
 	ctx context.Context,
 	blk *block.Block,
-	nl NodeLookup,
-	msgValidator MessageValidator,
+	rt *registry.Runtime,
+	epoch beacon.EpochTime,
 	commit *ExecutorCommitment,
+	msgValidator MessageValidator,
+	nl NodeLookup,
 ) error {
-	if p.Committee == nil {
-		return ErrNoCommittee
-	}
-	if p.Committee.Kind != scheduler.KindComputeExecutor {
-		return ErrInvalidCommitteeKind
+	// Check executor commitment signature.
+	if err := commit.Verify(rt.ID); err != nil {
+		return p2pError.Permanent(err)
 	}
 
-	// Ensure that the node is actually a committee member. We do not enforce specific
-	// roles based on current discrepancy state to allow commitments arriving in any
-	// order (e.g., a backup worker can submit a commitment even before there is a
-	// discrepancy).
-	if !p.isMember(commit.NodeID) {
-		return ErrNotInCommittee
-	}
-
-	// Ensure the node did not already submit a commitment.
-	if _, ok := p.ExecuteCommitments[commit.NodeID]; ok {
-		return ErrAlreadyCommitted
-	}
-
-	if p.Runtime == nil {
-		return ErrNoRuntime
-	}
-	if p.Round != blk.Header.Round {
-		logger.Error("incorrectly configured pool",
-			"round", p.Round,
-			"blk_round", blk.Header.Round,
+	// Validate executor commitment.
+	if err := commit.ValidateBasic(); err != nil {
+		logger.Debug("executor commitment validate basic error",
+			"err", err,
 		)
-		return ErrInvalidRound
+		return ErrBadExecutorCommitment
 	}
 
 	// Check if the block is based on the previous block.
@@ -205,20 +113,20 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 		return ErrNotBasedOnCorrectBlock
 	}
 
-	if err := commit.ValidateBasic(); err != nil {
-		logger.Debug("executor commitment validate basic error",
-			"err", err,
-		)
-		return ErrBadExecutorCommitment
-	}
-
 	// TODO: Check for evidence of equivocation (oasis-core#3685).
 
 	switch commit.IsIndicatingFailure() {
 	case true:
-	default:
+		// Prevent schedulers to submit failures.
+		if commit.NodeID.Equal(commit.Header.SchedulerID) {
+			logger.Debug("executor commitment scheduler is not allowed to submit a failure",
+				"node_id", commit.NodeID,
+			)
+			return ErrBadExecutorCommitment
+		}
+	case false:
 		// Verify RAK-attestation.
-		if p.Runtime.TEEHardware != node.TEEHardwareInvalid {
+		if rt.TEEHardware != node.TEEHardwareInvalid {
 			n, err := nl.Node(ctx, commit.NodeID)
 			if err != nil {
 				// This should never happen as nodes cannot disappear mid-epoch.
@@ -229,51 +137,51 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 				return ErrNotInCommittee
 			}
 
-			ad := p.Runtime.ActiveDeployment(p.Committee.ValidFor)
+			ad := rt.ActiveDeployment(epoch)
 			if ad == nil {
 				// This should never happen as we prevent this elsewhere.
 				logger.Error("no active deployment",
-					"runtime_id", p.Runtime.ID,
+					"runtime_id", rt.ID,
 					"node_id", commit.NodeID,
-					"deployments", p.Runtime.Deployments,
+					"deployments", rt.Deployments,
 				)
 				return ErrNoRuntime
 			}
 
-			rt := n.GetRuntime(p.Runtime.ID, ad.Version)
-			if rt == nil {
+			nodeRt := n.GetRuntime(rt.ID, ad.Version)
+			if nodeRt == nil {
 				// We currently prevent this case throughout the rest of the system.
 				// Still, it's prudent to check.
 				logger.Warn("committee member not registered with this runtime",
-					"runtime_id", p.Runtime.ID,
+					"runtime_id", rt.ID,
 					"node_id", commit.NodeID,
 				)
 				return ErrNotInCommittee
 			}
 
-			if rt.Capabilities.TEE == nil {
+			if nodeRt.Capabilities.TEE == nil {
 				// This should never happen as we prevent this elsewhere.
 				logger.Error("node doesn't have TEE capability",
-					"runtime_id", p.Runtime.ID,
+					"runtime_id", rt.ID,
 					"node_id", commit.NodeID,
 				)
 				return ErrRakSigInvalid
 			}
 
-			if err = commit.Header.VerifyRAK(rt.Capabilities.TEE.RAK); err != nil {
+			if err = commit.Header.VerifyRAK(nodeRt.Capabilities.TEE.RAK); err != nil {
 				return ErrRakSigInvalid
 			}
 		}
 
 		// Check emitted runtime messages.
-		switch p.isScheduler(commit.NodeID) {
+		switch commit.NodeID.Equal(commit.Header.SchedulerID) {
 		case true:
 			// The transaction scheduler can include messages.
-			if uint32(len(commit.Messages)) > p.Runtime.Executor.MaxMessages {
+			if uint32(len(commit.Messages)) > rt.Executor.MaxMessages {
 				logger.Debug("executor commitment from scheduler has too many messages",
 					"node_id", commit.NodeID,
 					"num_messages", len(commit.Messages),
-					"max_messages", p.Runtime.Executor.MaxMessages,
+					"max_messages", rt.Executor.MaxMessages,
 				)
 				return ErrInvalidMessages
 			}
@@ -309,54 +217,124 @@ func (p *Pool) addVerifiedExecutorCommitment( // nolint: gocyclo
 		}
 	}
 
-	if p.ExecuteCommitments == nil {
-		p.ExecuteCommitments = make(map[signature.PublicKey]*ExecutorCommitment)
-	}
-	p.ExecuteCommitments[commit.NodeID] = commit
-
 	return nil
 }
 
-// AddExecutorCommitment verifies and adds a new executor commitment to the pool.
-func (p *Pool) AddExecutorCommitment(
-	ctx context.Context,
-	blk *block.Block,
-	nl NodeLookup,
-	commit *ExecutorCommitment,
-	msgValidator MessageValidator,
-) error {
-	if p.Runtime == nil {
-		return ErrNoRuntime
+// AddVerifiedExecutorCommitment adds a verified executor commitment to the pool.
+func (p *Pool) AddVerifiedExecutorCommitment(c *scheduler.Committee, ec *ExecutorCommitment) error {
+	// Enforce specific roles based on current discrepancy state.
+	switch {
+	case !p.Discrepancy && !c.IsMember(ec.NodeID):
+		// Discrepancy detection accepts commitments arriving in any order, e.g., a backup worker
+		// can submit a commitment even before there is a discrepancy.
+		logger.Debug("node is not in the committee",
+			"node_id", ec.NodeID,
+		)
+		return ErrNotInCommittee
+	case p.Discrepancy && !c.IsBackupWorker(ec.NodeID):
+		// Discrepancy resolution accepts commitments only from backup workers to prevent workers
+		// from improving their liveness statistics.
+		logger.Debug("node is not a backup worker",
+			"node_id", ec.NodeID,
+		)
+		return ErrBadExecutorCommitment
 	}
 
-	// Check executor commitment signature.
-	if err := commit.Verify(p.Runtime.ID); err != nil {
-		return p2pError.Permanent(err)
+	// Ensure that the scheduler is allowed to schedule transactions.
+	rank, ok := c.SchedulerRank(ec.Header.Header.Round, ec.Header.SchedulerID)
+	if !ok {
+		// Reject commitments with invalid schedulers.
+		logger.Debug("executor commitment's scheduler is not in the committee",
+			"round", ec.Header.Header.Round,
+			"scheduler_id", ec.Header.SchedulerID,
+		)
+		return ErrBadExecutorCommitment
 	}
 
-	return p.addVerifiedExecutorCommitment(ctx, blk, nl, msgValidator, commit)
+	// Prioritize commitments.
+	switch {
+	case rank > p.HighestRank:
+		// Reject commitments with higher ranking.
+		logger.Debug("executor commitment's scheduler has too high ranking",
+			"round", ec.Header.Header.Round,
+			"commitment_rank", rank,
+			"pool_rank", p.HighestRank,
+		)
+		return ErrBadExecutorCommitment
+	case rank != p.HighestRank && p.Discrepancy:
+		// Prevent placing commitments with different rank during discrepancy resolution.
+		logger.Debug("executor commitment's scheduler rank does not match",
+			"round", ec.Header.Header.Round,
+			"commitment_rank", rank,
+			"pool_rank", p.HighestRank,
+		)
+		return ErrBadExecutorCommitment
+	case rank < p.HighestRank:
+		// Update the pool when a scheduler with a superior rank commits.
+		if !ec.NodeID.Equal(ec.Header.SchedulerID) {
+			break
+		}
+
+		p.HighestRank = rank
+
+		// Drop commitments with higher ranking.
+		for r := range p.SchedulerCommitments {
+			if r > p.HighestRank {
+				delete(p.SchedulerCommitments, r)
+			}
+		}
+	}
+
+	// Add commitment if the node hasn't submitted one.
+	if p.SchedulerCommitments == nil {
+		p.SchedulerCommitments = make(map[uint64]*SchedulerCommitment)
+	}
+	sc, ok := p.SchedulerCommitments[rank]
+	if !ok {
+		sc = &SchedulerCommitment{}
+		p.SchedulerCommitments[rank] = sc
+	}
+
+	return sc.Add(ec)
 }
 
-// ProcessCommitments performs a single round of commitment checks. If there are enough commitments
-// in the pool, it performs discrepancy detection or resolution.
-func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
+// ProcessCommitments performs discrepancy detection or resolution.
+func (p *Pool) ProcessCommitments(c *scheduler.Committee, allowedStragglers uint16, timeout bool) (*SchedulerCommitment, error) {
+	sc, err := p.processCommitments(c, allowedStragglers, timeout)
+	switch err {
+	case ErrDiscrepancyDetected:
+		// Switch to discrepancy resolution.
+		p.Discrepancy = true
+
+		// Drop commitments with different ranking.
+		for r := range p.SchedulerCommitments {
+			if r != p.HighestRank {
+				delete(p.SchedulerCommitments, r)
+			}
+		}
+	}
+
+	return sc, err
+}
+
+func (p *Pool) processCommitments(c *scheduler.Committee, allowedStragglers uint16, timeout bool) (*SchedulerCommitment, error) { // nolint: gocyclo
+	// Ensure we have at least scheduler's vote.
+	sc, ok := p.SchedulerCommitments[p.HighestRank]
 	switch {
-	case p.Committee == nil:
-		return nil, ErrNoCommittee
-	case p.Committee.Kind != scheduler.KindComputeExecutor:
-		panic("roothash/commitment: unknown committee kind: " + p.Committee.Kind.String())
-	}
+	case !ok && timeout:
+		// The round timer expired, but the schedulers haven't submitted any commitments.
+		return nil, ErrNoSchedulerCommitment
+	case !ok:
+		// Wait for additional commitments or until the round timer expires.
+		return nil, ErrStillWaiting
 
-	type vote struct {
-		commit OpenCommitment
-		tally  int
 	}
-
-	var total, commits, failures int
 
 	// Gather votes.
-	votes := make(map[hash.Hash]*vote)
-	for _, n := range p.Committee.Members {
+	var total, commits, failures int
+	votes := make(map[hash.Hash]int)
+
+	for _, n := range c.Members {
 		switch {
 		case !p.Discrepancy && n.Role != scheduler.RoleWorker:
 			continue
@@ -365,201 +343,102 @@ func (p *Pool) ProcessCommitments(didTimeout bool) (OpenCommitment, error) {
 		}
 
 		total++
-		commit, ok := p.ExecuteCommitments[n.PublicKey]
-		if !ok {
+		vote, ok := sc.Votes[n.PublicKey]
+		switch {
+		case !ok:
 			continue
+		case vote == nil:
+			failures++
+		default:
+			votes[*vote]++
 		}
 		commits++
 
-		if commit.IsIndicatingFailure() {
-			failures++
+		// Early discrepancy detection.
+		switch {
+		case p.Discrepancy:
+			// Discrepancy resolution already started.
+			continue
+		case len(votes) <= 1 && failures <= int(allowedStragglers):
+			// Discrepancy not detected.
+			continue
+		case p.HighestRank > 0 && !timeout:
+			// To ensure fairness, the backup schedulers are always required to wait for a round
+			// timeout. Without this delay, there is a risk that they could bypass the scheduling
+			// order by convincing a few other nodes to instantly publish failures or discrepant
+			// commitments.
+			//
+			// In the former scenario, the colliding nodes might avoid punishment because nodes
+			// posting a failure are merely marked as 'not alive' for the current round, and no
+			// slashing occurs. In the latter case, the colliding nodes may be penalized, but
+			// the potential gains from being a scheduler could outweigh the losses.
 			continue
 		}
 
-		k := commit.ToVote()
-		if v, ok := votes[k]; !ok {
-			votes[k] = &vote{
-				commit: commit,
-				tally:  1,
-			}
-		} else {
-			v.tally++
-		}
-
-		// As soon as there is a discrepancy we can proceed with discrepancy resolution.
-		// No need to wait for all commits.
-		if !p.Discrepancy && len(votes) > 1 {
-			p.Discrepancy = true
-			return nil, ErrDiscrepancyDetected
-		}
-	}
-
-	// Determine whether the proposer has submitted a commitment.
-	proposer, err := p.Committee.TransactionScheduler(p.Round)
-	if err != nil {
-		return nil, ErrNoCommittee
-	}
-	proposerCommit, ok := p.ExecuteCommitments[proposer.PublicKey]
-	if !ok && didTimeout {
-		// TODO: Consider slashing for this offense.
-		return nil, ErrNoProposerCommitment
+		// The committee is neither unanimous nor is the number of valid commitments expected to
+		// surpass the required threshold due to numerous failures. Start discrepancy resolution.
+		return nil, ErrDiscrepancyDetected
 	}
 
 	switch p.Discrepancy {
 	case false:
 		// Discrepancy detection.
-		allowedStragglers := int(p.Runtime.Executor.AllowedStragglers)
-
-		// If it is already known that the number of valid commitments will not exceed the required
-		// threshold, there is no need to wait for the timer to expire. Instead, proceed directly to
-		// the discrepancy resolution mode, regardless of any additional commits.
-		if failures > allowedStragglers {
-			p.Discrepancy = true
-			return nil, ErrDiscrepancyDetected
-		}
-
-		// While a timer is running, all nodes are required to answer.
-		required := total
-
-		// After the timeout has elapsed, a limited number of stragglers are allowed.
-		if didTimeout {
-			required -= allowedStragglers
-			commits -= failures // Since failures count as stragglers.
-		}
-
-		// Check if the majority has been reached.
-		if commits < required || proposerCommit == nil {
+		if len(votes) > 1 || failures > int(allowedStragglers) {
+			// Early discrepancy detection will always identify discrepancies for the primary
+			// scheduler. However, for the backup schedulers, this will only be the case
+			// during timeouts. In other cases, the backup schedulers must await a round timeout.
 			return nil, ErrStillWaiting
 		}
 
+		// Check if the majority has been reached.
+		required := total - int(allowedStragglers)
+		for _, v := range votes {
+			// The map should have exactly one key/value pair, which indicates how many votes
+			// the scheduler's commitment has received.
+			required -= v
+		}
+
+		switch {
+		case required > 0 && timeout:
+			// The round timer expired, but the required number of votes hasn't been reached.
+			return nil, ErrDiscrepancyDetected
+		case required > 0:
+			// Wait for additional commitments or until the round timer expires.
+			return nil, ErrStillWaiting
+		}
 	case true:
 		// Discrepancy resolution.
 		required := total/2 + 1
+		remaining := total - commits
 
 		// Find the commit with the highest number of votes.
-		topVote := &vote{}
-		for _, v := range votes {
-			if v.tally > topVote.tally {
-				topVote = v
+		var (
+			hash hash.Hash
+			best int
+		)
+		for h, v := range votes {
+			if v > best {
+				hash = h
+				best = v
 			}
 		}
 
-		// Fail the round if the majority cannot be reached due to insufficient votes remaining
-		// (e.g. too many nodes have failed),
-		remaining := total - commits
-		if topVote.tally+remaining < required {
+		switch {
+		case best+remaining < required:
+			// Fail the round if the majority cannot be reached due to insufficient votes remaining
+			// (e.g. too many nodes have failed).
 			return nil, ErrInsufficientVotes
-		}
-
-		// Check if the majority has been reached.
-		if topVote.tally < required || proposerCommit == nil {
-			if didTimeout {
-				return nil, ErrInsufficientVotes
-			}
+		case best < required && timeout:
+			// The round timer expired, but the majority hasn't been reached.
+			return nil, ErrInsufficientVotes
+		case best < required:
+			// Wait for additional commitments or until the round timer expires.
 			return nil, ErrStillWaiting
-		}
-
-		// Make sure that the majority commitment is the same as the proposer commitment.
-		if !proposerCommit.MostlyEqual(topVote.commit) {
-			return nil, ErrBadProposerCommitment
+		case hash != sc.Commitment.ToVote():
+			// The scheduler's commitment hasn't received the majority of the votes.
+			return nil, ErrBadSchedulerCommitment
 		}
 	}
 
-	// We must return the proposer commitment as that one contains additional data.
-	return proposerCommit, nil
-}
-
-// CheckProposerTimeout verifies executor timeout request conditions.
-func (p *Pool) CheckProposerTimeout(
-	block *block.Block,
-	id signature.PublicKey,
-	round uint64,
-) error {
-	if p.Committee == nil {
-		return ErrNoCommittee
-	}
-	if p.Committee.Kind != scheduler.KindComputeExecutor {
-		return ErrInvalidCommitteeKind
-	}
-
-	// Ensure timeout is for correct round.
-	if round != block.Header.Round {
-		return ErrTimeoutNotCorrectRound
-	}
-
-	// Ensure there is no commitments yet.
-	if len(p.ExecuteCommitments) != 0 {
-		return ErrAlreadyCommitted
-	}
-
-	// Ensure that the node that is requesting a timeout is actually a committee
-	// worker.
-	if !p.isWorker(id) {
-		return ErrNotInCommittee
-	}
-
-	// Ensure that the node requesting a timeout is not the scheduler for
-	// current round.
-	if p.isScheduler(id) {
-		return ErrNodeIsScheduler
-	}
-
-	return nil
-}
-
-// TryFinalize attempts to finalize the commitments by performing discrepancy
-// detection and discrepancy resolution, based on the state of the pool. It may
-// request the caller to schedule timeouts by setting NextTimeout appropriately.
-//
-// If a timeout occurs and isTimeoutAuthoritative is false, the internal
-// discrepancy flag will not be changed but the method will still return the
-// ErrDiscrepancyDetected error.
-func (p *Pool) TryFinalize(
-	height int64,
-	roundTimeout int64,
-	didTimeout bool,
-	isTimeoutAuthoritative bool,
-) (OpenCommitment, error) {
-	var rearmTimer bool
-	defer func() {
-		if rearmTimer {
-			p.NextTimeout = height + roundTimeout
-		} else {
-			p.NextTimeout = TimeoutNever
-		}
-	}()
-
-	switch commit, err := p.ProcessCommitments(didTimeout); err {
-	case nil:
-		return commit, nil
-	case ErrStillWaiting:
-		if didTimeout {
-			// This is the fast path and the round timer expired.
-			//
-			// Transition to the discrepancy state so the backup workers
-			// process the round, assuming that it is possible to do so.
-			if isTimeoutAuthoritative {
-				p.Discrepancy = true
-				// Arm the timer, but increase the roundTimeout as the backup workers should be
-				// given some more time to do the computation.
-				rearmTimer = true
-				roundTimeout = (backupWorkerTimeoutFactorNumerator * roundTimeout) / backupWorkerTimeoutFactorDenominator
-			}
-			return nil, ErrDiscrepancyDetected
-		}
-
-		// Insufficient commitments for finalization, wait.
-		rearmTimer = true
-		return nil, err
-	case ErrDiscrepancyDetected:
-		rearmTimer = true
-		return nil, err
-	default:
-		return nil, err
-	}
-}
-
-// IsTimeout returns true if the time is up for pool's TryFinalize to be called.
-func (p *Pool) IsTimeout(height int64) bool {
-	return p.NextTimeout != TimeoutNever && height >= p.NextTimeout
+	return sc, nil
 }
