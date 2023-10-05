@@ -1453,9 +1453,9 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 	// Compute node's rank when scheduling transactions.
 	id := n.commonNode.Identity.NodeSigner.Public()
 	n.committee = n.epoch.GetExecutorCommittee().Committee
-	n.rank, err = n.committee.SchedulerRank(round, id)
-	if err != nil {
-		n.rank = math.MaxUint64
+	n.rank = math.MaxUint64
+	if rank, ok := n.committee.SchedulerRank(round, id); ok {
+		n.rank = rank
 	}
 
 	n.logger.Debug("node is an executor member",
@@ -1546,8 +1546,8 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 				if ec.Header.Header.Round != round {
 					continue
 				}
-				rank, err := n.committee.SchedulerRank(round, ec.Header.SchedulerID)
-				if err != nil {
+				rank, ok := n.committee.SchedulerRank(round, ec.Header.SchedulerID)
+				if !ok {
 					continue
 				}
 				poolRank = rank

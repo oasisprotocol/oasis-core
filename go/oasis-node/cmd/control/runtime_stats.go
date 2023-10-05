@@ -430,10 +430,11 @@ func doRuntimeStats(cmd *cobra.Command, args []string) { //nolint:gocyclo
 				continue
 			}
 			// Set committee info.
+			var ok bool
 			currentCommittee = state.Committee
-			currentScheduler, err = currentCommittee.Scheduler(currentRound, 0)
-			if err != nil {
-				logger.Error("failed to query transaction scheduler",
+			currentScheduler, ok = currentCommittee.Scheduler(currentRound, 0)
+			if !ok {
+				logger.Error("failed to query primary scheduler, no workers in committee",
 					"err", err,
 					"height", height,
 				)

@@ -74,8 +74,8 @@ func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.Publi
 		// Before opening the signed dispatch message, verify that it was actually signed by one
 		// of the transaction schedulers.
 		committee := epoch.GetExecutorCommittee().Committee
-		rank, err := committee.SchedulerRank(proposal.Header.Round, proposal.NodeID)
-		if err != nil {
+		rank, ok := committee.SchedulerRank(proposal.Header.Round, proposal.NodeID)
+		if !ok {
 			// Invalid scheduler, do not forward.
 			return p2pError.Permanent(errMsgFromNonTxnSched)
 		}

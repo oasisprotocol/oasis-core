@@ -76,9 +76,6 @@ func schedulerCheckScheduled(committee *scheduler.Committee, nodeID signature.Pu
 }
 
 func schedulerCheckPrimaryScheduler(committee *scheduler.Committee, nodeID signature.PublicKey, round uint64) bool {
-	rank, err := committee.SchedulerRank(round, nodeID)
-	if err != nil {
-		panic(err)
-	}
-	return rank == 0
+	rank, ok := committee.SchedulerRank(round, nodeID)
+	return ok && rank == 0
 }

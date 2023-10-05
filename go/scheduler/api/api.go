@@ -194,20 +194,20 @@ func (c *Committee) IsBackupWorker(id signature.PublicKey) bool {
 // Scheduler returns the scheduler with the given rank in the committee's scheduling order
 // for the given round.
 //
-// If no scheduler with the given rank is found, it returns an error.
-func (c *Committee) Scheduler(round uint64, rank uint64) (*CommitteeNode, error) {
-	idx, err := c.SchedulerIdx(round, rank)
-	if err != nil {
-		return nil, err
+// If no scheduler with the given rank is found, it returns false.
+func (c *Committee) Scheduler(round uint64, rank uint64) (*CommitteeNode, bool) {
+	idx, ok := c.SchedulerIdx(round, rank)
+	if !ok {
+		return nil, false
 	}
-	return c.Members[idx], nil
+	return c.Members[idx], true
 }
 
 // SchedulerIdx returns the index of the scheduler with the given rank in the committee's
 // scheduling order for the given round.
 //
-// If no scheduler with the given rank is found, it returns an error.
-func (c *Committee) SchedulerIdx(round uint64, rank uint64) (int, error) {
+// If no scheduler with the given rank is found, it returns false.
+func (c *Committee) SchedulerIdx(round uint64, rank uint64) (int, bool) {
 	var total uint64
 
 	for _, n := range c.Members {
@@ -219,20 +219,20 @@ func (c *Committee) SchedulerIdx(round uint64, rank uint64) (int, error) {
 	}
 
 	if rank >= total {
-		return 0, fmt.Errorf("no worker with the given rank in the committee")
+		return 0, false
 	}
 
 	idx := (rank + total - round%total) % total
 
-	return int(idx), nil
+	return int(idx), true
 }
 
 // SchedulerRank returns the position (index) of a node with the given public key in the committee's
 // scheduling order for the given round. A lower rank indicates higher scheduling priority.
 //
 // If the node is not a worker in the committee and, therefore, not allowed to schedule transactions
-// for the given round, it returns an error.
-func (c *Committee) SchedulerRank(round uint64, id signature.PublicKey) (uint64, error) {
+// for the given round, it returns false.
+func (c *Committee) SchedulerRank(round uint64, id signature.PublicKey) (uint64, bool) {
 	var (
 		total    uint64
 		idx      uint64
@@ -252,12 +252,12 @@ func (c *Committee) SchedulerRank(round uint64, id signature.PublicKey) (uint64,
 	}
 
 	if !isWorker {
-		return 0, fmt.Errorf("node is not a worker in the committee")
+		return 0, false
 	}
 
 	rank := (round + idx) % total
 
-	return rank, nil
+	return rank, true
 }
 
 // String returns a string representation of a Committee.

@@ -329,8 +329,8 @@ func (s *runtimeState) generateExecutorCommitments(t *testing.T, consensus conse
 	inMsgsHash.Empty()
 
 	// Gather executor nodes, starting with the scheduler.
-	schedulerIdx, err := executorCommittee.committee.SchedulerIdx(parent.Header.Round, rank)
-	require.NoError(err, "SchedulerIdx")
+	schedulerIdx, ok := executorCommittee.committee.SchedulerIdx(parent.Header.Round, rank)
+	require.True(ok, "SchedulerIdx")
 	schedulerID := executorCommittee.workers[schedulerIdx].Signer.Public()
 
 	executorNodes := make([]*registryTests.TestNode, 0, len(executorCommittee.workers))
@@ -523,8 +523,8 @@ func (s *runtimeState) testSuccessfulRound(t *testing.T, backend api.Backend, co
 		liveRounds[i] = 1
 	}
 
-	schedulerIdx, err := s.executorCommittee.committee.SchedulerIdx(parent.Block.Header.Round, 0)
-	require.NoError(err, "SchedulerIdx")
+	schedulerIdx, ok := s.executorCommittee.committee.SchedulerIdx(parent.Block.Header.Round, 0)
+	require.True(ok, "SchedulerIdx")
 	finalizedProposals[schedulerIdx]++
 
 	require.Equal(uint64(1), livenessStatistics.TotalRounds, "there should be one finalized round")
@@ -565,8 +565,8 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 		missedProposals := make([]uint64, len(livenessStatistics.MissedProposals))
 
 		var schedulerIdx int
-		schedulerIdx, err = s.executorCommittee.committee.SchedulerIdx(blk.Block.Header.Round, 0)
-		require.NoError(err, "SchedulerIdx")
+		schedulerIdx, ok := s.executorCommittee.committee.SchedulerIdx(blk.Block.Header.Round, 0)
+		require.True(ok, "SchedulerIdx")
 		missedProposals[schedulerIdx]++
 
 		require.Zero(livenessStatistics.TotalRounds, "there should be no finalized rounds")

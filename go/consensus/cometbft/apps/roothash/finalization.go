@@ -139,9 +139,10 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	livenessStats.TotalRounds++
 
 	// Record if the highest-ranked scheduler received enough commitments.
-	firstSchedulerIdx, err := rtState.Committee.SchedulerIdx(round, 0)
-	if err != nil {
-		return err
+	firstSchedulerIdx, ok := rtState.Committee.SchedulerIdx(round, 0)
+	if !ok {
+		// Should never happen.
+		return fmt.Errorf("failed to query primary scheduler, no workers in committee")
 	}
 	firstScheduler := rtState.Committee.Members[firstSchedulerIdx]
 
@@ -331,13 +332,12 @@ func (app *rootHashApplication) failRound(
 	)
 
 	// Record that the scheduler did not receive enough commitments.
-	schedulerIdx, err := rtState.Committee.SchedulerIdx(round, 0)
-	if err != nil {
-		// No workers in the committee.
-		return err
+	firstSchedulerIdx, ok := rtState.Committee.SchedulerIdx(round, 0)
+	if !ok {
+		return fmt.Errorf("failed to query primary scheduler, no workers in committee")
 	}
 
-	rtState.LivenessStatistics.MissedProposals[schedulerIdx]++
+	rtState.LivenessStatistics.MissedProposals[firstSchedulerIdx]++
 
 	if err := app.finalizeBlock(ctx, rtState, block.RoundFailed, nil); err != nil {
 		return fmt.Errorf("failed to emit empty block: %w", err)

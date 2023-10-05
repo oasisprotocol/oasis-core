@@ -313,7 +313,7 @@ func (n *Node) GetStatus() (*api.Status, error) {
 		status.ExecutorRoles = cmte.Roles
 
 		// Include scheduler rank.
-		if rank, err := cmte.Committee.SchedulerRank(status.LatestRound+1, epoch.identity.NodeSigner.Public()); err != nil {
+		if rank, ok := cmte.Committee.SchedulerRank(status.LatestRound+1, epoch.identity.NodeSigner.Public()); ok {
 			status.SchedulerRank = rank
 		}
 

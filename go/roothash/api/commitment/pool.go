@@ -241,8 +241,8 @@ func (p *Pool) AddVerifiedExecutorCommitment(c *scheduler.Committee, ec *Executo
 	}
 
 	// Ensure that the scheduler is allowed to schedule transactions.
-	rank, err := c.SchedulerRank(ec.Header.Header.Round, ec.Header.SchedulerID)
-	if err != nil {
+	rank, ok := c.SchedulerRank(ec.Header.Header.Round, ec.Header.SchedulerID)
+	if !ok {
 		// Reject commitments with invalid schedulers.
 		logger.Debug("executor commitment's scheduler is not in the committee",
 			"round", ec.Header.Header.Round,
