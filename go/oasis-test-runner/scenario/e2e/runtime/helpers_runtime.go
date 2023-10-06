@@ -178,7 +178,8 @@ func (sc *Scenario) EnsureActiveVersionForComputeWorker(ctx context.Context, nod
 			return fmt.Errorf("%s: unexpected active version (expected: %s got: %s)", node.Name, v, cs.ActiveVersion)
 		}
 		if cs.Status != commonWorker.StatusStateReady {
-			return fmt.Errorf("%s: runtime is not ready (got: %s)", node.Name, cs.Status)
+			time.Sleep(1 * time.Second)
+			continue
 		}
 		break
 	}
