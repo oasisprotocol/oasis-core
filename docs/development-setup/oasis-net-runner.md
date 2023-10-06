@@ -112,7 +112,7 @@ sysctl kernel.unprivileged_userns_clone=1
 
 This could also happen if you are running in a Docker container without
 specifying additional options at startup. See the [Using the Development Docker
-Image] section for details.
+Image] section of the Prerequisites for details.
 
 <!-- markdownlint-disable line-length -->
 [sandboxing]: ../runtime/README.md#runtimes

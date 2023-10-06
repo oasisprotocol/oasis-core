@@ -44,7 +44,7 @@ consensus layer only provides information on what state (summarized by a
 cryptographic hash of a Merklized data structure) is considered canonical at any
 given point in time.
 
-See the following sections for more details on specific components and their
+See the following chapters for more details on specific components and their
 implementations.
 
 * [Consensus Layer](consensus/README.md)
