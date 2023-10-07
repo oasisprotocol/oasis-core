@@ -613,6 +613,8 @@ func (n *Node) handleNewEventLocked(ev *roothash.Event) {
 
 // Guarded by n.CrossNode.
 func (n *Node) handleRuntimeHostEventLocked(ev *host.Event) {
+	n.logger.Debug("got runtime event", "ev", ev)
+
 	switch {
 	case ev.Started != nil:
 		atomic.StoreUint32(&n.hostedRuntimeProvisioned, 1)

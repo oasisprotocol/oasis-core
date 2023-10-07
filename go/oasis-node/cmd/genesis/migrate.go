@@ -364,6 +364,9 @@ NodeLoop:
 		}
 	}
 
+	// Reduce maximum consensus layer block size.
+	newDoc.Consensus.Parameters.MaxBlockSize = 1_048_576 // 1 MiB
+
 	return &newDoc, nil
 }
 
