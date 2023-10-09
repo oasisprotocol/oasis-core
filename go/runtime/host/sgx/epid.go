@@ -19,9 +19,7 @@ import (
 type teeStateEPID struct {
 	teeStateImplCommon
 
-	epidGID   uint32
-	spid      cmnIAS.SPID
-	quoteType *cmnIAS.SignatureType
+	epidGID uint32
 }
 
 func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error) {
@@ -30,21 +28,19 @@ func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID 
 		return nil, fmt.Errorf("error while getting quote info from AESMD: %w", err)
 	}
 
-	spidInfo, err := sp.ias.GetSPIDInfo(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error while getting IAS SPID information: %w", err)
-	}
-
 	ep.runtimeID = runtimeID
 	ep.version = version
 	ep.epidGID = binary.LittleEndian.Uint32(qi.GID[:])
-	ep.spid = spidInfo.SPID
-	ep.quoteType = &spidInfo.QuoteSignatureType
 
 	return qi.TargetInfo, nil
 }
 
 func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
+	spidInfo, err := sp.ias.GetSPIDInfo(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error while requesting SPID info: %w", err)
+	}
+
 	// Check if new format of attestations is supported in the consensus layer and use it.
 	regParams, err := sp.consensus.Registry().ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -61,8 +57,8 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	quote, err := sp.aesm.GetQuote(
 		ctx,
 		report,
-		*ep.quoteType,
-		ep.spid,
+		spidInfo.QuoteSignatureType,
+		spidInfo.SPID,
 		make([]byte, 16),
 		sigRL,
 	)
