@@ -306,8 +306,7 @@ mod tests {
                     0,
                     RegistryMessage::UpdateRuntime(registry::Runtime::default()),
                 ))],
-                // FIXME: Change to e6e170fb771583147255e0c96dc88615d4fd2fd28488ae489df01da201affe72 once cbor is fixed.
-                "baf9eeaa4860e363a9c27d99555839afc535f0cd32d23dc640f0f020677460e0",
+                "e6e170fb771583147255e0c96dc88615d4fd2fd28488ae489df01da201affe72",
             ),
             (
                 vec![Message::Registry(Versioned::new(

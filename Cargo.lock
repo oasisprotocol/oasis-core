@@ -1984,8 +1984,7 @@ dependencies = [
 [[package]]
 name = "oasis-cbor"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "937dd928dca340f29f67f096760ccec7853e60ebc156175aadfc8eb203eed37d"
+source = "git+https://github.com/oasisprotocol/oasis-cbor.git?branch=peternose/bugfix/skip-empty-optional-structs#95ad2e8f8c8bbd422fa958870a2d920a08ca33b9"
 dependencies = [
  "impl-trait-for-tuples",
  "oasis-cbor-derive",
@@ -1997,8 +1996,7 @@ dependencies = [
 [[package]]
 name = "oasis-cbor-derive"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b593c6ebad6e6429a8d1dac3509555da30311f0e6fdf93b96475bce895abef6d"
+source = "git+https://github.com/oasisprotocol/oasis-cbor.git?branch=peternose/bugfix/skip-empty-optional-structs#95ad2e8f8c8bbd422fa958870a2d920a08ca33b9"
 dependencies = [
  "darling",
  "oasis-cbor-value",
@@ -2011,8 +2009,7 @@ dependencies = [
 [[package]]
 name = "oasis-cbor-value"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe0d7f5a7c55eba7e8e845046c6c81332f4fa4997f0ed497b9f44db1d7f2050"
+source = "git+https://github.com/oasisprotocol/oasis-cbor.git?branch=peternose/bugfix/skip-empty-optional-structs#95ad2e8f8c8bbd422fa958870a2d920a08ca33b9"
 
 [[package]]
 name = "oasis-core-keymanager"
