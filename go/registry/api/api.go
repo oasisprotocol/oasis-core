@@ -614,9 +614,14 @@ func VerifyRegisterNodeArgs( // nolint: gocyclo
 				return nil, nil, fmt.Errorf("failed to lookup runtime: %w", err)
 			}
 
-			// If the node indicates TEE support for any of it's runtimes,
-			// validate the attestation evidence.
-			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height); err != nil && !isSanityCheck {
+			// If the node indicates TEE support for any of it's runtimes, validate the attestation
+			// evidence.
+			//
+			// These checks are skipped at time of genesis as there can be nodes present which are
+			// both validators and compute nodes and have out of date attestation evidence. Removing
+			// such nodes could lead to consensus not having the proper majority. This is safe as
+			// attestation evidence is independently verified before scheduling committees.
+			if err := VerifyNodeRuntimeEnclaveIDs(logger, n.ID, rt, regRt, params.TEEFeatures, now, height); err != nil && !isSanityCheck && !isGenesis {
 				return nil, nil, err
 			}
 

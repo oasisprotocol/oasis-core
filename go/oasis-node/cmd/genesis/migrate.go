@@ -293,23 +293,13 @@ NodeLoop:
 			continue
 		}
 		for _, rt := range node.Runtimes {
-			knownRt, exists := knownRuntimes[rt.ID]
+			_, exists := knownRuntimes[rt.ID]
 			if !exists {
 				logger.Warn("removing node referencing unknown runtime",
 					"node_id", node.ID,
 					"runtime_id", rt.ID,
 				)
 				continue NodeLoop
-			}
-			if rt.Capabilities.TEE != nil {
-				if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, node.ID, rt, knownRt, newDoc.Registry.Parameters.TEEFeatures, oldDoc.Time, uint64(oldDoc.Height)); err != nil {
-					logger.Warn("removing node with invalid TEE capability",
-						"err", err,
-						"node_id", node.ID,
-						"runtime_id", rt.ID,
-					)
-					continue NodeLoop
-				}
 			}
 		}
 		newDoc.Registry.Nodes = append(newDoc.Registry.Nodes, sigNode)
