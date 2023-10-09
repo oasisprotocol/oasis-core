@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -20,6 +21,11 @@ type teeStateEPID struct {
 	teeStateImplCommon
 
 	epidGID uint32
+
+	// prevIAS is the index of the IAS server that was used for the last successful attestation.
+	// This is used as a heuristic to first query the IAS server that is likely able to
+	// successfully do the attestation.
+	prevIAS int
 }
 
 func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID common.Namespace, version version.Version) ([]byte, error) {
@@ -36,11 +42,6 @@ func (ep *teeStateEPID) Init(ctx context.Context, sp *sgxProvisioner, runtimeID 
 }
 
 func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn protocol.Connection, report []byte, nonce string) ([]byte, error) {
-	spidInfo, err := sp.ias.GetSPIDInfo(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error while requesting SPID info: %w", err)
-	}
-
 	// Check if new format of attestations is supported in the consensus layer and use it.
 	regParams, err := sp.consensus.Registry().ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -48,8 +49,50 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	}
 	supportsAttestationV1 := (regParams.TEEFeatures != nil && regParams.TEEFeatures.SGX.PCS)
 
+	// Start with the IAS server that was used for the last successful attestation.
+	// TODO: Could consider implementing a strategy for more optimized endpoint selection with
+	// latency and success rate feedback (in ias/proxy/client.go). But (re-)attestations are
+	// not so frequent and this is the only code that uses the IAS clients, so this is good enough.
+	for i := ep.prevIAS; i < ep.prevIAS+len(sp.ias); i++ {
+		idx := i % len(sp.ias)
+		resp, err := ep.update(ctx, sp, conn, report, nonce, supportsAttestationV1, sp.ias[idx])
+		if err == nil {
+			ep.prevIAS = idx
+			return resp, nil
+		}
+
+		sp.logger.Warn("error obtaining attestation, trying next IAS server", "err", err, "client_idx", idx)
+		if i == ep.prevIAS+len(sp.ias)-1 {
+			return nil, err
+		}
+
+		select {
+		case <-time.After(50 * time.Millisecond):
+			continue
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return nil, fmt.Errorf("no IAS servers configured")
+}
+
+func (ep *teeStateEPID) update(
+	ctx context.Context,
+	sp *sgxProvisioner,
+	conn protocol.Connection,
+	report []byte,
+	nonce string,
+	supportsAttestationV1 bool,
+	iasClient ias.Endpoint,
+) ([]byte, error) {
+	// Obtain SPID info.
+	spidInfo, err := iasClient.GetSPIDInfo(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error while requesting SPID info: %w", err)
+	}
+
 	// Update the SigRL (Not cached, knowing if revoked is important).
-	sigRL, err := sp.ias.GetSigRL(ctx, ep.epidGID)
+	sigRL, err := iasClient.GetSigRL(ctx, ep.epidGID)
 	if err != nil {
 		return nil, fmt.Errorf("error while requesting SigRL: %w", err)
 	}
@@ -84,7 +127,7 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 		MinTCBEvaluationDataNumber: quotePolicy.MinTCBEvaluationDataNumber,
 	}
 
-	avrBundle, err := sp.ias.VerifyEvidence(ctx, &evidence)
+	avrBundle, err := iasClient.VerifyEvidence(ctx, &evidence)
 	if err != nil {
 		return nil, fmt.Errorf("error while verifying attestation evidence: %w", err)
 	}
@@ -94,7 +137,7 @@ func (ep *teeStateEPID) Update(ctx context.Context, sp *sgxProvisioner, conn pro
 	if decErr == nil && avr.TCBEvaluationDataNumber < quotePolicy.MinTCBEvaluationDataNumber {
 		// Retry again with early updating.
 		evidence.EarlyTCBUpdate = true
-		avrBundle, err = sp.ias.VerifyEvidence(ctx, &evidence)
+		avrBundle, err = iasClient.VerifyEvidence(ctx, &evidence)
 		if err != nil {
 			return nil, fmt.Errorf("error while verifying attestation evidence with early update: %w", err)
 		}

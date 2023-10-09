@@ -59,8 +59,8 @@ type Config struct {
 	// LoaderPath is the path to the runtime loader binary.
 	LoaderPath string
 
-	// IAS is the Intel Attestation Service endpoint.
-	IAS ias.Endpoint
+	// IAS are the Intel Attestation Service endpoint.
+	IAS []ias.Endpoint
 	// PCS is the Intel Provisioning Certification Service client.
 	PCS pcs.Client
 	// Consensus is the consensus layer backend.
@@ -157,7 +157,7 @@ type sgxProvisioner struct {
 	cfg Config
 
 	sandbox   host.Provisioner
-	ias       ias.Endpoint
+	ias       []ias.Endpoint
 	pcs       pcs.Client
 	aesm      *aesm.Client
 	consensus consensus.Backend

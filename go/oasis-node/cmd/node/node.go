@@ -74,7 +74,7 @@ type Node struct {
 	Genesis  genesisAPI.Provider
 	Identity *identity.Identity
 	Sentry   sentryAPI.Backend
-	IAS      iasAPI.Endpoint
+	IAS      []iasAPI.Endpoint
 
 	RuntimeRegistry runtimeRegistry.Registry
 
@@ -240,7 +240,6 @@ func (n *Node) initRuntimeWorkers() error {
 		n.Consensus,
 		n.LightClient,
 		n.P2P,
-		n.IAS,
 		n.Consensus.KeyManager(),
 		n.RuntimeRegistry,
 	)

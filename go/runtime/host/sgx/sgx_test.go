@@ -12,6 +12,7 @@ import (
 	cmnIAS "github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	"github.com/oasisprotocol/oasis-core/go/ias/api"
 	iasHttp "github.com/oasisprotocol/oasis-core/go/ias/http"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -76,7 +77,7 @@ func TestProvisionerSGX(t *testing.T) {
 					ConsensusProtocolVersion: version.Versions.ConsensusProtocol,
 				},
 				LoaderPath:            envRuntimeLoaderPath,
-				IAS:                   ias,
+				IAS:                   []api.Endpoint{ias},
 				RuntimeAttestInterval: 2 * time.Second,
 				InsecureNoSandbox:     true,
 				SandboxBinaryPath:     bwrapPath,
@@ -93,7 +94,7 @@ func TestProvisionerSGX(t *testing.T) {
 				},
 				LoaderPath:            envRuntimeLoaderPath,
 				RuntimeAttestInterval: 2 * time.Second,
-				IAS:                   ias,
+				IAS:                   []api.Endpoint{ias},
 				SandboxBinaryPath:     bwrapPath,
 			})
 		}, extraTests)
