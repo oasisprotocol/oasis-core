@@ -280,9 +280,9 @@ func (n *Node) Start() error {
 
 	for _, hosted := range n.hostedRuntimes {
 		if hosted.runtime.pruner.Strategy != "" {
-			n.Config.Runtime.HistoryPruner.Strategy = hosted.runtime.pruner.Strategy
-			n.Config.Runtime.HistoryPruner.Interval = hosted.runtime.pruner.Interval
-			n.Config.Runtime.HistoryPruner.NumKept = hosted.runtime.pruner.NumKept
+			n.Config.Runtime.Prune.Strategy = hosted.runtime.pruner.Strategy
+			n.Config.Runtime.Prune.Interval = hosted.runtime.pruner.Interval
+			n.Config.Runtime.Prune.NumKept = hosted.runtime.pruner.NumKept
 		}
 
 		n.Config.Runtime.Paths = append(n.Config.Runtime.Paths, hosted.runtime.BundlePaths()...)

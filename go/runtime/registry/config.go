@@ -293,18 +293,18 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 		cfg.Host = &rh
 	}
 
-	strategy := config.GlobalConfig.Runtime.HistoryPruner.Strategy
+	strategy := config.GlobalConfig.Runtime.Prune.Strategy
 	switch strings.ToLower(strategy) {
 	case history.PrunerStrategyNone:
 		cfg.History.Pruner = history.NewNonePruner()
 	case history.PrunerStrategyKeepLast:
-		numKept := config.GlobalConfig.Runtime.HistoryPruner.NumKept
+		numKept := config.GlobalConfig.Runtime.Prune.NumKept
 		cfg.History.Pruner = history.NewKeepLastPruner(numKept)
 	default:
 		return nil, fmt.Errorf("runtime/registry: unknown history pruner strategy: %s", strategy)
 	}
 
-	cfg.History.PruneInterval = config.GlobalConfig.Runtime.HistoryPruner.Interval
+	cfg.History.PruneInterval = config.GlobalConfig.Runtime.Prune.Interval
 	const minPruneInterval = 1 * time.Second
 	if cfg.History.PruneInterval < minPruneInterval {
 		cfg.History.PruneInterval = minPruneInterval

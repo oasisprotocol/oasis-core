@@ -304,10 +304,10 @@ func (sc *Scenario) EnableRuntimeDeployment(ctx context.Context, childEnv *env.E
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
 
-	// The upgrade epoch should be set to at least 3 to provide compute workers with enough time
+	// The upgrade epoch should be set to at least 4 to provide compute workers with enough time
 	// to prepare for the upgrade. If it is set too low, the runtime will be suspended due to
 	// a lack of eligible compute workers.
-	upgradeEpoch := epoch + 3
+	upgradeEpoch := epoch + 4
 
 	// Fetch old deployment.
 	oldRtDsc, err := sc.Net.Controller().Registry.GetRuntime(ctx, &registry.GetRuntimeQuery{

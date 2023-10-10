@@ -75,7 +75,7 @@ type Config struct {
 	Environment RuntimeEnvironment `yaml:"environment"`
 
 	// History pruner configuration.
-	HistoryPruner HistoryPrunerConfig `yaml:"history_pruner,omitempty"`
+	Prune PruneConfig `yaml:"prune,omitempty"`
 
 	// Runtime ID -> local config.
 	RuntimeConfig map[string]interface{} `yaml:"config,omitempty"`
@@ -92,8 +92,8 @@ type Config struct {
 	PreWarmEpochs uint64 `yaml:"pre_warm_epochs,omitempty"`
 }
 
-// HistoryPrunerConfig is the history pruner configuration structure.
-type HistoryPrunerConfig struct {
+// PruneConfig is the history pruner configuration structure.
+type PruneConfig struct {
 	// History pruner strategy.
 	Strategy string `yaml:"strategy"`
 	// History pruning interval.
@@ -126,11 +126,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("unknown runtime environment: %s", c.Environment)
 	}
 
-	switch c.HistoryPruner.Strategy {
+	switch c.Prune.Strategy {
 	case "none":
 	case "keep_last":
-		if c.HistoryPruner.Interval < 1*time.Second {
-			return fmt.Errorf("history_pruner.interval must be >= 1 second")
+		if c.Prune.Interval < 1*time.Second {
+			return fmt.Errorf("prune.interval must be >= 1 second")
 		}
 	default:
 		return fmt.Errorf("unknown runtime history pruner strategy: %s", c.Environment)
@@ -147,7 +147,7 @@ func DefaultConfig() Config {
 		SandboxBinary: "/usr/bin/bwrap",
 		SGXLoader:     "",
 		Environment:   RuntimeEnvironmentAuto,
-		HistoryPruner: HistoryPrunerConfig{
+		Prune: PruneConfig{
 			Strategy: "none",
 			Interval: 2 * time.Minute,
 			NumKept:  600,
