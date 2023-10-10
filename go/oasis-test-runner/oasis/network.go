@@ -640,7 +640,7 @@ func (net *Network) startOasisNode(
 	}
 	if len(subCmd) == 0 {
 		if net.iasProxy != nil {
-			cfg.IAS.ProxyAddress = []string{fmt.Sprintf("%s@127.0.0.1:%d", net.iasProxy.tlsPublicKey, net.iasProxy.grpcPort)}
+			cfg.IAS.ProxyAddresses = []string{fmt.Sprintf("%s@127.0.0.1:%d", net.iasProxy.tlsPublicKey, net.iasProxy.grpcPort)}
 			if net.iasProxy.mock {
 				cfg.IAS.DebugSkipVerify = true
 			}

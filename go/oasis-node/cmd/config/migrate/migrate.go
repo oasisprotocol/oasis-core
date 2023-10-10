@@ -682,8 +682,8 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 
 		if proxy, ok := m(ias)["proxy"]; ok {
 			if address, ok := m(proxy)["address"]; ok {
-				logger.Info("ias.proxy.address is now ias.proxy_address")
-				mIAS["proxy_address"] = address
+				logger.Info("ias.proxy.address is now ias.proxy_addresses")
+				mIAS["proxy_addresses"] = address
 				delete(m(proxy), "address")
 			}
 		}

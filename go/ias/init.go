@@ -24,6 +24,6 @@ func New(identity *identity.Identity) ([]api.Endpoint, error) {
 
 	return client.New(
 		identity,
-		config.GlobalConfig.IAS.ProxyAddress,
+		config.GlobalConfig.IAS.ProxyAddresses,
 	)
 }

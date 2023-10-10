@@ -4,7 +4,7 @@ package config
 // Config is the IAS configuration structure.
 type Config struct {
 	// IAS proxy address in the form ID@HOST:PORT.
-	ProxyAddress []string `yaml:"proxy_address"`
+	ProxyAddresses []string `yaml:"proxy_addresses"`
 
 	// Skip IAS AVR signature verification (UNSAFE).
 	DebugSkipVerify bool `yaml:"debug_skip_verify,omitempty"`
@@ -18,7 +18,7 @@ func (c *Config) Validate() error {
 // DefaultConfig returns the default configuration settings.
 func DefaultConfig() Config {
 	return Config{
-		ProxyAddress:    []string{},
+		ProxyAddresses:  []string{},
 		DebugSkipVerify: false,
 	}
 }
