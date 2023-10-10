@@ -70,7 +70,7 @@ type RuntimeHostConfig struct {
 	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
 }
 
-func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus consensus.Backend, ias ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
+func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus consensus.Backend, ias []ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
 	var cfg RuntimeConfig
 
 	haveSetRuntimes := len(config.GlobalConfig.Runtime.Paths) > 0

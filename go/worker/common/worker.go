@@ -10,7 +10,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
-	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	keymanagerApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
@@ -29,7 +28,6 @@ type Worker struct {
 	Consensus       consensus.Backend
 	LightClient     consensus.LightClient
 	P2P             p2p.Service
-	IAS             ias.Endpoint
 	KeyManager      keymanagerApi.Backend
 	RuntimeRegistry runtimeRegistry.Registry
 
@@ -192,7 +190,6 @@ func newWorker(
 	consensus consensus.Backend,
 	lightClient consensus.LightClient,
 	p2p p2p.Service,
-	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	rtRegistry runtimeRegistry.Registry,
 	cfg Config,
@@ -222,7 +219,6 @@ func newWorker(
 		Consensus:       consensus,
 		LightClient:     lightClient,
 		P2P:             p2p,
-		IAS:             ias,
 		KeyManager:      keyManager,
 		RuntimeRegistry: rtRegistry,
 		runtimes:        make(map[common.Namespace]*committee.Node),
@@ -256,7 +252,6 @@ func New(
 	consensus consensus.Backend,
 	lightClient consensus.LightClient,
 	p2p p2p.Service,
-	ias ias.Endpoint,
 	keyManager keymanagerApi.Backend,
 	runtimeRegistry runtimeRegistry.Registry,
 ) (*Worker, error) {
@@ -277,7 +272,6 @@ func New(
 		consensus,
 		lightClient,
 		p2p,
-		ias,
 		keyManager,
 		runtimeRegistry,
 		*cfg,
