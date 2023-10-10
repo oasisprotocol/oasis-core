@@ -44,6 +44,7 @@ var (
 	nodeStateGlobs = []string{
 		"persistent-store.*.db",
 		cmtCommon.StateDir,
+		"tendermint", // XXX: Legacy filename for consensus state directory.
 		filepath.Join(runtimesGlob, history.DbFilename),
 	}
 
