@@ -149,6 +149,10 @@ runtime:
   environment: sgx
   provisioner: sandboxed
 
+  history:
+    pruner:
+      strategy: keep_last
+
   sgx:
     loader: /oasis/bin/oasis-core-runtime-loader
 
@@ -507,6 +511,7 @@ func TestConfigMigrationComplex(t *testing.T) {
 	require.Equal(newConfig.Pprof.BindAddress, "0.0.0.0:6666")
 	require.Equal(newConfig.Runtime.Environment, rtConfig.RuntimeEnvironmentSGX)
 	require.Equal(newConfig.Runtime.Provisioner, rtConfig.RuntimeProvisionerSandboxed)
+	require.Equal(newConfig.Runtime.Prune.Strategy, "keep_last")
 	require.Equal(newConfig.Runtime.SGXLoader, "/oasis/bin/oasis-core-runtime-loader")
 	require.Equal(newConfig.Runtime.Paths[0], "/oasis/runtimes/sapphire-paratime.orc")
 	require.Equal(newConfig.Runtime.Paths[1], "/oasis/runtimes/sapphire-paratime-previous.orc")

@@ -391,9 +391,9 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 
 		if history, ok := m(runtime)["history"]; ok {
 			if pruner, ok := m(history)["pruner"]; ok {
-				logger.Info("runtime.history.pruner is now runtime.history_pruner")
+				logger.Info("runtime.history.pruner is now runtime.prune")
 				mkSubMap(newCfg, "runtime")
-				m(newCfg["runtime"])["history_pruner"] = m(pruner)
+				m(newCfg["runtime"])["prune"] = m(pruner)
 				delete(m(history), "pruner")
 			} else {
 				logger.Warn("input has invalid entries under runtime.history")
