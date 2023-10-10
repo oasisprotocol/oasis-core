@@ -548,6 +548,53 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 				m(m(newCfg["p2p"])["registration"])["addresses"] = addresses
 				delete(m(p2p), "addresses")
 			}
+
+			// Migrate gossipsub config.
+			for _, k := range []string{
+				"peer_outbound_queue_size",
+				"validate_queue_size",
+				"validate_concurrency",
+				"validate_throttle",
+			} {
+				if v, ok := m(p2p)[k]; ok {
+					logger.Info(fmt.Sprintf("worker.p2p.%s is now p2p.gossipsub.%s", k, k))
+					mkSubMap(newCfg, "p2p")
+					mkSubMap(m(newCfg["p2p"]), "gossipsub")
+					m(m(newCfg["p2p"])["gossipsub"])[k] = v
+					delete(m(p2p), k)
+				}
+			}
+
+			// Migrate connection manager config.
+			for _, k := range []string{
+				"max_num_peers",
+				"peer_grace_period",
+				"persistent_peers",
+			} {
+				if v, ok := m(p2p)[k]; ok {
+					logger.Info(fmt.Sprintf("worker.p2p.%s is now p2p.connection_manager.%s", k, k))
+					mkSubMap(newCfg, "p2p")
+					mkSubMap(m(newCfg["p2p"]), "connection_manager")
+					m(m(newCfg["p2p"])["connection_manager"])[k] = v
+					delete(m(p2p), k)
+				}
+			}
+
+			if blocked_peers, ok := m(p2p)["blocked_peers"]; ok {
+				logger.Info("worker.p2p.blocked_peers is now p2p.connection_gater.blocked_peers")
+				mkSubMap(newCfg, "p2p")
+				mkSubMap(m(newCfg["p2p"]), "connection_gater")
+				m(m(newCfg["p2p"])["connection_gater"])["blocked_peers"] = blocked_peers
+				delete(m(p2p), "blocked_peers")
+			}
+
+			if connectedness_low_water, ok := m(p2p)["connectedness_low_water"]; ok {
+				logger.Info("worker.p2p.connectedness_low_water is now p2p.peer_manager.connectedness_low_water")
+				mkSubMap(newCfg, "p2p")
+				mkSubMap(m(newCfg["p2p"]), "peer_manager")
+				m(m(newCfg["p2p"])["peer_manager"])["connectedness_low_water"] = connectedness_low_water
+				delete(m(p2p), "connectedness_low_water")
+			}
 		}
 	}
 

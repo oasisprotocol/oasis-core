@@ -70,6 +70,17 @@ genesis:
 worker:  
   p2p:
     port: 9002
+    peer_outbound_queue_size: 42
+    validate_queue_size: 43
+    validate_concurrency: 44
+    validate_throttle: 45
+    max_num_peers: 46
+    peer_grace_period: 47s
+    connectedness_low_water: 48
+    persistent_peers:
+      - "foo@1.2.3.4:4321"
+    blocked_peers:
+      - "1.2.3.4"
 
   registration:
     entity: /storage/node/entity/entity.json
@@ -480,6 +491,15 @@ func TestConfigMigrationComplex(t *testing.T) {
 	require.Equal(newConfig.P2P.Port, uint16(9002))
 	require.Equal(newConfig.P2P.Seeds[0], "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:26656")
 	require.Equal(newConfig.P2P.Seeds[1], "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:9200")
+	require.Equal(newConfig.P2P.Gossipsub.PeerOutboundQueueSize, 42)
+	require.Equal(newConfig.P2P.Gossipsub.ValidateQueueSize, 43)
+	require.Equal(newConfig.P2P.Gossipsub.ValidateConcurrency, 44)
+	require.Equal(newConfig.P2P.Gossipsub.ValidateThrottle, 45)
+	require.Equal(newConfig.P2P.ConnectionManager.MaxNumPeers, 46)
+	require.Equal(newConfig.P2P.ConnectionManager.PeerGracePeriod, 47*time.Second)
+	require.Equal(newConfig.P2P.ConnectionManager.PersistentPeers[0], "foo@1.2.3.4:4321")
+	require.Equal(newConfig.P2P.ConnectionGater.BlockedPeerIPs[0], "1.2.3.4")
+	require.Equal(newConfig.P2P.PeerManager.ConnectednessLowWater, 48.0)
 	require.Equal(newConfig.Consensus.P2P.PersistentPeer[0], "INSERT_P2P_PUBKEY_HERE@1.2.3.4:5678")
 	require.Equal(newConfig.Consensus.P2P.UnconditionalPeer[0], "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:26656")
 	require.Equal(newConfig.Consensus.SentryUpstreamAddresses[0], "INSERT_P2P_PUBKEY_HERE@1.2.3.4:5678")
