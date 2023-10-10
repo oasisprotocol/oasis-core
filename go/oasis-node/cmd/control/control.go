@@ -46,10 +46,9 @@ var (
 	}
 
 	controlClearDeregisterCmd = &cobra.Command{
-		Use:        "clear-deregister",
-		Short:      "clear the forced node deregistration flag",
-		Run:        doClearDeregister,
-		Deprecated: "it should not longer be necessary.",
+		Use:   "clear-deregister",
+		Short: "clear the forced node deregistration flag",
+		Run:   doClearDeregister,
 	}
 
 	controlUpgradeBinaryCmd = &cobra.Command{
