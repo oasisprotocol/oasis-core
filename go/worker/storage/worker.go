@@ -38,10 +38,7 @@ func New(
 	commonWorker *workerCommon.Worker,
 	registration *registration.Worker,
 ) (*Worker, error) {
-	enabled := config.GlobalConfig.Mode.HasLocalStorage()
-	if config.GlobalConfig.Mode == config.ModeArchive && len(commonWorker.GetRuntimes()) > 0 {
-		enabled = true
-	}
+	enabled := config.GlobalConfig.Mode.HasLocalStorage() && len(commonWorker.GetRuntimes()) > 0
 
 	s := &Worker{
 		enabled:      enabled,

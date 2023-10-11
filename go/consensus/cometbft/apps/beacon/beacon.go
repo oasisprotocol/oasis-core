@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	beaconState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/beacon/state"
@@ -74,6 +75,12 @@ func (app *beaconApplication) ExecuteMessage(*api.Context, interface{}, interfac
 }
 
 func (app *beaconApplication) ExecuteTx(ctx *api.Context, tx *transaction.Transaction) error {
+	if app.backend == nil {
+		// Executing a transaction before BeginBlock -- likely during transaction simulation or
+		// checks. Fail the transaction, it may be retried.
+		return consensus.ErrNoCommittedBlocks
+	}
+
 	state := beaconState.NewMutableState(ctx.State())
 
 	params, err := state.ConsensusParameters(ctx)

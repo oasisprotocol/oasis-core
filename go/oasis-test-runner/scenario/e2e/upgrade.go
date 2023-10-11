@@ -440,6 +440,12 @@ func (sc *nodeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		return err
 	}
 
+	// Wait for some blocks after the upgrade to make sure we don't query too fast.
+	_, err = sc.WaitBlocks(ctx, 2)
+	if err != nil {
+		return fmt.Errorf("failed to wait for blocks: %w", err)
+	}
+
 	// Run post-upgrade checker.
 	if err = sc.upgradeChecker.PostUpgradeFn(ctx, sc.Net.Controller()); err != nil {
 		return err
