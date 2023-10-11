@@ -188,19 +188,10 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// manager runtime has not been affected by the node upgrade. Furthermore, the insertion
 	// of new key/value pairs also works.
 
-	// Upgrade the compute runtime.
-	nonce, err := sc.TestEntityNonce(ctx)
-	if err != nil {
-		return err
-	}
-	if err := sc.UpgradeComputeRuntime(ctx, childEnv, cli, sc.upgradedRuntimeIndex, nonce); err != nil {
-		return err
-	}
-
 	// The key manager upgrade scenario added an upgraded key manager node to the network,
 	// so we need to re-register the entity.
 	ent := sc.Net.Entities()[1]
-	nonce, err = sc.EntityNonceByID(ctx, ent.ID())
+	nonce, err := sc.EntityNonceByID(ctx, ent.ID())
 	if err != nil {
 		return nil
 	}
@@ -228,6 +219,15 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	// Wait until at least 3 secrets are generated.
 	if _, err = sc.WaitMasterSecret(ctx, 3); err != nil {
+		return err
+	}
+
+	// Upgrade the compute runtime.
+	nonce, err = sc.TestEntityNonce(ctx)
+	if err != nil {
+		return err
+	}
+	if err := sc.UpgradeComputeRuntime(ctx, childEnv, cli, sc.upgradedRuntimeIndex, nonce); err != nil {
 		return err
 	}
 
