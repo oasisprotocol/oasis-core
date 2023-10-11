@@ -162,7 +162,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					Runtime:            0,
 					Entity:             1,
 					Policy:             0,
-					SkipPolicy:         tee != node.TEEHardwareInvalid,
+					SkipPolicy:         tee != node.TEEHardwareIntelSGX,
 					RuntimeProvisioner: runtimeProvisioner,
 				},
 			}
