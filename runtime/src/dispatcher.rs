@@ -32,8 +32,7 @@ use crate::{
         dispatcher::Dispatcher as RpcDispatcher,
         session::SessionInfo,
         types::{
-            Kind, Kind as RpcKind, Message as RpcMessage, Request as RpcRequest,
-            Response as RpcResponse,
+            Kind as RpcKind, Message as RpcMessage, Request as RpcRequest, Response as RpcResponse,
         },
         Context as RpcContext,
     },
@@ -324,14 +323,14 @@ impl Dispatcher {
                 );
 
                 match kind {
-                    Kind::NoiseSession => self.dispatch_secure_rpc(state, request).await,
-                    Kind::InsecureQuery => self.dispatch_insecure_rpc(state, request).await,
-                    Kind::LocalQuery => self.dispatch_local_rpc(state, request).await,
+                    RpcKind::NoiseSession => self.dispatch_secure_rpc(state, request).await,
+                    RpcKind::InsecureQuery => self.dispatch_insecure_rpc(state, request).await,
+                    RpcKind::LocalQuery => self.dispatch_local_rpc(state, request).await,
                 }
             }
             Body::RuntimeLocalRPCCallRequest { request } => {
                 debug!(self.logger, "Received RPC call request";
-                    "kind" => ?Kind::LocalQuery,
+                    "kind" => ?RpcKind::LocalQuery,
                 );
 
                 self.dispatch_local_rpc(state, request).await
@@ -798,7 +797,7 @@ impl Dispatcher {
                     // Note: MKVS commit is omitted, this MUST be global side-effect free.
 
                     debug!(self.logger, "RPC call dispatch complete";
-                        "kind" => ?Kind::NoiseSession,
+                        "kind" => ?RpcKind::NoiseSession,
                     );
 
                     let mut buffer = vec![];
@@ -850,7 +849,7 @@ impl Dispatcher {
         // Note: MKVS commit is omitted, this MUST be global side-effect free.
 
         debug!(self.logger, "RPC call dispatch complete";
-            "kind" => ?Kind::InsecureQuery,
+            "kind" => ?RpcKind::InsecureQuery,
         );
 
         Ok(Body::RuntimeRPCCallResponse { response })
@@ -872,7 +871,7 @@ impl Dispatcher {
         let response = cbor::to_vec(response);
 
         debug!(self.logger, "RPC call dispatch complete";
-            "kind" => ?Kind::LocalQuery,
+            "kind" => ?RpcKind::LocalQuery,
         );
 
         Ok(Body::RuntimeLocalRPCCallResponse { response })
@@ -889,11 +888,17 @@ impl Dispatcher {
         let protocol = state.protocol.clone();
         let consensus_verifier = state.consensus_verifier.clone();
         let rpc_dispatcher = state.rpc_dispatcher.clone();
+        let is_secure = kind == RpcKind::NoiseSession;
 
         let response = tokio::task::spawn_blocking(move || {
             let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(protocol.clone()));
-            let rpc_ctx =
-                RpcContext::new(identity, session_info, consensus_verifier, &untrusted_local);
+            let rpc_ctx = RpcContext::new(
+                identity,
+                is_secure,
+                session_info,
+                consensus_verifier,
+                &untrusted_local,
+            );
 
             rpc_dispatcher.dispatch(rpc_ctx, request, kind)
         })
