@@ -56,7 +56,7 @@ func (m NodeMode) IsClientOnly() bool {
 // HasLocalStorage returns true iff the mode is one that has local storage.
 func (m NodeMode) HasLocalStorage() bool {
 	switch m {
-	case ModeClient, ModeCompute:
+	case ModeClient, ModeCompute, ModeArchive:
 		return true
 	}
 	return false
