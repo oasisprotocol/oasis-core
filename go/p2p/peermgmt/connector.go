@@ -173,9 +173,6 @@ func (c *peerConnector) connect(ctx context.Context, info peer.AddrInfo) bool {
 
 	// Skip if the peer is connected.
 	if c.host.Network().Connectedness(info.ID) == network.Connected {
-		c.logger.Debug("peer already connected",
-			"peer_id", info.ID,
-		)
 		return true
 	}
 

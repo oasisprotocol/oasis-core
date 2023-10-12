@@ -414,7 +414,19 @@ func (n *Node) handleSuspendLocked(int64) {
 						return
 					}
 
+					// Refresh current epoch as otherwise it could be stale which will result in the
+					// new runtime version not being activated.
+					currentEpoch, err := n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
+					switch err {
+					case nil:
+						n.CurrentEpoch = currentEpoch
+					default:
+						n.logger.Error("failed to fetch current epoch",
+							"err", err,
+						)
+					}
 					n.CurrentDescriptor = rt
+
 					n.updateHostedRuntimeVersionLocked()
 					n.CrossNode.Unlock()
 				case <-resumeCh:

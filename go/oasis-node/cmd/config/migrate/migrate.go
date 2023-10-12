@@ -68,6 +68,8 @@ func translateKnownP2P(in []string) ([]string, uint) {
 		"E27F6B7A350B4CC2B48A6CBE94B0A02B0DCB0BF3@35.199.49.168:26656": "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656",
 		// Testnet seed node.
 		"53572F689E5BACDD3C6527E6594EC49C8F3093F6@34.86.165.6:26656": "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:26656",
+		// Old Testnet seed node.
+		"05EAC99BB37F6DAAD4B13386FF5E087ACBDDC450@34.86.165.6:26656": "HcDFrTp/MqRHtju5bCx6TIhIMd6X/0ZQ3lUG73q5898=@34.86.165.6:26656",
 	}
 
 	var numUnknown uint
@@ -719,6 +721,16 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 	pruneEmptyMaps(oldCfg)
 	// Also prune new config.
 	pruneEmptyMaps(newCfg)
+
+	// If a node has `consensus.validator` set to true and it does not have any runtimes configured,
+	// the new `mode` should be set to `validator`.
+	if newValidator, ok := m(newCfg["consensus"])["validator"]; ok {
+		isValidator, _ := newValidator.(bool)
+		if _, hasRuntimes := m(newCfg["runtime"])["paths"]; !hasRuntimes && isValidator {
+			nodeMode = "validator"
+			delete(m(newCfg["consensus"]), "validator")
+		}
+	}
 
 	// Check for options that are only available on the command-line.
 	if _, ok = oldCfg["debug"]; ok {
