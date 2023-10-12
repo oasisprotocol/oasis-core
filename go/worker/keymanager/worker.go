@@ -238,6 +238,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 	if err != nil {
 		w.logger.Error("failed to dispatch RPC call to runtime",
 			"err", err,
+			"kind", kind,
 		)
 		return nil, err
 	}
@@ -1075,11 +1076,12 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 		// control. Without it, the enclave won't be able to replicate the master secrets
 		// needed for initialization.
 		if w.enclaveStatus == nil {
+			rtStatus := w.rtStatus
 			w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
-				rt := n.AddOrUpdateRuntime(w.runtime.ID(), w.rtStatus.version)
-				rt.Version = w.rtStatus.version
+				rt := n.AddOrUpdateRuntime(w.runtime.ID(), rtStatus.version)
+				rt.Version = rtStatus.version
 				rt.ExtraInfo = nil
-				rt.Capabilities.TEE = w.rtStatus.capabilityTEE
+				rt.Capabilities.TEE = rtStatus.capabilityTEE
 				return nil
 			}, func(context.Context) error {
 				w.logger.Info("key manager registered (pre-registration)")

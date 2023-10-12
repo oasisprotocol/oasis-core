@@ -153,8 +153,9 @@ pub fn get_public_ephemeral_key(
     // they never verify their signatures and are not aware that signed ephemeral keys expire.
     // To ensure backwards compatibility we clear the expiration epoch. This should be removed
     // in the future once all clients are upgraded.
-    if ctx.session_info.is_some() {
-        sig.expiration = None
+    // XXX: Remove this after 23.0.x.
+    if ctx.is_secure {
+        sig.expiration = None;
     }
 
     Ok(sig)

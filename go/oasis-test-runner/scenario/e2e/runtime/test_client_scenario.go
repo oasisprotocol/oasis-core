@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 )
 
 var (
@@ -124,6 +126,14 @@ type KeyValueQuery struct {
 	Round    uint64
 }
 
+// EncryptDecryptTx encrypts and decrypts a message while verifying if the original message
+// matches the decrypted result.
+type EncryptDecryptTx struct {
+	Message   []byte
+	KeyPairID string
+	Epoch     beacon.EpochTime
+}
+
 // InsertKeyValueTx inserts a key/value pair to the database, and verifies that the response
 // (previous value) contains the expected data.
 type InsertKeyValueTx struct {
@@ -176,6 +186,19 @@ func NewTestClientScenario(requests []interface{}) TestClientScenario {
 	return func(submit func(req interface{}) error) error {
 		for _, req := range requests {
 			if err := submit(req); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// JoinTestClientScenarios joins an arbitrary number of test client scenarios into a single scenario
+// that executes them in the order they were provided.
+func JoinTestClientScenarios(scenarios ...TestClientScenario) TestClientScenario {
+	return func(submit func(req interface{}) error) error {
+		for _, scenario := range scenarios {
+			if err := scenario(submit); err != nil {
 				return err
 			}
 		}
