@@ -722,6 +722,16 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 	// Also prune new config.
 	pruneEmptyMaps(newCfg)
 
+	// If a node has `consensus.validator` set to true and it does not have any runtimes configured,
+	// the new `mode` should be set to `validator`.
+	if newValidator, ok := m(newCfg["consensus"])["validator"]; ok {
+		isValidator, _ := newValidator.(bool)
+		if _, hasRuntimes := m(newCfg["runtime"])["paths"]; !hasRuntimes && isValidator {
+			nodeMode = "validator"
+			delete(m(newCfg["consensus"]), "validator")
+		}
+	}
+
 	// Check for options that are only available on the command-line.
 	if _, ok = oldCfg["debug"]; ok {
 		logger.Warn("note that some debug.* options are from now on only available on the command-line")
