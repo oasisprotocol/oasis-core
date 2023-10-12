@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -204,11 +206,14 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return nil
 	}
 
+	encryptDecryptTestClientScenario := sc.newEncryptDecryptTestClientScenario(ctx, childEnv)
+
 	// Test after node upgrade.
 	sc.TestClient.WithScenario(runtime.JoinTestClientScenarios(
 		verifyNodeUpgradeTestClientScenario,
 		keyManagerUpgradeTestClientScenario,
 		verifyKeyManagerUpgradeTestClientScenario,
+		encryptDecryptTestClientScenario,
 	))
 	if err = sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
 		return err
@@ -244,6 +249,7 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		verifyKeyManagerUpgradeTestClientScenario,
 		runtimeUpgradeTestClientScenario,
 		verifyRuntimeUpgradeTestClientScenario,
+		encryptDecryptTestClientScenario,
 	))
 	if err = sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
 		return err
@@ -277,6 +283,7 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		verifyRuntimeUpgradeTestClientScenario,
 		networkUpgradeTestClientScenario,
 		masterSecretGenerationsTestClientScenario,
+		encryptDecryptTestClientScenario,
 	))
 	if err = sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
 		return err
@@ -327,4 +334,25 @@ func (sc *secureUpgradeImpl) startClientAndComputeWorkers(ctx context.Context) e
 	sc.Net.SetClientController(ctrl)
 
 	return nil
+}
+
+func (sc *secureUpgradeImpl) newEncryptDecryptTestClientScenario(ctx context.Context, childEnv *env.Env) runtime.TestClientScenario {
+	return func(submit func(req interface{}) error) error {
+		// Fetch current epoch.
+		epoch, err := sc.Net.Controller().Beacon.GetEpoch(ctx, consensus.HeightLatest)
+		if err != nil {
+			return fmt.Errorf("failed to get current epoch: %w", err)
+		}
+
+		// Use unique values.
+		now := time.Now().UnixNano()
+		keyPairID := fmt.Sprintf("key-pair-id-%d", now)
+		message := fmt.Sprintf("message-%d", now)
+
+		return submit(runtime.EncryptDecryptTx{
+			Epoch:     epoch,
+			KeyPairID: keyPairID,
+			Message:   []byte(message),
+		})
+	}
 }
