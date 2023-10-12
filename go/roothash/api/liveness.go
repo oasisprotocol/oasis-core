@@ -11,14 +11,14 @@ type LivenessStatistics struct {
 	LiveRounds []uint64 `json:"good_rounds"`
 
 	// FinalizedProposals is a list that records the number of finalized rounds when a node
-	// acted as a proposer.
+	// acted as a proposer with the highest rank.
 	//
 	// The list is ordered according to the committee arrangement (i.e., the counter at index i
 	// holds the value for the node at index i in the committee).
 	FinalizedProposals []uint64 `json:"finalized_proposals"`
 
 	// MissedProposals is a list that records the number of failed rounds when a node
-	// acted as a proposer.
+	// acted as a proposer with the highest rank.
 	//
 	// The list is ordered according to the committee arrangement (i.e., the counter at index i
 	// holds the value for the node at index i in the committee).
