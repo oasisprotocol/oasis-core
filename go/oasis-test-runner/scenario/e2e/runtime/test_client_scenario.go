@@ -182,3 +182,16 @@ func NewTestClientScenario(requests []interface{}) TestClientScenario {
 		return nil
 	}
 }
+
+// JoinTestClientScenarios joins an arbitrary number of test client scenarios into a single scenario
+// that executes them in the order they were provided.
+func JoinTestClientScenarios(scenarios ...TestClientScenario) TestClientScenario {
+	return func(submit func(req interface{}) error) error {
+		for _, scenario := range scenarios {
+			if err := scenario(submit); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
