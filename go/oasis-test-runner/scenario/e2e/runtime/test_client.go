@@ -1,11 +1,13 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"fmt"
 	"math/rand"
 
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/drbg"
@@ -157,6 +159,33 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
 		}
 
+	case EncryptDecryptTx:
+		ciphertext, err := cli.sc.submitKeyValueRuntimeEncryptTx(
+			ctx,
+			KeyValueRuntimeID,
+			rng.Uint64(),
+			req.Epoch,
+			req.KeyPairID,
+			req.Message,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt message: %w", err)
+		}
+		plaintext, err := cli.sc.submitKeyValueRuntimeDecryptTx(
+			ctx,
+			KeyValueRuntimeID,
+			rng.Uint64(),
+			req.Epoch,
+			req.KeyPairID,
+			ciphertext,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt ciphertext: %w", err)
+		}
+		if !bytes.Equal(plaintext, req.Message) {
+			return fmt.Errorf("decrypted message does not have expected value (got: '%v', expected: '%v')", plaintext, req.Message)
+		}
+
 	case InsertKeyValueTx:
 		rsp, err := cli.sc.submitKeyValueRuntimeInsertTx(
 			ctx,
@@ -252,24 +281,106 @@ func NewTestClient() *TestClient {
 	}
 }
 
-func (sc *Scenario) submitAndDecodeRuntimeTx(
+func (sc *Scenario) submitRuntimeTxAndDecode(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	method string,
+	args interface{},
+	rsp interface{},
+) error {
+	rawRsp, err := sc.submitRuntimeTx(ctx, id, nonce, method, args)
+	if err != nil {
+		return fmt.Errorf("failed to submit %s tx to runtime: %w", method, err)
+	}
+
+	if err = cbor.Unmarshal(rawRsp, rsp); err != nil {
+		return fmt.Errorf("failed to unmarshal %s tx response from runtime: %w", method, err)
+	}
+
+	return nil
+}
+
+func (sc *Scenario) submitRuntimeTxAndDecodeString(
 	ctx context.Context,
 	id common.Namespace,
 	nonce uint64,
 	method string,
 	args interface{},
 ) (string, error) {
-	rawRsp, err := sc.submitRuntimeTx(ctx, id, nonce, method, args)
-	if err != nil {
-		return "", fmt.Errorf("failed to submit %s tx to runtime: %w", method, err)
-	}
-
 	var rsp string
-	if err = cbor.Unmarshal(rawRsp, &rsp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal %s tx response from runtime: %w", method, err)
+	if err := sc.submitRuntimeTxAndDecode(ctx, id, nonce, method, args, &rsp); err != nil {
+		return "", err
+	}
+	return rsp, nil
+}
+
+func (sc *Scenario) submitRuntimeTxAndDecodeByteSlice(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	method string,
+	args interface{},
+) ([]byte, error) {
+	var rsp []byte
+	if err := sc.submitRuntimeTxAndDecode(ctx, id, nonce, method, args, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (sc *Scenario) submitKeyValueRuntimeEncryptTx(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	epoch beacon.EpochTime,
+	keyPairID string,
+	plaintext []byte,
+) ([]byte, error) {
+	sc.Logger.Info("encrypting",
+		"epoch", epoch,
+		"key_pair_id", keyPairID,
+		"plaintext", plaintext,
+	)
+
+	args := struct {
+		Epoch     beacon.EpochTime `json:"epoch"`
+		KeyPairID string           `json:"key_pair_id"`
+		Plaintext []byte           `json:"plaintext"`
+	}{
+		Epoch:     epoch,
+		KeyPairID: keyPairID,
+		Plaintext: plaintext,
 	}
 
-	return rsp, nil
+	return sc.submitRuntimeTxAndDecodeByteSlice(ctx, id, nonce, "encrypt", args)
+}
+
+func (sc *Scenario) submitKeyValueRuntimeDecryptTx(
+	ctx context.Context,
+	id common.Namespace,
+	nonce uint64,
+	epoch beacon.EpochTime,
+	keyPairID string,
+	ciphertext []byte,
+) ([]byte, error) {
+	sc.Logger.Info("decrypting",
+		"epoch", epoch,
+		"key_pair_id", keyPairID,
+		"ciphertext", ciphertext,
+	)
+
+	args := struct {
+		Epoch      beacon.EpochTime `json:"epoch"`
+		KeyPairID  string           `json:"key_pair_id"`
+		Ciphertext []byte           `json:"ciphertext"`
+	}{
+		Epoch:      epoch,
+		KeyPairID:  keyPairID,
+		Ciphertext: ciphertext,
+	}
+
+	return sc.submitRuntimeTxAndDecodeByteSlice(ctx, id, nonce, "decrypt", args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeInsertTx(
@@ -298,9 +409,9 @@ func (sc *Scenario) submitKeyValueRuntimeInsertTx(
 	}
 
 	if encrypted {
-		return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "enc_insert", args)
+		return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "enc_insert", args)
 	}
-	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "insert", args)
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "insert", args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeGetTx(
@@ -326,9 +437,9 @@ func (sc *Scenario) submitKeyValueRuntimeGetTx(
 	}
 
 	if encrypted {
-		return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "enc_get", args)
+		return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "enc_get", args)
 	}
-	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "get", args)
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "get", args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
@@ -354,9 +465,9 @@ func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
 	}
 
 	if encrypted {
-		return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "enc_remove", args)
+		return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "enc_remove", args)
 	}
-	return sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "remove", args)
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "remove", args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeGetRuntimeIDTx(
@@ -366,7 +477,7 @@ func (sc *Scenario) submitKeyValueRuntimeGetRuntimeIDTx(
 ) (string, error) {
 	sc.Logger.Info("retrieving runtime ID")
 
-	rsp, err := sc.submitAndDecodeRuntimeTx(ctx, id, nonce, "get_runtime_id", nil)
+	rsp, err := sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "get_runtime_id", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to query remote runtime ID: %w", err)
 	}

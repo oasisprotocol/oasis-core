@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 )
 
 var (
@@ -122,6 +124,14 @@ type KeyValueQuery struct {
 	Key      string
 	Response string
 	Round    uint64
+}
+
+// EncryptDecryptTx encrypts and decrypts a message while verifying if the original message
+// matches the decrypted result.
+type EncryptDecryptTx struct {
+	Message   []byte
+	KeyPairID string
+	Epoch     beacon.EpochTime
 }
 
 // InsertKeyValueTx inserts a key/value pair to the database, and verifies that the response
