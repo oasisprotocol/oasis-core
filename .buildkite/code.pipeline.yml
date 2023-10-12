@@ -382,6 +382,7 @@ steps:
       - label: E2E upgrade tests - sgx1
         timeout_in_minutes: 60
         command:
+          - trap 'buildkite-agent artifact upload "/tmp/oasis-{post,pre}-upgrade/e2e/**/*.log;/tmp/oasis-{post,pre}-upgrade/e2e/**/genesis.json;/tmp/oasis-{post,pre}-upgrade/e2e/**/runtime_genesis.json"' EXIT
           - .buildkite/scripts/download_e2e_test_artifacts.sh
           - .buildkite/scripts/test_upgrade.sh
         env:
