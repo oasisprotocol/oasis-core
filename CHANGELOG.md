@@ -12,6 +12,34 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.1 (2023-10-12)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- go/worker/storage: Disable storage worker when no runtimes configured
+  ([#5394](https://github.com/oasisprotocol/oasis-core/issues/5394))
+
+- go/oasis-net-runner: Fix SkipPolicy flag in default fixture
+  ([#5394](https://github.com/oasisprotocol/oasis-core/issues/5394))
+
+- go/worker/keymanager: Fix race condition when accessing runtime status
+  ([#5398](https://github.com/oasisprotocol/oasis-core/issues/5398))
+
+- keymanager: Fix public key decoding for legacy key manager clients
+  ([#5398](https://github.com/oasisprotocol/oasis-core/issues/5398))
+
+- go/worker/common: Refresh current epoch for suspended runtimes
+  ([#5400](https://github.com/oasisprotocol/oasis-core/issues/5400))
+
+- go/runtime/registry: Allow client nodes without runtimes
+  ([#5400](https://github.com/oasisprotocol/oasis-core/issues/5400))
+
 ## 23.0 (2023-10-10)
 
 | Protocol          | Version   |
