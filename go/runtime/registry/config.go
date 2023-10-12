@@ -82,13 +82,13 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 		if haveSetRuntimes && !cmdFlags.DebugDontBlameOasis() {
 			return nil, fmt.Errorf("no runtimes should be configured when in validator or seed modes")
 		}
-	case config.ModeArchive:
-		// Runtimes can be optionally configured.
-	default:
-		// In any other mode, at least one runtime should be configured.
+	case config.ModeCompute, config.ModeKeyManager, config.ModeStatelessClient:
+		// At least one runtime should be configured.
 		if !haveSetRuntimes && !cmdFlags.DebugDontBlameOasis() {
-			return nil, fmt.Errorf("at least one runtime must be configured when in compute, keymanager, client, or client-stateless modes")
+			return nil, fmt.Errorf("at least one runtime must be configured when in compute, keymanager, or client-stateless modes")
 		}
+	default:
+		// In any other mode, runtimes can be optionally configured.
 	}
 
 	// Check if any runtimes are configured to be hosted.
