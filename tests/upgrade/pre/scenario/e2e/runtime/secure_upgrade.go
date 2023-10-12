@@ -21,16 +21,14 @@ var (
 	// consensus verification, and test the functionality of master secret rotations.
 	SecureUpgrade scenario.Scenario = newSecureUpgradeImpl()
 
-	secureUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
-		// Insert pre-upgrade key/value pairs, one in plaintext and one encrypted.
-		runtime.InsertKeyValueTx{Key: "pre-key1", Value: "pre-value1", Response: "", Encrypted: false},
-		runtime.InsertKeyValueTx{Key: "pre-key2", Value: "pre-value2", Response: "", Encrypted: true},
-		// Test that pre-upgrade key/value pairs were correctly inserted into the database.
-		runtime.GetKeyValueTx{Key: "pre-key1", Response: "pre-value1", Encrypted: false},
-		runtime.GetKeyValueTx{Key: "pre-key2", Response: "pre-value2", Encrypted: true},
-		// Test that pre-upgrade key/value pairs are either in plaintext or encrypted.
-		runtime.GetKeyValueTx{Key: "pre-key1", Response: "", Encrypted: true},
-		runtime.GetKeyValueTx{Key: "pre-key2", Response: "", Encrypted: false},
+	// nodeUpgradeTestClientScenario tests that everything works before the upgrade starts.
+	nodeUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+		runtime.InsertKeyValueTx{Key: "node-key1", Value: "node-value1", Response: "", Encrypted: false},
+		runtime.InsertKeyValueTx{Key: "node-key2", Value: "node-value2", Response: "", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "node-key1", Response: "node-value1", Encrypted: false},
+		runtime.GetKeyValueTx{Key: "node-key2", Response: "node-value2", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "node-key1", Response: "", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "node-key2", Response: "", Encrypted: false},
 	})
 )
 
@@ -42,7 +40,7 @@ func newSecureUpgradeImpl() scenario.Scenario {
 	return &secureUpgradeImpl{
 		TrustRootImpl: *runtime.NewTrustRootImpl(
 			"secure-upgrade",
-			runtime.NewKVTestClient().WithScenario(secureUpgradeTestClientScenario),
+			runtime.NewKVTestClient().WithScenario(nodeUpgradeTestClientScenario),
 		),
 	}
 }

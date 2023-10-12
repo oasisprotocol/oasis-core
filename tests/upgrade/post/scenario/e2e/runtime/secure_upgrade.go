@@ -23,35 +23,58 @@ var (
 	// consensus verification, and test the functionality of master secret rotations.
 	SecureUpgrade scenario.Scenario = newSecureUpgradeImpl()
 
-	secureUpgradePreTestScenario = runtime.NewTestClientScenario([]interface{}{
-		// Test that pre-upgrade key/value pairs are still in the database.
-		runtime.GetKeyValueTx{Key: "pre-key1", Response: "pre-value1", Encrypted: false},
-		runtime.GetKeyValueTx{Key: "pre-key2", Response: "pre-value2", Encrypted: true, Generation: 0},
-		runtime.GetKeyValueTx{Key: "pre-key1", Response: "", Encrypted: true, Generation: 0},
-		runtime.GetKeyValueTx{Key: "pre-key2", Response: "", Encrypted: false},
-		// Insert post-upgrade key/value pairs, one in plaintext and one encrypted.
-		runtime.InsertKeyValueTx{Key: "post-key1", Value: "post-value1", Response: "", Encrypted: false},
-		runtime.InsertKeyValueTx{Key: "post-key2", Value: "post-value2", Response: "", Encrypted: true, Generation: 0},
-		// Test that post-upgrade key/value pairs were correctly inserted into the database.
-		runtime.GetKeyValueTx{Key: "post-key1", Response: "post-value1", Encrypted: false},
-		runtime.GetKeyValueTx{Key: "post-key2", Response: "post-value2", Encrypted: true, Generation: 0},
-		// Test that post-upgrade key/value pairs are either in plaintext or encrypted.
-		runtime.GetKeyValueTx{Key: "post-key1", Response: "", Encrypted: true, Generation: 0},
-		runtime.GetKeyValueTx{Key: "post-key2", Response: "", Encrypted: false},
+	// verifyNodeUpgradeTestClientScenario tests that values inserted before node upgrade are still
+	// in the database.
+	verifyNodeUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+		runtime.GetKeyValueTx{Key: "node-key1", Response: "node-value1", Encrypted: false},
+		runtime.GetKeyValueTx{Key: "node-key2", Response: "node-value2", Encrypted: true, Generation: 0},
+		runtime.GetKeyValueTx{Key: "node-key1", Response: "", Encrypted: true, Generation: 0},
+		runtime.GetKeyValueTx{Key: "node-key2", Response: "", Encrypted: false},
 	})
 
-	secureUpgradePostTestScenario = runtime.NewTestClientScenario([]interface{}{
-		// Test that pre-upgrade key/value pairs are still in the database.
-		runtime.GetKeyValueTx{Key: "pre-key1", Response: "pre-value1", Encrypted: false},
-		runtime.GetKeyValueTx{Key: "pre-key2", Response: "pre-value2", Encrypted: true, Generation: 0},
-		runtime.GetKeyValueTx{Key: "pre-key1", Response: "", Encrypted: true, Generation: 0},
-		runtime.GetKeyValueTx{Key: "pre-key2", Response: "", Encrypted: false},
-		// Test that post-upgrade key/value pairs are still in the database.
-		runtime.GetKeyValueTx{Key: "post-key1", Response: "post-value1", Encrypted: false},
-		runtime.GetKeyValueTx{Key: "post-key2", Response: "post-value2", Encrypted: true, Generation: 0},
-		runtime.GetKeyValueTx{Key: "post-key1", Response: "", Encrypted: true, Generation: 0},
-		runtime.GetKeyValueTx{Key: "post-key2", Response: "", Encrypted: false},
-		// Test master secret generations.
+	// keyManagerUpgradeTestClientScenario inserts values before key manager upgrade.
+	keyManagerUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+		runtime.InsertKeyValueTx{Key: "km-key1", Value: "km-value1", Response: "", Encrypted: false},
+		runtime.InsertKeyValueTx{Key: "km-key2", Value: "km-value2", Response: "", Encrypted: true, Generation: 0},
+	})
+
+	// verifyKeyManagerUpgradeTestClientScenario tests that values inserted before key manager
+	// upgrade are still in the database.
+	verifyKeyManagerUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+		runtime.GetKeyValueTx{Key: "km-key1", Response: "km-value1", Encrypted: false},
+		runtime.GetKeyValueTx{Key: "km-key2", Response: "km-value2", Encrypted: true, Generation: 0},
+		runtime.GetKeyValueTx{Key: "km-key1", Response: "", Encrypted: true, Generation: 0},
+		runtime.GetKeyValueTx{Key: "km-key2", Response: "", Encrypted: false},
+	})
+
+	// runtimeUpgradeTestClientScenario inserts values before key-value runtime upgrade.
+	runtimeUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+		runtime.InsertKeyValueTx{Key: "rt-key1", Value: "rt-value1", Response: "", Encrypted: false},
+		runtime.InsertKeyValueTx{Key: "rt-key2", Value: "rt-value2", Response: "", Encrypted: true, Generation: 0},
+	})
+
+	// verifyRuntimeUpgradeTestClientScenario tests that values inserted before key-value runtime
+	// upgrade are still in the database.
+	verifyRuntimeUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+		runtime.GetKeyValueTx{Key: "rt-key1", Response: "rt-value1", Encrypted: false},
+		runtime.GetKeyValueTx{Key: "rt-key2", Response: "rt-value2", Encrypted: true, Generation: 0},
+		runtime.GetKeyValueTx{Key: "rt-key1", Response: "", Encrypted: true, Generation: 0},
+		runtime.GetKeyValueTx{Key: "rt-key2", Response: "", Encrypted: false},
+	})
+
+	// networkUpgradeTestClientScenario tests that everything works after the upgrade has been
+	// completed.
+	networkUpgradeTestClientScenario = runtime.NewTestClientScenario([]interface{}{
+		runtime.InsertKeyValueTx{Key: "network-key1", Value: "network-value1", Response: "", Encrypted: false},
+		runtime.InsertKeyValueTx{Key: "network-key2", Value: "network-value2", Response: "", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "network-key1", Response: "network-value1", Encrypted: false},
+		runtime.GetKeyValueTx{Key: "network-key2", Response: "network-value2", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "network-key1", Response: "", Encrypted: true},
+		runtime.GetKeyValueTx{Key: "network-key2", Response: "", Encrypted: false},
+	})
+
+	// masterSecretGenerationsTestClientScenario tests master secret generations.
+	masterSecretGenerationsTestClientScenario = runtime.NewTestClientScenario([]interface{}{
 		runtime.InsertKeyValueTx{Key: "msgn-key1", Value: "msgn-value1", Response: "", Encrypted: true, Generation: 0},
 		runtime.InsertKeyValueTx{Key: "msgn-key2", Value: "msgn-value2", Response: "", Encrypted: true, Generation: 1},
 		runtime.InsertKeyValueTx{Key: "msgn-key3", Value: "msgn-value3", Response: "", Encrypted: true, Generation: 2},
@@ -60,8 +83,9 @@ var (
 		runtime.GetKeyValueTx{Key: "msgn-key3", Response: "msgn-value3", Encrypted: true, Generation: 2},
 	})
 
-	invalidSecureUpgradeTestScenario = runtime.NewTestClientScenario([]interface{}{
-		// Test that key/value pair cannot be encrypted with a master secret from the future.
+	// futureMasterSecretGenerationsTestClientScenario tests that future master secrets are not
+	// available.
+	futureMasterSecretGenerationsTestClientScenario = runtime.NewTestClientScenario([]interface{}{
 		runtime.InsertKeyValueTx{Key: "msgn-key4", Value: "msgn-value4", Response: "", Encrypted: true, Generation: 1000},
 	})
 )
@@ -77,7 +101,7 @@ func newSecureUpgradeImpl() scenario.Scenario {
 	return &secureUpgradeImpl{
 		Scenario: *runtime.NewScenario(
 			"trust-root/secure-upgrade",
-			runtime.NewTestClient().WithSeed("post-seed").WithScenario(secureUpgradePreTestScenario),
+			runtime.NewTestClient().WithSeed("post-seed"),
 		),
 	}
 }
@@ -175,10 +199,17 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return fmt.Errorf("failed to refresh runtime bundle: %w", err)
 	}
 
-	// Start all workers and run the test client.
+	// Start all workers.
 	if err = sc.startClientAndComputeWorkers(ctx); err != nil {
 		return nil
 	}
+
+	// Test after node upgrade.
+	sc.TestClient.WithScenario(runtime.JoinTestClientScenarios(
+		verifyNodeUpgradeTestClientScenario,
+		keyManagerUpgradeTestClientScenario,
+		verifyKeyManagerUpgradeTestClientScenario,
+	))
 	if err = sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
 		return err
 	}
@@ -208,6 +239,16 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
+	// Test after key manager upgrade.
+	sc.TestClient.WithScenario(runtime.JoinTestClientScenarios(
+		verifyKeyManagerUpgradeTestClientScenario,
+		runtimeUpgradeTestClientScenario,
+		verifyRuntimeUpgradeTestClientScenario,
+	))
+	if err = sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
+		return err
+	}
+
 	// Enable master secret rotations.
 	nonce, err = sc.TestEntityNonce(ctx)
 	if err != nil {
@@ -231,15 +272,19 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
-	// Run the test client again.
-	sc.TestClient.WithScenario(secureUpgradePostTestScenario)
+	// Test after key-value runtime upgrade.
+	sc.TestClient.WithScenario(runtime.JoinTestClientScenarios(
+		verifyRuntimeUpgradeTestClientScenario,
+		networkUpgradeTestClientScenario,
+		masterSecretGenerationsTestClientScenario,
+	))
 	if err = sc.RunTestClientAndCheckLogs(ctx, childEnv); err != nil {
 		return err
 	}
 
-	// Run the test client again, but expect it to fail this time as the requested master secret
-	// generation is not yet available.
-	sc.TestClient.WithScenario(invalidSecureUpgradeTestScenario)
+	// Test future master secrets, but expect the test to fail as the requested master secret
+	// generation should not be available.
+	sc.TestClient.WithScenario(futureMasterSecretGenerationsTestClientScenario)
 	err = sc.RunTestClientAndCheckLogs(ctx, childEnv)
 	switch {
 	case err == nil:
