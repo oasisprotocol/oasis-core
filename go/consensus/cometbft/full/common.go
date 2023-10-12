@@ -103,12 +103,17 @@ type commonNode struct {
 const (
 	stateNotReady    = 0
 	stateInitialized = 1
-	stateStarted     = 2
-	stateStopping    = 3
+	stateDBLoaded    = 2
+	stateStarted     = 3
+	stateStopping    = 4
 )
 
 func (n *commonNode) initialized() bool {
 	return atomic.LoadUint32(&n.state) >= stateInitialized
+}
+
+func (n *commonNode) dbLoaded() bool {
+	return atomic.LoadUint32(&n.state) >= stateDBLoaded
 }
 
 func (n *commonNode) started() bool {
@@ -146,6 +151,10 @@ func (n *commonNode) start() error {
 	}
 
 	return n.mux.Start()
+}
+
+func (n *commonNode) finishDBLoading() {
+	atomic.StoreUint32(&n.state, stateDBLoaded)
 }
 
 func (n *commonNode) finishStart() {
