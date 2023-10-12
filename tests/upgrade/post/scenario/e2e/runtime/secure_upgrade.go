@@ -255,6 +255,15 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 		return err
 	}
 
+	// Upgrade the compute runtime.
+	nonce, err = sc.TestEntityNonce(ctx)
+	if err != nil {
+		return err
+	}
+	if err := sc.UpgradeComputeRuntime(ctx, childEnv, cli, sc.upgradedRuntimeIndex, nonce); err != nil {
+		return err
+	}
+
 	// Enable master secret rotations.
 	nonce, err = sc.TestEntityNonce(ctx)
 	if err != nil {
@@ -266,15 +275,6 @@ func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
 
 	// Wait until at least 3 secrets are generated.
 	if _, err = sc.WaitMasterSecret(ctx, 3); err != nil {
-		return err
-	}
-
-	// Upgrade the compute runtime.
-	nonce, err = sc.TestEntityNonce(ctx)
-	if err != nil {
-		return err
-	}
-	if err := sc.UpgradeComputeRuntime(ctx, childEnv, cli, sc.upgradedRuntimeIndex, nonce); err != nil {
 		return err
 	}
 
