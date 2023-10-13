@@ -81,6 +81,7 @@ type Node struct { // nolint: maligned
 	discrepancyCh         chan *discrepancyEvent
 	schedulerCommitmentCh chan *commitment.ExecutorCommitment
 	reselectCh            chan struct{}
+	missingTxCh           chan [][]byte
 
 	txCh <-chan []*txpool.PendingCheckTransaction
 	ecCh <-chan *commitment.ExecutorCommitment
@@ -1526,6 +1527,9 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 			case txs := <-n.txCh:
 				// Check any queued transactions.
 				n.handleNewCheckedTransactions(txs)
+			case txs := <-n.missingTxCh:
+				// Missing transactions fetched.
+				n.handleMissingTransactions(txs)
 			case discrepancy := <-n.discrepancyCh:
 				// Discrepancy has been detected.
 				n.handleDiscrepancy(ctx, discrepancy)
@@ -1600,6 +1604,7 @@ func NewNode(
 		processedBatchCh:      make(chan *processedBatch, 1),
 		schedulerCommitmentCh: make(chan *commitment.ExecutorCommitment, 1),
 		reselectCh:            make(chan struct{}, 1),
+		missingTxCh:           make(chan [][]byte, 1),
 		logger:                logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
