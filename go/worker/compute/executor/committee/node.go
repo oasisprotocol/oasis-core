@@ -1476,9 +1476,7 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 
 	// The ticker determines when we are allowed to commit to proposals from schedulers
 	// with lower ranks.
-	schedulerDelay := n.rtState.Runtime.TxnScheduler.ProposerTimeout
-	schedulerRankTicker := NewLinearRankTicker(uint64(bi.RuntimeBlock.Header.Timestamp), schedulerDelay, n.rank)
-	schedulerRankTicker.Start()
+	schedulerRankTicker := time.NewTicker(n.rtState.Runtime.TxnScheduler.ProposerTimeout)
 	defer schedulerRankTicker.Stop()
 
 	// Reset discrepancy detection.
@@ -1538,13 +1536,14 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 			case batch := <-n.processedBatchCh:
 				// Batch processing has finished.
 				n.handleProcessedBatch(ctx, batch)
-			case schedulerRank = <-schedulerRankTicker.C():
-				// Scheduler rank decreased, try to schedule/process again.
+			case <-schedulerRankTicker.C:
+				// Change scheduler rank and try again.
+				schedulerRank++
 				n.logger.Debug("scheduler rank has changed",
 					"rank", schedulerRank,
 				)
 			case ec := <-n.schedulerCommitmentCh:
-				// Pool rank increased, no need to schedule/process again.
+				// Pool rank increased, no need to try again.
 				if ec.Header.Header.Round != round {
 					continue
 				}
