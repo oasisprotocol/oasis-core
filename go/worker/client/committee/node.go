@@ -144,13 +144,14 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 	// Fetch the active descriptor so we can get the current message limits.
 	n.commonNode.CrossNode.Lock()
 	dsc := n.commonNode.CurrentDescriptor
-	latestRound := n.commonNode.CurrentBlock.Header.Round
+	blk := n.commonNode.CurrentBlock
 	n.commonNode.CrossNode.Unlock()
 
-	if dsc == nil {
+	if dsc == nil || blk == nil {
 		return nil, api.ErrNoHostedRuntime
 	}
 	maxMessages := dsc.Executor.MaxMessages
+	latestRound := n.commonNode.CurrentBlock.Header.Round
 
 	rtInfo, err := hrt.GetInfo(ctx)
 	if err != nil {
