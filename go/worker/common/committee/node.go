@@ -43,13 +43,6 @@ var (
 		},
 		[]string{"runtime"},
 	)
-	processedEventCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "oasis_worker_processed_event_count",
-			Help: "Number of processed roothash events.",
-		},
-		[]string{"runtime"},
-	)
 	failedRoundCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_failed_round_count",
@@ -116,7 +109,6 @@ var (
 
 	nodeCollectors = []prometheus.Collector{
 		processedBlockCount,
-		processedEventCount,
 		failedRoundCount,
 		epochTransitionCount,
 		epochNumber,
@@ -144,8 +136,6 @@ type NodeHooks interface {
 	HandleNewBlockEarlyLocked(*runtime.BlockInfo)
 	// Guarded by CrossNode.
 	HandleNewBlockLocked(*runtime.BlockInfo)
-	// Guarded by CrossNode.
-	HandleNewEventLocked(*roothash.Event)
 	// Guarded by CrossNode.
 	HandleRuntimeHostEventLocked(*host.Event)
 
@@ -615,15 +605,6 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 }
 
 // Guarded by n.CrossNode.
-func (n *Node) handleNewEventLocked(ev *roothash.Event) {
-	processedEventCount.With(n.getMetricLabels()).Inc()
-
-	for _, hooks := range n.hooks {
-		hooks.HandleNewEventLocked(ev)
-	}
-}
-
-// Guarded by n.CrossNode.
 func (n *Node) handleRuntimeHostEventLocked(ev *host.Event) {
 	n.logger.Debug("got runtime event", "ev", ev)
 
@@ -710,16 +691,6 @@ func (n *Node) worker() {
 	}
 	defer blocksSub.Close()
 
-	// Start watching roothash events.
-	events, eventsSub, err := n.Consensus.RootHash().WatchEvents(n.ctx, n.Runtime.ID())
-	if err != nil {
-		n.logger.Error("failed to subscribe to roothash events",
-			"err", err,
-		)
-		return
-	}
-	defer eventsSub.Close()
-
 	// Provision the hosted runtime.
 	hrt, hrtNotifier, err := n.ProvisionHostedRuntime(n.ctx)
 	if err != nil {
@@ -795,13 +766,6 @@ func (n *Node) worker() {
 				n.CrossNode.Lock()
 				defer n.CrossNode.Unlock()
 				n.handleNewBlockLocked(blk.Block, blk.Height)
-			}()
-		case ev := <-events:
-			// Received an event.
-			func() {
-				n.CrossNode.Lock()
-				defer n.CrossNode.Unlock()
-				n.handleNewEventLocked(ev)
 			}()
 		case ev := <-hrtEventCh:
 			// Received a hosted runtime event.

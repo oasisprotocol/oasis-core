@@ -98,11 +98,6 @@ func (n *Node) HandleNewBlockLocked(*runtime.BlockInfo) {
 	// Nothing to do here.
 }
 
-// HandleNewEventLocked is guarded by CrossNode.
-func (n *Node) HandleNewEventLocked(*roothash.Event) {
-	// Nothing to do here.
-}
-
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
 func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
 	// Nothing to do here.
