@@ -1499,7 +1499,7 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 				// Commit to a proposal with a higher rank.
 				n.updateState(ctx, 0, rank, false)
 				n.processProposal(ctx, proposal, rank, false)
-			case n.rank <= schedulerRank:
+			case n.rank <= limit:
 				// Try to schedule a batch.
 				n.updateState(ctx, 0, n.rank, false)
 				n.scheduleBatch(ctx, round, flush)
