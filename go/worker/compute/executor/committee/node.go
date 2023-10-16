@@ -76,15 +76,14 @@ type Node struct { // nolint: maligned
 	committee        *scheduler.Committee
 	commitPool       *commitment.Pool
 
-	blockInfoCh           chan *runtime.BlockInfo
-	processedBatchCh      chan *processedBatch
-	discrepancyCh         chan *discrepancyEvent
-	schedulerCommitmentCh chan *commitment.ExecutorCommitment
-	reselectCh            chan struct{}
-	missingTxCh           chan [][]byte
+	blockInfoCh      chan *runtime.BlockInfo
+	processedBatchCh chan *processedBatch
+	reselectCh       chan struct{}
+	missingTxCh      chan [][]byte
 
 	txCh <-chan []*txpool.PendingCheckTransaction
 	ecCh <-chan *commitment.ExecutorCommitment
+	evCh <-chan *roothash.Event
 
 	// Local, set and used by every round worker.
 
@@ -96,6 +95,7 @@ type Node struct { // nolint: maligned
 	discrepancy   *discrepancyEvent
 	submitted     map[uint64]struct{}
 	rank          uint64
+	poolRank      uint64
 	proposedBatch *proposedBatch
 
 	logger *logging.Logger
@@ -1255,6 +1255,102 @@ func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) 
 	n.proposeBatch(ctx, &lastHeader, batch)
 }
 
+func (n *Node) handleEvent(ctx context.Context, ev *roothash.Event) {
+	processedEventCount.With(n.getMetricLabels()).Inc()
+
+	switch {
+	case ev.ExecutionDiscrepancyDetected != nil:
+		n.handleDiscrepancy(ctx, &discrepancyEvent{
+			rank:          ev.ExecutionDiscrepancyDetected.Rank,
+			height:        uint64(ev.Height),
+			authoritative: true,
+		})
+	case ev.ExecutorCommitted != nil:
+		n.handleExecutorCommitment(ctx, &ev.ExecutorCommitted.Commit)
+	}
+}
+
+func (n *Node) handleExecutorCommitment(ctx context.Context, ec *commitment.ExecutorCommitment) {
+	n.logger.Debug("executor commitment",
+		"commitment", ec,
+	)
+
+	id := n.commonNode.Identity.NodeSigner.Public()
+	switch {
+	case n.committee.IsWorker(id):
+		n.estimatePoolRank(ctx, ec, false)
+	}
+}
+
+func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitment.ExecutorCommitment) {
+	n.logger.Debug("observed executor commitment",
+		"commitment", ec,
+	)
+
+	id := n.commonNode.Identity.NodeSigner.Public()
+	switch {
+	case n.committee.IsWorker(id):
+		n.estimatePoolRank(ctx, ec, true)
+	case n.committee.IsBackupWorker(id):
+		n.predictDiscrepancy(ctx, ec)
+	}
+}
+
+func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorCommitment, observed bool) {
+	// Filter for this round only.
+	round := n.blockInfo.RuntimeBlock.Header.Round + 1
+	if ec.Header.Header.Round != round {
+		n.logger.Debug("ignoring bad executor commitment, not for this round",
+			"round", round,
+			"ec_round", ec.Header.Header.Round,
+			"node_id", ec.NodeID,
+			"observed", observed,
+		)
+		return
+	}
+
+	// Filter scheduler commitments.
+	if ec.NodeID != ec.Header.SchedulerID {
+		n.logger.Debug("ignoring bad executor commitment, not from scheduler",
+			"node_id", ec.NodeID,
+			"observed", observed,
+		)
+		return
+	}
+
+	if observed {
+		// Verify the commitment.
+		rt := n.epoch.GetRuntime()
+		if err := commitment.VerifyExecutorCommitment(ctx, n.blockInfo.RuntimeBlock, rt, n.committee.ValidFor, ec, nil, n.epoch); err != nil {
+			n.logger.Debug("ignoring bad executor commitment, verification failed",
+				"err", err,
+				"node_id", ec.NodeID,
+				"observed", observed,
+			)
+			return
+		}
+	}
+
+	// Update pool rank.
+	rank, ok := n.committee.SchedulerRank(ec.Header.Header.Round, ec.Header.SchedulerID)
+	if !ok {
+		n.logger.Debug("ignoring bad executor commitment, scheduler not in committee",
+			"node_id", ec.NodeID,
+			"observed", observed,
+		)
+		return
+	}
+	if rank >= n.poolRank {
+		return
+	}
+	n.poolRank = rank
+	n.logger.Debug("pool rank has changed",
+		"round", round,
+		"rank", n.poolRank,
+		"observed", observed,
+	)
+}
+
 func (n *Node) handleRoundStarted() {
 	n.logger.Debug("starting round worker",
 		"round", n.blockInfo.RuntimeBlock.Header.Round+1,
@@ -1336,6 +1432,7 @@ func (n *Node) worker() {
 		err   error
 		txSub pubsub.ClosableSubscription
 		ecSub pubsub.ClosableSubscription
+		evSub pubsub.ClosableSubscription
 	)
 
 	// Subscribe to notifications of new transactions being available in the pool.
@@ -1352,6 +1449,16 @@ func (n *Node) worker() {
 		return
 	}
 	defer ecSub.Close()
+
+	// Start watching roothash events.
+	n.evCh, evSub, err = n.commonNode.Consensus.RootHash().WatchEvents(n.ctx, n.commonNode.Runtime.ID())
+	if err != nil {
+		n.logger.Error("failed to subscribe to roothash events",
+			"err", err,
+		)
+		return
+	}
+	defer evSub.Close()
 
 	// We are initialized.
 	close(n.initCh)
@@ -1468,9 +1575,9 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 		"backup_worker", n.epoch.IsExecutorBackupWorker(),
 	)
 
-	// Track the pool's highest rank to prevent committing to worse-ranked proposals
+	// Estimate the pool's highest rank to prevent committing to worse-ranked proposals
 	// that will be rejected by the pool.
-	poolRank := uint64(math.MaxUint64)
+	n.poolRank = uint64(math.MaxUint64)
 
 	// Allow only the highest-ranked scheduler to propose immediately.
 	schedulerRank := uint64(0)
@@ -1492,7 +1599,7 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 		// Update state, propose or schedule.
 		switch n.discrepancy {
 		case nil:
-			limit := min(schedulerRank, poolRank, n.rank)
+			limit := min(schedulerRank, n.poolRank, n.rank)
 			proposal, rank, ok := n.proposals.Best(round, 0, limit, n.submitted)
 			switch {
 			case ok && rank < n.rank:
@@ -1524,15 +1631,15 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 			case <-ctx.Done():
 				n.logger.Debug("exiting round, context canceled")
 				return
+			case ev := <-n.evCh:
+				// Handle an event.
+				n.handleEvent(ctx, ev)
 			case txs := <-n.txCh:
 				// Check any queued transactions.
 				n.handleNewCheckedTransactions(txs)
 			case txs := <-n.missingTxCh:
 				// Missing transactions fetched.
 				n.handleMissingTransactions(txs)
-			case discrepancy := <-n.discrepancyCh:
-				// Discrepancy has been detected.
-				n.handleDiscrepancy(ctx, discrepancy)
 			case ec := <-n.ecCh:
 				// Process observed executor commitments.
 				n.handleObservedExecutorCommitment(ctx, ec)
@@ -1546,20 +1653,6 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 				n.logger.Debug("scheduler rank has changed",
 					"rank", schedulerRank,
 				)
-			case ec := <-n.schedulerCommitmentCh:
-				// Pool rank increased, no need to try again.
-				if ec.Header.Header.Round != round {
-					continue
-				}
-				rank, ok := n.committee.SchedulerRank(round, ec.Header.SchedulerID)
-				if !ok {
-					continue
-				}
-				poolRank = rank
-				n.logger.Debug("pool rank has changed",
-					"rank", poolRank,
-				)
-				continue
 			case <-flushTimer.C:
 				// Force scheduling for primary transaction scheduler.
 				n.logger.Debug("scheduling is now forced")
@@ -1586,26 +1679,24 @@ func NewNode(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	n := &Node{
-		commonNode:            commonNode,
-		commonCfg:             commonCfg,
-		roleProvider:          roleProvider,
-		committeeTopic:        committeeTopic,
-		proposals:             newPendingProposals(),
-		ctx:                   ctx,
-		cancelCtx:             cancel,
-		stopCh:                make(chan struct{}),
-		quitCh:                make(chan struct{}),
-		initCh:                make(chan struct{}),
-		state:                 StateWaitingForBatch{},
-		txSync:                txsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID()),
-		stateTransitions:      pubsub.NewBroker(false),
-		blockInfoCh:           make(chan *runtime.BlockInfo, 1),
-		discrepancyCh:         make(chan *discrepancyEvent, 1),
-		processedBatchCh:      make(chan *processedBatch, 1),
-		schedulerCommitmentCh: make(chan *commitment.ExecutorCommitment, 1),
-		reselectCh:            make(chan struct{}, 1),
-		missingTxCh:           make(chan [][]byte, 1),
-		logger:                logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
+		commonNode:       commonNode,
+		commonCfg:        commonCfg,
+		roleProvider:     roleProvider,
+		committeeTopic:   committeeTopic,
+		proposals:        newPendingProposals(),
+		ctx:              ctx,
+		cancelCtx:        cancel,
+		stopCh:           make(chan struct{}),
+		quitCh:           make(chan struct{}),
+		initCh:           make(chan struct{}),
+		state:            StateWaitingForBatch{},
+		txSync:           txsync.NewClient(commonNode.P2P, commonNode.ChainContext, commonNode.Runtime.ID()),
+		stateTransitions: pubsub.NewBroker(false),
+		blockInfoCh:      make(chan *runtime.BlockInfo, 1),
+		processedBatchCh: make(chan *processedBatch, 1),
+		reselectCh:       make(chan struct{}, 1),
+		missingTxCh:      make(chan [][]byte, 1),
+		logger:           logging.GetLogger("worker/executor/committee").With("runtime_id", commonNode.Runtime.ID()),
 	}
 
 	// Register prune handler.
