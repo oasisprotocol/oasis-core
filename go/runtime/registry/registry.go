@@ -88,6 +88,9 @@ type Runtime interface {
 	// RegisterStorage sets the given local storage backend for the runtime.
 	RegisterStorage(storage storageAPI.Backend)
 
+	// StorageInitFailed reports that storage initialization for the runtime failed.
+	StorageInitFailed(err error)
+
 	// AddRoles adds available node roles to the runtime.
 	AddRoles(roles node.RolesMask)
 
@@ -129,6 +132,7 @@ type runtime struct { // nolint: maligned
 
 	consensus    consensus.Backend
 	storage      storageAPI.Backend
+	storageErrCh chan error
 	localStorage localstorage.LocalStorage
 
 	history history.History
@@ -204,7 +208,19 @@ func (r *runtime) RegisterStorage(storage storageAPI.Backend) {
 	if r.storage != nil {
 		panic("runtime storage backend already assigned")
 	}
+	close(r.storageErrCh)
 	r.storage = storage
+}
+
+func (r *runtime) StorageInitFailed(err error) {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.storage != nil {
+		panic("runtime storage backend set already but reported init error")
+	}
+	r.storageErrCh <- err
+	close(r.storageErrCh)
 }
 
 func (r *runtime) AddRoles(roles node.RolesMask) {
@@ -394,6 +410,10 @@ func (r *runtime) watchUpdates(ctx context.Context) {
 }
 
 func (r *runtime) finishInitialization() error {
+	if err, ok := <-r.storageErrCh; ok && err != nil {
+		return err
+	}
+
 	r.Lock()
 	defer r.Unlock()
 
@@ -555,6 +575,7 @@ func newRuntime(
 		id:                         id,
 		dataDir:                    rtDataDir,
 		consensus:                  consensus,
+		storageErrCh:               make(chan error, 1),
 		localStorage:               localStorage,
 		cancelCtx:                  cancel,
 		registryDescriptorCh:       make(chan struct{}),
