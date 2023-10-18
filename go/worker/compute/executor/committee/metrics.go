@@ -9,6 +9,13 @@ import (
 )
 
 var (
+	processedEventCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "oasis_worker_processed_event_count",
+			Help: "Number of processed roothash events.",
+		},
+		[]string{"runtime"},
+	)
 	discrepancyDetectedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "oasis_worker_execution_discrepancy_detected_count",
@@ -52,6 +59,7 @@ var (
 		[]string{"runtime"},
 	)
 	nodeCollectors = []prometheus.Collector{
+		processedEventCount,
 		discrepancyDetectedCount,
 		abortedBatchCount,
 		storageCommitLatency,

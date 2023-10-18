@@ -31,6 +31,30 @@ func (n *Node) handleNewCheckedTransactions(txs []*txpool.PendingCheckTransactio
 		state.bytes += uint64(tx.Size())
 	}
 
+	n.checkWaitingForTxsState(&state)
+}
+
+func (n *Node) handleMissingTransactions(txs [][]byte) {
+	state, ok := n.state.(StateWaitingForTxs)
+	if !ok {
+		return
+	}
+
+	for _, tx := range txs {
+		h := hash.NewFromBytes(tx)
+		idx, ok := state.txs[h]
+		if !ok {
+			continue
+		}
+		delete(state.txs, h)
+		state.batch[idx] = tx
+		state.bytes += uint64(len(tx))
+	}
+
+	n.checkWaitingForTxsState(&state)
+}
+
+func (n *Node) checkWaitingForTxsState(state *StateWaitingForTxs) {
 	if len(state.txs) == 0 {
 		n.logger.Info("received all transactions needed for batch processing")
 	}
@@ -42,6 +66,8 @@ func (n *Node) handleNewCheckedTransactions(txs []*txpool.PendingCheckTransactio
 }
 
 func (n *Node) requestMissingTransactions(ctx context.Context, txHashes []hash.Hash) {
+	txs := make([][]byte, 0, len(txHashes))
+
 	requestOp := func() error {
 		if len(txHashes) == 0 {
 			return nil
@@ -68,6 +94,8 @@ func (n *Node) requestMissingTransactions(ctx context.Context, txHashes []hash.H
 			)
 		}
 
+		txs = append(txs, rsp.Txs...)
+
 		// Queue all transactions in the transaction pool.
 		n.commonNode.TxPool.SubmitProposedBatch(rsp.Txs)
 
@@ -93,5 +121,10 @@ func (n *Node) requestMissingTransactions(ctx context.Context, txHashes []hash.H
 		return
 	}
 
-	n.logger.Info("received all transactions needed for batch processing")
+	n.logger.Info("fetched all transactions needed for batch processing")
+
+	select {
+	case n.missingTxCh <- txs:
+	case <-ctx.Done():
+	}
 }

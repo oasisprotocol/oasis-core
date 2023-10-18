@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
-	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
@@ -45,35 +43,4 @@ func (n *Node) HandleNewBlockLocked(bi *runtime.BlockInfo) {
 
 	// Non-blocking send.
 	n.blockInfoCh <- bi
-}
-
-// HandleNewEventLocked implements NodeHooks.
-// Guarded by n.commonNode.CrossNode.
-func (n *Node) HandleNewEventLocked(ev *roothash.Event) {
-	switch {
-	case ev.ExecutionDiscrepancyDetected != nil:
-		n.NotifyDiscrepancy(&discrepancyEvent{
-			rank:          ev.ExecutionDiscrepancyDetected.Rank,
-			height:        uint64(ev.Height),
-			authoritative: true,
-		})
-	case ev.ExecutorCommitted != nil:
-		n.NotifySchedulerCommitment(&ev.ExecutorCommitted.Commit)
-	}
-}
-
-func (n *Node) NotifySchedulerCommitment(ec *commitment.ExecutorCommitment) {
-	// Filter scheduler commitments.
-	if ec.NodeID != ec.Header.SchedulerID {
-		return
-	}
-
-	// Drop commitments if the worker falls behind. The pool's rank can only improve.
-	select {
-	case <-n.schedulerCommitmentCh:
-	default:
-	}
-
-	// Non-blocking send.
-	n.schedulerCommitmentCh <- ec
 }

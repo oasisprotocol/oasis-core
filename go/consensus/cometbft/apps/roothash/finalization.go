@@ -83,7 +83,7 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	case commitment.ErrDiscrepancyDetected:
 		ctx.Logger().Warn("executor discrepancy detected",
 			"round", round,
-			"priority", rtState.CommitmentPool.HighestRank,
+			"rank", rtState.CommitmentPool.HighestRank,
 			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
 		)
 
@@ -291,6 +291,7 @@ func (app *rootHashApplication) finalizeBlock(ctx *tmapi.Context, rtState *rooth
 
 	// Emit event.
 	ctx.Logger().Debug("new runtime block",
+		"runtime_id", rtState.Runtime.ID,
 		"height", ctx.BlockHeight()+1, // Current height is ctx.BlockHeight() + 1
 		"round", blk.Header.Round,
 		"type", blk.Header.HeaderType,

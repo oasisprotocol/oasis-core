@@ -228,6 +228,7 @@ func (p *Pool) AddVerifiedExecutorCommitment(c *scheduler.Committee, ec *Executo
 		// Discrepancy detection accepts commitments arriving in any order, e.g., a backup worker
 		// can submit a commitment even before there is a discrepancy.
 		logger.Debug("node is not in the committee",
+			"round", ec.Header.Header.Round,
 			"node_id", ec.NodeID,
 		)
 		return ErrNotInCommittee
@@ -235,6 +236,7 @@ func (p *Pool) AddVerifiedExecutorCommitment(c *scheduler.Committee, ec *Executo
 		// Discrepancy resolution accepts commitments only from backup workers to prevent workers
 		// from improving their liveness statistics.
 		logger.Debug("node is not a backup worker",
+			"round", ec.Header.Header.Round,
 			"node_id", ec.NodeID,
 		)
 		return ErrBadExecutorCommitment
@@ -246,7 +248,9 @@ func (p *Pool) AddVerifiedExecutorCommitment(c *scheduler.Committee, ec *Executo
 		// Reject commitments with invalid schedulers.
 		logger.Debug("executor commitment's scheduler is not in the committee",
 			"round", ec.Header.Header.Round,
+			"node_id", ec.NodeID,
 			"scheduler_id", ec.Header.SchedulerID,
+			"rank", rank,
 		)
 		return ErrBadExecutorCommitment
 	}
@@ -255,18 +259,22 @@ func (p *Pool) AddVerifiedExecutorCommitment(c *scheduler.Committee, ec *Executo
 	switch {
 	case rank > p.HighestRank:
 		// Reject commitments with higher ranking.
-		logger.Debug("executor commitment's scheduler has too high ranking",
+		logger.Debug("executor commitment's scheduler has worse ranking",
 			"round", ec.Header.Header.Round,
-			"commitment_rank", rank,
-			"pool_rank", p.HighestRank,
+			"node_id", ec.NodeID,
+			"scheduler_id", ec.Header.SchedulerID,
+			"rank", rank,
+			"highest_rank", p.HighestRank,
 		)
 		return ErrBadExecutorCommitment
 	case rank != p.HighestRank && p.Discrepancy:
 		// Prevent placing commitments with different rank during discrepancy resolution.
 		logger.Debug("executor commitment's scheduler rank does not match",
 			"round", ec.Header.Header.Round,
-			"commitment_rank", rank,
-			"pool_rank", p.HighestRank,
+			"node_id", ec.NodeID,
+			"scheduler_id", ec.Header.SchedulerID,
+			"rank", rank,
+			"highest_rank", p.HighestRank,
 		)
 		return ErrBadExecutorCommitment
 	case rank < p.HighestRank:
