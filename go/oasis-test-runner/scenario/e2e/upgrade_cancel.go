@@ -42,7 +42,7 @@ func newNodeUpgradeCancelImpl() scenario.Scenario {
 
 func (sc *nodeUpgradeCancelImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeCancelImpl{
-		Scenario: sc.Scenario.Clone(),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 

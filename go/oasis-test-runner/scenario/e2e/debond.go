@@ -23,7 +23,7 @@ type debondImpl struct {
 
 func (s *debondImpl) Clone() scenario.Scenario {
 	return &debondImpl{
-		Scenario: s.Scenario.Clone(),
+		Scenario: *s.Scenario.Clone().(*Scenario),
 	}
 }
 

@@ -2,6 +2,8 @@
 package e2e
 
 import (
+	"context"
+
 	flag "github.com/spf13/pflag"
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -49,8 +51,8 @@ func NewScenario(name string) *Scenario {
 }
 
 // Clone implements scenario.Scenario.
-func (sc *Scenario) Clone() Scenario {
-	return Scenario{
+func (sc *Scenario) Clone() scenario.Scenario {
+	return &Scenario{
 		Net:    sc.Net,
 		Flags:  sc.Flags.Clone(),
 		Logger: sc.Logger,
@@ -63,6 +65,11 @@ func (sc *Scenario) Name() string {
 	return sc.name
 }
 
+// Network implements scenario.Scenario.
+func (sc *Scenario) Network() *oasis.Network {
+	return sc.Net
+}
+
 // Parameters implements scenario.Scenario.
 func (sc *Scenario) Parameters() *env.ParameterFlagSet {
 	return sc.Flags
@@ -70,6 +77,11 @@ func (sc *Scenario) Parameters() *env.ParameterFlagSet {
 
 // PreInit implements scenario.Scenario.
 func (sc *Scenario) PreInit() error {
+	return nil
+}
+
+// Run implements scenario.Scenario.
+func (sc *Scenario) Run(context.Context, *env.Env) error {
 	return nil
 }
 
@@ -129,9 +141,6 @@ func RegisterScenarios() error {
 		NodeUpgradeCancel,
 		// Debonding entries from genesis test.
 		Debond,
-		// Early query test.
-		EarlyQuery,
-		EarlyQueryInitHeight,
 		// Consensus state sync.
 		ConsensusStateSync,
 		// Multiple seeds test.

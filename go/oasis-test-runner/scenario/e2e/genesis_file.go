@@ -42,7 +42,7 @@ type genesisFileImpl struct {
 
 func (s *genesisFileImpl) Clone() scenario.Scenario {
 	return &genesisFileImpl{
-		Scenario: s.Scenario.Clone(),
+		Scenario: *s.Scenario.Clone().(*Scenario),
 	}
 }
 
