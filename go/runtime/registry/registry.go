@@ -107,7 +107,10 @@ type Runtime interface {
 	HasHost() bool
 
 	// Host returns the runtime host configuration and provisioner if configured.
-	Host(ctx context.Context) (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error)
+	//
+	// If the runtime is not yet registered an error is returned. Use `RegistryDescriptor` to
+	// wait for the runtime to be registered.
+	Host() (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error)
 
 	// HostVersions returns a list of supported runtime versions.
 	HostVersions() []version.Version
@@ -240,19 +243,20 @@ func (r *runtime) HasHost() bool {
 	return r.hostProvisioners != nil && r.hostConfig != nil
 }
 
-func (r *runtime) Host(ctx context.Context) (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error) {
+func (r *runtime) Host() (map[version.Version]*runtimeHost.Config, runtimeHost.Provisioner, error) {
 	if r.hostProvisioners == nil || r.hostConfig == nil {
 		return nil, nil, ErrRuntimeHostNotConfigured
 	}
 
-	rt, err := r.RegistryDescriptor(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get runtime registry descriptor: %w", err)
+	r.RLock()
+	defer r.RUnlock()
+	if r.registryDescriptor == nil {
+		return nil, nil, fmt.Errorf("runtime not yet registered")
 	}
 
-	provisioner, ok := r.hostProvisioners[rt.TEEHardware]
+	provisioner, ok := r.hostProvisioners[r.registryDescriptor.TEEHardware]
 	if !ok {
-		return nil, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", rt.TEEHardware)
+		return nil, nil, fmt.Errorf("no provisioner suitable for TEE hardware '%s'", r.registryDescriptor.TEEHardware)
 	}
 
 	return r.hostConfig, provisioner, nil
