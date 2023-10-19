@@ -67,7 +67,7 @@ genesis:
   file: /storage/node/genesis.json
 
 # Worker configuration.
-worker:  
+worker:
   p2p:
     port: 9002
     peer_outbound_queue_size: 42
@@ -253,6 +253,39 @@ consensus:
       # NOTE: You can add additional seed nodes to this list if you want.
       seed:
         - "E27F6B7A350B4CC2B48A6CBE94B0A02B0DCB0BF3@35.199.49.168:26656"
+
+worker:
+  registration:
+    # In order for the node to register itself, the entity.json of the entity
+    # used to provision the node must be available on the node.
+    entity: /node/entity/entity.json
+`
+
+// Validator node with external address set and no P2P address.
+const testValidatorConfig2Raw = `
+datadir: /node/data
+
+log:
+  level:
+    default: info
+    tendermint: info
+    tendermint/context: error
+  format: JSON
+
+genesis:
+  file: /node/etc/genesis.json
+
+consensus:
+  validator: true
+
+  tendermint:
+    p2p:
+      # List of seed nodes to connect to.
+      # NOTE: You can add additional seed nodes to this list if you want.
+      seed:
+        - "E27F6B7A350B4CC2B48A6CBE94B0A02B0DCB0BF3@35.199.49.168:26656"
+    core:
+      external_address: tcp://4.3.2.1:26656
 
 worker:
   registration:
@@ -610,6 +643,27 @@ func TestConfigMigrationValidator(t *testing.T) {
 	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
 	require.Equal(newConfig.P2P.Seeds[1], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:9200")
 	require.Equal(newConfig.Consensus.Validator, false)
+}
+
+func TestConfigMigrationValidator2(t *testing.T) {
+	require := require.New(t)
+	newConfig := prepareTest(require, testValidatorConfig2Raw)
+
+	// Now check if the config struct fields actually match the original state.
+	require.Equal(newConfig.Mode, config.ModeValidator)
+	require.Equal(newConfig.Common.DataDir, "/node/data")
+	require.Equal(newConfig.Common.Log.Format, "JSON")
+	require.Equal(newConfig.Common.Log.Level["default"], "info")
+	require.Equal(newConfig.Common.Log.Level["cometbft"], "info")
+	require.Equal(newConfig.Common.Log.Level["cometbft/context"], "error")
+	require.Equal(newConfig.Genesis.File, "/node/etc/genesis.json")
+	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
+	require.Equal(newConfig.P2P.Seeds[1], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:9200")
+	require.Equal(newConfig.Consensus.Validator, false)
+	require.Equal(newConfig.Consensus.ExternalAddress, "tcp://4.3.2.1:26656")
+	require.Equal(newConfig.P2P.Port, uint16(9200))
+	require.Equal(len(newConfig.P2P.Registration.Addresses), 1)
+	require.Equal(newConfig.P2P.Registration.Addresses[0], "4.3.2.1:9200")
 }
 
 func TestConfigMigrationDocsNonValidator(t *testing.T) {
