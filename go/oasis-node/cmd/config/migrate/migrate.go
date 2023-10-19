@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -724,12 +725,43 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 
 	// If a node has `consensus.validator` set to true and it does not have any runtimes configured,
 	// the new `mode` should be set to `validator`.
+	var isValidator bool
 	if newValidator, ok := m(newCfg["consensus"])["validator"]; ok {
-		isValidator, _ := newValidator.(bool)
+		isValidator, _ = newValidator.(bool)
 		if _, hasRuntimes := m(newCfg["runtime"])["paths"]; !hasRuntimes && isValidator {
 			nodeMode = "validator"
 			delete(m(newCfg["consensus"]), "validator")
 		}
+	}
+	// If node is a validator, it now requires external P2P addresses to have set.
+	if isValidator {
+		// Set P2P port if not set.
+		if _, ok := m(newCfg["p2p"])["port"]; !ok {
+			m(newCfg["p2p"])["port"] = 9200
+		}
+		// Set P2P registration addresses if not set.
+		if _, ok := m(m(newCfg["p2p"])["registration"])["addresses"]; !ok {
+			mkSubMap(m(newCfg["p2p"]), "registration")
+
+			// Parse host from consensus.external_address.
+			ea := m(newCfg["consensus"])["external_address"]
+			if eaStr, ok := ea.(string); ok {
+				url, err := url.Parse(eaStr)
+				if err != nil {
+					logger.Error("failed to parse URI from consensus.external_address", "err", err)
+					os.Exit(1)
+				}
+				m(m(newCfg["p2p"])["registration"])["addresses"] = []string{url.Hostname() + ":" + fmt.Sprintf("%d", m(newCfg["p2p"])["port"])}
+			} else {
+				logger.Warn("consensus.external_address missing, not configuring p2p.registration.addresses parameter", "address", ea)
+			}
+		} else {
+			logger.Warn("p2p.registration.addresses is already set, make sure the address port matches p2p.port")
+		}
+
+	}
+	if isValidator && (m(newCfg["p2p"])["port"] == nil || m(m(newCfg["p2p"])["registration"])["addresses"] == nil) {
+		logger.Warn("node is a validator but p2p.port or p2p.registration.addresses are not set")
 	}
 
 	// Check for options that are only available on the command-line.
