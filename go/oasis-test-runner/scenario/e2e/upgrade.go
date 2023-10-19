@@ -225,7 +225,7 @@ func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeC
 
 func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 	return &nodeUpgradeImpl{
-		Scenario:       sc.Scenario.Clone(),
+		Scenario:       *sc.Scenario.Clone().(*Scenario),
 		handlerName:    sc.handlerName,
 		upgradeChecker: sc.upgradeChecker,
 	}

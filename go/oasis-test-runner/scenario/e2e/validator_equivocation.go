@@ -36,7 +36,7 @@ type validatorEquivocationImpl struct {
 
 func (sc *validatorEquivocationImpl) Clone() scenario.Scenario {
 	return &validatorEquivocationImpl{
-		Scenario: sc.Scenario.Clone(),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 

@@ -110,7 +110,7 @@ func (sc *Scenario) Clone() scenario.Scenario {
 		testClient = sc.TestClient.Clone()
 	}
 	return &Scenario{
-		Scenario:                  sc.Scenario.Clone(),
+		Scenario:                  *sc.Scenario.Clone().(*e2e.Scenario),
 		TestClient:                testClient,
 		debugNoRandomInitialEpoch: sc.debugNoRandomInitialEpoch,
 		debugWeakAlphaOk:          sc.debugWeakAlphaOk,
@@ -362,6 +362,10 @@ func RegisterScenarios() error {
 		TrustRootChangeFailsTest,
 		// Archive node API test.
 		ArchiveAPI,
+		// Early query tests.
+		EarlyQuery,
+		EarlyQueryInitHeight,
+		EarlyQueryRuntime,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err
