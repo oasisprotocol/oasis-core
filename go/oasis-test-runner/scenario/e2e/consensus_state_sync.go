@@ -23,7 +23,7 @@ type consensusStateSyncImpl struct {
 
 func (sc *consensusStateSyncImpl) Clone() scenario.Scenario {
 	return &consensusStateSyncImpl{
-		Scenario: sc.Scenario.Clone(),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 

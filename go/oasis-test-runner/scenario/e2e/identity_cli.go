@@ -26,7 +26,7 @@ type identityCLIImpl struct {
 
 func (sc *identityCLIImpl) Clone() scenario.Scenario {
 	return &identityCLIImpl{
-		Scenario: sc.Scenario.Clone(),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 		dataDir:  sc.dataDir,
 	}
 }

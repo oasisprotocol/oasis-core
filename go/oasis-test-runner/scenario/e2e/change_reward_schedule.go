@@ -57,7 +57,7 @@ func newChangeRewardScheduleImpl(name string, parameters *api.ChangeParametersPr
 
 func (sc *changeRewardScheduleImpl) Clone() scenario.Scenario {
 	return &changeRewardScheduleImpl{
-		Scenario:     sc.Scenario.Clone(),
+		Scenario:     *sc.Scenario.Clone().(*Scenario),
 		parameters:   sc.parameters,
 		currentEpoch: sc.currentEpoch,
 		entityNonce:  sc.entityNonce,

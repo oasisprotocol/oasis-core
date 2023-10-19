@@ -51,7 +51,7 @@ type gasFeesImpl struct {
 
 func (sc *gasFeesImpl) Clone() scenario.Scenario {
 	return &gasFeesImpl{
-		Scenario:    sc.Scenario.Clone(),
+		Scenario:    *sc.Scenario.Clone().(*Scenario),
 		dumpRestore: sc.dumpRestore,
 	}
 }

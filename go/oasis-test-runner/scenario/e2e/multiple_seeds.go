@@ -39,7 +39,7 @@ func (sc *multipleSeeds) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *multipleSeeds) Clone() scenario.Scenario {
 	return &multipleSeeds{
-		Scenario: sc.Scenario.Clone(),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 

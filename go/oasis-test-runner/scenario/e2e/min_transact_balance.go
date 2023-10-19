@@ -82,7 +82,7 @@ func (mtb *minTransactBalanceImpl) getAccountAndCheckNonce(ctx context.Context, 
 
 func (mtb *minTransactBalanceImpl) Clone() scenario.Scenario {
 	return &minTransactBalanceImpl{
-		Scenario: mtb.Scenario.Clone(),
+		Scenario: *mtb.Scenario.Clone().(*Scenario),
 	}
 }
 

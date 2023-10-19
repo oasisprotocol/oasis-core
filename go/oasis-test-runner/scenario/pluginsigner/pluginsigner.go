@@ -68,6 +68,10 @@ func (sc *pluginSignerImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }
 
+func (sc *pluginSignerImpl) Network() *oasis.Network {
+	return nil
+}
+
 func (sc *pluginSignerImpl) Init(*env.Env, *oasis.Network) error {
 	return nil
 }

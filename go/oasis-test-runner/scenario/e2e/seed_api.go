@@ -37,7 +37,7 @@ func (sc *seedAPI) Fixture() (*oasis.NetworkFixture, error) {
 
 func (sc *seedAPI) Clone() scenario.Scenario {
 	return &seedAPI{
-		Scenario: sc.Scenario.Clone(),
+		Scenario: *sc.Scenario.Clone().(*Scenario),
 	}
 }
 

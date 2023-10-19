@@ -67,6 +67,10 @@ func (sc *remoteSignerImpl) Fixture() (*oasis.NetworkFixture, error) {
 	return nil, nil
 }
 
+func (sc *remoteSignerImpl) Network() *oasis.Network {
+	return nil
+}
+
 func (sc *remoteSignerImpl) Init(*env.Env, *oasis.Network) error {
 	return nil
 }

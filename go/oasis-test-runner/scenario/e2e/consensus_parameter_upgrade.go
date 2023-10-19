@@ -235,7 +235,7 @@ func newConsensusParameterUpgradeImpl(name string, parameters *api.ChangeParamet
 
 func (sc *consensusParameterUpgradeImpl) Clone() scenario.Scenario {
 	return &consensusParameterUpgradeImpl{
-		Scenario:       sc.Scenario.Clone(),
+		Scenario:       *sc.Scenario.Clone().(*Scenario),
 		parameters:     sc.parameters,
 		upgradeChecker: sc.upgradeChecker,
 		currentEpoch:   sc.currentEpoch,
