@@ -13,17 +13,6 @@ type discrepancyEvent struct {
 	authoritative bool
 }
 
-func (n *Node) NotifyDiscrepancy(info *discrepancyEvent) {
-	// Drop discrepancies if the worker falls behind.
-	select {
-	case <-n.discrepancyCh:
-	default:
-	}
-
-	// Non-blocking send.
-	n.discrepancyCh <- info
-}
-
 func (n *Node) handleDiscrepancy(ctx context.Context, ev *discrepancyEvent) {
 	n.logger.Warn("execution discrepancy detected",
 		"rank", ev.rank,
@@ -55,17 +44,7 @@ func (n *Node) handleDiscrepancy(ctx context.Context, ev *discrepancyEvent) {
 	n.discrepancy = ev
 }
 
-func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitment.ExecutorCommitment) {
-	// Don't do anything if we are not a backup worker or we are an executor worker.
-	id := n.commonNode.Identity.NodeSigner.Public()
-	if !n.committee.IsBackupWorker(id) || n.committee.IsWorker(id) {
-		return
-	}
-
-	n.logger.Debug("observed executor commitment",
-		"commitment", ec,
-	)
-
+func (n *Node) predictDiscrepancy(ctx context.Context, ec *commitment.ExecutorCommitment) {
 	// TODO: Handle equivocation detection.
 
 	// Don't do anything if the discrepancy has already been detected.
@@ -101,7 +80,7 @@ func (n *Node) handleObservedExecutorCommitment(ctx context.Context, ec *commitm
 
 	n.logger.Warn("observed commitments indicate discrepancy")
 
-	n.NotifyDiscrepancy(&discrepancyEvent{
+	n.handleDiscrepancy(ctx, &discrepancyEvent{
 		rank:          n.commitPool.HighestRank,
 		height:        uint64(n.blockInfo.ConsensusBlock.Height),
 		authoritative: false,

@@ -358,11 +358,6 @@ func (n *Node) HandleNewBlockLocked(bi *runtime.BlockInfo) {
 	n.blockCh.In() <- bi.RuntimeBlock
 }
 
-// HandleNewEventLocked is guarded by CrossNode.
-func (n *Node) HandleNewEventLocked(*roothashApi.Event) {
-	// Nothing to do here.
-}
-
 // HandleRuntimeHostEventLocked is guarded by CrossNode.
 func (n *Node) HandleRuntimeHostEventLocked(*host.Event) {
 	// Nothing to do here.
