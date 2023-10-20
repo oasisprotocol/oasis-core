@@ -320,6 +320,8 @@ func (n *Node) GetStatus() (*api.Status, error) {
 
 				for _, index := range cmte.Indices {
 					status.Liveness.LiveRounds += rs.LivenessStatistics.LiveRounds[index]
+					status.Liveness.FinalizedProposals += rs.LivenessStatistics.FinalizedProposals[index]
+					status.Liveness.MissedProposals += rs.LivenessStatistics.MissedProposals[index]
 				}
 			}
 		}

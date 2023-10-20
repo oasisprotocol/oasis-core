@@ -144,4 +144,12 @@ type LivenessStatus struct {
 
 	// LiveRounds is the number of rounds in which the node positively contributed.
 	LiveRounds uint64 `json:"live_rounds"`
+
+	// FinalizedProposals is the number of finalized rounds when a node acted as a proposer
+	// with the highest rank.
+	FinalizedProposals uint64 `json:"finalized_proposals"`
+
+	// MissedProposals is the number of failed rounds when a node acted as a proposer
+	// with the highest rank.
+	MissedProposals uint64 `json:"missed_proposals"`
 }
