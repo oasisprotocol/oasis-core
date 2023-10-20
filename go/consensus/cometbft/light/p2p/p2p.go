@@ -189,6 +189,8 @@ func (lp *lightClientProvider) Initialized() <-chan struct{} {
 func (lp *lightClientProvider) PeerID() string {
 	peer := lp.getPeer()
 	if peer == nil {
+		// This happens if a provider is not yet initialized, or
+		// (less likely) if a peer was just dropped and no new peer is available.
 		return ""
 	}
 	return peer.String()

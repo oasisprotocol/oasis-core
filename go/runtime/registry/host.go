@@ -61,7 +61,13 @@ type RuntimeHostNode struct {
 // started automatically, you must call Start explicitly.
 func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.RichRuntime, protocol.Notifier, error) {
 	runtime := n.factory.GetRuntime()
-	cfgs, provisioner, err := runtime.Host(ctx)
+
+	// Ensure registry descriptor is ready as it is required for obtaining Host configuration.
+	_, err := runtime.RegistryDescriptor(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to wait for registry descriptor: %w", err)
+	}
+	cfgs, provisioner, err := runtime.Host()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get runtime host: %w", err)
 	}

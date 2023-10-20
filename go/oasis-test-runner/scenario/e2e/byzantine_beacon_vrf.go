@@ -51,7 +51,7 @@ type byzantineVRFBeaconImpl struct {
 
 func (sc *byzantineVRFBeaconImpl) Clone() scenario.Scenario {
 	return &byzantineVRFBeaconImpl{
-		Scenario:     sc.Scenario.Clone(),
+		Scenario:     *sc.Scenario.Clone().(*Scenario),
 		extraArgs:    sc.extraArgs,
 		identitySeed: sc.identitySeed,
 	}

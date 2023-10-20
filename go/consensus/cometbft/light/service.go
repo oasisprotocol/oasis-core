@@ -106,7 +106,9 @@ func (c *client) GetStatus() (*consensus.LightClientStatus, error) {
 	}
 
 	for _, p := range c.providers {
-		status.PeerIDs = append(status.PeerIDs, p.PeerID())
+		if id := p.PeerID(); id != "" {
+			status.PeerIDs = append(status.PeerIDs, id)
+		}
 	}
 
 	return status, nil

@@ -38,6 +38,9 @@ type Scenario interface {
 	// otherwise it will be nil.
 	Init(childEnv *env.Env, net *oasis.Network) error
 
+	// Network returns the network used by this scenario.
+	Network() *oasis.Network
+
 	// Run runs the scenario.
 	Run(ctx context.Context, childEnv *env.Env) error
 }
