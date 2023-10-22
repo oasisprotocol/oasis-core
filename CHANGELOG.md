@@ -12,6 +12,45 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.2 (2023-10-22)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- go/worker/client: Fix nil dereference on early Query
+  ([#5403](https://github.com/oasisprotocol/oasis-core/issues/5403))
+
+- go/worker/compute/executor: Start processing once all txs are fetched
+  ([#5404](https://github.com/oasisprotocol/oasis-core/issues/5404))
+
+- go/worker/compute/executor: Estimate pool rank from observed commitments
+  ([#5404](https://github.com/oasisprotocol/oasis-core/issues/5404))
+
+- go/worker/compute/executor: Schedule only if higher ranks didn't propose
+  ([#5404](https://github.com/oasisprotocol/oasis-core/issues/5404))
+
+- go/worker/compute/executor: Use local time for batch scheduling
+  ([#5404](https://github.com/oasisprotocol/oasis-core/issues/5404))
+
+- Fix stuck `control status` on runtime nodes before initialization
+  ([#5407](https://github.com/oasisprotocol/oasis-core/issues/5407))
+
+- Fix showing empty peer IDs in the Consensus light client status output
+  ([#5408](https://github.com/oasisprotocol/oasis-core/issues/5408))
+
+- config/migrate: Automatically configure external P2P addresses for validators
+  ([#5410](https://github.com/oasisprotocol/oasis-core/issues/5410))
+
+### Internal Changes
+
+- go: Bump golang.org/x/net to v0.17.0
+  ([#5403](https://github.com/oasisprotocol/oasis-core/issues/5403))
+
 ## 23.0.1 (2023-10-12)
 
 | Protocol          | Version   |
