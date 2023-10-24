@@ -40,7 +40,7 @@ jobs:
         with:
           python-version: "3.x"
       - name: Set up Node.js 12
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: "12.x"
       - name: Set up Go
