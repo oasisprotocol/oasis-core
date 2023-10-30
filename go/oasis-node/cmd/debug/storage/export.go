@@ -167,7 +167,7 @@ func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storag
 	}
 
 	switch b {
-	case storageDatabase.BackendNameBadgerDB:
+	case storageDatabase.BackendNameBadgerDB, storageDatabase.BackendNamePebbleDB:
 		cfg.DB = filepath.Join(cfg.DB, storageDatabase.DefaultFileName(cfg.Backend))
 		return storageDatabase.New(cfg)
 	default:

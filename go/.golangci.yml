@@ -22,6 +22,7 @@ linters-settings:
           - github.com/a8m/envsubst
           - github.com/btcsuite/btcutil
           - github.com/cenkalti/backoff/v4
+          - github.com/cockroachdb/pebble
           - github.com/cometbft/cometbft
           - github.com/cosmos/gogoproto/proto
           - github.com/dgraph-io/badger/v3

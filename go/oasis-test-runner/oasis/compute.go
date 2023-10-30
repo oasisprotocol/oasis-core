@@ -217,7 +217,7 @@ func (net *Network) NewCompute(cfg *ComputeCfg) (*Compute, error) {
 		cfg.RuntimeProvisioner = runtimeConfig.RuntimeProvisionerSandboxed
 	}
 	if cfg.StorageBackend == "" {
-		cfg.StorageBackend = database.BackendNameBadgerDB
+		cfg.StorageBackend = database.BackendNamePebbleDB
 	}
 	// Initialize runtime state paths.
 	for i, path := range cfg.RuntimeStatePaths {
