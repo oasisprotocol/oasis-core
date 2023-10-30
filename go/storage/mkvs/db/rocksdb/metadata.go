@@ -1,10 +1,10 @@
-package badger
+package rocksdb
 
 import (
 	"fmt"
 	"sync"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/linxGnu/grocksdb"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -41,17 +41,17 @@ func (m *metadata) getEarliestVersion() uint64 {
 	return m.value.EarliestVersion
 }
 
-func (m *metadata) setEarliestVersion(tx *badger.Txn, version uint64) error {
+func (m *metadata) setEarliestVersion(batch *grocksdb.WriteBatch, version uint64) {
 	m.Lock()
 	defer m.Unlock()
 
 	// The earliest version can only increase, not decrease.
 	if version < m.value.EarliestVersion {
-		return nil
+		return
 	}
 
 	m.value.EarliestVersion = version
-	return m.save(tx)
+	m.saveB(batch)
 }
 
 func (m *metadata) getLastFinalizedVersion() (uint64, bool) {
@@ -64,12 +64,12 @@ func (m *metadata) getLastFinalizedVersion() (uint64, bool) {
 	return *m.value.LastFinalizedVersion, true
 }
 
-func (m *metadata) setLastFinalizedVersion(tx *badger.Txn, version uint64) error {
+func (m *metadata) setLastFinalizedVersion(batch *grocksdb.WriteBatch, version uint64) {
 	m.Lock()
 	defer m.Unlock()
 
 	if m.value.LastFinalizedVersion != nil && version <= *m.value.LastFinalizedVersion {
-		return nil
+		return
 	}
 
 	if m.value.LastFinalizedVersion == nil {
@@ -77,7 +77,7 @@ func (m *metadata) setLastFinalizedVersion(tx *badger.Txn, version uint64) error
 	}
 
 	m.value.LastFinalizedVersion = &version
-	return m.save(tx)
+	m.saveB(batch)
 }
 
 func (m *metadata) getMultipartVersion() uint64 {
@@ -87,16 +87,21 @@ func (m *metadata) getMultipartVersion() uint64 {
 	return m.value.MultipartVersion
 }
 
-func (m *metadata) setMultipartVersion(tx *badger.Txn, version uint64) error {
+func (m *metadata) setMultipartVersion(db *grocksdb.DB, version uint64) error {
 	m.Lock()
 	defer m.Unlock()
 
 	m.value.MultipartVersion = version
-	return m.save(tx)
+	return m.save(db)
 }
 
-func (m *metadata) save(tx *badger.Txn) error {
-	return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(m.value))
+func (m *metadata) save(db *grocksdb.DB) error {
+	return db.Put(defaultWriteOptions, metadataKeyFmt.Encode(), cbor.Marshal(m.value))
+}
+
+// TODO: Collaps with save.
+func (m *metadata) saveB(batch *grocksdb.WriteBatch) {
+	batch.Put(metadataKeyFmt.Encode(), cbor.Marshal(m.value))
 }
 
 // updatedNode is an element of the root updated nodes key.
@@ -123,23 +128,26 @@ type rootsMetadata struct {
 }
 
 // loadRootsMetadata loads the roots metadata for the given version from the database.
-func loadRootsMetadata(tx *badger.Txn, version uint64) (*rootsMetadata, error) {
+func loadRootsMetadata(db *grocksdb.DB, version uint64) (*rootsMetadata, error) {
 	rootsMeta := &rootsMetadata{version: version}
-	item, err := tx.Get(rootsMetadataKeyFmt.Encode(version))
-	switch err {
-	case nil:
-		if err = item.Value(func(val []byte) error { return cbor.Unmarshal(val, &rootsMeta) }); err != nil {
-			return nil, fmt.Errorf("mkvs/badger: error reading roots metadata: %w", err)
-		}
-	case badger.ErrKeyNotFound:
+
+	s, err := db.Get(defaultReadOptions, rootsMetadataKeyFmt.Encode(version))
+	if err != nil {
+		return nil, fmt.Errorf("mkvs/rocksdb: failed to get roots metadata from backing store: %w", err)
+	}
+	defer s.Free()
+	switch s.Exists() {
+	case false:
 		rootsMeta.Roots = make(map[node.TypedHash][]node.TypedHash)
-	default:
-		return nil, fmt.Errorf("mkvs/badger: error reading roots metadata: %w", err)
+	case true:
+		if err = cbor.Unmarshal(s.Data(), &rootsMeta); err != nil {
+			return nil, fmt.Errorf("mkvs/rocksdb: failed to unmarshal roots metadata: %w", err)
+		}
 	}
 	return rootsMeta, nil
 }
 
 // save saves the roots metadata to the database.
-func (rm *rootsMetadata) save(tx *badger.Txn) error {
-	return tx.Set(rootsMetadataKeyFmt.Encode(rm.version), cbor.Marshal(rm))
+func (rm *rootsMetadata) save(batch *grocksdb.WriteBatch) {
+	batch.Put(rootsMetadataKeyFmt.Encode(rm.version), cbor.Marshal(rm))
 }

@@ -10,19 +10,23 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	badgerDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/rocksdb"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
+
+var testNs = common.NewTestNamespaceFromSeed([]byte("oasis mkvs checkpoint test ns"), 0)
 
 const (
 	testCheckInterval = 50 * time.Millisecond
 	testNumKept       = 2
 )
 
-func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistingData bool) {
+func testCheckpointer(t *testing.T, new func(cfg *db.Config) (db.NodeDB, error), earliestVersion, interval uint64, preExistingData bool) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -31,7 +35,7 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
-	ndb, err := badgerDb.New(&db.Config{
+	ndb, err := new(&db.Config{
 		DB:           filepath.Join(dir, "db"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -166,20 +170,38 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 	}
 }
 
-func TestCheckpointer(t *testing.T) {
+func TestRocksDbCheckpointer(t *testing.T) {
 	t.Run("Basic", func(t *testing.T) {
-		testCheckpointer(t, 0, 1, false)
+		testCheckpointer(t, rocksdb.New, 0, 1, false)
 	})
 	t.Run("NonZeroEarliestVersion", func(t *testing.T) {
-		testCheckpointer(t, 1000, 1, false)
+		testCheckpointer(t, rocksdb.New, 1000, 1, false)
 	})
 	t.Run("NonZeroEarliestInitialVersion", func(t *testing.T) {
-		testCheckpointer(t, 100, 1, true)
+		testCheckpointer(t, rocksdb.New, 100, 1, true)
 	})
 	t.Run("MaybeUnderflow", func(t *testing.T) {
-		testCheckpointer(t, 5, 10, true)
+		testCheckpointer(t, rocksdb.New, 5, 10, true)
 	})
 	t.Run("ForceCheckpoint", func(t *testing.T) {
-		testCheckpointer(t, 0, 10, false)
+		testCheckpointer(t, rocksdb.New, 0, 10, false)
+	})
+}
+
+func TestBadgerDbCheckpointer(t *testing.T) {
+	t.Run("Basic", func(t *testing.T) {
+		testCheckpointer(t, badgerDb.New, 0, 1, false)
+	})
+	t.Run("NonZeroEarliestVersion", func(t *testing.T) {
+		testCheckpointer(t, badgerDb.New, 1000, 1, false)
+	})
+	t.Run("NonZeroEarliestInitialVersion", func(t *testing.T) {
+		testCheckpointer(t, badgerDb.New, 100, 1, true)
+	})
+	t.Run("MaybeUnderflow", func(t *testing.T) {
+		testCheckpointer(t, badgerDb.New, 5, 10, true)
+	})
+	t.Run("ForceCheckpoint", func(t *testing.T) {
+		testCheckpointer(t, badgerDb.New, 0, 10, false)
 	})
 }

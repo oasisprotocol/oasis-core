@@ -16,6 +16,7 @@ import (
 func TestStorageDatabase(t *testing.T) {
 	for _, v := range []string{
 		BackendNameBadgerDB,
+		BackendNameRocksDB,
 	} {
 		t.Run(v, func(t *testing.T) {
 			doTestImpl(t, v)

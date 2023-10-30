@@ -1,4 +1,4 @@
-package checkpoint
+package checkpoint_test
 
 import (
 	"bytes"
@@ -16,15 +16,93 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	badgerDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/rocksdb"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
+type NodeDBFactory func(cfg *db.Config) (db.NodeDB, error)
+
 var testNs = common.NewTestNamespaceFromSeed([]byte("oasis mkvs checkpoint test ns"), 0)
 
-func TestFileCheckpointCreator(t *testing.T) {
+func TestBadgerBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (NodeDBFactory, func()) {
+		// Create a new random temporary directory under /tmp.
+		dir, err := os.MkdirTemp("", "mkvs.checkpoint_test.badger")
+		require.NoError(t, err, "TempDir")
+
+		// Create a Badger-backed Node DB factory.
+		factory := func(cfg *db.Config) (db.NodeDB, error) {
+			return badgerDb.New(cfg)
+		}
+
+		cleanup := func() {
+			os.RemoveAll(dir)
+		}
+
+		return factory, cleanup
+	}, nil)
+}
+
+func TestRocksDBBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (NodeDBFactory, func()) {
+		// Create a new random temporary directory under /tmp.
+		dir, err := os.MkdirTemp("", "mkvs.checkpoint_test.rocksdb")
+		require.NoError(t, err, "TempDir")
+
+		// Create a RocksDB-backed Node DB factory.
+		factory := func(cfg *db.Config) (api.NodeDB, error) {
+			if cfg.DB == "" {
+				cfg.DB = dir
+			}
+			return rocksdb.New(cfg)
+		}
+
+		cleanup := func() {
+			os.RemoveAll(dir)
+		}
+
+		return factory, cleanup
+	}, nil)
+}
+
+func testBackend(
+	t *testing.T,
+	initBackend func(t *testing.T) (NodeDBFactory, func()),
+	skipTests []string,
+) {
+	tests := []struct {
+		name string
+		fn   func(*testing.T, NodeDBFactory)
+	}{
+		{"FileCheckpointCreator", testFileCheckpointCreator},
+		{"OversizedChunks", testOversizedChunks},
+		{"PruneGapAfterCheckpointRestore", testPruneGapAfterCheckpointRestore},
+	}
+
+	skipMap := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
+		skipMap[name] = true
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if skipMap[tc.name] {
+				t.Skip("skipping test for this backend")
+			}
+
+			factory, cleanup := initBackend(t)
+			defer cleanup()
+			tc.fn(t, factory)
+		})
+	}
+}
+
+func testFileCheckpointCreator(t *testing.T, new NodeDBFactory) {
 	require := require.New(t)
 
 	// Generate some data.
@@ -32,7 +110,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
-	ndb, err := badgerDb.New(&db.Config{
+	ndb, err := new(&db.Config{
 		DB:           filepath.Join(dir, "db"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -56,11 +134,11 @@ func TestFileCheckpointCreator(t *testing.T) {
 	}
 
 	// Create a file-based checkpoint creator.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
+	fc, err := checkpoint.NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
 	require.NoError(err, "NewFileCreator")
 
 	// There should be no checkpoints before one is created.
-	cps, err := fc.GetCheckpoints(ctx, &GetCheckpointsRequest{})
+	cps, err := fc.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{})
 	require.NoError(err, "GetCheckpoints")
 	require.Len(cps, 0)
 
@@ -86,7 +164,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.EqualValues(expectedChunks, cp.Chunks, "chunk hashes should be correct")
 
 	// There should now be one checkpoint.
-	cps, err = fc.GetCheckpoints(ctx, &GetCheckpointsRequest{Version: 1})
+	cps, err = fc.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1})
 	require.NoError(err, "GetCheckpoints")
 	require.Len(cps, 1, "there should be one checkpoint")
 	require.Equal(cp, cps[0], "checkpoint returned by GetCheckpoint should be correct")
@@ -117,7 +195,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.Error(err, "GetChunk on a non-existent chunk should fail")
 
 	// Create a fresh node database to restore into.
-	ndb2, err := badgerDb.New(&db.Config{
+	ndb2, err := new(&db.Config{
 		DB:           filepath.Join(dir, "db2"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -125,12 +203,12 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "New")
 
 	// Try to restore some chunks.
-	rs, err := NewRestorer(ndb2)
+	rs, err := checkpoint.NewRestorer(ndb2)
 	require.NoError(err, "NewRestorer")
 
 	_, err = rs.RestoreChunk(ctx, 0, &buf)
 	require.Error(err, "RestoreChunk should fail when no restore is in progress")
-	require.True(errors.Is(err, ErrNoRestoreInProgress))
+	require.True(errors.Is(err, checkpoint.ErrNoRestoreInProgress))
 
 	// Generate a bogus manifest which does not verify by corrupting chunk at index 1.
 	bogusCp, err := fc.GetCheckpoint(ctx, 1, root)
@@ -153,7 +231,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	err = rs.StartRestore(ctx, bogusCp)
 	require.NoError(err, "StartRestore")
 	for i := 0; i < len(bogusCp.Chunks); i++ {
-		var cm *ChunkMetadata
+		var cm *checkpoint.ChunkMetadata
 		cm, err = cp.GetChunkMetadata(uint64(i))
 		require.NoError(err, "GetChunkMetadata")
 
@@ -170,7 +248,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 		require.False(done, "RestoreChunk should not signal completed restoration")
 		if i == 1 {
 			require.Error(err, "RestoreChunk should fail with bogus chunk")
-			require.True(errors.Is(err, ErrChunkProofVerificationFailed))
+			require.True(errors.Is(err, checkpoint.ErrChunkProofVerificationFailed))
 			// Restorer should be reset.
 			break
 		}
@@ -183,12 +261,12 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "StartRestore")
 	err = rs.StartRestore(ctx, cp)
 	require.Error(err, "StartRestore should fail when a restore is already in progress")
-	require.True(errors.Is(err, ErrRestoreAlreadyInProgress))
+	require.True(errors.Is(err, checkpoint.ErrRestoreAlreadyInProgress))
 	rcp := rs.GetCurrentCheckpoint()
 	require.EqualValues(rcp, cp, "GetCurrentCheckpoint should return the checkpoint being restored")
 	require.NotSame(rcp, cp, "GetCurrentCheckpoint should return a copy")
 	for i := 0; i < len(cp.Chunks); i++ {
-		var cm *ChunkMetadata
+		var cm *checkpoint.ChunkMetadata
 		cm, err = cp.GetChunkMetadata(uint64(i))
 		require.NoError(err, "GetChunkMetadata")
 
@@ -213,7 +291,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 
 			_, err = rs.RestoreChunk(ctx, uint64(i), &buf)
 			require.Error(err, "RestoreChunk should fail if the same chunk has already been restored")
-			require.True(errors.Is(err, ErrChunkAlreadyRestored))
+			require.True(errors.Is(err, checkpoint.ErrChunkAlreadyRestored))
 		}
 	}
 	err = ndb2.Finalize([]node.Root{root})
@@ -233,7 +311,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "DeleteCheckpoint")
 
 	// There should now be no checkpoints.
-	cps, err = fc.GetCheckpoints(ctx, &GetCheckpointsRequest{Version: 1})
+	cps, err = fc.GetCheckpoints(ctx, &checkpoint.GetCheckpointsRequest{Version: 1})
 	require.NoError(err, "GetCheckpoints")
 	require.Len(cps, 0, "there should be no checkpoints")
 
@@ -259,7 +337,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.Error(err, "CreateCheckpoint should fail for invalid root")
 }
 
-func TestOversizedChunks(t *testing.T) {
+func testOversizedChunks(t *testing.T, new NodeDBFactory) {
 	require := require.New(t)
 
 	// Generate some data.
@@ -267,7 +345,7 @@ func TestOversizedChunks(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
-	ndb, err := badgerDb.New(&db.Config{
+	ndb, err := new(&db.Config{
 		DB:           filepath.Join(dir, "db"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -294,7 +372,7 @@ func TestOversizedChunks(t *testing.T) {
 	}
 
 	// Create a file-based checkpoint creator.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
+	fc, err := checkpoint.NewFileCreator(filepath.Join(dir, "checkpoints"), ndb)
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
@@ -305,7 +383,7 @@ func TestOversizedChunks(t *testing.T) {
 	require.Len(cp.Chunks, 100, "there should be the correct number of chunks")
 }
 
-func TestPruneGapAfterCheckpointRestore(t *testing.T) {
+func testPruneGapAfterCheckpointRestore(t *testing.T, new NodeDBFactory) {
 	require := require.New(t)
 
 	// Generate some data.
@@ -315,13 +393,13 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 
 	// Create two databases, the first will contain everything while the second one will only
 	// contain the first few versions.
-	ndb1, err := badgerDb.New(&db.Config{
+	ndb1, err := new(&db.Config{
 		DB:        filepath.Join(dir, "db1"),
 		Namespace: testNs,
 	})
 	require.NoError(err, "New")
 
-	ndb2, err := badgerDb.New(&db.Config{
+	ndb2, err := new(&db.Config{
 		DB:        filepath.Join(dir, "db2"),
 		Namespace: testNs,
 	})
@@ -393,7 +471,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 	}
 
 	// Create a file-based checkpoint creator for the first database.
-	fc, err := NewFileCreator(filepath.Join(dir, "checkpoints"), ndb1)
+	fc, err := checkpoint.NewFileCreator(filepath.Join(dir, "checkpoints"), ndb1)
 	require.NoError(err, "NewFileCreator")
 
 	// Create a checkpoint and check that it has been created correctly.
@@ -401,7 +479,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 	require.NoError(err, "CreateCheckpoint")
 
 	// Restore checkpoints in the second database.
-	rs, err := NewRestorer(ndb2)
+	rs, err := checkpoint.NewRestorer(ndb2)
 	require.NoError(err, "NewRestorer")
 
 	err = ndb2.StartMultipartInsert(cp.Root.Version)
@@ -409,7 +487,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 	err = rs.StartRestore(ctx, cp)
 	require.NoError(err, "StartRestore")
 	for i := 0; i < len(cp.Chunks); i++ {
-		var cm *ChunkMetadata
+		var cm *checkpoint.ChunkMetadata
 		cm, err = cp.GetChunkMetadata(uint64(i))
 		require.NoError(err, "GetChunkMetadata")
 
