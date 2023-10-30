@@ -339,7 +339,7 @@ func (v4 *v4Migrator) keyRootsMetadata(item *badger.Item) error { // nolint: goc
 	// Create root typing keys.
 	for h, types := range plainRoots {
 		for t := range types {
-			th := typedHashFromParts(t, h)
+			th := node.TypedHashFromParts(t, h)
 			entry := badger.NewEntry(
 				v4RootNodeKeyFmt.Encode(&th),
 				[]byte{},
@@ -352,15 +352,15 @@ func (v4 *v4Migrator) keyRootsMetadata(item *badger.Item) error { // nolint: goc
 
 	// Build new roots structure.
 	var newRoots v4RootsMetadata
-	newRoots.Roots = map[typedHash][]typedHash{}
+	newRoots.Roots = map[node.TypedHash][]node.TypedHash{}
 	for root, chain := range rootsMeta.Roots {
 		for typ := range plainRoots[root] {
-			arr := make([]typedHash, 0, len(chain))
+			arr := make([]node.TypedHash, 0, len(chain))
 			for _, droot := range chain {
-				th := typedHashFromParts(typ, droot)
+				th := node.TypedHashFromParts(typ, droot)
 				arr = append(arr, th)
 			}
-			th := typedHashFromParts(typ, root)
+			th := node.TypedHashFromParts(typ, root)
 			newRoots.Roots[th] = arr
 		}
 	}
@@ -380,7 +380,7 @@ func (v4 *v4Migrator) keyRootsMetadata(item *badger.Item) error { // nolint: goc
 func (v4 *v4Migrator) keyWriteLog(item *badger.Item) error {
 	var version uint64
 	var h1, h2 hash.Hash
-	var th1, th2 typedHash
+	var th1, th2 node.TypedHash
 	if !v3WriteLogKeyFmt.Decode(item.Key(), &version, &h1, &h2) {
 		return fmt.Errorf("error decoding writelog key")
 	}
@@ -449,7 +449,7 @@ func (v4 *v4Migrator) keyRootUpdatedNodes(item *badger.Item) error {
 	}
 	if item.IsDeletedOrExpired() {
 		for _, typ := range types {
-			th := typedHashFromParts(typ, h1)
+			th := node.TypedHashFromParts(typ, h1)
 			key := v4RootUpdatedNodesKeyFmt.Encode(version, &th)
 			if err = v4.changeBatch.DeleteAt(key, item.Version()); err != nil {
 				return fmt.Errorf("error transforming removed updated nodes list for root %v: %w", th, err)
@@ -475,7 +475,7 @@ func (v4 *v4Migrator) keyRootUpdatedNodes(item *badger.Item) error {
 	}
 
 	for _, typ := range types {
-		th := typedHashFromParts(typ, h1)
+		th := node.TypedHashFromParts(typ, h1)
 
 		if v4.meta.MultipartActive {
 			entry := badger.NewEntry(
@@ -521,7 +521,7 @@ func (v4 *v4Migrator) keyMultipartRestoreNodeLog(item *badger.Item) error {
 	if err := v4.changeBatch.DeleteAt(item.KeyCopy(nil), item.Version()); err != nil {
 		return fmt.Errorf("can't delete old multipart restore log key for %v: %w", h, err)
 	}
-	th := typedHashFromParts(node.RootTypeInvalid, h)
+	th := node.TypedHashFromParts(node.RootTypeInvalid, h)
 	entry := badger.NewEntry(
 		v4MultipartRestoreNodeLogKeyFmt.Encode(&th),
 		[]byte{},
@@ -701,16 +701,16 @@ func (v4 *v4Migrator) Migrate() (rversion uint64, rerr error) {
 }
 
 type v5MigratedRoot struct {
-	Hash    typedHash `json:"hash"`
-	Version uint64    `json:"version"`
+	Hash    node.TypedHash `json:"hash"`
+	Version uint64         `json:"version"`
 }
 
 type v5MigratorMetadata struct {
 	migrationCommonMeta
 
-	LastMigratedVersion *uint64                      `json:"last_migrated_version"`
-	LastMigratedRoots   map[typedHash]v5MigratedRoot `json:"last_migrated_roots"`
-	LastPrunedVersion   *uint64                      `json:"last_pruned_version"`
+	LastMigratedVersion *uint64                           `json:"last_migrated_version"`
+	LastMigratedRoots   map[node.TypedHash]v5MigratedRoot `json:"last_migrated_roots"`
+	LastPrunedVersion   *uint64                           `json:"last_pruned_version"`
 }
 
 func (m *v5MigratorMetadata) load(db *badger.DB) error {
@@ -952,7 +952,7 @@ func (v5 *v5Migrator) migrateNode(h hash.Hash, version uint64) (*hash.Hash, erro
 	return &newHash, nil
 }
 
-func (v5 *v5Migrator) migrateWriteLog(oldSrcRoot, oldDstRoot, newSrcRoot typedHash, newDstRoot v5MigratedRoot) error {
+func (v5 *v5Migrator) migrateWriteLog(oldSrcRoot, oldDstRoot, newSrcRoot node.TypedHash, newDstRoot v5MigratedRoot) error {
 	item, err := v5.readTxn.Get(v4WriteLogKeyFmt.Encode(newDstRoot.Version, &oldDstRoot, &oldSrcRoot))
 	switch err {
 	case nil:
@@ -983,7 +983,7 @@ func (v5 *v5Migrator) migrateWriteLog(oldSrcRoot, oldDstRoot, newSrcRoot typedHa
 	return nil
 }
 
-func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash]v5MigratedRoot) (bool, error) {
+func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[node.TypedHash]v5MigratedRoot) (bool, error) {
 	defer func() {
 		v5.readTxn.Discard()
 		v5.readTxn = v5.db.db.NewTransactionAt(maxTimestamp, false)
@@ -1008,7 +1008,7 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 		return false, fmt.Errorf("error decoding roots metadata for version %d: %w", version, err)
 	}
 
-	newRoots := make(map[typedHash][]typedHash)
+	newRoots := make(map[node.TypedHash][]node.TypedHash)
 	for root := range roots.Roots {
 		// Migrate the tree (if not empty).
 		var newRootHash hash.Hash
@@ -1023,14 +1023,14 @@ func (v5 *v5Migrator) migrateVersion(version uint64, migratedRoots map[typedHash
 			newRootHash.Empty()
 		}
 
-		newRoot := typedHashFromParts(root.Type(), newRootHash)
-		newRoots[newRoot] = []typedHash{}
+		newRoot := node.TypedHashFromParts(root.Type(), newRootHash)
+		newRoots[newRoot] = []node.TypedHash{}
 		migratedRoots[root] = v5MigratedRoot{Hash: newRoot, Version: version}
 
 		// Check for a write log from empty root.
 		var emptyHash hash.Hash
 		emptyHash.Empty()
-		emptyRoot := typedHashFromParts(root.Type(), emptyHash)
+		emptyRoot := node.TypedHashFromParts(root.Type(), emptyHash)
 
 		if err = v5.migrateWriteLog(emptyRoot, root, emptyRoot, migratedRoots[root]); err != nil {
 			return false, err
@@ -1227,7 +1227,7 @@ func (v5 *v5Migrator) pruneVersion(version uint64) error {
 	return v5.flush(false)
 }
 
-func (v5 *v5Migrator) pruneWriteLog(version uint64, oldRoot typedHash) error {
+func (v5 *v5Migrator) pruneWriteLog(version uint64, oldRoot node.TypedHash) error {
 	prefix := v4WriteLogKeyFmt.Encode(version, &oldRoot)
 	it := v5.readTxn.NewIterator(badger.IteratorOptions{Prefix: prefix})
 	defer it.Close()
@@ -1307,7 +1307,7 @@ func (v5 *v5Migrator) Migrate() (rversion uint64, rerr error) {
 	v4RootsMetadataKeyFmt.Decode(it.Item().Key(), &lastVersion)
 	it.Close()
 
-	migratedRoots := make(map[typedHash]v5MigratedRoot)
+	migratedRoots := make(map[node.TypedHash]v5MigratedRoot)
 	if lv := v5.meta.LastMigratedVersion; lv != nil {
 		// Resume at the following version.
 		lastVersion = *lv - 1

@@ -1,4 +1,4 @@
-package badger
+package pebbledb
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/cockroachdb/pebble"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -20,11 +20,11 @@ import (
 )
 
 var (
-	nodePrefix = nodeKeyFmt.Encode()
+	nodePrefix = nodeMVCCKeyFmt.Encode()
 
 	logPrefix = multipartRestoreNodeLogKeyFmt.Encode()
 
-	testNs = common.NewTestNamespaceFromSeed([]byte("badger node db test ns"), 0)
+	testNs = common.NewTestNamespaceFromSeed([]byte("pebbledb node db test ns"), 0)
 
 	dbCfg = &api.Config{
 		Namespace:    testNs,
@@ -46,7 +46,7 @@ type test struct {
 	require  *require.Assertions
 	ctx      context.Context
 	dir      string
-	badgerdb *badgerNodeDB
+	pebbledb *pebbleNodeDB
 	ckMeta   *checkpoint.Metadata
 	ckNodes  keySet
 }
@@ -92,10 +92,14 @@ func fillDB(
 }
 
 func createCheckpoint(ctx context.Context, require *require.Assertions, dir string, values [][]byte, version uint64) (*checkpoint.Metadata, keySet) {
-	ndb, err := New(dbCfg)
+	dbDir, err := os.MkdirTemp(dir, "checkpoint-db")
+	require.NoError(err, "TempDir()")
+	dbCfg := *dbCfg
+	dbCfg.DB = dbDir
+	ndb, err := New(&dbCfg)
 	require.NoError(err, "New()")
 	defer ndb.Close()
-	badgerdb := ndb.(*badgerNodeDB)
+	pebbledb := ndb.(*pebbleNodeDB)
 	fc, err := checkpoint.NewFileCreator(dir, ndb)
 	require.NoError(err, "NewFileCreator()")
 
@@ -104,65 +108,55 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 	require.NoError(err, "CreateCheckpoint()")
 
 	nodeKeys := keySet{}
-	err = badgerdb.db.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			if bytes.HasPrefix(it.Item().Key(), nodePrefix) {
-				nodeKeys[string(it.Item().Key())] = struct{}{}
-			}
+
+	it := versionedIterator(pebbledb.db, []byte{0x80}, 2)
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		if bytes.HasPrefix(it.Key(), nodePrefix) {
+			nodeKeys[string(it.Key())] = struct{}{}
 		}
-		return nil
-	})
-	require.NoError(err, "createCheckpoint()")
+	}
 
 	return ckMeta, nodeKeys
 }
 
-func verifyNodes(require *require.Assertions, badgerdb *badgerNodeDB, keySet keySet) {
+func verifyNodes(require *require.Assertions, pebbledb *pebbleNodeDB, version uint64, keySet keySet) {
 	notVisited := map[string]struct{}{}
 	for k := range keySet {
 		notVisited[k] = struct{}{}
 	}
-	err := badgerdb.db.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			key := it.Item().Key()
-			if !bytes.HasPrefix(key, nodePrefix) {
-				continue
-			}
-			_, ok := keySet[string(key)]
-			require.Equal(true, ok, "unexpected node in db")
-			delete(notVisited, string(key))
+
+	it := versionedIterator(pebbledb.db, []byte{0x80}, version) // tODO: 0x80
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		key := it.Key()
+		if !bytes.HasPrefix(key, nodePrefix) {
+			continue
 		}
-		return nil
-	})
-	require.NoError(err, "verifyNodes()")
+		_, ok := keySet[string(key)]
+		require.Equal(true, ok, "unexpected node in db")
+		delete(notVisited, string(key))
+	}
+
 	require.Equal(0, len(notVisited), "some nodes not visited")
 }
 
-func checkNoLogKeys(require *require.Assertions, badgerdb *badgerNodeDB) {
-	err := badgerdb.db.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			key := it.Item().Key()
-			require.False(bytes.HasPrefix(key, logPrefix), "checkLogKeys()/iteration")
-		}
-		return nil
-	})
-	require.NoError(err, "checkNoLogKeys()")
+func checkNoLogKeys(require *require.Assertions, pebbledb *pebbleNodeDB) {
+	it, _ := pebbledb.db.NewIter(&pebble.IterOptions{})
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		require.False(bytes.HasPrefix(it.Key(), logPrefix), "checkLogKeys()/iteration")
+	}
 }
 
 func restoreCheckpoint(ctx *test, ckMeta *checkpoint.Metadata, ckNodes keySet) checkpoint.Restorer {
-	fc, err := checkpoint.NewFileCreator(ctx.dir, ctx.badgerdb)
+	fc, err := checkpoint.NewFileCreator(ctx.dir, ctx.pebbledb)
 	ctx.require.NoError(err, "NewFileCreator() - 2")
 
-	restorer, err := checkpoint.NewRestorer(ctx.badgerdb)
+	restorer, err := checkpoint.NewRestorer(ctx.pebbledb)
 	ctx.require.NoError(err, "NewRestorer()")
 
-	err = ctx.badgerdb.StartMultipartInsert(ckMeta.Root.Version)
+	err = ctx.pebbledb.StartMultipartInsert(ckMeta.Root.Version)
 	ctx.require.NoError(err, "StartMultipartInsert()")
 	err = restorer.StartRestore(ctx.ctx, ckMeta)
 	ctx.require.NoError(err, "StartRestore()")
@@ -186,7 +180,7 @@ func restoreCheckpoint(ctx *test, ckMeta *checkpoint.Metadata, ckNodes keySet) c
 		}()
 	}
 
-	verifyNodes(ctx.require, ctx.badgerdb, ckNodes)
+	verifyNodes(ctx.require, ctx.pebbledb, ckMeta.Root.Version, ckNodes)
 
 	return restorer
 }
@@ -203,16 +197,18 @@ func TestMultipartRestore(t *testing.T) {
 
 			ckMeta, ckNodes := createCheckpoint(ctx, require, dir, initialValues, 1)
 
-			ndb, err := New(dbCfg)
+			dbCfg := *dbCfg
+			dbCfg.DB = dir
+			ndb, err := New(&dbCfg)
 			require.NoError(err, "New() - 2")
 			defer ndb.Close()
-			badgerdb := ndb.(*badgerNodeDB)
+			pebbledb := ndb.(*pebbleNodeDB)
 
 			testCtx := &test{
 				require:  require,
 				ctx:      ctx,
 				dir:      dir,
-				badgerdb: badgerdb,
+				pebbledb: pebbledb,
 				ckMeta:   ckMeta,
 				ckNodes:  ckNodes,
 			}
@@ -231,11 +227,11 @@ func testAbort(ctx *test) {
 	restorer := restoreCheckpoint(ctx, ctx.ckMeta, ctx.ckNodes)
 	err := restorer.AbortRestore(ctx.ctx)
 	ctx.require.NoError(err, "AbortRestore()")
-	err = ctx.badgerdb.AbortMultipartInsert()
+	err = ctx.pebbledb.AbortMultipartInsert()
 	ctx.require.NoError(err, "AbortMultipartInsert()")
 
-	verifyNodes(ctx.require, ctx.badgerdb, keySet{})
-	checkNoLogKeys(ctx.require, ctx.badgerdb)
+	verifyNodes(ctx.require, ctx.pebbledb, 2, keySet{})
+	checkNoLogKeys(ctx.require, ctx.pebbledb)
 }
 
 func testFinalize(ctx *test) {
@@ -245,19 +241,19 @@ func testFinalize(ctx *test) {
 	restoreCheckpoint(ctx, ctx.ckMeta, ctx.ckNodes)
 
 	// Test parameter sanity checking first.
-	err := ctx.badgerdb.Finalize(nil)
+	err := ctx.pebbledb.Finalize(nil)
 	ctx.require.Error(err, "Finalize with no roots should fail")
 
 	bogusRoot := ctx.ckMeta.Root
 	bogusRoot.Version++
-	err = ctx.badgerdb.Finalize([]node.Root{ctx.ckMeta.Root, bogusRoot})
+	err = ctx.pebbledb.Finalize([]node.Root{ctx.ckMeta.Root, bogusRoot})
 	ctx.require.Error(err, "Finalize with roots from different versions should fail")
 
-	err = ctx.badgerdb.Finalize([]node.Root{ctx.ckMeta.Root})
+	err = ctx.pebbledb.Finalize([]node.Root{ctx.ckMeta.Root})
 	ctx.require.NoError(err, "Finalize()")
 
-	verifyNodes(ctx.require, ctx.badgerdb, ctx.ckNodes)
-	checkNoLogKeys(ctx.require, ctx.badgerdb)
+	verifyNodes(ctx.require, ctx.pebbledb, ctx.ckMeta.Root.Version, ctx.ckNodes)
+	checkNoLogKeys(ctx.require, ctx.pebbledb)
 }
 
 func testExistingNodes(ctx *test) {
@@ -280,16 +276,16 @@ func testExistingNodes(ctx *test) {
 
 	// Restore first checkpoint. The database is empty.
 	restoreCheckpoint(ctx, ctx.ckMeta, ctx.ckNodes)
-	err := ctx.badgerdb.Finalize([]node.Root{ctx.ckMeta.Root})
+	err := ctx.pebbledb.Finalize([]node.Root{ctx.ckMeta.Root})
 	ctx.require.NoError(err, "Finalize()")
-	verifyNodes(ctx.require, ctx.badgerdb, ctx.ckNodes)
+	verifyNodes(ctx.require, ctx.pebbledb, 2, ctx.ckNodes)
 
 	// Restore the second checkpoint. One of the nodes from it already exists. After aborting,
 	// exactly the nodes from the first checkpoint should remain.
 	restorer := restoreCheckpoint(ctx, ckMeta2, ckNodes2)
 	err = restorer.AbortRestore(ctx.ctx)
 	ctx.require.NoError(err, "AbortRestore()")
-	err = ctx.badgerdb.AbortMultipartInsert()
+	err = ctx.pebbledb.AbortMultipartInsert()
 	ctx.require.NoError(err, "AbortMultipartInsert()")
-	verifyNodes(ctx.require, ctx.badgerdb, ctx.ckNodes)
+	verifyNodes(ctx.require, ctx.pebbledb, 2, ctx.ckNodes)
 }

@@ -131,7 +131,7 @@ type NodeDB interface {
 	Prune(ctx context.Context, version uint64) error
 
 	// Size returns the size of the database in bytes.
-	Size() (int64, error)
+	Size() (uint64, error)
 
 	// Sync syncs the database to disk. This is useful if the NoFsync option is used to explicitly
 	// perform a sync.
@@ -250,7 +250,7 @@ func (d *nopNodeDB) Prune(context.Context, uint64) error {
 	return nil
 }
 
-func (d *nopNodeDB) Size() (int64, error) {
+func (d *nopNodeDB) Size() (uint64, error) {
 	return 0, nil
 }
 
