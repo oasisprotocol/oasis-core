@@ -631,8 +631,9 @@ func (w *Worker) setAccessList(runtimeID common.Namespace, nodes []*node.Node) {
 	)
 }
 
-func (w *Worker) generateMasterSecret(runtimeID common.Namespace, generation uint64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
+func (w *Worker) generateMasterSecret(runtimeID common.Namespace, height int64, generation uint64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
 	w.logger.Info("generating master secret",
+		"height", height,
 		"generation", generation,
 		"epoch", epoch,
 	)
@@ -713,8 +714,9 @@ func (w *Worker) generateMasterSecret(runtimeID common.Namespace, generation uin
 	return err
 }
 
-func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
+func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, height int64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
 	w.logger.Info("generating ephemeral secret",
+		"height", height,
 		"epoch", epoch,
 	)
 
@@ -967,6 +969,7 @@ func (w *Worker) handleStatusUpdate(kmStatus *api.Status) {
 		"generation", kmStatus.Generation,
 		"rotation_epoch", kmStatus.RotationEpoch,
 		"checksum", hex.EncodeToString(kmStatus.Checksum),
+		"nodes", kmStatus.Nodes,
 	)
 
 	// Update metrics.
@@ -1117,8 +1120,9 @@ func (w *Worker) handleNewEpoch(epoch beacon.EpochTime) {
 		crw.epochTransition()
 	}
 
-	// Choose a random height for generating master/ephemeral secrets.
-	// Avoid blocks at the end of the epoch as secret generation,
+	// Choose a random height for generating master/ephemeral secrets to prevent key managers from
+	// all publishing transactions simultaneously, which would result in unnecessary gas waste.
+	// Additionally, avoid selecting blocks at the end of the epoch, as secret generation,
 	// publication and replication takes some time.
 	height, err := w.randomBlockHeight(epoch, 50)
 	if err != nil {
@@ -1187,7 +1191,11 @@ func (w *Worker) handleGenerateMasterSecret(height int64, epoch beacon.EpochTime
 	if w.genMstSecInProgress || w.genMstSecRetry > generateSecretMaxRetries {
 		return
 	}
-	if w.genSecHeight > height || w.genMstSecEpoch > epoch {
+	if w.genSecHeight > height && len(w.kmStatus.Nodes) > 1 || w.genMstSecEpoch > epoch {
+		// Observe that the height for secret generation is respected only if there are multiple
+		// nodes in the key manager committee. In production, this should have no impact, but in
+		// test scenarios, it allows us to transition to the next epoch earlier, as soon as all
+		// required secrets are generated.
 		return
 	}
 
@@ -1204,7 +1212,7 @@ func (w *Worker) handleGenerateMasterSecret(height int64, epoch beacon.EpochTime
 
 	// Submitting transaction can take time, so don't block the loop.
 	generateMasterSecret := func(kmStatus *api.Status, rtStatus *runtimeStatus) {
-		if err := w.generateMasterSecret(w.runtimeID, nextGen, nextEpoch, kmStatus, rtStatus); err != nil {
+		if err := w.generateMasterSecret(w.runtimeID, height, nextGen, nextEpoch, kmStatus, rtStatus); err != nil {
 			w.logger.Error("failed to generate master secret",
 				"err", err,
 				"retry", retry,
@@ -1286,7 +1294,11 @@ func (w *Worker) handleGenerateEphemeralSecret(height int64, epoch beacon.EpochT
 	if w.genEphSecInProgress || w.genEphSecRetry > generateSecretMaxRetries {
 		return
 	}
-	if w.genSecHeight > height {
+	if w.genSecHeight > height && len(w.kmStatus.Nodes) > 1 {
+		// Observe that the height for secret generation is respected only if there are multiple
+		// nodes in the key manager committee. In production, this should have no impact, but in
+		// test scenarios, it allows us to transition to the next epoch earlier, as soon as all
+		// required secrets are generated.
 		return
 	}
 
@@ -1302,7 +1314,7 @@ func (w *Worker) handleGenerateEphemeralSecret(height int64, epoch beacon.EpochT
 
 	// Submitting transaction can take time, so don't block the loop.
 	generateEphemeralSecret := func(kmStatus *api.Status, rtStatus *runtimeStatus) {
-		if err := w.generateEphemeralSecret(w.runtimeID, nextEpoch, kmStatus, rtStatus); err != nil {
+		if err := w.generateEphemeralSecret(w.runtimeID, height, nextEpoch, kmStatus, rtStatus); err != nil {
 			w.logger.Error("failed to generate ephemeral secret",
 				"err", err,
 				"retry", retry,
