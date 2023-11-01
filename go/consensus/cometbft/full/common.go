@@ -586,7 +586,7 @@ func (n *commonNode) getLightBlock(ctx context.Context, height int64, allowPendi
 	}
 
 	commit, err := cmtcore.Commit(n.rpcCtx, &tmHeight)
-	if err == nil && commit.Header != nil {
+	if err == nil && commit != nil && commit.Header != nil {
 		lb.SignedHeader = &commit.SignedHeader
 		tmHeight = commit.Header.Height
 	} else if allowPending {
