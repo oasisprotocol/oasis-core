@@ -20,26 +20,27 @@ download_artifact simple-keyvalue target/debug 755
 
 export OASIS_TEST_RUNTIME_HOST_RUNTIME_PATH=$(pwd)/target/debug/simple-keyvalue
 
+TAGS="jemalloc,rocksdb,grocksdb_clean_link"
 #####################
 # Test the Oasis node
 #####################
 pushd go
   make generate
   # We need to do multiple test passes for different parts to get correct coverage.
-  env -u GOPATH go test -race -coverprofile=../coverage-misc.txt -covermode=atomic -v \
+  env -u GOPATH go test -tags "${TAGS}" -race -coverprofile=../coverage-misc.txt -covermode=atomic -v \
     $(go list ./... | \
         grep -v github.com/oasisprotocol/oasis-core/go/oasis-node | \
         grep -v github.com/oasisprotocol/oasis-core/go/genesis | \
         grep -v github.com/oasisprotocol/oasis-core/go/storage/mkvs )
   # Oasis node tests.
   pushd oasis-node
-    env -u GOPATH go test -race -coverpkg ../... -coverprofile=../../coverage-oasis-node.txt -covermode=atomic -v ./...
+    env -u GOPATH go test -tags "${TAGS}" -race -coverpkg ../... -coverprofile=../../coverage-oasis-node.txt -covermode=atomic -v ./...
   popd
   pushd genesis
-    env -u GOPATH go test -race -coverpkg ../... -coverprofile=../../coverage-genesis.txt -covermode=atomic -v ./...
+    env -u GOPATH go test -tags "${TAGS}" -race -coverpkg ../... -coverprofile=../../coverage-genesis.txt -covermode=atomic -v ./...
   popd
   # MKVS tests.
   pushd storage/mkvs
-    env -u GOPATH go test -race -coverpkg ./... -coverprofile=../../../coverage-mkvs.txt -covermode=atomic -v ./...
+    env -u GOPATH go test -tags "${TAGS}" -race -coverpkg ./... -coverprofile=../../../coverage-mkvs.txt -covermode=atomic -v ./...
   popd
 popd

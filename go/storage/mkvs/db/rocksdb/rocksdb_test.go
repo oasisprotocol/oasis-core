@@ -142,7 +142,6 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 				continue
 			}
 			_, ok := keySet[string(key)]
-			fmt.Println(key)
 			require.Equal(true, ok, "unexpected node in db")
 			delete(notVisited, string(key))
 		}
