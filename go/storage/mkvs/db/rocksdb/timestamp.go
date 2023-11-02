@@ -1,3 +1,6 @@
+//go:build rocksdb
+// +build rocksdb
+
 package rocksdb
 
 import (
@@ -25,7 +28,7 @@ func createTimestampComparator() *grocksdb.Comparator {
 	)
 }
 
-// Implements gorocksdb.Comparing.
+// Implements grocksdb.Comparing.
 func compareTimestampKeys(a, b []byte) int {
 	// First compare keys without timestamps.
 	if ret := compareWithoutTimestamp(a, true, b, true); ret != 0 {
@@ -36,7 +39,7 @@ func compareTimestampKeys(a, b []byte) int {
 	return -compareTimestamp(a[len(a)-timestampSize:], b[len(b)-timestampSize:])
 }
 
-// Implements gorocksdb.Comparing.
+// Implements grocksdb.Comparing.
 func compareTimestamp(a, b []byte) int {
 	ts1 := binary.LittleEndian.Uint64(a)
 	ts2 := binary.LittleEndian.Uint64(b)
@@ -51,7 +54,7 @@ func compareTimestamp(a, b []byte) int {
 	}
 }
 
-// Implements gorocksdb.ComparingWithoutTimestamp.
+// Implements grocksdb.ComparingWithoutTimestamp.
 func compareWithoutTimestamp(a []byte, aHasTs bool, b []byte, bHasTs bool) int {
 	if aHasTs {
 		a = a[:len(a)-timestampSize]
@@ -80,7 +83,7 @@ func timestampFromVersion(version uint64) [timestampSize]byte {
 
 func versionFromTimestamp(ts *grocksdb.Slice) (uint64, error) {
 	if !ts.Exists() {
-		return 0, fmt.Errorf("timestamp empty")
+		return 0, fmt.Errorf("missing timestamp")
 	}
 	defer ts.Free()
 	return binary.LittleEndian.Uint64(ts.Data()), nil

@@ -5,9 +5,28 @@ ifneq ($(GOLDFLAGS),)
 	GO_EXTRA_FLAGS += -ldflags $(GOLDFLAGS)
 endif
 
-# Build code with jemalloc tag unless explicitly disabled (used by badgerdb).
+# Initialize GO_TAGS variable to hold the build tags.
+GO_TAGS :=
+
+# Include jemalloc tag unless explicitly disabled (used by badgerdb).
 ifneq ($(OASIS_BADGER_NO_JEMALLOC), 1)
-	GO_EXTRA_FLAGS += -tags jemalloc
+	ifneq ($(GO_TAGS),)
+		GO_TAGS := $(GO_TAGS),
+	endif
+	GO_TAGS := $(GO_TAGS)jemalloc
+endif
+
+# Include rocksdb tags unless explicitly disabled.
+ifneq ($(OASIS_NO_ROCKSDB), 1)
+	ifneq ($(GO_TAGS),)
+		GO_TAGS := $(GO_TAGS),
+	endif
+	GO_TAGS := $(GO_TAGS)rocksdb,grocksdb_clean_link
+endif
+
+# If GO_TAGS is not empty, append it to GO_EXTRA_FLAGS.
+ifneq ($(GO_TAGS),)
+	GO_EXTRA_FLAGS += -tags "$(GO_TAGS)"
 endif
 
 # Set all target as the default target.

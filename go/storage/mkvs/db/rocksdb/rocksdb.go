@@ -1,3 +1,6 @@
+//go:build rocksdb
+// +build rocksdb
+
 // Package rocksdb provides a RocksDB-backed node database.
 package rocksdb
 
