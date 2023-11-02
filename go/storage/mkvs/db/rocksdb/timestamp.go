@@ -25,7 +25,7 @@ func createTimestampComparator() *grocksdb.Comparator {
 	)
 }
 
-// gorocksdb.Comparing.
+// Implements gorocksdb.Comparing.
 func compareTimestampKeys(a, b []byte) int {
 	// First compare keys without timestamps.
 	if ret := compareWithoutTimestamp(a, true, b, true); ret != 0 {
@@ -36,7 +36,7 @@ func compareTimestampKeys(a, b []byte) int {
 	return -compareTimestamp(a[len(a)-timestampSize:], b[len(b)-timestampSize:])
 }
 
-// gorocksdb.Comparing.
+// Implements gorocksdb.Comparing.
 func compareTimestamp(a, b []byte) int {
 	ts1 := binary.LittleEndian.Uint64(a)
 	ts2 := binary.LittleEndian.Uint64(b)
@@ -51,7 +51,7 @@ func compareTimestamp(a, b []byte) int {
 	}
 }
 
-// gorocksdb.ComparingWithoutTimestamp.
+// Implements gorocksdb.ComparingWithoutTimestamp.
 func compareWithoutTimestamp(a []byte, aHasTs bool, b []byte, bHasTs bool) int {
 	if aHasTs {
 		a = a[:len(a)-timestampSize]
@@ -62,13 +62,7 @@ func compareWithoutTimestamp(a []byte, aHasTs bool, b []byte, bHasTs bool) int {
 	return bytes.Compare(a, b)
 }
 
-func timestampFromVersion(version uint64) [timestampSize]byte {
-	var ts [timestampSize]byte
-	binary.LittleEndian.PutUint64(ts[:], version)
-	return ts
-}
-
-// timestampReadOptions returns ReadOptions used in the RocksDB column family read.
+// timestampReadOptions returns the default read options with set read timestamp.
 func timestampReadOptions(version uint64) *grocksdb.ReadOptions {
 	ts := timestampFromVersion(version)
 
@@ -76,6 +70,12 @@ func timestampReadOptions(version uint64) *grocksdb.ReadOptions {
 	readOpts.SetTimestamp(ts[:])
 
 	return readOpts
+}
+
+func timestampFromVersion(version uint64) [timestampSize]byte {
+	var ts [timestampSize]byte
+	binary.LittleEndian.PutUint64(ts[:], version)
+	return ts
 }
 
 func versionFromTimestamp(ts *grocksdb.Slice) (uint64, error) {

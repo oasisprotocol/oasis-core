@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/linxGnu/grocksdb"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -107,13 +108,18 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 	require.NoError(err, "CreateCheckpoint()")
 
 	nodeKeys := keySet{}
-	it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(2), rocksdb.cfNode), nil)
-	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		if bytes.HasPrefix(it.Key(), nodePrefix) {
-			nodeKeys[string(it.Key())] = struct{}{}
+
+	loadNodes := func(cf *grocksdb.ColumnFamilyHandle) {
+		it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(2), cf), nil)
+		defer it.Close()
+		for ; it.Valid(); it.Next() {
+			if bytes.HasPrefix(it.Key(), nodePrefix) {
+				nodeKeys[string(it.Key())] = struct{}{}
+			}
 		}
 	}
+	loadNodes(rocksdb.cfIOTree)
+	loadNodes(rocksdb.cfStateTree)
 
 	return ckMeta, nodeKeys
 }
@@ -124,17 +130,25 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 		notVisited[k] = struct{}{}
 	}
 
-	it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(version), rocksdb.cfNode), nil)
-	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		key := it.Key()
-		if !bytes.HasPrefix(key, nodePrefix) {
-			continue
+	checkNodes := func(cf *grocksdb.ColumnFamilyHandle) {
+		fmt.Println("checking nodes")
+		it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(version), cf), nil)
+		defer it.Close()
+		for ; it.Valid(); it.Next() {
+			key := it.Key()
+			if !bytes.HasPrefix(key, nodePrefix) {
+				continue
+			}
+			_, ok := keySet[string(key)]
+			fmt.Println(key)
+			require.Equal(true, ok, "unexpected node in db")
+			delete(notVisited, string(key))
 		}
-		_, ok := keySet[string(key)]
-		require.Equal(true, ok, "unexpected node in db")
-		delete(notVisited, string(key))
 	}
+	fmt.Println("Verify nodes.....")
+	checkNodes(rocksdb.cfIOTree)
+	checkNodes(rocksdb.cfStateTree)
+
 	require.Equal(0, len(notVisited), "some nodes not visited")
 }
 

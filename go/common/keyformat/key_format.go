@@ -157,7 +157,7 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 				panic(fmt.Sprintf("key format: failed to marshal element %d: %s", i, err))
 			}
 			if len(data) != meta.size {
-				panic(fmt.Sprintf("key format: unexpected marshalled size %d for element %d (expected: %d)", len(data), i, meta.size))
+				panic(fmt.Sprintf("key format: unexpected marshalled size %d for element %d", len(data), i))
 			}
 
 			copy(buf[:], data)

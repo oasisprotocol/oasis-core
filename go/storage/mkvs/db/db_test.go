@@ -268,7 +268,7 @@ func testVersionChecks(t *testing.T, new NodeDBFactory) {
 	err = ndb.StartMultipartInsert(44)
 	require.Error(err, "StartMultipartInsert(44)")
 
-	root := node.Root{}
+	root := node.Root{Type: node.RootTypeState}
 	_, err = ndb.NewBatch(root, 0, false) // Normal chunks not allowed during multipart.
 	require.Error(err, "NewBatch(.., 0, false)")
 	_, err = ndb.NewBatch(root, 13, true)

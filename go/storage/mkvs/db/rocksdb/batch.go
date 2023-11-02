@@ -24,7 +24,8 @@ type rocksdbBatch struct {
 	oldRoot node.Root
 	chunk   bool
 
-	version uint64
+	version  uint64
+	rootType node.RootType
 
 	writeLog     writelog.WriteLog
 	annotations  writelog.Annotations
@@ -58,13 +59,12 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 		return err
 	}
 
-	// cf := ba.db.getColumnFamilyForRoot(root)
-
+	cf := ba.db.getColumnFamilyForRoot(root)
 	rootHash := node.TypedHashFromRoot(root)
 	ts := timestampFromVersion(root.Version)
-	ba.bat.PutCFWithTS(ba.db.cfNode, rootNodeKeyFmt.Encode(&rootHash), ts[:], []byte{})
+	ba.bat.PutCFWithTS(cf, rootNodeKeyFmt.Encode(&rootHash), ts[:], []byte{})
 	if ba.multipartNodes != nil {
-		ba.multipartNodes.Put(multipartRestoreNodeLogKeyFmt.Encode(&rootHash), []byte{})
+		ba.multipartNodes.Put(multipartRestoreRootLogKeyFmt.Encode(&rootHash), []byte{})
 	}
 
 	if rootsMeta.Roots[rootHash] != nil {
@@ -94,17 +94,13 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 				return api.ErrPreviousVersionMismatch
 			}
 
-			// TODO: LongKeys.
-			// Old code re-loaded loadRootsMetadata here (which was saved in line 84). However i think this is not needed.
-			// More-over we lose the updates here, since the batch was not yet submitted, this differs with badger transaction
-			// semantics. Maybe we should use transactions here, idk.
 			var oldRootsMeta *rootsMetadata
 			oldRootsMeta, err = loadRootsMetadata(ba.db.db, ba.oldRoot.Version)
 			if err != nil {
 				return err
 			}
-			// Check if overridden in the current WriteBatch.
-			// TODO: this is probably not needed, just pick rootsMeta here?
+			// Check if oldRootsMeta was updated in this batch.
+			// TODO: could this be avoided?
 			wbIter := ba.bat.NewIterator()
 			for {
 				if !wbIter.Next() {
@@ -137,7 +133,7 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 			log := api.MakeHashedDBWriteLog(ba.writeLog, ba.annotations)
 			bytes := cbor.Marshal(log)
 			key := writeLogKeyFmt.Encode(root.Version, &rootHash, &oldRootHash)
-			ba.bat.PutCFWithTS(ba.db.cfNode, key, ts[:], bytes)
+			ba.bat.PutCFWithTS(cf, key, ts[:], bytes)
 		}
 	}
 
@@ -159,7 +155,7 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 }
 
 // MaybeStartSubtree implements api.Batch.
-func (ba *rocksdbBatch) MaybeStartSubtree(subtree api.Subtree, depth node.Depth, subtreeRoot *node.Pointer) api.Subtree {
+func (ba *rocksdbBatch) MaybeStartSubtree(subtree api.Subtree, _ node.Depth, _ *node.Pointer) api.Subtree {
 	if subtree == nil {
 		return &rocksdbSubtree{batch: ba}
 	}
@@ -216,23 +212,24 @@ func (s *rocksdbSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
 		return err
 	}
 
+	cf := s.batch.db.getColumnFamilyForType(s.batch.rootType)
 	h := ptr.Node.GetHash()
 	s.batch.updatedNodes = append(s.batch.updatedNodes, updatedNode{Hash: h})
 	nodeKey := nodeKeyFmt.Encode(&h)
 	if s.batch.multipartNodes != nil {
-		item, err := s.batch.db.db.GetCF(timestampReadOptions(s.batch.version), s.batch.db.cfNode, nodeKey)
+		item, err := s.batch.db.db.GetCF(timestampReadOptions(s.batch.version), cf, nodeKey)
 		if err != nil {
 			return err
 		}
 		defer item.Free()
 		if !item.Exists() {
-			th := node.TypedHashFromParts(node.RootTypeInvalid, h)
+			th := node.TypedHashFromParts(s.batch.rootType, h)
 			s.batch.multipartNodes.Put(multipartRestoreNodeLogKeyFmt.Encode(&th), []byte{})
 		}
 	}
 
 	ts := timestampFromVersion(s.batch.version)
-	s.batch.bat.PutCFWithTS(s.batch.db.cfNode, nodeKey, ts[:], data)
+	s.batch.bat.PutCFWithTS(cf, nodeKey, ts[:], data)
 	return nil
 }
 

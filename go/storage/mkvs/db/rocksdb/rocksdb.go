@@ -52,9 +52,17 @@ var (
 	//
 	// Value is empty.
 	multipartRestoreNodeLogKeyFmt = keyformat.New(0x03, &node.TypedHash{})
+
+	// multipartRestoreNodeLogKeyFmt is the key format for the root nodes inserted during a chunk restore.
+	// Once a set of chunks is fully restored, these entries should be removed. If chunk restoration
+	// is interrupted for any reason, the nodes associated with these keys should be removed, along
+	// with these entries.
+	//
+	// Value is empty.
+	multipartRestoreRootLogKeyFmt = keyformat.New(0x04, &node.TypedHash{})
 )
 
-// Node CF keys (timestamped).
+// Node CF keys (timestamped and used by state and io tree CFs).
 var (
 	// nodeKeyFmt is the key format for nodes (node hash).
 	//
@@ -79,10 +87,9 @@ var (
 )
 
 const (
-	cfMetadataName = "default"
-	cfNodeTree     = "node"
-	// cfStateTreeName = "state_tree"
-	// cfIOTreeName    = "io_tree"
+	cfMetadataName  = "default"
+	cfStateTreeName = "state_tree"
+	cfIOTreeName    = "io_tree"
 )
 
 // New creates a new RocksDB-backed node database.
@@ -100,6 +107,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	// Also see: https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
 
 	// Create options for the metadata column family.
+	// TODO: Consider some tuning for meta options.
 	optsMeta := grocksdb.NewDefaultOptions()
 	optsMeta.SetCreateIfMissing(true)
 	optsMeta.SetCreateIfMissingColumnFamilies(true)
@@ -152,14 +160,13 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 			cfg.DB,
 			[]string{
 				cfMetadataName,
-				cfNodeTree,
-				// cfStateTreeName,
-				// cfIOTreeName,
+				cfStateTreeName,
+				cfIOTreeName,
 			},
 			[]*grocksdb.Options{
 				optsMeta,
 				optsNodes,
-				// optsNodes,
+				optsNodes,
 			},
 			false)
 	case false:
@@ -168,14 +175,13 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 			cfg.DB,
 			[]string{
 				cfMetadataName,
-				cfNodeTree,
-				// cfStateTreeName,
-				// cfIOTreeName,
+				cfStateTreeName,
+				cfIOTreeName,
 			},
 			[]*grocksdb.Options{
 				optsMeta,
 				optsNodes,
-				// optsNodes,
+				optsNodes,
 			},
 		)
 	}
@@ -183,9 +189,8 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		return nil, fmt.Errorf("mkvs/rocksdb: failed to open database: %w", err)
 	}
 	db.cfMetadata = cfHandles[0] // Also the default handle.
-	db.cfNode = cfHandles[1]
-	// db.cfStateTree = cfHandles[1]
-	// db.cfIOTree = cfHandles[2]
+	db.cfStateTree = cfHandles[1]
+	db.cfIOTree = cfHandles[2]
 
 	// Load database metadata.
 	if err = db.load(); err != nil {
@@ -217,27 +222,17 @@ type rocksdbNodeDB struct {
 
 	discardWriteLogs bool
 
-	db         *grocksdb.DB
-	cfMetadata *grocksdb.ColumnFamilyHandle
-	cfNode     *grocksdb.ColumnFamilyHandle
-	// cfStateTree *grocksdb.ColumnFamilyHandle
-	// cfIOTree    *grocksdb.ColumnFamilyHandle
+	db          *grocksdb.DB
+	cfMetadata  *grocksdb.ColumnFamilyHandle
+	cfStateTree *grocksdb.ColumnFamilyHandle
+	cfIOTree    *grocksdb.ColumnFamilyHandle
 
 	closeOnce sync.Once
 }
 
-/*
 func (d *rocksdbNodeDB) getColumnFamilyForRoot(root node.Root) *grocksdb.ColumnFamilyHandle {
-	switch root.Type {
-	case node.RootTypeState:
-		return d.cfStateTree
-	case node.RootTypeIO:
-		return d.cfIOTree
-	default:
-		panic(fmt.Errorf("unsupported root type: %s", root.Type))
-	}
+	return d.getColumnFamilyForType(root.Type)
 }
-
 
 func (d *rocksdbNodeDB) getColumnFamilyForType(rootType node.RootType) *grocksdb.ColumnFamilyHandle {
 	switch rootType {
@@ -249,7 +244,6 @@ func (d *rocksdbNodeDB) getColumnFamilyForType(rootType node.RootType) *grocksdb
 		panic(fmt.Errorf("unsupported root type: %s", rootType))
 	}
 }
-*/
 
 func (d *rocksdbNodeDB) load() error {
 	/*
@@ -271,7 +265,7 @@ func (d *rocksdbNodeDB) load() error {
 
 		// Metadata already exists, just load it and verify that it is
 		// compatible with what we have here.
-		if err := cbor.UnmarshalTrusted(item.Data(), &d.meta.value); err != nil {
+		if err = cbor.UnmarshalTrusted(item.Data(), &d.meta.value); err != nil {
 			return err
 		}
 
@@ -311,8 +305,9 @@ func (d *rocksdbNodeDB) sanityCheckNamespace(ns common.Namespace) error {
 
 func (d *rocksdbNodeDB) checkRoot(root node.Root) error {
 	rootHash := node.TypedHashFromRoot(root)
+	cf := d.getColumnFamilyForRoot(root)
 
-	s, err := d.db.GetCF(timestampReadOptions(root.Version), d.cfNode, rootNodeKeyFmt.Encode(&rootHash))
+	s, err := d.db.GetCF(timestampReadOptions(root.Version), cf, rootNodeKeyFmt.Encode(&rootHash))
 	if err != nil {
 		d.logger.Error("failed to check root existence",
 			"err", err,
@@ -346,8 +341,8 @@ func (d *rocksdbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, e
 		return nil, err
 	}
 
-	// cf := d.getColumnFamilyForRoot(root)
-	s, err := d.db.GetCF(timestampReadOptions(root.Version), d.cfNode, nodeKeyFmt.Encode(&ptr.Hash))
+	cf := d.getColumnFamilyForRoot(root)
+	s, err := d.db.GetCF(timestampReadOptions(root.Version), cf, nodeKeyFmt.Encode(&ptr.Hash))
 	if err != nil {
 		return nil, fmt.Errorf("mkvs/rocksdb: failed to get node from backing store: %w", err)
 	}
@@ -385,6 +380,8 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 		return nil, err
 	}
 
+	cf := d.getColumnFamilyForRoot(startRoot)
+
 	// Start at the end root and search towards the start root. This assumes that the
 	// chains are not long and that there is not a lot of forks as in that case performance
 	// would suffer.
@@ -418,7 +415,7 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 		wl, err := func() (writelog.Iterator, error) {
 			// Iterate over all write logs that result in the current item.
 			prefix := writeLogKeyFmt.Encode(endRoot.Version, &curItem.endRootHash)
-			it := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(endRoot.Version), d.cfNode), prefix)
+			it := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(endRoot.Version), cf), prefix)
 			defer it.Close()
 
 			for ; it.Valid(); it.Next() {
@@ -462,7 +459,7 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 								Hash:      nextItem.logRoots[index].Hash(),
 							}
 
-							item, err := d.db.GetCF(timestampReadOptions(endRoot.Version), d.cfNode, key)
+							item, err := d.db.GetCF(timestampReadOptions(endRoot.Version), cf, key)
 							if err != nil || !item.Exists() {
 								return node.Root{}, nil, err
 							}
@@ -558,7 +555,7 @@ func (d *rocksdbNodeDB) HasRoot(root node.Root) bool {
 	return exists
 }
 
-func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
+func (d *rocksdbNodeDB) Finalize(roots []node.Root) error { // nolint: gocyclo
 	if len(roots) == 0 {
 		return fmt.Errorf("mkvs/rocksdb: need at least one root to finalize")
 	}
@@ -625,8 +622,8 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 	ts := timestampFromVersion(version)
 
 	// Go through all roots and prune them based on whether they are finalized or not.
-	maybeLoneNodes := make(map[hash.Hash]bool)
-	notLoneNodes := make(map[hash.Hash]bool)
+	maybeLoneNodes := make(map[hash.Hash]node.RootType)
+	notLoneNodes := make(map[hash.Hash]node.RootType)
 
 	for rootHash := range rootsMeta.Roots {
 		// TODO: Consider colocating updated nodes with the root metadata.
@@ -642,7 +639,7 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 		}
 
 		var updatedNodes []updatedNode
-		if err := cbor.UnmarshalTrusted(item.Data(), &updatedNodes); err != nil {
+		if err = cbor.UnmarshalTrusted(item.Data(), &updatedNodes); err != nil {
 			panic(fmt.Errorf("mkvs/rocksdb: corrupted root updated nodes index: %w", err))
 		}
 		item.Free()
@@ -651,9 +648,9 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 			// Make sure not to remove any nodes shared with finalized roots.
 			for _, n := range updatedNodes {
 				if n.Removed {
-					maybeLoneNodes[n.Hash] = true
+					maybeLoneNodes[n.Hash] = rootHash.Type()
 				} else {
-					notLoneNodes[n.Hash] = true
+					notLoneNodes[n.Hash] = rootHash.Type()
 				}
 			}
 		} else {
@@ -663,7 +660,7 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 			// roots added in the same version.
 			for _, n := range updatedNodes {
 				if !n.Removed {
-					maybeLoneNodes[n.Hash] = true
+					maybeLoneNodes[n.Hash] = rootHash.Type()
 				}
 			}
 
@@ -673,13 +670,13 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 			// Remove write logs for the non-finalized root.
 			if !d.discardWriteLogs {
 				if err = func() error {
+					cf := d.getColumnFamilyForType(rootHash.Type())
 					rootWriteLogsPrefix := writeLogKeyFmt.Encode(version, &rootHash)
-					wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), d.cfNode), rootWriteLogsPrefix)
+					wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), cf), rootWriteLogsPrefix)
 					defer wit.Close()
 
-					// cf := d.getColumnFamilyForType(rootHash.Type())
 					for ; wit.Valid(); wit.Next() {
-						batch.DeleteCFWithTS(d.cfNode, wit.Key(), ts[:])
+						batch.DeleteCFWithTS(cf, wit.Key(), ts[:])
 					}
 					return nil
 				}(); err != nil {
@@ -694,14 +691,11 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 
 	// Clean any lone nodes.
 	for h := range maybeLoneNodes {
-		if notLoneNodes[h] {
+		if _, ok := notLoneNodes[h]; ok {
 			continue
 		}
 
-		// TODO: get CF for hash?
-		// batch.DeleteCFWithTS(d.cfIOTree, nodeKeyFmt.Encode(&h), ts[:])
-		// batch.DeleteCFWithTS(d.cfStateTree, nodeKeyFmt.Encode(&h), ts[:])
-		batch.DeleteCFWithTS(d.cfNode, nodeKeyFmt.Encode(&h), ts[:])
+		batch.DeleteCFWithTS(d.getColumnFamilyForType(maybeLoneNodes[h]), nodeKeyFmt.Encode(&h), ts[:])
 	}
 
 	// Save roots metadata if changed.
@@ -768,8 +762,9 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 		var innerErr error
 		err := api.Visit(ctx, d, root, func(ctx context.Context, n node.Node) bool {
 			h := n.GetHash()
+			cf := d.getColumnFamilyForRoot(root)
 
-			s, ts, err := d.db.GetCFWithTS(timestampReadOptions(root.Version), d.cfNode, nodeKeyFmt.Encode(&h))
+			s, ts, err := d.db.GetCFWithTS(timestampReadOptions(root.Version), cf, nodeKeyFmt.Encode(&h))
 			if err != nil {
 				return false
 			}
@@ -784,7 +779,7 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 				panic(fmt.Errorf("mkvs/rocksdb: missing/corrupted timestamp for node: %s", h))
 			}
 			if itemTs == version {
-				batch.DeleteCFWithTS(d.cfNode, nodeKeyFmt.Encode(&h), ts.Data())
+				batch.DeleteCFWithTS(cf, nodeKeyFmt.Encode(&h), ts.Data())
 			}
 			return true
 		})
@@ -800,13 +795,16 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 
 	// Prune all write logs in version.
 	if !d.discardWriteLogs {
-		wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), d.cfNode), writeLogKeyFmt.Encode(version))
-		defer wit.Close()
+		discardLogs := func(cf *grocksdb.ColumnFamilyHandle) {
+			wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), cf), writeLogKeyFmt.Encode(version))
+			defer wit.Close()
 
-		for ; wit.Valid(); wit.Next() {
-			batch.DeleteCFWithTS(d.cfNode, wit.Key(), ts[:])
+			for ; wit.Valid(); wit.Next() {
+				batch.DeleteCFWithTS(cf, wit.Key(), ts[:])
+			}
 		}
-
+		discardLogs(d.cfStateTree)
+		discardLogs(d.cfIOTree)
 	}
 
 	// Update metadata.
@@ -816,14 +814,11 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 		return fmt.Errorf("mkvs/rocksdb: failed to prune version %d: %w", version, err)
 	}
 
-	// if err := d.db.IncreaseFullHistoryTsLow(d.cfIOTree, ts[:]); err != nil {
-	// 	return fmt.Errorf("mkvs/rocksdb: failed to prune version %d from IO tree: %w", version, err)
-	// }
-	// if err := d.db.IncreaseFullHistoryTsLow(d.cfStateTree, ts[:]); err != nil {
-	// 	return fmt.Errorf("mkvs/rocksdb: failed to prune version %d from state tree: %w", version, err)
-	// }
-	if err := d.db.IncreaseFullHistoryTsLow(d.cfNode, ts[:]); err != nil {
-		return fmt.Errorf("mkvs/rocksdb: failed to prune version %d from nodes tree: %w", version, err)
+	if err := d.db.IncreaseFullHistoryTsLow(d.cfIOTree, ts[:]); err != nil {
+		return fmt.Errorf("mkvs/rocksdb: failed to prune version %d from IO tree: %w", version, err)
+	}
+	if err := d.db.IncreaseFullHistoryTsLow(d.cfStateTree, ts[:]); err != nil {
+		return fmt.Errorf("mkvs/rocksdb: failed to prune version %d from state tree: %w", version, err)
 	}
 	return nil
 }
@@ -874,38 +869,45 @@ func (d *rocksdbNodeDB) cleanMultipartLocked(removeNodes bool) error {
 		return nil
 	}
 
-	it := prefixIterator(d.db.NewIterator(defaultReadOptions), multipartRestoreNodeLogKeyFmt.Encode())
-	defer it.Close()
-
 	batch := grocksdb.NewWriteBatch()
 	defer batch.Destroy()
 	ts := timestampFromVersion(version)
 	var logged bool
-	for ; it.Valid(); it.Next() {
-		key := it.Key()
 
-		var hash node.TypedHash
-		if !multipartRestoreNodeLogKeyFmt.Decode(key, &hash) {
-			break
-		}
+	// Clean up the node log.
+	cleanNodes := func(keyFormat *keyformat.KeyFormat, isRoot bool) {
+		it := prefixIterator(d.db.NewIterator(defaultReadOptions), keyFormat.Encode())
+		defer it.Close()
+		for ; it.Valid(); it.Next() {
+			key := it.Key()
 
-		if removeNodes {
-			if !logged {
-				d.logger.Info("removing some nodes from a multipart restore")
-				logged = true
+			var hash node.TypedHash
+			if !keyFormat.Decode(key, &hash) {
+				break
 			}
-			switch hash.Type() {
-			case node.RootTypeInvalid:
-				h := hash.Hash()
-				batch.DeleteCFWithTS(d.cfNode, nodeKeyFmt.Encode(&h), ts[:])
-			default:
-				// cf := d.getColumnFamilyForType(hash.Type())
-				batch.DeleteCFWithTS(d.cfNode, rootNodeKeyFmt.Encode(&hash), ts[:])
+			cf := d.getColumnFamilyForType(hash.Type())
+
+			if removeNodes {
+				if !logged {
+					d.logger.Info("removing some nodes from a multipart restore")
+					logged = true
+				}
+
+				switch isRoot {
+				case false:
+					h := hash.Hash()
+					batch.DeleteCFWithTS(cf, nodeKeyFmt.Encode(&h), ts[:])
+				default:
+					cf := d.getColumnFamilyForType(hash.Type())
+					batch.DeleteCFWithTS(cf, rootNodeKeyFmt.Encode(&hash), ts[:])
+				}
 			}
+			// Delete the metadata entry as well.
+			batch.Delete(key)
 		}
-		// Delete the metadata entry as well.
-		batch.Delete(key)
 	}
+	cleanNodes(multipartRestoreNodeLogKeyFmt, false)
+	cleanNodes(multipartRestoreRootLogKeyFmt, true)
 
 	// Apply the batch first. If anything fails, having corrupt
 	// multipart info in d.meta shouldn't hurt us next run.
@@ -922,15 +924,11 @@ func (d *rocksdbNodeDB) cleanMultipartLocked(removeNodes bool) error {
 }
 
 func (d *rocksdbNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) (api.Batch, error) {
-	// WARNING: There is a maximum batch size and maximum batch entry count.
-	// Both of these things are derived from the MaxTableSize option.
-	//
-	// The size limit also applies to normal transactions, so the "right"
-	// thing to do would be to either crank up MaxTableSize or maybe split
-	// the transaction out.
-
 	if d.readOnly {
 		return nil, api.ErrReadOnly
+	}
+	if oldRoot.Type != node.RootTypeState && oldRoot.Type != node.RootTypeIO {
+		return nil, fmt.Errorf("mkvs/rocksdb: unsupported root type: %s", oldRoot.Type)
 	}
 
 	d.metaUpdateLock.Lock()
@@ -945,14 +943,13 @@ func (d *rocksdbNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) 
 
 	var logBatch *grocksdb.WriteBatch
 	if d.multipartVersion != multipartVersionNone {
-		// The node log is at a different version than the nodes themselves,
-		// which is awkward.
 		logBatch = grocksdb.NewWriteBatch()
 	}
 
 	return &rocksdbBatch{
 		db:             d,
 		version:        version,
+		rootType:       oldRoot.Type,
 		bat:            grocksdb.NewWriteBatch(),
 		multipartNodes: logBatch,
 		oldRoot:        oldRoot,
@@ -962,25 +959,23 @@ func (d *rocksdbNodeDB) NewBatch(oldRoot node.Root, version uint64, chunk bool) 
 
 func (d *rocksdbNodeDB) Size() (uint64, error) {
 	meta := d.db.GetColumnFamilyMetadataCF(d.cfMetadata)
-	// io := d.db.GetColumnFamilyMetadataCF(d.cfIOTree)
-	// state := d.db.GetColumnFamilyMetadataCF(d.cfStateTree)
-	node := d.db.GetColumnFamilyMetadataCF(d.cfNode)
+	io := d.db.GetColumnFamilyMetadataCF(d.cfIOTree)
+	state := d.db.GetColumnFamilyMetadataCF(d.cfStateTree)
 
-	return meta.Size() + node.Size(), nil // io.Size() + state.Size(), nil
+	return meta.Size() + io.Size() + state.Size(), nil
 }
 
 func (d *rocksdbNodeDB) Sync() error {
 	opts := grocksdb.NewDefaultFlushOptions()
-	return d.db.FlushCFs([]*grocksdb.ColumnFamilyHandle{d.cfMetadata, d.cfNode}, opts)
+	return d.db.FlushCFs([]*grocksdb.ColumnFamilyHandle{d.cfMetadata, d.cfIOTree, d.cfStateTree}, opts)
 }
 
 func (d *rocksdbNodeDB) Close() {
 	d.closeOnce.Do(func() {
 		d.db.Close()
 		d.cfMetadata = nil
-		// d.cfIOTree = nil
-		// d.cfStateTree = nil
-		d.cfNode = nil
+		d.cfIOTree = nil
+		d.cfStateTree = nil
 		d.db = nil
 	})
 }
