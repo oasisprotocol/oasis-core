@@ -638,6 +638,7 @@ func InitStateStorage(cfg *ApplicationConfig) (storage.LocalBackend, storage.Nod
 
 	switch cfg.StorageBackend {
 	case storageDB.BackendNameBadgerDB:
+	case storageDB.BackendNameRocksDB:
 	default:
 		return nil, nil, nil, fmt.Errorf("unsupported storage backend: %s", cfg.StorageBackend)
 	}

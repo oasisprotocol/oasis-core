@@ -30,6 +30,8 @@ updates:
       # CometBFT is manualy kept up to date.
       - dependency-name: github.com/cometbft/cometbft
       - dependency-name: github.com/cometbft/cometbft-db
+      # RocksDB is manualy kept up to date.
+      - dependency-name: github.com/linxGnu/grocksdb
 
   # Manage Rust pacakge versions.
   - package-ecosystem: cargo

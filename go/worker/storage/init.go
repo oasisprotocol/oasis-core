@@ -47,6 +47,9 @@ func NewLocalBackend(
 	case database.BackendNameBadgerDB:
 		cfg.DB = GetLocalBackendDBDir(dataDir, cfg.Backend)
 		impl, err = database.New(cfg)
+	case database.BackendNameRocksDB:
+		cfg.DB = GetLocalBackendDBDir(dataDir, cfg.Backend)
+		impl, err = database.New(cfg)
 	default:
 		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
 	}

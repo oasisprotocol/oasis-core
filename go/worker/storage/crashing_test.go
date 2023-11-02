@@ -21,7 +21,7 @@ func TestCrashingBackendDoNotInterfere(t *testing.T) {
 
 	var (
 		cfg = api.Config{
-			Backend:      database.BackendNameBadgerDB,
+			Backend:      database.BackendNameRocksDB,
 			Namespace:    testNs,
 			MaxCacheSize: 16 * 1024 * 1024,
 		}
