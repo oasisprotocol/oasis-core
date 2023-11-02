@@ -13,6 +13,7 @@ ARG GOIMPORTS_VERSION=v0.12.0
 ARG RUST_NIGHTLY_VERSION=2023-01-16
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
+ARG ROCKSDB_VERSION=8.5.3
 
 # Legacy package versions (upgrade tests).
 ARG LEGACY_GO_VERSION=1.20.2
@@ -80,6 +81,18 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     # Install gofumpt for code formatting.
     go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
     go install golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}
+
+# Install RocksDB.
+RUN \
+  wget -q https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz \
+  # Ensure checksum matches. TODO
+  && tar -zxf v${ROCKSDB_VERSION}.tar.gz \
+  && cd rocksdb-${ROCKSDB_VERSION} \
+  && DEBUG_LEVEL=0 make -j4 shared_lib \
+  && make install-shared \
+  && ldconfig \
+  && cd .. \
+  && rm -rf v${ROCKSDB}.tar.gz rocksdb-${ROCKSDB}
 
 # Install jemalloc (used by BadgerDB).
 RUN wget -O jemalloc.tar.bz2 \
