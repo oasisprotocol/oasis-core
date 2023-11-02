@@ -24,6 +24,14 @@ ifneq ($(OASIS_NO_ROCKSDB), 1)
 	GO_TAGS := $(GO_TAGS)rocksdb,grocksdb_clean_link
 endif
 
+# Include e2ecoverage tag if configured.
+ifeq ($(GO_BUILD_E2E_COVERAGE),1)
+	ifneq ($(GO_TAGS),)
+		GO_TAGS := $(GO_TAGS),
+	endif
+	GO_TAGS := $(GO_TAGS)e2ecoverage
+endif
+
 # If GO_TAGS is not empty, append it to GO_EXTRA_FLAGS.
 ifneq ($(GO_TAGS),)
 	GO_EXTRA_FLAGS += -tags "$(GO_TAGS)"
@@ -49,7 +57,7 @@ $(go-binaries):
 	@$(GO) build $(GOFLAGS) $(GO_EXTRA_FLAGS) -o ./$@/$(notdir $@) ./$@
 ifeq ($(GO_BUILD_E2E_COVERAGE),1)
 	@$(ECHO) "$(MAGENTA)*** Building $@ with E2E coverage...$(OFF)"
-	@$(GO) test $(GOFLAGS) -c -tags e2ecoverage -covermode=atomic -coverpkg=./... -o ./$@/$(notdir $@).test ./$@
+	@$(GO) test $(GOFLAGS) -c $(GO_TEST_FLAGS) -covermode=atomic -coverpkg=./... -o ./$@/$(notdir $@).test ./$@
 endif
 
 build: $(go-binaries)
@@ -113,7 +121,7 @@ test: $(test-targets)
 # Test without caching.
 force-test:
 	@$(ECHO) "$(CYAN)*** Running Go unit tests in force mode...$(OFF)"
-	@$(MAKE) test GO_TEST_FLAGS=-count=1
+	@$(MAKE) test GO_TEST_FLAGS += -count=1
 
 # Clean.
 clean:
