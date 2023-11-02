@@ -6,6 +6,7 @@ ifneq ($(GOLDFLAGS),)
 endif
 
 # Initialize GO_TAGS variable to hold the build tags.
+# TODO: actually only oasis-node needs to be built with these, other binaries not.
 GO_TAGS :=
 
 # Include jemalloc tag unless explicitly disabled (used by badgerdb).

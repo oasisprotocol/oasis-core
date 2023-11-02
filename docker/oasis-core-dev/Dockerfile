@@ -14,6 +14,7 @@ ARG RUST_NIGHTLY_VERSION=2023-01-16
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 ARG ROCKSDB_VERSION=8.5.3
+ARG ROCKSDB_CHECKSUM=ed4230500b9ca20bc7918c32166b2d0d46a8695c59991821daa586d55689d785
 
 # Legacy package versions (upgrade tests).
 ARG LEGACY_GO_VERSION=1.20.2
@@ -33,7 +34,9 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     python3-prometheus-client \
     # for seccomp Go bindings support
     libseccomp-dev \
-    bubblewrap && \
+    bubblewrap \
+    # Compression libs for RocksDB.
+    libsnappy-dev libbz2-dev liblz4-dev libzstd-dev && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/* && \
     # for linting Git commits
     pip install gitlint
@@ -82,18 +85,6 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
     go install golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}
 
-# Install RocksDB.
-RUN \
-  wget -q https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz \
-  # Ensure checksum matches. TODO
-  && tar -zxf v${ROCKSDB_VERSION}.tar.gz \
-  && cd rocksdb-${ROCKSDB_VERSION} \
-  && DEBUG_LEVEL=0 make -j4 shared_lib \
-  && make install-shared \
-  && ldconfig \
-  && cd .. \
-  && rm -rf v${ROCKSDB}.tar.gz rocksdb-${ROCKSDB}
-
 # Install jemalloc (used by BadgerDB).
 RUN wget -O jemalloc.tar.bz2 \
     https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 && \
@@ -108,3 +99,17 @@ RUN wget -O jemalloc.tar.bz2 \
     make && \
     make install && \
     cd .. && rm jemalloc.tar.bz2 && rm -rf jemalloc-${JEMALLOC_VERSION}
+
+# Install RocksDB.
+RUN wget -q https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz && \
+  # Ensure checksum matches.
+    echo "${ROCKSDB_CHECKSUM}  v${ROCKSDB_VERSION}.tar.gz" | sha256sum -c && \
+    tar -zxf v${ROCKSDB_VERSION}.tar.gz && \
+    cd rocksdb-${ROCKSDB_VERSION} && \
+    # TODO: clashes with jemalloc used by BadgerDB.
+    # For 64-bit x86 the `PORTABLE=haswell` is a reasonable compromise, which supports many or most
+    # of the available optimizations while still being compatible with most processors made since
+    # roughly 2013. https://github.com/facebook/rocksdb/blob/main/INSTALL.md
+    DEBUG_LEVEL=0 ROCKSDB_DISABLE_JEMALLOC=1 PORTABLE=haswell make -j4 shared_lib && \
+    make install-shared && ldconfig && \
+    cd .. && rm -rf v${ROCKSDB_VERSION}.tar.gz rocksdb-${ROCKSDB_VERSION}
