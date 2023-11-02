@@ -8,47 +8,21 @@ import (
 )
 
 type iterator struct {
-	source     *grocksdb.Iterator
-	start, end []byte
-	reverse    bool
-	invalid    bool
+	source  *grocksdb.Iterator
+	prefix  []byte
+	invalid bool
 }
 
-// TODO: add support for prefix, on valid, check if prefix matches.
-func newIterator(source *grocksdb.Iterator, start, end []byte, reverse bool) *iterator {
-	switch reverse {
-	case false:
-		if start == nil {
-			source.SeekToFirst()
-		} else {
-			source.Seek(start)
-		}
-	case true:
-		if end == nil {
-			source.SeekToLast()
-		} else {
-			source.Seek(end)
-
-			if source.Valid() {
-				// We are either at the matching key, or the next key.
-				eoaKey := readOnlySlice(source.Key())
-				if bytes.Compare(end, eoaKey) <= 0 { // end == aoaKey, or end < eaoKey
-					// End is exclusive, so move to the previous key.
-					source.Prev()
-				}
-			} else {
-				// Past the end of the db, move to the last key.
-				source.SeekToLast()
-			}
-		}
-
+func prefixIterator(source *grocksdb.Iterator, prefix []byte) *iterator {
+	if prefix == nil {
+		source.SeekToFirst()
+	} else {
+		source.Seek(prefix)
 	}
 
 	return &iterator{
 		source:  source,
-		start:   start,
-		end:     end,
-		reverse: reverse,
+		prefix:  prefix,
 		invalid: !source.Valid(),
 	}
 }
@@ -73,38 +47,27 @@ func copyAndFreeSlice(s *grocksdb.Slice) []byte {
 }
 
 func (itr *iterator) Valid() bool {
-	// once invalid, forever invalid
+	// Once invalid, always invalid.
 	if itr.invalid {
 		return false
 	}
 
-	// if source has error, consider it invalid
+	// Check for errors.
 	if err := itr.source.Err(); err != nil {
 		itr.invalid = true
 		return false
 	}
 
-	// if source is invalid, consider it invalid
+	// If iterator is not valid, we are done.
 	if !itr.source.Valid() {
 		itr.invalid = true
 		return false
 	}
 
-	// if key is at the end or past it, consider it invalid
-	start := itr.start
-	end := itr.end
-	key := readOnlySlice(itr.source.Key())
-
-	if itr.reverse {
-		if start != nil && bytes.Compare(key, start) < 0 {
-			itr.invalid = true
-			return false
-		}
-	} else {
-		if end != nil && bytes.Compare(end, key) <= 0 {
-			itr.invalid = true
-			return false
-		}
+	// If key does not match prefix, we are done.
+	if !bytes.HasPrefix(readOnlySlice(itr.source.Key()), itr.prefix) {
+		itr.invalid = true
+		return false
 	}
 
 	return true
@@ -125,11 +88,7 @@ func (itr iterator) Next() bool {
 		return false
 	}
 
-	if itr.reverse {
-		itr.source.Prev()
-	} else {
-		itr.source.Next()
-	}
+	itr.source.Next()
 
 	return itr.Valid()
 }

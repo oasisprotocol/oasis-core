@@ -64,7 +64,6 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 	ts := timestampFromVersion(root.Version)
 	ba.bat.PutCFWithTS(ba.db.cfNode, rootNodeKeyFmt.Encode(&rootHash), ts[:], []byte{})
 	if ba.multipartNodes != nil {
-		fmt.Println("putting there")
 		ba.multipartNodes.Put(multipartRestoreNodeLogKeyFmt.Encode(&rootHash), []byte{})
 	}
 

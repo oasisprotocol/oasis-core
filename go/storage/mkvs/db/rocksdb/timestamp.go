@@ -3,6 +3,7 @@ package rocksdb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/linxGnu/grocksdb"
 )
@@ -75,4 +76,12 @@ func timestampReadOptions(version uint64) *grocksdb.ReadOptions {
 	readOpts.SetTimestamp(ts[:])
 
 	return readOpts
+}
+
+func versionFromTimestamp(ts *grocksdb.Slice) (uint64, error) {
+	if !ts.Exists() {
+		return 0, fmt.Errorf("timestamp empty")
+	}
+	defer ts.Free()
+	return binary.LittleEndian.Uint64(ts.Data()), nil
 }

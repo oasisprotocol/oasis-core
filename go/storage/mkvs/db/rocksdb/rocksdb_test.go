@@ -107,19 +107,13 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 	require.NoError(err, "CreateCheckpoint()")
 
 	nodeKeys := keySet{}
-	it := newIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(2), rocksdb.cfNode), nil, nil, false)
+	it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(2), rocksdb.cfNode), nil)
 	defer it.Close()
 	for ; it.Valid(); it.Next() {
-		// TODO: maybe gotta strip version.
-		if len(values) == 1 {
-			fmt.Println("AAAAa", it.Key())
-		}
-
 		if bytes.HasPrefix(it.Key(), nodePrefix) {
 			nodeKeys[string(it.Key())] = struct{}{}
 		}
 	}
-	fmt.Println("node keys", len(values), version, len(nodeKeys))
 
 	return ckMeta, nodeKeys
 }
@@ -130,7 +124,7 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 		notVisited[k] = struct{}{}
 	}
 
-	it := newIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(version), rocksdb.cfNode), nil, nil, false)
+	it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(version), rocksdb.cfNode), nil)
 	defer it.Close()
 	for ; it.Valid(); it.Next() {
 		key := it.Key()
@@ -138,7 +132,6 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 			continue
 		}
 		_, ok := keySet[string(key)]
-		fmt.Println(version, key)
 		require.Equal(true, ok, "unexpected node in db")
 		delete(notVisited, string(key))
 	}
@@ -146,7 +139,7 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 }
 
 func checkNoLogKeys(require *require.Assertions, rocksdb *rocksdbNodeDB) {
-	it := newIterator(rocksdb.db.NewIterator(defaultReadOptions), nil, nil, false)
+	it := prefixIterator(rocksdb.db.NewIterator(defaultReadOptions), nil)
 	defer it.Close()
 	for ; it.Valid(); it.Next() {
 		require.False(bytes.HasPrefix(it.Key(), logPrefix), "checkLogKeys()/iteration")
@@ -199,9 +192,7 @@ func TestMultipartRestore(t *testing.T) {
 			require.NoError(err, "TempDir()")
 			defer os.RemoveAll(dir)
 
-			fmt.Println("Creating checkpoint with", initialValues)
 			ckMeta, ckNodes := createCheckpoint(ctx, require, dir, initialValues, 1)
-			fmt.Println("Got:", ckNodes)
 
 			dbCfg := *dbCfg
 			dbCfg.DB = dir
@@ -271,10 +262,8 @@ func testExistingNodes(ctx *test) {
 
 	// Create the checkpoint to be used as the overriding restore.
 	ckMeta2, ckNodes2 := createCheckpoint(ctx.ctx, ctx.require, ctx.dir, testValues, 2)
-	fmt.Println(ctx.ckNodes)
 	var overlap bool
 	for node1 := range ctx.ckNodes {
-		fmt.Println("IM HERE", node1)
 		if _, ok := ckNodes2[node1]; ok {
 			overlap = true
 			break

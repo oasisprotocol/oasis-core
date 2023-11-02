@@ -650,15 +650,12 @@ func (d *badgerNodeDB) Finalize(roots []node.Root) error { // nolint: gocyclo
 
 			// Remove write logs for the non-finalized root.
 			if !d.discardWriteLogs {
-				fmt.Println("DISCARDING HERE badger")
 				if err = func() error {
 					rootWriteLogsPrefix := writeLogKeyFmt.Encode(version, &rootHash)
-					fmt.Println("Prefix badger: ", version, rootWriteLogsPrefix)
 					wit := tx.NewIterator(badger.IteratorOptions{Prefix: rootWriteLogsPrefix})
 					defer wit.Close()
 
 					for wit.Rewind(); wit.Valid(); wit.Next() {
-						fmt.Println("DELETING HERE badger", version, wit.Item().Key())
 						if err = versionBatch.Delete(wit.Item().KeyCopy(nil)); err != nil {
 							return err
 						}

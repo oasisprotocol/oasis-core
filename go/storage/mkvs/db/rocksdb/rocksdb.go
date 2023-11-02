@@ -1,9 +1,8 @@
-// Package badger provides a RocksDB-backed node database.
+// Package rocksdb provides a RocksDB-backed node database.
 package rocksdb
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"runtime"
 	"sync"
@@ -32,19 +31,19 @@ var (
 	// rootsMetadataKeyFmt is the key format for roots metadata. The key format is (version).
 	//
 	// Value is CBOR-serialized rootsMetadata.
-	rootsMetadataKeyFmt = keyformat.New(0x02, uint64(0))
+	rootsMetadataKeyFmt = keyformat.New(0x00, uint64(0))
 
 	// rootUpdatedNodesKeyFmt is the key format for the pending updated nodes for the
 	// given root that need to be removed only in case the given root is not among
 	// the finalized roots. They key format is (version, root).
 	//
 	// Value is CBOR-serialized []updatedNode.
-	rootUpdatedNodesKeyFmt = keyformat.New(0x03, uint64(0), &node.TypedHash{})
+	rootUpdatedNodesKeyFmt = keyformat.New(0x01, uint64(0), &node.TypedHash{})
 
 	// metadataKeyFmt is the key format for metadata.
 	//
 	// Value is CBOR-serialized metadata.
-	metadataKeyFmt = keyformat.New(0x04)
+	metadataKeyFmt = keyformat.New(0x02)
 
 	// multipartRestoreNodeLogKeyFmt is the key format for the nodes inserted during a chunk restore.
 	// Once a set of chunks is fully restored, these entries should be removed. If chunk restoration
@@ -52,7 +51,7 @@ var (
 	// with these entries.
 	//
 	// Value is empty.
-	multipartRestoreNodeLogKeyFmt = keyformat.New(0x05, &node.TypedHash{})
+	multipartRestoreNodeLogKeyFmt = keyformat.New(0x03, &node.TypedHash{})
 )
 
 // Node CF keys (timestamped).
@@ -62,7 +61,6 @@ var (
 	// Value is serialized node.
 	nodeKeyFmt = keyformat.New(0x00, &hash.Hash{})
 
-	// TODO: separate CF?
 	// writeLogKeyFmt is the key format for write logs (version, new root,
 	// old root).
 	//
@@ -72,7 +70,7 @@ var (
 	// rootNodeKeyFmt is the key format for root nodes (node hash).
 	//
 	// Value is empty.
-	rootNodeKeyFmt = keyformat.New(0x06, &node.TypedHash{})
+	rootNodeKeyFmt = keyformat.New(0x02, &node.TypedHash{})
 )
 
 var (
@@ -96,9 +94,10 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		readOnly:         cfg.ReadOnly,
 	}
 
-	// XXX: Most of these options were taken from cosmos SDK.
+	// XXX: Most of these were taken from Cosmos-SDK RocksDB impl.
 	// Experiment/modify if needed. Most of these can be adjusted
 	// on a live database.
+	// Also see: https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
 
 	// Create options for the metadata column family.
 	optsMeta := grocksdb.NewDefaultOptions()
@@ -354,7 +353,6 @@ func (d *rocksdbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, e
 	}
 	defer s.Free()
 	if !s.Exists() {
-		fmt.Println("fail here", root.Version)
 		return nil, api.ErrNodeNotFound
 	}
 
@@ -419,10 +417,8 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 
 		wl, err := func() (writelog.Iterator, error) {
 			// Iterate over all write logs that result in the current item.
-			start := writeLogKeyFmt.Encode(endRoot.Version, &curItem.endRootHash)
-
-			// TODO: maybe support prefix iterator? (manually configure start & end).
-			it := newIterator(d.db.NewIteratorCF(timestampReadOptions(endRoot.Version), d.cfNode), start, nil, false)
+			prefix := writeLogKeyFmt.Encode(endRoot.Version, &curItem.endRootHash)
+			it := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(endRoot.Version), d.cfNode), prefix)
 			defer it.Close()
 
 			for ; it.Valid(); it.Next() {
@@ -438,10 +434,6 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 				var decStartRootHash node.TypedHash
 
 				if !writeLogKeyFmt.Decode(key, &decVersion, &decEndRootHash, &decStartRootHash) {
-					return nil, nil
-				}
-				// TODO: check other such places.
-				if decVersion != endRoot.Version || !decEndRootHash.Equal(&curItem.endRootHash) {
 					return nil, nil
 				}
 
@@ -568,7 +560,7 @@ func (d *rocksdbNodeDB) HasRoot(root node.Root) bool {
 
 func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 	if len(roots) == 0 {
-		return fmt.Errorf("mkvs/badger: need at least one root to finalize")
+		return fmt.Errorf("mkvs/rocksdb: need at least one root to finalize")
 	}
 	version := roots[0].Version
 
@@ -594,7 +586,7 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 	finalizedRoots := make(map[node.TypedHash]bool)
 	for _, root := range roots {
 		if root.Version != version {
-			return fmt.Errorf("mkvs/badger: roots to finalize don't have matching versions")
+			return fmt.Errorf("mkvs/rocksdb: roots to finalize don't have matching versions")
 		}
 		finalizedRoots[node.TypedHashFromRoot(root)] = true
 	}
@@ -651,9 +643,9 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 
 		var updatedNodes []updatedNode
 		if err := cbor.UnmarshalTrusted(item.Data(), &updatedNodes); err != nil {
-			panic(fmt.Errorf("mkvs/badger: corrupted root updated nodes index: %w", err))
+			panic(fmt.Errorf("mkvs/rocksdb: corrupted root updated nodes index: %w", err))
 		}
-		item.Free() // TODO: wrapper.
+		item.Free()
 
 		if finalizedRoots[rootHash] {
 			// Make sure not to remove any nodes shared with finalized roots.
@@ -665,7 +657,7 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 				}
 			}
 		} else {
-			// Remove any non-finalized roots. It is safe to remove these nodes as Badger's version
+			// Remove any non-finalized roots. It is safe to remove these nodes as RocksDB's version
 			// control will make sure they are not removed if they are resurrected in any later
 			// version as long as we make sure that these nodes are not shared with any finalized
 			// roots added in the same version.
@@ -680,31 +672,14 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 
 			// Remove write logs for the non-finalized root.
 			if !d.discardWriteLogs {
-				fmt.Println("DISCARDING HERE")
 				if err = func() error {
 					rootWriteLogsPrefix := writeLogKeyFmt.Encode(version, &rootHash)
-					fmt.Println("Prefix: ", version, rootWriteLogsPrefix)
-					wit := newIterator(d.db.NewIteratorCF(timestampReadOptions(version), d.cfNode), rootWriteLogsPrefix, nil, false)
+					wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), d.cfNode), rootWriteLogsPrefix)
 					defer wit.Close()
 
-					fmt.Println("AA", wit.Valid())
 					// cf := d.getColumnFamilyForType(rootHash.Type())
 					for ; wit.Valid(); wit.Next() {
-						fmt.Println("COME HERE")
-						key := wit.Key()
-
-						var decVersion uint64
-						var decRootHash node.TypedHash
-						var decRootHash2 node.TypedHash
-						if !writeLogKeyFmt.Decode(key, &decVersion, &decRootHash, &decRootHash2) {
-							return nil
-						}
-						if decVersion != version || !decRootHash.Equal(&rootHash) {
-							return nil
-						}
-
-						fmt.Println("DELETING HERE", ts, d.cfNode)
-						batch.DeleteCFWithTS(d.cfNode, key, ts[:])
+						batch.DeleteCFWithTS(d.cfNode, wit.Key(), ts[:])
 					}
 					return nil
 				}(); err != nil {
@@ -739,7 +714,7 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error {
 
 	// Commit batch.
 	if err := d.db.Write(defaultWriteOptions, batch); err != nil {
-		return fmt.Errorf("mkvs/badger: failed to commit finalized roots: %w", err)
+		return fmt.Errorf("mkvs/rocksdb: failed to commit finalized roots: %w", err)
 	}
 
 	// Clean multipart metadata if there is any.
@@ -803,11 +778,12 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 				return false
 			}
 
-			// TODO: Extract.
-			itemTS := binary.LittleEndian.Uint64(ts.Data())
-			defer ts.Free()
-
-			if itemTS == version {
+			itemTs, err := versionFromTimestamp(ts)
+			if err != nil {
+				// Shouldn't happen unless corrupted db.
+				panic(fmt.Errorf("mkvs/rocksdb: missing/corrupted timestamp for node: %s", h))
+			}
+			if itemTs == version {
 				batch.DeleteCFWithTS(d.cfNode, nodeKeyFmt.Encode(&h), ts.Data())
 			}
 			return true
@@ -824,24 +800,11 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 
 	// Prune all write logs in version.
 	if !d.discardWriteLogs {
-		prefix := writeLogKeyFmt.Encode(version)
-		wit := newIterator(d.db.NewIteratorCF(timestampReadOptions(version), d.cfNode), prefix, nil, false)
+		wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), d.cfNode), writeLogKeyFmt.Encode(version))
 		defer wit.Close()
 
 		for ; wit.Valid(); wit.Next() {
-			key := wit.Key()
-
-			var decVersion uint64
-			var decRootHash node.TypedHash
-			var decRootHash2 node.TypedHash
-			if !writeLogKeyFmt.Decode(key, &decVersion, &decRootHash, &decRootHash2) {
-				break
-			}
-			if decVersion != version {
-				break
-			}
-
-			batch.DeleteCFWithTS(d.cfNode, key, ts[:]) // HM? seems wrong.
+			batch.DeleteCFWithTS(d.cfNode, wit.Key(), ts[:])
 		}
 
 	}
@@ -911,7 +874,7 @@ func (d *rocksdbNodeDB) cleanMultipartLocked(removeNodes bool) error {
 		return nil
 	}
 
-	it := newIterator(d.db.NewIterator(defaultReadOptions), multipartRestoreNodeLogKeyFmt.Encode(), nil, false)
+	it := prefixIterator(d.db.NewIterator(defaultReadOptions), multipartRestoreNodeLogKeyFmt.Encode())
 	defer it.Close()
 
 	batch := grocksdb.NewWriteBatch()
@@ -933,11 +896,9 @@ func (d *rocksdbNodeDB) cleanMultipartLocked(removeNodes bool) error {
 			}
 			switch hash.Type() {
 			case node.RootTypeInvalid:
-				fmt.Println("REMOVING NODE at TS", ts)
 				h := hash.Hash()
 				batch.DeleteCFWithTS(d.cfNode, nodeKeyFmt.Encode(&h), ts[:])
 			default:
-				fmt.Println("REMOVING ROOT NODE at TS", ts, hash.Hash())
 				// cf := d.getColumnFamilyForType(hash.Type())
 				batch.DeleteCFWithTS(d.cfNode, rootNodeKeyFmt.Encode(&hash), ts[:])
 			}
