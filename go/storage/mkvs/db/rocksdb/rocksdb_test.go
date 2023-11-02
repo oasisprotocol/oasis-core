@@ -134,7 +134,6 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 	}
 
 	checkNodes := func(cf *grocksdb.ColumnFamilyHandle) {
-		fmt.Println("checking nodes")
 		it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(version), cf), nil)
 		defer it.Close()
 		for ; it.Valid(); it.Next() {
@@ -148,7 +147,6 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 			delete(notVisited, string(key))
 		}
 	}
-	fmt.Println("Verify nodes.....")
 	checkNodes(rocksdb.cfIOTree)
 	checkNodes(rocksdb.cfStateTree)
 

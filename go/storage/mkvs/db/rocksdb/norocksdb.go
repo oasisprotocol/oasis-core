@@ -9,6 +9,6 @@ import (
 )
 
 // New creates a new RocksDB-backed node database.
-func New(cfg *api.Config) (api.NodeDB, error) {
+func New(_ *api.Config) (api.NodeDB, error) {
 	return nil, fmt.Errorf("mkvs/rocksdb: not compiled with RocksDB support")
 }

@@ -27,6 +27,7 @@ endif
 # If GO_TAGS is not empty, append it to GO_EXTRA_FLAGS.
 ifneq ($(GO_TAGS),)
 	GO_EXTRA_FLAGS += -tags "$(GO_TAGS)"
+	GO_TEST_FLAGS += -tags "$(GO_TAGS)"
 endif
 
 # Set all target as the default target.
