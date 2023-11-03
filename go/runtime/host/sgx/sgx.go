@@ -45,7 +45,7 @@ const (
 	// nodes on a single machine, all sharing the same EPC.
 	runtimeRAKTimeout = 60 * time.Second
 	// Runtime attest interval.
-	defaultRuntimeAttestInterval = 1 * time.Hour
+	defaultRuntimeAttestInterval = 2 * time.Hour
 )
 
 // Config contains SGX-specific provisioner configuration options.
