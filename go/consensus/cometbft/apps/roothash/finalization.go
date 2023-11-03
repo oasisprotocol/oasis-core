@@ -82,8 +82,10 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	switch err {
 	case commitment.ErrDiscrepancyDetected:
 		ctx.Logger().Warn("executor discrepancy detected",
+			"runtime_id", rtState.Runtime.ID,
 			"round", round,
 			"rank", rtState.CommitmentPool.HighestRank,
+			"timeout", timeout,
 			logging.LogEvent, roothash.LogEventExecutionDiscrepancyDetected,
 		)
 
@@ -97,7 +99,7 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 		prevTimeout := rtState.NextTimeout
 		rtState.NextTimeout = ctx.BlockHeight() + 1 + (rtState.Runtime.Executor.RoundTimeout*backupWorkerTimeoutFactorNumerator)/backupWorkerTimeoutFactorDenominator // Current height is ctx.BlockHeight() + 1
 
-		if err = rearmRoundTimeout(ctx, rtState.Runtime.ID, prevTimeout, rtState.NextTimeout); err != nil {
+		if err = rearmRoundTimeout(ctx, rtState.Runtime.ID, round, prevTimeout, rtState.NextTimeout); err != nil {
 			return err
 		}
 
@@ -114,6 +116,7 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	case commitment.ErrStillWaiting:
 		// Need more commits.
 		ctx.Logger().Debug("insufficient commitments for finality, waiting",
+			"runtime_id", rtState.Runtime.ID,
 			"round", round,
 		)
 		return nil
@@ -132,8 +135,11 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 
 	// The round has been finalized.
 	ctx.Logger().Debug("finalized round",
+		"runtime_id", rtState.Runtime.ID,
 		"round", round,
-		"priority", pool.HighestRank,
+		"rank", pool.HighestRank,
+		"scheduler_id", sc.Commitment.Header.SchedulerID,
+		"timeout", timeout,
 	)
 
 	livenessStats.TotalRounds++
@@ -231,6 +237,8 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 	switch rtState.CommitmentPool.Discrepancy {
 	case true:
 		ctx.Logger().Debug("executor pool discrepancy",
+			"runtime_id", rtState.Runtime.ID,
+			"round", round,
 			"slashing", rtState.Runtime.Staking.Slashing,
 		)
 
@@ -316,7 +324,7 @@ func (app *rootHashApplication) finalizeBlock(ctx *tmapi.Context, rtState *rooth
 	prevTimeout := rtState.NextTimeout
 	rtState.NextTimeout = roothash.TimeoutNever
 
-	return rearmRoundTimeout(ctx, rtState.Runtime.ID, prevTimeout, rtState.NextTimeout)
+	return rearmRoundTimeout(ctx, rtState.Runtime.ID, blk.Header.Round, prevTimeout, rtState.NextTimeout)
 }
 
 func (app *rootHashApplication) failRound(
@@ -327,6 +335,7 @@ func (app *rootHashApplication) failRound(
 	round := rtState.LastBlock.Header.Round + 1
 
 	ctx.Logger().Debug("round failed",
+		"runtime_id", rtState.Runtime.ID,
 		"round", round,
 		"err", err,
 		logging.LogEvent, roothash.LogEventRoundFailed,

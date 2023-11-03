@@ -86,6 +86,8 @@ func (h *committeeMsgHandler) HandleMessage(_ context.Context, _ signature.Publi
 		}
 
 		h.n.logger.Debug("received a proposal",
+			"runtime_id", h.n.commonNode.Runtime.ID(),
+			"round", proposal.Header.Round,
 			"node_id", proposal.NodeID,
 			"rank", rank,
 			"batch_size", len(proposal.Batch),

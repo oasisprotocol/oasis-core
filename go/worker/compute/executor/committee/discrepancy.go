@@ -8,15 +8,17 @@ import (
 )
 
 type discrepancyEvent struct {
-	rank          uint64
 	height        uint64
+	rank          uint64
+	timeout       bool
 	authoritative bool
 }
 
 func (n *Node) handleDiscrepancy(ctx context.Context, ev *discrepancyEvent) {
 	n.logger.Warn("execution discrepancy detected",
-		"rank", ev.rank,
 		"height", ev.height,
+		"rank", ev.rank,
+		"timeout", ev.timeout,
 		"authoritative", ev.authoritative,
 	)
 
@@ -81,8 +83,9 @@ func (n *Node) predictDiscrepancy(ctx context.Context, ec *commitment.ExecutorCo
 	n.logger.Warn("observed commitments indicate discrepancy")
 
 	n.handleDiscrepancy(ctx, &discrepancyEvent{
-		rank:          n.commitPool.HighestRank,
 		height:        uint64(n.blockInfo.ConsensusBlock.Height),
+		rank:          n.commitPool.HighestRank,
+		timeout:       false,
 		authoritative: false,
 	})
 }
