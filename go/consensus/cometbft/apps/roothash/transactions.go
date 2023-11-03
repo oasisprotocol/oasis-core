@@ -133,7 +133,11 @@ func (app *rootHashApplication) executorCommit(
 
 	// Check if higher-ranked scheduler submitted a commitment.
 	if prevRank != rtState.CommitmentPool.HighestRank {
+		round := rtState.LastBlock.Header.Round + 1
+
 		ctx.Logger().Debug("transaction scheduler has changed",
+			"runtime_id", cc.ID,
+			"round", round,
 			"prev_rank", prevRank,
 			"new_rank", rtState.CommitmentPool.HighestRank,
 		)
@@ -142,7 +146,7 @@ func (app *rootHashApplication) executorCommit(
 		prevTimeout := rtState.NextTimeout
 		rtState.NextTimeout = ctx.BlockHeight() + 1 + rtState.Runtime.Executor.RoundTimeout // Current height is ctx.BlockHeight() + 1
 
-		if err := rearmRoundTimeout(ctx, cc.ID, prevTimeout, rtState.NextTimeout); err != nil {
+		if err := rearmRoundTimeout(ctx, cc.ID, round, prevTimeout, rtState.NextTimeout); err != nil {
 			return err
 		}
 	}
