@@ -141,7 +141,7 @@ func newTestNode(t *testing.T) *testNode {
 		config.GlobalConfig.Common.Debug.AllowRoot = true
 		config.GlobalConfig.Mode = config.ModeCompute
 		config.GlobalConfig.Runtime.Provisioner = runtimeConfig.RuntimeProvisionerMock
-		config.GlobalConfig.Storage.Backend = "badger"
+		config.GlobalConfig.Storage.Backend = "rocksdb"
 		config.GlobalConfig.Storage.PublicRPCEnabled = true
 		config.GlobalConfig.Consensus.ListenAddress = "tcp://0.0.0.0:27565"
 		config.GlobalConfig.Consensus.SupplementarySanity.Enabled = true

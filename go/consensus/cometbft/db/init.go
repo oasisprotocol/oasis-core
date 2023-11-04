@@ -8,11 +8,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db/badger"
 )
 
-// GetBackendName returns the currently configured CometBFT database backend.
-func GetBackendName() string {
-	return badger.BackendName
-}
-
 // GetProvider returns the currently configured CometBFT DBProvider.
 func GetProvider() (node.DBProvider, error) {
 	return badger.DBProvider, nil
