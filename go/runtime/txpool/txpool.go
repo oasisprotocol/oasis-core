@@ -117,7 +117,7 @@ type TransactionPool interface {
 
 	// WatchCheckedTransactions subscribes to notifications about new transactions being available
 	// in the transaction pool for scheduling.
-	WatchCheckedTransactions() (pubsub.ClosableSubscription, <-chan []*PendingCheckTransaction)
+	WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, pubsub.ClosableSubscription)
 
 	// PendingCheckSize returns the number of transactions currently pending to be checked.
 	PendingCheckSize() int
@@ -406,11 +406,11 @@ func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) erro
 	return nil
 }
 
-func (t *txPool) WatchCheckedTransactions() (pubsub.ClosableSubscription, <-chan []*PendingCheckTransaction) {
+func (t *txPool) WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, pubsub.ClosableSubscription) {
 	sub := t.checkTxNotifier.Subscribe()
 	ch := make(chan []*PendingCheckTransaction)
 	sub.Unwrap(ch)
-	return sub, ch
+	return ch, sub
 }
 
 func (t *txPool) PendingCheckSize() int {
