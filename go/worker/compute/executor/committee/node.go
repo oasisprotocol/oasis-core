@@ -1437,7 +1437,7 @@ func (n *Node) worker() {
 	)
 
 	// Subscribe to notifications of new transactions being available in the pool.
-	txSub, n.txCh = n.commonNode.TxPool.WatchCheckedTransactions()
+	n.txCh, txSub = n.commonNode.TxPool.WatchCheckedTransactions()
 	defer txSub.Close()
 
 	// Subscribe to gossiped executor commitments.
