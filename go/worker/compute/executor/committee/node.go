@@ -1531,6 +1531,13 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 
 	// Need to be an executor committee member.
 	n.epoch = n.commonNode.Group.GetEpochSnapshot()
+	if epoch := n.epoch.GetEpochNumber(); epoch != bi.Epoch {
+		n.logger.Debug("skipping round, behind common worker",
+			"epoch", epoch,
+			"block_epoch", bi.Epoch,
+		)
+		return
+	}
 	if !n.epoch.IsExecutorMember() {
 		n.logger.Debug("skipping round, not an executor member",
 			"round", round,
