@@ -110,10 +110,10 @@ type TransactionPool interface {
 	GetKnownBatch(batch []hash.Hash) ([]*TxQueueMeta, map[hash.Hash]int)
 
 	// ProcessBlock updates the last known runtime block information.
-	ProcessBlock(bi *runtime.BlockInfo) error
+	ProcessBlock(bi *runtime.BlockInfo)
 
 	// ProcessIncomingMessages loads transactions from incoming messages into the pool.
-	ProcessIncomingMessages(inMsgs []*message.IncomingMessage) error
+	ProcessIncomingMessages(inMsgs []*message.IncomingMessage)
 
 	// WatchCheckedTransactions subscribes to notifications about new transactions being available
 	// in the transaction pool for scheduling.
@@ -374,36 +374,29 @@ HASH_LOOP:
 	return txs, missingTxs
 }
 
-func (t *txPool) ProcessBlock(bi *runtime.BlockInfo) error {
+func (t *txPool) ProcessBlock(bi *runtime.BlockInfo) {
 	t.blockInfoLock.Lock()
 	defer t.blockInfoLock.Unlock()
 
-	switch {
-	case t.blockInfo == nil:
+	if t.blockInfo == nil {
 		close(t.initCh)
-		fallthrough
-	case bi.RuntimeBlock.Header.HeaderType == block.EpochTransition:
-		// Force recheck on epoch transitions.
-		t.recheckTxCh.In() <- struct{}{}
-	default:
 	}
 
 	t.blockInfo = bi
 	t.lastBlockProcessed = time.Now()
 
-	// Trigger transaction rechecks if needed.
-	if (bi.RuntimeBlock.Header.Round - t.lastRecheckRound) > t.cfg.RecheckInterval {
+	// Force transaction rechecks on epoch transitions and if needed.
+	isEpochTransition := bi.RuntimeBlock.Header.HeaderType == block.EpochTransition
+	roundDifference := bi.RuntimeBlock.Header.Round - t.lastRecheckRound
+	if isEpochTransition || roundDifference > t.cfg.RecheckInterval {
 		t.recheckTxCh.In() <- struct{}{}
 		t.lastRecheckRound = bi.RuntimeBlock.Header.Round
 	}
-
-	return nil
 }
 
-func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) error {
+func (t *txPool) ProcessIncomingMessages(inMsgs []*message.IncomingMessage) {
 	t.rimQueue.Load(inMsgs)
 	rimQueueSize.With(t.getMetricLabels()).Set(float64(t.rimQueue.size()))
-	return nil
 }
 
 func (t *txPool) WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, pubsub.ClosableSubscription) {
