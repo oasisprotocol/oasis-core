@@ -1352,51 +1352,45 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 	)
 }
 
-func (n *Node) handleRoundStarted() {
-	n.logger.Debug("starting round worker",
-		"round", n.blockInfo.RuntimeBlock.Header.Round+1,
-	)
-
+func (n *Node) finalizePreviousRound() {
 	n.logger.Info("considering the round finalized",
 		"round", n.blockInfo.RuntimeBlock.Header.Round,
 		"header_hash", n.blockInfo.RuntimeBlock.Header.EncodedHash(),
 		"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
 	)
-	if n.blockInfo.RuntimeBlock.Header.HeaderType != block.Normal {
-		return
+
+	if n.proposedBatch != nil && n.blockInfo.RuntimeBlock.Header.HeaderType == block.Normal {
+		switch n.blockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
+		case false:
+			n.logger.Error("proposed batch was not finalized",
+				"header_io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+				"proposed_io_root", n.proposedBatch.proposedIORoot,
+				"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
+				"batch_size", len(n.proposedBatch.txHashes),
+			)
+		case true:
+			// Record time taken for successfully processing a batch.
+			batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.proposedBatch.batchStartTime).Seconds())
+
+			n.logger.Debug("removing processed batch from queue",
+				"batch_size", len(n.proposedBatch.txHashes),
+				"io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+			)
+
+			// Remove processed transactions from queue.
+			n.commonNode.TxPool.HandleTxsUsed(n.proposedBatch.txHashes)
+		}
 	}
 
-	if n.proposedBatch == nil {
-		return
-	}
+	// Clear last proposal.
+	n.proposedBatch = nil
 
-	if !n.blockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
-		n.logger.Error("proposed batch was not finalized",
-			"header_io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
-			"proposed_io_root", n.proposedBatch.proposedIORoot,
-			"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
-			"batch_size", len(n.proposedBatch.txHashes),
-		)
-		return
-	}
-
-	// Record time taken for successfully processing a batch.
-	batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.proposedBatch.batchStartTime).Seconds())
-
-	n.logger.Debug("removing processed batch from queue",
-		"batch_size", len(n.proposedBatch.txHashes),
-		"io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
-	)
-
-	// Remove processed transactions from queue.
-	n.commonNode.TxPool.HandleTxsUsed(n.proposedBatch.txHashes)
+	// Clear proposal queue.
+	n.commonNode.TxPool.ClearProposedBatch()
 }
 
-func (n *Node) handleRoundEnded() {
-	n.logger.Debug("stopping round worker",
-		"round", n.blockInfo.RuntimeBlock.Header.Round+1,
-	)
-
+// resetNodeState transitions to the StateWaitingForBatch state.
+func (n *Node) resetNodeState() {
 	switch state := n.state.(type) {
 	case StateWaitingForBatch:
 		// Nothing to do here.
@@ -1413,6 +1407,23 @@ func (n *Node) handleRoundEnded() {
 	}
 
 	n.transitionState(StateWaitingForBatch{})
+}
+
+// drainChannels clears all worker's channels.
+//
+// This ensures that channels do not accumulate obsolete data when the round worker exits
+// early due to non-membership in the executor committee or errors.
+func (n *Node) drainChannels(ctx context.Context) {
+	for {
+		select {
+		case <-n.txCh:
+		case <-n.ecCh:
+		case <-n.evCh:
+		case <-n.reselectCh:
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (n *Node) worker() {
@@ -1492,6 +1503,7 @@ func (n *Node) worker() {
 			go func() {
 				defer wg.Done()
 				n.roundWorker(ctx)
+				n.drainChannels(ctx)
 			}()
 
 			select {
@@ -1518,14 +1530,15 @@ func (n *Node) roundWorker(ctx context.Context) {
 	}
 	round := n.blockInfo.RuntimeBlock.Header.Round + 1
 
-	n.handleRoundStarted()
-	defer n.handleRoundEnded()
+	n.logger.Debug("round worker started",
+		"round", round,
+	)
+	defer n.logger.Debug("round worker stopped",
+		"round", round,
+	)
 
-	// Clear last proposal.
-	n.proposedBatch = nil
-
-	// Clear proposal queue.
-	n.commonNode.TxPool.ClearProposedBatch()
+	n.finalizePreviousRound()
+	defer n.resetNodeState()
 
 	// Prune proposals.
 	n.proposals.Prune(round)
