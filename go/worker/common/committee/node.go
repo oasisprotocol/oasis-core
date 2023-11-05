@@ -574,12 +574,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		return
 	}
 
-	err = n.TxPool.ProcessBlock(bi)
-	if err != nil {
-		n.logger.Error("failed to process block in transaction pool",
-			"err", err,
-		)
-	}
+	n.TxPool.ProcessBlock(bi)
 
 	// Fetch incoming messages.
 	inMsgs, err := n.Consensus.RootHash().GetIncomingMessageQueue(n.ctx, &roothash.InMessageQueueRequest{
@@ -594,12 +589,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		)
 		return
 	}
-	err = n.TxPool.ProcessIncomingMessages(inMsgs)
-	if err != nil {
-		n.logger.Error("failed to process incoming messages in transaction pool",
-			"err", err,
-		)
-	}
+	n.TxPool.ProcessIncomingMessages(inMsgs)
 
 	for _, hooks := range n.hooks {
 		hooks.HandleNewBlockLocked(bi)
