@@ -52,12 +52,6 @@ func (h *txMsgHandler) HandleMessage(ctx context.Context, _ signature.PublicKey,
 		}
 	}
 
-	// Dispatch to any transaction handlers.
-	for _, hooks := range h.n.hooks {
-		if err := hooks.HandlePeerTx(ctx, tx); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
