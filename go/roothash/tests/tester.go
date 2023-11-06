@@ -51,6 +51,7 @@ type commitmentEvent struct {
 type discrepancyEvent struct {
 	timeout bool
 	rank    uint64
+	round   uint64
 }
 
 type finalizedEvent struct {
@@ -418,6 +419,7 @@ func (s *runtimeState) verifyEvents(t *testing.T, ctx context.Context, backend a
 		require.NotNil(ev.ExecutionDiscrepancyDetected, fmt.Sprintf("unexpected event: %+v", ev))
 		require.Equal(de.timeout, ev.ExecutionDiscrepancyDetected.Timeout, "timeout should match")
 		require.Equal(de.rank, ev.ExecutionDiscrepancyDetected.Rank, "rank should match")
+		require.Equal(de.round, ev.ExecutionDiscrepancyDetected.Round, "round should match")
 	}
 
 	if fe != nil {
@@ -590,7 +592,8 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 		parent, err = nextRuntimeBlock(ch, nil)
 		require.NoError(err, "nextRuntimeBlock")
 
-		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		round := child.Block.Header.Round + 1
+		require.EqualValues(round, parent.Block.Header.Round, "block round")
 		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
 
 		// Check that round was finalized after 2.5*RoundTimeout blocks.
@@ -599,7 +602,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 
 		// Check that discrepancy resolution started after RoundTimeout blocks.
 		height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
+		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		// Check that the liveness statistics were computed correctly.
 		verifyLivenessStatistics(parent)
@@ -626,7 +629,8 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 		parent, err = nextRuntimeBlock(ch, nil)
 		require.NoError(err, "nextRuntimeBlock")
 
-		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		round := child.Block.Header.Round + 1
+		require.EqualValues(round, parent.Block.Header.Round, "block round")
 		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
 
 		// Backup schedulers should wait for a double timeout.
@@ -635,7 +639,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 			// Check that round was finalized after 1.5*RoundTimeout blocks and that discrepancy
 			// resolution started immediately.
 			height := parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, &discrepancyEvent{false, rank}, nil)
+			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:2]}, &discrepancyEvent{false, rank, round}, nil)
 		default:
 			// Check that round was finalized after 2.5*RoundTimeout blocks.
 			height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
@@ -643,7 +647,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 
 			// Check that discrepancy resolution started after RoundTimeout blocks.
 			height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
+			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		}
 
@@ -672,7 +676,8 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 		parent, err = nextRuntimeBlock(ch, nil)
 		require.NoError(err, "nextRuntimeBlock")
 
-		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		round := child.Block.Header.Round + 1
+		require.EqualValues(round, parent.Block.Header.Round, "block round")
 		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
 
 		// Check that round was finalized after 2.5*RoundTimeout blocks.
@@ -681,7 +686,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 
 		// Check that discrepancy resolution started after RoundTimeout blocks.
 		height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
+		s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		// Check that the liveness statistics were computed correctly.
 		verifyLivenessStatistics(parent)
@@ -712,7 +717,8 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 		parent, err = nextRuntimeBlock(ch, nil)
 		require.NoError(err, "nextRuntimeBlock")
 
-		require.EqualValues(child.Block.Header.Round+1, parent.Block.Header.Round, "block round")
+		round := child.Block.Header.Round + 1
+		require.EqualValues(round, parent.Block.Header.Round, "block round")
 		require.EqualValues(block.RoundFailed, parent.Block.Header.HeaderType, "block header type must be RoundFailed")
 
 		// Backup schedulers should wait for a double timeout.
@@ -721,7 +727,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 			// Check that round was finalized after 1.5*RoundTimeout blocks and that discrepancy
 			// resolution started immediately.
 			height := parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:3]}, &discrepancyEvent{false, rank}, nil)
+			s.verifyEvents(t, ctx, backend, height, &commitmentEvent{executorCommits[:3]}, &discrepancyEvent{false, rank, round}, nil)
 		default:
 			// Check that round was finalized after 2.5*RoundTimeout blocks.
 			height := parent.Height - 25*s.rt.Runtime.Executor.RoundTimeout/10
@@ -729,7 +735,7 @@ func (s *runtimeState) testRoundTimeout(t *testing.T, backend api.Backend, conse
 
 			// Check that discrepancy resolution started after RoundTimeout blocks.
 			height = parent.Height - 15*s.rt.Runtime.Executor.RoundTimeout/10
-			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank}, nil)
+			s.verifyEvents(t, ctx, backend, height, nil, &discrepancyEvent{true, rank, round}, nil)
 
 		}
 
