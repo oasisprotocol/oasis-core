@@ -337,16 +337,6 @@ func (n *Node) GetLocalStorage() storageApi.LocalBackend {
 
 // NodeHooks implementation.
 
-func (n *Node) HandlePeerTx(context.Context, []byte) error {
-	// Nothing to do here.
-	return nil
-}
-
-// HandleEpochTransitionLocked is guarded by CrossNode.
-func (n *Node) HandleEpochTransitionLocked(*committee.EpochSnapshot) {
-	// Nothing to do here.
-}
-
 // HandleNewBlockEarlyLocked is guarded by CrossNode.
 func (n *Node) HandleNewBlockEarlyLocked(*runtime.BlockInfo) {
 	// Nothing to do here.
