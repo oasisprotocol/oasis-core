@@ -91,7 +91,11 @@ func (app *rootHashApplication) tryFinalizeRoundInsideTx( //nolint: gocyclo
 
 		ctx.EmitEvent(
 			tmapi.NewEventBuilder(app.Name()).
-				TypedAttribute(&roothash.ExecutionDiscrepancyDetectedEvent{Rank: rtState.CommitmentPool.HighestRank, Timeout: timeout}).
+				TypedAttribute(&roothash.ExecutionDiscrepancyDetectedEvent{
+					Round:   round,
+					Rank:    rtState.CommitmentPool.HighestRank,
+					Timeout: timeout,
+				}).
 				TypedAttribute(&roothash.RuntimeIDAttribute{ID: rtState.Runtime.ID}),
 		)
 

@@ -1262,6 +1262,7 @@ func (n *Node) handleEvent(ctx context.Context, ev *roothash.Event) {
 	case ev.ExecutionDiscrepancyDetected != nil:
 		n.handleDiscrepancy(ctx, &discrepancyEvent{
 			height:        uint64(ev.Height),
+			round:         ev.ExecutionDiscrepancyDetected.Round,
 			rank:          ev.ExecutionDiscrepancyDetected.Rank,
 			timeout:       ev.ExecutionDiscrepancyDetected.Timeout,
 			authoritative: true,
