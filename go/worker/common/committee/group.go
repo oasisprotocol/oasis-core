@@ -52,11 +52,6 @@ func (ci *CommitteeInfo) HasRole(role scheduler.Role) bool {
 }
 
 type epoch struct {
-	epochCtx       context.Context
-	cancelEpochCtx context.CancelFunc
-	roundCtx       context.Context
-	cancelRoundCtx context.CancelFunc
-
 	// epochNumber is the sequential number of the epoch.
 	epochNumber beacon.EpochTime
 	// epochHeight is the height at which the epoch transition happened.
@@ -154,7 +149,6 @@ func (e *EpochSnapshot) Node(_ context.Context, id signature.PublicKey) (*node.N
 type Group struct {
 	sync.RWMutex
 
-	ctx      context.Context
 	identity *identity.Identity
 	runtime  runtimeRegistry.Runtime
 
@@ -176,12 +170,6 @@ func (g *Group) RoundTransition() {
 	if g.activeEpoch == nil {
 		return
 	}
-
-	(g.activeEpoch.cancelRoundCtx)()
-
-	ctx, cancel := context.WithCancel(g.activeEpoch.epochCtx)
-	g.activeEpoch.roundCtx = ctx
-	g.activeEpoch.cancelRoundCtx = cancel
 }
 
 // Suspend processes a runtime suspension that just happened.
@@ -195,8 +183,6 @@ func (g *Group) Suspend() {
 		return
 	}
 
-	// Cancel context for the previous epoch.
-	(g.activeEpoch.cancelEpochCtx)()
 	// Invalidate current epoch.
 	g.activeEpoch = nil
 }
@@ -205,11 +191,6 @@ func (g *Group) Suspend() {
 func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	g.Lock()
 	defer g.Unlock()
-
-	// Cancel context for the previous epoch.
-	if g.activeEpoch != nil {
-		(g.activeEpoch.cancelEpochCtx)()
-	}
 
 	// Invalidate current epoch. In case we cannot process this transition,
 	// this should cause the node to transition into NotReady and stay there
@@ -295,18 +276,10 @@ func (g *Group) EpochTransition(ctx context.Context, height int64) error {
 	// Freeze the committee.
 	g.nodes.Freeze(height)
 
-	// Create a new epoch and round contexts.
-	epochCtx, cancelEpochCtx := context.WithCancel(ctx)
-	roundCtx, cancelRoundCtx := context.WithCancel(epochCtx)
-
 	// Update the current epoch.
 	g.activeEpoch = &epoch{
 		epochNumber:       epochNumber,
 		epochHeight:       epochHeight,
-		epochCtx:          epochCtx,
-		cancelEpochCtx:    cancelEpochCtx,
-		roundCtx:          roundCtx,
-		cancelRoundCtx:    cancelRoundCtx,
 		executorCommittee: executorCommittee,
 		runtime:           runtime,
 	}
@@ -358,7 +331,6 @@ func NewGroup(
 	}
 
 	return &Group{
-		ctx:       ctx,
 		identity:  identity,
 		runtime:   runtime,
 		consensus: consensus,
