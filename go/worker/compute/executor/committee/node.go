@@ -395,7 +395,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	// Ask the transaction pool to get a batch of transactions for us and see if we should be
 	// proposing a new batch to other nodes.
 	batch := n.commonNode.TxPool.GetSchedulingSuggestion(rtInfo.Features.ScheduleControl.InitialBatchSize)
-	defer n.commonNode.TxPool.FinishScheduling()
 	switch {
 	case force:
 		// Batch flush timeout expired, schedule empty batch.
@@ -412,6 +411,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	default:
 		// No need to schedule a batch.
 		n.logger.Debug("not scheduling, no transactions")
+		n.commonNode.TxPool.FinishScheduling()
 		return
 	}
 
@@ -431,6 +431,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	go func() {
 		defer close(done)
 		n.startSchedulingBatch(ctx, batch)
+		n.commonNode.TxPool.FinishScheduling()
 	}()
 }
 
