@@ -35,11 +35,13 @@ func (app *rootHashApplication) processRoundTimeouts(ctx *tmapi.Context) error {
 
 func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, runtimeID common.Namespace) error {
 	ctx.Logger().Warn("round timeout expired, forcing finalization",
+		"runtime_id", runtimeID,
 		logging.LogEvent, roothash.LogEventTimerFired,
 	)
 
 	if err := app.tryFinalizeRound(ctx, runtimeID, true); err != nil {
 		ctx.Logger().Error("failed to finalize round",
+			"runtime_id", runtimeID,
 			"err", err,
 		)
 		return fmt.Errorf("failed to finalize round: %w", err)
@@ -48,7 +50,7 @@ func (app *rootHashApplication) processRoundTimeout(ctx *tmapi.Context, runtimeI
 	return nil
 }
 
-func rearmRoundTimeout(ctx *tmapi.Context, runtimeID common.Namespace, prevTimeout int64, nextTimeout int64) error {
+func rearmRoundTimeout(ctx *tmapi.Context, runtimeID common.Namespace, round uint64, prevTimeout int64, nextTimeout int64) error {
 	// Re-arm only if the round timeout has changed.
 	if prevTimeout == nextTimeout {
 		return nil
@@ -56,6 +58,7 @@ func rearmRoundTimeout(ctx *tmapi.Context, runtimeID common.Namespace, prevTimeo
 
 	ctx.Logger().Debug("re-arming round timeout",
 		"runtime_id", runtimeID,
+		"round", round,
 		"prev_timeout", prevTimeout,
 		"next_timeout", nextTimeout,
 		"height", ctx.BlockHeight()+1, // Current height is ctx.BlockHeight() + 1

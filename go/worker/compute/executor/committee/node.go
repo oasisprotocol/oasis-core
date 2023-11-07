@@ -395,7 +395,6 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	// Ask the transaction pool to get a batch of transactions for us and see if we should be
 	// proposing a new batch to other nodes.
 	batch := n.commonNode.TxPool.GetSchedulingSuggestion(rtInfo.Features.ScheduleControl.InitialBatchSize)
-	defer n.commonNode.TxPool.FinishScheduling()
 	switch {
 	case force:
 		// Batch flush timeout expired, schedule empty batch.
@@ -412,6 +411,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	default:
 		// No need to schedule a batch.
 		n.logger.Debug("not scheduling, no transactions")
+		n.commonNode.TxPool.FinishScheduling()
 		return
 	}
 
@@ -431,6 +431,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 	go func() {
 		defer close(done)
 		n.startSchedulingBatch(ctx, batch)
+		n.commonNode.TxPool.FinishScheduling()
 	}()
 }
 
@@ -830,7 +831,9 @@ func (n *Node) proposeBatch(
 	// Commit I/O and state write logs to storage.
 	storageErr := func() error {
 		start := time.Now()
-		defer storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
+		defer func() {
+			storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
+		}()
 
 		ctx, cancel := context.WithCancel(roundCtx)
 		defer cancel()
@@ -1261,8 +1264,10 @@ func (n *Node) handleEvent(ctx context.Context, ev *roothash.Event) {
 	switch {
 	case ev.ExecutionDiscrepancyDetected != nil:
 		n.handleDiscrepancy(ctx, &discrepancyEvent{
-			rank:          ev.ExecutionDiscrepancyDetected.Rank,
 			height:        uint64(ev.Height),
+			round:         ev.ExecutionDiscrepancyDetected.Round,
+			rank:          ev.ExecutionDiscrepancyDetected.Rank,
+			timeout:       ev.ExecutionDiscrepancyDetected.Timeout,
 			authoritative: true,
 		})
 	case ev.ExecutorCommitted != nil:
@@ -1351,51 +1356,45 @@ func (n *Node) estimatePoolRank(ctx context.Context, ec *commitment.ExecutorComm
 	)
 }
 
-func (n *Node) handleRoundStarted() {
-	n.logger.Debug("starting round worker",
-		"round", n.blockInfo.RuntimeBlock.Header.Round+1,
-	)
-
+func (n *Node) finalizePreviousRound() {
 	n.logger.Info("considering the round finalized",
 		"round", n.blockInfo.RuntimeBlock.Header.Round,
 		"header_hash", n.blockInfo.RuntimeBlock.Header.EncodedHash(),
 		"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
 	)
-	if n.blockInfo.RuntimeBlock.Header.HeaderType != block.Normal {
-		return
+
+	if n.proposedBatch != nil && n.blockInfo.RuntimeBlock.Header.HeaderType == block.Normal {
+		switch n.blockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
+		case false:
+			n.logger.Error("proposed batch was not finalized",
+				"header_io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+				"proposed_io_root", n.proposedBatch.proposedIORoot,
+				"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
+				"batch_size", len(n.proposedBatch.txHashes),
+			)
+		case true:
+			// Record time taken for successfully processing a batch.
+			batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.proposedBatch.batchStartTime).Seconds())
+
+			n.logger.Debug("removing processed batch from queue",
+				"batch_size", len(n.proposedBatch.txHashes),
+				"io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
+			)
+
+			// Remove processed transactions from queue.
+			n.commonNode.TxPool.HandleTxsUsed(n.proposedBatch.txHashes)
+		}
 	}
 
-	if n.proposedBatch == nil {
-		return
-	}
+	// Clear last proposal.
+	n.proposedBatch = nil
 
-	if !n.blockInfo.RuntimeBlock.Header.IORoot.Equal(&n.proposedBatch.proposedIORoot) {
-		n.logger.Error("proposed batch was not finalized",
-			"header_io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
-			"proposed_io_root", n.proposedBatch.proposedIORoot,
-			"header_type", n.blockInfo.RuntimeBlock.Header.HeaderType,
-			"batch_size", len(n.proposedBatch.txHashes),
-		)
-		return
-	}
-
-	// Record time taken for successfully processing a batch.
-	batchProcessingTime.With(n.getMetricLabels()).Observe(time.Since(n.proposedBatch.batchStartTime).Seconds())
-
-	n.logger.Debug("removing processed batch from queue",
-		"batch_size", len(n.proposedBatch.txHashes),
-		"io_root", n.blockInfo.RuntimeBlock.Header.IORoot,
-	)
-
-	// Remove processed transactions from queue.
-	n.commonNode.TxPool.HandleTxsUsed(n.proposedBatch.txHashes)
+	// Clear proposal queue.
+	n.commonNode.TxPool.ClearProposedBatch()
 }
 
-func (n *Node) handleRoundEnded() {
-	n.logger.Debug("stopping round worker",
-		"round", n.blockInfo.RuntimeBlock.Header.Round+1,
-	)
-
+// resetNodeState transitions to the StateWaitingForBatch state.
+func (n *Node) resetNodeState() {
 	switch state := n.state.(type) {
 	case StateWaitingForBatch:
 		// Nothing to do here.
@@ -1412,6 +1411,23 @@ func (n *Node) handleRoundEnded() {
 	}
 
 	n.transitionState(StateWaitingForBatch{})
+}
+
+// drainChannels clears all worker's channels.
+//
+// This ensures that channels do not accumulate obsolete data when the round worker exits
+// early due to non-membership in the executor committee or errors.
+func (n *Node) drainChannels(ctx context.Context) {
+	for {
+		select {
+		case <-n.txCh:
+		case <-n.ecCh:
+		case <-n.evCh:
+		case <-n.reselectCh:
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (n *Node) worker() {
@@ -1436,7 +1452,7 @@ func (n *Node) worker() {
 	)
 
 	// Subscribe to notifications of new transactions being available in the pool.
-	txSub, n.txCh = n.commonNode.TxPool.WatchCheckedTransactions()
+	n.txCh, txSub = n.commonNode.TxPool.WatchCheckedTransactions()
 	defer txSub.Close()
 
 	// Subscribe to gossiped executor commitments.
@@ -1476,22 +1492,22 @@ func (n *Node) worker() {
 		}
 	}()
 
-	// (Re)Start the runtime worker every time a runtime block is finalized.
-	var (
-		wg sync.WaitGroup
-		bi *runtime.BlockInfo
-	)
+	// Restart the round worker every time a runtime block is finalized.
 	for {
+		var bi *runtime.BlockInfo
+
 		func() {
-			wg.Add(1)
+			var wg sync.WaitGroup
 			defer wg.Wait()
 
 			ctx, cancel := context.WithCancel(n.ctx)
 			defer cancel()
 
+			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				n.roundWorker(ctx, bi)
+				n.roundWorker(ctx)
+				n.drainChannels(ctx)
 			}()
 
 			select {
@@ -1499,6 +1515,9 @@ func (n *Node) worker() {
 			case bi = <-n.blockInfoCh:
 			}
 		}()
+
+		// Round worker stopped, so it is safe to update the last block info.
+		n.blockInfo = bi
 
 		select {
 		case <-n.stopCh:
@@ -1509,27 +1528,34 @@ func (n *Node) worker() {
 	}
 }
 
-func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
-	if bi == nil {
+func (n *Node) roundWorker(ctx context.Context) {
+	if n.blockInfo == nil {
 		return
 	}
-	n.blockInfo = bi
-	round := bi.RuntimeBlock.Header.Round + 1
+	round := n.blockInfo.RuntimeBlock.Header.Round + 1
 
-	n.handleRoundStarted()
-	defer n.handleRoundEnded()
+	n.logger.Debug("round worker started",
+		"round", round,
+	)
+	defer n.logger.Debug("round worker stopped",
+		"round", round,
+	)
 
-	// Clear last proposal.
-	n.proposedBatch = nil
-
-	// Clear proposal queue.
-	n.commonNode.TxPool.ClearProposedBatch()
+	n.finalizePreviousRound()
+	defer n.resetNodeState()
 
 	// Prune proposals.
 	n.proposals.Prune(round)
 
 	// Need to be an executor committee member.
 	n.epoch = n.commonNode.Group.GetEpochSnapshot()
+	if epoch := n.epoch.GetEpochNumber(); epoch != n.blockInfo.Epoch {
+		n.logger.Debug("skipping round, behind common worker",
+			"epoch", epoch,
+			"block_epoch", n.blockInfo.Epoch,
+		)
+		return
+	}
 	if !n.epoch.IsExecutorMember() {
 		n.logger.Debug("skipping round, not an executor member",
 			"round", round,
@@ -1547,7 +1573,7 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 
 	// Fetch state and round results upfront.
 	var err error
-	n.rtState, n.roundResults, err = n.getRtStateAndRoundResults(ctx, bi.ConsensusBlock.Height)
+	n.rtState, n.roundResults, err = n.getRtStateAndRoundResults(ctx, n.blockInfo.ConsensusBlock.Height)
 	if err != nil {
 		n.logger.Debug("skipping round, failed to fetch state and round results",
 			"err", err,
@@ -1557,7 +1583,7 @@ func (n *Node) roundWorker(ctx context.Context, bi *runtime.BlockInfo) {
 
 	// Prepare flush timer for the primary transaction scheduler.
 	flush := false
-	flushTimer := time.NewTimer(bi.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
+	flushTimer := time.NewTimer(n.blockInfo.ActiveDescriptor.TxnScheduler.BatchFlushTimeout)
 	defer flushTimer.Stop()
 
 	// Compute node's rank when scheduling transactions.

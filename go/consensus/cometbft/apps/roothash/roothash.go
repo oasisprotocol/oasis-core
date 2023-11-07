@@ -201,6 +201,7 @@ func (app *rootHashApplication) onCommitteeChanged(ctx *tmapi.Context, state *ro
 			ctx.Logger().Debug("updating committee for runtime",
 				"runtime_id", rt.ID,
 				"epoch", epoch,
+				"committee", committee,
 			)
 
 			// Emit an empty block signaling epoch transition. This is required so that

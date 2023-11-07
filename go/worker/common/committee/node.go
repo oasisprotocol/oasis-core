@@ -127,11 +127,6 @@ var (
 // NodeHooks defines a worker's duties at common events.
 // These are called from the runtime's common node's worker.
 type NodeHooks interface {
-	// HandlePeerTx handles a transaction received from a (non-local) peer.
-	HandlePeerTx(ctx context.Context, tx []byte) error
-
-	// Guarded by CrossNode.
-	HandleEpochTransitionLocked(*EpochSnapshot)
 	// Guarded by CrossNode.
 	HandleNewBlockEarlyLocked(*runtime.BlockInfo)
 	// Guarded by CrossNode.
@@ -365,9 +360,6 @@ func (n *Node) handleEpochTransitionLocked(height int64) {
 	}
 
 	epochNumber.With(n.getMetricLabels()).Set(float64(epoch.epochNumber))
-	for _, hooks := range n.hooks {
-		hooks.HandleEpochTransitionLocked(epoch)
-	}
 }
 
 // Guarded by n.CrossNode.
@@ -376,11 +368,6 @@ func (n *Node) handleSuspendLocked(int64) {
 
 	// Suspend group.
 	n.Group.Suspend()
-
-	epoch := n.Group.GetEpochSnapshot()
-	for _, hooks := range n.hooks {
-		hooks.HandleEpochTransitionLocked(epoch)
-	}
 
 	// If the runtime has been suspended, we need to switch to checking the latest registry
 	// descriptor instead of the active one as otherwise we may miss deployment updates and never
@@ -574,12 +561,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		return
 	}
 
-	err = n.TxPool.ProcessBlock(bi)
-	if err != nil {
-		n.logger.Error("failed to process block in transaction pool",
-			"err", err,
-		)
-	}
+	n.TxPool.ProcessBlock(bi)
 
 	// Fetch incoming messages.
 	inMsgs, err := n.Consensus.RootHash().GetIncomingMessageQueue(n.ctx, &roothash.InMessageQueueRequest{
@@ -594,12 +576,7 @@ func (n *Node) handleNewBlockLocked(blk *block.Block, height int64) {
 		)
 		return
 	}
-	err = n.TxPool.ProcessIncomingMessages(inMsgs)
-	if err != nil {
-		n.logger.Error("failed to process incoming messages in transaction pool",
-			"err", err,
-		)
-	}
+	n.TxPool.ProcessIncomingMessages(inMsgs)
 
 	for _, hooks := range n.hooks {
 		hooks.HandleNewBlockLocked(bi)
