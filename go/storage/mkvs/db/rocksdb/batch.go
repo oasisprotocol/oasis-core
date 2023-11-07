@@ -37,6 +37,10 @@ type rocksdbBatch struct {
 
 // Commit implements api.Batch.
 func (ba *rocksdbBatch) Commit(root node.Root) error {
+	defer ba.bat.Destroy()
+	if ba.multipartNodes != nil {
+		defer ba.multipartNodes.Destroy()
+	}
 	ba.db.metaUpdateLock.Lock()
 	defer ba.db.metaUpdateLock.Unlock()
 

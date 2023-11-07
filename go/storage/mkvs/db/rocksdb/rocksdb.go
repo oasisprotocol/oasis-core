@@ -463,10 +463,13 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 							}
 
 							item, err := d.db.GetCF(timestampReadOptions(endRoot.Version), cf, key)
-							if err != nil || !item.Exists() {
+							if err != nil {
 								return node.Root{}, nil, err
 							}
 							defer item.Free()
+							if !item.Exists() {
+								return node.Root{}, nil, err
+							}
 
 							var log api.HashedDBWriteLog
 							if err := cbor.UnmarshalTrusted(item.Data(), &log); err != nil {
@@ -749,6 +752,7 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 	}
 
 	batch := grocksdb.NewWriteBatch()
+	defer batch.Destroy()
 	for rootHash, derivedRoots := range rootsMeta.Roots {
 		if len(derivedRoots) > 0 {
 			// Not a lone root.
