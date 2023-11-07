@@ -210,6 +210,34 @@ Core:
   (i.e. you can't use `./configure --prefix=$HOME/.local ...`) because upstream
   authors [hardcode its path][jemalloc-hardcode-path]._
 
+* (**OPTIONAL**) [rocksdb] (version 8.5.3)
+
+  # TODO: investigate clashing with jemalloc built above.
+  Alternatively set `OASIS_NO_ROCKSDB="1"` environment variable when building
+  `oasis-node` code, to build `oasis-node` without `rocksdb` support.
+
+  See official instructions on building `rocksdb` for your system: https://github.com/facebook/rocksdb/blob/main/INSTALL.md
+
+  Or use the following to build (non-portable) `rocksdb` on Ubuntu 22.04:
+  ```
+  # Install prerequsites.
+  apt install libgflags-dev libsnappy-dev libbz2-dev liblz4-dev libzstd-dev
+  # Build RocksDB.
+  ROCKSDB_VERSION=8.5.3
+  ROCKSDB_CHECKSUM=ed4230500b9ca20bc7918c32166b2d0d46a8695c59991821daa586d55689d785
+  pushd $(mktemp -d)
+  wget -O rocksdb.tar.gz \
+    https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz
+  # Ensure checksum matches.
+  echo "${ROCKSDB_CHECKSUM}  rocksdb.tar.gz" | sha256sum -c
+  tar -zxf rocksdb.tar.gz
+  cd rocksdb-${ROCKSDB_VERSION}
+  DEBUG_LEVEL=0 ROCKSDB_DISABLE_JEMALLOC=1 make -j4 shared_lib
+  sudo make install-shared
+  sudo ldconfig
+  popd
+  ```
+
 In the following instructions, the top-level directory is the directory
 where the code has been checked out.
 
