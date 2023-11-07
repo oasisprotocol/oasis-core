@@ -309,7 +309,7 @@ func testConsensus(t *testing.T, node *testNode) {
 
 func testConsensusClient(t *testing.T, node *testNode) {
 	// Create a client backend connected to the local node's internal socket.
-	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"),
+	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, cmdCommon.InternalSocketName),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err, "Dial")
 
@@ -346,7 +346,7 @@ func testScheduler(t *testing.T, node *testNode) {
 
 func testSchedulerClient(t *testing.T, node *testNode) {
 	// Create a client backend connected to the local node's internal socket.
-	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"),
+	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, cmdCommon.InternalSocketName),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err, "Dial")
 	defer conn.Close()
@@ -361,7 +361,7 @@ func testStaking(t *testing.T, node *testNode) {
 
 func testStakingClient(t *testing.T, node *testNode) {
 	// Create a client backend connected to the local node's internal socket.
-	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"),
+	conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, cmdCommon.InternalSocketName),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err, "Dial")
 	defer conn.Close()
@@ -379,7 +379,7 @@ func testRootHash(t *testing.T, node *testNode) {
 	// Over gRPC.
 	t.Run("OverGrpc", func(t *testing.T) {
 		// Create a client backend connected to the local node's internal socket.
-		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"),
+		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, cmdCommon.InternalSocketName),
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 		require.NoError(t, err, "Dial")
 		defer conn.Close()
@@ -398,7 +398,7 @@ func testGovernance(t *testing.T, node *testNode) {
 	// Over gRPC.
 	t.Run("OverGrpc", func(t *testing.T) {
 		// Create a client backend connected to the local node's internal socket.
-		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"),
+		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, cmdCommon.InternalSocketName),
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 		require.NoError(t, err, "Dial")
 		defer conn.Close()
@@ -435,7 +435,7 @@ func testRuntimeClient(t *testing.T, node *testNode) {
 	// Over gRPC.
 	t.Run("OverGrpc", func(t *testing.T) {
 		// Create a client backend connected to the local node's internal socket.
-		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, "internal.sock"),
+		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, cmdCommon.InternalSocketName),
 			grpc.WithTransportCredentials(insecure.NewCredentials()))
 		require.NoError(t, err, "Dial")
 		defer conn.Close()
