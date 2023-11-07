@@ -831,7 +831,9 @@ func (n *Node) proposeBatch(
 	// Commit I/O and state write logs to storage.
 	storageErr := func() error {
 		start := time.Now()
-		defer storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
+		defer func() {
+			storageCommitLatency.With(n.getMetricLabels()).Observe(time.Since(start).Seconds())
+		}()
 
 		ctx, cancel := context.WithCancel(roundCtx)
 		defer cancel()
