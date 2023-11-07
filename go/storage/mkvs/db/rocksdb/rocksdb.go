@@ -310,18 +310,20 @@ func (d *rocksdbNodeDB) checkRoot(root node.Root) error {
 	rootHash := node.TypedHashFromRoot(root)
 	cf := d.getColumnFamilyForRoot(root)
 
-	s, err := d.db.GetCF(timestampReadOptions(root.Version), cf, rootNodeKeyFmt.Encode(&rootHash))
-	if err != nil {
-		d.logger.Error("failed to check root existence",
-			"err", err,
-		)
-		return fmt.Errorf("mkvs/rocksdb: failed to get root from backing store: %w", err)
-	}
-	defer s.Free()
-	if !s.Exists() {
-		return api.ErrRootNotFound
-	}
-	return nil
+	return withTimestampRead(root.Version, func(readOpts *grocksdb.ReadOptions) error {
+		s, err := d.db.GetCF(readOpts, cf, rootNodeKeyFmt.Encode(&rootHash))
+		if err != nil {
+			d.logger.Error("failed to check root existence",
+				"err", err,
+			)
+			return fmt.Errorf("mkvs/rocksdb: failed to get root from backing store: %w", err)
+		}
+		defer s.Free()
+		if !s.Exists() {
+			return api.ErrRootNotFound
+		}
+		return nil
+	})
 }
 
 // Implements api.NodeDB.
@@ -345,19 +347,23 @@ func (d *rocksdbNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, e
 	}
 
 	cf := d.getColumnFamilyForRoot(root)
-	s, err := d.db.GetCF(timestampReadOptions(root.Version), cf, nodeKeyFmt.Encode(&ptr.Hash))
-	if err != nil {
-		return nil, fmt.Errorf("mkvs/rocksdb: failed to get node from backing store: %w", err)
-	}
-	defer s.Free()
-	if !s.Exists() {
-		return nil, api.ErrNodeNotFound
-	}
-
 	var n node.Node
-	n, err = node.UnmarshalBinary(s.Data())
-	if err != nil {
-		return nil, fmt.Errorf("mkvs/rocksdb: failed to unmarshal node: %w", err)
+	if err := withTimestampRead(root.Version, func(readOpts *grocksdb.ReadOptions) error {
+		s, err := d.db.GetCF(readOpts, cf, nodeKeyFmt.Encode(&ptr.Hash))
+		if err != nil {
+			return fmt.Errorf("mkvs/rocksdb: failed to get node from backing store: %w", err)
+		}
+		defer s.Free()
+		if !s.Exists() {
+			return api.ErrNodeNotFound
+		}
+		n, err = node.UnmarshalBinary(s.Data())
+		if err != nil {
+			return fmt.Errorf("mkvs/rocksdb: failed to unmarshal node: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return n, nil
@@ -418,7 +424,9 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 		wl, err := func() (writelog.Iterator, error) {
 			// Iterate over all write logs that result in the current item.
 			prefix := writeLogKeyFmt.Encode(endRoot.Version, &curItem.endRootHash)
-			it := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(endRoot.Version), cf), prefix)
+			ro := timestampReadOptions(endRoot.Version)
+			defer ro.Destroy()
+			it := prefixIterator(d.db.NewIteratorCF(ro, cf), prefix)
 			defer it.Close()
 
 			for ; it.Valid(); it.Next() {
@@ -462,7 +470,9 @@ func (d *rocksdbNodeDB) GetWriteLog(ctx context.Context, startRoot, endRoot node
 								Hash:      nextItem.logRoots[index].Hash(),
 							}
 
-							item, err := d.db.GetCF(timestampReadOptions(endRoot.Version), cf, key)
+							ro := timestampReadOptions(endRoot.Version)
+							defer ro.Destroy()
+							item, err := d.db.GetCF(ro, cf, key)
 							if err != nil {
 								return node.Root{}, nil, err
 							}
@@ -678,7 +688,9 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error { // nolint: gocyclo
 				if err = func() error {
 					cf := d.getColumnFamilyForType(rootHash.Type())
 					rootWriteLogsPrefix := writeLogKeyFmt.Encode(version, &rootHash)
-					wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), cf), rootWriteLogsPrefix)
+					ro := timestampReadOptions(version)
+					defer ro.Destroy()
+					wit := prefixIterator(d.db.NewIteratorCF(ro, cf), rootWriteLogsPrefix)
 					defer wit.Close()
 
 					for ; wit.Valid(); wit.Next() {
@@ -771,7 +783,9 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 			h := n.GetHash()
 			cf := d.getColumnFamilyForRoot(root)
 
-			s, ts, err := d.db.GetCFWithTS(timestampReadOptions(root.Version), cf, nodeKeyFmt.Encode(&h))
+			itRo := timestampReadOptions(root.Version)
+			defer itRo.Destroy()
+			s, ts, err := d.db.GetCFWithTS(itRo, cf, nodeKeyFmt.Encode(&h))
 			if err != nil {
 				return false
 			}
@@ -803,7 +817,9 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 	// Prune all write logs in version.
 	if !d.discardWriteLogs {
 		discardLogs := func(cf *grocksdb.ColumnFamilyHandle) {
-			wit := prefixIterator(d.db.NewIteratorCF(timestampReadOptions(version), cf), writeLogKeyFmt.Encode(version))
+			ro := timestampReadOptions(version)
+			defer ro.Destroy()
+			wit := prefixIterator(d.db.NewIteratorCF(ro, cf), writeLogKeyFmt.Encode(version))
 			defer wit.Close()
 
 			for ; wit.Valid(); wit.Next() {

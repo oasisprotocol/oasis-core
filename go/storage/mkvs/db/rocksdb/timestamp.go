@@ -75,6 +75,14 @@ func timestampReadOptions(version uint64) *grocksdb.ReadOptions {
 	return readOpts
 }
 
+// withTimestampRead executes the given function with the timestamp read options and destroys them.
+func withTimestampRead(version uint64, fn func(*grocksdb.ReadOptions) error) error {
+	readOpts := timestampReadOptions(version)
+	defer readOpts.Destroy()
+
+	return fn(readOpts)
+}
+
 func timestampFromVersion(version uint64) [timestampSize]byte {
 	var ts [timestampSize]byte
 	binary.LittleEndian.PutUint64(ts[:], version)

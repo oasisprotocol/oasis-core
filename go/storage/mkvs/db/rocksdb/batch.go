@@ -224,14 +224,19 @@ func (s *rocksdbSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
 	s.batch.updatedNodes = append(s.batch.updatedNodes, updatedNode{Hash: h})
 	nodeKey := nodeKeyFmt.Encode(&h)
 	if s.batch.multipartNodes != nil {
-		item, err := s.batch.db.db.GetCF(timestampReadOptions(s.batch.version), cf, nodeKey)
-		if err != nil {
+		if err = withTimestampRead(s.batch.version, func(readOpts *grocksdb.ReadOptions) error {
+			item, err := s.batch.db.db.GetCF(readOpts, cf, nodeKey)
+			if err != nil {
+				return err
+			}
+			defer item.Free()
+			if !item.Exists() {
+				th := node.TypedHashFromParts(s.batch.rootType, h)
+				s.batch.multipartNodes.Put(multipartRestoreNodeLogKeyFmt.Encode(&th), []byte{})
+			}
+			return nil
+		}); err != nil {
 			return err
-		}
-		defer item.Free()
-		if !item.Exists() {
-			th := node.TypedHashFromParts(s.batch.rootType, h)
-			s.batch.multipartNodes.Put(multipartRestoreNodeLogKeyFmt.Encode(&th), []byte{})
 		}
 	}
 

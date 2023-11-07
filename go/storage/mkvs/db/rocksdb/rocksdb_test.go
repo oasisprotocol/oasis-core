@@ -113,13 +113,15 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 	nodeKeys := keySet{}
 
 	loadNodes := func(cf *grocksdb.ColumnFamilyHandle) {
-		it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(2), cf), nil)
-		defer it.Close()
-		for ; it.Valid(); it.Next() {
-			if bytes.HasPrefix(it.Key(), nodePrefix) {
-				nodeKeys[string(it.Key())] = struct{}{}
+		withTimestampRead(2, func(readOpts *grocksdb.ReadOptions) error {
+			it := prefixIterator(rocksdb.db.NewIteratorCF(readOpts, cf), nil)
+			defer it.Close()
+			for ; it.Valid(); it.Next() {
+				if bytes.HasPrefix(it.Key(), nodePrefix) {
+					nodeKeys[string(it.Key())] = struct{}{}
+				}
 			}
-		}
+		})
 	}
 	loadNodes(rocksdb.cfIOTree)
 	loadNodes(rocksdb.cfStateTree)
@@ -134,17 +136,19 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 	}
 
 	checkNodes := func(cf *grocksdb.ColumnFamilyHandle) {
-		it := prefixIterator(rocksdb.db.NewIteratorCF(timestampReadOptions(version), cf), nil)
-		defer it.Close()
-		for ; it.Valid(); it.Next() {
-			key := it.Key()
-			if !bytes.HasPrefix(key, nodePrefix) {
-				continue
+		withTimestampRead(version, func(readOpts *grocksdb.ReadOptions) error {
+			it := prefixIterator(rocksdb.db.NewIteratorCF(readOpts, cf), nil)
+			defer it.Close()
+			for ; it.Valid(); it.Next() {
+				key := it.Key()
+				if !bytes.HasPrefix(key, nodePrefix) {
+					continue
+				}
+				_, ok := keySet[string(key)]
+				require.Equal(true, ok, "unexpected node in db")
+				delete(notVisited, string(key))
 			}
-			_, ok := keySet[string(key)]
-			require.Equal(true, ok, "unexpected node in db")
-			delete(notVisited, string(key))
-		}
+		})
 	}
 	checkNodes(rocksdb.cfIOTree)
 	checkNodes(rocksdb.cfStateTree)
