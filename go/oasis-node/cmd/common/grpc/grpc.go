@@ -3,7 +3,6 @@ package grpc
 
 import (
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -64,11 +63,6 @@ func NewServerTCP(cert *tls.Certificate, installWrapper bool) (*cmnGrpc.Server, 
 // This internally takes a snapshot of the current global tracer, so
 // make sure you initialize the global tracer before calling this.
 func NewServerLocal(installWrapper bool) (*cmnGrpc.Server, error) {
-	dataDir := common.DataDir()
-	if dataDir == "" {
-		return nil, errors.New("data directory must be set")
-	}
-
 	config := &cmnGrpc.ServerConfig{
 		Name:           "internal",
 		Path:           common.InternalSocketPath(),
