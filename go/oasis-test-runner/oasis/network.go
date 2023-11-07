@@ -659,8 +659,7 @@ func (net *Network) startOasisNode(
 		if node.customGrpcSocketPath == "" {
 			node.customGrpcSocketPath = net.generateTempSocketPath(node.Name)
 		}
-		extraArgs = extraArgs.debugDontBlameOasis()
-		extraArgs = extraArgs.grpcDebugGrpcInternalSocketPath(node.customGrpcSocketPath)
+		cfg.Common.InternalSocketPath = node.customGrpcSocketPath
 	}
 	if node.consensusStateSync != nil {
 		cfg.Consensus.StateSync.Enabled = true

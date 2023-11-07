@@ -5,6 +5,8 @@ package config
 type Config struct {
 	// Node's data directory.
 	DataDir string `yaml:"data_dir"`
+	// Path to the node's internal unix socket.
+	InternalSocketPath string `yaml:"internal_socket_path,omitempty"`
 	// Logging configuration options.
 	Log LogConfig `yaml:"log,omitempty"`
 	// Debug configuration options (do not use).
