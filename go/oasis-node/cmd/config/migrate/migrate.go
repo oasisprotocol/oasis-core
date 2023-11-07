@@ -666,6 +666,11 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 			mDebug["allow_root"] = allow_root
 			delete(m(debug), "allow_root")
 		}
+
+		if socketPath, ok := m(m(m(debug)["grpc"])["internal"])["socket_path"]; ok {
+			m(newCfg["common"])["internal_socket_path"] = socketPath
+			delete(m(debug), "grpc")
+		}
 	}
 
 	pprof, ok := oldCfg["pprof"]

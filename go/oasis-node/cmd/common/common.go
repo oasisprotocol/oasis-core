@@ -37,6 +37,9 @@ const (
 	// RequiredRlimit is the minimum required RLIMIT_NOFILE as too low of a
 	// limit can cause problems with BadgerDB.
 	RequiredRlimit = 50_000
+
+	// InternalSocketName is the default name of the internal gRPC socket.
+	InternalSocketName = "internal.sock"
 )
 
 var (
@@ -55,6 +58,14 @@ var (
 // DataDir returns the data directory iff one is set.
 func DataDir() string {
 	return config.GlobalConfig.Common.DataDir
+}
+
+// InternalSocketPath returns the path to the node's internal unix socket.
+func InternalSocketPath() string {
+	if config.GlobalConfig.Common.InternalSocketPath != "" {
+		return config.GlobalConfig.Common.InternalSocketPath
+	}
+	return filepath.Join(DataDir(), InternalSocketName)
 }
 
 // IsNodeCmd returns true iff the current command is the ekiden node.

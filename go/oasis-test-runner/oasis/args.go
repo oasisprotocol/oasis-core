@@ -102,14 +102,6 @@ func (args *argBuilder) grpcLogDebug() *argBuilder {
 	return args
 }
 
-func (args *argBuilder) grpcDebugGrpcInternalSocketPath(path string) *argBuilder {
-	args.vec = append(args.vec, Argument{
-		Name:   grpc.CfgDebugGrpcInternalSocketPath,
-		Values: []string{path},
-	})
-	return args
-}
-
 func (args *argBuilder) iasDebugMock() *argBuilder {
 	args.vec = append(args.vec, Argument{Name: "ias.debug.mock"})
 	return args

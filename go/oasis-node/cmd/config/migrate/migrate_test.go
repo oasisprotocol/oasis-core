@@ -491,6 +491,45 @@ consensus:
         - "asdf@1.2.3.4:26656"
 `
 
+// Simple config with internal socket override.
+const testInternalSocketOverrideConfigRaw = `
+debug:
+  dont_blame_oasis: true
+  grpc:
+    internal:
+      socket_path: /node/custom-internal.sock
+
+datadir: /node/data
+
+log:
+  level:
+    default: debug
+    tendermint: debug
+    tendermint/context: error
+  format: JSON
+
+genesis:
+  file: /node/etc/genesis.json
+
+consensus:
+  tendermint:
+    p2p:
+      seed:
+        - "E27F6B7A350B4CC2B48A6CBE94B0A02B0DCB0BF3@35.199.49.168:26656"
+
+runtime:
+  mode: client
+  paths:
+    - /node/runtime/cipher-paratime-2.6.2.orc
+    - /node/runtime/emerald-paratime-10.0.0.orc
+    - /node/runtime/sapphire-paratime-0.4.0.orc
+
+worker:
+  storage:
+    checkpointer:
+      enabled: true
+`
+
 func prepareTest(require *require.Assertions, configIn string) config.Config {
 	// Prepare temporary directory and populate it with the test config file.
 	tempDir, err := os.MkdirTemp("", "oasis-node-config_migrate_test_")
@@ -777,4 +816,25 @@ func TestConfigMigrationDocsSentry(t *testing.T) {
 	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
 	require.Equal(newConfig.P2P.Seeds[1], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:9200")
 	require.Equal(newConfig.Consensus.SentryUpstreamAddresses[0], "INSERT_P2P_PUBKEY_HERE@1.2.3.4:26656")
+}
+
+func TestConfigMigrationSocketOverride(t *testing.T) {
+	require := require.New(t)
+	newConfig := prepareTest(require, testInternalSocketOverrideConfigRaw)
+
+	// Now check if the config struct fields actually match the original state.
+	require.Equal(newConfig.Mode, config.ModeClient)
+	require.Equal(newConfig.Common.DataDir, "/node/data")
+	require.Equal(newConfig.Common.Log.Format, "JSON")
+	require.Equal(newConfig.Common.Log.Level["default"], "debug")
+	require.Equal(newConfig.Common.Log.Level["cometbft"], "debug")
+	require.Equal(newConfig.Common.Log.Level["cometbft/context"], "error")
+	require.Equal(newConfig.Genesis.File, "/node/etc/genesis.json")
+	require.Equal(newConfig.P2P.Seeds[0], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:26656")
+	require.Equal(newConfig.P2P.Seeds[1], "H6u9MtuoWRKn5DKSgarj/dzr2Z9BsjuRHgRAoXITOcU=@35.199.49.168:9200")
+	require.Equal(newConfig.Runtime.Paths[0], "/node/runtime/cipher-paratime-2.6.2.orc")
+	require.Equal(newConfig.Runtime.Paths[1], "/node/runtime/emerald-paratime-10.0.0.orc")
+	require.Equal(newConfig.Runtime.Paths[2], "/node/runtime/sapphire-paratime-0.4.0.orc")
+	require.Equal(newConfig.Storage.Checkpointer.Enabled, true)
+	require.Equal(newConfig.Common.InternalSocketPath, "/node/custom-internal.sock")
 }

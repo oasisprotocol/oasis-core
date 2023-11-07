@@ -21,7 +21,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
-	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 )
@@ -504,7 +503,7 @@ func nodeLogPath(dir *env.Dir) string {
 }
 
 func internalSocketPath(dir *env.Dir) string {
-	return filepath.Join(dir.String(), grpc.LocalSocketFilename)
+	return filepath.Join(dir.String(), cmdCommon.InternalSocketName)
 }
 
 func nodeIdentityKeyPath(dir *env.Dir) string {
