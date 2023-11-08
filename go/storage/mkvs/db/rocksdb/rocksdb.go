@@ -87,6 +87,7 @@ var (
 var (
 	defaultWriteOptions = grocksdb.NewDefaultWriteOptions()
 	defaultReadOptions  = grocksdb.NewDefaultReadOptions()
+	defaultFlushOptions = grocksdb.NewDefaultFlushOptions()
 )
 
 const (
@@ -989,8 +990,7 @@ func (d *rocksdbNodeDB) Size() (uint64, error) {
 }
 
 func (d *rocksdbNodeDB) Sync() error {
-	opts := grocksdb.NewDefaultFlushOptions()
-	return d.db.FlushCFs([]*grocksdb.ColumnFamilyHandle{d.cfMetadata, d.cfIOTree, d.cfStateTree}, opts)
+	return d.db.FlushCFs([]*grocksdb.ColumnFamilyHandle{d.cfMetadata, d.cfIOTree, d.cfStateTree}, defaultFlushOptions)
 }
 
 func (d *rocksdbNodeDB) Close() {
