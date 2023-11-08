@@ -1,7 +1,10 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
+
 	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.2-oasis1
+	// Temp.
+	github.com/linxGnu/grocksdb => github.com/ptrus/grocksdb v0.0.0-20231108081122-7a5267edc303
 
 	// v1.5.0 has broken uint parsing, use my commit with fixes instead until
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
