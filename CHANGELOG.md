@@ -12,6 +12,53 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.3 (2023-11-08)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- config: add option to override internal unix socket path
+  ([#5427](https://github.com/oasisprotocol/oasis-core/issues/5427))
+
+  Previously the UNIX socket path could only be overriden via a debug option
+  which also required the general "don't blame Oasis" to be set. Since this
+  option can be generally useful in production environments it is now supported
+  in the config file. The socket path can be set under
+  `common.internal_socket_path`, and is not considered a debug option anymore.
+
+### Bug Fixes
+
+- go/consensus: Do not crash on nil result from Commit
+  ([#5423](https://github.com/oasisprotocol/oasis-core/issues/5423))
+
+  The Commit function can return both a nil error and a nil result in case
+  the given block is not available yet.
+
+- go/worker/compute/executor: Clear channels when not in the committee
+  ([#5426](https://github.com/oasisprotocol/oasis-core/issues/5426))
+
+- go/runtime/host/multi: Propagate special requests to next version
+  ([#5433](https://github.com/oasisprotocol/oasis-core/issues/5433))
+
+  Previously periodic consensus sync requests were not propagated to the
+  next (e.g. upcoming) runtime version. This could result in the runtime's
+  consensus view going stale which would make the attestations too old so
+  they would be rejected during scheduling.
+
+  Additionally, key manager update requests should also be propagated to
+  ensure the runtime is ready immediately when activated, avoiding any
+  potential race conditions.
+
+### Internal Changes
+
+- Install setuptools to make Towncrier fork work with Python 3.12
+  ([#5421](https://github.com/oasisprotocol/oasis-core/issues/5421))
+
 ## 23.0.2 (2023-10-22)
 
 | Protocol          | Version   |
