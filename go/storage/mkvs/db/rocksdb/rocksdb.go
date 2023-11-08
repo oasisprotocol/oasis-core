@@ -105,13 +105,14 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		readOnly:         cfg.ReadOnly,
 	}
 
-	// XXX: Most of these were taken from Cosmos-SDK RocksDB impl.
-	// Experiment/modify if needed. Most of these can be adjusted
-	// on a live database.
-	// Also see: https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
+	// XXX: The options bellow were taken from a combination of:
+	// - Cosmos-SDK RocksDB implementation
+	// - https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
+	// - https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning
+	// Experiment/modify if needed.
 
 	// Create options for the metadata column family.
-	// TODO: Consider some tuning for meta options.
+	// TODO: Consider also tuning some options of the metadata CF (although this is small compared to nodes CFs).
 	optsMeta := grocksdb.NewDefaultOptions()
 	optsMeta.SetCreateIfMissing(true)
 	optsMeta.SetCreateIfMissingColumnFamilies(true)
@@ -120,40 +121,50 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	// TODO: Consider separate options for state vs. io.
 	optsNodes := grocksdb.NewDefaultOptions()
 	optsNodes.SetCreateIfMissing(true)
-
 	optsNodes.SetComparator(createTimestampComparator())
 	optsNodes.IncreaseParallelism(runtime.NumCPU())
+
+	// General options.
+	// https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#other-general-options
+	optsNodes.SetLevelCompactionDynamicLevelBytes(true)
+	optsNodes.SetBytesPerSync(1048576) // 1 MB.
 	optsNodes.OptimizeLevelStyleCompaction(512 * 1024 * 1024)
 	optsNodes.SetTargetFileSizeMultiplier(2)
-	optsNodes.SetLevelCompactionDynamicLevelBytes(true)
 
 	bbto := grocksdb.NewDefaultBlockBasedTableOptions()
 	bbto.SetBlockSize(32 * 1024)
+	bbto.SetPinL0FilterAndIndexBlocksInCache(true)
+	// Configure block cache. Recommendation is 1/3 of memory budget.
+	// https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
 	if cfg.MaxCacheSize == 0 {
-		// Default to 64mb block cache size if not configured.
-		bbto.SetBlockCache(grocksdb.NewLRUCache(64 * 1024 * 1024))
+		// Default to 128mb block cache size if not configured.
+		bbto.SetBlockCache(grocksdb.NewLRUCache(128 * 1024 * 1024))
 	} else {
 		bbto.SetBlockCache(grocksdb.NewLRUCache(uint64(cfg.MaxCacheSize)))
 	}
+
+	// Configure query filter.
+	// https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#bloom-filters
+	// http://rocksdb.org/blog/2021/12/29/ribbon-filter.html
 	bbto.SetFilterPolicy(grocksdb.NewRibbonHybridFilterPolicy(9.9, 1))
+	bbto.SetOptimizeFiltersForMemory(true)
+	// https://github.com/facebook/rocksdb/wiki/Index-Block-Format#index_type--kbinarysearchwithfirstkey
 	bbto.SetIndexType(grocksdb.KBinarySearchWithFirstKey)
+
 	optsNodes.SetBlockBasedTableFactory(bbto)
+
+	// Configure compression.
+	// https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#compression
+	optsNodes.SetCompression(grocksdb.LZ4Compression)
+	optsNodes.SetBottommostCompression(grocksdb.ZSTDCompression)
+
+	// Configure ZSTD (follows Cosmos-SDK values).
+	compressOpts := grocksdb.NewDefaultCompressionOptions()
+	compressOpts.MaxDictBytes = 110 * 1024 // 110KB - typical size for ZSTD.
+	compressOpts.Level = 12                // Higher compression.
+	optsNodes.SetBottommostCompressionOptions(compressOpts, true)
+	optsNodes.SetBottommostCompressionOptionsZstdMaxTrainBytes(compressOpts.MaxDictBytes*100, true) // 100 * dict size.
 	optsNodes.SetCompressionOptionsParallelThreads(4)
-
-	/*
-		// Apparently with dict compression the file writer doesn't report file size:
-		// https://github.com/facebook/rocksdb/issues/11146
-		// compression options at bottommost level
-		opts.SetBottommostCompression(grocksdb.ZSTDCompression)
-
-		compressOpts := grocksdb.NewDefaultCompressionOptions()
-		compressOpts.MaxDictBytes = 112640 // 110k
-		compressOpts.Level = 12
-
-		opts.SetBottommostCompressionOptions(compressOpts, true)
-		opts.SetBottommostCompressionOptionsZstdMaxTrainBytes(compressOpts.MaxDictBytes*100, true)
-
-	*/
 
 	var err error
 	var cfHandles []*grocksdb.ColumnFamilyHandle
