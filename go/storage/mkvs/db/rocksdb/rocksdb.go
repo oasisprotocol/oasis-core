@@ -34,6 +34,8 @@ var (
 	// rootsMetadataKeyFmt is the key format for roots metadata. The key format is (version).
 	//
 	// Value is CBOR-serialized rootsMetadata.
+	// TODO: The rootsMetadata is one per version, which means it can also get quite large,
+	// maybe use same db options as for nodes CFs? (minus the timestamps).
 	rootsMetadataKeyFmt = keyformat.New(0x00, uint64(0))
 
 	// rootUpdatedNodesKeyFmt is the key format for the pending updated nodes for the
@@ -271,12 +273,12 @@ func (d *rocksdbNodeDB) load() error {
 
 	// Load metadata.
 	item, err := d.db.Get(defaultReadOptions, metadataKeyFmt.Encode())
-	switch err {
-	case nil:
-		if !item.Exists() {
-			break
-		}
-		defer item.Free()
+	if err != nil {
+		return err
+	}
+	defer item.Free()
+	switch {
+	case item.Exists():
 
 		// Metadata already exists, just load it and verify that it is
 		// compatible with what we have here.
@@ -296,16 +298,14 @@ func (d *rocksdbNodeDB) load() error {
 				d.meta.value.Namespace,
 			)
 		}
-		return nil
 	default:
-		return err
-	}
+		// No metadata exists, create some.
+		d.meta.value.Version = dbVersion
+		d.meta.value.Namespace = d.namespace
+		if err = d.meta.save(d.db); err != nil {
+			return err
+		}
 
-	// No metadata exists, create some.
-	d.meta.value.Version = dbVersion
-	d.meta.value.Namespace = d.namespace
-	if err = d.meta.save(d.db); err != nil {
-		return err
 	}
 
 	return nil
@@ -803,6 +803,7 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 			}
 			defer s.Free()
 			if !s.Exists() {
+				ts.Free()
 				return false
 			}
 
@@ -825,6 +826,9 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 
 		batch.Delete(rootNodeKeyFmt.Encode(&rootHash))
 	}
+
+	// Prune roots metadata.
+	batch.Delete(rootsMetadataKeyFmt.Encode(version))
 
 	// Prune all write logs in version.
 	if !d.discardWriteLogs {
