@@ -143,32 +143,67 @@ func (agg *Aggregate) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 	return agg.active.host.GetCapabilityTEE()
 }
 
+// shouldPropagateToNextVersion checks whether the given runtime request should also be propagated
+// to the next version that is pending activation.
+func shouldPropagateToNextVersion(body *protocol.Body) bool {
+	switch {
+	case body.RuntimeConsensusSyncRequest != nil:
+		// Consensus view of the next version should be up to date as otherwise signed attestations
+		// will be stale, resulting in them being rejected by the consensus layer.
+		return true
+	case body.RuntimeKeyManagerPolicyUpdateRequest != nil,
+		body.RuntimeKeyManagerStatusUpdateRequest != nil,
+		body.RuntimeKeyManagerQuotePolicyUpdateRequest != nil:
+		// Key manager updates should be propagated so that the runtime is ready when activated.
+		return true
+	default:
+		return false
+	}
+}
+
 // Call implements host.Runtime.
-func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
-	callFn := func() error {
+func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+	var (
+		activeHost host.Runtime
+		nextHost   host.Runtime
+	)
+	getHostsFn := func() error {
 		agg.l.RLock()
+		defer agg.l.RUnlock()
+
 		if agg.active == nil {
-			agg.l.RUnlock()
 			return ErrNoActiveVersion
 		}
-		host := agg.active.host
-		// Take care to release lock before calling into the runtime as otherwise this could lead
-		// to a deadlock in case the runtime makes a call that acquires the cross node lock and at
-		// the same time SetVersion is being called to update the version with the cross node lock
-		// acquired.
-		agg.l.RUnlock()
+		activeHost = agg.active.host
 
-		rsp, err = host.Call(ctx, body)
-		if err != nil {
-			// All protocol-level errors are permanent.
-			return backoff.Permanent(err)
+		if agg.next != nil {
+			nextHost = agg.next.host
 		}
+
 		return nil
 	}
-
 	// Retry call in case the runtime is not yet ready.
-	err = backoff.Retry(callFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
-	return
+	err := backoff.Retry(getHostsFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	// Take care to release lock before calling into the runtime as otherwise this could lead to a
+	// deadlock in case the runtime makes a call that acquires the cross node lock and at the same
+	// time SetVersion is being called to update the version with the cross node lock acquired.
+
+	// Check if request should be propagated to the next version.
+	if nextHost != nil && shouldPropagateToNextVersion(body) {
+		_, err = nextHost.Call(ctx, body)
+		if err != nil {
+			agg.logger.Warn("failed to propagate runtime request to next version",
+				"id", agg.ID(),
+				"err", err,
+			)
+		}
+	}
+
+	return activeHost.Call(ctx, body)
 }
 
 // UpdateCapabilityTEE implements host.Runtime.
