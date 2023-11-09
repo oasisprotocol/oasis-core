@@ -106,14 +106,15 @@ func (ah *aggregatedHost) stopPassthrough() {
 type Aggregate struct {
 	l sync.RWMutex
 
-	id     common.Namespace
-	logger *logging.Logger
+	id common.Namespace
 
 	hosts  map[version.Version]*aggregatedHost
 	active *aggregatedHost
 	next   *aggregatedHost
 
 	notifier *pubsub.Broker
+
+	logger *logging.Logger
 }
 
 // ID implements host.Runtime.
@@ -197,7 +198,6 @@ func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (*protocol.
 		_, err = nextHost.Call(ctx, body)
 		if err != nil {
 			agg.logger.Warn("failed to propagate runtime request to next version",
-				"id", agg.ID(),
 				"err", err,
 			)
 		}
@@ -293,7 +293,6 @@ func (agg *Aggregate) SetVersion(active version.Version, next *version.Version) 
 	defer agg.l.Unlock()
 
 	agg.logger.Info("set version",
-		"id", agg.ID(),
 		"active", active,
 		"next", next,
 	)
@@ -312,7 +311,6 @@ func (agg *Aggregate) setActiveVersionLocked(version version.Version) error {
 	// Ensure that we know about the new version.
 	if next == nil {
 		agg.logger.Error("SetVersion: unknown version",
-			"id", agg.ID(),
 			"version", version,
 		)
 
@@ -345,7 +343,6 @@ func (agg *Aggregate) setActiveVersionLocked(version version.Version) error {
 			// the part that does all the work is async.  Log something.
 			agg.logger.Error("SetVersion: failed to start sub-host",
 				"err", err,
-				"id", agg.ID(),
 				"version", version,
 			)
 		}
@@ -369,7 +366,6 @@ func (agg *Aggregate) stopActiveLocked() {
 	}
 
 	agg.logger.Debug("stopActiveLocked",
-		"id", agg.ID(),
 		"version", agg.active.version,
 	)
 
@@ -392,7 +388,6 @@ func (agg *Aggregate) stopActiveLocked() {
 			continue
 		}
 		agg.logger.Debug("stopActiveLocked: stopped old sub-host",
-			"id", agg.ID(),
 			"version", agg.active.version,
 		)
 		break
@@ -419,7 +414,6 @@ func (agg *Aggregate) setNextVersionLocked(maybeVersion *version.Version) error 
 	// Ensure that we know about the next version.
 	if next == nil {
 		agg.logger.Warn("unsupported next version",
-			"id", agg.ID(),
 			"version", version,
 		)
 		// Active version must be unaffected.
@@ -440,7 +434,6 @@ func (agg *Aggregate) setNextVersionLocked(maybeVersion *version.Version) error 
 
 		// Warn in case the next version is changed but the previous one was not activated yet.
 		agg.logger.Warn("overwriting next version without activation",
-			"id", agg.ID(),
 			"version", version,
 			"previous_version", agg.next.version,
 		)
@@ -453,7 +446,6 @@ func (agg *Aggregate) setNextVersionLocked(maybeVersion *version.Version) error 
 		// the part that does all the work is async.  Log something.
 		agg.logger.Error("failed to start next version sub-host",
 			"err", err,
-			"id", agg.ID(),
 			"version", version,
 		)
 	}
@@ -478,7 +470,6 @@ func (agg *Aggregate) stopNextLocked() {
 	}
 
 	agg.logger.Debug("stopNextLocked",
-		"id", agg.ID(),
 		"version", agg.next.version,
 	)
 
@@ -510,7 +501,7 @@ func New(
 
 	agg := &Aggregate{
 		id:       id,
-		logger:   logging.GetLogger("runtime/host/multi"),
+		logger:   logging.GetLogger("runtime/host/multi").With("runtime_id", id),
 		hosts:    make(map[version.Version]*aggregatedHost),
 		notifier: pubsub.NewBroker(false),
 	}
