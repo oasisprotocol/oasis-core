@@ -168,6 +168,13 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	optsNodes.SetBottommostCompressionOptionsZstdMaxTrainBytes(compressOpts.MaxDictBytes*100, true) // 100 * dict size.
 	optsNodes.SetCompressionOptionsParallelThreads(4)
 
+	/*
+		// TODO: only enable statistics via a config param.
+		// 5-10% performance penalty with statistics based on documentation.
+		optsMeta.EnableStatistics()
+		optsNodes.EnableStatistics()
+	*/
+
 	var err error
 	var cfHandles []*grocksdb.ColumnFamilyHandle
 	switch cfg.ReadOnly {
@@ -1017,3 +1024,14 @@ func (d *rocksdbNodeDB) Close() {
 		d.db = nil
 	})
 }
+
+/*
+func (d *rocksdbNodeDB) getStats() {
+	opts, err := grocksdb.LoadLatestOptions("path", nil, true, nil)
+	if err != nil {
+		panic(err)
+	}
+	defer opts.Destroy()
+	str := opts.Options().GetStatisticsString()
+}
+*/
