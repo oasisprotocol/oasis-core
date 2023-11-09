@@ -146,7 +146,7 @@ type Backend interface {
 	//
 	// Note that these commitments may not have been processed by consensus, commitments may be
 	// received in any order and duplicates are possible.
-	WatchExecutorCommitments(ctx context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error)
+	WatchExecutorCommitments(ctx context.Context, runtimeID common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error)
 
 	// TrackRuntime adds a runtime the history of which should be tracked.
 	TrackRuntime(ctx context.Context, history BlockHistory) error

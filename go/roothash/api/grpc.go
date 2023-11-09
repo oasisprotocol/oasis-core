@@ -371,12 +371,13 @@ func handlerWatchEvents(srv interface{}, stream grpc.ServerStream) error {
 }
 
 func handlerWatchExecutorCommitments(srv interface{}, stream grpc.ServerStream) error {
-	if err := stream.RecvMsg(nil); err != nil {
+	var runtimeID common.Namespace
+	if err := stream.RecvMsg(&runtimeID); err != nil {
 		return err
 	}
 
 	ctx := stream.Context()
-	ch, sub, err := srv.(Backend).WatchExecutorCommitments(ctx)
+	ch, sub, err := srv.(Backend).WatchExecutorCommitments(ctx, runtimeID)
 	if err != nil {
 		return err
 	}
@@ -556,14 +557,14 @@ func (c *roothashClient) WatchEvents(ctx context.Context, runtimeID common.Names
 	return ch, sub, nil
 }
 
-func (c *roothashClient) WatchExecutorCommitments(ctx context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
+func (c *roothashClient) WatchExecutorCommitments(ctx context.Context, runtimeID common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
 	ctx, sub := pubsub.NewContextSubscription(ctx)
 
 	stream, err := c.conn.NewStream(ctx, &serviceDesc.Streams[1], methodWatchExecutorCommitments.FullName())
 	if err != nil {
 		return nil, nil, err
 	}
-	if err = stream.SendMsg(nil); err != nil {
+	if err = stream.SendMsg(runtimeID); err != nil {
 		return nil, nil, err
 	}
 	if err = stream.CloseSend(); err != nil {

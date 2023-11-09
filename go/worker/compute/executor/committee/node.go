@@ -1456,7 +1456,7 @@ func (n *Node) worker() {
 	defer txSub.Close()
 
 	// Subscribe to gossiped executor commitments.
-	n.ecCh, ecSub, err = n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx)
+	n.ecCh, ecSub, err = n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx, n.commonNode.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to executor commitments",
 			"err", err,
