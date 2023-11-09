@@ -34,6 +34,7 @@ import (
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/genesis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -652,7 +653,7 @@ func (net *Network) startOasisNode(
 
 		extraArgs = extraArgs.debugAllowDebugEnclaves()
 	} else {
-		baseArgs = append(baseArgs, "--genesis.file", net.GenesisPath())
+		baseArgs = append(baseArgs, "--"+cmdFlags.CfgGenesisFile, net.GenesisPath())
 	}
 	if net.cfg.UseShortGrpcSocketPaths {
 		// Keep the socket, if it was already generated!
@@ -748,21 +749,20 @@ func (net *Network) startOasisNode(
 func (net *Network) MakeGenesis() error {
 	args := []string{
 		"genesis", "init",
-		"--genesis.file", net.GenesisPath(),
-		"--chain.id", genesisTestHelpers.TestChainID,
-		"--initial_height", strconv.FormatInt(net.cfg.InitialHeight, 10),
-		"--consensus.backend", net.cfg.Consensus.Backend,
-		"--consensus.cometbft.timeout_commit", net.cfg.Consensus.Parameters.TimeoutCommit.String(),
-		"--registry.enable_runtime_governance_models", "entity,runtime",
-		"--registry.debug.allow_unroutable_addresses", "true",
+		"--" + cmdFlags.CfgGenesisFile, net.GenesisPath(),
+		"--" + genesis.CfgChainID, genesisTestHelpers.TestChainID,
+		"--" + genesis.CfgInitialHeight, strconv.FormatInt(net.cfg.InitialHeight, 10),
+		"--" + genesis.CfgConsensusBackend, net.cfg.Consensus.Backend,
+		"--" + genesis.CfgConsensusTimeoutCommit, net.cfg.Consensus.Parameters.TimeoutCommit.String(),
+		"--" + genesis.CfgRegistryEnableRuntimeGovernanceModels, "entity,runtime",
+		"--" + genesis.CfgRegistryDebugAllowUnroutableAddresses, "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
-		"--scheduler.max_validators_per_entity", strconv.Itoa(len(net.Validators())),
+		"--" + genesis.CfgSchedulerMaxValidatorsPerEntity, strconv.Itoa(len(net.Validators())),
 		"--" + genesis.CfgConsensusGasCostsTxByte, strconv.FormatUint(uint64(net.cfg.Consensus.Parameters.GasCosts[consensusGenesis.GasOpTxByte]), 10),
 		"--" + genesis.CfgConsensusStateCheckpointInterval, strconv.FormatUint(net.cfg.Consensus.Parameters.StateCheckpointInterval, 10),
 		"--" + genesis.CfgConsensusStateCheckpointNumKept, strconv.FormatUint(net.cfg.Consensus.Parameters.StateCheckpointNumKept, 10),
 		"--" + genesis.CfgStakingTokenSymbol, genesisTestHelpers.TestStakingTokenSymbol,
-		"--" + genesis.CfgStakingTokenValueExponent, strconv.FormatUint(
-			uint64(genesisTestHelpers.TestStakingTokenValueExponent), 10),
+		"--" + genesis.CfgStakingTokenValueExponent, strconv.FormatUint(uint64(genesisTestHelpers.TestStakingTokenValueExponent), 10),
 		"--" + genesis.CfgBeaconBackend, net.cfg.Beacon.Backend,
 	}
 	switch net.cfg.Beacon.Backend {
