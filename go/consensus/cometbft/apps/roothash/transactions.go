@@ -47,12 +47,10 @@ func (app *rootHashApplication) executorCommit(
 	cc *roothash.ExecutorCommit,
 ) (err error) {
 	if ctx.IsCheckOnly() {
-		// In case an executor commit notifier has been set up, push all commits into channel.
-		if app.ecNotifier != nil {
-			for _, ec := range cc.Commits {
-				ec := ec
-				app.ecNotifier.Broadcast(&ec)
-			}
+		// Notify subscribers about observed commitments.
+		for _, ec := range cc.Commits {
+			ec := ec
+			app.ecn.DeliverExecutorCommitment(cc.ID, &ec)
 		}
 		return nil
 	}
