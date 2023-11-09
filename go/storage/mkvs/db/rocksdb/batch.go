@@ -61,7 +61,7 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 		return api.ErrAlreadyFinalized
 	}
 
-	rootsMeta, err := loadRootsMetadata(ba.db.db, root.Version)
+	rootsMeta, err := loadRootsMetadata(ba.db.db, ba.db.cfRoots, root.Version)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 			}
 
 			var oldRootsMeta *rootsMetadata
-			oldRootsMeta, err = loadRootsMetadata(ba.db.db, ba.oldRoot.Version)
+			oldRootsMeta, err = loadRootsMetadata(ba.db.db, ba.db.cfRoots, ba.oldRoot.Version)
 			if err != nil {
 				return err
 			}

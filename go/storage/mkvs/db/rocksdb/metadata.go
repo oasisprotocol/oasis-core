@@ -126,15 +126,17 @@ type rootsMetadata struct {
 	// Roots is the map of a root created in a version to any derived roots (in this or later versions).
 	Roots map[node.TypedHash][]node.TypedHash
 
+	rootsCf *grocksdb.ColumnFamilyHandle
+
 	// version is the version this metadata is for.
 	version uint64
 }
 
 // loadRootsMetadata loads the roots metadata for the given version from the database.
-func loadRootsMetadata(db *grocksdb.DB, version uint64) (*rootsMetadata, error) {
-	rootsMeta := &rootsMetadata{version: version}
+func loadRootsMetadata(db *grocksdb.DB, cf *grocksdb.ColumnFamilyHandle, version uint64) (*rootsMetadata, error) {
+	rootsMeta := &rootsMetadata{version: version, rootsCf: cf}
 
-	s, err := db.Get(defaultReadOptions, rootsMetadataKeyFmt.Encode(version))
+	s, err := db.GetCF(defaultReadOptions, cf, rootsMetadataKeyFmt.Encode(version))
 	if err != nil {
 		return nil, fmt.Errorf("mkvs/rocksdb: failed to get roots metadata from backing store: %w", err)
 	}
@@ -152,5 +154,5 @@ func loadRootsMetadata(db *grocksdb.DB, version uint64) (*rootsMetadata, error) 
 
 // save saves the roots metadata to the database.
 func (rm *rootsMetadata) save(batch *grocksdb.WriteBatch) {
-	batch.Put(rootsMetadataKeyFmt.Encode(rm.version), cbor.Marshal(rm))
+	batch.PutCF(rm.rootsCf, rootsMetadataKeyFmt.Encode(rm.version), cbor.Marshal(rm))
 }
