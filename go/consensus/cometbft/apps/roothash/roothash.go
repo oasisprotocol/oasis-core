@@ -8,7 +8,6 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/api"
@@ -32,8 +31,7 @@ var _ tmapi.Application = (*rootHashApplication)(nil)
 type rootHashApplication struct {
 	state tmapi.ApplicationState
 	md    tmapi.MessageDispatcher
-
-	ecNotifier *pubsub.Broker
+	ecn   tmapi.ExecutorCommitmentNotifier
 }
 
 func (app *rootHashApplication) Name() string {
@@ -402,8 +400,8 @@ func (app *rootHashApplication) EndBlock(ctx *tmapi.Context) (types.ResponseEndB
 }
 
 // New constructs a new roothash application instance.
-func New(ecNotifier *pubsub.Broker) tmapi.Application {
+func New(ecn tmapi.ExecutorCommitmentNotifier) tmapi.Application {
 	return &rootHashApplication{
-		ecNotifier: ecNotifier,
+		ecn: ecn,
 	}
 }
