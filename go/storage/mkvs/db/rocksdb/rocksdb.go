@@ -100,40 +100,27 @@ const (
 	cfIOTreeName    = "io_tree"
 )
 
-// New creates a new RocksDB-backed node database.
-func New(cfg *api.Config) (api.NodeDB, error) {
-	db := &rocksdbNodeDB{
-		logger:           logging.GetLogger("mkvs/db/rocksdb"),
-		namespace:        cfg.Namespace,
-		discardWriteLogs: cfg.DiscardWriteLogs,
-		readOnly:         cfg.ReadOnly,
-	}
-
+func newOptions(versioned bool, maxCacheSize int64) *grocksdb.Options {
 	// XXX: The options bellow were taken from a combination of:
 	// - Cosmos-SDK RocksDB implementation
 	// - https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
 	// - https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning
 	// Experiment/modify if needed.
 
-	// Create options for the metadata column family.
-	// TODO: Consider also tuning some options of the metadata CF (although this is small compared to nodes CFs).
-	optsMeta := grocksdb.NewDefaultOptions()
-	optsMeta.SetCreateIfMissing(true)
-	optsMeta.SetCreateIfMissingColumnFamilies(true)
-
-	// Create options for the node column families.
 	// TODO: Consider separate options for state vs. io.
-	optsNodes := grocksdb.NewDefaultOptions()
-	optsNodes.SetCreateIfMissing(true)
-	optsNodes.SetComparator(createTimestampComparator())
-	optsNodes.IncreaseParallelism(runtime.NumCPU())
+	opts := grocksdb.NewDefaultOptions()
+	opts.SetCreateIfMissing(true)
+	if versioned {
+		opts.SetComparator(createTimestampComparator())
+	}
+	opts.IncreaseParallelism(runtime.NumCPU())
 
 	// General options.
 	// https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#other-general-options
-	optsNodes.SetLevelCompactionDynamicLevelBytes(true)
-	optsNodes.SetBytesPerSync(1048576) // 1 MB.
-	optsNodes.OptimizeLevelStyleCompaction(512 * 1024 * 1024)
-	optsNodes.SetTargetFileSizeMultiplier(2)
+	opts.SetLevelCompactionDynamicLevelBytes(true)
+	opts.SetBytesPerSync(1048576) // 1 MB.
+	opts.OptimizeLevelStyleCompaction(512 * 1024 * 1024)
+	opts.SetTargetFileSizeMultiplier(2)
 
 	bbto := grocksdb.NewDefaultBlockBasedTableOptions()
 	bbto.SetFormatVersion(4) // Latest version format, default uses older backwards compatible one.
@@ -141,11 +128,11 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	bbto.SetPinL0FilterAndIndexBlocksInCache(true)
 	// Configure block cache. Recommendation is 1/3 of memory budget.
 	// https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
-	if cfg.MaxCacheSize == 0 {
+	if maxCacheSize == 0 {
 		// Default to 128mb block cache size if not configured.
 		bbto.SetBlockCache(grocksdb.NewLRUCache(128 * 1024 * 1024))
 	} else {
-		bbto.SetBlockCache(grocksdb.NewLRUCache(uint64(cfg.MaxCacheSize)))
+		bbto.SetBlockCache(grocksdb.NewLRUCache(uint64(maxCacheSize)))
 	}
 
 	// Configure query filter.
@@ -156,20 +143,20 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 	// https://github.com/facebook/rocksdb/wiki/Index-Block-Format#index_type--kbinarysearchwithfirstkey
 	bbto.SetIndexType(grocksdb.KBinarySearchWithFirstKey)
 
-	optsNodes.SetBlockBasedTableFactory(bbto)
+	opts.SetBlockBasedTableFactory(bbto)
 
 	// Configure compression.
 	// https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#compression
-	optsNodes.SetCompression(grocksdb.LZ4Compression)
-	optsNodes.SetBottommostCompression(grocksdb.ZSTDCompression)
+	opts.SetCompression(grocksdb.LZ4Compression)
+	opts.SetBottommostCompression(grocksdb.ZSTDCompression)
 
 	// Configure ZSTD (follows Cosmos-SDK values).
 	compressOpts := grocksdb.NewDefaultCompressionOptions()
 	compressOpts.MaxDictBytes = 110 * 1024 // 110KB - typical size for ZSTD.
 	compressOpts.Level = 12                // Higher compression.
-	optsNodes.SetBottommostCompressionOptions(compressOpts, true)
-	optsNodes.SetBottommostCompressionOptionsZstdMaxTrainBytes(compressOpts.MaxDictBytes*100, true) // 100 * dict size.
-	optsNodes.SetCompressionOptionsParallelThreads(4)
+	opts.SetBottommostCompressionOptions(compressOpts, true)
+	opts.SetBottommostCompressionOptionsZstdMaxTrainBytes(compressOpts.MaxDictBytes*100, true) // 100 * dict size.
+	opts.SetCompressionOptionsParallelThreads(4)
 
 	/*
 		// TODO: only enable statistics via a config param.
@@ -177,6 +164,29 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 		optsMeta.EnableStatistics()
 		optsNodes.EnableStatistics()
 	*/
+
+	return opts
+}
+
+// New creates a new RocksDB-backed node database.
+func New(cfg *api.Config) (api.NodeDB, error) {
+	db := &rocksdbNodeDB{
+		logger:           logging.GetLogger("mkvs/db/rocksdb"),
+		namespace:        cfg.Namespace,
+		discardWriteLogs: cfg.DiscardWriteLogs,
+		readOnly:         cfg.ReadOnly,
+	}
+
+	// Create options for the metadata column family.
+	// TODO: Consider also tuning some options of the metadata CF (although this is small compared to nodes CFs).
+	optsMeta := grocksdb.NewDefaultOptions()
+	optsMeta.SetCreateIfMissing(true)
+	optsMeta.SetCreateIfMissingColumnFamilies(true)
+
+	// Create options for the node column families.
+	optsRoots := newOptions(false, cfg.MaxCacheSize)
+	// TODO: Consider separate options for state vs. io.
+	optsNodes := newOptions(true, cfg.MaxCacheSize)
 
 	var err error
 	var cfHandles []*grocksdb.ColumnFamilyHandle
@@ -193,7 +203,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 			},
 			[]*grocksdb.Options{
 				optsMeta,
-				optsNodes,
+				optsRoots,
 				optsNodes,
 				optsNodes,
 			},
@@ -210,7 +220,7 @@ func New(cfg *api.Config) (api.NodeDB, error) {
 			},
 			[]*grocksdb.Options{
 				optsMeta,
-				optsNodes,
+				optsRoots,
 				optsNodes,
 				optsNodes,
 			},
