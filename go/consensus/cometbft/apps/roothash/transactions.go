@@ -97,6 +97,7 @@ func (app *rootHashApplication) executorCommit(
 		if err = commitment.VerifyExecutorCommitment(ctx, rtState.LastBlock, rtState.Runtime, rtState.Committee.ValidFor, &commit, msgGasAccountant, nl); err != nil { // nolint: gosec
 			ctx.Logger().Debug("failed to verify executor commitment",
 				"err", err,
+				"runtime_id", cc.ID,
 				"round", commit.Header.Header.Round,
 			)
 			return err
@@ -105,12 +106,14 @@ func (app *rootHashApplication) executorCommit(
 		if err := rtState.CommitmentPool.AddVerifiedExecutorCommitment(rtState.Committee, &commit); err != nil { // nolint: gosec
 			ctx.Logger().Debug("failed to add executor commitment",
 				"err", err,
+				"runtime_id", cc.ID,
 				"round", commit.Header.Header.Round,
 			)
 			return err
 		}
 
 		ctx.Logger().Debug("executor commitment added to pool",
+			"runtime_id", cc.ID,
 			"round", commit.Header.Header.Round,
 			"node_id", commit.NodeID,
 			"scheduler_id", commit.Header.SchedulerID,
