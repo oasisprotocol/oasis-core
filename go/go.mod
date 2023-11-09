@@ -1,10 +1,7 @@
 module github.com/oasisprotocol/oasis-core/go
 
 replace (
-
 	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.2-oasis1
-	// Temp.
-	github.com/linxGnu/grocksdb => github.com/ptrus/grocksdb v0.0.0-20231108081122-7a5267edc303
 
 	// v1.5.0 has broken uint parsing, use my commit with fixes instead until
 	// the maintainers merge my PR: https://github.com/spf13/cast/pull/144
@@ -36,7 +33,7 @@ require (
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/libp2p/go-libp2p v0.30.0
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
-	github.com/linxGnu/grocksdb v1.8.4
+	github.com/linxGnu/grocksdb v1.8.5
 	github.com/multiformats/go-multiaddr v0.11.0
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7
