@@ -1,3 +1,4 @@
 CVE-2022-30591 # quic-go resource exhaustion through 0.27.0, 0.27.1 imported, false positive?
 CVE-2022-44797 # remove once tendermint uses btcd above or 0.23.2
+CVE-2023-39325 # removed in 23.0.x
 CVE-2022-39389 # can be ignored as we only use a few crypto libraries from btcd
