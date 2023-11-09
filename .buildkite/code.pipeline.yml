@@ -390,3 +390,37 @@ steps:
       <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
+
+  ######################################################
+  # Key manager upgrade test - sgx1 (triggered manually)
+  ######################################################
+  - group: "Key manager upgrade test - sgx1"
+    depends_on:
+      - "build-go"
+      - "build-rust-runtime-loader"
+      - "build-rust-runtimes"
+    steps:
+      - block: "Confirm key manager upgrade test run"
+        prompt: "Run key manager upgrade test for this pull request"
+        blocked_state: passed
+
+      - label: Key manager upgrade test - sgx1
+        timeout_in_minutes: 20
+        command:
+          - .buildkite/scripts/download_e2e_test_artifacts.sh
+          - .buildkite/scripts/test_km_upgrade.sh --scenario e2e.runtime.keymanager-upgrade
+        artifact_paths:
+          - /tmp/e2e/**/*.log
+          - /tmp/e2e/**/genesis.json
+          - /tmp/e2e/**/runtime_genesis.json
+        env:
+          # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
+          OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
+          OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
+          TEST_BASE_DIR: /tmp
+        agents:
+          queue: sgx1
+        retry:
+          <<: *retry_agent_failure
+        plugins:
+          <<: *docker_plugin_sgx1

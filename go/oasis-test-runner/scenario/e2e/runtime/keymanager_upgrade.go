@@ -45,7 +45,7 @@ func (sc *kmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Load the upgraded keymanager binary.
-	newKmBinaries := sc.resolveRuntimeBinaries("simple-keymanager-upgrade")
+	newKmBinaries := sc.ResolveRuntimeUpgradeBinaries("simple-keymanager-upgrade")
 	// Setup the upgraded runtime.
 	kmRuntimeFix := f.Runtimes[0]
 	if kmRuntimeFix.Kind != registry.KindKeyManager {

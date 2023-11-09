@@ -28,14 +28,16 @@ import (
 )
 
 const (
-	cfgRuntimeBinaryDirDefault  = "runtime.binary_dir.default"
-	cfgRuntimeBinaryDirIntelSGX = "runtime.binary_dir.intel-sgx"
-	cfgRuntimeSourceDir         = "runtime.source_dir"
-	cfgRuntimeTargetDir         = "runtime.target_dir"
-	cfgRuntimeLoader            = "runtime.loader"
-	cfgTEEHardware              = "tee_hardware"
-	cfgIasMock                  = "ias.mock"
-	cfgEpochInterval            = "epoch.interval"
+	cfgRuntimeBinaryDirDefault         = "runtime.binary_dir.default"
+	cfgRuntimeBinaryDirDefaultUpgrade  = "runtime.binary_dir.default.upgrade"
+	cfgRuntimeBinaryDirIntelSGX        = "runtime.binary_dir.intel-sgx"
+	cfgRuntimeBinaryDirIntelSGXUpgrade = "runtime.binary_dir.intel-sgx.upgrade"
+	cfgRuntimeSourceDir                = "runtime.source_dir"
+	cfgRuntimeTargetDir                = "runtime.target_dir"
+	cfgRuntimeLoader                   = "runtime.loader"
+	cfgTEEHardware                     = "tee_hardware"
+	cfgIasMock                         = "ias.mock"
+	cfgEpochInterval                   = "epoch.interval"
 )
 
 var (
@@ -125,7 +127,9 @@ func NewScenario(name string, testClient TestClient) *Scenario {
 		testClient: testClient,
 	}
 	sc.Flags.String(cfgRuntimeBinaryDirDefault, "", "(no-TEE) path to the runtime binaries directory")
+	sc.Flags.String(cfgRuntimeBinaryDirDefaultUpgrade, "", "(no-TEE) path to the runtime upgrade binaries directory")
 	sc.Flags.String(cfgRuntimeBinaryDirIntelSGX, "", "(Intel SGX) path to the runtime binaries directory")
+	sc.Flags.String(cfgRuntimeBinaryDirIntelSGXUpgrade, "", "(Intel SGX) path to the runtime upgrade binaries directory")
 	sc.Flags.String(cfgRuntimeSourceDir, "", "path to the runtime source base dir")
 	sc.Flags.String(cfgRuntimeTargetDir, "", "path to the Cargo target dir (should be a parent of the runtime binary dir)")
 	sc.Flags.String(cfgRuntimeLoader, "oasis-core-runtime-loader", "path to the runtime loader")
@@ -200,7 +204,7 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 				GovernanceModel: registry.GovernanceEntity,
 				Deployments: []oasis.DeploymentCfg{
 					{
-						Binaries: sc.resolveRuntimeBinaries(keyManagerBinary),
+						Binaries: sc.ResolveRuntimeBinaries(keyManagerBinary),
 					},
 				},
 			},
@@ -243,7 +247,7 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 				GovernanceModel: registry.GovernanceEntity,
 				Deployments: []oasis.DeploymentCfg{
 					{
-						Binaries: sc.resolveRuntimeBinaries(runtimeBinary),
+						Binaries: sc.ResolveRuntimeBinaries(runtimeBinary),
 					},
 				},
 			},
@@ -303,26 +307,58 @@ func (sc *Scenario) getTEEHardware() (node.TEEHardware, error) {
 	return tee, nil
 }
 
-func (sc *Scenario) resolveRuntimeBinaries(baseRuntimeBinary string) map[node.TEEHardware]string {
+// ResolveRuntimeBinaries returns the paths to the runtime binaries.
+func (sc *Scenario) ResolveRuntimeBinaries(runtimeBinary string) map[node.TEEHardware]string {
+	return sc.resolveRuntimeBinaries(runtimeBinary, false)
+}
+
+// ResolveRuntimeUpgradeBinaries returns the paths to the runtime upgrade binaries.
+func (sc *Scenario) ResolveRuntimeUpgradeBinaries(runtimeBinary string) map[node.TEEHardware]string {
+	return sc.resolveRuntimeBinaries(runtimeBinary, true)
+}
+
+// resolveRuntimeBinaries returns the paths to the runtime (upgrade) binaries.
+func (sc *Scenario) resolveRuntimeBinaries(runtimeBinary string, upgrade bool) map[node.TEEHardware]string {
 	binaries := make(map[node.TEEHardware]string)
 	for _, tee := range []node.TEEHardware{
 		node.TEEHardwareInvalid,
 		node.TEEHardwareIntelSGX,
 	} {
-		binaries[tee] = sc.resolveRuntimeBinary(baseRuntimeBinary, tee)
+		binaries[tee] = sc.resolveRuntimeBinary(runtimeBinary, tee, upgrade)
 	}
 	return binaries
 }
 
-func (sc *Scenario) resolveRuntimeBinary(runtimeBinary string, tee node.TEEHardware) string {
+// ResolveRuntimeBinary returns the path to the runtime binary.
+func (sc *Scenario) ResolveRuntimeBinary(runtimeBinary string, tee node.TEEHardware) string {
+	return sc.resolveRuntimeBinary(runtimeBinary, tee, false)
+}
+
+// ResolveRuntimeUpgradeBinary returns the path to the runtime upgrade binary.
+func (sc *Scenario) ResolveRuntimeUpgradeBinary(runtimeBinary string, tee node.TEEHardware) string {
+	return sc.resolveRuntimeBinary(runtimeBinary, tee, true)
+}
+
+// resolveRuntimeBinary returns the path to the runtime (upgrade) binary.
+func (sc *Scenario) resolveRuntimeBinary(runtimeBinary string, tee node.TEEHardware, upgrade bool) string {
 	var runtimeExt, path string
 	switch tee {
 	case node.TEEHardwareInvalid:
 		runtimeExt = ""
-		path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirDefault)
+		switch upgrade {
+		case true:
+			path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirDefaultUpgrade)
+		case false:
+			path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirDefault)
+		}
 	case node.TEEHardwareIntelSGX:
 		runtimeExt = ".sgxs"
-		path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirIntelSGX)
+		switch upgrade {
+		case true:
+			path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirIntelSGXUpgrade)
+		case false:
+			path, _ = sc.Flags.GetString(cfgRuntimeBinaryDirIntelSGX)
+		}
 	}
 
 	return filepath.Join(path, runtimeBinary+runtimeExt)
