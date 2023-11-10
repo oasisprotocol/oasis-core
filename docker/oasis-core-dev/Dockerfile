@@ -85,7 +85,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
     go install golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}
 
-# Install jemalloc (used by BadgerDB).
+# Install jemalloc for BadgerDB ('je_' API prefix).
 RUN wget -O jemalloc.tar.bz2 \
     https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 && \
     # Ensure checksum matches.
@@ -101,15 +101,25 @@ RUN wget -O jemalloc.tar.bz2 \
     cd .. && rm jemalloc.tar.bz2 && rm -rf jemalloc-${JEMALLOC_VERSION}
 
 # Install RocksDB.
+# https://github.com/facebook/rocksdb/blob/main/INSTALL.md
 RUN wget -q https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz && \
   # Ensure checksum matches.
     echo "${ROCKSDB_CHECKSUM}  v${ROCKSDB_VERSION}.tar.gz" | sha256sum -c && \
     tar -zxf v${ROCKSDB_VERSION}.tar.gz && \
     cd rocksdb-${ROCKSDB_VERSION} && \
-    # TODO: clashes with jemalloc used by BadgerDB.
+    # In production it's recomended to use either tcmalloc or jemalloc instead of ptmalloc:
+    # https://blog.cloudflare.com/the-effect-of-switching-to-tcmalloc-on-rocksdb-memory-use/
+    # However RocksDB jemalloc requirement clashes with BadgerDB (RocksDB requires it without 'je_' prefix).
+    # Using tcmalloc next to badgerdb's jemalloc also causes problems. Therefore we default to ptmalloc for
+    # the docker container. If/when RocksDB becomes the prefered database, we should default to building
+    # BadgerDB without jemalloc and use tcmalloc/jemalloc here.
+    #
+    # Disable jemalloc as it is used by default if found on the system.
+    ROCKSDB_DISABLE_JEMALLOC=1 \
     # For 64-bit x86 the `PORTABLE=haswell` is a reasonable compromise, which supports many or most
     # of the available optimizations while still being compatible with most processors made since
-    # roughly 2013. https://github.com/facebook/rocksdb/blob/main/INSTALL.md
-    DEBUG_LEVEL=0 ROCKSDB_DISABLE_JEMALLOC=1 PORTABLE=haswell make -j4 shared_lib && \
+    # roughly 2013.
+    PORTABLE=haswell \
+    DEBUG_LEVEL=0 make -j4 shared_lib && \
     make install-shared && ldconfig && \
     cd .. && rm -rf v${ROCKSDB_VERSION}.tar.gz rocksdb-${ROCKSDB_VERSION}

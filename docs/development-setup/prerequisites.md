@@ -232,7 +232,7 @@ Core:
   echo "${ROCKSDB_CHECKSUM}  rocksdb.tar.gz" | sha256sum -c
   tar -zxf rocksdb.tar.gz
   cd rocksdb-${ROCKSDB_VERSION}
-  DEBUG_LEVEL=0 ROCKSDB_DISABLE_JEMALLOC=1 make -j4 shared_lib
+  DEBUG_LEVEL=0 ROCKSDB_DISABLE_MALLOC_USABLE_SIZE=1 ROCKSDB_DISABLE_JEMALLOC=1 make -j4 shared_lib
   sudo make install-shared
   sudo ldconfig
   popd

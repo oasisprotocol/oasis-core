@@ -106,8 +106,9 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 			if err != nil {
 				return err
 			}
-			// Check if oldRootsMeta was updated in this batch.
-			// TODO: could this be avoided?
+
+			// Check if oldRootsMeta was updated in this batch. Since we don't see the
+			// batch updates, until the batch is applied.
 			wbIter := ba.bat.NewIterator()
 			for {
 				if !wbIter.Next() {
@@ -115,7 +116,7 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 				}
 				rec := wbIter.Record()
 				if bytes.Equal(rec.Key, rootsMetadataKeyFmt.Encode(ba.oldRoot.Version)) {
-					if rec.Type == grocksdb.WriteBatchValueRecord {
+					if rec.Type == grocksdb.WriteBatchCFValueRecord {
 						if err = cbor.Unmarshal(rec.Value, &oldRootsMeta); err != nil {
 							panic(err)
 						}

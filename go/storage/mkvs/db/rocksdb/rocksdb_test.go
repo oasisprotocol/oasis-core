@@ -121,6 +121,7 @@ func createCheckpoint(ctx context.Context, require *require.Assertions, dir stri
 					nodeKeys[string(it.Key())] = struct{}{}
 				}
 			}
+			return nil
 		})
 	}
 	loadNodes(rocksdb.cfIOTree)
@@ -148,6 +149,7 @@ func verifyNodes(require *require.Assertions, rocksdb *rocksdbNodeDB, version ui
 				require.Equal(true, ok, "unexpected node in db")
 				delete(notVisited, string(key))
 			}
+			return nil
 		})
 	}
 	checkNodes(rocksdb.cfIOTree)
