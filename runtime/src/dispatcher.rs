@@ -1,10 +1,7 @@
 //! Runtime call dispatcher.
 use std::{
     convert::TryInto,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Condvar, Mutex,
-    },
+    sync::{Arc, Condvar, Mutex},
     thread,
 };
 
@@ -150,7 +147,6 @@ struct State {
 #[derive(Debug)]
 enum Command {
     Request(u64, Body),
-    Abort(mpsc::Sender<()>),
 }
 
 /// Runtime call dispatcher.
@@ -158,7 +154,6 @@ pub struct Dispatcher {
     logger: Logger,
     queue_tx: mpsc::Sender<Command>,
     identity: Arc<Identity>,
-    abort_batch: Arc<AtomicBool>,
 
     state: Mutex<Option<ProtocolState>>,
     state_cond: Condvar,
@@ -179,7 +174,6 @@ impl Dispatcher {
             logger: get_logger("runtime/dispatcher"),
             queue_tx: tx,
             identity,
-            abort_batch: Arc::new(AtomicBool::new(false)),
             state: Mutex::new(None),
             state_cond: Condvar::new(),
             tokio_runtime,
@@ -212,17 +206,6 @@ impl Dispatcher {
         Ok(())
     }
 
-    /// Signals to dispatcher that it should abort and waits for the abort to
-    /// complete.
-    pub fn abort_and_wait(&self) -> AnyResult<()> {
-        self.abort_batch.store(true, Ordering::SeqCst);
-        // Queue an abort command and wait for it to be processed.
-        let (tx, mut rx) = mpsc::channel(1);
-        self.queue_tx.blocking_send(Command::Abort(tx))?;
-        rx.blocking_recv();
-        Ok(())
-    }
-
     fn run(self: &Arc<Self>, initializer: Box<dyn Initializer>, mut rx: mpsc::Receiver<Command>) {
         // Wait for the state to be available.
         let ProtocolState {
@@ -249,10 +232,9 @@ impl Dispatcher {
             consensus_verifier: &consensus_verifier,
         };
         let post_init_state = initializer.init(pre_init_state);
-        let mut txn_dispatcher = post_init_state
+        let txn_dispatcher = post_init_state
             .txn_dispatcher
             .unwrap_or_else(|| Box::<TxnNoopDispatcher>::default());
-        txn_dispatcher.set_abort_batch_flag(self.abort_batch.clone());
 
         let state = State {
             protocol: protocol.clone(),
@@ -293,10 +275,6 @@ impl Dispatcher {
                             };
                             protocol.send_response(id, response).unwrap();
                         });
-                    }
-                    Command::Abort(tx) => {
-                        // Request to abort processing.
-                        tx.send(()).await.unwrap();
                     }
                 }
             }
