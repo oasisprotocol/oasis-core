@@ -41,9 +41,10 @@ const (
 
 	// Runtime RAK initialization timeout.
 	//
-	// This can take a long time in deployments that run multiple
-	// nodes on a single machine, all sharing the same EPC.
-	runtimeRAKTimeout = 60 * time.Second
+	// This can take a long time in deployments that run multiple nodes on a single machine, all
+	// sharing the same EPC. Additionally, this includes time to do the initial consensus light
+	// client sync and freshness verification which can take some time.
+	runtimeRAKTimeout = 5 * time.Minute
 	// Runtime attest interval.
 	defaultRuntimeAttestInterval = 2 * time.Hour
 )
