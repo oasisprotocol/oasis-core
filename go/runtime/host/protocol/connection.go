@@ -356,8 +356,6 @@ func (c *connection) readResponse(ctx context.Context, respCh <-chan *Body) (*Bo
 }
 
 func (c *connection) workerOutgoing() {
-	defer c.quitWg.Done()
-
 	for {
 		select {
 		case msg := <-c.outCh:
@@ -462,16 +460,18 @@ func (c *connection) handleMessage(ctx context.Context, message *Message) {
 }
 
 func (c *connection) workerIncoming() {
+	// Wait for request handlers to finish.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	// Cancel all request handlers.
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	defer func() {
 		// Close connection and signal that connection is closed.
 		_ = c.conn.Close()
 		close(c.closeCh)
-
-		// Cancel all request handlers.
-		cancel()
-
-		c.quitWg.Done()
 	}()
 
 	for {
@@ -486,7 +486,11 @@ func (c *connection) workerIncoming() {
 		}
 
 		// Handle message in a separate goroutine.
-		go c.handleMessage(ctx, &message)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.handleMessage(ctx, &message)
+		}()
 	}
 }
 
@@ -502,8 +506,14 @@ func (c *connection) initConn(conn net.Conn) {
 	c.codec = cbor.NewMessageCodec(conn, moduleName)
 
 	c.quitWg.Add(2)
-	go c.workerIncoming()
-	go c.workerOutgoing()
+	go func() {
+		defer c.quitWg.Done()
+		c.workerIncoming()
+	}()
+	go func() {
+		defer c.quitWg.Done()
+		c.workerOutgoing()
+	}()
 
 	// Change protocol state to Initializing so that some of the requests are allowed.
 	c.setStateLocked(stateInitializing)
