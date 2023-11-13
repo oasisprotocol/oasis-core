@@ -70,6 +70,11 @@ jsonrpc = { version = "0.13.0", features = ["simple_uds"] }
 tempfile = "3.4.0"
 tendermint-testgen = "0.30.0"
 
+[features]
+default = []
+# Enables debug-level logging in release builds.
+debug-logging = ["slog/max_level_debug", "slog/release_max_level_debug"]
+
 [[bin]]
 name = "fuzz-mkvs-proof"
 path = "fuzz/mkvs_proof.rs"

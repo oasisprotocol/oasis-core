@@ -42,6 +42,7 @@ type runtimeBrokers struct {
 
 	blockNotifier *pubsub.Broker
 	eventNotifier *pubsub.Broker
+	ecNotifier    *pubsub.Broker
 
 	lastBlockHeight int64
 	lastBlock       *block.Block
@@ -79,8 +80,6 @@ type serviceClient struct {
 	trackedRuntime map[common.Namespace]*trackedRuntime
 
 	pruneHandler *pruneHandler
-
-	ecNotifier *pubsub.Broker
 }
 
 // Implements api.Backend.
@@ -240,8 +239,9 @@ func (sc *serviceClient) WatchEvents(_ context.Context, id common.Namespace) (<-
 }
 
 // Implements api.Backend.
-func (sc *serviceClient) WatchExecutorCommitments(_ context.Context) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
-	sub := sc.ecNotifier.Subscribe()
+func (sc *serviceClient) WatchExecutorCommitments(_ context.Context, id common.Namespace) (<-chan *commitment.ExecutorCommitment, pubsub.ClosableSubscription, error) {
+	notifiers := sc.getRuntimeNotifiers(id)
+	sub := notifiers.ecNotifier.Subscribe()
 	ch := make(chan *commitment.ExecutorCommitment)
 	sub.Unwrap(ch)
 
@@ -361,6 +361,7 @@ func (sc *serviceClient) getRuntimeNotifiers(id common.Namespace) *runtimeBroker
 		notifiers = &runtimeBrokers{
 			blockNotifier: pubsub.NewBroker(false),
 			eventNotifier: pubsub.NewBroker(false),
+			ecNotifier:    pubsub.NewBroker(false),
 		}
 		sc.runtimeNotifiers[id] = notifiers
 	}
@@ -594,6 +595,12 @@ func (sc *serviceClient) DeliverEvent(ctx context.Context, height int64, tx cmtt
 	}
 
 	return nil
+}
+
+// Implements api.ExecutorCommitmentNotifier.
+func (sc *serviceClient) DeliverExecutorCommitment(runtimeID common.Namespace, ec *commitment.ExecutorCommitment) {
+	notifiers := sc.getRuntimeNotifiers(runtimeID)
+	notifiers.ecNotifier.Broadcast(ec)
 }
 
 func (sc *serviceClient) processFinalizedEvent(
@@ -862,36 +869,33 @@ func New(
 	ctx context.Context,
 	backend tmapi.Backend,
 ) (ServiceClient, error) {
-	// Create the general executor commitment notifier.
-	ecNotifier := pubsub.NewBroker(false)
-
-	// Initialize and register the CometBFT service component.
-	a := app.New(ecNotifier)
-	if err := backend.RegisterApplication(a); err != nil {
-		return nil, err
-	}
-
-	// Register a consensus state prune handler to make sure that we don't prune blocks that haven't
-	// yet been indexed by the roothash backend.
-	ph := &pruneHandler{
-		logger: logging.GetLogger("cometbft/roothash/prunehandler"),
-	}
-	backend.Pruner().RegisterHandler(ph)
-
-	return &serviceClient{
+	sc := serviceClient{
 		ctx:              ctx,
 		logger:           logging.GetLogger("cometbft/roothash"),
 		backend:          backend,
-		querier:          a.QueryFactory().(*app.QueryFactory),
 		allBlockNotifier: pubsub.NewBroker(false),
 		runtimeNotifiers: make(map[common.Namespace]*runtimeBrokers),
 		genesisBlocks:    make(map[common.Namespace]*block.Block),
 		queryCh:          make(chan cmtpubsub.Query, runtimeRegistry.MaxRuntimeCount),
 		cmdCh:            make(chan interface{}, runtimeRegistry.MaxRuntimeCount),
 		trackedRuntime:   make(map[common.Namespace]*trackedRuntime),
-		pruneHandler:     ph,
-		ecNotifier:       ecNotifier,
-	}, nil
+	}
+
+	// Initialize and register the CometBFT service component.
+	a := app.New(&sc)
+	if err := backend.RegisterApplication(a); err != nil {
+		return nil, err
+	}
+	sc.querier = a.QueryFactory().(*app.QueryFactory)
+
+	// Register a consensus state prune handler to make sure that we don't prune blocks that haven't
+	// yet been indexed by the roothash backend.
+	sc.pruneHandler = &pruneHandler{
+		logger: logging.GetLogger("cometbft/roothash/prunehandler"),
+	}
+	backend.Pruner().RegisterHandler(sc.pruneHandler)
+
+	return &sc, nil
 }
 
 func init() {

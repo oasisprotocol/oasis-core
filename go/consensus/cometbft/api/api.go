@@ -14,6 +14,7 @@ import (
 	cmtrpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -23,6 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
+	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
@@ -379,4 +381,11 @@ var MessageStateSyncCompleted = messageKind(0)
 // CometBFTChainID returns the CometBFT chain ID computed from chain context.
 func CometBFTChainID(chainContext string) string {
 	return chainContext[:cmttypes.MaxChainIDLen]
+}
+
+// ExecutorCommitmentNotifier is an executor commitment notifier interface.
+type ExecutorCommitmentNotifier interface {
+	// DeliverExecutorCommitment delivers an executor commitment observed
+	// in the consensus layer P2P network.
+	DeliverExecutorCommitment(runtimeID common.Namespace, ec *commitment.ExecutorCommitment)
 }

@@ -45,6 +45,10 @@ var (
 	getInfoTimeout = 5 * time.Second
 )
 
+// executeBatchTimeoutFactor is the factor F in calculation of the batch execution timeout using
+// the formula F * ProposerTimeout to ensure that a broken runtime doesn't block forever.
+const executeBatchTimeoutFactor = 3
+
 // Node is a committee node.
 type Node struct { // nolint: maligned
 	runtimeReady         bool
@@ -186,7 +190,7 @@ func (n *Node) transitionState(state NodeState) {
 }
 
 func (n *Node) transitionStateToProcessing(ctx context.Context, proposal *commitment.Proposal, rank uint64, batch transaction.RawBatch) {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
 	done := make(chan struct{})
 
 	n.transitionState(StateProcessingBatch{
@@ -220,7 +224,7 @@ func (n *Node) transitionStateToProcessingFailure(
 		"max_batch_size", maxBatchSize,
 	)
 
-	cancel := func() {}
+	cancel := func(_ error) {}
 	done := make(chan struct{})
 	close(done)
 
@@ -415,7 +419,7 @@ func (n *Node) scheduleBatch(ctx context.Context, round uint64, force bool) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
 	done := make(chan struct{})
 
 	n.transitionState(StateProcessingBatch{
@@ -686,15 +690,26 @@ func (n *Node) runtimeExecuteTxBatch(
 		batchRuntimeProcessingTime.With(n.getMetricLabels()).Observe(time.Since(rtStartTime).Seconds())
 	}()
 
-	rsp, err := rt.Call(ctx, rq)
+	// Ensure batch execution is bounded.
+	proposerTimeout := state.Runtime.TxnScheduler.ProposerTimeout
+	callCtx, cancelCallFn := context.WithTimeoutCause(
+		ctx,
+		executeBatchTimeoutFactor*proposerTimeout,
+		errors.New("proposer timeout expired"),
+	)
+	defer cancelCallFn()
+
+	rsp, err := rt.Call(callCtx, rq)
 	switch {
 	case err == nil:
 	case errors.Is(err, context.Canceled):
 		// Context was canceled while the runtime was processing a request.
-		n.logger.Error("batch processing aborted by context, restarting runtime")
+		n.logger.Error("batch processing aborted by context, restarting runtime",
+			"cause", context.Cause(callCtx),
+		)
 
 		// Abort the runtime, so we can start processing the next batch.
-		abortCtx, cancel := context.WithTimeout(n.ctx, abortTimeout)
+		abortCtx, cancel := context.WithTimeout(ctx, abortTimeout)
 		defer cancel()
 
 		if err = rt.Abort(abortCtx, false); err != nil {
@@ -778,7 +793,7 @@ func (n *Node) abortBatch(state *StateProcessingBatch) {
 	n.logger.Warn("aborting processing batch")
 
 	// Stop processing.
-	state.Cancel()
+	state.Cancel(errors.New("batch aborted"))
 
 	// Discard the result if there was any.
 	select {
@@ -1456,7 +1471,7 @@ func (n *Node) worker() {
 	defer txSub.Close()
 
 	// Subscribe to gossiped executor commitments.
-	n.ecCh, ecSub, err = n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx)
+	n.ecCh, ecSub, err = n.commonNode.Consensus.RootHash().WatchExecutorCommitments(n.ctx, n.commonNode.Runtime.ID())
 	if err != nil {
 		n.logger.Error("failed to subscribe to executor commitments",
 			"err", err,
@@ -1500,8 +1515,8 @@ func (n *Node) worker() {
 			var wg sync.WaitGroup
 			defer wg.Wait()
 
-			ctx, cancel := context.WithCancel(n.ctx)
-			defer cancel()
+			ctx, cancel := context.WithCancelCause(n.ctx)
+			defer cancel(errors.New("round finished"))
 
 			wg.Add(1)
 			go func() {

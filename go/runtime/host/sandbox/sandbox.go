@@ -136,21 +136,13 @@ func (r *sandboxedRuntime) ID() common.Namespace {
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) GetInfo(ctx context.Context) (rsp *protocol.RuntimeInfoResponse, err error) {
-	callFn := func() error {
-		r.RLock()
-		defer r.RUnlock()
-
-		if r.conn == nil {
-			return errRuntimeNotReady
-		}
-		rsp, err = r.conn.GetInfo()
-		return err
+func (r *sandboxedRuntime) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
+	conn, err := r.getConnection(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	// Retry call in case the runtime is not yet ready.
-	err = backoff.Retry(callFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
-	return
+	return conn.GetInfo()
 }
 
 // Implements host.Runtime.
@@ -165,25 +157,39 @@ func (r *sandboxedRuntime) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (rsp *protocol.Body, err error) {
-	callFn := func() error {
+func (r *sandboxedRuntime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
+	conn, err := r.getConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Take care to release lock before calling into the runtime as otherwise this could lead to a
+	// deadlock in case the runtime makes a call that acquires the cross node lock and at the same
+	// time SetVersion is being called to update the version with the cross node lock acquired.
+
+	return conn.Call(ctx, body)
+}
+
+func (r *sandboxedRuntime) getConnection(ctx context.Context) (protocol.Connection, error) {
+	var conn protocol.Connection
+	getConnFn := func() error {
 		r.RLock()
 		defer r.RUnlock()
 
 		if r.conn == nil {
 			return errRuntimeNotReady
 		}
-		rsp, err = r.conn.Call(ctx, body)
-		if err != nil {
-			// All protocol-level errors are permanent.
-			return backoff.Permanent(err)
-		}
+		conn = r.conn
+
 		return nil
 	}
-
 	// Retry call in case the runtime is not yet ready.
-	err = backoff.Retry(callFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
-	return
+	err := backoff.Retry(getConnFn, backoff.WithContext(cmnBackoff.NewExponentialBackOff(), ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 // Implements host.Runtime.
@@ -421,8 +427,8 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	}
 
 	ok = true
-	r.Lock()
 	r.process = p
+	r.Lock()
 	r.conn = pc
 	r.capabilityTEE = ev.CapabilityTEE
 	r.Unlock()
@@ -464,9 +470,9 @@ func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 
 	// Remove the process so it will be respanwed (it would be respawned either way, but with an
 	// additional "unexpected termination" message).
-	r.Lock()
 	r.conn.Close()
 	r.process = nil
+	r.Lock()
 	r.conn = nil
 	r.capabilityTEE = nil
 	r.Unlock()
@@ -580,9 +586,9 @@ func (r *sandboxedRuntime) manager() {
 				"err", r.process.Error(),
 			)
 
-			r.Lock()
 			r.conn.Close()
 			r.process = nil
+			r.Lock()
 			r.conn = nil
 			r.capabilityTEE = nil
 			r.Unlock()
