@@ -141,7 +141,7 @@ type StateProcessingBatch struct {
 	// Timing for this batch.
 	batchStartTime time.Time
 	// Function for cancelling batch processing.
-	cancelFn context.CancelFunc
+	cancelFn context.CancelCauseFunc
 	// Channel which will provide the result.
 	done chan struct{}
 }
@@ -157,8 +157,8 @@ func (s StateProcessingBatch) String() string {
 }
 
 // Cancel invokes the cancellation function and waits for the processing to actually stop.
-func (s *StateProcessingBatch) Cancel() {
-	s.cancelFn()
+func (s *StateProcessingBatch) Cancel(cause error) {
+	s.cancelFn(cause)
 	<-s.done
 }
 
