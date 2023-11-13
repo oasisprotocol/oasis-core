@@ -107,14 +107,20 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 		return nil, fmt.Errorf("unsupported attestation key type: %s", quote.Signature.AttestationKeyType())
 	}
 
-	switch qs.CertificationData.(type) {
+	switch data := qs.CertificationData.(type) {
 	case *pcs.CertificationData_PCKCertificateChain:
 		// We have a PCK certificate chain and so are good to go.
 	case *pcs.CertificationData_PPID:
-		// We have a PPID, need to retrieve PCK certificate first.
-		// TODO: Fetch PCK certificate based on PPID and include it in the quote, replacing the
-		//       PPID certification data with the PCK certificate chain certification data.
-		return nil, fmt.Errorf("PPID certification data not yet supported")
+		// Fetch PCK certificate chain and include it in the quote.
+		certificateChain, err := sp.pcs.GetPCKCertificateChain(ctx, data.PPID, data.CPUSVN, data.PCESVN, data.PCEID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch PCK certificate: %w", err)
+		}
+
+		// Replace the certification data with the PCK certification chain data.
+		qs.CertificationData = &pcs.CertificationData_PCKCertificateChain{
+			CertificateChain: certificateChain,
+		}
 	default:
 		return nil, fmt.Errorf("unsupported certification data type: %s", qs.CertificationData.CertificationDataType())
 	}

@@ -2,6 +2,7 @@ package pcs
 
 import (
 	"context"
+	"crypto/x509"
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -17,6 +18,9 @@ var (
 type Client interface {
 	// GetTCBBundle retrieves the signed TCB artifacts needed to verify a quote.
 	GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundle, error)
+
+	// GetPCKCertificateChain retrieves the PCK certificate chain for the give PPID.
+	GetPCKCertificateChain(ctx context.Context, encPpid [384]byte, cpusvn [16]byte, pcesvn uint16, pceid uint16) ([]*x509.Certificate, error)
 }
 
 // QuoteBundle is an attestation quote together with the TCB bundle required for its verification.
