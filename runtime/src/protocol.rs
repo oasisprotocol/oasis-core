@@ -367,10 +367,7 @@ impl Protocol {
             }
             Body::RuntimeAbortRequest {} => {
                 info!(self.logger, "Received worker abort request");
-                self.ensure_initialized()?;
-                self.dispatcher.abort_and_wait()?;
-                info!(self.logger, "Handled worker abort request");
-                Ok(Some(Body::RuntimeAbortResponse {}))
+                Err(ProtocolError::MethodNotSupported.into())
             }
 
             // Attestation-related requests.
