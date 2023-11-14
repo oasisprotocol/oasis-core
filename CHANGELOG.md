@@ -12,6 +12,37 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.4 (2023-11-14)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go/consensus/roothash: Filter executor commitments by runtime ID
+  ([#5436](https://github.com/oasisprotocol/oasis-core/issues/5436))
+
+  Compute executor committee workers no longer have to verify the signatures
+  of observed commitments simply to identify them as invalid.
+
+### Bug Fixes
+
+- go/runtime/host/sandbox: Release lock before calling into runtime
+  ([#5438](https://github.com/oasisprotocol/oasis-core/issues/5438))
+
+  Similar to how this is handled in the multi runtime host, we need to
+  release the lock before calling into the runtime as otherwise this could
+  lead to a deadlock in certain situations.
+
+- go/worker/compute: Bound batch execution time
+  ([#5438](https://github.com/oasisprotocol/oasis-core/issues/5438))
+
+- go/runtime/host/protocol/connection: Cancel call if connection is closed
+  ([#5442](https://github.com/oasisprotocol/oasis-core/issues/5442))
+
 ## 23.0.3 (2023-11-08)
 
 | Protocol          | Version   |
