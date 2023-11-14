@@ -1,6 +1,7 @@
 package pcs
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/binary"
@@ -135,22 +136,47 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundl
 	return &tcbBundle, nil
 }
 
-func (hc *httpClient) GetPCKCertificateChain(ctx context.Context, encPpid [384]byte, cpusvn [16]byte, pcesvn uint16, pceid uint16) ([]*x509.Certificate, error) {
+func (hc *httpClient) GetPCKCertificateChain(ctx context.Context, platformData []byte, encPpid [384]byte, cpusvn [16]byte, pcesvn uint16, pceid uint16) ([]*x509.Certificate, error) {
 	u := hc.getUrl(pcsAPIGetPCKCertificatePath)
 	q := u.Query()
-	q.Set("encrypted_ppid", hex.EncodeToString(encPpid[:]))
-	q.Set("cpusvn", hex.EncodeToString(cpusvn[:]))
+
 	// Base16-encoded PCESVN value (2 bytes, little endian).
 	var pcesvnBytes [2]byte
 	binary.LittleEndian.PutUint16(pcesvnBytes[:], pcesvn)
-	q.Set("pcesvn", hex.EncodeToString(pcesvnBytes[:]))
+
 	// Base16-encoded PCE-ID value (2 bytes, little endian)
 	var pceidBytes [2]byte
 	binary.LittleEndian.PutUint16(pceidBytes[:], pceid)
-	q.Set("pceid", hex.EncodeToString(pceidBytes[:]))
-	u.RawQuery = q.Encode()
 
-	rsp, err := hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false)
+	var rsp *http.Response
+	var err error
+	switch {
+	case platformData == nil:
+		// Use GET endpoint with PPID instead of platform data.
+		q.Set("encrypted_ppid", hex.EncodeToString(encPpid[:]))
+		q.Set("cpusvn", hex.EncodeToString(cpusvn[:]))
+		q.Set("pcesvn", hex.EncodeToString(pcesvnBytes[:]))
+		q.Set("pceid", hex.EncodeToString(pceidBytes[:]))
+		u.RawQuery = q.Encode()
+		rsp, err = hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false) // nolint: bodyclose
+	default:
+		// Platform data is provided, use the POST endpoint with platform data.
+		payload, merr := json.Marshal(&struct {
+			PlatformManifest string `json:"platformManifest"`
+			CPUSVN           string `json:"cpusvn"`
+			PCESVN           string `json:"pcesvn"`
+			PCEID            string `json:"pceid"`
+		}{
+			PlatformManifest: hex.EncodeToString(platformData),
+			CPUSVN:           hex.EncodeToString(cpusvn[:]),
+			PCESVN:           hex.EncodeToString(pcesvnBytes[:]),
+			PCEID:            hex.EncodeToString(pceidBytes[:]),
+		})
+		if merr != nil {
+			return nil, fmt.Errorf("pcs: failed to marshal PCK certificate request payload: %w", err)
+		}
+		rsp, err = hc.doPCSRequest(ctx, u, http.MethodPost, "application/json", bytes.NewReader(payload), false) // nolint: bodyclose
+	}
 	if err != nil {
 		return nil, fmt.Errorf("pcs: PCK certificate request failed: %w", err)
 	}
@@ -162,13 +188,13 @@ func (hc *httpClient) GetPCKCertificateChain(ctx context.Context, encPpid [384]b
 		return nil, fmt.Errorf("pcs: failed to parse PCK certificate issuer chain header: %w", err)
 	}
 	// It consists of SGX Root CA Certificate and SGX Intermediate CA Certificate.
-	rootCert, rest, err := CertFromPEM([]byte(rawCerts))
-	if err != nil {
-		return nil, fmt.Errorf("pcs: failed to parse root SGX Root CA Certificate from PCK certificate issuer chain: %w", err)
-	}
-	intermediateCert, _, err := CertFromPEM(rest)
+	intermediateCert, rest, err := CertFromPEM([]byte(rawCerts))
 	if err != nil {
 		return nil, fmt.Errorf("pcs: failed to parse SGX Intermediate CA Certificate from PCK certificate issuer chain: %w", err)
+	}
+	rootCert, _, err := CertFromPEM(rest)
+	if err != nil {
+		return nil, fmt.Errorf("pcs: failed to parse root SGX Root CA Certificate from PCK certificate issuer chain: %w", err)
 	}
 
 	// Parse PCK Certificate.

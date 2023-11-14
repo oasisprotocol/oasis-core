@@ -425,10 +425,11 @@ func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
 						}
 					case compId == 18:
 						// CPUSVN
-						cpusvnSlice := pckInfo.CPUSVN[:]
+						var cpusvnSlice []byte
 						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &cpusvnSlice); err != nil {
 							return nil, fmt.Errorf("pcs/quote: bad CPUSVN: %w", err)
 						}
+						copy(pckInfo.CPUSVN[:], cpusvnSlice)
 					}
 				}
 			}
@@ -454,6 +455,14 @@ func (qs *QuoteSignatureECDSA_P256) Verify(
 	pckInfo, err := qs.VerifyPCK(ts)
 	if err != nil {
 		return err
+	}
+
+	// Ensure PCK certification information matches the quote.
+	if !bytes.Equal(pckInfo.CPUSVN[:], qs.QEReport.CPUSVN[:]) {
+		return fmt.Errorf("pcs/quote: PCK CPUSVN(%v) does not match QE report CPUSVN(%v), TCB recovery likely required", pckInfo.CPUSVN, qs.QEReport.CPUSVN)
+	}
+	if pckInfo.PCESVN != int32(header.PCESVN) {
+		return fmt.Errorf("pcs/quote: PCK PCESVN(%d) does not match quote PCESVN(%d), TCB recovery likely required", pckInfo.PCESVN, header.PCESVN)
 	}
 
 	// Verify QE report signature using PCK public key.

@@ -20,6 +20,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/keymanager"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/node"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/registry"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/sgx"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/signer"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/stake"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/storage"
@@ -88,6 +89,7 @@ func init() {
 		consensus.Register,
 		node.Register,
 		config.Register,
+		sgx.Register,
 	} {
 		v(rootCmd)
 	}

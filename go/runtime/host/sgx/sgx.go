@@ -48,6 +48,9 @@ const (
 	defaultRuntimeAttestInterval = 2 * time.Hour
 )
 
+// Key of the platform manifest in the common store.
+var platformManifestKey = []byte("platform_manifest")
+
 // Config contains SGX-specific provisioner configuration options.
 type Config struct {
 	// HostInfo provides information about the host environment.
@@ -415,6 +418,11 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitial
 			CapabilityTEE: capabilityTEE,
 		}})
 	}
+}
+
+func (s *sgxProvisioner) getPlatformManifest() (platformManifest []byte, err error) {
+	err = s.serviceStore.GetCBOR(platformManifestKey, &platformManifest)
+	return
 }
 
 // Implements host.Provisioner.

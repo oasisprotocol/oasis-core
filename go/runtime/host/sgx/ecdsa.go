@@ -2,6 +2,7 @@ package sgx
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"time"
@@ -112,9 +113,22 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 		// We have a PCK certificate chain and so are good to go.
 	case *pcs.CertificationData_PPID:
 		// Fetch PCK certificate chain and include it in the quote.
-		certificateChain, err := sp.pcs.GetPCKCertificateChain(ctx, data.PPID, data.CPUSVN, data.PCESVN, data.PCEID)
+		var certificateChain []*x509.Certificate
+		certificateChain, err = sp.pcs.GetPCKCertificateChain(ctx, nil, data.PPID, data.CPUSVN, data.PCESVN, data.PCEID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch PCK certificate: %w", err)
+			// Fetching certificate chain via PPID failed, check if we have platform data.
+			manifest, merr := sp.getPlatformManifest()
+			if merr != nil {
+				sp.logger.Error("fetching pkcert using encrypted PPID failed, and unable to laod platform manifest", "err", err, "manifest_err", merr)
+				return nil, fmt.Errorf("failed to fetch PCK certificate with PPID: %w", err)
+			}
+			// TODO: try registering the platform data with the PCS (fails if already indirectly registered in past) and retry fetching the certificate chain.
+
+			// Try fetching the certificate chain via platform manifest.
+			certificateChain, err = sp.pcs.GetPCKCertificateChain(ctx, manifest, data.PPID, data.CPUSVN, data.PCESVN, data.PCEID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch PCK certificate with platform manifest: %w", err)
+			}
 		}
 
 		// Replace the certification data with the PCK certification chain data.
