@@ -166,6 +166,7 @@ func (worker *Compute) ModifyConfig() error {
 	worker.Config.Mode = config.ModeCompute
 	worker.Config.Runtime.Provisioner = worker.runtimeProvisioner
 	worker.Config.Runtime.SGXLoader = worker.net.cfg.RuntimeSGXLoaderBinary
+	worker.Config.Runtime.AttestInterval = worker.net.cfg.RuntimeAttestInterval
 
 	worker.Config.Storage.Backend = worker.storageBackend
 	worker.Config.Storage.PublicRPCEnabled = !worker.disablePublicRPC

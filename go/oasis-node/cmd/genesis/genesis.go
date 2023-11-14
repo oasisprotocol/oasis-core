@@ -55,15 +55,16 @@ const (
 	CfgInitialHeight = "initial_height"
 
 	// Registry config flags.
-	CfgRegistryMaxNodeExpiration                = "registry.max_node_expiration"
-	CfgRegistryDisableRuntimeRegistration       = "registry.disable_runtime_registration"
-	CfgRegistryDebugAllowUnroutableAddresses    = "registry.debug.allow_unroutable_addresses"
-	CfgRegistryDebugAllowTestRuntimes           = "registry.debug.allow_test_runtimes"
-	cfgRegistryDebugBypassStake                 = "registry.debug.bypass_stake" // nolint: gosec
-	CfgRegistryEnableRuntimeGovernanceModels    = "registry.enable_runtime_governance_models"
-	CfgRegistryTEEFeaturesSGXPCS                = "registry.tee_features.sgx.pcs"
-	CfgRegistryTEEFeaturesSGXSignedAttestations = "registry.tee_features.sgx.signed_attestations"
-	CfgRegistryTEEFeaturesFreshnessProofs       = "registry.tee_features.freshness_proofs"
+	CfgRegistryMaxNodeExpiration                      = "registry.max_node_expiration"
+	CfgRegistryDisableRuntimeRegistration             = "registry.disable_runtime_registration"
+	CfgRegistryDebugAllowUnroutableAddresses          = "registry.debug.allow_unroutable_addresses"
+	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
+	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
+	CfgRegistryEnableRuntimeGovernanceModels          = "registry.enable_runtime_governance_models"
+	CfgRegistryTEEFeaturesSGXPCS                      = "registry.tee_features.sgx.pcs"
+	CfgRegistryTEEFeaturesSGXSignedAttestations       = "registry.tee_features.sgx.signed_attestations"
+	CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge = "registry.tee_features.sgx.default_max_attestation_age"
+	CfgRegistryTEEFeaturesFreshnessProofs             = "registry.tee_features.freshness_proofs"
 
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
@@ -349,7 +350,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		if regSt.Parameters.TEEFeatures == nil {
 			regSt.Parameters.TEEFeatures = &node.TEEFeatures{}
 		}
-		regSt.Parameters.TEEFeatures.SGX = node.TEEFeaturesSGX{PCS: true}
+		regSt.Parameters.TEEFeatures.SGX.PCS = true
 	}
 
 	if viper.GetBool(CfgRegistryTEEFeaturesFreshnessProofs) {
@@ -364,7 +365,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			regSt.Parameters.TEEFeatures = &node.TEEFeatures{}
 		}
 		regSt.Parameters.TEEFeatures.SGX.SignedAttestations = true
-		regSt.Parameters.TEEFeatures.SGX.DefaultMaxAttestationAge = 1200 // ~2 hours at 6 sec per block.
+		regSt.Parameters.TEEFeatures.SGX.DefaultMaxAttestationAge = viper.GetUint64(CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge)
 	}
 
 	for _, gmStr := range viper.GetStringSlice(CfgRegistryEnableRuntimeGovernanceModels) {
@@ -795,6 +796,7 @@ func init() {
 	initGenesisFlags.StringSlice(CfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXPCS, true, "enable PCS support for SGX TEEs")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXSignedAttestations, true, "enable SGX RAK-signed attestations")
+	initGenesisFlags.Uint64(CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge, 1200, "default max attestation age (SGX RAK-signed attestations must be enabled") // ~2 hours at 6 sec per block.
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesFreshnessProofs, true, "enable freshness proofs")
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)

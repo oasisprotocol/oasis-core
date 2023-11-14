@@ -104,6 +104,13 @@ type NetworkCfg struct { // nolint: maligned
 	// RuntimeSGXLoaderBinary is the path to the Oasis SGX runtime loader.
 	RuntimeSGXLoaderBinary string `json:"runtime_loader_binary"`
 
+	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
+	// a default will be used.
+	RuntimeAttestInterval time.Duration `json:"runtime_attest_interval,omitempty"`
+
+	// RuntimeDefaultMaxAttestationAge is the default maximum attestation age (in blocks).
+	RuntimeDefaultMaxAttestationAge uint64 `json:"runtime_max_attestation_age,omitempty"`
+
 	// Consensus are the network-wide consensus parameters.
 	Consensus consensusGenesis.Genesis `json:"consensus"`
 
@@ -786,6 +793,9 @@ func (net *Network) MakeGenesis() error {
 	}
 	if net.cfg.Beacon.DebugMockBackend {
 		args = append(args, "--"+genesis.CfgBeaconDebugMockBackend)
+	}
+	if net.cfg.RuntimeDefaultMaxAttestationAge != 0 {
+		args = append(args, "--"+genesis.CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge, strconv.FormatUint(net.cfg.RuntimeDefaultMaxAttestationAge, 10))
 	}
 	if cfg := net.cfg.GovernanceParameters; cfg != nil {
 		args = append(args, []string{
