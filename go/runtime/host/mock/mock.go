@@ -185,8 +185,7 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 }
 
 // Implements host.Runtime.
-func (r *runtime) UpdateCapabilityTEE(context.Context) error {
-	return nil
+func (r *runtime) UpdateCapabilityTEE() {
 }
 
 // Implements host.Runtime.

@@ -1668,42 +1668,37 @@ func (n *Node) roundWorker(ctx context.Context) {
 			}
 		}
 
-		for {
-			select {
-			case <-ctx.Done():
-				n.logger.Debug("exiting round, context canceled")
-				return
-			case ev := <-n.evCh:
-				// Handle an event.
-				n.handleEvent(ctx, ev)
-			case txs := <-n.txCh:
-				// Check any queued transactions.
-				n.handleNewCheckedTransactions(txs)
-			case txs := <-n.missingTxCh:
-				// Missing transactions fetched.
-				n.handleMissingTransactions(txs)
-			case ec := <-n.ecCh:
-				// Process observed executor commitments.
-				n.handleObservedExecutorCommitment(ctx, ec)
-				continue
-			case batch := <-n.processedBatchCh:
-				// Batch processing has finished.
-				n.handleProcessedBatch(ctx, batch)
-			case <-schedulerRankTicker.C:
-				// Change scheduler rank and try again.
-				schedulerRank++
-				n.logger.Debug("scheduler rank has changed",
-					"rank", schedulerRank,
-				)
-			case <-flushTimer.C:
-				// Force scheduling for primary transaction scheduler.
-				n.logger.Debug("scheduling is now forced")
-				flush = true
-			case <-n.reselectCh:
-				// Try again.
-			}
-
-			break
+		select {
+		case <-ctx.Done():
+			n.logger.Debug("exiting round, context canceled")
+			return
+		case ev := <-n.evCh:
+			// Handle an event.
+			n.handleEvent(ctx, ev)
+		case txs := <-n.txCh:
+			// Check any queued transactions.
+			n.handleNewCheckedTransactions(txs)
+		case txs := <-n.missingTxCh:
+			// Missing transactions fetched.
+			n.handleMissingTransactions(txs)
+		case ec := <-n.ecCh:
+			// Process observed executor commitments.
+			n.handleObservedExecutorCommitment(ctx, ec)
+		case batch := <-n.processedBatchCh:
+			// Batch processing has finished.
+			n.handleProcessedBatch(ctx, batch)
+		case <-schedulerRankTicker.C:
+			// Change scheduler rank and try again.
+			schedulerRank++
+			n.logger.Debug("scheduler rank has changed",
+				"rank", schedulerRank,
+			)
+		case <-flushTimer.C:
+			// Force scheduling for primary transaction scheduler.
+			n.logger.Debug("scheduling is now forced")
+			flush = true
+		case <-n.reselectCh:
+			// Try again.
 		}
 	}
 }

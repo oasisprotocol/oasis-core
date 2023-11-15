@@ -207,18 +207,16 @@ func (agg *Aggregate) Call(ctx context.Context, body *protocol.Body) (*protocol.
 }
 
 // UpdateCapabilityTEE implements host.Runtime.
-func (agg *Aggregate) UpdateCapabilityTEE(ctx context.Context) error {
+func (agg *Aggregate) UpdateCapabilityTEE() {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
-	var err error
 	if agg.active != nil {
-		err = errors.Join(err, agg.active.host.UpdateCapabilityTEE(ctx))
+		agg.active.host.UpdateCapabilityTEE()
 	}
 	if agg.next != nil {
-		err = errors.Join(err, agg.next.host.UpdateCapabilityTEE(ctx))
+		agg.next.host.UpdateCapabilityTEE()
 	}
-	return err
 }
 
 // WatchEvents implements host.Runtime.

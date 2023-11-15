@@ -926,11 +926,7 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 
 				n.logger.Debug("requesting the runtime to update CapabilityTEE")
 
-				if err = n.host.UpdateCapabilityTEE(n.ctx); err != nil {
-					n.logger.Error("failed to update runtime CapabilityTEE",
-						"err", err,
-					)
-				}
+				n.host.UpdateCapabilityTEE()
 				lastAttestationUpdateHeight = height
 				lastAttestationUpdate = time.Now()
 			}
