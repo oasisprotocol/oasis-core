@@ -702,14 +702,15 @@ func (n *Node) runtimeExecuteTxBatch(
 	rsp, err := rt.Call(callCtx, rq)
 	switch {
 	case err == nil:
-	case errors.Is(err, context.Canceled):
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		// Context was canceled while the runtime was processing a request.
 		n.logger.Error("batch processing aborted by context, restarting runtime",
 			"cause", context.Cause(callCtx),
 		)
 
-		// Abort the runtime, so we can start processing the next batch.
-		abortCtx, cancel := context.WithTimeout(ctx, abortTimeout)
+		// Abort the runtime, so we can start processing the next batch. Note that we use the global
+		// node context here to make sure abort gets processed even when ctx has been cancelled.
+		abortCtx, cancel := context.WithTimeout(n.ctx, abortTimeout)
 		defer cancel()
 
 		if err = rt.Abort(abortCtx, false); err != nil {

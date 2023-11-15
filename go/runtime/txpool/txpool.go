@@ -455,7 +455,7 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 	}()
 	switch {
 	case err == nil:
-	case errors.Is(err, context.Canceled):
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		// Context was canceled while the runtime was processing a request.
 		t.logger.Error("transaction batch check aborted by context, aborting runtime")
 
