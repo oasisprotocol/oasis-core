@@ -193,13 +193,8 @@ func (r *sandboxedRuntime) getConnection(ctx context.Context) (protocol.Connecti
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) UpdateCapabilityTEE(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case r.notifyUpdateCapabilityTEE.In() <- struct{}{}:
-	}
-	return nil
+func (r *sandboxedRuntime) UpdateCapabilityTEE() {
+	r.notifyUpdateCapabilityTEE.In() <- struct{}{}
 }
 
 // Implements host.Runtime.
