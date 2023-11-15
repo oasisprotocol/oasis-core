@@ -708,8 +708,9 @@ func (n *Node) runtimeExecuteTxBatch(
 			"cause", context.Cause(callCtx),
 		)
 
-		// Abort the runtime, so we can start processing the next batch.
-		abortCtx, cancel := context.WithTimeout(ctx, abortTimeout)
+		// Abort the runtime, so we can start processing the next batch. Note that we use the global
+		// node context here to make sure abort gets processed even when ctx has been cancelled.
+		abortCtx, cancel := context.WithTimeout(n.ctx, abortTimeout)
 		defer cancel()
 
 		if err = rt.Abort(abortCtx, false); err != nil {
