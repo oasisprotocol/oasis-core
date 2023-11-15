@@ -64,7 +64,7 @@ type Runtime interface {
 	Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error)
 
 	// UpdateCapabilityTEE asks the runtime to update its CapabilityTEE with latest data.
-	UpdateCapabilityTEE(ctx context.Context) error
+	UpdateCapabilityTEE()
 
 	// WatchEvents subscribes to runtime status events.
 	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
