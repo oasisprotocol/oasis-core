@@ -122,26 +122,32 @@ func (agg *Aggregate) ID() common.Namespace {
 	return agg.id
 }
 
-// GetInfo implements host.Runtime.
-func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
+func (agg *Aggregate) getActiveHost() (*aggregatedHost, error) {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
 	if agg.active == nil {
 		return nil, ErrNoActiveVersion
 	}
-	return agg.active.host.GetInfo(ctx)
+	return agg.active, nil
+}
+
+// GetInfo implements host.Runtime.
+func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
+	active, err := agg.getActiveHost()
+	if err != nil {
+		return nil, err
+	}
+	return active.host.GetInfo(ctx)
 }
 
 // GetCapabilityTEE implements host.Runtime.
 func (agg *Aggregate) GetCapabilityTEE() (*node.CapabilityTEE, error) {
-	agg.l.RLock()
-	defer agg.l.RUnlock()
-
-	if agg.active == nil {
-		return nil, ErrNoActiveVersion
+	active, err := agg.getActiveHost()
+	if err != nil {
+		return nil, err
 	}
-	return agg.active.host.GetCapabilityTEE()
+	return active.host.GetCapabilityTEE()
 }
 
 // shouldPropagateToNextVersion checks whether the given runtime request should also be propagated
@@ -243,13 +249,11 @@ func (agg *Aggregate) Start() error {
 
 // Abort implements host.Runtime.
 func (agg *Aggregate) Abort(ctx context.Context, force bool) error {
-	agg.l.RLock()
-	defer agg.l.RUnlock()
-
-	if agg.active == nil {
-		return ErrNoActiveVersion
+	active, err := agg.getActiveHost()
+	if err != nil {
+		return err
 	}
-	return agg.active.host.Abort(ctx, force)
+	return active.host.Abort(ctx, force)
 }
 
 // Stop implements host.Runtime.
