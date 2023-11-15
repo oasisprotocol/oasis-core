@@ -702,7 +702,7 @@ func (n *Node) runtimeExecuteTxBatch(
 	rsp, err := rt.Call(callCtx, rq)
 	switch {
 	case err == nil:
-	case errors.Is(err, context.Canceled):
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		// Context was canceled while the runtime was processing a request.
 		n.logger.Error("batch processing aborted by context, restarting runtime",
 			"cause", context.Cause(callCtx),
