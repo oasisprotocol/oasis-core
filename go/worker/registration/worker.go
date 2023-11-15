@@ -162,7 +162,11 @@ func (rp *roleProvider) SetAvailableWithCallback(hook RegisterNodeHook, cb Regis
 	rp.cb = cb
 	rp.Unlock()
 
-	rp.w.registerCh <- struct{}{}
+	// Notify worker that role provider has been updated.
+	select {
+	case rp.w.registerCh <- struct{}{}:
+	default:
+	}
 }
 
 func (rp *roleProvider) SetUnavailable() {
@@ -1079,7 +1083,7 @@ func New(
 		logger:             logger,
 		consensus:          consensus,
 		p2p:                p2p,
-		registerCh:         make(chan struct{}, 64),
+		registerCh:         make(chan struct{}, 1),
 	}
 
 	w.storedDeregister = storedDeregister
