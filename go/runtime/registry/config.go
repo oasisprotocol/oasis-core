@@ -117,6 +117,7 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 		// Register provisioners based on the configured provisioner.
 		var insecureNoSandbox bool
 		sandboxBinary := config.GlobalConfig.Runtime.SandboxBinary
+		attestInterval := config.GlobalConfig.Runtime.AttestInterval
 		rh.Provisioners = make(map[node.TEEHardware]runtimeHost.Provisioner)
 		switch p := config.GlobalConfig.Runtime.Provisioner; p {
 		case rtConfig.RuntimeProvisionerMock:
@@ -182,14 +183,15 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 				}
 
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
-					HostInfo:          hostInfo,
-					CommonStore:       commonStore,
-					LoaderPath:        sgxLoader,
-					IAS:               ias,
-					PCS:               pc,
-					Consensus:         consensus,
-					SandboxBinaryPath: sandboxBinary,
-					InsecureNoSandbox: insecureNoSandbox,
+					HostInfo:              hostInfo,
+					CommonStore:           commonStore,
+					LoaderPath:            sgxLoader,
+					IAS:                   ias,
+					PCS:                   pc,
+					Consensus:             consensus,
+					SandboxBinaryPath:     sandboxBinary,
+					InsecureNoSandbox:     insecureNoSandbox,
+					RuntimeAttestInterval: attestInterval,
 				})
 				if err != nil {
 					return nil, fmt.Errorf("failed to create SGX runtime provisioner: %w", err)

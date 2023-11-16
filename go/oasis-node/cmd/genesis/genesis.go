@@ -51,24 +51,25 @@ const (
 	cfgKeyManager    = "keymanager"
 	cfgStaking       = "staking"
 	cfgBlockHeight   = "height"
-	cfgChainID       = "chain.id"
-	cfgInitialHeight = "initial_height"
+	CfgChainID       = "chain.id"
+	CfgInitialHeight = "initial_height"
 
 	// Registry config flags.
-	CfgRegistryMaxNodeExpiration                = "registry.max_node_expiration"
-	CfgRegistryDisableRuntimeRegistration       = "registry.disable_runtime_registration"
-	cfgRegistryDebugAllowUnroutableAddresses    = "registry.debug.allow_unroutable_addresses"
-	CfgRegistryDebugAllowTestRuntimes           = "registry.debug.allow_test_runtimes"
-	cfgRegistryDebugBypassStake                 = "registry.debug.bypass_stake" // nolint: gosec
-	cfgRegistryEnableRuntimeGovernanceModels    = "registry.enable_runtime_governance_models"
-	CfgRegistryTEEFeaturesSGXPCS                = "registry.tee_features.sgx.pcs"
-	CfgRegistryTEEFeaturesSGXSignedAttestations = "registry.tee_features.sgx.signed_attestations"
-	CfgRegistryTEEFeaturesFreshnessProofs       = "registry.tee_features.freshness_proofs"
+	CfgRegistryMaxNodeExpiration                      = "registry.max_node_expiration"
+	CfgRegistryDisableRuntimeRegistration             = "registry.disable_runtime_registration"
+	CfgRegistryDebugAllowUnroutableAddresses          = "registry.debug.allow_unroutable_addresses"
+	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
+	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
+	CfgRegistryEnableRuntimeGovernanceModels          = "registry.enable_runtime_governance_models"
+	CfgRegistryTEEFeaturesSGXPCS                      = "registry.tee_features.sgx.pcs"
+	CfgRegistryTEEFeaturesSGXSignedAttestations       = "registry.tee_features.sgx.signed_attestations"
+	CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge = "registry.tee_features.sgx.default_max_attestation_age"
+	CfgRegistryTEEFeaturesFreshnessProofs             = "registry.tee_features.freshness_proofs"
 
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
 	cfgSchedulerMaxValidators          = "scheduler.max_validators"
-	cfgSchedulerMaxValidatorsPerEntity = "scheduler.max_validators_per_entity"
+	CfgSchedulerMaxValidatorsPerEntity = "scheduler.max_validators_per_entity"
 	cfgSchedulerDebugBypassStake       = "scheduler.debug.bypass_stake" // nolint: gosec
 	CfgSchedulerDebugForceElect        = "scheduler.debug.force_elect"
 	CfgSchedulerDebugAllowWeakAlpha    = "scheduler.debug.allow_weak_alpha"
@@ -101,7 +102,7 @@ const (
 	CfgStakingTokenValueExponent = "staking.token_value_exponent"
 
 	// CometBFT config flags.
-	cfgConsensusTimeoutCommit            = "consensus.cometbft.timeout_commit"
+	CfgConsensusTimeoutCommit            = "consensus.cometbft.timeout_commit"
 	cfgConsensusSkipTimeoutCommit        = "consensus.cometbft.skip_timeout_commit"
 	cfgConsensusEmptyBlockInterval       = "consensus.cometbft.empty_block_interval"
 	cfgConsensusMaxTxSizeBytes           = "consensus.cometbft.max_tx_size"
@@ -115,7 +116,7 @@ const (
 	cfgConsensusBlacklistPublicKey       = "consensus.blacklist_public_key"
 
 	// Consensus backend config flag.
-	cfgConsensusBackend = "consensus.backend"
+	CfgConsensusBackend = "consensus.backend"
 
 	// Our 'entity' flag overlaps with the common flag 'entity'.
 	// We bind it to a separate Viper key to disambiguate at runtime.
@@ -171,7 +172,7 @@ func doInitGenesis(*cobra.Command, []string) {
 		return
 	}
 
-	chainID := viper.GetString(cfgChainID)
+	chainID := viper.GetString(CfgChainID)
 	if chainID == "" {
 		logger.Error("genesis chain id missing")
 		return
@@ -179,7 +180,7 @@ func doInitGenesis(*cobra.Command, []string) {
 
 	// Build the genesis state, if any.
 	doc := &genesis.Document{
-		Height:  viper.GetInt64(cfgInitialHeight),
+		Height:  viper.GetInt64(CfgInitialHeight),
 		ChainID: chainID,
 		Time:    time.Now(),
 	}
@@ -221,7 +222,7 @@ func doInitGenesis(*cobra.Command, []string) {
 		Parameters: scheduler.ConsensusParameters{
 			MinValidators:          viper.GetInt(cfgSchedulerMinValidators),
 			MaxValidators:          viper.GetInt(cfgSchedulerMaxValidators),
-			MaxValidatorsPerEntity: viper.GetInt(cfgSchedulerMaxValidatorsPerEntity),
+			MaxValidatorsPerEntity: viper.GetInt(CfgSchedulerMaxValidatorsPerEntity),
 			DebugBypassStake:       viper.GetBool(cfgSchedulerDebugBypassStake),
 			DebugAllowWeakAlpha:    viper.GetBool(CfgSchedulerDebugAllowWeakAlpha),
 		},
@@ -283,9 +284,9 @@ func doInitGenesis(*cobra.Command, []string) {
 	}
 
 	doc.Consensus = consensusGenesis.Genesis{
-		Backend: viper.GetString(cfgConsensusBackend),
+		Backend: viper.GetString(CfgConsensusBackend),
 		Parameters: consensusGenesis.Parameters{
-			TimeoutCommit:            viper.GetDuration(cfgConsensusTimeoutCommit),
+			TimeoutCommit:            viper.GetDuration(CfgConsensusTimeoutCommit),
 			SkipTimeoutCommit:        viper.GetBool(cfgConsensusSkipTimeoutCommit),
 			EmptyBlockInterval:       viper.GetDuration(cfgConsensusEmptyBlockInterval),
 			MaxTxSize:                uint64(viper.GetSizeInBytes(cfgConsensusMaxTxSizeBytes)),
@@ -332,7 +333,7 @@ func doInitGenesis(*cobra.Command, []string) {
 func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []string, l *logging.Logger) error {
 	regSt := registry.Genesis{
 		Parameters: registry.ConsensusParameters{
-			DebugAllowUnroutableAddresses: viper.GetBool(cfgRegistryDebugAllowUnroutableAddresses),
+			DebugAllowUnroutableAddresses: viper.GetBool(CfgRegistryDebugAllowUnroutableAddresses),
 			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
 			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
 			GasCosts:                      registry.DefaultGasCosts, // TODO: Make these configurable.
@@ -349,7 +350,7 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		if regSt.Parameters.TEEFeatures == nil {
 			regSt.Parameters.TEEFeatures = &node.TEEFeatures{}
 		}
-		regSt.Parameters.TEEFeatures.SGX = node.TEEFeaturesSGX{PCS: true}
+		regSt.Parameters.TEEFeatures.SGX.PCS = true
 	}
 
 	if viper.GetBool(CfgRegistryTEEFeaturesFreshnessProofs) {
@@ -364,10 +365,10 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			regSt.Parameters.TEEFeatures = &node.TEEFeatures{}
 		}
 		regSt.Parameters.TEEFeatures.SGX.SignedAttestations = true
-		regSt.Parameters.TEEFeatures.SGX.DefaultMaxAttestationAge = 1200 // ~2 hours at 6 sec per block.
+		regSt.Parameters.TEEFeatures.SGX.DefaultMaxAttestationAge = viper.GetUint64(CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge)
 	}
 
-	for _, gmStr := range viper.GetStringSlice(cfgRegistryEnableRuntimeGovernanceModels) {
+	for _, gmStr := range viper.GetStringSlice(CfgRegistryEnableRuntimeGovernanceModels) {
 		var gm registry.RuntimeGovernanceModel
 		if err := gm.UnmarshalText([]byte(strings.ToLower(gmStr))); err != nil {
 			return fmt.Errorf("%w: '%s'", err, gmStr)
@@ -783,27 +784,28 @@ func init() {
 	initGenesisFlags.StringSlice(cfgRootHash, nil, "path to roothash genesis runtime states file")
 	initGenesisFlags.String(cfgStaking, "", "path to staking genesis file")
 	initGenesisFlags.StringSlice(cfgKeyManager, nil, "path to key manager genesis status file")
-	initGenesisFlags.String(cfgChainID, "", "genesis chain id")
-	initGenesisFlags.Int64(cfgInitialHeight, 1, "initial block height")
+	initGenesisFlags.String(CfgChainID, "", "genesis chain id")
+	initGenesisFlags.Int64(CfgInitialHeight, 1, "initial block height")
 
 	// Registry config flags.
 	initGenesisFlags.Uint64(CfgRegistryMaxNodeExpiration, 5, "maximum node registration lifespan in epochs")
 	initGenesisFlags.Bool(CfgRegistryDisableRuntimeRegistration, false, "disable non-genesis runtime registration")
-	initGenesisFlags.Bool(cfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
+	initGenesisFlags.Bool(CfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
-	initGenesisFlags.StringSlice(cfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
+	initGenesisFlags.StringSlice(CfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXPCS, true, "enable PCS support for SGX TEEs")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXSignedAttestations, true, "enable SGX RAK-signed attestations")
+	initGenesisFlags.Uint64(CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge, 1200, "default max attestation age (SGX RAK-signed attestations must be enabled") // ~2 hours at 6 sec per block.
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesFreshnessProofs, true, "enable freshness proofs")
-	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugAllowUnroutableAddresses)
+	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
 	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)
 
 	// Scheduler config flags.
 	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minimum number of validators")
 	initGenesisFlags.Int(cfgSchedulerMaxValidators, 100, "maximum number of validators")
-	initGenesisFlags.Int(cfgSchedulerMaxValidatorsPerEntity, 1, "maximum number of validators per entity")
+	initGenesisFlags.Int(CfgSchedulerMaxValidatorsPerEntity, 1, "maximum number of validators per entity")
 	initGenesisFlags.Bool(cfgSchedulerDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.String(CfgSchedulerDebugForceElect, "", "force elect the (runtime, node, role) tuple(s) (UNSAFE)")
 	initGenesisFlags.Bool(CfgSchedulerDebugAllowWeakAlpha, false, "bypass alpha strength check for VRF elections (UNSAFE)")
@@ -842,7 +844,7 @@ func init() {
 	initGenesisFlags.Uint8(CfgStakingTokenValueExponent, 0, "token value's base-10 exponent")
 
 	// CometBFT config flags.
-	initGenesisFlags.Duration(cfgConsensusTimeoutCommit, 1*time.Second, "cometbft commit timeout")
+	initGenesisFlags.Duration(CfgConsensusTimeoutCommit, 1*time.Second, "cometbft commit timeout")
 	initGenesisFlags.Bool(cfgConsensusSkipTimeoutCommit, false, "skip cometbft commit timeout")
 	initGenesisFlags.Duration(cfgConsensusEmptyBlockInterval, 0*time.Second, "cometbft empty block interval")
 	initGenesisFlags.String(cfgConsensusMaxTxSizeBytes, "32kb", "cometbft maximum transaction size (in bytes)")
@@ -856,7 +858,7 @@ func init() {
 	initGenesisFlags.StringSlice(cfgConsensusBlacklistPublicKey, nil, "blacklist public key")
 
 	// Consensus backend flag.
-	initGenesisFlags.String(cfgConsensusBackend, cmt.BackendName, "consensus backend")
+	initGenesisFlags.String(CfgConsensusBackend, cmt.BackendName, "consensus backend")
 
 	_ = viper.BindPFlags(initGenesisFlags)
 	initGenesisFlags.StringSlice(cfgEntity, nil, "path to entity registration file")

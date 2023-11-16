@@ -90,6 +90,10 @@ type Config struct {
 	// Number of epochs before runtime activation epoch when to start the runtime to warm it up and
 	// prepare any required attestations. Zero disables pre-warming.
 	PreWarmEpochs uint64 `yaml:"pre_warm_epochs,omitempty"`
+
+	// AttestInterval is the interval for periodic runtime re-attestation. If not specified
+	// a default will be used.
+	AttestInterval time.Duration `yaml:"attest_interval,omitempty"`
 }
 
 // PruneConfig is the history pruner configuration structure.

@@ -292,6 +292,7 @@ func (km *Keymanager) ModifyConfig() error {
 	km.Config.Mode = config.ModeKeyManager
 	km.Config.Runtime.Provisioner = km.runtimeProvisioner
 	km.Config.Runtime.SGXLoader = km.net.cfg.RuntimeSGXLoaderBinary
+	km.Config.Runtime.AttestInterval = km.net.cfg.RuntimeAttestInterval
 	km.Config.Runtime.Paths = append(km.Config.Runtime.Paths, km.runtime.BundlePaths()...)
 
 	km.Config.Keymanager.RuntimeID = km.runtime.ID().String()

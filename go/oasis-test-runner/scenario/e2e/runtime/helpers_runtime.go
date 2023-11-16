@@ -477,13 +477,46 @@ func (sc *Scenario) UpgradeKeyManager(ctx context.Context, childEnv *env.Env, cl
 		return err
 	}
 
+	// Verify that both key managers can successfully register after the upgrade. If enclave
+	// initialization no longer functions, for example, due to issues such as policy parsing,
+	// consensus verification failures, or decoding errors, the key managers will re-register
+	// with the last init response and the last attestation. Upon expiration of the latter,
+	// any subsequent re-registration attempts will be unsuccessful, resulting in the removal
+	// of the key manager from the committee.
+	//
+	// This verification may take a significant amount of time, as we need to await the expiration
+	// of the last attestation.
+	params, err := sc.Net.ClientController().Registry.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return err
+	}
+
+	// Wait for the last successful attestation to expire.
+	if _, err = sc.WaitBlocks(ctx, int(params.TEEFeatures.SGX.DefaultMaxAttestationAge)); err != nil {
+		return err
+	}
+
+	// And a bit more so that the current epoch ends.
+	if err = sc.WaitEpochs(ctx, 1); err != nil {
+		return err
+	}
+
+	// Now check if both key managers still form the committee.
+	status, err := sc.KeyManagerStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if size := len(status.Nodes); size != 2 {
+		return fmt.Errorf("key manager committee's size is not correct: expected 2, got %d", size)
+	}
+
+	// Shutdown old keymanager and make sure it de-registers.
 	nodeCh, nodeSub, err := sc.Net.Controller().Registry.WatchNodes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to watch nodes: %w", err)
 	}
 	defer nodeSub.Close()
 
-	// Shutdown old keymanager and make sure it de-registers.
 	sc.Logger.Info("shutting down old keymanager")
 
 	if err := oldKm.RequestShutdown(ctx, true); err != nil {

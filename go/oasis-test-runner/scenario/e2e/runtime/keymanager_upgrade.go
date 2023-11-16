@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -38,6 +39,9 @@ func (sc *KmUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	if sc.upgradedKeyManagerIndex, err = sc.UpgradeKeyManagerFixture(f); err != nil {
 		return nil, err
 	}
+
+	f.Network.RuntimeAttestInterval = 2 * time.Minute
+	f.Network.RuntimeDefaultMaxAttestationAge = 200 // 4 min at 1.2 sec per block.
 
 	return f, nil
 }
