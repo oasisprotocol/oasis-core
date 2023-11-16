@@ -10,6 +10,7 @@ import (
 	"time"
 
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	genesis "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -141,6 +142,10 @@ func (sc *secureUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Use the same non-debug entity as in the pre-upgrade scenario.
 	f.Entities[1].Restore = true
 
+	// Speed up test by reducing the attestation interval to less than
+	// the default max attestation age (set later).
+	f.Network.RuntimeAttestInterval = 2 * time.Minute
+
 	return f, nil
 }
 
@@ -151,12 +156,38 @@ func (sc *secureUpgradeImpl) Clone() scenario.Scenario {
 }
 
 func (sc *secureUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error {
-	// Fix the exported genesis file and use it.
+	// Migrate the exported genesis file.
 	cli := cli.New(childEnv, sc.Net, sc.Logger)
 	genesisFile, err := e2e.FixExportedGenesisFile(childEnv, cli, &sc.Scenario.Scenario)
 	if err != nil {
 		return err
 	}
+
+	// Update the genesis file to override migration changes made to
+	// the default max attestation age.
+	genesisFileProvider, err := genesis.NewFileProvider(genesisFile)
+	if err != nil {
+		sc.Logger.Error("failed getting genesis file provider",
+			"err", err,
+		)
+		return err
+	}
+	genesisDoc, err := genesisFileProvider.GetGenesisDocument()
+	if err != nil {
+		sc.Logger.Error("failed getting genesis document from file provider",
+			"err", err,
+		)
+		return err
+	}
+	genesisDoc.Registry.Parameters.TEEFeatures.SGX.DefaultMaxAttestationAge = 200 // 4 min at 1.2 sec per block.
+	if err = genesisDoc.WriteFileJSON(genesisFile); err != nil {
+		sc.Logger.Error("failed to update genesis",
+			"err", err,
+		)
+		return err
+	}
+
+	// Use the modified genesis file.
 	cfg := sc.Net.Config()
 	cfg.GenesisFile = genesisFile
 
