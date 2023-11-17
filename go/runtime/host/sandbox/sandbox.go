@@ -446,7 +446,7 @@ func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 		return nil
 	}
 
-	r.logger.Warn("restarting runtime", "force_restart", rq.force, "abbort_err", err, "abort_resp", response)
+	r.logger.Warn("restarting runtime", "force_restart", rq.force, "abort_err", err, "abort_resp", response)
 
 	// Failed to gracefully interrupt the runtime. Kill the runtime and it will be automatically
 	// restarted by the manager after it dies.
