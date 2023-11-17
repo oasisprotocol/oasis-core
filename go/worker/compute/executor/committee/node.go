@@ -691,9 +691,15 @@ func (n *Node) runtimeExecuteTxBatch(
 	}()
 
 	// Ensure batch execution is bounded.
+	//
+	// Note: We intentionally never abort batch execution when ctx is canceled
+	// (e.g., when a round ends or when a proposal with a higher rank is received)
+	// to prevent runtimes from restarting, as abort requests are currently not
+	// supported. Execution shouldn't take a significant amount of time anyway
+	// unless something is seriously wrong.
 	proposerTimeout := state.Runtime.TxnScheduler.ProposerTimeout
 	callCtx, cancelCallFn := context.WithTimeoutCause(
-		ctx,
+		context.TODO(), // Replace with ctx once runtimes start supporting abort requests.
 		executeBatchTimeoutFactor*proposerTimeout,
 		errors.New("proposer timeout expired"),
 	)
