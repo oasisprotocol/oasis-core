@@ -8,7 +8,7 @@ use crate::{
         key_format::{KeyFormat, KeyFormatAtom},
         namespace::Namespace,
     },
-    consensus::{keymanager::SignedPolicySGX, state::StateError},
+    consensus::{beacon::EpochTime, keymanager::SignedPolicySGX, state::StateError},
     key_format,
     storage::mkvs::ImmutableMKVS,
 };
@@ -36,12 +36,18 @@ pub struct Status {
     pub is_initialized: bool,
     /// True iff the key manager is secure.
     pub is_secure: bool,
+    /// Generation of the latest master secret.
+    pub generation: u64,
+    /// Epoch of the last master secret rotation.
+    pub rotation_epoch: EpochTime,
     /// Key manager master secret verification checksum.
     pub checksum: Vec<u8>,
     /// List of currently active key manager node IDs.
     pub nodes: Vec<PublicKey>,
     /// Key manager policy.
     pub policy: Option<SignedPolicySGX>,
+    /// Runtime signing key of the key manager.
+    pub rsk: Option<PublicKey>,
 }
 
 impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
@@ -172,6 +178,7 @@ mod test {
                 checksum: vec![],
                 nodes: vec![],
                 policy: None,
+                ..Default::default()
             },
             Status {
                 id: keymanager2,
@@ -202,6 +209,7 @@ mod test {
                         },
                     ],
                 }),
+                ..Default::default()
             },
         ];
 

@@ -57,7 +57,7 @@ func (sc *runtimeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 
 	// Load the upgraded runtime binary.
-	newRuntimeBinaries := sc.resolveRuntimeBinaries("simple-keyvalue-upgrade")
+	newRuntimeBinaries := sc.ResolveRuntimeUpgradeBinaries("simple-keyvalue-upgrade")
 
 	// Setup the upgraded runtime (first is keymanager, others should be generic compute).
 	runtimeFix := f.Runtimes[computeIndex]

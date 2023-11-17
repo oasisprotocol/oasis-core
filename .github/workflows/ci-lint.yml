@@ -56,6 +56,10 @@ jobs:
       - name: Install gitlint
         run: |
           python -m pip install gitlint
+        # Needed for Towncrier fork to work with 3.12 and above
+      - name: Install setuptools
+        run: |
+          python -m pip install setuptools
       - name: Install towncrier
         run: |
           python -m pip install https://github.com/oasisprotocol/towncrier/archive/oasis-master.tar.gz
