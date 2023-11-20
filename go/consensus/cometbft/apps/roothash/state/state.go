@@ -51,13 +51,13 @@ var (
 	//
 	// Value is CBOR-serialized message.IncomingMessage.
 	inMsgQueueKeyFmt = keyformat.New(0x29, keyformat.H(&common.Namespace{}), uint64(0))
-	// pastRootsFmt is the key format for previous state and I/O runtime roots.
+	// pastRootsKeyFmt is the key format for previous state and I/O runtime roots.
 	//
 	// Key format is: 0x2a H(<runtime-id>) <round>
 	// Value is CBOR-serialized roothash.RoundRoots for that round and runtime.
 	// The maximum number of rounds that this map stores is defined by the
 	// roothash consensus parameters as MaxPastRootsStored.
-	pastRootsFmt = keyformat.New(0x2a, keyformat.H(&common.Namespace{}), uint64(0))
+	pastRootsKeyFmt = keyformat.New(0x2a, keyformat.H(&common.Namespace{}), uint64(0))
 )
 
 // ImmutableState is the immutable roothash state wrapper.
@@ -281,7 +281,7 @@ func (s *ImmutableState) IncomingMessageQueue(ctx context.Context, runtimeID com
 //
 // If no roots are present for the given runtime and round, nil is returned.
 func (s *ImmutableState) RoundRoots(ctx context.Context, runtimeID common.Namespace, round uint64) (*roothash.RoundRoots, error) {
-	raw, err := s.is.Get(ctx, pastRootsFmt.Encode(&runtimeID, round))
+	raw, err := s.is.Get(ctx, pastRootsKeyFmt.Encode(&runtimeID, round))
 	if err != nil {
 		return nil, api.UnavailableStateError(err)
 	}
@@ -312,12 +312,12 @@ func (s *ImmutableState) PastRoundRoots(ctx context.Context, runtimeID common.Na
 
 	// Round -> [state, I/O] roots.
 	ret := make(map[uint64]roothash.RoundRoots)
-	for it.Seek(pastRootsFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
+	for it.Seek(pastRootsKeyFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
 		var (
 			rtID  keyformat.PreHashed
 			round uint64
 		)
-		if !pastRootsFmt.Decode(it.Key(), &rtID, &round) {
+		if !pastRootsKeyFmt.Decode(it.Key(), &rtID, &round) {
 			break
 		}
 		if rtID != hID {
@@ -348,12 +348,12 @@ func (s *ImmutableState) PastRoundRootsCount(ctx context.Context, runtimeID comm
 	hID := keyformat.PreHashed(runtimeID.Hash())
 
 	var count uint64
-	for it.Seek(pastRootsFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
+	for it.Seek(pastRootsKeyFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
 		var (
 			rtID  keyformat.PreHashed
 			round uint64
 		)
-		if !pastRootsFmt.Decode(it.Key(), &rtID, &round) {
+		if !pastRootsKeyFmt.Decode(it.Key(), &rtID, &round) {
 			break
 		}
 		if rtID != hID {
@@ -417,12 +417,12 @@ func (s *MutableState) SetRuntimeState(ctx context.Context, state *roothash.Runt
 
 		// Delete the oldest root to make room for the new one.
 		if newRound >= maxStored {
-			if err = s.ms.Remove(ctx, pastRootsFmt.Encode(&state.Runtime.ID, newRound-maxStored)); err != nil {
+			if err = s.ms.Remove(ctx, pastRootsKeyFmt.Encode(&state.Runtime.ID, newRound-maxStored)); err != nil {
 				return api.UnavailableStateError(err)
 			}
 		}
 
-		if err = s.ms.Insert(ctx, pastRootsFmt.Encode(&state.Runtime.ID, newRound), newRoots); err != nil {
+		if err = s.ms.Insert(ctx, pastRootsKeyFmt.Encode(&state.Runtime.ID, newRound), newRoots); err != nil {
 			return api.UnavailableStateError(err)
 		}
 	}
@@ -459,7 +459,7 @@ func (s *MutableState) ShrinkPastRoots(ctx context.Context, max uint64) error {
 		hID := keyformat.PreHashed(id.Hash())
 
 		keysToRemove := make([][]byte, 0, numPastRootsToDelete)
-		for it.Seek(pastRootsFmt.Encode(&id)); it.Valid(); it.Next() {
+		for it.Seek(pastRootsKeyFmt.Encode(&id)); it.Valid(); it.Next() {
 			if uint64(len(keysToRemove)) >= numPastRootsToDelete {
 				break
 			}
@@ -468,7 +468,7 @@ func (s *MutableState) ShrinkPastRoots(ctx context.Context, max uint64) error {
 				runtimeID keyformat.PreHashed
 				round     uint64
 			)
-			if !pastRootsFmt.Decode(it.Key(), &runtimeID, &round) {
+			if !pastRootsKeyFmt.Decode(it.Key(), &runtimeID, &round) {
 				break
 			}
 			if runtimeID != hID {
