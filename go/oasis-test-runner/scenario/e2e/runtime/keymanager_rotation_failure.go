@@ -63,8 +63,8 @@ func (sc *kmRotationFailureImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// This requires multiple keymanagers.
 	f.Keymanagers = []oasis.KeymanagerFixture{
 		{Runtime: 0, Entity: 1, Policy: 0},
-		{Runtime: 0, Entity: 1, Policy: 0, NodeFixture: oasis.NodeFixture{NoAutoStart: true}},
-		{Runtime: 0, Entity: 1, Policy: 0, NodeFixture: oasis.NodeFixture{NoAutoStart: true}},
+		{Runtime: 0, Entity: 1, Policy: 0},
+		{Runtime: 0, Entity: 1, Policy: 0},
 	}
 
 	// Enable master secret rotation.
@@ -76,28 +76,20 @@ func (sc *kmRotationFailureImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
-	// Start the first two key managers.
+	var generation uint64
+
+	// Start the first key manager.
 	if err := sc.Net.Start(); err != nil {
 		return err
 	}
 
-	for i := 0; i < 3; i++ {
-		// Start the third key manager.
-		if err := sc.StartKeymanagers([]int{1, 2}); err != nil {
-			return err
-		}
-
-		// Verify that master secret generation works.
-		generation := uint64(2*i + 1)
-		status, err := sc.WaitMasterSecret(ctx, generation)
-		if err != nil {
-			return fmt.Errorf("master secret was not generated: %w", err)
-		}
-		if status.Generation != generation {
-			return fmt.Errorf("master secret generation number is not correct: expected %d, got %d", generation, status.Generation)
-		}
-		if size := len(status.Nodes); size != 3 {
-			return fmt.Errorf("key manager committee's size is not correct: expected 3, got %d", size)
+	for i := 0; i < 2; i++ {
+		// Verify that master secret generation works with all key managers.
+		for j := 0; j < 2; j++ {
+			if err := sc.verifyMasterSecret(ctx, generation, 3); err != nil {
+				return err
+			}
+			generation++
 		}
 
 		// Give key managers enough time to apply the last proposal and register with the latests
@@ -122,20 +114,51 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
 		if err := sc.verifyMasterSecretRejections(ctx, 3); err != nil {
 			return err
 		}
+
+		// Verify that master secret generation works with one key manager
+		// after registrations expire.
+		for j := 0; j < 2; j++ {
+			if err := sc.verifyMasterSecret(ctx, generation, 1); err != nil {
+				return err
+			}
+			generation++
+		}
+
+		// Start stopped key managers.
+		//
+		// Note: Starting both key managers while they are still registered
+		// may lead to a scenario where they both attempt to replicate ephemeral
+		// secrets from each other. Since they are both still uninitialized,
+		// replication requests will fail and retries will block initialization
+		// for 15 seconds.
+		if err := sc.StartKeymanagers([]int{1, 2}); err != nil {
+			return err
+		}
+
+		// Key managers that have been started should join the committee in
+		// the following epoch, unless consensus sync takes a lot of time.
+		// Due to uncertainty about the committee size, we skip validation
+		// of the next generation.
+		if _, err := sc.WaitMasterSecret(ctx, generation); err != nil {
+			return err
+		}
+		generation++
 	}
 
-	// Verify that master secret generation works after the third key manager is deregistered.
-	status, err := sc.WaitMasterSecret(ctx, 6)
+	return nil
+}
+
+func (sc *kmRotationFailureImpl) verifyMasterSecret(ctx context.Context, generation uint64, committeeSize int) error {
+	status, err := sc.WaitMasterSecret(ctx, generation)
 	if err != nil {
-		return err
+		return fmt.Errorf("master secret was not generated: %w", err)
 	}
-	if status.Generation != 6 {
-		return fmt.Errorf("master secret generation number is not correct: expected 6, got %d", status.Generation)
+	if status.Generation != generation {
+		return fmt.Errorf("master secret generation number is not correct: expected %d, got %d", generation, status.Generation)
 	}
-	if size := len(status.Nodes); size != 1 {
-		return fmt.Errorf("key manager committee's size is not correct: expected 1, got %d", size)
+	if size := len(status.Nodes); size != committeeSize {
+		return fmt.Errorf("key manager committee's size is not correct: expected %d, got %d", committeeSize, size)
 	}
-
 	return nil
 }
 
@@ -189,7 +212,7 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 		if err != nil {
 			return err
 		}
-		tx := registry.NewRegisterNodeTx(nonce, &transaction.Fee{Gas: 10000}, sigNode)
+		tx := registry.NewRegisterNodeTx(nonce, &transaction.Fee{Gas: 11000}, sigNode)
 		sigTx, err := transaction.Sign(identity.NodeSigner, tx)
 		if err != nil {
 			return err
