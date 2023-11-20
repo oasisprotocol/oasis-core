@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -13,7 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	commonErrors "github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 )
@@ -252,6 +253,9 @@ type Client interface {
 		opts ...CallMultiOption,
 	) ([]interface{}, []PeerFeedback, error)
 
+	// Close closes all connections to the given peer.
+	Close(peerID core.PeerID) error
+
 	// RegisterListener subscribes the listener to the client notification events.
 	// If the listener is already registered this is a noop operation.
 	RegisterListener(l ClientListener)
@@ -273,6 +277,7 @@ type client struct {
 	logger *logging.Logger
 }
 
+// Implements Client.
 func (c *client) Call(
 	ctx context.Context,
 	peer core.PeerID,
@@ -283,6 +288,7 @@ func (c *client) Call(
 	return c.CallOne(ctx, []core.PeerID{peer}, method, body, rsp, opts...)
 }
 
+// Implements Client.
 func (c *client) CallOne(
 	ctx context.Context,
 	peers []core.PeerID,
@@ -345,6 +351,7 @@ func (c *client) CallOne(
 	return pf, err
 }
 
+// Implements Client.
 func (c *client) CallMulti(
 	ctx context.Context,
 	peers []core.PeerID,
@@ -449,7 +456,7 @@ func (c *client) timeCall(
 
 	if err != nil {
 		// If the caller canceled the context we should not degrade the peer.
-		if !errors.Is(err, context.Canceled) {
+		if !commonErrors.Is(err, context.Canceled) {
 			c.recordFailure(peerID, latency)
 		}
 
@@ -519,7 +526,7 @@ func (c *client) call(
 
 	// Decode response.
 	if rawRsp.Error != nil {
-		return errors.FromCode(rawRsp.Error.Module, rawRsp.Error.Code, rawRsp.Error.Message)
+		return commonErrors.FromCode(rawRsp.Error.Module, rawRsp.Error.Code, rawRsp.Error.Message)
 	}
 
 	if rsp != nil {
@@ -528,6 +535,17 @@ func (c *client) call(
 	return nil
 }
 
+// Implements Client.
+func (c *client) Close(peerID core.PeerID) error {
+	var errs error
+	for _, conn := range c.host.Network().ConnsToPeer(peerID) {
+		err := conn.Close()
+		errs = errors.Join(errs, err)
+	}
+	return errs
+}
+
+// Implements Client.
 func (c *client) RegisterListener(l ClientListener) {
 	c.listeners.Lock()
 	defer c.listeners.Unlock()
@@ -535,6 +553,7 @@ func (c *client) RegisterListener(l ClientListener) {
 	c.listeners.m[l] = struct{}{}
 }
 
+// Implements Client.
 func (c *client) UnregisterListener(l ClientListener) {
 	c.listeners.Lock()
 	defer c.listeners.Unlock()
