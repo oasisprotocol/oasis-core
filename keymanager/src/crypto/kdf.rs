@@ -780,7 +780,7 @@ impl Kdf {
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, MASTER_SECRET_SEAL_CONTEXT);
         let plaintext = d2
             .open(&nonce, ciphertext.to_vec(), additional_data)
-            .expect("persisted state is corrupted");
+            .unwrap();
 
         Some(Secret(plaintext.try_into().unwrap()))
     }

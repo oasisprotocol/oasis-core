@@ -147,7 +147,9 @@ impl TrustedStateStore {
             TRUSTED_STATE_CONTEXT,
             &untrusted_value,
         )
+        .map_err(|_| Error::TrustedStateLoadingFailed)?
         .unwrap();
+
         let trusted_state: TrustedState =
             cbor::from_slice(&raw).expect("corrupted sealed trusted state");
 

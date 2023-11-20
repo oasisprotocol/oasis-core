@@ -1,4 +1,5 @@
 //! Wrappers for sealing secrets to the enclave in cold storage.
+use anyhow::{format_err, Error};
 use rand::{rngs::OsRng, Rng};
 use sgx_isa::Keypolicy;
 use zeroize::Zeroize;
@@ -27,20 +28,18 @@ pub fn seal(key_policy: Keypolicy, context: &[u8], data: &[u8]) -> Vec<u8> {
 /// Unseal a previously sealed secret to the enclave.
 ///
 /// The `context` field is a domain separation tag.
-///
-/// # Panics
-///
-/// All parsing and authentication errors of the ciphertext are fatal and
-/// will result in a panic.
-pub fn unseal(key_policy: Keypolicy, context: &[u8], ciphertext: &[u8]) -> Option<Vec<u8>> {
+pub fn unseal(
+    key_policy: Keypolicy,
+    context: &[u8],
+    ciphertext: &[u8],
+) -> Result<Option<Vec<u8>>, Error> {
     let ct_len = ciphertext.len();
     if ct_len == 0 {
-        return None;
+        return Ok(None);
     }
-    assert!(
-        ct_len >= TAG_SIZE + NONCE_SIZE,
-        "ciphertext is corrupted, invalid size"
-    );
+    if ct_len < TAG_SIZE + NONCE_SIZE {
+        return Err(format_err!("ciphertext is corrupted: invalid size"));
+    }
     let ct_len = ct_len - NONCE_SIZE;
 
     // Split the ciphertext || tag || nonce.
@@ -49,11 +48,11 @@ pub fn unseal(key_policy: Keypolicy, context: &[u8], ciphertext: &[u8]) -> Optio
     let ciphertext = &ciphertext[..ct_len];
 
     let d2 = new_deoxysii(key_policy, context);
-    let plaintext = d2
-        .open(&nonce, ciphertext.to_vec(), vec![])
-        .expect("ciphertext is corrupted");
 
-    Some(plaintext)
+    match d2.open(&nonce, ciphertext.to_vec(), vec![]) {
+        Ok(plaintext) => Ok(Some(plaintext)),
+        Err(_) => Err(format_err!("ciphertext is corrupted")),
+    }
 }
 
 /// Creates a new Deoxys-II instance initialized with an SGX sealing key derived
@@ -77,37 +76,37 @@ mod tests {
         // Test different policies.
         let sealed_a = seal(Keypolicy::MRSIGNER, b"MRSIGNER", b"Mr. Signer");
         let unsealed_a = unseal(Keypolicy::MRSIGNER, b"MRSIGNER", &sealed_a);
-        assert_eq!(unsealed_a, Some(b"Mr. Signer".to_vec()));
+        assert_eq!(unsealed_a.unwrap(), Some(b"Mr. Signer".to_vec()));
 
         let sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE", b"Mr. Enclave");
         let unsealed_b = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b);
-        assert_eq!(unsealed_b, Some(b"Mr. Enclave".to_vec()));
+        assert_eq!(unsealed_b.unwrap(), Some(b"Mr. Enclave".to_vec()));
 
         // Test zero-length ciphertext.
         let unsealed_c = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", b"");
-        assert_eq!(unsealed_c, None);
+        assert_eq!(unsealed_c.unwrap(), None);
     }
 
     #[test]
-    #[should_panic]
     fn test_incorrect_context() {
         // Test incorrect context.
         let sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE1", b"Mr. Enclave");
-        unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE2", &sealed_b);
+        let unsealed_b = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE2", &sealed_b);
+        assert_eq!(unsealed_b.is_err(), true);
     }
 
     #[test]
-    #[should_panic]
     fn test_incorrect_ciphertext_a() {
         let sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE", b"Mr. Enclave");
-        unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b[..2]);
+        let unsealed_b = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b[..2]);
+        assert_eq!(unsealed_b.is_err(), true);
     }
 
     #[test]
-    #[should_panic]
     fn test_incorrect_ciphertext_b() {
         let mut sealed_b = seal(Keypolicy::MRENCLAVE, b"MRENCLAVE", b"Mr. Enclave");
         sealed_b[0] = sealed_b[0].wrapping_add(1);
-        unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b);
+        let unsealed_b = unseal(Keypolicy::MRENCLAVE, b"MRENCLAVE", &sealed_b);
+        assert_eq!(unsealed_b.is_err(), true);
     }
 }
