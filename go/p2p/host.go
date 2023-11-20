@@ -8,7 +8,9 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/multiformats/go-multiaddr"
@@ -36,6 +38,12 @@ type HostConfig struct {
 func NewHost(cfg *HostConfig) (host.Host, *conngater.BasicConnectionGater, error) {
 	id := api.SignerToPrivKey(cfg.Signer)
 
+	// Set up a resource manager so that we can reserve more resources.
+	rm, err := NewResourceManager()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Set up a connection manager so we can limit the number of connections.
 	cm, err := NewConnManager(&cfg.ConnManagerConfig)
 	if err != nil {
@@ -52,6 +60,7 @@ func NewHost(cfg *HostConfig) (host.Host, *conngater.BasicConnectionGater, error
 		libp2p.UserAgent(cfg.UserAgent),
 		libp2p.ListenAddrs(cfg.ListenAddr),
 		libp2p.Identity(id),
+		libp2p.ResourceManager(rm),
 		libp2p.ConnectionManager(cm),
 		libp2p.ConnectionGater(cg),
 	)
@@ -196,4 +205,35 @@ func (cfg *ConnGaterConfig) Load() error {
 	cfg.BlockedPeers = blockedPeers
 
 	return nil
+}
+
+// NewResourceManager constructs a new resource manager.
+func NewResourceManager() (network.ResourceManager, error) {
+	// Use the default resource manager for non-seed nodes.
+	if config.GlobalConfig.Mode != config.ModeSeed {
+		return nil, nil
+	}
+
+	// Tweak limits for seed nodes.
+	//
+	// Note: The connection manager will trim connections when the total number of inbound and
+	// outbound connections exceeds the high watermark (default set to 130). Using autoscaling
+	// and configuring the default limit to 128 seems to be a prudent choice.
+	defaultLimits := rcmgr.DefaultLimits
+	defaultLimits.SystemBaseLimit.ConnsInbound = 128
+	defaultLimits.SystemBaseLimit.StreamsInbound = 128 * 16
+	defaultLimits.SystemLimitIncrease.ConnsInbound = 128
+	defaultLimits.SystemLimitIncrease.StreamsInbound = 128 * 16
+
+	// Add limits around included libp2p protocols.
+	libp2p.SetDefaultServiceLimits(&defaultLimits)
+
+	// Scale limits.
+	scaledLimits := defaultLimits.AutoScale()
+
+	// The resource manager expects a limiter, se we create one from our limits.
+	limiter := rcmgr.NewFixedLimiter(scaledLimits)
+
+	// Initialize the resource manager.
+	return rcmgr.NewResourceManager(limiter)
 }
