@@ -133,6 +133,13 @@ func (c *client) Advertise(ctx context.Context, ns string, _ ...discovery.Option
 
 	pf.RecordSuccess()
 
+	// Close connections after every call because requests to the seed node are infrequent.
+	if err = c.rc.Close(c.seed.ID); err != nil {
+		c.logger.Warn("failed to close connections to seed node",
+			"err", err,
+		)
+	}
+
 	return res.TTL, nil
 }
 
@@ -237,6 +244,13 @@ func (c *client) fetchPeers(ctx context.Context, ns string, limit int) []peer.Ad
 		c.nextDiscovery = now.Add(c.backoff.NextBackOff())
 
 		pf.RecordFailure()
+	}
+
+	// Close connections after every call because requests to the seed node are infrequent.
+	if err := c.rc.Close(c.seed.ID); err != nil {
+		c.logger.Warn("failed to close connections to seed node",
+			"err", err,
+		)
 	}
 
 	return cache.peers
