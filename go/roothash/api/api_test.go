@@ -2,11 +2,13 @@ package api
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/events"
@@ -667,4 +669,59 @@ func TestRuntimeIDAttribute(t *testing.T) {
 
 	val2 := events.EncodeValue(&attribute)
 	require.EqualValues(t, val, val2, "events.EncodeValue should encode correctly")
+}
+
+func TestRoundRootsSerialization(t *testing.T) {
+	require := require.New(t)
+
+	for _, tc := range []struct {
+		rr             RoundRoots
+		expectedBase64 string
+	}{
+		{
+			rr:             RoundRoots{},
+			expectedBase64: "glggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		},
+		{
+			rr: RoundRoots{
+				StateRoot: hash.NewFromBytes([]byte("test")),
+			},
+			expectedBase64: "glggPTf+WENeDYcyPe5KLBsznvlU3mNxbuefV0f5TZdPkT9YIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		},
+		{
+			rr: RoundRoots{
+				IORoot: hash.NewFromBytes([]byte("test")),
+			},
+			expectedBase64: "glggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYID03/lhDXg2HMj3uSiwbM575VN5jcW7nn1dH+U2XT5E/",
+		},
+		{
+			rr: RoundRoots{
+				StateRoot: hash.NewFromBytes([]byte("test")),
+				IORoot:    hash.NewFromBytes([]byte("test")),
+			},
+			expectedBase64: "glggPTf+WENeDYcyPe5KLBsznvlU3mNxbuefV0f5TZdPkT9YID03/lhDXg2HMj3uSiwbM575VN5jcW7nn1dH+U2XT5E/",
+		},
+		{
+			rr: RoundRoots{
+				StateRoot: hash.NewFromBytes([]byte("test1")),
+				IORoot:    hash.NewFromBytes([]byte("test2")),
+			},
+			expectedBase64: "glggC4+lzfqNgLxCHLxwDp+Bf5PLLb0DILrUZWwF+lp6Z/NYIJ3seczGUDFDvmAEdVCeep6Xsn8XRosTKWpu9wZ3mQRq",
+		},
+		{
+			rr: RoundRoots{
+				StateRoot: hash.NewFromBytes([]byte("test2")),
+				IORoot:    hash.NewFromBytes([]byte("test1")),
+			},
+			expectedBase64: "glggnex5zMZQMUO+YAR1UJ56npeyfxdGixMpam73BneZBGpYIAuPpc36jYC8Qhy8cA6fgX+Tyy29AyC61GVsBfpaemfz",
+		},
+	} {
+		enc := cbor.Marshal(tc.rr)
+		require.Equal(tc.expectedBase64, base64.StdEncoding.EncodeToString(enc), "serialization should match")
+
+		var dec RoundRoots
+		err := cbor.Unmarshal(enc, &dec)
+		require.NoError(err, "Unmarshal")
+		require.EqualValues(tc.rr, dec, "Runtime serialization should round-trip")
+	}
 }

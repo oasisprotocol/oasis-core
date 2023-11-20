@@ -187,7 +187,7 @@ impl KeyFormatAtom for Tuple {
     }
 }
 
-/// Define a KeyFormat from KeyFromatAtom and a prefix.
+/// Define a KeyFormat from KeyFormatAtom and a prefix.
 ///
 /// # Examples
 ///
