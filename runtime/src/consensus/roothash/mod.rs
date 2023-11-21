@@ -7,7 +7,10 @@
 use thiserror::Error;
 
 use crate::{
-    common::{crypto::signature::PublicKey, namespace::Namespace},
+    common::{
+        crypto::{hash::Hash, signature::PublicKey},
+        namespace::Namespace,
+    },
     consensus::state::StateError,
 };
 
@@ -125,6 +128,14 @@ pub struct RoundResults {
     pub bad_compute_entities: Vec<PublicKey>,
 }
 
+/// Per-round state and I/O roots that are stored in consensus state.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash, cbor::Encode, cbor::Decode)]
+#[cbor(as_array)]
+pub struct RoundRoots {
+    pub state_root: Hash,
+    pub io_root: Hash,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,6 +174,45 @@ mod tests {
             let dec: RoundResults = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
                 .expect("round results should deserialize correctly");
             assert_eq!(dec, rr, "decoded results should match the expected value");
+        }
+    }
+
+    #[test]
+    fn test_consistent_round_roots() {
+        let tcs = vec![
+            ("glggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", RoundRoots::default()),
+            ("glggPTf+WENeDYcyPe5KLBsznvlU3mNxbuefV0f5TZdPkT9YIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", RoundRoots {
+                state_root: Hash::digest_bytes(b"test"),
+                ..Default::default()
+            }),
+            ("glggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYID03/lhDXg2HMj3uSiwbM575VN5jcW7nn1dH+U2XT5E/", RoundRoots {
+                io_root: Hash::digest_bytes(b"test"),
+                ..Default::default()
+            }),
+            ("glggPTf+WENeDYcyPe5KLBsznvlU3mNxbuefV0f5TZdPkT9YID03/lhDXg2HMj3uSiwbM575VN5jcW7nn1dH+U2XT5E/",
+                RoundRoots {
+                    state_root: Hash::digest_bytes(b"test"),
+                    io_root: Hash::digest_bytes(b"test"),
+                }),
+            ("glggC4+lzfqNgLxCHLxwDp+Bf5PLLb0DILrUZWwF+lp6Z/NYIJ3seczGUDFDvmAEdVCeep6Xsn8XRosTKWpu9wZ3mQRq",
+                RoundRoots {
+                    state_root: Hash::digest_bytes(b"test1"),
+                    io_root: Hash::digest_bytes(b"test2"),
+                }),
+            ("glggnex5zMZQMUO+YAR1UJ56npeyfxdGixMpam73BneZBGpYIAuPpc36jYC8Qhy8cA6fgX+Tyy29AyC61GVsBfpaemfz",
+                RoundRoots {
+                    state_root: Hash::digest_bytes(b"test2"),
+                    io_root: Hash::digest_bytes(b"test1"),
+                }),
+        ];
+
+        for (encoded_base64, rr) in tcs {
+            let dec: RoundRoots = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                .expect("round roots should deserialize correctly");
+            assert_eq!(
+                dec, rr,
+                "decoded round roots should match the expected value"
+            );
         }
     }
 }
