@@ -63,21 +63,21 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     }
 
     // Returns the state and I/O roots for the given runtime and round.
-    pub fn round_roots(&self, id: Namespace, round: u64) -> Result<Option<RoundRoots>, Error> {
+    pub fn round_roots(&self, id: Namespace, round: u64) -> Result<Option<RoundRoots>, StateError> {
         match self
             .mkvs
             .get(&PastRootsKeyFmt((Hash::digest_bytes(id.as_ref()), round)).encode())
         {
             Ok(Some(b)) => {
-                cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)).into())
+                cbor::from_slice(&b).map_err(|err| StateError::Unavailable(anyhow!(err)))
             }
             Ok(None) => Ok(None),
-            Err(err) => Err(StateError::Unavailable(anyhow!(err)).into()),
+            Err(err) => Err(StateError::Unavailable(anyhow!(err))),
         }
     }
 
     // Returns all past round roots for the given runtime.
-    pub fn past_round_roots(&self, id: Namespace) -> Result<BTreeMap<u64, RoundRoots>, Error> {
+    pub fn past_round_roots(&self, id: Namespace) -> Result<BTreeMap<u64, RoundRoots>, StateError> {
         let h = Hash::digest_bytes(id.as_ref());
         let mut it = self.mkvs.iter();
         it.seek(&PastRootsKeyFmt((h, Default::default())).encode_partial(1));
