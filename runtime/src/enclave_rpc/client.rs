@@ -1,12 +1,5 @@
 //! Enclave RPC client.
-use std::{
-    collections::HashSet,
-    mem,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
-};
+use std::{collections::HashSet, mem, sync::Arc};
 
 use anyhow;
 use thiserror::Error;
@@ -349,11 +342,6 @@ impl Controller {
 pub struct RpcClient {
     /// Internal command queue (sender part).
     cmdq: mpsc::Sender<Command>,
-    /// Flag indicating whether the controller has been spawned.
-    has_controller: AtomicBool,
-    /// Initial controller. Only exists until the controller is spawned and is then moved into the
-    /// controller task.
-    controller: Mutex<Option<Controller>>,
 }
 
 impl RpcClient {
@@ -365,18 +353,18 @@ impl RpcClient {
         // Create the command channel.
         let (tx, rx) = mpsc::channel(CMDQ_BACKLOG);
 
-        Self {
-            cmdq: tx.clone(),
-            has_controller: AtomicBool::new(false),
-            controller: Mutex::new(Some(Controller {
-                max_retries: 3,
-                nodes,
-                session: MultiplexedSession::new(builder),
-                transport,
-                cmdq: rx,
-                cmdq_tx: tx,
-            })),
-        }
+        // Create the controller task and start it.
+        let controller = Controller {
+            max_retries: 3,
+            nodes,
+            session: MultiplexedSession::new(builder),
+            transport,
+            cmdq: rx,
+            cmdq_tx: tx.clone(),
+        };
+        tokio::spawn(controller.run());
+
+        Self { cmdq: tx }
     }
 
     /// Construct an unconnected RPC client with runtime-internal transport.
@@ -455,23 +443,6 @@ impl RpcClient {
         request: types::Request,
         kind: types::Kind,
     ) -> Result<(u64, types::Response), RpcClientError> {
-        // Spawn a new controller if we haven't spawned one yet.
-        if self
-            .has_controller
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-        {
-            let controller = self
-                .controller
-                .lock()
-                .unwrap()
-                .take()
-                .expect("has_controller was false");
-
-            tokio::spawn(controller.run());
-        }
-
-        // Send request to controller and wait for the response.
         let (tx, rx) = oneshot::channel();
         self.cmdq
             .send(Command::Call(request, kind, tx, 0))
@@ -685,6 +656,7 @@ mod test {
     #[test]
     fn test_rpc_client() {
         let rt = tokio::runtime::Runtime::new().unwrap();
+        let _guard = rt.enter(); // Ensure Tokio runtime is available.
         let transport = MockTransport::new();
         let builder = session::Builder::default();
         let client = RpcClient::new(Box::new(transport.clone()), builder, vec![]);

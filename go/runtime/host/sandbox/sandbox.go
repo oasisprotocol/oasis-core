@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/eapache/channels"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
@@ -82,15 +81,15 @@ func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	id := cfg.Bundle.Manifest.ID
 
 	r := &sandboxedRuntime{
-		cfg:                       p.cfg,
-		rtCfg:                     cfg,
-		id:                        id,
-		stopCh:                    make(chan struct{}),
-		quitCh:                    make(chan struct{}),
-		ctrlCh:                    make(chan interface{}, ctrlChannelBufferSize),
-		notifier:                  pubsub.NewBroker(false),
-		notifyUpdateCapabilityTEE: channels.NewRingChannel(1),
-		logger:                    p.cfg.Logger.With("runtime_id", id),
+		cfg:                         p.cfg,
+		rtCfg:                       cfg,
+		id:                          id,
+		stopCh:                      make(chan struct{}),
+		quitCh:                      make(chan struct{}),
+		ctrlCh:                      make(chan interface{}, ctrlChannelBufferSize),
+		notifier:                    pubsub.NewBroker(false),
+		notifyUpdateCapabilityTEECh: make(chan struct{}, 1),
+		logger:                      p.cfg.Logger.With("runtime_id", id),
 	}
 
 	return r, nil
@@ -124,8 +123,8 @@ type sandboxedRuntime struct {
 	conn     protocol.Connection
 	notifier *pubsub.Broker
 
-	notifyUpdateCapabilityTEE *channels.RingChannel
-	capabilityTEE             *node.CapabilityTEE
+	notifyUpdateCapabilityTEECh chan struct{}
+	capabilityTEE               *node.CapabilityTEE
 
 	logger *logging.Logger
 }
@@ -193,13 +192,11 @@ func (r *sandboxedRuntime) getConnection(ctx context.Context) (protocol.Connecti
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) UpdateCapabilityTEE(ctx context.Context) error {
+func (r *sandboxedRuntime) UpdateCapabilityTEE() {
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case r.notifyUpdateCapabilityTEE.In() <- struct{}{}:
+	case r.notifyUpdateCapabilityTEECh <- struct{}{}:
+	default:
 	}
-	return nil
 }
 
 // Implements host.Runtime.
@@ -407,15 +404,12 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
 	}
 
-	notifyUpdateCapabilityTEECh := make(chan struct{})
-	channels.Unwrap(r.notifyUpdateCapabilityTEE, notifyUpdateCapabilityTEECh)
-
 	hp := &HostInitializerParams{
 		Runtime:                   r,
 		Version:                   *rtVersion,
 		Process:                   p,
 		Connection:                pc,
-		NotifyUpdateCapabilityTEE: notifyUpdateCapabilityTEECh,
+		NotifyUpdateCapabilityTEE: r.notifyUpdateCapabilityTEECh,
 	}
 
 	// Perform configuration-specific host initialization.
@@ -452,7 +446,7 @@ func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 		return nil
 	}
 
-	r.logger.Warn("restarting runtime", "force_restart", rq.force, "abbort_err", err, "abort_resp", response)
+	r.logger.Warn("restarting runtime", "force_restart", rq.force, "abort_err", err, "abort_resp", response)
 
 	// Failed to gracefully interrupt the runtime. Kill the runtime and it will be automatically
 	// restarted by the manager after it dies.

@@ -691,9 +691,15 @@ func (n *Node) runtimeExecuteTxBatch(
 	}()
 
 	// Ensure batch execution is bounded.
+	//
+	// Note: We intentionally never abort batch execution when ctx is canceled
+	// (e.g., when a round ends or when a proposal with a higher rank is received)
+	// to prevent runtimes from restarting, as abort requests are currently not
+	// supported. Execution shouldn't take a significant amount of time anyway
+	// unless something is seriously wrong.
 	proposerTimeout := state.Runtime.TxnScheduler.ProposerTimeout
 	callCtx, cancelCallFn := context.WithTimeoutCause(
-		ctx,
+		context.TODO(), // Replace with ctx once runtimes start supporting abort requests.
 		executeBatchTimeoutFactor*proposerTimeout,
 		errors.New("proposer timeout expired"),
 	)
@@ -702,14 +708,15 @@ func (n *Node) runtimeExecuteTxBatch(
 	rsp, err := rt.Call(callCtx, rq)
 	switch {
 	case err == nil:
-	case errors.Is(err, context.Canceled):
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		// Context was canceled while the runtime was processing a request.
 		n.logger.Error("batch processing aborted by context, restarting runtime",
 			"cause", context.Cause(callCtx),
 		)
 
-		// Abort the runtime, so we can start processing the next batch.
-		abortCtx, cancel := context.WithTimeout(ctx, abortTimeout)
+		// Abort the runtime, so we can start processing the next batch. Note that we use the global
+		// node context here to make sure abort gets processed even when ctx has been cancelled.
+		abortCtx, cancel := context.WithTimeout(n.ctx, abortTimeout)
 		defer cancel()
 
 		if err = rt.Abort(abortCtx, false); err != nil {
@@ -1667,42 +1674,37 @@ func (n *Node) roundWorker(ctx context.Context) {
 			}
 		}
 
-		for {
-			select {
-			case <-ctx.Done():
-				n.logger.Debug("exiting round, context canceled")
-				return
-			case ev := <-n.evCh:
-				// Handle an event.
-				n.handleEvent(ctx, ev)
-			case txs := <-n.txCh:
-				// Check any queued transactions.
-				n.handleNewCheckedTransactions(txs)
-			case txs := <-n.missingTxCh:
-				// Missing transactions fetched.
-				n.handleMissingTransactions(txs)
-			case ec := <-n.ecCh:
-				// Process observed executor commitments.
-				n.handleObservedExecutorCommitment(ctx, ec)
-				continue
-			case batch := <-n.processedBatchCh:
-				// Batch processing has finished.
-				n.handleProcessedBatch(ctx, batch)
-			case <-schedulerRankTicker.C:
-				// Change scheduler rank and try again.
-				schedulerRank++
-				n.logger.Debug("scheduler rank has changed",
-					"rank", schedulerRank,
-				)
-			case <-flushTimer.C:
-				// Force scheduling for primary transaction scheduler.
-				n.logger.Debug("scheduling is now forced")
-				flush = true
-			case <-n.reselectCh:
-				// Try again.
-			}
-
-			break
+		select {
+		case <-ctx.Done():
+			n.logger.Debug("exiting round, context canceled")
+			return
+		case ev := <-n.evCh:
+			// Handle an event.
+			n.handleEvent(ctx, ev)
+		case txs := <-n.txCh:
+			// Check any queued transactions.
+			n.handleNewCheckedTransactions(txs)
+		case txs := <-n.missingTxCh:
+			// Missing transactions fetched.
+			n.handleMissingTransactions(txs)
+		case ec := <-n.ecCh:
+			// Process observed executor commitments.
+			n.handleObservedExecutorCommitment(ctx, ec)
+		case batch := <-n.processedBatchCh:
+			// Batch processing has finished.
+			n.handleProcessedBatch(ctx, batch)
+		case <-schedulerRankTicker.C:
+			// Change scheduler rank and try again.
+			schedulerRank++
+			n.logger.Debug("scheduler rank has changed",
+				"rank", schedulerRank,
+			)
+		case <-flushTimer.C:
+			// Force scheduling for primary transaction scheduler.
+			n.logger.Debug("scheduling is now forced")
+			flush = true
+		case <-n.reselectCh:
+			// Try again.
 		}
 	}
 }

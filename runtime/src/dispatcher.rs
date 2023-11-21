@@ -220,6 +220,9 @@ impl Dispatcher {
             guard.take().unwrap()
         };
 
+        // Ensure Tokio runtime is available during dispatcher initialization.
+        let _guard = self.tokio_runtime.enter();
+
         // Create actual dispatchers for RPCs and transactions.
         info!(self.logger, "Starting the runtime dispatcher");
         let mut rpc_demux = RpcDemux::new(self.identity.clone());

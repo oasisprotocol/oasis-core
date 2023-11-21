@@ -83,6 +83,13 @@ func (c *nopClient) CallMulti(
 }
 
 // Implements Client.
+func (c *nopClient) Close(
+	peer.ID,
+) error {
+	return nil
+}
+
+// Implements Client.
 func (c *nopClient) RegisterListener(ClientListener) {}
 
 // Implements Client.
