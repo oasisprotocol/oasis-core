@@ -114,7 +114,11 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 		// We have a PPID, need to retrieve PCK certificate first.
 		// TODO: Fetch PCK certificate based on PPID and include it in the quote, replacing the
 		//       PPID certification data with the PCK certificate chain certification data.
-		return nil, fmt.Errorf("PPID certification data not yet supported")
+		//       e.g. sp.pcs.GetPCKCertificateChain(ctx, nil, data.PPID, data.CPUSVN, data.PCESVN, data.PCEID)
+		//
+		//	 Due to aesmd QuoteEx APIs not supporting certification data this currently
+		//       cannot be easily implemented. Instead we rely on a quote provider to be installed.
+		return nil, fmt.Errorf("PPID certification data not yet supported; please install a quote provider")
 	default:
 		return nil, fmt.Errorf("unsupported certification data type: %s", qs.CertificationData.CertificationDataType())
 	}
