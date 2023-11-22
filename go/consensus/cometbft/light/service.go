@@ -145,10 +145,17 @@ func (c *client) worker() {
 	case <-c.consensus.Synced():
 	}
 
+	chainCtx, err := c.consensus.GetChainContext(c.ctx)
+	if err != nil {
+		c.logger.Error("failed to obtain chain context", "err", err)
+		return
+	}
+	tmChainID := tmapi.CometBFTChainID(chainCtx)
+
 	// Loads the local block at the provided height and adds it to the trust store.
 	trustLocalBlock := func(ctx context.Context, height int64) error {
-		lb, err := c.consensus.GetLightBlock(ctx, height)
-		if err != nil {
+		var lb *consensus.LightBlock
+		if lb, err = c.consensus.GetLightBlock(ctx, height); err != nil {
 			return fmt.Errorf("failed to obtain block %d from consensus: %w", height, err)
 		}
 		// Convert to protobuff LightBlock.
@@ -157,9 +164,12 @@ func (c *client) worker() {
 			return fmt.Errorf("failed to unmarshal cometbft protobuff light block: %w", err)
 		}
 		// Convert to CometBFT LightBlock.
-		tmLb, err := cmttypes.LightBlockFromProto(&pb)
-		if err != nil {
+		var tmLb *cmttypes.LightBlock
+		if tmLb, err = cmttypes.LightBlockFromProto(&pb); err != nil {
 			return fmt.Errorf("failed to convert protobuff light block into cometbft light block: %w", err)
+		}
+		if err = tmLb.ValidateBasic(tmChainID); err != nil {
+			return fmt.Errorf("local light block %d seems to be invalid (data corruption?): %w", height, err)
 		}
 		if err = c.store.SaveLightBlock(tmLb); err != nil {
 			return fmt.Errorf("failed to save block %d into the light client trust store: %w", lb.Height, err)
@@ -173,27 +183,22 @@ func (c *client) worker() {
 		c.logger.Error("failed to get last retained height from consensus", "err", err)
 		return
 	}
-	// Some pruning configurations return 0 instead of a valid block height. Clamp those to the genesis height.
+	// Some pruning configurations return 0 instead of a valid block height. Clamp those to the
+	// genesis height.
 	if lastRetainedHeight < c.genesis.Height {
 		lastRetainedHeight = c.genesis.Height
 	}
 	if err = trustLocalBlock(c.ctx, lastRetainedHeight); err != nil {
 		c.logger.Error("failed to store last retained block into trust store", "err", err)
-		return
+		// Errors ignored as we could still initialize if we can get the latest block. If not, the
+		// light client constructor will fail anyway.
 	}
 
 	// Store latest block into trust store.
 	if err = trustLocalBlock(c.ctx, consensus.HeightLatest); err != nil {
 		c.logger.Error("failed to store last retained block into trust store", "err", err)
-		return
 	}
 
-	chainCtx, err := c.consensus.GetChainContext(c.ctx)
-	if err != nil {
-		c.logger.Error("failed to obtain chain context", "err", err)
-		return
-	}
-	tmChainID := tmapi.CometBFTChainID(chainCtx)
 	// Initialize a provider pool.
 	pool := p2pLight.NewLightClientProviderPool(c.ctx, chainCtx, tmChainID, c.p2p)
 	var providers []cmtlightprovider.Provider
