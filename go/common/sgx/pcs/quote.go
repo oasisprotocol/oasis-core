@@ -425,10 +425,11 @@ func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
 						}
 					case compId == 18:
 						// CPUSVN
-						cpusvnSlice := pckInfo.CPUSVN[:]
+						var cpusvnSlice []byte
 						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &cpusvnSlice); err != nil {
 							return nil, fmt.Errorf("pcs/quote: bad CPUSVN: %w", err)
 						}
+						copy(pckInfo.CPUSVN[:], cpusvnSlice)
 					}
 				}
 			}
