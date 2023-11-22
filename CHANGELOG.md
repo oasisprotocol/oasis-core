@@ -12,6 +12,71 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.5 (2023-11-22)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- runtime: Add roothash round roots state wrappers in rust
+  ([#5457](https://github.com/oasisprotocol/oasis-core/issues/5457))
+
+### Bug Fixes
+
+- go/worker/compute: Use correct context when aborting runtime
+  ([#5446](https://github.com/oasisprotocol/oasis-core/issues/5446))
+
+- go/worker/compute: Also abort in case deadline exceeded
+  ([#5446](https://github.com/oasisprotocol/oasis-core/issues/5446))
+
+- go/runtime: Fix zombie channel pipe leak on runtime restarts
+  ([#5447](https://github.com/oasisprotocol/oasis-core/issues/5447))
+
+  Pipes created by a call to channels.Unwrap spawned new goroutines
+  that were not terminated during runtime restarts. These zombie
+  pipes also intercepted one value from the newly created pipes,
+  causing them to block indefinitely.
+
+- go/worker/compute/executor: Propose promptly upon detecting discrepancy
+  ([#5447](https://github.com/oasisprotocol/oasis-core/issues/5447))
+
+- go/runtime/host/multi: Release lock early to avoid blocking
+  ([#5448](https://github.com/oasisprotocol/oasis-core/issues/5448))
+
+- runtime: Create controller in RpcClient constructor
+  ([#5450](https://github.com/oasisprotocol/oasis-core/issues/5450))
+
+  Previously if no RPC calls were initiated by the runtime, the client
+  controller task was never spawned which caused quote policy update
+  requests to pile up in the command queue, eventually blocking the entire
+  runtime from processing requests.
+
+  Since the async runtime is now available early on during initialization,
+  we can spawn the controller in the RpcClient constructor, avoiding these
+  problems.
+
+- go/worker/compute: Abort runtimes only on timeouts
+  ([#5453](https://github.com/oasisprotocol/oasis-core/issues/5453))
+
+- go/p2p: Close connection to seed node after every request
+  ([#5456](https://github.com/oasisprotocol/oasis-core/issues/5456))
+
+  Bootstrap client, which is responsible for peer discovery and advertisement,
+  now terminates connection to the seed node after every request. This action
+  should free up recourses (e.g. inbound/outbound connections) on both sides
+  without affecting performance since discovered peers are cached (see retention
+  period) and advertisement is done infrequently (see TTL).
+
+- go/p2p: Increase incoming connection limit for seed nodes
+  ([#5456](https://github.com/oasisprotocol/oasis-core/issues/5456))
+
+- go/consensus/cometbft/light: Don't crash when signed header unavailable
+  ([#5462](https://github.com/oasisprotocol/oasis-core/issues/5462))
+
 ## 23.0.4 (2023-11-14)
 
 | Protocol          | Version   |
