@@ -41,6 +41,9 @@ type Provider interface {
 
 	// PeerID returns the identifier of the peer backing the provider.
 	PeerID() string
+
+	// RefreshPeer notifies the provider to attempt to replace a peer with a fresh one.
+	RefreshPeer()
 }
 
 // ClientConfig is the configuration for the light client.
