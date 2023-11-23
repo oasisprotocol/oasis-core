@@ -75,6 +75,7 @@ func (hc *httpClient) doPCSRequest(ctx context.Context, u *url.URL, method, body
 			"method", method,
 			"url", u,
 		)
+		resp.Body.Close()
 		return nil, fmt.Errorf("pcs: response status error: %s", http.StatusText(resp.StatusCode))
 	}
 

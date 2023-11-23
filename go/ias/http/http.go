@@ -82,6 +82,7 @@ func (e *httpEndpoint) doIASRequest(ctx context.Context, method, uPath, bodyType
 	}
 	if resp.StatusCode != http.StatusOK {
 		logger.Error("ias response status error", "status", http.StatusText(resp.StatusCode), "method", method, "url", u)
+		resp.Body.Close()
 		return nil, fmt.Errorf("ias: response status error: %s", http.StatusText(resp.StatusCode))
 	}
 
@@ -126,9 +127,6 @@ func (e *httpEndpoint) VerifyEvidence(ctx context.Context, evidence *api.Evidenc
 		query = []string{iasAPIAVRTCBUpdateParam, iasAPIAVRTCBUpdateValueEarly}
 	}
 	resp, err := e.doIASRequest(ctx, http.MethodPost, iasAPIAttestationReportPath, "application/json", bytes.NewReader(reqPayload), query...)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
 	if err != nil {
 		return nil, fmt.Errorf("ias: http POST failed: %w", err)
 	}
@@ -165,12 +163,10 @@ func (e *httpEndpoint) GetSigRL(ctx context.Context, epidGID uint32) ([]byte, er
 	// Dispatch the request via HTTP.
 	p := path.Join(iasAPISigRLPath, hex.EncodeToString(gid[:]))
 	resp, err := e.doIASRequest(ctx, http.MethodGet, p, "", nil)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
 	if err != nil {
 		return nil, fmt.Errorf("ias: http GET failed: %w", err)
 	}
+	defer resp.Body.Close()
 
 	// Extract and parse the SigRL.
 	sigRL, err := io.ReadAll(resp.Body)
