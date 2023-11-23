@@ -3,6 +3,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -254,14 +255,67 @@ func (c *client) GetLightBlock(ctx context.Context, height int64) (*consensus.Li
 		return nil, nil, ctx.Err()
 	}
 
-	// Try local backend first.
-	lb, err := c.consensus.GetLightBlock(ctx, height)
-	if err == nil {
+	// Local backend source.
+	localBackendSource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		lb, err := c.consensus.GetLightBlock(ctx, height)
+		if err != nil {
+			c.logger.Debug("failed to fetch light block from local full node",
+				"err", err,
+				"height", height,
+			)
+			return nil, nil, err
+		}
+
 		return lb, rpc.NewNopPeerFeedback(), nil
 	}
-	c.logger.Debug("failed to fetch light block from local full node", "err", err)
 
-	return c.lc.GetLightBlock(ctx, height)
+	// Light client.
+	lightClientSource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		clb, err := c.lc.GetVerifiedLightBlock(ctx, height)
+		if err != nil {
+			c.logger.Debug("failed to fetch light block from light client",
+				"err", err,
+				"height", height,
+			)
+			return nil, nil, err
+		}
+
+		plb, err := clb.ToProto()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to marshal light block: %w", err)
+		}
+		meta, err := plb.Marshal()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to marshal light block: %w", err)
+		}
+
+		return &consensus.LightBlock{
+			Height: clb.Height,
+			Meta:   meta,
+		}, rpc.NewNopPeerFeedback(), nil
+	}
+
+	// Direct peer query.
+	directPeerQuerySource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		return c.lc.GetLightBlock(ctx, height)
+	}
+
+	// Try all sources in order.
+	var mergedErr error
+	for _, src := range []func() (*consensus.LightBlock, rpc.PeerFeedback, error){
+		localBackendSource,
+		lightClientSource,
+		directPeerQuerySource,
+	} {
+		lb, pf, err := src()
+		if err == nil {
+			return lb, pf, nil
+		}
+
+		mergedErr = errors.Join(mergedErr, err)
+	}
+
+	return nil, nil, mergedErr
 }
 
 // GetParameters implements api.Client.
