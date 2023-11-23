@@ -9,16 +9,11 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
 const (
-	// PruneDefault is the default PruneStrategy.
-	PruneDefault = pruneNone
-
-	pruneNone  = "none"
-	pruneKeepN = "keep_n"
-
 	// LogEventABCIPruneDelete is a log event value that signals an ABCI pruning
 	// delete event.
 	LogEventABCIPruneDelete = "cometbft/abci/prune"
@@ -38,9 +33,9 @@ const (
 func (s PruneStrategy) String() string {
 	switch s {
 	case PruneNone:
-		return pruneNone
+		return config.PruneStrategyNone
 	case PruneKeepN:
-		return pruneKeepN
+		return config.PruneStrategyKeepN
 	default:
 		return "[unknown]"
 	}
@@ -48,9 +43,9 @@ func (s PruneStrategy) String() string {
 
 func (s *PruneStrategy) FromString(str string) error {
 	switch strings.ToLower(str) {
-	case pruneNone:
+	case config.PruneStrategyNone:
 		*s = PruneNone
-	case pruneKeepN:
+	case config.PruneStrategyKeepN:
 		*s = PruneKeepN
 	default:
 		return fmt.Errorf("abci/pruner: unknown pruning strategy: '%v'", str)

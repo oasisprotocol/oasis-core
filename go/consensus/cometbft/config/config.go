@@ -87,6 +87,13 @@ type SubmissionConfig struct {
 	MaxFee uint64 `yaml:"max_fee"`
 }
 
+const (
+	// PruneStrategyNone is the identifier of the strategy that disables pruning.
+	PruneStrategyNone = "none"
+	// PruneStrategyKeepN is the identifier of the strategy that keeps the last N versions.
+	PruneStrategyKeepN = "keep_n"
+)
+
 // PruneConfig is the CometBFT ABCI state pruning configuration structure.
 type PruneConfig struct {
 	// ABCI state pruning strategy.
@@ -95,6 +102,8 @@ type PruneConfig struct {
 	NumKept uint64 `yaml:"num_kept"`
 	// ABCI state pruning interval.
 	Interval time.Duration `yaml:"interval"`
+	// Light blocks kept in trusted store.
+	NumLightBlocksKept uint16 `yaml:"num_light_blocks_kept"`
 }
 
 // CheckpointerConfig is the CometBFT ABCI state pruning configuration structure.
@@ -200,9 +209,10 @@ func DefaultConfig() Config {
 		HaltHeight:       0,
 		UpgradeStopDelay: 60 * time.Second,
 		Prune: PruneConfig{
-			Strategy: "none",
-			NumKept:  3600,
-			Interval: 2 * time.Minute,
+			Strategy:           PruneStrategyNone,
+			NumKept:            3600,
+			Interval:           2 * time.Minute,
+			NumLightBlocksKept: 10000,
 		},
 		Checkpointer: CheckpointerConfig{
 			Disabled:      false,

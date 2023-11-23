@@ -21,8 +21,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
+	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	p2pLight "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/p2p"
@@ -151,7 +151,7 @@ func (c *client) worker() {
 		c.logger.Error("failed to obtain chain context", "err", err)
 		return
 	}
-	tmChainID := tmapi.CometBFTChainID(chainCtx)
+	tmChainID := cmtAPI.CometBFTChainID(chainCtx)
 
 	// Loads the local block at the provided height and adds it to the trust store.
 	trustLocalBlock := func(ctx context.Context, height int64) error {
@@ -208,15 +208,26 @@ func (c *client) worker() {
 		providers = append(providers, p)
 		c.providers = append(c.providers, p)
 	}
+
+	opts := []cmtlight.Option{
+		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts),
+		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
+		cmtlight.DisableProviderRemoval(),
+	}
+	switch config.GlobalConfig.Consensus.Prune.Strategy {
+	case cmtConfig.PruneStrategyNone:
+		opts = append(opts, cmtlight.PruningSize(0)) // Disable pruning the light store.
+	default:
+		opts = append(opts, cmtlight.PruningSize(config.GlobalConfig.Consensus.Prune.NumLightBlocksKept))
+	}
+
 	tmc, err := cmtlight.NewClientFromTrustedStore(
 		tmChainID,
 		config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 		providers[0],  // Primary provider.
 		providers[1:], // Witnesses.
 		c.store,
-		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts),
-		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
-		cmtlight.DisableProviderRemoval(),
+		opts...,
 	)
 	if err != nil {
 		c.logger.Error("failed to initialize cometbft light client", "err", err)
