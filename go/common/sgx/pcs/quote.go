@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -363,7 +364,7 @@ type PCKInfo struct {
 	PublicKey  *ecdsa.PublicKey
 	FMSPC      []byte
 	TCBCompSVN [16]int32
-	PCESVN     int32
+	PCESVN     uint16
 	CPUSVN     [16]byte
 }
 
@@ -420,9 +421,14 @@ func (qs *QuoteSignatureECDSA_P256) VerifyPCK(ts time.Time) (*PCKInfo, error) {
 						}
 					case compId == 17:
 						// PCESVN
-						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &pckInfo.PCESVN); err != nil {
+						var pcesvn int32
+						if _, err = asn1.Unmarshal(tcbExt.Value.FullBytes, &pcesvn); err != nil {
 							return nil, fmt.Errorf("pcs/quote: bad PCESVN: %w", err)
 						}
+						if pcesvn < 0 || pcesvn > math.MaxUint16 {
+							return nil, fmt.Errorf("pcs/quote: bad PCESVN value: %d (not uint16)", pcesvn)
+						}
+						pckInfo.PCESVN = uint16(pcesvn)
 					case compId == 18:
 						// CPUSVN
 						var cpusvnSlice []byte

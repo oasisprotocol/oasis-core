@@ -45,7 +45,7 @@ func (bnd *TCBBundle) Verify(
 	policy *QuotePolicy,
 	fmspc []byte,
 	tcbCompSvn [16]int32,
-	pcesvn int32,
+	pcesvn uint16,
 	qe *ReportBody,
 ) error {
 	pk, err := bnd.getPublicKey(ts)
@@ -84,7 +84,7 @@ func (bnd *TCBBundle) verifyTCBInfo(
 	policy *QuotePolicy,
 	fmspc []byte,
 	tcbCompSvn [16]int32,
-	pcesvn int32,
+	pcesvn uint16,
 ) error {
 	tcbInfo, err := bnd.TCBInfo.open(ts, policy, pk)
 	if err != nil {
@@ -261,7 +261,7 @@ func (ti *TCBInfo) validateFMSPC(fmspc []byte) error {
 
 func (ti *TCBInfo) validateTCBLevel(
 	tcbCompSvn [16]int32,
-	pcesvn int32,
+	pcesvn uint16,
 ) error {
 	tcbLevel, err := ti.getTCBLevel(tcbCompSvn, pcesvn)
 	if err != nil {
@@ -284,7 +284,7 @@ func (ti *TCBInfo) validateTCBLevel(
 
 func (ti *TCBInfo) getTCBLevel(
 	tcbCompSvn [16]int32,
-	pcesvn int32,
+	pcesvn uint16,
 ) (*TCBLevel, error) {
 	// Find first matching TCB level.
 	var matchedTCBLevel *TCBLevel
@@ -350,7 +350,7 @@ type TCBComponent struct {
 // TCBLevel is a platform TCB level.
 type TCBLevel struct {
 	TCB struct {
-		PCESVN        int32            `json:"pcesvn"`
+		PCESVN        uint16           `json:"pcesvn"`
 		SGXComponents [16]TCBComponent `json:"sgxtcbcomponents"`
 		TDXComponents [16]TCBComponent `json:"tdxtcbcomponents,omitempty"`
 	} `json:"tcb"`
@@ -360,7 +360,7 @@ type TCBLevel struct {
 }
 
 // matches performs the SVN comparison.
-func (tl *TCBLevel) matches(tcbCompSvn [16]int32, pcesvn int32) bool {
+func (tl *TCBLevel) matches(tcbCompSvn [16]int32, pcesvn uint16) bool {
 	// a) Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to
 	//    16) with the corresponding values in the TCB Level. If all SGX TCB Comp SVNs in the
 	//    certificate are greater or equal to the corresponding values in TCB Level, go to b,
