@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft"
+	consensusLightP2P "github.com/oasisprotocol/oasis-core/go/consensus/p2p/light"
 	controlAPI "github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -580,6 +581,9 @@ func NewNode() (node *Node, err error) { // nolint: gocyclo
 		return nil, err
 	}
 	node.svcMgr.Register(node.LightClient)
+
+	// Register consensus light client P2P protocol server.
+	node.P2P.RegisterProtocolServer(consensusLightP2P.NewServer(node.P2P, node.chainContext, node.Consensus, node.LightClient))
 
 	// If the consensus backend supports communicating with consensus services, we can also start
 	// all services required for runtime operation.

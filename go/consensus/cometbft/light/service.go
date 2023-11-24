@@ -3,6 +3,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -20,8 +21,8 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
+	cmtConfig "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	p2pLight "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/p2p"
@@ -150,7 +151,7 @@ func (c *client) worker() {
 		c.logger.Error("failed to obtain chain context", "err", err)
 		return
 	}
-	tmChainID := tmapi.CometBFTChainID(chainCtx)
+	tmChainID := cmtAPI.CometBFTChainID(chainCtx)
 
 	// Loads the local block at the provided height and adds it to the trust store.
 	trustLocalBlock := func(ctx context.Context, height int64) error {
@@ -207,15 +208,26 @@ func (c *client) worker() {
 		providers = append(providers, p)
 		c.providers = append(c.providers, p)
 	}
+
+	opts := []cmtlight.Option{
+		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts),
+		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
+		cmtlight.DisableProviderRemoval(),
+	}
+	switch config.GlobalConfig.Consensus.Prune.Strategy {
+	case cmtConfig.PruneStrategyNone:
+		opts = append(opts, cmtlight.PruningSize(0)) // Disable pruning the light store.
+	default:
+		opts = append(opts, cmtlight.PruningSize(config.GlobalConfig.Consensus.Prune.NumLightBlocksKept))
+	}
+
 	tmc, err := cmtlight.NewClientFromTrustedStore(
 		tmChainID,
 		config.GlobalConfig.Consensus.StateSync.TrustPeriod,
 		providers[0],  // Primary provider.
 		providers[1:], // Witnesses.
 		c.store,
-		cmtlight.MaxRetryAttempts(lcMaxRetryAttempts),
-		cmtlight.Logger(common.NewLogAdapter(!config.GlobalConfig.Consensus.LogDebug)),
-		cmtlight.DisableProviderRemoval(),
+		opts...,
 	)
 	if err != nil {
 		c.logger.Error("failed to initialize cometbft light client", "err", err)
@@ -246,6 +258,15 @@ func (c *client) worker() {
 	}
 }
 
+// GetStoredBlock implements api.Client.
+func (c *client) GetStoredLightBlock(height int64) (*consensus.LightBlock, error) {
+	clb, err := c.store.LightBlock(height)
+	if err != nil {
+		return nil, err
+	}
+	return api.NewLightBlock(clb)
+}
+
 // GetLightBlock implements api.Client.
 func (c *client) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 	select {
@@ -254,14 +275,59 @@ func (c *client) GetLightBlock(ctx context.Context, height int64) (*consensus.Li
 		return nil, nil, ctx.Err()
 	}
 
-	// Try local backend first.
-	lb, err := c.consensus.GetLightBlock(ctx, height)
-	if err == nil {
+	// Local backend source.
+	localBackendSource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		lb, err := c.consensus.GetLightBlock(ctx, height)
+		if err != nil {
+			c.logger.Debug("failed to fetch light block from local full node",
+				"err", err,
+				"height", height,
+			)
+			return nil, nil, err
+		}
+
 		return lb, rpc.NewNopPeerFeedback(), nil
 	}
-	c.logger.Debug("failed to fetch light block from local full node", "err", err)
 
-	return c.lc.GetLightBlock(ctx, height)
+	// Light client.
+	lightClientSource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		clb, err := c.lc.GetVerifiedLightBlock(ctx, height)
+		if err != nil {
+			c.logger.Debug("failed to fetch light block from light client",
+				"err", err,
+				"height", height,
+			)
+			return nil, nil, err
+		}
+
+		lb, err := api.NewLightBlock(clb)
+		if err != nil {
+			return nil, nil, err
+		}
+		return lb, rpc.NewNopPeerFeedback(), nil
+	}
+
+	// Direct peer query.
+	directPeerQuerySource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		return c.lc.GetLightBlock(ctx, height)
+	}
+
+	// Try all sources in order.
+	var mergedErr error
+	for _, src := range []func() (*consensus.LightBlock, rpc.PeerFeedback, error){
+		localBackendSource,
+		lightClientSource,
+		directPeerQuerySource,
+	} {
+		lb, pf, err := src()
+		if err == nil {
+			return lb, pf, nil
+		}
+
+		mergedErr = errors.Join(mergedErr, err)
+	}
+
+	return nil, nil, mergedErr
 }
 
 // GetParameters implements api.Client.
