@@ -17,6 +17,8 @@ type Query interface {
 	GenesisBlock(context.Context, common.Namespace) (*block.Block, error)
 	RuntimeState(context.Context, common.Namespace) (*roothash.RuntimeState, error)
 	LastRoundResults(context.Context, common.Namespace) (*roothash.RoundResults, error)
+	RoundRoots(context.Context, common.Namespace, uint64) (*roothash.RoundRoots, error)
+	PastRoundRoots(context.Context, common.Namespace) (map[uint64]roothash.RoundRoots, error)
 	IncomingMessageQueueMeta(context.Context, common.Namespace) (*message.IncomingMessageQueueMeta, error)
 	IncomingMessageQueue(ctx context.Context, id common.Namespace, offset uint64, limit uint32) ([]*message.IncomingMessage, error)
 	Genesis(context.Context) (*roothash.Genesis, error)
@@ -63,6 +65,14 @@ func (rq *rootHashQuerier) RuntimeState(ctx context.Context, id common.Namespace
 
 func (rq *rootHashQuerier) LastRoundResults(ctx context.Context, id common.Namespace) (*roothash.RoundResults, error) {
 	return rq.state.LastRoundResults(ctx, id)
+}
+
+func (rq *rootHashQuerier) RoundRoots(ctx context.Context, id common.Namespace, round uint64) (*roothash.RoundRoots, error) {
+	return rq.state.RoundRoots(ctx, id, round)
+}
+
+func (rq *rootHashQuerier) PastRoundRoots(ctx context.Context, id common.Namespace) (map[uint64]roothash.RoundRoots, error) {
+	return rq.state.PastRoundRoots(ctx, id)
 }
 
 func (rq *rootHashQuerier) IncomingMessageQueueMeta(ctx context.Context, id common.Namespace) (*message.IncomingMessageQueueMeta, error) {

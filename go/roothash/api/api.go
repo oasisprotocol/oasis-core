@@ -121,6 +121,12 @@ type Backend interface {
 	// GetRuntimeState returns the given runtime's state.
 	GetRuntimeState(ctx context.Context, request *RuntimeRequest) (*RuntimeState, error)
 
+	// GetPastRoundRoots returns the stored state and I/O roots for the given runtime and round.
+	GetRoundRoots(ctx context.Context, request *RoundRootsRequest) (*RoundRoots, error)
+
+	// GetPastRoundRoots returns the stored past state and I/O roots for the given runtime.
+	GetPastRoundRoots(ctx context.Context, request *RuntimeRequest) (map[uint64]RoundRoots, error)
+
 	// GetLastRoundResults returns the given runtime's last normal round results.
 	GetLastRoundResults(ctx context.Context, request *RuntimeRequest) (*RoundResults, error)
 
@@ -168,6 +174,13 @@ type Backend interface {
 type RuntimeRequest struct {
 	RuntimeID common.Namespace `json:"runtime_id"`
 	Height    int64            `json:"height"`
+}
+
+// RoundRootsRequest is a request for a specific runtime and round's state and I/O roots.
+type RoundRootsRequest struct {
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Height    int64            `json:"height"`
+	Round     uint64           `json:"round"`
 }
 
 // InMessageQueueRequest is a request for queued incoming messages.

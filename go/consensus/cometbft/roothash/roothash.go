@@ -145,6 +145,24 @@ func (sc *serviceClient) GetLastRoundResults(ctx context.Context, request *api.R
 	return q.LastRoundResults(ctx, request.RuntimeID)
 }
 
+func (sc *serviceClient) GetRoundRoots(ctx context.Context, request *api.RoundRootsRequest) (*api.RoundRoots, error) {
+	q, err := sc.querier.QueryAt(ctx, request.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.RoundRoots(ctx, request.RuntimeID, request.Round)
+}
+
+func (sc *serviceClient) GetPastRoundRoots(ctx context.Context, request *api.RuntimeRequest) (map[uint64]api.RoundRoots, error) {
+	q, err := sc.querier.QueryAt(ctx, request.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.PastRoundRoots(ctx, request.RuntimeID)
+}
+
 // Implements api.Backend.
 func (sc *serviceClient) GetIncomingMessageQueueMeta(ctx context.Context, request *api.RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
 	q, err := sc.querier.QueryAt(ctx, request.Height)
