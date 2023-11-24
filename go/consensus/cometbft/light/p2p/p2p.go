@@ -245,6 +245,12 @@ func (lp *lightClientProvider) SubmitEvidence(ctx context.Context, evidence *con
 	return pf, nil
 }
 
+// GetStoredLightBlock implements api.Provider.
+func (lp *lightClientProvider) GetStoredLightBlock(_ int64) (*consensus.LightBlock, error) {
+	// The remote client provider stores no blocks locally.
+	return nil, consensus.ErrVersionNotFound
+}
+
 // GetLightBlock implements api.Provider.
 func (lp *lightClientProvider) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 	peerID := lp.getPeer()

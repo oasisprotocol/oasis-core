@@ -22,6 +22,10 @@ type LightService interface {
 
 // LightClient is a consensus light client interface.
 type LightClient interface {
+	// GetStoredLightBlock retrieves a light block from the local light block store without doing
+	// any remote queries.
+	GetStoredLightBlock(height int64) (*LightBlock, error)
+
 	// GetLightBlock queries peers for a specific light block.
 	GetLightBlock(ctx context.Context, height int64) (*LightBlock, rpc.PeerFeedback, error)
 
