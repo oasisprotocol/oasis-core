@@ -4,6 +4,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"reflect"
@@ -22,10 +23,6 @@ import (
 
 // ModuleName is a unique module name for the governance backend.
 const ModuleName = "governance"
-
-// ProposalContentInvalidText is the textual representation of an invalid
-// ProposalContent.
-const ProposalContentInvalidText = "(invalid)"
 
 var (
 	// ErrInvalidArgument is the error returned on malformed argument(s).
@@ -124,15 +121,17 @@ func (p *ProposalContent) Equals(other *ProposalContent) bool {
 // PrettyPrint writes a pretty-printed representation of ProposalContent to the
 // given writer.
 func (p ProposalContent) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
-	switch {
-	case p.Upgrade != nil && p.CancelUpgrade == nil:
+	if p.Upgrade != nil {
 		fmt.Fprintf(w, "%sUpgrade:\n", prefix)
 		p.Upgrade.PrettyPrint(ctx, prefix+"  ", w)
-	case p.CancelUpgrade != nil && p.Upgrade == nil:
+	}
+	if p.CancelUpgrade != nil {
 		fmt.Fprintf(w, "%sCancel Upgrade:\n", prefix)
 		p.CancelUpgrade.PrettyPrint(ctx, prefix+"  ", w)
-	default:
-		fmt.Fprintf(w, "%s%s\n", prefix, ProposalContentInvalidText)
+	}
+	if p.ChangeParameters != nil {
+		fmt.Fprintf(w, "%sChange Parameters:\n", prefix)
+		p.ChangeParameters.PrettyPrint(ctx, prefix+"  ", w)
 	}
 }
 
@@ -233,8 +232,18 @@ func (p *ChangeParametersProposal) Equals(other *ChangeParametersProposal) bool 
 // PrettyPrint writes a pretty-printed representation of ChangeParametersProposal to the given
 // writer.
 func (p *ChangeParametersProposal) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
+	var changes map[string]interface{}
+	if err := cbor.Unmarshal(p.Changes, &changes); err != nil {
+		fmt.Fprintf(w, "%s  <error: %s>\n", prefix, err)
+		fmt.Fprintf(w, "%s  <malformed: %s>\n", prefix, base64.StdEncoding.EncodeToString(p.Changes))
+		return
+	}
 	fmt.Fprintf(w, "%sModule: %s\n", prefix, p.Module)
-	fmt.Fprintf(w, "%sChanges: %v\n", prefix, p.Changes)
+	fmt.Fprintf(w, "%sChanges: \n", prefix)
+	for param, value := range changes {
+		fmt.Fprintf(w, "%s  - Parameter: %s\n", prefix, param)
+		fmt.Fprintf(w, "%s    Value: %v\n", prefix, value)
+	}
 }
 
 // PrettyType returns a representation of ChangeParametersProposal that can be used for pretty
