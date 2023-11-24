@@ -258,6 +258,15 @@ func (c *client) worker() {
 	}
 }
 
+// GetStoredBlock implements api.Client.
+func (c *client) GetStoredLightBlock(height int64) (*consensus.LightBlock, error) {
+	clb, err := c.store.LightBlock(height)
+	if err != nil {
+		return nil, err
+	}
+	return api.NewLightBlock(clb)
+}
+
 // GetLightBlock implements api.Client.
 func (c *client) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 	select {
@@ -291,19 +300,11 @@ func (c *client) GetLightBlock(ctx context.Context, height int64) (*consensus.Li
 			return nil, nil, err
 		}
 
-		plb, err := clb.ToProto()
+		lb, err := api.NewLightBlock(clb)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to marshal light block: %w", err)
+			return nil, nil, err
 		}
-		meta, err := plb.Marshal()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to marshal light block: %w", err)
-		}
-
-		return &consensus.LightBlock{
-			Height: clb.Height,
-			Meta:   meta,
-		}, rpc.NewNopPeerFeedback(), nil
+		return lb, rpc.NewNopPeerFeedback(), nil
 	}
 
 	// Direct peer query.

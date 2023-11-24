@@ -61,6 +61,15 @@ func tryProviders[R any](
 	return result, nil, err
 }
 
+// GetStoredBlock implements api.Client.
+func (lc *lightClient) GetStoredLightBlock(height int64) (*consensus.LightBlock, error) {
+	clb, err := lc.tmc.TrustedLightBlock(height)
+	if err != nil {
+		return nil, err
+	}
+	return api.NewLightBlock(clb)
+}
+
 // GetLightBlock implements api.Client.
 func (lc *lightClient) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 	return tryProviders(ctx, lc, func(p api.Provider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
