@@ -47,7 +47,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
-	lightP2P "github.com/oasisprotocol/oasis-core/go/consensus/p2p/light"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
@@ -472,9 +471,6 @@ func (t *fullService) RegisterP2PService(p2p p2pAPI.Service) error {
 		return fmt.Errorf("p2p service already registered")
 	}
 	t.p2p = p2p
-
-	// Register consensus protocol server.
-	t.p2p.RegisterProtocolServer(lightP2P.NewServer(t.p2p, t.genesis.ChainContext(), t))
 
 	return nil
 }

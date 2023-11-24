@@ -33,6 +33,12 @@ func New(
 }
 
 // NewLightClient creates a new CometBFT light client service.
-func NewLightClient(ctx context.Context, dataDir string, genesis *genesisAPI.Document, consensus consensusAPI.Backend, p2p rpc.P2P) (lightAPI.ClientService, error) {
+func NewLightClient(
+	ctx context.Context,
+	dataDir string,
+	genesis *genesisAPI.Document,
+	consensus consensusAPI.Backend,
+	p2p rpc.P2P,
+) (lightAPI.ClientService, error) {
 	return light.New(ctx, dataDir, genesis, consensus, p2p)
 }

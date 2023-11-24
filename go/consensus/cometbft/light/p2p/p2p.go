@@ -46,12 +46,13 @@ type providersPool struct {
 // NewLightClientProvider implements LightClientProvidersPool.
 func (p *providersPool) NewLightClientProvider() api.Provider {
 	provider := &lightClientProvider{
-		initCh:  make(chan struct{}),
-		chainID: p.chainID,
-		p2pMgr:  p.p2pMgr,
-		rc:      p.rc,
-		logger:  logging.GetLogger("cometbft/light/p2p"),
-		pool:    p,
+		initCh:    make(chan struct{}),
+		chainID:   p.chainID,
+		p2pMgr:    p.p2pMgr,
+		rc:        p.rc,
+		refreshCh: make(chan struct{}, 1),
+		logger:    logging.GetLogger("cometbft/light/p2p"),
+		pool:      p,
 	}
 
 	go provider.worker(p.ctx)
@@ -87,6 +88,8 @@ type lightClientProvider struct {
 	p2pMgr rpc.PeerManager
 	rc     rpc.Client
 
+	refreshCh chan struct{}
+
 	// Guarded by lock.
 	l      sync.RWMutex
 	peerID *core.PeerID
@@ -106,6 +109,9 @@ func (lp *lightClientProvider) worker(ctx context.Context) {
 
 	for {
 		select {
+		case <-lp.refreshCh:
+			// Explicitly requested peer refresh.
+			lp.refreshPeer()
 		case update := <-ch:
 			peerID := lp.getPeer()
 			switch {
@@ -185,7 +191,7 @@ func (lp *lightClientProvider) Initialized() <-chan struct{} {
 	return lp.initCh
 }
 
-// Initialized implements api.Provider.
+// PeerID implements api.Provider.
 func (lp *lightClientProvider) PeerID() string {
 	peer := lp.getPeer()
 	if peer == nil {
@@ -194,6 +200,14 @@ func (lp *lightClientProvider) PeerID() string {
 		return ""
 	}
 	return peer.String()
+}
+
+// RefreshPeer implements api.Provider.
+func (lp *lightClientProvider) RefreshPeer() {
+	select {
+	case lp.refreshCh <- struct{}{}:
+	default:
+	}
 }
 
 // MalevolentProvider implements api.Provider.
@@ -231,6 +245,12 @@ func (lp *lightClientProvider) SubmitEvidence(ctx context.Context, evidence *con
 	return pf, nil
 }
 
+// GetStoredLightBlock implements api.Provider.
+func (lp *lightClientProvider) GetStoredLightBlock(_ int64) (*consensus.LightBlock, error) {
+	// The remote client provider stores no blocks locally.
+	return nil, consensus.ErrVersionNotFound
+}
+
 // GetLightBlock implements api.Provider.
 func (lp *lightClientProvider) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
 	peerID := lp.getPeer()
@@ -247,7 +267,7 @@ func (lp *lightClientProvider) GetLightBlock(ctx context.Context, height int64) 
 	// Ensure peer returned the block for the queried height.
 	if rsp.Height != height {
 		pf.RecordBadPeer()
-		return nil, nil, err
+		return nil, nil, consensus.ErrVersionNotFound
 	}
 
 	return &rsp, pf, nil
@@ -269,7 +289,7 @@ func (lp *lightClientProvider) GetParameters(ctx context.Context, height int64) 
 	// Ensure peer returned the parameters for the queried height.
 	if rsp.Height != height {
 		pf.RecordBadPeer()
-		return nil, nil, err
+		return nil, nil, consensus.ErrVersionNotFound
 	}
 
 	return &rsp, pf, nil

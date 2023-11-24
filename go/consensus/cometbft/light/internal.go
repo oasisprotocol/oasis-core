@@ -27,19 +27,70 @@ type lightClient struct {
 	tmc *cmtlight.Client
 }
 
+func tryProviders[R any](
+	ctx context.Context,
+	lc *lightClient,
+	fn func(api.Provider) (R, rpc.PeerFeedback, error),
+) (R, rpc.PeerFeedback, error) {
+	// Primary provider.
+	providers := append([]api.Provider{}, lc.tmc.Primary().(api.Provider))
+	// Additional providers.
+	for _, provider := range lc.tmc.Witnesses() {
+		providers = append(providers, provider.(api.Provider))
+	}
+
+	var (
+		result R
+		err    error
+	)
+	for _, provider := range providers {
+		if ctx.Err() != nil {
+			return result, nil, ctx.Err()
+		}
+
+		var pf rpc.PeerFeedback
+		result, pf, err = fn(provider)
+		if err == nil {
+			return result, pf, nil
+		}
+	}
+
+	// Trigger primary provider refresh if everything fails.
+	providers[0].RefreshPeer()
+
+	return result, nil, err
+}
+
+// GetStoredBlock implements api.Client.
+func (lc *lightClient) GetStoredLightBlock(height int64) (*consensus.LightBlock, error) {
+	clb, err := lc.tmc.TrustedLightBlock(height)
+	if err != nil {
+		return nil, err
+	}
+	return api.NewLightBlock(clb)
+}
+
 // GetLightBlock implements api.Client.
 func (lc *lightClient) GetLightBlock(ctx context.Context, height int64) (*consensus.LightBlock, rpc.PeerFeedback, error) {
-	return lc.getPrimary().GetLightBlock(ctx, height)
+	return tryProviders(ctx, lc, func(p api.Provider) (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		return p.GetLightBlock(ctx, height)
+	})
 }
 
 // GetParameters implements api.Client.
 func (lc *lightClient) GetParameters(ctx context.Context, height int64) (*consensus.Parameters, rpc.PeerFeedback, error) {
-	return lc.getPrimary().GetParameters(ctx, height)
+	return tryProviders(ctx, lc, func(p api.Provider) (*consensus.Parameters, rpc.PeerFeedback, error) {
+		return p.GetParameters(ctx, height)
+	})
 }
 
 // SubmitEvidence implements api.Client.
 func (lc *lightClient) SubmitEvidence(ctx context.Context, evidence *consensus.Evidence) (rpc.PeerFeedback, error) {
-	return lc.getPrimary().SubmitEvidence(ctx, evidence)
+	_, pf, err := tryProviders(ctx, lc, func(p api.Provider) (any, rpc.PeerFeedback, error) {
+		pf, err := p.SubmitEvidence(ctx, evidence)
+		return nil, pf, err
+	})
+	return pf, err
 }
 
 // GetVerifiedLightBlock implements Client.
@@ -49,7 +100,7 @@ func (lc *lightClient) GetVerifiedLightBlock(ctx context.Context, height int64) 
 
 // GetVerifiedLightBlock implements Client.
 func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
-	p, pf, err := lc.getPrimary().GetParameters(ctx, height)
+	p, pf, err := lc.GetParameters(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -87,10 +138,6 @@ func (lc *lightClient) GetVerifiedParameters(ctx context.Context, height int64) 
 	}
 
 	return &paramsPB, nil
-}
-
-func (lc *lightClient) getPrimary() api.Provider {
-	return lc.tmc.Primary().(api.Provider)
 }
 
 // NewInternalClient creates an internal and non-persistent light client.

@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 
 	cmtlight "github.com/cometbft/cometbft/light"
 	cmtlightprovider "github.com/cometbft/cometbft/light/provider"
@@ -41,6 +42,9 @@ type Provider interface {
 
 	// PeerID returns the identifier of the peer backing the provider.
 	PeerID() string
+
+	// RefreshPeer notifies the provider to attempt to replace a peer with a fresh one.
+	RefreshPeer()
 }
 
 // ClientConfig is the configuration for the light client.
@@ -50,4 +54,21 @@ type ClientConfig struct {
 
 	// TrustOptions are CometBFT light client trust options.
 	TrustOptions cmtlight.TrustOptions
+}
+
+// NewLightBlock creates a new consensus.LightBlock from a CometBFT light block.
+func NewLightBlock(clb *cmttypes.LightBlock) (*consensus.LightBlock, error) {
+	plb, err := clb.ToProto()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal light block: %w", err)
+	}
+	meta, err := plb.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal light block: %w", err)
+	}
+
+	return &consensus.LightBlock{
+		Height: clb.Height,
+		Meta:   meta,
+	}, nil
 }
