@@ -811,6 +811,7 @@ func (net *Network) MakeGenesis() error {
 		args = append(args, []string{
 			"--" + genesis.CfgRoothashMaxRuntimeMessages, strconv.FormatUint(uint64(cfg.MaxRuntimeMessages), 10),
 			"--" + genesis.CfgRoothashMaxInRuntimeMessages, strconv.FormatUint(uint64(cfg.MaxInRuntimeMessages), 10),
+			"--" + genesis.CfgRoothashMaxRuntimeMessages, strconv.FormatUint(uint64(cfg.MaxRuntimeMessages), 10),
 		}...)
 	}
 	if cfg := net.cfg.SchedulerForceElect; cfg != nil {

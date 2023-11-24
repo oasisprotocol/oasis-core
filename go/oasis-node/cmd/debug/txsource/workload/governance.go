@@ -401,6 +401,9 @@ func (g *governanceWorkload) doChangeParametersProposal() error { // nolint: goc
 		if randBool() {
 			pc.MaxEvidenceAge = &params.MaxEvidenceAge
 		}
+		if randBool() {
+			pc.MaxPastRootsStored = &params.MaxPastRootsStored
+		}
 		shouldFail = pc.SanityCheck() != nil
 		module = roothash.ModuleName
 		changes = cbor.Marshal(pc)
