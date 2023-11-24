@@ -90,7 +90,8 @@ func (b *peerstoreBackup) restore(ctx context.Context) error {
 	}
 
 	for _, info := range peers[peerstoreNamespace] {
-		b.store.SetAddrs(info.ID, info.Addrs, peerstore.RecentlyConnectedAddrTTL)
+		// Make sure to add, not set, the address to avoid overwriting the TTL.
+		b.store.AddAddrs(info.ID, info.Addrs, peerstore.RecentlyConnectedAddrTTL)
 	}
 
 	return nil
