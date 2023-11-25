@@ -29,6 +29,7 @@ import (
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
@@ -87,6 +88,7 @@ type queries struct {
 	registry   registry.Backend
 	scheduler  scheduler.Backend
 	governance governance.Backend
+	roothash   roothash.Backend
 	runtime    runtimeClient.RuntimeClient
 
 	runtimeGenesisRound uint64
@@ -674,6 +676,62 @@ func (q *queries) doGovernanceQueries(ctx context.Context, _ *rand.Rand, height 
 	return nil
 }
 
+func (q *queries) doRoothashQueries(ctx context.Context, _ *rand.Rand, height int64) error {
+	q.logger.Debug("doing roothash queries",
+		"height", height,
+	)
+
+	_, err := q.roothash.ConsensusParameters(ctx, height)
+	if err != nil {
+		return fmt.Errorf("roothash.ConsensusParameters: %w", err)
+	}
+
+	_, err = q.roothash.GetGenesisBlock(ctx, &roothash.RuntimeRequest{RuntimeID: q.runtimeID, Height: height})
+	if err != nil {
+		return fmt.Errorf("roothash.GetGenesisBlock: %w", err)
+	}
+
+	_, err = q.roothash.GetIncomingMessageQueue(ctx, &roothash.InMessageQueueRequest{RuntimeID: q.runtimeID, Height: height})
+	if err != nil {
+		return fmt.Errorf("roothash.GetIncomingMessageQueue: %w", err)
+	}
+
+	_, err = q.roothash.GetIncomingMessageQueueMeta(ctx, &roothash.RuntimeRequest{RuntimeID: q.runtimeID, Height: height})
+	if err != nil {
+		return fmt.Errorf("roothash.GetIncomingMessageQueueMeta: %w", err)
+	}
+
+	_, err = q.roothash.GetLastRoundResults(ctx, &roothash.RuntimeRequest{RuntimeID: q.runtimeID, Height: height})
+	if err != nil {
+		return fmt.Errorf("roothash.GetLastRoundResults: %w", err)
+	}
+
+	_, err = q.roothash.GetLatestBlock(ctx, &roothash.RuntimeRequest{RuntimeID: q.runtimeID, Height: height})
+	if err != nil {
+		return fmt.Errorf("roothash.GetLatestBlock: %w", err)
+	}
+
+	state, err := q.roothash.GetRuntimeState(ctx, &roothash.RuntimeRequest{RuntimeID: q.runtimeID, Height: height})
+	if err != nil {
+		return fmt.Errorf("roothash.GetRuntimeState: %w", err)
+	}
+
+	_, err = q.roothash.GetRoundRoots(ctx, &roothash.RoundRootsRequest{RuntimeID: q.runtimeID, Height: height, Round: state.LastNormalRound})
+	if err != nil {
+		return fmt.Errorf("roothash.GetRoundRoots: %w", err)
+	}
+
+	_, err = q.roothash.GetPastRoundRoots(ctx, &roothash.RuntimeRequest{RuntimeID: q.runtimeID, Height: height})
+	if err != nil {
+		return fmt.Errorf("roothash.GetPastRoundRoots: %w", err)
+	}
+
+	q.logger.Debug("done roothash queries",
+		"height", height,
+	)
+	return nil
+}
+
 // doRuntimeQueries does runtime queries at a random round.
 func (q *queries) doRuntimeQueries(ctx context.Context, rng *rand.Rand) error {
 	q.logger.Debug("doing runtime queries")
@@ -789,6 +847,9 @@ func (q *queries) doQueries(ctx context.Context, rng *rand.Rand) error {
 	if err := q.doGovernanceQueries(ctx, rng, height); err != nil {
 		return fmt.Errorf("governance queries error: %w", err)
 	}
+	if err := q.doRoothashQueries(ctx, rng, height); err != nil {
+		return fmt.Errorf("roothash queries error: %w", err)
+	}
 	if viper.GetBool(CfgQueriesRuntimeEnabled) {
 		if err := q.doRuntimeQueries(ctx, rng); err != nil {
 			return fmt.Errorf("runtime queries error: %w", err)
@@ -831,6 +892,7 @@ func (q *queries) Run(
 	q.scheduler = scheduler.NewSchedulerClient(conn)
 	q.governance = governance.NewGovernanceClient(conn)
 	q.staking = staking.NewStakingClient(conn)
+	q.roothash = roothash.NewRootHashClient(conn)
 
 	q.stakingParams, err = q.staking.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {

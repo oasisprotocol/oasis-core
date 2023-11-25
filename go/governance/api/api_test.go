@@ -163,16 +163,18 @@ func TestProposalContentPrettyPrint(t *testing.T) {
 			},
 		},
 		{
-			expRegex: ProposalContentInvalidText,
+			expRegex: "",
 			p:        &ProposalContent{},
 		},
 		{
-			expRegex: ProposalContentInvalidText,
+			expRegex: "^Change Parameters:",
 			p: &ProposalContent{
-				Upgrade: &UpgradeProposal{
-					Descriptor: upgrade.Descriptor{Handler: "test"},
+				ChangeParameters: &ChangeParametersProposal{
+					Module: "test-module",
+					Changes: cbor.Marshal(map[string]string{
+						"test-parameter": "test-value",
+					}),
 				},
-				CancelUpgrade: &CancelUpgradeProposal{ProposalID: 42},
 			},
 		},
 	} {

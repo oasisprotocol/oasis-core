@@ -1,8 +1,10 @@
 package pcs
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -27,6 +29,7 @@ const (
 	pcsAPIGetTCBInfoPath        = "/certification/v4/tcb"
 	pcsAPIGetQEIdentityPath     = "/certification/v4/qe/identity"
 	pcsAPICertChainHeader       = "TCB-Info-Issuer-Chain"
+	pcsAPIPCKIIssuerChainHeader = "SGX-PCK-Certificate-Issuer-Chain"
 )
 
 // HTTPClientConfig is the Intel SGX PCS client configuration.
@@ -72,6 +75,7 @@ func (hc *httpClient) doPCSRequest(ctx context.Context, u *url.URL, method, body
 			"method", method,
 			"url", u,
 		)
+		resp.Body.Close()
 		return nil, fmt.Errorf("pcs: response status error: %s", http.StatusText(resp.StatusCode))
 	}
 
@@ -131,6 +135,80 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundl
 	}
 
 	return &tcbBundle, nil
+}
+
+func (hc *httpClient) GetPCKCertificateChain(ctx context.Context, platformData []byte, encPpid [384]byte, cpusvn [16]byte, pcesvn uint16, pceid uint16) ([]*x509.Certificate, error) {
+	u := hc.getUrl(pcsAPIGetPCKCertificatePath)
+	q := u.Query()
+
+	// Base16-encoded PCESVN value (2 bytes, little endian).
+	var pcesvnBytes [2]byte
+	binary.LittleEndian.PutUint16(pcesvnBytes[:], pcesvn)
+
+	// Base16-encoded PCE-ID value (2 bytes, little endian)
+	var pceidBytes [2]byte
+	binary.LittleEndian.PutUint16(pceidBytes[:], pceid)
+
+	var rsp *http.Response
+	var err error
+	switch {
+	case platformData == nil:
+		// Use GET endpoint with encrypted PPID.
+		q.Set("encrypted_ppid", hex.EncodeToString(encPpid[:]))
+		q.Set("cpusvn", hex.EncodeToString(cpusvn[:]))
+		q.Set("pcesvn", hex.EncodeToString(pcesvnBytes[:]))
+		q.Set("pceid", hex.EncodeToString(pceidBytes[:]))
+		u.RawQuery = q.Encode()
+		rsp, err = hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false) // nolint: bodyclose
+	default:
+		// Platform data is provided, use the POST endpoint with platform data.
+		payload, merr := json.Marshal(&struct {
+			PlatformManifest string `json:"platformManifest"`
+			CPUSVN           string `json:"cpusvn"`
+			PCESVN           string `json:"pcesvn"`
+			PCEID            string `json:"pceid"`
+		}{
+			PlatformManifest: hex.EncodeToString(platformData),
+			CPUSVN:           hex.EncodeToString(cpusvn[:]),
+			PCESVN:           hex.EncodeToString(pcesvnBytes[:]),
+			PCEID:            hex.EncodeToString(pceidBytes[:]),
+		})
+		if merr != nil {
+			return nil, fmt.Errorf("pcs: failed to marshal PCK certificate request payload: %w", merr)
+		}
+		rsp, err = hc.doPCSRequest(ctx, u, http.MethodPost, "application/json", bytes.NewReader(payload), false) // nolint: bodyclose
+	}
+	if err != nil {
+		return nil, fmt.Errorf("pcs: PCK certificate request failed: %w", err)
+	}
+	defer rsp.Body.Close()
+
+	// Parse issuer Certificate chain for SGX PCK Certificate.
+	rawCerts, err := url.QueryUnescape(rsp.Header.Get(pcsAPIPCKIIssuerChainHeader))
+	if err != nil {
+		return nil, fmt.Errorf("pcs: failed to parse PCK certificate issuer chain header: %w", err)
+	}
+	// It consists of SGX Root CA Certificate and SGX Intermediate CA Certificate.
+	intermediateCert, rest, err := CertFromPEM([]byte(rawCerts))
+	if err != nil {
+		return nil, fmt.Errorf("pcs: failed to parse SGX Intermediate CA Certificate from PCK certificate issuer chain: %w", err)
+	}
+	rootCert, _, err := CertFromPEM(rest)
+	if err != nil {
+		return nil, fmt.Errorf("pcs: failed to parse root SGX Root CA Certificate from PCK certificate issuer chain: %w", err)
+	}
+
+	// Parse PCK Certificate.
+	rawPCKCert, err := io.ReadAll(rsp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("pcs: failed to read PCK certificate response body: %w", err)
+	}
+	leafCert, _, err := CertFromPEM(rawPCKCert)
+	if err != nil {
+		return nil, fmt.Errorf("pcs: failed to parse PCK certificate: %w", err)
+	}
+
+	return []*x509.Certificate{leafCert, intermediateCert, rootCert}, nil
 }
 
 // NewHTTPClient returns a new PCS HTTP endpoint.

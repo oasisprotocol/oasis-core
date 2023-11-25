@@ -25,6 +25,10 @@ var (
 	methodGetRuntimeState = serviceName.NewMethod("GetRuntimeState", RuntimeRequest{})
 	// methodGetLastRoundResults is the GetLastRoundResults method.
 	methodGetLastRoundResults = serviceName.NewMethod("GetLastRoundResults", RuntimeRequest{})
+	// methodGetRoundRoots is the GetRoundRoots method.
+	methodGetRoundRoots = serviceName.NewMethod("GetRoundRoots", RoundRootsRequest{})
+	// methodGetPastRoundRoots is the GetPastRoundRoots method.
+	methodGetPastRoundRoots = serviceName.NewMethod("GetPastRoundRoots", RuntimeRequest{})
 	// methodGetIncomingMessageQueueMeta is the GetIncomingMessageQueueMeta method.
 	methodGetIncomingMessageQueueMeta = serviceName.NewMethod("GetIncomingMessageQueueMeta", RuntimeRequest{})
 	// methodGetIncomingMessageQueue is the GetIncomingMessageQueue method.
@@ -63,6 +67,14 @@ var (
 			{
 				MethodName: methodGetLastRoundResults.ShortName(),
 				Handler:    handlerGetLastRoundResults,
+			},
+			{
+				MethodName: methodGetRoundRoots.ShortName(),
+				Handler:    handlerGetRoundRoots,
+			},
+			{
+				MethodName: methodGetPastRoundRoots.ShortName(),
+				Handler:    handlerGetPastRoundRoots,
 			},
 			{
 				MethodName: methodGetIncomingMessageQueueMeta.ShortName(),
@@ -193,6 +205,52 @@ func handlerGetLastRoundResults(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).GetLastRoundResults(ctx, req.(*RuntimeRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerGetRoundRoots(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq RoundRootsRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetRoundRoots(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetRoundRoots.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetRoundRoots(ctx, req.(*RoundRootsRequest))
+	}
+	return interceptor(ctx, &rq, info, handler)
+}
+
+func handlerGetPastRoundRoots(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var rq RuntimeRequest
+	if err := dec(&rq); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).GetPastRoundRoots(ctx, &rq)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetPastRoundRoots.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).GetPastRoundRoots(ctx, req.(*RuntimeRequest))
 	}
 	return interceptor(ctx, &rq, info, handler)
 }
@@ -438,6 +496,22 @@ func (c *roothashClient) GetLastRoundResults(ctx context.Context, request *Runti
 		return nil, err
 	}
 	return &rsp, nil
+}
+
+func (c *roothashClient) GetRoundRoots(ctx context.Context, request *RoundRootsRequest) (*RoundRoots, error) {
+	var rsp RoundRoots
+	if err := c.conn.Invoke(ctx, methodGetRoundRoots.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
+}
+
+func (c *roothashClient) GetPastRoundRoots(ctx context.Context, request *RuntimeRequest) (map[uint64]RoundRoots, error) {
+	var rsp map[uint64]RoundRoots
+	if err := c.conn.Invoke(ctx, methodGetPastRoundRoots.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
 }
 
 func (c *roothashClient) GetIncomingMessageQueueMeta(ctx context.Context, request *RuntimeRequest) (*message.IncomingMessageQueueMeta, error) {
