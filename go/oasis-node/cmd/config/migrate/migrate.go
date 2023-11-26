@@ -346,6 +346,9 @@ func doMigrateConfig(cmd *cobra.Command, args []string) {
 							m(newCfg["consensus"])["prune"] = prune
 							delete(m(m(tendermint)["abci"]), "prune")
 						}
+					} else if k == "db" {
+						logger.Info("consensus.db.* is no longer needed")
+						delete(m(tendermint), "db")
 					} else {
 						m(newCfg["consensus"])[k] = v
 						delete(m(tendermint), k)

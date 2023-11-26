@@ -120,6 +120,8 @@ consensus:
       upstream_address:
         - "asdf@1.2.3.4:5678"
     mode: full
+    db:
+      backend: badger
 
     # Validators behind sentry nodes should set sentries as persistent peers.
     p2p:
