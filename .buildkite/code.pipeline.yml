@@ -86,6 +86,9 @@ retry: &retry_agent_failure
     # Buildkite lost contact with the agent or it stopped reporting.
     - exit_status: -1
       limit: 2
+    # Cargo build error (e.g., Unable to update registry `crates-io`).
+    - exit_status: 101
+      limit: 10
     # ERRO[0092] error waiting for container: unexpected EOF.
     - exit_status: 125
       limit: 2
