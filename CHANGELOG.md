@@ -12,6 +12,53 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.6 (2023-11-27)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Configuration Changes
+
+- Add `num_light_blocks_kept` configuration option
+  ([#5466](https://github.com/oasisprotocol/oasis-core/issues/5466))
+
+  Located under `consensus.prune`, it allows configuring the number of light
+  blocks that are kept in the local trusted store (defaulting to 10000).
+
+### Features
+
+- go/roothash: expose RoundRoots in the roothash client
+  ([#5467](https://github.com/oasisprotocol/oasis-core/issues/5467))
+
+### Bug Fixes
+
+- go/consensus/cometbft/light: Try multiple sources when fetching blocks
+  ([#5466](https://github.com/oasisprotocol/oasis-core/issues/5466))
+
+- go/p2p/peermgmt/backup: Prevent overwriting TTL when restoring peers
+  ([#5469](https://github.com/oasisprotocol/oasis-core/issues/5469))
+
+  If the peer address of a seed node was added to the libp2p address book
+  before peer manager restored backup peer addresses, its permanent TTL
+  was replaced with the TTL for recently connected peers.
+
+- governance: Fix pretty priting of `ChangeParametersProposal`
+  ([#5472](https://github.com/oasisprotocol/oasis-core/issues/5472))
+
+- go/oasis-node: Remove obsolete db section during config migration
+  ([#5473](https://github.com/oasisprotocol/oasis-core/issues/5473))
+
+- go/p2p/discovery: Close only idle connections to seed node
+  ([#5476](https://github.com/oasisprotocol/oasis-core/issues/5476))
+
+### Internal Changes
+
+- go/common/sgx: implement `GetPCKCertificateChain` PCS API client
+  ([#5465](https://github.com/oasisprotocol/oasis-core/issues/5465))
+
 ## 23.0.5 (2023-11-22)
 
 | Protocol          | Version   |
