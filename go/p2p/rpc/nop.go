@@ -90,6 +90,13 @@ func (c *nopClient) Close(
 }
 
 // Implements Client.
+func (c *nopClient) CloseIdle(
+	peer.ID,
+) error {
+	return nil
+}
+
+// Implements Client.
 func (c *nopClient) RegisterListener(ClientListener) {}
 
 // Implements Client.

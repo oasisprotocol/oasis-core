@@ -133,9 +133,9 @@ func (c *client) Advertise(ctx context.Context, ns string, _ ...discovery.Option
 
 	pf.RecordSuccess()
 
-	// Close connections after every call because requests to the seed node are infrequent.
-	if err = c.rc.Close(c.seed.ID); err != nil {
-		c.logger.Warn("failed to close connections to seed node",
+	// Try to close connections after every call because requests to the seed node are infrequent.
+	if err = c.rc.CloseIdle(c.seed.ID); err != nil {
+		c.logger.Warn("failed to close idle connections to seed node",
 			"err", err,
 		)
 	}
@@ -246,9 +246,9 @@ func (c *client) fetchPeers(ctx context.Context, ns string, limit int) []peer.Ad
 		pf.RecordFailure()
 	}
 
-	// Close connections after every call because requests to the seed node are infrequent.
-	if err := c.rc.Close(c.seed.ID); err != nil {
-		c.logger.Warn("failed to close connections to seed node",
+	// Try to close connections after every call because requests to the seed node are infrequent.
+	if err = c.rc.CloseIdle(c.seed.ID); err != nil {
+		c.logger.Warn("failed to close idle connections to seed node",
 			"err", err,
 		)
 	}
