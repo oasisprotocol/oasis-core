@@ -256,6 +256,9 @@ type Client interface {
 	// Close closes all connections to the given peer.
 	Close(peerID core.PeerID) error
 
+	// CloseIdle closes all connections to the given peer that have no open streams.
+	CloseIdle(peerID core.PeerID) error
+
 	// RegisterListener subscribes the listener to the client notification events.
 	// If the listener is already registered this is a noop operation.
 	RegisterListener(l ClientListener)
@@ -539,6 +542,19 @@ func (c *client) call(
 func (c *client) Close(peerID core.PeerID) error {
 	var errs error
 	for _, conn := range c.host.Network().ConnsToPeer(peerID) {
+		err := conn.Close()
+		errs = errors.Join(errs, err)
+	}
+	return errs
+}
+
+// Implements Client.
+func (c *client) CloseIdle(peerID core.PeerID) error {
+	var errs error
+	for _, conn := range c.host.Network().ConnsToPeer(peerID) {
+		if len(conn.GetStreams()) > 0 {
+			continue
+		}
 		err := conn.Close()
 		errs = errors.Join(errs, err)
 	}
