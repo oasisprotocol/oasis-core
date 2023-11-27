@@ -366,11 +366,6 @@ func (m *PeerManager) connectPeers(ctx context.Context, registered bool) {
 		}()
 	}
 
-	var (
-		peerCh <-chan peer.AddrInfo
-		limit  int
-	)
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -379,14 +374,16 @@ func (m *PeerManager) connectPeers(ctx context.Context, registered bool) {
 
 		switch registered {
 		case true:
-			peerCh = m.registry.findProtocolPeers(ctx, p)
-			limit = d.min - connected
+			if limit := d.min - connected; limit > 0 {
+				peerCh := m.registry.findProtocolPeers(ctx, p)
+				connectPeers(peerCh, limit)
+			}
 		default:
-			peerCh = m.discovery.findPeers(ctx, string(p))
-			limit = d.total - connected
+			if limit := d.total - connected; limit > 0 {
+				peerCh := m.discovery.findPeers(ctx, string(p))
+				connectPeers(peerCh, limit)
+			}
 		}
-
-		connectPeers(peerCh, limit)
 	}
 
 	for t, d := range m.topics {
@@ -394,15 +391,17 @@ func (m *PeerManager) connectPeers(ctx context.Context, registered bool) {
 
 		switch registered {
 		case true:
-			peerCh = m.registry.findTopicPeers(ctx, t)
-			limit = d.min - connected
+			if limit := d.min - connected; limit > 0 {
+				peerCh := m.registry.findTopicPeers(ctx, t)
+				connectPeers(peerCh, limit)
+			}
 
 		default:
-			peerCh = m.discovery.findPeers(ctx, t)
-			limit = d.total - connected
+			if limit := d.total - connected; limit > 0 {
+				peerCh := m.discovery.findPeers(ctx, t)
+				connectPeers(peerCh, limit)
+			}
 		}
-
-		connectPeers(peerCh, limit)
 	}
 }
 
