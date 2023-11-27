@@ -416,8 +416,9 @@ func (app *governanceApplication) closeProposal(
 			}
 			delegationToValidator = true
 			validatorVote := validatorVotes[to]
-			if validatorVote == &vote.Vote { //nolint:gosec
-				// Vote matches the delegated validator vote.
+
+			// Skip if vote matches the delegated validator vote.
+			if validatorVote != nil && *validatorVote == vote.Vote {
 				continue
 			}
 
