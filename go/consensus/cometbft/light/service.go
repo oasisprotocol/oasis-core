@@ -289,21 +289,17 @@ func (c *client) GetLightBlock(ctx context.Context, height int64) (*consensus.Li
 		return lb, rpc.NewNopPeerFeedback(), nil
 	}
 
-	// Light client.
-	lightClientSource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
-		clb, err := c.lc.GetVerifiedLightBlock(ctx, height)
+	// Light client store.
+	lightClientStoreSource := func() (*consensus.LightBlock, rpc.PeerFeedback, error) {
+		lb, err := c.GetStoredLightBlock(height)
 		if err != nil {
-			c.logger.Debug("failed to fetch light block from light client",
+			c.logger.Debug("failed to fetch light block from light client store",
 				"err", err,
 				"height", height,
 			)
 			return nil, nil, err
 		}
 
-		lb, err := api.NewLightBlock(clb)
-		if err != nil {
-			return nil, nil, err
-		}
 		return lb, rpc.NewNopPeerFeedback(), nil
 	}
 
@@ -316,7 +312,7 @@ func (c *client) GetLightBlock(ctx context.Context, height int64) (*consensus.Li
 	var mergedErr error
 	for _, src := range []func() (*consensus.LightBlock, rpc.PeerFeedback, error){
 		localBackendSource,
-		lightClientSource,
+		lightClientStoreSource,
 		directPeerQuerySource,
 	} {
 		lb, pf, err := src()
