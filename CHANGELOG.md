@@ -12,6 +12,30 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.7 (2023-11-28)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- go/p2p/peermgmt: Find peers and connect only when needed
+  ([#5480](https://github.com/oasisprotocol/oasis-core/issues/5480))
+
+  If we are already connected to a sufficient number of peers
+  for a given topic or protocol, there's no need to retrieve
+  additional peers from the registry or the seed node.
+
+- go/consensus/cometbft/light: Only fetch from light store for now
+  ([#5481](https://github.com/oasisprotocol/oasis-core/issues/5481))
+
+  In practice the previously introduced fetch from light client caused
+  the light client to fall back to slow backwards verification due to
+  target blocks being in the past, below the pruning window.
+
 ## 23.0.6 (2023-11-27)
 
 | Protocol          | Version   |
