@@ -12,6 +12,19 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.8 (2023-11-29)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- rhp: Add extra signatures to Eden genesis block
+  ([#5486](https://github.com/oasisprotocol/oasis-core/issues/5486))
+
 ## 23.0.7 (2023-11-28)
 
 | Protocol          | Version   |
