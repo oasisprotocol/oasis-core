@@ -322,7 +322,7 @@ func (c *connection) call(ctx context.Context, body *Body) (result *Body, err er
 	// Await a response.
 	resp, err := c.readResponse(ctx, respCh)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
 	return resp, nil
@@ -349,9 +349,9 @@ func (c *connection) readResponse(ctx context.Context, respCh <-chan *Body) (*Bo
 
 		return resp, nil
 	case <-c.closeCh:
-		return nil, fmt.Errorf("connection closed")
+		return nil, fmt.Errorf("failed to read response: %w", fmt.Errorf("connection closed"))
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("failed to read response: %w", ctx.Err())
 	}
 }
 
