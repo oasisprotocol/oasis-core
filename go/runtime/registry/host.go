@@ -313,7 +313,7 @@ func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
 	if err != nil {
 		return nil, err
 	}
-	edenChainContext := "bb3d748def55bdfb797a2ac53ee6ee141e54cd2ab2dc2375f4a0703a178e6e55" // #nosec G101
+	edenChainContext := "bb3d748def55bdfb797a2ac53ee6ee141e54cd2ab2dc2375f4a0703a178e6e55"
 	edenGenesisHeight := uint64(16817956)
 	if chainContext == edenChainContext && rq.Height == edenGenesisHeight {
 		var pb cmtproto.LightBlock
@@ -409,8 +409,7 @@ func (h *runtimeHostHandler) handleHostFetchConsensusBlock(
 				return nil, fmt.Errorf("cometbft light block signature %d already set", index)
 			}
 
-			var sig []byte
-			sig, err = hex.DecodeString(encSig)
+			sig, err := hex.DecodeString(encSig)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode cometbft light block signature: %w", err)
 			}
