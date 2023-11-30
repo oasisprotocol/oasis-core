@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.9 (2023-11-30)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Bug Fixes
+
+- rhp: don't prepend 'failed to read response' to runtime module errors
+  ([#5488](https://github.com/oasisprotocol/oasis-core/issues/5488))
+
+- storage/checkpoints: Ignore i/o root in genesis checkpoint
+  ([#5492](https://github.com/oasisprotocol/oasis-core/issues/5492))
+
 ## 23.0.8 (2023-11-29)
 
 | Protocol          | Version   |
