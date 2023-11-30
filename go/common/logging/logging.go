@@ -189,6 +189,13 @@ func (l *Logger) With(keyvals ...interface{}) *Logger {
 	}
 }
 
+// NewNopLogger creates a logger that doesn't perform any logging.
+func NewNopLogger() *Logger {
+	return &Logger{
+		logger: log.NewNopLogger(),
+	}
+}
+
 // GetLevel returns the current global log level.
 func GetLevel() Level {
 	return backend.defaultLevel
