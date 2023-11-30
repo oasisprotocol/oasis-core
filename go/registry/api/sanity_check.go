@@ -50,9 +50,8 @@ func (g *Genesis) SanityCheck(
 	stakeLedger map[staking.Address]*staking.Account,
 	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
 	publicKeyBlacklist map[signature.PublicKey]bool,
+	logger *logging.Logger,
 ) error {
-	logger := logging.GetLogger("genesis/sanity-check")
-
 	if err := g.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("registry: sanity check failed: %w", err)
 	}
