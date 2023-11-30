@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/logging"
 )
 
 // SanityCheck does basic sanity checking on the contents of the genesis document.
@@ -30,7 +31,15 @@ func (d *Document) SanityCheck() error {
 	}
 	epoch := d.Beacon.Base // Note: d.Height has no easy connection to the epoch.
 
-	if err := d.Registry.SanityCheck(d.Time, uint64(d.Height), epoch, d.Staking.Ledger, d.Staking.Parameters.Thresholds, pkBlacklist); err != nil {
+	if err := d.Registry.SanityCheck(
+		d.Time,
+		uint64(d.Height),
+		epoch,
+		d.Staking.Ledger,
+		d.Staking.Parameters.Thresholds,
+		pkBlacklist,
+		logging.NewNopLogger(),
+	); err != nil {
 		return err
 	}
 	if err := d.RootHash.SanityCheck(); err != nil {
