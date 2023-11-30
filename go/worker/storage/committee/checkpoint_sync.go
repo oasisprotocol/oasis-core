@@ -300,12 +300,17 @@ func (n *Node) getCheckpointList() ([]*storageSync.Checkpoint, error) {
 	return list, nil
 }
 
-func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask outstandingMask) bool {
+func (n *Node) checkCheckpointUsable(cp *storageSync.Checkpoint, remainingMask outstandingMask, genesisRound uint64) bool {
 	namespace := n.commonNode.Runtime.ID()
 	if !namespace.Equal(&cp.Root.Namespace) {
 		// Not for the right runtime.
 		return false
 	}
+	if cp.Root.Version == genesisRound && cp.Root.Type == storageApi.RootTypeIO {
+		// Never fetch i/o root for genesis round.
+		return false
+	}
+
 	blk, err := n.commonNode.Runtime.History().GetCommittedBlock(n.ctx, cp.Root.Version)
 	if err != nil {
 		n.logger.Error("can't get block information for checkpoint, skipping", "err", err, "root", cp.Root)
@@ -374,13 +379,14 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 	}()
 
 	for _, check := range cps {
-		if check.Root.Version < genesisRound || !n.checkCheckpointUsable(check, remainingRoots) {
+
+		if check.Root.Version < genesisRound || !n.checkCheckpointUsable(check, remainingRoots, genesisRound) {
 			continue
 		}
 
 		if check.Root.Version != prevVersion {
 			// Starting a new round, so we need to clean up all state from
-			// previous retores. Aborting multipart works with no multipart in
+			// previous retries. Aborting multipart works with no multipart in
 			// progress too.
 			multipartRunning = false
 			if err := n.localStorage.NodeDB().AbortMultipartInsert(); err != nil {
@@ -393,6 +399,22 @@ func (n *Node) syncCheckpoints(genesisRound uint64, wantOnlyGenesis bool) (*bloc
 			remainingRoots = outstandingMaskFull
 			prevVersion = check.Root.Version
 			syncState.Roots = nil
+
+			if check.Root.Version == genesisRound {
+				// Genesis round has no i/o root. The remote node could have
+				// (an invalid) one checkpointed, if its history state was not
+				// cleared during a dump-restore upgrade. Ignore fetching it and
+				// use an empty i/o root.
+				remainingRoots.remove(storageApi.RootTypeIO)
+
+				root := storageApi.Root{
+					Namespace: check.Root.Namespace,
+					Version:   check.Root.Version,
+					Type:      storageApi.RootTypeIO,
+				}
+				root.Hash.Empty()
+				syncState.Roots = append(syncState.Roots, root)
+			}
 		}
 
 		status, err := n.handleCheckpoint(check, n.checkpointSyncCfg.ChunkFetcherCount)
