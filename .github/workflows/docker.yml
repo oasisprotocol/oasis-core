@@ -100,15 +100,31 @@ jobs:
             org.opencontainers.image.created=${{ steps.determine_tag.outputs.created }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: "Rebuild ghcr.io/oasisprotocol/aesmd:${{ steps.determine_tag.outputs.tag }}"
+      - name: "Rebuild ghcr.io/oasisprotocol/aesmd-dcap:${{ steps.determine_tag.outputs.tag }}"
         uses: docker/build-push-action@v4
         with:
           context: docker/aesmd
           file: docker/aesmd/Dockerfile
-          tags: ghcr.io/oasisprotocol/aesmd:${{ steps.determine_tag.outputs.tag }}
+          tags: ghcr.io/oasisprotocol/aesmd-dcap:${{ steps.determine_tag.outputs.tag }}
           pull: true
           push: true
           provenance: false
+          build-args: MODE=dcap
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.created=${{ steps.determine_tag.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: "Rebuild ghcr.io/oasisprotocol/aesmd-epid:${{ steps.determine_tag.outputs.tag }}"
+        uses: docker/build-push-action@v4
+        with:
+          context: docker/aesmd
+          file: docker/aesmd/Dockerfile
+          tags: ghcr.io/oasisprotocol/aesmd-epid:${{ steps.determine_tag.outputs.tag }}
+          pull: true
+          push: true
+          provenance: false
+          build-args: MODE=epid
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.created=${{ steps.determine_tag.outputs.created }}
@@ -136,12 +152,23 @@ jobs:
           prune-untagged: true
           prune-tags-regexes: ^pr-
 
-      - name: Prune old ghcr.io/oasisprotocol/aesmd images
+      - name: Prune old ghcr.io/oasisprotocol/aesmd-dcap images
         uses: vlaurin/action-ghcr-prune@v0.5.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           organization: oasisprotocol
-          container: aesmd
+          container: aesmd-dcap
+          keep-younger-than: 7 # days
+          keep-last: 2
+          prune-untagged: true
+          prune-tags-regexes: ^pr-
+
+      - name: Prune old ghcr.io/oasisprotocol/aesmd-epid images
+        uses: vlaurin/action-ghcr-prune@v0.5.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          organization: oasisprotocol
+          container: aesmd-epid
           keep-younger-than: 7 # days
           keep-last: 2
           prune-untagged: true
