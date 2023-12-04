@@ -24,4 +24,4 @@ ENV LD_LIBRARY_PATH=/opt/intel/sgx-aesm-service/aesm
 
 WORKDIR /opt/intel/sgx-aesm-service/aesm
 
-ENTRYPOINT ["/opt/intel/sgx-aesm-service/aesm/aesm_service", "--no-daemon"]
+ENTRYPOINT ["/opt/intel/sgx-aesm-service/aesm/aesm_service", "--no-daemon", "--no-syslog"]
