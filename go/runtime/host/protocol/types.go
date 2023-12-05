@@ -187,9 +187,6 @@ type Features struct {
 	// KeyManagerMasterSecretRotation is a feature specifying that the runtime supports rotating
 	// key manager's master secret.
 	KeyManagerMasterSecretRotation bool `json:"key_manager_master_secret_rotation,omitempty"`
-	// SameBlockConsensusValidation is a feature specifying that the runtime supports same-block
-	// consensus validation.
-	SameBlockConsensusValidation bool `json:"same_block_consensus_validation,omitempty"`
 }
 
 // HasScheduleControl returns true when the runtime supports the schedule control feature.
