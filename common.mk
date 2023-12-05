@@ -166,7 +166,7 @@ endef
 # NOTE: go mod tidy doesn't implement a check mode yet.
 # For more details, see: https://github.com/golang/go/issues/27005.
 define CHECK_GO_MOD_TIDY =
-    $(GO) mod tidy; \
+    $(GO) mod tidy && \
     if [[ ! -z `git status --porcelain go.mod go.sum` ]]; then \
         $(ECHO) "$(RED)Error: The following changes detected after running 'go mod tidy':$(OFF)"; \
         git diff go.mod go.sum; \
