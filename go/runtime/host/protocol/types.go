@@ -194,9 +194,6 @@ type Features struct {
 	// KeyManagerMasterSecretRotation is a feature specifying that the runtime supports rotating
 	// key manager's master secret.
 	KeyManagerMasterSecretRotation bool `json:"key_manager_master_secret_rotation,omitempty"`
-	// SameBlockConsensusValidation is a feature specifying that the runtime supports same-block
-	// consensus validation.
-	SameBlockConsensusValidation bool `json:"same_block_consensus_validation,omitempty"`
 	// RPCPeerID is a feature specifying that the runtime supports RPC peer IDs.
 	RPCPeerID bool `json:"rpc_peer_id,omitempty"`
 	// EndorsedCapabilityTEE is a feature specifying that the runtime supports endorsed TEE
