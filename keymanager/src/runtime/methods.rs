@@ -66,7 +66,7 @@ const MAX_EPHEMERAL_KEY_AGE: EpochTime = 10;
 const MAX_FRESH_HEIGHT_AGE: u64 = 50;
 
 /// Initialize the Kdf.
-pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitResponse> {
+pub fn init_kdf(ctx: &RpcContext, req: &InitRequest) -> Result<SignedInitResponse> {
     let rctx = runtime_context!(ctx, KmContext);
     let runtime_id = rctx.runtime_id;
     let storage = ctx.untrusted_local_storage;
@@ -96,7 +96,7 @@ pub fn init_kdf(ctx: &mut RpcContext, req: &InitRequest) -> Result<SignedInitRes
 }
 
 /// See `Kdf::get_or_create_keys`.
-pub fn get_or_create_keys(ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Result<KeyPair> {
+pub fn get_or_create_keys(ctx: &RpcContext, req: &LongTermKeyRequest) -> Result<KeyPair> {
     authorize_private_key_generation(ctx, &req.runtime_id)?;
     validate_height_freshness(ctx, req.height)?;
 
@@ -109,7 +109,7 @@ pub fn get_or_create_keys(ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Res
 }
 
 /// See `Kdf::get_public_key`.
-pub fn get_public_key(ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Result<SignedPublicKey> {
+pub fn get_public_key(ctx: &RpcContext, req: &LongTermKeyRequest) -> Result<SignedPublicKey> {
     // No authentication or authorization.
     // Absolutely anyone is allowed to query public long-term keys.
 
@@ -126,7 +126,7 @@ pub fn get_public_key(ctx: &mut RpcContext, req: &LongTermKeyRequest) -> Result<
 
 /// See `Kdf::get_or_create_ephemeral_keys`.
 pub fn get_or_create_ephemeral_keys(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     req: &EphemeralKeyRequest,
 ) -> Result<KeyPair> {
     authorize_private_key_generation(ctx, &req.runtime_id)?;
@@ -138,7 +138,7 @@ pub fn get_or_create_ephemeral_keys(
 
 /// See `Kdf::get_public_ephemeral_key`.
 pub fn get_public_ephemeral_key(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     req: &EphemeralKeyRequest,
 ) -> Result<SignedPublicKey> {
     // No authentication or authorization.
@@ -163,7 +163,7 @@ pub fn get_public_ephemeral_key(
 
 /// See `Kdf::replicate_master_secret`.
 pub fn replicate_master_secret(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     req: &ReplicateMasterSecretRequest,
 ) -> Result<ReplicateMasterSecretResponse> {
     authorize_secret_replication(ctx)?;
@@ -181,7 +181,7 @@ pub fn replicate_master_secret(
 
 /// See `Kdf::replicate_ephemeral_secret`.
 pub fn replicate_ephemeral_secret(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     req: &ReplicateEphemeralSecretRequest,
 ) -> Result<ReplicateEphemeralSecretResponse> {
     authorize_secret_replication(ctx)?;
@@ -193,7 +193,7 @@ pub fn replicate_ephemeral_secret(
 
 /// Generate a master secret and encrypt it using the key manager's REK keys.
 pub fn generate_master_secret(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     req: &GenerateMasterSecretRequest,
 ) -> Result<GenerateMasterSecretResponse> {
     let kdf = Kdf::global();
@@ -228,7 +228,7 @@ pub fn generate_master_secret(
 
 /// Generate an ephemeral secret and encrypt it using the key manager's REK keys.
 pub fn generate_ephemeral_secret(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     req: &GenerateEphemeralSecretRequest,
 ) -> Result<GenerateEphemeralSecretResponse> {
     let kdf = Kdf::global();
@@ -260,7 +260,7 @@ pub fn generate_ephemeral_secret(
 
 /// Encrypt a secret using the Deoxys-II MRAE algorithm and the key manager's REK keys.
 fn encrypt_secret(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     secret: Secret,
     checksum: Vec<u8>,
     additional_data: Vec<u8>,
@@ -302,7 +302,7 @@ fn encrypt_secret(
 }
 
 /// Decrypt and store a proposal for the next master secret.
-pub fn load_master_secret(ctx: &mut RpcContext, req: &LoadMasterSecretRequest) -> Result<()> {
+pub fn load_master_secret(ctx: &RpcContext, req: &LoadMasterSecretRequest) -> Result<()> {
     let signed_secret = validate_signed_master_secret(ctx, &req.signed_secret)?;
 
     let secret = match decrypt_master_secret(ctx, &signed_secret)? {
@@ -321,7 +321,7 @@ pub fn load_master_secret(ctx: &mut RpcContext, req: &LoadMasterSecretRequest) -
 
 /// Decrypt and store an ephemeral secret. If decryption fails, try to replicate the secret
 /// from another key manager enclave.
-pub fn load_ephemeral_secret(ctx: &mut RpcContext, req: &LoadEphemeralSecretRequest) -> Result<()> {
+pub fn load_ephemeral_secret(ctx: &RpcContext, req: &LoadEphemeralSecretRequest) -> Result<()> {
     let signed_secret = validate_signed_ephemeral_secret(ctx, &req.signed_secret)?;
 
     let secret = match decrypt_ephemeral_secret(ctx, &signed_secret)? {
@@ -356,7 +356,7 @@ pub fn load_ephemeral_secret(ctx: &mut RpcContext, req: &LoadEphemeralSecretRequ
 
 /// Decrypt master secret with local REK key.
 fn decrypt_master_secret(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     secret: &EncryptedMasterSecret,
 ) -> Result<Option<Secret>> {
     let generation = secret.generation;
@@ -390,7 +390,7 @@ fn decrypt_master_secret(
 
 /// Decrypt ephemeral secret with local REK key.
 fn decrypt_ephemeral_secret(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     secret: &EncryptedEphemeralSecret,
 ) -> Result<Option<Secret>> {
     let epoch = secret.epoch;
@@ -422,7 +422,7 @@ fn decrypt_ephemeral_secret(
 }
 
 /// Key manager client for master and ephemeral secret replication.
-fn key_manager_client_for_replication(ctx: &mut RpcContext) -> RemoteClient {
+fn key_manager_client_for_replication(ctx: &RpcContext) -> RemoteClient {
     let rctx = runtime_context!(ctx, KmContext);
     let protocol = rctx.protocol.clone();
     let runtime_id = rctx.runtime_id;
@@ -442,7 +442,7 @@ fn key_manager_client_for_replication(ctx: &mut RpcContext) -> RemoteClient {
 
 /// Create init response and sign it with RAK.
 fn sign_init_response(
-    ctx: &mut RpcContext,
+    ctx: &RpcContext,
     state: State,
     policy_checksum: Vec<u8>,
 ) -> Result<SignedInitResponse> {
