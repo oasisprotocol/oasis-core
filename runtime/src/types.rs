@@ -348,9 +348,6 @@ pub struct Features {
     /// A feature specifying that the runtime supports rotating key manager's master secret.
     #[cbor(optional)]
     pub key_manager_master_secret_rotation: bool,
-    /// A feature specifying that the runtime supports same-block consensus validation.
-    #[cbor(optional)]
-    pub same_block_consensus_validation: bool,
 }
 
 impl Default for Features {
@@ -360,7 +357,6 @@ impl Default for Features {
             key_manager_quote_policy_updates: true,
             key_manager_status_updates: true,
             key_manager_master_secret_rotation: false,
-            same_block_consensus_validation: true,
         }
     }
 }

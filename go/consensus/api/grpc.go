@@ -38,8 +38,6 @@ var (
 	methodGetBlock = serviceName.NewMethod("GetBlock", int64(0))
 	// methodGetLightBlock is the GetLightBlock method.
 	methodGetLightBlock = serviceName.NewMethod("GetLightBlock", int64(0))
-	// methodGetLightBlockForState is the GetLightBlockForState method.
-	methodGetLightBlockForState = serviceName.NewMethod("GetLightBlockForState", int64(0))
 	// methodGetTransactions is the GetTransactions method.
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", int64(0))
 	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
@@ -106,10 +104,6 @@ var (
 			{
 				MethodName: methodGetLightBlock.ShortName(),
 				Handler:    handlerGetLightBlock,
-			},
-			{
-				MethodName: methodGetLightBlockForState.ShortName(),
-				Handler:    handlerGetLightBlockForState,
 			},
 			{
 				MethodName: methodGetTransactions.ShortName(),
@@ -354,29 +348,6 @@ func handlerGetLightBlock(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetLightBlock(ctx, req.(int64))
-	}
-	return interceptor(ctx, height, info, handler)
-}
-
-func handlerGetLightBlockForState(
-	srv interface{},
-	ctx context.Context,
-	dec func(interface{}) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (interface{}, error) {
-	var height int64
-	if err := dec(&height); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ClientBackend).GetLightBlockForState(ctx, height)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: methodGetLightBlockForState.FullName(),
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClientBackend).GetLightBlockForState(ctx, req.(int64))
 	}
 	return interceptor(ctx, height, info, handler)
 }
@@ -748,14 +719,6 @@ func (c *consensusClient) GetBlock(ctx context.Context, height int64) (*Block, e
 func (c *consensusClient) GetLightBlock(ctx context.Context, height int64) (*LightBlock, error) {
 	var rsp LightBlock
 	if err := c.conn.Invoke(ctx, methodGetLightBlock.FullName(), height, &rsp); err != nil {
-		return nil, err
-	}
-	return &rsp, nil
-}
-
-func (c *consensusClient) GetLightBlockForState(ctx context.Context, height int64) (*LightBlock, error) {
-	var rsp LightBlock
-	if err := c.conn.Invoke(ctx, methodGetLightBlockForState.FullName(), height, &rsp); err != nil {
 		return nil, err
 	}
 	return &rsp, nil
