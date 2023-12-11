@@ -195,11 +195,7 @@ impl QuoteBundle {
             .timestamp();
 
         // Perform quote verification.
-        let mut verifier = Verifier {
-            tcb_info,
-            qe_identity,
-            tcb_level: None,
-        };
+        let mut verifier: QeEcdsaP256Verifier = QeEcdsaP256Verifier::new(tcb_info, qe_identity);
         let sig = quote
             .signature::<quote::Quote3SignatureEcdsaP256>()
             .map_err(|err| Error::QuoteParseError(err.to_string()))?;
@@ -244,13 +240,31 @@ impl QuoteBundle {
     }
 }
 
-struct Verifier {
+/// Quoting Enclave ECDSA P-256 verifier.
+pub struct QeEcdsaP256Verifier {
     tcb_info: TCBInfo,
     qe_identity: QEIdentity,
     tcb_level: Option<TCBLevel>,
 }
 
-impl quote::Quote3SignatureEcdsaP256Verifier for Verifier {
+impl QeEcdsaP256Verifier {
+    /// Create a new verifier.
+    pub fn new(tcb_info: TCBInfo, qe_identity: QEIdentity) -> Self {
+        Self {
+            tcb_info,
+            qe_identity,
+            tcb_level: None,
+        }
+    }
+
+    /// Get the TCB level.
+    /// This will return `None` if the quote has not been verified yet.
+    pub fn tcb_level(&self) -> Option<TCBLevel> {
+        self.tcb_level.clone()
+    }
+}
+
+impl quote::Quote3SignatureEcdsaP256Verifier for QeEcdsaP256Verifier {
     fn verify_certification_data(
         &mut self,
         quote3signature: &quote::Quote3SignatureEcdsaP256,
@@ -504,7 +518,8 @@ pub struct TCBInfo {
 }
 
 impl TCBInfo {
-    fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
+    /// Validate the TCB info against the quote policy.
+    pub fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
         if self.id != REQUIRED_TCB_INFO_ID {
             return Err(Error::TCBParseError(anyhow::anyhow!(
                 "unexpected TCB info identifier"
@@ -547,7 +562,8 @@ impl TCBInfo {
         Ok(())
     }
 
-    fn verify(
+    /// Verify and return the TCB level matching the given TCB components and PCESVN.
+    pub fn verify(
         &self,
         fmspc: &[u8],
         tcb_comp_svn: [u32; 16],
@@ -604,7 +620,8 @@ pub struct TCBLevel {
 }
 
 impl TCBLevel {
-    fn matches(&self, tcb_comp_svn: &[u32], pcesvn: u32) -> bool {
+    /// Whether the TCB level matches the given TCB components and PCESVN.
+    pub fn matches(&self, tcb_comp_svn: &[u32], pcesvn: u32) -> bool {
         // a) Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to
         //    16) with the corresponding values in the TCB Level. If all SGX TCB Comp SVNs in the
         //    certificate are greater or equal to the corresponding values in TCB Level, go to b,
@@ -757,7 +774,8 @@ pub struct QEIdentity {
 }
 
 impl QEIdentity {
-    fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
+    /// Validate the QE identity against the quote policy.
+    pub fn validate(&self, ts: DateTime<Utc>, policy: &QuotePolicy) -> Result<(), Error> {
         if self.id != REQUIRED_QE_ID {
             return Err(Error::TCBParseError(anyhow::anyhow!("unexpected QE ID")));
         }
@@ -788,7 +806,8 @@ impl QEIdentity {
         Ok(())
     }
 
-    fn verify(&self, report: &Report) -> Result<(), Error> {
+    /// Verify the QE report against the QE identity.
+    pub fn verify(&self, report: &Report) -> Result<(), Error> {
         // Verify if MRSIGNER field retrieved from SGX Enclave Report is equal to the value of
         // mrsigner field in QE Identity.
         let expected_mr_signer: Vec<u8> = self
