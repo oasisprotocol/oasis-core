@@ -1,6 +1,6 @@
 use oasis_core_keymanager::runtime::init::new_keymanager;
 use oasis_core_runtime::{
-    common::version::Version, config::Config, consensus::verifier::TrustRoot, types::Features,
+    common::version::Version, config::Config, consensus::verifier::TrustRoot,
 };
 
 mod api;
@@ -29,10 +29,6 @@ pub fn main_with_version(version: Version) {
         Config {
             version,
             trust_root,
-            features: Some(Features {
-                key_manager_master_secret_rotation: true,
-                ..Default::default()
-            }),
             freshness_proofs: true,
             ..Default::default()
         },

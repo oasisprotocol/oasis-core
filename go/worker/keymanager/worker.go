@@ -311,41 +311,10 @@ func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface
 func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*api.SignedInitResponse, error) {
 	w.logger.Info("initializing key manager enclave")
 
-	// Check if the key manager supports init requests with key manager status
-	// field which were deployed together with master secret rotation feature.
-	// TODO: Remove in PR-5205.
-	rt := w.GetHostedRuntime()
-	if rt == nil {
-		w.logger.Warn("runtime is not yet ready")
-		return nil, fmt.Errorf("worker/keymanager: runtime is not yet ready")
-	}
-	rtInfo, err := rt.GetInfo(w.ctx)
-	if err != nil {
-		w.logger.Warn("runtime is broken",
-			"err", err,
-		)
-		return nil, fmt.Errorf("worker/keymanager: runtime is broken")
-	}
-
 	// Initialize the key manager.
-	var args api.InitRequest
-	if rtInfo.Features != nil && rtInfo.Features.KeyManagerMasterSecretRotation {
-		args = api.InitRequest{
-			Status: kmStatus,
-		}
-	} else {
-		var policy []byte
-		if kmStatus.Policy != nil {
-			policy = cbor.Marshal(kmStatus.Policy)
-		}
-
-		args = api.InitRequest{
-			Checksum:    kmStatus.Checksum,
-			Policy:      policy,
-			MayGenerate: w.mayGenerate,
-		}
+	args := api.InitRequest{
+		Status: *kmStatus,
 	}
-
 	var signedInitResp api.SignedInitResponse
 	if err := w.localCallEnclave(api.RPCMethodInit, args, &signedInitResp); err != nil {
 		w.logger.Error("failed to initialize enclave",
