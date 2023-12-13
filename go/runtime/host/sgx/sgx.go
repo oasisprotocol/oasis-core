@@ -259,14 +259,19 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		"component", comp.Kind,
 	)
 
+	args := []string{
+		"--host-socket", socketPath,
+		"--type", "sgxs",
+		"--signature", signaturePath,
+		runtimePath,
+	}
+	if comp.IsNetworkAllowed() {
+		args = append(args, "--allow-network")
+	}
+
 	return process.Config{
 		Path: s.cfg.LoaderPath,
-		Args: []string{
-			"--host-socket", socketPath,
-			"--type", "sgxs",
-			"--signature", signaturePath,
-			runtimePath,
-		},
+		Args: args,
 		BindRW: map[string]string{
 			aesmdSocketPath: "/var/run/aesmd/aesm.socket",
 		},
@@ -280,6 +285,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		SandboxBinaryPath: s.cfg.SandboxBinaryPath,
 		Stdout:            logWrapper,
 		Stderr:            logWrapper,
+		AllowNetwork:      comp.IsNetworkAllowed(),
 	}, nil
 }
 

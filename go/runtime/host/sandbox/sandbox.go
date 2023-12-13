@@ -639,6 +639,7 @@ func New(cfg Config) (host.Provisioner, error) {
 				SandboxBinaryPath: cfg.SandboxBinaryPath,
 				Stdout:            logWrapper,
 				Stderr:            logWrapper,
+				AllowNetwork:      comp.IsNetworkAllowed(),
 			}, nil
 		}
 	}
