@@ -13,6 +13,7 @@ pub trait Loader {
         filename: &str,
         signature_filename: Option<&str>,
         host_socket: &str,
+        allow_network: bool,
     ) -> Result<()>;
 }
 

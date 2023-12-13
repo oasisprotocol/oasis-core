@@ -132,3 +132,15 @@ func (c *Component) Validate() error {
 	}
 	return nil
 }
+
+// IsNetworkAllowed returns true if network access should be allowed for the component.
+func (c *Component) IsNetworkAllowed() bool {
+	switch c.Kind {
+	case ComponentROFL:
+		// Off-chain logic is allowed to access the network.
+		return true
+	default:
+		// Network access is generally not allowed.
+		return false
+	}
+}

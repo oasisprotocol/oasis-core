@@ -97,6 +97,12 @@ func NewBubbleWrap(cfg Config) (Process, error) {
 		// Entrypoint binary.
 		"--ro-bind", cfg.Path, sandboxMountBinary,
 	}
+	if cfg.AllowNetwork {
+		// Share network interfaces.
+		fdArgs = append(fdArgs, "--share-net")
+		// Share DNS resolution.
+		fdArgs = append(fdArgs, "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf")
+	}
 	for key, value := range cfg.Env {
 		fdArgs = append(fdArgs, "--setenv", key, value)
 	}
