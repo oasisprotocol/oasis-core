@@ -17,6 +17,10 @@ type Config struct {
 	// Bundle is the runtime bundle.
 	Bundle *RuntimeBundle
 
+	// Components are optional component kinds that should be provisioned in case the runtime has
+	// multiple components.
+	Components []bundle.ComponentKind
+
 	// Extra is an optional provisioner-specific configuration.
 	Extra interface{}
 
@@ -31,8 +35,8 @@ type Config struct {
 type RuntimeBundle struct {
 	*bundle.Bundle
 
-	// Exeuctable is the path to the extracted ELF or TEE executable.
-	Path string
+	// ExplodedDataDir is the path to the data directory under which the bundle has been exploded.
+	ExplodedDataDir string
 }
 
 // Provisioner is the runtime provisioner interface.
@@ -81,6 +85,13 @@ type Runtime interface {
 
 	// Stop signals the provisioned runtime to stop.
 	Stop()
+}
+
+// CompositeRuntime is a runtime that provides multiple components which are themselves runtimes.
+type CompositeRuntime interface {
+	// Component returns the runtime component of the given kind.
+	// If the component of the given kind does not exist, nil is returned.
+	Component(kind bundle.ComponentKind) Runtime
 }
 
 // RuntimeEventEmitter is the interface for emitting events for a provisioned runtime.

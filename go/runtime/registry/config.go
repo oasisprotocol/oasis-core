@@ -238,39 +238,23 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 				}
 			}
 
-			runtimeHostCfg := &runtimeHost.Config{
+			// Determine what kind of components we want.
+			wantedComponents := []bundle.ComponentKind{
+				bundle.ComponentRONL,
+			}
+			// For compute nodes we also want to run the ROFL component.
+			if config.GlobalConfig.Mode == config.ModeCompute {
+				wantedComponents = append(wantedComponents, bundle.ComponentROFL)
+			}
+
+			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
 				Bundle: &runtimeHost.RuntimeBundle{
-					Bundle: bnd,
-					Path:   bnd.ExplodedPath(dataDir, bnd.Manifest.Executable),
+					Bundle:          bnd,
+					ExplodedDataDir: dataDir,
 				},
+				Components:  wantedComponents,
 				LocalConfig: localConfig,
 			}
-
-			var haveSGXSignature bool
-			if !forceNoSGX && bnd.Manifest.SGX != nil {
-				// Ensure SGX provisioner is configured.
-				if _, ok := rh.Provisioners[node.TEEHardwareIntelSGX]; !ok {
-					return nil, fmt.Errorf("SGX loader binary path is not configured")
-				}
-
-				// If this is a TEE enclave, override the executable to point
-				// at the enclave binary instead.
-				runtimeHostCfg.Bundle.Path = bnd.ExplodedPath(dataDir, bnd.Manifest.SGX.Executable)
-				if bnd.Manifest.SGX.Signature != "" {
-					haveSGXSignature = true
-					runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
-						SignaturePath: bnd.ExplodedPath(dataDir, bnd.Manifest.SGX.Signature),
-					}
-				}
-			}
-			if !haveSGXSignature {
-				// HACK HACK HACK: Allow dummy SIGSTRUCT generation.
-				runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
-					UnsafeDebugGenerateSigstruct: true,
-				}
-			}
-
-			rh.Runtimes[id][bnd.Manifest.Version] = runtimeHostCfg
 		}
 		if cmdFlags.DebugDontBlameOasis() {
 			// This is to allow the mock provisioner to function, as it does
@@ -289,6 +273,9 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 								ID: id,
 							},
 						},
+					},
+					Components: []bundle.ComponentKind{
+						bundle.ComponentRONL,
 					},
 				}
 				rh.Runtimes[id] = map[version.Version]*runtimeHost.Config{
