@@ -215,7 +215,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 				return nil, fmt.Errorf("oasis/runtime: failed to open existing bundle: %w", err)
 			}
 			if rt.teeHardware != node.TEEHardwareInvalid {
-				if mrEnclave, err = bnd.MrEnclave(); err != nil {
+				if mrEnclave, err = bnd.MrEnclave(bundle.ComponentRONL); err != nil {
 					return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 				}
 
@@ -271,7 +271,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 		}
 		_ = bnd.Add(sgxBin, binBuf)
 
-		mrEnclave, err = bnd.MrEnclave()
+		mrEnclave, err = bnd.MrEnclave(bundle.ComponentRONL)
 		if err != nil {
 			return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 		}

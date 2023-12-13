@@ -617,13 +617,22 @@ func New(cfg Config) (host.Provisioner, error) {
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
 		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, _ string) (process.Config, error) {
+			if numComps := len(hostCfg.Components); numComps != 1 {
+				return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
+			}
+			comp := hostCfg.Bundle.Manifest.GetComponentByKind(hostCfg.Components[0])
+			if comp == nil {
+				return process.Config{}, fmt.Errorf("component '%s' not available", hostCfg.Components[0])
+			}
+
 			logWrapper := host.NewRuntimeLogWrapper(
 				cfg.Logger,
 				"runtime_id", hostCfg.Bundle.Manifest.ID,
 				"runtime_name", hostCfg.Bundle.Manifest.Name,
+				"component", comp.Kind,
 			)
 			return process.Config{
-				Path: hostCfg.Bundle.Path,
+				Path: hostCfg.Bundle.ExplodedPath(hostCfg.Bundle.ExplodedDataDir, comp.Executable),
 				Env: map[string]string{
 					"OASIS_WORKER_HOST": socketPath,
 				},

@@ -24,6 +24,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
@@ -81,7 +82,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 		rtCfg.MessageHandler = msgHandler
 
 		// Provision the runtime.
-		if rts[version], err = provisioner.NewRuntime(rtCfg); err != nil {
+		if rts[version], err = composite.New(rtCfg, provisioner); err != nil {
 			return nil, nil, fmt.Errorf("failed to provision runtime version %s: %w", version, err)
 		}
 	}
