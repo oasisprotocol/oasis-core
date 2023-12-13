@@ -147,11 +147,11 @@ func (ba *rocksdbBatch) Commit(root node.Root) error {
 
 	// Flush node updates.
 	if ba.multipartNodes != nil {
-		if err = ba.db.db.Write(defaultWriteOptions, ba.multipartNodes); err != nil {
+		if err = ba.db.db.Write(ba.db.defaultWriteOptions, ba.multipartNodes); err != nil {
 			return fmt.Errorf("mkvs/rocksdb: failed to flush node log batch: %w", err)
 		}
 	}
-	if err = ba.db.db.Write(defaultWriteOptions, ba.bat); err != nil {
+	if err = ba.db.db.Write(ba.db.defaultWriteOptions, ba.bat); err != nil {
 		return fmt.Errorf("mkvs/rocksdb: failed to flush batch: %w", err)
 	}
 

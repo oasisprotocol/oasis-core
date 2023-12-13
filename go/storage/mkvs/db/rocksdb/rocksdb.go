@@ -88,7 +88,6 @@ var (
 )
 
 var (
-	defaultWriteOptions = grocksdb.NewDefaultWriteOptions()
 	defaultReadOptions  = grocksdb.NewDefaultReadOptions()
 	defaultFlushOptions = grocksdb.NewDefaultFlushOptions()
 )
@@ -109,6 +108,7 @@ func newOptions(versioned bool, maxCacheSize int64) *grocksdb.Options {
 
 	// TODO: Consider separate options for state vs. io.
 	opts := grocksdb.NewDefaultOptions()
+	opts.SetParanoidChecks(true)
 	opts.SetCreateIfMissing(true)
 	if versioned {
 		opts.SetComparator(createTimestampComparator())
@@ -171,11 +171,14 @@ func newOptions(versioned bool, maxCacheSize int64) *grocksdb.Options {
 // New creates a new RocksDB-backed node database.
 func New(cfg *api.Config) (api.NodeDB, error) {
 	db := &rocksdbNodeDB{
-		logger:           logging.GetLogger("mkvs/db/rocksdb"),
-		namespace:        cfg.Namespace,
-		discardWriteLogs: cfg.DiscardWriteLogs,
-		readOnly:         cfg.ReadOnly,
+		logger:              logging.GetLogger("mkvs/db/rocksdb"),
+		namespace:           cfg.Namespace,
+		discardWriteLogs:    cfg.DiscardWriteLogs,
+		readOnly:            cfg.ReadOnly,
+		defaultWriteOptions: grocksdb.NewDefaultWriteOptions(),
 	}
+	// Configure fsync.
+	db.defaultWriteOptions.SetSync(!cfg.NoFsync)
 
 	// Create options for the metadata column family.
 	// TODO: Consider also tuning some options of the metadata CF (although this is small compared to nodes CFs).
@@ -270,6 +273,8 @@ type rocksdbNodeDB struct {
 	cfStateTree *grocksdb.ColumnFamilyHandle
 	cfIOTree    *grocksdb.ColumnFamilyHandle
 
+	defaultWriteOptions *grocksdb.WriteOptions
+
 	closeOnce sync.Once
 }
 
@@ -328,7 +333,7 @@ func (d *rocksdbNodeDB) load() error {
 		// No metadata exists, create some.
 		d.meta.value.Version = dbVersion
 		d.meta.value.Namespace = d.namespace
-		if err = d.meta.save(d.db); err != nil {
+		if err = d.meta.save(d.db, d.defaultWriteOptions); err != nil {
 			return err
 		}
 
@@ -763,7 +768,7 @@ func (d *rocksdbNodeDB) Finalize(roots []node.Root) error { // nolint: gocyclo
 	d.meta.setLastFinalizedVersion(batch, version)
 
 	// Commit batch.
-	if err := d.db.Write(defaultWriteOptions, batch); err != nil {
+	if err := d.db.Write(d.defaultWriteOptions, batch); err != nil {
 		return fmt.Errorf("mkvs/rocksdb: failed to commit finalized roots: %w", err)
 	}
 
@@ -875,7 +880,7 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 	// Update metadata.
 	d.meta.setEarliestVersion(batch, version+1)
 
-	if err := d.db.Write(defaultWriteOptions, batch); err != nil {
+	if err := d.db.Write(d.defaultWriteOptions, batch); err != nil {
 		return fmt.Errorf("mkvs/rocksdb: failed to prune version %d: %w", version, err)
 	}
 
@@ -905,7 +910,7 @@ func (d *rocksdbNodeDB) StartMultipartInsert(version uint64) error {
 		return nil
 	}
 
-	if err := d.meta.setMultipartVersion(d.db, version); err != nil {
+	if err := d.meta.setMultipartVersion(d.db, d.defaultWriteOptions, version); err != nil {
 		return err
 	}
 	d.multipartVersion = version
@@ -976,11 +981,11 @@ func (d *rocksdbNodeDB) cleanMultipartLocked(removeNodes bool) error {
 
 	// Apply the batch first. If anything fails, having corrupt
 	// multipart info in d.meta shouldn't hurt us next run.
-	if err := d.db.Write(defaultWriteOptions, batch); err != nil {
+	if err := d.db.Write(d.defaultWriteOptions, batch); err != nil {
 		return err
 	}
 
-	if err := d.meta.setMultipartVersion(d.db, multipartVersionNone); err != nil {
+	if err := d.meta.setMultipartVersion(d.db, d.defaultWriteOptions, multipartVersionNone); err != nil {
 		return err
 	}
 
@@ -1037,11 +1042,13 @@ func (d *rocksdbNodeDB) Sync() error {
 
 func (d *rocksdbNodeDB) Close() {
 	d.closeOnce.Do(func() {
+		d.defaultWriteOptions.Destroy()
 		d.db.Close()
 		d.cfMetadata = nil
 		d.cfRoots = nil
 		d.cfIOTree = nil
 		d.cfStateTree = nil
+		d.defaultWriteOptions = nil
 		d.db = nil
 	})
 }

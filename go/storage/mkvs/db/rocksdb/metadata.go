@@ -90,16 +90,16 @@ func (m *metadata) getMultipartVersion() uint64 {
 	return m.value.MultipartVersion
 }
 
-func (m *metadata) setMultipartVersion(db *grocksdb.DB, version uint64) error {
+func (m *metadata) setMultipartVersion(db *grocksdb.DB, wo *grocksdb.WriteOptions, version uint64) error {
 	m.Lock()
 	defer m.Unlock()
 
 	m.value.MultipartVersion = version
-	return m.save(db)
+	return m.save(db, wo)
 }
 
-func (m *metadata) save(db *grocksdb.DB) error {
-	return db.Put(defaultWriteOptions, metadataKeyFmt.Encode(), cbor.Marshal(m.value))
+func (m *metadata) save(db *grocksdb.DB, wo *grocksdb.WriteOptions) error {
+	return db.Put(wo, metadataKeyFmt.Encode(), cbor.Marshal(m.value))
 }
 
 // TODO: Collaps with save.
