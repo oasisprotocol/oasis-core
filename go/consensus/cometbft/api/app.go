@@ -105,3 +105,26 @@ type Application interface {
 	// Commit is omitted because Applications will work on a cache of
 	// the state bound to the multiplexer.
 }
+
+// Extension is the interface implemented by application-specific extensions.
+type Extension interface {
+	// Methods returns the list of supported methods.
+	Methods() []transaction.MethodName
+
+	// OnRegister is the function that is called when the Application
+	// is registered with the multiplexer instance.
+	OnRegister(ApplicationState, MessageDispatcher)
+
+	// ExecuteTx executes a transaction.
+	ExecuteTx(*Context, *transaction.Transaction) error
+
+	// BeginBlock signals the beginning of a block.
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	BeginBlock(*Context) error
+
+	// EndBlock signals the end of a block.
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	EndBlock(*Context) error
+}
