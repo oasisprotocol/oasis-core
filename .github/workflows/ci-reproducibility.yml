@@ -105,12 +105,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download checksums for build 1
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: oasis-node-SHA256SUMs-build1
           path: oasis-node-SHA256SUMs-build1
       - name: Download checksum for build 2
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: oasis-node-SHA256SUMs-build2
           path: oasis-node-SHA256SUMs-build2
