@@ -92,7 +92,7 @@ jobs:
           OASIS_NODE_MAKE_PATH: go/oasis-node/oasis-node
           OASIS_NODE_GORELEASER_PATH: dist/oasis-node_linux_amd64/oasis-node
       - name: Upload checksums
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: oasis-node-SHA256SUMs-build${{ matrix.build_number }}
           path: oasis-node-SHA256SUMs
