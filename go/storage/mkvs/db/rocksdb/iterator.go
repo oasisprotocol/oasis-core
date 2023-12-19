@@ -81,6 +81,11 @@ func (itr *iterator) Key() []byte {
 	return copyAndFreeSlice(itr.source.Key())
 }
 
+func (itr *iterator) Timestamp() []byte {
+	itr.assertIsValid()
+	return copyAndFreeSlice(itr.source.Timestamp())
+}
+
 func (itr *iterator) Value() []byte {
 	itr.assertIsValid()
 	return copyAndFreeSlice(itr.source.Value())

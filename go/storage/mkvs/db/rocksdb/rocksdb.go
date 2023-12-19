@@ -108,7 +108,7 @@ func newOptions(versioned bool, maxCacheSize int64) *grocksdb.Options {
 
 	// TODO: Consider separate options for state vs. io.
 	opts := grocksdb.NewDefaultOptions()
-	opts.SetParanoidChecks(true)
+	// opts.SetParanoidChecks(true)
 	opts.SetCreateIfMissing(true)
 	if versioned {
 		opts.SetComparator(createTimestampComparator())
@@ -828,23 +828,23 @@ func (d *rocksdbNodeDB) Prune(ctx context.Context, version uint64) error {
 
 			itRo := timestampReadOptions(root.Version)
 			defer itRo.Destroy()
-			s, ts, err := d.db.GetCFWithTS(itRo, cf, nodeKeyFmt.Encode(&h))
+			s, itemTs, err := d.db.GetCFWithTS(itRo, cf, nodeKeyFmt.Encode(&h))
 			if err != nil {
 				return false
 			}
 			defer s.Free()
 			if !s.Exists() {
-				ts.Free()
+				itemTs.Free()
 				return false
 			}
 
-			itemTs, err := versionFromTimestamp(ts)
+			itemVersion, err := versionFromTimestamp(itemTs)
 			if err != nil {
 				// Shouldn't happen unless corrupted db.
 				panic(fmt.Errorf("mkvs/rocksdb: missing/corrupted timestamp for node: %s", h))
 			}
-			if itemTs == version {
-				batch.DeleteCFWithTS(cf, nodeKeyFmt.Encode(&h), ts.Data())
+			if itemVersion == version {
+				batch.DeleteCFWithTS(cf, nodeKeyFmt.Encode(&h), ts[:])
 			}
 			return true
 		})
