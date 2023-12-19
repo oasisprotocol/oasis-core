@@ -210,7 +210,7 @@ Core:
   (i.e. you can't use `./configure --prefix=$HOME/.local ...`) because upstream
   authors [hardcode its path][jemalloc-hardcode-path]._
 
-* (**OPTIONAL**) [rocksdb] (version 8.5.3)
+* (**OPTIONAL**) [rocksdb] (version 8.8.1)
 
   # TODO: investigate clashing with jemalloc built above.
   Alternatively set `OASIS_NO_ROCKSDB="1"` environment variable when building
@@ -223,8 +223,8 @@ Core:
   # Install prerequsites.
   apt install libgflags-dev libsnappy-dev libbz2-dev liblz4-dev libzstd-dev
   # Build RocksDB.
-  ROCKSDB_VERSION=8.5.3
-  ROCKSDB_CHECKSUM=ed4230500b9ca20bc7918c32166b2d0d46a8695c59991821daa586d55689d785
+  ROCKSDB_VERSION=8.8.1
+  ROCKSDB_CHECKSUM=056c7e21ad8ae36b026ac3b94b9d6e0fcc60e1d937fc80330921e4181be5c36e
   pushd $(mktemp -d)
   wget -O rocksdb.tar.gz \
     https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz
