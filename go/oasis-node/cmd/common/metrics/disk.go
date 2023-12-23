@@ -79,8 +79,8 @@ func (d *diskCollector) Update() error {
 		return fmt.Errorf("disk I/O metric: failed to obtain procIO object %d: %w", d.pid, err)
 	}
 
-	diskIOWrittenBytesGauge.Set(float64(procIO.ReadBytes))
-	diskIOReadBytesGauge.Set(float64(procIO.WriteBytes))
+	diskIOWrittenBytesGauge.Set(float64(procIO.WriteBytes))
+	diskIOReadBytesGauge.Set(float64(procIO.ReadBytes))
 
 	return nil
 }
