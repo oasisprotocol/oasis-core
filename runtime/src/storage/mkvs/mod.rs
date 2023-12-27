@@ -8,6 +8,8 @@ use anyhow::{Error, Result};
 
 use crate::common::{crypto::hash::Hash, namespace::Namespace};
 
+use self::sync::Proof;
+
 #[macro_use]
 mod tree;
 mod cache;
@@ -18,7 +20,7 @@ pub mod sync;
 #[cfg(test)]
 mod tests;
 
-pub use tree::{Depth, Key, NodeBox, OverlayTree, Root, RootType, Tree};
+pub use tree::{Depth, Key, NodeBox, NodePointer, NodePtrRef, OverlayTree, Root, RootType, Tree};
 
 /// The type of entry in the log.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -100,6 +102,9 @@ pub trait MKVS {
     /// Fetch entry with given key.
     fn get(&self, key: &[u8]) -> Option<Vec<u8>>;
 
+    /// Fetch proof for entry with given key.
+    fn get_proof(&self, key: &[u8]) -> Option<Proof>;
+
     /// Check if the local MKVS cache contains the given key.
     ///
     /// While get can be used to check if the MKVS as a whole contains
@@ -135,6 +140,9 @@ pub trait MKVS {
 pub trait FallibleMKVS {
     /// Fetch entry with given key.
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    /// Fetch proof for entry with given key.
+    fn get_proof(&self, key: &[u8]) -> Result<Option<Proof>>;
 
     /// Check if the local MKVS cache contains the given key.
     ///
@@ -172,6 +180,9 @@ pub trait ImmutableMKVS {
     /// Fetch entry with given key.
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
+    /// Fetch proof for entry with given key.
+    fn get_proof(&self, key: &[u8]) -> Result<Option<Proof>>;
+
     /// Populate the in-memory tree with nodes for keys starting with given prefixes.
     fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16) -> Result<()>;
 
@@ -185,6 +196,10 @@ where
 {
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         T::get(self, key)
+    }
+
+    fn get_proof(&self, key: &[u8]) -> Result<Option<Proof>> {
+        T::get_proof(self, key)
     }
 
     fn prefetch_prefixes(&self, prefixes: &[Prefix], limit: u16) -> Result<()> {
@@ -228,6 +243,10 @@ impl<T: MKVS + ?Sized> MKVS for &mut T {
         T::get(self, key)
     }
 
+    fn get_proof(&self, key: &[u8]) -> Option<Proof> {
+        T::get_proof(self, key)
+    }
+
     fn cache_contains_key(&self, key: &[u8]) -> bool {
         T::cache_contains_key(self, key)
     }
@@ -256,6 +275,10 @@ impl<T: MKVS + ?Sized> MKVS for &mut T {
 impl<T: FallibleMKVS + ?Sized> FallibleMKVS for &mut T {
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         T::get(self, key)
+    }
+
+    fn get_proof(&self, key: &[u8]) -> Result<Option<Proof>> {
+        T::get_proof(self, key)
     }
 
     fn cache_contains_key(&self, key: &[u8]) -> bool {

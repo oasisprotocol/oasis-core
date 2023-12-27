@@ -169,6 +169,10 @@ impl mkvs::FallibleMKVS for Tree {
         Tree::get(self, key)
     }
 
+    fn get_proof(&self, key: &[u8]) -> Result<Option<Proof>> {
+        Tree::get_proof(self, key)
+    }
+
     fn cache_contains_key(&self, key: &[u8]) -> bool {
         Tree::cache_contains_key(self, key)
     }
