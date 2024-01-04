@@ -52,12 +52,26 @@ var (
 	labelSyncGet         = prometheus.Labels{"call": "sync_get"}
 	labelSyncGetPrefixes = prometheus.Labels{"call": "sync_get_prefixes"}
 	labelSyncIterate     = prometheus.Labels{"call": "sync_iterate"}
+	labelGetDiff         = prometheus.Labels{"call": "get_diff"}
 
 	metricsOnce sync.Once
 )
 
 type metricsWrapper struct {
 	Backend
+}
+
+func (w *metricsWrapper) GetDiff(ctx context.Context, request *GetDiffRequest) (WriteLogIterator, error) {
+	start := time.Now()
+	it, err := w.Backend.GetDiff(ctx, request)
+	storageLatency.With(labelGetDiff).Observe(time.Since(start).Seconds())
+	if err != nil {
+		storageFailures.With(labelGetDiff).Inc()
+		return nil, err
+	}
+
+	storageCalls.With(labelGetDiff).Inc()
+	return it, err
 }
 
 func (w *metricsWrapper) SyncGet(ctx context.Context, request *GetRequest) (*ProofResponse, error) {
