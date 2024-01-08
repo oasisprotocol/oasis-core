@@ -415,6 +415,7 @@ pub fn main_with_version(version: Version) {
     };
 
     // Determine test trust root based on build settings.
+    #[allow(clippy::option_env_unwrap)]
     let trust_root = option_env!("OASIS_TESTS_CONSENSUS_TRUST_HEIGHT").map(|height| {
         let hash = option_env!("OASIS_TESTS_CONSENSUS_TRUST_HASH").unwrap();
         let runtime_id = option_env!("OASIS_TESTS_CONSENSUS_TRUST_RUNTIME_ID").unwrap();
