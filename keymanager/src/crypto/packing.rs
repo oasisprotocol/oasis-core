@@ -35,11 +35,7 @@ pub fn unpack_runtime_id_epoch(data: Vec<u8>) -> Option<(Namespace, EpochTime)> 
         return None;
     }
 
-    let runtime_id: Namespace = data
-        .get(0..NAMESPACE_SIZE)
-        .unwrap()
-        .try_into()
-        .expect("slice with incorrect length");
+    let runtime_id: Namespace = data.get(0..NAMESPACE_SIZE).unwrap().into();
 
     let epoch = u64::from_le_bytes(
         data.get(NAMESPACE_SIZE..)
@@ -65,11 +61,7 @@ pub fn unpack_runtime_id_generation(data: Vec<u8>) -> Option<(Namespace, u64)> {
         return None;
     }
 
-    let runtime_id: Namespace = data
-        .get(0..NAMESPACE_SIZE)
-        .unwrap()
-        .try_into()
-        .expect("slice with incorrect length");
+    let runtime_id: Namespace = data.get(0..NAMESPACE_SIZE).unwrap().into();
 
     let generation = u64::from_le_bytes(
         data.get(NAMESPACE_SIZE..)
@@ -100,11 +92,7 @@ pub fn unpack_runtime_id_generation_epoch(data: Vec<u8>) -> Option<(Namespace, u
         return None;
     }
 
-    let runtime_id: Namespace = data
-        .get(0..NAMESPACE_SIZE)
-        .unwrap()
-        .try_into()
-        .expect("slice with incorrect length");
+    let runtime_id: Namespace = data.get(0..NAMESPACE_SIZE).unwrap().into();
 
     let generation = u64::from_le_bytes(
         data.get(NAMESPACE_SIZE..NAMESPACE_SIZE + GENERATION_SIZE)

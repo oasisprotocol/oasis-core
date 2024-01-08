@@ -637,9 +637,9 @@ impl Verifier {
         let peer_id = PeerId::new([0; 20]);
         let clock = Box::new(InsecureClock);
         let verifier = Box::new(PredicateVerifier::new(
-            ProdPredicates::default(),
+            ProdPredicates,
             ProvidedVotingPowerCalculator::<signature::DomSepVerifier>::default(),
-            ProdCommitValidator::default(),
+            ProdCommitValidator,
         ));
         let io = Box::new(Io::new(&self.protocol));
 
