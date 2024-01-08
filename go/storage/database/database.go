@@ -12,14 +12,21 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	badgerNodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/rocksdb"
 )
 
 const (
 	// BackendNameBadgerDB is the name of the BadgeDB backed database backend.
 	BackendNameBadgerDB = "badger"
 
+	// BackendNameRocksDB is the name of the RocksDB backed database backend.
+	BackendNameRocksDB = "rocksdb"
+
 	// DBFileBadgerDB is the default BadgerDB backing store filename.
 	DBFileBadgerDB = "mkvs_storage.badger.db"
+
+	// DBFileRocksDB is the default RocksDB backing store filename.
+	DBFileRocksDB = "mkvs_storage.rocksdb.db"
 
 	checkpointDir = "checkpoints"
 )
@@ -30,6 +37,8 @@ func DefaultFileName(backend string) string {
 	switch backend {
 	case BackendNameBadgerDB:
 		return DBFileBadgerDB
+	case BackendNameRocksDB:
+		return DBFileRocksDB
 	default:
 		panic("storage/database: can't get default filename for unknown backend")
 	}
@@ -56,6 +65,8 @@ func New(cfg *api.Config) (api.LocalBackend, error) {
 	switch cfg.Backend {
 	case BackendNameBadgerDB:
 		ndb, err = badgerNodedb.New(ndbCfg)
+	case BackendNameRocksDB:
+		ndb, err = rocksdb.New(ndbCfg)
 	default:
 		err = errors.New("storage/database: unsupported backend")
 	}

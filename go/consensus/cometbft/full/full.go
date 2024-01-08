@@ -533,7 +533,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:                   filepath.Join(t.dataDir, tmcommon.StateDir),
-		StorageBackend:            db.GetBackendName(),
+		StorageBackend:            config.GlobalConfig.Storage.Backend,
 		Pruning:                   pruneCfg,
 		HaltEpoch:                 beaconAPI.EpochTime(config.GlobalConfig.Consensus.HaltEpoch),
 		HaltHeight:                config.GlobalConfig.Consensus.HaltHeight,

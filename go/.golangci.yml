@@ -48,6 +48,7 @@ linters-settings:
           - github.com/stretchr
           - github.com/tidwall/btree
           - github.com/tyler-smith/go-bip39
+          - github.com/linxGnu/grocksdb
 
 linters:
   disable-all: true

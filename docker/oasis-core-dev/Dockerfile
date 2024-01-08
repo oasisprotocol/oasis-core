@@ -13,6 +13,8 @@ ARG GOIMPORTS_VERSION=v0.12.0
 ARG RUST_NIGHTLY_VERSION=2023-01-16
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
+ARG ROCKSDB_VERSION=8.8.1
+ARG ROCKSDB_CHECKSUM=056c7e21ad8ae36b026ac3b94b9d6e0fcc60e1d937fc80330921e4181be5c36e
 
 # Legacy package versions (upgrade tests).
 ARG LEGACY_GO_VERSION=1.20.2
@@ -32,7 +34,9 @@ RUN apt-get update -qq && apt-get upgrade -qq && apt-get install -qq \
     python3-prometheus-client \
     # for seccomp Go bindings support
     libseccomp-dev \
-    bubblewrap && \
+    bubblewrap \
+    # Compression libs for RocksDB.
+    libsnappy-dev libbz2-dev liblz4-dev libzstd-dev && \
     apt-get autoclean && apt-get autoremove && rm -rf /var/cache/apt/archives/* && \
     # for linting Git commits
     pip install gitlint
@@ -81,7 +85,7 @@ RUN wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} && \
     go install golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}
 
-# Install jemalloc (used by BadgerDB).
+# Install jemalloc for BadgerDB ('je_' API prefix).
 RUN wget -O jemalloc.tar.bz2 \
     https://github.com/jemalloc/jemalloc/releases/download/${JEMALLOC_VERSION}/jemalloc-${JEMALLOC_VERSION}.tar.bz2 && \
     # Ensure checksum matches.
@@ -95,3 +99,27 @@ RUN wget -O jemalloc.tar.bz2 \
     make && \
     make install && \
     cd .. && rm jemalloc.tar.bz2 && rm -rf jemalloc-${JEMALLOC_VERSION}
+
+# Install RocksDB.
+# https://github.com/facebook/rocksdb/blob/main/INSTALL.md
+RUN wget -q https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VERSION}.tar.gz && \
+  # Ensure checksum matches.
+    echo "${ROCKSDB_CHECKSUM}  v${ROCKSDB_VERSION}.tar.gz" | sha256sum -c && \
+    tar -zxf v${ROCKSDB_VERSION}.tar.gz && \
+    cd rocksdb-${ROCKSDB_VERSION} && \
+    # In production it's recomended to use either tcmalloc or jemalloc instead of ptmalloc:
+    # https://blog.cloudflare.com/the-effect-of-switching-to-tcmalloc-on-rocksdb-memory-use/
+    # However RocksDB jemalloc requirement clashes with BadgerDB (RocksDB requires it without 'je_' prefix).
+    # Using tcmalloc next to badgerdb's jemalloc also causes problems. Therefore we default to ptmalloc for
+    # the docker container. If/when RocksDB becomes the prefered database, we should default to building
+    # BadgerDB without jemalloc and use tcmalloc/jemalloc here.
+    #
+    # Disable jemalloc as it is used by default if found on the system.
+    ROCKSDB_DISABLE_JEMALLOC=1 \
+    # For 64-bit x86 the `PORTABLE=haswell` is a reasonable compromise, which supports many or most
+    # of the available optimizations while still being compatible with most processors made since
+    # roughly 2013.
+    PORTABLE=haswell \
+    DEBUG_LEVEL=0 make -j4 shared_lib && \
+    make install-shared && ldconfig && \
+    cd .. && rm -rf v${ROCKSDB_VERSION}.tar.gz rocksdb-${ROCKSDB_VERSION}

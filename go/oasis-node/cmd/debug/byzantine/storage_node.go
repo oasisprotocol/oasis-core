@@ -47,8 +47,8 @@ func newStorageNode(namespace common.Namespace, datadir string) (*storageWorker,
 	defer close(initCh)
 
 	cfg := &storage.Config{
-		Backend:      database.BackendNameBadgerDB,
-		DB:           filepath.Join(datadir, database.DefaultFileName(database.BackendNameBadgerDB)),
+		Backend:      database.BackendNameRocksDB,
+		DB:           filepath.Join(datadir, database.DefaultFileName(database.BackendNameRocksDB)),
 		Namespace:    namespace,
 		MaxCacheSize: 64 * 1024 * 1024,
 	}
