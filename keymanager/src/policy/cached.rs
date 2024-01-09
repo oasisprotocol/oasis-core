@@ -172,10 +172,12 @@ impl Policy {
     fn load_policy(storage: &dyn KeyValue) -> Option<CachedPolicy> {
         let ciphertext = storage.get(POLICY_STORAGE_KEY.to_vec()).unwrap();
 
-        unseal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, &ciphertext).map(|plaintext| {
-            // Deserialization failures are fatal, because it is state corruption.
-            CachedPolicy::parse_raw(&plaintext).expect("failed to deserialize persisted policy")
-        })
+        unseal(Keypolicy::MRENCLAVE, POLICY_SEAL_CONTEXT, &ciphertext)
+            .unwrap()
+            .map(|plaintext| {
+                // Deserialization failures are fatal, because it is state corruption.
+                CachedPolicy::parse_raw(&plaintext).expect("failed to deserialize persisted policy")
+            })
     }
 
     fn save_raw_policy(storage: &dyn KeyValue, raw_policy: &[u8]) {

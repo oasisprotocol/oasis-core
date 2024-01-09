@@ -646,9 +646,17 @@ impl Verifier {
         // Build a light client using the embedded trust root or trust root
         // stored in the local store.
         info!(self.logger, "Loading trusted state");
-        let trusted_state: TrustedState = self
+        let trusted_state = self
             .trusted_state_store
-            .load(self.runtime_version, &self.trust_root)?;
+            .load(self.runtime_version, &self.trust_root);
+
+        let trusted_state: TrustedState = match trusted_state {
+            Ok(state) => state,
+            Err(err) => {
+                error!(self.logger, "failed to load trusted state (if running in SGX mode, check if the CPU had changed; if yes, wipe 'worker-local-storage.badger.db' and restart the node)");
+                return Err(err);
+            }
+        };
 
         // Verify if we can trust light blocks from a new chain if the consensus
         // chain context changes.
