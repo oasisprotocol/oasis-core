@@ -12,13 +12,9 @@ mod overlay;
 mod prefetch;
 mod remove;
 
-pub use commit::*;
 pub use errors::*;
-pub use insert::*;
-pub use iterator::*;
 pub use node::*;
 pub use overlay::*;
-pub use remove::*;
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
