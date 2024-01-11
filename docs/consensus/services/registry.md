@@ -93,8 +93,8 @@ registry.RegisterEntity
 ```
 
 The body of a register entity transaction must be a [`SignedEntity`] structure,
-which is a [signed envelope] containing an [`Entity`] descriptor. The signer of
-the entity MUST be the same as the signer of the transaction.
+which is a [signed envelope][envelopes] containing an [`Entity`] descriptor. The
+signer of the entity MUST be the same as the signer of the transaction.
 
 Registering an entity may require sufficient stake in the entity's
 [escrow account].
@@ -103,7 +103,7 @@ Registering an entity may require sufficient stake in the entity's
 [`NewRegisterEntityTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterEntityTx
 [`SignedEntity`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/entity?tab=doc#SignedEntity
 [`Entity`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/entity?tab=doc#Entity
-[signed envelope]: ../../crypto.md#signed-envelope
+[envelopes]: ../../crypto.md#envelopes
 [escrow account]: staking.md#escrow
 <!-- markdownlint-enable line-length -->
 
@@ -140,13 +140,13 @@ registry.RegisterNode
 ```
 
 The body of a register entity transaction must be a [`MultiSignedNode`]
-structure, which is a [multi-signed envelope] containing a [`Node`] descriptor.
-The signer of the transaction MUST be the node identity key.
+structure, which is a [multi-signed envelope][envelopes] containing a [`Node`]
+descriptor. The signer of the transaction MUST be the node identity key.
 
 The owning entity MUST have the given node identity public key whitelisted in
 the `Nodes` field in its [`Entity`] descriptor.
 
-The node descriptor structure MUST be signed by all of the following keys:
+The node descriptor structure MUST be signed by all the following keys:
 
 * Node identity key.
 * Consensus key.
@@ -171,7 +171,6 @@ sum of thresholds of all the runtimes it is registering for.
 [`NewRegisterNodeTx`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#NewRegisterNodeTx
 [`MultiSignedNode`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#MultiSignedNode
 [`Node`]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/common/node?tab=doc#Node
-[multi-signed envelope]: ../../crypto.md#multi-signed-envelope
 [`Thresholds` in staking consensus parameters]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/staking/api?tab=doc#ConsensusParameters.Thresholds
 [`Staking` field]: https://pkg.go.dev/github.com/oasisprotocol/oasis-core/go/registry/api?tab=doc#Runtime.Staking
 <!-- markdownlint-enable line-length -->

@@ -49,7 +49,7 @@ oasis-core/consensus: tx
 ```
 
 [encoded]: ../encoding.md
-[signed envelope]: ../crypto.md#signed-envelope
+[signed envelope]: ../crypto.md#envelopes
 [Domain separation]: ../crypto.md#domain-separation
 [chain domain separation]: ../crypto.md#chain-domain-separation
 
