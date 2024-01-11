@@ -77,6 +77,7 @@ oasis_registry_runtimes | Gauge | Number of registry runtimes. |  | [registry](h
 oasis_rhp_failures | Counter | Number of failed Runtime Host calls. | call | [runtime/host/protocol](https://github.com/oasisprotocol/oasis-core/tree/master/go/runtime/host/protocol/connection.go)
 oasis_rhp_latency | Summary | Runtime Host call latency (seconds). | call | [runtime/host/protocol](https://github.com/oasisprotocol/oasis-core/tree/master/go/runtime/host/protocol/connection.go)
 oasis_rhp_successes | Counter | Number of successful Runtime Host calls. | call | [runtime/host/protocol](https://github.com/oasisprotocol/oasis-core/tree/master/go/runtime/host/protocol/connection.go)
+oasis_rhp_timeouts | Counter | Number of timed out Runtime Host calls. |  | [runtime/host/protocol](https://github.com/oasisprotocol/oasis-core/tree/master/go/runtime/host/protocol/connection.go)
 oasis_roothash_block_interval | Summary | Time between roothash blocks (seconds). | runtime | [roothash](https://github.com/oasisprotocol/oasis-core/tree/master/go/roothash/metrics.go)
 oasis_storage_failures | Counter | Number of storage failures. | call | [storage/api](https://github.com/oasisprotocol/oasis-core/tree/master/go/storage/api/metrics.go)
 oasis_storage_latency | Summary | Storage call latency (seconds). | call | [storage/api](https://github.com/oasisprotocol/oasis-core/tree/master/go/storage/api/metrics.go)

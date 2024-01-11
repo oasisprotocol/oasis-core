@@ -49,11 +49,18 @@ var (
 		},
 		[]string{"call"},
 	)
+	rhpCallTimeouts = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "oasis_rhp_timeouts",
+			Help: "Number of timed out Runtime Host calls.",
+		},
+	)
 
 	rhpCollectors = []prometheus.Collector{
 		rhpLatency,
 		rhpCallSuccesses,
 		rhpCallFailures,
+		rhpCallTimeouts,
 	}
 
 	metricsOnce sync.Once
@@ -287,6 +294,11 @@ func (c *connection) call(ctx context.Context, body *Body) (result *Body, err er
 			rhpLatency.With(prometheus.Labels{"call": body.Type()}).Observe(time.Since(start).Seconds())
 			if err != nil {
 				rhpCallFailures.With(prometheus.Labels{"call": body.Type()}).Inc()
+
+				// Specifically measure timeouts.
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					rhpCallTimeouts.Inc()
+				}
 			} else {
 				rhpCallSuccesses.With(prometheus.Labels{"call": body.Type()}).Inc()
 			}
