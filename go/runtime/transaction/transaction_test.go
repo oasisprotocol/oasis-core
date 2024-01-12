@@ -3,15 +3,38 @@ package transaction
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
+
+func populateTransactions(t *testing.T, tree *Tree) []Transaction {
+	var testTxns []Transaction
+	for i := 0; i < 20; i++ {
+		newTx := Transaction{
+			Input:      []byte(fmt.Sprintf("this goes in (%d)", i)),
+			Output:     []byte("and this comes out"),
+			BatchOrder: uint32(i + 1),
+		}
+		newTags := Tags{
+			Tag{Key: []byte("tagA"), Value: []byte("valueA")},
+			Tag{Key: []byte("tagB"), Value: []byte("valueB")},
+		}
+		err := tree.AddTransaction(context.Background(), newTx, newTags)
+		require.NoError(t, err, "AddTransaction")
+		testTxns = append(testTxns, newTx)
+	}
+	return testTxns
+}
 
 func TestTransaction(t *testing.T) {
 	ctx := context.Background()
@@ -50,21 +73,7 @@ func TestTransaction(t *testing.T) {
 	require.True(t, txns[0].Equal(&tx), "transaction should have correct artifacts")
 
 	// Add some more transactions.
-	var testTxns []Transaction
-	for i := 0; i < 20; i++ {
-		newTx := Transaction{
-			Input:      []byte(fmt.Sprintf("this goes in (%d)", i)),
-			Output:     []byte("and this comes out"),
-			BatchOrder: uint32(i + 1),
-		}
-		newTags := Tags{
-			Tag{Key: []byte("tagA"), Value: []byte("valueA")},
-			Tag{Key: []byte("tagB"), Value: []byte("valueB")},
-		}
-		err = tree.AddTransaction(ctx, newTx, newTags)
-		require.NoError(t, err, "AddTransaction")
-		testTxns = append(testTxns, newTx)
-	}
+	testTxns := populateTransactions(t, tree)
 
 	txns, err = tree.GetTransactions(ctx)
 	require.NoError(t, err, "GetTransactions")
@@ -164,6 +173,65 @@ func TestTransaction(t *testing.T) {
 		require.Contains(t, txnsByHash, checkTx.Hash(), "transaction should exist")
 		require.True(t, txnsByHash[checkTx.Hash()].Equal(&checkTx), "transaction should have the correct artifacts") // nolint: gosec
 	}
+}
+
+type disableReadSync struct {
+	storage.LocalBackend
+}
+
+func (s *disableReadSync) SyncGet(context.Context, *syncer.GetRequest) (*syncer.ProofResponse, error) {
+	panic("attempted to use SyncGet")
+}
+
+func (s *disableReadSync) SyncGetPrefixes(context.Context, *syncer.GetPrefixesRequest) (*syncer.ProofResponse, error) {
+	panic("attempted to use SyncGetPrefixes")
+}
+
+func (s *disableReadSync) SyncIterate(context.Context, *syncer.IterateRequest) (*syncer.ProofResponse, error) {
+	panic("attempted to use SyncIterate")
+}
+
+func TestTransactionLocalBackend(t *testing.T) {
+	require := require.New(t)
+	ctx := context.Background()
+
+	var (
+		cfg = storage.Config{
+			Backend:      database.BackendNameBadgerDB,
+			MaxCacheSize: 16 * 1024 * 1024,
+			NoFsync:      true,
+		}
+		err error
+	)
+
+	cfg.DB, err = os.MkdirTemp("", "oasis-rt-tx-tree-localdb-test")
+	require.NoError(err, "TempDir()")
+	defer os.RemoveAll(cfg.DB)
+
+	db, err := database.New(&cfg)
+	require.NoError(err, "New()")
+	defer db.Cleanup()
+
+	var root node.Root
+	root.Type = node.RootTypeIO
+	root.Empty()
+
+	// Prepare transaction tree.
+	tree := NewTree(db, root)
+	testTxns := populateTransactions(t, tree)
+
+	_, root.Hash, err = tree.Commit(ctx)
+	require.NoError(err, "Commit")
+
+	// Create a wrapper that aborts on ReadSync use.
+	wrappedDb := &disableReadSync{db}
+
+	// Now check if we hit the database directly.
+	tree = NewTree(wrappedDb, root)
+
+	txns, err := tree.GetTransactions(ctx)
+	require.NoError(err, "GetTransactions")
+	require.Len(txns, len(testTxns), "there should be some transactions")
 }
 
 func TestTransactionInvalidBatchOrder(t *testing.T) {
