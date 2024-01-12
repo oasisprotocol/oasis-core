@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
@@ -196,9 +197,18 @@ type Tree struct {
 
 // NewTree creates a new transaction artifacts tree.
 func NewTree(rs syncer.ReadSyncer, ioRoot node.Root) *Tree {
+	var tree mkvs.Tree
+	if ldb, ok := rs.(storage.LocalBackend); ok {
+		// When the passed instance is actually a local storage backend, use it directly instead of
+		// going through the read syncer interface. This avoids some overhead.
+		tree = mkvs.NewWithRoot(nil, ldb.NodeDB(), ioRoot)
+	} else {
+		tree = mkvs.NewWithRoot(rs, nil, ioRoot, mkvs.Capacity(50000, 16*1024*1024))
+	}
+
 	return &Tree{
 		ioRoot: ioRoot,
-		tree:   mkvs.NewWithRoot(rs, nil, ioRoot, mkvs.Capacity(50000, 16*1024*1024)),
+		tree:   tree,
 	}
 }
 
