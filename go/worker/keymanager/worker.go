@@ -202,8 +202,6 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		switch frame.UntrustedPlaintext {
 		case "":
 			// Anyone can connect.
-		case api.RPCMethodGetPublicKey, api.RPCMethodGetPublicEphemeralKey:
-			// Anyone can get public keys.
 		default:
 			if _, privatePeered := w.privatePeers[peerID]; !privatePeered {
 				// Defer to access control to check the policy.
