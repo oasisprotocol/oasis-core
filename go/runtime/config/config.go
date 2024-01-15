@@ -94,6 +94,9 @@ type Config struct {
 	// AttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
 	AttestInterval time.Duration `yaml:"attest_interval,omitempty"`
+
+	// LoadBalancer is the load balancer configuration.
+	LoadBalancer LoadBalancerConfig `yaml:"load_balancer,omitempty"`
 }
 
 // PruneConfig is the history pruner configuration structure.
@@ -104,6 +107,13 @@ type PruneConfig struct {
 	Interval time.Duration `yaml:"interval"`
 	// Number of last rounds to keep.
 	NumKept uint64 `yaml:"num_kept"`
+}
+
+// LoadBalancerConfig is the load balancer configuration.
+type LoadBalancerConfig struct {
+	// NumInstances is the number of runtime instances to provision for load-balancing. Setting it
+	// to zero (default) or one disables load balancing.
+	NumInstances uint64 `yaml:"num_instances,omitempty"`
 }
 
 // Validate validates the configuration settings.
@@ -140,6 +150,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("unknown runtime history pruner strategy: %s", c.Environment)
 	}
 
+	if c.LoadBalancer.NumInstances > 128 {
+		return fmt.Errorf("cannot specify more than 128 instances for load balancing")
+	}
+
 	return nil
 }
 
@@ -166,5 +180,8 @@ func DefaultConfig() Config {
 			RepublishInterval:    60 * time.Second,
 		},
 		PreWarmEpochs: 3,
+		LoadBalancer: LoadBalancerConfig{
+			NumInstances: 0,
+		},
 	}
 }

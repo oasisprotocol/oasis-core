@@ -23,6 +23,7 @@ import (
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
+	hostLoadBalance "github.com/oasisprotocol/oasis-core/go/runtime/host/loadbalance"
 	hostMock "github.com/oasisprotocol/oasis-core/go/runtime/host/mock"
 	hostProtocol "github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	hostSandbox "github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
@@ -199,6 +200,13 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 			}
 		default:
 			return nil, fmt.Errorf("unsupported runtime provisioner: %s", p)
+		}
+
+		// Configure optional load balancing.
+		for tee, rp := range rh.Provisioners {
+			rh.Provisioners[tee] = hostLoadBalance.New(rp, hostLoadBalance.Config{
+				NumInstances: int(config.GlobalConfig.Runtime.LoadBalancer.NumInstances),
+			})
 		}
 
 		// Configure runtimes.

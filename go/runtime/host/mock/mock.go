@@ -189,20 +189,19 @@ func (r *runtime) UpdateCapabilityTEE() {
 }
 
 // Implements host.Runtime.
-func (r *runtime) WatchEvents(context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
+func (r *runtime) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
 	typedCh := make(chan *host.Event)
 	sub := r.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub, nil
+	return typedCh, sub
 }
 
 // Implements host.Runtime.
-func (r *runtime) Start() error {
+func (r *runtime) Start() {
 	r.notifier.Broadcast(&host.Event{
 		Started: &host.StartedEvent{},
 	})
-	return nil
 }
 
 // Implements host.Runtime.

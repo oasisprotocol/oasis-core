@@ -1268,21 +1268,10 @@ func (w *Worker) worker() {
 		return
 	}
 
-	hrtEventCh, hrtSub, err := hrt.WatchEvents(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to subscribe to key manager runtime events",
-			"err", err,
-		)
-		return
-	}
+	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()
 
-	if err = hrt.Start(); err != nil {
-		w.logger.Error("failed to start key manager runtime",
-			"err", err,
-		)
-		return
-	}
+	hrt.Start()
 	defer hrt.Stop()
 
 	if err = hrtNotifier.Start(); err != nil {

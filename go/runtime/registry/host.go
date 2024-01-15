@@ -86,7 +86,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 		}
 	}
 
-	agg, err := multi.New(ctx, runtime.ID(), rts)
+	agg, err := multi.New(runtime.ID(), rts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to provision aggregate runtime: %w", err)
 	}
@@ -620,13 +620,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	defer sub.Close()
 
 	// Subscribe to runtime host events (policies will be lost on restarts).
-	evCh, evSub, err := n.host.WatchEvents(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to subscribe to runtime host events",
-			"err", err,
-		)
-		return
-	}
+	evCh, evSub := n.host.WatchEvents()
 	defer evSub.Close()
 
 	retryTicker := time.NewTicker(retryInterval)
