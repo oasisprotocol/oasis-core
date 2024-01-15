@@ -94,6 +94,7 @@ type Worker struct { // nolint: maligned
 	globalStatus  *api.Status
 	enclaveStatus *api.SignedInitResponse
 	policy        *api.SignedPolicySGX
+	activeVersion *version.Version
 
 	masterSecretStats    workerKeymanager.MasterSecretStats
 	ephemeralSecretStats workerKeymanager.EphemeralSecretStats
@@ -406,6 +407,13 @@ func (w *Worker) setStatus(status *api.Status) {
 	defer w.Unlock()
 
 	w.globalStatus = status
+}
+
+func (w *Worker) setVersion(v *version.Version) {
+	w.Lock()
+	defer w.Unlock()
+
+	w.activeVersion = v
 }
 
 func (w *Worker) setLastGeneratedMasterSecretGeneration(generation uint64) {
@@ -1029,6 +1037,7 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 		default:
 			return
 		}
+		w.setVersion(&w.rtStatus.version)
 
 		if w.kmStatus == nil {
 			return
@@ -1055,6 +1064,7 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 	case ev.FailedToStart != nil, ev.Stopped != nil:
 		// Worker failed to start or was stopped -- we can no longer service requests.
 		w.rtStatus = nil
+		w.setVersion(nil)
 		w.roleProvider.SetUnavailable()
 	default:
 		// Unknown event.
