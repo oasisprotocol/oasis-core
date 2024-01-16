@@ -47,16 +47,16 @@ pub struct MethodDescriptor {
 /// Handler for a RPC method.
 pub trait MethodHandler<Rq, Rsp> {
     /// Invoke the method implementation and return a response.
-    fn handle(&self, ctx: &mut Context, request: &Rq) -> Result<Rsp>;
+    fn handle(&self, ctx: &Context, request: &Rq) -> Result<Rsp>;
 }
 
 impl<Rq, Rsp, F> MethodHandler<Rq, Rsp> for F
 where
     Rq: 'static,
     Rsp: 'static,
-    F: Fn(&mut Context, &Rq) -> Result<Rsp> + 'static,
+    F: Fn(&Context, &Rq) -> Result<Rsp> + 'static,
 {
-    fn handle(&self, ctx: &mut Context, request: &Rq) -> Result<Rsp> {
+    fn handle(&self, ctx: &Context, request: &Rq) -> Result<Rsp> {
         (*self)(ctx, request)
     }
 }
@@ -67,7 +67,7 @@ pub trait MethodHandlerDispatch {
     fn get_descriptor(&self) -> &MethodDescriptor;
 
     /// Dispatch request.
-    fn dispatch(&self, ctx: &mut Context, request: Request) -> Result<Response>;
+    fn dispatch(&self, ctx: &Context, request: Request) -> Result<Response>;
 }
 
 struct MethodHandlerDispatchImpl<Rq, Rsp> {
@@ -86,7 +86,7 @@ where
         &self.descriptor
     }
 
-    fn dispatch(&self, ctx: &mut Context, request: Request) -> Result<Response> {
+    fn dispatch(&self, ctx: &Context, request: Request) -> Result<Response> {
         let request = cbor::from_value(request.args)?;
         let response = self.handler.handle(ctx, &request)?;
 

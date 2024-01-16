@@ -13,7 +13,7 @@
 macro_rules! runtime_context {
     ($ctx:ident, $type:ty) => {
         $ctx.runtime
-            .downcast_mut::<$type>()
+            .downcast_ref::<$type>()
             .expect("invalid runtime context")
     };
 }

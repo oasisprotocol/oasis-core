@@ -91,9 +91,10 @@ type Worker struct { // nolint: maligned
 	roleProvider registration.RoleProvider
 	backend      api.Backend
 
-	globalStatus  *api.Status
-	enclaveStatus *api.SignedInitResponse
-	policy        *api.SignedPolicySGX
+	globalStatus   *api.Status
+	policy         *api.SignedPolicySGX
+	policyChecksum []byte
+	activeVersion  *version.Version
 
 	masterSecretStats    workerKeymanager.MasterSecretStats
 	ephemeralSecretStats workerKeymanager.EphemeralSecretStats
@@ -202,8 +203,6 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		switch frame.UntrustedPlaintext {
 		case "":
 			// Anyone can connect.
-		case api.RPCMethodGetPublicKey, api.RPCMethodGetPublicEphemeralKey:
-			// Anyone can get public keys.
 		default:
 			if _, privatePeered := w.privatePeers[peerID]; !privatePeered {
 				// Defer to access control to check the policy.
@@ -359,13 +358,13 @@ func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*ap
 
 	// Update metrics.
 	enclaveMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.Generation))
-	if w.enclaveStatus == nil || !bytes.Equal(w.enclaveStatus.InitResponse.PolicyChecksum, signedInitResp.InitResponse.PolicyChecksum) {
+	if !bytes.Equal(w.policyChecksum, signedInitResp.InitResponse.PolicyChecksum) {
 		policyUpdateCount.WithLabelValues(w.runtimeLabel).Inc()
 	}
 
-	// Cache the key manager enclave status and the currently active policy.
-	w.enclaveStatus = &signedInitResp
+	// Cache the currently active policy and its checksum.
 	w.policy = kmStatus.Policy
+	w.policyChecksum = signedInitResp.InitResponse.PolicyChecksum
 
 	return &signedInitResp, nil
 }
@@ -408,6 +407,13 @@ func (w *Worker) setStatus(status *api.Status) {
 	defer w.Unlock()
 
 	w.globalStatus = status
+}
+
+func (w *Worker) setVersion(v *version.Version) {
+	w.Lock()
+	defer w.Unlock()
+
+	w.activeVersion = v
 }
 
 func (w *Worker) setLastGeneratedMasterSecretGeneration(generation uint64) {
@@ -645,21 +651,12 @@ func (w *Worker) generateMasterSecret(runtimeID common.Namespace, height int64, 
 		return fmt.Errorf("failed to generate master secret: %w", err)
 	}
 
-	// Fetch key manager runtime details.
-	kmRt, err := w.commonWorker.Consensus.Registry().GetRuntime(w.ctx, &registry.GetRuntimeQuery{
-		Height: consensus.HeightLatest,
-		ID:     kmStatus.ID,
-	})
+	rak, err := w.runtimeAttestationKey(rtStatus)
 	if err != nil {
 		return err
 	}
 
-	rak, err := w.runtimeAttestationKey(rtStatus, kmRt)
-	if err != nil {
-		return err
-	}
-
-	reks, err := w.runtimeEncryptionKeys(kmStatus, kmRt)
+	reks, err := w.runtimeEncryptionKeys(kmStatus)
 	if err != nil {
 		return err
 	}
@@ -722,21 +719,12 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, height int6
 		return fmt.Errorf("failed to generate ephemeral secret: %w", err)
 	}
 
-	// Fetch key manager runtime details.
-	kmRt, err := w.commonWorker.Consensus.Registry().GetRuntime(w.ctx, &registry.GetRuntimeQuery{
-		Height: consensus.HeightLatest,
-		ID:     kmStatus.ID,
-	})
+	rak, err := w.runtimeAttestationKey(rtStatus)
 	if err != nil {
 		return err
 	}
 
-	rak, err := w.runtimeAttestationKey(rtStatus, kmRt)
-	if err != nil {
-		return err
-	}
-
-	reks, err := w.runtimeEncryptionKeys(kmStatus, kmRt)
+	reks, err := w.runtimeEncryptionKeys(kmStatus)
 	if err != nil {
 		return err
 	}
@@ -759,7 +747,12 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, height int6
 	return err
 }
 
-func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus, kmRt *registry.Runtime) (*signature.PublicKey, error) {
+func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus) (*signature.PublicKey, error) {
+	kmRt, err := w.runtime.RegistryDescriptor(w.ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var rak *signature.PublicKey
 	switch kmRt.TEEHardware {
 	case node.TEEHardwareInvalid:
@@ -776,7 +769,12 @@ func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus, kmRt *registry.R
 	return rak, nil
 }
 
-func (w *Worker) runtimeEncryptionKeys(kmStatus *api.Status, kmRt *registry.Runtime) (map[x25519.PublicKey]struct{}, error) {
+func (w *Worker) runtimeEncryptionKeys(kmStatus *api.Status) (map[x25519.PublicKey]struct{}, error) {
+	kmRt, err := w.runtime.RegistryDescriptor(w.ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	reks := make(map[x25519.PublicKey]struct{})
 	for _, id := range kmStatus.Nodes {
 		var n *node.Node
@@ -1039,15 +1037,22 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 		default:
 			return
 		}
+		w.setVersion(&w.rtStatus.version)
 
 		if w.kmStatus == nil {
 			return
 		}
 
+		// Check whether the enclave has been initialized at least once.
+		// If true, preregistration is not required.
+		w.RLock()
+		initialized := w.policyChecksum != nil
+		w.RUnlock()
+
 		// Send a node preregistration, so that other nodes know to update their access
 		// control. Without it, the enclave won't be able to replicate the master secrets
 		// needed for initialization.
-		if w.enclaveStatus == nil {
+		if !initialized {
 			rtStatus := w.rtStatus
 			w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
 				rt := n.AddOrUpdateRuntime(w.runtime.ID(), rtStatus.version)
@@ -1065,6 +1070,7 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 	case ev.FailedToStart != nil, ev.Stopped != nil:
 		// Worker failed to start or was stopped -- we can no longer service requests.
 		w.rtStatus = nil
+		w.setVersion(nil)
 		w.roleProvider.SetUnavailable()
 	default:
 		// Unknown event.
