@@ -2,7 +2,6 @@ package keymanager
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"slices"
@@ -220,61 +219,12 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 	return resp.Response, nil
 }
 
-func (w *Worker) callEnclaveLocal(method string, args interface{}, rsp interface{}) error {
-	req := enclaverpc.Request{
-		Method: method,
-		Args:   args,
-	}
-	body := &protocol.Body{
-		RuntimeLocalRPCCallRequest: &protocol.RuntimeLocalRPCCallRequest{
-			Request: cbor.Marshal(&req),
-		},
-	}
-
+func (w *Worker) callEnclaveLocal(ctx context.Context, method string, args interface{}, rsp interface{}) error {
 	rt := w.GetHostedRuntime()
 	if rt == nil {
 		return fmt.Errorf("not initialized")
 	}
-	response, err := rt.Call(w.ctx, body)
-	if err != nil {
-		w.logger.Error("failed to dispatch local RPC call to runtime",
-			"method", method,
-			"err", err,
-		)
-		return err
-	}
-
-	resp := response.RuntimeLocalRPCCallResponse
-	if resp == nil {
-		w.logger.Error("malformed response from runtime",
-			"method", method,
-			"response", response,
-		)
-		return fmt.Errorf("malformed response from runtime")
-	}
-
-	var msg enclaverpc.Message
-	if err = cbor.Unmarshal(resp.Response, &msg); err != nil {
-		return fmt.Errorf("malformed message envelope: %w", err)
-	}
-
-	if msg.Response == nil {
-		return fmt.Errorf("message is not a response: '%s'", hex.EncodeToString(resp.Response))
-	}
-
-	switch {
-	case msg.Response.Body.Success != nil:
-	case msg.Response.Body.Error != nil:
-		return fmt.Errorf("rpc failure: '%s'", *msg.Response.Body.Error)
-	default:
-		return fmt.Errorf("unknown rpc response status: '%s'", hex.EncodeToString(resp.Response))
-	}
-
-	if err = cbor.Unmarshal(msg.Response.Body.Success, rsp); err != nil {
-		return fmt.Errorf("failed to extract rpc response payload: %w", err)
-	}
-
-	return nil
+	return rt.LocalRPC(ctx, method, args, rsp)
 }
 
 func (w *Worker) runtimeAttestationKey() (*signature.PublicKey, error) {
