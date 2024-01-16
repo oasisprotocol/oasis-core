@@ -55,11 +55,6 @@ func (w *Worker) GetStatus() (*api.Status, error) {
 		al = append(al, ral)
 	}
 
-	var pc []byte
-	if w.enclaveStatus != nil {
-		pc = w.enclaveStatus.InitResponse.PolicyChecksum
-	}
-
 	gs := w.globalStatus
 	ws := api.WorkerStatus{
 		Status:           ss,
@@ -70,7 +65,7 @@ func (w *Worker) GetStatus() (*api.Status, error) {
 		AccessList:       al,
 		PrivatePeers:     ps,
 		Policy:           w.policy,
-		PolicyChecksum:   pc,
+		PolicyChecksum:   w.policyChecksum,
 		MasterSecrets:    w.masterSecretStats,
 		EphemeralSecrets: w.ephemeralSecretStats,
 	}

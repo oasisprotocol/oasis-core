@@ -91,10 +91,10 @@ type Worker struct { // nolint: maligned
 	roleProvider registration.RoleProvider
 	backend      api.Backend
 
-	globalStatus  *api.Status
-	enclaveStatus *api.SignedInitResponse
-	policy        *api.SignedPolicySGX
-	activeVersion *version.Version
+	globalStatus   *api.Status
+	policy         *api.SignedPolicySGX
+	policyChecksum []byte
+	activeVersion  *version.Version
 
 	masterSecretStats    workerKeymanager.MasterSecretStats
 	ephemeralSecretStats workerKeymanager.EphemeralSecretStats
@@ -358,13 +358,13 @@ func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*ap
 
 	// Update metrics.
 	enclaveMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.Generation))
-	if w.enclaveStatus == nil || !bytes.Equal(w.enclaveStatus.InitResponse.PolicyChecksum, signedInitResp.InitResponse.PolicyChecksum) {
+	if !bytes.Equal(w.policyChecksum, signedInitResp.InitResponse.PolicyChecksum) {
 		policyUpdateCount.WithLabelValues(w.runtimeLabel).Inc()
 	}
 
-	// Cache the key manager enclave status and the currently active policy.
-	w.enclaveStatus = &signedInitResp
+	// Cache the currently active policy and its checksum.
 	w.policy = kmStatus.Policy
+	w.policyChecksum = signedInitResp.InitResponse.PolicyChecksum
 
 	return &signedInitResp, nil
 }
@@ -1043,10 +1043,16 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 			return
 		}
 
+		// Check whether the enclave has been initialized at least once.
+		// If true, preregistration is not required.
+		w.RLock()
+		initialized := w.policyChecksum != nil
+		w.RUnlock()
+
 		// Send a node preregistration, so that other nodes know to update their access
 		// control. Without it, the enclave won't be able to replicate the master secrets
 		// needed for initialization.
-		if w.enclaveStatus == nil {
+		if !initialized {
 			rtStatus := w.rtStatus
 			w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
 				rt := n.AddOrUpdateRuntime(w.runtime.ID(), rtStatus.version)
