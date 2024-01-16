@@ -643,21 +643,12 @@ func (w *Worker) generateMasterSecret(runtimeID common.Namespace, height int64, 
 		return fmt.Errorf("failed to generate master secret: %w", err)
 	}
 
-	// Fetch key manager runtime details.
-	kmRt, err := w.commonWorker.Consensus.Registry().GetRuntime(w.ctx, &registry.GetRuntimeQuery{
-		Height: consensus.HeightLatest,
-		ID:     kmStatus.ID,
-	})
+	rak, err := w.runtimeAttestationKey(rtStatus)
 	if err != nil {
 		return err
 	}
 
-	rak, err := w.runtimeAttestationKey(rtStatus, kmRt)
-	if err != nil {
-		return err
-	}
-
-	reks, err := w.runtimeEncryptionKeys(kmStatus, kmRt)
+	reks, err := w.runtimeEncryptionKeys(kmStatus)
 	if err != nil {
 		return err
 	}
@@ -720,21 +711,12 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, height int6
 		return fmt.Errorf("failed to generate ephemeral secret: %w", err)
 	}
 
-	// Fetch key manager runtime details.
-	kmRt, err := w.commonWorker.Consensus.Registry().GetRuntime(w.ctx, &registry.GetRuntimeQuery{
-		Height: consensus.HeightLatest,
-		ID:     kmStatus.ID,
-	})
+	rak, err := w.runtimeAttestationKey(rtStatus)
 	if err != nil {
 		return err
 	}
 
-	rak, err := w.runtimeAttestationKey(rtStatus, kmRt)
-	if err != nil {
-		return err
-	}
-
-	reks, err := w.runtimeEncryptionKeys(kmStatus, kmRt)
+	reks, err := w.runtimeEncryptionKeys(kmStatus)
 	if err != nil {
 		return err
 	}
@@ -757,7 +739,12 @@ func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, height int6
 	return err
 }
 
-func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus, kmRt *registry.Runtime) (*signature.PublicKey, error) {
+func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus) (*signature.PublicKey, error) {
+	kmRt, err := w.runtime.RegistryDescriptor(w.ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var rak *signature.PublicKey
 	switch kmRt.TEEHardware {
 	case node.TEEHardwareInvalid:
@@ -774,7 +761,12 @@ func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus, kmRt *registry.R
 	return rak, nil
 }
 
-func (w *Worker) runtimeEncryptionKeys(kmStatus *api.Status, kmRt *registry.Runtime) (map[x25519.PublicKey]struct{}, error) {
+func (w *Worker) runtimeEncryptionKeys(kmStatus *api.Status) (map[x25519.PublicKey]struct{}, error) {
+	kmRt, err := w.runtime.RegistryDescriptor(w.ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	reks := make(map[x25519.PublicKey]struct{})
 	for _, id := range kmStatus.Nodes {
 		var n *node.Node
