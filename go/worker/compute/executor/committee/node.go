@@ -1129,7 +1129,7 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 				}
 
 				// Obtain CapabilityTEE for the given runtime version.
-				capabilityTEE, err := n.commonNode.GetHostedRuntimeCapabilityTEE(version)
+				capabilityTEE, err := n.commonNode.GetHostedRuntimeCapabilityTEEForVersion(version)
 				if err != nil {
 					n.logger.Warn("failed to get CapabilityTEE for hosted runtime, skipping",
 						"err", err,
