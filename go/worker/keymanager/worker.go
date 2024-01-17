@@ -99,8 +99,7 @@ type Worker struct { // nolint: maligned
 	masterSecretStats    workerKeymanager.MasterSecretStats
 	ephemeralSecretStats workerKeymanager.EphemeralSecretStats
 
-	enabled     bool
-	mayGenerate bool
+	enabled bool
 
 	kmStatus *api.Status
 	rtStatus *runtimeStatus

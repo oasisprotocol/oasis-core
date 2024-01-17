@@ -198,7 +198,6 @@ worker:
   registration:
     entity: /km/etc/entity/entity.json
   keymanager:
-    may_generate: false
     runtime:
       id: "4000000000000000000000000000000000000000000000004a1a53dff2ae482d"
     private_peer_pub_keys:

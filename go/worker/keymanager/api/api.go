@@ -100,9 +100,6 @@ type WorkerStatus struct {
 	// ActiveVersion is the currently active version.
 	ActiveVersion *version.Version `json:"active_version"`
 
-	// MayGenerate returns whether the enclave can generate a master secret.
-	MayGenerate bool `json:"may_generate"`
-
 	// RuntimeID is the runtime ID of the key manager.
 	RuntimeID *common.Namespace `json:"runtime_id"`
 	// ClientRuntimes is a list of compute runtimes that use this key manager.
