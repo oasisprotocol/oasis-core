@@ -79,11 +79,23 @@ var (
 	// RPCMethodInit is the name of the `init` method.
 	RPCMethodInit = "init"
 
+	// RPCMethodGetOrCreateKeys is the name of the `get_or_create_keys` method.
+	RPCMethodGetOrCreateKeys = "get_or_create_keys"
+
 	// RPCMethodGetPublicKey is the name of the `get_public_key` method.
 	RPCMethodGetPublicKey = "get_public_key"
 
+	// RPCMethodGetOrCreateEphemeralKeys is the name of the `get_or_create_ephemeral_keys` method.
+	RPCMethodGetOrCreateEphemeralKeys = "get_or_create_ephemeral_keys"
+
 	// RPCMethodGetPublicEphemeralKey is the name of the `get_public_ephemeral_key` method.
 	RPCMethodGetPublicEphemeralKey = "get_public_ephemeral_key" // #nosec G101
+
+	// RPCMethodReplicateMasterSecret is the name of the `replicate_master_secret` method.
+	RPCMethodReplicateMasterSecret = "replicate_master_secret"
+
+	// RPCMethodReplicateEphemeralSecret is the name of the `replicate_ephemeral_secret` method.
+	RPCMethodReplicateEphemeralSecret = "replicate_ephemeral_secret"
 
 	// RPCMethodGenerateMasterSecret is the name of the `generate_master_secret` RPC method.
 	RPCMethodGenerateMasterSecret = "generate_master_secret"
