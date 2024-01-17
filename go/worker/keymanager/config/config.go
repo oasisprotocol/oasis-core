@@ -5,8 +5,6 @@ package config
 type Config struct {
 	// Key manager Runtime ID.
 	RuntimeID string `yaml:"runtime_id"`
-	// Key manager may generate a new master secret.
-	MayGenerate bool `yaml:"may_generate"`
 	// Base64-encoded public keys of unadvertised peers that may call protected methods.
 	PrivatePeerPubKeys []string `yaml:"private_peer_pub_keys"`
 }
@@ -20,7 +18,6 @@ func (c *Config) Validate() error {
 func DefaultConfig() Config {
 	return Config{
 		RuntimeID:          "",
-		MayGenerate:        false,
 		PrivatePeerPubKeys: []string{},
 	}
 }

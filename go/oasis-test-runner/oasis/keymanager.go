@@ -163,8 +163,6 @@ type Keymanager struct { // nolint: maligned
 	consensusPort uint16
 	p2pPort       uint16
 
-	mayGenerate bool
-
 	privatePeerPubKeys []string
 }
 
@@ -298,10 +296,6 @@ func (km *Keymanager) ModifyConfig() error {
 	km.Config.Keymanager.RuntimeID = km.runtime.ID().String()
 	km.Config.Keymanager.PrivatePeerPubKeys = km.privatePeerPubKeys
 
-	if km.mayGenerate {
-		km.Config.Keymanager.MayGenerate = true
-	}
-
 	// Sentry configuration.
 	sentries, err := resolveSentries(km.net, km.sentryIndices)
 	if err != nil {
@@ -354,7 +348,6 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		sentryPubKey:       sentryPubKey,
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
-		mayGenerate:        len(net.keymanagers) == 0,
 		privatePeerPubKeys: cfg.PrivatePeerPubKeys,
 	}
 

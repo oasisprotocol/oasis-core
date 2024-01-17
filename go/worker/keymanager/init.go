@@ -53,7 +53,6 @@ func New(
 		commonWorker:        commonWorker,
 		backend:             backend,
 		enabled:             enabled,
-		mayGenerate:         config.GlobalConfig.Keymanager.MayGenerate,
 		initEnclaveDoneCh:   make(chan *api.SignedInitResponse, 1),
 		genMstSecDoneCh:     make(chan bool, 1),
 		genMstSecEpoch:      math.MaxUint64,

@@ -59,7 +59,6 @@ func (w *Worker) GetStatus() (*api.Status, error) {
 	ws := api.WorkerStatus{
 		Status:           ss,
 		ActiveVersion:    w.activeVersion,
-		MayGenerate:      w.mayGenerate,
 		RuntimeID:        &w.runtimeID,
 		ClientRuntimes:   rts,
 		AccessList:       al,
