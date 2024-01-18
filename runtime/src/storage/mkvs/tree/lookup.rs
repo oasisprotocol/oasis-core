@@ -36,6 +36,22 @@ impl Tree {
         self._get_top(key, false)
     }
 
+    pub fn get_proof(&self, key: &[u8]) -> Result<Option<Proof>> {
+        let boxed_key = key.to_vec();
+        let pending_root = self.cache.borrow().get_pending_root();
+
+        // Remember where the path from root to target node ends (will end).
+        self.cache.borrow_mut().mark_position();
+
+        let mut proof_builder = ProofBuilder::new(pending_root.as_ref().borrow().hash);
+
+        let result = self._get(pending_root, 0, &boxed_key, false, Some(&mut proof_builder))?;
+        match result {
+            Some(_) => Ok(Some(proof_builder.build())),
+            None => Ok(None),
+        }
+    }
+
     /// Check if the key exists in the local cache.
     pub fn cache_contains_key(&self, key: &[u8]) -> bool {
         match self._get_top(key, true) {
@@ -52,7 +68,7 @@ impl Tree {
         // Remember where the path from root to target node ends (will end).
         self.cache.borrow_mut().mark_position();
 
-        self._get(pending_root, 0, &boxed_key, check_only)
+        self._get(pending_root, 0, &boxed_key, check_only, None)
     }
 
     fn _get(
@@ -61,6 +77,7 @@ impl Tree {
         bit_depth: Depth,
         key: &Key,
         check_only: bool,
+        mut proof_builder: Option<&mut ProofBuilder>,
     ) -> Result<Option<Value>> {
         let node_ref = self.cache.borrow_mut().deref_node_ptr(
             ptr,
@@ -70,6 +87,11 @@ impl Tree {
                 Some(FetcherSyncGet::new(key, false))
             },
         )?;
+
+        // Include nodes in proof if we have a proof builder.
+        if let (Some(pb), Some(node_ref)) = (proof_builder.as_mut(), &node_ref) {
+            pb.include(&node_ref.borrow());
+        }
 
         match classify_noderef!(?node_ref) {
             NodeKind::None => {
@@ -87,6 +109,7 @@ impl Tree {
                             bit_depth + n.label_bit_length,
                             key,
                             check_only,
+                            None, // Omit the proof builder as the leaf node is always included with the internal node itself.
                         );
                     }
 
@@ -102,6 +125,7 @@ impl Tree {
                             bit_depth + n.label_bit_length,
                             key,
                             check_only,
+                            proof_builder,
                         );
                     } else {
                         return self._get(
@@ -109,6 +133,7 @@ impl Tree {
                             bit_depth + n.label_bit_length,
                             key,
                             check_only,
+                            proof_builder,
                         );
                     }
                 }

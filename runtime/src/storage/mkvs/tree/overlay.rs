@@ -42,6 +42,16 @@ impl<T: mkvs::FallibleMKVS> OverlayTree<T> {
         self.inner.get(key)
     }
 
+    pub fn get_proof(&self, key: &[u8]) -> Result<Option<Proof>> {
+        if !self.dirty.is_empty() {
+            Err(Error::msg(
+                "overlay tree proofs are not supported when there are dirty values",
+            ))?;
+        }
+
+        self.inner.get_proof(key)
+    }
+
     /// Insert a key/value pair into the tree.
     pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let previous = self.get(key)?;
@@ -257,6 +267,10 @@ impl<'tree, T: mkvs::FallibleMKVS> mkvs::Iterator for OverlayTreeIterator<'tree,
 impl<T: mkvs::FallibleMKVS> mkvs::MKVS for OverlayTree<T> {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         self.get(key).unwrap()
+    }
+
+    fn get_proof(&self, key: &[u8]) -> Option<Proof> {
+        self.get_proof(key).unwrap()
     }
 
     fn cache_contains_key(&self, key: &[u8]) -> bool {

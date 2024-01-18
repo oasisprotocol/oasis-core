@@ -10,6 +10,33 @@ use crate::{
 /// Size of the encoded value length.
 const VALUE_LENGTH_SIZE: usize = size_of::<u32>();
 
+impl NodeBox {
+    pub fn compact_marshal_binary(&self) -> Result<Vec<u8>> {
+        match self {
+            NodeBox::Internal(ref n) => n.compact_marshal_binary(),
+            NodeBox::Leaf(ref n) => n.compact_marshal_binary(),
+        }
+    }
+}
+
+impl InternalNode {
+    pub fn compact_marshal_binary(&self) -> Result<Vec<u8>> {
+        let leaf_node_binary = if self.leaf_node.borrow().is_null() {
+            vec![NodeKind::None as u8]
+        } else {
+            noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?
+        };
+
+        let mut result: Vec<u8> = Vec::with_capacity(1 + leaf_node_binary.len() + 2 * Hash::len());
+        result.push(NodeKind::Internal as u8);
+        result.append(&mut self.label_bit_length.marshal_binary()?);
+        result.extend_from_slice(&self.label);
+        result.extend_from_slice(leaf_node_binary.as_ref());
+
+        Ok(result)
+    }
+}
+
 impl Marshal for NodeBox {
     fn marshal_binary(&self) -> Result<Vec<u8>> {
         match self {
@@ -72,17 +99,7 @@ impl Marshal for NodeKind {
 
 impl Marshal for InternalNode {
     fn marshal_binary(&self) -> Result<Vec<u8>> {
-        let leaf_node_binary = if self.leaf_node.borrow().is_null() {
-            vec![NodeKind::None as u8]
-        } else {
-            noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?
-        };
-
-        let mut result: Vec<u8> = Vec::with_capacity(1 + leaf_node_binary.len() + 2 * Hash::len());
-        result.push(NodeKind::Internal as u8);
-        result.append(&mut self.label_bit_length.marshal_binary()?);
-        result.extend_from_slice(&self.label);
-        result.extend_from_slice(leaf_node_binary.as_ref());
+        let mut result = self.compact_marshal_binary()?;
         result.extend_from_slice(self.left.borrow().hash.as_ref());
         result.extend_from_slice(self.right.borrow().hash.as_ref());
 
@@ -161,8 +178,8 @@ impl Marshal for InternalNode {
     }
 }
 
-impl Marshal for LeafNode {
-    fn marshal_binary(&self) -> Result<Vec<u8>> {
+impl LeafNode {
+    pub fn compact_marshal_binary(&self) -> Result<Vec<u8>> {
         let mut result: Vec<u8> = Vec::with_capacity(1 + VALUE_LENGTH_SIZE);
         result.push(NodeKind::Leaf as u8);
         result.append(&mut self.key.marshal_binary()?);
@@ -170,6 +187,12 @@ impl Marshal for LeafNode {
         result.extend_from_slice(&self.value);
 
         Ok(result)
+    }
+}
+
+impl Marshal for LeafNode {
+    fn marshal_binary(&self) -> Result<Vec<u8>> {
+        self.compact_marshal_binary()
     }
 
     fn unmarshal_binary(&mut self, data: &[u8]) -> Result<usize> {

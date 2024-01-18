@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+};
 
 use anyhow::{anyhow, Result};
 use arbitrary::Arbitrary;
@@ -59,6 +62,116 @@ pub struct Proof {
     pub untrusted_root: Hash,
     /// Proof entries in pre-order traversal.
     pub entries: Vec<Option<RawProofEntry>>,
+}
+
+struct ProofNode {
+    serialized: Vec<u8>,
+    children: Vec<Hash>,
+}
+
+/// A Merkle proof builder.
+pub struct ProofBuilder {
+    root: Hash,
+    included: BTreeMap<Hash, ProofNode>,
+}
+
+impl ProofBuilder {
+    /// Create a new proof builder for the given root hash.
+    pub fn new(root: Hash) -> Self {
+        Self {
+            root,
+            included: BTreeMap::new(),
+        }
+    }
+
+    /// Add a node to the set of included nodes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is not clean.
+    pub fn include(&mut self, node: &NodeBox) {
+        if !node.is_clean() {
+            panic!("proof builder: node is not clean");
+        }
+
+        // If node is already included, skip.
+        let nh = node.get_hash();
+        if self.included.contains_key(&nh) {
+            return;
+        }
+        let mut pn = ProofNode {
+            serialized: node
+                .compact_marshal_binary()
+                .expect("marshaling node in proof"),
+            children: vec![],
+        };
+
+        // For internal nodes, also include children.
+        if let NodeBox::Internal(nd) = node {
+            let ch = nd
+                .left
+                .borrow()
+                .node
+                .as_ref()
+                .map(|n| n.borrow().get_hash())
+                .unwrap_or(Hash::empty_hash());
+            pn.children.push(ch);
+
+            let ch = nd
+                .right
+                .borrow()
+                .node
+                .as_ref()
+                .map(|n| n.borrow().get_hash())
+                .unwrap_or(Hash::empty_hash());
+            pn.children.push(ch);
+        }
+
+        self.included.insert(nh, pn);
+    }
+
+    /// Build the (unverified) proof.
+    pub fn build(&self) -> Proof {
+        let mut proof = Proof {
+            untrusted_root: self.root,
+            entries: vec![],
+        };
+        self._build(&mut proof, &self.root);
+
+        proof
+    }
+
+    fn _build(&self, p: &mut Proof, h: &Hash) {
+        if h.is_empty() {
+            // Append nil for empty nodes.
+            p.entries.push(None);
+            return;
+        }
+
+        match self.included.get(h) {
+            None => {
+                // Node is not included in this proof, just add hash of subtree.
+                let mut data = Vec::with_capacity(h.as_ref().len() + 1);
+                data.push(PROOF_ENTRY_HASH);
+                data.extend_from_slice(h.as_ref());
+
+                p.entries.push(Some(RawProofEntry(data)));
+            }
+            Some(pn) => {
+                // Pre-order traversal, add visited node.
+                let mut data = Vec::with_capacity(pn.serialized.len() + 1);
+                data.push(PROOF_ENTRY_FULL);
+                data.extend_from_slice(&pn.serialized);
+
+                p.entries.push(Some(RawProofEntry(data)));
+
+                // Recurse into children.
+                for ch in pn.children.iter() {
+                    self._build(p, ch);
+                }
+            }
+        }
+    }
 }
 
 /// A proof verifier enables verifying proofs returned by the ReadSyncer API.
@@ -155,6 +268,9 @@ impl ProofVerifier {
 #[cfg(test)]
 mod test {
     use base64;
+    use rustc_hex::ToHex;
+
+    use crate::storage::mkvs::{cache::Cache, sync::NoopReadSyncer};
 
     use super::*;
 
@@ -268,5 +384,115 @@ uO/mFPzJZey4liX5fxf4fwcQRhM=",
 
         pv.verify_proof(root_hash, &proof)
             .expect_err("proof with extra data should fail to validate");
+    }
+
+    #[test]
+    fn test_proof_builder() {
+        // NOTE: Ensure this test matches TestProof in go/storage/mkvs/syncer_test.go.
+
+        // Prepare test tree.
+        let mut tree = Tree::builder()
+            .with_root(Root {
+                hash: Hash::empty_hash(),
+                ..Default::default()
+            })
+            .build(Box::new(NoopReadSyncer));
+        for i in 0..10 {
+            let k = format!("key {}", i).into_bytes();
+            let v = format!("value {}", i).into_bytes();
+            tree.insert(&k, &v).expect("insert");
+        }
+        let roothash = tree.commit(Default::default(), 1).expect("commit");
+
+        // Ensure tree matches Go side.
+        assert_eq!(
+            roothash.0.to_hex::<String>(),
+            "59e67c2fdc08b8e10dd08bb6b8efe614fcc965ecb89625f97f17f87f07104613",
+        );
+
+        // Ensure proof matches Go side.
+        let mut pb = ProofBuilder::new(roothash);
+        let root_only_proof = pb.build();
+        assert_eq!(
+            base64::encode(cbor::to_vec(root_only_proof)),
+            "omdlbnRyaWVzgVghAlnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYTbnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
+        );
+
+        // Include root node.
+        let root_ptr = tree.cache.borrow().get_pending_root();
+        let root_node = root_ptr.borrow().get_node();
+        pb.include(&*root_node.borrow());
+        // Include root.left node.
+        pb.include(
+            &*noderef_as!(root_node, Internal)
+                .left
+                .borrow()
+                .get_node()
+                .borrow(),
+        );
+        // Ensure proofs matches Go side.
+        let test_proof = pb.build();
+        assert_eq!(
+            base64::encode(cbor::to_vec(test_proof)),
+		    "omdlbnRyaWVzhUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlWCECpsJnkjOnIgc4+yfvpsqCcIYHh5eld1hNMWTT7arAfHFYIQLhNTLWRbks1RBf52ulnlOTO+7D5EZNMYFzTx8U46sCnm51bnRydXN0ZWRfcm9vdFggWeZ8L9wIuOEN0Iu2uO/mFPzJZey4liX5fxf4fwcQRhM=",
+        );
+    }
+
+    #[test]
+    fn test_tree_proofs() {
+        // NOTE: Ensure this test matches TestTreeProofs in go/storage/mkvs/syncer_test.go.
+
+        // Prepare test tree.
+        let mut tree = Tree::builder()
+            .with_root(Root {
+                hash: Hash::empty_hash(),
+                ..Default::default()
+            })
+            .build(Box::new(NoopReadSyncer));
+        let mut keys = vec![];
+        for i in 0..10 {
+            let k = format!("key {}", i).into_bytes();
+            let v = format!("value {}", i).into_bytes();
+            tree.insert(&k, &v).expect("insert");
+            keys.push(k);
+        }
+        let roothash = tree.commit(Default::default(), 1).expect("commit");
+
+        // Ensure tree matches Go side.
+        assert_eq!(
+            roothash.0.to_hex::<String>(),
+            "59e67c2fdc08b8e10dd08bb6b8efe614fcc965ecb89625f97f17f87f07104613",
+        );
+
+        // Ensure tree proofs match Go side.
+        // Keys[0].
+        let proof = tree
+            .get_proof(&keys[0])
+            .expect("get proof keys[0] works")
+            .expect("proof keys[0] exists");
+        assert_eq!(
+            base64::encode(cbor::to_vec(proof)),
+		    "omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAkYBAQEAAAJGAQEBAAACVAEABQBrZXkgMAcAAAB2YWx1ZSAwWCECV0zNDCAeH8Ryb6sX6LfUCc6AVgGKkECVzHlN/mXjJb5YIQIOdiNCGwCnl8P6B/RblhgVjoKcZRGsQRO0m8mn6KMfjFghAqbCZ5IzpyIHOPsn76bKgnCGB4eXpXdYTTFk0+2qwHxxWCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+        );
+
+        // Keys[5].
+        let proof = tree
+            .get_proof(&keys[5])
+            .expect("get proof keys[5] works")
+            .expect("proof keys[5] exists");
+        assert_eq!(
+            base64::encode(cbor::to_vec(proof)),
+		    "omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlRgEBAQCAAkYBAQEAAAJYIQLGCmUSnaMGinOcyqgElnV7MITsg7YFvkKovKkL4iISGlQBAAUAa2V5IDUHAAAAdmFsdWUgNVghArfWCo9vCnfczvIpvZVKjt4HyniNlmZgacnueN4UEYe1WCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+        );
+
+        // Keys[9].
+        let proof = tree
+            .get_proof(&keys[9])
+            .expect("get proof keys[9] works")
+            .expect("proof keys[9] exists");
+        assert_eq!(
+            base64::encode(cbor::to_vec(proof)),
+		    "omdlbnRyaWVzhUoBASQAa2V5IDACWCECJueKTLbwFMAiJitvfP3+tOruv3XChOjYSpH3U9/Xo/1GAQEDAIACWCECMMFu3slwotsl8hQsxQ/VPkrMtYMEsIrJAUH5PvSglANUAQAFAGtleSA5BwAAAHZhbHVlIDludW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+        );
     }
 }

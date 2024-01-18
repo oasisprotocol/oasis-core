@@ -85,12 +85,18 @@ func TestProof(t *testing.T) {
 	require.EqualValues(leftIntNode1.Right.Hash[:], proof.Entries[3][1:], "fourth entry hash should be correct (root.left.left)")
 	require.EqualValues(rootIntNode.Right.Hash[:], proof.Entries[4][1:], "fifth entry hash should be correct (root.right)")
 
-	// Proof should be stable.
+	// Proofs should be stable.
+	// NOTE: Ensure these match the test in runtime/src/storage/mkvs/sync/proof.rs.
 	// TODO: Provide multiple test vectors.
-	testVectorProof := base64.StdEncoding.EncodeToString(cbor.Marshal(proof))
+	// Root only proof.
+	require.EqualValues(
+		"omdlbnRyaWVzgVghAlnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYTbnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
+		base64.StdEncoding.EncodeToString(cbor.Marshal(rootOnlyProof)),
+	)
+	// Root and root.left proof.
 	require.EqualValues(
 		"omdlbnRyaWVzhUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlWCECpsJnkjOnIgc4+yfvpsqCcIYHh5eld1hNMWTT7arAfHFYIQLhNTLWRbks1RBf52ulnlOTO+7D5EZNMYFzTx8U46sCnm51bnRydXN0ZWRfcm9vdFggWeZ8L9wIuOEN0Iu2uO/mFPzJZey4liX5fxf4fwcQRhM=",
-		testVectorProof,
+		base64.StdEncoding.EncodeToString(cbor.Marshal(proof)),
 	)
 	testVectorRootHash := rootHash.String()
 	require.EqualValues("59e67c2fdc08b8e10dd08bb6b8efe614fcc965ecb89625f97f17f87f07104613", testVectorRootHash)
@@ -168,4 +174,68 @@ func copyProof(p *syncer.Proof) *syncer.Proof {
 		result.Entries[i] = append([]byte{}, e...)
 	}
 	return &result
+}
+
+func TestTreeProofs(t *testing.T) {
+	// NOTE: Ensure this matches the test in runtime/src/storage/mkvs/sync/proof.rs.
+	require := require.New(t)
+
+	// Build a simple in-memory Merkle tree.
+	ctx := context.Background()
+	keys, values := generateKeyValuePairsEx("", 10)
+	var ns common.Namespace
+
+	tree := New(nil, nil, node.RootTypeState).(*tree)
+	for i, key := range keys {
+		err := tree.Insert(ctx, key, values[i])
+		require.NoError(err, "Insert")
+	}
+	_, roothash, err := tree.Commit(ctx, ns, 0)
+	require.NoError(err, "Commit")
+
+	// Ensure SyncGet returns expected proofs.
+	// Keys[0].
+	resp, err := tree.SyncGet(ctx, &syncer.GetRequest{
+		Tree: syncer.TreeID{
+			Root:     node.Root{Namespace: ns, Version: 0, Hash: roothash, Type: node.RootTypeState},
+			Position: roothash,
+		},
+		Key:             keys[0],
+		IncludeSiblings: false,
+	})
+	require.NoError(err, "SyncGet keys[0]")
+	require.EqualValues(
+		"omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAkYBAQEAAAJGAQEBAAACVAEABQBrZXkgMAcAAAB2YWx1ZSAwWCECV0zNDCAeH8Ryb6sX6LfUCc6AVgGKkECVzHlN/mXjJb5YIQIOdiNCGwCnl8P6B/RblhgVjoKcZRGsQRO0m8mn6KMfjFghAqbCZ5IzpyIHOPsn76bKgnCGB4eXpXdYTTFk0+2qwHxxWCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		base64.StdEncoding.EncodeToString(cbor.Marshal(resp.Proof)),
+	)
+
+	// Keys[5].
+	resp, err = tree.SyncGet(ctx, &syncer.GetRequest{
+		Tree: syncer.TreeID{
+			Root:     node.Root{Namespace: ns, Version: 0, Hash: roothash, Type: node.RootTypeState},
+			Position: roothash,
+		},
+		Key:             keys[5],
+		IncludeSiblings: false,
+	})
+	require.NoError(err, "SyncGet keys[5]")
+	require.EqualValues(
+		"omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlRgEBAQCAAkYBAQEAAAJYIQLGCmUSnaMGinOcyqgElnV7MITsg7YFvkKovKkL4iISGlQBAAUAa2V5IDUHAAAAdmFsdWUgNVghArfWCo9vCnfczvIpvZVKjt4HyniNlmZgacnueN4UEYe1WCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		base64.StdEncoding.EncodeToString(cbor.Marshal(resp.Proof)),
+	)
+
+	// Key[9].
+	resp, err = tree.SyncGet(ctx, &syncer.GetRequest{
+		Tree: syncer.TreeID{
+			Root:     node.Root{Namespace: ns, Version: 0, Hash: roothash, Type: node.RootTypeState},
+			Position: roothash,
+		},
+		Key:             keys[9],
+		IncludeSiblings: false,
+	})
+	require.NoError(err, "SyncGet keys[9]")
+	require.EqualValues(
+		"omdlbnRyaWVzhUoBASQAa2V5IDACWCECJueKTLbwFMAiJitvfP3+tOruv3XChOjYSpH3U9/Xo/1GAQEDAIACWCECMMFu3slwotsl8hQsxQ/VPkrMtYMEsIrJAUH5PvSglANUAQAFAGtleSA5BwAAAHZhbHVlIDludW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		base64.StdEncoding.EncodeToString(cbor.Marshal(resp.Proof)),
+	)
 }

@@ -69,6 +69,10 @@ impl ImmutableMKVS for ConsensusState {
         self.mkvs.get(key)
     }
 
+    fn get_proof(&self, key: &[u8]) -> Result<Option<crate::storage::mkvs::sync::Proof>> {
+        self.mkvs.get_proof(key)
+    }
+
     fn prefetch_prefixes(
         &self,
         prefixes: &[crate::storage::mkvs::Prefix],
@@ -85,6 +89,10 @@ impl ImmutableMKVS for ConsensusState {
 impl ImmutableMKVS for &ConsensusState {
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.mkvs.get(key)
+    }
+
+    fn get_proof(&self, key: &[u8]) -> Result<Option<crate::storage::mkvs::sync::Proof>> {
+        self.mkvs.get_proof(key)
     }
 
     fn prefetch_prefixes(
