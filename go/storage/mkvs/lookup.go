@@ -140,9 +140,6 @@ func (t *tree) doGet(
 				}
 			}
 
-			// Omit the proof builder as the leaf node is always included with
-			// the internal node itself.
-			opts.proofBuilder = nil
 			return t.doGet(ctx, n.LeafNode, bitLength, key, opts, false)
 		}
 

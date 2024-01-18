@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
@@ -18,6 +19,8 @@ const (
 
 // Proof is a Merkle proof for a subtree.
 type Proof struct {
+	cbor.Versioned
+
 	// UntrustedRoot is the root hash this proof is for. This should only be
 	// used as a quick sanity check and proof verification MUST use an
 	// independently obtained root hash as the prover can provide any root.
@@ -77,7 +80,7 @@ func (b *ProofBuilder) Include(n node.Node) {
 	if nd, ok := n.(*node.InternalNode); ok {
 		// Add leaf, left and right.
 		for _, child := range []*node.Pointer{
-			// NOTE: LeafNode is always included with the internal node.
+			nd.LeafNode,
 			nd.Left,
 			nd.Right,
 		} {
@@ -113,7 +116,10 @@ func (b *ProofBuilder) Size() uint64 {
 
 // Build tries to build the proof.
 func (b *ProofBuilder) Build(ctx context.Context) (*Proof, error) {
-	var proof Proof
+	proof := Proof{
+		Versioned: cbor.NewVersioned(1),
+	}
+
 	switch b.HasSubtreeRoot() {
 	case true:
 		// A partial proof for the subtree is available, include that.
@@ -233,6 +239,15 @@ func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int)
 		// For internal nodes, also decode children.
 		pos := idx + 1
 		if nd, ok := n.(*node.InternalNode); ok {
+			// In version 0, the leaf node is included in the internal node.
+			if proof.V == 1 {
+				// Leaf.
+				pos, nd.LeafNode, err = pv.verifyProof(ctx, proof, pos)
+				if err != nil {
+					return -1, nil, err
+				}
+			}
+
 			// Left.
 			pos, nd.Left, err = pv.verifyProof(ctx, proof, pos)
 			if err != nil {

@@ -386,8 +386,25 @@ func (n *InternalNode) ExtractUnchecked() Node {
 }
 
 // CompactMarshalBinary encodes an internal node into binary form without
-// any hash pointers (e.g., for proofs).
+// any hash pointers and also doesn't include the leaf node (e.g., for proofs).
 func (n *InternalNode) CompactMarshalBinary() (data []byte, err error) {
+	leafNodeBinary := make([]byte, 1)
+	leafNodeBinary[0] = PrefixNilNode
+
+	data = make([]byte, 1+DepthSize+len(n.Label)+len(leafNodeBinary))
+	pos := 0
+	data[pos] = PrefixInternalNode
+	pos++
+	copy(data[pos:pos+DepthSize], n.LabelBitLength.MarshalBinary()[:])
+	pos += DepthSize
+	copy(data[pos:pos+len(n.Label)], n.Label)
+	pos += len(n.Label)
+	copy(data[pos:pos+len(leafNodeBinary)], leafNodeBinary[:])
+	return
+}
+
+// MarshalBinary encodes an internal node into binary form.
+func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 	// Internal node's LeafNode is always marshaled along the internal node.
 	var leafNodeBinary []byte
 	if n.LeafNode == nil {
@@ -408,15 +425,6 @@ func (n *InternalNode) CompactMarshalBinary() (data []byte, err error) {
 	copy(data[pos:pos+len(n.Label)], n.Label)
 	pos += len(n.Label)
 	copy(data[pos:pos+len(leafNodeBinary)], leafNodeBinary[:])
-	return
-}
-
-// MarshalBinary encodes an internal node into binary form.
-func (n *InternalNode) MarshalBinary() (data []byte, err error) {
-	data, err = n.CompactMarshalBinary()
-	if err != nil {
-		return
-	}
 
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()

@@ -3,6 +3,7 @@ package mkvs
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -49,22 +50,25 @@ func TestProof(t *testing.T) {
 	proof, err := builder.Build(ctx)
 	require.NoError(err, "Build should not fail")
 	require.EqualValues(proof.UntrustedRoot, rootHash, "UntrustedRoot should be correct")
-	require.Len(proof.Entries, 3, "proof should only contain the root and two child hashes")
+	require.Len(proof.Entries, 4, "proof should only contain the root and three child hashes")
 
 	// Include root.left node.
 	rootIntNode := rootNode.(*node.InternalNode)
+	fmt.Println("Root int node leaf:", rootIntNode.LeafNode)
 	leftNode1 := rootIntNode.Left.Node
 	builder.Include(leftNode1)
 
 	proof, err = builder.Build(ctx)
 	require.NoError(err, "Build should not fail")
-	// Pre-order: root(full), root.left(full), root.left.left(hash), root.left.right(hash), root.right(hash)
-	require.Len(proof.Entries, 5, "proof should only contain the correct amount of nodes")
+	// Pre-order: root(full), root.leaf(nil), root.left(full), root.left.leaf(full), root.left.left(hash), root.left.right(hash), root.right(hash)
+	require.Len(proof.Entries, 7, "proof should only contain the correct amount of nodes")
 	require.EqualValues(proof.Entries[0][0], 0x01, "first entry should be a full node")
-	require.EqualValues(proof.Entries[1][0], 0x01, "second entry should be a full node")
-	require.EqualValues(proof.Entries[2][0], 0x02, "third entry should be a hash")
-	require.EqualValues(proof.Entries[3][0], 0x02, "fourth entry should be a hash")
+	require.Empty(proof.Entries[1], "second entry should be a nil node")
+	require.EqualValues(proof.Entries[2][0], 0x01, "third entry should be a full node")
+	require.Empty(proof.Entries[3], "fourth entry should be a nil node")
 	require.EqualValues(proof.Entries[4][0], 0x02, "fifth entry should be a hash")
+	require.EqualValues(proof.Entries[5][0], 0x02, "sixth entry should be a hash")
+	require.EqualValues(proof.Entries[6][0], 0x02, "seventh entry should be a hash")
 
 	decNode, err := node.UnmarshalBinary(proof.Entries[0][1:])
 	require.NoError(err, "first entry should unmarshal as a node")
@@ -72,30 +76,37 @@ func TestProof(t *testing.T) {
 	require.True(ok, "first entry must be an internal node (root)")
 	require.Nil(decIntNode.Left, "first entry must use compact encoding")
 	require.Nil(decIntNode.Right, "first entry must use compact encoding")
+	require.Nil(decIntNode.LeafNode, "first entry must use compact encoding")
 
-	decNode, err = node.UnmarshalBinary(proof.Entries[1][1:])
-	require.NoError(err, "second entry should unmarshal as a node")
+	// Second entry is a nil node. (root.leaf).
+
+	decNode, err = node.UnmarshalBinary(proof.Entries[2][1:])
+	require.NoError(err, "third entry should unmarshal as a node")
 	decIntNode, ok = decNode.(*node.InternalNode)
-	require.True(ok, "second entry must be an internal node (root.left)")
-	require.Nil(decIntNode.Left, "second entry must use compact encoding")
-	require.Nil(decIntNode.Right, "second entry must use compact encoding")
+	require.True(ok, "third entry must be an internal node (root.left)")
+	require.Nil(decIntNode.Left, "third entry must use compact encoding")
+	require.Nil(decIntNode.Right, "third entry must use compact encoding")
+	require.Nil(decIntNode.LeafNode, "third entry must use compact encoding")
 
 	leftIntNode1 := leftNode1.(*node.InternalNode)
-	require.EqualValues(leftIntNode1.Left.Hash[:], proof.Entries[2][1:], "third entry hash should be correct (root.left.left)")
-	require.EqualValues(leftIntNode1.Right.Hash[:], proof.Entries[3][1:], "fourth entry hash should be correct (root.left.left)")
-	require.EqualValues(rootIntNode.Right.Hash[:], proof.Entries[4][1:], "fifth entry hash should be correct (root.right)")
+	require.Nil(leftIntNode1.LeafNode, "fourth entry should be correct (root.left.leaf=nil)")
+	require.EqualValues(leftIntNode1.Left.Hash[:], proof.Entries[4][1:], "fifth entry hash should be correct (root.left.left)")
+	require.EqualValues(leftIntNode1.Right.Hash[:], proof.Entries[5][1:], "sixth entry hash should be correct (root.left.left)")
+	require.EqualValues(rootIntNode.Right.Hash[:], proof.Entries[6][1:], "seventh entry hash should be correct (root.right)")
 
 	// Proofs should be stable.
 	// NOTE: Ensure these match the test in runtime/src/storage/mkvs/sync/proof.rs.
 	// TODO: Provide multiple test vectors.
 	// Root only proof.
 	require.EqualValues(
-		"omdlbnRyaWVzgVghAlnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYTbnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
+		//"omdlbnRyaWVzgVghAlnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYTbnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
+		"o2F2AWdlbnRyaWVzgVghAlnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYTbnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
 		base64.StdEncoding.EncodeToString(cbor.Marshal(rootOnlyProof)),
 	)
 	// Root and root.left proof.
 	require.EqualValues(
-		"omdlbnRyaWVzhUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlWCECpsJnkjOnIgc4+yfvpsqCcIYHh5eld1hNMWTT7arAfHFYIQLhNTLWRbks1RBf52ulnlOTO+7D5EZNMYFzTx8U46sCnm51bnRydXN0ZWRfcm9vdFggWeZ8L9wIuOEN0Iu2uO/mFPzJZey4liX5fxf4fwcQRhM=",
+		// "+yfvpsqCcIYHh5eld1hNMWTT7arAfHFYIQLhNTLWRbks1RBf52ulnlOTO+7D5EZNMYFzTx8U46sCnm51bnRydXN0ZWRfcm9vdFggWeZ8L9wIuOEN0Iu2uO/mFPzJZey4liX5fxf4fwcQRhM=",
+		"o2F2AWdlbnRyaWVzh0oBASQAa2V5IDAC9kYBAQEAAAL2WCECwWW1hGEPh0DAc506YSKBjWvTakkfoieGKJsqWH2d5iVYIQKmwmeSM6ciBzj7J++myoJwhgeHl6V3WE0xZNPtqsB8cVghAuE1MtZFuSzVEF/na6WeU5M77sPkRk0xgXNPHxTjqwKebnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
 		base64.StdEncoding.EncodeToString(cbor.Marshal(proof)),
 	)
 	testVectorRootHash := rootHash.String()
@@ -138,6 +149,12 @@ func TestProof(t *testing.T) {
 	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
 	require.Error(err, "VerifyProof should fail with invalid proof")
 
+	// Different leaf hash element.
+	corrupted = copyProof(proof)
+	corrupted.Entries[1] = bogusHash[:]
+	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
+	require.Error(err, "VerifyProof should fail with invalid proof")
+
 	// Corrupted full node.
 	corrupted = copyProof(proof)
 	corrupted.Entries[0] = corrupted.Entries[0][:3]
@@ -152,7 +169,7 @@ func TestProof(t *testing.T) {
 
 	// Corrupted proof element type.
 	corrupted = copyProof(proof)
-	corrupted.Entries[3][0] = 0xaa
+	corrupted.Entries[4][0] = 0xaa
 	_, err = pv.VerifyProof(ctx, rootHash, corrupted)
 	require.Error(err, "VerifyProof should fail with invalid proof")
 
@@ -205,9 +222,14 @@ func TestTreeProofs(t *testing.T) {
 	})
 	require.NoError(err, "SyncGet keys[0]")
 	require.EqualValues(
-		"omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAkYBAQEAAAJGAQEBAAACVAEABQBrZXkgMAcAAAB2YWx1ZSAwWCECV0zNDCAeH8Ryb6sX6LfUCc6AVgGKkECVzHlN/mXjJb5YIQIOdiNCGwCnl8P6B/RblhgVjoKcZRGsQRO0m8mn6KMfjFghAqbCZ5IzpyIHOPsn76bKgnCGB4eXpXdYTTFk0+2qwHxxWCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		// "omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAkYBAQEAAAJGAQEBAAACVAEABQBrZXkgMAcAAAB2YWx1ZSAwWCECV0zNDCAeH8Ryb6sX6LfUCc6AVgGKkECVzHlN/mXjJb5YIQIOdiNCGwCnl8P6B/RblhgVjoKcZRGsQRO0m8mn6KMfjFghAqbCZ5IzpyIHOPsn76bKgnCGB4eXpXdYTTFk0+2qwHxxWCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		"o2F2AWdlbnRyaWVzjUoBASQAa2V5IDAC9kYBAQEAAAL2RgEBAQAAAvZGAQEBAAAC9lQBAAUAa2V5IDAHAAAAdmFsdWUgMFghAldMzQwgHh/Ecm+rF+i31AnOgFYBipBAlcx5Tf5l4yW+WCECDnYjQhsAp5fD+gf0W5YYFY6CnGURrEETtJvJp+ijH4xYIQKmwmeSM6ciBzj7J++myoJwhgeHl6V3WE0xZNPtqsB8cVghAuE1MtZFuSzVEF/na6WeU5M77sPkRk0xgXNPHxTjqwKebnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
 		base64.StdEncoding.EncodeToString(cbor.Marshal(resp.Proof)),
 	)
+	// Proof should verify.
+	var pv syncer.ProofVerifier
+	_, err = pv.VerifyProof(ctx, roothash, &resp.Proof)
+	require.NoError(err, "VerifyProof should not fail with a valid proof")
 
 	// Keys[5].
 	resp, err = tree.SyncGet(ctx, &syncer.GetRequest{
@@ -220,9 +242,13 @@ func TestTreeProofs(t *testing.T) {
 	})
 	require.NoError(err, "SyncGet keys[5]")
 	require.EqualValues(
-		"omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlRgEBAQCAAkYBAQEAAAJYIQLGCmUSnaMGinOcyqgElnV7MITsg7YFvkKovKkL4iISGlQBAAUAa2V5IDUHAAAAdmFsdWUgNVghArfWCo9vCnfczvIpvZVKjt4HyniNlmZgacnueN4UEYe1WCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		// "omdlbnRyaWVziUoBASQAa2V5IDACRgEBAQAAAlghAsFltYRhD4dAwHOdOmEigY1r02pJH6InhiibKlh9neYlRgEBAQCAAkYBAQEAAAJYIQLGCmUSnaMGinOcyqgElnV7MITsg7YFvkKovKkL4iISGlQBAAUAa2V5IDUHAAAAdmFsdWUgNVghArfWCo9vCnfczvIpvZVKjt4HyniNlmZgacnueN4UEYe1WCEC4TUy1kW5LNUQX+drpZ5Tkzvuw+RGTTGBc08fFOOrAp5udW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		"o2F2AWdlbnRyaWVzjUoBASQAa2V5IDAC9kYBAQEAAAL2WCECwWW1hGEPh0DAc506YSKBjWvTakkfoieGKJsqWH2d5iVGAQEBAIAC9kYBAQEAAAL2WCECxgplEp2jBopznMqoBJZ1ezCE7IO2Bb5CqLypC+IiEhpUAQAFAGtleSA1BwAAAHZhbHVlIDVYIQK31gqPbwp33M7yKb2VSo7eB8p4jZZmYGnJ7njeFBGHtVghAuE1MtZFuSzVEF/na6WeU5M77sPkRk0xgXNPHxTjqwKebnVudHJ1c3RlZF9yb290WCBZ5nwv3Ai44Q3Qi7a47+YU/Mll7LiWJfl/F/h/BxBGEw==",
 		base64.StdEncoding.EncodeToString(cbor.Marshal(resp.Proof)),
 	)
+	// Proof should verify.
+	_, err = pv.VerifyProof(ctx, roothash, &resp.Proof)
+	require.NoError(err, "VerifyProof should not fail with a valid proof")
 
 	// Key[9].
 	resp, err = tree.SyncGet(ctx, &syncer.GetRequest{
@@ -235,7 +261,11 @@ func TestTreeProofs(t *testing.T) {
 	})
 	require.NoError(err, "SyncGet keys[9]")
 	require.EqualValues(
-		"omdlbnRyaWVzhUoBASQAa2V5IDACWCECJueKTLbwFMAiJitvfP3+tOruv3XChOjYSpH3U9/Xo/1GAQEDAIACWCECMMFu3slwotsl8hQsxQ/VPkrMtYMEsIrJAUH5PvSglANUAQAFAGtleSA5BwAAAHZhbHVlIDludW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		// "omdlbnRyaWVzhUoBASQAa2V5IDACWCECJueKTLbwFMAiJitvfP3+tOruv3XChOjYSpH3U9/Xo/1GAQEDAIACWCECMMFu3slwotsl8hQsxQ/VPkrMtYMEsIrJAUH5PvSglANUAQAFAGtleSA5BwAAAHZhbHVlIDludW50cnVzdGVkX3Jvb3RYIFnmfC/cCLjhDdCLtrjv5hT8yWXsuJYl+X8X+H8HEEYT",
+		"o2F2AWdlbnRyaWVzh0oBASQAa2V5IDAC9lghAibniky28BTAIiYrb3z9/rTq7r91woTo2EqR91Pf16P9RgEBAwCAAvZYIQIwwW7eyXCi2yXyFCzFD9U+Ssy1gwSwiskBQfk+9KCUA1QBAAUAa2V5IDkHAAAAdmFsdWUgOW51bnRydXN0ZWRfcm9vdFggWeZ8L9wIuOEN0Iu2uO/mFPzJZey4liX5fxf4fwcQRhM=",
 		base64.StdEncoding.EncodeToString(cbor.Marshal(resp.Proof)),
 	)
+	// Proof should verify.
+	_, err = pv.VerifyProof(ctx, roothash, &resp.Proof)
+	require.NoError(err, "VerifyProof should not fail with a valid proof")
 }
