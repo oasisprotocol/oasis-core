@@ -161,7 +161,7 @@ func DefaultConfig() Config {
 		TxPool: tpConfig.Config{
 			MaxPoolSize:          50_000,
 			MaxLastSeenCacheSize: 100_000,
-			MaxCheckTxBatchSize:  1000,
+			MaxCheckTxBatchSize:  128,
 			RecheckInterval:      5,
 			RepublishInterval:    60 * time.Second,
 		},
