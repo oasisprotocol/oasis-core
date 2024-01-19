@@ -265,9 +265,13 @@ type Node interface {
 	// IsClean returns true if the node is non-dirty.
 	IsClean() bool
 
-	// CompactMarshalBinary encodes a node into binary form without any hash
-	// pointers (e.g., for proofs).
-	CompactMarshalBinary() ([]byte, error)
+	// CompactMarshalBinaryV0 is a backwards compatibility compact marshalling for
+	// version 0 proofs.
+	CompactMarshalBinaryV0() ([]byte, error)
+
+	// CompactMarshalBinaryV1 encodes a node into binary form without any hash
+	// pointers, for version 1 proofs.
+	CompactMarshalBinaryV1() ([]byte, error)
 
 	// GetHash returns the node's cached hash.
 	GetHash() hash.Hash
@@ -346,10 +350,6 @@ func (n *InternalNode) GetHash() hash.Hash {
 }
 
 // Extract makes a copy of the node containing only hash references.
-//
-// For LeafNode, it makes a deep copy so that the parent internal node always
-// ships it since we cannot address the LeafNode uniquely with NodeID (both the
-// internal node and LeafNode have the same path and bit depth).
 func (n *InternalNode) Extract() Node {
 	if !n.Clean {
 		panic("mkvs: extract called on dirty node")
@@ -359,47 +359,58 @@ func (n *InternalNode) Extract() Node {
 		Hash:           n.Hash,
 		Label:          n.Label,
 		LabelBitLength: n.LabelBitLength,
-		// LeafNode is always contained in internal node.
-		LeafNode: n.LeafNode.ExtractWithNode(),
-		Left:     n.Left.Extract(),
-		Right:    n.Right.Extract(),
+		LeafNode:       n.LeafNode.Extract(),
+		Left:           n.Left.Extract(),
+		Right:          n.Right.Extract(),
 	}
 }
 
 // ExtractUnchecked makes a copy of the node containing only hash references without
 // checking the dirty flag.
-//
-// For LeafNode, it makes a deep copy so that the parent internal node always
-// ships it since we cannot address the LeafNode uniquely with NodeID (both the
-// internal node and LeafNode have the same path and bit depth).
 func (n *InternalNode) ExtractUnchecked() Node {
 	return &InternalNode{
 		Clean:          true,
 		Hash:           n.Hash,
 		Label:          n.Label,
 		LabelBitLength: n.LabelBitLength,
-		// LeafNode is always contained in internal node.
-		LeafNode: n.LeafNode.ExtractWithNodeUnchecked(),
-		Left:     n.Left.ExtractUnchecked(),
-		Right:    n.Right.ExtractUnchecked(),
+		LeafNode:       n.LeafNode.ExtractUnchecked(),
+		Left:           n.Left.ExtractUnchecked(),
+		Right:          n.Right.ExtractUnchecked(),
 	}
 }
 
-// CompactMarshalBinary encodes an internal node into binary form without
-// any hash pointers and also doesn't include the leaf node (e.g., for proofs).
-func (n *InternalNode) CompactMarshalBinary() (data []byte, err error) {
-	leafNodeBinary := make([]byte, 1)
-	leafNodeBinary[0] = PrefixNilNode
+// CompactMarshalBinaryV0 is a backwards compatibility compact marshalling for
+// version 0 proofs.
+func (n *InternalNode) CompactMarshalBinaryV0() (data []byte, err error) {
+	// Internal node's LeafNode is always marshaled along the internal node.
+	var leafNodeBinary []byte
+	if n.LeafNode == nil {
+		leafNodeBinary = make([]byte, 1)
+		leafNodeBinary[0] = PrefixNilNode
+	} else {
+		if leafNodeBinary, err = n.LeafNode.Node.MarshalBinary(); err != nil {
+			return nil, fmt.Errorf("mkvs: failed to marshal leaf node: %w", err)
+		}
+	}
 
-	data = make([]byte, 1+DepthSize+len(n.Label)+len(leafNodeBinary))
-	pos := 0
-	data[pos] = PrefixInternalNode
-	pos++
-	copy(data[pos:pos+DepthSize], n.LabelBitLength.MarshalBinary()[:])
-	pos += DepthSize
-	copy(data[pos:pos+len(n.Label)], n.Label)
-	pos += len(n.Label)
-	copy(data[pos:pos+len(leafNodeBinary)], leafNodeBinary[:])
+	data = make([]byte, 0, 1+DepthSize+len(n.Label)+len(leafNodeBinary))
+	data = append(data, PrefixInternalNode)
+	data = append(data, n.LabelBitLength.MarshalBinary()...)
+	data = append(data, n.Label...)
+	data = append(data, leafNodeBinary...)
+
+	return
+}
+
+// CompactMarshalBinaryV1 encodes an internal node into binary form without
+// any hash pointers and also doesn't include the leaf node (e.g., for proofs).
+func (n *InternalNode) CompactMarshalBinaryV1() (data []byte, err error) {
+	data = make([]byte, 0, 1+DepthSize+len(n.Label)+1)
+	data = append(data, PrefixInternalNode)
+	data = append(data, n.LabelBitLength.MarshalBinary()...)
+	data = append(data, n.Label...)
+	data = append(data, PrefixNilNode)
+
 	return
 }
 
@@ -416,21 +427,17 @@ func (n *InternalNode) MarshalBinary() (data []byte, err error) {
 		}
 	}
 
-	data = make([]byte, 1+DepthSize+len(n.Label)+len(leafNodeBinary))
-	pos := 0
-	data[pos] = PrefixInternalNode
-	pos++
-	copy(data[pos:pos+DepthSize], n.LabelBitLength.MarshalBinary()[:])
-	pos += DepthSize
-	copy(data[pos:pos+len(n.Label)], n.Label)
-	pos += len(n.Label)
-	copy(data[pos:pos+len(leafNodeBinary)], leafNodeBinary[:])
-
 	leftHash := n.Left.GetHash()
 	rightHash := n.Right.GetHash()
 
+	data = make([]byte, 0, 1+DepthSize+len(n.Label)+len(leafNodeBinary)+2*hash.Size)
+	data = append(data, PrefixInternalNode)
+	data = append(data, n.LabelBitLength.MarshalBinary()...)
+	data = append(data, n.Label...)
+	data = append(data, leafNodeBinary...)
 	data = append(data, leftHash[:]...)
 	data = append(data, rightHash[:]...)
+
 	return
 }
 
@@ -592,28 +599,31 @@ func (n *LeafNode) ExtractUnchecked() Node {
 	}
 }
 
-// CompactMarshalBinary encodes a leaf node into binary form.
-func (n *LeafNode) CompactMarshalBinary() (data []byte, err error) {
+// CompactMarshalBinaryV0 is a backwards compatibility compact marshaling for
+// version 0 proofs.
+func (n *LeafNode) CompactMarshalBinaryV0() ([]byte, error) {
+	return n.CompactMarshalBinaryV1() // Leaf node format is the same between versions.
+}
+
+// CompactMarshalBinaryV1 encodes a leaf node into binary form.
+func (n *LeafNode) CompactMarshalBinaryV1() (data []byte, err error) {
 	keyData, err := n.Key.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	data = make([]byte, 1+len(keyData)+ValueLengthSize+len(n.Value))
-	pos := 0
-	data[pos] = PrefixLeafNode
-	pos++
-	copy(data[pos:pos+len(keyData)], keyData)
-	pos += len(keyData)
-	binary.LittleEndian.PutUint32(data[pos:pos+ValueLengthSize], uint32(len(n.Value)))
-	pos += ValueLengthSize
-	copy(data[pos:], n.Value)
+	data = make([]byte, 0, 1+len(keyData)+ValueLengthSize+len(n.Value))
+	data = append(data, PrefixLeafNode)
+	data = append(data, keyData...)
+	data = binary.LittleEndian.AppendUint32(data, uint32(len(n.Value)))
+	data = append(data, n.Value...)
+
 	return
 }
 
 // MarshalBinary encodes a leaf node into binary form.
 func (n *LeafNode) MarshalBinary() ([]byte, error) {
-	return n.CompactMarshalBinary()
+	return n.CompactMarshalBinaryV0() // Leaf node format is the same for compact and non-compact.
 }
 
 // UnmarshalBinary decodes a binary marshaled leaf node.

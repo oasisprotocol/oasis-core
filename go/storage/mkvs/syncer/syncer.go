@@ -18,6 +18,8 @@ var (
 	ErrInvalidRoot = errors.New("mkvs: invalid root")
 	// ErrUnsupported is the error returned when a ReadSyncer method is not supported.
 	ErrUnsupported = errors.New("mkvs: method not supported")
+	// ErrUnsupportedProofVersion is the error returned when a ReadSyncer requests an unsuported proof version.
+	ErrUnsupportedProofVersion = errors.New("mkvs: unsupported proof version")
 )
 
 // TreeID identifies a specific tree and a position within that tree.
@@ -34,6 +36,10 @@ type GetRequest struct {
 	Tree            TreeID `json:"tree"`
 	Key             []byte `json:"key"`
 	IncludeSiblings bool   `json:"include_siblings,omitempty"`
+
+	// ProofVersion specifies the proof version to use. If not specified,
+	// the default (0) version is used for backwards compatibility.
+	ProofVersion uint16 `json:"proof_version,omitempty"`
 }
 
 // GetPrefixesRequest is a request for the SyncGetPrefixes operation.
@@ -41,6 +47,10 @@ type GetPrefixesRequest struct {
 	Tree     TreeID   `json:"tree"`
 	Prefixes [][]byte `json:"prefixes"`
 	Limit    uint16   `json:"limit"`
+
+	// ProofVersion specifies the proof version to use. If not specified,
+	// the default (0) version is used for backwards compatibility.
+	ProofVersion uint16 `json:"proof_version,omitempty"`
 }
 
 // IterateRequest is a request for the SyncIterate operation.
@@ -48,6 +58,10 @@ type IterateRequest struct {
 	Tree     TreeID `json:"tree"`
 	Key      []byte `json:"key"`
 	Prefetch uint16 `json:"prefetch"`
+
+	// ProofVersion specifies the proof version to use. If not specified,
+	// the default (0) version is used for backwards compatibility.
+	ProofVersion uint16 `json:"proof_version,omitempty"`
 }
 
 // ProofResponse is a response for requests that produce proofs.

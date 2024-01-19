@@ -8,6 +8,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
 
+// Use version 0 proofs in sync requests for now.
+const syncProofsVersion uint16 = 0
+
 // Implements Tree.
 func (t *tree) Get(ctx context.Context, key []byte) ([]byte, error) {
 	t.cache.Lock()
@@ -48,12 +51,15 @@ func (t *tree) SyncGet(ctx context.Context, request *syncer.GetRequest) (*syncer
 	// Remember where the path from root to target node ends (will end).
 	t.cache.markPosition()
 
-	pb := syncer.NewProofBuilder(request.Tree.Root.Hash, request.Tree.Position)
+	pb, err := syncer.NewProofBuilderForVersion(request.Tree.Root.Hash, request.Tree.Position, request.ProofVersion)
+	if err != nil {
+		return nil, err
+	}
 	opts := doGetOptions{
 		proofBuilder:    pb,
 		includeSiblings: request.IncludeSiblings,
 	}
-	if _, err := t.doGet(ctx, t.cache.pendingRoot, 0, request.Key, opts, false); err != nil {
+	if _, err = t.doGet(ctx, t.cache.pendingRoot, 0, request.Key, opts, false); err != nil {
 		return nil, err
 	}
 	proof, err := pb.Build(ctx)
@@ -75,6 +81,7 @@ func (t *tree) newFetcherSyncGet(key node.Key, includeSiblings bool) readSyncFet
 			},
 			Key:             key,
 			IncludeSiblings: includeSiblings,
+			ProofVersion:    syncProofsVersion,
 		})
 		if err != nil {
 			return nil, err
@@ -127,7 +134,6 @@ func (t *tree) doGet(
 
 		// Does lookup key end here? Look into LeafNode.
 		if key.BitLength() == bitLength {
-			// Include siblings before disabling the proof builder for the leaf node.
 			if opts.includeSiblings {
 				// Also fetch the left and right siblings.
 				_, err = t.doGet(ctx, n.Left, bitLength, key, opts, true)
@@ -140,6 +146,12 @@ func (t *tree) doGet(
 				}
 			}
 
+			if pb := opts.proofBuilder; pb != nil && pb.Version() == 0 {
+				// Omit the proof builder as the leaf node is always included with
+				// the internal node itself in V0 proofs.
+				opts.proofBuilder = nil
+			}
+
 			return t.doGet(ctx, n.LeafNode, bitLength, key, opts, false)
 		}
 
@@ -149,36 +161,36 @@ func (t *tree) doGet(
 		}
 
 		// Continue recursively based on a bit value.
-		var value []byte
-		if key.GetBit(bitLength) {
-			value, err = t.doGet(ctx, n.Right, bitLength, key, opts, false)
+		fn := func(visit, other, leaf *node.Pointer) ([]byte, error) {
+			value, err := t.doGet(ctx, visit, bitLength, key, opts, false)
 			if err != nil {
 				return nil, err
 			}
 
 			if opts.includeSiblings {
-				// Also fetch the left sibling.
-				_, err = t.doGet(ctx, n.Left, bitLength, key, opts, true)
+				if pb := opts.proofBuilder; pb != nil && pb.Version() > 0 {
+					// In V0, the leaf node is included in internal node.
+					// Also fetch the leaf.
+					_, err = t.doGet(ctx, leaf, bitLength, key, opts, true)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				// Also fetch the other sibling.
+				_, err = t.doGet(ctx, other, bitLength, key, opts, true)
 				if err != nil {
 					return nil, err
 				}
 			}
 			return value, nil
 		}
-
-		value, err = t.doGet(ctx, n.Left, bitLength, key, opts, false)
-		if err != nil {
-			return nil, err
+		switch key.GetBit(bitLength) {
+		case true:
+			return fn(n.Right, n.Left, n.LeafNode)
+		default:
+			return fn(n.Left, n.Right, n.LeafNode)
 		}
-
-		if opts.includeSiblings {
-			// Also fetch the right sibling.
-			_, err = t.doGet(ctx, n.Right, bitLength, key, opts, true)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return value, nil
 	case *node.LeafNode:
 		// Reached a leaf node, check if key matches.
 		if n.Key.Equal(key) {
