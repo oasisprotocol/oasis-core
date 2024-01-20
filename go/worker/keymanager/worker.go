@@ -32,9 +32,7 @@ import (
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -80,7 +78,7 @@ type Worker struct { // nolint: maligned
 	runtimeID    common.Namespace
 	runtimeLabel string
 
-	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
+	kmRuntimeWatcher *kmRuntimeWatcher
 
 	accessList   *AccessList
 	privatePeers map[core.PeerID]struct{}
@@ -519,68 +517,6 @@ func (w *Worker) setLastLoadedEphemeralSecretEpoch(epoch beacon.EpochTime) {
 
 	w.ephemeralSecretStats.NumLoaded++
 	w.ephemeralSecretStats.LastLoaded = epoch
-}
-
-func (w *Worker) addClientRuntimeWatcher(n common.Namespace, crw *clientRuntimeWatcher) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.clientRuntimes[n] = crw
-}
-
-func (w *Worker) getClientRuntimeWatcher(n common.Namespace) *clientRuntimeWatcher {
-	w.RLock()
-	defer w.RUnlock()
-
-	return w.clientRuntimes[n]
-}
-
-func (w *Worker) getClientRuntimeWatchers() []*clientRuntimeWatcher {
-	w.RLock()
-	defer w.RUnlock()
-
-	crws := make([]*clientRuntimeWatcher, 0, len(w.clientRuntimes))
-	for _, crw := range w.clientRuntimes {
-		crws = append(crws, crw)
-	}
-
-	return crws
-}
-
-func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime) error {
-	if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&w.runtimeID) {
-		return nil
-	}
-	if w.getClientRuntimeWatcher(rt.ID) != nil {
-		return nil
-	}
-
-	w.logger.Info("seen new runtime using us as a key manager",
-		"runtime_id", rt.ID,
-	)
-
-	nodes, err := nodes.NewVersionedNodeDescriptorWatcher(w.ctx, w.commonWorker.Consensus)
-	if err != nil {
-		w.logger.Error("unable to create new client runtime node watcher",
-			"err", err,
-			"runtime_id", rt.ID,
-		)
-		return err
-	}
-	crw := &clientRuntimeWatcher{
-		w:         w,
-		runtimeID: rt.ID,
-		nodes:     nodes,
-	}
-	crw.epochTransition()
-	go crw.worker()
-
-	w.addClientRuntimeWatcher(rt.ID, crw)
-
-	// Update metrics.
-	computeRuntimeCount.WithLabelValues(w.runtimeLabel).Inc()
-
-	return nil
 }
 
 func (w *Worker) generateMasterSecret(runtimeID common.Namespace, height int64, generation uint64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
@@ -1050,21 +986,7 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 	}
 }
 
-func (w *Worker) handleRuntimeRegistrationEvent(rt *registry.Runtime) {
-	if err := w.startClientRuntimeWatcher(rt); err != nil {
-		w.logger.Error("failed to start runtime watcher",
-			"err", err,
-		)
-		return
-	}
-}
-
 func (w *Worker) handleNewEpoch(epoch beacon.EpochTime) {
-	// Update per runtime access lists.
-	for _, crw := range w.getClientRuntimeWatchers() {
-		crw.epochTransition()
-	}
-
 	// Choose a random height for generating master/ephemeral secrets to prevent key managers from
 	// all publishing transactions simultaneously, which would result in unnecessary gas waste.
 	// Additionally, avoid selecting blocks at the end of the epoch, as secret generation,
@@ -1386,6 +1308,10 @@ func (w *Worker) worker() {
 	knw := newKmNodeWatcher(w)
 	go knw.watchNodes()
 
+	// Watch runtime registrations in order to know which runtimes are using
+	// us as a key manager.
+	go w.kmRuntimeWatcher.watch(w.ctx)
+
 	// Subscribe to key manager status updates.
 	statusCh, statusSub := w.backend.WatchStatuses()
 	defer statusSub.Close()
@@ -1428,17 +1354,6 @@ func (w *Worker) worker() {
 	}
 	defer blkSub.Close()
 
-	// Subscribe to runtime registrations in order to know which runtimes
-	// are using us as a key manager.
-	rtCh, rtSub, err := w.commonWorker.Consensus.Registry().WatchRuntimes(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to watch runtimes",
-			"err", err,
-		)
-		return
-	}
-	defer rtSub.Close()
-
 	for {
 		select {
 		case ev := <-hrtEventCh:
@@ -1449,8 +1364,6 @@ func (w *Worker) worker() {
 			w.handleInitEnclave()
 		case rsp := <-w.initEnclaveDoneCh:
 			w.handleInitEnclaveDone(rsp)
-		case rt := <-rtCh:
-			w.handleRuntimeRegistrationEvent(rt)
 		case epoch = <-epoCh:
 			w.handleNewEpoch(epoch)
 		case blk := <-blkCh:
@@ -1468,68 +1381,4 @@ func (w *Worker) worker() {
 			return
 		}
 	}
-}
-
-type clientRuntimeWatcher struct {
-	w         *Worker
-	runtimeID common.Namespace
-	nodes     nodes.VersionedNodeDescriptorWatcher
-}
-
-func (crw *clientRuntimeWatcher) worker() {
-	ch, sub, err := crw.nodes.WatchNodeUpdates()
-	if err != nil {
-		crw.w.logger.Error("failed to subscribe to client runtime node updates",
-			"err", err,
-			"runtime_id", crw.runtimeID,
-		)
-		return
-	}
-	defer sub.Close()
-
-	for {
-		select {
-		case <-crw.w.ctx.Done():
-			return
-		case nu := <-ch:
-			if nu.Reset {
-				// Ignore reset events to avoid clearing the access list before setting a new one.
-				// This is safe because a reset event is always followed by a freeze event after the
-				// nodes have been set (even if the new set is empty).
-				continue
-			}
-
-			crw.w.accessList.UpdateNodes(crw.w.runtimeID, crw.nodes.GetNodes())
-		}
-	}
-}
-
-func (crw *clientRuntimeWatcher) epochTransition() {
-	crw.nodes.Reset()
-
-	cms, err := crw.w.commonWorker.Consensus.Scheduler().GetCommittees(crw.w.ctx, &scheduler.GetCommitteesRequest{
-		Height:    consensus.HeightLatest,
-		RuntimeID: crw.runtimeID,
-	})
-	if err != nil {
-		crw.w.logger.Error("failed to fetch client runtime committee",
-			"err", err,
-			"runtime_id", crw.runtimeID,
-		)
-		return
-	}
-
-	for _, cm := range cms {
-		if cm.Kind != scheduler.KindComputeExecutor {
-			continue
-		}
-
-		for _, member := range cm.Members {
-			_, _ = crw.nodes.WatchNode(crw.w.ctx, member.PublicKey)
-		}
-	}
-
-	crw.nodes.Freeze(0)
-
-	crw.w.accessList.UpdateNodes(crw.runtimeID, crw.nodes.GetNodes())
 }

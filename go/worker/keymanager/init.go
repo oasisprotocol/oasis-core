@@ -9,7 +9,6 @@ import (
 
 	"github.com/libp2p/go-libp2p/core"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -46,7 +45,6 @@ func New(
 		stopCh:            make(chan struct{}),
 		quitCh:            make(chan struct{}),
 		initCh:            make(chan struct{}),
-		clientRuntimes:    make(map[common.Namespace]*clientRuntimeWatcher),
 		accessList:        NewAccessList(),
 		privatePeers:      make(map[core.PeerID]struct{}),
 		commonWorker:      commonWorker,
@@ -106,6 +104,9 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}
+
+	// Prepare watchers.
+	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
 
 	// Register keymanager service.
 	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, w.runtimeID, w))
