@@ -106,6 +106,7 @@ func New(
 	}
 
 	// Prepare watchers.
+	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
 	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
 
 	// Register keymanager service.

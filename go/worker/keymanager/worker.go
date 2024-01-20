@@ -78,6 +78,7 @@ type Worker struct { // nolint: maligned
 	runtimeID    common.Namespace
 	runtimeLabel string
 
+	kmNodeWatcher    *kmNodeWatcher
 	kmRuntimeWatcher *kmRuntimeWatcher
 
 	accessList   *AccessList
@@ -1305,8 +1306,7 @@ func (w *Worker) worker() {
 
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
-	knw := newKmNodeWatcher(w)
-	go knw.watchNodes()
+	go w.kmNodeWatcher.watch(w.ctx)
 
 	// Watch runtime registrations in order to know which runtimes are using
 	// us as a key manager.

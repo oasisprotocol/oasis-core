@@ -15,38 +15,51 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
+// kmNodeWatcher is a key manager node watcher responsible for maintaining
+// the access list and the list of important peers for the specified
+// key manager runtime, ensuring it remains up-to-date.
 type kmNodeWatcher struct {
-	w         *Worker
+	runtimeID common.Namespace
 	consensus consensus.Backend
+
+	accessList *AccessList
+	peerTagger p2p.PeerTagger
+
+	logger *logging.Logger
 }
 
-func newKmNodeWatcher(w *Worker) *kmNodeWatcher {
+func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Backend, accessList *AccessList, peerTagger p2p.PeerTagger) *kmNodeWatcher {
+	logger := logging.GetLogger("worker/keymanager/watcher/km")
+
 	return &kmNodeWatcher{
-		w:         w,
-		consensus: w.commonWorker.Consensus,
+		runtimeID:  runtimeID,
+		consensus:  consensus,
+		accessList: accessList,
+		peerTagger: peerTagger,
+		logger:     logger,
 	}
 }
 
-func (knw *kmNodeWatcher) watchNodes() {
-	nodesCh, nodesSub, err := knw.consensus.Registry().WatchNodeList(knw.w.ctx)
+func (w *kmNodeWatcher) watch(ctx context.Context) {
+	nodesCh, nodesSub, err := w.consensus.Registry().WatchNodeList(ctx)
 	if err != nil {
-		knw.w.logger.Error("worker/keymanager: failed to watch node list",
+		w.logger.Error("failed to watch node list",
 			"err", err,
 		)
 		return
 	}
 	defer nodesSub.Close()
 
-	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(knw.w.ctx, knw.consensus)
+	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, w.consensus)
 	if err != nil {
-		knw.w.logger.Error("worker/keymanager: failed to create node desc watcher",
+		w.logger.Error("failed to create node watcher",
 			"err", err,
 		)
 		return
 	}
 	watcherCh, watcherSub, err := watcher.WatchNodeUpdates()
 	if err != nil {
-		knw.w.logger.Error("worker/keymanager: failed to watch node updates",
+		w.logger.Error("failed to watch node updates",
 			"err", err,
 		)
 		return
@@ -58,10 +71,10 @@ func (knw *kmNodeWatcher) watchNodes() {
 		select {
 		case nodeList := <-nodesCh:
 			watcher.Reset()
-			activeNodes = knw.rebuildActiveNodeIDs(nodeList.Nodes)
+			activeNodes = w.rebuildActiveNodeIDs(nodeList.Nodes)
 			for id := range activeNodes {
-				if _, err := watcher.WatchNode(knw.w.ctx, id); err != nil {
-					knw.w.logger.Error("worker/keymanager: failed to watch node",
+				if _, err := watcher.WatchNode(ctx, id); err != nil {
+					w.logger.Error("worker/keymanager: failed to watch node",
 						"err", err,
 						"id", id,
 					)
@@ -74,7 +87,7 @@ func (knw *kmNodeWatcher) watchNodes() {
 			if !activeNodes[watcherEv.Update.ID] {
 				continue
 			}
-		case <-knw.w.stopCh:
+		case <-ctx.Done():
 			return
 		}
 
@@ -90,23 +103,21 @@ func (knw *kmNodeWatcher) watchNodes() {
 			peers[n.P2P.ID] = struct{}{}
 		}
 
-		knw.w.accessList.UpdateNodes(knw.w.runtimeID, nodes)
-		if pm := knw.w.commonWorker.P2P.PeerManager(); pm != nil {
-			if pids, err := p2p.PublicKeyMapToPeerIDs(peers); err == nil {
-				pm.PeerTagger().SetPeerImportance(p2p.ImportantNodeKeyManager, knw.w.runtime.ID(), pids)
-			}
+		w.accessList.UpdateNodes(w.runtimeID, nodes)
+		if pids, err := p2p.PublicKeyMapToPeerIDs(peers); err == nil {
+			w.peerTagger.SetPeerImportance(p2p.ImportantNodeKeyManager, w.runtimeID, pids)
 		}
 	}
 }
 
-func (knw *kmNodeWatcher) rebuildActiveNodeIDs(nodeList []*node.Node) map[signature.PublicKey]bool {
+func (w *kmNodeWatcher) rebuildActiveNodeIDs(nodeList []*node.Node) map[signature.PublicKey]bool {
 	m := make(map[signature.PublicKey]bool)
 	for _, n := range nodeList {
 		if !n.HasRoles(node.RoleKeyManager) {
 			continue
 		}
 		for _, rt := range n.Runtimes {
-			if rt.ID.Equal(&knw.w.runtimeID) {
+			if rt.ID.Equal(&w.runtimeID) {
 				m[n.ID] = true
 				break
 			}
