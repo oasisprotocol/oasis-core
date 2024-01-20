@@ -38,21 +38,14 @@ func (w *Worker) GetStatus() (*api.Status, error) {
 		ps = append(ps, p)
 	}
 
+	al := w.accessList.RuntimeAccessLists()
+
 	w.RLock()
 	defer w.RUnlock()
 
 	rts := make([]common.Namespace, 0, len(w.clientRuntimes))
 	for rt := range w.clientRuntimes {
 		rts = append(rts, rt)
-	}
-
-	al := make([]api.RuntimeAccessList, 0, len(w.accessListByRuntime))
-	for rt, ps := range w.accessListByRuntime {
-		ral := api.RuntimeAccessList{
-			RuntimeID: rt,
-			Peers:     ps,
-		}
-		al = append(al, ral)
 	}
 
 	gs := w.globalStatus

@@ -27,7 +27,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
@@ -83,9 +82,8 @@ type Worker struct { // nolint: maligned
 
 	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
 
-	accessList          map[core.PeerID]map[common.Namespace]struct{}
-	accessListByRuntime map[common.Namespace][]core.PeerID
-	privatePeers        map[core.PeerID]struct{}
+	accessList   *AccessList
+	privatePeers map[core.PeerID]struct{}
 
 	commonWorker *workerCommon.Worker
 	roleProvider registration.RoleProvider
@@ -359,9 +357,10 @@ func (w *Worker) authorize(method string, kind enclaverpc.Kind, peerID core.Peer
 			if w.globalStatus.Policy == nil {
 				return fmt.Errorf("policy not set")
 			}
+			rts := w.accessList.Runtimes(peerID)
 			for _, enc := range w.globalStatus.Policy.Policy.Enclaves { // TODO: Use the right enclave identity.
-				for rtID := range w.accessList[peerID] {
-					if _, ok := enc.MayQuery[rtID]; ok {
+				for rtID := range enc.MayQuery {
+					if rts.Contains(rtID) {
 						return nil
 					}
 				}
@@ -372,7 +371,7 @@ func (w *Worker) authorize(method string, kind enclaverpc.Kind, peerID core.Peer
 		}
 	case api.RPCMethodReplicateMasterSecret, api.RPCMethodReplicateEphemeralSecret:
 		// Replication is restricted to peers within the same key manager runtime.
-		if _, ok := w.accessList[peerID][w.runtimeID]; !ok {
+		if !w.accessList.Runtimes(peerID).Contains(w.runtimeID) {
 			return fmt.Errorf("not a key manager")
 		}
 		return nil
@@ -582,48 +581,6 @@ func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime) error {
 	computeRuntimeCount.WithLabelValues(w.runtimeLabel).Inc()
 
 	return nil
-}
-
-func (w *Worker) setAccessList(runtimeID common.Namespace, nodes []*node.Node) {
-	w.Lock()
-	defer w.Unlock()
-
-	// Clear any old nodes from the access list.
-	for _, peerID := range w.accessListByRuntime[runtimeID] {
-		entry := w.accessList[peerID]
-		delete(entry, runtimeID)
-		if len(entry) == 0 {
-			delete(w.accessList, peerID)
-		}
-	}
-
-	// Update the access list.
-	var peers []core.PeerID
-	for _, node := range nodes {
-		peerID, err := p2p.PublicKeyToPeerID(node.P2P.ID)
-		if err != nil {
-			w.logger.Warn("invalid node P2P ID",
-				"err", err,
-				"node_id", node.ID,
-			)
-			continue
-		}
-
-		entry := w.accessList[peerID]
-		if entry == nil {
-			entry = make(map[common.Namespace]struct{})
-			w.accessList[peerID] = entry
-		}
-
-		entry[runtimeID] = struct{}{}
-		peers = append(peers, peerID)
-	}
-	w.accessListByRuntime[runtimeID] = peers
-
-	w.logger.Debug("new client runtime access policy in effect",
-		"runtime_id", runtimeID,
-		"peers", peers,
-	)
 }
 
 func (w *Worker) generateMasterSecret(runtimeID common.Namespace, height int64, generation uint64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
@@ -1541,7 +1498,8 @@ func (crw *clientRuntimeWatcher) worker() {
 				// nodes have been set (even if the new set is empty).
 				continue
 			}
-			crw.w.setAccessList(crw.runtimeID, crw.nodes.GetNodes())
+
+			crw.w.accessList.UpdateNodes(crw.w.runtimeID, crw.nodes.GetNodes())
 		}
 	}
 }
@@ -1573,5 +1531,5 @@ func (crw *clientRuntimeWatcher) epochTransition() {
 
 	crw.nodes.Freeze(0)
 
-	crw.w.setAccessList(crw.runtimeID, crw.nodes.GetNodes())
+	crw.w.accessList.UpdateNodes(crw.runtimeID, crw.nodes.GetNodes())
 }

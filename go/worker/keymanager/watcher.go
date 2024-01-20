@@ -83,7 +83,7 @@ func (knw *kmNodeWatcher) watchNodes() {
 			peers[n.P2P.ID] = struct{}{}
 		}
 
-		knw.w.setAccessList(knw.w.runtimeID, nodes)
+		knw.w.accessList.UpdateNodes(knw.w.runtimeID, nodes)
 		if pm := knw.w.commonWorker.P2P.PeerManager(); pm != nil {
 			if pids, err := p2p.PublicKeyMapToPeerIDs(peers); err == nil {
 				pm.PeerTagger().SetPeerImportance(p2p.ImportantNodeKeyManager, knw.w.runtime.ID(), pids)
