@@ -679,21 +679,10 @@ func (n *Node) worker() {
 		return
 	}
 
-	hrtEventCh, hrtSub, err := hrt.WatchEvents(n.ctx)
-	if err != nil {
-		n.logger.Error("failed to subscribe to hosted runtime events",
-			"err", err,
-		)
-		return
-	}
+	hrtEventCh, hrtSub := hrt.WatchEvents()
 	defer hrtSub.Close()
 
-	if err = hrt.Start(); err != nil {
-		n.logger.Error("failed to start hosted runtime",
-			"err", err,
-		)
-		return
-	}
+	hrt.Start()
 	defer hrt.Stop()
 
 	if err = hrtNotifier.Start(); err != nil {

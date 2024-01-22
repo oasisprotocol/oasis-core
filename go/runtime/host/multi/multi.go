@@ -226,25 +226,25 @@ func (agg *Aggregate) UpdateCapabilityTEE() {
 }
 
 // WatchEvents implements host.Runtime.
-func (agg *Aggregate) WatchEvents(context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
+func (agg *Aggregate) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
 	typedCh := make(chan *host.Event)
 	sub := agg.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub, nil
+	return typedCh, sub
 }
 
 // Start implements host.Runtime.
-func (agg *Aggregate) Start() error {
+func (agg *Aggregate) Start() {
 	agg.l.RLock()
 	defer agg.l.RUnlock()
 
 	// This is "ok", sort of, though maybe this should fail.
 	if agg.active == nil {
-		return nil
+		return
 	}
 
-	return agg.active.host.Start()
+	agg.active.host.Start()
 }
 
 // Abort implements host.Runtime.
@@ -340,14 +340,7 @@ func (agg *Aggregate) setActiveVersionLocked(version version.Version) error {
 		next.stopDiscard(agg) // Forward any captured started events.
 	} else {
 		host := next.host
-		if err := host.Start(); err != nil {
-			// Do not bail, this can't actually fail in practice because
-			// the part that does all the work is async.  Log something.
-			agg.logger.Error("SetVersion: failed to start sub-host",
-				"err", err,
-				"version", version,
-			)
-		}
+		host.Start()
 	}
 
 	// Assume that the caller is ok with SetVersion acting as a Stop+Start
@@ -443,14 +436,7 @@ func (agg *Aggregate) setNextVersionLocked(maybeVersion *version.Version) error 
 	}
 
 	// Start the next version.
-	if err := next.host.Start(); err != nil {
-		// Do not bail, this can't actually fail in practice because
-		// the part that does all the work is async.  Log something.
-		agg.logger.Error("failed to start next version sub-host",
-			"err", err,
-			"version", version,
-		)
-	}
+	next.host.Start()
 
 	// Start discarding events.
 	next.startDiscard()
@@ -493,7 +479,6 @@ func (agg *Aggregate) stopNextLocked() {
 // New returns a new aggregated runtime.  The runtimes provided must be
 // freshly provisioned (ie: Start() must not have been called).
 func New(
-	ctx context.Context,
 	id common.Namespace,
 	rts map[version.Version]host.Runtime,
 ) (host.Runtime, error) {
@@ -519,10 +504,7 @@ func New(
 			return nil, fmt.Errorf("runtime/host/multi: duplicate sub-runtime version: %v", version)
 		}
 
-		ch, sub, err := rt.WatchEvents(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("runtime/host/multi: failed to subscribe to sub-runtime events: %w", err)
-		}
+		ch, sub := rt.WatchEvents()
 
 		ah := &aggregatedHost{
 			host:             rts[version],

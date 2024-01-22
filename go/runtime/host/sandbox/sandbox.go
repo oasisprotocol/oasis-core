@@ -85,7 +85,6 @@ func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 		rtCfg:                       cfg,
 		id:                          id,
 		stopCh:                      make(chan struct{}),
-		quitCh:                      make(chan struct{}),
 		ctrlCh:                      make(chan interface{}, ctrlChannelBufferSize),
 		notifier:                    pubsub.NewBroker(false),
 		notifyUpdateCapabilityTEECh: make(chan struct{}, 1),
@@ -114,11 +113,11 @@ type sandboxedRuntime struct {
 	rtCfg host.Config
 	id    common.Namespace
 
-	stopCh chan struct{}
-	quitCh chan struct{}
-	ctrlCh chan interface{}
+	startOnce sync.Once
+	stopOnce  sync.Once
+	stopCh    chan struct{}
+	ctrlCh    chan interface{}
 
-	started  bool
 	process  process.Process
 	conn     protocol.Connection
 	notifier *pubsub.Broker
@@ -200,27 +199,19 @@ func (r *sandboxedRuntime) UpdateCapabilityTEE() {
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) WatchEvents(context.Context) (<-chan *host.Event, pubsub.ClosableSubscription, error) {
+func (r *sandboxedRuntime) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
 	typedCh := make(chan *host.Event)
 	sub := r.notifier.Subscribe()
 	sub.Unwrap(typedCh)
 
-	return typedCh, sub, nil
+	return typedCh, sub
 }
 
 // Implements host.Runtime.
-func (r *sandboxedRuntime) Start() error {
-	r.Lock()
-	defer r.Unlock()
-
-	if r.started {
-		return nil
-	}
-	r.started = true
-
-	go r.manager()
-
-	return nil
+func (r *sandboxedRuntime) Start() {
+	r.startOnce.Do(func() {
+		go r.manager()
+	})
 }
 
 // Implements host.Runtime.
@@ -244,7 +235,9 @@ func (r *sandboxedRuntime) Abort(ctx context.Context, force bool) error {
 
 // Implements host.Runtime.
 func (r *sandboxedRuntime) Stop() {
-	close(r.stopCh)
+	r.stopOnce.Do(func() {
+		close(r.stopCh)
+	})
 }
 
 // Implements host.EmitEvent.
@@ -501,18 +494,10 @@ func (r *sandboxedRuntime) manager() {
 
 		// Notify subscribers that the runtime has stopped.
 		r.notifier.Broadcast(&host.Event{Stopped: &host.StoppedEvent{}})
-
-		close(r.quitCh)
 	}()
 
 	// Subscribe to own events to make sure the cached CapabilityTEE remains up-to-date.
-	evCh, evSub, err := r.WatchEvents(context.Background())
-	if err != nil {
-		r.logger.Error("unable to subscribe to own events",
-			"err", err,
-		)
-		return
-	}
+	evCh, evSub := r.WatchEvents()
 	defer evSub.Close()
 
 	var attempt int

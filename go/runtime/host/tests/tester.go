@@ -106,11 +106,9 @@ func testBasic(t *testing.T, cfg host.Config, p host.Provisioner) {
 
 	r, err := p.NewRuntime(cfg)
 	require.NoError(err, "NewRuntime")
-	err = r.Start()
-	require.NoError(err, "Start")
+	r.Start()
 
-	evCh, sub, err := r.WatchEvents(context.Background())
-	require.NoError(err, "WatchEvents")
+	evCh, sub := r.WatchEvents()
 	defer sub.Close()
 
 	// Wait for a successful start event.
@@ -153,12 +151,10 @@ func testRestart(t *testing.T, cfg host.Config, p host.Provisioner) {
 
 	r, err := p.NewRuntime(cfg)
 	require.NoError(err, "NewRuntime")
-	err = r.Start()
-	require.NoError(err, "Start")
+	r.Start()
 	defer r.Stop()
 
-	evCh, sub, err := r.WatchEvents(context.Background())
-	require.NoError(err, "WatchEvents")
+	evCh, sub := r.WatchEvents()
 	defer sub.Close()
 
 	// Wait for a successful start event.

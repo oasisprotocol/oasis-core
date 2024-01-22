@@ -67,10 +67,10 @@ type Runtime interface {
 	UpdateCapabilityTEE()
 
 	// WatchEvents subscribes to runtime status events.
-	WatchEvents(ctx context.Context) (<-chan *Event, pubsub.ClosableSubscription, error)
+	WatchEvents() (<-chan *Event, pubsub.ClosableSubscription)
 
-	// Start attempts to start the runtime.
-	Start() error
+	// Start starts the runtime.
+	Start()
 
 	// Abort attempts to abort a runtime so that it will be ready to service new requests.
 	// In case abort fails or force flag is set, the runtime will be restarted.
