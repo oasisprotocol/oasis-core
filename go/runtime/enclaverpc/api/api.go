@@ -13,6 +13,20 @@ const (
 	KindLocalQuery    Kind = 2
 )
 
+// String returns a string representation of RPC call kind.
+func (k Kind) String() string {
+	switch k {
+	case KindNoiseSession:
+		return "noise session"
+	case KindInsecureQuery:
+		return "insecure query"
+	case KindLocalQuery:
+		return "local query"
+	default:
+		return "[unknown]"
+	}
+}
+
 // Frame is an EnclaveRPC frame.
 //
 // It is the Go analog of the Rust RPC frame defined in runtime/src/enclave_rpc/types.rs.

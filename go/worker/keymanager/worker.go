@@ -27,15 +27,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
-	"github.com/oasisprotocol/oasis-core/go/runtime/nodes"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
-	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -81,11 +78,11 @@ type Worker struct { // nolint: maligned
 	runtimeID    common.Namespace
 	runtimeLabel string
 
-	clientRuntimes map[common.Namespace]*clientRuntimeWatcher
+	kmNodeWatcher    *kmNodeWatcher
+	kmRuntimeWatcher *kmRuntimeWatcher
 
-	accessList          map[core.PeerID]map[common.Namespace]struct{}
-	accessListByRuntime map[common.Namespace][]core.PeerID
-	privatePeers        map[core.PeerID]struct{}
+	accessList   *AccessList
+	privatePeers map[core.PeerID]struct{}
 
 	commonWorker *workerCommon.Worker
 	roleProvider registration.RoleProvider
@@ -177,47 +174,41 @@ func (w *Worker) Initialized() <-chan struct{} {
 }
 
 func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.Kind) ([]byte, error) {
-	select {
-	case <-w.initCh:
-	default:
-		return nil, fmt.Errorf("not initialized")
-	}
-
+	// Peek into the frame/request data to extract the method.
+	var method string
 	switch kind {
 	case enclaverpc.KindNoiseSession:
-		// Handle access control as only peers on the access list can call this method.
-		peerID, ok := rpc.PeerIDFromContext(ctx)
-		if !ok {
-			return nil, fmt.Errorf("not authorized")
-		}
-
-		// Peek into the frame data to extract the method.
 		var frame enclaverpc.Frame
 		if err := cbor.Unmarshal(data, &frame); err != nil {
-			return nil, fmt.Errorf("malformed request")
+			return nil, fmt.Errorf("malformed RPC frame")
 		}
-
-		// Note that the untrusted plaintext is also checked in the enclave, so if the node lied about
-		// what method it's using, we will know and the request will get rejected.
-		switch frame.UntrustedPlaintext {
-		case "":
-			// Anyone can connect.
-		default:
-			if _, privatePeered := w.privatePeers[peerID]; !privatePeered {
-				// Defer to access control to check the policy.
-				w.RLock()
-				_, allowed := w.accessList[peerID]
-				w.RUnlock()
-				if !allowed {
-					return nil, fmt.Errorf("not authorized")
-				}
-			}
-		}
+		// Note that the untrusted plaintext is also checked in the enclave, so if the node lied
+		// about what method it's using, we will know and the request will get rejected.
+		method = frame.UntrustedPlaintext
 	case enclaverpc.KindInsecureQuery:
-		// Insecure queries are always allowed.
+		var req enclaverpc.Request
+		if err := cbor.Unmarshal(data, &req); err != nil {
+			return nil, fmt.Errorf("malformed RPC request")
+		}
+		method = req.Method
 	default:
 		// Local queries are not allowed.
 		return nil, fmt.Errorf("unsupported RPC kind")
+	}
+
+	// Handle access control.
+	switch {
+	case method == "" && kind == enclaverpc.KindNoiseSession:
+		// Anyone can connect.
+	default:
+		peerID, ok := rpc.PeerIDFromContext(ctx)
+		if !ok {
+			return nil, fmt.Errorf("not authorized: unknown peer")
+		}
+
+		if err := w.authorize(method, kind, peerID); err != nil {
+			return nil, fmt.Errorf("not authorized: %w", err)
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, rpcCallTimeout)
@@ -304,6 +295,88 @@ func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface
 	}
 
 	return nil
+}
+
+func (w *Worker) authorize(method string, kind enclaverpc.Kind, peerID core.PeerID) error {
+	select {
+	case <-w.initCh:
+	default:
+		return fmt.Errorf("not initialized")
+	}
+
+	switch kind {
+	case enclaverpc.KindInsecureQuery:
+		switch method {
+		case api.RPCMethodGetPublicKey:
+		case api.RPCMethodGetPublicEphemeralKey:
+		default:
+			return fmt.Errorf("unsupported method: %s", method)
+		}
+		return nil
+	case enclaverpc.KindNoiseSession:
+		switch method {
+		case api.RPCMethodGetOrCreateKeys:
+		case api.RPCMethodGetOrCreateEphemeralKeys:
+		case api.RPCMethodReplicateMasterSecret:
+		case api.RPCMethodReplicateEphemeralSecret:
+		default:
+			return fmt.Errorf("unsupported method: %s", method)
+		}
+	default:
+		return fmt.Errorf("unsupported kind: %s", kind)
+	}
+
+	if _, ok := w.privatePeers[peerID]; ok {
+		return nil
+	}
+
+	w.RLock()
+	defer w.RUnlock()
+
+	if w.globalStatus == nil || !w.globalStatus.IsInitialized || w.activeVersion == nil {
+		return fmt.Errorf("not initialized")
+	}
+
+	switch method {
+	case api.RPCMethodGetOrCreateKeys, api.RPCMethodGetOrCreateEphemeralKeys:
+		capabilityTEE, err := w.GetHostedRuntimeCapabilityTEE()
+		if err != nil {
+			return err
+		}
+
+		switch {
+		case capabilityTEE == nil:
+			// Insecure key manager enclaves can be queried by all runtimes (used for testing).
+			if w.globalStatus.IsSecure {
+				return fmt.Errorf("untrusted hardware")
+			}
+			return nil
+		case capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
+			// Secure key manager enclaves can be queried by runtimes specified in the policy.
+			if w.globalStatus.Policy == nil {
+				return fmt.Errorf("policy not set")
+			}
+			rts := w.accessList.Runtimes(peerID)
+			for _, enc := range w.globalStatus.Policy.Policy.Enclaves { // TODO: Use the right enclave identity.
+				for rtID := range enc.MayQuery {
+					if rts.Contains(rtID) {
+						return nil
+					}
+				}
+			}
+			return fmt.Errorf("query not allowed")
+		default:
+			return fmt.Errorf("unsupported hardware: %s", capabilityTEE.Hardware)
+		}
+	case api.RPCMethodReplicateMasterSecret, api.RPCMethodReplicateEphemeralSecret:
+		// Replication is restricted to peers within the same key manager runtime.
+		if !w.accessList.Runtimes(peerID).Contains(w.runtimeID) {
+			return fmt.Errorf("not a key manager")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported method: %s", method)
+	}
 }
 
 func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*api.SignedInitResponse, error) {
@@ -445,164 +518,6 @@ func (w *Worker) setLastLoadedEphemeralSecretEpoch(epoch beacon.EpochTime) {
 
 	w.ephemeralSecretStats.NumLoaded++
 	w.ephemeralSecretStats.LastLoaded = epoch
-}
-
-func (w *Worker) addClientRuntimeWatcher(n common.Namespace, crw *clientRuntimeWatcher) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.clientRuntimes[n] = crw
-}
-
-func (w *Worker) getClientRuntimeWatcher(n common.Namespace) *clientRuntimeWatcher {
-	w.RLock()
-	defer w.RUnlock()
-
-	return w.clientRuntimes[n]
-}
-
-func (w *Worker) getClientRuntimeWatchers() []*clientRuntimeWatcher {
-	w.RLock()
-	defer w.RUnlock()
-
-	crws := make([]*clientRuntimeWatcher, 0, len(w.clientRuntimes))
-	for _, crw := range w.clientRuntimes {
-		crws = append(crws, crw)
-	}
-
-	return crws
-}
-
-func (w *Worker) startClientRuntimeWatcher(rt *registry.Runtime, kmStatus *api.Status) error {
-	if kmStatus == nil || !kmStatus.IsInitialized || w.rtStatus == nil {
-		return nil
-	}
-	if rt.Kind != registry.KindCompute || rt.KeyManager == nil || !rt.KeyManager.Equal(&w.runtimeID) {
-		return nil
-	}
-	if w.getClientRuntimeWatcher(rt.ID) != nil {
-		return nil
-	}
-
-	w.logger.Info("seen new runtime using us as a key manager",
-		"runtime_id", rt.ID,
-	)
-
-	// Check policy document if runtime is allowed to query any of the
-	// key manager enclaves.
-	var allowed bool
-	switch {
-	case w.rtStatus.capabilityTEE == nil:
-		// Insecure test key manager enclaves can be queried by all runtimes.
-		allowed = !kmStatus.IsSecure
-	case w.rtStatus.capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
-		if kmStatus.Policy == nil {
-			break
-		}
-		for _, enc := range kmStatus.Policy.Policy.Enclaves {
-			if _, ok := enc.MayQuery[rt.ID]; ok {
-				allowed = true
-				break
-			}
-		}
-	}
-	if !allowed {
-		w.logger.Warn("runtime not found in keymanager policy, skipping",
-			"runtime_id", rt.ID,
-			"status", kmStatus,
-		)
-		return nil
-	}
-
-	nodes, err := nodes.NewVersionedNodeDescriptorWatcher(w.ctx, w.commonWorker.Consensus)
-	if err != nil {
-		w.logger.Error("unable to create new client runtime node watcher",
-			"err", err,
-			"runtime_id", rt.ID,
-		)
-		return err
-	}
-	crw := &clientRuntimeWatcher{
-		w:         w,
-		runtimeID: rt.ID,
-		nodes:     nodes,
-	}
-	crw.epochTransition()
-	go crw.worker()
-
-	w.addClientRuntimeWatcher(rt.ID, crw)
-
-	// Update metrics.
-	computeRuntimeCount.WithLabelValues(w.runtimeLabel).Inc()
-
-	return nil
-}
-
-func (w *Worker) recheckAllRuntimes(kmStatus *api.Status) error {
-	rts, err := w.commonWorker.Consensus.Registry().GetRuntimes(w.ctx,
-		&registry.GetRuntimesQuery{
-			Height:           consensus.HeightLatest,
-			IncludeSuspended: false,
-		},
-	)
-	if err != nil {
-		w.logger.Error("failed querying runtimes",
-			"err", err,
-		)
-		return fmt.Errorf("failed querying runtimes: %w", err)
-	}
-	for _, rt := range rts {
-		if err := w.startClientRuntimeWatcher(rt, kmStatus); err != nil {
-			w.logger.Error("failed to start runtime watcher",
-				"err", err,
-			)
-			continue
-		}
-	}
-
-	return nil
-}
-
-func (w *Worker) setAccessList(runtimeID common.Namespace, nodes []*node.Node) {
-	w.Lock()
-	defer w.Unlock()
-
-	// Clear any old nodes from the access list.
-	for _, peerID := range w.accessListByRuntime[runtimeID] {
-		entry := w.accessList[peerID]
-		delete(entry, runtimeID)
-		if len(entry) == 0 {
-			delete(w.accessList, peerID)
-		}
-	}
-
-	// Update the access list.
-	var peers []core.PeerID
-	for _, node := range nodes {
-		peerID, err := p2p.PublicKeyToPeerID(node.P2P.ID)
-		if err != nil {
-			w.logger.Warn("invalid node P2P ID",
-				"err", err,
-				"node_id", node.ID,
-			)
-			continue
-		}
-
-		entry := w.accessList[peerID]
-		if entry == nil {
-			entry = make(map[common.Namespace]struct{})
-			w.accessList[peerID] = entry
-		}
-
-		entry[runtimeID] = struct{}{}
-		peers = append(peers, peerID)
-	}
-	w.accessListByRuntime[runtimeID] = peers
-
-	w.logger.Debug("new client runtime access policy in effect",
-		"runtime_id", runtimeID,
-		"peers", peers,
-	)
 }
 
 func (w *Worker) generateMasterSecret(runtimeID common.Namespace, height int64, generation uint64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
@@ -950,13 +865,6 @@ func (w *Worker) handleStatusUpdate(kmStatus *api.Status) {
 	// A new master secret generation or policy might have been published.
 	w.handleInitEnclave()
 
-	// New runtimes can be allowed with the policy update.
-	if err := w.recheckAllRuntimes(w.kmStatus); err != nil {
-		w.logger.Error("failed rechecking runtimes",
-			"err", err,
-		)
-	}
-
 	// The epoch for generating the next master secret may change with the policy update.
 	w.updateGenerateMasterSecretEpoch()
 }
@@ -1079,21 +987,7 @@ func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 	}
 }
 
-func (w *Worker) handleRuntimeRegistrationEvent(rt *registry.Runtime) {
-	if err := w.startClientRuntimeWatcher(rt, w.kmStatus); err != nil {
-		w.logger.Error("failed to start runtime watcher",
-			"err", err,
-		)
-		return
-	}
-}
-
 func (w *Worker) handleNewEpoch(epoch beacon.EpochTime) {
-	// Update per runtime access lists.
-	for _, crw := range w.getClientRuntimeWatchers() {
-		crw.epochTransition()
-	}
-
 	// Choose a random height for generating master/ephemeral secrets to prevent key managers from
 	// all publishing transactions simultaneously, which would result in unnecessary gas waste.
 	// Additionally, avoid selecting blocks at the end of the epoch, as secret generation,
@@ -1412,8 +1306,11 @@ func (w *Worker) worker() {
 
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
-	knw := newKmNodeWatcher(w)
-	go knw.watchNodes()
+	go w.kmNodeWatcher.watch(w.ctx)
+
+	// Watch runtime registrations in order to know which runtimes are using
+	// us as a key manager.
+	go w.kmRuntimeWatcher.watch(w.ctx)
 
 	// Subscribe to key manager status updates.
 	statusCh, statusSub := w.backend.WatchStatuses()
@@ -1457,17 +1354,6 @@ func (w *Worker) worker() {
 	}
 	defer blkSub.Close()
 
-	// Subscribe to runtime registrations in order to know which runtimes
-	// are using us as a key manager.
-	rtCh, rtSub, err := w.commonWorker.Consensus.Registry().WatchRuntimes(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to watch runtimes",
-			"err", err,
-		)
-		return
-	}
-	defer rtSub.Close()
-
 	for {
 		select {
 		case ev := <-hrtEventCh:
@@ -1478,8 +1364,6 @@ func (w *Worker) worker() {
 			w.handleInitEnclave()
 		case rsp := <-w.initEnclaveDoneCh:
 			w.handleInitEnclaveDone(rsp)
-		case rt := <-rtCh:
-			w.handleRuntimeRegistrationEvent(rt)
 		case epoch = <-epoCh:
 			w.handleNewEpoch(epoch)
 		case blk := <-blkCh:
@@ -1497,67 +1381,4 @@ func (w *Worker) worker() {
 			return
 		}
 	}
-}
-
-type clientRuntimeWatcher struct {
-	w         *Worker
-	runtimeID common.Namespace
-	nodes     nodes.VersionedNodeDescriptorWatcher
-}
-
-func (crw *clientRuntimeWatcher) worker() {
-	ch, sub, err := crw.nodes.WatchNodeUpdates()
-	if err != nil {
-		crw.w.logger.Error("failed to subscribe to client runtime node updates",
-			"err", err,
-			"runtime_id", crw.runtimeID,
-		)
-		return
-	}
-	defer sub.Close()
-
-	for {
-		select {
-		case <-crw.w.ctx.Done():
-			return
-		case nu := <-ch:
-			if nu.Reset {
-				// Ignore reset events to avoid clearing the access list before setting a new one.
-				// This is safe because a reset event is always followed by a freeze event after the
-				// nodes have been set (even if the new set is empty).
-				continue
-			}
-			crw.w.setAccessList(crw.runtimeID, crw.nodes.GetNodes())
-		}
-	}
-}
-
-func (crw *clientRuntimeWatcher) epochTransition() {
-	crw.nodes.Reset()
-
-	cms, err := crw.w.commonWorker.Consensus.Scheduler().GetCommittees(crw.w.ctx, &scheduler.GetCommitteesRequest{
-		Height:    consensus.HeightLatest,
-		RuntimeID: crw.runtimeID,
-	})
-	if err != nil {
-		crw.w.logger.Error("failed to fetch client runtime committee",
-			"err", err,
-			"runtime_id", crw.runtimeID,
-		)
-		return
-	}
-
-	for _, cm := range cms {
-		if cm.Kind != scheduler.KindComputeExecutor {
-			continue
-		}
-
-		for _, member := range cm.Members {
-			_, _ = crw.nodes.WatchNode(crw.w.ctx, member.PublicKey)
-		}
-	}
-
-	crw.nodes.Freeze(0)
-
-	crw.w.setAccessList(crw.runtimeID, crw.nodes.GetNodes())
 }

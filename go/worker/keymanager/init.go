@@ -9,7 +9,6 @@ import (
 
 	"github.com/libp2p/go-libp2p/core"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -40,24 +39,22 @@ func New(
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	w := &Worker{
-		logger:              logging.GetLogger("worker/keymanager"),
-		ctx:                 ctx,
-		cancelCtx:           cancelFn,
-		stopCh:              make(chan struct{}),
-		quitCh:              make(chan struct{}),
-		initCh:              make(chan struct{}),
-		clientRuntimes:      make(map[common.Namespace]*clientRuntimeWatcher),
-		accessList:          make(map[core.PeerID]map[common.Namespace]struct{}),
-		privatePeers:        make(map[core.PeerID]struct{}),
-		accessListByRuntime: make(map[common.Namespace][]core.PeerID),
-		commonWorker:        commonWorker,
-		backend:             backend,
-		enabled:             enabled,
-		initEnclaveDoneCh:   make(chan *api.SignedInitResponse, 1),
-		genMstSecDoneCh:     make(chan bool, 1),
-		genMstSecEpoch:      math.MaxUint64,
-		genEphSecDoneCh:     make(chan bool, 1),
-		genSecHeight:        int64(math.MaxInt64),
+		logger:            logging.GetLogger("worker/keymanager"),
+		ctx:               ctx,
+		cancelCtx:         cancelFn,
+		stopCh:            make(chan struct{}),
+		quitCh:            make(chan struct{}),
+		initCh:            make(chan struct{}),
+		accessList:        NewAccessList(),
+		privatePeers:      make(map[core.PeerID]struct{}),
+		commonWorker:      commonWorker,
+		backend:           backend,
+		enabled:           enabled,
+		initEnclaveDoneCh: make(chan *api.SignedInitResponse, 1),
+		genMstSecDoneCh:   make(chan bool, 1),
+		genMstSecEpoch:    math.MaxUint64,
+		genEphSecDoneCh:   make(chan bool, 1),
+		genSecHeight:      int64(math.MaxInt64),
 	}
 
 	if !w.enabled {
@@ -107,6 +104,10 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create runtime host helpers: %w", err)
 	}
+
+	// Prepare watchers.
+	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
+	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
 
 	// Register keymanager service.
 	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, w.runtimeID, w))
