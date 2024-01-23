@@ -64,6 +64,11 @@ func (r *runtime) GetInfo(context.Context) (*protocol.RuntimeInfoResponse, error
 }
 
 // Implements host.Runtime.
+func (r *runtime) GetActiveVersion() (*version.Version, error) {
+	return nil, nil
+}
+
+// Implements host.Runtime.
 func (r *runtime) GetCapabilityTEE() (*node.CapabilityTEE, error) {
 	return nil, nil
 }

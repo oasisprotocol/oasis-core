@@ -124,6 +124,19 @@ func (n *RuntimeHostNode) WaitHostedRuntime(ctx context.Context) (host.RichRunti
 	return n.GetHostedRuntime(), nil
 }
 
+// GetHostedRuntimeActiveVersion returns the version of the active runtime.
+func (n *RuntimeHostNode) GetHostedRuntimeActiveVersion() (*version.Version, error) {
+	n.Lock()
+	agg := n.agg
+	n.Unlock()
+
+	if agg == nil {
+		return nil, fmt.Errorf("runtime not available")
+	}
+
+	return agg.GetActiveVersion()
+}
+
 // GetHostedRuntimeCapabilityTEE returns the CapabilityTEE for the active runtime version.
 func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE() (*node.CapabilityTEE, error) {
 	n.Lock()

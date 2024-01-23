@@ -52,6 +52,9 @@ type Runtime interface {
 	// ID is the runtime identifier.
 	ID() common.Namespace
 
+	// GetActiveVersion retrieves the version of the currently active runtime.
+	GetActiveVersion() (*version.Version, error)
+
 	// GetInfo retrieves the runtime information.
 	GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error)
 

@@ -132,6 +132,17 @@ func (agg *Aggregate) getActiveHost() (*aggregatedHost, error) {
 	return agg.active, nil
 }
 
+// GetActiveVersion implements host.Runtime.
+func (agg *Aggregate) GetActiveVersion() (*version.Version, error) {
+	agg.l.RLock()
+	defer agg.l.RUnlock()
+
+	if agg.active == nil {
+		return nil, ErrNoActiveVersion
+	}
+	return &agg.active.version, nil
+}
+
 // GetInfo implements host.Runtime.
 func (agg *Aggregate) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
 	active, err := agg.getActiveHost()

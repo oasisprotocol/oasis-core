@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -47,6 +48,11 @@ func (lb *lbRuntime) ID() common.Namespace {
 // Implements host.Runtime.
 func (lb *lbRuntime) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
 	return lb.instances[0].GetInfo(ctx)
+}
+
+// Implements host.Runtime.
+func (lb *lbRuntime) GetActiveVersion() (*version.Version, error) {
+	return lb.instances[0].GetActiveVersion()
 }
 
 // Implements host.Runtime.
