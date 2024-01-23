@@ -13,6 +13,9 @@ type One interface {
 	// TryStop stops the running function, if any. This method blocks until
 	// the function finishes its work.
 	TryStop() bool
+
+	// IsRunning returns true iff the function is running.
+	IsRunning() bool
 }
 
 type one struct {
@@ -39,6 +42,7 @@ func NewOne() One {
 	}
 }
 
+// TryStart implements One.
 func (s *one) TryStart(fn func(ctx context.Context)) bool {
 	// Allow running only one function at a time.
 	select {
@@ -75,6 +79,7 @@ func (s *one) TryStart(fn func(ctx context.Context)) bool {
 	return true
 }
 
+// TryStop implements One.
 func (s *one) TryStop() bool {
 	select {
 	case ctrl := <-s.ctrlCh:
@@ -85,4 +90,9 @@ func (s *one) TryStop() bool {
 	default:
 		return false
 	}
+}
+
+// IsRunning implements One.
+func (s *one) IsRunning() bool {
+	return len(s.startCh) > 0
 }

@@ -123,9 +123,7 @@ func (m *PeerManager) PeerTagger() api.PeerTagger {
 
 // Start starts the background services required for the peer manager to work.
 func (m *PeerManager) Start() {
-	m.startOne.TryStart(func(ctx context.Context) {
-		go m.run(ctx)
-	})
+	m.startOne.TryStart(m.run)
 }
 
 // Stop stops all background services. The method blocks until all services finish their work.
