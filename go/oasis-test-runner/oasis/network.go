@@ -162,6 +162,12 @@ type NetworkCfg struct { // nolint: maligned
 	// externally-provided.
 	UseShortGrpcSocketPaths bool `json:"-"`
 
+	// NodeLogLevel is the log level to use for created nodes.
+	NodeLogLevel string `json:"node_log_level,omitempty"`
+
+	// NodeLogFormat is the log format to use for created nodes.
+	NodeLogFormat string `json:"node_log_format,omitempty"`
+
 	// Nodes lists the names of nodes to be created, enabling an N:M mapping between physical node
 	// processes and the features they host. If a feature is specified as attached to a node that
 	// isn't listed here, a new node will be created automatically, so this list can normally be
@@ -638,8 +644,16 @@ func (net *Network) startOasisNode(
 
 	cfg.Common.DataDir = node.DataDir()
 	cfg.Common.Log.Level = make(map[string]string)
-	cfg.Common.Log.Level["default"] = "debug"
-	cfg.Common.Log.Format = "json"
+	if net.Config().NodeLogLevel != "" {
+		cfg.Common.Log.Level["default"] = net.Config().NodeLogLevel
+	} else {
+		cfg.Common.Log.Level["default"] = "debug"
+	}
+	if net.Config().NodeLogFormat != "" {
+		cfg.Common.Log.Format = net.Config().NodeLogFormat
+	} else {
+		cfg.Common.Log.Format = "json"
+	}
 	cfg.Common.Log.File = nodeLogPath(node.dir)
 	cfg.Genesis.File = net.GenesisPath()
 
@@ -710,6 +724,8 @@ func (net *Network) startOasisNode(
 
 	net.logger.Info("launching Oasis node",
 		"args", strings.Join(args, " "),
+		"log_level", cfg.Common.Log.Level["default"],
+		"log_format", cfg.Common.Log.Format,
 	)
 
 	if err = cmd.Start(); err != nil {
