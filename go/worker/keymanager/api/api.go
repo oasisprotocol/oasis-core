@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
 // StatusState is the concise status state of the key manager worker.
@@ -83,17 +85,8 @@ type RuntimeAccessList struct {
 	Peers []core.PeerID `json:"peers"`
 }
 
-// Status is the key manager global and worker status.
+// Status is the key manager worker status.
 type Status struct {
-	// GlobalStatus is the global key manager committee status.
-	GlobalStatus *api.Status `json:"global"`
-
-	// WorkerStatus is the key manager worker status.
-	WorkerStatus WorkerStatus `json:"worker"`
-}
-
-// WorkerStatus is the key manager worker status.
-type WorkerStatus struct {
 	// Status is a concise status of the key manager worker.
 	Status StatusState `json:"status"`
 
@@ -102,33 +95,62 @@ type WorkerStatus struct {
 
 	// RuntimeID is the runtime ID of the key manager.
 	RuntimeID *common.Namespace `json:"runtime_id"`
+
 	// ClientRuntimes is a list of compute runtimes that use this key manager.
 	ClientRuntimes []common.Namespace `json:"client_runtimes"`
 
 	// AccessList is per-runtime list of peers that are allowed to call protected methods.
 	AccessList []RuntimeAccessList `json:"access_list"`
-	// PrivatePeers is a list of peers that are always allowed to call protected methods.
-	PrivatePeers []core.PeerID `json:"private_peers"`
 
-	// Policy is the key manager policy.
+	// Secrets is the master and ephemeral secrets status.
+	Secrets *SecretsStatus `json:"secrets"`
+}
+
+// SecretsStatus is the key manager master and ephemeral secrets status.
+type SecretsStatus struct {
+	// Status is the global key manager committee status.
+	Status *api.Status `json:"status"`
+
+	// Worker is the key manager master and ephemeral secrets worker status.
+	Worker SecretsWorkerStatus `json:"worker"`
+}
+
+// SecretsWorkerStatus is the key manager master and ephemeral secrets worker status.
+type SecretsWorkerStatus struct {
+	// Status is a concise status of the worker.
+	Status StatusState `json:"status"`
+
+	// LastRegistration is the time of the last successful registration with the consensus registry
+	// service. In case the worker did not successfully register yet, it will be the zero timestamp.
+	LastRegistration time.Time `json:"last_registration"`
+
+	// Policy is the master and ephemeral secrets access control policy.
 	Policy *api.SignedPolicySGX `json:"policy"`
-	// PolicyChecksum is the checksum of the key manager policy.
+
+	// PolicyChecksum is the checksum of the policy.
 	PolicyChecksum []byte `json:"policy_checksum"`
 
 	// MasterSecrets are the master secret generation and replication stats.
 	MasterSecrets MasterSecretStats `json:"master_secrets"`
+
 	// EphemeralSecrets are the ephemeral secret generation and replication stats.
 	EphemeralSecrets EphemeralSecretStats `json:"ephemeral_secrets"`
+
+	// PrivatePeers is a list of peers that are always allowed to call protected methods.
+	PrivatePeers []core.PeerID `json:"private_peers"`
 }
 
 // MasterSecretStats are the master secret generation and replication stats.
 type MasterSecretStats struct {
 	// NumLoaded is the number of loaded secrets.
 	NumLoaded int `json:"num_loaded"`
+
 	// LastLoaded is the generation of the last loaded secret.
 	LastLoaded uint64 `json:"last_loaded_generation"`
+
 	// NumGenerated is the number of generated secrets.
 	NumGenerated int `json:"num_generated"`
+
 	// LastGenerated is the generation of the last generated secret.
 	LastGenerated uint64 `json:"last_generated_generation"`
 }
@@ -137,10 +159,22 @@ type MasterSecretStats struct {
 type EphemeralSecretStats struct {
 	// NumLoaded is the number of loaded secrets.
 	NumLoaded int `json:"num_loaded"`
+
 	// LastLoaded is the epoch of the last loaded secret.
 	LastLoaded beacon.EpochTime `json:"last_loaded_epoch"`
+
 	// NumGenerated is the number of generated secrets.
 	NumGenerated int `json:"num_generated"`
+
 	// LastGenerated is the epoch of the last generated secret.
 	LastGenerated beacon.EpochTime `json:"last_generated_epoch"`
+}
+
+// RPCAccessController handles the authorization of enclave RPC calls.
+type RPCAccessController interface {
+	// Methods returns a list of allowed methods.
+	Methods() []string
+
+	// Authorize verifies whether the peer is allowed to invoke the specified RPC method.
+	Authorize(method string, kind enclaverpc.Kind, peerID core.PeerID) error
 }

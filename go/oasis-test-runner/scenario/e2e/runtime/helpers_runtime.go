@@ -231,7 +231,7 @@ func (sc *Scenario) EnsureActiveVersionForKeyManager(ctx context.Context, node *
 			return fmt.Errorf("%s: missing key manager status", node.Name)
 		}
 
-		ws := status.Keymanager.WorkerStatus
+		ws := status.Keymanager
 		if !id.Equal(ws.RuntimeID) {
 			return fmt.Errorf("%s: unsupported runtime (expected: %s got: %s)", node.Name, ws.RuntimeID, id)
 		}

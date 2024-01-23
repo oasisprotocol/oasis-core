@@ -1,8 +1,7 @@
 package keymanager
 
 import (
-	"github.com/libp2p/go-libp2p/core/peer"
-
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 )
 
@@ -32,33 +31,28 @@ func (w *Worker) GetStatus() (*api.Status, error) {
 		ss = api.StatusStateStarting
 	}
 
-	ps := make([]peer.ID, 0, len(w.privatePeers))
-	for p := range w.privatePeers {
-		ps = append(ps, p)
+	av, _ := w.GetHostedRuntimeActiveVersion()
+	al := w.accessList.RuntimeAccessLists()
+
+	var rts []common.Namespace
+	if w.kmRuntimeWatcher != nil {
+		rts = w.kmRuntimeWatcher.Runtimes()
 	}
 
-	rts := w.kmRuntimeWatcher.Runtimes()
-	al := w.accessList.RuntimeAccessLists()
+	var s *api.SecretsStatus
+	if w.secretsWorker != nil {
+		s = w.secretsWorker.GetStatus()
+	}
 
 	w.RLock()
 	defer w.RUnlock()
 
-	gs := w.globalStatus
-	ws := api.WorkerStatus{
-		Status:           ss,
-		ActiveVersion:    w.activeVersion,
-		RuntimeID:        &w.runtimeID,
-		ClientRuntimes:   rts,
-		AccessList:       al,
-		PrivatePeers:     ps,
-		Policy:           w.policy,
-		PolicyChecksum:   w.policyChecksum,
-		MasterSecrets:    w.masterSecretStats,
-		EphemeralSecrets: w.ephemeralSecretStats,
-	}
-
 	return &api.Status{
-		GlobalStatus: gs,
-		WorkerStatus: ws,
+		Status:         ss,
+		ActiveVersion:  av,
+		RuntimeID:      &w.runtimeID,
+		ClientRuntimes: rts,
+		AccessList:     al,
+		Secrets:        s,
 	}, nil
 }
