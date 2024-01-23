@@ -11,6 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -65,6 +66,9 @@ type NodeController interface {
 type Status struct {
 	// SoftwareVersion is the oasis-node software version.
 	SoftwareVersion string `json:"software_version"`
+
+	// Mode is the node mode.
+	Mode config.NodeMode `json:"mode"`
 
 	// Debug is the oasis-node debug status.
 	Debug *DebugStatus `json:"debug,omitempty"`

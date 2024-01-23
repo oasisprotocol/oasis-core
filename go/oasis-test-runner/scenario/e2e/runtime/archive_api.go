@@ -8,6 +8,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensusAPI "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -85,6 +86,9 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	status, err := archiveCtrl.GetStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get status for node: %w", err)
+	}
+	if status.Mode != config.ModeArchive {
+		return fmt.Errorf("archive node should report its mode, got: %v", status.Mode)
 	}
 	if !status.Consensus.Features.Has(consensusAPI.FeatureArchiveNode) {
 		return fmt.Errorf("archive node lacks archive feature, got: '%s'", status.Consensus.Features.String())

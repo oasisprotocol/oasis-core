@@ -159,6 +159,7 @@ func (n *Node) GetStatus(ctx context.Context) (*control.Status, error) {
 
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
+		Mode:            config.GlobalConfig.Mode,
 		Debug:           ds,
 		Identity:        ident,
 		Consensus:       cs,
