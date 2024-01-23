@@ -75,7 +75,7 @@ type Handler interface {
 // Notifier is a protocol runtime notifier interface.
 type Notifier interface {
 	// Start the notifier.
-	Start() error
+	Start()
 
 	// Stop the notifier.
 	Stop()

@@ -1274,12 +1274,7 @@ func (w *Worker) worker() {
 	hrt.Start()
 	defer hrt.Stop()
 
-	if err = hrtNotifier.Start(); err != nil {
-		w.logger.Error("failed to start key manager runtime notifier",
-			"err", err,
-		)
-		return
-	}
+	hrtNotifier.Start()
 	defer hrtNotifier.Stop()
 
 	// Key managers always need to use the enclave version given to them in the bundle

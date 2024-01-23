@@ -685,12 +685,7 @@ func (n *Node) worker() {
 	hrt.Start()
 	defer hrt.Stop()
 
-	if err = hrtNotifier.Start(); err != nil {
-		n.logger.Error("failed to start runtime notifier",
-			"err", err,
-		)
-		return
-	}
+	hrtNotifier.Start()
 	defer hrtNotifier.Stop()
 
 	// Perform initial hosted runtime version update to ensure we have something even in cases where
