@@ -125,12 +125,25 @@ type sandboxedRuntime struct {
 	notifyUpdateCapabilityTEECh chan struct{}
 	capabilityTEE               *node.CapabilityTEE
 
+	rtVersion *version.Version
+
 	logger *logging.Logger
 }
 
 // Implements host.Runtime.
 func (r *sandboxedRuntime) ID() common.Namespace {
 	return r.id
+}
+
+// GetInfo implements host.Runtime.
+func (r *sandboxedRuntime) GetActiveVersion() (*version.Version, error) {
+	r.RLock()
+	defer r.RUnlock()
+
+	if r.conn == nil {
+		return nil, errRuntimeNotReady
+	}
+	return r.rtVersion, nil
 }
 
 // Implements host.Runtime.
@@ -418,6 +431,7 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 	r.Lock()
 	r.conn = pc
 	r.capabilityTEE = ev.CapabilityTEE
+	r.rtVersion = rtVersion
 	r.Unlock()
 
 	// Notify subscribers that a runtime has been started.
@@ -462,6 +476,7 @@ func (r *sandboxedRuntime) handleAbortRequest(rq *abortRequest) error {
 	r.Lock()
 	r.conn = nil
 	r.capabilityTEE = nil
+	r.rtVersion = nil
 	r.Unlock()
 
 	// Notify subscribers that the runtime has stopped.
@@ -570,6 +585,7 @@ func (r *sandboxedRuntime) manager() {
 			r.Lock()
 			r.conn = nil
 			r.capabilityTEE = nil
+			r.rtVersion = nil
 			r.Unlock()
 
 			// Notify subscribers that the runtime has stopped.
