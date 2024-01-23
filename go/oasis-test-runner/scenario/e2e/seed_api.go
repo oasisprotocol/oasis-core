@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/oasisprotocol/oasis-core/go/config"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -117,6 +118,9 @@ func (sc *seedAPI) Run(ctx context.Context, _ *env.Env) error { // nolint: gocyc
 	// General status fields.
 	if status.SoftwareVersion == "" {
 		return fmt.Errorf("seed node should report software version")
+	}
+	if status.Mode != config.ModeSeed {
+		return fmt.Errorf("seed node should report its mode, got: %v", status.Mode)
 	}
 	if reflect.DeepEqual(status.Identity, control.IdentityStatus{}) {
 		return fmt.Errorf("seed node should report its identity")

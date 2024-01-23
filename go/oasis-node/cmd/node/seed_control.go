@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	control "github.com/oasisprotocol/oasis-core/go/control/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
@@ -75,6 +76,7 @@ func (n *SeedNode) GetStatus(_ context.Context) (*control.Status, error) {
 
 	return &control.Status{
 		SoftwareVersion: version.SoftwareVersion,
+		Mode:            config.GlobalConfig.Mode,
 		Identity:        identity,
 		Seed:            &seedStatus,
 	}, nil
