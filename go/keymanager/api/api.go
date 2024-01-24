@@ -76,6 +76,9 @@ var (
 		MethodPublishEphemeralSecret,
 	}
 
+	// RPCMethodConnect is the name of the method used to establish a Noise session.
+	RPCMethodConnect = ""
+
 	// RPCMethodInit is the name of the `init` method.
 	RPCMethodInit = "init"
 

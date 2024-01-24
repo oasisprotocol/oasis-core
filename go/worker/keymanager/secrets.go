@@ -13,6 +13,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/libp2p/go-libp2p/core"
+	"golang.org/x/exp/maps"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -40,6 +41,18 @@ const (
 	loadSecretMaxRetries     = 5
 	ephemeralSecretCacheSize = 20
 )
+
+var insecureRPCMethods = map[string]struct{}{
+	api.RPCMethodGetPublicKey:          {},
+	api.RPCMethodGetPublicEphemeralKey: {},
+}
+
+var secureRPCMethods = map[string]struct{}{
+	api.RPCMethodGetOrCreateKeys:          {},
+	api.RPCMethodGetOrCreateEphemeralKeys: {},
+	api.RPCMethodReplicateMasterSecret:    {},
+	api.RPCMethodReplicateEphemeralSecret: {},
+}
 
 // Ensure the secrets worker implements the RPCAccessController interface.
 var _ workerKm.RPCAccessController = (*secretsWorker)(nil)
@@ -145,105 +158,121 @@ func newSecretsWorker(
 
 // Methods implements RPCAccessController interface.
 func (w *secretsWorker) Methods() []string {
-	return []string{
-		api.RPCMethodInit,
-		api.RPCMethodGetOrCreateKeys,
-		api.RPCMethodGetPublicKey,
-		api.RPCMethodGetOrCreateEphemeralKeys,
-		api.RPCMethodGetPublicEphemeralKey,
-		api.RPCMethodReplicateMasterSecret,
-		api.RPCMethodReplicateEphemeralSecret,
-		api.RPCMethodGenerateMasterSecret,
-		api.RPCMethodGenerateEphemeralSecret,
-		api.RPCMethodLoadMasterSecret,
-		api.RPCMethodLoadEphemeralSecret,
+	var methods []string
+	methods = append(methods, maps.Keys(secureRPCMethods)...)
+	methods = append(methods, maps.Keys(insecureRPCMethods)...)
+	return methods
+}
+
+// Connect implements RPCAccessController interface.
+func (w *secretsWorker) Connect(peerID core.PeerID) bool {
+	// Start accepting requests after initialization.
+	w.mu.RLock()
+	state := w.status.Worker.Status
+	kmStatus := w.status.Status
+	w.mu.RUnlock()
+
+	if state != workerKm.StatusStateReady || kmStatus == nil {
+		return false
 	}
+
+	// Secure methods are accessible to private peers without restrictions.
+	if _, ok := w.privatePeers[peerID]; ok {
+		return true
+	}
+
+	// Other peers must undergo the authorization process.
+	if err := w.authorizeNode(peerID, kmStatus); err == nil {
+		return true
+	}
+	if err := w.authorizeKeyManager(peerID); err == nil {
+		return true
+	}
+
+	return false
 }
 
 // Authorize implements RPCAccessController interface.
 func (w *secretsWorker) Authorize(method string, kind enclaverpc.Kind, peerID core.PeerID) error {
+	// Start accepting requests after initialization.
 	w.mu.RLock()
-	status := w.status.Worker.Status
+	state := w.status.Worker.Status
+	kmStatus := w.status.Status
 	w.mu.RUnlock()
 
-	if status != workerKm.StatusStateReady {
+	if state != workerKm.StatusStateReady || kmStatus == nil {
 		return fmt.Errorf("not initialized")
 	}
 
+	// Check if the method is supported.
 	switch kind {
 	case enclaverpc.KindInsecureQuery:
-		switch method {
-		case api.RPCMethodGetPublicKey:
-		case api.RPCMethodGetPublicEphemeralKey:
-		default:
+		if _, ok := insecureRPCMethods[method]; !ok {
 			return fmt.Errorf("unsupported method: %s", method)
 		}
 		return nil
 	case enclaverpc.KindNoiseSession:
-		switch method {
-		case api.RPCMethodGetOrCreateKeys:
-		case api.RPCMethodGetOrCreateEphemeralKeys:
-		case api.RPCMethodReplicateMasterSecret:
-		case api.RPCMethodReplicateEphemeralSecret:
-		default:
+		if _, ok := secureRPCMethods[method]; !ok {
 			return fmt.Errorf("unsupported method: %s", method)
 		}
 	default:
 		return fmt.Errorf("unsupported kind: %s", kind)
 	}
 
+	// Secure methods are accessible to private peers without restrictions.
 	if _, ok := w.privatePeers[peerID]; ok {
 		return nil
 	}
 
-	w.mu.RLock()
-	kmStatus := w.status.Status
-	w.mu.RUnlock()
-
-	if kmStatus == nil || !kmStatus.IsInitialized {
-		return fmt.Errorf("not initialized")
-	}
-
+	// Other peers must undergo the authorization process.
 	switch method {
 	case api.RPCMethodGetOrCreateKeys, api.RPCMethodGetOrCreateEphemeralKeys:
-		capabilityTEE, err := w.kmWorker.GetHostedRuntimeCapabilityTEE()
-		if err != nil {
-			return err
-		}
-
-		switch {
-		case capabilityTEE == nil:
-			// Insecure key manager enclaves can be queried by all runtimes (used for testing).
-			if w.status.Status.IsSecure {
-				return fmt.Errorf("untrusted hardware")
-			}
-			return nil
-		case capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
-			// Secure key manager enclaves can be queried by runtimes specified in the policy.
-			if w.status.Status.Policy == nil {
-				return fmt.Errorf("policy not set")
-			}
-			rts := w.kmWorker.accessList.Runtimes(peerID)
-			for _, enc := range w.status.Status.Policy.Policy.Enclaves { // TODO: Use the right enclave identity.
-				for rtID := range enc.MayQuery {
-					if rts.Contains(rtID) {
-						return nil
-					}
-				}
-			}
-			return fmt.Errorf("query not allowed")
-		default:
-			return fmt.Errorf("unsupported hardware: %s", capabilityTEE.Hardware)
-		}
+		return w.authorizeNode(peerID, kmStatus)
 	case api.RPCMethodReplicateMasterSecret, api.RPCMethodReplicateEphemeralSecret:
-		// Replication is restricted to peers within the same key manager runtime.
-		if !w.kmWorker.accessList.Runtimes(peerID).Contains(w.runtimeID) {
-			return fmt.Errorf("not a key manager")
-		}
-		return nil
+		return w.authorizeKeyManager(peerID)
 	default:
 		return fmt.Errorf("unsupported method: %s", method)
 	}
+}
+
+func (w *secretsWorker) authorizeNode(peerID core.PeerID, kmStatus *api.Status) error {
+	capabilityTEE, err := w.kmWorker.GetHostedRuntimeCapabilityTEE()
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case capabilityTEE == nil:
+		// Insecure key manager enclaves can be queried by all runtimes (used for testing).
+		if kmStatus.IsSecure {
+			return fmt.Errorf("untrusted hardware")
+		}
+		return nil
+	case capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
+		// Secure key manager enclaves can be queried by runtimes specified in the policy.
+		if kmStatus.Policy == nil {
+			return fmt.Errorf("policy not set")
+		}
+		rts := w.kmWorker.accessList.Runtimes(peerID)
+		for _, enc := range kmStatus.Policy.Policy.Enclaves { // TODO: Use the right enclave identity.
+			for rtID := range enc.MayQuery {
+				if rts.Contains(rtID) {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("query not allowed")
+	default:
+		return fmt.Errorf("unsupported hardware: %s", capabilityTEE.Hardware)
+	}
+}
+
+func (w *secretsWorker) authorizeKeyManager(peerID core.PeerID) error {
+	// Allow only peers within the same key manager runtime.
+	if !w.kmWorker.accessList.Runtimes(peerID).Contains(w.runtimeID) {
+		return fmt.Errorf("not a key manager")
+	}
+	return nil
 }
 
 // Initialized returns a channel that will be closed when the worker is initialized
