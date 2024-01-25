@@ -175,6 +175,10 @@ type RPCAccessController interface {
 	// Methods returns a list of allowed methods.
 	Methods() []string
 
+	// Connect verifies whether the peer is allowed to establish a secure Noise connection,
+	// meaning it is authorized to invoke at least one secure RPC method.
+	Connect(peerID core.PeerID) bool
+
 	// Authorize verifies whether the peer is allowed to invoke the specified RPC method.
 	Authorize(method string, kind enclaverpc.Kind, peerID core.PeerID) error
 }

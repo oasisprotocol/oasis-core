@@ -63,7 +63,8 @@ type Worker struct { // nolint: maligned
 	kmRuntimeWatcher *kmRuntimeWatcher
 	secretsWorker    *secretsWorker
 
-	accessControllers map[string]workerKeymanager.RPCAccessController
+	accessControllers         []workerKeymanager.RPCAccessController
+	accessControllersByMethod map[string]workerKeymanager.RPCAccessController
 
 	accessList *AccessList
 
@@ -145,20 +146,25 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 	}
 
 	// Handle access control.
-	switch {
-	case method == "" && kind == enclaverpc.KindNoiseSession:
-		// Anyone can connect.
-	default:
-		peerID, ok := rpc.PeerIDFromContext(ctx)
-		if !ok {
-			return nil, fmt.Errorf("not authorized: unknown peer")
-		}
+	peerID, ok := rpc.PeerIDFromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("not authorized: unknown peer")
+	}
 
-		ctrl, ok := w.accessControllers[method]
+	switch {
+	case method == api.RPCMethodConnect && kind == enclaverpc.KindNoiseSession:
+		// Allow connection if at least one controller grants authorization.
+		fn := func(ctrl workerKeymanager.RPCAccessController) bool {
+			return ctrl.Connect(peerID)
+		}
+		if !slices.ContainsFunc(w.accessControllers, fn) {
+			return nil, fmt.Errorf("not authorized to connect")
+		}
+	default:
+		ctrl, ok := w.accessControllersByMethod[method]
 		if !ok {
 			return nil, fmt.Errorf("unsupported RPC method")
 		}
-
 		if err := ctrl.Authorize(method, kind, peerID); err != nil {
 			return nil, fmt.Errorf("not authorized: %w", err)
 		}
@@ -174,8 +180,10 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		},
 	}
 
-	// Hosted runtime should not be nil as we are initialized.
 	rt := w.GetHostedRuntime()
+	if rt == nil {
+		return nil, fmt.Errorf("not initialized")
+	}
 	response, err := rt.Call(ctx, req)
 	if err != nil {
 		w.logger.Error("failed to dispatch RPC call to runtime",
@@ -208,6 +216,9 @@ func (w *Worker) callEnclaveLocal(method string, args interface{}, rsp interface
 	}
 
 	rt := w.GetHostedRuntime()
+	if rt == nil {
+		return fmt.Errorf("not initialized")
+	}
 	response, err := rt.Call(w.ctx, body)
 	if err != nil {
 		w.logger.Error("failed to dispatch local RPC call to runtime",
