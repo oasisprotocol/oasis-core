@@ -1,24 +1,18 @@
 package keymanager
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"math/rand"
 	"slices"
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
-	"github.com/libp2p/go-libp2p/core"
-
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
-	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -40,22 +34,10 @@ import (
 
 const (
 	rpcCallTimeout = 2 * time.Second
-
-	generateSecretMaxRetries = 5
-	loadSecretMaxRetries     = 5
-	ephemeralSecretCacheSize = 20
 )
 
-var (
-	_ service.BackgroundService = (*Worker)(nil)
-
-	errMalformedResponse = fmt.Errorf("worker/keymanager: malformed response from worker")
-)
-
-type runtimeStatus struct {
-	version       version.Version
-	capabilityTEE *node.CapabilityTEE
-}
+// Ensure the key manager worker implements the BackgroundService interface.
+var _ service.BackgroundService = (*Worker)(nil)
 
 // Worker is the key manager worker.
 //
@@ -70,7 +52,6 @@ type Worker struct { // nolint: maligned
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
-	stopCh    chan struct{}
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
@@ -80,49 +61,17 @@ type Worker struct { // nolint: maligned
 
 	kmNodeWatcher    *kmNodeWatcher
 	kmRuntimeWatcher *kmRuntimeWatcher
+	secretsWorker    *secretsWorker
 
-	accessList   *AccessList
-	privatePeers map[core.PeerID]struct{}
+	accessControllers map[string]workerKeymanager.RPCAccessController
+
+	accessList *AccessList
 
 	commonWorker *workerCommon.Worker
 	roleProvider registration.RoleProvider
 	backend      api.Backend
 
-	globalStatus   *api.Status
-	policy         *api.SignedPolicySGX
-	policyChecksum []byte
-	activeVersion  *version.Version
-
-	masterSecretStats    workerKeymanager.MasterSecretStats
-	ephemeralSecretStats workerKeymanager.EphemeralSecretStats
-
 	enabled bool
-
-	kmStatus *api.Status
-	rtStatus *runtimeStatus
-
-	initEnclaveInProgress  bool
-	initEnclaveRequired    bool
-	initEnclaveDoneCh      chan *api.SignedInitResponse
-	initEnclaveRetryCh     <-chan time.Time
-	initEnclaveRetryTicker *backoff.Ticker
-
-	mstSecret *api.SignedEncryptedMasterSecret
-
-	loadMstSecRetry     int
-	genMstSecDoneCh     chan bool
-	genMstSecEpoch      beacon.EpochTime
-	genMstSecInProgress bool
-	genMstSecRetry      int
-
-	ephSecret *api.SignedEncryptedEphemeralSecret
-
-	loadEphSecRetry     int
-	genEphSecDoneCh     chan bool
-	genEphSecInProgress bool
-	genEphSecRetry      int
-
-	genSecHeight int64
 }
 
 func (w *Worker) Name() string {
@@ -143,7 +92,7 @@ func (w *Worker) Start() error {
 }
 
 func (w *Worker) Stop() {
-	w.logger.Info("stopping key manager service")
+	w.logger.Info("stopping key manager worker")
 
 	if !w.enabled {
 		close(w.quitCh)
@@ -152,7 +101,6 @@ func (w *Worker) Stop() {
 
 	// Stop the sub-components.
 	w.cancelCtx()
-	close(w.stopCh)
 }
 
 // Enabled returns if worker is enabled.
@@ -206,7 +154,12 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 			return nil, fmt.Errorf("not authorized: unknown peer")
 		}
 
-		if err := w.authorize(method, kind, peerID); err != nil {
+		ctrl, ok := w.accessControllers[method]
+		if !ok {
+			return nil, fmt.Errorf("unsupported RPC method")
+		}
+
+		if err := ctrl.Authorize(method, kind, peerID); err != nil {
 			return nil, fmt.Errorf("not authorized: %w", err)
 		}
 	}
@@ -237,13 +190,13 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		w.logger.Error("malformed response from runtime",
 			"response", response,
 		)
-		return nil, errMalformedResponse
+		return nil, fmt.Errorf("malformed response from runtime")
 	}
 
 	return resp.Response, nil
 }
 
-func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface{}) error {
+func (w *Worker) callEnclaveLocal(method string, args interface{}, rsp interface{}) error {
 	req := enclaverpc.Request{
 		Method: method,
 		Args:   args,
@@ -270,7 +223,7 @@ func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface
 			"method", method,
 			"response", response,
 		)
-		return errMalformedResponse
+		return fmt.Errorf("malformed response from runtime")
 	}
 
 	var msg enclaverpc.Message
@@ -297,371 +250,7 @@ func (w *Worker) localCallEnclave(method string, args interface{}, rsp interface
 	return nil
 }
 
-func (w *Worker) authorize(method string, kind enclaverpc.Kind, peerID core.PeerID) error {
-	select {
-	case <-w.initCh:
-	default:
-		return fmt.Errorf("not initialized")
-	}
-
-	switch kind {
-	case enclaverpc.KindInsecureQuery:
-		switch method {
-		case api.RPCMethodGetPublicKey:
-		case api.RPCMethodGetPublicEphemeralKey:
-		default:
-			return fmt.Errorf("unsupported method: %s", method)
-		}
-		return nil
-	case enclaverpc.KindNoiseSession:
-		switch method {
-		case api.RPCMethodGetOrCreateKeys:
-		case api.RPCMethodGetOrCreateEphemeralKeys:
-		case api.RPCMethodReplicateMasterSecret:
-		case api.RPCMethodReplicateEphemeralSecret:
-		default:
-			return fmt.Errorf("unsupported method: %s", method)
-		}
-	default:
-		return fmt.Errorf("unsupported kind: %s", kind)
-	}
-
-	if _, ok := w.privatePeers[peerID]; ok {
-		return nil
-	}
-
-	w.RLock()
-	defer w.RUnlock()
-
-	if w.globalStatus == nil || !w.globalStatus.IsInitialized || w.activeVersion == nil {
-		return fmt.Errorf("not initialized")
-	}
-
-	switch method {
-	case api.RPCMethodGetOrCreateKeys, api.RPCMethodGetOrCreateEphemeralKeys:
-		capabilityTEE, err := w.GetHostedRuntimeCapabilityTEE()
-		if err != nil {
-			return err
-		}
-
-		switch {
-		case capabilityTEE == nil:
-			// Insecure key manager enclaves can be queried by all runtimes (used for testing).
-			if w.globalStatus.IsSecure {
-				return fmt.Errorf("untrusted hardware")
-			}
-			return nil
-		case capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
-			// Secure key manager enclaves can be queried by runtimes specified in the policy.
-			if w.globalStatus.Policy == nil {
-				return fmt.Errorf("policy not set")
-			}
-			rts := w.accessList.Runtimes(peerID)
-			for _, enc := range w.globalStatus.Policy.Policy.Enclaves { // TODO: Use the right enclave identity.
-				for rtID := range enc.MayQuery {
-					if rts.Contains(rtID) {
-						return nil
-					}
-				}
-			}
-			return fmt.Errorf("query not allowed")
-		default:
-			return fmt.Errorf("unsupported hardware: %s", capabilityTEE.Hardware)
-		}
-	case api.RPCMethodReplicateMasterSecret, api.RPCMethodReplicateEphemeralSecret:
-		// Replication is restricted to peers within the same key manager runtime.
-		if !w.accessList.Runtimes(peerID).Contains(w.runtimeID) {
-			return fmt.Errorf("not a key manager")
-		}
-		return nil
-	default:
-		return fmt.Errorf("unsupported method: %s", method)
-	}
-}
-
-func (w *Worker) initEnclave(kmStatus *api.Status, rtStatus *runtimeStatus) (*api.SignedInitResponse, error) {
-	w.logger.Info("initializing key manager enclave")
-
-	// Initialize the key manager.
-	args := api.InitRequest{
-		Status: *kmStatus,
-	}
-	var signedInitResp api.SignedInitResponse
-	if err := w.localCallEnclave(api.RPCMethodInit, args, &signedInitResp); err != nil {
-		w.logger.Error("failed to initialize enclave",
-			"err", err,
-		)
-		return nil, fmt.Errorf("worker/keymanager: failed to initialize enclave: %w", err)
-	}
-
-	// Validate the signature.
-	if tee := rtStatus.capabilityTEE; tee != nil {
-		var signingKey signature.PublicKey
-
-		switch tee.Hardware {
-		case node.TEEHardwareInvalid:
-			signingKey = api.InsecureRAK
-		case node.TEEHardwareIntelSGX:
-			signingKey = tee.RAK
-		default:
-			return nil, fmt.Errorf("worker/keymanager: unknown TEE hardware: %v", tee.Hardware)
-		}
-
-		if err := signedInitResp.Verify(signingKey); err != nil {
-			return nil, fmt.Errorf("worker/keymanager: failed to validate initialization response signature: %w", err)
-		}
-	}
-
-	if !signedInitResp.InitResponse.IsSecure {
-		w.logger.Warn("key manager enclave build is INSECURE")
-	}
-
-	w.logger.Info("key manager enclave initialized",
-		"is_secure", signedInitResp.InitResponse.IsSecure,
-		"checksum", hex.EncodeToString(signedInitResp.InitResponse.Checksum),
-		"next_checksum", hex.EncodeToString(signedInitResp.InitResponse.NextChecksum),
-		"policy_checksum", hex.EncodeToString(signedInitResp.InitResponse.PolicyChecksum),
-		"rsk", signedInitResp.InitResponse.RSK,
-		"next_rsk", signedInitResp.InitResponse.NextRSK,
-	)
-
-	w.Lock()
-	defer w.Unlock()
-
-	// Update metrics.
-	enclaveMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.Generation))
-	if !bytes.Equal(w.policyChecksum, signedInitResp.InitResponse.PolicyChecksum) {
-		policyUpdateCount.WithLabelValues(w.runtimeLabel).Inc()
-	}
-
-	// Cache the currently active policy and its checksum.
-	w.policy = kmStatus.Policy
-	w.policyChecksum = signedInitResp.InitResponse.PolicyChecksum
-
-	return &signedInitResp, nil
-}
-
-func (w *Worker) registerNode(rsp *api.SignedInitResponse) {
-	w.logger.Info("registering key manager",
-		"is_secure", rsp.InitResponse.IsSecure,
-		"checksum", hex.EncodeToString(rsp.InitResponse.Checksum),
-		"policy_checksum", hex.EncodeToString(rsp.InitResponse.PolicyChecksum),
-		"rsk", rsp.InitResponse.RSK,
-		"next_rsk", rsp.InitResponse.NextRSK,
-	)
-
-	// Register as we are now ready to handle requests.
-	rtStatus := w.rtStatus
-	extraInfo := cbor.Marshal(rsp)
-	w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
-		rt := n.AddOrUpdateRuntime(w.runtimeID, rtStatus.version)
-		rt.Version = rtStatus.version
-		rt.ExtraInfo = extraInfo
-		rt.Capabilities.TEE = rtStatus.capabilityTEE
-		return nil
-	}, func(context.Context) error {
-		w.logger.Info("key manager registered")
-
-		// Signal that we are initialized.
-		select {
-		case <-w.initCh:
-		default:
-			w.logger.Info("key manager initialized")
-			close(w.initCh)
-		}
-
-		return nil
-	})
-}
-
-func (w *Worker) setStatus(status *api.Status) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.globalStatus = status
-}
-
-func (w *Worker) setVersion(v *version.Version) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.activeVersion = v
-}
-
-func (w *Worker) setLastGeneratedMasterSecretGeneration(generation uint64) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.masterSecretStats.NumGenerated++
-	w.masterSecretStats.LastGenerated = generation
-}
-
-func (w *Worker) setLastLoadedMasterSecretGeneration(generation uint64) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.masterSecretStats.NumLoaded++
-	w.masterSecretStats.LastLoaded = generation
-}
-
-func (w *Worker) setLastGeneratedEphemeralSecretEpoch(epoch beacon.EpochTime) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.ephemeralSecretStats.NumGenerated++
-	w.ephemeralSecretStats.LastGenerated = epoch
-}
-
-func (w *Worker) setLastLoadedEphemeralSecretEpoch(epoch beacon.EpochTime) {
-	w.Lock()
-	defer w.Unlock()
-
-	w.ephemeralSecretStats.NumLoaded++
-	w.ephemeralSecretStats.LastLoaded = epoch
-}
-
-func (w *Worker) generateMasterSecret(runtimeID common.Namespace, height int64, generation uint64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
-	w.logger.Info("generating master secret",
-		"height", height,
-		"generation", generation,
-		"epoch", epoch,
-	)
-	// Check if the master secret has been proposed in this epoch.
-	// Note that despite this check, the nodes can still publish master secrets at the same time.
-	lastSecret, err := w.commonWorker.Consensus.KeyManager().GetMasterSecret(w.ctx, &registry.NamespaceQuery{
-		Height: consensus.HeightLatest,
-		ID:     runtimeID,
-	})
-	if err != nil && err != api.ErrNoSuchMasterSecret {
-		return err
-	}
-	if lastSecret != nil && epoch == lastSecret.Secret.Epoch {
-		return fmt.Errorf("master secret can be proposed once per epoch")
-	}
-
-	// Check if rotation is allowed.
-	if err = kmStatus.VerifyRotationEpoch(epoch); err != nil {
-		return err
-	}
-
-	// Skip generation if the node is not in the key manager committee.
-	id := w.commonWorker.Identity.NodeSigner.Public()
-	if !slices.Contains(kmStatus.Nodes, id) {
-		w.logger.Info("skipping master secret generation, node not in the key manager committee")
-		return fmt.Errorf("node not in the key manager committee")
-	}
-
-	// Generate master secret.
-	args := api.GenerateMasterSecretRequest{
-		Generation: generation,
-		Epoch:      epoch,
-	}
-
-	var rsp api.GenerateMasterSecretResponse
-	if err = w.localCallEnclave(api.RPCMethodGenerateMasterSecret, args, &rsp); err != nil {
-		w.logger.Error("failed to generate master secret",
-			"err", err,
-		)
-		return fmt.Errorf("failed to generate master secret: %w", err)
-	}
-
-	rak, err := w.runtimeAttestationKey(rtStatus)
-	if err != nil {
-		return err
-	}
-
-	reks, err := w.runtimeEncryptionKeys(kmStatus)
-	if err != nil {
-		return err
-	}
-
-	// Verify the response.
-	if err = rsp.SignedSecret.Verify(generation, epoch, reks, rak); err != nil {
-		return fmt.Errorf("failed to validate master secret signature: %w", err)
-	}
-
-	// Publish transaction.
-	tx := api.NewPublishMasterSecretTx(0, nil, &rsp.SignedSecret)
-	if err = consensus.SignAndSubmitTx(w.ctx, w.commonWorker.Consensus, w.commonWorker.Identity.NodeSigner, tx); err != nil {
-		return err
-	}
-
-	// Update metrics.
-	enclaveGeneratedMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(rsp.SignedSecret.Secret.Generation))
-	enclaveGeneratedMasterSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(rsp.SignedSecret.Secret.Epoch))
-	w.setLastGeneratedMasterSecretGeneration(rsp.SignedSecret.Secret.Generation)
-
-	return err
-}
-
-func (w *Worker) generateEphemeralSecret(runtimeID common.Namespace, height int64, epoch beacon.EpochTime, kmStatus *api.Status, rtStatus *runtimeStatus) error {
-	w.logger.Info("generating ephemeral secret",
-		"height", height,
-		"epoch", epoch,
-	)
-
-	// Check if the ephemeral secret has been published in this epoch.
-	// Note that despite this check, the nodes can still publish ephemeral secrets at the same time.
-	lastSecret, err := w.commonWorker.Consensus.KeyManager().GetEphemeralSecret(w.ctx, &registry.NamespaceQuery{
-		Height: consensus.HeightLatest,
-		ID:     runtimeID,
-	})
-	if err != nil && err != api.ErrNoSuchEphemeralSecret {
-		return err
-	}
-	if lastSecret != nil && epoch == lastSecret.Secret.Epoch {
-		return fmt.Errorf("ephemeral secret can be proposed once per epoch")
-	}
-
-	// Skip generation if the node is not in the key manager committee.
-	id := w.commonWorker.Identity.NodeSigner.Public()
-	if !slices.Contains(kmStatus.Nodes, id) {
-		w.logger.Info("skipping ephemeral secret generation, node not in the key manager committee")
-		return fmt.Errorf("node not in the key manager committee")
-	}
-
-	// Generate ephemeral secret.
-	args := api.GenerateEphemeralSecretRequest{
-		Epoch: epoch,
-	}
-
-	var rsp api.GenerateEphemeralSecretResponse
-	if err = w.localCallEnclave(api.RPCMethodGenerateEphemeralSecret, args, &rsp); err != nil {
-		w.logger.Error("failed to generate ephemeral secret",
-			"err", err,
-		)
-		return fmt.Errorf("failed to generate ephemeral secret: %w", err)
-	}
-
-	rak, err := w.runtimeAttestationKey(rtStatus)
-	if err != nil {
-		return err
-	}
-
-	reks, err := w.runtimeEncryptionKeys(kmStatus)
-	if err != nil {
-		return err
-	}
-
-	// Verify the response.
-	if err = rsp.SignedSecret.Verify(epoch, reks, rak); err != nil {
-		return fmt.Errorf("failed to validate ephemeral secret signature: %w", err)
-	}
-
-	// Publish transaction.
-	tx := api.NewPublishEphemeralSecretTx(0, nil, &rsp.SignedSecret)
-	if err = consensus.SignAndSubmitTx(w.ctx, w.commonWorker.Consensus, w.commonWorker.Identity.NodeSigner, tx); err != nil {
-		return err
-	}
-
-	// Update metrics.
-	enclaveGeneratedEphemeralSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(rsp.SignedSecret.Secret.Epoch))
-	w.setLastGeneratedEphemeralSecretEpoch(rsp.SignedSecret.Secret.Epoch)
-
-	return err
-}
-
-func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus) (*signature.PublicKey, error) {
+func (w *Worker) runtimeAttestationKey() (*signature.PublicKey, error) {
 	kmRt, err := w.runtime.RegistryDescriptor(w.ctx)
 	if err != nil {
 		return nil, err
@@ -672,10 +261,14 @@ func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus) (*signature.Publ
 	case node.TEEHardwareInvalid:
 		rak = &api.InsecureRAK
 	case node.TEEHardwareIntelSGX:
-		if rtStatus.capabilityTEE == nil {
-			return nil, fmt.Errorf("node doesn't have TEE capability")
+		capabilityTEE, err := w.GetHostedRuntimeCapabilityTEE()
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch TEE capability: %w", err)
 		}
-		rak = &rtStatus.capabilityTEE.RAK
+		if capabilityTEE == nil {
+			return nil, fmt.Errorf("runtime is not running inside a TEE")
+		}
+		rak = &capabilityTEE.RAK
 	default:
 		return nil, fmt.Errorf("TEE hardware mismatch")
 	}
@@ -683,14 +276,14 @@ func (w *Worker) runtimeAttestationKey(rtStatus *runtimeStatus) (*signature.Publ
 	return rak, nil
 }
 
-func (w *Worker) runtimeEncryptionKeys(kmStatus *api.Status) (map[x25519.PublicKey]struct{}, error) {
+func (w *Worker) runtimeEncryptionKeys(nodes []signature.PublicKey) (map[x25519.PublicKey]struct{}, error) {
 	kmRt, err := w.runtime.RegistryDescriptor(w.ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	reks := make(map[x25519.PublicKey]struct{})
-	for _, id := range kmStatus.Nodes {
+	for _, id := range nodes {
 		var n *node.Node
 		n, err := w.commonWorker.Consensus.Registry().GetNode(w.ctx, &registry.IDQuery{
 			Height: consensus.HeightLatest,
@@ -707,7 +300,7 @@ func (w *Worker) runtimeEncryptionKeys(kmStatus *api.Status) (map[x25519.PublicK
 		idx := slices.IndexFunc(n.Runtimes, func(rt *node.Runtime) bool {
 			// Skipping version check as key managers are running exactly one
 			// version of the runtime.
-			return rt.ID.Equal(&kmStatus.ID)
+			return rt.ID.Equal(&w.runtimeID)
 		})
 		if idx == -1 {
 			continue
@@ -731,56 +324,6 @@ func (w *Worker) runtimeEncryptionKeys(kmStatus *api.Status) (map[x25519.PublicK
 	}
 
 	return reks, nil
-}
-
-func (w *Worker) loadMasterSecret(sigSecret *api.SignedEncryptedMasterSecret) error {
-	w.logger.Info("loading master secret",
-		"generation", sigSecret.Secret.Generation,
-		"epoch", sigSecret.Secret.Epoch,
-	)
-
-	args := api.LoadMasterSecretRequest{
-		SignedSecret: *sigSecret,
-	}
-
-	var rsp protocol.Empty
-	if err := w.localCallEnclave(api.RPCMethodLoadMasterSecret, args, &rsp); err != nil {
-		w.logger.Error("failed to load master secret",
-			"err", err,
-		)
-		return fmt.Errorf("failed to load master secret: %w", err)
-	}
-
-	// Update metrics.
-	enclaveMasterSecretProposalGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(w.mstSecret.Secret.Generation))
-	enclaveMasterSecretProposalEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(w.mstSecret.Secret.Epoch))
-	w.setLastLoadedMasterSecretGeneration(w.mstSecret.Secret.Generation)
-
-	return nil
-}
-
-func (w *Worker) loadEphemeralSecret(sigSecret *api.SignedEncryptedEphemeralSecret) error {
-	w.logger.Info("loading ephemeral secret",
-		"epoch", sigSecret.Secret.Epoch,
-	)
-
-	args := api.LoadEphemeralSecretRequest{
-		SignedSecret: *sigSecret,
-	}
-
-	var rsp protocol.Empty
-	if err := w.localCallEnclave(api.RPCMethodLoadEphemeralSecret, args, &rsp); err != nil {
-		w.logger.Error("failed to load ephemeral secret",
-			"err", err,
-		)
-		return fmt.Errorf("failed to load ephemeral secret: %w", err)
-	}
-
-	// Update metrics.
-	enclaveEphemeralSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(w.ephSecret.Secret.Epoch))
-	w.setLastLoadedEphemeralSecretEpoch(w.ephSecret.Secret.Epoch)
-
-	return nil
 }
 
 // randomBlockHeight returns the height of a random block in the k-th percentile of the given epoch.
@@ -808,438 +351,44 @@ func (w *Worker) randomBlockHeight(epoch beacon.EpochTime, percentile int64) (in
 	return height, nil
 }
 
-func (w *Worker) updateGenerateMasterSecretEpoch() {
-	var nextEpoch beacon.EpochTime
-
-	// If at least one master secret has been generated, respect the rotation interval.
-	nextGen := w.kmStatus.NextGeneration()
-	if nextGen != 0 {
-		var rotationInterval beacon.EpochTime
-		if w.kmStatus.Policy != nil {
-			rotationInterval = w.kmStatus.Policy.Policy.MasterSecretRotationInterval
-		}
-
-		switch rotationInterval {
-		case 0:
-			// Rotation not allowed.
-			nextEpoch = math.MaxUint64
-		default:
-			// Secrets are allowed to be generated at most one epoch before the rotation.
-			nextEpoch = w.kmStatus.RotationEpoch + rotationInterval - 1
-		}
-	}
-
-	// If a master secret has been proposed, wait for the next epoch.
-	if w.mstSecret != nil && nextEpoch < w.mstSecret.Secret.Epoch {
-		nextEpoch = w.mstSecret.Secret.Epoch
-	}
-
-	w.genMstSecEpoch = nextEpoch
-
-	w.logger.Debug("epoch for generating master secret updated",
-		"epoch", w.genMstSecEpoch,
-	)
-}
-
-func (w *Worker) handleStatusUpdate(kmStatus *api.Status) {
-	if kmStatus == nil || !kmStatus.ID.Equal(&w.runtimeID) {
-		return
-	}
-
-	w.logger.Debug("key manager status updated",
-		"generation", kmStatus.Generation,
-		"rotation_epoch", kmStatus.RotationEpoch,
-		"checksum", hex.EncodeToString(kmStatus.Checksum),
-		"nodes", kmStatus.Nodes,
-	)
-
-	// Update metrics.
-	consensusMasterSecretGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.Generation))
-	consensusMasterSecretRotationEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(kmStatus.RotationEpoch))
-
-	// Cache the latest status.
-	w.setStatus(kmStatus)
-	w.kmStatus = kmStatus
-
-	// (Re)Initialize the enclave.
-	// A new master secret generation or policy might have been published.
-	w.handleInitEnclave()
-
-	// The epoch for generating the next master secret may change with the policy update.
-	w.updateGenerateMasterSecretEpoch()
-}
-
-func (w *Worker) handleInitEnclave() {
-	if w.kmStatus == nil || w.rtStatus == nil {
-		// There's no need to retry as another call will be made
-		// once both fields are initialized.
-		return
-	}
-	if w.initEnclaveInProgress {
-		// Try again later, immediately after the current task finishes.
-		w.initEnclaveRequired = true
-		return
-	}
-
-	// Lock. Allow only one active initialization.
-	w.initEnclaveRequired = false
-	w.initEnclaveInProgress = true
-
-	// Enclave initialization can take a long time (e.g. when master secrets
-	// need to be replicated), so don't block the loop.
-	initEnclave := func(kmStatus *api.Status, rtStatus *runtimeStatus) {
-		rsp, err := w.initEnclave(kmStatus, rtStatus)
-		if err != nil {
-			w.logger.Error("failed to initialize enclave",
-				"err", err,
-			)
-		}
-		w.initEnclaveDoneCh <- rsp
-	}
-
-	go initEnclave(w.kmStatus, w.rtStatus)
-}
-
-func (w *Worker) handleInitEnclaveDone(rsp *api.SignedInitResponse) {
-	// Unlock.
-	w.initEnclaveInProgress = false
-
-	// Stop or set up the retry ticker, depending on whether the initialization failed.
-	switch {
-	case rsp != nil && w.initEnclaveRetryTicker != nil:
-		w.initEnclaveRetryTicker.Stop()
-		w.initEnclaveRetryTicker = nil
-		w.initEnclaveRetryCh = nil
-	case rsp == nil && w.initEnclaveRetryTicker == nil && !w.initEnclaveRequired:
-		w.initEnclaveRetryTicker = backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
-		w.initEnclaveRetryCh = w.initEnclaveRetryTicker.C
-	}
-
-	// Ensure the enclave is up-to-date with the latest key manager status.
-	// For example, if the replication of master secrets took a long time,
-	// new secrets might have been generated and they need to be replicated too.
-	if w.initEnclaveRequired {
-		w.handleInitEnclave()
-		return
-	}
-
-	// (Re)Register the node with the latest init response.
-	if rsp != nil {
-		w.registerNode(rsp)
-	}
-}
-
 func (w *Worker) handleRuntimeHostEvent(ev *host.Event) {
 	switch {
 	case ev.Started != nil, ev.Updated != nil:
-		// Runtime has started successfully.
-		w.rtStatus = &runtimeStatus{}
+		var (
+			version       version.Version
+			capabilityTEE *node.CapabilityTEE
+		)
 		switch {
 		case ev.Started != nil:
-			w.rtStatus.version = ev.Started.Version
-			w.rtStatus.capabilityTEE = ev.Started.CapabilityTEE
+			version = ev.Started.Version
+			capabilityTEE = ev.Started.CapabilityTEE
 		case ev.Updated != nil:
-			w.rtStatus.version = ev.Updated.Version
-			w.rtStatus.capabilityTEE = ev.Updated.CapabilityTEE
+			version = ev.Updated.Version
+			capabilityTEE = ev.Updated.CapabilityTEE
 		default:
 			return
 		}
-		w.setVersion(&w.rtStatus.version)
 
-		if w.kmStatus == nil {
-			return
-		}
-
-		// Check whether the enclave has been initialized at least once.
-		// If true, preregistration is not required.
-		w.RLock()
-		initialized := w.policyChecksum != nil
-		w.RUnlock()
-
-		// Send a node preregistration, so that other nodes know to update their access
-		// control. Without it, the enclave won't be able to replicate the master secrets
-		// needed for initialization.
-		if !initialized {
-			rtStatus := w.rtStatus
-			w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
-				rt := n.AddOrUpdateRuntime(w.runtime.ID(), rtStatus.version)
-				rt.Version = rtStatus.version
-				rt.ExtraInfo = nil
-				rt.Capabilities.TEE = rtStatus.capabilityTEE
-				return nil
-			}, func(context.Context) error {
-				w.logger.Info("key manager registered (pre-registration)")
-				return nil
-			})
-		}
-
-		w.handleStatusUpdate(w.kmStatus)
+		w.roleProvider.SetAvailableWithCallback(func(n *node.Node) error {
+			rt := n.AddOrUpdateRuntime(w.runtime.ID(), version)
+			rt.Version = version
+			rt.Capabilities.TEE = capabilityTEE
+			return nil
+		}, func(context.Context) error {
+			w.logger.Info("key manager registered",
+				"version", version,
+				"tee", capabilityTEE,
+			)
+			return nil
+		})
 	case ev.FailedToStart != nil, ev.Stopped != nil:
-		// Worker failed to start or was stopped -- we can no longer service requests.
-		w.rtStatus = nil
-		w.setVersion(nil)
+		// We can no longer service requests.
 		w.roleProvider.SetUnavailable()
 	default:
 		// Unknown event.
-		w.logger.Warn("unknown worker event",
+		w.logger.Warn("unknown runtime host event",
 			"ev", ev,
 		)
-	}
-}
-
-func (w *Worker) handleNewEpoch(epoch beacon.EpochTime) {
-	// Choose a random height for generating master/ephemeral secrets to prevent key managers from
-	// all publishing transactions simultaneously, which would result in unnecessary gas waste.
-	// Additionally, avoid selecting blocks at the end of the epoch, as secret generation,
-	// publication and replication takes some time.
-	height, err := w.randomBlockHeight(epoch, 50)
-	if err != nil {
-		// If randomization fails, the height will be set to zero meaning that
-		// the secrets will be generated immediately without a delay.
-		w.logger.Error("failed to select a random block height",
-			"err", err,
-		)
-	}
-
-	w.logger.Debug("block height for generating secrets selected",
-		"height", height,
-		"epoch", epoch,
-	)
-
-	// Reset retries.
-	w.genSecHeight = height
-	w.genMstSecRetry = 0
-	w.genEphSecRetry = 0
-}
-
-func (w *Worker) handleNewBlock(blk *consensus.Block, epoch beacon.EpochTime) {
-	if blk == nil {
-		w.logger.Error("watch blocks channel closed unexpectedly")
-		return
-	}
-
-	// (Re)Generate master/ephemeral secrets once we reach the chosen height and epoch.
-	w.handleGenerateMasterSecret(blk.Height, epoch)
-	w.handleGenerateEphemeralSecret(blk.Height, epoch)
-
-	// (Re)Load master/ephemeral secrets.
-	// When using CometBFT as a backend service the first load
-	// will probably fail as the verifier is one block behind.
-	w.handleLoadMasterSecret()
-	w.handleLoadEphemeralSecret()
-}
-
-func (w *Worker) handleNewMasterSecret(secret *api.SignedEncryptedMasterSecret) {
-	if !secret.Secret.ID.Equal(&w.runtimeID) {
-		return
-	}
-
-	w.logger.Debug("master secret published",
-		"generation", secret.Secret.Generation,
-		"epoch", secret.Secret.Epoch,
-		"checksum", hex.EncodeToString(secret.Secret.Secret.Checksum),
-	)
-
-	// Update metrics.
-	consensusMasterSecretProposalGenerationNumber.WithLabelValues(w.runtimeLabel).Set(float64(secret.Secret.Generation))
-	consensusMasterSecretProposalEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(secret.Secret.Epoch))
-
-	// Rearm master secret loading.
-	w.mstSecret = secret
-	w.loadMstSecRetry = 0
-
-	w.updateGenerateMasterSecretEpoch()
-	w.handleLoadMasterSecret()
-}
-
-func (w *Worker) handleGenerateMasterSecret(height int64, epoch beacon.EpochTime) {
-	if w.kmStatus == nil || w.rtStatus == nil {
-		return
-	}
-	if w.genMstSecInProgress || w.genMstSecRetry > generateSecretMaxRetries {
-		return
-	}
-	if w.genSecHeight > height && len(w.kmStatus.Nodes) > 1 || w.genMstSecEpoch > epoch {
-		// Observe that the height for secret generation is respected only if there are multiple
-		// nodes in the key manager committee. In production, this should have no impact, but in
-		// test scenarios, it allows us to transition to the next epoch earlier, as soon as all
-		// required secrets are generated.
-		return
-	}
-
-	// Lock. Allow only one active master secret generation.
-	w.genMstSecInProgress = true
-
-	// Master secrets are generated for the next generation and for the next epoch.
-	nextGen := w.kmStatus.NextGeneration()
-	nextEpoch := epoch + 1
-	retry := w.genMstSecRetry
-
-	// Retry only few times per epoch.
-	w.genMstSecRetry++
-
-	// Submitting transaction can take time, so don't block the loop.
-	generateMasterSecret := func(kmStatus *api.Status, rtStatus *runtimeStatus) {
-		if err := w.generateMasterSecret(w.runtimeID, height, nextGen, nextEpoch, kmStatus, rtStatus); err != nil {
-			w.logger.Error("failed to generate master secret",
-				"err", err,
-				"retry", retry,
-			)
-			w.genMstSecDoneCh <- false
-			return
-		}
-		w.genMstSecDoneCh <- true
-	}
-
-	go generateMasterSecret(w.kmStatus, w.rtStatus)
-}
-
-func (w *Worker) handleGenerateMasterSecretDone(ok bool) {
-	// Unlock.
-	w.genMstSecInProgress = false
-
-	// Disarm master secret generation if we are still in the same epoch.
-	if ok && w.genMstSecRetry > 0 {
-		w.genMstSecRetry = math.MaxInt64
-	}
-}
-
-func (w *Worker) handleLoadMasterSecret() {
-	if w.kmStatus == nil || w.rtStatus == nil || w.mstSecret == nil {
-		return
-	}
-	if w.loadMstSecRetry > loadSecretMaxRetries {
-		return
-	}
-
-	// Retry only few times per epoch.
-	w.loadMstSecRetry++
-
-	if err := w.loadMasterSecret(w.mstSecret); err != nil {
-		w.logger.Error("failed to load master secret",
-			"err", err,
-			"retry", w.loadMstSecRetry-1,
-		)
-		return
-	}
-
-	// Disarm master secret loading.
-	w.loadMstSecRetry = math.MaxInt64
-
-	// Announce that the enclave has replicated the proposal for the next master
-	// secret and is ready for rotation.
-	w.handleInitEnclave()
-}
-
-func (w *Worker) handleNewEphemeralSecret(secret *api.SignedEncryptedEphemeralSecret, epoch beacon.EpochTime) {
-	if !secret.Secret.ID.Equal(&w.runtimeID) {
-		return
-	}
-
-	w.logger.Debug("ephemeral secret published",
-		"epoch", secret.Secret.Epoch,
-	)
-
-	// Update metrics.
-	consensusEphemeralSecretEpochNumber.WithLabelValues(w.runtimeLabel).Set(float64(secret.Secret.Epoch))
-
-	// Rearm ephemeral secret loading.
-	w.ephSecret = secret
-	w.loadEphSecRetry = 0
-
-	if secret.Secret.Epoch == epoch+1 {
-		// Disarm ephemeral secret generation.
-		w.genEphSecRetry = math.MaxInt64
-	}
-
-	w.handleLoadEphemeralSecret()
-}
-
-func (w *Worker) handleGenerateEphemeralSecret(height int64, epoch beacon.EpochTime) {
-	if w.kmStatus == nil || w.rtStatus == nil {
-		return
-	}
-	if w.genEphSecInProgress || w.genEphSecRetry > generateSecretMaxRetries {
-		return
-	}
-	if w.genSecHeight > height && len(w.kmStatus.Nodes) > 1 {
-		// Observe that the height for secret generation is respected only if there are multiple
-		// nodes in the key manager committee. In production, this should have no impact, but in
-		// test scenarios, it allows us to transition to the next epoch earlier, as soon as all
-		// required secrets are generated.
-		return
-	}
-
-	// Lock. Allow only one active ephemeral secret generation.
-	w.genEphSecInProgress = true
-
-	// Ephemeral secrets are generated for the next epoch.
-	nextEpoch := epoch + 1
-	retry := w.genEphSecRetry
-
-	// Retry only few times per epoch.
-	w.genEphSecRetry++
-
-	// Submitting transaction can take time, so don't block the loop.
-	generateEphemeralSecret := func(kmStatus *api.Status, rtStatus *runtimeStatus) {
-		if err := w.generateEphemeralSecret(w.runtimeID, height, nextEpoch, kmStatus, rtStatus); err != nil {
-			w.logger.Error("failed to generate ephemeral secret",
-				"err", err,
-				"retry", retry,
-			)
-			w.genEphSecDoneCh <- false
-			return
-		}
-		w.genEphSecDoneCh <- true
-	}
-
-	go generateEphemeralSecret(w.kmStatus, w.rtStatus)
-}
-
-func (w *Worker) handleGenerateEphemeralSecretDone(ok bool) {
-	// Unlock.
-	w.genEphSecInProgress = false
-
-	// Disarm ephemeral secret generation if we are still in the same epoch.
-	if ok && w.genEphSecRetry > 0 {
-		w.genEphSecRetry = math.MaxInt64
-	}
-}
-
-func (w *Worker) handleLoadEphemeralSecret() {
-	if w.kmStatus == nil || w.rtStatus == nil || w.ephSecret == nil {
-		return
-	}
-	if w.loadEphSecRetry > loadSecretMaxRetries {
-		return
-	}
-
-	// Retry only few times per epoch.
-	w.loadEphSecRetry++
-
-	if err := w.loadEphemeralSecret(w.ephSecret); err != nil {
-		w.logger.Error("failed to load ephemeral secret",
-			"err", err,
-		)
-		return
-	}
-
-	// Disarm ephemeral secret loading.
-	w.loadEphSecRetry = math.MaxInt64
-}
-
-func (w *Worker) handleStop() {
-	w.logger.Info("termination requested")
-
-	// Wait until tasks running in the background finish.
-	if w.initEnclaveInProgress {
-		<-w.initEnclaveDoneCh
-	}
-	if w.genMstSecInProgress {
-		<-w.genMstSecDoneCh
-	}
-	if w.genEphSecInProgress {
-		<-w.genEphSecDoneCh
 	}
 }
 
@@ -1249,9 +398,9 @@ func (w *Worker) worker() {
 	defer close(w.quitCh)
 
 	// Wait for consensus sync.
-	w.logger.Info("delaying key manager worker start until after consensus synchronization")
+	w.logger.Info("waiting consensus to finish initial synchronization")
 	select {
-	case <-w.stopCh:
+	case <-w.ctx.Done():
 		return
 	case <-w.commonWorker.Consensus.Synced():
 	}
@@ -1274,12 +423,7 @@ func (w *Worker) worker() {
 	hrt.Start()
 	defer hrt.Stop()
 
-	if err = hrtNotifier.Start(); err != nil {
-		w.logger.Error("failed to start key manager runtime notifier",
-			"err", err,
-		)
-		return
-	}
+	hrtNotifier.Start()
 	defer hrtNotifier.Stop()
 
 	// Key managers always need to use the enclave version given to them in the bundle
@@ -1293,81 +437,52 @@ func (w *Worker) worker() {
 		return
 	}
 
+	// Always wait for the background watchers and workers to finish.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	wg.Add(4)
+
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
-	go w.kmNodeWatcher.watch(w.ctx)
+	go func() {
+		defer wg.Done()
+		w.kmNodeWatcher.watch(w.ctx)
+	}()
 
 	// Watch runtime registrations in order to know which runtimes are using
 	// us as a key manager.
-	go w.kmRuntimeWatcher.watch(w.ctx)
+	go func() {
+		defer wg.Done()
+		w.kmRuntimeWatcher.watch(w.ctx)
+	}()
 
-	// Subscribe to key manager status updates.
-	statusCh, statusSub := w.backend.WatchStatuses()
-	defer statusSub.Close()
+	// Serve master and ephemeral secrets.
+	go func() {
+		defer wg.Done()
+		w.secretsWorker.work(w.ctx, hrt)
+	}()
 
-	// Subscribe to key manager master secret publications.
-	mstCh, mstSub := w.backend.WatchMasterSecrets()
-	defer mstSub.Close()
+	// Watch runtime updates and register with new capabilities on restarts.
+	go func() {
+		defer wg.Done()
 
-	// Subscribe to key manager ephemeral secret publications.
-	ephCh, ephSub := w.backend.WatchEphemeralSecrets()
-	defer ephSub.Close()
-
-	// Subscribe to epoch transitions in order to know when we need to refresh
-	// the access control policy and choose a random block height for ephemeral
-	// secret generation.
-	epoch, err := w.commonWorker.Consensus.Beacon().GetEpoch(w.ctx, consensus.HeightLatest)
-	if err != nil {
-		w.logger.Error("failed to fetch current epoch",
-			"err", err,
-		)
-		return
-	}
-	epoCh, epoSub, err := w.commonWorker.Consensus.Beacon().WatchLatestEpoch(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to watch epochs",
-			"err", err,
-		)
-		return
-	}
-	defer epoSub.Close()
-
-	// Watch block heights so we can impose a random ephemeral secret
-	// generation delay.
-	blkCh, blkSub, err := w.commonWorker.Consensus.WatchBlocks(w.ctx)
-	if err != nil {
-		w.logger.Error("failed to watch blocks",
-			"err", err,
-		)
-		return
-	}
-	defer blkSub.Close()
-
-	for {
-		select {
-		case ev := <-hrtEventCh:
-			w.handleRuntimeHostEvent(ev)
-		case kmStatus := <-statusCh:
-			w.handleStatusUpdate(kmStatus)
-		case <-w.initEnclaveRetryCh:
-			w.handleInitEnclave()
-		case rsp := <-w.initEnclaveDoneCh:
-			w.handleInitEnclaveDone(rsp)
-		case epoch = <-epoCh:
-			w.handleNewEpoch(epoch)
-		case blk := <-blkCh:
-			w.handleNewBlock(blk, epoch)
-		case secret := <-mstCh:
-			w.handleNewMasterSecret(secret)
-		case ok := <-w.genMstSecDoneCh:
-			w.handleGenerateMasterSecretDone(ok)
-		case secret := <-ephCh:
-			w.handleNewEphemeralSecret(secret, epoch)
-		case ok := <-w.genEphSecDoneCh:
-			w.handleGenerateEphemeralSecretDone(ok)
-		case <-w.stopCh:
-			w.handleStop()
-			return
+		for {
+			select {
+			case ev := <-hrtEventCh:
+				w.handleRuntimeHostEvent(ev)
+			case <-w.ctx.Done():
+				return
+			}
 		}
+	}()
+
+	// Wait for all workers to initialize.
+	select {
+	case <-w.secretsWorker.Initialized():
+	case <-w.ctx.Done():
+		return
 	}
+
+	close(w.initCh)
 }

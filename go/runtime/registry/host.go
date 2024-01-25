@@ -955,19 +955,17 @@ func (n *runtimeHostNotifier) watchConsensusLightBlocks() {
 }
 
 // Implements protocol.Notifier.
-func (n *runtimeHostNotifier) Start() error {
+func (n *runtimeHostNotifier) Start() {
 	n.Lock()
 	defer n.Unlock()
 
 	if n.started {
-		return nil
+		return
 	}
 	n.started = true
 
 	go n.watchPolicyUpdates()
 	go n.watchConsensusLightBlocks()
-
-	return nil
 }
 
 // Implements protocol.Notifier.

@@ -3,20 +3,15 @@ package keymanager
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
-	"math"
 
-	"github.com/libp2p/go-libp2p/core"
-
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
-	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	runtimeRegistry "github.com/oasisprotocol/oasis-core/go/runtime/registry"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
+	workerKeymanager "github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/p2p"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
@@ -39,22 +34,15 @@ func New(
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	w := &Worker{
-		logger:            logging.GetLogger("worker/keymanager"),
-		ctx:               ctx,
-		cancelCtx:         cancelFn,
-		stopCh:            make(chan struct{}),
-		quitCh:            make(chan struct{}),
-		initCh:            make(chan struct{}),
-		accessList:        NewAccessList(),
-		privatePeers:      make(map[core.PeerID]struct{}),
-		commonWorker:      commonWorker,
-		backend:           backend,
-		enabled:           enabled,
-		initEnclaveDoneCh: make(chan *api.SignedInitResponse, 1),
-		genMstSecDoneCh:   make(chan bool, 1),
-		genMstSecEpoch:    math.MaxUint64,
-		genEphSecDoneCh:   make(chan bool, 1),
-		genSecHeight:      int64(math.MaxInt64),
+		logger:       logging.GetLogger("worker/keymanager"),
+		ctx:          ctx,
+		cancelCtx:    cancelFn,
+		quitCh:       make(chan struct{}),
+		initCh:       make(chan struct{}),
+		accessList:   NewAccessList(),
+		commonWorker: commonWorker,
+		backend:      backend,
+		enabled:      enabled,
 	}
 
 	if !w.enabled {
@@ -62,22 +50,6 @@ func New(
 	}
 
 	initMetrics()
-
-	for _, b64pk := range config.GlobalConfig.Keymanager.PrivatePeerPubKeys {
-		pkBytes, err := base64.StdEncoding.DecodeString(b64pk)
-		if err != nil {
-			return nil, fmt.Errorf("oasis/keymanager: `%s` is not a base64-encoded public key (%w)", b64pk, err)
-		}
-		var pk signature.PublicKey
-		if err = pk.UnmarshalBinary(pkBytes); err != nil {
-			return nil, fmt.Errorf("oasis/keymanager: `%s` is not a public key (%w)", b64pk, err)
-		}
-		peerID, err := p2pAPI.PublicKeyToPeerID(pk)
-		if err != nil {
-			return nil, fmt.Errorf("oasis/keymanager: `%s` can not be converted to a peer id (%w)", b64pk, err)
-		}
-		w.privatePeers[peerID] = struct{}{}
-	}
 
 	// Parse runtime ID.
 	if err := w.runtimeID.UnmarshalHex(config.GlobalConfig.Keymanager.RuntimeID); err != nil {
@@ -108,6 +80,21 @@ func New(
 	// Prepare watchers.
 	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
 	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
+
+	// Prepare sub-workers.
+	w.secretsWorker, err = newSecretsWorker(w.runtimeID, commonWorker, w, r, backend)
+	if err != nil {
+		return nil, fmt.Errorf("worker/keymanager: failed to create secrets worker: %w", err)
+	}
+
+	// Register methods.
+	w.accessControllers = make(map[string]workerKeymanager.RPCAccessController)
+	for _, m := range w.secretsWorker.Methods() {
+		if _, ok := w.accessControllers[m]; ok {
+			return nil, fmt.Errorf("worker/keymanager: duplicate enclave RPC method: %s", m)
+		}
+		w.accessControllers[m] = w.secretsWorker
+	}
 
 	// Register keymanager service.
 	commonWorker.P2P.RegisterProtocolServer(p2p.NewServer(commonWorker.ChainContext, w.runtimeID, w))
