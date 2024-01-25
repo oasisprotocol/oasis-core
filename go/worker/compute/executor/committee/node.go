@@ -507,7 +507,7 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 	}
 
 	// Remove any rejected transactions.
-	n.commonNode.TxPool.HandleTxsUsed(rsp.TxRejectHashes)
+	n.commonNode.TxPool.RejectTxs(rsp.TxRejectHashes)
 	// Mark any proposed transactions.
 	_, _ = n.commonNode.TxPool.PromoteProposedBatch(rsp.TxHashes)
 
