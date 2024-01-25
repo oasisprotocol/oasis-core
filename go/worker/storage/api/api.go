@@ -15,6 +15,7 @@ const ModuleName = "worker/storage"
 type StorageWorkerStatus string
 
 const (
+	StatusDBLoading           StorageWorkerStatus = "loading database"
 	StatusInitializing        StorageWorkerStatus = "initializing"
 	StatusStarting            StorageWorkerStatus = "starting"
 	StatusStopping            StorageWorkerStatus = "stopping"

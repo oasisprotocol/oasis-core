@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
@@ -9,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	"github.com/oasisprotocol/oasis-core/go/config"
+	storageApi "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -95,9 +97,8 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerC
 		}
 	}
 
-	localStorage, err := NewLocalBackend(commonNode.Runtime.DataDir(), id)
-	if err != nil {
-		return fmt.Errorf("can't create local storage backend: %w", err)
+	storageCtor := func(ctx context.Context) (storageApi.LocalBackend, error) {
+		return NewLocalBackend(commonNode.Runtime.DataDir(), id)
 	}
 
 	node, err := committee.NewNode(
@@ -106,7 +107,7 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerC
 		rp,
 		rpRPC,
 		w.commonWorker.GetConfig(),
-		localStorage,
+		storageCtor,
 		checkpointerCfg,
 		&committee.CheckpointSyncConfig{
 			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
@@ -116,7 +117,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerC
 	if err != nil {
 		return err
 	}
-	commonNode.Runtime.RegisterStorage(localStorage)
 	commonNode.AddHooks(node)
 	w.runtimes[id] = node
 
@@ -167,13 +167,21 @@ func (w *Worker) Start() error {
 	}()
 
 	// Start all runtimes and wait for initialization.
-	go func() {
-		w.logger.Info("starting storage sync services", "num_runtimes", len(w.runtimes))
+	var err error
 
-		for _, r := range w.runtimes {
-			_ = r.Start()
+	w.logger.Info("starting storage sync services", "num_runtimes", len(w.runtimes))
+	for id, r := range w.runtimes {
+		if err = r.Start(); err != nil {
+			w.logger.Error("committee node did not start successfully", "err", err, "runtime", id)
 		}
+		defer func(r *committee.Node) {
+			if err != nil {
+				r.Stop()
+			}
+		}(r)
+	}
 
+	go func() {
 		// Wait for runtimes to be initialized and the node to be registered.
 		for _, r := range w.runtimes {
 			<-r.Initialized()

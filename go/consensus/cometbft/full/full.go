@@ -388,7 +388,10 @@ func (t *fullService) GetStatus(ctx context.Context) (*consensusAPI.Status, erro
 	if err != nil {
 		return nil, err
 	}
-	status.Status = consensusAPI.StatusStateSyncing
+	status.Status = consensusAPI.StatusStateDBLoading
+	if t.dbLoaded() {
+		status.Status = consensusAPI.StatusStateSyncing
+	}
 
 	status.P2P = &consensusAPI.P2PStatus{}
 	status.P2P.PubKey = t.identity.P2PSigner.Public()
@@ -675,6 +678,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		default:
 		}
 
+		t.finishDBLoading()
 		return db, nil
 	}
 

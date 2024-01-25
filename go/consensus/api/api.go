@@ -247,6 +247,8 @@ var (
 	StatusStateReady StatusState
 	// StatusStateSyncing is the syncing status state.
 	StatusStateSyncing StatusState = 1
+	// StatusStateDBLoading is the status state when the database is loading.
+	StatusStateDBLoading StatusState = 2
 )
 
 // String returns a string representation of a status state.
@@ -256,6 +258,8 @@ func (s StatusState) String() string {
 		return "ready"
 	case StatusStateSyncing:
 		return "syncing"
+	case StatusStateDBLoading:
+		return "loading database"
 	default:
 		return "[invalid status state]"
 	}
@@ -264,10 +268,8 @@ func (s StatusState) String() string {
 // MarshalText encodes a StatusState into text form.
 func (s StatusState) MarshalText() ([]byte, error) {
 	switch s {
-	case StatusStateReady:
-		return []byte(StatusStateReady.String()), nil
-	case StatusStateSyncing:
-		return []byte(StatusStateSyncing.String()), nil
+	case StatusStateReady, StatusStateSyncing, StatusStateDBLoading:
+		return []byte(s.String()), nil
 	default:
 		return nil, fmt.Errorf("invalid StatusState: %d", s)
 	}
@@ -280,6 +282,8 @@ func (s *StatusState) UnmarshalText(text []byte) error {
 		*s = StatusStateReady
 	case StatusStateSyncing.String():
 		*s = StatusStateSyncing
+	case StatusStateDBLoading.String():
+		*s = StatusStateDBLoading
 	default:
 		return fmt.Errorf("invalid StatusState: %s", string(text))
 	}

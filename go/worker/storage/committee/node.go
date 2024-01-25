@@ -148,7 +148,8 @@ type Node struct { // nolint: maligned
 	quitCh       chan struct{}
 	workerQuitCh chan struct{}
 
-	initCh chan struct{}
+	storageInitCh chan error
+	initCh        chan struct{}
 }
 
 func NewNode(
@@ -157,7 +158,7 @@ func NewNode(
 	roleProvider registration.RoleProvider,
 	rpcRoleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
-	localStorage storageApi.LocalBackend,
+	storageCtor func(context.Context) (storageApi.LocalBackend, error),
 	checkpointerCfg *checkpoint.CheckpointerConfig,
 	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Node, error) {
@@ -173,13 +174,11 @@ func NewNode(
 
 		workerCommonCfg: workerCommonCfg,
 
-		localStorage: localStorage,
-
 		fetchPool: fetchPool,
 
 		checkpointSyncCfg: checkpointSyncCfg,
 
-		status: api.StatusInitializing,
+		status: api.StatusDBLoading,
 
 		blockCh:    channels.NewInfiniteChannel(),
 		diffCh:     make(chan *fetchedDiff),
@@ -187,7 +186,9 @@ func NewNode(
 
 		quitCh:       make(chan struct{}),
 		workerQuitCh: make(chan struct{}),
-		initCh:       make(chan struct{}),
+
+		storageInitCh: make(chan error, 1),
+		initCh:        make(chan struct{}),
 	}
 
 	// Validate checkpoint sync configuration.
@@ -199,6 +200,36 @@ func NewNode(
 	n.syncedState.Round = defaultUndefinedRound
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
+
+	go func() {
+		defer close(n.storageInitCh)
+		localStorage, err := storageCtor(n.ctx)
+		if err != nil {
+			err = fmt.Errorf("error creating storage worker local backend: %w", err)
+			n.storageInitCh <- err
+			commonNode.Runtime.StorageInitFailed(err)
+			return
+		}
+		n.storageInitCh <- n.newBottomHalf(commonNode, rpcRoleProvider, localStorage, checkpointerCfg)
+	}()
+
+	return n, nil
+}
+
+func (n *Node) newBottomHalf(
+	commonNode *committee.Node,
+	rpcRoleProvider registration.RoleProvider,
+	localStorage storageApi.LocalBackend,
+	checkpointerCfg *checkpoint.CheckpointerConfig,
+) error {
+	func() {
+		n.statusLock.Lock()
+		defer n.statusLock.Unlock()
+
+		n.status = api.StatusInitializing
+	}()
+	n.localStorage = localStorage
+	commonNode.Runtime.RegisterStorage(localStorage)
 
 	// Create a new checkpointer if enabled.
 	if checkpointerCfg != nil {
@@ -245,7 +276,7 @@ func NewNode(
 			*checkpointerCfg,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create checkpointer: %w", err)
+			return fmt.Errorf("failed to create checkpointer: %w", err)
 		}
 	}
 
@@ -264,7 +295,7 @@ func NewNode(
 		commonNode.P2P.RegisterProtocolServer(storagePub.NewServer(commonNode.ChainContext, commonNode.Runtime.ID(), localStorage))
 	}
 
-	return n, nil
+	return nil
 }
 
 // Service interface.
@@ -276,6 +307,9 @@ func (n *Node) Name() string {
 
 // Start causes the worker to start responding to CometBFT new block events.
 func (n *Node) Start() error {
+	if err := <-n.storageInitCh; err != nil {
+		return err
+	}
 	go n.watchQuit()
 	go n.worker()
 	if n.checkpointer != nil {
