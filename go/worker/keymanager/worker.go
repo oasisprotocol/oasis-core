@@ -174,8 +174,10 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		},
 	}
 
-	// Hosted runtime should not be nil as we are initialized.
 	rt := w.GetHostedRuntime()
+	if rt == nil {
+		return nil, fmt.Errorf("not initialized")
+	}
 	response, err := rt.Call(ctx, req)
 	if err != nil {
 		w.logger.Error("failed to dispatch RPC call to runtime",
@@ -208,6 +210,9 @@ func (w *Worker) callEnclaveLocal(method string, args interface{}, rsp interface
 	}
 
 	rt := w.GetHostedRuntime()
+	if rt == nil {
+		return fmt.Errorf("not initialized")
+	}
 	response, err := rt.Call(w.ctx, body)
 	if err != nil {
 		w.logger.Error("failed to dispatch local RPC call to runtime",
