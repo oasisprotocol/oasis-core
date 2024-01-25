@@ -83,6 +83,11 @@ type TransactionPool interface {
 	// ClearProposedBatch clears the proposal queue.
 	ClearProposedBatch()
 
+	// RejectTxs indicates that given transaction hashes have been rejected during block processing.
+	// Queues that can remove those transactions will do so. Additionally, these transactions will
+	// be removed from the already seen cache as they can potentially become valid in the future.
+	RejectTxs(txs []hash.Hash)
+
 	// HandleTxsUsed indicates that given transaction hashes are processed in a block. Queues that
 	// can remove those transactions will do so.
 	HandleTxsUsed(txs []hash.Hash)
@@ -333,6 +338,16 @@ func (t *txPool) FinishScheduling() {
 	t.drainLock.Unlock()
 }
 
+func (t *txPool) RejectTxs(hashes []hash.Hash) {
+	// Remove rejected transactions from the already seen cache to allow them to be resubmitted as
+	// they may become valid in the future.
+	for _, h := range hashes {
+		t.seenCache.Remove(h)
+	}
+
+	t.HandleTxsUsed(hashes)
+}
+
 func (t *txPool) HandleTxsUsed(hashes []hash.Hash) {
 	for _, q := range t.usableSources {
 		q.HandleTxsUsed(hashes)
@@ -509,6 +524,10 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 				"result", res,
 				"recheck", batch[i].flags.isRecheck(),
 			)
+
+			// Make sure a failed transaction is removed from the seen cache as the transaction may
+			// become valid in the future.
+			t.seenCache.Remove(batch[i].Hash())
 
 			// We won't be sending this tx on to its destination queue.
 			notifySubmitter(i)
