@@ -321,7 +321,11 @@ func (n *Node) initRuntimeWorkers() error {
 	n.svcMgr.Register(n.ExecutorWorker)
 
 	// Initialize the client worker.
-	n.ClientWorker, err = workerClient.New(n.grpcInternal, n.CommonWorker)
+	n.ClientWorker, err = workerClient.New(
+		n.grpcInternal,
+		n.CommonWorker,
+		n.RegistrationWorker,
+	)
 	if err != nil {
 		return err
 	}

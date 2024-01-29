@@ -2,14 +2,18 @@
 package client
 
 import (
+	"fmt"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/client/committee"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
+	"github.com/oasisprotocol/oasis-core/go/worker/registration"
 )
 
 // Worker is a runtime client worker handling many runtimes.
@@ -17,6 +21,7 @@ type Worker struct {
 	enabled bool
 
 	commonWorker *workerCommon.Worker
+	registration *registration.Worker
 
 	runtimes map[common.Namespace]*committee.Node
 
@@ -124,6 +129,19 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		"runtime_id", id,
 	)
 
+	switch config.GlobalConfig.Mode {
+	case config.ModeClient, config.ModeStatelessClient:
+		// When a node is a client node and it has an entity configured, we register it with the
+		// observer role as this may be needed for confidential runtimes.
+		rp, err := w.registration.NewRuntimeRoleProvider(node.RoleObserver, id)
+		if err != nil {
+			return fmt.Errorf("failed to create role provider: %w", err)
+		}
+
+		rp.SetAvailable(commonNode.RegisterNodeRuntime)
+	default:
+	}
+
 	// Create committee node for the given runtime.
 	node, err := committee.NewNode(commonNode)
 	if err != nil {
@@ -146,7 +164,11 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 }
 
 // New creates a new runtime client worker.
-func New(grpcInternal *grpc.Server, commonWorker *workerCommon.Worker) (*Worker, error) {
+func New(
+	grpcInternal *grpc.Server,
+	commonWorker *workerCommon.Worker,
+	registration *registration.Worker,
+) (*Worker, error) {
 	var enabled bool
 	switch config.GlobalConfig.Mode {
 	case config.ModeValidator, config.ModeSeed, config.ModeKeyManager:
@@ -165,6 +187,7 @@ func New(grpcInternal *grpc.Server, commonWorker *workerCommon.Worker) (*Worker,
 	w := &Worker{
 		enabled:      enabled,
 		commonWorker: commonWorker,
+		registration: registration,
 		runtimes:     make(map[common.Namespace]*committee.Node),
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
