@@ -18,7 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/protocol"
@@ -82,15 +82,15 @@ func (c *keyManagerRPCClient) addKeyManagerAddrToHost(km *oasis.Keymanager) (pee
 }
 
 func (c *keyManagerRPCClient) fetchPublicKey(ctx context.Context, generation uint64, peerID peer.ID) (*x25519.PublicKey, error) {
-	args := keymanager.LongTermKeyRequest{
+	args := secrets.LongTermKeyRequest{
 		Height:     nil,
 		ID:         KeyManagerRuntimeID,
-		KeyPairID:  keymanager.KeyPairID{1, 2, 3},
+		KeyPairID:  secrets.KeyPairID{1, 2, 3},
 		Generation: generation,
 	}
 
 	req := enclaverpc.Request{
-		Method: keymanager.RPCMethodGetPublicKey,
+		Method: secrets.RPCMethodGetPublicKey,
 		Args:   args,
 	}
 
@@ -118,7 +118,7 @@ func (c *keyManagerRPCClient) fetchPublicKey(ctx context.Context, generation uin
 		return nil, fmt.Errorf(msg)
 	}
 
-	var key keymanager.SignedPublicKey
+	var key secrets.SignedPublicKey
 	if err = cbor.Unmarshal(rsp.Body.Success, &key); err != nil {
 		return nil, err
 	}
@@ -127,15 +127,15 @@ func (c *keyManagerRPCClient) fetchPublicKey(ctx context.Context, generation uin
 }
 
 func (c *keyManagerRPCClient) fetchEphemeralPublicKey(ctx context.Context, epoch beacon.EpochTime, peerID peer.ID) (*x25519.PublicKey, error) {
-	args := keymanager.EphemeralKeyRequest{
+	args := secrets.EphemeralKeyRequest{
 		Height:    nil,
 		ID:        KeyManagerRuntimeID,
-		KeyPairID: keymanager.KeyPairID{1, 2, 3},
+		KeyPairID: secrets.KeyPairID{1, 2, 3},
 		Epoch:     epoch,
 	}
 
 	req := enclaverpc.Request{
-		Method: keymanager.RPCMethodGetPublicEphemeralKey,
+		Method: secrets.RPCMethodGetPublicEphemeralKey,
 		Args:   args,
 	}
 
@@ -163,7 +163,7 @@ func (c *keyManagerRPCClient) fetchEphemeralPublicKey(ctx context.Context, epoch
 		return nil, fmt.Errorf(msg)
 	}
 
-	var key keymanager.SignedPublicKey
+	var key secrets.SignedPublicKey
 	if err = cbor.Unmarshal(rsp.Body.Success, &key); err != nil {
 		return nil, err
 	}

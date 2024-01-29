@@ -8,12 +8,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
-	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/state"
+	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -287,13 +287,13 @@ func checkStaking(ctx *abciAPI.Context, now beacon.EpochTime) error { //nolint: 
 }
 
 func checkKeyManager(ctx *abciAPI.Context, _ beacon.EpochTime) error {
-	st := keymanagerState.NewMutableState(ctx.State())
+	st := secretsState.NewMutableState(ctx.State())
 
 	statuses, err := st.Statuses(ctx)
 	if err != nil {
 		return fmt.Errorf("Statuses(): %w", err)
 	}
-	err = keymanager.SanityCheckStatuses(statuses)
+	err = secrets.SanityCheckStatuses(statuses)
 	if err != nil {
 		return fmt.Errorf("SanityCheckStatuses: %w", err)
 	}

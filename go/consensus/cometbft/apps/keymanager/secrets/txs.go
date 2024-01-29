@@ -1,4 +1,4 @@
-package keymanager
+package secrets
 
 import (
 	"fmt"
@@ -10,16 +10,17 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/state"
+	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-func (app *keymanagerApplication) updatePolicy(
+func (ext *secretsExt) updatePolicy(
 	ctx *tmapi.Context,
-	state *keymanagerState.MutableState,
-	sigPol *api.SignedPolicySGX,
+	state *secretsState.MutableState,
+	sigPol *secrets.SignedPolicySGX,
 ) error {
 	// Ensure that the runtime exists and is a key manager.
 	regState := registryState.NewMutableState(ctx.State())
@@ -37,9 +38,9 @@ func (app *keymanagerApplication) updatePolicy(
 	oldStatus, err := state.Status(ctx, kmRt.ID)
 	switch err {
 	case nil:
-	case api.ErrNoSuchStatus:
+	case secrets.ErrNoSuchStatus:
 		// This must be a new key manager runtime.
-		oldStatus = &api.Status{
+		oldStatus = &secrets.Status{
 			ID: kmRt.ID,
 		}
 	default:
@@ -47,7 +48,7 @@ func (app *keymanagerApplication) updatePolicy(
 	}
 
 	// Validate the tx.
-	if err = api.SanityCheckSignedPolicySGX(oldStatus.Policy, sigPol); err != nil {
+	if err = secrets.SanityCheckSignedPolicySGX(oldStatus.Policy, sigPol); err != nil {
 		return err
 	}
 
@@ -60,7 +61,7 @@ func (app *keymanagerApplication) updatePolicy(
 	if err != nil {
 		return err
 	}
-	if err = ctx.Gas().UseGas(1, api.GasOpUpdatePolicy, kmParams.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, secrets.GasOpUpdatePolicy, kmParams.GasCosts); err != nil {
 		return err
 	}
 
@@ -80,7 +81,7 @@ func (app *keymanagerApplication) updatePolicy(
 	// TODO: It would be possible to update the cohort on each
 	// node-reregistration, but I'm not sure how often the policy
 	// will get updated.
-	epoch, err := app.state.GetCurrentEpoch(ctx)
+	epoch, err := ext.state.GetCurrentEpoch(ctx)
 	if err != nil {
 		return err
 	}
@@ -93,7 +94,7 @@ func (app *keymanagerApplication) updatePolicy(
 	nodes, _ := regState.Nodes(ctx)
 	registry.SortNodeList(nodes)
 	oldStatus.Policy = sigPol
-	newStatus := app.generateStatus(ctx, kmRt, oldStatus, nil, nodes, regParams, epoch)
+	newStatus := generateStatus(ctx, kmRt, oldStatus, nil, nodes, regParams, epoch)
 	if err := state.SetStatus(ctx, newStatus); err != nil {
 		ctx.Logger().Error("keymanager: failed to set key manager status",
 			"err", err,
@@ -101,8 +102,8 @@ func (app *keymanagerApplication) updatePolicy(
 		return fmt.Errorf("keymanager: failed to set key manager status: %w", err)
 	}
 
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&api.StatusUpdateEvent{
-		Statuses: []*api.Status{newStatus},
+	ctx.EmitEvent(tmapi.NewEventBuilder(ext.appName).TypedAttribute(&secrets.StatusUpdateEvent{
+		Statuses: []*secrets.Status{newStatus},
 	}))
 
 	return nil
@@ -127,10 +128,10 @@ func (app *keymanagerApplication) updatePolicy(
 // It's worth noting that the process of generating, publishing, and replicating master
 // secrets differs from that of ephemeral secrets. For more information, please refer
 // to the description of the publishEphemeralSecret function.
-func (app *keymanagerApplication) publishMasterSecret(
+func (ext *secretsExt) publishMasterSecret(
 	ctx *tmapi.Context,
-	state *keymanagerState.MutableState,
-	secret *api.SignedEncryptedMasterSecret,
+	state *secretsState.MutableState,
+	secret *secrets.SignedEncryptedMasterSecret,
 ) error {
 	// Ensure that the runtime exists and is a key manager.
 	regState := registryState.NewMutableState(ctx.State())
@@ -150,7 +151,7 @@ func (app *keymanagerApplication) publishMasterSecret(
 
 	// Reject if the master secret has been proposed in this epoch.
 	lastSecret, err := state.MasterSecret(ctx, secret.Secret.ID)
-	if err != nil && err != api.ErrNoSuchMasterSecret {
+	if err != nil && err != secrets.ErrNoSuchMasterSecret {
 		return err
 	}
 	if lastSecret != nil && secret.Secret.Epoch == lastSecret.Secret.Epoch {
@@ -165,7 +166,7 @@ func (app *keymanagerApplication) publishMasterSecret(
 	// Verify the secret. Master secrets can be published for the next epoch and for
 	// the next generation only.
 	nextGen := kmStatus.NextGeneration()
-	epoch, err := app.state.GetCurrentEpoch(ctx)
+	epoch, err := ext.state.GetCurrentEpoch(ctx)
 	if err != nil {
 		return err
 	}
@@ -190,7 +191,7 @@ func (app *keymanagerApplication) publishMasterSecret(
 	if err != nil {
 		return err
 	}
-	if err = ctx.Gas().UseGas(1, api.GasOpPublishMasterSecret, kmParams.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, secrets.GasOpPublishMasterSecret, kmParams.GasCosts); err != nil {
 		return err
 	}
 
@@ -207,7 +208,7 @@ func (app *keymanagerApplication) publishMasterSecret(
 		return fmt.Errorf("keymanager: failed to set key manager master secret: %w", err)
 	}
 
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&api.MasterSecretPublishedEvent{
+	ctx.EmitEvent(tmapi.NewEventBuilder(ext.appName).TypedAttribute(&secrets.MasterSecretPublishedEvent{
 		Secret: secret,
 	}))
 
@@ -227,10 +228,10 @@ func (app *keymanagerApplication) publishMasterSecret(
 //
 // Note that ephemeral secrets differ from master secrets. For more information, see
 // the description of the publishMasterSecret function.
-func (app *keymanagerApplication) publishEphemeralSecret(
+func (ext *secretsExt) publishEphemeralSecret(
 	ctx *tmapi.Context,
-	state *keymanagerState.MutableState,
-	secret *api.SignedEncryptedEphemeralSecret,
+	state *secretsState.MutableState,
+	secret *secrets.SignedEncryptedEphemeralSecret,
 ) error {
 	// Ensure that the runtime exists and is a key manager.
 	regState := registryState.NewMutableState(ctx.State())
@@ -250,7 +251,7 @@ func (app *keymanagerApplication) publishEphemeralSecret(
 
 	// Reject if the ephemeral secret has been published in this epoch.
 	lastSecret, err := state.EphemeralSecret(ctx, secret.Secret.ID)
-	if err != nil && err != api.ErrNoSuchEphemeralSecret {
+	if err != nil && err != secrets.ErrNoSuchEphemeralSecret {
 		return err
 	}
 	if lastSecret != nil && secret.Secret.Epoch == lastSecret.Secret.Epoch {
@@ -258,7 +259,7 @@ func (app *keymanagerApplication) publishEphemeralSecret(
 	}
 
 	// Verify the secret. Ephemeral secrets can be published for the next epoch only.
-	epoch, err := app.state.GetCurrentEpoch(ctx)
+	epoch, err := ext.state.GetCurrentEpoch(ctx)
 	if err != nil {
 		return err
 	}
@@ -283,7 +284,7 @@ func (app *keymanagerApplication) publishEphemeralSecret(
 	if err != nil {
 		return err
 	}
-	if err = ctx.Gas().UseGas(1, api.GasOpPublishEphemeralSecret, kmParams.GasCosts); err != nil {
+	if err = ctx.Gas().UseGas(1, secrets.GasOpPublishEphemeralSecret, kmParams.GasCosts); err != nil {
 		return err
 	}
 
@@ -300,7 +301,7 @@ func (app *keymanagerApplication) publishEphemeralSecret(
 		return fmt.Errorf("keymanager: failed to set key manager ephemeral secret: %w", err)
 	}
 
-	ctx.EmitEvent(tmapi.NewEventBuilder(app.Name()).TypedAttribute(&api.EphemeralSecretPublishedEvent{
+	ctx.EmitEvent(tmapi.NewEventBuilder(ext.appName).TypedAttribute(&secrets.EphemeralSecretPublishedEvent{
 		Secret: secret,
 	}))
 
@@ -353,7 +354,7 @@ func runtimeAttestationKey(ctx *tmapi.Context, regState *registryState.MutableSt
 	return rak, nil
 }
 
-func runtimeEncryptionKeys(ctx *tmapi.Context, regState *registryState.MutableState, kmRt *registry.Runtime, kmStatus *api.Status) map[x25519.PublicKey]struct{} {
+func runtimeEncryptionKeys(ctx *tmapi.Context, regState *registryState.MutableState, kmRt *registry.Runtime, kmStatus *secrets.Status) map[x25519.PublicKey]struct{} {
 	// Fetch REKs of the key manager committee.
 	reks := make(map[x25519.PublicKey]struct{})
 	for _, id := range kmStatus.Nodes {

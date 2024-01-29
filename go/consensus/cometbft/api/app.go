@@ -118,6 +118,12 @@ type Extension interface {
 	// ExecuteTx executes a transaction.
 	ExecuteTx(*Context, *transaction.Transaction) error
 
+	// InitChain initializes the blockchain with validators and other
+	// info from CometBFT.
+	//
+	// Note: Errors are irrecoverable and will result in a panic.
+	InitChain(*Context, cmtabcitypes.RequestInitChain, *genesis.Document) error
+
 	// BeginBlock signals the beginning of a block.
 	//
 	// Note: Errors are irrecoverable and will result in a panic.

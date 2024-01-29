@@ -314,7 +314,7 @@ func dumpKeyManager(ctx context.Context, qs *dumpQueryState) (*keymanager.Genesi
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to create key manager query: %w", err)
 	}
-	st, err := q.Genesis(ctx)
+	st, err := q.Secrets().Genesis(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("dumpdb: failed to dump key manager state: %w", err)
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	kmApi "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	cmdContext "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/context"
@@ -122,7 +123,7 @@ func doInitPolicy(*cobra.Command, []string) {
 	)
 }
 
-func policyFromFlags() (*kmApi.PolicySGX, error) {
+func policyFromFlags() (*secrets.PolicySGX, error) {
 	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(CfgPolicyID)); err != nil {
 		logger.Error("failed to parse key manager runtime ID",
@@ -134,7 +135,7 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 
 	serial := viper.GetUint32(CfgPolicySerial)
 
-	enclaves := make(map[sgx.EnclaveIdentity]*kmApi.EnclavePolicySGX)
+	enclaves := make(map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX)
 
 	// Replicate and query permissions are set per-key manager enclave ID.
 	// Since viper doesn't store order of arguments, go through os.Args by hand,
@@ -150,7 +151,7 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 				return nil, err
 			}
 
-			enclaves[kmEnclaveID] = &kmApi.EnclavePolicySGX{
+			enclaves[kmEnclaveID] = &secrets.EnclavePolicySGX{
 				MayReplicate: []sgx.EnclaveIdentity{},
 				MayQuery:     make(map[common.Namespace][]sgx.EnclaveIdentity),
 			}
@@ -211,7 +212,7 @@ func policyFromFlags() (*kmApi.PolicySGX, error) {
 
 	rotationInterval := api.EpochTime(viper.GetUint64(CfgPolicyMasterSecretRotationInterval))
 
-	return &kmApi.PolicySGX{
+	return &secrets.PolicySGX{
 		Serial:                       serial,
 		ID:                           id,
 		Enclaves:                     enclaves,
@@ -284,7 +285,7 @@ func signPolicyFromFlags() (*signature.Signature, error) {
 		return nil, err
 	}
 
-	rawSigBytes, err := signer.ContextSign(kmApi.PolicySGXSignatureContext, policyBytes)
+	rawSigBytes, err := signer.ContextSign(secrets.PolicySGXSignatureContext, policyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +350,7 @@ func verifyPolicyFromFlags() error {
 				return err
 			}
 
-			if !s.Verify(kmApi.PolicySGXSignatureContext, policyBytes) {
+			if !s.Verify(secrets.PolicySGXSignatureContext, policyBytes) {
 				return errors.New("signature is not valid for given policy")
 			}
 		}
@@ -358,9 +359,9 @@ func verifyPolicyFromFlags() error {
 	return nil
 }
 
-// / unmarshalPolicyChor checks whether given CBOR is a valid kmApi.PolicySGX struct.
-func unmarshalPolicyCBOR(pb []byte) (*kmApi.PolicySGX, error) {
-	var p *kmApi.PolicySGX = &kmApi.PolicySGX{}
+// / unmarshalPolicyChor checks whether given CBOR is a valid secrets.PolicySGX struct.
+func unmarshalPolicyCBOR(pb []byte) (*secrets.PolicySGX, error) {
+	var p *secrets.PolicySGX = &secrets.PolicySGX{}
 	if err := cbor.Unmarshal(pb, p); err != nil {
 		return nil, err
 	}
@@ -417,7 +418,7 @@ func doGenUpdate(*cobra.Command, []string) {
 
 	// Assemble the SignedPolicySGX from the policy document and detached
 	// signatures.
-	var signedPolicy kmApi.SignedPolicySGX
+	var signedPolicy secrets.SignedPolicySGX
 
 	policyBytes, err := os.ReadFile(viper.GetString(CfgPolicyFile))
 	if err != nil {
@@ -455,7 +456,7 @@ func doGenUpdate(*cobra.Command, []string) {
 	}
 
 	// Validate the SignedPolicySGX.
-	if err = kmApi.SanityCheckSignedPolicySGX(nil, &signedPolicy); err != nil {
+	if err = secrets.SanityCheckSignedPolicySGX(nil, &signedPolicy); err != nil {
 		logger.Error("failed to validate SignedPolicySGX",
 			"err", err,
 		)
@@ -464,11 +465,11 @@ func doGenUpdate(*cobra.Command, []string) {
 
 	// Build, sign, and write the UpdatePolicy transaction.
 	nonce, fee := cmdConsensus.GetTxNonceAndFee()
-	tx := kmApi.NewUpdatePolicyTx(nonce, fee, &signedPolicy)
+	tx := secrets.NewUpdatePolicyTx(nonce, fee, &signedPolicy)
 	cmdConsensus.SignAndSaveTx(cmdContext.GetCtxWithGenesisInfo(genesis), tx, nil)
 }
 
-func statusFromFlags() (*kmApi.Status, error) {
+func statusFromFlags() (*secrets.Status, error) {
 	var id common.Namespace
 	if err := id.UnmarshalHex(viper.GetString(CfgStatusID)); err != nil {
 		logger.Error("failed to parse key manager status ID",
@@ -479,7 +480,7 @@ func statusFromFlags() (*kmApi.Status, error) {
 	}
 
 	// Unmarshal KM policy and its signatures.
-	var signedPolicy *kmApi.SignedPolicySGX
+	var signedPolicy *secrets.SignedPolicySGX
 	if viper.GetString(CfgPolicyFile) != "" {
 		pb, err := os.ReadFile(viper.GetString(CfgPolicyFile))
 		if err != nil {
@@ -490,7 +491,7 @@ func statusFromFlags() (*kmApi.Status, error) {
 		if err != nil {
 			return nil, err
 		}
-		signedPolicy = &kmApi.SignedPolicySGX{
+		signedPolicy = &secrets.SignedPolicySGX{
 			Policy: *p,
 		}
 
@@ -516,8 +517,8 @@ func statusFromFlags() (*kmApi.Status, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(checksum) != kmApi.ChecksumSize {
-			return nil, fmt.Errorf("checksum %x is not %d bytes long", checksum, kmApi.ChecksumSize)
+		if len(checksum) != secrets.ChecksumSize {
+			return nil, fmt.Errorf("checksum %x is not %d bytes long", checksum, secrets.ChecksumSize)
 		}
 	}
 
@@ -542,7 +543,7 @@ func statusFromFlags() (*kmApi.Status, error) {
 		return nil, fmt.Errorf("%s provided, but %s is false", CfgStatusRSK, CfgStatusInitialized)
 	}
 
-	return &kmApi.Status{
+	return &secrets.Status{
 		ID:            id,
 		IsInitialized: viper.GetBool(CfgStatusInitialized),
 		IsSecure:      viper.GetBool(CfgStatusSecure),

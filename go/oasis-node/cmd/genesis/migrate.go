@@ -17,7 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -306,8 +306,8 @@ NodeLoop:
 	}
 
 	// Move key manager gas costs from the registry to the key manager.
-	newDoc.KeyManager.Parameters.GasCosts = keymanager.DefaultGasCosts
-	newDoc.KeyManager.Parameters.GasCosts[keymanager.GasOpUpdatePolicy] = newDoc.Registry.Parameters.GasCosts["update_keymanager"]
+	newDoc.KeyManager.Parameters.GasCosts = secrets.DefaultGasCosts
+	newDoc.KeyManager.Parameters.GasCosts[secrets.GasOpUpdatePolicy] = newDoc.Registry.Parameters.GasCosts["update_keymanager"]
 	delete(newDoc.Registry.Parameters.GasCosts, "update_keymanager")
 
 	// Update registry parameters.

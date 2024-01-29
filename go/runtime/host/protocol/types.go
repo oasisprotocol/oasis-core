@@ -18,7 +18,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	consensusTx "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/commitment"
@@ -425,7 +425,7 @@ type RuntimeExecuteTxBatchResponse struct {
 
 // RuntimeKeyManagerStatusUpdateRequest is a runtime key manager status update request message body.
 type RuntimeKeyManagerStatusUpdateRequest struct {
-	Status keymanager.Status `json:"status"`
+	Status secrets.Status `json:"status"`
 }
 
 // RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy update request message body.

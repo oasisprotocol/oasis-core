@@ -227,7 +227,7 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 }
 
 func (sc *kmRotationFailureImpl) verifyMasterSecretRejections(ctx context.Context, n int) error {
-	mstCh, mstSub, err := sc.Net.Controller().Keymanager.WatchMasterSecrets(ctx)
+	mstCh, mstSub, err := sc.Net.Controller().Keymanager.Secrets().WatchMasterSecrets(ctx)
 	if err != nil {
 		return err
 	}

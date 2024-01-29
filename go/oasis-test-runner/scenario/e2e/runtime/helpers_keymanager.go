@@ -14,7 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -22,42 +22,42 @@ import (
 )
 
 // KeyManagerStatus returns the latest key manager status.
-func (sc *Scenario) KeyManagerStatus(ctx context.Context) (*keymanager.Status, error) {
-	return sc.Net.Controller().Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
+func (sc *Scenario) KeyManagerStatus(ctx context.Context) (*secrets.Status, error) {
+	return sc.Net.Controller().Keymanager.Secrets().GetStatus(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     KeyManagerRuntimeID,
 	})
 }
 
 // MasterSecret returns the key manager master secret.
-func (sc *Scenario) MasterSecret(ctx context.Context) (*keymanager.SignedEncryptedMasterSecret, error) {
-	secret, err := sc.Net.Controller().Keymanager.GetMasterSecret(ctx, &registry.NamespaceQuery{
+func (sc *Scenario) MasterSecret(ctx context.Context) (*secrets.SignedEncryptedMasterSecret, error) {
+	secret, err := sc.Net.Controller().Keymanager.Secrets().GetMasterSecret(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     KeyManagerRuntimeID,
 	})
-	if err == keymanager.ErrNoSuchMasterSecret {
+	if err == secrets.ErrNoSuchMasterSecret {
 		return nil, nil
 	}
 	return secret, err
 }
 
 // WaitMasterSecret waits until the specified generation of the master secret is generated.
-func (sc *Scenario) WaitMasterSecret(ctx context.Context, generation uint64) (*keymanager.Status, error) {
+func (sc *Scenario) WaitMasterSecret(ctx context.Context, generation uint64) (*secrets.Status, error) {
 	sc.Logger.Info("waiting for master secret", "generation", generation)
 
-	mstCh, mstSub, err := sc.Net.Controller().Keymanager.WatchMasterSecrets(ctx)
+	mstCh, mstSub, err := sc.Net.Controller().Keymanager.Secrets().WatchMasterSecrets(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer mstSub.Close()
 
-	stCh, stSub, err := sc.Net.Controller().Keymanager.WatchStatuses(ctx)
+	stCh, stSub, err := sc.Net.Controller().Keymanager.Secrets().WatchStatuses(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer stSub.Close()
 
-	var last *keymanager.Status
+	var last *secrets.Status
 	for {
 		select {
 		case <-ctx.Done():
@@ -98,16 +98,16 @@ func (sc *Scenario) WaitMasterSecret(ctx context.Context, generation uint64) (*k
 }
 
 // WaitEphemeralSecrets waits for the specified number of ephemeral secrets to be generated.
-func (sc *Scenario) WaitEphemeralSecrets(ctx context.Context, n int) (*keymanager.SignedEncryptedEphemeralSecret, error) {
+func (sc *Scenario) WaitEphemeralSecrets(ctx context.Context, n int) (*secrets.SignedEncryptedEphemeralSecret, error) {
 	sc.Logger.Info("waiting ephemeral secrets", "n", n)
 
-	ephCh, ephSub, err := sc.Net.Controller().Keymanager.WatchEphemeralSecrets(ctx)
+	ephCh, ephSub, err := sc.Net.Controller().Keymanager.Secrets().WatchEphemeralSecrets(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer ephSub.Close()
 
-	var secret *keymanager.SignedEncryptedEphemeralSecret
+	var secret *secrets.SignedEncryptedEphemeralSecret
 	for i := 0; i < n; i++ {
 		select {
 		case secret = <-ephCh:
@@ -128,11 +128,11 @@ func (sc *Scenario) UpdateRotationInterval(ctx context.Context, childEnv *env.En
 	)
 
 	status, err := sc.KeyManagerStatus(ctx)
-	if err != nil && err != keymanager.ErrNoSuchStatus {
+	if err != nil && err != secrets.ErrNoSuchStatus {
 		return err
 	}
 
-	var policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX
+	var policies map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX
 	if status != nil && status.Policy != nil {
 		policies = status.Policy.Policy.Enclaves
 	}
@@ -211,7 +211,7 @@ func (sc *Scenario) CompareLongtermPublicKeys(ctx context.Context, idxs []int) e
 }
 
 // KeymanagerInitResponse returns InitResponse of the specified key manager node.
-func (sc *Scenario) KeymanagerInitResponse(ctx context.Context, idx int) (*keymanager.InitResponse, error) {
+func (sc *Scenario) KeymanagerInitResponse(ctx context.Context, idx int) (*secrets.InitResponse, error) {
 	kms := sc.Net.Keymanagers()
 	if kmLen := len(kms); kmLen <= idx {
 		return nil, fmt.Errorf("expected more than %d keymanager, have: %v", idx, kmLen)
@@ -237,7 +237,7 @@ func (sc *Scenario) KeymanagerInitResponse(ctx context.Context, idx int) (*keyma
 	if rt == nil {
 		return nil, fmt.Errorf("key manager is missing keymanager runtime from descriptor")
 	}
-	var signedInitResponse keymanager.SignedInitResponse
+	var signedInitResponse secrets.SignedInitResponse
 	if err = cbor.Unmarshal(rt.ExtraInfo, &signedInitResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal extrainfo")
 	}
@@ -246,7 +246,7 @@ func (sc *Scenario) KeymanagerInitResponse(ctx context.Context, idx int) (*keyma
 }
 
 // UpdateEnclavePolicies updates enclave policies with a new runtime deployment.
-func (sc *Scenario) UpdateEnclavePolicies(rt *oasis.Runtime, deploymentIndex int, policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX) {
+func (sc *Scenario) UpdateEnclavePolicies(rt *oasis.Runtime, deploymentIndex int, policies map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX) {
 	enclaveID := rt.GetEnclaveIdentity(deploymentIndex)
 	if enclaveID == nil {
 		return
@@ -260,7 +260,7 @@ func (sc *Scenario) UpdateEnclavePolicies(rt *oasis.Runtime, deploymentIndex int
 		}
 
 		// Allow all runtimes to query the new key manager runtime.
-		newPolicy := keymanager.EnclavePolicySGX{
+		newPolicy := secrets.EnclavePolicySGX{
 			MayQuery:     make(map[common.Namespace][]sgx.EnclaveIdentity),
 			MayReplicate: make([]sgx.EnclaveIdentity, 0),
 		}
@@ -288,10 +288,10 @@ func (sc *Scenario) UpdateEnclavePolicies(rt *oasis.Runtime, deploymentIndex int
 //   - Each SGX runtime must have only one deployment and a distinct enclave identity.
 //   - Key manager enclaves are not allowed to replicate the master secrets.
 //   - All compute runtime enclaves are allowed to query key manager enclaves.
-func (sc *Scenario) BuildAllEnclavePolicies() (map[common.Namespace]map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
+func (sc *Scenario) BuildAllEnclavePolicies() (map[common.Namespace]map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX, error) {
 	sc.Logger.Info("building key manager SGX policy enclave policies map")
 
-	kmPolicies := make(map[common.Namespace]map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX)
+	kmPolicies := make(map[common.Namespace]map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX)
 
 	// Each SGX runtime must have only one deployment.
 	for _, rt := range sc.Net.Runtimes() {
@@ -332,7 +332,7 @@ func (sc *Scenario) BuildAllEnclavePolicies() (map[common.Namespace]map[sgx.Encl
 			return nil, fmt.Errorf("duplicate key manager runtime: %s", rt.ID())
 		}
 
-		kmPolicies[rt.ID()] = map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX{
+		kmPolicies[rt.ID()] = map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX{
 			*enclaveID: {
 				MayQuery:     make(map[common.Namespace][]sgx.EnclaveIdentity),
 				MayReplicate: make([]sgx.EnclaveIdentity, 0),
@@ -370,7 +370,7 @@ func (sc *Scenario) BuildAllEnclavePolicies() (map[common.Namespace]map[sgx.Encl
 //
 // If the simple key manager runtime does not exist or is not running on an SGX platform,
 // it returns nil.
-func (sc *Scenario) BuildEnclavePolicies() (map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, error) {
+func (sc *Scenario) BuildEnclavePolicies() (map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX, error) {
 	policies, err := sc.BuildAllEnclavePolicies()
 	if err != nil {
 		return nil, err
@@ -379,9 +379,9 @@ func (sc *Scenario) BuildEnclavePolicies() (map[sgx.EnclaveIdentity]*keymanager.
 }
 
 // ApplyKeyManagerPolicy applies the given policy to the simple key manager runtime.
-func (sc *Scenario) ApplyKeyManagerPolicy(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rotationInterval beacon.EpochTime, policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, nonce uint64) error {
+func (sc *Scenario) ApplyKeyManagerPolicy(ctx context.Context, childEnv *env.Env, cli *cli.Helpers, rotationInterval beacon.EpochTime, policies map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX, nonce uint64) error {
 	status, err := sc.KeyManagerStatus(ctx)
-	if err != nil && err != keymanager.ErrNoSuchStatus {
+	if err != nil && err != secrets.ErrNoSuchStatus {
 		return err
 	}
 

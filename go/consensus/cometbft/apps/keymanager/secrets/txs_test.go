@@ -1,4 +1,4 @@
-package keymanager
+package secrets
 
 import (
 	"crypto/sha512"
@@ -16,9 +16,9 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/state"
+	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
@@ -26,7 +26,9 @@ func TestPublishEphemeralSecret(t *testing.T) {
 	// Prepare key manager app.
 	cfg := abciAPI.MockApplicationStateConfig{}
 	appState := abciAPI.NewMockApplicationState(&cfg)
-	app := keymanagerApplication{appState}
+	ext := secretsExt{
+		state: appState,
+	}
 
 	// Prepare abci contexts.
 	ctx := appState.NewContext(abciAPI.ContextEndBlock)
@@ -35,11 +37,11 @@ func TestPublishEphemeralSecret(t *testing.T) {
 	defer txCtx.Close()
 
 	// Prepare states.
-	kmState := keymanagerState.NewMutableState(ctx.State())
+	kmState := secretsState.NewMutableState(ctx.State())
 	regState := registryState.NewMutableState(ctx.State())
 
 	// Set up key manager consensus parameters.
-	err := kmState.SetConsensusParameters(ctx, &api.ConsensusParameters{})
+	err := kmState.SetConsensusParameters(ctx, &secrets.ConsensusParameters{})
 	require.NoError(t, err, "api.SetConsensusParameters")
 
 	// Register one compute and two key manager runtimes.
@@ -145,14 +147,14 @@ func TestPublishEphemeralSecret(t *testing.T) {
 	}
 
 	// Set key manager statuses.
-	firstKmStatus := api.Status{
+	firstKmStatus := secrets.Status{
 		ID:    firstKmID,
 		Nodes: nodes,
 	}
 	err = kmState.SetStatus(ctx, &firstKmStatus)
 	require.NoError(t, err, "keymanager.SetStatus")
 
-	secondKmStatus := api.Status{
+	secondKmStatus := secrets.Status{
 		ID:    secondKmID,
 		Nodes: nodes,
 	}
@@ -160,11 +162,11 @@ func TestPublishEphemeralSecret(t *testing.T) {
 	require.NoError(t, err, "keymanager.SetStatus")
 
 	// Prepare signed secret.
-	newSignedSecret := func() *api.SignedEncryptedEphemeralSecret {
-		secret := api.EncryptedEphemeralSecret{
+	newSignedSecret := func() *secrets.SignedEncryptedEphemeralSecret {
+		secret := secrets.EncryptedEphemeralSecret{
 			ID:    firstKmID,
 			Epoch: beacon.EpochTime(1),
-			Secret: api.EncryptedSecret{
+			Secret: secrets.EncryptedSecret{
 				PubKey: *reks[0].Public(),
 				Ciphertexts: map[x25519.PublicKey][]byte{
 					*reks[0].Public(): {1, 2, 3},
@@ -172,10 +174,10 @@ func TestPublishEphemeralSecret(t *testing.T) {
 				},
 			},
 		}
-		sig, err2 := signature.Sign(raks[0], api.EncryptedEphemeralSecretSignatureContext, cbor.Marshal(secret))
+		sig, err2 := signature.Sign(raks[0], secrets.EncryptedEphemeralSecretSignatureContext, cbor.Marshal(secret))
 		require.NoError(t, err2, "signature.Sign")
 
-		return &api.SignedEncryptedEphemeralSecret{
+		return &secrets.SignedEncryptedEphemeralSecret{
 			Secret:    secret,
 			Signature: sig.Signature,
 		}
@@ -189,7 +191,7 @@ func TestPublishEphemeralSecret(t *testing.T) {
 		sigSecret := newSignedSecret()
 		sigSecret.Secret.ID = common.Namespace{}
 
-		err = app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err = ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "registry: no such runtime")
 	})
 
@@ -197,16 +199,16 @@ func TestPublishEphemeralSecret(t *testing.T) {
 		sigSecret := newSignedSecret()
 		sigSecret.Secret.ID = runtimeID
 
-		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err := ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "keymanager: runtime is not a key manager: 8000000000000000000000000000000000000000000000000000000000000000")
 	})
 
 	t.Run("node not in the key manager committee", func(t *testing.T) {
-		err := kmState.SetStatus(ctx, &api.Status{ID: firstKmID})
+		err := kmState.SetStatus(ctx, &secrets.Status{ID: firstKmID})
 		require.NoError(t, err, "SetStatus")
 
 		sigSecret := newSignedSecret()
-		err = app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err = ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "keymanager: ephemeral secret can be published only by the key manager committee")
 
 		err = kmState.SetStatus(ctx, &firstKmStatus)
@@ -217,7 +219,7 @@ func TestPublishEphemeralSecret(t *testing.T) {
 		sigSecret := newSignedSecret()
 		delete(sigSecret.Secret.Secret.Ciphertexts, *reks[0].Public())
 
-		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err := ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "keymanager: sanity check failed: secret is not encrypted with enough keys")
 	})
 
@@ -225,7 +227,7 @@ func TestPublishEphemeralSecret(t *testing.T) {
 		sigSecret := newSignedSecret()
 		sigSecret.Secret.ID = secondKmID
 
-		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err := ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "keymanager: sanity check failed: secret has to be encrypted with at least one key")
 	})
 
@@ -233,7 +235,7 @@ func TestPublishEphemeralSecret(t *testing.T) {
 		sigSecret := newSignedSecret()
 		sigSecret.Signature = signature.RawSignature{1, 2, 3, 4, 5}
 
-		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err := ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "keymanager: sanity check failed: ephemeral secret contains an invalid signature")
 	})
 
@@ -241,19 +243,19 @@ func TestPublishEphemeralSecret(t *testing.T) {
 		sigSecret := newSignedSecret()
 		sigSecret.Secret.Epoch = 2
 
-		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err := ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "keymanager: sanity check failed: ephemeral secret contains an invalid epoch: (expected: 1, got: 2)")
 	})
 
 	t.Run("happy path", func(t *testing.T) {
 		sigSecret := newSignedSecret()
-		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err := ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.NoError(t, err, "publishEphemeralSecret")
 	})
 
 	t.Run("ephemeral secret already published", func(t *testing.T) {
 		sigSecret := newSignedSecret()
-		err := app.publishEphemeralSecret(txCtx, kmState, sigSecret)
+		err := ext.publishEphemeralSecret(txCtx, kmState, sigSecret)
 		require.EqualError(t, err, "keymanager: ephemeral secret can be proposed once per epoch")
 	})
 }

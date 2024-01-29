@@ -283,7 +283,7 @@ func (sc *kmEphemeralSecretsImpl) Run(ctx context.Context, _ *env.Env) error { /
 	}
 
 	// Test that published secrets are encrypted to all enclaves.
-	ephCh, ephSub, err := sc.Net.Controller().Keymanager.WatchEphemeralSecrets(ctx)
+	ephCh, ephSub, err := sc.Net.Controller().Keymanager.Secrets().WatchEphemeralSecrets(ctx)
 	if err != nil {
 		return err
 	}
@@ -497,7 +497,7 @@ func (sc *kmEphemeralSecretsImpl) submitKeyValueRuntimeDecryptTx(
 }
 
 func (sc *kmEphemeralSecretsImpl) checkNumberOfKeyManagers(ctx context.Context, n int) error {
-	status, err := sc.Net.Controller().Keymanager.GetStatus(ctx, &registry.NamespaceQuery{
+	status, err := sc.Net.Controller().Keymanager.Secrets().GetStatus(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     KeyManagerRuntimeID,
 	})

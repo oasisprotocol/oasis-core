@@ -26,6 +26,7 @@ import (
 	genesisTestHelpers "github.com/oasisprotocol/oasis-core/go/genesis/tests"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -314,7 +315,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 	// Test keymanager genesis checks.
 	d = testDoc()
 	d.KeyManager = keymanager.Genesis{
-		Statuses: []*keymanager.Status{
+		Statuses: []*secrets.Status{
 			{
 				ID: testRuntimeID,
 			},
@@ -324,7 +325,7 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	d = testDoc()
 	d.KeyManager = keymanager.Genesis{
-		Statuses: []*keymanager.Status{
+		Statuses: []*secrets.Status{
 			{
 				ID:    validNS,
 				Nodes: []signature.PublicKey{invalidPK},

@@ -8,7 +8,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	cmdConsensus "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/consensus"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
@@ -21,7 +21,7 @@ type KeymanagerHelpers struct {
 }
 
 // InitPolicy generates the KM policy file.
-func (k *KeymanagerHelpers) InitPolicy(runtimeID common.Namespace, serial uint32, rotationInterval beacon.EpochTime, policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX, polPath string) error {
+func (k *KeymanagerHelpers) InitPolicy(runtimeID common.Namespace, serial uint32, rotationInterval beacon.EpochTime, policies map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX, polPath string) error {
 	k.logger.Info("initing KM policy",
 		"policy_path", polPath,
 		"serial", serial,

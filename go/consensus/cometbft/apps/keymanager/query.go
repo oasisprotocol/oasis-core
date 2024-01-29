@@ -3,19 +3,14 @@ package keymanager
 import (
 	"context"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/state"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets"
+	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 )
 
 // Query is the key manager query interface.
 type Query interface {
-	Status(context.Context, common.Namespace) (*keymanager.Status, error)
-	Statuses(context.Context) ([]*keymanager.Status, error)
-	MasterSecret(context.Context, common.Namespace) (*keymanager.SignedEncryptedMasterSecret, error)
-	EphemeralSecret(context.Context, common.Namespace) (*keymanager.SignedEncryptedEphemeralSecret, error)
-	Genesis(context.Context) (*keymanager.Genesis, error)
+	Secrets() secrets.Query
 }
 
 // QueryFactory is the key manager query factory.
@@ -25,7 +20,7 @@ type QueryFactory struct {
 
 // QueryAt returns the key manager query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := keymanagerState.NewImmutableState(ctx, sf.state, height)
+	state, err := secretsState.NewImmutableState(ctx, sf.state, height) // TODO: not ok
 	if err != nil {
 		return nil, err
 	}
@@ -33,23 +28,11 @@ func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error
 }
 
 type keymanagerQuerier struct {
-	state *keymanagerState.ImmutableState
+	state *secretsState.ImmutableState
 }
 
-func (kq *keymanagerQuerier) Status(ctx context.Context, id common.Namespace) (*keymanager.Status, error) {
-	return kq.state.Status(ctx, id)
-}
-
-func (kq *keymanagerQuerier) Statuses(ctx context.Context) ([]*keymanager.Status, error) {
-	return kq.state.Statuses(ctx)
-}
-
-func (kq *keymanagerQuerier) MasterSecret(ctx context.Context, id common.Namespace) (*keymanager.SignedEncryptedMasterSecret, error) {
-	return kq.state.MasterSecret(ctx, id)
-}
-
-func (kq *keymanagerQuerier) EphemeralSecret(ctx context.Context, id common.Namespace) (*keymanager.SignedEncryptedEphemeralSecret, error) {
-	return kq.state.EphemeralSecret(ctx, id)
+func (kq *keymanagerQuerier) Secrets() secrets.Query {
+	return secrets.NewQuery(kq.state)
 }
 
 func (app *keymanagerApplication) QueryFactory() interface{} {
