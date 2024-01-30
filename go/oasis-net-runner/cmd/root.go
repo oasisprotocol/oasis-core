@@ -139,6 +139,10 @@ func runRoot(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("root: failed to instantiate fixture: %w", err)
 	}
 
+	// Set logging level and format for all spawned nodes.
+	net.Config().NodeLogLevel = viper.GetString(cfgLogLevel)
+	net.Config().NodeLogFormat = viper.GetString(cfgLogFmt)
+
 	// Start the network and keep it running.
 	if err = net.Start(); err != nil {
 		logger.Error("failed to start network",

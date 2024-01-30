@@ -71,12 +71,12 @@ func (c *keyManagerRPCClient) addKeyManagerAddrToHost(km *oasis.Keymanager) (pee
 		return "", err
 	}
 
-	listenAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", km.P2PPort()))
+	peerAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", km.P2PPort()))
 	if err != nil {
 		return "", err
 	}
 
-	c.host.Peerstore().AddAddr(peerID, listenAddr, time.Hour)
+	c.host.Peerstore().AddAddr(peerID, peerAddr, time.Hour)
 
 	return peerID, nil
 }

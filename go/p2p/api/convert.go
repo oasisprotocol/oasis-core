@@ -88,7 +88,7 @@ func AddrInfosFromConsensusAddrs(addrs []string) ([]peer.AddrInfo, error) {
 // /ip6/::1/tcp/8080 would be converted to a list ["/ip4/127.0.0.1/tcp/8080/p2p/1234",
 // "/ip6/::1/tcp/8080/p2p/1234"].
 func AddrInfoToString(info peer.AddrInfo) []string {
-	id := info.ID.Pretty()
+	id := info.ID.String()
 	addrs := make([]string, len(info.Addrs))
 	for i, a := range info.Addrs {
 		addrs[i] = fmt.Sprintf("%s/p2p/%s", a.String(), id)
