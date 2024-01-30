@@ -3,9 +3,29 @@ package events
 import (
 	"encoding/base64"
 	"fmt"
+	"sync"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
+
+// eventSeparator is the separator used to separate module from event name.
+const eventSeparator = "."
+
+// registeredEvents stores registered event names.
+var registeredEvents sync.Map
+
+// NewEventName creates a new event name.
+//
+// Module and event must be unique. If they are not, this method will panic.
+func NewEventName(module string, event string) string {
+	// Check for duplicate event names.
+	name := module + eventSeparator + event
+	if _, isRegistered := registeredEvents.LoadOrStore(name, struct{}{}); isRegistered {
+		panic(fmt.Errorf("events: event already registered: %s", name))
+	}
+
+	return name
+}
 
 // Provable is an interface implemented by event types which can be proven.
 type Provable interface {
