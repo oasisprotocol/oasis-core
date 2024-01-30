@@ -16,11 +16,8 @@ const KeyManagerProtocolID = "keymanager"
 // KeyManagerProtocolVersion is the supported version of the keymanager protocol.
 var KeyManagerProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
 
-// Constants related to the GetDiff method.
-const (
-	MethodCallEnclave     = "CallEnclave"
-	MaxCallEnclaveRetries = 15
-)
+// MethodCallEnclave is the name of the CallEnclave method.
+const MethodCallEnclave = "CallEnclave"
 
 // CallEnclaveRequest is a CallEnclave request.
 type CallEnclaveRequest struct {
