@@ -14,9 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
-	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	p2pProtocol "github.com/oasisprotocol/oasis-core/go/p2p/protocol"
@@ -52,7 +50,6 @@ const executeBatchTimeoutFactor = 3
 // Node is a committee node.
 type Node struct { // nolint: maligned
 	runtimeReady         bool
-	runtimeVersion       version.Version
 	runtimeTrustSynced   bool
 	runtimeTrustSyncCncl context.CancelFunc
 
@@ -1121,28 +1118,7 @@ func (n *Node) nudgeAvailabilityLocked(force bool) {
 			break
 		}
 
-		n.roleProvider.SetAvailable(func(nd *node.Node) error {
-			for _, version := range n.commonNode.Runtime.HostVersions() {
-				// Skip sending any old versions that will never be active again.
-				if version.ToU64() < n.runtimeVersion.ToU64() {
-					continue
-				}
-
-				// Obtain CapabilityTEE for the given runtime version.
-				capabilityTEE, err := n.commonNode.GetHostedRuntimeCapabilityTEEForVersion(version)
-				if err != nil {
-					n.logger.Warn("failed to get CapabilityTEE for hosted runtime, skipping",
-						"err", err,
-						"version", version,
-					)
-					continue
-				}
-
-				rt := nd.AddOrUpdateRuntime(n.commonNode.Runtime.ID(), version)
-				rt.Capabilities.TEE = capabilityTEE
-			}
-			return nil
-		})
+		n.roleProvider.SetAvailable(n.commonNode.RegisterNodeRuntime)
 	default:
 		// Executor is not ready to process requests.
 		if !n.roleProvider.IsAvailable() && !force {
@@ -1183,7 +1159,6 @@ func (n *Node) HandleRuntimeHostEventLocked(ev *host.Event) {
 
 		// We are now able to service requests for this runtime.
 		n.runtimeReady = true
-		n.runtimeVersion = ev.Started.Version
 	case ev.Updated != nil:
 		// Update runtime capabilities.
 		n.runtimeReady = true

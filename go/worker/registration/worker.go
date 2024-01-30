@@ -1098,18 +1098,6 @@ func New(
 		rp.SetAvailable(func(*node.Node) error { return nil })
 	}
 
-	// When a node is a client node and it has an entity configured, we register it with the
-	// observer role as this may be needed for confidential runtimes.
-	if config.GlobalConfig.Mode == config.ModeClient {
-		rp, err := w.NewRoleProvider(node.RoleObserver)
-		if err != nil {
-			return nil, err
-		}
-
-		// The observer role is available immediately.
-		rp.SetAvailable(func(*node.Node) error { return nil })
-	}
-
 	return w, nil
 }
 
