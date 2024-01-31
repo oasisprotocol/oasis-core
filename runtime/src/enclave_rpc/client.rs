@@ -99,7 +99,7 @@ struct Controller {
     /// Internal command queue (receiver part).
     cmdq: mpsc::Receiver<Command>,
     /// Internal command queue (sender part for retries).
-    cmdq_tx: mpsc::Sender<Command>,
+    cmdq_tx: mpsc::WeakSender<Command>,
 }
 
 impl Controller {
@@ -200,10 +200,11 @@ impl Controller {
             _ => {
                 // Attempt retry if number of retries is not exceeded. Retry is performed by
                 // queueing another request.
-                let _ = self
-                    .cmdq_tx
-                    .send(Command::Call(request, kind, sender, retries + 1))
-                    .await;
+                if let Some(cmdq_tx) = self.cmdq_tx.upgrade() {
+                    let _ = cmdq_tx
+                        .send(Command::Call(request, kind, sender, retries + 1))
+                        .await;
+                }
             }
         }
     }
@@ -360,7 +361,7 @@ impl RpcClient {
             session: MultiplexedSession::new(builder),
             transport,
             cmdq: rx,
-            cmdq_tx: tx.clone(),
+            cmdq_tx: tx.downgrade(), // Ensure channel is closed on RpcClient drop.
         };
         tokio::spawn(controller.run());
 
