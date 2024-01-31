@@ -67,8 +67,7 @@ func (a Address) String() string {
 
 // Reserve adds the address to the reserved addresses list.
 func (a Address) Reserve() error {
-	_, loaded := reservedAddresses.LoadOrStore(a, true)
-	if loaded {
+	if _, loaded := reservedAddresses.LoadOrStore(a, struct{}{}); loaded {
 		return fmt.Errorf("address: address '%s' is already reserved", a)
 	}
 	return nil
