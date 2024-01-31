@@ -11,9 +11,8 @@ impl_bytes!(
 impl SessionID {
     /// Generate a random session identifier.
     pub fn random() -> Self {
-        let mut rng = OsRng {};
         let mut session_id = [0u8; 32];
-        rng.fill(&mut session_id);
+        OsRng.fill(&mut session_id);
 
         SessionID(session_id)
     }

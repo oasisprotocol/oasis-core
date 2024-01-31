@@ -88,7 +88,7 @@ impl MultiplexedSession {
 }
 
 struct Controller {
-    /// Maximum number of call retries.
+    /// Maximum number of call retries on transport failures.
     max_retries: usize,
     /// Allowed nodes.
     nodes: Vec<signature::PublicKey>,
@@ -119,7 +119,7 @@ impl Controller {
 
                     self.session.builder =
                         mem::take(&mut self.session.builder).remote_enclaves(enclaves);
-                    self.session.reset();
+                    self.reset().await;
                 }
                 Command::UpdateQuotePolicy(policy) => {
                     let policy = Some(Arc::new(policy));
@@ -129,7 +129,7 @@ impl Controller {
 
                     self.session.builder =
                         mem::take(&mut self.session.builder).quote_policy(policy);
-                    self.session.reset();
+                    self.reset().await;
                 }
                 Command::UpdateRuntimeID(id) => {
                     if self.session.builder.get_remote_runtime_id() == &id {
@@ -138,7 +138,7 @@ impl Controller {
 
                     self.session.builder =
                         mem::take(&mut self.session.builder).remote_runtime_id(id);
-                    self.session.reset();
+                    self.reset().await;
                 }
                 Command::UpdateNodes(nodes) => {
                     self.nodes = nodes;
@@ -182,10 +182,10 @@ impl Controller {
 
         // Update peer feedback for next request.
         let pfid = self.transport.get_peer_feedback_id();
-        if result.is_err() {
+        if result.is_err() && kind == types::Kind::NoiseSession {
             // In case there was a transport error we need to reset the session immediately as no
             // progress is possible.
-            self.session.reset();
+            self.reset().await;
             // Set peer feedback immediately so retries can try new peers.
             self.transport
                 .set_peer_feedback(pfid, Some(types::PeerFeedback::Failure));
@@ -217,7 +217,7 @@ impl Controller {
             return Ok(());
         }
         // Make sure the session is reset for a new connection.
-        self.session.reset();
+        self.reset().await;
 
         // Handshake1 -> Handshake2
         let mut buffer = vec![];
@@ -250,6 +250,12 @@ impl Controller {
             .write_noise_session(session_id, buffer, String::new(), vec![node])
             .await
             .map_err(|_| RpcClientError::Transport)?;
+
+        // Check if the session has failed authentication. In this case, notify the other side
+        // (returning an error here will do that in `call`).
+        if self.session.inner.is_unauthenticated() {
+            return Err(RpcClientError::Transport);
+        }
 
         Ok(())
     }
@@ -303,25 +309,35 @@ impl Controller {
         cbor::from_slice(&data).map_err(RpcClientError::DecodeError)
     }
 
-    async fn close(&mut self) -> Result<(), RpcClientError> {
-        if !self.session.inner.is_connected() {
-            return Ok(());
-        }
+    async fn reset(&mut self) {
+        // Notify the other end (if any) of session closure.
+        let _ = self.close_notify().await;
+        // Reset the session.
+        self.session.reset();
+    }
 
-        // Prepare the close message.
+    async fn close_notify(&mut self) -> Result<Vec<u8>, RpcClientError> {
+        let node = self.session.inner.get_node()?;
+
         let mut buffer = vec![];
         self.session
             .inner
             .write_message(types::Message::Close, &mut buffer)
             .map_err(|_| RpcClientError::Transport)?;
-        let node = self.session.inner.get_node()?;
 
-        // Send the message and receive the response.
-        let (data, _) = self
-            .transport
+        self.transport
             .write_noise_session(self.session.id, buffer, String::new(), vec![node])
             .await
-            .map_err(|_| RpcClientError::Transport)?;
+            .map_err(|_| RpcClientError::Transport)
+            .map(|(data, _)| data)
+    }
+
+    async fn close(&mut self) -> Result<(), RpcClientError> {
+        if !self.session.inner.is_connected() {
+            return Ok(());
+        }
+
+        let data = self.close_notify().await?;
 
         // Close the session and check the received message.
         let msg = self

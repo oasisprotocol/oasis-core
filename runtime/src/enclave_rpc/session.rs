@@ -56,6 +56,7 @@ enum State {
     Handshake1(snow::HandshakeState),
     Handshake2(snow::HandshakeState),
     Transport(snow::TransportState),
+    UnauthenticatedTransport(snow::TransportState),
     Closed,
 }
 
@@ -132,32 +133,37 @@ impl Session {
                 self.state = State::Handshake2(state);
             }
             State::Handshake2(mut state) => {
-                if state.is_initiator() {
-                    // <- e, ee, s, es
-                    let len = state.read_message(&data, &mut self.buf)?;
-                    let remote_static = state
-                        .get_remote_static()
-                        .expect("dh exchange just happened");
-                    self.info = self
-                        .verify_rak_binding(&self.buf[..len], remote_static)
-                        .await?;
+                // Process data sent during Handshake1 phase.
+                let len = state.read_message(&data, &mut self.buf)?;
+                let remote_static = state
+                    .get_remote_static()
+                    .expect("dh exchange just happened");
+                let auth_info = self
+                    .verify_rak_binding(&self.buf[..len], remote_static)
+                    .await;
 
+                if state.is_initiator() {
                     // -> s, se
                     let len = state.write_message(&self.get_rak_binding(), &mut self.buf)?;
                     writer.write_all(&self.buf[..len])?;
-                } else {
-                    // <- s, se
-                    let len = state.read_message(&data, &mut self.buf)?;
-                    let remote_static = state
-                        .get_remote_static()
-                        .expect("dh exchange just happened");
-                    self.info = self
-                        .verify_rak_binding(&self.buf[..len], remote_static)
-                        .await?;
                 }
 
-                // Move into transport mode.
-                self.state = State::Transport(state.into_transport_mode()?);
+                match auth_info {
+                    Ok(auth_info) => {
+                        self.info = auth_info;
+                        self.state = State::Transport(state.into_transport_mode()?);
+                    }
+                    Err(_) if state.is_initiator() => {
+                        // There was an error authenticating the session and we are the initiator.
+                        // Transition into unauthenticated transport state so we can notify the
+                        // other side of the close.
+                        self.state = State::UnauthenticatedTransport(state.into_transport_mode()?);
+                    }
+                    Err(err) => {
+                        // There was an authentication error and we are not the initiator, abort.
+                        return Err(err);
+                    }
+                }
             }
             State::Transport(mut state) => {
                 // TODO: Restore session in case of errors.
@@ -167,7 +173,7 @@ impl Session {
                 self.state = State::Transport(state);
                 return Ok(Some(msg));
             }
-            State::Closed => {
+            State::Closed | State::UnauthenticatedTransport(_) => {
                 return Err(SessionError::Closed.into());
             }
         }
@@ -180,15 +186,18 @@ impl Session {
     /// The `writer` will be used for protocol message output which should
     /// be transmitted to the remote session counterpart.
     pub fn write_message<W: Write>(&mut self, msg: Message, mut writer: W) -> Result<()> {
-        if let State::Transport(ref mut state) = self.state {
-            let msg = cbor::to_vec(msg);
-            let len = state.write_message(&msg, &mut self.buf)?;
-            writer.write_all(&self.buf[..len])?;
+        let state = match self.state {
+            State::Transport(ref mut state) => state,
+            State::UnauthenticatedTransport(ref mut state) if matches!(msg, Message::Close) => {
+                state
+            }
+            _ => return Err(SessionError::InvalidState.into()),
+        };
 
-            Ok(())
-        } else {
-            Err(SessionError::InvalidState.into())
-        }
+        let len = state.write_message(&cbor::to_vec(msg), &mut self.buf)?;
+        writer.write_all(&self.buf[..len])?;
+
+        Ok(())
     }
 
     /// Mark the session as closed.
@@ -286,6 +295,12 @@ impl Session {
     /// Whether the session is in closed state.
     pub fn is_closed(&self) -> bool {
         matches!(self.state, State::Closed)
+    }
+
+    /// Whether the session is in unauthenticated transport state. In this state the session can
+    /// only be used to transmit a close notification.
+    pub fn is_unauthenticated(&self) -> bool {
+        matches!(self.state, State::UnauthenticatedTransport(_))
     }
 
     /// Return remote node identifier.
