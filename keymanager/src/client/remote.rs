@@ -43,7 +43,8 @@ use super::KeyManagerClient;
 /// Key manager RPC endpoint.
 const KEY_MANAGER_ENDPOINT: &str = "key-manager";
 
-struct Inner {
+/// A key manager client which talks to a remote key manager enclave.
+pub struct RemoteClient {
     /// Runtime identifier for which we are going to request keys.
     runtime_id: Namespace,
     /// RPC client.
@@ -62,11 +63,6 @@ struct Inner {
     rsk: RwLock<Option<PublicKey>>,
 }
 
-/// A key manager client which talks to a remote key manager enclave.
-pub struct RemoteClient {
-    inner: Arc<Inner>,
-}
-
 impl RemoteClient {
     fn new(
         runtime_id: Namespace,
@@ -77,16 +73,14 @@ impl RemoteClient {
         let cap = NonZeroUsize::new(keys_cache_sizes).unwrap();
 
         Self {
-            inner: Arc::new(Inner {
-                runtime_id,
-                rpc_client,
-                consensus_verifier,
-                longterm_private_keys: RwLock::new(LruCache::new(cap)),
-                longterm_public_keys: RwLock::new(LruCache::new(cap)),
-                ephemeral_private_keys: RwLock::new(LruCache::new(cap)),
-                ephemeral_public_keys: RwLock::new(LruCache::new(cap)),
-                rsk: RwLock::new(None),
-            }),
+            runtime_id,
+            rpc_client,
+            consensus_verifier,
+            longterm_private_keys: RwLock::new(LruCache::new(cap)),
+            longterm_public_keys: RwLock::new(LruCache::new(cap)),
+            ephemeral_private_keys: RwLock::new(LruCache::new(cap)),
+            ephemeral_public_keys: RwLock::new(LruCache::new(cap)),
+            rsk: RwLock::new(None),
         }
     }
 
@@ -180,11 +174,11 @@ impl RemoteClient {
     pub fn set_status(&self, status: KeyManagerStatus) -> Result<(), KeyManagerError> {
         // Set runtime signing key.
         if let Some(rsk) = status.rsk {
-            self.inner.rsk.write().unwrap().replace(rsk);
+            self.rsk.write().unwrap().replace(rsk);
         }
 
         // Set key manager runtime ID.
-        self.inner.rpc_client.update_runtime_id(Some(status.id));
+        self.rpc_client.update_runtime_id(Some(status.id));
 
         // Verify and apply the policy, if set.
         let untrusted_policy = match status.policy {
@@ -200,7 +194,7 @@ impl RemoteClient {
         {
             let enclaves: HashSet<EnclaveIdentity> =
                 HashSet::from_iter(policy.enclaves.keys().cloned());
-            self.inner.rpc_client.update_enclaves(Some(enclaves));
+            self.rpc_client.update_enclaves(Some(enclaves));
         }
 
         Ok(())
@@ -208,12 +202,12 @@ impl RemoteClient {
 
     /// Set key manager's quote policy.
     pub fn set_quote_policy(&self, policy: QuotePolicy) {
-        self.inner.rpc_client.update_quote_policy(policy);
+        self.rpc_client.update_quote_policy(policy);
     }
 
     /// Set allowed key manager nodes.
     pub fn set_nodes(&self, nodes: Vec<signature::PublicKey>) {
-        self.inner.rpc_client.update_nodes(nodes);
+        self.rpc_client.update_nodes(nodes);
     }
 
     fn verify_public_key(
@@ -223,10 +217,10 @@ impl RemoteClient {
         epoch: Option<EpochTime>,
         now: Option<EpochTime>,
     ) -> Result<(), KeyManagerError> {
-        let pk = self.inner.rsk.read().unwrap();
+        let pk = self.rsk.read().unwrap();
         let pk = pk.as_ref().ok_or(KeyManagerError::RSKMissing)?;
 
-        key.verify(self.inner.runtime_id, key_pair_id, epoch, now, pk)
+        key.verify(self.runtime_id, key_pair_id, epoch, now, pk)
             .map_err(KeyManagerError::InvalidSignature)
     }
 }
@@ -236,19 +230,19 @@ impl KeyManagerClient for RemoteClient {
     fn clear_cache(&self) {
         // We explicitly only take one lock at a time.
 
-        let mut cache = self.inner.longterm_private_keys.write().unwrap();
+        let mut cache = self.longterm_private_keys.write().unwrap();
         cache.clear();
         drop(cache);
 
-        let mut cache = self.inner.longterm_public_keys.write().unwrap();
+        let mut cache = self.longterm_public_keys.write().unwrap();
         cache.clear();
         drop(cache);
 
-        let mut cache = self.inner.ephemeral_private_keys.write().unwrap();
+        let mut cache = self.ephemeral_private_keys.write().unwrap();
         cache.clear();
         drop(cache);
 
-        let mut cache = self.inner.ephemeral_public_keys.write().unwrap();
+        let mut cache = self.ephemeral_public_keys.write().unwrap();
         cache.clear();
         drop(cache);
     }
@@ -262,7 +256,7 @@ impl KeyManagerClient for RemoteClient {
 
         // First try to fetch from cache.
         {
-            let mut cache = self.inner.longterm_private_keys.write().unwrap();
+            let mut cache = self.longterm_private_keys.write().unwrap();
             if let Some(keys) = cache.get(&id) {
                 return Ok(keys.clone());
             }
@@ -270,20 +264,18 @@ impl KeyManagerClient for RemoteClient {
 
         // No entry in cache, fetch from key manager.
         let height = self
-            .inner
             .consensus_verifier
             .latest_height()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         let keys: KeyPair = self
-            .inner
             .rpc_client
             .secure_call(
                 METHOD_GET_OR_CREATE_KEYS,
                 LongTermKeyRequest {
                     height: Some(height),
-                    runtime_id: self.inner.runtime_id,
+                    runtime_id: self.runtime_id,
                     key_pair_id,
                     generation,
                 },
@@ -292,7 +284,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         // Cache key.
-        let mut cache = self.inner.longterm_private_keys.write().unwrap();
+        let mut cache = self.longterm_private_keys.write().unwrap();
         cache.put(id, keys.clone());
 
         Ok(keys)
@@ -307,7 +299,7 @@ impl KeyManagerClient for RemoteClient {
 
         // First fetch from cache.
         {
-            let mut cache = self.inner.longterm_public_keys.write().unwrap();
+            let mut cache = self.longterm_public_keys.write().unwrap();
             if let Some(key) = cache.get(&id) {
                 match self.verify_public_key(key, key_pair_id, None, None) {
                     Ok(()) => return Ok(key.clone()),
@@ -320,20 +312,18 @@ impl KeyManagerClient for RemoteClient {
 
         // No entry in cache, fetch from key manager.
         let height = self
-            .inner
             .consensus_verifier
             .latest_height()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         let key: SignedPublicKey = self
-            .inner
             .rpc_client
             .insecure_call(
                 METHOD_GET_PUBLIC_KEY,
                 LongTermKeyRequest {
                     height: Some(height),
-                    runtime_id: self.inner.runtime_id,
+                    runtime_id: self.runtime_id,
                     key_pair_id,
                     generation,
                 },
@@ -345,7 +335,7 @@ impl KeyManagerClient for RemoteClient {
         self.verify_public_key(&key, key_pair_id, None, None)?;
 
         // Cache key.
-        let mut cache = self.inner.longterm_public_keys.write().unwrap();
+        let mut cache = self.longterm_public_keys.write().unwrap();
         cache.put(id, key.clone());
 
         Ok(key)
@@ -360,7 +350,7 @@ impl KeyManagerClient for RemoteClient {
 
         // First try to fetch from cache.
         {
-            let mut cache = self.inner.ephemeral_private_keys.write().unwrap();
+            let mut cache = self.ephemeral_private_keys.write().unwrap();
             if let Some(keys) = cache.get(&id) {
                 return Ok(keys.clone());
             }
@@ -368,20 +358,18 @@ impl KeyManagerClient for RemoteClient {
 
         // No entry in cache, fetch from key manager.
         let height = self
-            .inner
             .consensus_verifier
             .latest_height()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         let keys: KeyPair = self
-            .inner
             .rpc_client
             .secure_call(
                 METHOD_GET_OR_CREATE_EPHEMERAL_KEYS,
                 EphemeralKeyRequest {
                     height: Some(height),
-                    runtime_id: self.inner.runtime_id,
+                    runtime_id: self.runtime_id,
                     key_pair_id,
                     epoch,
                 },
@@ -390,7 +378,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         // Cache key.
-        let mut cache = self.inner.ephemeral_private_keys.write().unwrap();
+        let mut cache = self.ephemeral_private_keys.write().unwrap();
         cache.put(id, keys.clone());
 
         Ok(keys)
@@ -404,7 +392,7 @@ impl KeyManagerClient for RemoteClient {
         let id = (key_pair_id, epoch);
 
         // Fetch current epoch.
-        let consensus_state = self.inner.consensus_verifier.latest_state().await?;
+        let consensus_state = self.consensus_verifier.latest_state().await?;
         let consensus_epoch = tokio::task::block_in_place(move || {
             let beacon_state = BeaconState::new(&consensus_state);
             beacon_state.epoch()
@@ -412,7 +400,7 @@ impl KeyManagerClient for RemoteClient {
 
         // First try to fetch from cache.
         {
-            let mut cache = self.inner.ephemeral_public_keys.write().unwrap();
+            let mut cache = self.ephemeral_public_keys.write().unwrap();
             if let Some(key) = cache.get(&id) {
                 match self.verify_public_key(key, key_pair_id, Some(epoch), Some(consensus_epoch)) {
                     Ok(()) => return Ok(key.clone()),
@@ -425,20 +413,18 @@ impl KeyManagerClient for RemoteClient {
 
         // No entry in cache, fetch from key manager.
         let height = self
-            .inner
             .consensus_verifier
             .latest_height()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         let key: SignedPublicKey = self
-            .inner
             .rpc_client
             .insecure_call(
                 METHOD_GET_PUBLIC_EPHEMERAL_KEY,
                 EphemeralKeyRequest {
                     height: Some(height),
-                    runtime_id: self.inner.runtime_id,
+                    runtime_id: self.runtime_id,
                     key_pair_id,
                     epoch,
                 },
@@ -450,7 +436,7 @@ impl KeyManagerClient for RemoteClient {
         self.verify_public_key(&key, key_pair_id, Some(epoch), Some(consensus_epoch))?;
 
         // Cache key.
-        let mut cache = self.inner.ephemeral_public_keys.write().unwrap();
+        let mut cache = self.ephemeral_public_keys.write().unwrap();
         cache.put(id, key.clone());
 
         Ok(key)
@@ -461,14 +447,12 @@ impl KeyManagerClient for RemoteClient {
         generation: u64,
     ) -> Result<VerifiableSecret, KeyManagerError> {
         let height = self
-            .inner
             .consensus_verifier
             .latest_height()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-        self.inner
-            .rpc_client
+        self.rpc_client
             .secure_call(
                 METHOD_REPLICATE_MASTER_SECRET,
                 ReplicateMasterSecretRequest {
@@ -489,14 +473,12 @@ impl KeyManagerClient for RemoteClient {
         epoch: EpochTime,
     ) -> Result<Secret, KeyManagerError> {
         let height = self
-            .inner
             .consensus_verifier
             .latest_height()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
-        self.inner
-            .rpc_client
+        self.rpc_client
             .secure_call(
                 METHOD_REPLICATE_EPHEMERAL_SECRET,
                 ReplicateEphemeralSecretRequest {
