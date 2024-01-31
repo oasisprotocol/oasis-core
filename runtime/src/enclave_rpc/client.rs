@@ -54,7 +54,7 @@ enum Command {
         oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
         usize,
     ),
-    PeerFeedback(u64, types::PeerFeedback),
+    PeerFeedback(u64, types::PeerFeedback, types::Kind),
     UpdateEnclaves(Option<HashSet<EnclaveIdentity>>),
     UpdateQuotePolicy(QuotePolicy),
     UpdateRuntimeID(Option<Namespace>),
@@ -109,8 +109,16 @@ impl Controller {
                 Command::Call(request, kind, sender, retries) => {
                     self.call(request, kind, sender, retries).await
                 }
-                Command::PeerFeedback(pfid, peer_feedback) => {
+                Command::PeerFeedback(pfid, peer_feedback, kind) => {
                     self.transport.set_peer_feedback(pfid, Some(peer_feedback));
+
+                    // In case the peer feedback is bad, reset the session so a new peer can be
+                    // selected for a subsequent session.
+                    if !matches!(peer_feedback, types::PeerFeedback::Success)
+                        && kind == types::Kind::NoiseSession
+                    {
+                        self.reset().await;
+                    }
                 }
                 Command::UpdateEnclaves(enclaves) => {
                     if self.session.builder.get_remote_enclaves() == &enclaves {
@@ -182,13 +190,15 @@ impl Controller {
 
         // Update peer feedback for next request.
         let pfid = self.transport.get_peer_feedback_id();
-        if result.is_err() && kind == types::Kind::NoiseSession {
-            // In case there was a transport error we need to reset the session immediately as no
-            // progress is possible.
-            self.reset().await;
+        if result.is_err() {
             // Set peer feedback immediately so retries can try new peers.
             self.transport
                 .set_peer_feedback(pfid, Some(types::PeerFeedback::Failure));
+            // In case there was a transport error we need to reset the session immediately as no
+            // progress is possible.
+            if kind == types::Kind::NoiseSession {
+                self.reset().await;
+            }
         }
 
         match result {
@@ -450,7 +460,7 @@ impl RpcClient {
             Ok(_) => types::PeerFeedback::Success,
             Err(_) => types::PeerFeedback::Failure,
         };
-        let _ = self.cmdq.send(Command::PeerFeedback(pfid, pf)).await;
+        let _ = self.cmdq.send(Command::PeerFeedback(pfid, pf, kind)).await;
 
         result
     }
@@ -721,6 +731,7 @@ mod test {
             vec![
                 (1, Some(types::PeerFeedback::Success)), // Previous handled call.
                 (2, Some(types::PeerFeedback::Failure)), // Failed call due to induced error.
+                (2, None),                               // Session close.
                 (2, None),                               // New handshake.
                 (2, None),                               // New handshake.
                 (2, Some(types::PeerFeedback::Success)), // Handled call.
