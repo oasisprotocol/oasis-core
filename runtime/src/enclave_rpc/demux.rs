@@ -15,13 +15,13 @@ use super::{
 use crate::{common::time::insecure_posix_system_time, identity::Identity};
 
 /// Maximum concurrent EnclaveRPC sessions.
-const MAX_CONCURRENT_SESSIONS: usize = 100;
+const MAX_CONCURRENT_SESSIONS: usize = 1024;
 /// Sessions without any processed frame for more than STALE_SESSION_TIMEOUT_SECS seconds
 /// can be purged.
-const STALE_SESSION_TIMEOUT_SECS: u64 = 60;
+const STALE_SESSION_TIMEOUT_SECS: u64 = 5;
 /// Stale session check will be performed on any new incoming connection with at minimum
 /// STALE_SESSIONS_CHECK_TIMEOUT_SECS seconds between checks.
-const STALE_SESSIONS_CHECK_TIMEOUT_SECS: u64 = 10;
+const STALE_SESSIONS_CHECK_TIMEOUT_SECS: u64 = 5;
 
 /// Demultiplexer error.
 #[derive(Error, Debug)]
