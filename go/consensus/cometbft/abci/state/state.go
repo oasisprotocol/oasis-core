@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -15,11 +15,11 @@ var (
 	// chainContextKeyFmt is the key format used for storing the chain context.
 	//
 	// Value is the chain context.
-	chainContextKeyFmt = keyformat.New(0xF0)
+	chainContextKeyFmt = consensus.KeyFormat.New(0xF0)
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized consensusGenesis.Parameters.
-	parametersKeyFmt = keyformat.New(0xF1)
+	parametersKeyFmt = consensus.KeyFormat.New(0xF1)
 )
 
 // ImmutableState is an immutable consensus backend state wrapper.

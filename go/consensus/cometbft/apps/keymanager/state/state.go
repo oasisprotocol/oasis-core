@@ -7,6 +7,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -16,19 +17,19 @@ var (
 	// statusKeyFmt is the key manager status key format.
 	//
 	// Value is CBOR-serialized key manager status.
-	statusKeyFmt = keyformat.New(0x70, keyformat.H(&common.Namespace{}))
+	statusKeyFmt = consensus.KeyFormat.New(0x70, keyformat.H(&common.Namespace{}))
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized keymanager.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x71)
+	parametersKeyFmt = consensus.KeyFormat.New(0x71)
 	// masterSecretKeyFmt is the key manager master secret key format.
 	//
 	// Value is CBOR-serialized key manager signed encrypted master secret.
-	masterSecretKeyFmt = keyformat.New(0x72, keyformat.H(&common.Namespace{}))
+	masterSecretKeyFmt = consensus.KeyFormat.New(0x72, keyformat.H(&common.Namespace{}))
 	// ephemeralSecretKeyFmt is the key manager ephemeral secret key format.
 	//
 	// Value is CBOR-serialized key manager signed encrypted ephemeral secret.
-	ephemeralSecretKeyFmt = keyformat.New(0x73, keyformat.H(&common.Namespace{}))
+	ephemeralSecretKeyFmt = consensus.KeyFormat.New(0x73, keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable key manager state wrapper.

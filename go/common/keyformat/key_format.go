@@ -4,6 +4,7 @@ import (
 	"encoding"
 	"encoding/binary"
 	"fmt"
+	"sync"
 )
 
 // CustomFormat specifies a custom encoding format for a key element.
@@ -31,6 +32,39 @@ func (m *elementMeta) checkSize(index, size int) {
 			m.size,
 		))
 	}
+}
+
+// Namespace is a tool for constructing unique key formats within a namespace.
+type Namespace struct {
+	namespace string
+
+	mu       sync.Mutex
+	prefixes map[byte]struct{}
+}
+
+// NewNamespace constructs a new key format namespace.
+func NewNamespace(namespace string) *Namespace {
+	return &Namespace{
+		namespace: namespace,
+		prefixes:  make(map[byte]struct{}),
+	}
+}
+
+// New constructs a new key format.
+//
+// The prefix must be unique; otherwise, this method will panic.
+func (f *Namespace) New(prefix byte, layout ...interface{}) *KeyFormat {
+	func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+
+		if _, ok := f.prefixes[prefix]; ok {
+			panic(fmt.Errorf("key format: already registered: namespace %s, prefix 0x%x", f.namespace, prefix))
+		}
+		f.prefixes[prefix] = struct{}{}
+	}()
+
+	return New(prefix, layout...)
 }
 
 // KeyFormat is a key formatting helper to be used together with key-value

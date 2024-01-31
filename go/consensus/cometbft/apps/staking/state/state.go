@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -26,58 +27,58 @@ var (
 	// accountKeyFmt is the key format used for accounts (account addresses).
 	//
 	// Value is a CBOR-serialized account address.
-	accountKeyFmt = keyformat.New(0x50, &staking.Address{})
+	accountKeyFmt = consensus.KeyFormat.New(0x50, &staking.Address{})
 	// totalSupplyKeyFmt is the key format used for the total supply.
 	//
 	// Value is a CBOR-serialized quantity.
-	totalSupplyKeyFmt = keyformat.New(0x51)
+	totalSupplyKeyFmt = consensus.KeyFormat.New(0x51)
 	// commonPoolKeyFmt is the key format used for the common pool balance.
 	//
 	// Value is a CBOR-serialized quantity.
-	commonPoolKeyFmt = keyformat.New(0x52)
+	commonPoolKeyFmt = consensus.KeyFormat.New(0x52)
 	// delegationKeyFmt is the key format used for delegations (escrow address,
 	// delegator address).
 	//
 	// Value is CBOR-serialized delegation.
-	delegationKeyFmt = keyformat.New(0x53, &staking.Address{}, &staking.Address{})
+	delegationKeyFmt = consensus.KeyFormat.New(0x53, &staking.Address{}, &staking.Address{})
 	// debondingDelegationKeyFmt is the key format used for debonding delegations
 	// (delegator address, escrow address, epoch).
 	//
 	// Value is CBOR-serialized debonding delegation.
-	debondingDelegationKeyFmt = keyformat.New(0x54, &staking.Address{}, &staking.Address{}, uint64(0))
+	debondingDelegationKeyFmt = consensus.KeyFormat.New(0x54, &staking.Address{}, &staking.Address{}, uint64(0))
 	// debondingQueueKeyFmt is the debonding queue key format
 	// (epoch, delegator address, escrow address).
 	//
 	// Value is empty.
-	debondingQueueKeyFmt = keyformat.New(0x55, uint64(0), &staking.Address{}, &staking.Address{})
+	debondingQueueKeyFmt = consensus.KeyFormat.New(0x55, uint64(0), &staking.Address{}, &staking.Address{})
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized staking.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x56)
+	parametersKeyFmt = consensus.KeyFormat.New(0x56)
 	// lastBlockFeesKeyFmt is the accumulated fee balance for the previous block.
 	//
 	// Value is CBOR-serialized quantity.
-	lastBlockFeesKeyFmt = keyformat.New(0x57)
+	lastBlockFeesKeyFmt = consensus.KeyFormat.New(0x57)
 	// epochSigningKeyFmt is the key format for epoch signing information.
 	//
 	// Value is CBOR-serialized EpochSigning.
-	epochSigningKeyFmt = keyformat.New(0x58)
+	epochSigningKeyFmt = consensus.KeyFormat.New(0x58)
 	// governanceDepositsKeyFmt is the key format used for the governance deposits balance.
 	//
 	// Value is a CBOR-serialized quantity.
-	governanceDepositsKeyFmt = keyformat.New(0x59)
+	governanceDepositsKeyFmt = consensus.KeyFormat.New(0x59)
 
 	// delegationKeyReverseFmt is the key format used for reverse mapping of
 	// delegations (delegator address, escrow address).
 	//
 	// Value is CBOR-serialized delegation.
-	delegationKeyReverseFmt = keyformat.New(0x5A, &staking.Address{}, &staking.Address{})
+	delegationKeyReverseFmt = consensus.KeyFormat.New(0x5A, &staking.Address{}, &staking.Address{})
 
 	// commissionScheduleAddressesKeyFmt is the key format used for index of addresses
 	// with non empty commission schedule.
 	//
 	// Value is empty.
-	commissionScheduleAddressesKeyFmt = keyformat.New(0x5B, &staking.Address{})
+	commissionScheduleAddressesKeyFmt = consensus.KeyFormat.New(0x5B, &staking.Address{})
 
 	logger = logging.GetLogger("cometbft/staking")
 )

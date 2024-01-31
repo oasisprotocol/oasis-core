@@ -17,18 +17,21 @@ import (
 const dbVersion = 1
 
 var (
+	// keyFormat is the namespace for the runtime history database key formats.
+	keyFormat = keyformat.NewNamespace("runtime history db")
+
 	// metadataKeyFmt is the metadata key format.
 	//
 	// Value is CBOR-serialized dbMetadata.
-	metadataKeyFmt = keyformat.New(0x01)
+	metadataKeyFmt = keyFormat.New(0x01)
 	// blockKeyFmt is the block index key format.
 	//
 	// Value is CBOR-serialized roothash.AnnotatedBlock.
-	blockKeyFmt = keyformat.New(0x02, uint64(0))
+	blockKeyFmt = keyFormat.New(0x02, uint64(0))
 	// roundResultsKeyFmt is the round result index key format.
 	//
 	// Value is CBOR-serialized roothash.RoundResults.
-	roundResultsKeyFmt = keyformat.New(0x03, uint64(0))
+	roundResultsKeyFmt = keyFormat.New(0x03, uint64(0))
 )
 
 type dbMetadata struct {

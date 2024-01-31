@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
@@ -65,6 +66,9 @@ var (
 	SystemMethods = map[transaction.MethodName]struct{}{
 		MethodMeta: {},
 	}
+
+	// KeyFormat is the namespace for the consensus state key formats.
+	KeyFormat = keyformat.NewNamespace("consensus")
 )
 
 // FeatureMask is the consensus backend feature bitmask.

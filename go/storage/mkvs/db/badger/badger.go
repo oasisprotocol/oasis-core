@@ -29,40 +29,43 @@ const (
 )
 
 var (
+	// keyFormat is the namespace for the badger database key formats.
+	keyFormat = keyformat.NewNamespace("badger")
+
 	// nodeKeyFmt is the key format for nodes (node hash).
 	//
 	// Value is serialized node.
-	nodeKeyFmt = keyformat.New(0x00, &hash.Hash{})
+	nodeKeyFmt = keyFormat.New(0x00, &hash.Hash{})
 	// writeLogKeyFmt is the key format for write logs (version, new root,
 	// old root).
 	//
 	// Value is CBOR-serialized write log.
-	writeLogKeyFmt = keyformat.New(0x01, uint64(0), &typedHash{}, &typedHash{})
+	writeLogKeyFmt = keyFormat.New(0x01, uint64(0), &typedHash{}, &typedHash{})
 	// rootsMetadataKeyFmt is the key format for roots metadata. The key format is (version).
 	//
 	// Value is CBOR-serialized rootsMetadata.
-	rootsMetadataKeyFmt = keyformat.New(0x02, uint64(0))
+	rootsMetadataKeyFmt = keyFormat.New(0x02, uint64(0))
 	// rootUpdatedNodesKeyFmt is the key format for the pending updated nodes for the
 	// given root that need to be removed only in case the given root is not among
 	// the finalized roots. They key format is (version, root).
 	//
 	// Value is CBOR-serialized []updatedNode.
-	rootUpdatedNodesKeyFmt = keyformat.New(0x03, uint64(0), &typedHash{})
+	rootUpdatedNodesKeyFmt = keyFormat.New(0x03, uint64(0), &typedHash{})
 	// metadataKeyFmt is the key format for metadata.
 	//
 	// Value is CBOR-serialized metadata.
-	metadataKeyFmt = keyformat.New(0x04)
+	metadataKeyFmt = keyFormat.New(0x04)
 	// multipartRestoreNodeLogKeyFmt is the key format for the nodes inserted during a chunk restore.
 	// Once a set of chunks is fully restored, these entries should be removed. If chunk restoration
 	// is interrupted for any reason, the nodes associated with these keys should be removed, along
 	// with these entries.
 	//
 	// Value is empty.
-	multipartRestoreNodeLogKeyFmt = keyformat.New(0x05, &typedHash{})
+	multipartRestoreNodeLogKeyFmt = keyFormat.New(0x05, &typedHash{})
 	// rootNodeKeyFmt is the key format for root nodes (typed node hash).
 	//
 	// Value is empty.
-	rootNodeKeyFmt = keyformat.New(0x06, &typedHash{})
+	rootNodeKeyFmt = keyFormat.New(0x06, &typedHash{})
 )
 
 // New creates a new BadgerDB-backed node database.

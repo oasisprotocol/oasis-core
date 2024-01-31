@@ -6,12 +6,12 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 )
 
 // vrfStateKeyFmt is the current VRF state key format.
-var vrfStateKeyFmt = keyformat.New(0x46)
+var vrfStateKeyFmt = consensus.KeyFormat.New(0x46)
 
 func (s *ImmutableState) VRFState(ctx context.Context) (*beacon.VRFState, error) {
 	data, err := s.is.Get(ctx, vrfStateKeyFmt.Encode())
