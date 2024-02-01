@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"time"
+
 	"github.com/libp2p/go-libp2p/core"
 
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -16,8 +18,11 @@ const KeyManagerProtocolID = "keymanager"
 // KeyManagerProtocolVersion is the supported version of the keymanager protocol.
 var KeyManagerProtocolVersion = version.Version{Major: 2, Minor: 0, Patch: 0}
 
-// MethodCallEnclave is the name of the CallEnclave method.
-const MethodCallEnclave = "CallEnclave"
+// Constants related to the CallEnclave method.
+const (
+	MethodCallEnclave        = "CallEnclave"
+	MethodCallEnclaveTimeout = 3 * time.Second
+)
 
 // CallEnclaveRequest is a CallEnclave request.
 type CallEnclaveRequest struct {
