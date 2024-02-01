@@ -214,7 +214,7 @@ type RuntimeInfoResponse struct {
 	RuntimeVersion version.Version `json:"runtime_version"`
 
 	// Features describe the features supported by the runtime.
-	Features *Features `json:"features,omitempty"`
+	Features Features `json:"features,omitempty"`
 }
 
 // RuntimeCapabilityTEERakInitRequest is a worker RFC 0009 CapabilityTEE

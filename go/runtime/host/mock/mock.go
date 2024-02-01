@@ -55,7 +55,7 @@ func (r *runtime) GetInfo(context.Context) (*protocol.RuntimeInfoResponse, error
 	return &protocol.RuntimeInfoResponse{
 		ProtocolVersion: version.RuntimeHostProtocol,
 		RuntimeVersion:  version.MustFromString("0.0.0"),
-		Features: &protocol.Features{
+		Features: protocol.Features{
 			ScheduleControl: &protocol.FeatureScheduleControl{
 				InitialBatchSize: 100,
 			},

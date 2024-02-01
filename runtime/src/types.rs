@@ -376,8 +376,7 @@ pub struct RuntimeInfoResponse {
     pub runtime_version: Version,
 
     /// Describes the features supported by the runtime.
-    #[cbor(optional)]
-    pub features: Option<Features>,
+    pub features: Features,
 }
 
 /// Batch execution mode.
