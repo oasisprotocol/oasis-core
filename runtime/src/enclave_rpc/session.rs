@@ -483,6 +483,11 @@ impl Builder {
         self
     }
 
+    /// Return the local identity if configured in the builder.
+    pub fn get_local_identity(&self) -> &Option<Arc<Identity>> {
+        &self.identity
+    }
+
     /// Enable RAK binding.
     pub fn local_identity(mut self, identity: Arc<Identity>) -> Self {
         self.identity = Some(identity);

@@ -551,7 +551,6 @@ mod test {
     use crate::{
         common::crypto::signature,
         enclave_rpc::{demux::Demux, session, types},
-        identity::Identity,
     };
 
     use super::{super::transport::Transport, RpcClient};
@@ -567,7 +566,7 @@ mod test {
     impl MockTransport {
         fn new() -> Self {
             Self {
-                demux: Arc::new(Demux::new(Arc::new(Identity::new()))),
+                demux: Arc::new(Demux::new(session::Builder::default(), 4, 4, 60)),
                 next_error: Arc::new(AtomicBool::new(false)),
                 peer_feedback: Arc::new(Mutex::new((0, None))),
                 peer_feedback_history: Arc::new(Mutex::new(Vec::new())),
@@ -627,8 +626,10 @@ mod test {
                 types::Kind::NoiseSession => {
                     // Deliver directly to the multiplexer.
                     let mut buffer = Vec::new();
-                    let (mut session, message) =
-                        self.demux.process_frame(request, &mut buffer).await?;
+                    let (mut session, message) = self
+                        .demux
+                        .process_frame(vec![], request, &mut buffer)
+                        .await?;
 
                     match message {
                         Some(message) => {

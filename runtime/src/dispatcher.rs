@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Result as AnyResult;
+use rustc_hex::ToHex;
 use slog::{debug, error, info, warn, Logger};
 use tokio::sync::mpsc;
 
@@ -27,7 +28,7 @@ use crate::{
     enclave_rpc::{
         demux::Demux as RpcDemux,
         dispatcher::Dispatcher as RpcDispatcher,
-        session::SessionInfo,
+        session::{self, SessionInfo},
         types::{
             Kind as RpcKind, Message as RpcMessage, Request as RpcRequest, Response as RpcResponse,
         },
@@ -49,6 +50,15 @@ use crate::{
 
 /// Maximum amount of requests that can be in the dispatcher queue.
 const BACKLOG_SIZE: usize = 1000;
+
+/// Maximum total number of EnclaveRPC sessions.
+const RPC_MAX_SESSIONS: usize = 1024;
+/// Maximum concurrent EnclaveRPC sessions per peer. In case more sessions are open, old sessions
+/// will be closed to make room for new sessions.
+const RPC_MAX_SESSIONS_PER_PEER: usize = 8;
+/// EnclaveRPC sessions without any processed frame for more than RPC_STALE_SESSION_TIMEOUT_SECS
+/// seconds can be closed to make room for new sessions.
+const RPC_STALE_SESSION_TIMEOUT_SECS: i64 = 10;
 
 /// Interface for dispatcher initializers.
 pub trait Initializer: Send + Sync {
@@ -225,7 +235,12 @@ impl Dispatcher {
 
         // Create actual dispatchers for RPCs and transactions.
         info!(self.logger, "Starting the runtime dispatcher");
-        let mut rpc_demux = RpcDemux::new(self.identity.clone());
+        let mut rpc_demux = RpcDemux::new(
+            session::Builder::default().local_identity(self.identity.clone()),
+            RPC_MAX_SESSIONS,
+            RPC_MAX_SESSIONS_PER_PEER,
+            RPC_STALE_SESSION_TIMEOUT_SECS,
+        );
         let mut rpc_dispatcher = RpcDispatcher::default();
         let pre_init_state = PreInitState {
             protocol: &protocol,
@@ -298,13 +313,20 @@ impl Dispatcher {
             }
 
             // RPC and transaction requests.
-            Body::RuntimeRPCCallRequest { request, kind } => {
+            Body::RuntimeRPCCallRequest {
+                request,
+                kind,
+                peer_id,
+            } => {
                 debug!(self.logger, "Received RPC call request";
                     "kind" => ?kind,
+                    "peer_id" => peer_id.to_hex::<String>(),
                 );
 
                 match kind {
-                    RpcKind::NoiseSession => self.dispatch_secure_rpc(state, request).await,
+                    RpcKind::NoiseSession => {
+                        self.dispatch_secure_rpc(state, request, peer_id).await
+                    }
                     RpcKind::InsecureQuery => self.dispatch_insecure_rpc(state, request).await,
                     RpcKind::LocalQuery => self.dispatch_local_rpc(state, request).await,
                 }
@@ -751,14 +773,22 @@ impl Dispatcher {
         .unwrap() // Propagate panics during transaction dispatch.
     }
 
-    async fn dispatch_secure_rpc(&self, state: State, request: Vec<u8>) -> Result<Body, Error> {
+    async fn dispatch_secure_rpc(
+        &self,
+        state: State,
+        request: Vec<u8>,
+        peer_id: Vec<u8>,
+    ) -> Result<Body, Error> {
         // Make sure to abort the process on panic during RPC processing as that indicates a
         // serious problem and should make sure to clean up the process.
         let _guard = AbortOnPanic;
 
         // Process frame.
         let mut buffer = vec![];
-        let (mut session, message) = state.rpc_demux.process_frame(request, &mut buffer).await?;
+        let (mut session, message) = state
+            .rpc_demux
+            .process_frame(peer_id, request, &mut buffer)
+            .await?;
 
         if let Some(message) = message {
             // Dispatch request.

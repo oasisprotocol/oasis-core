@@ -190,6 +190,8 @@ type Features struct {
 	// SameBlockConsensusValidation is a feature specifying that the runtime supports same-block
 	// consensus validation.
 	SameBlockConsensusValidation bool `json:"same_block_consensus_validation,omitempty"`
+	// RPCPeerID is a feature specifying that the runtime supports RPC peer IDs.
+	RPCPeerID bool `json:"rpc_peer_id,omitempty"`
 }
 
 // HasScheduleControl returns true when the runtime supports the schedule control feature.
@@ -257,6 +259,8 @@ type RuntimeRPCCallRequest struct {
 	Request []byte `json:"request"`
 	// Kind is the type of RPC call.
 	Kind enclaverpc.Kind `json:"kind,omitempty"`
+	// PeerID is the identifier of the peer making the request.
+	PeerID []byte `json:"peer_id,omitempty"`
 }
 
 // RuntimeRPCCallResponse is a worker RPC call response message body.
