@@ -281,6 +281,8 @@ impl KeyManagerClient for RemoteClient {
                 },
             )
             .await
+            .into_result_with_feedback()
+            .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         // Cache key.
@@ -329,6 +331,8 @@ impl KeyManagerClient for RemoteClient {
                 },
             )
             .await
+            .into_result_with_feedback()
+            .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         // Verify the signature.
@@ -374,6 +378,8 @@ impl KeyManagerClient for RemoteClient {
                     epoch,
                 },
             )
+            .await
+            .into_result_with_feedback()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
@@ -430,6 +436,8 @@ impl KeyManagerClient for RemoteClient {
                 },
             )
             .await
+            .into_result_with_feedback()
+            .await
             .map_err(|err| KeyManagerError::Other(err.into()))?;
 
         // Verify the signature.
@@ -461,6 +469,8 @@ impl KeyManagerClient for RemoteClient {
                 },
             )
             .await
+            .into_result_with_feedback()
+            .await
             .map_err(|err| KeyManagerError::Other(err.into()))
             .map(|rsp: ReplicateMasterSecretResponse| VerifiableSecret {
                 secret: rsp.master_secret,
@@ -486,6 +496,8 @@ impl KeyManagerClient for RemoteClient {
                     epoch,
                 },
             )
+            .await
+            .into_result_with_feedback()
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))
             .map(|rsp: ReplicateEphemeralSecretResponse| rsp.ephemeral_secret)

@@ -365,6 +365,62 @@ impl Controller {
     }
 }
 
+/// An EnclaveRPC response that can be used to provide peer feedback.
+pub struct Response<T> {
+    inner: Result<T, RpcClientError>,
+    kind: types::Kind,
+    cmdq: mpsc::WeakSender<Command>,
+    pfid: Option<u64>,
+}
+
+impl<T> Response<T> {
+    /// Report success if result was `Ok(_)` and failure if result was `Err(_)`, then return the
+    /// inner result consuming the response instance.
+    pub async fn into_result_with_feedback(mut self) -> Result<T, RpcClientError> {
+        match self.inner {
+            Ok(_) => self.success().await,
+            Err(_) => self.failure().await,
+        }
+
+        self.inner
+    }
+
+    /// Reference to inner result.
+    pub fn result(&self) -> &Result<T, RpcClientError> {
+        &self.inner
+    }
+
+    /// Consume the response instance returning the inner result.
+    pub fn into_result(self) -> Result<T, RpcClientError> {
+        self.inner
+    }
+
+    /// Report success as peer feedback.
+    pub async fn success(&mut self) {
+        self.send_peer_feedback(types::PeerFeedback::Success).await;
+    }
+
+    /// Report failure as peer feedback.
+    pub async fn failure(&mut self) {
+        self.send_peer_feedback(types::PeerFeedback::Failure).await;
+    }
+
+    /// Report bad peer as peer feedback.
+    pub async fn bad_peer(&mut self) {
+        self.send_peer_feedback(types::PeerFeedback::BadPeer).await;
+    }
+
+    /// Send peer feedback.
+    async fn send_peer_feedback(&mut self, pf: types::PeerFeedback) {
+        if let Some(pfid) = self.pfid.take() {
+            // Only count feedback once.
+            if let Some(cmdq) = self.cmdq.upgrade() {
+                let _ = cmdq.send(Command::PeerFeedback(pfid, pf, self.kind)).await;
+            }
+        }
+    }
+}
+
 /// RPC client.
 pub struct RpcClient {
     /// Internal command queue (sender part).
@@ -409,11 +465,7 @@ impl RpcClient {
     }
 
     /// Call a remote method using an encrypted and authenticated Noise session.
-    pub async fn secure_call<C, O>(
-        &self,
-        method: &'static str,
-        args: C,
-    ) -> Result<O, RpcClientError>
+    pub async fn secure_call<C, O>(&self, method: &'static str, args: C) -> Response<O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
@@ -422,11 +474,7 @@ impl RpcClient {
     }
 
     /// Call a remote method over an insecure channel where messages are sent in plain text.
-    pub async fn insecure_call<C, O>(
-        &self,
-        method: &'static str,
-        args: C,
-    ) -> Result<O, RpcClientError>
+    pub async fn insecure_call<C, O>(&self, method: &'static str, args: C) -> Response<O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
@@ -434,12 +482,7 @@ impl RpcClient {
         self.call(method, args, types::Kind::InsecureQuery).await
     }
 
-    async fn call<C, O>(
-        &self,
-        method: &'static str,
-        args: C,
-        kind: types::Kind,
-    ) -> Result<O, RpcClientError>
+    async fn call<C, O>(&self, method: &'static str, args: C, kind: types::Kind) -> Response<O>
     where
         C: cbor::Encode,
         O: cbor::Decode + Send + 'static,
@@ -449,20 +492,22 @@ impl RpcClient {
             args: cbor::to_value(args),
         };
 
-        let (pfid, response) = self.execute_call(request, kind).await?;
-        let result = match response.body {
-            types::Body::Success(value) => cbor::from_value(value).map_err(Into::into),
-            types::Body::Error(error) => Err(RpcClientError::CallFailed(error)),
+        let (pfid, inner) = match self.execute_call(request, kind).await {
+            Ok((pfid, response)) => match response.body {
+                types::Body::Success(value) => {
+                    (Some(pfid), cbor::from_value(value).map_err(Into::into))
+                }
+                types::Body::Error(error) => (Some(pfid), Err(RpcClientError::CallFailed(error))),
+            },
+            Err(err) => (None, Err(err)),
         };
 
-        // Report peer feedback based on whether call was successful.
-        let pf = match result {
-            Ok(_) => types::PeerFeedback::Success,
-            Err(_) => types::PeerFeedback::Failure,
-        };
-        let _ = self.cmdq.send(Command::PeerFeedback(pfid, pf, kind)).await;
-
-        result
+        Response {
+            inner,
+            kind,
+            cmdq: self.cmdq.downgrade(),
+            pfid,
+        }
     }
 
     async fn execute_call(
@@ -690,7 +735,15 @@ mod test {
         let client = RpcClient::new(Box::new(transport.clone()), builder, vec![]);
 
         // Basic secure call.
-        let result: u64 = rt.block_on(client.secure_call("test", 42)).unwrap();
+        let result: u64 = rt
+            .block_on(async {
+                client
+                    .secure_call("test", 42)
+                    .await
+                    .into_result_with_feedback()
+                    .await
+            })
+            .unwrap();
         rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 42, "secure call should work");
         assert_eq!(
@@ -706,7 +759,15 @@ mod test {
         // Reset all sessions on the server and make sure that we can still get a response.
         transport.reset();
 
-        let result: u64 = rt.block_on(client.secure_call("test", 43)).unwrap();
+        let result: u64 = rt
+            .block_on(async {
+                client
+                    .secure_call("test", 43)
+                    .await
+                    .into_result_with_feedback()
+                    .await
+            })
+            .unwrap();
         rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 43, "secure call should work");
         assert_eq!(
@@ -724,7 +785,15 @@ mod test {
         // can still get a response.
         transport.induce_transport_error();
 
-        let result: u64 = rt.block_on(client.secure_call("test", 44)).unwrap();
+        let result: u64 = rt
+            .block_on(async {
+                client
+                    .secure_call("test", 44)
+                    .await
+                    .into_result_with_feedback()
+                    .await
+            })
+            .unwrap();
         rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 44, "secure call should work");
         assert_eq!(
@@ -740,7 +809,15 @@ mod test {
         );
 
         // Basic insecure call.
-        let result: u64 = rt.block_on(client.insecure_call("test", 45)).unwrap();
+        let result: u64 = rt
+            .block_on(async {
+                client
+                    .insecure_call("test", 45)
+                    .await
+                    .into_result_with_feedback()
+                    .await
+            })
+            .unwrap();
         rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 45, "insecure call should work");
         assert_eq!(
@@ -754,7 +831,15 @@ mod test {
         // Induce a single transport error and make sure we can still get a response.
         transport.induce_transport_error();
 
-        let result: u64 = rt.block_on(client.insecure_call("test", 46)).unwrap();
+        let result: u64 = rt
+            .block_on(async {
+                client
+                    .insecure_call("test", 46)
+                    .await
+                    .into_result_with_feedback()
+                    .await
+            })
+            .unwrap();
         rt.block_on(client.flush_cmd_queue()).unwrap(); // Flush cmd queue to get peer feedback.
         assert_eq!(result, 46, "insecure call should work");
         assert_eq!(
