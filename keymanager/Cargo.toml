@@ -6,7 +6,8 @@ edition = "2018"
 
 [dependencies]
 oasis-core-runtime = { path = "../runtime" }
-cbor = { version = "0.5.1", package = "oasis-cbor" }
+# TODO: Upgrade.
+cbor = { package = "oasis-cbor", git = 'https://github.com/oasisprotocol/oasis-cbor.git', branch = 'peternose/bugfix/skip-empty-optional-structs' }
 
 # Third party.
 anyhow = "1.0"

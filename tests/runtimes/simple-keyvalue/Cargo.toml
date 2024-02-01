@@ -20,7 +20,8 @@ stack-size = 2097152
 threads = 26
 
 [dependencies]
-cbor = { version = "0.5.1", package = "oasis-cbor" }
+# TODO: Upgrade.
+cbor = { package = "oasis-cbor", git = 'https://github.com/oasisprotocol/oasis-cbor.git', branch = 'peternose/bugfix/skip-empty-optional-structs' }
 oasis-core-runtime = { path = "../../../runtime" }
 oasis-core-keymanager = { path = "../../../keymanager" }
 simple-keymanager = { path = "../simple-keymanager" }
