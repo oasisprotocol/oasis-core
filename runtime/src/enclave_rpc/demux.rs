@@ -6,13 +6,17 @@ use std::{
     time::SystemTime,
 };
 
+use slog::info;
 use thiserror::Error;
 
 use super::{
     session::{Builder, Session, SessionInfo},
     types::{Frame, Message, SessionID},
 };
-use crate::{common::time::insecure_posix_system_time, identity::Identity};
+use crate::{
+    common::{logger::get_logger, time::insecure_posix_system_time},
+    identity::Identity,
+};
 
 /// Maximum concurrent EnclaveRPC sessions.
 const MAX_CONCURRENT_SESSIONS: usize = 100;
@@ -162,6 +166,12 @@ impl Demux {
     ) -> Result<Arc<tokio::sync::Mutex<MultiplexedSession>>, Error> {
         let mut sessions = self.sessions.lock().unwrap();
 
+        let logger = get_logger("xxxx");
+        info!(logger, "num sessions";
+            "id" => ?id,
+            "n" => ?sessions.len(),
+        );
+
         if let Some(session) = sessions.get(&id) {
             Ok(session.clone())
         } else {
@@ -183,6 +193,11 @@ impl Demux {
                 }));
 
                 sessions.insert(id, session.clone());
+
+                info!(logger, "adding new session";
+                    "id" => ?id,
+                    "n" => sessions.len(),
+                );
 
                 Ok(session)
             } else {

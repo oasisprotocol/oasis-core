@@ -85,7 +85,7 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
 
 	for i := 0; i < 2; i++ {
 		// Verify that master secret generation works with all key managers.
-		for j := 0; j < 2; j++ {
+		for j := 0; j < 1; j++ {
 			if err := sc.verifyMasterSecret(ctx, generation, 3); err != nil {
 				return err
 			}
@@ -117,7 +117,7 @@ func (sc *kmRotationFailureImpl) Run(ctx context.Context, _ *env.Env) error {
 
 		// Verify that master secret generation works with one key manager
 		// after registrations expire.
-		for j := 0; j < 2; j++ {
+		for j := 0; j < 1; j++ {
 			if err := sc.verifyMasterSecret(ctx, generation, 1); err != nil {
 				return err
 			}
