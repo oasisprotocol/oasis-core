@@ -33,24 +33,6 @@ const (
 	globalInvAlpha = 25
 )
 
-// PeerManagerOptions are peer manager options.
-type PeerManagerOptions struct {
-	stickyPeers bool
-}
-
-// PeerManagerOption is a peer manager option setter.
-type PeerManagerOption func(opts *PeerManagerOptions)
-
-// WithStickyPeers configures the sticky peers feature.
-//
-// When enabled, the last successful peer will be stuck and reused on subsequent selections
-// of the best peers until the peer is deemed bad.
-func WithStickyPeers(enabled bool) PeerManagerOption {
-	return func(opts *PeerManagerOptions) {
-		opts.stickyPeers = enabled
-	}
-}
-
 // BestPeersOptions are per-call options.
 type BestPeersOptions struct {
 	limitPeers []core.PeerID
@@ -159,11 +141,7 @@ type peerManager struct {
 	peers               map[core.PeerID]*peerStats
 	ignoredPeers        map[core.PeerID]bool
 
-	stickyPeer core.PeerID
-
 	avgRequestLatency time.Duration
-
-	opts *PeerManagerOptions
 
 	logger *logging.Logger
 }
@@ -227,10 +205,6 @@ func (mgr *peerManager) RecordSuccess(peerID core.PeerID, latency time.Duration)
 	}
 
 	mgr.host.ConnManager().TagPeer(peerID, string(mgr.protocolID), SuccessConnManagerPeerTagValue)
-
-	if mgr.opts.stickyPeers {
-		mgr.stickyPeer = peerID
-	}
 }
 
 func (mgr *peerManager) RecordFailure(peerID core.PeerID, latency time.Duration) {
@@ -243,7 +217,6 @@ func (mgr *peerManager) RecordFailure(peerID core.PeerID, latency time.Duration)
 	}
 	ps.failures++
 	ps.recordLatency(latency)
-	mgr.unstickPeerLocked(peerID)
 }
 
 func (mgr *peerManager) RecordBadPeer(peerID core.PeerID) {
@@ -258,18 +231,7 @@ func (mgr *peerManager) RecordBadPeer(peerID core.PeerID) {
 	}
 
 	delete(mgr.peers, peerID)
-	mgr.unstickPeerLocked(peerID)
 	mgr.peerUpdatesNotifier.Broadcast(&PeerUpdate{ID: peerID, PeerRemoved: &PeerRemoved{BadPeer: true}})
-}
-
-func (mgr *peerManager) unstickPeerLocked(peerID core.PeerID) {
-	if !mgr.opts.stickyPeers {
-		return
-	}
-
-	if mgr.stickyPeer == peerID {
-		mgr.stickyPeer = ""
-	}
 }
 
 func (mgr *peerManager) WatchUpdates() (<-chan *PeerUpdate, pubsub.ClosableSubscription, error) {
@@ -287,27 +249,17 @@ func (mgr *peerManager) GetBestPeers(opts ...BestPeersOption) []core.PeerID {
 	o := NewBestPeersOptions(opts...)
 
 	// Start by including all peers that are in the limited set, if given.
-	// Do not include the sticky peer so we can prepend it later.
-	var haveStickyPeer bool
 	peers := make([]core.PeerID, 0, len(mgr.peers))
 	switch len(o.limitPeers) {
 	case 0:
-		// Add all known peers except the sticky one.
+		// Add all known peers.
 		for peer := range mgr.peers {
-			if mgr.stickyPeer == peer {
-				haveStickyPeer = true
-				continue
-			}
 			peers = append(peers, peer)
 		}
 	default:
 		// Keep peers from the limited set only.
 		for _, peer := range o.limitPeers {
 			if _, ok := mgr.peers[peer]; !ok {
-				continue
-			}
-			if mgr.stickyPeer == peer {
-				haveStickyPeer = true
 				continue
 			}
 			peers = append(peers, peer)
@@ -336,11 +288,6 @@ func (mgr *peerManager) GetBestPeers(opts ...BestPeersOption) []core.PeerID {
 	rng.Shuffle(len(bestPeers), func(i, j int) {
 		bestPeers[i], bestPeers[j] = bestPeers[j], bestPeers[i]
 	})
-
-	// If we have a stuck peer that is still available, prepend it so we always try it first.
-	if haveStickyPeer {
-		peers = append([]core.PeerID{mgr.stickyPeer}, peers...)
-	}
 
 	return peers
 }
@@ -424,15 +371,10 @@ func (mgr *peerManager) peerProtocolWatcher() {
 }
 
 // NewPeerManager creates a new peer manager for the given protocol.
-func NewPeerManager(p2p P2P, protocolID protocol.ID, opts ...PeerManagerOption) PeerManager {
+func NewPeerManager(p2p P2P, protocolID protocol.ID) PeerManager {
 	if p2p.Host() == nil {
 		// No P2P service, use the no-op peer manager.
 		return &nopPeerManager{}
-	}
-
-	var pmo PeerManagerOptions
-	for _, opt := range opts {
-		opt(&pmo)
 	}
 
 	mgr := &peerManager{
@@ -442,7 +384,6 @@ func NewPeerManager(p2p P2P, protocolID protocol.ID, opts ...PeerManagerOption) 
 		peerUpdatesNotifier: pubsub.NewBroker(false),
 		peers:               make(map[core.PeerID]*peerStats),
 		ignoredPeers:        make(map[core.PeerID]bool),
-		opts:                &pmo,
 		logger: logging.GetLogger("p2p/rpc/peermgr").With(
 			"protocol_id", protocolID,
 		),

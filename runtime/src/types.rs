@@ -145,6 +145,7 @@ pub enum Body {
     RuntimeRPCCallRequest {
         request: Vec<u8>,
         kind: enclave_rpc::types::Kind,
+        peer_id: Vec<u8>,
     },
     RuntimeRPCCallResponse {
         response: Vec<u8>,
@@ -345,6 +346,9 @@ pub struct Features {
     /// A feature specifying that the runtime supports updating key manager's status.
     #[cbor(optional)]
     pub key_manager_status_updates: bool,
+    /// A feature specifying that the runtime supports RPC peer IDs.
+    #[cbor(optional)]
+    pub rpc_peer_id: bool,
 }
 
 impl Default for Features {
@@ -353,6 +357,7 @@ impl Default for Features {
             schedule_control: None,
             key_manager_quote_policy_updates: true,
             key_manager_status_updates: true,
+            rpc_peer_id: true,
         }
     }
 }
@@ -376,8 +381,7 @@ pub struct RuntimeInfoResponse {
     pub runtime_version: Version,
 
     /// Describes the features supported by the runtime.
-    #[cbor(optional)]
-    pub features: Option<Features>,
+    pub features: Features,
 }
 
 /// Batch execution mode.

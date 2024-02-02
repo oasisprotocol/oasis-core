@@ -36,7 +36,7 @@ type client struct {
 func (c *client) CallEnclave(ctx context.Context, request *CallEnclaveRequest, peers []core.PeerID) (*CallEnclaveResponse, rpc.PeerFeedback, error) {
 	var rsp CallEnclaveResponse
 	pf, err := c.rc.CallOne(ctx, c.mgr.GetBestPeers(rpc.WithLimitPeers(peers)), MethodCallEnclave, request, &rsp,
-		rpc.WithMaxRetries(MaxCallEnclaveRetries),
+		rpc.WithMaxPeerResponseTime(MethodCallEnclaveTimeout),
 	)
 	if err != nil {
 		return nil, nil, err
@@ -47,7 +47,7 @@ func (c *client) CallEnclave(ctx context.Context, request *CallEnclaveRequest, p
 // NewClient creates a new keymanager protocol client.
 func NewClient(p2p p2p.Service, chainContext string, keymanagerID common.Namespace) Client {
 	pid := protocol.NewRuntimeProtocolID(chainContext, keymanagerID, KeyManagerProtocolID, KeyManagerProtocolVersion)
-	mgr := rpc.NewPeerManager(p2p, pid, rpc.WithStickyPeers(true))
+	mgr := rpc.NewPeerManager(p2p, pid)
 	rc := rpc.NewClient(p2p.Host(), pid)
 	rc.RegisterListener(mgr)
 

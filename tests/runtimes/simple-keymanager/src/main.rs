@@ -30,7 +30,6 @@ pub fn main_with_version(version: Version) {
         Config {
             version,
             trust_root,
-            freshness_proofs: true,
             ..Default::default()
         },
     );

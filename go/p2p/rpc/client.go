@@ -28,7 +28,7 @@ const (
 	// retries by setting the WithMaxRetries option to a non-zero value. It can be overridden by
 	// using the WithRetryInterval call option.
 	DefaultCallRetryInterval = 1 * time.Second
-	// DefaultParallelRequests is the default number of parallel requests that can be mande
+	// DefaultParallelRequests is the default number of parallel requests that can be made
 	// when calling multiple peers.
 	DefaultParallelRequests = 5
 )
