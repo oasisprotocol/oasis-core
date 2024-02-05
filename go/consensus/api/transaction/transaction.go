@@ -338,10 +338,9 @@ func (m MethodName) IsCritical() bool {
 func NewMethodName(module, method string, bodyType interface{}) MethodName {
 	// Check for duplicate method names.
 	name := module + MethodSeparator + method
-	if _, isRegistered := registeredMethods.Load(name); isRegistered {
+	if _, isRegistered := registeredMethods.LoadOrStore(name, bodyType); isRegistered {
 		panic(fmt.Errorf("transaction: method already registered: %s", name))
 	}
-	registeredMethods.Store(name, bodyType)
 
 	return MethodName(name)
 }

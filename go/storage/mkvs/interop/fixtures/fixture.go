@@ -28,10 +28,9 @@ type Fixture interface {
 // Register registers a new fixture.
 func Register(fixture Fixture) {
 	name := fixture.Name()
-	if _, isRegistered := registeredFixtures.Load(name); isRegistered {
+	if _, isRegistered := registeredFixtures.LoadOrStore(name, fixture); isRegistered {
 		panic(fmt.Errorf("fixture already registered: %s", name))
 	}
-	registeredFixtures.Store(name, fixture)
 }
 
 // GetFixture returns a registered fixture by name.

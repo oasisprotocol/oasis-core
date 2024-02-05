@@ -76,14 +76,17 @@ func (ak *artifactKind) UnmarshalBinary(data []byte) error {
 }
 
 var (
+	// keyFormat is the namespace for the runtime transaction key formats.
+	keyFormat = keyformat.NewNamespace("runtime transaction")
+
 	// txnKeyFmt is the key format used for transaction artifacts.
 	// The artifactKind parameter is needed to compute the enum size in bytes. We put some marshallable value there.
-	txnKeyFmt = keyformat.New('T', &hash.Hash{}, artifactKind(1))
+	txnKeyFmt = keyFormat.New('T', &hash.Hash{}, artifactKind(1))
 	// tagKeyFmt is the key format used for emitted tags.
 	//
 	// This is kept separate so that clients can query only tags they are
 	// interested in instead of needing to go through all transactions.
-	tagKeyFmt = keyformat.New('E', []byte{}, &hash.Hash{})
+	tagKeyFmt = keyFormat.New('E', []byte{}, &hash.Hash{})
 )
 
 // ValidateIOWriteLog validates the writelog for IO storage.

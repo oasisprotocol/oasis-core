@@ -127,3 +127,12 @@ func TestVariableSize(t *testing.T) {
 	require.EqualValues(t, vsElem, decVs3, "decoded variable-sized element should have the same value")
 	require.EqualValues(t, h, decH4, "decoded hash should have the same value")
 }
+
+func TestNamespace(t *testing.T) {
+	ns := NewNamespace("namespace")
+	ns.New('T', []byte{}, &hash.Hash{})
+
+	require.Panics(t, func() {
+		ns.New('T', []byte{}, &hash.Hash{})
+	}, "should panic if duplicate prefix is registered")
+}

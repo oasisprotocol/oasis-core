@@ -70,10 +70,9 @@ func (sn ServiceName) NewMethod(name string, requestType interface{}) *MethodDes
 		requestType: requestType,
 	}
 
-	if _, isRegistered := registeredMethods.Load(md.FullName()); isRegistered {
+	if _, isRegistered := registeredMethods.LoadOrStore(md.FullName(), md); isRegistered {
 		panic(fmt.Errorf("service: method already registered: %s", name))
 	}
-	registeredMethods.Store(md.FullName(), md)
 
 	return md
 }

@@ -53,10 +53,9 @@ func Register(name upgradeApi.HandlerName, handler Handler) {
 	if err := name.ValidateBasic(); err != nil {
 		panic(fmt.Errorf("migration handler name error: %w", err))
 	}
-	if _, isRegistered := registeredHandlers.Load(name); isRegistered {
+	if _, isRegistered := registeredHandlers.LoadOrStore(name, handler); isRegistered {
 		panic(fmt.Errorf("migration handler already registered: %s", name))
 	}
-	registeredHandlers.Store(name, handler)
 }
 
 // NewContext returns a new upgrade migration context.

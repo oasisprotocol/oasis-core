@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/message"
@@ -18,46 +19,46 @@ var (
 	// runtimeKeyFmt is the key format used for per-runtime roothash state.
 	//
 	// Value is CBOR-serialized roothash.RuntimeState.
-	runtimeKeyFmt = keyformat.New(0x20, keyformat.H(&common.Namespace{}))
+	runtimeKeyFmt = consensus.KeyFormat.New(0x20, keyformat.H(&common.Namespace{}))
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized roothash.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x21)
+	parametersKeyFmt = consensus.KeyFormat.New(0x21)
 	// roundTimeoutQueueKeyFmt is the key format used for the round timeout queue.
 	//
 	// The format is (height, runtimeID). Value is runtimeID.
-	roundTimeoutQueueKeyFmt = keyformat.New(0x22, int64(0), keyformat.H(&common.Namespace{}))
+	roundTimeoutQueueKeyFmt = consensus.KeyFormat.New(0x22, int64(0), keyformat.H(&common.Namespace{}))
 	// evidenceKeyFmt is the key format used for storing valid misbehaviour evidence.
 	//
 	// Key format is: 0x24 <H(runtime-id) (hash.Hash)> <round (uint64)> <evidence-hash (hash.Hash)>
-	evidenceKeyFmt = keyformat.New(0x24, keyformat.H(&common.Namespace{}), uint64(0), &hash.Hash{})
+	evidenceKeyFmt = consensus.KeyFormat.New(0x24, keyformat.H(&common.Namespace{}), uint64(0), &hash.Hash{})
 	// stateRootKeyFmt is the key format used for runtime state roots.
 	//
 	// Value is the runtime's latest state root.
-	stateRootKeyFmt = keyformat.New(0x25, keyformat.H(&common.Namespace{}))
+	stateRootKeyFmt = consensus.KeyFormat.New(0x25, keyformat.H(&common.Namespace{}))
 	// ioRootKeyFmt is the key format used for runtime I/O roots.
 	//
 	// Value is the runtime's latest I/O root.
-	ioRootKeyFmt = keyformat.New(0x26, keyformat.H(&common.Namespace{}))
+	ioRootKeyFmt = consensus.KeyFormat.New(0x26, keyformat.H(&common.Namespace{}))
 	// lastRoundResultsKeyFmt is the key format used for last normal round results.
 	//
 	// Value is CBOR-serialized roothash.RoundResults.
-	lastRoundResultsKeyFmt = keyformat.New(0x27, keyformat.H(&common.Namespace{}))
+	lastRoundResultsKeyFmt = consensus.KeyFormat.New(0x27, keyformat.H(&common.Namespace{}))
 	// inMsgQueueMetaKeyFmt is the key format used for incoming message queue metadata.
 	//
 	// Value is CBOR-serialized message.IncomingMessageQueueMeta.
-	inMsgQueueMetaKeyFmt = keyformat.New(0x28, keyformat.H(&common.Namespace{}))
+	inMsgQueueMetaKeyFmt = consensus.KeyFormat.New(0x28, keyformat.H(&common.Namespace{}))
 	// inMsgQueueKeyFmt is the key format used for the incoming message queue.
 	//
 	// Value is CBOR-serialized message.IncomingMessage.
-	inMsgQueueKeyFmt = keyformat.New(0x29, keyformat.H(&common.Namespace{}), uint64(0))
+	inMsgQueueKeyFmt = consensus.KeyFormat.New(0x29, keyformat.H(&common.Namespace{}), uint64(0))
 	// pastRootsKeyFmt is the key format for previous state and I/O runtime roots.
 	//
 	// Key format is: 0x2a H(<runtime-id>) <round>
 	// Value is CBOR-serialized roothash.RoundRoots for that round and runtime.
 	// The maximum number of rounds that this map stores is defined by the
 	// roothash consensus parameters as MaxPastRootsStored.
-	pastRootsKeyFmt = keyformat.New(0x2a, keyformat.H(&common.Namespace{}), uint64(0))
+	pastRootsKeyFmt = consensus.KeyFormat.New(0x2a, keyformat.H(&common.Namespace{}), uint64(0))
 )
 
 // ImmutableState is the immutable roothash state wrapper.

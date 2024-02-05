@@ -155,10 +155,9 @@ func NewContext(rawContext string, opts ...ContextOption) Context {
 	}
 
 	ctx := Context(rawContext)
-	if _, isRegistered := registeredContexts.Load(ctx); isRegistered {
+	if _, isRegistered := registeredContexts.LoadOrStore(ctx, &opt); isRegistered {
 		panic("signature: context already registered: '" + ctx + "'")
 	}
-	registeredContexts.Store(ctx, &opt)
 
 	return ctx
 }

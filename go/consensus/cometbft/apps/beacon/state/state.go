@@ -7,7 +7,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
@@ -16,24 +16,24 @@ var (
 	// epochCurrentKeyFmt is the current epoch key format.
 	//
 	// Value is CBOR-serialized epoch time state.
-	epochCurrentKeyFmt = keyformat.New(0x40)
+	epochCurrentKeyFmt = consensus.KeyFormat.New(0x40)
 	// epochFutureKeyFmt is the future epoch key format.
 	//
 	// Value is CBOR-serialized epoch time state.
-	epochFutureKeyFmt = keyformat.New(0x41)
+	epochFutureKeyFmt = consensus.KeyFormat.New(0x41)
 	// epochPendingMockKeyFmt is the pending mock epoch key format.
 	//
 	// Value is CBOR-serialized epoch time.
-	epochPendingMockKeyFmt = keyformat.New(0x45)
+	epochPendingMockKeyFmt = consensus.KeyFormat.New(0x45)
 
 	// beaconKeyFmt is the random beacon key format.
 	//
 	// Value is raw random beacon.
-	beaconKeyFmt = keyformat.New(0x42)
+	beaconKeyFmt = consensus.KeyFormat.New(0x42)
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized beacon.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x43)
+	parametersKeyFmt = consensus.KeyFormat.New(0x43)
 )
 
 // ImmutableState is the immutable beacon state wrapper.

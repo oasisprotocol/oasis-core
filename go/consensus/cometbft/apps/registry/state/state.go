@@ -10,6 +10,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	tmcrypto "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
@@ -29,20 +30,20 @@ var (
 	// signedEntityKeyFmt is the key format used for signed entities.
 	//
 	// Value is CBOR-serialized signed entity.
-	signedEntityKeyFmt = keyformat.New(0x10, keyformat.H(&signature.PublicKey{}))
+	signedEntityKeyFmt = consensus.KeyFormat.New(0x10, keyformat.H(&signature.PublicKey{}))
 	// signedNodeKeyFmt is the key format used for signed nodes.
 	//
 	// Value is CBOR-serialized signed node.
-	signedNodeKeyFmt = keyformat.New(0x11, keyformat.H(&signature.PublicKey{}))
+	signedNodeKeyFmt = consensus.KeyFormat.New(0x11, keyformat.H(&signature.PublicKey{}))
 	// signedNodeByEntityKeyFmt is the key format used for signed node by entity
 	// index.
 	//
 	// Value is empty.
-	signedNodeByEntityKeyFmt = keyformat.New(0x12, keyformat.H(&signature.PublicKey{}), keyformat.H(&signature.PublicKey{}))
+	signedNodeByEntityKeyFmt = consensus.KeyFormat.New(0x12, keyformat.H(&signature.PublicKey{}), keyformat.H(&signature.PublicKey{}))
 	// runtimeKeyFmt is the key format used for runtimes.
 	//
 	// Value is CBOR-serialized runtime.
-	runtimeKeyFmt = keyformat.New(0x13, keyformat.H(&common.Namespace{}))
+	runtimeKeyFmt = consensus.KeyFormat.New(0x13, keyformat.H(&common.Namespace{}))
 	// nodeByConsAddressKeyFmt is the key format used for the consensus address to
 	// node public key mapping.
 	//
@@ -51,30 +52,30 @@ var (
 	// evidence instead of the actual public key.
 	//
 	// Value is binary node public key.
-	nodeByConsAddressKeyFmt = keyformat.New(0x14, []byte{})
+	nodeByConsAddressKeyFmt = consensus.KeyFormat.New(0x14, []byte{})
 	// nodeStatusKeyFmt is the key format used for node statuses.
 	//
 	// Value is CBOR-serialized node status.
-	nodeStatusKeyFmt = keyformat.New(0x15, keyformat.H(&signature.PublicKey{}))
+	nodeStatusKeyFmt = consensus.KeyFormat.New(0x15, keyformat.H(&signature.PublicKey{}))
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized registry.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x16)
+	parametersKeyFmt = consensus.KeyFormat.New(0x16)
 	// keyMapKeyFmt is the key format used for key-to-node-id map.
 	//
 	// This stores the consensus, P2P and TLS public keys to node ID mappings.
 	//
 	// Value is binary signature.PublicKey (node ID).
-	keyMapKeyFmt = keyformat.New(0x17, keyformat.H(&signature.PublicKey{}))
+	keyMapKeyFmt = consensus.KeyFormat.New(0x17, keyformat.H(&signature.PublicKey{}))
 	// suspendedRuntimeKeyFmt is the key format used for suspended runtimes.
 	//
 	// Value is CBOR-serialized runtime.
-	suspendedRuntimeKeyFmt = keyformat.New(0x18, keyformat.H(&common.Namespace{}))
+	suspendedRuntimeKeyFmt = consensus.KeyFormat.New(0x18, keyformat.H(&common.Namespace{}))
 	// runtimeByEntityKeyFmt is the key format used for runtime by entity
 	// index.
 	//
 	// Value is empty.
-	runtimeByEntityKeyFmt = keyformat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
+	runtimeByEntityKeyFmt = consensus.KeyFormat.New(0x19, keyformat.H(&signature.PublicKey{}), keyformat.H(&common.Namespace{}))
 )
 
 // ImmutableState is the immutable registry state wrapper.

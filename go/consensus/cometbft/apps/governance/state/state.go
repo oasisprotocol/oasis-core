@@ -6,7 +6,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
@@ -18,35 +18,35 @@ var (
 	// nextProposalIdentifierKeyFmt is the key format used for the storing the next proposal identifier.
 	//
 	// Value is a CBOR-serialized uint64.
-	nextProposalIdentifierKeyFmt = keyformat.New(0x80)
+	nextProposalIdentifierKeyFmt = consensus.KeyFormat.New(0x80)
 
 	// proposalsKeyFmt is the key format used for the storing existing proposals.
 	//
 	// Key format is: 0x81 <proposal-id (uint64)>.
 	// Value is a CBOR-serialized governance.Proposal.
-	proposalsKeyFmt = keyformat.New(0x81, uint64(0))
+	proposalsKeyFmt = consensus.KeyFormat.New(0x81, uint64(0))
 
 	// activeProposalsKeyFmt is the key format used for the storing active proposals.
 	//
 	// Key format is: 0x82 <closes-at-epoch (uint64)> <proposal-id (uint64)>.
-	activeProposalsKeyFmt = keyformat.New(0x82, uint64(0), uint64(0))
+	activeProposalsKeyFmt = consensus.KeyFormat.New(0x82, uint64(0), uint64(0))
 
 	// votesKeyFmt is the key format used for the storing existing votes for proposals.
 	//
 	// Key format is: 0x83 <proposal-id (uint64)> <voter-address (staking.Address)>.
 	// Value is a CBOR-serialized governance.Vote.
-	votesKeyFmt = keyformat.New(0x83, uint64(0), &staking.Address{})
+	votesKeyFmt = consensus.KeyFormat.New(0x83, uint64(0), &staking.Address{})
 
 	// pendingUpgradesKeyFmt is the key format used for the storing pending upgrades.
 	//
 	// Key format is: 0x84 <upgrade-epoch (uint64)> <proposal-id (uint64)>.
-	pendingUpgradesKeyFmt = keyformat.New(0x84, uint64(0), uint64(0))
+	pendingUpgradesKeyFmt = consensus.KeyFormat.New(0x84, uint64(0), uint64(0))
 
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Key format is: 0x85.
 	// Value is CBOR-serialized governance.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x85)
+	parametersKeyFmt = consensus.KeyFormat.New(0x85)
 )
 
 // ImmutableState is the immutable consensus state wrapper.

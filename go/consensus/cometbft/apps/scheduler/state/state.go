@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
+	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
@@ -17,21 +18,21 @@ var (
 	// committeeKeyFmt is the key format used for committees.
 	//
 	// Value is CBOR-serialized committee.
-	committeeKeyFmt = keyformat.New(0x60, uint8(0), keyformat.H(&common.Namespace{}))
+	committeeKeyFmt = consensus.KeyFormat.New(0x60, uint8(0), keyformat.H(&common.Namespace{}))
 	// validatorsCurrentKeyFmt is the key format used for the current set of
 	// validators.
 	//
 	// Value is CBOR-serialized map of validator node consensus public keys to validator entries.
-	validatorsCurrentKeyFmt = keyformat.New(0x61)
+	validatorsCurrentKeyFmt = consensus.KeyFormat.New(0x61)
 	// validatorsPendingKeyFmt is the key format used for the pending set of
 	// validators.
 	//
 	// Value is CBOR-serialized map of validator node consensus public keys to validator entries.
-	validatorsPendingKeyFmt = keyformat.New(0x62)
+	validatorsPendingKeyFmt = consensus.KeyFormat.New(0x62)
 	// parametersKeyFmt is the key format used for consensus parameters.
 	//
 	// Value is CBOR-serialized api.ConsensusParameters.
-	parametersKeyFmt = keyformat.New(0x63)
+	parametersKeyFmt = consensus.KeyFormat.New(0x63)
 )
 
 // ImmutableState is the immutable scheduler state wrapper.
