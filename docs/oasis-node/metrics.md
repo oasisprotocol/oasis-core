@@ -148,4 +148,4 @@ CometBFT metrics are also reported. Consult
 [CometBFT-core documentation][2] for a list of reported by CometBFT.
 
 [1]: ../consensus/README.md#cometbft
-[2]: https://docs.cometbft.com/main/cometbft-core/metrics.html
+[2]: https://docs.cometbft.com/v0.38/core/metrics
