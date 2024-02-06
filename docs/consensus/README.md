@@ -172,6 +172,6 @@ application multiplexer mentioned above.
 
 <!-- markdownlint-disable line-length -->
 [serialized signed Oasis Core transaction]: transactions.md
-[CometBFT transaction]: https://docs.cometbft.com/main/cometbft-core/using-cometbft.html#transactions
+[CometBFT transaction]: https://docs.cometbft.com/v0.38/core/using-cometbft#transactions
 [mempool]: https://github.com/cometbft/cometbft/blob/master/spec/abci/abci.md#mempool-connection
 <!-- markdownlint-enable line-length -->
