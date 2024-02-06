@@ -6,13 +6,12 @@ import (
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/x25519"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -24,7 +23,7 @@ func (ext *secretsExt) updatePolicy(
 ) error {
 	// Ensure that the runtime exists and is a key manager.
 	regState := registryState.NewMutableState(ctx.State())
-	kmRt, err := keyManagerRuntime(ctx, regState, sigPol.Policy.ID)
+	kmRt, err := common.KeyManagerRuntime(ctx, sigPol.Policy.ID)
 	if err != nil {
 		return err
 	}
@@ -134,8 +133,7 @@ func (ext *secretsExt) publishMasterSecret(
 	secret *secrets.SignedEncryptedMasterSecret,
 ) error {
 	// Ensure that the runtime exists and is a key manager.
-	regState := registryState.NewMutableState(ctx.State())
-	kmRt, err := keyManagerRuntime(ctx, regState, secret.Secret.ID)
+	kmRt, err := common.KeyManagerRuntime(ctx, secret.Secret.ID)
 	if err != nil {
 		return err
 	}
@@ -171,12 +169,11 @@ func (ext *secretsExt) publishMasterSecret(
 		return err
 	}
 	nextEpoch := epoch + 1
-	rak, err := runtimeAttestationKey(ctx, regState, kmRt)
+
+	rak, reks, err := fetchKeys(ctx, kmRt, kmStatus)
 	if err != nil {
 		return err
 	}
-	reks := runtimeEncryptionKeys(ctx, regState, kmRt, kmStatus)
-
 	if err = secret.Verify(nextGen, nextEpoch, reks, rak); err != nil {
 		return err
 	}
@@ -234,8 +231,7 @@ func (ext *secretsExt) publishEphemeralSecret(
 	secret *secrets.SignedEncryptedEphemeralSecret,
 ) error {
 	// Ensure that the runtime exists and is a key manager.
-	regState := registryState.NewMutableState(ctx.State())
-	kmRt, err := keyManagerRuntime(ctx, regState, secret.Secret.ID)
+	kmRt, err := common.KeyManagerRuntime(ctx, secret.Secret.ID)
 	if err != nil {
 		return err
 	}
@@ -264,12 +260,11 @@ func (ext *secretsExt) publishEphemeralSecret(
 		return err
 	}
 	nextEpoch := epoch + 1
-	rak, err := runtimeAttestationKey(ctx, regState, kmRt)
+
+	rak, reks, err := fetchKeys(ctx, kmRt, kmStatus)
 	if err != nil {
 		return err
 	}
-	reks := runtimeEncryptionKeys(ctx, regState, kmRt, kmStatus)
-
 	if err = secret.Verify(nextEpoch, reks, rak); err != nil {
 		return err
 	}
@@ -308,86 +303,34 @@ func (ext *secretsExt) publishEphemeralSecret(
 	return nil
 }
 
-func keyManagerRuntime(ctx *tmapi.Context, regState *registryState.MutableState, id common.Namespace) (*registry.Runtime, error) {
-	// Ensure that the runtime exists and is a key manager.
-	rt, err := regState.Runtime(ctx, id)
+func fetchKeys(ctx *tmapi.Context, kmRt *registry.Runtime, kmStatus *secrets.Status) (*signature.PublicKey, map[x25519.PublicKey]struct{}, error) {
+	regState := registryState.NewMutableState(ctx.State())
+
+	nodeID := ctx.TxSigner()
+	n, err := regState.Node(ctx, nodeID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if rt.Kind != registry.KindKeyManager {
-		return nil, fmt.Errorf("keymanager: runtime is not a key manager: %s", id)
-	}
-	return rt, nil
-}
-
-func runtimeAttestationKey(ctx *tmapi.Context, regState *registryState.MutableState, kmRt *registry.Runtime) (*signature.PublicKey, error) {
-	// Ensure that the signer is a key manager.
-	n, err := regState.Node(ctx, ctx.TxSigner())
+	nodeRt, err := common.NodeRuntime(n, kmRt.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	idx := slices.IndexFunc(n.Runtimes, func(rt *node.Runtime) bool {
-		// Skipping version check as key managers are running exactly one
-		// version of the runtime.
-		return rt.ID == kmRt.ID
-	})
-	if idx == -1 {
-		return nil, fmt.Errorf("keymanager: node is not a key manager")
-	}
-	nRt := n.Runtimes[idx]
-
-	// Fetch RAK. Remember that registration ensures that node's hardware meets
-	// the TEE requirements of the key manager runtime.
-	var rak *signature.PublicKey
-	switch kmRt.TEEHardware {
-	case node.TEEHardwareInvalid:
-		rak = &api.InsecureRAK
-	case node.TEEHardwareIntelSGX:
-		if nRt.Capabilities.TEE == nil {
-			return nil, fmt.Errorf("keymanager: node doesn't have TEE capability")
-		}
-		rak = &nRt.Capabilities.TEE.RAK
-	default:
-		return nil, fmt.Errorf("keymanager: TEE hardware mismatch")
+	rak, err := common.RuntimeAttestationKey(nodeRt, kmRt)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return rak, nil
-}
-
-func runtimeEncryptionKeys(ctx *tmapi.Context, regState *registryState.MutableState, kmRt *registry.Runtime, kmStatus *secrets.Status) map[x25519.PublicKey]struct{} {
-	// Fetch REKs of the key manager committee.
-	reks := make(map[x25519.PublicKey]struct{})
+	nodes := make([]*node.Node, 0, len(kmStatus.Nodes))
 	for _, id := range kmStatus.Nodes {
 		n, err := regState.Node(ctx, id)
 		if err != nil {
-			continue
+			return nil, nil, err
 		}
-
-		idx := slices.IndexFunc(n.Runtimes, func(rt *node.Runtime) bool {
-			// Skipping version check as key managers are running exactly one
-			// version of the runtime.
-			return rt.ID == kmRt.ID
-		})
-		if idx == -1 {
-			continue
-		}
-		nRt := n.Runtimes[idx]
-
-		var rek x25519.PublicKey
-		switch kmRt.TEEHardware {
-		case node.TEEHardwareInvalid:
-			rek = api.InsecureREK
-		case node.TEEHardwareIntelSGX:
-			if nRt.Capabilities.TEE == nil || nRt.Capabilities.TEE.REK == nil {
-				continue
-			}
-			rek = *nRt.Capabilities.TEE.REK
-		default:
-			continue
-		}
-
-		reks[rek] = struct{}{}
+		nodes = append(nodes, n)
 	}
 
-	return reks
+	nodeRts := common.NodeRuntimes(nodes, kmRt.ID)
+	reks := common.RuntimeEncryptionKeys(nodeRts, kmRt)
+
+	return rak, reks, nil
 }
