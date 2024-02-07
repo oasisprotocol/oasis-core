@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -205,13 +205,13 @@ func (sc *kmMasterSecretsImpl) monitorMasterSecrets(ctx context.Context) (func()
 
 	// Monitor proposed secrets.
 	go func() {
-		mstCh, mstSub, err := sc.Net.ClientController().Keymanager.WatchMasterSecrets(ctx)
+		mstCh, mstSub, err := sc.Net.ClientController().Keymanager.Secrets().WatchMasterSecrets(ctx)
 		if err != nil {
 			return
 		}
 		defer mstSub.Close()
 
-		var prev, next *keymanager.SignedEncryptedMasterSecret
+		var prev, next *secrets.SignedEncryptedMasterSecret
 		for {
 			select {
 			case <-stopCh:
@@ -262,13 +262,13 @@ func (sc *kmMasterSecretsImpl) monitorMasterSecrets(ctx context.Context) (func()
 
 	// Monitor accepted secrets.
 	go func() {
-		stCh, stSub, err := sc.Net.ClientController().Keymanager.WatchStatuses(ctx)
+		stCh, stSub, err := sc.Net.ClientController().Keymanager.Secrets().WatchStatuses(ctx)
 		if err != nil {
 			return
 		}
 		defer stSub.Close()
 
-		var prev, next *keymanager.Status
+		var prev, next *secrets.Status
 		for {
 			select {
 			case <-stopCh:

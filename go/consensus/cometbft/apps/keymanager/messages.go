@@ -5,9 +5,10 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/state"
+	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
 func (app *keymanagerApplication) changeParameters(ctx *api.Context, msg interface{}, apply bool) (interface{}, error) {
@@ -21,13 +22,13 @@ func (app *keymanagerApplication) changeParameters(ctx *api.Context, msg interfa
 		return nil, nil
 	}
 
-	var changes keymanager.ConsensusParameterChanges
+	var changes secrets.ConsensusParameterChanges
 	if err := cbor.Unmarshal(proposal.Changes, &changes); err != nil {
 		return nil, fmt.Errorf("keymanager: failed to unmarshal consensus parameter changes: %w", err)
 	}
 
 	// Validate changes against current parameters.
-	state := keymanagerState.NewMutableState(ctx.State())
+	state := secretsState.NewMutableState(ctx.State())
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("keymanager: failed to load consensus parameters: %w", err)

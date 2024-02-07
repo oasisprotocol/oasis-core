@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -80,15 +81,15 @@ func TestProvisioner(
 
 func mockKeyManagerPolicyRequest() (*protocol.Body, error) {
 	// Generate a dummy key manager policy for tests.
-	policy := keymanager.PolicySGX{
+	policy := secrets.PolicySGX{
 		Serial:   1,
-		Enclaves: map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX{},
+		Enclaves: map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX{},
 	}
-	sigPolicy := keymanager.SignedPolicySGX{
+	sigPolicy := secrets.SignedPolicySGX{
 		Policy: policy,
 	}
 	for _, signer := range keymanager.TestSigners[1:] {
-		sig, err := signature.Sign(signer, keymanager.PolicySGXSignatureContext, cbor.Marshal(policy))
+		sig, err := signature.Sign(signer, secrets.PolicySGXSignatureContext, cbor.Marshal(policy))
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign mock policy: %w", err)
 		}

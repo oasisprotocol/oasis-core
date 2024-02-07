@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -150,10 +150,10 @@ func (sc *kmReplicateImpl) Run(ctx context.Context, _ *env.Env) error {
 	return sc.CompareLongtermPublicKeys(ctx, []int{0, 1, 2, 3})
 }
 
-func (sc *kmReplicateImpl) waitKeymanagerStatuses(ctx context.Context, n int) (*keymanager.Status, error) {
+func (sc *kmReplicateImpl) waitKeymanagerStatuses(ctx context.Context, n int) (*secrets.Status, error) {
 	sc.Logger.Info("waiting for key manager status", "n", n)
 
-	stCh, stSub, err := sc.Net.Controller().Keymanager.WatchStatuses(ctx)
+	stCh, stSub, err := sc.Net.Controller().Keymanager.Secrets().WatchStatuses(ctx)
 	if err != nil {
 		return nil, err
 	}

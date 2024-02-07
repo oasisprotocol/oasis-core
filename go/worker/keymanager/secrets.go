@@ -26,6 +26,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	p2pAPI "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
@@ -43,15 +44,15 @@ const (
 )
 
 var insecureRPCMethods = map[string]struct{}{
-	api.RPCMethodGetPublicKey:          {},
-	api.RPCMethodGetPublicEphemeralKey: {},
+	secrets.RPCMethodGetPublicKey:          {},
+	secrets.RPCMethodGetPublicEphemeralKey: {},
 }
 
 var secureRPCMethods = map[string]struct{}{
-	api.RPCMethodGetOrCreateKeys:          {},
-	api.RPCMethodGetOrCreateEphemeralKeys: {},
-	api.RPCMethodReplicateMasterSecret:    {},
-	api.RPCMethodReplicateEphemeralSecret: {},
+	secrets.RPCMethodGetOrCreateKeys:          {},
+	secrets.RPCMethodGetOrCreateEphemeralKeys: {},
+	secrets.RPCMethodReplicateMasterSecret:    {},
+	secrets.RPCMethodReplicateEphemeralSecret: {},
 }
 
 // Ensure the secrets worker implements the RPCAccessController interface.
@@ -75,15 +76,15 @@ type secretsWorker struct {
 	backend      api.Backend
 
 	status   workerKm.SecretsStatus // Guarded by mutex.
-	kmStatus *api.Status
+	kmStatus *secrets.Status
 
 	initEnclaveInProgress  bool
 	initEnclaveRequired    bool
-	initEnclaveDoneCh      chan *api.SignedInitResponse
+	initEnclaveDoneCh      chan *secrets.SignedInitResponse
 	initEnclaveRetryCh     <-chan time.Time
 	initEnclaveRetryTicker *backoff.Ticker
 
-	mstSecret *api.SignedEncryptedMasterSecret
+	mstSecret *secrets.SignedEncryptedMasterSecret
 
 	loadMstSecRetry     int
 	genMstSecDoneCh     chan bool
@@ -91,7 +92,7 @@ type secretsWorker struct {
 	genMstSecInProgress bool
 	genMstSecRetry      int
 
-	ephSecret *api.SignedEncryptedEphemeralSecret
+	ephSecret *secrets.SignedEncryptedEphemeralSecret
 
 	loadEphSecRetry     int
 	genEphSecDoneCh     chan bool
@@ -147,7 +148,7 @@ func newSecretsWorker(
 		kmWorker:          kmWorker,
 		commonWorker:      commonWorker,
 		backend:           backend,
-		initEnclaveDoneCh: make(chan *api.SignedInitResponse, 1),
+		initEnclaveDoneCh: make(chan *secrets.SignedInitResponse, 1),
 		genMstSecDoneCh:   make(chan bool, 1),
 		genMstSecEpoch:    math.MaxUint64,
 		genEphSecDoneCh:   make(chan bool, 1),
@@ -226,16 +227,16 @@ func (w *secretsWorker) Authorize(method string, kind enclaverpc.Kind, peerID co
 
 	// Other peers must undergo the authorization process.
 	switch method {
-	case api.RPCMethodGetOrCreateKeys, api.RPCMethodGetOrCreateEphemeralKeys:
+	case secrets.RPCMethodGetOrCreateKeys, secrets.RPCMethodGetOrCreateEphemeralKeys:
 		return w.authorizeNode(peerID, kmStatus)
-	case api.RPCMethodReplicateMasterSecret, api.RPCMethodReplicateEphemeralSecret:
+	case secrets.RPCMethodReplicateMasterSecret, secrets.RPCMethodReplicateEphemeralSecret:
 		return w.authorizeKeyManager(peerID)
 	default:
 		return fmt.Errorf("unsupported method: %s", method)
 	}
 }
 
-func (w *secretsWorker) authorizeNode(peerID core.PeerID, kmStatus *api.Status) error {
+func (w *secretsWorker) authorizeNode(peerID core.PeerID, kmStatus *secrets.Status) error {
 	capabilityTEE, err := w.kmWorker.GetHostedRuntimeCapabilityTEE()
 	if err != nil {
 		return err
@@ -306,15 +307,15 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.RichRuntime) {
 	defer hrtSub.Close()
 
 	// Subscribe to key manager status updates.
-	statusCh, statusSub := w.backend.WatchStatuses()
+	statusCh, statusSub := w.backend.Secrets().WatchStatuses()
 	defer statusSub.Close()
 
 	// Subscribe to key manager master secret publications.
-	mstCh, mstSub := w.backend.WatchMasterSecrets()
+	mstCh, mstSub := w.backend.Secrets().WatchMasterSecrets()
 	defer mstSub.Close()
 
 	// Subscribe to key manager ephemeral secret publications.
-	ephCh, ephSub := w.backend.WatchEphemeralSecrets()
+	ephCh, ephSub := w.backend.Secrets().WatchEphemeralSecrets()
 	defer ephSub.Close()
 
 	// Subscribe to epoch transitions in order to know when we need to choose
@@ -447,7 +448,7 @@ func (w *secretsWorker) handleRuntimeHostEvent(ev *host.Event) {
 	}
 }
 
-func (w *secretsWorker) handleStatusUpdate(kmStatus *api.Status) {
+func (w *secretsWorker) handleStatusUpdate(kmStatus *secrets.Status) {
 	if kmStatus == nil || !kmStatus.ID.Equal(&w.runtimeID) {
 		return
 	}
@@ -495,7 +496,7 @@ func (w *secretsWorker) handleInitEnclave() {
 
 	// Enclave initialization can take a long time (e.g. when master secrets
 	// need to be replicated), so don't block the loop.
-	initEnclave := func(kmStatus *api.Status) {
+	initEnclave := func(kmStatus *secrets.Status) {
 		rsp, err := w.initEnclave(kmStatus)
 		if err != nil {
 			w.logger.Error("failed to initialize enclave",
@@ -508,15 +509,15 @@ func (w *secretsWorker) handleInitEnclave() {
 	go initEnclave(w.kmStatus)
 }
 
-func (w *secretsWorker) initEnclave(kmStatus *api.Status) (*api.SignedInitResponse, error) {
+func (w *secretsWorker) initEnclave(kmStatus *secrets.Status) (*secrets.SignedInitResponse, error) {
 	w.logger.Info("initializing key manager enclave")
 
 	// Initialize the key manager.
-	args := api.InitRequest{
+	args := secrets.InitRequest{
 		Status: *kmStatus,
 	}
-	var rsp api.SignedInitResponse
-	if err := w.kmWorker.callEnclaveLocal(api.RPCMethodInit, args, &rsp); err != nil {
+	var rsp secrets.SignedInitResponse
+	if err := w.kmWorker.callEnclaveLocal(secrets.RPCMethodInit, args, &rsp); err != nil {
 		w.logger.Error("failed to initialize enclave",
 			"err", err,
 		)
@@ -561,7 +562,7 @@ func (w *secretsWorker) initEnclave(kmStatus *api.Status) (*api.SignedInitRespon
 	return &rsp, nil
 }
 
-func (w *secretsWorker) handleInitEnclaveDone(rsp *api.SignedInitResponse) {
+func (w *secretsWorker) handleInitEnclaveDone(rsp *secrets.SignedInitResponse) {
 	// Discard the response if the runtime is not ready and retry later.
 	version, err := w.kmWorker.GetHostedRuntimeActiveVersion()
 	if err != nil {
@@ -596,7 +597,7 @@ func (w *secretsWorker) handleInitEnclaveDone(rsp *api.SignedInitResponse) {
 	}
 }
 
-func (w *secretsWorker) registerNode(rsp *api.SignedInitResponse, version version.Version) {
+func (w *secretsWorker) registerNode(rsp *secrets.SignedInitResponse, version version.Version) {
 	w.logger.Info("registering key manager",
 		"is_secure", rsp.InitResponse.IsSecure,
 		"checksum", hex.EncodeToString(rsp.InitResponse.Checksum),
@@ -665,7 +666,7 @@ func (w *secretsWorker) updateGenerateMasterSecretEpoch() {
 	)
 }
 
-func (w *secretsWorker) handleNewMasterSecret(secret *api.SignedEncryptedMasterSecret) {
+func (w *secretsWorker) handleNewMasterSecret(secret *secrets.SignedEncryptedMasterSecret) {
 	if !secret.Secret.ID.Equal(&w.runtimeID) {
 		return
 	}
@@ -715,18 +716,18 @@ func (w *secretsWorker) handleLoadMasterSecret() {
 	w.handleInitEnclave()
 }
 
-func (w *secretsWorker) loadMasterSecret(sigSecret *api.SignedEncryptedMasterSecret) error {
+func (w *secretsWorker) loadMasterSecret(sigSecret *secrets.SignedEncryptedMasterSecret) error {
 	w.logger.Info("loading master secret",
 		"generation", sigSecret.Secret.Generation,
 		"epoch", sigSecret.Secret.Epoch,
 	)
 
-	args := api.LoadMasterSecretRequest{
+	args := secrets.LoadMasterSecretRequest{
 		SignedSecret: *sigSecret,
 	}
 
 	var rsp protocol.Empty
-	if err := w.kmWorker.callEnclaveLocal(api.RPCMethodLoadMasterSecret, args, &rsp); err != nil {
+	if err := w.kmWorker.callEnclaveLocal(secrets.RPCMethodLoadMasterSecret, args, &rsp); err != nil {
 		w.logger.Error("failed to load master secret",
 			"err", err,
 		)
@@ -773,7 +774,7 @@ func (w *secretsWorker) handleGenerateMasterSecret(ctx context.Context, height i
 	w.genMstSecRetry++
 
 	// Submitting transaction can take time, so don't block the loop.
-	generateMasterSecret := func(kmStatus *api.Status) {
+	generateMasterSecret := func(kmStatus *secrets.Status) {
 		if err := w.generateMasterSecret(ctx, w.runtimeID, height, nextGen, nextEpoch, kmStatus); err != nil {
 			w.logger.Error("failed to generate master secret",
 				"err", err,
@@ -788,7 +789,7 @@ func (w *secretsWorker) handleGenerateMasterSecret(ctx context.Context, height i
 	go generateMasterSecret(w.kmStatus)
 }
 
-func (w *secretsWorker) generateMasterSecret(ctx context.Context, runtimeID common.Namespace, height int64, generation uint64, epoch beacon.EpochTime, kmStatus *api.Status) error {
+func (w *secretsWorker) generateMasterSecret(ctx context.Context, runtimeID common.Namespace, height int64, generation uint64, epoch beacon.EpochTime, kmStatus *secrets.Status) error {
 	w.logger.Info("generating master secret",
 		"height", height,
 		"generation", generation,
@@ -796,11 +797,11 @@ func (w *secretsWorker) generateMasterSecret(ctx context.Context, runtimeID comm
 	)
 	// Check if the master secret has been proposed in this epoch.
 	// Note that despite this check, the nodes can still publish master secrets at the same time.
-	lastSecret, err := w.commonWorker.Consensus.KeyManager().GetMasterSecret(ctx, &registry.NamespaceQuery{
+	lastSecret, err := w.commonWorker.Consensus.KeyManager().Secrets().GetMasterSecret(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     runtimeID,
 	})
-	if err != nil && err != api.ErrNoSuchMasterSecret {
+	if err != nil && err != secrets.ErrNoSuchMasterSecret {
 		return err
 	}
 	if lastSecret != nil && epoch == lastSecret.Secret.Epoch {
@@ -820,13 +821,13 @@ func (w *secretsWorker) generateMasterSecret(ctx context.Context, runtimeID comm
 	}
 
 	// Generate master secret.
-	args := api.GenerateMasterSecretRequest{
+	args := secrets.GenerateMasterSecretRequest{
 		Generation: generation,
 		Epoch:      epoch,
 	}
 
-	var rsp api.GenerateMasterSecretResponse
-	if err = w.kmWorker.callEnclaveLocal(api.RPCMethodGenerateMasterSecret, args, &rsp); err != nil {
+	var rsp secrets.GenerateMasterSecretResponse
+	if err = w.kmWorker.callEnclaveLocal(secrets.RPCMethodGenerateMasterSecret, args, &rsp); err != nil {
 		w.logger.Error("failed to generate master secret",
 			"err", err,
 		)
@@ -849,7 +850,7 @@ func (w *secretsWorker) generateMasterSecret(ctx context.Context, runtimeID comm
 	}
 
 	// Publish transaction.
-	tx := api.NewPublishMasterSecretTx(0, nil, &rsp.SignedSecret)
+	tx := secrets.NewPublishMasterSecretTx(0, nil, &rsp.SignedSecret)
 	if err = consensus.SignAndSubmitTx(ctx, w.commonWorker.Consensus, w.commonWorker.Identity.NodeSigner, tx); err != nil {
 		return err
 	}
@@ -877,7 +878,7 @@ func (w *secretsWorker) handleGenerateMasterSecretDone(ok bool) {
 	}
 }
 
-func (w *secretsWorker) handleNewEphemeralSecret(secret *api.SignedEncryptedEphemeralSecret, epoch beacon.EpochTime) {
+func (w *secretsWorker) handleNewEphemeralSecret(secret *secrets.SignedEncryptedEphemeralSecret, epoch beacon.EpochTime) {
 	if !secret.Secret.ID.Equal(&w.runtimeID) {
 		return
 	}
@@ -923,17 +924,17 @@ func (w *secretsWorker) handleLoadEphemeralSecret() {
 	w.loadEphSecRetry = math.MaxInt64
 }
 
-func (w *secretsWorker) loadEphemeralSecret(sigSecret *api.SignedEncryptedEphemeralSecret) error {
+func (w *secretsWorker) loadEphemeralSecret(sigSecret *secrets.SignedEncryptedEphemeralSecret) error {
 	w.logger.Info("loading ephemeral secret",
 		"epoch", sigSecret.Secret.Epoch,
 	)
 
-	args := api.LoadEphemeralSecretRequest{
+	args := secrets.LoadEphemeralSecretRequest{
 		SignedSecret: *sigSecret,
 	}
 
 	var rsp protocol.Empty
-	if err := w.kmWorker.callEnclaveLocal(api.RPCMethodLoadEphemeralSecret, args, &rsp); err != nil {
+	if err := w.kmWorker.callEnclaveLocal(secrets.RPCMethodLoadEphemeralSecret, args, &rsp); err != nil {
 		w.logger.Error("failed to load ephemeral secret",
 			"err", err,
 		)
@@ -978,7 +979,7 @@ func (w *secretsWorker) handleGenerateEphemeralSecret(ctx context.Context, heigh
 	w.genEphSecRetry++
 
 	// Submitting transaction can take time, so don't block the loop.
-	generateEphemeralSecret := func(kmStatus *api.Status) {
+	generateEphemeralSecret := func(kmStatus *secrets.Status) {
 		if err := w.generateEphemeralSecret(ctx, w.runtimeID, height, nextEpoch, kmStatus); err != nil {
 			w.logger.Error("failed to generate ephemeral secret",
 				"err", err,
@@ -993,7 +994,7 @@ func (w *secretsWorker) handleGenerateEphemeralSecret(ctx context.Context, heigh
 	go generateEphemeralSecret(w.kmStatus)
 }
 
-func (w *secretsWorker) generateEphemeralSecret(ctx context.Context, runtimeID common.Namespace, height int64, epoch beacon.EpochTime, kmStatus *api.Status) error {
+func (w *secretsWorker) generateEphemeralSecret(ctx context.Context, runtimeID common.Namespace, height int64, epoch beacon.EpochTime, kmStatus *secrets.Status) error {
 	w.logger.Info("generating ephemeral secret",
 		"height", height,
 		"epoch", epoch,
@@ -1001,11 +1002,11 @@ func (w *secretsWorker) generateEphemeralSecret(ctx context.Context, runtimeID c
 
 	// Check if the ephemeral secret has been published in this epoch.
 	// Note that despite this check, the nodes can still publish ephemeral secrets at the same time.
-	lastSecret, err := w.commonWorker.Consensus.KeyManager().GetEphemeralSecret(ctx, &registry.NamespaceQuery{
+	lastSecret, err := w.commonWorker.Consensus.KeyManager().Secrets().GetEphemeralSecret(ctx, &registry.NamespaceQuery{
 		Height: consensus.HeightLatest,
 		ID:     runtimeID,
 	})
-	if err != nil && err != api.ErrNoSuchEphemeralSecret {
+	if err != nil && err != secrets.ErrNoSuchEphemeralSecret {
 		return err
 	}
 	if lastSecret != nil && epoch == lastSecret.Secret.Epoch {
@@ -1020,12 +1021,12 @@ func (w *secretsWorker) generateEphemeralSecret(ctx context.Context, runtimeID c
 	}
 
 	// Generate ephemeral secret.
-	args := api.GenerateEphemeralSecretRequest{
+	args := secrets.GenerateEphemeralSecretRequest{
 		Epoch: epoch,
 	}
 
-	var rsp api.GenerateEphemeralSecretResponse
-	if err = w.kmWorker.callEnclaveLocal(api.RPCMethodGenerateEphemeralSecret, args, &rsp); err != nil {
+	var rsp secrets.GenerateEphemeralSecretResponse
+	if err = w.kmWorker.callEnclaveLocal(secrets.RPCMethodGenerateEphemeralSecret, args, &rsp); err != nil {
 		w.logger.Error("failed to generate ephemeral secret",
 			"err", err,
 		)
@@ -1048,7 +1049,7 @@ func (w *secretsWorker) generateEphemeralSecret(ctx context.Context, runtimeID c
 	}
 
 	// Publish transaction.
-	tx := api.NewPublishEphemeralSecretTx(0, nil, &rsp.SignedSecret)
+	tx := secrets.NewPublishEphemeralSecretTx(0, nil, &rsp.SignedSecret)
 	if err = consensus.SignAndSubmitTx(ctx, w.commonWorker.Consensus, w.commonWorker.Identity.NodeSigner, tx); err != nil {
 		return err
 	}

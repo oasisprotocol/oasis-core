@@ -32,7 +32,7 @@ import (
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmdCmnGenesis "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/genesis"
@@ -556,9 +556,9 @@ func AppendRootHashState(doc *genesis.Document, exports []string, l *logging.Log
 // AppendKeyManagerState appends the key manager genesis state given a vector of
 // key manager statuses.
 func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.Logger) error {
-	kmSt := keymanager.Genesis{
-		Parameters: keymanager.ConsensusParameters{
-			GasCosts: keymanager.DefaultGasCosts, // TODO: Make these configurable.
+	kmSt := secrets.Genesis{
+		Parameters: secrets.ConsensusParameters{
+			GasCosts: secrets.DefaultGasCosts, // TODO: Make these configurable.
 		},
 	}
 
@@ -572,7 +572,7 @@ func AppendKeyManagerState(doc *genesis.Document, statuses []string, l *logging.
 			return err
 		}
 
-		var status keymanager.Status
+		var status secrets.Status
 		if err = json.Unmarshal(b, &status); err != nil {
 			l.Error("failed to parse genesis key manager status",
 				"err", err,

@@ -8,9 +8,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	keymanagerState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/state"
+	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
 func TestChangeParameters(t *testing.T) {
@@ -20,13 +21,13 @@ func TestChangeParameters(t *testing.T) {
 	defer ctx.Close()
 
 	// Setup state.
-	state := keymanagerState.NewMutableState(ctx.State())
+	state := secretsState.NewMutableState(ctx.State())
 	app := &keymanagerApplication{
 		state: appState,
 	}
-	params := &keymanager.ConsensusParameters{
+	params := &secrets.ConsensusParameters{
 		GasCosts: transaction.Costs{
-			keymanager.GasOpUpdatePolicy: 1000,
+			secrets.GasOpUpdatePolicy: 1000,
 		},
 	}
 	err := state.SetConsensusParameters(ctx, params)
@@ -34,9 +35,9 @@ func TestChangeParameters(t *testing.T) {
 
 	// Prepare proposal.
 	gasCosts := transaction.Costs{
-		keymanager.GasOpUpdatePolicy: 2000,
+		secrets.GasOpUpdatePolicy: 2000,
 	}
-	changes := keymanager.ConsensusParameterChanges{
+	changes := secrets.ConsensusParameterChanges{
 		GasCosts: gasCosts,
 	}
 	proposal := governance.ChangeParametersProposal{

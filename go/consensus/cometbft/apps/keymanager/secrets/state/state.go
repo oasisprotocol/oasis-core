@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
 )
 
@@ -38,7 +38,7 @@ type ImmutableState struct {
 }
 
 // ConsensusParameters returns the key manager consensus parameters.
-func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*api.ConsensusParameters, error) {
+func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*secrets.ConsensusParameters, error) {
 	raw, err := st.is.Get(ctx, parametersKeyFmt.Encode())
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
@@ -47,22 +47,22 @@ func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*api.Consens
 		return nil, fmt.Errorf("cometbft/keymanager: expected consensus parameters to be present in app state")
 	}
 
-	var params api.ConsensusParameters
+	var params secrets.ConsensusParameters
 	if err = cbor.Unmarshal(raw, &params); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &params, nil
 }
 
-func (st *ImmutableState) Statuses(ctx context.Context) ([]*api.Status, error) {
+func (st *ImmutableState) Statuses(ctx context.Context) ([]*secrets.Status, error) {
 	rawStatuses, err := st.getStatusesRaw(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var statuses []*api.Status
+	var statuses []*secrets.Status
 	for _, raw := range rawStatuses {
-		var status api.Status
+		var status secrets.Status
 		if err = cbor.Unmarshal(raw, &status); err != nil {
 			return nil, abciAPI.UnavailableStateError(err)
 		}
@@ -89,48 +89,48 @@ func (st *ImmutableState) getStatusesRaw(ctx context.Context) ([][]byte, error) 
 	return rawVec, nil
 }
 
-func (st *ImmutableState) Status(ctx context.Context, id common.Namespace) (*api.Status, error) {
+func (st *ImmutableState) Status(ctx context.Context, id common.Namespace) (*secrets.Status, error) {
 	data, err := st.is.Get(ctx, statusKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	if data == nil {
-		return nil, api.ErrNoSuchStatus
+		return nil, secrets.ErrNoSuchStatus
 	}
 
-	var status api.Status
+	var status secrets.Status
 	if err := cbor.Unmarshal(data, &status); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &status, nil
 }
 
-func (st *ImmutableState) MasterSecret(ctx context.Context, id common.Namespace) (*api.SignedEncryptedMasterSecret, error) {
+func (st *ImmutableState) MasterSecret(ctx context.Context, id common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
 	data, err := st.is.Get(ctx, masterSecretKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	if data == nil {
-		return nil, api.ErrNoSuchMasterSecret
+		return nil, secrets.ErrNoSuchMasterSecret
 	}
 
-	var secret api.SignedEncryptedMasterSecret
+	var secret secrets.SignedEncryptedMasterSecret
 	if err := cbor.Unmarshal(data, &secret); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	return &secret, nil
 }
 
-func (st *ImmutableState) EphemeralSecret(ctx context.Context, id common.Namespace) (*api.SignedEncryptedEphemeralSecret, error) {
+func (st *ImmutableState) EphemeralSecret(ctx context.Context, id common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
 	data, err := st.is.Get(ctx, ephemeralSecretKeyFmt.Encode(&id))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
 	if data == nil {
-		return nil, api.ErrNoSuchEphemeralSecret
+		return nil, secrets.ErrNoSuchEphemeralSecret
 	}
 
-	var secret api.SignedEncryptedEphemeralSecret
+	var secret secrets.SignedEncryptedEphemeralSecret
 	if err := cbor.Unmarshal(data, &secret); err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -155,7 +155,7 @@ type MutableState struct {
 // SetConsensusParameters sets key manager consensus parameters.
 //
 // NOTE: This method must only be called from InitChain/EndBlock contexts.
-func (st *MutableState) SetConsensusParameters(ctx context.Context, params *api.ConsensusParameters) error {
+func (st *MutableState) SetConsensusParameters(ctx context.Context, params *secrets.ConsensusParameters) error {
 	if err := st.is.CheckContextMode(ctx, []abciAPI.ContextMode{abciAPI.ContextInitChain, abciAPI.ContextEndBlock}); err != nil {
 		return err
 	}
@@ -163,17 +163,17 @@ func (st *MutableState) SetConsensusParameters(ctx context.Context, params *api.
 	return abciAPI.UnavailableStateError(err)
 }
 
-func (st *MutableState) SetStatus(ctx context.Context, status *api.Status) error {
+func (st *MutableState) SetStatus(ctx context.Context, status *secrets.Status) error {
 	err := st.ms.Insert(ctx, statusKeyFmt.Encode(&status.ID), cbor.Marshal(status))
 	return abciAPI.UnavailableStateError(err)
 }
 
-func (st *MutableState) SetMasterSecret(ctx context.Context, secret *api.SignedEncryptedMasterSecret) error {
+func (st *MutableState) SetMasterSecret(ctx context.Context, secret *secrets.SignedEncryptedMasterSecret) error {
 	err := st.ms.Insert(ctx, masterSecretKeyFmt.Encode(&secret.Secret.ID), cbor.Marshal(secret))
 	return abciAPI.UnavailableStateError(err)
 }
 
-func (st *MutableState) SetEphemeralSecret(ctx context.Context, secret *api.SignedEncryptedEphemeralSecret) error {
+func (st *MutableState) SetEphemeralSecret(ctx context.Context, secret *secrets.SignedEncryptedEphemeralSecret) error {
 	err := st.ms.Insert(ctx, ephemeralSecretKeyFmt.Encode(&secret.Secret.ID), cbor.Marshal(secret))
 	return abciAPI.UnavailableStateError(err)
 }

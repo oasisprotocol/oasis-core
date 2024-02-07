@@ -21,7 +21,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
@@ -619,7 +619,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	n.logger.Debug("watching key manager policy updates", "keymanager", kmRtID)
 
 	// Subscribe to key manager status updates (policy might change).
-	stCh, stSub := n.consensus.KeyManager().WatchStatuses()
+	stCh, stSub := n.consensus.KeyManager().Secrets().WatchStatuses()
 	defer stSub.Close()
 
 	// Subscribe to epoch transitions (quote policy might change).
@@ -646,7 +646,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	)
 
 	var (
-		st *keymanager.Status
+		st *secrets.Status
 		sc *node.SGXConstraints
 		vi *registry.VersionInfo
 		ri *protocol.RuntimeInfoResponse
@@ -753,7 +753,7 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	}
 }
 
-func (n *runtimeHostNotifier) updateKeyManagerStatus(ctx context.Context, status *keymanager.Status) error {
+func (n *runtimeHostNotifier) updateKeyManagerStatus(ctx context.Context, status *secrets.Status) error {
 	n.logger.Debug("got key manager status update", "status", status)
 
 	req := &protocol.Body{RuntimeKeyManagerStatusUpdateRequest: &protocol.RuntimeKeyManagerStatusUpdateRequest{
@@ -774,7 +774,7 @@ func (n *runtimeHostNotifier) updateKeyManagerStatus(ctx context.Context, status
 	return nil
 }
 
-func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *keymanager.SignedPolicySGX) error {
+func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *secrets.SignedPolicySGX) error {
 	n.logger.Debug("got key manager policy update", "policy", policy)
 
 	raw := cbor.Marshal(policy)

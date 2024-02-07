@@ -9,7 +9,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
 
@@ -109,7 +109,7 @@ type Status struct {
 // SecretsStatus is the key manager master and ephemeral secrets status.
 type SecretsStatus struct {
 	// Status is the global key manager committee status.
-	Status *api.Status `json:"status"`
+	Status *secrets.Status `json:"status"`
 
 	// Worker is the key manager master and ephemeral secrets worker status.
 	Worker SecretsWorkerStatus `json:"worker"`
@@ -125,7 +125,7 @@ type SecretsWorkerStatus struct {
 	LastRegistration time.Time `json:"last_registration"`
 
 	// Policy is the master and ephemeral secrets access control policy.
-	Policy *api.SignedPolicySGX `json:"policy"`
+	Policy *secrets.SignedPolicySGX `json:"policy"`
 
 	// PolicyChecksum is the checksum of the policy.
 	PolicyChecksum []byte `json:"policy_checksum"`

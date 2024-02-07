@@ -14,7 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
@@ -280,10 +280,10 @@ func (sc *Scenario) EnableRuntimeDeployment(ctx context.Context, childEnv *env.E
 
 	// Update the key manager policy.
 	status, err := sc.KeyManagerStatus(ctx)
-	if err != nil && err != keymanager.ErrNoSuchStatus {
+	if err != nil && err != secrets.ErrNoSuchStatus {
 		return err
 	}
-	var policies map[sgx.EnclaveIdentity]*keymanager.EnclavePolicySGX
+	var policies map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX
 	if status != nil && status.Policy != nil {
 		policies = status.Policy.Policy.Enclaves
 	}
@@ -558,7 +558,7 @@ func (sc *Scenario) ensureReplicationWorked(ctx context.Context, km *oasis.Keyma
 	if nodeRt == nil {
 		return fmt.Errorf("node is missing keymanager runtime from descriptor")
 	}
-	var signedInitResponse keymanager.SignedInitResponse
+	var signedInitResponse secrets.SignedInitResponse
 	if err = cbor.Unmarshal(nodeRt.ExtraInfo, &signedInitResponse); err != nil {
 		return fmt.Errorf("failed to unmarshal replica extrainfo")
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	cmSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
-	keymanager "github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
@@ -225,11 +225,11 @@ func (nt *nodeTracker) Nodes(nodes []signature.PublicKey) map[core.PeerID]signat
 }
 
 func (nt *nodeTracker) trackKeymanagerNodes(ctx context.Context) {
-	stCh, stSub := nt.consensus.KeyManager().WatchStatuses()
+	stCh, stSub := nt.consensus.KeyManager().Secrets().WatchStatuses()
 	defer stSub.Close()
 
 	for {
-		var status *keymanager.Status
+		var status *secrets.Status
 		select {
 		case <-ctx.Done():
 			return
