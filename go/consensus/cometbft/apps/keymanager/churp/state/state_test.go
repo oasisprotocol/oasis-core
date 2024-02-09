@@ -124,7 +124,7 @@ func TestStatuses(t *testing.T) {
 	}
 
 	// Empty state.
-	fetched, err := st.Statuses(ctx)
+	fetched, err := st.Statuses(ctx, statuses[0].RuntimeID)
 	require.NoError(t, err)
 	require.Empty(t, fetched)
 
@@ -135,7 +135,56 @@ func TestStatuses(t *testing.T) {
 	}
 
 	// New state.
-	fetched, err = st.Statuses(ctx)
+	fetched, err = st.Statuses(ctx, statuses[0].RuntimeID)
+	require.NoError(t, err)
+	require.ElementsMatch(t, statuses[:2], fetched)
+}
+
+func TestAllStatuses(t *testing.T) {
+	appState := abciAPI.NewMockApplicationState(&abciAPI.MockApplicationStateConfig{})
+	ctx := appState.NewContext(abciAPI.ContextBeginBlock)
+	defer ctx.Close()
+
+	st := NewMutableState(ctx.State())
+
+	// Prepare.
+	statuses := []*churp.Status{
+		{
+			Identity: churp.Identity{
+				ID:        1,
+				RuntimeID: common.NewTestNamespaceFromSeed([]byte{1}, common.NamespaceTest),
+			},
+			Threshold: 1,
+		},
+		{
+			Identity: churp.Identity{
+				ID:        2,
+				RuntimeID: common.NewTestNamespaceFromSeed([]byte{1}, common.NamespaceTest),
+			},
+			Threshold: 2,
+		},
+		{
+			Identity: churp.Identity{
+				ID:        1,
+				RuntimeID: common.NewTestNamespaceFromSeed([]byte{2}, common.NamespaceTest),
+			},
+			Threshold: 1,
+		},
+	}
+
+	// Empty state.
+	fetched, err := st.AllStatuses(ctx)
+	require.NoError(t, err)
+	require.Empty(t, fetched)
+
+	// Set state.
+	for _, status := range statuses {
+		err = st.SetStatus(ctx, status)
+		require.NoError(t, err)
+	}
+
+	// New state.
+	fetched, err = st.AllStatuses(ctx)
 	require.NoError(t, err)
 	require.ElementsMatch(t, statuses, fetched)
 }

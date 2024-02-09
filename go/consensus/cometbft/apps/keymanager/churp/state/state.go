@@ -19,11 +19,11 @@ var (
 	// Value is CBOR-serialized churp.ConsensusParameters.
 	parametersKeyFmt = consensus.KeyFormat.New(0x74)
 
-	// satusKeyFmt is the status key format.
+	// statusKeyFmt is the status key format.
 	//
 	// Key format is: 0x75 <runtime-id> <churp-id>.
 	// Value is CBOR-serialized churp.Status.
-	satusKeyFmt = consensus.KeyFormat.New(0x75, keyformat.H(&common.Namespace{}), uint8(0))
+	statusKeyFmt = consensus.KeyFormat.New(0x75, keyformat.H(&common.Namespace{}), uint8(0))
 )
 
 // ImmutableState is a immutable state wrapper.
@@ -48,9 +48,9 @@ func (st *ImmutableState) ConsensusParameters(ctx context.Context) (*churp.Conse
 	return &params, nil
 }
 
-// Status returns the CHURP status for the specified runtime ID and CHURP ID.
+// Status returns the CHURP status for the specified runtime and CHURP instance.
 func (st *ImmutableState) Status(ctx context.Context, runtimeID common.Namespace, churpID uint8) (*churp.Status, error) {
-	data, err := st.is.Get(ctx, satusKeyFmt.Encode(&runtimeID, churpID))
+	data, err := st.is.Get(ctx, statusKeyFmt.Encode(&runtimeID, churpID))
 	if err != nil {
 		return nil, abciAPI.UnavailableStateError(err)
 	}
@@ -65,14 +65,48 @@ func (st *ImmutableState) Status(ctx context.Context, runtimeID common.Namespace
 	return &status, nil
 }
 
-// Statuses returns the CHURP statuses for all runtimes.
-func (st *ImmutableState) Statuses(ctx context.Context) ([]*churp.Status, error) {
+// Statuses returns the CHURP statuses for the specified runtime.
+func (st *ImmutableState) Statuses(ctx context.Context, runtimeID common.Namespace) ([]*churp.Status, error) {
+	it := st.is.NewIterator(ctx)
+	defer it.Close()
+
+	// We need to pre-hash the runtime ID, so we can compare it below.
+	runtimeIDHash := keyformat.PreHashed(runtimeID.Hash())
+
+	var statuses []*churp.Status
+	for it.Seek(statusKeyFmt.Encode(&runtimeID)); it.Valid(); it.Next() {
+		var (
+			hash    keyformat.PreHashed
+			churpID uint8
+		)
+		if !statusKeyFmt.Decode(it.Key(), &hash, &churpID) {
+			break
+		}
+		if runtimeIDHash != hash {
+			break
+		}
+
+		var status churp.Status
+		if err := cbor.Unmarshal(it.Value(), &status); err != nil {
+			return nil, abciAPI.UnavailableStateError(err)
+		}
+		statuses = append(statuses, &status)
+	}
+	if it.Err() != nil {
+		return nil, abciAPI.UnavailableStateError(it.Err())
+	}
+
+	return statuses, nil
+}
+
+// AllStatuses returns the CHURP statuses for all runtimes.
+func (st *ImmutableState) AllStatuses(ctx context.Context) ([]*churp.Status, error) {
 	it := st.is.NewIterator(ctx)
 	defer it.Close()
 
 	var statuses []*churp.Status
-	for it.Seek(satusKeyFmt.Encode()); it.Valid(); it.Next() {
-		if !satusKeyFmt.Decode(it.Key()) {
+	for it.Seek(statusKeyFmt.Encode()); it.Valid(); it.Next() {
+		if !statusKeyFmt.Decode(it.Key()) {
 			break
 		}
 
@@ -118,7 +152,7 @@ func (st *MutableState) SetConsensusParameters(ctx context.Context, params *chur
 
 // SetStatus updates the state using the provided CHURP status.
 func (st *MutableState) SetStatus(ctx context.Context, status *churp.Status) error {
-	err := st.ms.Insert(ctx, satusKeyFmt.Encode(&status.RuntimeID, status.ID), cbor.Marshal(status))
+	err := st.ms.Insert(ctx, statusKeyFmt.Encode(&status.RuntimeID, status.ID), cbor.Marshal(status))
 	return abciAPI.UnavailableStateError(err)
 }
 
