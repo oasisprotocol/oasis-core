@@ -46,6 +46,7 @@ func TestRegisterNode(t *testing.T) {
 			staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
 			staking.KindRuntimeCompute:    *quantity.NewFromUint64(0),
 			staking.KindRuntimeKeyManager: *quantity.NewFromUint64(0),
+			staking.KindKeyManagerChurp:   *quantity.NewFromUint64(0),
 		},
 	}
 
@@ -120,6 +121,7 @@ func TestRegisterNode(t *testing.T) {
 					staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
 					staking.KindRuntimeCompute:    *quantity.NewFromUint64(0),
 					staking.KindRuntimeKeyManager: *quantity.NewFromUint64(0),
+					staking.KindKeyManagerChurp:   *quantity.NewFromUint64(0),
 				},
 			},
 			false,
@@ -299,6 +301,7 @@ func TestRegisterNode(t *testing.T) {
 					staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
 					staking.KindRuntimeCompute:    *quantity.NewFromUint64(0),
 					staking.KindRuntimeKeyManager: *quantity.NewFromUint64(0),
+					staking.KindKeyManagerChurp:   *quantity.NewFromUint64(0),
 				},
 			},
 			false,

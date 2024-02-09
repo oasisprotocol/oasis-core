@@ -264,6 +264,7 @@ func (sc *txSourceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				staking.KindNodeKeyManager:    *quantity.NewFromUint64(0),
 				staking.KindRuntimeCompute:    *quantity.NewFromUint64(100),
 				staking.KindRuntimeKeyManager: *quantity.NewFromUint64(100),
+				staking.KindKeyManagerChurp:   *quantity.NewFromUint64(0),
 			},
 		},
 		TotalSupply: *quantity.NewFromUint64(150000001400),

@@ -39,6 +39,7 @@ func GenesisState() api.Genesis {
 				api.KindNodeKeyManager:    *quantity.NewFromUint64(5),
 				api.KindRuntimeCompute:    *quantity.NewFromUint64(6),
 				api.KindRuntimeKeyManager: *quantity.NewFromUint64(7),
+				api.KindKeyManagerChurp:   *quantity.NewFromUint64(8),
 			},
 			Slashing: map[api.SlashReason]api.Slash{
 				api.SlashConsensusEquivocation: {

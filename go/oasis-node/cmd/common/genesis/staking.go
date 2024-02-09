@@ -89,6 +89,7 @@ func (st *AppendableStakingState) AppendTo(doc *genesis.Document) error {
 			staking.KindNodeKeyManager:    sq,
 			staking.KindRuntimeCompute:    sq,
 			staking.KindRuntimeKeyManager: sq,
+			staking.KindKeyManagerChurp:   sq,
 		}
 	}
 

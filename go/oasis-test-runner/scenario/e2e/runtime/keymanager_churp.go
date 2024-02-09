@@ -226,9 +226,18 @@ func (sc *kmChurpImpl) Run(ctx context.Context, _ *env.Env) error { //nolint: go
 	nonce++
 
 	// After the update, there should be no status updates.
-	<-stCh
+	for status.HandoffInterval != churp.HandoffsDisabled {
+		status, err = sc.nextChurpStatus(ctx, stCh)
+		if err != nil {
+			return err
+		}
+	}
+
 	select {
-	case <-stCh:
+	case status = <-stCh:
+		sc.Logger.Info("status updated",
+			"status", fmt.Sprintf("%+v", status),
+		)
 		return fmt.Errorf("handoffs should be disabled")
 	case <-ctx.Done():
 		return ctx.Err()

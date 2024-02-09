@@ -376,6 +376,7 @@ func checkHalt(*abciAPI.Context, beacon.EpochTime) error {
 func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	regSt := registryState.NewMutableState(ctx.State())
 	stakingSt := stakingState.NewMutableState(ctx.State())
+	churpSt := churpState.NewMutableState(ctx.State())
 
 	regParams, err := regSt.ConsensusParameters(ctx)
 	if err != nil {
@@ -418,9 +419,17 @@ func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 			return fmt.Errorf("failed to get staking account %s: %w", addr, err)
 		}
 	}
+	// Get key manager churp statuses.
+	churps, err := churpSt.AllStatuses(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get churp statuses: %w", err)
+	}
 
 	// Generate escrows.
 	escrows := make(map[staking.Address]*staking.EscrowAccount)
+	if err = churp.AddStakeClaims(churps, runtimes, escrows); err != nil {
+		return err
+	}
 	if err = registry.AddStakeClaims(entities, nodes, runtimes, runtimes, escrows); err != nil {
 		return err
 	}

@@ -245,6 +245,7 @@ func doInfo(cmd *cobra.Command, _ []string) {
 		api.KindNodeKeyManager,
 		api.KindRuntimeCompute,
 		api.KindRuntimeKeyManager,
+		api.KindKeyManagerChurp,
 	}
 	for _, kind := range thresholdsToQuery {
 		thres, err := client.Threshold(ctx, &api.ThresholdQuery{Kind: kind, Height: height})
