@@ -33,25 +33,22 @@ const (
 
 // Non-versioned keys.
 var (
-	// keyFormat is the namespace for the pebbledb database key formats.
-	keyFormat = keyformat.NewNamespace("pebbledb")
-
 	// rootUpdatedNodesKeyFmt is the key format for the pending updated nodes for the
 	// given root that need to be removed only in case the given root is not among
 	// the finalized roots. They key format is (version, root).
 	//
 	// Value is CBOR-serialized []updatedNode.
-	rootUpdatedNodesKeyFmt = keyFormat.New(0x00, uint64(0), &node.TypedHash{})
+	rootUpdatedNodesKeyFmt = keyformat.New(0x00, uint64(0), &node.TypedHash{})
 
 	// metadataKeyFmt is the key format for metadata.
 	//
 	// Value is CBOR-serialized metadata.
-	metadataKeyFmt = keyFormat.New(0x01)
+	metadataKeyFmt = keyformat.New(0x01)
 
 	// rootsMetadataKeyFmt is the key format for roots metadata. The key format is (version).
 	//
 	// Values is CBOR-serialized rootsMetadata.
-	rootsMetadataKeyFmt = keyFormat.New(0x02, uint64(0))
+	rootsMetadataKeyFmt = keyformat.New(0x02, uint64(0))
 
 	// multipartRestoreNodeLogKeyFmt is the key format for the nodes inserted during a chunk restore.
 	// Once a set of chunks is fully restored, these entries should be removed. If chunk restoration
@@ -59,7 +56,7 @@ var (
 	// with these entries.
 	//
 	// Value is empty.
-	multipartRestoreNodeLogKeyFmt = keyFormat.New(0x03, &node.TypedHash{})
+	multipartRestoreNodeLogKeyFmt = keyformat.New(0x03, &node.TypedHash{})
 
 	// multipartRestoreNodeLogKeyFmt is the key format for the root nodes inserted during a chunk restore.
 	// Once a set of chunks is fully restored, these entries should be removed. If chunk restoration
@@ -67,7 +64,7 @@ var (
 	// with these entries.
 	//
 	// Value is empty.
-	multipartRestoreRootLogKeyFmt = keyFormat.New(0x04, &node.TypedHash{})
+	multipartRestoreRootLogKeyFmt = keyformat.New(0x04, &node.TypedHash{})
 )
 
 // Timestamped (versioned) keys.
@@ -75,18 +72,18 @@ var (
 	// nodeKeyFmt is the key format for nodes (node hash).
 	//
 	// Value is serialized node.
-	nodeMVCCKeyFmt = keyFormat.New(mvccKeyIndicator+1, &hash.Hash{})
+	nodeMVCCKeyFmt = keyformat.New(mvccKeyIndicator+1, &hash.Hash{})
 
 	// writeLogKeyFmt is the key format for write logs (version, new root,
 	// old root).
 	//
 	// Value is CBOR-serialized write log.
-	writeLogMVCCKeyFmt = keyFormat.New(mvccKeyIndicator+2, uint64(0), &node.TypedHash{}, &node.TypedHash{})
+	writeLogMVCCKeyFmt = keyformat.New(mvccKeyIndicator+2, uint64(0), &node.TypedHash{}, &node.TypedHash{})
 
 	// rootNodeKeyFmt is the key format for root nodes (node hash).
 	//
 	// Value is empty.
-	rootNodeMVCCKeyFmt = keyFormat.New(mvccKeyIndicator+3, &node.TypedHash{})
+	rootNodeMVCCKeyFmt = keyformat.New(mvccKeyIndicator+3, &node.TypedHash{})
 )
 
 func New(cfg *api.Config) (api.NodeDB, error) {
