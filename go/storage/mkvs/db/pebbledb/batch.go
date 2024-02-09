@@ -236,7 +236,7 @@ func (s *pebbledbSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
 		err = existsVersioned(s.batch.db.db, nodeKey, s.batch.version)
 		switch {
 		case err == nil:
-		case errors.Is(err, errNotFound):
+		case errors.Is(err, errVersionedNotFound):
 			// Node does not exist, add to multipartNodes.
 			th := node.TypedHashFromParts(s.batch.rootType, h)
 			if err = s.batch.multipartNodes.Set(multipartRestoreNodeLogKeyFmt.Encode(&th), []byte{}, nil); err != nil {

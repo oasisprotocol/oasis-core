@@ -43,7 +43,7 @@ func (iter *iterator) Key() []byte {
 	iter.assertIsValid()
 
 	// Key version is checked to be valid in Next().
-	key, _, ok := SplitMVCCKey(iter.source.Key())
+	key, _, ok := decodeMVCCKey(iter.source.Key())
 	if !ok {
 		panic(fmt.Sprintf("invalid PebbleDB MVCC key: %s", iter.source.Key()))
 	}
@@ -55,9 +55,9 @@ func (iter *iterator) Value() []byte {
 	iter.assertIsValid()
 
 	// Val ensured to not be a tombstone in Next().
-	val, _, ok := SplitMVCCValue(iter.source.Value())
-	if !ok {
-		panic(fmt.Sprintf("invalid PebbleDB MVCC value: %s", iter.source.Value()))
+	val, tombstone := decodeMVCCValue(iter.source.Value())
+	if tombstone {
+		panic(fmt.Sprintf("unexpected tombstone value in iteration: %s", iter.source.Value()))
 	}
 
 	return val
@@ -103,7 +103,7 @@ func (iter *iterator) Next() bool {
 	}
 
 	// We are now at the first (smallest) version of the next key.
-	nextKey, nv, ok := SplitMVCCKey(iter.source.Key())
+	nextKey, newVersionRaw, ok := decodeMVCCKey(iter.source.Key())
 	if !ok {
 		panic(fmt.Sprintf("invalid PebbleDB MVCC key: %s", iter.source.Key()))
 	}
@@ -114,7 +114,7 @@ func (iter *iterator) Next() bool {
 	}
 
 	// Check next key version.
-	nextKeyVersion, err := decodeUint64Ascending(nv)
+	nextKeyVersion, err := decodeVersion(newVersionRaw)
 	if err != nil {
 		panic(fmt.Sprintf("invalid PebbleDB MVCC key: %s", iter.source.Key()))
 	}
@@ -125,25 +125,17 @@ func (iter *iterator) Next() bool {
 	case nextKeyVersion < iter.version:
 		// The minimal version of this key is smaller than the iterator version.Next
 		// Find the largest version of the key which is smaller than the iterator version.
-		iter.valid = iter.source.SeekLT(MVCCEncode(nextKey, iter.version+1))
+		iter.valid = iter.source.SeekLT(encodeMVCCKey(nextKey, iter.version+1))
 		if !iter.valid {
 			return false
 		}
-
-		// This can either return the same key where we are currently at, or a greter still valid key,
-		// so it is safe to override the next key.
-		// nextKey, nv, ok = SplitMVCCKey(iter.source.Key())
-		// if !ok {
-		// 	panic(fmt.Sprintf("invalid PebbleDB MVCC key: %s", iter.source.Key()))
-		// }
 	default:
 		// We are alraedy at the key with the exact version.
 	}
 
-	// Ensure key/value is not tombstoned.
-	_, isTomb := tombstoneVersion(iter.source.Value())
-	if isTomb {
-		// If the value is tombstoned, we skip to the next key.
+	// Ensure not tombstone.
+	if mvccIsTombstone(iter.source.Value()) {
+		// If the value is a tombstone, we skip to the next key.
 		iter.Next()
 	}
 	return iter.valid

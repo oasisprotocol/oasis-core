@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"slices"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/bloom"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -22,8 +24,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
-// TODO: values need to be incoded in all places where we write (e.g. to support tombstones).
-
 const (
 	dbVersion = 1
 	// multipartVersionNone is the value used for the multipart version in metadata
@@ -32,7 +32,6 @@ const (
 )
 
 // Non-versioned keys.
-// TODO: use <0x7F for non-timestamped and >0x7F for timestamped keys, to make prunning simpler.
 var (
 	// keyFormat is the namespace for the pebbledb database key formats.
 	keyFormat = keyformat.NewNamespace("pebbledb")
@@ -76,30 +75,57 @@ var (
 	// nodeKeyFmt is the key format for nodes (node hash).
 	//
 	// Value is serialized node.
-	nodeMVCCKeyFmt = keyFormat.New(0x80, &hash.Hash{})
+	nodeMVCCKeyFmt = keyFormat.New(mvccKeyIndicator+1, &hash.Hash{})
 
 	// writeLogKeyFmt is the key format for write logs (version, new root,
 	// old root).
 	//
 	// Value is CBOR-serialized write log.
-	writeLogMVCCKeyFmt = keyFormat.New(0x81, uint64(0), &node.TypedHash{}, &node.TypedHash{})
+	writeLogMVCCKeyFmt = keyFormat.New(mvccKeyIndicator+2, uint64(0), &node.TypedHash{}, &node.TypedHash{})
 
 	// rootNodeKeyFmt is the key format for root nodes (node hash).
 	//
 	// Value is empty.
-	rootNodeMVCCKeyFmt = keyFormat.New(0x82, &node.TypedHash{})
+	rootNodeMVCCKeyFmt = keyFormat.New(mvccKeyIndicator+3, &node.TypedHash{})
 )
 
-var errNotFound = fmt.Errorf("mkvs/pebbledb: item not found")
-
 func New(cfg *api.Config) (api.NodeDB, error) {
+	// TODO: Could try optimizing some options, e.g.:
+	// https://github.com/ethereum/go-ethereum/blob/16ce7bf50fa71c907d1dc6504ed32a9161e71351/ethdb/pebble/pebble.go#L181-L222
+	// https://github.com/bnb-chain/bsc/blob/c6aeee20016181a5ad4153acbbbf2cf1b27be0a5/ethdb/pebble/pebble.go#L178-L227
+	// https://github.com/cockroachdb/pebble/blob/291a41df6aeb6f0455579af6372c2545794c254e/cmd/pebble/db.go#L55-L91
 	opts := &pebble.Options{
 		Comparer: MVCCComparer,
 		ReadOnly: cfg.ReadOnly,
 		Logger:   newPebbleLogger("storage/mkvs/pebbledb"),
+		// Use all available CPUs for faster compaction.
+		MaxConcurrentCompactions: func() int { return runtime.NumCPU() },
+
+		// https://github.com/cockroachdb/pebble/blob/291a41df6aeb6f0455579af6372c2545794c254e/cmd/pebble/db.go#L55-L91
+		FormatMajorVersion:          pebble.FormatNewest,
+		Levels:                      make([]pebble.LevelOptions, 7),
+		MaxOpenFiles:                16384,
+		MemTableSize:                64 << 20,
+		MemTableStopWritesThreshold: 4,
 	}
+	for i := 0; i < len(opts.Levels); i++ {
+		l := &opts.Levels[i]
+		l.BlockSize = 32 << 10       // 32 KB
+		l.IndexBlockSize = 256 << 10 // 256 KB
+		l.FilterPolicy = bloom.FilterPolicy(10)
+		l.FilterType = pebble.TableFilter
+		if i > 0 {
+			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
+		}
+		l.EnsureDefaults()
+	}
+	opts.Levels[6].FilterPolicy = nil
+	opts.FlushSplitBytes = opts.Levels[0].TargetFileSize
+
 	if cfg.MaxCacheSize > 0 {
 		opts.Cache = pebble.NewCache(cfg.MaxCacheSize)
+	} else {
+		opts.Cache = pebble.NewCache(1024 * 1024 * 1024) // 1GB.
 	}
 
 	opts = opts.EnsureDefaults()
@@ -147,7 +173,6 @@ type pebbleNodeDB struct {
 }
 
 func (d *pebbleNodeDB) load() error {
-	fmt.Println("Opening...")
 	// Load metadata.
 	item, closer, err := d.db.Get(metadataKeyFmt.Encode())
 	switch {
@@ -155,7 +180,6 @@ func (d *pebbleNodeDB) load() error {
 		// Continue below.
 		defer closer.Close()
 	case errors.Is(err, pebble.ErrNotFound):
-		fmt.Println("no metadata already exists")
 		// No metadata, initialize.
 		d.meta.value.Version = dbVersion
 		d.meta.value.Namespace = d.namespace
@@ -166,13 +190,11 @@ func (d *pebbleNodeDB) load() error {
 		return fmt.Errorf("mkvs/pebbledb: failed to get metadata: %w", err)
 	}
 
-	fmt.Println("metadata already exists")
 	// Metadata already exists, just load it and verify that it is
 	// compatible with what we have here.
 	if err = cbor.UnmarshalTrusted(item, &d.meta.value); err != nil {
 		return err
 	}
-	fmt.Println("Earliest:", d.meta.value.EarliestVersion)
 
 	if d.meta.value.Version != dbVersion {
 		return fmt.Errorf("incompatible database version (expected: %d got: %d)",
@@ -204,7 +226,7 @@ func (d *pebbleNodeDB) checkRoot(root node.Root) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, errNotFound):
+	case errors.Is(err, errVersionedNotFound):
 		return api.ErrRootNotFound
 	default:
 		d.logger.Error("failed to check root existence",
@@ -243,7 +265,7 @@ func (d *pebbleNodeDB) GetNode(root node.Root, ptr *node.Pointer) (node.Node, er
 			return nil, fmt.Errorf("mkvs/pebbledb: failed to unmarshal node: %w", err)
 		}
 		return n, nil
-	case errors.Is(err, errNotFound):
+	case errors.Is(err, errVersionedNotFound):
 		return nil, api.ErrNodeNotFound
 	default:
 		return nil, fmt.Errorf("mkvs/pebbledb: failed to get node from backing store: %w", err)
@@ -518,7 +540,7 @@ func (d *pebbleNodeDB) Finalize(roots []node.Root) error { // nolint: gocyclo
 				panic(fmt.Errorf("mkvs/pebbledb: corrupted root updated nodes index: %w", err))
 			}
 			// Continues below.
-		case errors.Is(err, errNotFound):
+		case errors.Is(err, errVersionedNotFound):
 			panic(fmt.Errorf("mkvs/pebbledb: missing root updated nodes index"))
 		default:
 			panic(fmt.Errorf("mkvs/pebbledb: corrupted root updated nodes index: %w", err))
@@ -644,12 +666,12 @@ func (d *pebbleNodeDB) Prune(_ context.Context, version uint64) error {
 	var prevIsTombstone bool
 
 	for iter.First(); iter.Valid(); {
-		key, verBz, ok := SplitMVCCKey(iter.Key())
+		key, verRaw, ok := decodeMVCCKey(iter.Key())
 		if !ok {
 			return fmt.Errorf("mkvs/pebbledb: invalid key while prunning: %s", iter.Key())
 		}
 		var keyVersion uint64
-		keyVersion, err = decodeUint64Ascending(verBz)
+		keyVersion, err = decodeVersion(verRaw)
 		if err != nil {
 			return fmt.Errorf("mkvs/pebbledb: failed to decode key version: %w", err)
 		}
@@ -674,7 +696,7 @@ func (d *pebbleNodeDB) Prune(_ context.Context, version uint64) error {
 		prevKey = key
 		prevFullKey = slices.Clone(iter.Key())
 		prevVersion = keyVersion
-		_, prevIsTombstone = tombstoneVersion(iter.Value())
+		prevIsTombstone = mvccIsTombstone(iter.Value())
 
 		// Move to the next key (possible next version of the same key).
 		iter.Next()
