@@ -11,21 +11,34 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 )
 
-const tombstoneVal = "TOMBSTONE"
+const (
+	// mvccKeyIndicator marks keys as being version-controlled under the MVCC scheme.
+	// It's part of the key prefix where any prefix value greater than 0x7F indicates an MVCC key.
+	// This serves as a contract within the database to differentiate between MVCC and non-MVCC keys.
+	mvccKeyIndicator = 0x7F
+)
+
+var errVersionedNotFound = fmt.Errorf("mkvs/pebbledb: versioned key not found")
 
 // MVCCComparer returns a PebbleDB Comparer with encoding and decoding routines
 // for MVCC control, used to compare and store versioned keys.
 //
-// Note: This Comparer implementation is largely based on PebbleDB's internal
-// MVCC example, which can be found here:
+// Based on:
+//
 // https://github.com/cockroachdb/pebble/blob/master/cmd/pebble/mvcc.go
+// https://github.com/cockroachdb/cockroach/blob/049d54d18aead4c10308ebb9e996451dffe2c9c4/pkg/storage/pebble.go#L379-L488
+// https://github.com/cosmos/cosmos-sdk/blob/e4fabebfc5e1fe4dddb8ea7583bf2ba2a891649b/store/storage/pebbledb/comparator.go#L17
 var MVCCComparer = &pebble.Comparer{
-	Name: "ss_pebbledb_comparator",
+	Name: "pebbledb_comparator",
 
-	Compare: MVCCKeyCompare,
+	Compare: mvccKeyCompare,
+
+	Equal: func(a, b []byte) bool {
+		return mvccKeyCompare(a, b) == 0
+	},
 
 	AbbreviatedKey: func(k []byte) uint64 {
-		key, _, ok := SplitMVCCKey(k)
+		key, _, ok := decodeMVCCKey(k)
 		if !ok {
 			return 0
 		}
@@ -33,28 +46,23 @@ var MVCCComparer = &pebble.Comparer{
 		return pebble.DefaultComparer.AbbreviatedKey(key)
 	},
 
-	Equal: func(a, b []byte) bool {
-		return MVCCKeyCompare(a, b) == 0
-	},
-
 	Separator: func(dst, a, b []byte) []byte {
-		aKey, _, ok := SplitMVCCKey(a)
+		aKey, _, ok := decodeMVCCKey(a)
 		if !ok {
 			return append(dst, a...)
 		}
 
-		bKey, _, ok := SplitMVCCKey(b)
+		bKey, _, ok := decodeMVCCKey(b)
 		if !ok {
 			return append(dst, a...)
 		}
 
-		// if the keys are the same return a.
+		// If the keys are the same just return a.
 		if bytes.Equal(aKey, bKey) {
 			return append(dst, a...)
 		}
 
 		n := len(dst)
-
 		// MVCC key comparison uses bytes.Compare on the roachpb.Key, which is the
 		// same semantics as pebble.DefaultComparer, so reuse the latter's Separator
 		// implementation.
@@ -82,7 +90,7 @@ var MVCCComparer = &pebble.Comparer{
 	},
 
 	Successor: func(dst, a []byte) []byte {
-		aKey, _, ok := SplitMVCCKey(a)
+		aKey, _, ok := decodeMVCCKey(a)
 		if !ok {
 			return append(dst, a...)
 		}
@@ -110,7 +118,7 @@ var MVCCComparer = &pebble.Comparer{
 	},
 
 	Split: func(k []byte) int {
-		key, _, ok := SplitMVCCKey(k)
+		key, _, ok := decodeMVCCKey(k)
 		if !ok {
 			return len(k)
 		}
@@ -131,102 +139,76 @@ type mvccKeyFormatter struct {
 }
 
 func (f mvccKeyFormatter) Format(s fmt.State, _ rune) {
-	k, vBz, ok := SplitMVCCKey(f.key)
+	k, vBz, ok := decodeMVCCKey(f.key)
 	if ok {
-		v, _ := decodeUint64Ascending(vBz)
-		fmt.Fprintf(s, "versioned: %s/%d (fullk: %s)", k, v, f.key)
+		v, _ := decodeVersion(vBz)
+		fmt.Fprintf(s, "mvcc: %s/%d (fullkey: %s)", k, v, f.key)
 	} else {
-		fmt.Fprintf(s, "not versioned: %s", f.key)
+		fmt.Fprintf(s, "non-mvcc: %s", f.key)
 	}
 }
 
-// SplitMVCCKey accepts an MVCC key and returns the "user" key, the MVCC version,
-// and a boolean indicating if the provided key is an MVCC key.
+// decodeMVCCValue accepts a raw MVCC value and returns the "user" value, and
+// a boolean indecating if the provided value is a tombstone.
+func decodeMVCCValue(mvccValue []byte) ([]byte, bool) {
+	// Tombstone.
+	if len(mvccValue) == 0 {
+		return nil, true
+	}
+	// Otherwise this is not a tombstone, copy and return the user value.
+	value := bytes.Clone(mvccValue)
+	return value[:len(mvccValue)-1], false
+}
+
+// encodeMVVCValue returns an encoded a MVCC value.
 //
-// Note, internally, we must make a copy of the provided mvccKey argument, which
-// typically comes from the Key() method as it's not safe.
-func SplitMVCCKey(mvccKey []byte) (key, version []byte, ok bool) {
-	if len(mvccKey) == 0 {
-		return nil, nil, false
+// Tombstones are encoded as empty values, normal values are encoded as [value] + [1].
+func encodeMVVCValue(value []byte, tombstone bool) []byte {
+	if tombstone {
+		return []byte{}
 	}
-	mvccKeyCopy := bytes.Clone(mvccKey)
-
-	// If first byte bellow 0x80 this key is not versioned (TODO: could return version 0).
-	if mvccKeyCopy[0] < 0x80 {
-		return mvccKeyCopy, nil, false
-	}
-
-	n := len(mvccKeyCopy) - 1    // last item
-	tsLen := int(mvccKeyCopy[n]) // int(last item)=timestamp length
-	if n < tsLen {
-		return nil, nil, false
-	}
-
-	key = mvccKeyCopy[:n-tsLen] // key=[0:n-tsLen], version=[n-tsLen+1: n]
-	if tsLen > 0 {
-		version = mvccKeyCopy[n-tsLen+1 : n]
-	}
-
-	return key, version, true
+	return append(value, 0x1)
 }
 
-// SplitMVCCValue accepts an MVCC key and returns the "user" key, the MVCC version,
-// and a boolean indicating if the provided key is an MVCC key.
-//
-// Note, internally, we must make a copy of the provided mvccKey argument, which
-// typically comes from the Key() method as it's not safe.
-func SplitMVCCValue(mvccKey []byte) (key, version []byte, ok bool) {
-	if len(mvccKey) == 0 {
-		return nil, nil, false
-	}
-	mvccKeyCopy := bytes.Clone(mvccKey)
-
-	n := len(mvccKeyCopy) - 1    // last item
-	tsLen := int(mvccKeyCopy[n]) // int(last item)=timestamp length
-	if n < tsLen {
-		return nil, nil, false
-	}
-
-	key = mvccKeyCopy[:n-tsLen] // key=[0:n-tsLen], version=[n-tsLen+1: n]
-	if tsLen > 0 {
-		version = mvccKeyCopy[n-tsLen+1 : n]
-	}
-
-	return key, version, true
-}
-
-// MVCCKeyCompare compares two MVCC keys.
-func MVCCKeyCompare(a, b []byte) int {
+// mvccKeyCompare compares two MVCC keys.
+func mvccKeyCompare(a, b []byte) int {
+	// For performance, this routine manually splits the key into the user-key
+	// and version components rather than using DecodeEngineKey.
 	aEnd := len(a) - 1
 	bEnd := len(b) - 1
 	if aEnd < 0 || bEnd < 0 {
 		// This should never happen unless there is some sort of corruption of
-		// the keys. This is a little bizarre, but the behavior exactly matches
-		// engine/db.cc:DBComparator.
+		// the keys.
 		return bytes.Compare(a, b)
 	}
 
-	// If first byte bellow 0x80 this key is not versioned (TODO: could return version 0).
-	if a[0] < 0x80 && b[0] < 0x80 {
+	// If any of the keys are not versioned, compare as regular keys.
+	if a[0] < mvccKeyIndicator || b[0] < mvccKeyIndicator {
 		return bytes.Compare(a, b)
 	}
 
-	// Compute the index of the separator between the key and the timestamp.
+	// Compute the index of the separator between the key and the version. If the
+	// separator is found to be at -1 for both keys, then we are comparing bare
+	// suffixes without a user key part. Pebble requires bare suffixes to be
+	// comparable with the same ordering as if they had a common user key.
 	aSep := aEnd - int(a[aEnd])
 	bSep := bEnd - int(b[bEnd])
+	if aSep == -1 && bSep == -1 {
+		aSep, bSep = 0, 0 // comparing bare suffixes
+	}
 	if aSep < 0 || bSep < 0 {
 		// This should never happen unless there is some sort of corruption of
-		// the keys. This is a little bizarre, but the behavior exactly matches
-		// engine/db.cc:DBComparator.
+		// the keys.
 		return bytes.Compare(a, b)
 	}
 
-	// compare the "user key" part of the key
+	// Compare the "user key" part of the key.
 	if c := bytes.Compare(a[:aSep], b[:bSep]); c != 0 {
 		return c
 	}
 
-	// compare the timestamp part of the key
+	// Compare the version part of the key.
+	// Since versions are encoded as big-endian, we can compare the raw bytes.
 	aTS := a[aSep:aEnd]
 	bTS := b[bSep:bEnd]
 	if len(aTS) == 0 {
@@ -241,37 +223,67 @@ func MVCCKeyCompare(a, b []byte) int {
 	return bytes.Compare(aTS, bTS)
 }
 
-// MVCCEncode encodes a MVCC key with the specified version.
+// encodeMVCCKey encodes a MVCC key with the specified version.
 //
-// <key>\x00[<version>]<#version-bytes>
-func MVCCEncode(key []byte, version uint64) (dst []byte) {
-	dst = append(dst, key...)
-	dst = append(dst, 0)
-
-	if version != 0 {
-		extra := byte(1 + 8)
-		dst = encodeUint64Ascending(dst, version)
-		dst = append(dst, extra)
+// <key>\x00<version><#version-bytes>
+func encodeMVCCKey(key []byte, version uint64) []byte {
+	if len(key) > 0 && key[0] <= mvccKeyIndicator {
+		panic(fmt.Sprintf("invalid key: first byte doesn't indicate a mvcc key: %s", key))
 	}
+
+	dst := make([]byte, 0, len(key)+1+8+1)
+
+	// <key>
+	dst = append(dst, key...)
+	// \x00
+	dst = append(dst, 0)
+	// <version>
+	dst = encodeVersion(dst, version)
+	// <# version-bytes>
+	dst = append(dst, 9)
 
 	return dst
 }
 
-// encodeUint64Ascending encodes the uint64 value using a big-endian 8 byte
-// representation. The bytes are appended to the supplied buffer and
-// the final buffer is returned.
-func encodeUint64Ascending(dst []byte, v uint64) []byte {
-	return append(
-		dst,
-		byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
-		byte(v>>24), byte(v>>16), byte(v>>8), byte(v),
-	)
+// decodeMVCCKey accepts an MVCC key and returns the "user" key, the MVCC version,
+// and a boolean indicating if the provided key is an MVCC key.
+// MVCC version is returned raw.
+func decodeMVCCKey(mvccKey []byte) (key, version []byte, ok bool) {
+	if len(mvccKey) == 0 {
+		return nil, nil, false
+	}
+	mvccKeyCopy := bytes.Clone(mvccKey)
+
+	// If first byte bellow 0x80 this key is not versioned.
+	if mvccKeyCopy[0] < mvccKeyIndicator {
+		return mvccKeyCopy, nil, false
+	}
+
+	n := len(mvccKeyCopy) - 1
+	tsLen := int(mvccKeyCopy[n]) // Last iterm is timestamp length.
+	if n < tsLen {
+		// Invalid key.
+		return nil, nil, false
+	}
+
+	// Key is [0:n-tsLen]
+	key = mvccKeyCopy[:n-tsLen]
+	if tsLen > 0 {
+		// Version is: [n-tsLen+1:n].
+		version = mvccKeyCopy[n-tsLen+1 : n]
+	}
+	return key, version, true
 }
 
-// decodeUint64Ascending decodes a uint64 from the input buffer, treating
-// the input as a big-endian 8 byte uint64 representation. The decoded uint64 is
-// returned.
-func decodeUint64Ascending(b []byte) (uint64, error) {
+// encodeVersion encodes the uint64 version value using a big-endian 8 byte
+// representation.
+func encodeVersion(dst []byte, v uint64) []byte {
+	return binary.BigEndian.AppendUint64(dst, v)
+}
+
+// decodeVersion decodes a uint64 version value from the input buffer, treating
+// the input as a big-endian 8 byte uint64 representation.
+func decodeVersion(b []byte) (uint64, error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
@@ -283,23 +295,9 @@ func decodeUint64Ascending(b []byte) (uint64, error) {
 	return v, nil
 }
 
-func tombstoneVersion(val []byte) (uint64, bool) {
-	_, tombBz, ok := SplitMVCCValue(val)
-	if !ok {
-		panic(fmt.Sprintf("not a valid mvcc value: %s", val))
-	}
-
-	// Not a tombstone.
-	if len(tombBz) == 0 {
-		return 0, false
-	}
-
-	// Decode tombstone.
-	tombstone, err := decodeUint64Ascending(tombBz)
-	if err != nil {
-		panic(fmt.Sprintf("not a valid tombstone in mvcc value: %s", val))
-	}
-	return tombstone, true
+func mvccIsTombstone(val []byte) bool {
+	// Tombstones are encoded as empty values.
+	return len(val) == 0
 }
 
 // existsVersioned checks if the key at the given MVCC key exists at the given version.
@@ -311,21 +309,18 @@ func existsVersioned(db *pebble.DB, key []byte, version uint64) error {
 
 	iter, _ := db.NewIter(&pebble.IterOptions{
 		LowerBound: key,
-		UpperBound: MVCCEncode(key, version),
+		UpperBound: encodeMVCCKey(key, version),
 	})
 	defer iter.Close()
 
 	// Move the iterator to the last key matching the bounds.
 	if !iter.Last() {
-		return errNotFound
+		return errVersionedNotFound
 	}
 
 	// Check if value is a tombstone.
-	val := iter.Value()
-	tv, isTomb := tombstoneVersion(val)
-	if isTomb && tv <= version {
-		// Tombstone in the past, the key was deleted.
-		return errNotFound
+	if mvccIsTombstone(iter.Value()) {
+		return errVersionedNotFound
 	}
 
 	return nil
@@ -342,25 +337,23 @@ func fetchVersionedRaw(db *pebble.DB, key []byte, version uint64) ([]byte, error
 
 	iter, _ := db.NewIter(&pebble.IterOptions{
 		LowerBound: key,
-		UpperBound: MVCCEncode(key, version),
+		UpperBound: encodeMVCCKey(key, version),
 	})
 	defer iter.Close()
 
 	// Move the iterator to the last key matching the bounds.
 	if !iter.Last() {
-		return nil, errNotFound
+		return nil, errVersionedNotFound
 	}
 
-	// Check if value is a tombstone.
-	val := iter.Value()
-	tv, isTomb := tombstoneVersion(val)
-	if isTomb && tv <= version {
+	// Decode MVCC value.
+	val, isTomb := decodeMVCCValue(iter.Value())
+	if isTomb {
 		// Tombstone -> the key was deleted.
-		return nil, errNotFound
+		return nil, errVersionedNotFound
 	}
-	v, _, _ := SplitMVCCKey(val) // TODO: hack, update tombstone version???
 
-	return v, nil
+	return val, nil
 }
 
 // fetchVersioned fetches and seriliazes the value at the given MVCC key and version.
@@ -377,10 +370,10 @@ func fetchVersioned(db *pebble.DB, key []byte, version uint64, ret interface{}) 
 // deleteVersioned deletes the MVCC versioned key at the given version.
 func deleteVersioned(batch *pebble.Batch, key []byte, version uint64) error {
 	// Write a tombstone, instead of deleting the key.
-	return batch.Set(MVCCEncode(key, version), MVCCEncode([]byte(tombstoneVal), version), nil) // TODO: not sure why value is done this way, but this is what cosmos does.
+	return batch.Set(encodeMVCCKey(key, version), encodeMVVCValue(nil, true), nil)
 }
 
 // putVersioned puts the MVCC versioned key at the given version.
 func putVersioned(batch *pebble.Batch, key []byte, version uint64, value []byte) error {
-	return batch.Set(MVCCEncode(key, version), MVCCEncode(value, 0), nil)
+	return batch.Set(encodeMVCCKey(key, version), encodeMVVCValue(value, false), nil)
 }
