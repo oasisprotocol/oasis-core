@@ -167,7 +167,6 @@ type processedBatch struct {
 	rank     uint64
 
 	computed *protocol.ComputedBatch
-	raw      transaction.RawBatch
 
 	txInputWriteLog storage.WriteLog
 }
