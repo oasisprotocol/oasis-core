@@ -6,7 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
@@ -37,7 +37,7 @@ func (ext *secretsExt) OnRegister(state tmapi.ApplicationState, _ tmapi.MessageD
 
 // ExecuteTx implements api.Extension.
 func (ext *secretsExt) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
-	state := secretsState.NewMutableState(ctx.State())
+	state := state.NewMutableState(ctx.State())
 
 	switch tx.Method {
 	case secrets.MethodUpdatePolicy:
