@@ -32,7 +32,6 @@ pub mod future;
 pub mod host;
 pub mod identity;
 pub mod init;
-pub mod macros;
 pub mod policy;
 pub mod protocol;
 pub mod storage;
