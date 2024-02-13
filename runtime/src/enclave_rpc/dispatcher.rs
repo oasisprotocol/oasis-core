@@ -20,19 +20,10 @@ enum DispatchError {
     InvalidRpcKind { method: String, kind: Kind },
 }
 
-/// Custom context initializer.
-pub trait ContextInitializer {
-    /// Called to initialize the context.
-    fn init(&self, ctx: &mut Context);
-}
-
-impl<F> ContextInitializer for F
-where
-    F: Fn(&mut Context),
-{
-    fn init(&self, ctx: &mut Context) {
-        (*self)(ctx)
-    }
+/// RPC handler.
+pub trait Handler {
+    /// Returns the list of RPC methods supported by this handler.
+    fn methods(&'static self) -> Vec<Method>;
 }
 
 /// Descriptor of a RPC API method.
@@ -148,8 +139,6 @@ pub struct Dispatcher {
     km_status_handler: Option<Box<KeyManagerStatusHandler>>,
     /// Registered key manager quote policy handler.
     km_quote_policy_handler: Option<Box<KeyManagerQuotePolicyHandler>>,
-    /// Registered context initializer.
-    ctx_initializer: Option<Box<dyn ContextInitializer + Send + Sync>>,
 }
 
 impl Dispatcher {
@@ -158,20 +147,15 @@ impl Dispatcher {
         self.methods.insert(method.get_name().clone(), method);
     }
 
-    /// Configure context initializer.
-    pub fn set_context_initializer<I>(&mut self, initializer: I)
-    where
-        I: ContextInitializer + Send + Sync + 'static,
-    {
-        self.ctx_initializer = Some(Box::new(initializer));
+    /// Register new methods in the dispatcher.
+    pub fn add_methods(&mut self, methods: Vec<Method>) {
+        for method in methods {
+            self.add_method(method);
+        }
     }
 
     /// Dispatch request.
     pub fn dispatch(&self, mut ctx: Context, request: Request, kind: Kind) -> Response {
-        if let Some(ref ctx_init) = self.ctx_initializer {
-            ctx_init.init(&mut ctx);
-        }
-
         match self.dispatch_fallible(&mut ctx, request, kind) {
             Ok(response) => response,
             Err(error) => Response {

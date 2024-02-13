@@ -37,7 +37,7 @@ use crate::{
     future::block_on,
     identity::Identity,
     policy::PolicyVerifier,
-    protocol::{Protocol, ProtocolUntrustedLocalStorage},
+    protocol::Protocol,
     storage::mkvs::{sync::NoopReadSyncer, OverlayTree, Root, RootType},
     transaction::{
         dispatcher::{Dispatcher as TxnDispatcher, NoopDispatcher as TxnNoopDispatcher},
@@ -895,16 +895,10 @@ impl Dispatcher {
         session_info: Option<Arc<SessionInfo>>,
         state: &State,
     ) -> Result<RpcResponse, Error> {
-        let identity = self.identity.clone();
-        let protocol = state.protocol.clone();
-        let consensus_verifier = state.consensus_verifier.clone();
         let rpc_dispatcher = state.rpc_dispatcher.clone();
 
         let response = tokio::task::spawn_blocking(move || {
-            let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(protocol.clone()));
-            let rpc_ctx =
-                RpcContext::new(identity, session_info, consensus_verifier, &untrusted_local);
-
+            let rpc_ctx = RpcContext::new(session_info);
             rpc_dispatcher.dispatch(rpc_ctx, request, kind)
         })
         .await?;
