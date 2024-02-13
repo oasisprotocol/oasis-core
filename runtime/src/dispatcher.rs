@@ -899,17 +899,11 @@ impl Dispatcher {
         let protocol = state.protocol.clone();
         let consensus_verifier = state.consensus_verifier.clone();
         let rpc_dispatcher = state.rpc_dispatcher.clone();
-        let is_secure = kind == RpcKind::NoiseSession;
 
         let response = tokio::task::spawn_blocking(move || {
             let untrusted_local = Arc::new(ProtocolUntrustedLocalStorage::new(protocol.clone()));
-            let rpc_ctx = RpcContext::new(
-                identity,
-                is_secure,
-                session_info,
-                consensus_verifier,
-                &untrusted_local,
-            );
+            let rpc_ctx =
+                RpcContext::new(identity, session_info, consensus_verifier, &untrusted_local);
 
             rpc_dispatcher.dispatch(rpc_ctx, request, kind)
         })

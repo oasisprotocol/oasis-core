@@ -71,8 +71,6 @@ pub fn init_kdf(ctx: &RpcContext, req: &InitRequest) -> Result<SignedInitRespons
     let runtime_id = rctx.runtime_id;
     let storage = ctx.untrusted_local_storage;
 
-    // Note that the first validation of the status will probably fail,
-    // as the verifier is one block behind the consensus.
     let status = req.status.clone();
     let status = validate_key_manager_status(ctx, runtime_id, status)?;
 
@@ -147,16 +145,7 @@ pub fn get_public_ephemeral_key(
 
     let kdf = Kdf::global();
     let pk = kdf.get_public_ephemeral_key(req.runtime_id, req.key_pair_id, req.epoch)?;
-    let mut sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, Some(req.epoch))?;
-
-    // Outdated key manager clients request public ephemeral keys via secure RPC calls,
-    // they never verify their signatures and are not aware that signed ephemeral keys expire.
-    // To ensure backwards compatibility we clear the expiration epoch. This should be removed
-    // in the future once all clients are upgraded.
-    // XXX: Remove this after 23.0.x.
-    if ctx.is_secure {
-        sig.expiration = None;
-    }
+    let sig = kdf.sign_public_key(pk, req.runtime_id, req.key_pair_id, Some(req.epoch))?;
 
     Ok(sig)
 }

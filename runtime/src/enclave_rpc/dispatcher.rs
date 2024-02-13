@@ -193,15 +193,11 @@ impl Dispatcher {
             }),
         };
 
-        match (method.get_kind(), kind) {
-            (Kind::NoiseSession, Kind::NoiseSession) => {}
-            (Kind::InsecureQuery, Kind::InsecureQuery) => {}
-            (Kind::InsecureQuery, Kind::NoiseSession) => {}
-            (Kind::LocalQuery, Kind::LocalQuery) => {}
-            _ => bail!(DispatchError::InvalidRpcKind {
+        if method.get_kind() != kind {
+            bail!(DispatchError::InvalidRpcKind {
                 method: request.method,
                 kind,
-            }),
+            });
         };
 
         method.dispatch(ctx, request)
