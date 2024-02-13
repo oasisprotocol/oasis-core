@@ -109,7 +109,7 @@ impl Tree {
                             bit_depth + n.label_bit_length,
                             key,
                             check_only,
-                            None, // Omit the proof builder as the leaf node is always included with the internal node itself.
+                            proof_builder,
                         );
                     }
 

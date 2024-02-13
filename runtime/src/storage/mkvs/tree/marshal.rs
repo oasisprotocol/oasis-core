@@ -11,29 +11,49 @@ use crate::{
 const VALUE_LENGTH_SIZE: usize = size_of::<u32>();
 
 impl NodeBox {
-    pub fn compact_marshal_binary(&self) -> Result<Vec<u8>> {
+    pub fn compact_marshal_binary(&self, v: u16) -> Result<Vec<u8>> {
         match self {
-            NodeBox::Internal(ref n) => n.compact_marshal_binary(),
+            NodeBox::Internal(ref n) => n.compact_marshal_binary(v),
             NodeBox::Leaf(ref n) => n.compact_marshal_binary(),
         }
     }
 }
 
 impl InternalNode {
-    pub fn compact_marshal_binary(&self) -> Result<Vec<u8>> {
-        let leaf_node_binary = if self.leaf_node.borrow().is_null() {
-            vec![NodeKind::None as u8]
-        } else {
-            noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?
-        };
+    pub fn compact_marshal_binary(&self, v: u16) -> Result<Vec<u8>> {
+        match v {
+            0 => {
+                // In version 0 of compact serialization, leaf node is included in the internal
+                // nodes serialization.
+                let leaf_node_binary = if self.leaf_node.borrow().is_null() {
+                    vec![NodeKind::None as u8]
+                } else {
+                    noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?
+                };
 
-        let mut result: Vec<u8> = Vec::with_capacity(1 + leaf_node_binary.len() + 2 * Hash::len());
-        result.push(NodeKind::Internal as u8);
-        result.append(&mut self.label_bit_length.marshal_binary()?);
-        result.extend_from_slice(&self.label);
-        result.extend_from_slice(leaf_node_binary.as_ref());
+                let mut result: Vec<u8> = Vec::with_capacity(
+                    1 + size_of::<u16>() + self.label.len() + leaf_node_binary.len(),
+                );
+                result.push(NodeKind::Internal as u8);
+                result.append(&mut self.label_bit_length.marshal_binary()?);
+                result.extend_from_slice(&self.label);
+                result.extend_from_slice(leaf_node_binary.as_ref());
 
-        Ok(result)
+                Ok(result)
+            }
+            1 => {
+                // In version 1 of compact serialization, leaf node is not included.
+                let mut result: Vec<u8> =
+                    Vec::with_capacity(1 + size_of::<u16>() + self.label.len() + 1);
+                result.push(NodeKind::Internal as u8);
+                result.append(&mut self.label_bit_length.marshal_binary()?);
+                result.extend_from_slice(&self.label);
+                result.push(NodeKind::None as u8);
+
+                Ok(result)
+            }
+            _ => panic!("unsupported compact serialization version: {:?}", v),
+        }
     }
 }
 
@@ -99,7 +119,19 @@ impl Marshal for NodeKind {
 
 impl Marshal for InternalNode {
     fn marshal_binary(&self) -> Result<Vec<u8>> {
-        let mut result = self.compact_marshal_binary()?;
+        let leaf_node_binary = if self.leaf_node.borrow().is_null() {
+            vec![NodeKind::None as u8]
+        } else {
+            noderef_as!(self.leaf_node.borrow().get_node(), Leaf).marshal_binary()?
+        };
+
+        let mut result: Vec<u8> = Vec::with_capacity(
+            1 + size_of::<u16>() + self.label.len() + leaf_node_binary.len() + Hash::len() * 2,
+        );
+        result.push(NodeKind::Internal as u8);
+        result.append(&mut self.label_bit_length.marshal_binary()?);
+        result.extend_from_slice(&self.label);
+        result.extend_from_slice(leaf_node_binary.as_ref());
         result.extend_from_slice(self.left.borrow().hash.as_ref());
         result.extend_from_slice(self.right.borrow().hash.as_ref());
 
