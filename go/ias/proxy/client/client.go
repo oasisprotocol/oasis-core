@@ -104,7 +104,7 @@ func New(identity *identity.Identity, addresses []string) ([]api.Endpoint, error
 		creds, err := cmnGrpc.NewClientCreds(&cmnGrpc.ClientOptions{
 			ServerPubKeys: map[signature.PublicKey]bool{pk: true},
 			CommonName:    proxy.CommonName,
-			GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			GetClientCertificate: func(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				return identity.TLSCertificate, nil
 			},
 		})

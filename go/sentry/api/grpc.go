@@ -42,7 +42,7 @@ func handlerGetAddresses(
 		Server:     srv,
 		FullMethod: methodGetAddresses.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(Backend).GetAddresses(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)

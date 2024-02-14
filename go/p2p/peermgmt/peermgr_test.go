@@ -77,7 +77,7 @@ func (s *PeerManagerTestSuite) SetupTest() {
 	// Let every peer support few protocols.
 	for i := 0; i < n; i++ {
 		for j := i; j < n; j++ {
-			s.peers[i].SetStreamHandler(s.protocols[j], func(stream network.Stream) {})
+			s.peers[i].SetStreamHandler(s.protocols[j], func(_ network.Stream) {})
 		}
 	}
 

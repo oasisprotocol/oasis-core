@@ -754,7 +754,7 @@ func (t *fullService) lazyInit() error { // nolint: gocyclo
 		t.failMonitor = newFailMonitor(t.ctx, t.Logger, t.node.ConsensusState().Wait)
 
 		// Register a halt hook that handles upgrades gracefully.
-		t.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beaconAPI.EpochTime, err error) {
+		t.RegisterHaltHook(func(_ context.Context, _ int64, _ beaconAPI.EpochTime, err error) {
 			if !errors.Is(err, upgradeAPI.ErrStopForUpgrade) {
 				return
 			}

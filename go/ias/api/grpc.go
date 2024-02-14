@@ -78,7 +78,7 @@ func handlerGetSPIDInfo(
 		Server:     srv,
 		FullMethod: methodGetSPIDInfo.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(Endpoint).GetSPIDInfo(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)

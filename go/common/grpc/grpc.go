@@ -643,14 +643,14 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	if config.Identity != nil && config.Identity.TLSCertificate != nil {
 		tlsConfig := &tls.Config{
 			ClientAuth: clientAuthType,
-			VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 				return cmnTLS.VerifyCertificate(rawCerts, cmnTLS.VerifyOptions{
 					CommonName:         config.ClientCommonName,
 					AllowUnknownKeys:   true,
 					AllowNoCertificate: true,
 				})
 			},
-			GetCertificate: func(ch *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return config.Identity.TLSCertificate, nil
 			},
 		}

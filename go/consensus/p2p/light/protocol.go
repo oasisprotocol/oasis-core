@@ -29,7 +29,7 @@ const (
 
 func init() {
 	peermgmt.RegisterNodeHandler(&peermgmt.NodeHandlerBundle{
-		ProtocolsFn: func(n *node.Node, chainContext string) []core.ProtocolID {
+		ProtocolsFn: func(_ *node.Node, chainContext string) []core.ProtocolID {
 			return []core.ProtocolID{ProtocolID(chainContext)}
 		},
 	})

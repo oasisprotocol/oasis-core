@@ -434,7 +434,7 @@ func handlerGetUnconfirmedTransactions(
 		Server:     srv,
 		FullMethod: methodGetUnconfirmedTransactions.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetUnconfirmedTransactions(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -522,7 +522,7 @@ func handlerGetGenesisDocument(
 		Server:     srv,
 		FullMethod: methodGetGenesisDocument.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetGenesisDocument(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -541,7 +541,7 @@ func handlerGetChainContext(
 		Server:     srv,
 		FullMethod: methodGetChainContext.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetChainContext(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -560,7 +560,7 @@ func handlerGetStatus(
 		Server:     srv,
 		FullMethod: methodGetStatus.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetStatus(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -579,7 +579,7 @@ func handlerGetNextBlockState(
 		Server:     srv,
 		FullMethod: methodGetNextBlockState.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(ClientBackend).GetNextBlockState(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)

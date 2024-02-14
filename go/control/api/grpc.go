@@ -108,7 +108,7 @@ func handlerWaitSync(
 		Server:     srv,
 		FullMethod: methodWaitSync.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return nil, srv.(NodeController).WaitSync(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -127,7 +127,7 @@ func handlerIsSynced(
 		Server:     srv,
 		FullMethod: methodIsSynced.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(NodeController).IsSynced(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -146,7 +146,7 @@ func handlerWaitReady(
 		Server:     srv,
 		FullMethod: methodWaitReady.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return nil, srv.(NodeController).WaitReady(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -165,7 +165,7 @@ func handlerIsReady(
 		Server:     srv,
 		FullMethod: methodIsSynced.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(NodeController).IsReady(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -230,7 +230,7 @@ func handlerGetStatus(
 		Server:     srv,
 		FullMethod: methodGetStatus.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(NodeController).GetStatus(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)

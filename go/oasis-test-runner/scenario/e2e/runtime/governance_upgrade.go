@@ -389,9 +389,9 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 	var group sync.WaitGroup
 	errCh := make(chan error, len(sc.Net.Nodes()))
 	if !sc.shouldCancelUpgrade {
-		for i, nd := range sc.Net.Nodes() {
+		for _, nd := range sc.Net.Nodes() {
 			group.Add(1)
-			go func(i int, nd *oasis.Node) {
+			go func(nd *oasis.Node) {
 				defer group.Done()
 				sc.Logger.Info("waiting for node to exit", "node", nd.Name)
 				<-nd.Exit()
@@ -399,7 +399,7 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 				if err = nd.Restart(ctx); err != nil {
 					errCh <- err
 				}
-			}(i, nd)
+			}(nd)
 		}
 	}
 

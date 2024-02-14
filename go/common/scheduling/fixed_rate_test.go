@@ -9,7 +9,7 @@ import (
 )
 
 func TestFixedRateScheduler(t *testing.T) {
-	t.Run("No tasks", func(t *testing.T) {
+	t.Run("No tasks", func(_ *testing.T) {
 		scheduler := NewFixedRateScheduler(time.Millisecond, time.Millisecond)
 		scheduler.Start()
 		time.Sleep(5 * time.Millisecond)
@@ -20,8 +20,8 @@ func TestFixedRateScheduler(t *testing.T) {
 		require := require.New(t)
 
 		n1, n2 := 0, 0
-		t1 := func(ctx context.Context) error { n1++; return nil }
-		t2 := func(ctx context.Context) error { n2++; return nil }
+		t1 := func(_ context.Context) error { n1++; return nil }
+		t2 := func(_ context.Context) error { n2++; return nil }
 
 		scheduler := NewFixedRateScheduler(time.Millisecond, time.Millisecond)
 		scheduler.AddTask("t1", t1)
@@ -40,8 +40,8 @@ func TestFixedRateScheduler(t *testing.T) {
 		require := require.New(t)
 
 		n1, n2 := 0, 0
-		t1 := func(ctx context.Context) error { n1++; return nil }
-		t2 := func(ctx context.Context) error { n2++; return nil }
+		t1 := func(_ context.Context) error { n1++; return nil }
+		t2 := func(_ context.Context) error { n2++; return nil }
 
 		scheduler := NewFixedRateScheduler(time.Millisecond, time.Millisecond)
 		scheduler.AddTask("t1", t1)

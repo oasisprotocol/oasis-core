@@ -80,7 +80,7 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 			ChunkSize:      16 * 1024,
 			InitialVersion: earliestVersion,
 		},
-		GetRoots: func(ctx context.Context, version uint64) ([]node.Root, error) {
+		GetRoots: func(_ context.Context, version uint64) ([]node.Root, error) {
 			if version < earliestVersion {
 				// Simulate early block fetch failing.
 				return nil, fmt.Errorf("version not found")

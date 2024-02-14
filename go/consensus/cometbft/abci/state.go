@@ -760,7 +760,7 @@ func newApplicationState(ctx context.Context, upgrader upgrade.Backend, cfg *App
 			Name:            "consensus",
 			CheckInterval:   cfg.CheckpointerCheckInterval,
 			RootsPerVersion: 1,
-			GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+			GetParameters: func(_ context.Context) (*checkpoint.CreationParameters, error) {
 				params := s.ConsensusParameters()
 				return &checkpoint.CreationParameters{
 					Interval:       params.StateCheckpointInterval,

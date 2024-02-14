@@ -167,7 +167,7 @@ func handlerTokenSymbol(
 		Server:     srv,
 		FullMethod: methodTokenSymbol.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(Backend).TokenSymbol(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -186,7 +186,7 @@ func handlerTokenValueExponent(
 		Server:     srv,
 		FullMethod: methodTokenValueExponent.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(Backend).TokenValueExponent(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)

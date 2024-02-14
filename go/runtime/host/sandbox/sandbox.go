@@ -616,7 +616,7 @@ func New(cfg Config) (host.Provisioner, error) {
 	}
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
-		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
+		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, _ string) (process.Config, error) {
 			logWrapper := host.NewRuntimeLogWrapper(
 				cfg.Logger,
 				"runtime_id", hostCfg.Bundle.Manifest.ID,
@@ -639,7 +639,7 @@ func New(cfg Config) (host.Provisioner, error) {
 	}
 	// Use a default HostInitializer if none was provided.
 	if cfg.HostInitializer == nil {
-		cfg.HostInitializer = func(ctx context.Context, hp *HostInitializerParams) (*host.StartedEvent, error) {
+		cfg.HostInitializer = func(_ context.Context, hp *HostInitializerParams) (*host.StartedEvent, error) {
 			return &host.StartedEvent{
 				Version: hp.Version,
 			}, nil

@@ -22,7 +22,7 @@ var (
 
 	// MethodSyncGet is the SyncGet method.
 	MethodSyncGet = ServiceName.NewMethod("SyncGet", GetRequest{}).
-			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
+			WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*GetRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -32,7 +32,7 @@ var (
 		WithAccessControl(cmnGrpc.AccessControlAlways)
 	// MethodSyncGetPrefixes is the SyncGetPrefixes method.
 	MethodSyncGetPrefixes = ServiceName.NewMethod("SyncGetPrefixes", GetPrefixesRequest{}).
-				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*GetPrefixesRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -42,7 +42,7 @@ var (
 		WithAccessControl(cmnGrpc.AccessControlAlways)
 	// MethodSyncIterate is the SyncIterate method.
 	MethodSyncIterate = ServiceName.NewMethod("SyncIterate", IterateRequest{}).
-				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*IterateRequest)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType

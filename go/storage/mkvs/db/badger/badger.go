@@ -765,7 +765,7 @@ func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 			Hash:      rootHash.Hash(),
 		}
 		var innerErr error
-		err := api.Visit(ctx, d, root, func(ctx context.Context, n node.Node) bool {
+		err := api.Visit(ctx, d, root, func(_ context.Context, n node.Node) bool {
 			h := n.GetHash()
 			var item *badger.Item
 			if item, innerErr = tx.Get(nodeKeyFmt.Encode(&h)); innerErr != nil {

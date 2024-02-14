@@ -74,7 +74,7 @@ func (p *nonePruner) Prune(context.Context, uint64) error {
 
 // NewNonePruner creates a new pruner that never prunes anything.
 func NewNonePruner() PrunerFactory {
-	return func(db *DB) (Pruner, error) {
+	return func(_ *DB) (Pruner, error) {
 		return &nonePruner{}, nil
 	}
 }

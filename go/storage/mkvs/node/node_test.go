@@ -178,7 +178,7 @@ func FuzzNode(f *testing.F) {
 	f.Add(rawIntNodeCompact)
 
 	// Fuzzing.
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(_ *testing.T, data []byte) {
 		n, err := UnmarshalBinary(data)
 		if err != nil {
 			return

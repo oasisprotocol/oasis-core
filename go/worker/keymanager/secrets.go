@@ -348,7 +348,7 @@ func (w *secretsWorker) work(ctx context.Context, hrt host.RichRuntime) {
 	defer blkSub.Close()
 
 	// Don't block node registration.
-	w.roleProvider.SetAvailable(func(n *node.Node) error { return nil })
+	w.roleProvider.SetAvailable(func(_ *node.Node) error { return nil })
 
 	for run := true; run; {
 		select {
