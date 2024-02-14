@@ -250,7 +250,7 @@ func FuzzQuoteUnmarshal(f *testing.F) {
 	f.Add(raw2)
 
 	// Fuzzing.
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(_ *testing.T, data []byte) {
 		var quote Quote
 		_ = quote.UnmarshalBinary(data)
 	})

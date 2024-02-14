@@ -10,7 +10,7 @@ import (
 )
 
 func TestOne(t *testing.T) {
-	noopFn := func(ctx context.Context) {}
+	noopFn := func(_ context.Context) {}
 	blockFn := func(ctx context.Context) {
 		<-ctx.Done()
 	}

@@ -125,7 +125,7 @@ func handlerPublicKeys(
 		Server:     srv,
 		FullMethod: methodPublicKeys.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(_ context.Context, _ interface{}) (interface{}, error) {
 		return srv.(Backend).PublicKeys()
 	}
 	return interceptor(ctx, nil, info, handler)
@@ -148,7 +148,7 @@ func handlerSign(
 		Server:     srv,
 		FullMethod: methodSign.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(_ context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Sign(req.(*SignRequest))
 	}
 	return interceptor(ctx, &req, info, handler)
@@ -171,7 +171,7 @@ func handlerProve(
 		Server:     srv,
 		FullMethod: methodProve.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(_ context.Context, req interface{}) (interface{}, error) {
 		return srv.(Backend).Prove(req.(*ProveRequest))
 	}
 	return interceptor(ctx, &req, info, handler)

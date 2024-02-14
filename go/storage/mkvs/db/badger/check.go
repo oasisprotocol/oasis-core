@@ -31,7 +31,7 @@ type checkerCommon struct {
 }
 
 func (cc *checkerCommon) checkNodes(root node.Root) error {
-	err := api.Visit(cc.ctx, cc.ndb, root, func(ctx context.Context, n node.Node) bool {
+	err := api.Visit(cc.ctx, cc.ndb, root, func(_ context.Context, n node.Node) bool {
 		// We just need to walk through the tree, nothing to do except trying to
 		// minimize tree traversal in case multiple roots share some subtrees.
 		h := n.GetHash()

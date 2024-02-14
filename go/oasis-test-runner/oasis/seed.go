@@ -33,8 +33,8 @@ func (seed *Seed) AddArgs(*argBuilder) error {
 func (seed *Seed) ModifyConfig() error {
 	seed.Config.Mode = config.ModeSeed
 
-	seed.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(seed.consensusPort))
-	seed.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(seed.consensusPort))
+	seed.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(seed.consensusPort))
+	seed.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(seed.consensusPort))
 
 	if seed.disableAddrBookFromGenesis {
 		seed.Config.Consensus.Debug.DisableAddrBookFromGenesis = true

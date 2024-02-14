@@ -135,7 +135,7 @@ func ListRegisteredCrashPoints() []string {
 // ListRegisteredCrashPoints lists the registered crash points for a Crasher instance.
 func (c *Crasher) ListRegisteredCrashPoints() []string {
 	var crashPointIDs []string
-	c.CrashPointConfig.Range(func(k, v interface{}) bool {
+	c.CrashPointConfig.Range(func(k, _ interface{}) bool {
 		crashPointIDs = append(crashPointIDs, k.(string))
 		return true
 	})

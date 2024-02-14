@@ -63,8 +63,8 @@ func (worker *Byzantine) AddArgs(args *argBuilder) error {
 }
 
 func (worker *Byzantine) ModifyConfig() error {
-	worker.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(worker.consensusPort))
-	worker.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(worker.consensusPort))
+	worker.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(worker.consensusPort))
+	worker.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(worker.consensusPort))
 
 	worker.Config.Consensus.Debug.P2PAllowDuplicateIP = true
 	worker.Config.Consensus.Debug.P2PAddrBookLenient = true

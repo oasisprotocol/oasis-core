@@ -66,8 +66,8 @@ func (sentry *Sentry) AddArgs(args *argBuilder) error {
 }
 
 func (sentry *Sentry) ModifyConfig() error {
-	sentry.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(sentry.consensusPort))
-	sentry.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(sentry.consensusPort))
+	sentry.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(sentry.consensusPort))
+	sentry.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(sentry.consensusPort))
 
 	if sentry.supplementarySanityInterval > 0 {
 		sentry.Config.Consensus.SupplementarySanity.Enabled = true

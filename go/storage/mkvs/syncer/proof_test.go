@@ -43,7 +43,7 @@ func FuzzProof(f *testing.F) {
 	f.Add(rawProof)
 
 	// Fuzzing.
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(_ *testing.T, data []byte) {
 		var proof Proof
 		err := cbor.Unmarshal(data, &proof)
 		if err != nil {

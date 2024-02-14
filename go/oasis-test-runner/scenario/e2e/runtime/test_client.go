@@ -277,7 +277,7 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 func NewTestClient() *TestClient {
 	return &TestClient{
 		seed:     "seed",
-		scenario: func(submit func(req interface{}) error) error { return nil },
+		scenario: func(_ func(req interface{}) error) error { return nil },
 	}
 }
 

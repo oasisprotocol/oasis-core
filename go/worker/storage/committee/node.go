@@ -692,11 +692,11 @@ func (n *Node) nudgeAvailability(lastSynced, latest uint64) {
 		return
 	}
 	if latest-lastSynced < maximumRoundDelayForAvailability && !n.roleAvailable {
-		n.roleProvider.SetAvailable(func(nd *node.Node) error {
+		n.roleProvider.SetAvailable(func(_ *node.Node) error {
 			return nil
 		})
 		if n.rpcRoleProvider != nil {
-			n.rpcRoleProvider.SetAvailable(func(nd *node.Node) error {
+			n.rpcRoleProvider.SetAvailable(func(_ *node.Node) error {
 				return nil
 			})
 		}

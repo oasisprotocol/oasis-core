@@ -82,8 +82,8 @@ func (val *Validator) AddArgs(args *argBuilder) error {
 func (val *Validator) ModifyConfig() error {
 	val.Config.Consensus.Validator = true
 
-	val.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(val.consensusPort))
-	val.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(val.consensusPort))
+	val.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(val.consensusPort))
+	val.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(val.consensusPort))
 
 	if val.supplementarySanityInterval > 0 {
 		val.Config.Consensus.SupplementarySanity.Enabled = true

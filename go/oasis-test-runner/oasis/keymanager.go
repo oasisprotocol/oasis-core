@@ -272,8 +272,8 @@ func (km *Keymanager) AddArgs(args *argBuilder) error {
 }
 
 func (km *Keymanager) ModifyConfig() error {
-	km.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(km.consensusPort))
-	km.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(km.consensusPort))
+	km.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(km.consensusPort))
+	km.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(km.consensusPort))
 
 	if km.supplementarySanityInterval > 0 {
 		km.Config.Consensus.SupplementarySanity.Enabled = true

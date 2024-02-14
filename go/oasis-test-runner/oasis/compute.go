@@ -148,8 +148,8 @@ func (worker *Compute) ModifyConfig() error {
 	worker.RLock()
 	defer worker.RUnlock()
 
-	worker.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(worker.consensusPort))
-	worker.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(worker.consensusPort))
+	worker.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(worker.consensusPort))
+	worker.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(worker.consensusPort))
 
 	if worker.supplementarySanityInterval > 0 {
 		worker.Config.Consensus.SupplementarySanity.Enabled = true

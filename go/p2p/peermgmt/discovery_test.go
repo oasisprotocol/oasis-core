@@ -78,7 +78,7 @@ func (s *DiscoveryTestSuite) TestAdvertise() {
 					return
 				}
 			case <-ctx.Done():
-				require.Equal(s.T(), expected, s.advertiseCount())
+				require.Equal(t, expected, s.advertiseCount())
 				return
 			}
 		}

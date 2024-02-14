@@ -95,7 +95,7 @@ func handlerGetBaseEpoch(
 		Server:     srv,
 		FullMethod: methodGetBaseEpoch.FullName(),
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(Backend).GetBaseEpoch(ctx)
 	}
 	return interceptor(ctx, nil, info, handler)

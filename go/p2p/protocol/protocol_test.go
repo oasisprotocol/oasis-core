@@ -58,7 +58,7 @@ func TestProtocolID(t *testing.T) {
 
 	registry = newProtocolRegistry()
 
-	t.Run("ValidateProtocolID", func(t *testing.T) {
+	t.Run("ValidateProtocolID", func(_ *testing.T) {
 		ValidateProtocolID("protocol-1")
 		ValidateProtocolID("protocol-2")
 	})

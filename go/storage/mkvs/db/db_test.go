@@ -64,7 +64,7 @@ func TestHashedWriteLog(t *testing.T) {
 
 			return node.Root{}, hashed, nil
 		},
-		func(root node.Root, h hash.Hash) (*node.LeafNode, error) {
+		func(_ node.Root, h hash.Hash) (*node.LeafNode, error) {
 			return hashes[h].Node.(*node.LeafNode), nil
 		},
 		func() {},

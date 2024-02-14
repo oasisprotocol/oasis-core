@@ -165,7 +165,7 @@ func multiPingUnaryHandler(
 		Server:     srv,
 		FullMethod: "/MultiPingService/Ping",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
 		return srv.(MultiPingServer).Ping(ctx)
 	}
 	return interceptor(ctx, pq, info, handler)

@@ -48,8 +48,8 @@ func (client *Client) AddArgs(args *argBuilder) error {
 }
 
 func (client *Client) ModifyConfig() error {
-	client.Config.Consensus.ListenAddress = "tcp://0.0.0.0:" + strconv.Itoa(int(client.consensusPort))
-	client.Config.Consensus.ExternalAddress = "tcp://127.0.0.1:" + strconv.Itoa(int(client.consensusPort))
+	client.Config.Consensus.ListenAddress = allInterfacesAddr + ":" + strconv.Itoa(int(client.consensusPort))
+	client.Config.Consensus.ExternalAddress = localhostAddr + ":" + strconv.Itoa(int(client.consensusPort))
 
 	if client.supplementarySanityInterval > 0 {
 		client.Config.Consensus.SupplementarySanity.Enabled = true

@@ -30,7 +30,7 @@ func (t *tree) doPrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit 
 	return t.cache.remoteSync(
 		ctx,
 		t.cache.pendingRoot,
-		func(ctx context.Context, ptr *node.Pointer, rs syncer.ReadSyncer) (*syncer.Proof, error) {
+		func(ctx context.Context, _ *node.Pointer, rs syncer.ReadSyncer) (*syncer.Proof, error) {
 			rsp, err := rs.SyncGetPrefixes(ctx, &syncer.GetPrefixesRequest{
 				Tree: syncer.TreeID{
 					Root:     t.cache.syncRoot,

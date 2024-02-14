@@ -32,7 +32,7 @@ var (
 	serviceName = cmnGrpc.NewServiceName("PingService")
 	// MethodPing is the Ping method.
 	MethodPing = serviceName.NewMethod("Ping", PingQuery{}).
-			WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
+			WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*PingQuery)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType
@@ -42,7 +42,7 @@ var (
 
 	// MethodWatchPings is the WatchPings method.
 	MethodWatchPings = serviceName.NewMethod("WatchPings", PingQuery{}).
-				WithNamespaceExtractor(func(ctx context.Context, req interface{}) (common.Namespace, error) {
+				WithNamespaceExtractor(func(_ context.Context, req interface{}) (common.Namespace, error) {
 			r, ok := req.(*PingQuery)
 			if !ok {
 				return common.Namespace{}, errInvalidRequestType

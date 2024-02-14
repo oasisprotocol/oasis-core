@@ -915,7 +915,7 @@ func TestVerify(t *testing.T) {
 		require.NoError(t, err)
 
 		invalidMsgErr := fmt.Errorf("all messages are invalid")
-		alwaysInvalidValidator := func(msgs []message.Message) error {
+		alwaysInvalidValidator := func(_ []message.Message) error {
 			return invalidMsgErr
 		}
 
@@ -923,7 +923,7 @@ func TestVerify(t *testing.T) {
 		require.ErrorIs(t, err, invalidMsgErr)
 
 		// And they are.
-		alwaysValidValidator := func(msgs []message.Message) error {
+		alwaysValidValidator := func(_ []message.Message) error {
 			return nil
 		}
 
