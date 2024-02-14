@@ -341,8 +341,6 @@ steps:
       - make build-helpers
       - export OASIS_STORAGE_PROTOCOL_SERVER_BINARY=$(realpath go/storage/mkvs/interop/mkvs-test-helpers)
       - .buildkite/rust/coverage.sh
-    # Don't cause the build to fail, as tarpaulin is pretty unstable at the moment.
-    soft_fail: true
     retry:
       <<: *retry_agent_failure
     plugins:
