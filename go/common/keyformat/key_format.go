@@ -157,9 +157,15 @@ func (k *KeyFormat) Encode(values ...interface{}) []byte {
 		case *uint8:
 			meta.checkSize(i, 1)
 			buf[0] = *t
-		case uint32:
+		case uint16:
 			// Use big endian encoding so the keys sort correctly when doing
 			// range queries.
+			meta.checkSize(i, 2)
+			binary.BigEndian.PutUint16(buf, t)
+		case *uint16:
+			meta.checkSize(i, 2)
+			binary.BigEndian.PutUint16(buf, *t)
+		case uint32:
 			meta.checkSize(i, 4)
 			binary.BigEndian.PutUint32(buf, t)
 		case *uint32:
@@ -246,9 +252,12 @@ func (k *KeyFormat) Decode(data []byte, values ...interface{}) bool {
 		case *uint8:
 			meta.checkSize(i, 1)
 			*t = buf[0]
-		case *uint32:
+		case *uint16:
 			// Use big endian encoding so the keys sort correctly when doing
 			// range queries.
+			meta.checkSize(i, 2)
+			*t = binary.BigEndian.Uint16(buf)
+		case *uint32:
 			meta.checkSize(i, 4)
 			*t = binary.BigEndian.Uint32(buf)
 		case *uint64:
@@ -291,6 +300,10 @@ func (k *KeyFormat) getElementMeta(l interface{}) *elementMeta {
 		return &elementMeta{size: 1}
 	case *uint8:
 		return &elementMeta{size: 1}
+	case uint16:
+		return &elementMeta{size: 2}
+	case *uint16:
+		return &elementMeta{size: 2}
 	case uint32:
 		return &elementMeta{size: 4}
 	case *uint32:

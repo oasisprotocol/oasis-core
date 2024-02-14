@@ -12,8 +12,8 @@ import (
 )
 
 func TestKeyFormat(t *testing.T) {
-	fmt1 := New('N', &common.Namespace{}, &hash.Hash{})
-	require.Equal(t, 1+32+32, fmt1.Size(), "format size")
+	fmt1 := New('N', &common.Namespace{}, &hash.Hash{}, uint8(0), uint16(0), uint32(0), uint64(0))
+	require.Equal(t, 1+32+32+1+2+4+8, fmt1.Size(), "format size")
 
 	var ns common.Namespace
 	var h hash.Hash
@@ -26,15 +26,25 @@ func TestKeyFormat(t *testing.T) {
 	require.Equal(t, "4e", hex.EncodeToString(enc))
 
 	// Test full encode.
-	enc = fmt1.Encode(&ns, &h)
-	require.Equal(t, "4e0000000000000000000000000000000000000000000000000000000000000000c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a", hex.EncodeToString(enc))
+	enc = fmt1.Encode(&ns, &h, uint8(1), uint16(1_000), uint32(1_000_000), uint64(10_000_000))
+	require.Equal(t, "4e0000000000000000000000000000000000000000000000000000000000000000c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a0103e8000f42400000000000989680", hex.EncodeToString(enc))
 
-	var decNs common.Namespace
-	var decH hash.Hash
-	ok := fmt1.Decode(enc, &decNs, &decH)
+	var (
+		decNs  common.Namespace
+		decH   hash.Hash
+		decU8  uint8
+		decU16 uint16
+		decU32 uint32
+		decU64 uint64
+	)
+	ok := fmt1.Decode(enc, &decNs, &decH, &decU8, &decU16, &decU32, &decU64)
 	require.True(t, ok, "Decode")
 	require.EqualValues(t, ns, decNs, "namespace encode/decode round trip")
 	require.EqualValues(t, h, decH, "hash encode/decode round trip")
+	require.EqualValues(t, 1, decU8, "uint8 encode/decode round trip")
+	require.EqualValues(t, 1_000, decU16, "uint16 encode/decode round trip")
+	require.EqualValues(t, 1_000_000, decU32, "uint32 encode/decode round trip")
+	require.EqualValues(t, 10_000_000, decU64, "uint64 encode/decode round trip")
 
 	fmt2 := New('L', &common.Namespace{}, uint64(0), int64(0), &hash.Hash{}, &hash.Hash{})
 	require.Equal(t, 1+32+8+8+32+32, fmt2.Size())
