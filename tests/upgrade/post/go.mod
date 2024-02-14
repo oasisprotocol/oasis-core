@@ -1,8 +1,8 @@
 module github.com/oasisprotocol/oasis-core/test-upgrade
 
-go 1.21
+go 1.22
 
-toolchain go1.21.0
+toolchain go1.22.0
 
 replace (
 	github.com/cometbft/cometbft => github.com/oasisprotocol/cometbft v0.37.2-oasis1

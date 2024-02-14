@@ -52,6 +52,9 @@ const (
 	nodePortP2P       = "p2p"
 	nodePortP2PSeed   = "p2p-seed"
 	nodePortPprof     = "pprof"
+
+	allInterfacesAddr = "tcp://0.0.0.0"
+	localhostAddr     = "tcp://127.0.0.1"
 )
 
 // ConsensusStateSyncCfg is a node's consensus state sync configuration.

@@ -1,4 +1,7 @@
 linters-settings:
+  goconst:
+    ignore-tests: true
+    ignore-strings: 'unix:.*'
   goimports:
     # Put local imports after 3rd-party packages.
     local-prefixes: github.com/oasisprotocol/oasis-core
