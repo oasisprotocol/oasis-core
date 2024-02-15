@@ -1,7 +1,6 @@
 package history
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
@@ -34,13 +33,13 @@ type PruneHandler interface {
 	// Note that this can be called for the same round multiple
 	// times (e.g., if one of the handlers fails but others succeed
 	// and pruning is later retried).
-	Prune(ctx context.Context, rounds []uint64) error
+	Prune(rounds []uint64) error
 }
 
 // Pruner is the runtime history pruner interface.
 type Pruner interface {
 	// Prune purges unneeded history, given the latest round.
-	Prune(ctx context.Context, latestRound uint64) error
+	Prune(latestRound uint64) error
 
 	// RegisterHandler registers a prune handler.
 	RegisterHandler(handler PruneHandler)
@@ -68,7 +67,7 @@ type nonePruner struct{}
 func (p *nonePruner) RegisterHandler(PruneHandler) {
 }
 
-func (p *nonePruner) Prune(context.Context, uint64) error {
+func (p *nonePruner) Prune(uint64) error {
 	return nil
 }
 
@@ -88,7 +87,7 @@ type keepLastPruner struct {
 	numKept uint64
 }
 
-func (p *keepLastPruner) Prune(ctx context.Context, latestRound uint64) error {
+func (p *keepLastPruner) Prune(latestRound uint64) error {
 	if latestRound < p.numKept {
 		return nil
 	}
@@ -143,7 +142,7 @@ func (p *keepLastPruner) Prune(ctx context.Context, latestRound uint64) error {
 		// Before pruning anything, run all prune handlers. If any of them
 		// fails we abort the prune.
 		for _, ph := range p.prunerBase.handlers {
-			if err := ph.Prune(ctx, pruned); err != nil {
+			if err := ph.Prune(pruned); err != nil {
 				p.logger.Error("prune handler failed, aborting prune",
 					"err", err,
 					"round_count", len(pruned),

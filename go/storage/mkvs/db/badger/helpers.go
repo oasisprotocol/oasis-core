@@ -33,7 +33,6 @@ func commonConfigToBadgerOptions(cfg *api.Config, db *badgerNodeDB) badger.Optio
 	opts = opts.WithSyncWrites(!cfg.NoFsync)
 	opts = opts.WithCompression(options.Snappy)
 	if cfg.MaxCacheSize == 0 {
-		// Default to 64mb block cache size if not configured to avoid a panic.
 		opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
 	} else {
 		opts = opts.WithBlockCacheSize(cfg.MaxCacheSize)

@@ -718,7 +718,7 @@ func (d *badgerNodeDB) Finalize(roots []node.Root) error { // nolint: gocyclo
 	return nil
 }
 
-func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
+func (d *badgerNodeDB) Prune(version uint64) error {
 	if d.readOnly {
 		return api.ErrReadOnly
 	}
@@ -738,6 +738,10 @@ func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 	// Make sure that the version that we are trying to prune is the earliest version.
 	if version != d.meta.getEarliestVersion() {
 		return api.ErrNotEarliest
+	}
+	// Make sure that the version that we are trying to prune is not the only finalized version.
+	if version == lastFinalizedVersion {
+		return api.ErrCannotPruneLatestVersion
 	}
 
 	// Remove all roots in version.
@@ -765,7 +769,7 @@ func (d *badgerNodeDB) Prune(ctx context.Context, version uint64) error {
 			Hash:      rootHash.Hash(),
 		}
 		var innerErr error
-		err := api.Visit(ctx, d, root, func(_ context.Context, n node.Node) bool {
+		err := api.Visit(context.Background(), d, root, func(_ context.Context, n node.Node) bool {
 			h := n.GetHash()
 			var item *badger.Item
 			if item, innerErr = tx.Get(nodeKeyFmt.Encode(&h)); innerErr != nil {
@@ -972,15 +976,15 @@ func (ba *badgerBatch) PutWriteLog(writeLog writelog.WriteLog, annotations write
 	return nil
 }
 
-func (ba *badgerBatch) RemoveNodes(nodes []node.Node) error {
+func (ba *badgerBatch) RemoveNodes(nodes []*node.Pointer) error {
 	if ba.chunk {
 		return fmt.Errorf("mkvs/badger: cannot remove nodes in chunk mode")
 	}
 
-	for _, n := range nodes {
+	for _, ptr := range nodes {
 		ba.updatedNodes = append(ba.updatedNodes, updatedNode{
 			Removed: true,
-			Hash:    n.GetHash(),
+			Hash:    ptr.GetHash(),
 		})
 	}
 	return nil
@@ -1149,7 +1153,11 @@ func (s *badgerSubtree) PutNode(_ node.Depth, ptr *node.Pointer) error {
 	return s.batch.bat.Set(nodeKey, data)
 }
 
-func (s *badgerSubtree) VisitCleanNode(node.Depth, *node.Pointer) error {
+func (s *badgerSubtree) VisitCleanNode(node.Depth, *node.Pointer, *node.Pointer) error {
+	return nil
+}
+
+func (s *badgerSubtree) VisitDirtyNode(node.Depth, *node.Pointer, *node.Pointer) error {
 	return nil
 }
 

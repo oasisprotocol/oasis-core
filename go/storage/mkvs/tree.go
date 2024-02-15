@@ -22,7 +22,7 @@ type tree struct { // nolint: maligned
 	// pendingRemovedNodes are the nodes that have been removed from the
 	// in-memory tree and should be marked for garbage collection if this
 	// tree is committed to the node database.
-	pendingRemovedNodes []node.Node
+	pendingRemovedNodes []*node.Pointer
 }
 
 type pendingEntry struct {

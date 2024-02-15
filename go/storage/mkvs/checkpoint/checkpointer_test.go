@@ -12,8 +12,9 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
-	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
-	badgerDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db"
+	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	dbTesting "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/testing"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
@@ -22,7 +23,7 @@ const (
 	testNumKept       = 2
 )
 
-func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistingData bool) {
+func testCheckpointer(t *testing.T, factory dbApi.Factory, earliestVersion, interval uint64, preExistingData bool) {
 	require := require.New(t)
 	ctx := context.Background()
 
@@ -31,7 +32,7 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
-	ndb, err := badgerDb.New(&db.Config{
+	ndb, err := factory.New(&dbApi.Config{
 		DB:           filepath.Join(dir, "db"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -167,19 +168,23 @@ func testCheckpointer(t *testing.T, earliestVersion, interval uint64, preExistin
 }
 
 func TestCheckpointer(t *testing.T) {
+	dbTesting.TestMultipleBackends(t, db.Backends, testCheckpointerWithBackend)
+}
+
+func testCheckpointerWithBackend(t *testing.T, factory dbApi.Factory) {
 	t.Run("Basic", func(t *testing.T) {
-		testCheckpointer(t, 0, 1, false)
+		testCheckpointer(t, factory, 0, 1, false)
 	})
 	t.Run("NonZeroEarliestVersion", func(t *testing.T) {
-		testCheckpointer(t, 1000, 1, false)
+		testCheckpointer(t, factory, 1000, 1, false)
 	})
 	t.Run("NonZeroEarliestInitialVersion", func(t *testing.T) {
-		testCheckpointer(t, 100, 1, true)
+		testCheckpointer(t, factory, 100, 1, true)
 	})
 	t.Run("MaybeUnderflow", func(t *testing.T) {
-		testCheckpointer(t, 5, 10, true)
+		testCheckpointer(t, factory, 5, 10, true)
 	})
 	t.Run("ForceCheckpoint", func(t *testing.T) {
-		testCheckpointer(t, 0, 10, false)
+		testCheckpointer(t, factory, 0, 10, false)
 	})
 }

@@ -159,6 +159,15 @@ func (r *Root) EncodedHash() hash.Hash {
 	return hash.NewFrom(r)
 }
 
+// DBPointer contains NodeDB-specific internals to aid pointer resolution.
+type DBPointer interface {
+	// SetDitry marks the pointer as dirty.
+	SetDirty()
+
+	// Clone makes a copy of the pointer.
+	Clone() DBPointer
+}
+
 // Pointer is a pointer to another node.
 type Pointer struct {
 	Clean bool
@@ -166,9 +175,8 @@ type Pointer struct {
 	Node  Node
 	LRU   *list.Element
 
-	// DBInternal contains NodeDB-specific internal metadata to aid
-	// pointer resolution.
-	DBInternal interface{}
+	// DBInternal contains NodeDB-specific internal metadata to aid pointer resolution.
+	DBInternal DBPointer
 }
 
 // Size returns the size of this pointer in bytes.
@@ -204,6 +212,16 @@ func (p *Pointer) IsClean() bool {
 	return p.Clean
 }
 
+func (p *Pointer) SetDirty() {
+	p.Clean = false
+
+	// Clear any DB-specific pointer as making the node dirty invalidates the pointer.
+	if p.DBInternal != nil {
+		p.DBInternal.SetDirty()
+		p.DBInternal = nil
+	}
+}
+
 // Extract makes a copy of the pointer containing only hash references.
 func (p *Pointer) Extract() *Pointer {
 	if !p.IsClean() {
@@ -219,9 +237,15 @@ func (p *Pointer) ExtractUnchecked() *Pointer {
 		return nil
 	}
 
+	var dbPtr DBPointer
+	if p.DBInternal != nil {
+		dbPtr = p.DBInternal.Clone()
+	}
+
 	return &Pointer{
-		Clean: true,
-		Hash:  p.Hash,
+		Clean:      true,
+		Hash:       p.Hash,
+		DBInternal: dbPtr,
 	}
 }
 

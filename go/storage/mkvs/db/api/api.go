@@ -53,6 +53,9 @@ var (
 	// ErrUpgradeInProgress indicates that a database upgrade was started by the upgrader tool and the
 	// database is therefore unusable. Run the upgrade tool to finish upgrading.
 	ErrUpgradeInProgress = errors.New(ModuleName, 15, "mkvs: database upgrade in progress")
+	// ErrCannotPruneLatestVersion indicates that the caller attempted to prune the latest finalized
+	// version which would leave the database without any finalized versions.
+	ErrCannotPruneLatestVersion = errors.New(ModuleName, 16, "mkvs: cannot prune latest version")
 )
 
 // Config is the node database backend configuration.
@@ -77,6 +80,51 @@ type Config struct { // nolint: maligned
 
 	// DiscardWriteLogs will cause all write logs to be discarded.
 	DiscardWriteLogs bool
+}
+
+// Factory is a node database factory interface that can create new databases.
+type Factory interface {
+	// New creates a new node database.
+	New(cfg *Config) (NodeDB, error)
+
+	// Name returns the name of this node database factory.
+	Name() string
+}
+
+// RootPolicy is the storage policy for a given root type.
+type RootPolicy struct {
+	// NoChildRoots means that roots of this type cannot have any children, each version must create
+	// a root from scratch and the root is not available in the next version.
+	NoChildRoots bool
+}
+
+var rootPolicies = map[node.RootType]*RootPolicy{
+	node.RootTypeState: {
+		NoChildRoots: false,
+	},
+	node.RootTypeIO: {
+		NoChildRoots: true,
+	},
+}
+
+// PolicyForRoot returns the storage policy for the given root.
+func PolicyForRoot(root node.Root) *RootPolicy {
+	return rootPolicies[root.Type]
+}
+
+// RootTypesWithPolicy returns all root types where the given policy predicate evaluates to true.
+func RootTypesWithPolicy(policyFn func(*RootPolicy) bool) (types []node.RootType) {
+	for rootType, policy := range rootPolicies {
+		if policyFn(policy) {
+			types = append(types, rootType)
+		}
+	}
+	return
+}
+
+// RootTypes returns all supported root types.
+func RootTypes() []node.RootType {
+	return RootTypesWithPolicy(func(*RootPolicy) bool { return true })
 }
 
 // NodeDB is the persistence layer used for persisting the in-memory tree.
@@ -128,7 +176,7 @@ type NodeDB interface {
 	// Prune removes all roots recorded under the given version.
 	//
 	// Only the earliest version can be pruned, passing any other version will result in an error.
-	Prune(ctx context.Context, version uint64) error
+	Prune(version uint64) error
 
 	// Size returns the size of the database in bytes.
 	Size() (int64, error)
@@ -154,7 +202,15 @@ type Subtree interface {
 	// The specific NodeDB implementation may wish to do further processing.
 	//
 	// Depth is the node depth not bit depth.
-	VisitCleanNode(depth node.Depth, ptr *node.Pointer) error
+	VisitCleanNode(depth node.Depth, ptr *node.Pointer, parent *node.Pointer) error
+
+	// VisitDirtyNode is called before processing any children of a dirty node encountered during
+	// commit or checkpoint restore operation.
+	//
+	// The specific NodeDB implementation may wish to do further processing.
+	//
+	// Depth is the node depth not bit depth.
+	VisitDirtyNode(depth node.Depth, ptr *node.Pointer, parent *node.Pointer) error
 
 	// Commit marks the subtree as complete.
 	Commit() error
@@ -175,7 +231,7 @@ type Batch interface {
 	PutWriteLog(writeLog writelog.WriteLog, logAnnotations writelog.Annotations) error
 
 	// RemoveNodes marks nodes for eventual garbage collection.
-	RemoveNodes(nodes []node.Node) error
+	RemoveNodes(nodes []*node.Pointer) error
 
 	// Commit commits the batch.
 	Commit(root node.Root) error
@@ -246,7 +302,7 @@ func (d *nopNodeDB) Finalize([]node.Root) error {
 	return nil
 }
 
-func (d *nopNodeDB) Prune(context.Context, uint64) error {
+func (d *nopNodeDB) Prune(uint64) error {
 	return nil
 }
 
@@ -278,7 +334,7 @@ func (b *nopBatch) PutWriteLog(writelog.WriteLog, writelog.Annotations) error {
 	return nil
 }
 
-func (b *nopBatch) RemoveNodes([]node.Node) error {
+func (b *nopBatch) RemoveNodes([]*node.Pointer) error {
 	return nil
 }
 
@@ -292,7 +348,11 @@ func (s *nopSubtree) PutNode(node.Depth, *node.Pointer) error {
 	return nil
 }
 
-func (s *nopSubtree) VisitCleanNode(node.Depth, *node.Pointer) error {
+func (s *nopSubtree) VisitCleanNode(node.Depth, *node.Pointer, *node.Pointer) error {
+	return nil
+}
+
+func (s *nopSubtree) VisitDirtyNode(node.Depth, *node.Pointer, *node.Pointer) error {
 	return nil
 }
 

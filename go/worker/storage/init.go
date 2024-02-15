@@ -2,7 +2,6 @@
 package storage
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -39,17 +38,8 @@ func NewLocalBackend(
 		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfig.Storage.MaxCacheSize)),
 	}
 
-	var (
-		err  error
-		impl api.LocalBackend
-	)
-	switch cfg.Backend {
-	case database.BackendNameBadgerDB:
-		cfg.DB = GetLocalBackendDBDir(dataDir, cfg.Backend)
-		impl, err = database.New(cfg)
-	default:
-		err = fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
-	}
+	cfg.DB = GetLocalBackendDBDir(dataDir, cfg.Backend)
+	impl, err := database.New(cfg)
 	if err != nil {
 		return nil, err
 	}

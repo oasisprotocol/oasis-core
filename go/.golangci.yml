@@ -27,7 +27,7 @@ linters-settings:
           - github.com/cenkalti/backoff/v4
           - github.com/cometbft/cometbft
           - github.com/cosmos/gogoproto/proto
-          - github.com/dgraph-io/badger/v3
+          - github.com/dgraph-io/badger/v4
           - github.com/eapache/channels
           - github.com/fxamacker/cbor/v2
           - github.com/gammazero/deque

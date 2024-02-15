@@ -354,7 +354,7 @@ func (h *runtimeHistory) pruneWorker() {
 			select {
 			case round = <-h.pruneCh.Out():
 			case <-h.stopCh:
-				h.logger.Info("prune worker is terminating")
+				h.logger.Debug("prune worker is terminating")
 				return
 			}
 
@@ -362,14 +362,14 @@ func (h *runtimeHistory) pruneWorker() {
 				"round", round.(uint64),
 			)
 
-			if err := h.pruner.Prune(h.ctx, round.(uint64)); err != nil {
+			if err := h.pruner.Prune(round.(uint64)); err != nil {
 				h.logger.Error("failed to prune",
 					"err", err,
 				)
 				continue
 			}
 		case <-h.stopCh:
-			h.logger.Info("prune worker is terminating")
+			h.logger.Debug("prune worker is terminating")
 			return
 		}
 	}

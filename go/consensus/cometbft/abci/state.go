@@ -605,7 +605,7 @@ func (s *applicationState) pruneWorker() {
 
 			version := v.(uint64)
 
-			if err := s.statePruner.Prune(s.ctx, version); err != nil {
+			if err := s.statePruner.Prune(version); err != nil {
 				s.logger.Warn("failed to prune state",
 					"err", err,
 					"block_height", version,
@@ -634,12 +634,6 @@ func InitStateStorage(cfg *ApplicationConfig) (storage.LocalBackend, storage.Nod
 		if err := common.Mkdir(baseDir); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to create application state directory: %w", err)
 		}
-	}
-
-	switch cfg.StorageBackend {
-	case storageDB.BackendNameBadgerDB:
-	default:
-		return nil, nil, nil, fmt.Errorf("unsupported storage backend: %s", cfg.StorageBackend)
 	}
 
 	db, err := storageDB.New(&storage.Config{

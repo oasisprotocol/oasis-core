@@ -1284,7 +1284,7 @@ type pruneHandler struct {
 	node   *Node
 }
 
-func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
+func (p *pruneHandler) Prune(rounds []uint64) error {
 	// Make sure we never prune past what was synced.
 	lastSycnedRound, _, _ := p.node.GetLastSynced()
 
@@ -1300,7 +1300,7 @@ func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
 		p.logger.Debug("pruning storage for round", "round", round)
 
 		// Prune given block.
-		err := p.node.localStorage.NodeDB().Prune(ctx, round)
+		err := p.node.localStorage.NodeDB().Prune(round)
 		switch err {
 		case nil:
 		case mkvsDB.ErrNotEarliest:

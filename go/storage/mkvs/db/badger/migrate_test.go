@@ -307,7 +307,7 @@ func TestBadgerV5SharedRoots(t *testing.T) {
 		node.RootTypeState,
 		node.RootTypeIO,
 	}
-	for round := uint64(1); round < rounds; round++ {
+	for round := uint64(1); round < rounds-1; round++ {
 		// Check key accessibility for this round.
 		for _, typ := range allTypes {
 			root := node.Root{
@@ -333,7 +333,7 @@ func TestBadgerV5SharedRoots(t *testing.T) {
 		require.NoError(t, err, fmt.Sprintf("checkSanityInternal/%d", round))
 
 		// Try pruning, then move on. The following rounds should all still work.
-		err = ndb.Prune(ctx, round)
+		err = ndb.Prune(round)
 		require.NoError(t, err, fmt.Sprintf("Prune/%d", round))
 	}
 	// prettyPrintDBV5(ndb)
@@ -383,7 +383,7 @@ func TestBadgerV5ToEmpty(t *testing.T) {
 		node.RootTypeState,
 		node.RootTypeIO,
 	}
-	for round := uint64(1); round < rounds; round++ {
+	for round := uint64(1); round < rounds-1; round++ {
 		// Check key accessibility for this round.
 		for _, typ := range allTypes {
 			root := node.Root{
@@ -409,7 +409,7 @@ func TestBadgerV5ToEmpty(t *testing.T) {
 		require.NoError(t, err, fmt.Sprintf("checkSanityInternal/%d", round))
 
 		// Try pruning, then move on. The following rounds should all still work.
-		err = ndb.Prune(ctx, round)
+		err = ndb.Prune(round)
 		require.NoError(t, err, fmt.Sprintf("Prune/%d", round))
 	}
 	// prettyPrintDBV5(ndb)

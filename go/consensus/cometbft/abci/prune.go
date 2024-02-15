@@ -1,7 +1,6 @@
 package abci
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -74,7 +73,7 @@ type StatePruner interface {
 	// given the latest version, based on the underlying strategy.
 	//
 	// This method is NOT safe for concurrent use.
-	Prune(ctx context.Context, latestVersion uint64) error
+	Prune(latestVersion uint64) error
 
 	// GetLastRetainedVersion returns the earliest version below which all
 	// versions can be discarded from block history. Zero indicates that
@@ -90,7 +89,7 @@ type statePrunerInitializer interface {
 
 type nonePruner struct{}
 
-func (p *nonePruner) Prune(context.Context, uint64) error {
+func (p *nonePruner) Prune(uint64) error {
 	// Nothing to prune.
 	return nil
 }
@@ -130,17 +129,7 @@ func (p *genericPruner) GetLastRetainedVersion() uint64 {
 	return p.lastRetainedVersion
 }
 
-func (p *genericPruner) Prune(ctx context.Context, latestVersion uint64) error {
-	if err := p.doPrune(ctx, latestVersion); err != nil {
-		p.logger.Error("Prune",
-			"err", err,
-		)
-		return err
-	}
-	return nil
-}
-
-func (p *genericPruner) doPrune(ctx context.Context, latestVersion uint64) error {
+func (p *genericPruner) Prune(latestVersion uint64) error {
 	if latestVersion < p.keepN {
 		return nil
 	}
@@ -161,7 +150,7 @@ PruneLoop:
 		// Before pruning anything, run all prune handlers. If any of them
 		// fails we abort the prune.
 		for _, ph := range p.handlers {
-			if err := ph.Prune(ctx, i); err != nil {
+			if err := ph.Prune(i); err != nil {
 				p.logger.Debug("prune handler blocked pruning version",
 					"err", err,
 					"latest_version", latestVersion,
@@ -178,7 +167,7 @@ PruneLoop:
 			logging.LogEvent, LogEventABCIPruneDelete,
 		)
 
-		err := p.ndb.Prune(ctx, i)
+		err := p.ndb.Prune(i)
 		switch err {
 		case nil:
 		case nodedb.ErrNotEarliest:

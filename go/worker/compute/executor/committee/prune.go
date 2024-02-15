@@ -13,14 +13,14 @@ type pruneHandler struct {
 	commonNode *committee.Node
 }
 
-func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
+func (p *pruneHandler) Prune(rounds []uint64) error {
 	p.commonNode.CrossNode.Lock()
 	height := p.commonNode.CurrentBlockHeight
 	p.commonNode.CrossNode.Unlock()
 
 	// Make sure we never prune past the last successful round as we need that round in history so
 	// we can fetch any needed round results.
-	state, err := p.commonNode.Consensus.RootHash().GetRuntimeState(ctx, &roothash.RuntimeRequest{
+	state, err := p.commonNode.Consensus.RootHash().GetRuntimeState(context.Background(), &roothash.RuntimeRequest{
 		RuntimeID: p.commonNode.Runtime.ID(),
 		Height:    height,
 	})

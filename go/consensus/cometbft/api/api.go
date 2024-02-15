@@ -240,7 +240,7 @@ type StatePruneHandler interface {
 	// Note that this can be called for the same version multiple
 	// times (e.g., if one of the handlers fails but others succeed
 	// and pruning is later retried).
-	Prune(ctx context.Context, version uint64) error
+	Prune(version uint64) error
 }
 
 // StatePruner is a concrete ABCI mux state pruner implementation.
