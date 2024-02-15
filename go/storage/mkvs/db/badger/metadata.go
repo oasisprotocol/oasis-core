@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
 // serializedMetadata is the on-disk serialized metadata.
@@ -115,7 +116,7 @@ type rootsMetadata struct {
 	_ struct{} `cbor:",toarray"`
 
 	// Roots is the map of a root created in a version to any derived roots (in this or later versions).
-	Roots map[typedHash][]typedHash
+	Roots map[api.TypedHash][]api.TypedHash
 
 	// version is the version this metadata is for.
 	version uint64
@@ -131,7 +132,7 @@ func loadRootsMetadata(tx *badger.Txn, version uint64) (*rootsMetadata, error) {
 			return nil, fmt.Errorf("mkvs/badger: error reading roots metadata: %w", err)
 		}
 	case badger.ErrKeyNotFound:
-		rootsMeta.Roots = make(map[typedHash][]typedHash)
+		rootsMeta.Roots = make(map[api.TypedHash][]api.TypedHash)
 	default:
 		return nil, fmt.Errorf("mkvs/badger: error reading roots metadata: %w", err)
 	}

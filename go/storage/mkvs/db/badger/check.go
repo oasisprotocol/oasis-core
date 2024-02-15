@@ -123,7 +123,7 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 		hashes: map[hash.Hash]*list.Element{},
 	}
 
-	lastRoots := make(map[typedHash]uint64)
+	lastRoots := make(map[api.TypedHash]uint64)
 	for it.Seek(lastRootsMetadataKey); it.Valid(); it.Next() {
 		rootsMeta := &rootsMetadata{}
 		if !rootsMetadataKeyFmt.Decode(it.Item().Key(), &version) {
@@ -187,7 +187,7 @@ func checkSanityInternal(ctx context.Context, db *badgerNodeDB, display DisplayH
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {
-		var srcRoot, dstRoot typedHash
+		var srcRoot, dstRoot api.TypedHash
 		if !writeLogKeyFmt.Decode(it.Item().Key(), &version, &dstRoot, &srcRoot) {
 			return fmt.Errorf("mkvs/badger/check: undecodable write log key (%v) at item version %d", it.Item().Key(), it.Item().Version())
 		}
