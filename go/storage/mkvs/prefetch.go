@@ -36,8 +36,9 @@ func (t *tree) doPrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit 
 					Root:     t.cache.syncRoot,
 					Position: t.cache.syncRoot.Hash,
 				},
-				Prefixes: prefixes,
-				Limit:    limit,
+				Prefixes:     prefixes,
+				Limit:        limit,
+				ProofVersion: syncProofsVersion,
 			})
 			if err != nil {
 				return nil, err
@@ -72,7 +73,11 @@ func (t *tree) SyncGetPrefixes(ctx context.Context, request *syncer.GetPrefixesR
 		}
 	}
 
-	it := t.NewIterator(ctx, WithProof(request.Tree.Root.Hash))
+	pb, err := syncer.NewProofBuilderForVersion(request.Tree.Root.Hash, request.Tree.Root.Hash, request.ProofVersion)
+	if err != nil {
+		return nil, err
+	}
+	it := t.NewIterator(ctx, WithProofBuilder(pb))
 	defer it.Close()
 
 	var total int

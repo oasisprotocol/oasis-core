@@ -20,6 +20,10 @@ const (
 	chunksDir              = "chunks"
 	checkpointMetadataFile = "meta"
 	checkpointVersion      = 1
+
+	// Versions 1 of checkpoint chunks use proofs version 0. Consider bumping
+	// this to latest version when introducing new checkpoint versions.
+	checkpointProofsVersion = 0
 )
 
 type fileCreator struct {

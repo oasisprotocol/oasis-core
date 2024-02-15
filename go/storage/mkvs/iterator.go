@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 )
@@ -25,12 +24,16 @@ func (t *tree) SyncIterate(ctx context.Context, request *syncer.IterateRequest) 
 	if !t.cache.pendingRoot.IsClean() {
 		return nil, syncer.ErrDirtyRoot
 	}
+	pb, err := syncer.NewProofBuilderForVersion(request.Tree.Root.Hash, request.Tree.Root.Hash, request.ProofVersion)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create an iterator which generates proofs. Always anchor the proof at the
 	// root as an iterator may encompass many subtrees. Make sure to propagate
 	// prefetching to any upstream remote syncers.
 	it := t.NewIterator(ctx,
-		WithProof(request.Tree.Root.Hash),
+		WithProofBuilder(pb),
 		IteratorPrefetch(request.Prefetch),
 	)
 	defer it.Close()
@@ -64,8 +67,9 @@ func (t *tree) newFetcherSyncIterate(key node.Key, prefetch uint16) readSyncFetc
 				Root:     t.cache.syncRoot,
 				Position: ptr.Hash,
 			},
-			Key:      key,
-			Prefetch: prefetch,
+			Key:          key,
+			Prefetch:     prefetch,
+			ProofVersion: syncProofsVersion,
 		})
 		if err != nil {
 			return nil, err
@@ -146,11 +150,11 @@ func IteratorPrefetch(prefetch uint16) IteratorOption {
 	}
 }
 
-// WithProof configures the iterator for generating proofs of all
-// visited nodes.
-func WithProof(root hash.Hash) IteratorOption {
+// WithProofBuilder configures the iterator for generating proofs of all
+// visited nodes with the given proof builder.
+func WithProofBuilder(pb *syncer.ProofBuilder) IteratorOption {
 	return func(it Iterator) {
-		it.(*treeIterator).proofBuilder = syncer.NewProofBuilder(root, root)
+		it.(*treeIterator).proofBuilder = pb
 	}
 }
 

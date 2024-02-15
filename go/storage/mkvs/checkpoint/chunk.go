@@ -28,7 +28,11 @@ func createChunk(
 	nextOffset node.Key,
 	err error,
 ) {
-	it := tree.NewIterator(ctx, mkvs.WithProof(root.Hash))
+	it := tree.NewIterator(
+		ctx,
+		// V1 checkpoints use V0 proofs.
+		mkvs.WithProofBuilder(syncer.NewProofBuilderV0(root.Hash, root.Hash)),
+	)
 	defer it.Close()
 
 	// We build the chunk until the proof becomes too large or we have reached the end.
@@ -82,6 +86,7 @@ func restoreChunk(ctx context.Context, ndb db.NodeDB, chunk *ChunkMetadata, r io
 	// Reconstruct the proof.
 	var decodeErr error
 	var p syncer.Proof
+	p.V = checkpointProofsVersion
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()

@@ -10,6 +10,13 @@ import (
 )
 
 const (
+	// MinimumProofVersion is the minimum supported proof version.
+	MinimumProofVersion = 0
+	// LatestProofVersion is the latest supported proof version.
+	LatestProofVersion = 1
+)
+
+const (
 	// proofEntryFull is the proof entry type for full nodes.
 	proofEntryFull byte = 0x01
 	// proofEntryHash is the proof entry type for subtree hashes.
@@ -18,6 +25,22 @@ const (
 
 // Proof is a Merkle proof for a subtree.
 type Proof struct {
+	// V is the proof version.
+	//
+	// Similar to `cbor.Versioned` but the version is omitted if it is 0.
+	// We don't use `cbor.Versioned` since we want version 0 proofs to be
+	// backwards compatible with the old structure which was not versioned.
+	//
+	// Version 0:
+	// Initial format.
+	//
+	// Version 1 change:
+	// Leaf nodes are included separately, as children. In version 0 the leaf node was
+	// serialized within the internal node.  The rationale behind this change is to eliminate
+	// the need to serialize all leaf nodes on the path when proving the existence of a
+	// specific value.
+	V uint16 `json:"v,omitempty"`
+
 	// UntrustedRoot is the root hash this proof is for. This should only be
 	// used as a quick sanity check and proof verification MUST use an
 	// independently obtained root hash as the prover can provide any root.
@@ -33,19 +56,48 @@ type proofNode struct {
 
 // ProofBuilder is a Merkle proof builder.
 type ProofBuilder struct {
-	root     hash.Hash
-	subtree  hash.Hash
-	included map[hash.Hash]*proofNode
-	size     uint64
+	proofVersion uint16
+	root         hash.Hash
+	subtree      hash.Hash
+	included     map[hash.Hash]*proofNode
+	size         uint64
 }
 
 // NewProofBuilder creates a new Merkle proof builder for the given root.
 func NewProofBuilder(root, subtree hash.Hash) *ProofBuilder {
-	return &ProofBuilder{
-		root:     root,
-		subtree:  subtree,
-		included: make(map[hash.Hash]*proofNode),
+	pb, err := NewProofBuilderForVersion(root, subtree, LatestProofVersion)
+	if err != nil {
+		panic(err)
 	}
+	return pb
+}
+
+// NewProofBuilderV0 creates a new version 0 proof builder for the given root.
+func NewProofBuilderV0(root, subtree hash.Hash) *ProofBuilder {
+	pb, err := NewProofBuilderForVersion(root, subtree, 0)
+	if err != nil {
+		panic(err)
+	}
+	return pb
+}
+
+// NewProofBuilderForVersion creates a new Merkle proof builder for the given root
+// in a given proof version format.
+func NewProofBuilderForVersion(root, subtree hash.Hash, proofVersion uint16) (*ProofBuilder, error) {
+	if proofVersion < MinimumProofVersion || proofVersion > LatestProofVersion {
+		return nil, fmt.Errorf("%v: %d", ErrUnsupportedProofVersion, proofVersion)
+	}
+	return &ProofBuilder{
+		proofVersion: proofVersion,
+		root:         root,
+		subtree:      subtree,
+		included:     make(map[hash.Hash]*proofNode),
+	}, nil
+}
+
+// Version returns the proof version.
+func (b *ProofBuilder) Version() uint16 {
+	return b.proofVersion
 }
 
 // Include adds a node to the set of included nodes.
@@ -68,19 +120,43 @@ func (b *ProofBuilder) Include(n node.Node) {
 	// Node is available, serialize it.
 	var err error
 	var pn proofNode
-	pn.serialized, err = n.CompactMarshalBinary()
+	switch b.proofVersion {
+	case 0:
+		// In version 0, the leaf is included in the internal node.
+		pn.serialized, err = n.CompactMarshalBinaryV0()
+	case 1:
+		// In version 1, the leaf node is added separately, as a child.
+		pn.serialized, err = n.CompactMarshalBinaryV1()
+	default:
+		panic("proof: unexpected proof version")
+	}
 	if err != nil {
 		panic(err)
 	}
 
 	// For internal nodes, also add any children.
 	if nd, ok := n.(*node.InternalNode); ok {
-		// Add leaf, left and right.
-		for _, child := range []*node.Pointer{
-			// NOTE: LeafNode is always included with the internal node.
-			nd.Left,
-			nd.Right,
-		} {
+
+		var children []*node.Pointer
+		switch b.proofVersion {
+		case 0:
+			// In version 0, the leaf node is included in the internal node.
+			children = []*node.Pointer{
+				nd.Left,
+				nd.Right,
+			}
+		case 1:
+			// In version 1, the leaf node is added separately, as a child.
+			children = []*node.Pointer{
+				nd.LeafNode,
+				nd.Left,
+				nd.Right,
+			}
+		default:
+			panic("proof: unexpected proof version")
+		}
+
+		for _, child := range children {
 			var childHash hash.Hash
 			if child == nil {
 				childHash.Empty()
@@ -113,7 +189,10 @@ func (b *ProofBuilder) Size() uint64 {
 
 // Build tries to build the proof.
 func (b *ProofBuilder) Build(ctx context.Context) (*Proof, error) {
-	var proof Proof
+	proof := Proof{
+		V: b.proofVersion,
+	}
+
 	switch b.HasSubtreeRoot() {
 	case true:
 		// A partial proof for the subtree is available, include that.
@@ -169,6 +248,10 @@ type ProofVerifier struct{}
 // VerifyProof verifies a proof and generates an in-memory subtree representing
 // the nodes which are included in the proof.
 func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof *Proof) (*node.Pointer, error) {
+	if proof.V < MinimumProofVersion || proof.V > LatestProofVersion {
+		return nil, fmt.Errorf("verifier: unsupported proof version: %d", proof.V)
+	}
+
 	// Sanity check that the proof is for the correct root (as otherwise it
 	// makes no sense to verify the proof).
 	if !proof.UntrustedRoot.Equal(&root) {
@@ -233,6 +316,21 @@ func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int)
 		// For internal nodes, also decode children.
 		pos := idx + 1
 		if nd, ok := n.(*node.InternalNode); ok {
+			switch proof.V {
+			case 0:
+				// In version 0, the leaf node is included in the internal node.
+			case 1:
+				// In version 1, the leaf node is added separately, as a child.
+				// Leaf.
+				pos, nd.LeafNode, err = pv.verifyProof(ctx, proof, pos)
+				if err != nil {
+					return -1, nil, err
+				}
+			default:
+				// Checked in VerifyProof.
+				panic("unexpected proof version")
+			}
+
 			// Left.
 			pos, nd.Left, err = pv.verifyProof(ctx, proof, pos)
 			if err != nil {

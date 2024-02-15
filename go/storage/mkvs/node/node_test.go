@@ -16,10 +16,12 @@ func TestSerializationLeafNode(t *testing.T) {
 
 	rawLeafNodeFull, err := leafNode.MarshalBinary()
 	require.NoError(t, err, "MarshalBinary")
-	rawLeafNodeCompact, err := leafNode.CompactMarshalBinary()
-	require.NoError(t, err, "CompactMarshalBinary")
+	rawLeafNodeCompactV0, err := leafNode.CompactMarshalBinaryV0()
+	require.NoError(t, err, "CompactMarshalBinaryV1")
+	rawLeafNodeCompactV1, err := leafNode.CompactMarshalBinaryV1()
+	require.NoError(t, err, "CompactMarshalBinaryV1")
 
-	for _, rawLeafNode := range [][]byte{rawLeafNodeFull, rawLeafNodeCompact} {
+	for _, rawLeafNode := range [][]byte{rawLeafNodeFull, rawLeafNodeCompactV0, rawLeafNodeCompactV1} {
 		var decodedLeafNode LeafNode
 		err = decodedLeafNode.UnmarshalBinary(rawLeafNode)
 		require.NoError(t, err, "UnmarshalBinary")
@@ -52,10 +54,12 @@ func TestSerializationInternalNode(t *testing.T) {
 
 	rawIntNodeFull, err := intNode.MarshalBinary()
 	require.NoError(t, err, "MarshalBinary")
-	rawIntNodeCompact, err := intNode.CompactMarshalBinary()
+	rawIntNodeCompactV0, err := intNode.CompactMarshalBinaryV0()
+	require.NoError(t, err, "CompactMarshalBinary")
+	rawIntNodeCompactV1, err := intNode.CompactMarshalBinaryV1()
 	require.NoError(t, err, "CompactMarshalBinary")
 
-	for idx, rawIntNode := range [][]byte{rawIntNodeFull, rawIntNodeCompact} {
+	for idx, rawIntNode := range [][]byte{rawIntNodeFull, rawIntNodeCompactV0, rawIntNodeCompactV1} {
 		var decodedIntNode InternalNode
 		err = decodedIntNode.UnmarshalBinary(rawIntNode)
 		require.NoError(t, err, "UnmarshalBinary")
@@ -63,12 +67,12 @@ func TestSerializationInternalNode(t *testing.T) {
 		require.True(t, decodedIntNode.Clean)
 		require.Equal(t, intNode.Label, decodedIntNode.Label)
 		require.Equal(t, intNode.LabelBitLength, decodedIntNode.LabelBitLength)
-		require.Equal(t, intNode.LeafNode.Hash, decodedIntNode.LeafNode.Hash)
-		require.True(t, decodedIntNode.LeafNode.Clean)
-		require.NotNil(t, decodedIntNode.LeafNode.Node)
 
-		// Only check left/right for non-compact encoding.
+		// Only check leaf/left/right for non-compact encoding.
 		if idx == 0 {
+			require.Equal(t, intNode.LeafNode.Hash, decodedIntNode.LeafNode.Hash)
+			require.True(t, decodedIntNode.LeafNode.Clean)
+			require.NotNil(t, decodedIntNode.LeafNode.Node)
 			require.Equal(t, intNode.Left.Hash, decodedIntNode.Left.Hash)
 			require.Equal(t, intNode.Right.Hash, decodedIntNode.Right.Hash)
 			require.True(t, decodedIntNode.Left.Clean)
@@ -155,9 +159,11 @@ func FuzzNode(f *testing.F) {
 	leafNode.UpdateHash()
 
 	rawLeafNodeFull, _ := leafNode.MarshalBinary()
-	rawLeafNodeCompact, _ := leafNode.CompactMarshalBinary()
+	rawLeafNodeCompactV0, _ := leafNode.CompactMarshalBinaryV0()
+	rawLeafNodeCompactV1, _ := leafNode.CompactMarshalBinaryV1()
 	f.Add(rawLeafNodeFull)
-	f.Add(rawLeafNodeCompact)
+	f.Add(rawLeafNodeCompactV0)
+	f.Add(rawLeafNodeCompactV1)
 
 	leftHash := hash.NewFromBytes([]byte("everyone move to the left"))
 	rightHash := hash.NewFromBytes([]byte("everyone move to the right"))
@@ -173,9 +179,11 @@ func FuzzNode(f *testing.F) {
 	}
 
 	rawIntNodeFull, _ := intNode.MarshalBinary()
-	rawIntNodeCompact, _ := intNode.CompactMarshalBinary()
+	rawIntNodeCompactV0, _ := intNode.CompactMarshalBinaryV0()
+	rawIntNodeCompactV1, _ := intNode.CompactMarshalBinaryV1()
 	f.Add(rawIntNodeFull)
-	f.Add(rawIntNodeCompact)
+	f.Add(rawIntNodeCompactV0)
+	f.Add(rawIntNodeCompactV1)
 
 	// Fuzzing.
 	f.Fuzz(func(_ *testing.T, data []byte) {
@@ -184,7 +192,12 @@ func FuzzNode(f *testing.F) {
 			return
 		}
 
-		_, err = n.CompactMarshalBinary()
+		_, err = n.CompactMarshalBinaryV0()
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = n.CompactMarshalBinaryV1()
 		if err != nil {
 			panic(err)
 		}
