@@ -18,7 +18,7 @@ require (
 	github.com/cometbft/cometbft v0.0.0-00010101000000-000000000000
 	github.com/cometbft/cometbft-db v0.7.0
 	github.com/cosmos/gogoproto v1.4.1
-	github.com/dgraph-io/badger/v3 v3.2103.4
+	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/eapache/channels v1.1.0
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/gammazero/deque v0.2.1

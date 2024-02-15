@@ -11,8 +11,8 @@ import (
 
 	dbm "github.com/cometbft/cometbft-db"
 	"github.com/cometbft/cometbft/node"
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/options"
 
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
