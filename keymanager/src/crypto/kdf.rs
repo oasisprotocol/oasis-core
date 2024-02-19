@@ -961,11 +961,10 @@ mod tests {
         convert::TryInto,
         num::NonZeroUsize,
         panic,
-        sync::{Arc, Mutex, RwLock},
+        sync::{Arc, RwLock},
         vec,
     };
 
-    use anyhow::Result;
     use lru::LruCache;
     use rustc_hex::{FromHex, ToHex};
 
@@ -975,8 +974,7 @@ mod tests {
             namespace::{Namespace, NAMESPACE_SIZE},
         },
         consensus::beacon::EpochTime,
-        storage::KeyValue,
-        types::Error,
+        storage::{KeyValue, UntrustedInMemoryStorage},
     };
 
     use crate::{
@@ -1035,39 +1033,10 @@ mod tests {
         }
     }
 
-    /// Untrusted key/value store which stores arbitrary binary key/value pairs in memory.
-    pub struct InMemoryKeyValue {
-        store: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
-    }
-
-    impl InMemoryKeyValue {
-        pub fn new() -> Self {
-            Self {
-                store: Mutex::new(HashMap::new()),
-            }
-        }
-    }
-
-    impl KeyValue for InMemoryKeyValue {
-        fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
-            // To mock the untrusted local key value store, we must return
-            // an empty vector if the key is not found.
-            let cache = self.store.lock().unwrap();
-            let value = cache.get(&key).cloned().unwrap_or_default();
-            Ok(value)
-        }
-
-        fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Error> {
-            let mut cache = self.store.lock().unwrap();
-            cache.insert(key, value);
-            Ok(())
-        }
-    }
-
     #[test]
     fn init_replication() {
         let kdf = Kdf::new();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
         let provider = MockSecretProvider::new(runtime_id, false);
@@ -1126,7 +1095,7 @@ mod tests {
     #[test]
     fn init_rotation() {
         let kdf = Kdf::new();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
         let provider = MockSecretProvider::new(runtime_id, true);
@@ -1206,7 +1175,7 @@ mod tests {
     #[test]
     fn init_corrupted_checksum() {
         let kdf = Kdf::new();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
         let provider = MockSecretProvider::new(runtime_id, false);
@@ -1253,7 +1222,7 @@ mod tests {
     #[test]
     fn init_corrupted_secret() {
         let kdf = Kdf::new();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
         let provider = MockSecretProvider::new(runtime_id, false);
@@ -1298,7 +1267,7 @@ mod tests {
     #[test]
     fn init_invalid_generation() {
         let kdf = Kdf::new();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
         let provider = MockSecretProvider::new(runtime_id, false);
@@ -1339,7 +1308,7 @@ mod tests {
     #[test]
     fn init_invalid_runtime_id() {
         let kdf = Kdf::new();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let epoch = 0;
         let invalid_runtime_id = Namespace::from(vec![2u8; 32]);
@@ -1388,7 +1357,7 @@ mod tests {
     #[test]
     fn key_generation_is_deterministic() {
         let kdf = Kdf::default();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let key_pair_id = KeyPairId::from(vec![2u8; 32]);
         let generation = 0;
@@ -1433,7 +1402,7 @@ mod tests {
     fn private_keys_are_unique() {
         // Default values.
         let kdf = Kdf::default();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let key_pair_id = KeyPairId::from(vec![1u8; 32]);
         let generation = 0;
@@ -1473,7 +1442,7 @@ mod tests {
     #[test]
     fn private_and_public_key_match() {
         let kdf = Kdf::default();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let runtime_id = Namespace::from(vec![1u8; 32]);
         let key_pair_id = KeyPairId::from(vec![2u8; 32]);
         let generation = 0;
@@ -1526,7 +1495,7 @@ mod tests {
     #[test]
     fn master_secret_can_be_replicated() {
         let kdf = Kdf::default();
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
 
         // Happy path.
         let generation = 1;
@@ -1827,7 +1796,7 @@ mod tests {
                     ephemeral_keys: LruCache::new(NonZeroUsize::new(1).unwrap()),
                 }),
             };
-            let storage = InMemoryKeyValue::new();
+            let storage = UntrustedInMemoryStorage::new();
             let runtime_id = Namespace::from(v.runtime_id);
             let key_pair_id = KeyPairId::from(v.key_pair_id);
 
@@ -1848,7 +1817,7 @@ mod tests {
 
     #[test]
     fn master_secret_save_load() {
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let secret = Secret([1; SECRET_SIZE]);
         let runtime_id = Namespace([2; NAMESPACE_SIZE]);
         let generation = 3;
@@ -1873,7 +1842,7 @@ mod tests {
 
     #[test]
     fn checksum_save_load() {
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let generation = 0;
         let checksum = vec![1, 2, 3];
 
@@ -1889,7 +1858,7 @@ mod tests {
 
     #[test]
     fn master_secret_proposal_save_load() {
-        let storage = InMemoryKeyValue::new();
+        let storage = UntrustedInMemoryStorage::new();
         let secret = Secret([0; SECRET_SIZE]);
         let new_secret = Secret([1; SECRET_SIZE]);
         let runtime_id = Namespace([2; NAMESPACE_SIZE]);
