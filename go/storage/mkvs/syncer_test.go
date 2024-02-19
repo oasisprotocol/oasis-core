@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 func TestProofV0(t *testing.T) {
@@ -105,10 +106,16 @@ func TestProofV0(t *testing.T) {
 	var pv syncer.ProofVerifier
 	_, err = pv.VerifyProof(ctx, rootHash, proof)
 	require.NoError(err, "VerifyProof should not fail with a valid proof")
+	wl, err := pv.VerifyProofToWriteLog(ctx, rootHash, proof)
+	require.NoError(err, "VerifyProofToWriteLog should not fail with a valid proof")
+	require.Empty(wl)
 
 	// Proof with only the root node should verify.
 	_, err = pv.VerifyProof(ctx, rootHash, rootOnlyProof)
 	require.NoError(err, "VerifyProof should not fail on a proof with only the root node")
+	wl, err = pv.VerifyProofToWriteLog(ctx, rootHash, proof)
+	require.NoError(err, "VerifyProofToWriteLog should not fail on a proof with only the root node")
+	require.Empty(wl)
 
 	// Empty root proof should verify.
 	var emptyHash hash.Hash
@@ -119,6 +126,9 @@ func TestProofV0(t *testing.T) {
 	emptyRootPtr, err := pv.VerifyProof(ctx, emptyHash, emptyRootProof)
 	require.NoError(err, "VerifyProof should not fail with a valid proof for an empty root")
 	require.Nil(emptyRootPtr, "VerifyProof should return nil pointer for an empty root")
+	wl, err = pv.VerifyProofToWriteLog(ctx, rootHash, proof)
+	require.NoError(err, "VerifyProofToWriteLog should not fail with a valid proof for an empty root")
+	require.Empty(wl)
 
 	// Invalid proofs should not verify.
 
@@ -267,10 +277,16 @@ func TestProofV1(t *testing.T) {
 	var pv syncer.ProofVerifier
 	_, err = pv.VerifyProof(ctx, rootHash, proof)
 	require.NoError(err, "VerifyProof should not fail with a valid proof")
+	wl, err := pv.VerifyProofToWriteLog(ctx, rootHash, proof)
+	require.NoError(err, "VerifyProofToWriteLog should not fail with a valid proof")
+	require.Empty(wl)
 
 	// Proof with only the root node should verify.
 	_, err = pv.VerifyProof(ctx, rootHash, rootOnlyProof)
 	require.NoError(err, "VerifyProof should not fail on a proof with only the root node")
+	wl, err = pv.VerifyProofToWriteLog(ctx, rootHash, proof)
+	require.NoError(err, "VerifyProofToWriteLog should not fail on a proof with only the root node")
+	require.Empty(wl)
 
 	// Empty root proof should verify.
 	var emptyHash hash.Hash
@@ -281,6 +297,9 @@ func TestProofV1(t *testing.T) {
 	emptyRootPtr, err := pv.VerifyProof(ctx, emptyHash, emptyRootProof)
 	require.NoError(err, "VerifyProof should not fail with a valid proof for an empty root")
 	require.Nil(emptyRootPtr, "VerifyProof should return nil pointer for an empty root")
+	wl, err = pv.VerifyProofToWriteLog(ctx, rootHash, proof)
+	require.NoError(err, "VerifyProofToWriteLog should not fail with a valid proof for an empty root")
+	require.Empty(wl)
 
 	// Invalid proofs should not verify.
 
@@ -501,7 +520,6 @@ func TestTreeProofs(t *testing.T) {
 			})
 			require.NoError(err, "SyncGet keys[%d], version: %d", i, tc.proofVersion)
 			require.EqualValues(
-
 				tc.proofs[i],
 				base64.StdEncoding.EncodeToString(cbor.Marshal(resp.Proof)),
 				"keys[%d], version: %d", i, tc.proofVersion,
@@ -510,6 +528,15 @@ func TestTreeProofs(t *testing.T) {
 			var pv syncer.ProofVerifier
 			_, err = pv.VerifyProof(ctx, roothash, &resp.Proof)
 			require.NoError(err, "VerifyProof should not fail with a valid proof: keys[%d], version: %d", i, tc.proofVersion)
+
+			wl, err := pv.VerifyProofToWriteLog(ctx, roothash, &resp.Proof)
+			require.NoError(err, "VerifyProofToWriteLog should not fail with a valid proof")
+			if tc.proofVersion == 0 || tc.includeSiblings {
+				require.True(len(wl) >= 1, "VerifyProofToWriteLog should return at least the key in write log")
+			} else {
+				require.Equal(1, len(wl), "VerifyProofToWriteLog should return exactly one entry in write log")
+			}
+			require.Contains(wl, writelog.LogEntry{Key: key, Value: values[i]})
 		}
 	}
 }

@@ -28,6 +28,9 @@ func TestProofExtraNodes(t *testing.T) {
 	var verifier ProofVerifier
 	_, err = verifier.VerifyProof(context.Background(), rootHash, &proof)
 	require.NoError(err)
+	wl, err := verifier.VerifyProofToWriteLog(context.Background(), rootHash, &proof)
+	require.NoError(err)
+	require.Empty(wl)
 
 	// Duplicate some nodes and add them to the end.
 	proof.Entries = append(proof.Entries, proof.Entries[0])
@@ -43,6 +46,9 @@ func TestProofExtraNodes(t *testing.T) {
 	// Verify the proof as a sanity check.
 	_, err = verifier.VerifyProof(context.Background(), rootHash, &proof)
 	require.NoError(err)
+	wl, err = verifier.VerifyProofToWriteLog(context.Background(), rootHash, &proof)
+	require.NoError(err)
+	require.Empty(wl)
 
 	// Duplicate some nodes and add them to the end.
 	proof.Entries = append(proof.Entries, proof.Entries[0])
