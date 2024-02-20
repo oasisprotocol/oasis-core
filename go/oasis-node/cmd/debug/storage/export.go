@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -156,23 +155,15 @@ func exportIterator(fn string, root *storageAPI.Root, it mkvs.Iterator) error {
 }
 
 func newDirectStorageBackend(dataDir string, namespace common.Namespace) (storageAPI.Backend, error) {
-	b := strings.ToLower(config.GlobalConfig.Storage.Backend)
 	// The right thing to do will be to use storage.New, but the backend config
 	// assumes that identity is valid, and we don't have one.
 	cfg := &storageAPI.Config{
-		Backend:      b,
-		DB:           dataDir,
+		Backend:      config.GlobalConfig.Storage.Backend,
 		Namespace:    namespace,
 		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfig.Storage.MaxCacheSize)),
 	}
-
-	switch b {
-	case storageDatabase.BackendNameBadgerDB:
-		cfg.DB = filepath.Join(cfg.DB, storageDatabase.DefaultFileName(cfg.Backend))
-		return storageDatabase.New(cfg)
-	default:
-		return nil, fmt.Errorf("storage: unsupported backend: '%v'", cfg.Backend)
-	}
+	cfg.DB = filepath.Join(dataDir, storageDatabase.DefaultFileName(cfg.Backend))
+	return storageDatabase.New(cfg)
 }
 
 func init() {
