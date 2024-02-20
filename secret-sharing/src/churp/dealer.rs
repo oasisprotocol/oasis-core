@@ -1,6 +1,7 @@
 //! CHURP dealer.
 
 use group::{ff::PrimeField, Group, GroupEncoding};
+use rand_core::RngCore;
 
 use crate::vss::{matrix::VerificationMatrix, polynomial::BivariatePolynomial};
 
@@ -41,14 +42,14 @@ where
     }
 
     /// Creates a new dealer with a random bivariate polynomial.
-    pub fn random(dx: u8, dy: u8) -> Self {
-        let bp = BivariatePolynomial::random(dx, dy);
+    pub fn random(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
+        let bp = BivariatePolynomial::random(dx, dy, rng);
         Self::new(bp)
     }
 
     /// Creates a new dealer with a random zero-hole bivariate polynomial.
-    pub fn zero_hole(dx: u8, dy: u8) -> Self {
-        let mut bp = BivariatePolynomial::random(dx, dy);
+    pub fn zero_hole(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
+        let mut bp = BivariatePolynomial::random(dx, dy, rng);
         bp.to_zero_hole();
         Self::new(bp)
     }
@@ -77,6 +78,8 @@ impl DealerParams for NistP384 {
 
 #[cfg(test)]
 mod tests {
+    use rand_core::OsRng;
+
     use super::{BivariatePolynomial, NistP384Dealer};
 
     #[test]
@@ -87,13 +90,13 @@ mod tests {
 
     #[test]
     fn test_random() {
-        let d = NistP384Dealer::random(2, 3);
+        let d = NistP384Dealer::random(2, 3, &mut OsRng);
         assert!(!d.verification_matrix().is_zero_hole()); // Zero-hole with negligible probability.
     }
 
     #[test]
     fn test_zero_hole() {
-        let d = NistP384Dealer::zero_hole(2, 3);
+        let d = NistP384Dealer::zero_hole(2, 3, &mut OsRng);
         assert!(d.verification_matrix().is_zero_hole());
     }
 }

@@ -115,13 +115,13 @@ where
     }
 
     /// Returns the size of the byte representation of a matrix element.
-    fn element_byte_size() -> usize {
+    pub fn element_byte_size() -> usize {
         // Is there a better way?
         G::Repr::default().as_ref().len()
     }
 
     /// Returns the size of the byte representation of the verification matrix.
-    fn byte_size(rows: usize, cols: usize) -> usize {
+    pub fn byte_size(rows: usize, cols: usize) -> usize {
         2 + rows * cols * Self::element_byte_size()
     }
 }
@@ -130,6 +130,7 @@ where
 mod tests {
     use group::Group;
     use p384;
+    use rand_core::OsRng;
 
     use crate::vss::matrix::VerificationMatrix;
 
@@ -156,13 +157,13 @@ mod tests {
         }
 
         // Random bivariate polynomial (slow).
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(5, 10);
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(5, 10, &mut OsRng);
         let _: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
     }
 
     #[test]
     fn test_serialization() {
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3);
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut OsRng);
         let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
         let restored: VerificationMatrix<p384::ProjectivePoint> =
             VerificationMatrix::from_bytes(vm.to_bytes()).expect("deserialization should succeed");

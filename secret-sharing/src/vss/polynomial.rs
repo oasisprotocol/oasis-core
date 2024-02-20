@@ -1,4 +1,5 @@
 use group::ff::PrimeField;
+use rand_core::RngCore;
 
 /// Bivariate polynomial over a non-binary prime field.
 ///
@@ -33,7 +34,7 @@ where
     }
 
     /// Creates a bivariate polynomial with random coefficients.
-    pub fn random(deg_x: u8, deg_y: u8) -> Self {
+    pub fn random(deg_x: u8, deg_y: u8, rng: &mut impl RngCore) -> Self {
         let deg_x = deg_x as usize;
         let deg_y = deg_y as usize;
 
@@ -41,7 +42,7 @@ where
         for _ in 0..b.capacity() {
             let mut bi = Vec::with_capacity(deg_y + 1);
             for _ in 0..bi.capacity() {
-                let bij = Fp::random(rand_core::OsRng);
+                let bij = Fp::random(&mut *rng);
                 bi.push(bij);
             }
             b.push(bi);
@@ -125,12 +126,12 @@ where
     }
 
     /// Returns the size of the byte representation of a coefficient.
-    fn coefficient_byte_size() -> usize {
+    pub fn coefficient_byte_size() -> usize {
         Fp::NUM_BITS.saturating_add(7) as usize / 8
     }
 
     /// Returns the size of the byte representation of the bivariate polynomial.
-    fn byte_size(deg_x: usize, deg_y: usize) -> usize {
+    pub fn byte_size(deg_x: usize, deg_y: usize) -> usize {
         2 + (deg_x + 1) * (deg_y + 1) * Self::coefficient_byte_size()
     }
 }
@@ -138,19 +139,20 @@ where
 #[cfg(test)]
 mod tests {
     use p384;
+    use rand_core::OsRng;
 
     use super::BivariatePolynomial;
 
     #[test]
     fn test_zero() {
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::zero(0, 0);
+        let bp = BivariatePolynomial::<p384::Scalar>::zero(0, 0);
         assert_eq!(bp.deg_x, 0);
         assert_eq!(bp.deg_y, 0);
         assert_eq!(bp.b.len(), 1);
         assert_eq!(bp.b[0].len(), 1);
         assert_eq!(bp.b[0][0], p384::Scalar::ZERO);
 
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::zero(2, 3);
+        let bp = BivariatePolynomial::<p384::Scalar>::zero(2, 3);
         assert_eq!(bp.deg_x, 2);
         assert_eq!(bp.deg_y, 3);
         assert_eq!(bp.b.len(), 3);
@@ -164,14 +166,14 @@ mod tests {
 
     #[test]
     fn test_random() {
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(0, 0);
+        let bp = BivariatePolynomial::<p384::Scalar>::random(0, 0, &mut OsRng);
         assert_eq!(bp.deg_x, 0);
         assert_eq!(bp.deg_y, 0);
         assert_eq!(bp.b.len(), 1);
         assert_eq!(bp.b[0].len(), 1);
         assert_ne!(bp.b[0][0], p384::Scalar::ZERO); // Zero with negligible probability.
 
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3);
+        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut OsRng);
         assert_eq!(bp.deg_x, 2);
         assert_eq!(bp.deg_y, 3);
         assert_eq!(bp.b.len(), 3);
@@ -185,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_set_coefficient() {
-        let mut bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::zero(2, 3);
+        let mut bp = BivariatePolynomial::<p384::Scalar>::zero(2, 3);
         assert_eq!(bp.b[0][0], p384::Scalar::ZERO);
 
         bp.set_coefficient(p384::Scalar::ONE, 0, 0);
@@ -194,7 +196,7 @@ mod tests {
 
     #[test]
     fn test_to_zero_hole() {
-        let mut bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3);
+        let mut bp = BivariatePolynomial::random(2, 3, &mut OsRng);
 
         bp.set_coefficient(p384::Scalar::ONE, 0, 0);
         assert_eq!(bp.b[0][0], p384::Scalar::ONE);
@@ -205,9 +207,9 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3);
-        let restored: BivariatePolynomial<p384::Scalar> =
-            BivariatePolynomial::from_bytes(bp.to_bytes()).expect("deserialization should succeed");
+        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut OsRng);
+        let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
+            .expect("deserialization should succeed");
 
         assert_eq!(bp, restored)
     }
