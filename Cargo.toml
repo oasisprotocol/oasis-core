@@ -3,6 +3,7 @@ members = [
     "runtime",
     "runtime-loader",
     "keymanager",
+    "secret-sharing",
     "tools",
 
     # Test runtimes.

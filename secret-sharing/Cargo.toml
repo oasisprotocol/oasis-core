@@ -1,0 +1,11 @@
+[package]
+name = "secret-sharing"
+version = "0.1.0"
+authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
+edition = "2018"
+
+[dependencies]
+# Third party.
+group = "0.13.0"
+p384 = { version = "0.13.0" }
+rand_core = "0.6.4"

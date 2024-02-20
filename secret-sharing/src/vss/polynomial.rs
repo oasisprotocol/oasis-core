@@ -1,0 +1,226 @@
+use group::ff::PrimeField;
+
+/// Bivariate polynomial over a non-binary prime field.
+///
+/// ```text
+/// B(x,y) = \sum_{i=0}^{deg_x} \sum_{j=0}^{deg_y} b_{i,j} x^i y^j
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BivariatePolynomial<Fp>
+where
+    Fp: PrimeField,
+{
+    /// The degree of the bivariate polynomial in the x variable.
+    pub deg_x: usize,
+    /// The degree of the bivariate polynomial in the y variable.
+    pub deg_y: usize,
+    /// The coefficients of the bivariate polynomial, where `b[i][j]`
+    /// represents the coefficient of the term `x^i y^j`.
+    pub b: Vec<Vec<Fp>>,
+}
+
+impl<Fp> BivariatePolynomial<Fp>
+where
+    Fp: PrimeField,
+{
+    /// Creates a bivariate polynomial initialized to zero.
+    pub fn zero(deg_x: u8, deg_y: u8) -> Self {
+        let deg_x = deg_x as usize;
+        let deg_y = deg_y as usize;
+
+        let b = vec![vec![Fp::ZERO; deg_y + 1]; deg_x + 1];
+        Self { b, deg_x, deg_y }
+    }
+
+    /// Creates a bivariate polynomial with random coefficients.
+    pub fn random(deg_x: u8, deg_y: u8) -> Self {
+        let deg_x = deg_x as usize;
+        let deg_y = deg_y as usize;
+
+        let mut b = Vec::with_capacity(deg_x + 1);
+        for _ in 0..b.capacity() {
+            let mut bi = Vec::with_capacity(deg_y + 1);
+            for _ in 0..bi.capacity() {
+                let bij = Fp::random(rand_core::OsRng);
+                bi.push(bij);
+            }
+            b.push(bi);
+        }
+
+        Self { b, deg_x, deg_y }
+    }
+
+    /// Sets the coefficient `b_{i,j}` that belongs to the term `x^i y^j`.
+    ///
+    /// If the coefficient does not exist, this is a no-op.
+    pub fn set_coefficient(&mut self, bij: Fp, i: usize, j: usize) {
+        if let Some(bi) = self.b.get_mut(i) {
+            if let Some(old_bij) = bi.get_mut(j) {
+                *old_bij = bij;
+            }
+        }
+    }
+
+    /// Sets the coefficient `b_{0,0}` of the constant term to zero,
+    /// effectively creating a zero-hole bivariate polynomial.
+    pub fn to_zero_hole(&mut self) {
+        self.set_coefficient(Fp::ZERO, 0, 0);
+    }
+
+    /// Returns true if and only if the coefficient `b_{0,0}` of the constant
+    /// term is zero.
+    pub fn is_zero_hole(&self) -> bool {
+        self.b[0][0] == Fp::ZERO
+    }
+
+    /// Returns the byte representation of the bivariate polynomial.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let cap = Self::byte_size(self.deg_x, self.deg_y);
+        let mut bytes = Vec::with_capacity(cap);
+        bytes.extend([self.deg_x as u8, self.deg_y as u8].iter());
+        for bi in &self.b {
+            for bij in bi {
+                bytes.extend_from_slice(bij.to_repr().as_ref());
+            }
+        }
+
+        bytes
+    }
+
+    /// Attempts to create a bivariate polynomial from its byte representation.
+    pub fn from_bytes(bytes: Vec<u8>) -> Option<Self> {
+        if bytes.len() < 2 {
+            return None;
+        }
+
+        let deg_x = bytes[0] as usize;
+        let deg_y = bytes[1] as usize;
+
+        if bytes.len() != Self::byte_size(deg_x, deg_y) {
+            return None;
+        }
+
+        let mut bytes = &bytes[2..];
+        let mut b = Vec::with_capacity(deg_x + 1);
+        for _ in 0..=deg_x {
+            let mut bi = Vec::with_capacity(deg_y + 1);
+            for _ in 0..=deg_y {
+                let mut repr: Fp::Repr = Default::default();
+                let slice = &mut repr.as_mut()[..];
+                let (bij, rest) = bytes.split_at(slice.len());
+                slice.copy_from_slice(bij);
+                bytes = rest;
+
+                let bij = match Fp::from_repr(repr).into() {
+                    None => return None,
+                    Some(bij) => bij,
+                };
+
+                bi.push(bij);
+            }
+            b.push(bi);
+        }
+
+        Some(Self { deg_x, deg_y, b })
+    }
+
+    /// Returns the size of the byte representation of a coefficient.
+    fn coefficient_byte_size() -> usize {
+        Fp::NUM_BITS.saturating_add(7) as usize / 8
+    }
+
+    /// Returns the size of the byte representation of the bivariate polynomial.
+    fn byte_size(deg_x: usize, deg_y: usize) -> usize {
+        2 + (deg_x + 1) * (deg_y + 1) * Self::coefficient_byte_size()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use p384;
+
+    use super::BivariatePolynomial;
+
+    #[test]
+    fn test_zero() {
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::zero(0, 0);
+        assert_eq!(bp.deg_x, 0);
+        assert_eq!(bp.deg_y, 0);
+        assert_eq!(bp.b.len(), 1);
+        assert_eq!(bp.b[0].len(), 1);
+        assert_eq!(bp.b[0][0], p384::Scalar::ZERO);
+
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::zero(2, 3);
+        assert_eq!(bp.deg_x, 2);
+        assert_eq!(bp.deg_y, 3);
+        assert_eq!(bp.b.len(), 3);
+        for bi in bp.b.iter() {
+            assert_eq!(bi.len(), 4);
+            for bij in bi.iter() {
+                assert_eq!(bij, &p384::Scalar::ZERO);
+            }
+        }
+    }
+
+    #[test]
+    fn test_random() {
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(0, 0);
+        assert_eq!(bp.deg_x, 0);
+        assert_eq!(bp.deg_y, 0);
+        assert_eq!(bp.b.len(), 1);
+        assert_eq!(bp.b[0].len(), 1);
+        assert_ne!(bp.b[0][0], p384::Scalar::ZERO); // Zero with negligible probability.
+
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3);
+        assert_eq!(bp.deg_x, 2);
+        assert_eq!(bp.deg_y, 3);
+        assert_eq!(bp.b.len(), 3);
+        for bi in bp.b.iter() {
+            assert_eq!(bi.len(), 4);
+            for bij in bi.iter() {
+                assert_ne!(bij, &p384::Scalar::ZERO); // Zero with negligible probability.
+            }
+        }
+    }
+
+    #[test]
+    fn test_set_coefficient() {
+        let mut bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::zero(2, 3);
+        assert_eq!(bp.b[0][0], p384::Scalar::ZERO);
+
+        bp.set_coefficient(p384::Scalar::ONE, 0, 0);
+        assert_eq!(bp.b[0][0], p384::Scalar::ONE);
+    }
+
+    #[test]
+    fn test_to_zero_hole() {
+        let mut bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3);
+
+        bp.set_coefficient(p384::Scalar::ONE, 0, 0);
+        assert_eq!(bp.b[0][0], p384::Scalar::ONE);
+
+        bp.to_zero_hole();
+        assert_eq!(bp.b[0][0], p384::Scalar::ZERO);
+    }
+
+    #[test]
+    fn test_serialization() {
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3);
+        let restored: BivariatePolynomial<p384::Scalar> =
+            BivariatePolynomial::from_bytes(bp.to_bytes()).expect("deserialization should succeed");
+
+        assert_eq!(bp, restored)
+    }
+
+    #[test]
+    fn test_coefficient_byte_size() {
+        let size = BivariatePolynomial::<p384::Scalar>::coefficient_byte_size();
+        assert_eq!(size, 48);
+    }
+
+    #[test]
+    fn test_byte_size() {
+        let size = BivariatePolynomial::<p384::Scalar>::byte_size(2, 3);
+        assert_eq!(size, 2 + 3 * 4 * 48);
+    }
+}
