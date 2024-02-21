@@ -43,7 +43,12 @@ func DefaultConfig() Config {
 		Log: LogConfig{
 			File:   "",
 			Format: "logfmt",
-			Level:  make(map[string]string),
+			Level: map[string]string{
+				"cometbft/context":  "error", // Too verbose by default.
+				"cometbft/db":       "info",  // Debug logs are too verbose and not very useful.
+				"common/persistent": "info",  // Debug logs are too verbose and not very useful.
+				"mkvs/db":           "info",  // Debug logs are too verbose and not very useful.
+			},
 		},
 		Debug: DebugConfig{
 			AllowRoot: false,
