@@ -16,7 +16,7 @@ slog-stdlog = "4.1.0"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = { version = "1.0.87", features = ["raw_value"] }
 lazy_static = "1.3.0"
-crossbeam = "0.8.2"
+crossbeam = "0.8.4"
 byteorder = "1.4.3"
 anyhow = "1.0"
 thiserror = "1.0"
