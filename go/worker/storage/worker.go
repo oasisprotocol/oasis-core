@@ -174,12 +174,10 @@ func (w *Worker) Start() error {
 			_ = r.Start()
 		}
 
-		// Wait for runtimes to be initialized and the node to be registered.
+		// Wait for runtimes to be initialized.
 		for _, r := range w.runtimes {
 			<-r.Initialized()
 		}
-
-		<-w.registration.InitialRegistrationCh()
 
 		w.logger.Info("storage worker started")
 
