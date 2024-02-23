@@ -471,7 +471,8 @@ impl Verifier {
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            self.verify_freshness_with_rak(&next_state, cache)?;
+            let latest_state = self.latest_consensus_state(cache, instance)?;
+            self.verify_freshness_with_rak(&latest_state, cache)?;
         }
 
         // Cache verified state root and epoch.
@@ -726,9 +727,7 @@ impl Verifier {
         // Verify state freshness with freshness proof. This step is required only for clients
         // as executors and key managers verify freshness regularly using node registration
         // (RAK with random nonces).
-        if self.protocol.get_config().freshness_proofs {
-            self.verify_freshness_with_proof(&mut instance, &mut cache)?;
-        };
+        self.verify_freshness_with_proof(&mut instance, &mut cache)?;
 
         // Start the command processing loop.
         loop {
