@@ -241,6 +241,9 @@ func (p *ChangeParametersProposal) PrettyPrint(_ context.Context, prefix string,
 	fmt.Fprintf(w, "%sModule: %s\n", prefix, p.Module)
 	fmt.Fprintf(w, "%sChanges: \n", prefix)
 	for param, value := range changes {
+		if value == nil {
+			continue
+		}
 		fmt.Fprintf(w, "%s  - Parameter: %s\n", prefix, param)
 		fmt.Fprintf(w, "%s    Value: %v\n", prefix, value)
 	}
