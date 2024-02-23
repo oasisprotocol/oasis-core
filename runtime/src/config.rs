@@ -2,7 +2,7 @@
 use crate::{common::version::Version, consensus::verifier::TrustRoot, types::Features};
 
 /// Global runtime configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Config {
     /// Semantic runtime version.
     pub version: Version,
@@ -15,21 +15,6 @@ pub struct Config {
     /// Whether storage state should be persisted between transaction check invocations. The state
     /// is invalidated on the next round.
     pub persist_check_tx_state: bool,
-    /// Whether TEE freshness is verified with freshness proofs.
-    pub freshness_proofs: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            version: Default::default(),
-            trust_root: None,
-            storage: Default::default(),
-            features: Default::default(),
-            persist_check_tx_state: false,
-            freshness_proofs: true,
-        }
-    }
 }
 
 /// Storage-related configuration.

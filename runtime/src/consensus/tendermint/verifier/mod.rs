@@ -726,9 +726,7 @@ impl Verifier {
         // Verify state freshness with freshness proof. This step is required only for clients
         // as executors and key managers verify freshness regularly using node registration
         // (RAK with random nonces).
-        if self.protocol.get_config().freshness_proofs {
-            self.verify_freshness_with_proof(&mut instance, &mut cache)?;
-        };
+        self.verify_freshness_with_proof(&mut instance, &mut cache)?;
 
         // Start the command processing loop.
         loop {
