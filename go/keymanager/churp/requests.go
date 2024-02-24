@@ -4,7 +4,15 @@ import (
 	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
+
+// ApplicationRequestSignatureContext is the signature context used to sign
+// application requests with runtime signing key (RAK).
+var ApplicationRequestSignatureContext = signature.NewContext("oasis-core/keymanager/churp: application request")
 
 // CreateRequest contains the initial configuration.
 type CreateRequest struct {
@@ -73,5 +81,34 @@ func (c *UpdateRequest) ValidateBasic() error {
 		}
 	}
 
+	return nil
+}
+
+// ApplicationRequest contains node's application to form a new committee.
+type ApplicationRequest struct {
+	// Identity of the CHRUP scheme.
+	Identity
+
+	// Round is the round for which the node would like to register.
+	Round uint64 `json:"round,omitempty"`
+
+	// Checksum is the hash of the verification matrix.
+	Checksum hash.Hash `json:"checksum,omitempty"`
+}
+
+// SignedApplicationRequest is an application request signed by the key manager
+// enclave using its runtime attestation key (RAK).
+type SignedApplicationRequest struct {
+	Application ApplicationRequest `json:"application,omitempty"`
+
+	// Signature is the RAK signature of the application request.
+	Signature signature.RawSignature `json:"signature,omitempty"`
+}
+
+// VerifyRAK verifies the runtime attestation key (RAK) signature.
+func (r *SignedApplicationRequest) VerifyRAK(rak *signature.PublicKey) error {
+	if !rak.Verify(ApplicationRequestSignatureContext, cbor.Marshal(r.Application), r.Signature[:]) {
+		return fmt.Errorf("RAK signature verification failed")
+	}
 	return nil
 }

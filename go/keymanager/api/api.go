@@ -9,6 +9,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
@@ -41,6 +42,9 @@ type Backend interface {
 
 	// Secrets returns the key manager secrets management implementation.
 	Secrets() secrets.Backend
+
+	// Churp returns the key manager CHURP management implementation.
+	Churp() churp.Backend
 }
 
 // Genesis is the key manager management genesis state.

@@ -21,20 +21,20 @@ type querier struct {
 	state *secretsState.ImmutableState
 }
 
-func (kq *querier) Status(ctx context.Context, id common.Namespace) (*secrets.Status, error) {
-	return kq.state.Status(ctx, id)
+func (kq *querier) Status(ctx context.Context, runtimeID common.Namespace) (*secrets.Status, error) {
+	return kq.state.Status(ctx, runtimeID)
 }
 
 func (kq *querier) Statuses(ctx context.Context) ([]*secrets.Status, error) {
 	return kq.state.Statuses(ctx)
 }
 
-func (kq *querier) MasterSecret(ctx context.Context, id common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
-	return kq.state.MasterSecret(ctx, id)
+func (kq *querier) MasterSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
+	return kq.state.MasterSecret(ctx, runtimeID)
 }
 
-func (kq *querier) EphemeralSecret(ctx context.Context, id common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
-	return kq.state.EphemeralSecret(ctx, id)
+func (kq *querier) EphemeralSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
+	return kq.state.EphemeralSecret(ctx, runtimeID)
 }
 
 func (kq *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {

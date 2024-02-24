@@ -10,6 +10,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
@@ -47,6 +48,8 @@ type TxTestSuite struct {
 
 	ctx   *abciAPI.Context
 	txCtx *abciAPI.Context
+	cfg   *abciAPI.MockApplicationStateConfig
+
 	state *churpState.MutableState
 
 	nodes              []*testNode
@@ -57,8 +60,8 @@ type TxTestSuite struct {
 
 func (s *TxTestSuite) SetupTest() {
 	// Prepare extension.
-	cfg := abciAPI.MockApplicationStateConfig{}
-	appState := abciAPI.NewMockApplicationState(&cfg)
+	s.cfg = &abciAPI.MockApplicationStateConfig{}
+	appState := abciAPI.NewMockApplicationState(s.cfg)
 	s.ext = churpExt{
 		state: appState,
 	}
@@ -134,6 +137,7 @@ func (s *TxTestSuite) SetupTest() {
 				ID: s.nodes[i].signer.Public(),
 			},
 			EntityID: s.entity.signer.Public(),
+			Roles:    node.RoleKeyManager,
 		}
 
 		for _, rt := range s.keymanagerRuntimes {
@@ -200,17 +204,17 @@ func (s *TxTestSuite) TestCreate() {
 	})
 
 	s.Run("happy path - handoffs disabled", func() {
+		identity := churp.Identity{
+			ID:        0,
+			RuntimeID: s.keymanagerRuntimes[0].ID,
+		}
 		policy := churp.SignedPolicySGX{
 			Policy: churp.PolicySGX{
-				ID:        0,
-				RuntimeID: s.keymanagerRuntimes[0].ID,
+				Identity: identity,
 			},
 		}
 		req := churp.CreateRequest{
-			Identity: churp.Identity{
-				ID:        0,
-				RuntimeID: s.keymanagerRuntimes[0].ID,
-			},
+			Identity:        identity,
 			GroupID:         churp.EccNistP384,
 			Threshold:       1,
 			HandoffInterval: 0,
@@ -226,8 +230,8 @@ func (s *TxTestSuite) TestCreate() {
 		// Verify state.
 		status, err := s.state.Status(s.txCtx, s.keymanagerRuntimes[0].ID, 0)
 		require.NoError(s.T(), err)
-		require.Equal(s.T(), uint8(0), status.Identity.ID)
-		require.Equal(s.T(), s.keymanagerRuntimes[0].ID, status.Identity.RuntimeID)
+		require.Equal(s.T(), uint8(0), status.ID)
+		require.Equal(s.T(), s.keymanagerRuntimes[0].ID, status.RuntimeID)
 		require.Equal(s.T(), churp.EccNistP384, status.GroupID)
 		require.Equal(s.T(), uint8(1), status.Threshold)
 		require.Equal(s.T(), uint64(0), status.Round)
@@ -240,17 +244,17 @@ func (s *TxTestSuite) TestCreate() {
 	})
 
 	s.Run("happy path - handoffs enabled", func() {
+		identity := churp.Identity{
+			ID:        1,
+			RuntimeID: s.keymanagerRuntimes[0].ID,
+		}
 		policy := churp.SignedPolicySGX{
 			Policy: churp.PolicySGX{
-				ID:        1,
-				RuntimeID: s.keymanagerRuntimes[0].ID,
+				Identity: identity,
 			},
 		}
 		req := churp.CreateRequest{
-			Identity: churp.Identity{
-				ID:        1,
-				RuntimeID: s.keymanagerRuntimes[0].ID,
-			},
+			Identity:        identity,
 			GroupID:         churp.EccNistP384,
 			Threshold:       1,
 			HandoffInterval: 10,
@@ -280,19 +284,19 @@ func (s *TxTestSuite) TestCreate() {
 
 func (s *TxTestSuite) TestUpdate() {
 	// Prepare one instance in advance.
+	identity := churp.Identity{
+		ID:        0,
+		RuntimeID: s.keymanagerRuntimes[0].ID,
+	}
 	createReq := churp.CreateRequest{
-		Identity: churp.Identity{
-			ID:        0,
-			RuntimeID: s.keymanagerRuntimes[0].ID,
-		},
+		Identity:        identity,
 		GroupID:         churp.EccNistP384,
 		Threshold:       1,
 		HandoffInterval: 0,
 		Policy: churp.SignedPolicySGX{
 			Policy: churp.PolicySGX{
-				Serial:    0,
-				ID:        0,
-				RuntimeID: s.keymanagerRuntimes[0].ID,
+				Identity: identity,
+				Serial:   0,
 			},
 		},
 	}
@@ -412,5 +416,162 @@ func (s *TxTestSuite) TestUpdate() {
 		require.NoError(s.T(), err)
 		require.Equal(s.T(), churp.HandoffsDisabled, status.NextHandoff)
 		require.Equal(s.T(), beacon.EpochTime(0), status.HandoffInterval)
+	})
+}
+
+func (s *TxTestSuite) TestApply() {
+	// Prepare one instance in advance.
+	identity := churp.Identity{
+		ID:        0,
+		RuntimeID: s.keymanagerRuntimes[0].ID,
+	}
+	createReq := churp.CreateRequest{
+		Identity:        identity,
+		GroupID:         churp.EccNistP384,
+		Threshold:       1,
+		HandoffInterval: 0,
+		Policy: churp.SignedPolicySGX{
+			Policy: churp.PolicySGX{
+				Identity: identity,
+				Serial:   0,
+			},
+		},
+	}
+	err := s.ext.create(s.txCtx, &createReq)
+	require.NoError(s.T(), err)
+
+	// Create event should be emitted.
+	events := s.txCtx.GetEvents()
+	require.Len(s.T(), events, 1)
+
+	s.Run("not key manager runtime", func() {
+		req := churp.SignedApplicationRequest{
+			Application: churp.ApplicationRequest{
+				Identity: churp.Identity{
+					RuntimeID: s.computeRuntimes[0].ID,
+				},
+			},
+		}
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "runtime is not a key manager")
+	})
+
+	s.Run("non-existing instance", func() {
+		// Wrong ID.
+		req := churp.SignedApplicationRequest{
+			Application: churp.ApplicationRequest{
+				Identity: churp.Identity{
+					ID:        1,
+					RuntimeID: s.keymanagerRuntimes[0].ID,
+				},
+			},
+		}
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "non-existing ID")
+
+		// Wrong runtime ID.
+		req = churp.SignedApplicationRequest{
+			Application: churp.ApplicationRequest{
+				Identity: churp.Identity{
+					ID:        0,
+					RuntimeID: s.keymanagerRuntimes[1].ID,
+				},
+			},
+		}
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "non-existing ID")
+	})
+
+	s.Run("handoffs disabled", func() {
+		req := churp.SignedApplicationRequest{
+			Application: churp.ApplicationRequest{
+				Identity: churp.Identity{
+					ID:        0,
+					RuntimeID: s.keymanagerRuntimes[0].ID,
+				},
+			},
+		}
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "handoffs disabled")
+	})
+
+	// Enable handoffs.
+	handoffInterval := beacon.EpochTime(1)
+	updateReq := churp.UpdateRequest{
+		Identity: churp.Identity{
+			ID:        0,
+			RuntimeID: s.keymanagerRuntimes[0].ID,
+		},
+		HandoffInterval: &handoffInterval,
+	}
+	err = s.ext.update(s.txCtx, &updateReq)
+	require.NoError(s.T(), err)
+
+	s.Run("submissions closed", func() {
+		s.cfg.CurrentEpoch = 1
+
+		req := churp.SignedApplicationRequest{
+			Application: churp.ApplicationRequest{
+				Identity: churp.Identity{
+					ID:        0,
+					RuntimeID: s.keymanagerRuntimes[0].ID,
+				},
+			},
+		}
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "submissions closed")
+
+		s.cfg.CurrentEpoch = 0
+	})
+
+	s.Run("invalid round", func() {
+		req := churp.SignedApplicationRequest{
+			Application: churp.ApplicationRequest{
+				Identity: churp.Identity{
+					ID:        0,
+					RuntimeID: s.keymanagerRuntimes[0].ID,
+				},
+				Round: 100,
+			},
+		}
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "invalid round")
+	})
+
+	// A request with invalid signature.
+	req := churp.SignedApplicationRequest{
+		Application: churp.ApplicationRequest{
+			Identity: churp.Identity{
+				ID:        0,
+				RuntimeID: s.keymanagerRuntimes[0].ID,
+			},
+			Round:    0,
+			Checksum: hash.Hash{1, 2, 3},
+		},
+		Signature: signature.RawSignature{},
+	}
+
+	// A valid tx signer.
+	s.txCtx.SetTxSigner(s.nodes[0].signer.Public())
+
+	s.Run("invalid RAK signature", func() {
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "RAK signature verification failed")
+	})
+
+	// Sign the request.
+	rak := s.nodes[0].rak
+	rawSigBytes, err := rak.ContextSign(churp.ApplicationRequestSignatureContext, cbor.Marshal(req.Application))
+	require.NoError(s.T(), err)
+	copy(req.Signature[:], rawSigBytes)
+
+	s.Run("happy path", func() {
+		err = s.ext.apply(s.txCtx, &req)
+		require.NoError(s.T(), err)
+	})
+
+	s.Run("duplicate submission", func() {
+		err = s.ext.apply(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "application already submitted")
 	})
 }

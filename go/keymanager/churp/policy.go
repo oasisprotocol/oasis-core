@@ -3,7 +3,6 @@ package churp
 import (
 	"fmt"
 
-	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -15,14 +14,10 @@ var PolicySGXSignatureContext = signature.NewContext("oasis-core/keymanager/chur
 // PolicySGX represents an SGX access control policy used to authenticate
 // key manager enclaves during handoffs.
 type PolicySGX struct {
+	Identity
+
 	// Serial is the monotonically increasing policy serial number.
-	Serial uint32 `json:"serial"`
-
-	// ID is the identifier of the CHURP instance.
-	ID uint8 `json:"id"`
-
-	// RuntimeID is the runtime identifier of the key manager.
-	RuntimeID common.Namespace `json:"runtime_id"`
+	Serial uint32 `json:"serial,omitempty"`
 
 	// MayShare is the vector of enclave identities from which a share can be
 	// obtained during handouts.

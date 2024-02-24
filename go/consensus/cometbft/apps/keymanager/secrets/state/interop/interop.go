@@ -125,7 +125,7 @@ func InitializeTestKeyManagerSecretsState(ctx context.Context, mkvs mkvs.Tree) e
 		},
 	} {
 		if err = state.SetStatus(ctx, status); err != nil {
-			return fmt.Errorf("setting key manager status: %w", err)
+			return fmt.Errorf("failed to set key manager status: %w", err)
 		}
 	}
 

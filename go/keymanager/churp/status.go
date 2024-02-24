@@ -25,7 +25,7 @@ type ConsensusParameters struct {
 
 // Identity uniquely identifies a CHURP instance.
 type Identity struct {
-	// ID is a unique identifier within the key manager runtime.
+	// ID is a unique CHURP identifier within the key manager runtime.
 	ID uint8 `json:"id,omitempty"`
 
 	// RuntimeID is the identifier of the key manager runtime.
@@ -38,7 +38,7 @@ type Status struct {
 
 	// GroupID is the identifier of a group used for verifiable secret sharing
 	// and key derivation.
-	GroupID uint8 `json:"group,omitempty"`
+	GroupID uint8 `json:"group_id"`
 
 	// Threshold is the minimum number of distinct shares required
 	// to reconstruct a key.
@@ -87,6 +87,11 @@ type Status struct {
 	// with the same checksum; otherwise, the applications will be annulled,
 	// and the nodes will need to apply for the new committee again.
 	Checksum *hash.Hash `json:"checksum,omitempty"`
+}
+
+// HandoffsDisabled returns true if and only if handoffs are disabled.
+func (s *Status) HandoffsDisabled() bool {
+	return s.HandoffInterval == HandoffsDisabled
 }
 
 // Application represents a node's application to form a new committee.

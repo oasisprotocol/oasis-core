@@ -4,6 +4,8 @@ import (
 	"context"
 
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp"
+	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 )
@@ -11,6 +13,7 @@ import (
 // Query is the key manager query interface.
 type Query interface {
 	Secrets() secrets.Query
+	Churp() churp.Query
 }
 
 // QueryFactory is the key manager query factory.
@@ -20,19 +23,33 @@ type QueryFactory struct {
 
 // QueryAt returns the key manager query interface for a specific height.
 func (sf *QueryFactory) QueryAt(ctx context.Context, height int64) (Query, error) {
-	state, err := secretsState.NewImmutableState(ctx, sf.state, height) // TODO: not ok
+	secretsState, err := secretsState.NewImmutableState(ctx, sf.state, height)
 	if err != nil {
 		return nil, err
 	}
-	return &keymanagerQuerier{state}, nil
+
+	churpState, err := churpState.NewImmutableState(ctx, sf.state, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return &keymanagerQuerier{
+		secretsState: secretsState,
+		churpState:   churpState,
+	}, nil
 }
 
 type keymanagerQuerier struct {
-	state *secretsState.ImmutableState
+	secretsState *secretsState.ImmutableState
+	churpState   *churpState.ImmutableState
 }
 
 func (kq *keymanagerQuerier) Secrets() secrets.Query {
-	return secrets.NewQuery(kq.state)
+	return secrets.NewQuery(kq.secretsState)
+}
+
+func (kq *keymanagerQuerier) Churp() churp.Query {
+	return churp.NewQuery(kq.churpState)
 }
 
 func (app *keymanagerApplication) QueryFactory() interface{} {
