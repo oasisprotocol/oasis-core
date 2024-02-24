@@ -326,6 +326,7 @@ type KeymanagerFixture struct {
 	LogWatcherHandlerFactories []log.WatcherHandlerFactory `json:"-"`
 
 	PrivatePeerPubKeys []string `json:"private_peer_pub_keys,omitempty"`
+	ChurpIDs           []uint8  `json:"churp_ids,omitempty"`
 }
 
 // Create instantiates the key manager described by the fixture.
@@ -364,6 +365,7 @@ func (f *KeymanagerFixture) Create(net *Network) (*Keymanager, error) {
 		Policy:             policy,
 		SentryIndices:      f.Sentries,
 		PrivatePeerPubKeys: f.PrivatePeerPubKeys,
+		ChurpIDs:           f.ChurpIDs,
 	})
 }
 

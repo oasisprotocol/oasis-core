@@ -9,6 +9,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 )
@@ -104,6 +105,9 @@ type Status struct {
 
 	// Secrets is the master and ephemeral secrets status.
 	Secrets *SecretsStatus `json:"secrets"`
+
+	// Churp is the CHURP status.
+	Churp ChurpStatus `json:"churp"`
 }
 
 // SecretsStatus is the key manager master and ephemeral secrets status.
@@ -168,6 +172,18 @@ type EphemeralSecretStats struct {
 
 	// LastGenerated is the epoch of the last generated secret.
 	LastGenerated beacon.EpochTime `json:"last_generated_epoch"`
+}
+
+// ChurpStatus represents the status of the key manager CHURP extension.
+type ChurpStatus struct {
+	// Schemes is a list of CHURP scheme configurations.
+	Schemes map[uint8]ChurpSchemeStatus `json:"schemes,omitempty"`
+}
+
+// ChurpSchemeStatus represents the status of a CHURP scheme.
+type ChurpSchemeStatus struct {
+	// Status is the consensus status of the CHURP scheme.
+	Status *churp.Status `json:"status,omitempty"`
 }
 
 // RPCAccessController handles the authorization of enclave RPC calls.

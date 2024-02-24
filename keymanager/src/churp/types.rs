@@ -1,7 +1,7 @@
 //! CHURP types used by the worker-host protocol.
 use oasis_core_runtime::common::{crypto::signature::Signature, namespace::Namespace};
 
-/// Signed public key.
+/// Initialization request.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct InitRequest {
     /// A unique identifier within the key manager runtime.

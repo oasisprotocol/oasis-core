@@ -39,6 +39,7 @@ func New(
 		cancelCtx:    cancelFn,
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
+		nodeID:       commonWorker.Identity.NodeSigner.Public(),
 		accessList:   NewAccessList(),
 		commonWorker: commonWorker,
 		backend:      backend,
@@ -86,16 +87,23 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("worker/keymanager: failed to create secrets worker: %w", err)
 	}
+	w.churpWorker, err = newChurpWorker(w)
+	if err != nil {
+		return nil, fmt.Errorf("worker/keymanager: failed to create churp worker: %w", err)
+	}
 
 	// Prepare access controllers and register their methods.
-	w.accessControllers = []workerKeymanager.RPCAccessController{w.secretsWorker}
+	w.accessControllers = []workerKeymanager.RPCAccessController{
+		w.secretsWorker,
+		w.churpWorker,
+	}
 	w.accessControllersByMethod = make(map[string]workerKeymanager.RPCAccessController)
 	for _, ctrl := range w.accessControllers {
 		for _, m := range ctrl.Methods() {
 			if _, ok := w.accessControllersByMethod[m]; ok {
 				return nil, fmt.Errorf("worker/keymanager: duplicate enclave RPC method: %s", m)
 			}
-			w.accessControllersByMethod[m] = w.secretsWorker
+			w.accessControllersByMethod[m] = ctrl
 		}
 	}
 
