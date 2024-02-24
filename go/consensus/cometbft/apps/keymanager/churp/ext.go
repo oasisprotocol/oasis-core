@@ -53,6 +53,12 @@ func (ext *churpExt) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) 
 			return api.ErrInvalidArgument
 		}
 		return ext.update(ctx, &cfg)
+	case churp.MethodApply:
+		var reg churp.SignedApplicationRequest
+		if err := cbor.Unmarshal(tx.Body, &reg); err != nil {
+			return api.ErrInvalidArgument
+		}
+		return ext.apply(ctx, &reg)
 	default:
 		panic(fmt.Sprintf("keymanager: churp: invalid method: %s", tx.Method))
 	}

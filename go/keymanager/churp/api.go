@@ -20,10 +20,15 @@ var (
 	// MethodUpdate is the method name for CHURP updates.
 	MethodUpdate = transaction.NewMethodName(ModuleName, "Update", UpdateRequest{})
 
+	// MethodApply is the method name for a node submitting an application
+	// to form a new committee.
+	MethodApply = transaction.NewMethodName(ModuleName, "Apply", ApplicationRequest{})
+
 	// Methods is the list of all methods supported by the CHURP extension.
 	Methods = []transaction.MethodName{
 		MethodCreate,
 		MethodUpdate,
+		MethodApply,
 	}
 )
 
@@ -32,12 +37,15 @@ const (
 	GasOpCreate transaction.Op = "create"
 	// GasOpUpdate is the gas operation identifier for update costs.
 	GasOpUpdate transaction.Op = "update"
+	// GasOpApply is the gas operation identifier for application costs.
+	GasOpApply transaction.Op = "apply"
 )
 
 // DefaultGasCosts are the "default" gas costs for operations.
 var DefaultGasCosts = transaction.Costs{
 	GasOpCreate: 1000,
 	GasOpUpdate: 1000,
+	GasOpApply:  1000,
 }
 
 // DefaultConsensusParameters are the "default" consensus parameters.
@@ -53,4 +61,9 @@ func NewCreateTx(nonce uint64, fee *transaction.Fee, req *CreateRequest) *transa
 // NewUpdateTx creates a new update transaction.
 func NewUpdateTx(nonce uint64, fee *transaction.Fee, req *UpdateRequest) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodUpdate, req)
+}
+
+// NewApplyTx creates a new apply transaction.
+func NewApplyTx(nonce uint64, fee *transaction.Fee, req *SignedApplicationRequest) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodApply, req)
 }
