@@ -13,7 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 )
@@ -227,31 +227,23 @@ func VerifyExtraInfo(
 	height uint64,
 	params *registry.ConsensusParameters,
 ) (*secrets.InitResponse, error) {
-	var (
-		hw  node.TEEHardware
-		rak signature.PublicKey
-	)
-	if nodeRt.Capabilities.TEE == nil || nodeRt.Capabilities.TEE.Hardware == node.TEEHardwareInvalid {
-		hw = node.TEEHardwareInvalid
-		rak = api.InsecureRAK
-	} else {
-		hw = nodeRt.Capabilities.TEE.Hardware
-		rak = nodeRt.Capabilities.TEE.RAK
-	}
-	if hw != rt.TEEHardware {
-		return nil, fmt.Errorf("keymanager: TEEHardware mismatch")
-	} else if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeID, nodeRt, rt, params.TEEFeatures, ts, height); err != nil {
+	if err := registry.VerifyNodeRuntimeEnclaveIDs(logger, nodeID, nodeRt, rt, params.TEEFeatures, ts, height); err != nil {
 		return nil, err
 	}
 	if nodeRt.ExtraInfo == nil {
 		return nil, fmt.Errorf("keymanager: missing ExtraInfo")
 	}
 
+	rak, err := common.RuntimeAttestationKey(nodeRt, rt)
+	if err != nil {
+		return nil, err
+	}
+
 	var untrustedSignedInitResponse secrets.SignedInitResponse
 	if err := cbor.Unmarshal(nodeRt.ExtraInfo, &untrustedSignedInitResponse); err != nil {
 		return nil, err
 	}
-	if err := untrustedSignedInitResponse.Verify(rak); err != nil {
+	if err := untrustedSignedInitResponse.Verify(*rak); err != nil {
 		return nil, err
 	}
 	return &untrustedSignedInitResponse.InitResponse, nil
