@@ -18,6 +18,8 @@ use crate::{
     storage::mkvs::ImmutableMKVS,
 };
 
+pub mod churp;
+
 /// Consensus key manager state wrapper.
 pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,

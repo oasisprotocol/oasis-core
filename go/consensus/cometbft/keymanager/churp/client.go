@@ -92,7 +92,7 @@ func (sc *ServiceClient) DeliverEvent(ev *cmtabcitypes.Event) error {
 	return nil
 }
 
-// New constructs a new CometBFT backed key manager secrets management Backend
+// New constructs a new CometBFT backed key manager CHURP management Backend
 // instance.
 func New(ctx context.Context, querier *app.QueryFactory) (*ServiceClient, error) {
 	sc := ServiceClient{
