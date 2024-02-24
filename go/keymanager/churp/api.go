@@ -1,6 +1,7 @@
 package churp
 
 import (
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 )
@@ -66,4 +67,11 @@ func NewUpdateTx(nonce uint64, fee *transaction.Fee, req *UpdateRequest) *transa
 // NewApplyTx creates a new apply transaction.
 func NewApplyTx(nonce uint64, fee *transaction.Fee, req *SignedApplicationRequest) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodApply, req)
+}
+
+// StatusQuery is a status query by CHURP and runtime ID.
+type StatusQuery struct {
+	Height    int64            `json:"height"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	ChurpID   uint8            `json:"churp_id"`
 }
