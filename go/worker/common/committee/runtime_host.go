@@ -50,6 +50,11 @@ func (env *nodeEnvironment) GetLightClient() (consensusAPI.LightClient, error) {
 	return env.n.LightClient, nil
 }
 
+// GetRuntimeRegistry implements RuntimeHostHandlerEnvironment.
+func (env *nodeEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
+	return env.n.RuntimeRegistry
+}
+
 // NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
 func (n *Node) NewRuntimeHostHandler() protocol.Handler {
 	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)

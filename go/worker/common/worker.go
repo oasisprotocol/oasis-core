@@ -161,6 +161,7 @@ func (w *Worker) registerRuntime(runtime runtimeRegistry.Runtime) error {
 		w.ChainContext,
 		w.HostNode,
 		runtime,
+		w.RuntimeRegistry,
 		w.Identity,
 		w.KeyManager,
 		w.Consensus,
