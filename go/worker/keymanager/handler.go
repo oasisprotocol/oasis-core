@@ -53,6 +53,11 @@ func (env *workerEnvironment) GetLightClient() (consensusAPI.LightClient, error)
 	return env.w.commonWorker.LightClient, nil
 }
 
+// GetRuntimeRegistry implements RuntimeHostHandlerEnvironment.
+func (env *workerEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
+	return env.w.commonWorker.RuntimeRegistry
+}
+
 // NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
 func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
 	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)

@@ -205,8 +205,14 @@ func New(
 		}
 	}
 
+	srv := &service{w: w}
 	// Attach the runtime client worker's internal GRPC interface.
-	api.RegisterService(grpcInternal.Server(), &service{w: w})
+	api.RegisterService(grpcInternal.Server(), srv)
+	// Register the client service with the registry.
+	err := commonWorker.RuntimeRegistry.RegisterClient(srv)
+	if err != nil {
+		return nil, err
+	}
 
 	return w, nil
 }

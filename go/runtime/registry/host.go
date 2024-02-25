@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -13,6 +12,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -23,6 +23,7 @@ import (
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
@@ -202,11 +203,6 @@ func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, er
 	}, nil
 }
 
-var (
-	errMethodNotSupported   = errors.New("method not supported")
-	errEndpointNotSupported = errors.New("endpoint not supported")
-)
-
 // RuntimeHostHandlerEnvironment is the host environment interface.
 type RuntimeHostHandlerEnvironment interface {
 	// GetKeyManagerClient returns the key manager client for this runtime.
@@ -220,6 +216,9 @@ type RuntimeHostHandlerEnvironment interface {
 
 	// GetLightClient returns the consensus light client.
 	GetLightClient() (consensus.LightClient, error)
+
+	// GetRuntimeRegistry returns the runtime registry.
+	GetRuntimeRegistry() Registry
 }
 
 // RuntimeHostHandler is a runtime host handler suitable for compute runtimes. It provides the
@@ -256,7 +255,7 @@ func (h *runtimeHostHandler) handleHostRPCCall(
 			Node:     &node,
 		}, nil
 	default:
-		return nil, errEndpointNotSupported
+		return nil, fmt.Errorf("endpoint not supported")
 	}
 }
 
@@ -271,13 +270,13 @@ func (h *runtimeHostHandler) handleHostStorageSync(
 		rs = h.runtime.Storage()
 		if rs == nil {
 			// May be unsupported for unmanaged runtimes like the key manager.
-			return nil, errEndpointNotSupported
+			return nil, fmt.Errorf("endpoint not supported")
 		}
 	case protocol.HostStorageEndpointConsensus:
 		// Consensus state storage.
 		rs = h.consensus.State()
 	default:
-		return nil, errEndpointNotSupported
+		return nil, fmt.Errorf("endpoint not supported")
 	}
 
 	var rsp *storage.ProofResponse
@@ -290,7 +289,7 @@ func (h *runtimeHostHandler) handleHostStorageSync(
 	case rq.SyncIterate != nil:
 		rsp, err = rs.SyncIterate(ctx, rq.SyncIterate)
 	default:
-		return nil, errMethodNotSupported
+		return nil, fmt.Errorf("method not supported")
 	}
 	if err != nil {
 		return nil, err
@@ -379,7 +378,7 @@ func (h *runtimeHostHandler) handleHostFetchConsensusEvents(
 			evs = append(evs, &consensusResults.Event{Governance: gev})
 		}
 	default:
-		return nil, errMethodNotSupported
+		return nil, fmt.Errorf("method not supported")
 	}
 	return &protocol.HostFetchConsensusEventsResponse{Events: evs}, nil
 }
@@ -483,6 +482,53 @@ func (h *runtimeHostHandler) handleHostIdentity() (*protocol.HostIdentityRespons
 	}, nil
 }
 
+func (h *runtimeHostHandler) handleHostSubmitTx(
+	ctx context.Context,
+	rq *protocol.HostSubmitTxRequest,
+) (*protocol.HostSubmitTxResponse, error) {
+	clientSrv, err := h.env.GetRuntimeRegistry().Client()
+	if err != nil {
+		return nil, err
+	}
+
+	submitRq := &runtimeClient.SubmitTxRequest{
+		RuntimeID: rq.RuntimeID,
+		Data:      rq.Data,
+	}
+
+	switch rq.Wait {
+	case true:
+		// We need to wait for transaction inclusion.
+		rsp, err := clientSrv.SubmitTxMeta(ctx, submitRq)
+		switch {
+		case err != nil:
+			return nil, err
+		case rsp.CheckTxError != nil:
+			return nil, errors.WithContext(runtimeClient.ErrCheckTxFailed, rsp.CheckTxError.String())
+		default:
+		}
+
+		var proof *syncer.Proof
+		if rq.Prove {
+			// TODO: Add support for inclusion proofs.
+		}
+
+		return &protocol.HostSubmitTxResponse{
+			Output:     rsp.Output,
+			Round:      rsp.Round,
+			BatchOrder: rsp.BatchOrder,
+			Proof:      proof,
+		}, nil
+	default:
+		// Just submit and forget.
+		err = clientSrv.SubmitTxNoWait(ctx, submitRq)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.HostSubmitTxResponse{}, nil
+	}
+}
+
 // Implements protocol.Handler.
 func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*protocol.Body, error) {
 	var (
@@ -524,8 +570,11 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	case rq.HostIdentityRequest != nil:
 		// Host identity.
 		rsp.HostIdentityResponse, err = h.handleHostIdentity()
+	case rq.HostSubmitTxRequest != nil:
+		// Transaction submission.
+		rsp.HostSubmitTxResponse, err = h.handleHostSubmitTx(ctx, rq.HostSubmitTxRequest)
 	default:
-		err = errMethodNotSupported
+		err = fmt.Errorf("method not supported")
 	}
 
 	if err != nil {
