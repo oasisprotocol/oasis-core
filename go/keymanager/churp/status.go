@@ -26,10 +26,10 @@ type ConsensusParameters struct {
 // Identity uniquely identifies a CHURP instance.
 type Identity struct {
 	// ID is a unique CHURP identifier within the key manager runtime.
-	ID uint8 `json:"id"`
+	ID uint8 `json:"id,omitempty"`
 
 	// RuntimeID is the identifier of the key manager runtime.
-	RuntimeID common.Namespace `json:"runtime_id"`
+	RuntimeID common.Namespace `json:"runtime_id,omitempty"`
 }
 
 // Status represents the current state of a CHURP instance.
@@ -42,27 +42,27 @@ type Status struct {
 
 	// Threshold is the minimum number of distinct shares required
 	// to reconstruct a key.
-	Threshold uint8 `json:"threshold"`
+	Threshold uint8 `json:"threshold,omitempty"`
 
 	// Round counts the number of handoffs done so far.
 	//
 	// The first round is a special round called the dealer round, in which
 	// nodes do not reshare shares but construct the secret and shares instead.
-	Round uint64 `json:"round"`
+	Round uint64 `json:"round,omitempty"`
 
 	// NextHandoff defines the epoch in which the next handoff will occur.
 	//
 	// If an insufficient number of applications is received, the next handoff
 	// will be delayed by one epoch.
-	NextHandoff beacon.EpochTime `json:"next_handoff"`
+	NextHandoff beacon.EpochTime `json:"next_handoff,omitempty"`
 
 	// HandoffInterval is the time interval in epochs between handoffs.
 	//
 	// A zero value disables handoffs.
-	HandoffInterval beacon.EpochTime `json:"handoff_interval"`
+	HandoffInterval beacon.EpochTime `json:"handoff_interval,omitempty"`
 
 	// Policy is a signed SGX access control policy.
-	Policy SignedPolicySGX `json:"policy"`
+	Policy SignedPolicySGX `json:"policy,omitempty"`
 
 	// Committee is a vector of nodes holding a share of the secret
 	// in the current round.
@@ -100,9 +100,9 @@ type Application struct {
 	//
 	// In all handoffs, except in the dealer phase, the verification matrix
 	// needs to be zero-hole.
-	Checksum hash.Hash `json:"checksum"`
+	Checksum hash.Hash `json:"checksum,omitempty"`
 
 	// Reconstructed is true if and only if the node verified all matrices
 	// and successfully reconstructed its share during the handoff.
-	Reconstructed bool `json:"reconstructed"`
+	Reconstructed bool `json:"reconstructed,omitempty"`
 }

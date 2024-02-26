@@ -18,8 +18,6 @@ use crate::{
     storage::mkvs::ImmutableMKVS,
 };
 
-pub mod churp;
-
 /// Consensus key manager state wrapper.
 pub struct ImmutableState<'a, T: ImmutableMKVS> {
     mkvs: &'a T,
@@ -168,7 +166,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("2e88f31ccb944195b557ca4c2de7589b042696eb5a6cefce925891ccb9da5eed"),
+            hash: Hash::from("b13652616801aaac81697445b16d75cfa5dd96d53df6fd96dff9cd29c0ee0725"),
             ..Default::default()
         };
         let mkvs = Tree::builder()

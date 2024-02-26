@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 oasis-core-runtime = { path = "../runtime" }
-secret-sharing = { path = "../secret-sharing" }
 cbor = { version = "0.5.1", package = "oasis-cbor" }
 
 # Third party.
@@ -25,5 +24,3 @@ x25519-dalek = { version = "2.0.0", features = ["static_secrets"] }
 tokio = { version = "1.29.1", features = ["rt"] }
 zeroize = "1.6"
 async-trait = "0.1.66"
-p384 = { version = "0.13.0" }
-p256 = { version = "0.13.2" }

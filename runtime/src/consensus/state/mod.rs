@@ -18,7 +18,7 @@ pub mod staking;
 
 #[derive(Error, Debug)]
 pub enum StateError {
-    #[error("consensus state: unavailable/corrupted state: {0}")]
+    #[error("consensus state: unavailable/corrupted state")]
     Unavailable(#[from] Error),
 }
 

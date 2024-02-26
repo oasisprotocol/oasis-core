@@ -90,19 +90,19 @@ type ApplicationRequest struct {
 	Identity
 
 	// Round is the round for which the node would like to register.
-	Round uint64 `json:"round"`
+	Round uint64 `json:"round,omitempty"`
 
 	// Checksum is the hash of the verification matrix.
-	Checksum hash.Hash `json:"checksum"`
+	Checksum hash.Hash `json:"checksum,omitempty"`
 }
 
 // SignedApplicationRequest is an application request signed by the key manager
 // enclave using its runtime attestation key (RAK).
 type SignedApplicationRequest struct {
-	Application ApplicationRequest `json:"application"`
+	Application ApplicationRequest `json:"application,omitempty"`
 
 	// Signature is the RAK signature of the application request.
-	Signature signature.RawSignature `json:"signature"`
+	Signature signature.RawSignature `json:"signature,omitempty"`
 }
 
 // VerifyRAK verifies the runtime attestation key (RAK) signature.
