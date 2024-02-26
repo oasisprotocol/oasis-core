@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -80,11 +82,56 @@ func (n *noOpUpgradeChecker) PostUpgradeFn(context.Context, *oasis.Controller) e
 	return nil
 }
 
+type upgrade240Checker struct{}
+
+func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check registry parameters.
+	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get registry consensus parameters: %w", err)
+	}
+	if registryParams.EnableKeyManagerCHURP {
+		return fmt.Errorf("key manager CHURP extension is enabled")
+	}
+
+	// Check CHURP parameters.
+	_, err = ctrl.Keymanager.Churp().ConsensusParameters(ctx, consensus.HeightLatest)
+	if err == nil {
+		return fmt.Errorf("key manager CHURP consensus parameters shouldn't be set: %w", err)
+	}
+
+	return nil
+}
+
+func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check updated registry parameters.
+	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get registry consensus parameters: %w", err)
+	}
+	if !registryParams.EnableKeyManagerCHURP {
+		return fmt.Errorf("key manager CHURP extension is disabled")
+	}
+
+	// Check updated CHURP parameters.
+	churpParams, err := ctrl.Keymanager.Churp().ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get key manager CHURP consensus parameters: %w", err)
+	}
+	if !reflect.DeepEqual(*churpParams, churp.DefaultConsensusParameters) {
+		return fmt.Errorf("key manager CHURP consensus parameters are not default")
+	}
+
+	return nil
+}
+
 var (
 	// NodeUpgradeDummy is the node upgrade dummy scenario.
 	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
 	// NodeUpgradeEmpty is the empty node upgrade scenario.
 	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{})
+	// NodeUpgradeConsensus240 is the node upgrade scenario for migrating to consensus 24.0.
+	NodeUpgradeConsensus240 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus240, &upgrade240Checker{})
 
 	malformedDescriptor = []byte(`{
 		"v": 1,

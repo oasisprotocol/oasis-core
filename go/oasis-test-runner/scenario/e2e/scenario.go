@@ -137,6 +137,7 @@ func RegisterScenarios() error {
 		NodeUpgradeDummy,
 		NodeUpgradeEmpty,
 		NodeUpgradeCancel,
+		NodeUpgradeConsensus240,
 		// Debonding entries from genesis test.
 		Debond,
 		// Consensus state sync.
