@@ -69,7 +69,7 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 		if err != nil {
 			return fmt.Errorf("failed to load registry consensus parameters: %w", err)
 		}
-		regParams.EnableKeyManagerCHURP = true
+		regParams.DeprecatedEnableKeyManagerCHURP = true // nolint: staticcheck
 
 		if err = regState.SetConsensusParameters(abciCtx, regParams); err != nil {
 			return fmt.Errorf("failed to update registry consensus parameters: %w", err)
