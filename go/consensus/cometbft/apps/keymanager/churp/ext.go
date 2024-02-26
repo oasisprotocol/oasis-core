@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 )
@@ -41,10 +40,6 @@ func (ext *churpExt) OnRegister(state tmapi.ApplicationState, _ tmapi.MessageDis
 
 // ExecuteTx implements api.Extension.
 func (ext *churpExt) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) error {
-	if enabled, err := ext.enabled(ctx); err != nil || !enabled {
-		return fmt.Errorf("keymanager: invalid method: %s", tx.Method)
-	}
-
 	switch tx.Method {
 	case churp.MethodCreate:
 		var cfg churp.CreateRequest
@@ -71,10 +66,6 @@ func (ext *churpExt) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) 
 
 // BeginBlock implements api.Extension.
 func (ext *churpExt) BeginBlock(ctx *tmapi.Context) error {
-	if enabled, err := ext.enabled(ctx); err != nil || !enabled {
-		return nil
-	}
-
 	changed, epoch := ext.state.EpochChanged(ctx)
 	if !changed {
 		return nil
@@ -91,13 +82,4 @@ func (*churpExt) EndBlock(*tmapi.Context) error {
 // InitChain implements api.Extension.
 func (ext *churpExt) InitChain(*tmapi.Context, types.RequestInitChain, *genesis.Document) error {
 	return nil
-}
-
-func (*churpExt) enabled(ctx *tmapi.Context) (bool, error) {
-	regState := registryState.NewMutableState(ctx.State())
-	regParams, err := regState.ConsensusParameters(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to load registry consensus parameters: %w", err)
-	}
-	return regParams.EnableKeyManagerCHURP, nil
 }

@@ -4,32 +4,31 @@ import (
 	"fmt"
 
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
-	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 )
 
 const (
-	// Consensus240 is the name of the upgrade that transitions Oasis Core
-	// from version 23.0.x to 24.0.0.
+	// Consensus241 is the name of the upgrade that transitions Oasis Core
+	// from version 24.0.x to 24.1.0.
 	//
-	// This upgrade enables the key manager CHURP extension.
-	Consensus240 = "consensus240"
+	// This upgrade removes the code previously necessary to enable the key
+	// manager CHURP extension.
+	Consensus241 = "consensus241"
 )
 
-var _ Handler = (*Handler240)(nil)
+var _ Handler = (*Handler241)(nil)
 
-// Handler240 is the upgrade handler that transitions Oasis Core
-// from version 23.0.x to 24.0.0.
-type Handler240 struct{}
+// Handler241 is the upgrade handler that transitions Oasis Core
+// from version 24.0.x to 24.1.0.
+type Handler241 struct{}
 
 // StartupUpgrade implements Handler.
-func (h *Handler240) StartupUpgrade() error {
+func (h *Handler241) StartupUpgrade() error {
 	return nil
 }
 
 // ConsensusUpgrade implements Handler.
-func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
+func (h *Handler241) ConsensusUpgrade(privateCtx interface{}) error {
 	abciCtx := privateCtx.(*abciAPI.Context)
 	switch abciCtx.Mode() {
 	case abciAPI.ContextBeginBlock:
@@ -42,17 +41,10 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 		if err != nil {
 			return fmt.Errorf("failed to load registry consensus parameters: %w", err)
 		}
-		regParams.DeprecatedEnableKeyManagerCHURP = true // nolint: staticcheck
+		regParams.DeprecatedEnableKeyManagerCHURP = false // nolint: staticcheck
 
 		if err = regState.SetConsensusParameters(abciCtx, regParams); err != nil {
 			return fmt.Errorf("failed to update registry consensus parameters: %w", err)
-		}
-
-		// CHURP.
-		state := churpState.NewMutableState(abciCtx.State())
-
-		if err := state.SetConsensusParameters(abciCtx, &churp.DefaultConsensusParameters); err != nil {
-			return fmt.Errorf("failed to set CHURP consensus parameters: %w", err)
 		}
 	default:
 		return fmt.Errorf("upgrade handler called in unexpected context: %s", abciCtx.Mode())
@@ -61,5 +53,5 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 }
 
 func init() {
-	Register(Consensus240, &Handler240{})
+	Register(Consensus241, &Handler241{})
 }
