@@ -61,6 +61,7 @@ const (
 	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
 	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
 	CfgRegistryEnableRuntimeGovernanceModels          = "registry.enable_runtime_governance_models"
+	CfgRegistryEnableKeyManagerCHURP                  = "registry.enable_key_manager_churp"
 	CfgRegistryTEEFeaturesSGXPCS                      = "registry.tee_features.sgx.pcs"
 	CfgRegistryTEEFeaturesSGXSignedAttestations       = "registry.tee_features.sgx.signed_attestations"
 	CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge = "registry.tee_features.sgx.default_max_attestation_age"
@@ -374,6 +375,10 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 			return fmt.Errorf("%w: '%s'", err, gmStr)
 		}
 		regSt.Parameters.EnableRuntimeGovernanceModels[gm] = true
+	}
+
+	if viper.GetBool(CfgRegistryEnableKeyManagerCHURP) {
+		regSt.Parameters.EnableKeyManagerCHURP = true
 	}
 
 	entMap := make(map[signature.PublicKey]bool)
@@ -794,6 +799,7 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
 	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.StringSlice(CfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
+	initGenesisFlags.Bool(CfgRegistryEnableKeyManagerCHURP, false, "enable key manager CHURP extension")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXPCS, true, "enable PCS support for SGX TEEs")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXSignedAttestations, true, "enable SGX RAK-signed attestations")
 	initGenesisFlags.Uint64(CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge, 1200, "default max attestation age (SGX RAK-signed attestations must be enabled") // ~2 hours at 6 sec per block.

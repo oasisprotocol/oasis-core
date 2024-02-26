@@ -1403,6 +1403,9 @@ type ConsensusParameters struct {
 	// disabled outside of the genesis block.
 	DisableKeyManagerRuntimeRegistration bool `json:"disable_km_runtime_registration,omitempty"`
 
+	// EnableKeyManagerCHURP is true iff the CHURP extension for the key manager is enabled.
+	EnableKeyManagerCHURP bool `json:"enable_km_churp,omitempty"`
+
 	// GasCosts are the registry transaction gas costs.
 	GasCosts transaction.Costs `json:"gas_costs,omitempty"`
 
