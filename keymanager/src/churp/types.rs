@@ -5,15 +5,12 @@ use oasis_core_runtime::common::{crypto::signature::Signature, namespace::Namesp
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct InitRequest {
     /// A unique identifier within the key manager runtime.
-    #[cbor(optional)]
     pub id: u8,
 
     /// The identifier of the key manager runtime.
-    #[cbor(optional)]
     pub runtime_id: Namespace,
 
     /// Round number for which the node would like to register.
-    #[cbor(optional)]
     pub round: u64,
 }
 
@@ -21,19 +18,15 @@ pub struct InitRequest {
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct ApplicationRequest {
     /// A unique identifier within the key manager runtime.
-    #[cbor(optional)]
     pub id: u8,
 
     /// The identifier of the key manager runtime.
-    #[cbor(optional)]
     pub runtime_id: Namespace,
 
     /// The round for which the node would like to register.
-    #[cbor(optional)]
     pub round: u64,
 
     /// Checksum is the hash of the verification matrix.
-    #[cbor(optional)]
     pub checksum: Vec<u8>,
 }
 

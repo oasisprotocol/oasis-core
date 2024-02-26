@@ -40,10 +40,11 @@ use super::{
 /// A handoff interval that disables handoffs.
 pub const HANDOFFS_DISABLED: EpochTime = 0xffffffffffffffff;
 
-/// Context used for the application request signature.
+/// Signatures context for signing application requests.
 const APPLICATION_REQUEST_SIGNATURE_CONTEXT: &[u8] =
     b"oasis-core/keymanager/churp: application request";
 
+/// Custom KMAC domain separation for checksums of verification matrices.
 const CHECKSUM_VERIFICATION_MATRIX_CUSTOM: &[u8] =
     b"oasis-core/keymanager/churp: verification matrix";
 
@@ -53,22 +54,25 @@ const DEALERS_CACHE_SIZE: usize = 10;
 /// Key manager application that implements churn-robust proactive secret
 /// sharing scheme (CHURP).
 pub struct Churp {
-    runtime_id: Namespace,
+    /// Host node identifier.
     node_id: PublicKey,
+    /// Key manager runtime ID.
+    runtime_id: Namespace,
 
-    // Runtime attestation key signer.
+    /// Runtime attestation key signer.
     signer: Arc<dyn Signer>,
-    // Storage handler.
+    /// Storage handler.
     storage: Storage,
 
-    churp_verifier: ChurpState,
-    beacon_verifier: BeaconState,
+    churp_state: ChurpState,
+    beacon_state: BeaconState,
 
-    dealers: RwLock<LruCache<(Namespace, u64), Arc<dyn Any + Send + Sync>>>,
+    dealers: RwLock<LruCache<(u8, u64), Arc<dyn Any + Send + Sync>>>,
 }
 
 impl Churp {
     pub fn new(
+        node_id: PublicKey,
         runtime_id: Namespace,
         identity: Arc<EnclaveIdentity>,
         consensus_verifier: Arc<dyn ConsensusVerifier>,
@@ -76,8 +80,8 @@ impl Churp {
     ) -> Self {
         let storage = Storage::new(storage);
         let signer: Arc<dyn Signer> = identity.clone();
-        let churp_verifier = ChurpState::new(consensus_verifier.clone());
-        let beacon_verifier = BeaconState::new(consensus_verifier.clone());
+        let churp_state = ChurpState::new(consensus_verifier.clone());
+        let beacon_state = BeaconState::new(consensus_verifier.clone());
 
         let dealers = RwLock::new(LruCache::new(
             NonZeroUsize::new(DEALERS_CACHE_SIZE).unwrap(),
@@ -85,11 +89,11 @@ impl Churp {
 
         Self {
             signer,
+            node_id,
             runtime_id,
-            node_id: Default::default(),
             storage,
-            churp_verifier,
-            beacon_verifier,
+            churp_state,
+            beacon_state,
             dealers,
         }
     }
@@ -115,8 +119,8 @@ impl Churp {
     /// This method must be called locally.
     pub fn init(&self, req: &InitRequest) -> Result<SignedApplicationRequest> {
         // Verify request.
-        let epoch = self.beacon_verifier.epoch()?;
-        let status = self.churp_verifier.status(self.runtime_id, req.id)?;
+        let epoch = self.beacon_state.epoch()?;
+        let status = self.churp_state.status(self.runtime_id, req.id)?;
 
         if req.runtime_id != self.runtime_id {
             return Err(Error::RuntimeMismatch.into());
@@ -186,16 +190,18 @@ impl Churp {
         D: DealerParams + 'static,
     {
         // Check the memory first.
-        let key = (self.runtime_id, round);
+        let key = (churp_id, round);
         let mut dealers = self.dealers.write().unwrap();
 
         if let Some(dealer) = dealers.get(&key) {
             // Downcasting should never fail because the consensus ensures that
             // the group ID cannot change.
             let dealer = dealer
-                .downcast_ref::<Arc<Dealer<D>>>()
-                .ok_or(Error::DealerMismatch)?;
-            return Ok(dealer.clone());
+                .clone()
+                .downcast::<Dealer<D>>()
+                .or(Err(Error::DealerMismatch))?;
+
+            return Ok(dealer);
         }
 
         // Check the local storage to ensure that only one secret bivariate
@@ -203,7 +209,14 @@ impl Churp {
         // host has cleared the storage.
         let polynomial = self
             .storage
-            .load_bivariate_polynomial::<D::PrimeField>(churp_id, round)?;
+            .load_bivariate_polynomial::<D::PrimeField>(churp_id, round);
+        let polynomial = match polynomial {
+            Ok(polynomial) => Ok(polynomial),
+            Err(err) => match err.downcast_ref::<Error>() {
+                Some(Error::InvalidBivariatePolynomial) => Ok(None), // Ignore previous rounds.
+                _ => Err(err),
+            },
+        }?;
 
         let dealer = match polynomial {
             Some(bp) => {
@@ -214,10 +227,13 @@ impl Churp {
                 Dealer::new(bp)
             }
             None => {
-                // The local storage is empty. It's time to prepare a new polynomial.
-                // If the host has cleared the storage, other participants will detect
-                // the polynomial change because the checksum of the verification matrix
-                // in the submitted application will also change.
+                // The local storage is either empty or contains a polynomial
+                // from another round. It's time to prepare a new one.
+                //
+                // If the host has cleared the storage, other participants
+                // will detect the polynomial change because the checksum
+                // of the verification matrix in the submitted application
+                // will also change.
                 let dx = threshold.saturating_sub(1);
                 let dy = 2 * dx;
 
@@ -232,13 +248,10 @@ impl Churp {
                     .store_bivariate_polynomial(polynomial, churp_id, round)?;
 
                 dealer
-
-                // TODO: Delete previous polynomials. How? Should we call
-                //       the host to clean storage?
             }
         };
 
-        // Keep the most recent dealers in the memory.
+        // Keep the most recent dealers in memory.
         let dealer = Arc::new(dealer);
         dealers.put(key, dealer.clone());
 

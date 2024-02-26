@@ -57,8 +57,6 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
     }
 
     fn decode_status(&self, data: &[u8]) -> Result<Status, StateError> {
-        print!("{:?}", data);
-
         cbor::from_slice(data).map_err(|err| StateError::Unavailable(anyhow!(err)))
     }
 }
@@ -67,11 +65,9 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
 pub struct Status {
     /// A unique identifier within the key manager runtime.
-    #[cbor(optional)]
     pub id: u8,
 
     /// The identifier of the key manager runtime.
-    #[cbor(optional)]
     pub runtime_id: Namespace,
 
     /// GroupID is the identifier of a group used for verifiable secret sharing
@@ -80,31 +76,26 @@ pub struct Status {
 
     /// Threshold is the minimum number of distinct shares required
     /// to reconstruct a key.
-    #[cbor(optional)]
     pub threshold: u8,
 
     /// Round counts the number of handoffs done so far.
     ///
     /// The first round is a special round called the dealer round, in which
     /// nodes do not reshare shares but construct the secret and shares instead.
-    #[cbor(optional)]
     pub round: u64,
 
     /// NextHandoff defines the epoch in which the next handoff will occur.
     ///
     /// If an insufficient number of applications is received, the next handoff
     /// will be delayed by one epoch.
-    #[cbor(optional)]
     pub next_handoff: EpochTime,
 
     /// HandoffInterval is the time interval in epochs between handoffs.
     ///
     /// A zero value disables handoffs.
-    #[cbor(optional)]
     pub handoff_interval: EpochTime,
 
     /// Policy is a signed SGX access control policy.
-    #[cbor(optional)]
     pub policy: SignedPolicySGX,
 
     /// Committee is a vector of nodes holding a share of the secret
@@ -142,12 +133,10 @@ pub struct Application {
     ///
     /// In all handoffs, except in the dealer phase, the verification matrix
     /// needs to be zero-hole.
-    #[cbor(optional)]
     pub checksum: Hash,
 
     /// Reconstructed is true if and only if the node verified all matrices
     /// and successfully reconstructed its share during the handoff.
-    #[cbor(optional)]
     pub reconstructed: bool,
 }
 
@@ -155,25 +144,20 @@ pub struct Application {
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct PolicySGX {
     /// A unique identifier within the key manager runtime.
-    #[cbor(optional)]
     pub id: u8,
 
     /// The identifier of the key manager runtime.
-    #[cbor(optional)]
     pub runtime_id: Namespace,
 
     /// A monotonically increasing policy serial number.
-    #[cbor(optional)]
     pub serial: u32,
 
     /// A vector of enclave identities from which a share can be obtained
     /// during handouts.
-    #[cbor(optional)]
     pub may_share: Vec<EnclaveIdentity>,
 
     /// A vector of enclave identities that may form the new committee
     /// in the next handoffs.
-    #[cbor(optional)]
     pub may_join: Vec<EnclaveIdentity>,
 }
 
@@ -181,7 +165,6 @@ pub struct PolicySGX {
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct SignedPolicySGX {
     /// An SGX access control policy.
-    #[cbor(optional)]
     pub policy: PolicySGX,
 
     /// A vector of signatures.
@@ -223,7 +206,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("b13652616801aaac81697445b16d75cfa5dd96d53df6fd96dff9cd29c0ee0725"),
+            hash: Hash::from("2e88f31ccb944195b557ca4c2de7589b042696eb5a6cefce925891ccb9da5eed"),
             ..Default::default()
         };
         let mkvs = Tree::builder()

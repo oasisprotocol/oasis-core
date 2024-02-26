@@ -16,9 +16,12 @@ use oasis_core_runtime::{
 
 use super::Error;
 
+/// Domain separation tag for encrypting bivariate polynomials.
 const BIVARIATE_POLYNOMIAL_SEAL_CONTEXT: &[u8] =
     b"oasis-core/keymanager/churp: bivariate polynomial";
-const BIVARIATE_POLYNOMIAL_STORAGE_KEY_PREFIX: &[u8] = b"keymanager/churp: bivariate polynomial";
+
+/// Prefix for storage keys used to store bivariate polynomials.
+const BIVARIATE_POLYNOMIAL_STORAGE_KEY_PREFIX: &[u8] = b"keymanager_churp_bivariate_polynomial";
 
 // CHURP storage handler.
 pub struct Storage {
@@ -41,7 +44,7 @@ impl Storage {
     where
         Fp: PrimeField,
     {
-        let key = Self::create_bivariate_polynomial_key(churp_id, round);
+        let key = Self::create_bivariate_polynomial_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
             return Ok(None);
@@ -61,7 +64,7 @@ impl Storage {
     where
         Fp: PrimeField,
     {
-        let key = Self::create_bivariate_polynomial_key(churp_id, round);
+        let key = Self::create_bivariate_polynomial_key(churp_id);
         let ciphertext = Self::encrypt_bivariate_polynomial(polynomial, churp_id, round);
         self.storage.insert(key, ciphertext)?;
 
@@ -108,10 +111,9 @@ impl Storage {
     }
 
     /// Concatenates churp ID and round.
-    fn create_bivariate_polynomial_key(churp_id: u8, round: u64) -> Vec<u8> {
+    fn create_bivariate_polynomial_key(churp_id: u8) -> Vec<u8> {
         let mut key = BIVARIATE_POLYNOMIAL_STORAGE_KEY_PREFIX.to_vec();
         key.extend(vec![churp_id]);
-        key.extend(round.to_le_bytes());
         key
     }
 
@@ -172,24 +174,18 @@ mod tests {
             .expect("bivariate polynomial should be loaded");
         assert_eq!(None, restored);
 
-        // Non-existing round.
-        let restored = storage
+        // Invalid round, decryption should fail.
+        storage
             .load_bivariate_polynomial::<p384::Scalar>(churp_id, round + 1)
-            .expect("bivariate polynomial should be loaded");
-        assert_eq!(None, restored);
+            .expect_err("decryption of bivariate polynomial should fail");
 
         // Manipulate local storage.
-        let right_key = Storage::create_bivariate_polynomial_key(churp_id, round);
+        let right_key = Storage::create_bivariate_polynomial_key(churp_id);
         let mut encrypted_polynomial = untrusted
             .get(right_key.clone())
             .expect("bivariate polynomial should be loaded");
 
-        let wrong_key = Storage::create_bivariate_polynomial_key(churp_id + 1, round);
-        untrusted
-            .insert(wrong_key, encrypted_polynomial.clone())
-            .expect("bivariate polynomial should be stored");
-
-        let wrong_key = Storage::create_bivariate_polynomial_key(churp_id, round + 1);
+        let wrong_key = Storage::create_bivariate_polynomial_key(churp_id + 1);
         untrusted
             .insert(wrong_key, encrypted_polynomial.clone())
             .expect("bivariate polynomial should be stored");
@@ -202,11 +198,6 @@ mod tests {
         // Invalid ID, decryption should fail.
         storage
             .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, round)
-            .expect_err("decryption of bivariate polynomial should fail");
-
-        // Invalid round, decryption should fail.
-        storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id, round + 1)
             .expect_err("decryption of bivariate polynomial should fail");
 
         // Corrupted ciphertext, decryption should fail.
