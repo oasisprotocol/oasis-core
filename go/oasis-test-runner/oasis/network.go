@@ -778,6 +778,7 @@ func (net *Network) MakeGenesis() error {
 		"--" + genesis.CfgConsensusBackend, net.cfg.Consensus.Backend,
 		"--" + genesis.CfgConsensusTimeoutCommit, net.cfg.Consensus.Parameters.TimeoutCommit.String(),
 		"--" + genesis.CfgRegistryEnableRuntimeGovernanceModels, "entity,runtime",
+		"--" + genesis.CfgRegistryEnableKeyManagerCHURP, "true",
 		"--" + genesis.CfgRegistryDebugAllowUnroutableAddresses, "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
 		"--" + genesis.CfgSchedulerMaxValidatorsPerEntity, strconv.Itoa(len(net.Validators())),

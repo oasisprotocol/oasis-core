@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets"
 	registryapp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
@@ -179,6 +180,7 @@ func New() tmapi.Application {
 	}
 
 	app.registerExtensions(secrets.New(app.Name()))
+	app.registerExtensions(churp.New(app.Name()))
 
 	return &app
 }
