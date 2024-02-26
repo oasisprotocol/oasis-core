@@ -17,15 +17,15 @@ type PolicySGX struct {
 	Identity
 
 	// Serial is the monotonically increasing policy serial number.
-	Serial uint32 `json:"serial,omitempty"`
+	Serial uint32 `json:"serial"`
 
 	// MayShare is the vector of enclave identities from which a share can be
 	// obtained during handouts.
-	MayShare []sgx.EnclaveIdentity `json:"may_share,omitempty"`
+	MayShare []sgx.EnclaveIdentity `json:"may_share"`
 
 	// MayJoin is the vector of enclave identities that may form the new
 	// committee in the next handoffs.
-	MayJoin []sgx.EnclaveIdentity `json:"may_join,omitempty"`
+	MayJoin []sgx.EnclaveIdentity `json:"may_join"`
 }
 
 // SanityCheck verifies the validity of the policy.
@@ -56,7 +56,7 @@ func (p *PolicySGX) SanityCheck(prev *PolicySGX) error {
 // valid, and a sufficient number of trusted policy signers have signed it.
 type SignedPolicySGX struct {
 	// Policy is an SGX access control policy.
-	Policy PolicySGX `json:"policy,omitempty"`
+	Policy PolicySGX `json:"policy"`
 
 	// Signatures is a vector of signatures.
 	Signatures []signature.Signature `json:"signatures,omitempty"`
