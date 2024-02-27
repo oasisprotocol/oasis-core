@@ -80,59 +80,9 @@ func (n *noOpUpgradeChecker) PostUpgradeFn(context.Context, *oasis.Controller) e
 	return nil
 }
 
-type upgradeV62Checker struct{}
-
-func (n *upgradeV62Checker) PreUpgradeFn(context.Context, *oasis.Controller) error {
-	return nil
-}
-
-func (n *upgradeV62Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
-	// Check updated registry parameters.
-	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
-	if err != nil {
-		return fmt.Errorf("can't get registry consensus parameters: %w", err)
-	}
-	if registryParams.TEEFeatures == nil {
-		return fmt.Errorf("TEE features are unset")
-	}
-	if !registryParams.TEEFeatures.SGX.PCS {
-		return fmt.Errorf("PCS SGX TEE feature is disabled")
-	}
-	if !registryParams.TEEFeatures.FreshnessProofs {
-		return fmt.Errorf("freshness proofs TEE feature is disabled")
-	}
-	if !registryParams.TEEFeatures.SGX.SignedAttestations {
-		return fmt.Errorf("signed attestations TEE feature is disabled")
-	}
-	if registryParams.TEEFeatures.SGX.DefaultMaxAttestationAge != 1200 {
-		return fmt.Errorf("default max attestation age is not set correctly")
-	}
-	if registryParams.GasCosts[registry.GasOpProveFreshness] != registry.DefaultGasCosts[registry.GasOpProveFreshness] {
-		return fmt.Errorf("default gas cost for freshness proofs is not set")
-	}
-	if registryParams.MaxRuntimeDeployments != 5 {
-		return fmt.Errorf("maximum number of runtime deployments is not set correctly")
-	}
-
-	// Check updated governance parameters.
-	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
-	if err != nil {
-		return fmt.Errorf("can't get governance consensus parameters: %w", err)
-	}
-	if !govParams.EnableChangeParametersProposal {
-		return fmt.Errorf("change parameters proposal is disabled")
-	}
-
-	return nil
-}
-
 var (
 	// NodeUpgradeDummy is the node upgrade dummy scenario.
 	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
-	// NodeUpgradeMaxAllowances is the node upgrade max allowances scenario.
-	NodeUpgradeMaxAllowances scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusMaxAllowances16Handler, &noOpUpgradeChecker{})
-	// NodeUpgradeV62 is the node consensus V61 migration scenario.
-	NodeUpgradeV62 scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusV62, &upgradeV62Checker{})
 	// NodeUpgradeEmpty is the empty node upgrade scenario.
 	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{})
 
