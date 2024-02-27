@@ -3,14 +3,11 @@ package churp
 import (
 	"fmt"
 
-	"github.com/cometbft/cometbft/abci/types"
-
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
-	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 )
 
@@ -85,11 +82,6 @@ func (ext *churpExt) BeginBlock(ctx *tmapi.Context) error {
 
 // EndBlock implements api.Extension.
 func (*churpExt) EndBlock(*tmapi.Context) error {
-	return nil
-}
-
-// InitChain implements api.Extension.
-func (ext *churpExt) InitChain(*tmapi.Context, types.RequestInitChain, *genesis.Document) error {
 	return nil
 }
 

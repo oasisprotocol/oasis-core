@@ -18,6 +18,7 @@ import (
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
+	keymanagerConfig "github.com/oasisprotocol/oasis-core/go/worker/keymanager/config"
 )
 
 const (
@@ -164,6 +165,7 @@ type Keymanager struct { // nolint: maligned
 	p2pPort       uint16
 
 	privatePeerPubKeys []string
+	churpIDs           []uint8
 }
 
 // KeymanagerCfg is the Oasis key manager provisioning configuration.
@@ -178,6 +180,9 @@ type KeymanagerCfg struct {
 
 	// PrivatePeerPubKeys is a list of base64-encoded libp2p public keys of peers who may call non-public methods.
 	PrivatePeerPubKeys []string
+
+	// ChurpIDs is a list of supported CHURP schemes.
+	ChurpIDs []uint8
 }
 
 // IdentityKeyPath returns the paths to the node's identity key.
@@ -296,6 +301,15 @@ func (km *Keymanager) ModifyConfig() error {
 	km.Config.Keymanager.RuntimeID = km.runtime.ID().String()
 	km.Config.Keymanager.PrivatePeerPubKeys = km.privatePeerPubKeys
 
+	// Configuration for the CHURP key manager extension.
+	schemes := make([]keymanagerConfig.ChurpSchemeConfig, len(km.churpIDs))
+	for i, id := range km.churpIDs {
+		schemes[i] = keymanagerConfig.ChurpSchemeConfig{
+			ID: id,
+		}
+	}
+	km.Config.Keymanager.Churp.Schemes = schemes
+
 	// Sentry configuration.
 	sentries, err := resolveSentries(km.net, km.sentryIndices)
 	if err != nil {
@@ -349,6 +363,7 @@ func (net *Network) NewKeymanager(cfg *KeymanagerCfg) (*Keymanager, error) {
 		consensusPort:      host.getProvisionedPort(nodePortConsensus),
 		p2pPort:            host.getProvisionedPort(nodePortP2P),
 		privatePeerPubKeys: cfg.PrivatePeerPubKeys,
+		churpIDs:           cfg.ChurpIDs,
 	}
 
 	// Remove any exploded bundles on cleanup.

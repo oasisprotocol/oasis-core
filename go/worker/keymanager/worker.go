@@ -55,6 +55,8 @@ type Worker struct { // nolint: maligned
 	quitCh    chan struct{}
 	initCh    chan struct{}
 
+	nodeID signature.PublicKey
+
 	runtime      runtimeRegistry.Runtime
 	runtimeID    common.Namespace
 	runtimeLabel string
@@ -62,6 +64,7 @@ type Worker struct { // nolint: maligned
 	kmNodeWatcher    *kmNodeWatcher
 	kmRuntimeWatcher *kmRuntimeWatcher
 	secretsWorker    *secretsWorker
+	churpWorker      *churpWorker
 
 	accessControllers         []workerKeymanager.RPCAccessController
 	accessControllersByMethod map[string]workerKeymanager.RPCAccessController
@@ -465,7 +468,7 @@ func (w *Worker) worker() {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	wg.Add(4)
+	wg.Add(5)
 
 	// Need to explicitly watch for updates related to the key manager runtime
 	// itself.
@@ -487,6 +490,12 @@ func (w *Worker) worker() {
 		w.secretsWorker.work(w.ctx, hrt)
 	}()
 
+	// Serve CHURP secrets.
+	go func() {
+		defer wg.Done()
+		w.churpWorker.work(w.ctx, hrt)
+	}()
+
 	// Watch runtime updates and register with new capabilities on restarts.
 	go func() {
 		defer wg.Done()
@@ -504,6 +513,12 @@ func (w *Worker) worker() {
 	// Wait for all workers to initialize.
 	select {
 	case <-w.secretsWorker.Initialized():
+	case <-w.ctx.Done():
+		return
+	}
+
+	select {
+	case <-w.churpWorker.Initialized():
 	case <-w.ctx.Done():
 		return
 	}

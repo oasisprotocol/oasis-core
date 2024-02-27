@@ -19,40 +19,46 @@ func (w *Worker) GetStatus() (*api.Status, error) {
 	default:
 	}
 
-	var ss api.StatusState
+	var status api.StatusState
 	switch {
 	case !w.enabled:
-		ss = api.StatusStateDisabled
+		status = api.StatusStateDisabled
 	case stopped:
-		ss = api.StatusStateStopped
+		status = api.StatusStateStopped
 	case initialized:
-		ss = api.StatusStateReady
+		status = api.StatusStateReady
 	default:
-		ss = api.StatusStateStarting
+		status = api.StatusStateStarting
 	}
 
-	av, _ := w.GetHostedRuntimeActiveVersion()
-	al := w.accessList.RuntimeAccessLists()
+	activeVersion, _ := w.GetHostedRuntimeActiveVersion()
+	accessList := w.accessList.RuntimeAccessLists()
 
-	var rts []common.Namespace
+	var runtimeClients []common.Namespace
 	if w.kmRuntimeWatcher != nil {
-		rts = w.kmRuntimeWatcher.Runtimes()
+		runtimeClients = w.kmRuntimeWatcher.Runtimes()
 	}
 
-	var s *api.SecretsStatus
+	var secrets *api.SecretsStatus
 	if w.secretsWorker != nil {
-		s = w.secretsWorker.GetStatus()
+		secrets = w.secretsWorker.GetStatus()
+	}
+
+	var churp api.ChurpStatus
+	if w.churpWorker != nil {
+		churp = w.churpWorker.GetStatus()
 	}
 
 	w.RLock()
 	defer w.RUnlock()
 
 	return &api.Status{
-		Status:         ss,
-		ActiveVersion:  av,
+		Status:         status,
+		ActiveVersion:  activeVersion,
 		RuntimeID:      &w.runtimeID,
-		ClientRuntimes: rts,
-		AccessList:     al,
-		Secrets:        s,
+		ClientRuntimes: runtimeClients,
+		AccessList:     accessList,
+		Secrets:        secrets,
+		Churp:          churp,
 	}, nil
 }
