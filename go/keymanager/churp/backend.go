@@ -9,8 +9,11 @@ import (
 
 // Backend is a CHURP management implementation.
 type Backend interface {
+	// ConsensusParameters returns the CHURP consensus parameters.
+	ConsensusParameters(context.Context, int64) (*ConsensusParameters, error)
+
 	// Status returns the CHURP status for the specified runtime and CHURP
-	// instance.
+	// scheme.
 	Status(context.Context, *StatusQuery) (*Status, error)
 
 	// Statuses returns the CHURP statuses for the specified runtime.
