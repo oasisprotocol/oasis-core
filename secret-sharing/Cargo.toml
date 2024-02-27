@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 
 # Third party.
+anyhow = "1.0"
 group = "0.13.0"
 p384 = { version = "0.13.0" }
 rand_core = "0.6.4"

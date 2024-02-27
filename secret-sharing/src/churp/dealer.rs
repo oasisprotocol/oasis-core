@@ -1,9 +1,17 @@
 //! CHURP dealer.
 
-use group::{ff::PrimeField, Group, GroupEncoding};
+use anyhow::{anyhow, Result};
+
+use group::{
+    ff::{Field, PrimeField},
+    Group, GroupEncoding,
+};
 use rand_core::RngCore;
 
-use crate::vss::{matrix::VerificationMatrix, polynomial::BivariatePolynomial};
+use crate::vss::{
+    matrix::VerificationMatrix,
+    polynomial::{BivariatePolynomial, Polynomial},
+};
 
 /// Dealer parameters.
 pub trait DealerParams {
@@ -62,6 +70,14 @@ where
     /// Returns the verification matrix.
     pub fn verification_matrix(&self) -> &VerificationMatrix<D::Group> {
         &self.vm
+    }
+
+    // Returns a secret share for the given recipient.
+    pub fn share(&self, recipient: &D::PrimeField) -> Result<Polynomial<D::PrimeField>> {
+        if recipient.is_zero().into() {
+            return Err(anyhow!("zero-value recipient not allowed"));
+        }
+        Ok(self.bp.eval_x(recipient))
     }
 }
 
