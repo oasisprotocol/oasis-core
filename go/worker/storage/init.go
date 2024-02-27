@@ -36,6 +36,7 @@ func NewLocalBackend(
 		DB:           dataDir,
 		Namespace:    namespace,
 		MaxCacheSize: int64(config.ParseSizeInBytes(config.GlobalConfig.Storage.MaxCacheSize)),
+		NoFsync:      true, // Should be safe, storage will be re-applied on crashes.
 	}
 
 	cfg.DB = GetLocalBackendDBDir(dataDir, cfg.Backend)
