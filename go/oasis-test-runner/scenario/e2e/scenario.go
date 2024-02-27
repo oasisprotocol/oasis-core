@@ -135,10 +135,9 @@ func RegisterScenarios() error {
 		GenesisFile,
 		// Node upgrade tests.
 		NodeUpgradeDummy,
-		NodeUpgradeMaxAllowances,
-		NodeUpgradeV62,
 		NodeUpgradeEmpty,
 		NodeUpgradeCancel,
+		NodeUpgradeConsensus240,
 		// Debonding entries from genesis test.
 		Debond,
 		// Consensus state sync.

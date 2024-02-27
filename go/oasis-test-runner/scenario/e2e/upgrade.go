@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -80,47 +82,44 @@ func (n *noOpUpgradeChecker) PostUpgradeFn(context.Context, *oasis.Controller) e
 	return nil
 }
 
-type upgradeV62Checker struct{}
+type upgrade240Checker struct{}
 
-func (n *upgradeV62Checker) PreUpgradeFn(context.Context, *oasis.Controller) error {
+func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check registry parameters.
+	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get registry consensus parameters: %w", err)
+	}
+	if registryParams.EnableKeyManagerCHURP {
+		return fmt.Errorf("key manager CHURP extension is enabled")
+	}
+
+	// Check CHURP parameters.
+	_, err = ctrl.Keymanager.Churp().ConsensusParameters(ctx, consensus.HeightLatest)
+	if err == nil {
+		return fmt.Errorf("key manager CHURP consensus parameters shouldn't be set: %w", err)
+	}
+
 	return nil
 }
 
-func (n *upgradeV62Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
 	// Check updated registry parameters.
 	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
 		return fmt.Errorf("can't get registry consensus parameters: %w", err)
 	}
-	if registryParams.TEEFeatures == nil {
-		return fmt.Errorf("TEE features are unset")
-	}
-	if !registryParams.TEEFeatures.SGX.PCS {
-		return fmt.Errorf("PCS SGX TEE feature is disabled")
-	}
-	if !registryParams.TEEFeatures.FreshnessProofs {
-		return fmt.Errorf("freshness proofs TEE feature is disabled")
-	}
-	if !registryParams.TEEFeatures.SGX.SignedAttestations {
-		return fmt.Errorf("signed attestations TEE feature is disabled")
-	}
-	if registryParams.TEEFeatures.SGX.DefaultMaxAttestationAge != 1200 {
-		return fmt.Errorf("default max attestation age is not set correctly")
-	}
-	if registryParams.GasCosts[registry.GasOpProveFreshness] != registry.DefaultGasCosts[registry.GasOpProveFreshness] {
-		return fmt.Errorf("default gas cost for freshness proofs is not set")
-	}
-	if registryParams.MaxRuntimeDeployments != 5 {
-		return fmt.Errorf("maximum number of runtime deployments is not set correctly")
+	if !registryParams.EnableKeyManagerCHURP {
+		return fmt.Errorf("key manager CHURP extension is disabled")
 	}
 
-	// Check updated governance parameters.
-	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
+	// Check updated CHURP parameters.
+	churpParams, err := ctrl.Keymanager.Churp().ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
-		return fmt.Errorf("can't get governance consensus parameters: %w", err)
+		return fmt.Errorf("can't get key manager CHURP consensus parameters: %w", err)
 	}
-	if !govParams.EnableChangeParametersProposal {
-		return fmt.Errorf("change parameters proposal is disabled")
+	if !reflect.DeepEqual(*churpParams, churp.DefaultConsensusParameters) {
+		return fmt.Errorf("key manager CHURP consensus parameters are not default")
 	}
 
 	return nil
@@ -129,12 +128,10 @@ func (n *upgradeV62Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 var (
 	// NodeUpgradeDummy is the node upgrade dummy scenario.
 	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
-	// NodeUpgradeMaxAllowances is the node upgrade max allowances scenario.
-	NodeUpgradeMaxAllowances scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusMaxAllowances16Handler, &noOpUpgradeChecker{})
-	// NodeUpgradeV62 is the node consensus V61 migration scenario.
-	NodeUpgradeV62 scenario.Scenario = newNodeUpgradeImpl(migrations.ConsensusV62, &upgradeV62Checker{})
 	// NodeUpgradeEmpty is the empty node upgrade scenario.
 	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{})
+	// NodeUpgradeConsensus240 is the node upgrade scenario for migrating to consensus 24.0.
+	NodeUpgradeConsensus240 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus240, &upgrade240Checker{})
 
 	malformedDescriptor = []byte(`{
 		"v": 1,

@@ -22,6 +22,16 @@ type ServiceClient struct {
 	statusNotifier *pubsub.Broker
 }
 
+// ConsensusParameters implements churp.Backend.
+func (sc *ServiceClient) ConsensusParameters(ctx context.Context, height int64) (*churp.ConsensusParameters, error) {
+	q, err := sc.querier.QueryAt(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.Churp().ConsensusParameters(ctx)
+}
+
 // Status implements churp.Backend.
 func (sc *ServiceClient) Status(ctx context.Context, query *churp.StatusQuery) (*churp.Status, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)

@@ -8,7 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 )
 
-// Query is the key manager query interface.
+// Query is the key manager secrets query interface.
 type Query interface {
 	Status(context.Context, common.Namespace) (*secrets.Status, error)
 	Statuses(context.Context) ([]*secrets.Status, error)
@@ -21,24 +21,29 @@ type querier struct {
 	state *secretsState.ImmutableState
 }
 
-func (kq *querier) Status(ctx context.Context, runtimeID common.Namespace) (*secrets.Status, error) {
-	return kq.state.Status(ctx, runtimeID)
+// Status implements Query.
+func (q *querier) Status(ctx context.Context, runtimeID common.Namespace) (*secrets.Status, error) {
+	return q.state.Status(ctx, runtimeID)
 }
 
-func (kq *querier) Statuses(ctx context.Context) ([]*secrets.Status, error) {
-	return kq.state.Statuses(ctx)
+// Statuses implements Query.
+func (q *querier) Statuses(ctx context.Context) ([]*secrets.Status, error) {
+	return q.state.Statuses(ctx)
 }
 
-func (kq *querier) MasterSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
-	return kq.state.MasterSecret(ctx, runtimeID)
+// MasterSecret implements Query.
+func (q *querier) MasterSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedMasterSecret, error) {
+	return q.state.MasterSecret(ctx, runtimeID)
 }
 
-func (kq *querier) EphemeralSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
-	return kq.state.EphemeralSecret(ctx, runtimeID)
+// EphemeralSecret implements Query.
+func (q *querier) EphemeralSecret(ctx context.Context, runtimeID common.Namespace) (*secrets.SignedEncryptedEphemeralSecret, error) {
+	return q.state.EphemeralSecret(ctx, runtimeID)
 }
 
-func (kq *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
-	statuses, err := kq.state.Statuses(ctx)
+// Genesis implements Query.
+func (q *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
+	statuses, err := q.state.Statuses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +57,7 @@ func (kq *querier) Genesis(ctx context.Context) (*secrets.Genesis, error) {
 	return &gen, nil
 }
 
+// NewQuery creates a new key manager secrets query.
 func NewQuery(state *secretsState.ImmutableState) Query {
 	return &querier{state}
 }

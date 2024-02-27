@@ -14,11 +14,13 @@ var (
 	// serviceName is the gRPC service name.
 	serviceName = cmnGrpc.NewServiceName("KeyManager.Churp")
 
-	// methodGetStatus is the GetStatus method.
+	// methodConsensusParameters is the ConsensusParameters method.
+	methodConsensusParameters = serviceName.NewMethod("ConsensusParameters", int64(0))
+	// methodStatus is the Status method.
 	methodStatus = serviceName.NewMethod("Status", StatusQuery{})
-	// methodGetStatuses is the GetStatuses method.
+	// methodStatuses is the Statuses method.
 	methodStatuses = serviceName.NewMethod("Statuses", registry.NamespaceQuery{})
-	// methodGetStatuses is the GetStatuses method.
+	// methodAllStatuses is the AllStatuses method.
 	methodAllStatuses = serviceName.NewMethod("AllStatuses", int64(0))
 
 	// methodWatchStatuses is the WatchStatuses method.
@@ -29,6 +31,10 @@ var (
 		ServiceName: string(serviceName),
 		HandlerType: (*Backend)(nil),
 		Methods: []grpc.MethodDesc{
+			{
+				MethodName: methodConsensusParameters.ShortName(),
+				Handler:    handlerConsensusParameters,
+			},
 			{
 				MethodName: methodStatus.ShortName(),
 				Handler:    handlerStatus,
@@ -51,6 +57,29 @@ var (
 		},
 	}
 )
+
+func handlerConsensusParameters(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(Backend).ConsensusParameters(ctx, height)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodConsensusParameters.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).ConsensusParameters(ctx, req.(int64))
+	}
+	return interceptor(ctx, height, info, handler)
+}
 
 func handlerStatus(
 	srv interface{},
@@ -154,6 +183,14 @@ func RegisterService(server *grpc.Server, service Backend) {
 // Client is a gRPC keymanager secrets client.
 type Client struct {
 	conn *grpc.ClientConn
+}
+
+func (c *Client) ConsensusParameters(ctx context.Context, height int64) (*ConsensusParameters, error) {
+	var resp ConsensusParameters
+	if err := c.conn.Invoke(ctx, methodConsensusParameters.FullName(), height, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 func (c *Client) Status(ctx context.Context, query *StatusQuery) (*Status, error) {
