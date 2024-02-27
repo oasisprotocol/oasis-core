@@ -2827,6 +2827,7 @@ dependencies = [
 name = "secret-sharing"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "group",
  "honggfuzz",
  "p384",
