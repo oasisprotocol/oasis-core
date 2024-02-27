@@ -12,6 +12,34 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.12 (2024-02-27)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/worker/client: Fix nil dereference on early Query
+  ([#5403](https://github.com/oasisprotocol/oasis-core/issues/5403))
+
+### Documentation Improvements
+
+- Pin Tendermint links to 22.2.x branch
+  ([#5347](https://github.com/oasisprotocol/oasis-core/issues/5347))
+
+  Since we moved (and renamed folders) from Tendermint to CometBFT in the
+  `master` branch, links in the stable branch docs to the source files are now
+  broken.
+  Fix the links by pointing to source files in the stable git branch.
+
+### Internal Changes
+
+- Install setuptools to make Towncrier fork work with Python 3.12
+  ([#5421](https://github.com/oasisprotocol/oasis-core/issues/5421))
+
 ## 22.2.11 (2023-08-09)
 
 | Protocol          | Version   |
