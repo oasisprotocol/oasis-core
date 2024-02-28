@@ -20,6 +20,9 @@ pub trait DealerParams {
 
     /// A group used for constructing the verification matrix.
     type Group: Group<Scalar = Self::PrimeField> + GroupEncoding;
+
+    // Maps input data to an element of the prime field.
+    fn encode(data: [u8; 32]) -> Option<Self::PrimeField>;
 }
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
@@ -90,13 +93,19 @@ pub struct NistP384;
 impl DealerParams for NistP384 {
     type PrimeField = p384::Scalar;
     type Group = p384::ProjectivePoint;
+
+    fn encode(data: [u8; 32]) -> Option<Self::PrimeField> {
+        let mut bytes = [0u8; 48];
+        bytes[16..].copy_from_slice(&data);
+        p384::Scalar::from_slice(&bytes).ok()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{BivariatePolynomial, NistP384Dealer};
+    use super::{BivariatePolynomial, DealerParams, NistP384, NistP384Dealer};
 
     #[test]
     fn test_new() {
@@ -116,5 +125,17 @@ mod tests {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let d = NistP384Dealer::zero_hole(2, 3, &mut rng);
         assert!(d.verification_matrix().is_zero_hole());
+    }
+
+    #[test]
+    fn test_encode() {
+        let zero = NistP384::encode([0; 32]);
+        assert_eq!(zero, Some(p384::Scalar::ZERO));
+
+        let mut data = [0; 32];
+        data[30] = 3;
+        data[31] = 232;
+        let thousand = NistP384::encode(data);
+        assert_eq!(thousand, Some(p384::Scalar::from_u64(1000)));
     }
 }
