@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	commonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
@@ -158,7 +159,6 @@ func NewNode(
 	rpcRoleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
-	checkpointerCfg *checkpoint.CheckpointerConfig,
 	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Node, error) {
 	initMetrics()
@@ -200,53 +200,56 @@ func NewNode(
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 
-	// Create a new checkpointer if enabled.
-	if checkpointerCfg != nil {
-		checkpointerCfg = &checkpoint.CheckpointerConfig{
-			Name:            "runtime",
-			Namespace:       commonNode.Runtime.ID(),
-			CheckInterval:   checkpointerCfg.CheckInterval,
-			RootsPerVersion: 2, // State root and I/O root.
-			GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
-				rt, rerr := commonNode.Runtime.ActiveDescriptor(ctx)
-				if rerr != nil {
-					return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
-				}
+	// Create a new checkpointer. Always create a checkpointer, even if checkpointing is disabled
+	// in configuration so we can ensure that the genesis checkpoint is available.
+	checkInterval := checkpoint.CheckIntervalDisabled
+	if config.GlobalConfig.Storage.Checkpointer.Enabled {
+		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
+	}
+	checkpointerCfg := checkpoint.CheckpointerConfig{
+		Name:            "runtime",
+		Namespace:       commonNode.Runtime.ID(),
+		CheckInterval:   checkInterval,
+		RootsPerVersion: 2, // State root and I/O root.
+		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+			rt, rerr := commonNode.Runtime.ActiveDescriptor(ctx)
+			if rerr != nil {
+				return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
+			}
 
-				blk, rerr := commonNode.Consensus.RootHash().GetGenesisBlock(ctx, &roothashApi.RuntimeRequest{
-					RuntimeID: rt.ID,
-					Height:    consensus.HeightLatest,
-				})
-				if rerr != nil {
-					return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
-				}
+			blk, rerr := commonNode.Consensus.RootHash().GetGenesisBlock(ctx, &roothashApi.RuntimeRequest{
+				RuntimeID: rt.ID,
+				Height:    consensus.HeightLatest,
+			})
+			if rerr != nil {
+				return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
+			}
 
-				return &checkpoint.CreationParameters{
-					Interval:       rt.Storage.CheckpointInterval,
-					NumKept:        rt.Storage.CheckpointNumKept,
-					ChunkSize:      rt.Storage.CheckpointChunkSize,
-					InitialVersion: blk.Header.Round,
-				}, nil
-			},
-			GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
-				blk, berr := commonNode.Runtime.History().GetCommittedBlock(ctx, version)
-				if berr != nil {
-					return nil, berr
-				}
+			return &checkpoint.CreationParameters{
+				Interval:       rt.Storage.CheckpointInterval,
+				NumKept:        rt.Storage.CheckpointNumKept,
+				ChunkSize:      rt.Storage.CheckpointChunkSize,
+				InitialVersion: blk.Header.Round,
+			}, nil
+		},
+		GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
+			blk, berr := commonNode.Runtime.History().GetCommittedBlock(ctx, version)
+			if berr != nil {
+				return nil, berr
+			}
 
-				return blk.Header.StorageRoots(), nil
-			},
-		}
-		var err error
-		n.checkpointer, err = checkpoint.NewCheckpointer(
-			n.ctx,
-			localStorage.NodeDB(),
-			localStorage.Checkpointer(),
-			*checkpointerCfg,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create checkpointer: %w", err)
-		}
+			return blk.Header.StorageRoots(), nil
+		},
+	}
+	var err error
+	n.checkpointer, err = checkpoint.NewCheckpointer(
+		n.ctx,
+		localStorage.NodeDB(),
+		localStorage.Checkpointer(),
+		checkpointerCfg,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create checkpointer: %w", err)
 	}
 
 	// Register prune handler.
@@ -278,7 +281,7 @@ func (n *Node) Name() string {
 func (n *Node) Start() error {
 	go n.watchQuit()
 	go n.worker()
-	if n.checkpointer != nil {
+	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		go n.consensusCheckpointSyncer()
 	}
 	return nil
@@ -1258,7 +1261,7 @@ mainLoop:
 				n.nudgeAvailability(cachedLastRound, latestBlockRound)
 
 				// Notify the checkpointer that there is a new finalized round.
-				if n.checkpointer != nil {
+				if config.GlobalConfig.Storage.Checkpointer.Enabled {
 					n.checkpointer.NotifyNewVersion(finalized.summary.Round)
 				}
 			} else {

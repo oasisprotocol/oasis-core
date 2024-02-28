@@ -9,7 +9,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	"github.com/oasisprotocol/oasis-core/go/config"
-	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	"github.com/oasisprotocol/oasis-core/go/worker/registration"
@@ -57,16 +56,9 @@ func New(
 	s.fetchPool = workerpool.New("storage_fetch")
 	s.fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 
-	var checkpointerCfg *checkpoint.CheckpointerConfig
-	if config.GlobalConfig.Storage.Checkpointer.Enabled {
-		checkpointerCfg = &checkpoint.CheckpointerConfig{
-			CheckInterval: config.GlobalConfig.Storage.Checkpointer.CheckInterval,
-		}
-	}
-
 	// Start storage node for every runtime.
 	for id, rt := range s.commonWorker.GetRuntimes() {
-		if err := s.registerRuntime(rt, checkpointerCfg); err != nil {
+		if err := s.registerRuntime(rt); err != nil {
 			return nil, fmt.Errorf("failed to create storage worker for runtime %s: %w", id, err)
 		}
 	}
@@ -77,7 +69,7 @@ func New(
 	return s, nil
 }
 
-func (w *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerCfg *checkpoint.CheckpointerConfig) error {
+func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 	id := commonNode.Runtime.ID()
 	w.logger.Info("registering new runtime",
 		"runtime_id", id,
@@ -107,7 +99,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node, checkpointerC
 		rpRPC,
 		w.commonWorker.GetConfig(),
 		localStorage,
-		checkpointerCfg,
 		&committee.CheckpointSyncConfig{
 			Disabled:          config.GlobalConfig.Storage.CheckpointSyncDisabled,
 			ChunkFetcherCount: config.GlobalConfig.Storage.FetcherCount,
