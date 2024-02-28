@@ -14,6 +14,8 @@ use crate::common::{
 
 use super::beacon::EpochTime;
 
+pub mod churp;
+
 /// Context used to sign key manager policies.
 const POLICY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager: policy";
 
