@@ -144,14 +144,15 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 	// also do their own verification).
 	// Check bundles in order: fresh first, then cached, then try downloading again if there was
 	// no scheduled refresh this time.
-	tcbBundle, err := func() (*pcs.TCBBundle, error) {
+	getTcbBundle := func(update pcs.UpdateType) (*pcs.TCBBundle, error) {
 		var fresh *pcs.TCBBundle
 
 		cached, refresh := ec.tcbCache.check(pckInfo.FMSPC)
 		if refresh {
-			if fresh, err = sp.pcs.GetTCBBundle(ctx, pckInfo.FMSPC); err != nil {
+			if fresh, err = sp.pcs.GetTCBBundle(ctx, pckInfo.FMSPC, update); err != nil {
 				sp.logger.Warn("error downloading TCB refresh",
 					"err", err,
+					"update", update,
 				)
 			}
 			if err = ec.verifyBundle(quote, quotePolicy, fresh, sp, "fresh"); err == nil {
@@ -160,6 +161,7 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 			}
 			sp.logger.Warn("error verifying downloaded TCB refresh",
 				"err", err,
+				"update", update,
 			)
 		}
 
@@ -169,13 +171,18 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 
 		// If downloaded already, don't try again but just return the last error.
 		if refresh {
+			sp.logger.Warn("error verifying cached TCB",
+				"err", err,
+				"update", update,
+			)
 			return nil, fmt.Errorf("both fresh and cached TCB bundles failed verification, cached error: %w", err)
 		}
 
 		// If not downloaded yet this time round, try forcing. Any errors are fatal.
-		if fresh, err = sp.pcs.GetTCBBundle(ctx, pckInfo.FMSPC); err != nil {
+		if fresh, err = sp.pcs.GetTCBBundle(ctx, pckInfo.FMSPC, update); err != nil {
 			sp.logger.Warn("error downloading TCB",
 				"err", err,
+				"update", update,
 			)
 			return nil, err
 		}
@@ -184,7 +191,13 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 		}
 		ec.tcbCache.cache(fresh, pckInfo.FMSPC)
 		return fresh, nil
-	}()
+	}
+	var tcbBundle *pcs.TCBBundle
+	for _, update := range []pcs.UpdateType{pcs.UpdateStandard, pcs.UpdateEarly} {
+		if tcbBundle, err = getTcbBundle(update); err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
