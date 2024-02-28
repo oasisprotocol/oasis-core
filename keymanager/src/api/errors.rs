@@ -31,10 +31,8 @@ pub enum KeyManagerError {
     PolicyChanged,
     #[error("policy has invalid runtime")]
     PolicyInvalidRuntime,
-    #[error("policy is malformed or invalid: {0}")]
-    PolicyInvalid(#[source] anyhow::Error),
-    #[error("policy has insufficient signatures")]
-    PolicyInsufficientSignatures,
+    #[error("insufficient signatures")]
+    InsufficientSignatures,
     #[error("runtime signing key missing")]
     RSKMissing,
     #[error("runtime encryption key not published")]

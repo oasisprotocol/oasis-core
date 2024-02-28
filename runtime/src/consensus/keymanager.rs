@@ -62,7 +62,7 @@ pub struct SignedPolicySGX {
 
 impl SignedPolicySGX {
     /// Verify the signatures.
-    pub fn verify(&self) -> Result<&PolicySGX, Error> {
+    pub fn verify(&self) -> Result<&PolicySGX> {
         let raw_policy = cbor::to_vec(self.policy.clone());
         for sig in &self.signatures {
             sig.signature

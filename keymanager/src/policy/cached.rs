@@ -24,7 +24,7 @@ use oasis_core_runtime::{
 
 use crate::api::KeyManagerError;
 
-use super::verify_policy_and_trusted_signers;
+use super::verify_data_and_trusted_signers;
 
 lazy_static! {
     static ref POLICY: Policy = Policy::new();
@@ -209,7 +209,7 @@ impl CachedPolicy {
     }
 
     fn parse(untrusted_policy: SignedPolicySGX, raw: &[u8]) -> Result<Self> {
-        let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+        let policy = verify_data_and_trusted_signers(&untrusted_policy)?;
         let checksum = Self::checksum_policy(raw);
 
         let mut cached_policy = Self::default();

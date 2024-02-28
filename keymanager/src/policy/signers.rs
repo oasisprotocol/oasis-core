@@ -1,22 +1,24 @@
 use std::collections::HashSet;
 
+use anyhow::Result;
+
 use oasis_core_runtime::{
-    common::crypto::signature::PublicKey as OasisPublicKey,
-    consensus::keymanager::{PolicySGX, SignedPolicySGX},
+    common::crypto::signature::{PublicKey as OasisPublicKey, SignatureBundle},
+    consensus::keymanager::{self, churp},
 };
 
 use crate::api::KeyManagerError;
 
-/// Set of trusted key manager policy signing keys.
+/// Set of trusted key manager signing keys.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
-pub struct TrustedPolicySigners {
+pub struct TrustedSigners {
     /// Set of trusted signers.
     pub signers: HashSet<OasisPublicKey>,
     /// Threshold for determining if enough valid signatures are present.
     pub threshold: u64,
 }
 
-impl Default for TrustedPolicySigners {
+impl Default for TrustedSigners {
     fn default() -> Self {
         Self {
             signers: HashSet::new(),
@@ -25,37 +27,58 @@ impl Default for TrustedPolicySigners {
     }
 }
 
-impl TrustedPolicySigners {
-    /// Verify that policy has valid signatures and that enough of them are from trusted signers.
-    pub fn verify<'a>(
-        &self,
-        signed_policy: &'a SignedPolicySGX,
-    ) -> Result<&'a PolicySGX, KeyManagerError> {
-        let policy = signed_policy
-            .verify()
-            .map_err(|err| KeyManagerError::PolicyInvalid(err.into()))?;
+impl TrustedSigners {
+    /// Verifies that signed data has valid signatures and that enough of them
+    // are from trusted signers.
+    pub fn verify<'a, P>(&self, signed_data: &'a impl SignedData<P>) -> Result<&'a P> {
+        let data = signed_data.verify()?;
+        self.verify_trusted_signers(signed_data)?;
 
-        self.verify_trusted_signers(signed_policy)?;
-
-        Ok(policy)
+        Ok(data)
     }
 
-    /// Verify that policy has enough signatures from trusted signers.
-    fn verify_trusted_signers(
-        &self,
-        signed_policy: &SignedPolicySGX,
-    ) -> Result<(), KeyManagerError> {
+    /// Verify that signed data has enough signatures from trusted signers.
+    fn verify_trusted_signers<P>(&self, signed_data: &impl SignedData<P>) -> Result<()> {
         // Use set to remove duplicates.
-        let all: HashSet<_> = signed_policy
-            .signatures
+        let all: HashSet<_> = signed_data
+            .signatures()
             .iter()
             .map(|s| s.public_key)
             .collect();
         let trusted: HashSet<_> = self.signers.intersection(&all).collect();
         if trusted.len() < self.threshold as usize {
-            return Err(KeyManagerError::PolicyInsufficientSignatures);
+            return Err(KeyManagerError::InsufficientSignatures.into());
         }
         Ok(())
+    }
+}
+
+/// Data signed by trusted signers.
+pub trait SignedData<P> {
+    /// Verifies the signatures.
+    fn verify(&self) -> Result<&P>;
+
+    /// Returns the signatures.
+    fn signatures(&self) -> &Vec<SignatureBundle>;
+}
+
+impl SignedData<keymanager::PolicySGX> for keymanager::SignedPolicySGX {
+    fn verify(&self) -> Result<&keymanager::PolicySGX> {
+        self.verify()
+    }
+
+    fn signatures(&self) -> &Vec<SignatureBundle> {
+        &self.signatures
+    }
+}
+
+impl SignedData<churp::PolicySGX> for churp::SignedPolicySGX {
+    fn verify(&self) -> Result<&churp::PolicySGX> {
+        self.verify()
+    }
+
+    fn signatures(&self) -> &Vec<SignatureBundle> {
+        &self.signatures
     }
 }
 
@@ -66,7 +89,7 @@ mod tests {
     use crypto::signature::{PublicKey as OasisPublicKey, SignatureBundle};
     use oasis_core_runtime::{common::crypto, consensus::keymanager::SignedPolicySGX};
 
-    use super::TrustedPolicySigners;
+    use super::TrustedSigners;
 
     #[test]
     fn test_trusted_policy_signers() {
@@ -106,7 +129,7 @@ mod tests {
                 ..Default::default()
             },
         ];
-        let trusted_signers = TrustedPolicySigners {
+        let trusted_signers = TrustedSigners {
             signers: HashSet::from_iter(vec![public_keys[0], public_keys[1], public_keys[2]]),
             threshold: 2,
         };

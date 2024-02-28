@@ -1,6 +1,9 @@
 //! Key manager state in the consensus layer.
 use std::collections::HashMap;
 
+use anyhow::Result;
+use thiserror::Error;
+
 use crate::{
     common::{
         crypto::{
@@ -12,6 +15,16 @@ use crate::{
     },
     consensus::beacon::EpochTime,
 };
+
+/// Context used to sign key manager CHURP policies.
+const POLICY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager/churp: policy";
+
+/// Errors emitted by the CHURP module.
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("invalid signature")]
+    InvalidSignature,
+}
 
 /// Group.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
@@ -131,4 +144,18 @@ pub struct SignedPolicySGX {
     /// A vector of signatures.
     #[cbor(optional)]
     pub signatures: Vec<SignatureBundle>,
+}
+
+impl SignedPolicySGX {
+    /// Verify the signatures.
+    pub fn verify(&self) -> Result<&PolicySGX> {
+        let raw_policy = cbor::to_vec(self.policy.clone());
+        for sig in &self.signatures {
+            sig.signature
+                .verify(&sig.public_key, POLICY_SIGNATURE_CONTEXT, &raw_policy)
+                .map_err(|_| Error::InvalidSignature)?;
+        }
+
+        Ok(&self.policy)
+    }
 }
