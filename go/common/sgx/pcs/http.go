@@ -88,15 +88,14 @@ func (hc *httpClient) getUrl(p string) *url.URL { // nolint: revive
 	return &u
 }
 
-func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundle, error) {
-	// TODO: Cache based on FMSPC, with TTL that is less than expiration time.
-
+func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte, update UpdateType) (*TCBBundle, error) {
 	var tcbBundle TCBBundle
 
 	// First fetch TCB info.
 	u := hc.getUrl(pcsAPIGetTCBInfoPath)
 	q := u.Query()
 	q.Set("fmspc", hex.EncodeToString(fmspc))
+	q.Set("update", string(update))
 	u.RawQuery = q.Encode()
 	rsp, err := hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false)
 	if err != nil {
@@ -120,6 +119,9 @@ func (hc *httpClient) GetTCBBundle(ctx context.Context, fmspc []byte) (*TCBBundl
 
 	// Then fetch QE identity.
 	u = hc.getUrl(pcsAPIGetQEIdentityPath)
+	q = u.Query()
+	q.Set("update", string(update))
+	u.RawQuery = q.Encode()
 	rsp, err = hc.doPCSRequest(ctx, u, http.MethodGet, "", nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("pcs: QE identity request failed: %w", err)
