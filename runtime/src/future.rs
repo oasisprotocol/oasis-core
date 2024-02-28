@@ -8,8 +8,8 @@ pub fn new_tokio_runtime() -> tokio::runtime::Runtime {
     //
     // Make sure to update THREADS.md if you change any of the thread-related settings.
     tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .max_blocking_threads(2)
+        .worker_threads(6)
+        .max_blocking_threads(16)
         .thread_keep_alive(std::time::Duration::MAX)
         .build()
         .unwrap()
