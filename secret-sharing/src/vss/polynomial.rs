@@ -23,6 +23,19 @@ where
         Self { a }
     }
 
+    /// Creates a bivariate polynomial with random coefficients.
+    pub fn random(deg: u8, rng: &mut impl RngCore) -> Self {
+        let deg = deg as usize;
+
+        let mut a = Vec::with_capacity(deg + 1);
+        for _ in 0..a.capacity() {
+            let ai = Fp::random(&mut *rng);
+            a.push(ai);
+        }
+
+        Self::with_coefficients(a)
+    }
+
     /// Creates a polynomial with the given coefficients.
     pub fn with_coefficients(a: Vec<Fp>) -> Self {
         if a.is_empty() {
@@ -30,6 +43,55 @@ where
         }
 
         Self { a }
+    }
+
+    /// Returns the byte representation of the polynomial.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let cap = Self::byte_size(self.a.len());
+        let mut bytes = Vec::with_capacity(cap);
+        for ai in &self.a {
+            bytes.extend_from_slice(ai.to_repr().as_ref());
+        }
+
+        bytes
+    }
+
+    /// Attempts to create a polynomial from its byte representation.
+    pub fn from_bytes(bytes: Vec<u8>) -> Option<Self> {
+        let size = Self::coefficient_byte_size();
+        if bytes.is_empty() || bytes.len() % size != 0 {
+            return None;
+        }
+        let deg = bytes.len() / size - 1;
+
+        let mut bytes = &bytes[..];
+        let mut a = Vec::with_capacity(deg + 1);
+        for _ in 0..=deg {
+            let mut repr: Fp::Repr = Default::default();
+            let slice = &mut repr.as_mut()[..];
+            let (ai, rest) = bytes.split_at(slice.len());
+            slice.copy_from_slice(ai);
+            bytes = rest;
+
+            let ai = match Fp::from_repr(repr).into() {
+                None => return None,
+                Some(ai) => ai,
+            };
+
+            a.push(ai);
+        }
+
+        Some(Self::with_coefficients(a))
+    }
+
+    /// Returns the size of the byte representation of a coefficient.
+    pub fn coefficient_byte_size() -> usize {
+        Fp::NUM_BITS.saturating_add(7) as usize / 8
+    }
+
+    /// Returns the size of the byte representation of the polynomial.
+    pub fn byte_size(deg: usize) -> usize {
+        Self::coefficient_byte_size() * deg
     }
 }
 
@@ -271,6 +333,19 @@ mod tests {
     }
 
     #[test]
+    fn test_p_serialization() {
+        let bp = Polynomial::<p384::Scalar>::random(0, &mut OsRng);
+        let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
+            .expect("deserialization should succeed");
+        assert_eq!(bp, restored);
+
+        let bp = Polynomial::<p384::Scalar>::random(3, &mut OsRng);
+        let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
+            .expect("deserialization should succeed");
+        assert_eq!(bp, restored);
+    }
+
+    #[test]
     fn test_bp_zero() {
         let bp = BivariatePolynomial::<p384::Scalar>::zero(0, 0);
         assert_eq!(bp.deg_x, 0);
@@ -366,11 +441,15 @@ mod tests {
 
     #[test]
     fn test_bp_serialization() {
+        let bp = BivariatePolynomial::<p384::Scalar>::random(0, 0, &mut OsRng);
+        let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
+            .expect("deserialization should succeed");
+        assert_eq!(bp, restored);
+
         let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut OsRng);
         let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
-
-        assert_eq!(bp, restored)
+        assert_eq!(bp, restored);
     }
 
     #[test]
