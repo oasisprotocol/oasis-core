@@ -21,7 +21,11 @@ import (
 const (
 	moduleName = "rhp/internal"
 
+	// connWriteTimeout is the connection write timeout.
 	connWriteTimeout = 5 * time.Second
+	// connReadyTimeout is the timeout while waiting for the connection to be ready while attempting
+	// to handle a new request from the runtime.
+	connReadyTimeout = 5 * time.Second
 )
 
 var (
@@ -212,6 +216,7 @@ type connection struct { // nolint: maligned
 
 	info *RuntimeInfoResponse
 
+	readyCh chan struct{}
 	outCh   chan *Message
 	closeCh chan struct{}
 	quitWg  sync.WaitGroup
@@ -224,6 +229,19 @@ func (c *connection) getState() state {
 	s := c.state
 	c.RUnlock()
 	return s
+}
+
+// waitReady waits for the connection to become ready for at most connReadyTimeout.
+func (c *connection) waitReady(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, connReadyTimeout)
+	defer cancel()
+
+	select {
+	case <-c.readyCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *connection) setStateLocked(s state) {
@@ -417,22 +435,7 @@ func (c *connection) handleMessage(ctx context.Context, message *Message) {
 	switch message.MessageType {
 	case MessageRequest:
 		// Incoming request.
-		var allowed bool
-		state := c.getState()
-		switch {
-		case state == stateReady:
-			// All requests allowed.
-			allowed = true
-		default:
-			// No requests allowed.
-			allowed = false
-		}
-		if !allowed {
-			// Reject incoming requests if not in correct state.
-			c.logger.Warn("rejecting incoming request before being ready",
-				"state", state,
-				"request", fmt.Sprintf("%+v", message.Body),
-			)
+		if err := c.waitReady(ctx); err != nil {
 			_ = c.sendMessage(ctx, newResponseMessage(message, errorToBody(ErrNotReady)))
 			return
 		}
@@ -540,6 +543,8 @@ func (c *connection) InitGuest(conn net.Conn) error {
 	c.setStateLocked(stateReady)
 	c.Unlock()
 
+	close(c.readyCh)
+
 	return nil
 }
 
@@ -587,6 +592,8 @@ func (c *connection) InitHost(ctx context.Context, conn net.Conn, hi *HostInfo) 
 	c.info = info
 	c.Unlock()
 
+	close(c.readyCh)
+
 	return &rtVersion, nil
 }
 
@@ -601,6 +608,7 @@ func NewConnection(logger *logging.Logger, runtimeID common.Namespace, handler H
 		handler:         handler,
 		state:           stateUninitialized,
 		pendingRequests: make(map[uint64]chan<- *Body),
+		readyCh:         make(chan struct{}),
 		outCh:           make(chan *Message),
 		closeCh:         make(chan struct{}),
 		logger:          logger,
