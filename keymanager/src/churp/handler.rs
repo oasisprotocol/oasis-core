@@ -13,7 +13,10 @@ use sp800_185::KMac;
 
 use oasis_core_runtime::{
     common::{
-        crypto::signature::{PublicKey, Signer},
+        crypto::{
+            hash::Hash,
+            signature::{PublicKey, Signer},
+        },
         namespace::Namespace,
     },
     consensus::{
@@ -158,7 +161,7 @@ impl Churp {
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
-        let checksum = Self::checksum_verification_matrix(matrix, self.runtime_id, round);
+        let checksum = Self::checksum_verification_matrix(matrix, self.runtime_id, churp_id, round);
 
         // Prepare response and sign it with RAK.
         let application = ApplicationRequest {
@@ -259,16 +262,18 @@ impl Churp {
     fn checksum_verification_matrix<G>(
         matrix: &VerificationMatrix<G>,
         runtime_id: Namespace,
+        churp_id: u8,
         round: u64,
-    ) -> Vec<u8>
+    ) -> Hash
     where
         G: Group + GroupEncoding,
     {
         let mut checksum = [0u8; 32];
         let mut f = KMac::new_kmac256(&matrix.to_bytes(), CHECKSUM_VERIFICATION_MATRIX_CUSTOM);
         f.update(&runtime_id.0);
+        f.update(&[churp_id]);
         f.update(&round.to_le_bytes());
         f.finalize(&mut checksum);
-        checksum.to_vec()
+        Hash(checksum)
     }
 }

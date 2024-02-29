@@ -1,5 +1,8 @@
 //! CHURP types used by the worker-host protocol.
-use oasis_core_runtime::common::{crypto::signature::Signature, namespace::Namespace};
+use oasis_core_runtime::common::{
+    crypto::{hash::Hash, signature::Signature},
+    namespace::Namespace,
+};
 
 /// Initialization request.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
@@ -27,7 +30,7 @@ pub struct ApplicationRequest {
     pub round: u64,
 
     /// Checksum is the hash of the verification matrix.
-    pub checksum: Vec<u8>,
+    pub checksum: Hash,
 }
 
 /// SignedApplication is an application request  signed by the key manager
