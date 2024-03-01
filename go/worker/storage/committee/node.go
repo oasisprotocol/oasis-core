@@ -458,7 +458,43 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 
 	// Check what the latest finalized version in the database is as we may be using a database
 	// from a previous version or network.
-	latestVersion, _ := n.localStorage.NodeDB().GetLatestVersion()
+	latestVersion, alreadyInitialized := n.localStorage.NodeDB().GetLatestVersion()
+
+	// Finalize any versions that were not yet finalized in the old database. This is only possible
+	// as long as there is only one non-finalized root per version. Note that we also cannot be sure
+	// that any of these roots are valid, but this is fine as long as the final version matches the
+	// genesis root.
+	if alreadyInitialized {
+		n.logger.Debug("already initialized, finalizing any non-finalized versions",
+			"genesis_state_root", genesisBlock.Header.StateRoot,
+			"genesis_round", genesisBlock.Header.Round,
+			"latest_version", latestVersion,
+		)
+
+		for v := latestVersion + 1; v < genesisBlock.Header.Round; v++ {
+			roots, err := n.localStorage.NodeDB().GetRootsForVersion(v)
+			if err != nil {
+				return fmt.Errorf("failed to fetch roots for version %d: %w", v, err)
+			}
+
+			var stateRoots []storageApi.Root
+			for _, root := range roots {
+				if root.Type == storageApi.RootTypeState {
+					stateRoots = append(stateRoots, root)
+				}
+			}
+			if len(stateRoots) != 1 {
+				break // We must have exactly one non-finalized state root to continue.
+			}
+
+			err = n.localStorage.NodeDB().Finalize(stateRoots)
+			if err != nil {
+				return fmt.Errorf("failed to finalize version %d: %w", v, err)
+			}
+
+			latestVersion = v
+		}
+	}
 
 	stateRoot := storageApi.Root{
 		Namespace: rt.ID,
