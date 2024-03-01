@@ -302,7 +302,7 @@ where
 mod tests {
     use std::panic;
 
-    use rand_core::OsRng;
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::{powers, BivariatePolynomial, Polynomial};
 
@@ -334,12 +334,13 @@ mod tests {
 
     #[test]
     fn test_p_serialization() {
-        let bp = Polynomial::<p384::Scalar>::random(0, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let bp = Polynomial::<p384::Scalar>::random(0, &mut rng);
         let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
         assert_eq!(bp, restored);
 
-        let bp = Polynomial::<p384::Scalar>::random(3, &mut OsRng);
+        let bp = Polynomial::<p384::Scalar>::random(3, &mut rng);
         let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
         assert_eq!(bp, restored);
@@ -400,14 +401,15 @@ mod tests {
 
     #[test]
     fn test_bp_random() {
-        let bp = BivariatePolynomial::<p384::Scalar>::random(0, 0, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let bp = BivariatePolynomial::<p384::Scalar>::random(0, 0, &mut rng);
         assert_eq!(bp.deg_x, 0);
         assert_eq!(bp.deg_y, 0);
         assert_eq!(bp.b.len(), 1);
         assert_eq!(bp.b[0].len(), 1);
         assert_ne!(bp.b[0][0], p384::Scalar::ZERO); // Zero with negligible probability.
 
-        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut OsRng);
+        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut rng);
         assert_eq!(bp.deg_x, 2);
         assert_eq!(bp.deg_y, 3);
         assert_eq!(bp.b.len(), 3);
@@ -430,7 +432,8 @@ mod tests {
 
     #[test]
     fn test_bp_to_zero_hole() {
-        let mut bp = BivariatePolynomial::random(2, 3, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let mut bp = BivariatePolynomial::random(2, 3, &mut rng);
 
         bp.set_coefficient(p384::Scalar::ONE, 0, 0);
         assert_eq!(bp.b[0][0], p384::Scalar::ONE);
@@ -441,12 +444,13 @@ mod tests {
 
     #[test]
     fn test_bp_serialization() {
-        let bp = BivariatePolynomial::<p384::Scalar>::random(0, 0, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let bp = BivariatePolynomial::<p384::Scalar>::random(0, 0, &mut rng);
         let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
         assert_eq!(bp, restored);
 
-        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut OsRng);
+        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut rng);
         let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
         assert_eq!(bp, restored);

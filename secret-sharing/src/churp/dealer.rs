@@ -94,7 +94,7 @@ impl DealerParams for NistP384 {
 
 #[cfg(test)]
 mod tests {
-    use rand_core::OsRng;
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::{BivariatePolynomial, NistP384Dealer};
 
@@ -106,13 +106,15 @@ mod tests {
 
     #[test]
     fn test_random() {
-        let d = NistP384Dealer::random(2, 3, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let d = NistP384Dealer::random(2, 3, &mut rng);
         assert!(!d.verification_matrix().is_zero_hole()); // Zero-hole with negligible probability.
     }
 
     #[test]
     fn test_zero_hole() {
-        let d = NistP384Dealer::zero_hole(2, 3, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let d = NistP384Dealer::zero_hole(2, 3, &mut rng);
         assert!(d.verification_matrix().is_zero_hole());
     }
 }
