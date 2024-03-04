@@ -12,6 +12,48 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.10 (2024-03-04)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go/oasis-net-runner: Add ability to set node log level and format
+  ([#5534](https://github.com/oasisprotocol/oasis-core/issues/5534))
+
+  Previously, every node started by the net runner had the default
+  log level of debug, while now it's possible to set it to other
+  levels.  The log format can also be changed.
+
+- sgx: Support early updates for ECDSA TCB infos
+  ([#5578](https://github.com/oasisprotocol/oasis-core/issues/5578))
+
+### Bug Fixes
+
+- metrics: fix labels for disk read and write metrics
+  ([#5510](https://github.com/oasisprotocol/oasis-core/issues/5510))
+
+  Fixes `oasis_node_disk_written_bytes` and `oasis_node_disk_read_bytes` which
+  were mistakenly reversed.
+
+### Internal Changes
+
+- go: Bump go-libp2p to 0.32.2
+  ([#5521](https://github.com/oasisprotocol/oasis-core/issues/5521))
+
+- runtime: Increase number of processing threads in SGX
+  ([#5523](https://github.com/oasisprotocol/oasis-core/issues/5523))
+
+- rust: bump shlex to v 1.3.0
+  ([#5533](https://github.com/oasisprotocol/oasis-core/issues/5533))
+
+  [RUSTSEC-2024-0006](
+  https://rustsec.org/advisories/RUSTSEC-2024-0006)
+
 ## 23.0.9 (2023-11-30)
 
 | Protocol          | Version   |
