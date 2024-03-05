@@ -1,7 +1,6 @@
 //! CBOR serializable X25519 types.
 use anyhow::Result;
 use rand::rngs::OsRng;
-use x25519_dalek;
 use zeroize::Zeroize;
 
 use super::hash::Hash;

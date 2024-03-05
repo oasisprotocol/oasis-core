@@ -1,8 +1,7 @@
 //! Helpers for testing MKVS trees.
 use std::fmt;
 
-use base64;
-use serde::{self, Deserialize};
+use serde::Deserialize;
 
 /// Tree operation kind.
 #[derive(Clone, Debug, Deserialize)]

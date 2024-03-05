@@ -240,7 +240,6 @@ where
 mod tests {
     use std::panic;
 
-    use p384;
     use rand_core::OsRng;
 
     use super::{powers, BivariatePolynomial, Polynomial};

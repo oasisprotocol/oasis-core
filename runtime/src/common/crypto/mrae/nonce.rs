@@ -53,6 +53,7 @@ impl Nonce {
         let new_counter: u32 = {
             let mut counter = counter_array.read_u32::<BigEndian>().unwrap();
             // If about to overflow wrap around to 0.
+            #[allow(clippy::nonminimal_bool)]
             if counter == !0u32 {
                 counter = 0;
             } else {

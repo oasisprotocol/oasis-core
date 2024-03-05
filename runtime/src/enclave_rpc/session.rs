@@ -2,7 +2,6 @@
 use std::{collections::HashSet, io::Write, mem, sync::Arc};
 
 use anyhow::Result;
-use snow;
 use thiserror::Error;
 
 use super::types::Message;

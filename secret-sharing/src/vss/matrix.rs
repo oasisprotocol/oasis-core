@@ -129,7 +129,6 @@ where
 #[cfg(test)]
 mod tests {
     use group::Group;
-    use p384;
     use rand_core::OsRng;
 
     use crate::vss::matrix::VerificationMatrix;

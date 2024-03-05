@@ -3,7 +3,12 @@ use std::{collections::VecDeque, fmt};
 
 use anyhow::{Error, Result};
 
-use crate::storage::mkvs::{self, cache::*, sync::*, tree::*};
+use crate::storage::mkvs::{
+    self,
+    cache::{Cache, ReadSyncFetcher},
+    sync::{IterateRequest, Proof, ReadSync, TreeID},
+    tree::{Depth, Key, KeyTrait, NodeBox, NodeKind, NodePtrRef, Root, Tree},
+};
 
 pub(super) struct FetcherSyncIterate<'a> {
     key: &'a Key,
@@ -346,11 +351,11 @@ pub(super) mod test {
 
     use rustc_hex::FromHex;
 
-    use super::{tree_test::generate_key_value_pairs_ex, *};
+    use super::{super::tree_test::generate_key_value_pairs_ex, *};
     use crate::storage::mkvs::{
-        self,
         interop::{Driver, ProtocolServer},
-        Iterator,
+        sync::{NoopReadSyncer, StatsCollector},
+        Iterator, OverlayTree, RootType,
     };
 
     #[test]

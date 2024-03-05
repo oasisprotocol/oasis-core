@@ -101,12 +101,9 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 #[cfg(test)]
 mod test {
     use crate::{
-        common::{
-            crypto::{hash::Hash, signature},
-            namespace::Namespace,
-        },
+        common::crypto::signature,
         consensus::registry::{
-            Capabilities, CapabilityTEE, ConsensusInfo, Node, NodeRuntime, P2PInfo, RuntimeKind,
+            Capabilities, CapabilityTEE, ConsensusInfo, NodeRuntime, P2PInfo, RuntimeKind,
             TEEHardware, TLSInfo, VRFInfo, VersionInfo,
         },
         storage::mkvs::{

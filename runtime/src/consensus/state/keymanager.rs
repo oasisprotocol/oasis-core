@@ -131,7 +131,7 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, default::Default, vec};
+    use std::collections::HashMap;
 
     use rustc_hex::FromHex;
 
@@ -139,11 +139,9 @@ mod test {
     use crate::{
         common::{
             crypto::{
-                hash::Hash,
                 signature::{Signature, SignatureBundle},
                 x25519,
             },
-            namespace::Namespace,
             sgx::{EnclaveIdentity, MrEnclave, MrSigner},
         },
         consensus::keymanager::{

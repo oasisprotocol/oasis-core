@@ -270,8 +270,6 @@ impl OpenCommitment for ExecutorCommitment {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::crypto::hash::Hash;
-
     use super::*;
 
     #[test]

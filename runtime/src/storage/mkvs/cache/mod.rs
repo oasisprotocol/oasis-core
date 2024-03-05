@@ -1,12 +1,16 @@
 mod lru_cache;
 
-pub use lru_cache::*;
+pub use lru_cache::LRUCache;
 
-use std::{any::Any, ptr::NonNull};
+use std::ptr::NonNull;
 
 use anyhow::Result;
 
-use crate::storage::mkvs::{cache::lru_cache::CacheItemBox, sync::*, tree::*};
+use crate::storage::mkvs::{
+    cache::lru_cache::CacheItemBox,
+    sync::{Proof, ReadSync},
+    tree::{Depth, Key, NodeKind, NodePtrRef, NodeRef, Root, Value},
+};
 
 /// Statistics about the contents of the cache.
 #[derive(Debug, Default)]
@@ -34,22 +38,19 @@ where
 
 /// Cache interface for the in-mmory tree cache.
 pub trait Cache {
-    /// Return `self` as an `Any` object, useful for downcasting.
-    fn as_any(&self) -> &dyn Any;
-
     /// Return statistics about the contents of the cache.
+    #[cfg(test)]
     fn stats(&self) -> CacheStats;
 
     /// Get a pointer to the current uncommitted root node.
     fn get_pending_root(&self) -> NodePtrRef;
     /// Set the root node for the tree to the given pointer.
     fn set_pending_root(&mut self, new_root: NodePtrRef);
-    /// Get the root of the tree used for syncing.
-    fn get_sync_root(&self) -> Root;
     /// Set the root of the tree after committing.
     fn set_sync_root(&mut self, root: Root);
 
     /// Get the read syncer backing this cache.
+    #[cfg(test)]
     fn get_read_syncer(&self) -> &Box<dyn ReadSync>;
 
     /// Create a new internal node and returns a pointer to it.

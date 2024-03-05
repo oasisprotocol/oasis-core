@@ -11,7 +11,6 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
-use toml;
 
 /// Fortanix SGX metadata (based on ftxsgx-runner-cargo).
 #[derive(Deserialize, Debug, Default)]

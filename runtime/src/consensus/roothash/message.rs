@@ -170,13 +170,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::{
-        common::{
-            crypto::{hash::Hash, signature::PublicKey},
-            namespace::Namespace,
-            quantity,
-            versioned::Versioned,
-        },
-        consensus::{governance, registry, scheduler, staking},
+        common::{crypto::signature::PublicKey, namespace::Namespace, quantity},
+        consensus::scheduler,
     };
 
     use super::*;

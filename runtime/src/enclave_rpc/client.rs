@@ -1,12 +1,10 @@
 //! Enclave RPC client.
 use std::{collections::HashSet, mem, sync::Arc};
 
-use anyhow;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    cbor,
     common::{
         crypto::signature,
         namespace::Namespace,

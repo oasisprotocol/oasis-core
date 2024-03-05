@@ -1,7 +1,7 @@
 use crate::storage::mkvs::{
     interop::{Driver, ProtocolServer},
-    sync::*,
-    LogEntry,
+    sync::NoopReadSyncer,
+    LogEntry, Root, RootType, Tree,
 };
 
 #[test]

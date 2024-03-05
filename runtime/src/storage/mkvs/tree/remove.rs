@@ -1,6 +1,11 @@
 use anyhow::Result;
 
-use crate::storage::mkvs::{cache::*, tree::*};
+use crate::storage::mkvs::{
+    cache::Cache,
+    tree::{
+        Depth, Key, KeyTrait, NodeBox, NodeKind, NodePointer, NodePtrRef, NodeRef, Tree, Value,
+    },
+};
 
 use super::lookup::FetcherSyncGet;
 

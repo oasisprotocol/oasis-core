@@ -1,9 +1,6 @@
-use std::{cell::RefCell, rc::Rc, str::FromStr};
+use std::str::FromStr;
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::{marshal::*, tree::*},
-};
+use crate::storage::mkvs::{marshal::*, tree::*};
 
 #[test]
 fn test_serialization_leaf() {

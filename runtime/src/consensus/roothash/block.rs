@@ -110,8 +110,6 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::{crypto::hash::Hash, namespace::Namespace};
-
     use super::*;
 
     #[test]

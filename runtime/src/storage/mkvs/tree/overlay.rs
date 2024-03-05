@@ -1,13 +1,13 @@
 use std::{
     collections::{btree_map, BTreeMap, HashSet},
-    iter::{Iterator, Peekable},
+    iter::Peekable,
 };
 
 use anyhow::{Error, Result};
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
-    storage::mkvs::{self, tree::*},
+    storage::mkvs::{self, tree::Key, Proof},
 };
 
 /// A key-value tree overlay that holds all updates in memory and only commits them if requested.
@@ -305,7 +305,9 @@ impl<T: mkvs::FallibleMKVS> mkvs::MKVS for OverlayTree<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::storage::mkvs::{sync::NoopReadSyncer, tree::iterator::test::test_iterator_with};
+    use crate::storage::mkvs::{
+        sync::NoopReadSyncer, tree::iterator::test::test_iterator_with, RootType, Tree,
+    };
 
     #[test]
     fn test_overlay() {

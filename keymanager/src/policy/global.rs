@@ -3,10 +3,7 @@ use std::sync::{Mutex, Once};
 use anyhow::Result;
 use lazy_static::lazy_static;
 
-use oasis_core_runtime::{
-    self,
-    consensus::keymanager::{PolicySGX, SignedPolicySGX},
-};
+use oasis_core_runtime::consensus::keymanager::{PolicySGX, SignedPolicySGX};
 
 use crate::{api::KeyManagerError, policy::TrustedPolicySigners};
 

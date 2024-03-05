@@ -101,12 +101,9 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        common::crypto::hash::Hash,
-        storage::mkvs::{
-            interop::{Fixture, ProtocolServer},
-            Root, RootType, Tree,
-        },
+    use crate::storage::mkvs::{
+        interop::{Fixture, ProtocolServer},
+        Root, RootType, Tree,
     };
 
     use super::*;

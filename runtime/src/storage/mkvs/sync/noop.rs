@@ -2,7 +2,9 @@ use std::any::Any;
 
 use anyhow::Result;
 
-use crate::storage::mkvs::sync::*;
+use crate::storage::mkvs::sync::{
+    GetPrefixesRequest, GetRequest, IterateRequest, ProofResponse, ReadSync, SyncerError,
+};
 
 /// A no-op read syncer which doesn't support any of the required operations.
 pub struct NoopReadSyncer;

@@ -1,10 +1,19 @@
-use std::{any::Any, cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc};
+use std::{cell::RefCell, pin::Pin, ptr::NonNull, rc::Rc};
 
 use anyhow::{anyhow, Result};
 use intrusive_collections::{intrusive_adapter, LinkedList, LinkedListLink};
 use thiserror::Error;
 
-use crate::storage::mkvs::{cache::*, sync::*, tree::*};
+#[cfg(test)]
+use crate::storage::mkvs::cache::CacheStats;
+use crate::storage::mkvs::{
+    cache::{Cache, CacheExtra, CacheItem, ReadSyncFetcher},
+    sync::{merge_verified_subtree, ProofVerifier, ReadSync},
+    tree::{
+        Depth, InternalNode, Key, LeafNode, NodeBox, NodeKind, NodePointer, NodePtrRef, NodeRef,
+        Root, RootType, Value,
+    },
+};
 
 #[derive(Error, Debug)]
 #[error("mkvs: tried to remove locked node")]
@@ -328,10 +337,7 @@ impl LRUCache {
 }
 
 impl Cache for LRUCache {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
+    #[cfg(test)]
     fn stats(&self) -> CacheStats {
         CacheStats {
             internal_node_count: self.lru_internal.size,
@@ -347,14 +353,11 @@ impl Cache for LRUCache {
         self.pending_root = new_root;
     }
 
-    fn get_sync_root(&self) -> Root {
-        self.sync_root
-    }
-
     fn set_sync_root(&mut self, root: Root) {
         self.sync_root = root;
     }
 
+    #[cfg(test)]
     fn get_read_syncer(&self) -> &Box<dyn ReadSync> {
         &self.read_syncer
     }

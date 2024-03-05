@@ -308,7 +308,7 @@ impl Secrets {
         let rek_keys = self.key_manager_rek_keys(runtime_id)?;
         let rek_keys: HashSet<_> = rek_keys.values().collect();
         // Abort if our REK hasn't been published.
-        if rek_keys.get(&self.identity.public_rek()).is_none() {
+        if !rek_keys.contains(&self.identity.public_rek()) {
             return Err(KeyManagerError::REKNotPublished.into());
         }
         // Encrypt the secret.

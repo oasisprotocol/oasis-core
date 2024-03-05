@@ -2,7 +2,7 @@ use std::any::Any;
 
 use anyhow::Result;
 
-use crate::storage::mkvs::sync::*;
+use super::{GetPrefixesRequest, GetRequest, IterateRequest, ProofResponse, ReadSync};
 
 /// A proxy read syncer which keeps track of call statistics.
 pub struct StatsCollector {
