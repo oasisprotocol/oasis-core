@@ -2,14 +2,11 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use anyhow::{anyhow, Result};
-use base64;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
 use lazy_static::lazy_static;
 use oid_registry::{OID_PKCS1_RSAENCRYPTION, OID_PKCS1_SHA256WITHRSA};
-use percent_encoding;
 use rsa::{pkcs1::DecodeRsaPublicKey, pkcs1v15::Pkcs1v15Sign, RsaPublicKey};
-use serde_json;
 use sgx_isa::{AttributesFlags, Report};
 use sha2::{digest::Update as _, Digest, Sha256};
 use thiserror::Error;
@@ -345,8 +342,8 @@ pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
 }
 
 fn parse_avr_timestamp(timestamp: &str) -> Result<i64> {
-    let timestamp_unix = match Utc.datetime_from_str(timestamp, IAS_TS_FMT) {
-        Ok(timestamp) => timestamp.timestamp(),
+    let timestamp_unix = match NaiveDateTime::parse_from_str(timestamp, IAS_TS_FMT) {
+        Ok(timestamp) => timestamp.and_utc().timestamp(),
         _ => return Err(AVRError::MalformedTimestamp.into()),
     };
     Ok(timestamp_unix)

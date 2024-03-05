@@ -174,19 +174,12 @@ pub struct SignedPolicySGX {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, default::Default, vec};
-
     use super::*;
     use crate::{
         common::{
-            crypto::{
-                hash::Hash,
-                signature::{Signature, SignatureBundle},
-            },
-            namespace::Namespace,
-            sgx::{EnclaveIdentity, MrEnclave, MrSigner},
+            crypto::signature::Signature,
+            sgx::{MrEnclave, MrSigner},
         },
-        consensus::state::keymanager::churp::PolicySGX,
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
             Root, RootType, Tree,

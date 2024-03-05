@@ -1,7 +1,6 @@
 //! Runtime initialization.
 use std::sync::Arc;
 
-use log;
 use slog::{error, info};
 
 use crate::{

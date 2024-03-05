@@ -7,7 +7,7 @@ use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     scalar::Scalar,
 };
-use ed25519_dalek::{self, Digest as _, Sha512, Signer as _};
+use ed25519_dalek::{Digest as _, Sha512, Signer as _};
 use rand::rngs::OsRng;
 use thiserror::Error;
 use zeroize::Zeroize;

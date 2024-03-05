@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::Result;
-use tempfile::{self, TempDir};
+use tempfile::TempDir;
 
 use super::{rpc, Driver};
 use crate::{

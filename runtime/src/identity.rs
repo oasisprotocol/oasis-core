@@ -6,8 +6,6 @@ use std::{
 
 use anyhow::Result;
 #[cfg(target_env = "sgx")]
-use base64;
-#[cfg(target_env = "sgx")]
 use rand::{rngs::OsRng, Rng};
 #[cfg(target_env = "sgx")]
 use sgx_isa::Report;

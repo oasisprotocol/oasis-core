@@ -12,7 +12,6 @@ use rand::rngs::OsRng;
 use sp800_185::KMac;
 
 use oasis_core_runtime::{
-    self,
     common::{
         crypto::signature::{PublicKey, Signer},
         namespace::Namespace,

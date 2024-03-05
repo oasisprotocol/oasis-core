@@ -1,5 +1,4 @@
 //! CHURP errors.
-use thiserror;
 
 /// CHURP error.
 #[derive(thiserror::Error, Debug)]

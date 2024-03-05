@@ -2,7 +2,7 @@
 use std::{convert::TryInto, fmt};
 
 use anyhow::{anyhow, Result};
-use bech32::{self, FromBase32, ToBase32, Variant};
+use bech32::{Bech32, Hrp};
 use lazy_static::lazy_static;
 
 use crate::common::{
@@ -34,7 +34,7 @@ const ADDRESS_V0_VERSION: u8 = 0;
 const ADDRESS_RUNTIME_V0_CONTEXT: &[u8] = b"oasis-core/address: runtime";
 const ADDRESS_RUNTIME_V0_VERSION: u8 = 0;
 
-const ADDRESS_BECH32_HRP: &str = "oasis";
+const ADDRESS_BECH32_HRP: Hrp = Hrp::parse_unchecked("oasis");
 
 /// A staking account address.
 #[derive(Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -68,23 +68,19 @@ impl Address {
 
     /// Tries to create a new address from Bech32-encoded string.
     pub fn from_bech32(data: &str) -> Result<Self> {
-        let (hrp, data, variant) =
-            bech32::decode(data).map_err(|_| anyhow!("malformed address"))?;
+        let (hrp, data) = bech32::decode(data).map_err(|_| anyhow!("malformed address"))?;
 
-        if variant != Variant::Bech32 || hrp != ADDRESS_BECH32_HRP {
+        if hrp != ADDRESS_BECH32_HRP {
             return Err(anyhow!("malformed address"));
         }
 
-        let data: Vec<u8> =
-            FromBase32::from_base32(&data).map_err(|_| anyhow!("malformed address"))?;
         let sized: &[u8; ADDRESS_SIZE] = &data.as_slice().try_into()?;
-
         Ok(sized.into())
     }
 
     /// Converts an address to Bech32 representation.
     pub fn to_bech32(&self) -> String {
-        bech32::encode(ADDRESS_BECH32_HRP, self.0.to_base32(), Variant::Bech32).unwrap()
+        bech32::encode::<Bech32>(ADDRESS_BECH32_HRP, &self.0).unwrap()
     }
 }
 

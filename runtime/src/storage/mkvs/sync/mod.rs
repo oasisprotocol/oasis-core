@@ -6,12 +6,12 @@ mod noop;
 mod proof;
 mod stats;
 
-pub use errors::*;
-pub use host::*;
-pub use merge::*;
-pub use noop::*;
-pub use proof::*;
-pub use stats::*;
+pub use errors::SyncerError;
+pub use host::HostReadSyncer;
+pub use merge::merge_verified_subtree;
+pub use noop::NoopReadSyncer;
+pub use proof::{Proof, ProofBuilder, ProofVerifier, RawProofEntry};
+pub use stats::StatsCollector;
 
 use std::any::Any;
 
@@ -19,7 +19,7 @@ use anyhow::Result;
 
 use crate::{
     common::crypto::hash::Hash,
-    storage::mkvs::{tree::*, Prefix},
+    storage::mkvs::{tree::Root, Prefix},
 };
 
 /// Identifies a specific tree and a position within that tree.

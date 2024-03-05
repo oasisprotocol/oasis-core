@@ -189,9 +189,9 @@ impl QuoteBundle {
             .open(ts, policy, tcb_cert.public_key_mut())?;
 
         // We use the TCB info issue date as the timestamp.
-        let timestamp = Utc
-            .datetime_from_str(&tcb_info.issue_date, PCS_TS_FMT)
+        let timestamp = NaiveDateTime::parse_from_str(&tcb_info.issue_date, PCS_TS_FMT)
             .map_err(|err| Error::TCBParseError(err.into()))?
+            .and_utc()
             .timestamp();
 
         // Perform quote verification.
@@ -285,7 +285,7 @@ impl quote::Quote3SignatureEcdsaP256Verifier for QeEcdsaP256Verifier {
             cert_chain.push(cert);
         }
         // TODO: Specify current timestamp.
-        Certificate::verify(&cert_chain, &PCS_TRUST_ROOT, None)?;
+        Certificate::verify(&cert_chain, &PCS_TRUST_ROOT, None, None)?;
 
         // Extract TCB parameters from the PCK certificate.
         let mut pck_cert = cert_chain.pop_front().unwrap();
@@ -393,7 +393,7 @@ impl TCBBundle {
         }
 
         // TODO: Specify current timestamp.
-        Certificate::verify(&cert_chain, &PCS_TRUST_ROOT, None)
+        Certificate::verify(&cert_chain, &PCS_TRUST_ROOT, None, None)
             .map_err(|_| Error::TCBVerificationFailed)?;
 
         Ok(cert_chain.pop_front().unwrap())
@@ -533,12 +533,12 @@ impl TCBInfo {
         }
 
         // Validate TCB info is not expired/not yet valid based on current time.
-        let issue_date = Utc
-            .datetime_from_str(&self.issue_date, PCS_TS_FMT)
-            .map_err(|err| Error::TCBParseError(err.into()))?;
-        let _next_update = Utc
-            .datetime_from_str(&self.next_update, PCS_TS_FMT)
-            .map_err(|err| Error::TCBParseError(err.into()))?;
+        let issue_date = NaiveDateTime::parse_from_str(&self.issue_date, PCS_TS_FMT)
+            .map_err(|err| Error::TCBParseError(err.into()))?
+            .and_utc();
+        let _next_update = NaiveDateTime::parse_from_str(&self.next_update, PCS_TS_FMT)
+            .map_err(|err| Error::TCBParseError(err.into()))?
+            .and_utc();
         if issue_date > ts {
             return Err(Error::TCBExpired);
         }
@@ -786,12 +786,12 @@ impl QEIdentity {
         }
 
         // Validate QE identity is not expired/not yet valid based on current time.
-        let issue_date = Utc
-            .datetime_from_str(&self.issue_date, PCS_TS_FMT)
-            .map_err(|err| Error::TCBParseError(err.into()))?;
-        let _next_update = Utc
-            .datetime_from_str(&self.next_update, PCS_TS_FMT)
-            .map_err(|err| Error::TCBParseError(err.into()))?;
+        let issue_date = NaiveDateTime::parse_from_str(&self.issue_date, PCS_TS_FMT)
+            .map_err(|err| Error::TCBParseError(err.into()))?
+            .and_utc();
+        let _next_update = NaiveDateTime::parse_from_str(&self.next_update, PCS_TS_FMT)
+            .map_err(|err| Error::TCBParseError(err.into()))?
+            .and_utc();
         if issue_date > ts {
             return Err(Error::TCBExpired);
         }

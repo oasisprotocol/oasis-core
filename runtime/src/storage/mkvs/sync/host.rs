@@ -4,7 +4,9 @@ use anyhow::Result;
 
 use crate::{
     protocol::{Protocol, ProtocolError},
-    storage::mkvs::sync::*,
+    storage::mkvs::sync::{
+        GetPrefixesRequest, GetRequest, IterateRequest, ProofResponse, ReadSync,
+    },
     types::{
         Body, HostStorageEndpoint, StorageSyncRequest, StorageSyncRequestWithEndpoint,
         StorageSyncResponse,

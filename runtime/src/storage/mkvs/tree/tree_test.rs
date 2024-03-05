@@ -1,14 +1,10 @@
-use serde_json;
 use std::{collections::HashSet, fs::File, io::BufReader, iter, iter::FromIterator, path::Path};
 
-use crate::{
-    common::crypto::hash::Hash,
-    storage::mkvs::{
-        interop::{Driver, ProtocolServer},
-        tests,
-        tree::*,
-        Iterator, LogEntry, LogEntryKind, WriteLog, MKVS,
-    },
+use crate::storage::mkvs::{
+    interop::{Driver, ProtocolServer},
+    tests,
+    tree::*,
+    Iterator, LogEntry, LogEntryKind, WriteLog, MKVS,
 };
 
 const INSERT_ITEMS: usize = 1000;

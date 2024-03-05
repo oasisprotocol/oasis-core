@@ -2,7 +2,10 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     common::{crypto::hash::Hash, namespace::Namespace},
-    storage::mkvs::{cache::*, marshal::*},
+    storage::mkvs::{
+        cache::{CacheExtra, CacheItem},
+        marshal::Marshal,
+    },
 };
 
 /// Common interface for node-like objects in the tree.
@@ -379,8 +382,6 @@ pub type Key = Vec<u8>;
 pub trait KeyTrait {
     /// Get a single bit from the given hash.
     fn get_bit(&self, bit: Depth) -> bool;
-    /// Set a single bit in the given hash and return the result. If bit>self, it resizes new Key.
-    fn set_bit(&self, bit: Depth, val: bool) -> Key;
     /// Returns the length of the key in bits.
     fn bit_length(&self) -> Depth;
     /// Bit-wise splits of the key.
@@ -396,24 +397,6 @@ pub trait KeyTrait {
 impl KeyTrait for Key {
     fn get_bit(&self, bit: Depth) -> bool {
         (self[(bit / 8) as usize] & (1 << (7 - (bit % 8)))) != 0
-    }
-
-    fn set_bit(&self, bit: Depth, val: bool) -> Key {
-        let mut k: Key;
-        if bit as usize >= self.len() * 8 {
-            k = vec![0; bit as usize / 8 + 1];
-            k[0..self.len()].clone_from_slice(self);
-        } else {
-            k = self.clone();
-        }
-
-        let mask = (1 << (7 - (bit % 8))) as u8;
-        if val {
-            k[(bit / 8) as usize] |= mask;
-        } else {
-            k[(bit / 8) as usize] &= !mask;
-        }
-        k
     }
 
     fn bit_length(&self) -> Depth {

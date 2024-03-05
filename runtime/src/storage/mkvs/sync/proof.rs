@@ -315,7 +315,6 @@ impl ProofVerifier {
 
 #[cfg(test)]
 mod test {
-    use base64;
     use rustc_hex::ToHex;
 
     use crate::storage::mkvs::{cache::Cache, sync::NoopReadSyncer};

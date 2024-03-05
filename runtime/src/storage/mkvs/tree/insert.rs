@@ -2,7 +2,10 @@ use std::mem;
 
 use anyhow::{anyhow, Result};
 
-use crate::storage::mkvs::{cache::*, tree::*};
+use crate::storage::mkvs::{
+    cache::Cache,
+    tree::{Depth, Key, KeyTrait, NodeBox, NodeKind, NodePointer, NodePtrRef, Tree, Value},
+};
 
 use super::lookup::FetcherSyncGet;
 
