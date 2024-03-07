@@ -57,7 +57,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.59.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20221004221323-12db695f1648
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -193,4 +193,4 @@ require (
 	lukechampine.com/blake3 v1.2.1 // indirect
 )
 
-go 1.21
+go 1.21.8

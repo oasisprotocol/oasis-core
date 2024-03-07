@@ -40,7 +40,7 @@ Core:
   ```
   <!-- markdownlint-enable line-length -->
 
-* [Go] (at least version 1.21.0).
+* [Go] (at least version 1.21.8).
 
   If your distribution provides a new-enough version of Go, just use that.
 
@@ -52,18 +52,18 @@ Core:
   * [ensure `$GOPATH/bin` is in your `PATH`](
     https://tip.golang.org/doc/code.html#GOPATH),
   * [install the desired version of Go](
-    https://golang.org/doc/install#extra_versions), e.g. 1.21.0, with:
+    https://golang.org/doc/install#extra_versions), e.g. 1.21.8, with:
 
     ```
-    go install golang.org/dl/go1.21.0@latest
-    go1.21.0 download
+    go install golang.org/dl/go1.21.8@latest
+    go1.21.8 download
     ```
 
   * instruct the build system to use this particular version of Go by setting
     the `OASIS_GO` environment variable in your `~/.bashrc`:
 
     ```
-    export OASIS_GO=go1.21.0
+    export OASIS_GO=go1.21.8
     ```
 
 * [Rust].
@@ -125,8 +125,8 @@ Core:
   active toolchain
   ----------------
 
-  nightly-2023-01-16-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain.toml')
-  rustc 1.68.0-nightly (9e75dddf6 2023-01-15)
+  nightly-2024-01-08-x86_64-unknown-linux-gnu (overridden by '/code/rust-toolchain.toml')
+  rustc 1.77.0-nightly (75c68cfd2 2024-01-07)
   ```
 
 * (**OPTIONAL**) [gofumpt] and [goimports].

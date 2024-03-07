@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 
 # Package versions.
-ARG GO_VERSION=1.21.0
+ARG GO_VERSION=1.21.8
 ARG GO_NANCY_VERSION=1.0.33
 ARG GO_NANCY_CHECKSUM=a4bf5290d41b095c04f941ed5380674770c79d59735e33b1bd07a5cd5fbb135d
 ARG GO_PROTOC_VERSION=3.6.1
@@ -10,7 +10,7 @@ ARG GOLANGCILINT_VERSION=1.54.2
 ARG GOCOVMERGE_VERSION=b5bfa59ec0adc420475f97f89b58045c721d761c
 ARG GOFUMPT_VERSION=v0.5.0
 ARG GOIMPORTS_VERSION=v0.12.0
-ARG RUST_NIGHTLY_VERSION=2023-01-16
+ARG RUST_NIGHTLY_VERSION=2024-01-08
 ARG JEMALLOC_VERSION=5.2.1
 ARG JEMALLOC_CHECKSUM=34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
 
@@ -52,8 +52,8 @@ RUN curl "https://sh.rustup.rs" -sfo rustup.sh && \
     sh rustup.sh -y --default-toolchain nightly-${RUST_NIGHTLY_VERSION} && \
     rustup target add x86_64-fortanix-unknown-sgx && \
     rustup component add rustfmt && \
-    cargo install --git https://github.com/fortanix/rust-sgx --rev 998c34d158a69dd1af33f22587e8ae1c26ca6a27 fortanix-sgx-tools && \
-    cargo install --git https://github.com/fortanix/rust-sgx --rev 998c34d158a69dd1af33f22587e8ae1c26ca6a27 sgxs-tools && \
+    cargo install --git https://github.com/fortanix/rust-sgx --rev c9028cffb8d80fe325f10eefb26f1f912c235c21 fortanix-sgx-tools && \
+    cargo install --git https://github.com/fortanix/rust-sgx --rev c9028cffb8d80fe325f10eefb26f1f912c235c21 sgxs-tools && \
     cargo install cargo-audit
 
 # Install Go and utilities.

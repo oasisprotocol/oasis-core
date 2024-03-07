@@ -15,10 +15,6 @@ use crate::{
 
 /// Starts the runtime.
 pub fn start_runtime(initializer: Box<dyn Initializer>, config: Config) {
-    // Output backtraces in debug builds.
-    #[cfg(debug_assertions)]
-    std::env::set_var("RUST_BACKTRACE", "1");
-
     // Initialize logging.
     init_logger(log::Level::Info);
     let logger = get_logger("runtime");
