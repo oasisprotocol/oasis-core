@@ -37,6 +37,8 @@ var (
 	methodGetTransactions = serviceName.NewMethod("GetTransactions", GetTransactionsRequest{})
 	// methodGetTransactionsWithResults is the GetTransactionsWithResults method.
 	methodGetTransactionsWithResults = serviceName.NewMethod("GetTransactionsWithResults", GetTransactionsRequest{})
+	// methodGetUnconfirmedTransactions is the GetUnconfirmedTransactions method.
+	methodGetUnconfirmedTransactions = serviceName.NewMethod("GetUnconfirmedTransactions", common.Namespace{})
 	// methodGetEvents is the GetEvents method.
 	methodGetEvents = serviceName.NewMethod("GetEvents", GetEventsRequest{})
 	// methodQuery is the Query method.
@@ -85,6 +87,10 @@ var (
 			{
 				MethodName: methodGetTransactionsWithResults.ShortName(),
 				Handler:    handlerGetTransactionsWithResults,
+			},
+			{
+				MethodName: methodGetUnconfirmedTransactions.ShortName(),
+				Handler:    handlerGetUnconfirmedTransactions,
 			},
 			{
 				MethodName: methodGetEvents.ShortName(),
@@ -345,6 +351,29 @@ func handlerGetTransactionsWithResults(
 	return interceptor(ctx, &rq, info, handler)
 }
 
+func handlerGetUnconfirmedTransactions(
+	srv interface{},
+	ctx context.Context,
+	dec func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	var runtimeID common.Namespace
+	if err := dec(&runtimeID); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeClient).GetUnconfirmedTransactions(ctx, runtimeID)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodGetUnconfirmedTransactions.FullName(),
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeClient).GetUnconfirmedTransactions(ctx, req.(common.Namespace))
+	}
+	return interceptor(ctx, runtimeID, info, handler)
+}
+
 func handlerGetEvents(
 	srv interface{},
 	ctx context.Context,
@@ -490,6 +519,14 @@ func (c *runtimeClient) GetTransactions(ctx context.Context, request *GetTransac
 func (c *runtimeClient) GetTransactionsWithResults(ctx context.Context, request *GetTransactionsRequest) ([]*TransactionWithResults, error) {
 	var rsp []*TransactionWithResults
 	if err := c.conn.Invoke(ctx, methodGetTransactionsWithResults.FullName(), request, &rsp); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (c *runtimeClient) GetUnconfirmedTransactions(ctx context.Context, runtimeID common.Namespace) ([][]byte, error) {
+	var rsp [][]byte
+	if err := c.conn.Invoke(ctx, methodGetUnconfirmedTransactions.FullName(), runtimeID, &rsp); err != nil {
 		return nil, err
 	}
 	return rsp, nil

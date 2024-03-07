@@ -69,6 +69,12 @@ func (lq *localQueue) HandleTxsUsed(hashes []hash.Hash) {
 	lq.txs = keptTxs
 }
 
+func (lq *localQueue) PeekAll() []*TxQueueMeta {
+	lq.l.Lock()
+	defer lq.l.Unlock()
+	return append(make([]*TxQueueMeta, 0, len(lq.txs)), lq.txs...)
+}
+
 func (lq *localQueue) TakeAll() []*TxQueueMeta {
 	lq.l.Lock()
 	defer lq.l.Unlock()
@@ -87,9 +93,7 @@ func (lq *localQueue) OfferChecked(tx *TxQueueMeta, _ *protocol.CheckTxMetadata)
 }
 
 func (lq *localQueue) GetTxsToPublish() []*TxQueueMeta {
-	lq.l.Lock()
-	defer lq.l.Unlock()
-	return append([]*TxQueueMeta(nil), lq.txs...)
+	return lq.PeekAll()
 }
 
 func (lq *localQueue) size() int {

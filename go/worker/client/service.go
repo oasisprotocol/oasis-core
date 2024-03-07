@@ -239,6 +239,24 @@ func (s *service) GetTransactionsWithResults(ctx context.Context, request *api.G
 }
 
 // Implements api.RuntimeClient.
+func (s *service) GetUnconfirmedTransactions(_ context.Context, runtimeID common.Namespace) ([][]byte, error) {
+	rt := s.w.commonWorker.GetRuntime(runtimeID)
+	if rt == nil {
+		return nil, api.ErrNotFound
+	}
+
+	// Get currently pending transactions from the runtime's transaction pool.
+	pendingTxs := rt.TxPool.GetTxs()
+
+	// Copy the raw transactions to the output slice.
+	out := make([][]byte, 0, len(pendingTxs))
+	for _, tx := range pendingTxs {
+		out = append(out, tx.Raw())
+	}
+	return out, nil
+}
+
+// Implements api.RuntimeClient.
 func (s *service) GetEvents(ctx context.Context, request *api.GetEventsRequest) ([]*api.Event, error) {
 	rt, err := s.w.commonWorker.RuntimeRegistry.GetRuntime(request.RuntimeID)
 	if err != nil {

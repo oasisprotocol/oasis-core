@@ -86,7 +86,7 @@ func newMainQueue(capacity int) *mainQueue {
 
 func (mq *mainQueue) GetSchedulingSuggestion(countHint uint32) []*TxQueueMeta {
 	txMetas := mq.inner.getPrioritizedBatch(nil, countHint)
-	var txs []*TxQueueMeta
+	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
 		txs = append(txs, &txMeta.TxQueueMeta) //nolint:gosec
 	}
@@ -107,9 +107,18 @@ func (mq *mainQueue) HandleTxsUsed(hashes []hash.Hash) {
 
 func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQueueMeta {
 	txMetas := mq.inner.getPrioritizedBatch(offset, limit)
-	var txs []*TxQueueMeta
+	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
 		txs = append(txs, &txMeta.TxQueueMeta) //nolint:gosec
+	}
+	return txs
+}
+
+func (mq *mainQueue) PeekAll() []*TxQueueMeta {
+	allTxs := mq.inner.getAll()
+	txs := make([]*TxQueueMeta, 0, len(allTxs))
+	for _, tx := range allTxs {
+		txs = append(txs, &tx.TxQueueMeta) //nolint:gosec
 	}
 	return txs
 }
@@ -117,7 +126,7 @@ func (mq *mainQueue) GetSchedulingExtra(offset *hash.Hash, limit uint32) []*TxQu
 func (mq *mainQueue) TakeAll() []*TxQueueMeta {
 	txMetas := mq.inner.getAll()
 	mq.inner.clear()
-	var txs []*TxQueueMeta
+	txs := make([]*TxQueueMeta, 0, len(txMetas))
 	for _, txMeta := range txMetas {
 		txs = append(txs, &txMeta.TxQueueMeta) //nolint:gosec
 	}
@@ -132,10 +141,5 @@ func (mq *mainQueue) OfferChecked(tx *TxQueueMeta, meta *protocol.CheckTxMetadat
 }
 
 func (mq *mainQueue) GetTxsToPublish() []*TxQueueMeta {
-	txMetas := mq.inner.getAll()
-	var txs []*TxQueueMeta
-	for _, txMeta := range txMetas {
-		txs = append(txs, &txMeta.TxQueueMeta) //nolint:gosec
-	}
-	return txs
+	return mq.PeekAll()
 }

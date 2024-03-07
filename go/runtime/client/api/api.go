@@ -72,6 +72,10 @@ type RuntimeClient interface {
 	// its results (outputs and emitted events).
 	GetTransactionsWithResults(ctx context.Context, request *GetTransactionsRequest) ([]*TransactionWithResults, error)
 
+	// GetUnconfirmedTransactions fetches all unconfirmed runtime transactions
+	// that are currently pending to be included in a block.
+	GetUnconfirmedTransactions(ctx context.Context, runtimeID common.Namespace) ([][]byte, error)
+
 	// GetEvents returns all events emitted in a given block.
 	GetEvents(ctx context.Context, request *GetEventsRequest) ([]*Event, error)
 

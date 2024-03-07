@@ -50,6 +50,8 @@ type UsableTransactionSource interface {
 	// HandleTxsUsed is a callback to indicate that the scheduler is done with a set of txs, by hash. For most
 	// implementations, remove it from internal storage.
 	HandleTxsUsed(hashes []hash.Hash)
+	// PeekAll returns all transactions without removing them.
+	PeekAll() []*TxQueueMeta
 }
 
 // RecheckableTransactionStore provides methods for rechecking.
