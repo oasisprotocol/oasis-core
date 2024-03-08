@@ -3,6 +3,7 @@ package migrations
 import (
 	"fmt"
 
+	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
@@ -10,10 +11,10 @@ import (
 )
 
 const (
-	// Consensus240 is the name of the upgrade that transitions Oasis Core
-	// from version 23.0.x to 24.0.0.
+	// Consensus240 is the name of the upgrade that enables features introduced in Oasis Core 24.0.
 	//
-	// This upgrade enables the key manager CHURP extension.
+	// This upgrade enables the key manager CHURP extension and updates the MaxTxSize/MaxBlockSize
+	// in order to accommodate larger node registrations.
 	Consensus240 = "consensus240"
 )
 
@@ -35,6 +36,20 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 	case abciAPI.ContextBeginBlock:
 		// Nothing to do.
 	case abciAPI.ContextEndBlock:
+		// Consensus parameters.
+		consState := consensusState.NewMutableState(abciCtx.State())
+
+		consParams, err := consState.ConsensusParameters(abciCtx)
+		if err != nil {
+			return fmt.Errorf("failed to load consensus parameters: %w", err)
+		}
+		consParams.MaxTxSize = 131072     // 32 KiB -> 128 KiB
+		consParams.MaxBlockSize = 4194304 // 1 MiB  -> 4 MiB
+
+		if err = consState.SetConsensusParameters(abciCtx, consParams); err != nil {
+			return fmt.Errorf("failed to set consensus parameters: %w", err)
+		}
+
 		// Registry.
 		regState := registryState.NewMutableState(abciCtx.State())
 
@@ -51,7 +66,7 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 		// CHURP.
 		state := churpState.NewMutableState(abciCtx.State())
 
-		if err := state.SetConsensusParameters(abciCtx, &churp.DefaultConsensusParameters); err != nil {
+		if err = state.SetConsensusParameters(abciCtx, &churp.DefaultConsensusParameters); err != nil {
 			return fmt.Errorf("failed to set CHURP consensus parameters: %w", err)
 		}
 	default:

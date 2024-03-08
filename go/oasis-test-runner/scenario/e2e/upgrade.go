@@ -104,6 +104,24 @@ func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 }
 
 func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Controller) error {
+	// Check updated consensus parameters.
+	consParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get consensus parameters: %w", err)
+	}
+	if expectedMaxTxSize := 128 * 1024; consParams.Parameters.MaxTxSize != uint64(expectedMaxTxSize) {
+		return fmt.Errorf("consensus parameter MaxTxSize not updated correctly (expected: %d actual: %d)",
+			expectedMaxTxSize,
+			consParams.Parameters.MaxTxSize,
+		)
+	}
+	if expectedMaxBlockSize := 4 * 1024 * 1024; consParams.Parameters.MaxBlockSize != uint64(expectedMaxBlockSize) {
+		return fmt.Errorf("consensus parameter MaxBlockSize not updated correctly (expected: %d actual: %d)",
+			expectedMaxBlockSize,
+			consParams.Parameters.MaxBlockSize,
+		)
+	}
+
 	// Check updated registry parameters.
 	registryParams, err := ctrl.Registry.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
