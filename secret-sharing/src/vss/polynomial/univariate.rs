@@ -7,6 +7,8 @@ use std::{
 use group::ff::PrimeField;
 use rand_core::RngCore;
 
+use crate::vss::arith::powers;
+
 /// Univariate polynomial over a non-binary prime field.
 ///
 /// ```text
@@ -98,6 +100,17 @@ where
     /// Returns the size of the byte representation of the polynomial.
     pub fn byte_size(deg: usize) -> usize {
         Self::coefficient_byte_size() * deg
+    }
+
+    /// Evaluates the polynomial.
+    pub fn eval(&self, x: &Fp) -> Fp {
+        let xpows = powers(x, self.a.len() - 1);
+        let mut r = Fp::ZERO;
+        for (i, xpow) in xpows.iter().enumerate() {
+            r += self.a[i] * xpow
+        }
+
+        r
     }
 }
 
@@ -262,6 +275,10 @@ mod tests {
 
     use super::Polynomial;
 
+    fn scalar(value: i64) -> p384::Scalar {
+        scalars(&vec![value])[0]
+    }
+
     fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
         values
             .iter()
@@ -302,6 +319,20 @@ mod tests {
         let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
         assert_eq!(bp, restored);
+    }
+
+    #[test]
+    pub fn test_eval() {
+        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
+
+        let r = f.eval(&scalar(0));
+        assert_eq!(r, scalar(1 + 2 * 0 + 3 * 0 * 0));
+
+        let r = f.eval(&scalar(1));
+        assert_eq!(r, scalar(1 + 2 * 1 + 3 * 1 * 1));
+
+        let r = f.eval(&scalar(2));
+        assert_eq!(r, scalar(1 + 2 * 2 + 3 * 2 * 2));
     }
 
     #[test]

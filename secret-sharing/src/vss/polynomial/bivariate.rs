@@ -166,10 +166,10 @@ where
     pub fn eval_x(&self, x: &Fp) -> Polynomial<Fp> {
         let xpows = powers(x, self.deg_x);
         let mut a = Vec::with_capacity(self.deg_y + 1);
-        for yj in 0..=self.deg_y {
+        for j in 0..=self.deg_y {
             let mut aj = Fp::ZERO;
-            for (xi, pow) in xpows.iter().enumerate() {
-                aj += self.b[xi][yj] * pow
+            for (i, pow) in xpows.iter().enumerate() {
+                aj += self.b[i][j] * pow
             }
             a.push(aj)
         }
@@ -181,10 +181,10 @@ where
     pub fn eval_y(&self, y: &Fp) -> Polynomial<Fp> {
         let ypows = powers(y, self.deg_y);
         let mut a = Vec::with_capacity(self.deg_x + 1);
-        for xi in 0..=self.deg_x {
+        for i in 0..=self.deg_x {
             let mut ai = Fp::ZERO;
-            for (yj, pow) in ypows.iter().enumerate() {
-                ai += self.b[xi][yj] * pow
+            for (j, pow) in ypows.iter().enumerate() {
+                ai += self.b[i][j] * pow
             }
             a.push(ai)
         }
