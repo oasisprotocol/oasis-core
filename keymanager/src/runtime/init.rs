@@ -10,13 +10,13 @@ use oasis_core_runtime::{
 
 use crate::{
     churp::Churp,
-    policy::{set_trusted_policy_signers, TrustedPolicySigners},
+    policy::{set_trusted_signers, TrustedSigners},
 };
 
 use super::secrets::Secrets;
 
-/// Initialize a keymanager with trusted policy signers.
-pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
+/// Initialize a keymanager with trusted signers.
+pub fn new_keymanager(signers: TrustedSigners) -> Box<dyn Initializer> {
     // Initializer.
     let init = move |state: PreInitState<'_>| -> PostInitState {
         // It's not the most elegant solution, but it gets the job done.
@@ -24,8 +24,8 @@ pub fn new_keymanager(signers: TrustedPolicySigners) -> Box<dyn Initializer> {
         // or by removing the initializer.
         let node_id = block_on(state.protocol.identity()).unwrap();
 
-        // Initialize the set of trusted policy signers.
-        set_trusted_policy_signers(signers.clone());
+        // Initialize the set of trusted signers.
+        set_trusted_signers(signers.clone());
 
         let secrets = Box::leak(Box::new(Secrets::new(
             state.identity.clone(),

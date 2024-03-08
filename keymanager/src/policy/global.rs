@@ -1,34 +1,32 @@
-use std::sync::{Mutex, Once};
+use std::{
+    any::Any,
+    sync::{Mutex, Once},
+};
 
 use anyhow::Result;
 use lazy_static::lazy_static;
 
-use oasis_core_runtime::consensus::keymanager::{PolicySGX, SignedPolicySGX};
-
-use crate::{api::KeyManagerError, policy::TrustedPolicySigners};
+use super::{signers::SignedData, TrustedSigners};
 
 lazy_static! {
-    /// Set of trusted policy signers.
-    static ref TRUSTED_SIGNERS: Mutex<TrustedPolicySigners> = Mutex::new(TrustedPolicySigners::default());
+    /// Set of trusted signers.
+    static ref TRUSTED_SIGNERS: Mutex<TrustedSigners> = Mutex::new(TrustedSigners::default());
 
     /// Initializes the global TRUSTED_SIGNERS only once.
     static ref INIT_TRUSTED_SIGNERS_ONCE: Once = Once::new();
 }
 
-/// Set the global set of trusted policy signers.
-/// Changing the set of policy signers after the first call is not possible.
-pub fn set_trusted_policy_signers(signers: TrustedPolicySigners) -> bool {
+/// Sets the global set of trusted signers.
+///
+/// Changing the set of signers after the first call is not possible.
+pub fn set_trusted_signers(signers: TrustedSigners) {
     INIT_TRUSTED_SIGNERS_ONCE.call_once(|| {
         *TRUSTED_SIGNERS.lock().unwrap() = signers;
     });
-
-    true
 }
 
-/// Verify that policy has valid signatures and that enough of them are from the global set
-/// of trusted policy signers.
-pub fn verify_policy_and_trusted_signers(
-    signed_policy: &SignedPolicySGX,
-) -> Result<&PolicySGX, KeyManagerError> {
-    TRUSTED_SIGNERS.lock().unwrap().verify(signed_policy)
+/// Verify that data has valid signatures and that enough of them are from
+/// the global set of trusted signers.
+pub fn verify_data_and_trusted_signers<P: Any>(signed_data: &impl SignedData<P>) -> Result<&P> {
+    TRUSTED_SIGNERS.lock().unwrap().verify(signed_data)
 }

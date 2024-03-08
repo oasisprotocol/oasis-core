@@ -17,8 +17,7 @@ use oasis_core_runtime::{
         namespace::Namespace,
     },
     consensus::{
-        beacon::EpochTime, state::keymanager::churp::GroupID,
-        verifier::Verifier as ConsensusVerifier,
+        beacon::EpochTime, keymanager::churp::GroupID, verifier::Verifier as ConsensusVerifier,
     },
     identity::Identity as EnclaveIdentity,
     storage::KeyValue,

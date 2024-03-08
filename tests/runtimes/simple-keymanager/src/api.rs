@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use oasis_core_keymanager::policy::TrustedPolicySigners;
+use oasis_core_keymanager::policy::TrustedSigners;
 use oasis_core_runtime::common::crypto::signature::PrivateKey as OasisPrivateKey;
 
-pub fn trusted_policy_signers() -> TrustedPolicySigners {
-    TrustedPolicySigners {
+pub fn trusted_signers() -> TrustedSigners {
+    TrustedSigners {
         signers: {
             let mut set = HashSet::new();
             for seed in [

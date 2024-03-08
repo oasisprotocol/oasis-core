@@ -129,7 +129,7 @@ where
 #[cfg(test)]
 mod tests {
     use group::Group;
-    use rand_core::OsRng;
+    use rand::{rngs::StdRng, SeedableRng};
 
     use crate::vss::matrix::VerificationMatrix;
 
@@ -138,6 +138,7 @@ mod tests {
     #[test]
     fn test_new() {
         // Two non-zero coefficients (fast).
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let mut bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::zero(2, 3);
         bp.set_coefficient(p384::Scalar::ONE, 0, 0);
         bp.set_coefficient(p384::Scalar::ONE.double(), 2, 2);
@@ -156,13 +157,14 @@ mod tests {
         }
 
         // Random bivariate polynomial (slow).
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(5, 10, &mut OsRng);
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(5, 10, &mut rng);
         let _: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
     }
 
     #[test]
     fn test_serialization() {
-        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
         let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
         let restored: VerificationMatrix<p384::ProjectivePoint> =
             VerificationMatrix::from_bytes(vm.to_bytes()).expect("deserialization should succeed");

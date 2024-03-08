@@ -7,7 +7,7 @@ mod api;
 
 pub fn main_with_version(version: Version) {
     // Initializer.
-    let init = new_keymanager(api::trusted_policy_signers());
+    let init = new_keymanager(api::trusted_signers());
 
     // Determine test trust root based on build settings.
     #[allow(clippy::option_env_unwrap)]

@@ -29,7 +29,7 @@ use oasis_core_runtime::{
     types::{CheckTxResult, Error as RuntimeError, FeatureScheduleControl, Features},
     TxnDispatcher,
 };
-use simple_keymanager::trusted_policy_signers;
+use simple_keymanager::trusted_signers;
 
 use methods::{BlockHandler, Methods};
 use types::*;
@@ -384,7 +384,7 @@ pub fn main_with_version(version: Version) {
             state.consensus_verifier.clone(),
             state.identity.clone(),
             1024,
-            trusted_policy_signers(),
+            trusted_signers(),
             vec![],
         ));
 

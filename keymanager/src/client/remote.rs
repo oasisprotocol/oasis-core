@@ -35,7 +35,7 @@ use crate::{
         METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
-    policy::{set_trusted_policy_signers, verify_policy_and_trusted_signers, TrustedPolicySigners},
+    policy::{set_trusted_signers, verify_data_and_trusted_signers, TrustedSigners},
 };
 
 use super::KeyManagerClient;
@@ -128,7 +128,7 @@ impl RemoteClient {
         consensus_verifier: Arc<dyn Verifier>,
         identity: Arc<Identity>,
         keys_cache_sizes: usize,
-        signers: TrustedPolicySigners,
+        signers: TrustedSigners,
         nodes: Vec<signature::PublicKey>,
     ) -> Self {
         // Skip policy checks iff both OASIS_UNSAFE_SKIP_KM_POLICY and
@@ -154,8 +154,8 @@ impl RemoteClient {
         let policy = None;
         let km_runtime_id = None;
 
-        // Configure trusted policy signers.
-        set_trusted_policy_signers(signers);
+        // Configure trusted signers.
+        set_trusted_signers(signers);
 
         Self::new_runtime_with_enclaves_and_policy(
             runtime_id,
@@ -187,7 +187,7 @@ impl RemoteClient {
         };
 
         #[cfg_attr(not(target_env = "sgx"), allow(unused))]
-        let policy = verify_policy_and_trusted_signers(&untrusted_policy)?;
+        let policy = verify_data_and_trusted_signers(&untrusted_policy)?;
 
         // Set client allowed enclaves from key manager policy.
         #[cfg(target_env = "sgx")]

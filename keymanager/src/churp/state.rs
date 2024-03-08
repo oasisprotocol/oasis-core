@@ -6,7 +6,7 @@ use anyhow::Result;
 use oasis_core_runtime::{
     common::namespace::Namespace,
     consensus::{
-        state::keymanager::churp::{ImmutableState as ChurpState, Status},
+        keymanager::churp::Status, state::keymanager::churp::ImmutableState as ChurpState,
         verifier::Verifier as ConsensusVerifier,
     },
     future::block_on,

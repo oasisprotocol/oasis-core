@@ -14,6 +14,8 @@ use crate::common::{
 
 use super::beacon::EpochTime;
 
+pub mod churp;
+
 /// Context used to sign key manager policies.
 const POLICY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager: policy";
 
@@ -60,7 +62,7 @@ pub struct SignedPolicySGX {
 
 impl SignedPolicySGX {
     /// Verify the signatures.
-    pub fn verify(&self) -> Result<&PolicySGX, Error> {
+    pub fn verify(&self) -> Result<&PolicySGX> {
         let raw_policy = cbor::to_vec(self.policy.clone());
         for sig in &self.signatures {
             sig.signature
