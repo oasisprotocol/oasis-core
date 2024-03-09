@@ -147,6 +147,15 @@ where
     }
 }
 
+impl<Fp> Default for Polynomial<Fp>
+where
+    Fp: PrimeField,
+{
+    fn default() -> Self {
+        Self::zero(0)
+    }
+}
+
 impl<Fp> Add for Polynomial<Fp>
 where
     Fp: PrimeField,
