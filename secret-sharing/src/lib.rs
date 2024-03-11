@@ -8,5 +8,7 @@
 //!
 //! - CHURP (CHUrn-Robust Proactive secret sharing)
 
+#![feature(test)]
+
 pub mod churp;
 pub mod vss;

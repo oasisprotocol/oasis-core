@@ -51,7 +51,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
+
+    use self::test::Bencher;
+
     use std::iter::zip;
+
+    use group::ff::Field;
+    use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     use super::{basis_polynomial_naive, lagrange_naive};
 
@@ -67,6 +74,10 @@ mod tests {
                 true => p384::Scalar::from_u64(-w as u64).neg(),
             })
             .collect()
+    }
+
+    fn random_scalars(n: usize, mut rng: &mut impl RngCore) -> Vec<p384::Scalar> {
+        (0..n).map(|_| p384::Scalar::random(&mut rng)).collect()
     }
 
     #[test]
@@ -103,5 +114,40 @@ mod tests {
             // Verify degree.
             assert_eq!(p.highest_degree(), 2);
         }
+    }
+
+    fn bench_lagrange_naive(b: &mut Bencher, n: usize) {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let xs = random_scalars(n, &mut rng);
+        let ys = random_scalars(n, &mut rng);
+
+        b.iter(|| {
+            let _p = lagrange_naive(&xs, &ys);
+        });
+    }
+
+    #[bench]
+    fn bench_lagrange_naive_1(b: &mut Bencher) {
+        bench_lagrange_naive(b, 1)
+    }
+
+    #[bench]
+    fn bench_lagrange_naive_2(b: &mut Bencher) {
+        bench_lagrange_naive(b, 2)
+    }
+
+    #[bench]
+    fn bench_lagrange_naive_5(b: &mut Bencher) {
+        bench_lagrange_naive(b, 5)
+    }
+
+    #[bench]
+    fn bench_lagrange_naive_10(b: &mut Bencher) {
+        bench_lagrange_naive(b, 10)
+    }
+
+    #[bench]
+    fn bench_lagrange_naive_20(b: &mut Bencher) {
+        bench_lagrange_naive(b, 20)
     }
 }
