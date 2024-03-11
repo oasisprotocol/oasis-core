@@ -14,6 +14,14 @@ use crate::vss::arith::powers;
 /// ```text
 /// A(x) = \sum_{i=0}^{deg_x} a_i x^i
 /// ```
+///
+/// The constant zero polynomial is represented by a vector with one zero
+/// element, rather than by an empty vector.
+///
+/// Trailing zeros are never trimmed to ensure that all polynomials of the same
+/// degree are consistently represented by vectors of the same size, resulting
+/// in encodings of equal length. If you wish to remove them, consider using
+/// the `trim` method after each operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Polynomial<Fp> {
     a: Vec<Fp>,
@@ -51,6 +59,31 @@ where
         }
 
         Self { a }
+    }
+
+    /// Returns the highest of the degrees of the polynomial's monomials with
+    /// non-zero coefficients.
+    pub fn degree(&self) -> usize {
+        let mut deg = self.a.len().saturating_sub(1);
+        for ai in self.a.iter().rev() {
+            if ai.is_zero().into() {
+                deg = deg.saturating_sub(1);
+            }
+        }
+
+        deg
+    }
+
+    /// Returns the highest of the degrees of the polynomial's monomials.
+    pub fn highest_degree(&self) -> usize {
+        self.a.len() - 1
+    }
+
+    /// Removes trailing zeros.
+    pub fn trim(&mut self) {
+        while self.a.len() > 1 && self.a[self.a.len() - 1].is_zero().into() {
+            _ = self.a.pop();
+        }
     }
 
     /// Returns the byte representation of the polynomial.
@@ -111,6 +144,15 @@ where
         }
 
         r
+    }
+}
+
+impl<Fp> Default for Polynomial<Fp>
+where
+    Fp: PrimeField,
+{
+    fn default() -> Self {
+        Self::zero(0)
     }
 }
 
@@ -304,6 +346,52 @@ mod tests {
         assert_eq!(p.a, scalars(&[0]));
 
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        assert_eq!(p.a, scalars(&[1, 2, 3]));
+    }
+
+    #[test]
+    fn test_degree() {
+        let p = Polynomial::<p384::Scalar>::with_coefficients(vec![]);
+        assert_eq!(p.degree(), 0);
+        assert_eq!(p.highest_degree(), 0);
+
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0]));
+        assert_eq!(p.degree(), 0);
+        assert_eq!(p.highest_degree(), 0);
+
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1]));
+        assert_eq!(p.degree(), 0);
+        assert_eq!(p.highest_degree(), 0);
+
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 0]));
+        assert_eq!(p.degree(), 0);
+        assert_eq!(p.highest_degree(), 1);
+
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        assert_eq!(p.degree(), 2);
+        assert_eq!(p.highest_degree(), 2);
+
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
+        assert_eq!(p.degree(), 2);
+        assert_eq!(p.highest_degree(), 4);
+    }
+
+    #[test]
+    fn test_trim() {
+        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0]));
+        p.trim();
+        assert_eq!(p.a, scalars(&[0]));
+
+        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 0]));
+        p.trim();
+        assert_eq!(p.a, scalars(&[0]));
+
+        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        p.trim();
+        assert_eq!(p.a, scalars(&[1, 2, 3]));
+
+        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
+        p.trim();
         assert_eq!(p.a, scalars(&[1, 2, 3]));
     }
 
