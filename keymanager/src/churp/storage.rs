@@ -142,7 +142,7 @@ impl Storage {
 mod tests {
     use std::sync::Arc;
 
-    use rand::rngs::OsRng;
+    use rand::{rngs::StdRng, SeedableRng};
 
     use oasis_core_runtime::storage::{KeyValue, UntrustedInMemoryStorage};
 
@@ -152,9 +152,10 @@ mod tests {
 
     #[test]
     fn test_store_load_polynomial() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let untrusted = Arc::new(UntrustedInMemoryStorage::new());
         let storage = Storage::new(untrusted.clone());
-        let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut OsRng);
+        let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
         let churp_id = 1;
         let round = 10;
 
@@ -208,7 +209,8 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_polynomial() {
-        let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut OsRng);
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
         let churp_id = 1;
         let round = 10;
 
