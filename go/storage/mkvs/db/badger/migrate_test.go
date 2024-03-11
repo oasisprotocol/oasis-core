@@ -452,7 +452,7 @@ func TestBadgerV5KeyVersioning(t *testing.T) {
 	}
 
 	var h hash.Hash
-	var th1, th2 typedHash
+	var th1, th2 node.TypedHash
 	var v uint64
 
 	for it.Rewind(); it.Valid(); it.Next() {
@@ -497,7 +497,7 @@ func prettyPrintDBV5(ndb api.NodeDB) { // nolint: deadcode, unused
 	defer it.Close()
 
 	var h hash.Hash
-	var th1, th2 typedHash
+	var th1, th2 node.TypedHash
 	var v uint64
 
 	for it.Rewind(); it.Valid(); it.Next() {

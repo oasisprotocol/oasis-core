@@ -34,7 +34,7 @@ type CheckpointerConfig struct {
 
 // Validate validates the configuration settings.
 func (c *Config) Validate() error {
-	if c.Backend != "badger" {
+	if c.Backend != "badger" && c.Backend != "pebbledb" {
 		return fmt.Errorf("unknown storage backend: %s", c.Backend)
 	}
 
@@ -44,7 +44,7 @@ func (c *Config) Validate() error {
 // DefaultConfig returns the default configuration settings.
 func DefaultConfig() Config {
 	return Config{
-		Backend:                "badger",
+		Backend:                "pebbledb",
 		MaxCacheSize:           "64mb",
 		FetcherCount:           4,
 		PublicRPCEnabled:       false,

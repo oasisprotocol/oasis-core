@@ -536,7 +536,7 @@ func (s *applicationState) resetProposalIfChanged(h []byte) bool {
 }
 
 func (s *applicationState) updateMetrics() error {
-	var dbSize int64
+	var dbSize uint64
 	var err error
 	if dbSize, err = s.storage.NodeDB().Size(); err != nil {
 		s.logger.Error("Size",
@@ -638,6 +638,7 @@ func InitStateStorage(cfg *ApplicationConfig) (storage.LocalBackend, storage.Nod
 
 	switch cfg.StorageBackend {
 	case storageDB.BackendNameBadgerDB:
+	case storageDB.BackendNamePebbleDB:
 	default:
 		return nil, nil, nil, fmt.Errorf("unsupported storage backend: %s", cfg.StorageBackend)
 	}

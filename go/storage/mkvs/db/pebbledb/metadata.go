@@ -1,10 +1,11 @@
-package badger
+package pebbledb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/cockroachdb/pebble"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -41,17 +42,17 @@ func (m *metadata) getEarliestVersion() uint64 {
 	return m.value.EarliestVersion
 }
 
-func (m *metadata) setEarliestVersion(tx *badger.Txn, version uint64) error {
+func (m *metadata) setEarliestVersion(batch *pebble.Batch, version uint64) {
 	m.Lock()
 	defer m.Unlock()
 
 	// The earliest version can only increase, not decrease.
 	if version < m.value.EarliestVersion {
-		return nil
+		return
 	}
 
 	m.value.EarliestVersion = version
-	return m.save(tx)
+	_ = m.save(batch, nil)
 }
 
 func (m *metadata) getLastFinalizedVersion() (uint64, bool) {
@@ -64,7 +65,7 @@ func (m *metadata) getLastFinalizedVersion() (uint64, bool) {
 	return *m.value.LastFinalizedVersion, true
 }
 
-func (m *metadata) setLastFinalizedVersion(tx *badger.Txn, version uint64) error {
+func (m *metadata) setLastFinalizedVersion(batch *pebble.Batch, version uint64) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -77,7 +78,7 @@ func (m *metadata) setLastFinalizedVersion(tx *badger.Txn, version uint64) error
 	}
 
 	m.value.LastFinalizedVersion = &version
-	return m.save(tx)
+	return batch.Set(metadataKeyFmt.Encode(), cbor.Marshal(m.value), nil)
 }
 
 func (m *metadata) getMultipartVersion() uint64 {
@@ -87,16 +88,16 @@ func (m *metadata) getMultipartVersion() uint64 {
 	return m.value.MultipartVersion
 }
 
-func (m *metadata) setMultipartVersion(tx *badger.Txn, version uint64) error {
+func (m *metadata) setMultipartVersion(db *pebble.DB, version uint64, wo *pebble.WriteOptions) error {
 	m.Lock()
 	defer m.Unlock()
 
 	m.value.MultipartVersion = version
-	return m.save(tx)
+	return m.save(db, wo)
 }
 
-func (m *metadata) save(tx *badger.Txn) error {
-	return tx.Set(metadataKeyFmt.Encode(), cbor.Marshal(m.value))
+func (m *metadata) save(db pebble.Writer, opts *pebble.WriteOptions) error {
+	return db.Set(metadataKeyFmt.Encode(), cbor.Marshal(m.value), opts)
 }
 
 // updatedNode is an element of the root updated nodes key.
@@ -123,23 +124,28 @@ type rootsMetadata struct {
 }
 
 // loadRootsMetadata loads the roots metadata for the given version from the database.
-func loadRootsMetadata(tx *badger.Txn, version uint64) (*rootsMetadata, error) {
-	rootsMeta := &rootsMetadata{version: version}
-	item, err := tx.Get(rootsMetadataKeyFmt.Encode(version))
-	switch err {
-	case nil:
-		if err = item.Value(func(val []byte) error { return cbor.Unmarshal(val, &rootsMeta) }); err != nil {
-			return nil, fmt.Errorf("mkvs/badger: error reading roots metadata: %w", err)
+func loadRootsMetadata(db *pebble.DB, version uint64) (*rootsMetadata, error) {
+	rootsMeta := &rootsMetadata{
+		version: version,
+	}
+
+	item, closer, err := db.Get(rootsMetadataKeyFmt.Encode(version))
+	switch {
+	case err == nil:
+		defer closer.Close()
+		if err = cbor.Unmarshal(item, &rootsMeta); err != nil {
+			return nil, fmt.Errorf("mkvs/pebbledb: failed to unmarshal roots metadata: %w", err)
 		}
-	case badger.ErrKeyNotFound:
+	case errors.Is(err, pebble.ErrNotFound):
 		rootsMeta.Roots = make(map[node.TypedHash][]node.TypedHash)
 	default:
-		return nil, fmt.Errorf("mkvs/badger: error reading roots metadata: %w", err)
+		return nil, fmt.Errorf("mkvs/pebbledb: failed to get roots metadata from backing store: %w", err)
 	}
+
 	return rootsMeta, nil
 }
 
 // save saves the roots metadata to the database.
-func (rm *rootsMetadata) save(tx *badger.Txn) error {
-	return tx.Set(rootsMetadataKeyFmt.Encode(rm.version), cbor.Marshal(rm))
+func (rm *rootsMetadata) save(batch *pebble.Batch) error {
+	return batch.Set(rootsMetadataKeyFmt.Encode(rm.version), cbor.Marshal(rm), nil)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 	badgerDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	pebbleDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/pebbledb"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
 	mkvsTests "github.com/oasisprotocol/oasis-core/go/storage/mkvs/tests"
@@ -195,6 +196,8 @@ func testBasic(t *testing.T, ndb db.NodeDB, _ NodeDBFactory) {
 	require.NoError(t, err, "Insert")
 	err = tree.Insert(ctx, keyOne, valueOne)
 	require.NoError(t, err, "Insert")
+	_, err = tree.Get(ctx, keyZero)
+	require.NoError(t, err, "Get")
 
 	// Tree now has key_zero and key_one and should hash as if the mangling didn't happen.
 	log, root, err = tree.Commit(ctx, testNs, 0)
@@ -2317,6 +2320,30 @@ func TestBadgerBackend(t *testing.T) {
 		// Create a Badger-backed Node DB factory.
 		factory := func(ns common.Namespace) (db.NodeDB, error) {
 			return badgerDb.New(&db.Config{
+				DB:           dir,
+				NoFsync:      true,
+				Namespace:    ns,
+				MaxCacheSize: 16 * 1024 * 1024,
+			})
+		}
+
+		cleanup := func() {
+			os.RemoveAll(dir)
+		}
+
+		return factory, cleanup
+	}, nil)
+}
+
+func TestPebbledbBackend(t *testing.T) {
+	testBackend(t, func(t *testing.T) (NodeDBFactory, func()) {
+		// Create a new random temporary directory under /tmp.
+		dir, err := os.MkdirTemp("", "mkvs.test.pebbledb")
+		require.NoError(t, err, "TempDir")
+
+		// Create a Badger-backed Node DB factory.
+		factory := func(ns common.Namespace) (db.NodeDB, error) {
+			return pebbleDb.New(&db.Config{
 				DB:           dir,
 				NoFsync:      true,
 				Namespace:    ns,

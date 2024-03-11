@@ -17,7 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/background"
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/database"
-	badgerNodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/pebbledb"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/interop/fixtures"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
@@ -68,7 +68,7 @@ func doProtoServer(*cobra.Command, []string) {
 
 	// Initialize a dummy storage backend.
 	storageCfg := api.Config{
-		Backend:      database.BackendNameBadgerDB,
+		Backend:      database.BackendNamePebbleDB,
 		DB:           dataDir,
 		MaxCacheSize: 16 * 1024 * 1024,
 	}
@@ -77,7 +77,7 @@ func doProtoServer(*cobra.Command, []string) {
 		ctx := context.Background()
 		ndbCfg := storageCfg.ToNodeDB()
 		var ndb api.NodeDB
-		ndb, err = badgerNodedb.New(ndbCfg)
+		ndb, err = pebbledb.New(ndbCfg)
 		if err != nil {
 			logger.Error("failed to initialize node db",
 				"err", err,

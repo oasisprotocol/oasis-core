@@ -160,7 +160,7 @@ func NewArchive(
 
 	appConfig := &abci.ApplicationConfig{
 		DataDir:        filepath.Join(srv.dataDir, tmcommon.StateDir),
-		StorageBackend: db.GetBackendName(),
+		StorageBackend: config.GlobalConfig.Storage.Backend,
 		Pruning: abci.PruneConfig{
 			Strategy:      abci.PruneNone,
 			PruneInterval: time.Hour * 100, // Irrelevant as pruning is disabled.

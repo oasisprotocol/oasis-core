@@ -44,7 +44,7 @@ func NewLocalBackend(
 		impl api.LocalBackend
 	)
 	switch cfg.Backend {
-	case database.BackendNameBadgerDB:
+	case database.BackendNameBadgerDB, database.BackendNamePebbleDB:
 		cfg.DB = GetLocalBackendDBDir(dataDir, cfg.Backend)
 		impl, err = database.New(cfg)
 	default:
