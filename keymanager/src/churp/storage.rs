@@ -191,7 +191,7 @@ mod tests {
             .insert(wrong_key, encrypted_polynomial.clone())
             .expect("bivariate polynomial should be stored");
 
-        encrypted_polynomial[0] += 1;
+        encrypted_polynomial[0] = encrypted_polynomial[0].saturating_add(1);
         untrusted
             .insert(right_key, encrypted_polynomial.clone())
             .expect("bivariate polynomial should be stored");
@@ -231,7 +231,7 @@ mod tests {
 
         // Corrupted ciphertext, decryption should fail.
         let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, round);
-        ciphertext[0] += 1;
+        ciphertext[0] = ciphertext[0].saturating_add(1);
         Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, round)
             .expect_err("decryption of bivariate polynomial should fail");
     }
