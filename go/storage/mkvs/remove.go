@@ -38,6 +38,7 @@ func (t *tree) RemoveExisting(ctx context.Context, key []byte) ([]byte, error) {
 			t.pendingWriteLog[node.ToMapKey(key)] = &pendingEntry{key, nil, changed, nil}
 		} else {
 			entry.value = nil
+			entry.insertedLeaf = nil
 		}
 	}
 
@@ -111,7 +112,7 @@ func (t *tree) doRemove(
 		if remainingLeaf != nil && remainingLeft == nil && remainingRight == nil {
 			ndLeaf := n.LeafNode
 			n.LeafNode = nil
-			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, ptr)
 			t.cache.removeNode(ptr)
 			return ndLeaf, true, existing, nil
 		} else if remainingLeaf == nil && (remainingLeft == nil || remainingRight == nil) {
@@ -134,15 +135,15 @@ func (t *tree) doRemove(
 				inode.LabelBitLength += n.LabelBitLength
 				if inode.Clean {
 					// Node was clean so old node is eligible for removal.
-					t.pendingRemovedNodes = append(t.pendingRemovedNodes, inode.ExtractUnchecked())
+					t.pendingRemovedNodes = append(t.pendingRemovedNodes, nodePtr.ExtractUnchecked())
 				}
 				inode.Clean = false
-				nodePtr.Clean = false
+				nodePtr.SetDirty()
 				// No longer eligible for eviction as it is dirty.
 				t.cache.rollbackNode(nodePtr)
 			}
 
-			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, ptr)
 			t.cache.removeNode(ptr)
 			return nodePtr, true, existing, nil
 		}
@@ -151,11 +152,11 @@ func (t *tree) doRemove(
 		if changed {
 			if n.Clean {
 				// Node was clean so old node is eligible for removal.
-				t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
+				t.pendingRemovedNodes = append(t.pendingRemovedNodes, ptr.ExtractUnchecked())
 			}
 
 			n.Clean = false
-			ptr.Clean = false
+			ptr.SetDirty()
 			// No longer eligible for eviction as it is dirty.
 			t.cache.rollbackNode(ptr)
 		}
@@ -164,7 +165,7 @@ func (t *tree) doRemove(
 	case *node.LeafNode:
 		// Remove from leaf node.
 		if n.Key.Equal(key) {
-			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n)
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, ptr)
 			t.cache.removeNode(ptr)
 			return nil, true, n.Value, nil
 		}

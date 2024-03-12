@@ -21,6 +21,10 @@ import (
 // is randomized.
 const checkpointIntervalRandomizationFactor = 0.1
 
+// CheckIntervalDisabled is the checkpointing interval which basically disables periodic
+// checkpoints (unless a checkpoint is forced).
+const CheckIntervalDisabled time.Duration = 1<<63 - 1
+
 // CheckpointerConfig is a checkpointer configuration.
 type CheckpointerConfig struct {
 	// Name identifying this checkpointer in logs.
@@ -287,7 +291,18 @@ func (c *checkpointer) worker(ctx context.Context) {
 	paused := false
 
 	for {
-		interval := random.GetRandomValueFromInterval(checkpointIntervalRandomizationFactor, rand.Float64(), c.cfg.CheckInterval)
+		var interval time.Duration
+		switch c.cfg.CheckInterval {
+		case CheckIntervalDisabled:
+			interval = CheckIntervalDisabled
+		default:
+			interval = random.GetRandomValueFromInterval(
+				checkpointIntervalRandomizationFactor,
+				rand.Float64(),
+				c.cfg.CheckInterval,
+			)
+		}
+
 		select {
 		case <-ctx.Done():
 			return
@@ -311,10 +326,6 @@ func (c *checkpointer) worker(ctx context.Context) {
 			force = true
 		}
 
-		if paused && !force {
-			continue
-		}
-
 		// Fetch current checkpoint parameters.
 		params := c.cfg.Parameters
 		if params == nil && c.cfg.GetParameters != nil {
@@ -334,8 +345,16 @@ func (c *checkpointer) worker(ctx context.Context) {
 		}
 
 		// Don't checkpoint if checkpoints are disabled.
-		if params.Interval == 0 && !force {
+		switch {
+		case force:
+			// Always checkpoint when forced.
+		case paused:
 			continue
+		case params.Interval == 0:
+			continue
+		case c.cfg.CheckInterval == CheckIntervalDisabled:
+			continue
+		default:
 		}
 
 		var err error

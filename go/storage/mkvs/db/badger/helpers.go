@@ -1,8 +1,8 @@
 package badger
 
 import (
-	"github.com/dgraph-io/badger/v3"
-	"github.com/dgraph-io/badger/v3/options"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/options"
 
 	cmnBadger "github.com/oasisprotocol/oasis-core/go/common/badger"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
@@ -33,7 +33,6 @@ func commonConfigToBadgerOptions(cfg *api.Config, db *badgerNodeDB) badger.Optio
 	opts = opts.WithSyncWrites(!cfg.NoFsync)
 	opts = opts.WithCompression(options.Snappy)
 	if cfg.MaxCacheSize == 0 {
-		// Default to 64mb block cache size if not configured to avoid a panic.
 		opts = opts.WithBlockCacheSize(64 * 1024 * 1024)
 	} else {
 		opts = opts.WithBlockCacheSize(cfg.MaxCacheSize)

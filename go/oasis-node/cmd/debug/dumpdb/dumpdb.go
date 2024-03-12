@@ -14,6 +14,7 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci"
 	abciState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	cmtAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
@@ -37,7 +38,6 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
-	storageDB "github.com/oasisprotocol/oasis-core/go/storage/database"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 )
 
@@ -105,7 +105,7 @@ func doDumpDB(cmd *cobra.Command, _ []string) {
 	ldb, _, stateRoot, err := abci.InitStateStorage(
 		&abci.ApplicationConfig{
 			DataDir:             filepath.Join(dataDir, cmtCommon.StateDir),
-			StorageBackend:      storageDB.BackendNameBadgerDB, // No other backend for now.
+			StorageBackend:      config.GlobalConfig.Storage.Backend,
 			MemoryOnlyStorage:   false,
 			ReadOnlyStorage:     viper.GetBool(cfgDumpReadOnlyDB),
 			DisableCheckpointer: true,

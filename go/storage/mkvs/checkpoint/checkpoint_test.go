@@ -17,14 +17,19 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs"
-	db "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
-	badgerDb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db"
+	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
+	dbTesting "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/testing"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 )
 
 var testNs = common.NewTestNamespaceFromSeed([]byte("oasis mkvs checkpoint test ns"), 0)
 
 func TestFileCheckpointCreator(t *testing.T) {
+	dbTesting.TestMultipleBackends(t, db.Backends, testFileCheckpointCreator)
+}
+
+func testFileCheckpointCreator(t *testing.T, factory dbApi.Factory) {
 	require := require.New(t)
 
 	// Generate some data.
@@ -32,7 +37,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
-	ndb, err := badgerDb.New(&db.Config{
+	ndb, err := factory.New(&dbApi.Config{
 		DB:           filepath.Join(dir, "db"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -46,7 +51,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 		require.NoError(err, "Insert")
 	}
 
-	_, rootHash, err := tree.Commit(ctx, testNs, 0)
+	_, rootHash, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(err, "Commit")
 	root := node.Root{
 		Namespace: testNs,
@@ -117,7 +122,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	require.Error(err, "GetChunk on a non-existent chunk should fail")
 
 	// Create a fresh node database to restore into.
-	ndb2, err := badgerDb.New(&db.Config{
+	ndb2, err := factory.New(&dbApi.Config{
 		DB:           filepath.Join(dir, "db2"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -224,7 +229,7 @@ func TestFileCheckpointCreator(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		var value []byte
 		value, err = tree.Get(ctx, []byte(strconv.Itoa(i)))
-		require.NoError(err, "Get")
+		require.NoError(err, "Get(%d)", i)
 		require.Equal([]byte(strconv.Itoa(i)), value)
 	}
 
@@ -260,6 +265,10 @@ func TestFileCheckpointCreator(t *testing.T) {
 }
 
 func TestOversizedChunks(t *testing.T) {
+	dbTesting.TestMultipleBackends(t, db.Backends, testOversizedChunks)
+}
+
+func testOversizedChunks(t *testing.T, factory dbApi.Factory) {
 	require := require.New(t)
 
 	// Generate some data.
@@ -267,7 +276,7 @@ func TestOversizedChunks(t *testing.T) {
 	require.NoError(err, "TempDir")
 	defer os.RemoveAll(dir)
 
-	ndb, err := badgerDb.New(&db.Config{
+	ndb, err := factory.New(&dbApi.Config{
 		DB:           filepath.Join(dir, "db"),
 		Namespace:    testNs,
 		MaxCacheSize: 16 * 1024 * 1024,
@@ -284,7 +293,7 @@ func TestOversizedChunks(t *testing.T) {
 		require.NoError(err, "Insert")
 	}
 
-	_, rootHash, err := tree.Commit(ctx, testNs, 0)
+	_, rootHash, err := tree.Commit(ctx, testNs, 1)
 	require.NoError(err, "Commit")
 	root := node.Root{
 		Namespace: testNs,
@@ -306,6 +315,10 @@ func TestOversizedChunks(t *testing.T) {
 }
 
 func TestPruneGapAfterCheckpointRestore(t *testing.T) {
+	dbTesting.TestMultipleBackends(t, db.Backends, testPruneGapAfterCheckpointRestore)
+}
+
+func testPruneGapAfterCheckpointRestore(t *testing.T, factory dbApi.Factory) {
 	require := require.New(t)
 
 	// Generate some data.
@@ -315,13 +328,13 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 
 	// Create two databases, the first will contain everything while the second one will only
 	// contain the first few versions.
-	ndb1, err := badgerDb.New(&db.Config{
+	ndb1, err := factory.New(&dbApi.Config{
 		DB:        filepath.Join(dir, "db1"),
 		Namespace: testNs,
 	})
 	require.NoError(err, "New")
 
-	ndb2, err := badgerDb.New(&db.Config{
+	ndb2, err := factory.New(&dbApi.Config{
 		DB:        filepath.Join(dir, "db2"),
 		Namespace: testNs,
 	})
@@ -425,7 +438,7 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 
 	// Now attempt to prune everything up to (but excluding) the current root.
 	for v := uint64(0); v < root.Version; v++ {
-		err = ndb2.Prune(ctx, v)
+		err = ndb2.Prune(v)
 		require.NoError(err, "Prune(%d)", v)
 	}
 	checkpointRootVersion := root.Version
@@ -475,6 +488,6 @@ func TestPruneGapAfterCheckpointRestore(t *testing.T) {
 	}
 
 	// Prune the checkpoint root version.
-	err = ndb2.Prune(ctx, checkpointRootVersion)
+	err = ndb2.Prune(checkpointRootVersion)
 	require.NoError(err, "Prune(%d)", checkpointRootVersion)
 }

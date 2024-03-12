@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	commonFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/p2p/rpc"
@@ -158,7 +159,6 @@ func NewNode(
 	rpcRoleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
 	localStorage storageApi.LocalBackend,
-	checkpointerCfg *checkpoint.CheckpointerConfig,
 	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Node, error) {
 	initMetrics()
@@ -200,53 +200,56 @@ func NewNode(
 
 	n.ctx, n.ctxCancel = context.WithCancel(context.Background())
 
-	// Create a new checkpointer if enabled.
-	if checkpointerCfg != nil {
-		checkpointerCfg = &checkpoint.CheckpointerConfig{
-			Name:            "runtime",
-			Namespace:       commonNode.Runtime.ID(),
-			CheckInterval:   checkpointerCfg.CheckInterval,
-			RootsPerVersion: 2, // State root and I/O root.
-			GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
-				rt, rerr := commonNode.Runtime.ActiveDescriptor(ctx)
-				if rerr != nil {
-					return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
-				}
+	// Create a new checkpointer. Always create a checkpointer, even if checkpointing is disabled
+	// in configuration so we can ensure that the genesis checkpoint is available.
+	checkInterval := checkpoint.CheckIntervalDisabled
+	if config.GlobalConfig.Storage.Checkpointer.Enabled {
+		checkInterval = config.GlobalConfig.Storage.Checkpointer.CheckInterval
+	}
+	checkpointerCfg := checkpoint.CheckpointerConfig{
+		Name:            "runtime",
+		Namespace:       commonNode.Runtime.ID(),
+		CheckInterval:   checkInterval,
+		RootsPerVersion: 2, // State root and I/O root.
+		GetParameters: func(ctx context.Context) (*checkpoint.CreationParameters, error) {
+			rt, rerr := commonNode.Runtime.ActiveDescriptor(ctx)
+			if rerr != nil {
+				return nil, fmt.Errorf("failed to retrieve runtime descriptor: %w", rerr)
+			}
 
-				blk, rerr := commonNode.Consensus.RootHash().GetGenesisBlock(ctx, &roothashApi.RuntimeRequest{
-					RuntimeID: rt.ID,
-					Height:    consensus.HeightLatest,
-				})
-				if rerr != nil {
-					return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
-				}
+			blk, rerr := commonNode.Consensus.RootHash().GetGenesisBlock(ctx, &roothashApi.RuntimeRequest{
+				RuntimeID: rt.ID,
+				Height:    consensus.HeightLatest,
+			})
+			if rerr != nil {
+				return nil, fmt.Errorf("failed to retrieve genesis block: %w", rerr)
+			}
 
-				return &checkpoint.CreationParameters{
-					Interval:       rt.Storage.CheckpointInterval,
-					NumKept:        rt.Storage.CheckpointNumKept,
-					ChunkSize:      rt.Storage.CheckpointChunkSize,
-					InitialVersion: blk.Header.Round,
-				}, nil
-			},
-			GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
-				blk, berr := commonNode.Runtime.History().GetCommittedBlock(ctx, version)
-				if berr != nil {
-					return nil, berr
-				}
+			return &checkpoint.CreationParameters{
+				Interval:       rt.Storage.CheckpointInterval,
+				NumKept:        rt.Storage.CheckpointNumKept,
+				ChunkSize:      rt.Storage.CheckpointChunkSize,
+				InitialVersion: blk.Header.Round,
+			}, nil
+		},
+		GetRoots: func(ctx context.Context, version uint64) ([]storageApi.Root, error) {
+			blk, berr := commonNode.Runtime.History().GetCommittedBlock(ctx, version)
+			if berr != nil {
+				return nil, berr
+			}
 
-				return blk.Header.StorageRoots(), nil
-			},
-		}
-		var err error
-		n.checkpointer, err = checkpoint.NewCheckpointer(
-			n.ctx,
-			localStorage.NodeDB(),
-			localStorage.Checkpointer(),
-			*checkpointerCfg,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create checkpointer: %w", err)
-		}
+			return blk.Header.StorageRoots(), nil
+		},
+	}
+	var err error
+	n.checkpointer, err = checkpoint.NewCheckpointer(
+		n.ctx,
+		localStorage.NodeDB(),
+		localStorage.Checkpointer(),
+		checkpointerCfg,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create checkpointer: %w", err)
 	}
 
 	// Register prune handler.
@@ -278,7 +281,7 @@ func (n *Node) Name() string {
 func (n *Node) Start() error {
 	go n.watchQuit()
 	go n.worker()
-	if n.checkpointer != nil {
+	if config.GlobalConfig.Storage.Checkpointer.Enabled {
 		go n.consensusCheckpointSyncer()
 	}
 	return nil
@@ -455,7 +458,43 @@ func (n *Node) initGenesis(rt *registryApi.Runtime, genesisBlock *block.Block) e
 
 	// Check what the latest finalized version in the database is as we may be using a database
 	// from a previous version or network.
-	latestVersion, _ := n.localStorage.NodeDB().GetLatestVersion()
+	latestVersion, alreadyInitialized := n.localStorage.NodeDB().GetLatestVersion()
+
+	// Finalize any versions that were not yet finalized in the old database. This is only possible
+	// as long as there is only one non-finalized root per version. Note that we also cannot be sure
+	// that any of these roots are valid, but this is fine as long as the final version matches the
+	// genesis root.
+	if alreadyInitialized {
+		n.logger.Debug("already initialized, finalizing any non-finalized versions",
+			"genesis_state_root", genesisBlock.Header.StateRoot,
+			"genesis_round", genesisBlock.Header.Round,
+			"latest_version", latestVersion,
+		)
+
+		for v := latestVersion + 1; v < genesisBlock.Header.Round; v++ {
+			roots, err := n.localStorage.NodeDB().GetRootsForVersion(v)
+			if err != nil {
+				return fmt.Errorf("failed to fetch roots for version %d: %w", v, err)
+			}
+
+			var stateRoots []storageApi.Root
+			for _, root := range roots {
+				if root.Type == storageApi.RootTypeState {
+					stateRoots = append(stateRoots, root)
+				}
+			}
+			if len(stateRoots) != 1 {
+				break // We must have exactly one non-finalized state root to continue.
+			}
+
+			err = n.localStorage.NodeDB().Finalize(stateRoots)
+			if err != nil {
+				return fmt.Errorf("failed to finalize version %d: %w", v, err)
+			}
+
+			latestVersion = v
+		}
+	}
 
 	stateRoot := storageApi.Root{
 		Namespace: rt.ID,
@@ -1258,7 +1297,7 @@ mainLoop:
 				n.nudgeAvailability(cachedLastRound, latestBlockRound)
 
 				// Notify the checkpointer that there is a new finalized round.
-				if n.checkpointer != nil {
+				if config.GlobalConfig.Storage.Checkpointer.Enabled {
 					n.checkpointer.NotifyNewVersion(finalized.summary.Round)
 				}
 			} else {
@@ -1284,7 +1323,7 @@ type pruneHandler struct {
 	node   *Node
 }
 
-func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
+func (p *pruneHandler) Prune(rounds []uint64) error {
 	// Make sure we never prune past what was synced.
 	lastSycnedRound, _, _ := p.node.GetLastSynced()
 
@@ -1300,7 +1339,7 @@ func (p *pruneHandler) Prune(ctx context.Context, rounds []uint64) error {
 		p.logger.Debug("pruning storage for round", "round", round)
 
 		// Prune given block.
-		err := p.node.localStorage.NodeDB().Prune(ctx, round)
+		err := p.node.localStorage.NodeDB().Prune(round)
 		switch err {
 		case nil:
 		case mkvsDB.ErrNotEarliest:

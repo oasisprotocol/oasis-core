@@ -860,7 +860,7 @@ func (ph *pruneHandler) trackRuntime(bh api.BlockHistory) {
 }
 
 // Implements api.StatePruneHandler.
-func (ph *pruneHandler) Prune(_ context.Context, version uint64) error {
+func (ph *pruneHandler) Prune(version uint64) error {
 	ph.Lock()
 	defer ph.Unlock()
 

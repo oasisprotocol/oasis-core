@@ -264,7 +264,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 				fixture.ComputeWorkers[j].RuntimeStatePaths[i] = runtimeStatePath
 			}
 
-			dbPath := filepath.Join(runtimeStatePath, database.DBFileBadgerDB)
+			dbPath := filepath.Join(runtimeStatePath, database.DefaultFileName(database.BackendNameBadgerDB))
 			_, err := os.Stat(dbPath)
 			if err != nil {
 				return nil, fmt.Errorf("runtime state path: %w", err)

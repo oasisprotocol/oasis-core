@@ -3,40 +3,32 @@ package database
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
-	nodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
-	badgerNodedb "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/badger"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db"
+	dbApi "github.com/oasisprotocol/oasis-core/go/storage/mkvs/db/api"
 )
 
 const (
-	// BackendNameBadgerDB is the name of the BadgeDB backed database backend.
+	// BackendNameBadgerDB is the name of the BadgerDB backed database backend.
 	BackendNameBadgerDB = "badger"
-
-	// DBFileBadgerDB is the default BadgerDB backing store filename.
-	DBFileBadgerDB = "mkvs_storage.badger.db"
+	// BackendNamePathBadger is the name of the PathBadger database backend.
+	BackendNamePathBadger = "pathbadger"
 
 	checkpointDir = "checkpoints"
 )
 
-// DefaultFileName returns the default database filename for the specified
-// backend.
+// DefaultFileName returns the default database filename for the specified backend.
 func DefaultFileName(backend string) string {
-	switch backend {
-	case BackendNameBadgerDB:
-		return DBFileBadgerDB
-	default:
-		panic("storage/database: can't get default filename for unknown backend")
-	}
+	return fmt.Sprintf("mkvs_storage.%s.db", backend)
 }
 
 type databaseBackend struct {
-	nodedb       nodedb.NodeDB
+	ndb          dbApi.NodeDB
 	checkpointer checkpoint.CreateRestorer
 	rootCache    *api.RootCache
 
@@ -47,18 +39,7 @@ type databaseBackend struct {
 
 // New constructs a new database backed storage Backend instance.
 func New(cfg *api.Config) (api.LocalBackend, error) {
-	ndbCfg := cfg.ToNodeDB()
-
-	var (
-		ndb nodedb.NodeDB
-		err error
-	)
-	switch cfg.Backend {
-	case BackendNameBadgerDB:
-		ndb, err = badgerNodedb.New(ndbCfg)
-	default:
-		err = errors.New("storage/database: unsupported backend")
-	}
+	ndb, err := db.New(cfg.Backend, cfg.ToNodeDB())
 	if err != nil {
 		return nil, fmt.Errorf("storage/database: failed to create node database: %w", err)
 	}
@@ -86,7 +67,7 @@ func New(cfg *api.Config) (api.LocalBackend, error) {
 	}
 
 	return &databaseBackend{
-		nodedb:       ndb,
+		ndb:          ndb,
 		checkpointer: checkpoint.NewCreateRestorer(creator, restorer),
 		rootCache:    rootCache,
 		initCh:       initCh,
@@ -95,7 +76,7 @@ func New(cfg *api.Config) (api.LocalBackend, error) {
 }
 
 func (ba *databaseBackend) Cleanup() {
-	ba.nodedb.Close()
+	ba.ndb.Close()
 }
 
 func (ba *databaseBackend) Initialized() <-chan struct{} {
@@ -133,7 +114,7 @@ func (ba *databaseBackend) SyncIterate(ctx context.Context, request *api.Iterate
 }
 
 func (ba *databaseBackend) GetDiff(ctx context.Context, request *api.GetDiffRequest) (api.WriteLogIterator, error) {
-	return ba.nodedb.GetWriteLog(ctx, request.StartRoot, request.EndRoot)
+	return ba.ndb.GetWriteLog(ctx, request.StartRoot, request.EndRoot)
 }
 
 func (ba *databaseBackend) GetCheckpoints(ctx context.Context, request *checkpoint.GetCheckpointsRequest) ([]*checkpoint.Metadata, error) {
@@ -180,6 +161,6 @@ func (ba *databaseBackend) Checkpointer() checkpoint.CreateRestorer {
 }
 
 // Implements api.LocalBackend.
-func (ba *databaseBackend) NodeDB() nodedb.NodeDB {
-	return ba.nodedb
+func (ba *databaseBackend) NodeDB() dbApi.NodeDB {
+	return ba.ndb
 }

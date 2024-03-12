@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/writelog"
 )
 
 const (
@@ -245,9 +246,49 @@ func (b *ProofBuilder) build(ctx context.Context, proof *Proof, h hash.Hash) err
 // ProofVerifier enables verifying proofs returned by the ReadSyncer API.
 type ProofVerifier struct{}
 
+type verifyOpts struct {
+	writeLog bool
+}
+
+type verifyResult struct {
+	// rootPtr is the pointer to the in-memory root node of the verified proof.
+	rootPtr *node.Pointer
+	// writeLog is the writelog containing key/value pairs if requested.
+	writeLog writelog.WriteLog
+}
+
+func (vr *verifyResult) addLeafToWriteLog(leaf *node.Pointer) {
+	if leaf == nil {
+		return
+	}
+	leafNode, ok := leaf.Node.(*node.LeafNode)
+	if !ok {
+		return
+	}
+	vr.writeLog = append(vr.writeLog, writelog.LogEntry{Key: leafNode.Key, Value: leafNode.Value})
+}
+
 // VerifyProof verifies a proof and generates an in-memory subtree representing
 // the nodes which are included in the proof.
 func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof *Proof) (*node.Pointer, error) {
+	res, err := pv.verifyProofOpts(ctx, root, proof, &verifyOpts{})
+	if err != nil {
+		return nil, err
+	}
+	return res.rootPtr, nil
+}
+
+// VerifyProofToWriteLog verifies a proof and generates a write log representing the key/value pairs
+// which are included in the proof.
+func (pv *ProofVerifier) VerifyProofToWriteLog(ctx context.Context, root hash.Hash, proof *Proof) (writelog.WriteLog, error) {
+	res, err := pv.verifyProofOpts(ctx, root, proof, &verifyOpts{writeLog: true})
+	if err != nil {
+		return nil, err
+	}
+	return res.writeLog, nil
+}
+
+func (pv *ProofVerifier) verifyProofOpts(ctx context.Context, root hash.Hash, proof *Proof, opts *verifyOpts) (*verifyResult, error) {
 	if proof.V < MinimumProofVersion || proof.V > LatestProofVersion {
 		return nil, fmt.Errorf("verifier: unsupported proof version: %d", proof.V)
 	}
@@ -264,7 +305,8 @@ func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof 
 		return nil, errors.New("verifier: empty proof")
 	}
 
-	idx, rootNode, err := pv.verifyProof(ctx, proof, 0)
+	var res verifyResult
+	idx, rootPtr, err := pv.verifyProof(ctx, proof, 0, opts, &res)
 	if err != nil {
 		return nil, err
 	}
@@ -273,11 +315,11 @@ func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof 
 	if idx != len(proof.Entries) {
 		return nil, fmt.Errorf("verifier: unused entries in proof")
 	}
-	rootNodeHash := rootNode.GetHash()
+	rootNodeHash := rootPtr.GetHash()
 	if rootNodeHash.IsEmpty() {
 		// Make sure that in case the root node is empty we always return nil
 		// and not a pointer that represents nil.
-		rootNode = nil
+		rootPtr = nil
 	}
 
 	if !rootNodeHash.Equal(&root) {
@@ -286,10 +328,13 @@ func (pv *ProofVerifier) VerifyProof(ctx context.Context, root hash.Hash, proof 
 			rootNodeHash,
 		)
 	}
-	return rootNode, nil
+
+	res.rootPtr = rootPtr
+
+	return &res, nil
 }
 
-func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int) (int, *node.Pointer, error) {
+func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int, opts *verifyOpts, res *verifyResult) (int, *node.Pointer, error) {
 	if ctx.Err() != nil {
 		return -1, nil, ctx.Err()
 	}
@@ -319,25 +364,28 @@ func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int)
 			switch proof.V {
 			case 0:
 				// In version 0, the leaf node is included in the internal node.
+				if opts.writeLog {
+					res.addLeafToWriteLog(nd.LeafNode)
+				}
 			case 1:
 				// In version 1, the leaf node is added separately, as a child.
 				// Leaf.
-				pos, nd.LeafNode, err = pv.verifyProof(ctx, proof, pos)
+				pos, nd.LeafNode, err = pv.verifyProof(ctx, proof, pos, opts, res)
 				if err != nil {
 					return -1, nil, err
 				}
 			default:
-				// Checked in VerifyProof.
+				// Checked in verifyProofOpts.
 				panic("unexpected proof version")
 			}
 
 			// Left.
-			pos, nd.Left, err = pv.verifyProof(ctx, proof, pos)
+			pos, nd.Left, err = pv.verifyProof(ctx, proof, pos, opts, res)
 			if err != nil {
 				return -1, nil, err
 			}
 			// Right.
-			pos, nd.Right, err = pv.verifyProof(ctx, proof, pos)
+			pos, nd.Right, err = pv.verifyProof(ctx, proof, pos, opts, res)
 			if err != nil {
 				return -1, nil, err
 			}
@@ -346,7 +394,13 @@ func (pv *ProofVerifier) verifyProof(ctx context.Context, proof *Proof, idx int)
 			nd.UpdateHash()
 		}
 
-		return pos, &node.Pointer{Clean: true, Hash: n.GetHash(), Node: n}, nil
+		ptr := &node.Pointer{Clean: true, Hash: n.GetHash(), Node: n}
+
+		if opts.writeLog {
+			res.addLeafToWriteLog(ptr)
+		}
+
+		return pos, ptr, nil
 	case proofEntryHash:
 		// Hash of a node.
 		var h hash.Hash

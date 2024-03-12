@@ -42,6 +42,7 @@ func (t *tree) Insert(ctx context.Context, key, value []byte) error {
 			}
 		} else {
 			entry.value = value
+			entry.insertedLeaf = result.insertedLeaf
 		}
 	}
 
@@ -118,11 +119,11 @@ func (t *tree) doInsert(
 			if !n.LeafNode.IsClean() || !n.Left.IsClean() || !n.Right.IsClean() {
 				if n.Clean {
 					// Node was clean so old node is eligible for removal.
-					t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
+					t.pendingRemovedNodes = append(t.pendingRemovedNodes, ptr.ExtractUnchecked())
 				}
 
 				n.Clean = false
-				ptr.Clean = false
+				ptr.SetDirty()
 				// No longer eligible for eviction as it is dirty.
 				t.cache.rollbackNode(ptr)
 			}
@@ -139,11 +140,11 @@ func (t *tree) doInsert(
 
 		if n.Clean {
 			// Node was clean so old node is eligible for removal.
-			t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
+			t.pendingRemovedNodes = append(t.pendingRemovedNodes, ptr.ExtractUnchecked())
 		}
 
 		n.Clean = false
-		ptr.Clean = false
+		ptr.SetDirty()
 		// No longer eligible for eviction as it is dirty.
 		t.cache.rollbackNode(ptr)
 
@@ -185,12 +186,12 @@ func (t *tree) doInsert(
 
 			if n.Clean {
 				// Node is dirty so old node is eligible for removal.
-				t.pendingRemovedNodes = append(t.pendingRemovedNodes, n.ExtractUnchecked())
+				t.pendingRemovedNodes = append(t.pendingRemovedNodes, ptr.ExtractUnchecked())
 			}
 
 			n.Value = val
 			n.Clean = false
-			ptr.Clean = false
+			ptr.SetDirty()
 			// No longer eligible for eviction as it is dirty.
 			t.cache.rollbackNode(ptr)
 			return insertResult{

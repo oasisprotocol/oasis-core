@@ -23,6 +23,7 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
+	"github.com/oasisprotocol/oasis-core/go/storage/database"
 )
 
 const (
@@ -39,6 +40,8 @@ const (
 	defaultVRFAlphaThreshold  = 3
 	defaultVRFInterval        = 20
 	defaultVRFSubmissionDelay = 5
+
+	defaultStorageBackend = database.BackendNamePathBadger
 
 	logNodeFile        = "node.log"
 	logConsoleFile     = "console.log"
@@ -257,6 +260,8 @@ func (n *Node) Start() error {
 	n.Config.Consensus.Submission.GasPrice = n.consensus.SubmissionGasPrice
 	n.Config.Consensus.MinGasPrice = n.consensus.MinGasPrice
 	n.Config.Consensus.HaltEpoch = n.net.cfg.HaltEpoch
+
+	n.Config.Storage.Backend = defaultStorageBackend
 
 	// Initialize node command-line arguments.
 	args := newArgBuilder().debugDontBlameOasis().debugAllowTestKeys()

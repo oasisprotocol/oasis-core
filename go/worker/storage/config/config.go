@@ -2,8 +2,9 @@
 package config
 
 import (
-	"fmt"
 	"time"
+
+	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/db"
 )
 
 // Config is the storage worker configuration structure.
@@ -34,11 +35,8 @@ type CheckpointerConfig struct {
 
 // Validate validates the configuration settings.
 func (c *Config) Validate() error {
-	if c.Backend != "badger" {
-		return fmt.Errorf("unknown storage backend: %s", c.Backend)
-	}
-
-	return nil
+	_, err := db.GetBackendByName(c.Backend)
+	return err
 }
 
 // DefaultConfig returns the default configuration settings.

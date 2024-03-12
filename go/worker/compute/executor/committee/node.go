@@ -743,7 +743,8 @@ func (n *Node) proposeBatch(
 			return err
 		}
 
-		return nil
+		// Ensure storage is written to disk before signing a commitment.
+		return n.storage.NodeDB().Sync()
 	}()
 	if storageErr != nil {
 		n.logger.Error("storage failure, submitting failure indicating commitment",

@@ -59,7 +59,7 @@ func (client *Client) ModifyConfig() error {
 	client.Config.P2P.Port = client.p2pPort
 
 	if len(client.runtimes) > 0 {
-		client.Config.Mode = config.ModeStatelessClient
+		client.Config.Mode = config.ModeClient
 		client.Config.Runtime.Provisioner = client.runtimeProvisioner
 	}
 
