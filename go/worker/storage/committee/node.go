@@ -154,7 +154,6 @@ type Node struct { // nolint: maligned
 
 func NewNode(
 	commonNode *committee.Node,
-	fetchPool *workerpool.Pool,
 	roleProvider registration.RoleProvider,
 	rpcRoleProvider registration.RoleProvider,
 	workerCommonCfg workerCommon.Config,
@@ -162,6 +161,10 @@ func NewNode(
 	checkpointSyncCfg *CheckpointSyncConfig,
 ) (*Node, error) {
 	initMetrics()
+
+	// Create the fetcher pool.
+	fetchPool := workerpool.New("storage_fetch/" + commonNode.Runtime.ID().String())
+	fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 
 	n := &Node{
 		commonNode: commonNode,
@@ -292,6 +295,8 @@ func (n *Node) Stop() {
 	n.statusLock.Lock()
 	n.status = api.StatusStopping
 	n.statusLock.Unlock()
+
+	n.fetchPool.Stop()
 
 	n.ctxCancel()
 }
