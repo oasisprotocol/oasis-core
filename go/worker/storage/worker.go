@@ -7,7 +7,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/workerpool"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
 	committeeCommon "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
@@ -27,8 +26,7 @@ type Worker struct {
 	initCh chan struct{}
 	quitCh chan struct{}
 
-	runtimes  map[common.Namespace]*committee.Node
-	fetchPool *workerpool.Pool
+	runtimes map[common.Namespace]*committee.Node
 }
 
 // New constructs a new storage worker.
@@ -52,9 +50,6 @@ func New(
 	if !enabled {
 		return s, nil
 	}
-
-	s.fetchPool = workerpool.New("storage_fetch")
-	s.fetchPool.Resize(config.GlobalConfig.Storage.FetcherCount)
 
 	// Start storage node for every runtime.
 	for id, rt := range s.commonWorker.GetRuntimes() {
@@ -94,7 +89,6 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 
 	node, err := committee.NewNode(
 		commonNode,
-		w.fetchPool,
 		rp,
 		rpRPC,
 		w.commonWorker.GetConfig(),
@@ -152,9 +146,6 @@ func (w *Worker) Start() error {
 		for _, r := range w.runtimes {
 			<-r.Quit()
 		}
-		if w.fetchPool != nil {
-			<-w.fetchPool.Quit()
-		}
 	}()
 
 	// Start all runtimes and wait for initialization.
@@ -187,9 +178,6 @@ func (w *Worker) Stop() {
 
 	for _, r := range w.runtimes {
 		r.Stop()
-	}
-	if w.fetchPool != nil {
-		w.fetchPool.Stop()
 	}
 }
 
