@@ -92,7 +92,8 @@ mod tests {
         }
 
         // Verify degree.
-        assert_eq!(p.highest_degree(), 2);
+        assert_eq!(p.degree(), 2);
+        assert_eq!(p.size(), 3);
     }
 
     #[test]
@@ -112,7 +113,8 @@ mod tests {
             }
 
             // Verify degree.
-            assert_eq!(p.highest_degree(), 2);
+            assert_eq!(p.degree(), 2);
+            assert_eq!(p.size(), 3);
         }
     }
 

@@ -74,9 +74,9 @@ where
         deg
     }
 
-    /// Returns the highest of the degrees of the polynomial's monomials.
-    pub fn highest_degree(&self) -> usize {
-        self.a.len() - 1
+    /// Returns the number of coefficients in the polynomial.
+    pub fn size(&self) -> usize {
+        self.a.len()
     }
 
     /// Removes trailing zeros.
@@ -350,30 +350,30 @@ mod tests {
     }
 
     #[test]
-    fn test_degree() {
+    fn test_degree_and_size() {
         let p = Polynomial::<p384::Scalar>::with_coefficients(vec![]);
         assert_eq!(p.degree(), 0);
-        assert_eq!(p.highest_degree(), 0);
+        assert_eq!(p.size(), 1);
 
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0]));
         assert_eq!(p.degree(), 0);
-        assert_eq!(p.highest_degree(), 0);
+        assert_eq!(p.size(), 1);
 
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1]));
         assert_eq!(p.degree(), 0);
-        assert_eq!(p.highest_degree(), 0);
+        assert_eq!(p.size(), 1);
 
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 0]));
         assert_eq!(p.degree(), 0);
-        assert_eq!(p.highest_degree(), 1);
+        assert_eq!(p.size(), 2);
 
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
         assert_eq!(p.degree(), 2);
-        assert_eq!(p.highest_degree(), 2);
+        assert_eq!(p.size(), 3);
 
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
         assert_eq!(p.degree(), 2);
-        assert_eq!(p.highest_degree(), 4);
+        assert_eq!(p.size(), 5);
     }
 
     #[test]
