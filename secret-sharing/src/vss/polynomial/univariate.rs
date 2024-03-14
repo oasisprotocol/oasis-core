@@ -79,6 +79,11 @@ where
         self.a.len()
     }
 
+    /// Returns the i-th coefficient of the polynomial.
+    pub fn coefficient(&self, i: usize) -> Option<&Fp> {
+        self.a.get(i)
+    }
+
     /// Removes trailing zeros.
     pub fn trim(&mut self) {
         while self.a.len() > 1 && self.a[self.a.len() - 1].is_zero().into() {
@@ -374,6 +379,15 @@ mod tests {
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
         assert_eq!(p.degree(), 2);
         assert_eq!(p.size(), 5);
+    }
+
+    #[test]
+    fn test_coefficient() {
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        assert_eq!(p.coefficient(0), Some(&scalar(1)));
+        assert_eq!(p.coefficient(1), Some(&scalar(2)));
+        assert_eq!(p.coefficient(2), Some(&scalar(3)));
+        assert_eq!(p.coefficient(3), None);
     }
 
     #[test]
