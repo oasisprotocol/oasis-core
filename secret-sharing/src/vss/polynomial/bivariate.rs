@@ -163,13 +163,22 @@ where
     }
 
     /// Evaluates the bivariate polynomial with respect to the indeterminate x.
+    ///
+    /// Returned polynomial:
+    /// ```text
+    /// A(y) = \sum_{j=0}^{deg_y} a_j y^j
+    /// ```
+    /// where
+    /// ```text
+    /// a_j = \sum_{i=0}^{deg_x} b_{i,j} x^i
+    /// ```
     pub fn eval_x(&self, x: &Fp) -> Polynomial<Fp> {
-        let xpows = powers(x, self.deg_x);
+        let xpows = powers(x, self.deg_x); // [x^i]
         let mut a = Vec::with_capacity(self.deg_y + 1);
         for j in 0..=self.deg_y {
             let mut aj = Fp::ZERO;
-            for (i, pow) in xpows.iter().enumerate() {
-                aj += self.b[i][j] * pow
+            for (i, xpow) in xpows.iter().enumerate() {
+                aj += self.b[i][j] * xpow //  b_{i,j} x^i
             }
             a.push(aj)
         }
@@ -178,13 +187,22 @@ where
     }
 
     /// Evaluates the bivariate polynomial with respect to the indeterminate y.
+    ///
+    /// Returned polynomial:
+    /// ```text
+    /// A(x) = \sum_{i=0}^{deg_x} a_i x^i
+    /// ```
+    /// where
+    /// ```text
+    /// a_i = \sum_{j=0}^{deg_y} b_{i,j} y^j
+    /// ```
     pub fn eval_y(&self, y: &Fp) -> Polynomial<Fp> {
-        let ypows = powers(y, self.deg_y);
+        let ypows = powers(y, self.deg_y); // [y^j]
         let mut a = Vec::with_capacity(self.deg_x + 1);
         for i in 0..=self.deg_x {
             let mut ai = Fp::ZERO;
-            for (j, pow) in ypows.iter().enumerate() {
-                ai += self.b[i][j] * pow
+            for (j, ypow) in ypows.iter().enumerate() {
+                ai += self.b[i][j] * ypow // b_{i,j} y^j
             }
             a.push(ai)
         }
