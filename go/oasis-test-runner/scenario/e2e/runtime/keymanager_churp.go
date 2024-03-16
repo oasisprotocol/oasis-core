@@ -96,7 +96,7 @@ func (sc *kmChurpImpl) Run(ctx context.Context, _ *env.Env) error {
 		return fmt.Errorf("failed submitting create churp transaction: %w", err)
 	}
 
-	// Test wether the key manager node submits an application every round.
+	// Test wether the key manager node submits an application every handoff.
 	var st *churp.Status
 	for i := range 4 {
 		select {
@@ -105,12 +105,8 @@ func (sc *kmChurpImpl) Run(ctx context.Context, _ *env.Env) error {
 			return ctx.Err()
 		}
 
-		round := uint64(i / 2)
-		if st.Round != round {
-			return fmt.Errorf("expected round %d, not round %d", round, st.Round)
-		}
-
-		// New round started or node just submitted an application.
+		// New round started (no applications) or node just submitted
+		// an application (exactly one application).
 		if appSize := i % 2; len(st.Applications) != appSize {
 			return fmt.Errorf("status should have %d applications", appSize)
 		}

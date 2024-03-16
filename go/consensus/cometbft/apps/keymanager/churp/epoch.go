@@ -39,17 +39,16 @@ func (ext *churpExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime) e
 			case status.NextHandoff + 1:
 				// Handoff ended. Not all nodes replicated the secret and confirmed it,
 				// as otherwise the next handoff epoch would be updated.
-				// Reset and start collecting again
+				// Reset and start collecting again.
 			default:
 				continue
 			}
 
-			// The handoff failed. Start another round in the next epoch,
+			// The handoff failed. Start another one in the next epoch,
 			// giving nodes one epoch time to submit applications.
 			status.Applications = nil
 			status.Checksum = nil
 			status.NextHandoff = epoch + 1
-			status.Round++
 
 			if err := state.SetStatus(ctx, status); err != nil {
 				ctx.Logger().Error("keymanager: churp: failed to set status",

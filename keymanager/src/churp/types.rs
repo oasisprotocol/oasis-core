@@ -1,7 +1,10 @@
 //! CHURP types used by the worker-host protocol.
-use oasis_core_runtime::common::{
-    crypto::{hash::Hash, signature::Signature},
-    namespace::Namespace,
+use oasis_core_runtime::{
+    common::{
+        crypto::{hash::Hash, signature::Signature},
+        namespace::Namespace,
+    },
+    consensus::beacon::EpochTime,
 };
 
 /// Initialization request.
@@ -13,8 +16,8 @@ pub struct InitRequest {
     /// The identifier of the key manager runtime.
     pub runtime_id: Namespace,
 
-    /// Round number for which the node would like to register.
-    pub round: u64,
+    /// The epoch of the handoff for which the node would like to register.
+    pub handoff: u64,
 }
 
 /// ApplicationRequest contains node's application to form a new committee.
@@ -26,8 +29,8 @@ pub struct ApplicationRequest {
     /// The identifier of the key manager runtime.
     pub runtime_id: Namespace,
 
-    /// The round for which the node would like to register.
-    pub round: u64,
+    /// The epoch of the handoff for which the node would like to register.
+    pub handoff: EpochTime,
 
     /// Checksum is the hash of the verification matrix.
     pub checksum: Hash,

@@ -234,7 +234,7 @@ func (s *TxTestSuite) TestCreate() {
 		require.Equal(s.T(), s.keymanagerRuntimes[0].ID, status.RuntimeID)
 		require.Equal(s.T(), churp.EccNistP384, status.GroupID)
 		require.Equal(s.T(), uint8(1), status.Threshold)
-		require.Equal(s.T(), uint64(0), status.Round)
+		require.Equal(s.T(), beacon.EpochTime(0), status.ActiveHandoff)
 		require.Equal(s.T(), churp.HandoffsDisabled, status.NextHandoff)
 		require.Equal(s.T(), beacon.EpochTime(0), status.HandoffInterval)
 		require.Equal(s.T(), policy, status.Policy)
@@ -524,18 +524,18 @@ func (s *TxTestSuite) TestApply() {
 		s.cfg.CurrentEpoch = 0
 	})
 
-	s.Run("invalid round", func() {
+	s.Run("invalid handoff", func() {
 		req := churp.SignedApplicationRequest{
 			Application: churp.ApplicationRequest{
 				Identity: churp.Identity{
 					ID:        0,
 					RuntimeID: s.keymanagerRuntimes[0].ID,
 				},
-				Round: 100,
+				Handoff: 100,
 			},
 		}
 		err = s.ext.apply(s.txCtx, &req)
-		require.ErrorContains(s.T(), err, "invalid round")
+		require.ErrorContains(s.T(), err, "invalid handoff")
 	})
 
 	// A request with invalid signature.
@@ -545,7 +545,7 @@ func (s *TxTestSuite) TestApply() {
 				ID:        0,
 				RuntimeID: s.keymanagerRuntimes[0].ID,
 			},
-			Round:    0,
+			Handoff:  1,
 			Checksum: hash.Hash{1, 2, 3},
 		},
 		Signature: signature.RawSignature{},

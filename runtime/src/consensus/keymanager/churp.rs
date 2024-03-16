@@ -44,43 +44,43 @@ pub struct Status {
     /// The identifier of the key manager runtime.
     pub runtime_id: Namespace,
 
-    /// GroupID is the identifier of a group used for verifiable secret sharing
+    /// The identifier of a group used for verifiable secret sharing
     /// and key derivation.
     pub group_id: GroupID,
 
-    /// Threshold is the minimum number of distinct shares required
-    /// to reconstruct a key.
+    /// The minimum number of distinct shares required to reconstruct a key.
     pub threshold: u8,
 
-    /// Round counts the number of handoffs done so far.
+    /// The epoch of the last successfully executed handoff.
     ///
-    /// The first round is a special round called the dealer round, in which
-    /// nodes do not reshare shares but construct the secret and shares instead.
-    pub round: u64,
+    /// The zero value indicates that no handoffs have been completed so far.
+    /// Note that the first handoff is special and is called the dealer phase,
+    /// in which nodes do not reshare or randomize shares but instead construct
+    /// the secret and shares.
+    pub active_handoff: EpochTime,
 
-    /// NextHandoff defines the epoch in which the next handoff will occur.
+    /// The epoch in which the next handoff will occur.
     ///
     /// If an insufficient number of applications is received, the next handoff
     /// will be delayed by one epoch.
     pub next_handoff: EpochTime,
 
-    /// HandoffInterval is the time interval in epochs between handoffs.
+    /// The time interval in epochs between handoffs.
     ///
     /// A zero value disables handoffs.
     pub handoff_interval: EpochTime,
 
-    /// Policy is a signed SGX access control policy.
+    /// A signed SGX access control policy.
     pub policy: SignedPolicySGX,
 
-    /// Committee is a vector of nodes holding a share of the secret
-    /// in the current round.
+    /// A vector of nodes holding a share of the secret in the active handoff.
     ///
     /// A client needs to obtain at least a threshold number of key shares
     /// from the nodes in this vector to construct the key.
     #[cbor(optional)]
     pub committee: Vec<PublicKey>,
 
-    /// Applications is a map of nodes that wish to form the new committee.
+    /// A map of nodes that wish to form the new committee.
     ///
     /// Candidates are expected to generate a random bivariate polynomial,
     /// construct a verification matrix, compute its checksum, and submit
@@ -90,7 +90,7 @@ pub struct Status {
     #[cbor(optional)]
     pub applications: HashMap<PublicKey, Application>,
 
-    /// Checksum is the hash of the merged verification matrix.
+    /// The hash of the merged verification matrix.
     ///
     /// The first candidate to confirm share reconstruction is the source
     /// of truth for the checksum. All other candidates need to confirm
@@ -103,7 +103,7 @@ pub struct Status {
 /// Application represents a node's application to form a new committee.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
 pub struct Application {
-    /// Checksum is the hash of the random verification matrix.
+    /// The hash of the random verification matrix.
     ///
     /// In all handoffs, except in the dealer phase, the verification matrix
     /// needs to be zero-hole.

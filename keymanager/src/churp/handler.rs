@@ -99,11 +99,11 @@ impl Churp {
         }
     }
 
-    /// Prepare CHURP for participation in the given round of the protocol.
+    /// Prepare CHURP for participation in the given handoff of the protocol.
     ///
     /// Initialization randomly selects a bivariate polynomial for the given
-    /// round, computes the corresponding verification matrix and its checksum,
-    /// and signs the latter.
+    /// handoff, computes the corresponding verification matrix and its
+    /// checksum, and signs the latter.
     ///
     /// Bivariate polynomial:
     ///     B(x,y) = \sum_{i=0}^{t_n} \sum_{j=0}^{t_m} b_{i,j} x^i y^j
@@ -112,10 +112,10 @@ impl Churp {
     ///     M = [b_{i,j} * G]
     ///
     /// Checksum:
-    ///     H = KMAC256(M, runtime ID, round)
+    ///     H = KMAC256(M, runtime ID, handoff)
     ///
-    /// The bivariate polynomial is zero-hole in all rounds expect in the zero
-    /// round (dealing phase).
+    /// The bivariate polynomial is zero-hole in all handoffs expect in the
+    /// first one (dealing phase).
     ///
     /// This method must be called locally.
     pub fn init(&self, req: &InitRequest) -> Result<SignedApplicationRequest> {
@@ -126,8 +126,8 @@ impl Churp {
         if req.runtime_id != self.runtime_id {
             return Err(Error::RuntimeMismatch.into());
         }
-        if status.round != req.round {
-            return Err(Error::RoundMismatch.into());
+        if status.next_handoff != req.handoff {
+            return Err(Error::HandoffMismatch.into());
         }
         if status.threshold == 0 {
             return Err(Error::ZeroThreshold.into());
@@ -144,30 +144,38 @@ impl Churp {
 
         // For now, support only one group.
         match status.group_id {
-            GroupID::NistP384 => self.do_init::<NistP384>(req.id, req.round, status.threshold),
+            GroupID::NistP384 => self.do_init::<NistP384>(
+                req.id,
+                status.active_handoff,
+                req.handoff,
+                status.threshold,
+            ),
         }
     }
 
     fn do_init<D>(
         &self,
         churp_id: u8,
-        round: u64,
+        active_handoff: EpochTime,
+        handoff: EpochTime,
         threshold: u8,
     ) -> Result<SignedApplicationRequest>
     where
         D: DealerParams + 'static,
     {
-        let dealer = self.get_or_create_dealer::<D>(churp_id, round, threshold)?;
+        let dealer =
+            self.get_or_create_dealer::<D>(churp_id, active_handoff, handoff, threshold)?;
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
-        let checksum = Self::checksum_verification_matrix(matrix, self.runtime_id, churp_id, round);
+        let checksum =
+            Self::checksum_verification_matrix(matrix, self.runtime_id, churp_id, handoff);
 
         // Prepare response and sign it with RAK.
         let application = ApplicationRequest {
             id: churp_id,
             runtime_id: self.runtime_id,
-            round,
+            handoff,
             checksum,
         };
         let body = cbor::to_vec(application.clone());
@@ -184,14 +192,15 @@ impl Churp {
     fn get_or_create_dealer<D>(
         &self,
         churp_id: u8,
-        round: u64,
+        active_handoff: EpochTime,
+        handoff: EpochTime,
         threshold: u8,
     ) -> Result<Arc<Dealer<D>>>
     where
         D: DealerParams + 'static,
     {
         // Check the memory first.
-        let key = (churp_id, round);
+        let key = (churp_id, handoff);
         let mut dealers = self.dealers.write().unwrap();
 
         if let Some(dealer) = dealers.get(&key) {
@@ -206,15 +215,15 @@ impl Churp {
         }
 
         // Check the local storage to ensure that only one secret bivariate
-        // polynomial is generated per round upon restarts, unless a malicious
+        // polynomial is generated per handoff upon restarts, unless a malicious
         // host has cleared the storage.
         let polynomial = self
             .storage
-            .load_bivariate_polynomial::<D::PrimeField>(churp_id, round);
+            .load_bivariate_polynomial::<D::PrimeField>(churp_id, handoff);
         let polynomial = match polynomial {
             Ok(polynomial) => Ok(polynomial),
             Err(err) => match err.downcast_ref::<Error>() {
-                Some(Error::InvalidBivariatePolynomial) => Ok(None), // Ignore previous rounds.
+                Some(Error::InvalidBivariatePolynomial) => Ok(None), // Ignore previous handoffs.
                 _ => Err(err),
             },
         }?;
@@ -224,12 +233,12 @@ impl Churp {
                 // Polynomial verification is redundant as encryption prevents
                 // tampering, while consensus ensures that the group ID remains
                 // unchanged and that polynomial dimensions remain consistent
-                // for any given pair of churp ID and round.
+                // for any given pair of churp ID and handoff.
                 Dealer::new(bp)
             }
             None => {
                 // The local storage is either empty or contains a polynomial
-                // from another round. It's time to prepare a new one.
+                // from another handoff. It's time to prepare a new one.
                 //
                 // If the host has cleared the storage, other participants
                 // will detect the polynomial change because the checksum
@@ -238,7 +247,7 @@ impl Churp {
                 let dx = threshold.saturating_sub(1);
                 let dy = 2 * dx;
 
-                let dealer = match round {
+                let dealer = match active_handoff {
                     0 => Dealer::random(dx, dy, &mut OsRng),
                     _ => Dealer::zero_hole(dx, dy, &mut OsRng),
                 };
@@ -246,7 +255,7 @@ impl Churp {
                 // Encrypt and store the polynomial in case of a restart.
                 let polynomial = dealer.bivariate_polynomial();
                 self.storage
-                    .store_bivariate_polynomial(polynomial, churp_id, round)?;
+                    .store_bivariate_polynomial(polynomial, churp_id, handoff)?;
 
                 dealer
             }
@@ -263,7 +272,7 @@ impl Churp {
         matrix: &VerificationMatrix<G>,
         runtime_id: Namespace,
         churp_id: u8,
-        round: u64,
+        handoff: EpochTime,
     ) -> Hash
     where
         G: Group + GroupEncoding,
@@ -272,7 +281,7 @@ impl Churp {
         let mut f = KMac::new_kmac256(&matrix.to_bytes(), CHECKSUM_VERIFICATION_MATRIX_CUSTOM);
         f.update(&runtime_id.0);
         f.update(&[churp_id]);
-        f.update(&round.to_le_bytes());
+        f.update(&handoff.to_le_bytes());
         f.finalize(&mut checksum);
         Hash(checksum)
     }

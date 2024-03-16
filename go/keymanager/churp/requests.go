@@ -89,8 +89,9 @@ type ApplicationRequest struct {
 	// Identity of the CHRUP scheme.
 	Identity
 
-	// Round is the round for which the node would like to register.
-	Round uint64 `json:"round"`
+	// Handoff is the epoch of the handoff for which the node would like
+	// to register.
+	Handoff beacon.EpochTime `json:"handoff"`
 
 	// Checksum is the hash of the verification matrix.
 	Checksum hash.Hash `json:"checksum"`

@@ -44,11 +44,13 @@ type Status struct {
 	// to reconstruct a key.
 	Threshold uint8 `json:"threshold"`
 
-	// Round counts the number of handoffs done so far.
+	// ActiveHandoff is the epoch of the last successfully executed handoff.
 	//
-	// The first round is a special round called the dealer round, in which
-	// nodes do not reshare shares but construct the secret and shares instead.
-	Round uint64 `json:"round"`
+	// The zero value indicates that no handoffs have been completed so far.
+	// Note that the first handoff is special and is called the dealer phase,
+	// in which nodes do not reshare or randomize shares but instead construct
+	// the secret and shares.
+	ActiveHandoff beacon.EpochTime `json:"active_handoff"`
 
 	// NextHandoff defines the epoch in which the next handoff will occur.
 	//
@@ -65,7 +67,7 @@ type Status struct {
 	Policy SignedPolicySGX `json:"policy"`
 
 	// Committee is a vector of nodes holding a share of the secret
-	// in the current round.
+	// in the active handoff.
 	//
 	// A client needs to obtain at least a threshold number of key shares
 	// from the nodes in this vector to construct the key.

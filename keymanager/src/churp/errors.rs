@@ -11,12 +11,12 @@ pub enum Error {
     DealerMismatch,
     #[error("handoffs disabled")]
     HandoffsDisabled,
+    #[error("handoff mismatch")]
+    HandoffMismatch,
     #[error("invalid bivariate polynomial")]
     InvalidBivariatePolynomial,
     #[error("invalid data")]
     InvalidData,
-    #[error("round mismatch")]
-    RoundMismatch,
     #[error("runtime mismatch")]
     RuntimeMismatch,
     #[error("status not published")]

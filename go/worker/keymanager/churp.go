@@ -22,7 +22,7 @@ import (
 )
 
 // maxSubmissionAttempts is the maximum number of attempts to submit
-// an application for a round.
+// an application for a handoff.
 const maxSubmissionAttempts = 10
 
 var (
@@ -188,12 +188,9 @@ type submissionInfo struct {
 	// churpID represents the identifier of the CHURP scheme.
 	churpID uint8
 
-	// round indicates the round number for which an application is scheduled
-	// to be submitted.
-	round uint64
-
-	// epoch signifies the opening epoch for submissions.
-	epoch beacon.EpochTime
+	// handoff is the epoch time of the handoff for which an application
+	// is scheduled to be submitted.
+	handoff beacon.EpochTime
 
 	// height denotes the minimum block height for the submission.
 	height int64
@@ -253,13 +250,13 @@ func (s *submissionScheduler) Queue(status *churp.Status) {
 		delete(s.submissions, status.ID)
 	}
 
-	// Stop and remove submission for the previous round.
+	// Stop and remove submission for the previous handoff.
 	info, ok := s.submissions[status.ID]
-	if ok && info.round < status.Round {
-		removeFn(info, fmt.Errorf("new round"))
+	if ok && info.handoff < status.NextHandoff {
+		removeFn(info, fmt.Errorf("new handoff"))
 	}
 
-	// Schedule submission for the current round.
+	// Schedule submission for the current handoff.
 	info, ok = s.submissions[status.ID]
 	if !ok {
 		epoch := status.NextHandoff - 1
@@ -273,8 +270,7 @@ func (s *submissionScheduler) Queue(status *churp.Status) {
 
 		info = &submissionInfo{
 			churpID: status.ID,
-			round:   status.Round,
-			epoch:   epoch,
+			handoff: status.NextHandoff,
 			height:  height,
 			index:   -1,
 			cancel:  nil,
@@ -312,7 +308,7 @@ func (s *submissionScheduler) Start(ctx context.Context, height int64) {
 		s.running[info.churpID] = info
 
 		s.wg.Add(1)
-		go s.submitApplication(submitCtx, info.churpID, info.round)
+		go s.submitApplication(submitCtx, info.churpID, info.handoff)
 	}
 }
 
@@ -335,7 +331,7 @@ func (s *submissionScheduler) Clear(epoch beacon.EpochTime) {
 			return
 		}
 		info := s.queue.Peek().(*submissionInfo)
-		if info.epoch >= epoch {
+		if info.handoff > epoch {
 			return
 		}
 		_ = heap.Pop(&s.queue)
@@ -347,7 +343,7 @@ func (s *submissionScheduler) Clear(epoch beacon.EpochTime) {
 func (s *submissionScheduler) Cancel(epoch beacon.EpochTime) {
 	cause := fmt.Errorf("submissions closed: epoch %d", epoch)
 	for id, churp := range s.running {
-		if churp.epoch == epoch {
+		if churp.handoff == epoch+1 {
 			continue
 		}
 		churp.cancel(cause)
@@ -357,20 +353,20 @@ func (s *submissionScheduler) Cancel(epoch beacon.EpochTime) {
 
 // submitApplication tries to submit an application, retrying if generation
 // or transaction fails.
-func (s *submissionScheduler) submitApplication(ctx context.Context, churpID uint8, round uint64) {
+func (s *submissionScheduler) submitApplication(ctx context.Context, churpID uint8, handoff beacon.EpochTime) {
 	defer s.wg.Done()
 
 	ticker := backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
 
 	for attempt := 1; attempt <= maxSubmissionAttempts; attempt++ {
-		err := s.trySubmitApplication(ctx, churpID, round)
+		err := s.trySubmitApplication(ctx, churpID, handoff)
 		if err == nil {
 			return
 		}
 
 		s.logger.Debug("failed to submit application",
 			"id", churpID,
-			"round", round,
+			"handoff", handoff,
 			"attempt", attempt,
 			"err", err,
 		)
@@ -384,10 +380,10 @@ func (s *submissionScheduler) submitApplication(ctx context.Context, churpID uin
 }
 
 // trySubmitApplication tries to submit an application.
-func (s *submissionScheduler) trySubmitApplication(ctx context.Context, churpID uint8, round uint64) error {
+func (s *submissionScheduler) trySubmitApplication(ctx context.Context, churpID uint8, handoff beacon.EpochTime) error {
 	s.logger.Info("trying to submit application",
 		"id", churpID,
-		"round", round,
+		"handoff", handoff,
 	)
 
 	// Ask enclave to prepare a dealer and return signed verification matrix.
@@ -396,7 +392,7 @@ func (s *submissionScheduler) trySubmitApplication(ctx context.Context, churpID 
 			ID:        churpID,
 			RuntimeID: s.kmWorker.runtimeID,
 		},
-		Round: round,
+		Handoff: handoff,
 	}
 	var rsp churp.SignedApplicationRequest
 	if err := s.kmWorker.callEnclaveLocal(churp.RPCMethodInit, req, &rsp); err != nil {
