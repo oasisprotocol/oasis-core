@@ -216,7 +216,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 			return nil
 		}
 
-		mrEnclave, err := deployCfg.bundle.MrEnclave(bundle.ComponentRONL)
+		mrEnclave, err := deployCfg.bundle.MrEnclave(bundle.ComponentID_RONL)
 		if err != nil {
 			return fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 		}

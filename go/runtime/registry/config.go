@@ -247,12 +247,13 @@ func newConfig( //nolint: gocyclo
 			}
 
 			// Determine what kind of components we want.
-			wantedComponents := []bundle.ComponentKind{
-				bundle.ComponentRONL,
+			wantedComponents := []bundle.ComponentID{
+				bundle.ComponentID_RONL,
 			}
 			// For compute nodes we also want to run the ROFL component.
 			if config.GlobalConfig.Mode == config.ModeCompute {
-				wantedComponents = append(wantedComponents, bundle.ComponentROFL)
+				// TODO: Support configuring named components.
+				wantedComponents = append(wantedComponents, bundle.ComponentID{Kind: bundle.ComponentROFL})
 			}
 
 			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
@@ -282,8 +283,8 @@ func newConfig( //nolint: gocyclo
 							},
 						},
 					},
-					Components: []bundle.ComponentKind{
-						bundle.ComponentRONL,
+					Components: []bundle.ComponentID{
+						bundle.ComponentID_RONL,
 					},
 				}
 				rh.Runtimes[id] = map[version.Version]*runtimeHost.Config{

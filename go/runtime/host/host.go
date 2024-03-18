@@ -17,9 +17,9 @@ type Config struct {
 	// Bundle is the runtime bundle.
 	Bundle *RuntimeBundle
 
-	// Components are optional component kinds that should be provisioned in case the runtime has
+	// Components are optional component ids that should be provisioned in case the runtime has
 	// multiple components.
-	Components []bundle.ComponentKind
+	Components []bundle.ComponentID
 
 	// Extra is an optional provisioner-specific configuration.
 	Extra interface{}
@@ -89,9 +89,9 @@ type Runtime interface {
 
 // CompositeRuntime is a runtime that provides multiple components which are themselves runtimes.
 type CompositeRuntime interface {
-	// Component returns the runtime component of the given kind.
-	// If the component of the given kind does not exist, nil is returned.
-	Component(kind bundle.ComponentKind) Runtime
+	// Component returns the runtime component with the given unique identifier.
+	// If the component with the given identifier does not exist, nil is returned.
+	Component(id bundle.ComponentID) Runtime
 }
 
 // RuntimeHandler is the message handler for the host side of the runtime host protocol.
