@@ -429,7 +429,7 @@ func (t *Tree) GetTransaction(ctx context.Context, txHash hash.Hash) (*Transacti
 func (t *Tree) GetTransactionMultiple(ctx context.Context, txHashes []hash.Hash) (map[hash.Hash]*Transaction, error) {
 	// Prefetch all of the specified transactions from storage so that we
 	// don't need to do multiple round trips.
-	var keys [][]byte
+	keys := make([][]byte, 0, len(txHashes))
 	for _, txHash := range txHashes {
 		keys = append(keys, txnKeyFmt.Encode(&txHash)) // nolint: gosec
 	}
@@ -470,7 +470,7 @@ func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
 			break
 		}
 
-		tags = append(tags, Tag{
+		tags = append(tags, &Tag{
 			Key:    decKey,
 			Value:  it.Value(),
 			TxHash: decHash,
@@ -481,6 +481,64 @@ func (t *Tree) GetTags(ctx context.Context) (Tags, error) {
 	}
 
 	return tags, nil
+}
+
+// GetTag looks up a specific tag and retrieves its values.
+func (t *Tree) GetTag(ctx context.Context, tag []byte) (Tags, error) {
+	it := t.tree.NewIterator(ctx)
+	defer it.Close()
+
+	var tags Tags
+	for it.Seek(tagKeyFmt.Encode(tag)); it.Valid(); it.Next() {
+		var (
+			decKey  []byte
+			decHash hash.Hash
+		)
+		if !tagKeyFmt.Decode(it.Key(), &decKey, &decHash) {
+			break
+		}
+		if !bytes.Equal(decKey, tag) {
+			break
+		}
+
+		tags = append(tags, &Tag{
+			Key:    decKey,
+			Value:  it.Value(),
+			TxHash: decHash,
+		})
+	}
+	if it.Err() != nil {
+		return nil, it.Err()
+	}
+
+	return tags, nil
+}
+
+// GetTagMultiple looks up multiple tags at once and retrieves their values. Tags that don't exist
+// are skipped.
+//
+// The function behaves identically to multiple GetTag calls, but is more efficient as it performs
+// prefetching to get all the requested tags in one round trip.
+func (t *Tree) GetTagMultiple(ctx context.Context, tags [][]byte) (Tags, error) {
+	// Prefetch all of the specified tags from storage so that we don't need to do multiple round
+	// trips.
+	keys := make([][]byte, 0, len(tags))
+	for _, tag := range tags {
+		keys = append(keys, tagKeyFmt.Encode(tag))
+	}
+	if err := t.tree.PrefetchPrefixes(ctx, keys, prefetchArtifactCount); err != nil {
+		return nil, fmt.Errorf("transaction: prefetch failed: %w", err)
+	}
+
+	var foundTags Tags
+	for _, tg := range tags {
+		tgs, err := t.GetTag(ctx, tg)
+		if err != nil {
+			return nil, err
+		}
+		foundTags = append(foundTags, tgs...)
+	}
+	return foundTags, nil
 }
 
 // Commit commits the updates to the underlying Merkle tree and returns the
