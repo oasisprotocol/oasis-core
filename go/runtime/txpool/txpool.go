@@ -126,6 +126,9 @@ type TransactionPool interface {
 
 	// PendingCheckSize returns the number of transactions currently pending to be checked.
 	PendingCheckSize() int
+
+	// GetTxs returns all transactions currently queued in the transaction pool.
+	GetTxs() []*TxQueueMeta
 }
 
 // RuntimeHostProvisioner is a runtime host provisioner.
@@ -423,6 +426,17 @@ func (t *txPool) WatchCheckedTransactions() (<-chan []*PendingCheckTransaction, 
 
 func (t *txPool) PendingCheckSize() int {
 	return t.checkTxQueue.size()
+}
+
+func (t *txPool) GetTxs() []*TxQueueMeta {
+	t.drainLock.Lock()
+	defer t.drainLock.Unlock()
+
+	var txs []*TxQueueMeta
+	for _, q := range t.usableSources {
+		txs = append(txs, q.PeekAll()...)
+	}
+	return txs
 }
 
 func (t *txPool) getCurrentBlockInfo() (*runtime.BlockInfo, time.Time, error) {

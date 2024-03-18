@@ -60,8 +60,8 @@ func testSubmitTransaction(
 	c api.RuntimeClient,
 	input string,
 ) {
-	testInput := []byte(input)
 	// Submit a test transaction.
+	testInput := []byte(input)
 	resp, err := c.SubmitTxMeta(ctx, &api.SubmitTxRequest{Data: testInput, RuntimeID: runtimeID})
 
 	// Check if everything is in order.
@@ -229,6 +229,11 @@ func testQuery(
 		Data:      []byte("test checktx request"),
 	})
 	require.NoError(t, err, "CheckTx")
+
+	// Get the number of unconfirmed transactions.
+	utxs, err := c.GetUnconfirmedTransactions(ctx, runtimeID)
+	require.NoError(t, err, "GetUnconfirmedTransactions")
+	require.True(t, len(utxs) == 0)
 }
 
 func testSubmitTransactionNoWait(

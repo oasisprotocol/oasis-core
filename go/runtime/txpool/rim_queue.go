@@ -36,6 +36,17 @@ func (rq *rimQueue) HandleTxsUsed([]hash.Hash) {
 	// The roothash module manages the incoming message queue on its own, so we don't do anything here.
 }
 
+func (rq *rimQueue) PeekAll() []*TxQueueMeta {
+	rq.l.RLock()
+	defer rq.l.RUnlock()
+
+	txs := make([]*TxQueueMeta, 0, len(rq.txs))
+	for _, tx := range rq.txs {
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
 // Load loads transactions from roothash incoming messages.
 func (rq *rimQueue) Load(inMsgs []*message.IncomingMessage) {
 	newTxs := map[hash.Hash]*TxQueueMeta{}
