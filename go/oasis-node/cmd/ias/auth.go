@@ -42,6 +42,12 @@ func (st *enclaveStore) verifyEvidence(evidence *ias.Evidence) error {
 		if v == id {
 			return nil
 		}
+		// HACK: Also allow enclaves from the same MRSIGNER. This is to make sure that ROFL enclaves
+		// are allowed as their MRENCLAVE may not be registered on the consensus layer. This will
+		// no longer be needed after everyone transitions to DCAP.
+		if v.MrSigner == id.MrSigner {
+			return nil
+		}
 	}
 
 	return fmt.Errorf("ias: enclave identity not in runtime descriptor: %v", id)

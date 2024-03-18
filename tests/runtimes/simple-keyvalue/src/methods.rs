@@ -208,6 +208,9 @@ impl Methods {
         }
         ctx.emit_tag(b"kv_op", b"insert");
         ctx.emit_tag(b"kv_key", args.key.as_bytes());
+        // Emit a special tag that includes the key, allowing one to subscribe to insertions of
+        // specific keys while ignoring other events. Used by the ROFL test.
+        ctx.emit_tag(&[b"kv_insertion.", args.key.as_bytes()].concat(), b"");
 
         let existing = ctx
             .parent

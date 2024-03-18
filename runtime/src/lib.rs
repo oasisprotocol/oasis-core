@@ -35,6 +35,7 @@ pub mod identity;
 pub mod init;
 pub mod policy;
 pub mod protocol;
+pub mod rofl;
 pub mod storage;
 pub mod transaction;
 pub mod types;

@@ -105,6 +105,8 @@ type Body struct {
 	RuntimeQueryResponse                          *RuntimeQueryResponse                         `json:",omitempty"`
 	RuntimeConsensusSyncRequest                   *RuntimeConsensusSyncRequest                  `json:",omitempty"`
 	RuntimeConsensusSyncResponse                  *Empty                                        `json:",omitempty"`
+	RuntimeNotifyRequest                          *RuntimeNotifyRequest                         `json:",omitempty"`
+	RuntimeNotifyResponse                         *Empty                                        `json:",omitempty"`
 
 	// Host interface.
 	HostRPCCallRequest               *HostRPCCallRequest               `json:",omitempty"`
@@ -131,6 +133,8 @@ type Body struct {
 	HostIdentityResponse             *HostIdentityResponse             `json:",omitempty"`
 	HostSubmitTxRequest              *HostSubmitTxRequest              `json:",omitempty"`
 	HostSubmitTxResponse             *HostSubmitTxResponse             `json:",omitempty"`
+	HostRegisterNotifyRequest        *HostRegisterNotifyRequest        `json:",omitempty"`
+	HostRegisterNotifyResponse       *Empty                            `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -641,29 +645,4 @@ type HostIdentityRequest struct{}
 type HostIdentityResponse struct {
 	// NodeID is the host node identifier.
 	NodeID signature.PublicKey `json:"node_id"`
-}
-
-// HostSubmitTxRequest is a request to host to submit a runtime transaction.
-type HostSubmitTxRequest struct {
-	// RuntimeID is the identifier of the target runtime.
-	RuntimeID common.Namespace `json:"runtime_id"`
-	// Data is the raw transaction data.
-	Data []byte `json:"data"`
-	// Wait specifies whether the call should wait until the transaction is included in a block.
-	Wait bool `json:"wait,omitempty"`
-	// Prove specifies whether the response should include a proof of transaction being included in
-	// a block.
-	Prove bool `json:"prove,omitempty"`
-}
-
-// HostSubmitTxResponse is a response from host on transaction submission.
-type HostSubmitTxResponse struct {
-	// Output is the transaction output.
-	Output []byte `json:"data,omitempty"`
-	// Round is the roothash round in which the transaction was executed.
-	Round uint64 `json:"round,omitempty"`
-	// BatchOrder is the order of the transaction in the execution batch.
-	BatchOrder uint32 `json:"batch_order,omitempty"`
-	// Proof is an optional inclusion proof.
-	Proof *storage.Proof `json:"proof,omitempty"`
 }

@@ -59,7 +59,7 @@ func (env *workerEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
 }
 
 // NewRuntimeHostHandler implements workerCommon.RuntimeHostHandlerFactory.
-func (w *Worker) NewRuntimeHostHandler() protocol.Handler {
+func (w *Worker) NewRuntimeHostHandler() host.RuntimeHandler {
 	kmCli := committeeCommon.NewKeyManagerClientWrapper(w.commonWorker.P2P, w.commonWorker.Consensus, w.commonWorker.ChainContext, w.logger)
 	runtimeID := w.runtime.ID()
 	kmCli.SetKeyManagerID(&runtimeID)

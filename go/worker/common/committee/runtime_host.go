@@ -56,6 +56,6 @@ func (env *nodeEnvironment) GetRuntimeRegistry() runtimeRegistry.Registry {
 }
 
 // NewRuntimeHostHandler implements RuntimeHostHandlerFactory.
-func (n *Node) NewRuntimeHostHandler() protocol.Handler {
+func (n *Node) NewRuntimeHostHandler() host.RuntimeHandler {
 	return runtimeRegistry.NewRuntimeHostHandler(&nodeEnvironment{n}, n.Runtime, n.Consensus)
 }

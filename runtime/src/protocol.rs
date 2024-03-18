@@ -386,6 +386,7 @@ impl Protocol {
             | Body::RuntimeLocalRPCCallRequest { .. }
             | Body::RuntimeCheckTxBatchRequest { .. }
             | Body::RuntimeExecuteTxBatchRequest { .. }
+            | Body::RuntimeNotifyRequest { .. }
             | Body::RuntimeKeyManagerStatusUpdateRequest { .. }
             | Body::RuntimeKeyManagerQuotePolicyUpdateRequest { .. }
             | Body::RuntimeQueryRequest { .. }

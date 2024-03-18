@@ -38,6 +38,7 @@ use crate::{
     identity::Identity,
     policy::PolicyVerifier,
     protocol::Protocol,
+    rofl,
     storage::mkvs::{sync::NoopReadSyncer, OverlayTree, Root, RootType},
     transaction::{
         dispatcher::{Dispatcher as TxnDispatcher, NoopDispatcher as TxnNoopDispatcher},
@@ -63,15 +64,15 @@ const RPC_STALE_SESSION_TIMEOUT_SECS: i64 = 10;
 /// Interface for dispatcher initializers.
 pub trait Initializer: Send + Sync {
     /// Initializes the dispatcher(s).
-    fn init(&self, state: PreInitState<'_>) -> PostInitState;
+    fn init(self: Box<Self>, state: PreInitState<'_>) -> PostInitState;
 }
 
 impl<F> Initializer for F
 where
-    F: Fn(PreInitState<'_>) -> PostInitState + Send + Sync,
+    F: FnOnce(PreInitState<'_>) -> PostInitState + Send + Sync,
 {
-    fn init(&self, state: PreInitState<'_>) -> PostInitState {
-        (*self)(state)
+    fn init(self: Box<Self>, state: PreInitState<'_>) -> PostInitState {
+        self(state)
     }
 }
 
@@ -94,6 +95,8 @@ pub struct PreInitState<'a> {
 pub struct PostInitState {
     /// Optional transaction dispatcher that should be used.
     pub txn_dispatcher: Option<Box<dyn TxnDispatcher>>,
+    /// Optional ROFL application.
+    pub app: Option<Box<dyn rofl::App>>,
 }
 
 /// A guard that will abort the process if dropped while panicking.
@@ -145,6 +148,7 @@ struct State {
     protocol: Arc<Protocol>,
     consensus_verifier: Arc<dyn Verifier>,
     dispatcher: Arc<Dispatcher>,
+    app: Arc<dyn rofl::App>,
     rpc_demux: Arc<RpcDemux>,
     rpc_dispatcher: Arc<RpcDispatcher>,
     txn_dispatcher: Arc<dyn TxnDispatcher>,
@@ -253,11 +257,20 @@ impl Dispatcher {
         let txn_dispatcher = post_init_state
             .txn_dispatcher
             .unwrap_or_else(|| Box::<TxnNoopDispatcher>::default());
+        let mut app = post_init_state
+            .app
+            .unwrap_or_else(|| Box::new(rofl::NoopApp));
+
+        // Initialize the application.
+        if let Err(err) = app.on_init(protocol.clone()) {
+            error!(self.logger, "ROFL application initialization failed"; "err" => ?err);
+        }
 
         let state = State {
             protocol: protocol.clone(),
             consensus_verifier: consensus_verifier.clone(),
             dispatcher: self.clone(),
+            app: Arc::from(app),
             rpc_demux: Arc::new(rpc_demux),
             rpc_dispatcher: Arc::new(rpc_dispatcher),
             txn_dispatcher: Arc::from(txn_dispatcher),
@@ -426,6 +439,29 @@ impl Dispatcher {
                     },
                 )
                 .await
+            }
+
+            // ROFL notifications.
+            Body::RuntimeNotifyRequest {
+                runtime_block,
+                runtime_event,
+            } => {
+                if let Some(runtime_block) = runtime_block {
+                    if let Err(err) = state.app.on_runtime_block(&runtime_block).await {
+                        error!(self.logger, "Application block notification failed"; "err" => ?err);
+                    }
+                }
+                if let Some(runtime_event) = runtime_event {
+                    if let Err(err) = state
+                        .app
+                        .on_runtime_event(&runtime_event.block, &runtime_event.tags)
+                        .await
+                    {
+                        error!(self.logger, "Application event notification failed"; "err" => ?err);
+                    }
+                }
+
+                Ok(Body::Empty {})
             }
 
             // Other requests.

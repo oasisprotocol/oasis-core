@@ -218,6 +218,13 @@ pub enum Body {
         height: u64,
     },
     RuntimeConsensusSyncResponse {},
+    RuntimeNotifyRequest {
+        #[cbor(optional)]
+        runtime_block: Option<roothash::AnnotatedBlock>,
+        #[cbor(optional)]
+        runtime_event: Option<RuntimeNotifyEvent>,
+    },
+    RuntimeNotifyResponse {},
 
     // Host interface.
     HostRPCCallRequest {
@@ -284,6 +291,25 @@ pub enum Body {
     HostIdentityResponse {
         node_id: signature::PublicKey,
     },
+    HostSubmitTxRequest {
+        runtime_id: Namespace,
+        data: Vec<u8>,
+        wait: bool,
+        prove: bool,
+    },
+    HostSubmitTxResponse {
+        output: Vec<u8>,
+        round: u64,
+        batch_order: u32,
+        proof: Option<sync::Proof>,
+    },
+    HostRegisterNotifyRequest {
+        #[cbor(optional)]
+        runtime_block: bool,
+        #[cbor(optional)]
+        runtime_event: Option<RegisterNotifyRuntimeEvent>,
+    },
+    HostRegisterNotifyResponse {},
 }
 
 impl Default for Body {
@@ -454,6 +480,22 @@ pub struct HostFetchConsensusEventsRequest {
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct HostFetchConsensusEventsResponse {
     pub events: Vec<consensus::Event>,
+}
+
+/// Registration for runtime event notifications.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct RegisterNotifyRuntimeEvent {
+    /// Event tags to subscribe to.
+    pub tags: Vec<Vec<u8>>,
+}
+
+/// An event notification.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct RuntimeNotifyEvent {
+    /// Header of the block that emitted the event.
+    pub block: roothash::AnnotatedBlock,
+    /// Matching tags.
+    pub tags: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, Copy, Debug, cbor::Encode, cbor::Decode)]

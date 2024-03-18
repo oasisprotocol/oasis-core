@@ -25,7 +25,7 @@ type Config struct {
 	Extra interface{}
 
 	// MessageHandler is the message handler for the Runtime Host Protocol messages.
-	MessageHandler protocol.Handler
+	MessageHandler RuntimeHandler
 
 	// LocalConfig is the node-local runtime configuration.
 	LocalConfig map[string]interface{}
@@ -92,6 +92,17 @@ type CompositeRuntime interface {
 	// Component returns the runtime component of the given kind.
 	// If the component of the given kind does not exist, nil is returned.
 	Component(kind bundle.ComponentKind) Runtime
+}
+
+// RuntimeHandler is the message handler for the host side of the runtime host protocol.
+type RuntimeHandler interface {
+	protocol.Handler
+
+	// NewSubHandler creates a sub-handler specialized for the given runtime component.
+	NewSubHandler(cr CompositeRuntime, component *bundle.Component) (RuntimeHandler, error)
+
+	// AttachRuntime attaches a given hosted runtime instance to this handler.
+	AttachRuntime(host Runtime) error
 }
 
 // RuntimeEventEmitter is the interface for emitting events for a provisioned runtime.

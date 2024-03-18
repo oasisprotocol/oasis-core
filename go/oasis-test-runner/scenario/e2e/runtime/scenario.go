@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
@@ -174,7 +175,12 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 				GovernanceModel: registry.GovernanceEntity,
 				Deployments: []oasis.DeploymentCfg{
 					{
-						Binaries: sc.ResolveRuntimeBinaries(KeyManagerRuntimeBinary),
+						Components: []oasis.ComponentCfg{
+							{
+								Kind:     bundle.ComponentRONL,
+								Binaries: sc.ResolveRuntimeBinaries(KeyManagerRuntimeBinary),
+							},
+						},
 					},
 				},
 			},
@@ -217,7 +223,12 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 				GovernanceModel: registry.GovernanceEntity,
 				Deployments: []oasis.DeploymentCfg{
 					{
-						Binaries: sc.ResolveRuntimeBinaries(KeyValueRuntimeBinary),
+						Components: []oasis.ComponentCfg{
+							{
+								Kind:     bundle.ComponentRONL,
+								Binaries: sc.ResolveRuntimeBinaries(KeyValueRuntimeBinary),
+							},
+						},
 					},
 				},
 			},
@@ -367,6 +378,8 @@ func RegisterScenarios() error {
 		EarlyQuery,
 		EarlyQueryInitHeight,
 		EarlyQueryRuntime,
+		// ROFL.
+		ROFL,
 	} {
 		if err := cmd.Register(s); err != nil {
 			return err

@@ -12,7 +12,6 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
-	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -23,7 +22,7 @@ import (
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
@@ -189,7 +188,7 @@ type RuntimeHostHandlerFactory interface {
 	GetRuntime() Runtime
 
 	// NewRuntimeHostHandler creates a new runtime host handler.
-	NewRuntimeHostHandler() protocol.Handler
+	NewRuntimeHostHandler() host.RuntimeHandler
 
 	// NewRuntimeHostNotifier creates a new runtime host notifier.
 	NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier
@@ -482,51 +481,19 @@ func (h *runtimeHostHandler) handleHostIdentity() (*protocol.HostIdentityRespons
 	}, nil
 }
 
-func (h *runtimeHostHandler) handleHostSubmitTx(
-	ctx context.Context,
-	rq *protocol.HostSubmitTxRequest,
-) (*protocol.HostSubmitTxResponse, error) {
-	clientSrv, err := h.env.GetRuntimeRegistry().Client()
-	if err != nil {
-		return nil, err
-	}
-
-	submitRq := &runtimeClient.SubmitTxRequest{
-		RuntimeID: rq.RuntimeID,
-		Data:      rq.Data,
-	}
-
-	switch rq.Wait {
-	case true:
-		// We need to wait for transaction inclusion.
-		rsp, err := clientSrv.SubmitTxMeta(ctx, submitRq)
-		switch {
-		case err != nil:
-			return nil, err
-		case rsp.CheckTxError != nil:
-			return nil, errors.WithContext(runtimeClient.ErrCheckTxFailed, rsp.CheckTxError.String())
-		default:
-		}
-
-		var proof *syncer.Proof
-		if rq.Prove {
-			// TODO: Add support for inclusion proofs.
-		}
-
-		return &protocol.HostSubmitTxResponse{
-			Output:     rsp.Output,
-			Round:      rsp.Round,
-			BatchOrder: rsp.BatchOrder,
-			Proof:      proof,
-		}, nil
+// Implements host.RuntimeHandler.
+func (h *runtimeHostHandler) NewSubHandler(cr host.CompositeRuntime, component *bundle.Component) (host.RuntimeHandler, error) {
+	switch component.Kind {
+	case bundle.ComponentROFL:
+		return newSubHandlerROFL(h, cr)
 	default:
-		// Just submit and forget.
-		err = clientSrv.SubmitTxNoWait(ctx, submitRq)
-		if err != nil {
-			return nil, err
-		}
-		return &protocol.HostSubmitTxResponse{}, nil
+		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", component.Kind)
 	}
+}
+
+// Implements host.RuntimeHandler.
+func (h *runtimeHostHandler) AttachRuntime(host.Runtime) error {
+	return nil
 }
 
 // Implements protocol.Handler.
@@ -570,9 +537,6 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 	case rq.HostIdentityRequest != nil:
 		// Host identity.
 		rsp.HostIdentityResponse, err = h.handleHostIdentity()
-	case rq.HostSubmitTxRequest != nil:
-		// Transaction submission.
-		rsp.HostSubmitTxResponse, err = h.handleHostSubmitTx(ctx, rq.HostSubmitTxRequest)
 	default:
 		err = fmt.Errorf("method not supported")
 	}
@@ -1048,7 +1012,7 @@ func NewRuntimeHostHandler(
 	env RuntimeHostHandlerEnvironment,
 	runtime Runtime,
 	consensus consensus.Backend,
-) protocol.Handler {
+) host.RuntimeHandler {
 	return &runtimeHostHandler{
 		env:       env,
 		runtime:   runtime,
