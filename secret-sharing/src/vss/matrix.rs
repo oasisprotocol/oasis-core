@@ -214,6 +214,17 @@ where
 {
     type Output = Self;
 
+    fn add(self, other: Self) -> Self {
+        &self + &other
+    }
+}
+
+impl<G> Add for &VerificationMatrix<G>
+where
+    G: Group + GroupEncoding,
+{
+    type Output = VerificationMatrix<G>;
+
     fn add(self, rhs: Self) -> Self::Output {
         let rows = max(self.rows, rhs.rows);
         let cols = max(self.cols, rhs.cols);
@@ -239,7 +250,7 @@ where
             m.push(mi);
         }
 
-        Self { rows, cols, m }
+        VerificationMatrix { rows, cols, m }
     }
 }
 
@@ -367,6 +378,11 @@ mod tests {
         ];
         let bp = BivariatePolynomial::with_coefficients(c);
         let m = VerificationMatrix::<p384::ProjectivePoint>::new(&bp);
+
+        let sum = &m1 + &m2;
+        assert_eq!(sum.rows, 3);
+        assert_eq!(sum.cols, 4);
+        assert_eq!(sum, m);
 
         let sum = m1 + m2;
         assert_eq!(sum.rows, 3);
