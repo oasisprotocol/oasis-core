@@ -16,14 +16,17 @@ use tiny_keccak::{Hasher, TupleHash};
 
 #[cfg_attr(not(target_env = "sgx"), allow(unused))]
 use crate::common::crypto::hash::Hash;
-use crate::common::{
-    crypto::{
-        mrae::deoxysii::{self, Opener},
-        signature::{self, Signature, Signer},
-        x25519,
+use crate::{
+    common::{
+        crypto::{
+            mrae::deoxysii::{self, Opener},
+            signature::{self, Signature, Signer},
+            x25519,
+        },
+        sgx::{EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
+        time::insecure_posix_time,
     },
-    sgx::{EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
-    time::insecure_posix_time,
+    consensus::registry::EndorsedCapabilityTEE,
 };
 
 /// Context used for computing the RAK digest.
@@ -65,6 +68,10 @@ enum QuoteError {
     QuotePolicyNotSet,
     #[error("quote policy already set")]
     QuotePolicyAlreadySet,
+    #[error("node identity not set")]
+    NodeIdentityNotSet,
+    #[error("endorsed quote mismatch")]
+    EndorsedQuoteMismatch,
 }
 
 struct Inner {
@@ -76,6 +83,8 @@ struct Inner {
     known_quotes: VecDeque<Arc<Quote>>,
     #[allow(unused)]
     enclave_identity: Option<EnclaveIdentity>,
+    node_identity: Option<signature::PublicKey>,
+    endorsed_capability_tee: Option<EndorsedCapabilityTEE>,
     #[allow(unused)]
     target_info: Option<Targetinfo>,
     #[allow(unused)]
@@ -123,6 +132,8 @@ impl Identity {
                 quote_policy: None,
                 known_quotes: Default::default(),
                 enclave_identity: EnclaveIdentity::current(),
+                node_identity: None,
+                endorsed_capability_tee: None,
                 target_info: None,
                 nonce: None,
             }),
@@ -213,7 +224,11 @@ impl Identity {
 
     /// Configure the remote attestation quote for RAK.
     #[cfg(target_env = "sgx")]
-    pub(crate) fn set_quote(&self, quote: Quote) -> Result<VerifiedQuote> {
+    pub(crate) fn set_quote(
+        &self,
+        node_id: signature::PublicKey,
+        quote: Quote,
+    ) -> Result<VerifiedQuote> {
         let rak_pub = self.public_rak();
 
         let mut inner = self.inner.write().unwrap();
@@ -265,6 +280,15 @@ impl Identity {
             }
         }
 
+        // Ensure host identity cannot change.
+        match inner.node_identity {
+            Some(existing_node_id) if node_id != existing_node_id => {
+                panic!("host node identity may never change");
+            }
+            Some(_) => {} // Host identity already set and is the same.
+            None => inner.node_identity = Some(node_id),
+        }
+
         let quote = Arc::new(quote);
         inner.quote = Some(quote.clone());
         inner.quote_timestamp = Some(verified_quote.timestamp);
@@ -289,6 +313,44 @@ impl Identity {
         inner.quote_policy = Some(Arc::new(policy));
 
         Ok(())
+    }
+
+    /// Configure the endorsed TEE capability.
+    #[cfg(target_env = "sgx")]
+    pub(crate) fn set_endorsed_capability_tee(&self, ect: EndorsedCapabilityTEE) -> Result<()> {
+        // Make sure the endorsed quote is actually ours.
+        if !ect.capability_tee.matches(self) {
+            return Err(QuoteError::EndorsedQuoteMismatch.into());
+        }
+
+        let mut inner = self.inner.write().unwrap();
+        let policy = inner
+            .quote_policy
+            .as_ref()
+            .ok_or(QuoteError::QuotePolicyNotSet)?;
+        let node_id = inner.node_identity.ok_or(QuoteError::NodeIdentityNotSet)?;
+
+        // Verify the endorsed capability TEE to make sure it matches our state.
+        if ect.node_endorsement.public_key != node_id {
+            return Err(QuoteError::EndorsedQuoteMismatch.into());
+        }
+        ect.verify(&policy)?;
+
+        inner.endorsed_capability_tee = Some(ect);
+
+        Ok(())
+    }
+
+    /// Endorsed TEE capability.
+    pub fn endorsed_capability_tee(&self) -> Option<EndorsedCapabilityTEE> {
+        let inner = self.inner.read().unwrap();
+        inner.endorsed_capability_tee.clone()
+    }
+
+    /// Host node identity public key.
+    pub fn node_identity(&self) -> Option<signature::PublicKey> {
+        let inner = self.inner.read().unwrap();
+        inner.node_identity
     }
 
     /// Public part of RAK.
