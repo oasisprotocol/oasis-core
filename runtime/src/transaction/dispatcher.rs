@@ -13,6 +13,11 @@ use crate::{
 /// It defines the interface used by the runtime call dispatcher
 /// to process transactions.
 pub trait Dispatcher: Send + Sync {
+    /// Whether dispatch is supported by this dispatcher.
+    fn is_supported(&self) -> bool {
+        true
+    }
+
     /// Execute the transactions in the given batch.
     ///
     /// # Consensus Layer State Integrity
@@ -198,6 +203,10 @@ pub struct ExecuteBatchResult {
 pub struct NoopDispatcher;
 
 impl Dispatcher for NoopDispatcher {
+    fn is_supported(&self) -> bool {
+        false
+    }
+
     fn execute_batch(
         &self,
         _ctx: Context,

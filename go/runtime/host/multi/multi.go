@@ -17,6 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -277,6 +278,22 @@ func (agg *Aggregate) Stop() {
 
 	agg.stopActiveLocked()
 	agg.stopNextLocked()
+}
+
+// Component implements host.CompositeRuntime.
+func (agg *Aggregate) Component(id bundle.ComponentID) (host.Runtime, bool) {
+	active, err := agg.getActiveHost()
+	if err != nil {
+		return nil, false
+	}
+
+	if cr, ok := active.host.(host.CompositeRuntime); ok {
+		return cr.Component(id)
+	}
+	if id == bundle.ComponentID_RONL {
+		return active.host, true
+	}
+	return nil, false
 }
 
 // GetVersion retrieves the runtime host for the specified version.
