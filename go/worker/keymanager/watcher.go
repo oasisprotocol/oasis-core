@@ -267,22 +267,46 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 	}
 	defer epoSub.Close()
 
-	watcher, err := nodes.NewVersionedNodeDescriptorWatcher(ctx, w.consensus)
-	if err != nil {
-		w.logger.Error("failed to create node watcher",
-			"err", err,
-		)
-		return
+	// Maintain lists of observer and compute nodes.
+	observerNodes := map[signature.PublicKey]*node.Node{}
+	computeNodes := map[signature.PublicKey]*node.Node{}
+
+	getFlatList := func() []*node.Node {
+		list := make([]*node.Node, 0, len(observerNodes)+len(computeNodes))
+		for _, nd := range observerNodes {
+			list = append(list, nd)
+		}
+		for id, nd := range computeNodes {
+			if _, dup := observerNodes[id]; !dup {
+				list = append(list, nd)
+			}
+		}
+		return list
 	}
 
-	ch, sub, err := watcher.WatchNodeUpdates()
+	nodeCh, nodeSub, err := w.consensus.Registry().WatchNodes(ctx)
 	if err != nil {
-		w.logger.Error("failed to watch node updates",
+		w.logger.Error("failed to subscribe to registry node updates",
 			"err", err,
 		)
 		return
 	}
-	defer sub.Close()
+	defer nodeSub.Close()
+
+	// And populate the list of observer nodes with the currently known set of them.
+	nodes, err := w.consensus.Registry().GetNodes(ctx, consensus.HeightLatest)
+	if err != nil {
+		w.logger.Error("failed to fetch list of nodes from the registry",
+			"err", err,
+		)
+		return
+	}
+	for _, nd := range nodes {
+		if nd.HasRoles(node.RoleObserver) && nd.HasRuntime(w.runtimeID) {
+			observerNodes[nd.ID] = nd
+		}
+	}
+	w.accessList.UpdateNodes(w.runtimeID, getFlatList())
 
 	for {
 		select {
@@ -290,9 +314,7 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 			return
 		case <-epoCh:
 			func() {
-				watcher.Reset()
-				defer watcher.Freeze(0)
-
+				// Get executor committee members.
 				cms, err := w.consensus.Scheduler().GetCommittees(ctx, &scheduler.GetCommitteesRequest{
 					Height:    consensus.HeightLatest,
 					RuntimeID: w.runtimeID,
@@ -303,6 +325,7 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 					)
 					return
 				}
+				clear(computeNodes)
 
 				for _, cm := range cms {
 					if cm.Kind != scheduler.KindComputeExecutor {
@@ -310,19 +333,42 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 					}
 
 					for _, member := range cm.Members {
-						_, _ = watcher.WatchNode(ctx, member.PublicKey)
+						nd, err := w.consensus.Registry().GetNode(ctx, &registry.IDQuery{
+							ID:     member.PublicKey,
+							Height: consensus.HeightLatest,
+						})
+						if err != nil {
+							w.logger.Error("failed to fetch node descriptor for committee member",
+								"err", err,
+								"member", member.PublicKey,
+							)
+							continue
+						}
+						computeNodes[nd.ID] = nd
 					}
 				}
 			}()
-		case nu := <-ch:
-			if nu.Reset {
-				// Ignore reset events to avoid clearing the access list before setting a new one.
-				// This is safe because a reset event is always followed by a freeze event after the
-				// nodes have been set (even if the new set is empty).
-				continue
+		case ne := <-nodeCh:
+			switch ne.IsRegistration {
+			case true:
+				// A new node registered, which may need to be added to the ACL.
+				if ne.Node.HasRoles(node.RoleObserver) && ne.Node.HasRuntime(w.runtimeID) {
+					observerNodes[ne.Node.ID] = ne.Node
+				}
+				if _, known := computeNodes[ne.Node.ID]; known {
+					computeNodes[ne.Node.ID] = ne.Node
+				}
+
+			case false:
+				// A node's descriptor expired, it potentially needs to be removed.
+				if _, known := observerNodes[ne.Node.ID]; known {
+					delete(observerNodes, ne.Node.ID)
+				} else {
+					continue
+				}
 			}
 		}
 
-		w.accessList.UpdateNodes(w.runtimeID, watcher.GetNodes())
+		w.accessList.UpdateNodes(w.runtimeID, getFlatList())
 	}
 }
