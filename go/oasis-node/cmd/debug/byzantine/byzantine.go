@@ -224,8 +224,8 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 				panic(fmt.Sprintf("compute state tree set failed: %+v", err))
 			}
 			if err = cbc.addResultSuccess(ctx, cbc.txs[0], nil, transaction.Tags{
-				transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
-				transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
+				&transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
+				&transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
 			}); err != nil {
 				panic(fmt.Sprintf("compute add result success failed: %+v", err))
 			}
@@ -245,8 +245,8 @@ func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
 		case 1:
 			// A single transaction.
 			if err = cbc.addResultSuccess(ctx, cbc.txs[0], nil, transaction.Tags{
-				transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
-				transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
+				&transaction.Tag{Key: []byte("kv_op"), Value: []byte("insert")},
+				&transaction.Tag{Key: []byte("kv_key"), Value: []byte("hello_key")},
 			}); err != nil {
 				panic(fmt.Sprintf("compute add result success failed: %+v", err))
 			}

@@ -19,4 +19,4 @@ type Tag struct {
 }
 
 // Tags is a set of tags.
-type Tags []Tag
+type Tags []*Tag
