@@ -114,7 +114,7 @@ func (rh *roflHostHandler) handleHostRPCCall(
 	switch rq.HostRPCCallRequest.Endpoint {
 	case rofl.EnclaveRPCEndpointRONL:
 		// Route EnclaveRPC request to RONL component.
-		compRt := rh.cr.Component(bundle.ComponentRONL)
+		compRt := rh.cr.Component(bundle.ComponentID_RONL)
 		if compRt == nil {
 			return nil, fmt.Errorf("endpoint not supported")
 		}

@@ -19,7 +19,7 @@ import (
 type composite struct {
 	id      common.Namespace
 	version version.Version
-	comps   map[bundle.ComponentKind]host.Runtime
+	comps   map[bundle.ComponentID]host.Runtime
 
 	stopCh chan struct{}
 
@@ -33,17 +33,17 @@ func (c *composite) ID() common.Namespace {
 
 // Implements host.Runtime.
 func (c *composite) GetActiveVersion() (*version.Version, error) {
-	return c.comps[bundle.ComponentRONL].GetActiveVersion()
+	return c.comps[bundle.ComponentID_RONL].GetActiveVersion()
 }
 
 // Implements host.Runtime.
 func (c *composite) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
-	return c.comps[bundle.ComponentRONL].GetInfo(ctx)
+	return c.comps[bundle.ComponentID_RONL].GetInfo(ctx)
 }
 
 // Implements host.Runtime.
 func (c *composite) GetCapabilityTEE() (*node.CapabilityTEE, error) {
-	return c.comps[bundle.ComponentRONL].GetCapabilityTEE()
+	return c.comps[bundle.ComponentID_RONL].GetCapabilityTEE()
 }
 
 // shouldPropagateToComponent checks whether the given runtime request should be propagated to the
@@ -66,13 +66,13 @@ func shouldPropagateToComponent(body *protocol.Body) bool {
 
 // Implements host.Runtime.
 func (c *composite) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	result, err := c.comps[bundle.ComponentRONL].Call(ctx, body)
+	result, err := c.comps[bundle.ComponentID_RONL].Call(ctx, body)
 	if err != nil {
 		return nil, err
 	}
 
-	for kind, comp := range c.comps {
-		if kind == bundle.ComponentRONL {
+	for id, comp := range c.comps {
+		if id == bundle.ComponentID_RONL {
 			continue // Already handled above.
 		}
 		if !shouldPropagateToComponent(body) {
@@ -82,7 +82,7 @@ func (c *composite) Call(ctx context.Context, body *protocol.Body) (*protocol.Bo
 		if _, err = comp.Call(ctx, body); err != nil {
 			c.logger.Warn("failed to propagate call to component",
 				"err", err,
-				"component", kind,
+				"component", id,
 			)
 		}
 	}
@@ -98,7 +98,7 @@ func (c *composite) UpdateCapabilityTEE() {
 
 // Implements host.Runtime.
 func (c *composite) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
-	return c.comps[bundle.ComponentRONL].WatchEvents()
+	return c.comps[bundle.ComponentID_RONL].WatchEvents()
 }
 
 // Implements host.Runtime.
@@ -111,7 +111,7 @@ func (c *composite) Start() {
 // Implements host.Runtime.
 func (c *composite) Abort(ctx context.Context, force bool) error {
 	// Only RONL supports aborts.
-	return c.comps[bundle.ComponentRONL].Abort(ctx, force)
+	return c.comps[bundle.ComponentID_RONL].Abort(ctx, force)
 }
 
 // Implements host.Runtime.
@@ -124,8 +124,8 @@ func (c *composite) Stop() {
 }
 
 // Implements host.CompositeRuntime.
-func (c *composite) Component(kind bundle.ComponentKind) host.Runtime {
-	return c.comps[kind]
+func (c *composite) Component(id bundle.ComponentID) host.Runtime {
+	return c.comps[id]
 }
 
 // New creates a new composite runtime host.
@@ -134,29 +134,29 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 	availableComps := cfg.Bundle.Manifest.GetAvailableComponents()
 
 	// Collect components that we want.
-	wantedComponents := make(map[bundle.ComponentKind]struct{})
-	for _, kind := range cfg.Components {
-		wantedComponents[kind] = struct{}{}
+	wantedComponents := make(map[bundle.ComponentID]struct{})
+	for _, id := range cfg.Components {
+		wantedComponents[id] = struct{}{}
 	}
 
 	crh := &composite{
 		id:      cfg.Bundle.Manifest.ID,
 		version: cfg.Bundle.Manifest.Version,
-		comps:   make(map[bundle.ComponentKind]host.Runtime),
+		comps:   make(map[bundle.ComponentID]host.Runtime),
 		stopCh:  make(chan struct{}),
 		logger:  logging.GetLogger("runtime/host/composite").With("runtime_id", cfg.Bundle.Manifest.ID),
 	}
 
 	// Iterate over all components and provision the individual runtimes.
-	for kind, c := range availableComps {
-		_, wanted := wantedComponents[kind]
+	for id, c := range availableComps {
+		_, wanted := wantedComponents[id]
 		if !wanted {
 			continue // Skip any components that we don't want.
 		}
 
 		compCfg := cfg
-		compCfg.Components = []bundle.ComponentKind{c.Kind}
-		switch kind {
+		compCfg.Components = []bundle.ComponentID{id}
+		switch id.Kind {
 		case bundle.ComponentROFL:
 			// Wrap message handler for ROFL component.
 			var err error
@@ -169,12 +169,12 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 
 		compRt, err := provisioner.NewRuntime(compCfg)
 		if err != nil {
-			return nil, fmt.Errorf("host/composite: failed to provision runtime component '%s': %w", c.Kind, err)
+			return nil, fmt.Errorf("host/composite: failed to provision runtime component '%s': %w", id, err)
 		}
 
-		crh.comps[c.Kind] = compRt
+		crh.comps[id] = compRt
 	}
-	if _, ronlExists := crh.comps[bundle.ComponentRONL]; !ronlExists {
+	if _, ronlExists := crh.comps[bundle.ComponentID_RONL]; !ronlExists {
 		return nil, fmt.Errorf("host/composite: required RONL component not available")
 	}
 
@@ -185,7 +185,7 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 	case len(crh.comps) == 1:
 		// If there is only a single component, just return the component itself as it doesn't make
 		// any sense to have another layer of indirection. This is always the RONL component.
-		return crh.comps[bundle.ComponentRONL], nil
+		return crh.comps[bundle.ComponentID_RONL], nil
 	default:
 		// Multiple components, create a composite runtime.
 		return crh, nil

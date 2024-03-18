@@ -36,20 +36,20 @@ func (bnd *Bundle) Validate() error {
 		optional  bool
 	}
 	var needFiles []bundleFile
-	for kind, comp := range bnd.Manifest.GetAvailableComponents() {
+	for id, comp := range bnd.Manifest.GetAvailableComponents() {
 		needFiles = append(needFiles, bundleFile{
-			descr: fmt.Sprintf("%s: ELF executable", kind),
+			descr: fmt.Sprintf("%s: ELF executable", id),
 			fn:    comp.Executable,
 		})
 		if sgx := comp.SGX; sgx != nil {
 			needFiles = append(needFiles,
 				[]bundleFile{
 					{
-						descr: fmt.Sprintf("%s: SGX executable", kind),
+						descr: fmt.Sprintf("%s: SGX executable", id),
 						fn:    sgx.Executable,
 					},
 					{
-						descr:    fmt.Sprintf("%s: SGX signature", kind),
+						descr:    fmt.Sprintf("%s: SGX signature", id),
 						fn:       sgx.Signature,
 						optional: true,
 					},
@@ -89,11 +89,11 @@ func (bnd *Bundle) Validate() error {
 		}
 	}
 
-	for kind, comp := range bnd.Manifest.GetAvailableComponents() {
+	for id, comp := range bnd.Manifest.GetAvailableComponents() {
 		// Make sure the ELF executable actually is an ELF image.
 		f, err := elf.NewFile(bytes.NewReader(bnd.Data[comp.Executable]))
 		if err != nil {
-			return fmt.Errorf("runtime/bundle: ELF executable for component '%s' isnt: %w", kind, err)
+			return fmt.Errorf("runtime/bundle: ELF executable for component '%s' isnt: %w", id, err)
 		}
 		_ = f.Close()
 
@@ -126,8 +126,8 @@ func (bnd *Bundle) Add(fn string, b []byte) error {
 }
 
 // MrEnclave returns the MRENCLAVE of the SGX excutable.
-func (bnd *Bundle) MrEnclave(kind ComponentKind) (*sgx.MrEnclave, error) {
-	ei, err := bnd.EnclaveIdentity(kind)
+func (bnd *Bundle) MrEnclave(id ComponentID) (*sgx.MrEnclave, error) {
+	ei, err := bnd.EnclaveIdentity(id)
 	if err != nil {
 		return nil, err
 	}
@@ -135,22 +135,22 @@ func (bnd *Bundle) MrEnclave(kind ComponentKind) (*sgx.MrEnclave, error) {
 }
 
 // EnclaveIdentity returns the SGX enclave identity of the given component.
-func (bnd *Bundle) EnclaveIdentity(kind ComponentKind) (*sgx.EnclaveIdentity, error) {
-	comp := bnd.Manifest.GetComponentByKind(kind)
+func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error) {
+	comp := bnd.Manifest.GetComponentByID(id)
 	if comp == nil {
-		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", kind)
+		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
 	}
 	if comp.SGX == nil {
-		return nil, fmt.Errorf("runtime/bundle: no SGX metadata for '%s'", kind)
+		return nil, fmt.Errorf("runtime/bundle: no SGX metadata for '%s'", id)
 	}
 	d := bnd.Data[comp.SGX.Executable]
 	if len(d) == 0 {
-		return nil, fmt.Errorf("runtime/bundle: no SGX executable for '%s'", kind)
+		return nil, fmt.Errorf("runtime/bundle: no SGX executable for '%s'", id)
 	}
 
 	var mrEnclave sgx.MrEnclave
 	if err := mrEnclave.FromSgxs(bytes.NewReader(d)); err != nil {
-		return nil, fmt.Errorf("runtime/bundle: failed to derive SGX MRENCLAVE for '%s': %w", kind, err)
+		return nil, fmt.Errorf("runtime/bundle: failed to derive SGX MRENCLAVE for '%s': %w", id, err)
 	}
 
 	var mrSigner sgx.MrSigner
@@ -180,7 +180,7 @@ func (bnd *Bundle) verifySgxSignature(comp *Component) error {
 		return nil
 	}
 
-	mrEnclave, err := bnd.MrEnclave(comp.Kind)
+	mrEnclave, err := bnd.MrEnclave(comp.ID())
 	if err != nil {
 		return err
 	}
@@ -331,10 +331,10 @@ func (bnd *Bundle) WriteExploded(dataDir string) error {
 			}
 		}
 
-		for kind, comp := range bnd.Manifest.GetAvailableComponents() {
+		for id, comp := range bnd.Manifest.GetAvailableComponents() {
 			if comp.Executable != "" {
 				if err := os.Chmod(bnd.ExplodedPath(dataDir, comp.Executable), 0o700); err != nil {
-					return fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", kind, err)
+					return fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
 				}
 			}
 		}

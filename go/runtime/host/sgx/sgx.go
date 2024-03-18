@@ -232,7 +232,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 	if numComps := len(rtCfg.Components); numComps != 1 {
 		return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
 	}
-	comp := rtCfg.Bundle.Manifest.GetComponentByKind(rtCfg.Components[0])
+	comp := rtCfg.Bundle.Manifest.GetComponentByID(rtCfg.Components[0])
 	if comp == nil {
 		return process.Config{}, fmt.Errorf("component '%s' not available", rtCfg.Components[0])
 	}
