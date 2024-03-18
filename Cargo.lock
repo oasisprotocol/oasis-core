@@ -1552,7 +1552,7 @@ version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 dependencies = [
- "spin",
+ "spin 0.5.2",
 ]
 
 [[package]]
@@ -1658,6 +1658,7 @@ dependencies = [
  "byteorder",
  "cc",
  "cfg-if 1.0.0",
+ "chrono",
  "mbedtls-platform-support",
  "mbedtls-sys-auto",
  "rs-libc",
@@ -2639,6 +2640,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ring"
+version = "0.17.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c17fa4cb658e3583423e915b9f3acc01cceaee1860e33d59ebae66adc3a2dc0d"
+dependencies = [
+ "cc",
+ "cfg-if 1.0.0",
+ "getrandom",
+ "libc",
+ "spin 0.9.8",
+ "untrusted",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "rs-libc"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2715,6 +2731,74 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rustls"
+version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e87c9956bd9807afa1f77e0f7594af32566e830e088a5576d27c5b6f30f49d41"
+dependencies = [
+ "log",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "rustls-mbedcrypto-provider"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a17f65cfae87b2d457074a48c27689794d4fab4c7a8bfb65cbcb8fe82126879"
+dependencies = [
+ "bit-vec 0.6.3",
+ "log",
+ "mbedtls 0.12.3",
+ "rustls",
+ "rustls-mbedtls-provider-utils",
+ "rustls-webpki",
+ "yasna 0.3.2",
+]
+
+[[package]]
+name = "rustls-mbedpki-provider"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720825b5e7f8bc0fbdd92577ce13eb4583ea803646e8e0ddf5aec69421e84794"
+dependencies = [
+ "chrono",
+ "mbedtls 0.12.3",
+ "rustls",
+ "rustls-mbedtls-provider-utils",
+ "x509-parser",
+]
+
+[[package]]
+name = "rustls-mbedtls-provider-utils"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea6440ac07b7ea318711e46e466cf12bcec134729ad0514fe89185abc1658498"
+dependencies = [
+ "mbedtls 0.12.3",
+ "rustls",
+]
+
+[[package]]
+name = "rustls-pki-types"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ede67b28608b4c60685c7d54122d4400d90f62b40caee7700e700380a390fa8"
+
+[[package]]
+name = "rustls-webpki"
+version = "0.102.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faaa0a62740bedb9b2ef5afa303da42764c012f743917351dc9a237ea1663610"
+dependencies = [
+ "ring",
+ "rustls-pki-types",
+ "untrusted",
 ]
 
 [[package]]
@@ -2943,7 +3027,6 @@ version = "0.0.0"
 dependencies = [
  "oasis-core-keymanager",
  "oasis-core-runtime",
- "oasis-core-tools",
 ]
 
 [[package]]
@@ -2955,11 +3038,26 @@ dependencies = [
  "oasis-cbor",
  "oasis-core-keymanager",
  "oasis-core-runtime",
- "oasis-core-tools",
  "simple-keymanager",
  "thiserror",
  "tokio 1.36.0",
- "x25519-dalek",
+]
+
+[[package]]
+name = "simple-rofl"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "mbedtls 0.12.3",
+ "oasis-cbor",
+ "oasis-core-keymanager",
+ "oasis-core-runtime",
+ "rand",
+ "rustls",
+ "rustls-mbedcrypto-provider",
+ "rustls-mbedpki-provider",
+ "tokio 1.36.0",
 ]
 
 [[package]]
@@ -3058,6 +3156,12 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spin"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spki"
@@ -3597,6 +3701,12 @@ checksum = "b57c6eace16c00eccb98a28e85db3370eab0685bdd5e13831d59e2bcb49a1d8a"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "untrusted"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "url"

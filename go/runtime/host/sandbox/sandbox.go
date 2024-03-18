@@ -91,6 +91,11 @@ func (p *provisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 		logger:                      p.cfg.Logger.With("runtime_id", id),
 	}
 
+	err := cfg.MessageHandler.AttachRuntime(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach host: %w", err)
+	}
+
 	return r, nil
 }
 

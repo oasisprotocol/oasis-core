@@ -226,7 +226,7 @@ func (n *Node) initRuntimeWorkers() error {
 	}
 
 	// Initialize the node's runtime registry.
-	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, n.dataDir, n.commonStore, n.Consensus, n.IAS)
+	n.RuntimeRegistry, err = runtimeRegistry.New(n.svcMgr.Ctx, n.dataDir, n.commonStore, n.Identity, n.Consensus, n.IAS)
 	if err != nil {
 		return err
 	}

@@ -171,6 +171,7 @@ steps:
     command:
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-rofl
 
       # Upload the built artifacts.
       - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
@@ -178,11 +179,13 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue.sgxs
       - buildkite-agent artifact upload simple-keyvalue-upgrade.sgxs
       - buildkite-agent artifact upload simple-keymanager-upgrade.sgxs
+      - buildkite-agent artifact upload simple-rofl.sgxs
       - cd /var/tmp/artifacts/default/debug
       - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
       - buildkite-agent artifact upload simple-keyvalue-upgrade
       - buildkite-agent artifact upload simple-keymanager-upgrade
+      - buildkite-agent artifact upload simple-rofl
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -225,7 +228,7 @@ steps:
       - "build-rust-runtime-loader"
       - "build-rust-runtimes"
     branches: "!master !stable/*"
-    parallelism: 5
+    parallelism: 6
     command:
       - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
       - .buildkite/scripts/download_e2e_test_artifacts.sh
@@ -234,7 +237,12 @@ steps:
       - export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"
       - export CC_x86_64_fortanix_unknown_sgx=clang-11
       # Only run runtime scenarios as others do not use SGX.
-      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-.+
+      - >
+        .buildkite/scripts/test_e2e.sh --timeout 20m
+        --scenario e2e/runtime/runtime-encryption
+        --scenario e2e/runtime/rofl
+        --scenario e2e/runtime/trust-root/.+
+        --scenario e2e/runtime/keymanager-.+
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
       OASIS_UNSAFE_LAX_AVR_VERIFY: "1"

@@ -19,7 +19,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
@@ -164,14 +163,7 @@ func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[has
 		return nil
 	}
 
-	ioRoot := storage.Root{
-		Namespace: blk.Header.Namespace,
-		Version:   blk.Header.Round,
-		Type:      storage.RootTypeIO,
-		Hash:      blk.Header.IORoot,
-	}
-
-	tree := transaction.NewTree(n.commonNode.Runtime.Storage(), ioRoot)
+	tree := transaction.NewTree(n.commonNode.Runtime.Storage(), blk.Header.StorageRootIO())
 	defer tree.Close()
 
 	// Check if there's anything interesting in this block.

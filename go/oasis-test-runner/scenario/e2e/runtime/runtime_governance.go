@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
@@ -57,17 +56,24 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Use deterministic identities as we need to allocate funds to nodes.
 	f.Network.DeterministicIdentities = true
 
-	// Remove existing compute runtimes from fixture, remember RuntimeID and
-	// binary from the first one.
-	var id common.Namespace
-	var runtimeBinaries map[node.TEEHardware]string
-	var rts []oasis.RuntimeFixture
+	// Remove existing compute runtimes from fixture, remember runtime ID and primary deployment
+	// from the first one.
+	var (
+		runtimeID         common.Namespace
+		runtimeDeployment *oasis.DeploymentCfg
+		rts               []oasis.RuntimeFixture
+	)
 	for _, rt := range f.Runtimes {
 		if rt.Kind == registry.KindCompute {
-			if runtimeBinaries == nil {
-				copy(id[:], rt.ID[:])
-				runtimeBinaries = rt.Deployments[0].Binaries
+			if len(rt.Deployments) == 0 {
+				continue
 			}
+			if runtimeDeployment != nil {
+				continue
+			}
+
+			copy(runtimeID[:], rt.ID[:])
+			runtimeDeployment = &rt.Deployments[0]
 		} else {
 			rts = append(rts, rt)
 		}
@@ -80,9 +86,10 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// Add our two test runtimes with the runtime governance model set.
 	for i := 1; i <= 2; i++ {
 		// Increase LSB by 1.
-		id[len(id)-1]++
+		runtimeID[len(runtimeID)-1]++
+
 		newRtFixture := oasis.RuntimeFixture{
-			ID:         id,
+			ID:         runtimeID,
 			Kind:       registry.KindCompute,
 			Entity:     0,
 			Keymanager: 0,
@@ -102,11 +109,7 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 				AnyNode: &registry.AnyNodeRuntimeAdmissionPolicy{},
 			},
 			GovernanceModel: registry.GovernanceRuntime,
-			Deployments: []oasis.DeploymentCfg{
-				{
-					Binaries: runtimeBinaries,
-				},
-			},
+			Deployments:     []oasis.DeploymentCfg{*runtimeDeployment}, // Copy deployment.
 		}
 
 		f.Runtimes = append(f.Runtimes, newRtFixture)
@@ -114,9 +117,10 @@ func (sc *runtimeGovernanceImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	var computeRuntimes []int
 	for id, rt := range f.Runtimes {
-		if rt.Kind == registry.KindCompute {
-			computeRuntimes = append(computeRuntimes, id)
+		if rt.Kind != registry.KindCompute {
+			continue
 		}
+		computeRuntimes = append(computeRuntimes, id)
 	}
 
 	// Set up compute worker fixtures.
