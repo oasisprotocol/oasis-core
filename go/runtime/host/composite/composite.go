@@ -124,8 +124,9 @@ func (c *composite) Stop() {
 }
 
 // Implements host.CompositeRuntime.
-func (c *composite) Component(id bundle.ComponentID) host.Runtime {
-	return c.comps[id]
+func (c *composite) Component(id bundle.ComponentID) (host.Runtime, bool) {
+	comp, ok := c.comps[id]
+	return comp, ok
 }
 
 // New creates a new composite runtime host.

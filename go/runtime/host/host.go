@@ -91,7 +91,7 @@ type Runtime interface {
 type CompositeRuntime interface {
 	// Component returns the runtime component with the given unique identifier.
 	// If the component with the given identifier does not exist, nil is returned.
-	Component(id bundle.ComponentID) Runtime
+	Component(id bundle.ComponentID) (Runtime, bool)
 }
 
 // RuntimeHandler is the message handler for the host side of the runtime host protocol.

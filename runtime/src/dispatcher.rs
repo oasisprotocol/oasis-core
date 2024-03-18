@@ -326,7 +326,7 @@ impl Dispatcher {
                 Ok(state.attestation_handler.handle(request).await?)
             }
 
-            // RPC and transaction requests.
+            // RPC requests.
             Body::RuntimeRPCCallRequest {
                 request,
                 kind,
@@ -352,6 +352,9 @@ impl Dispatcher {
 
                 self.dispatch_local_rpc(state, request).await
             }
+
+            // RONL.
+            // TODO: Refactor this so it can be part of an "app".
             Body::RuntimeExecuteTxBatchRequest {
                 mode,
                 consensus_block,
@@ -419,7 +422,7 @@ impl Dispatcher {
                 max_messages,
                 method,
                 args,
-            } => {
+            } if state.txn_dispatcher.is_supported() => {
                 // Query.
                 self.dispatch_query(
                     state.cache_set,
@@ -441,7 +444,13 @@ impl Dispatcher {
                 .await
             }
 
-            // ROFL notifications.
+            // ROFL.
+            Body::RuntimeQueryRequest { method, args, .. } if state.app.is_supported() => state
+                .app
+                .query(&method, args)
+                .await
+                .map(|data| Body::RuntimeQueryResponse { data })
+                .map_err(Into::into),
             Body::RuntimeNotifyRequest {
                 runtime_block,
                 runtime_event,
