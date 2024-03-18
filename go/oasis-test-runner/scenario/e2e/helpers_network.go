@@ -114,6 +114,15 @@ func (sc *Scenario) DumpRestoreNetwork(
 	genesisMapFn func(*genesis.Document),
 	resetFlags map[uint8]bool,
 ) error {
+	// Stop any compute workers before taking a dump. Otherwise runtime state may progress after
+	// taking the dump which would result in rollback which is not allowed.
+	sc.Logger.Info("stopping compute nodes before dumping state")
+	for _, n := range sc.Net.ComputeWorkers() {
+		if err := n.StopGracefully(); err != nil {
+			return fmt.Errorf("failed to stop node: %w", err)
+		}
+	}
+
 	// Dump-restore network.
 	sc.Logger.Info("dumping network state",
 		"child", childEnv,
