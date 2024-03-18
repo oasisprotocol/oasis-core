@@ -17,6 +17,7 @@ use crate::{
     consensus::{
         self,
         beacon::EpochTime,
+        registry::EndorsedCapabilityTEE,
         roothash::{self, Block, ComputeResultsHeader, Header},
         state::keymanager::Status as KeyManagerStatus,
         transaction::{Proof, SignedTransaction},
@@ -142,6 +143,10 @@ pub enum Body {
         height: u64,
         signature: Signature,
     },
+    RuntimeCapabilityTEEUpdateEndorsementRequest {
+        ect: EndorsedCapabilityTEE,
+    },
+    RuntimeCapabilityTEEUpdateEndorsementResponse {},
     RuntimeRPCCallRequest {
         request: Vec<u8>,
         kind: enclave_rpc::types::Kind,

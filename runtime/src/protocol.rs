@@ -375,7 +375,8 @@ impl Protocol {
             Body::RuntimeCapabilityTEERakInitRequest { .. }
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
-            | Body::RuntimeCapabilityTEERakQuoteRequest { .. } => {
+            | Body::RuntimeCapabilityTEERakQuoteRequest { .. }
+            | Body::RuntimeCapabilityTEEUpdateEndorsementRequest { .. } => {
                 self.dispatcher.queue_request(id, request)?;
                 Ok(None)
             }

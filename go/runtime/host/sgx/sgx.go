@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
@@ -67,6 +70,8 @@ type Config struct {
 	PCS pcs.Client
 	// Consensus is the consensus layer backend.
 	Consensus consensus.Backend
+	// Identity is the node identity.
+	Identity *identity.Identity
 
 	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
@@ -153,6 +158,7 @@ type sgxProvisioner struct {
 	pcs       pcs.Client
 	aesm      *aesm.Client
 	consensus consensus.Backend
+	identity  *identity.Identity
 
 	logger       *logging.Logger
 	serviceStore *persistent.ServiceStore
@@ -383,7 +389,43 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 		Attestation: attestation,
 	}
 
+	// Endorse TEE capability to support authenticated inter-component EnclaveRPC.
+	s.endorseCapabilityTEE(ctx, capabilityTEE, conn)
+
 	return capabilityTEE, nil
+}
+
+func (s *sgxProvisioner) endorseCapabilityTEE(ctx context.Context, capabilityTEE *node.CapabilityTEE, conn protocol.Connection) {
+	// Endorse CapabilityTEE by signing it under the proper domain separation context.
+	nodeSignature, err := signature.Sign(
+		s.identity.NodeSigner,
+		node.EndorseCapabilityTEESignatureContext,
+		cbor.Marshal(capabilityTEE),
+	)
+	if err != nil {
+		s.logger.Error("failed to sign endorsement of local component",
+			"err", err,
+		)
+		return
+	}
+
+	_, err = conn.Call(ctx, &protocol.Body{
+		RuntimeCapabilityTEEUpdateEndorsementRequest: &protocol.RuntimeCapabilityTEEUpdateEndorsementRequest{
+			EndorsedCapabilityTEE: node.EndorsedCapabilityTEE{
+				CapabilityTEE:   *capabilityTEE,
+				NodeEndorsement: *nodeSignature,
+			},
+		},
+	})
+	if err != nil {
+		// Note that this may fail because the runtime does not support endorsements.
+		s.logger.Warn("failed to update endorsement of local component",
+			"err", err,
+		)
+		return
+	}
+
+	s.logger.Debug("successfully updated component's TEE capability endorsement")
 }
 
 func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitializerParams) {
@@ -454,6 +496,7 @@ func New(cfg Config) (host.Provisioner, error) {
 		pcs:          cfg.PCS,
 		aesm:         aesm.NewClient(aesmdSocketPath),
 		consensus:    cfg.Consensus,
+		identity:     cfg.Identity,
 		logger:       logging.GetLogger("runtime/host/sgx"),
 		serviceStore: cfg.CommonStore.GetServiceStore(serviceStoreName),
 	}

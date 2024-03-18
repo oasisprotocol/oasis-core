@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // Bundle is a runtime bundle instance.
@@ -126,6 +127,15 @@ func (bnd *Bundle) Add(fn string, b []byte) error {
 
 // MrEnclave returns the MRENCLAVE of the SGX excutable.
 func (bnd *Bundle) MrEnclave(kind ComponentKind) (*sgx.MrEnclave, error) {
+	ei, err := bnd.EnclaveIdentity(kind)
+	if err != nil {
+		return nil, err
+	}
+	return &ei.MrEnclave, nil
+}
+
+// EnclaveIdentity returns the SGX enclave identity of the given component.
+func (bnd *Bundle) EnclaveIdentity(kind ComponentKind) (*sgx.EnclaveIdentity, error) {
 	comp := bnd.Manifest.GetComponentByKind(kind)
 	if comp == nil {
 		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", kind)
@@ -143,7 +153,26 @@ func (bnd *Bundle) MrEnclave(kind ComponentKind) (*sgx.MrEnclave, error) {
 		return nil, fmt.Errorf("runtime/bundle: failed to derive SGX MRENCLAVE for '%s': %w", kind, err)
 	}
 
-	return &mrEnclave, nil
+	var mrSigner sgx.MrSigner
+	switch {
+	case comp.SGX.Signature == "" && cmdFlags.DebugDontBlameOasis():
+		// Use dummy signer (only in tests).
+		mrSigner = sgx.FortanixDummyMrSigner
+	default:
+		// Load the actual signature.
+		sigPk, _, err := sigstruct.Verify(bnd.Data[comp.SGX.Signature])
+		if err != nil {
+			return nil, err
+		}
+		if err = mrSigner.FromPublicKey(sigPk); err != nil {
+			return nil, err
+		}
+	}
+
+	return &sgx.EnclaveIdentity{
+		MrEnclave: mrEnclave,
+		MrSigner:  mrSigner,
+	}, nil
 }
 
 func (bnd *Bundle) verifySgxSignature(comp *Component) error {

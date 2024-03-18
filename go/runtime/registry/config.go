@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
@@ -71,7 +72,13 @@ type RuntimeHostConfig struct {
 	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
 }
 
-func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus consensus.Backend, ias []ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
+func newConfig( //nolint: gocyclo
+	dataDir string,
+	commonStore *persistent.CommonStore,
+	identity *identity.Identity,
+	consensus consensus.Backend,
+	ias []ias.Endpoint,
+) (*RuntimeConfig, error) {
 	var cfg RuntimeConfig
 
 	haveSetRuntimes := len(config.GlobalConfig.Runtime.Paths) > 0
@@ -190,6 +197,7 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 					IAS:                   ias,
 					PCS:                   pc,
 					Consensus:             consensus,
+					Identity:              identity,
 					SandboxBinaryPath:     sandboxBinary,
 					InsecureNoSandbox:     insecureNoSandbox,
 					RuntimeAttestInterval: attestInterval,

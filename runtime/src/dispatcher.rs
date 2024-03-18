@@ -308,7 +308,8 @@ impl Dispatcher {
             Body::RuntimeCapabilityTEERakInitRequest { .. }
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
-            | Body::RuntimeCapabilityTEERakQuoteRequest { .. } => {
+            | Body::RuntimeCapabilityTEERakQuoteRequest { .. }
+            | Body::RuntimeCapabilityTEEUpdateEndorsementRequest { .. } => {
                 Ok(state.attestation_handler.handle(request).await?)
             }
 
