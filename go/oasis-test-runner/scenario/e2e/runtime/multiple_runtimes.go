@@ -77,9 +77,6 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 	}
 	f.Runtimes = rts
 
-	// Avoid unexpected blocks.
-	f.Network.SetMockEpoch()
-
 	// Add some more consecutive runtime IDs with the same binary.
 	numComputeRuntimes, _ := sc.Flags.GetInt(cfgNumComputeRuntimes)
 	executorGroupSize, _ := sc.Flags.GetUint16(cfgExecutorGroupSize)
@@ -147,17 +144,8 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *multipleRuntimesImpl) Run(ctx context.Context, _ *env.Env) error {
-	if err := sc.Net.Start(); err != nil {
-		return err
-	}
-
-	fixture, err := sc.Fixture()
-	if err != nil {
-		return err
-	}
-
-	// Wait for the nodes.
-	if _, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
+	// Start the network.
+	if err := sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}
 
@@ -165,16 +153,18 @@ func (sc *multipleRuntimesImpl) Run(ctx context.Context, _ *env.Env) error {
 	numComputeRuntimeTxns, _ := sc.Flags.GetInt(cfgNumComputeRuntimeTxns)
 	for _, r := range sc.Net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()
-		if rt.Kind == registry.KindCompute {
-			for i := 0; i < numComputeRuntimeTxns; i++ {
-				sc.Logger.Info("submitting transaction to runtime",
-					"seq", i,
-					"runtime_id", rt.ID,
-				)
+		if rt.Kind != registry.KindCompute {
+			continue
+		}
 
-				if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, uint64(i), "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), false, 0); err != nil {
-					return err
-				}
+		for i := 0; i < numComputeRuntimeTxns; i++ {
+			sc.Logger.Info("submitting transaction to runtime",
+				"seq", i,
+				"runtime_id", rt.ID,
+			)
+
+			if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, uint64(i), "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), false, 0); err != nil {
+				return err
 			}
 		}
 	}
