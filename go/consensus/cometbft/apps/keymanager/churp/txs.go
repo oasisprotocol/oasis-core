@@ -85,7 +85,7 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 		Identity:        req.Identity,
 		GroupID:         req.GroupID,
 		Threshold:       req.Threshold,
-		Round:           0,
+		ActiveHandoff:   0,
 		NextHandoff:     nextHandoff,
 		HandoffInterval: req.HandoffInterval,
 		Policy:          req.Policy,
@@ -226,8 +226,8 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 		return fmt.Errorf("keymanager: churp: submissions closed")
 	}
 
-	if status.Round != req.Application.Round {
-		return fmt.Errorf("keymanager: churp: invalid round: got %d, expected %d", req.Application.Round, status.Round)
+	if status.NextHandoff != req.Application.Handoff {
+		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Application.Handoff, status.NextHandoff)
 	}
 
 	// Allow only one application per round, to ensure the node's

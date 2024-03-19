@@ -56,7 +56,7 @@ mod test {
             crypto::signature::{PublicKey, Signature, SignatureBundle},
             sgx::{EnclaveIdentity, MrEnclave, MrSigner},
         },
-        consensus::keymanager::churp::{Application, GroupID, PolicySGX, SignedPolicySGX, Status},
+        consensus::keymanager::churp::{Application, GroupID, PolicySGX, SignedPolicySGX},
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
             Root, RootType, Tree,
@@ -76,7 +76,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("2e88f31ccb944195b557ca4c2de7589b042696eb5a6cefce925891ccb9da5eed"),
+            hash: Hash::from("280a0d815030421f16366da7cc57efbfc7fc87d9a7d16964216c79873ebd240a"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -147,7 +147,7 @@ mod test {
             runtime_id,
             group_id: GroupID::NistP384,
             threshold: 2,
-            round: 3,
+            active_handoff: 3,
             next_handoff: 4,
             handoff_interval: 5,
             policy: SignedPolicySGX {

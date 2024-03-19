@@ -11,6 +11,7 @@ use oasis_core_runtime::{
         crypto::mrae::nonce::{Nonce, NONCE_SIZE},
         sgx::seal::new_deoxysii,
     },
+    consensus::beacon::EpochTime,
     storage::KeyValue,
 };
 
@@ -39,7 +40,7 @@ impl Storage {
     pub fn load_bivariate_polynomial<Fp>(
         &self,
         churp_id: u8,
-        round: u64,
+        handoff: EpochTime,
     ) -> Result<Option<BivariatePolynomial<Fp>>>
     where
         Fp: PrimeField,
@@ -50,7 +51,7 @@ impl Storage {
             return Ok(None);
         }
 
-        let polynomial = Self::decrypt_bivariate_polynomial(&mut ciphertext, churp_id, round)?;
+        let polynomial = Self::decrypt_bivariate_polynomial(&mut ciphertext, churp_id, handoff)?;
         Ok(Some(polynomial))
     }
 
@@ -59,31 +60,31 @@ impl Storage {
         &self,
         polynomial: &BivariatePolynomial<Fp>,
         churp_id: u8,
-        round: u64,
+        handoff: EpochTime,
     ) -> Result<()>
     where
         Fp: PrimeField,
     {
         let key = Self::create_bivariate_polynomial_key(churp_id);
-        let ciphertext = Self::encrypt_bivariate_polynomial(polynomial, churp_id, round);
+        let ciphertext = Self::encrypt_bivariate_polynomial(polynomial, churp_id, handoff);
         self.storage.insert(key, ciphertext)?;
 
         Ok(())
     }
 
     // Encrypts and authenticates the given bivariate polynomial using
-    // the provided ID and round as additional data.
+    // the provided ID and handoff as additional data.
     fn encrypt_bivariate_polynomial<Fp>(
         polynomial: &BivariatePolynomial<Fp>,
         churp_id: u8,
-        round: u64,
+        handoff: EpochTime,
     ) -> Vec<u8>
     where
         Fp: PrimeField,
     {
         let nonce = Nonce::generate();
         let plaintext = polynomial.to_bytes();
-        let additional_data = Self::pack_churp_id_round(churp_id, round);
+        let additional_data = Self::pack_churp_id_handoff(churp_id, handoff);
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, BIVARIATE_POLYNOMIAL_SEAL_CONTEXT);
         let mut ciphertext = d2.seal(&nonce, plaintext, additional_data);
         ciphertext.extend_from_slice(&nonce.to_vec());
@@ -91,17 +92,17 @@ impl Storage {
     }
 
     // Decrypts and authenticates encrypted bivariate polynomial using
-    // the provided ID and round as additional data.
+    // the provided ID and handoff as additional data.
     fn decrypt_bivariate_polynomial<Fp>(
         ciphertext: &mut Vec<u8>,
         churp_id: u8,
-        round: u64,
+        handoff: EpochTime,
     ) -> Result<BivariatePolynomial<Fp>>
     where
         Fp: PrimeField,
     {
         let (ciphertext, nonce) = Self::unpack_ciphertext_with_nonce(ciphertext)?;
-        let additional_data = Self::pack_churp_id_round(churp_id, round);
+        let additional_data = Self::pack_churp_id_handoff(churp_id, handoff);
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, BIVARIATE_POLYNOMIAL_SEAL_CONTEXT);
         let plaintext = d2
             .open(nonce, ciphertext, additional_data)
@@ -110,17 +111,17 @@ impl Storage {
         BivariatePolynomial::from_bytes(plaintext).ok_or(Error::InvalidBivariatePolynomial.into())
     }
 
-    /// Concatenates churp ID and round.
+    /// Concatenates churp ID and handoff.
     fn create_bivariate_polynomial_key(churp_id: u8) -> Vec<u8> {
         let mut key = BIVARIATE_POLYNOMIAL_STORAGE_KEY_PREFIX.to_vec();
         key.extend(vec![churp_id]);
         key
     }
 
-    /// Concatenates churp ID and round.
-    fn pack_churp_id_round(churp_id: u8, round: u64) -> Vec<u8> {
+    /// Concatenates churp ID and handoff.
+    fn pack_churp_id_handoff(churp_id: u8, handoff: EpochTime) -> Vec<u8> {
         let mut data = vec![churp_id];
-        data.extend(round.to_le_bytes());
+        data.extend(handoff.to_le_bytes());
         data
     }
 
@@ -157,27 +158,27 @@ mod tests {
         let storage = Storage::new(untrusted.clone());
         let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
         let churp_id = 1;
-        let round = 10;
+        let handoff = 10;
 
         // Happy path.
         storage
-            .store_bivariate_polynomial(&polynomial, churp_id, round)
+            .store_bivariate_polynomial(&polynomial, churp_id, handoff)
             .expect("bivariate polynomial should be stored");
         let restored = storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id, round)
+            .load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff)
             .expect("bivariate polynomial should be loaded")
             .expect("bivariate polynomial should exist");
         assert_eq!(polynomial, restored);
 
         // Non-existing ID.
         let restored = storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, round)
+            .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, handoff)
             .expect("bivariate polynomial should be loaded");
         assert_eq!(None, restored);
 
-        // Invalid round, decryption should fail.
+        // Invalid handoff, decryption should fail.
         storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id, round + 1)
+            .load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff + 1)
             .expect_err("decryption of bivariate polynomial should fail");
 
         // Manipulate local storage.
@@ -191,19 +192,19 @@ mod tests {
             .insert(wrong_key, encrypted_polynomial.clone())
             .expect("bivariate polynomial should be stored");
 
-        encrypted_polynomial[0] = encrypted_polynomial[0].saturating_add(1);
+        (encrypted_polynomial[0], _) = encrypted_polynomial[0].overflowing_add(1);
         untrusted
             .insert(right_key, encrypted_polynomial.clone())
             .expect("bivariate polynomial should be stored");
 
         // Invalid ID, decryption should fail.
         storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, round)
+            .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, handoff)
             .expect_err("decryption of bivariate polynomial should fail");
 
         // Corrupted ciphertext, decryption should fail.
         storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id, round)
+            .load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff)
             .expect_err("decryption of bivariate polynomial should fail");
     }
 
@@ -212,27 +213,35 @@ mod tests {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
         let churp_id = 1;
-        let round = 10;
+        let handoff = 10;
 
         // Happy path.
-        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, round);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, round)
+        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, handoff);
+        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, handoff)
             .expect("decryption of bivariate polynomial should succeed");
 
         // Invalid ID, decryption should fail.
-        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, round);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id + 1, round)
-            .expect_err("decryption of bivariate polynomial should fail");
+        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, handoff);
+        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
+            &mut ciphertext,
+            churp_id + 1,
+            handoff,
+        )
+        .expect_err("decryption of bivariate polynomial should fail");
 
-        // Invalid round, decryption should fail.
-        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, round);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, round + 1)
-            .expect_err("decryption of bivariate polynomial should fail");
+        // Invalid handoff, decryption should fail.
+        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, handoff);
+        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
+            &mut ciphertext,
+            churp_id,
+            handoff + 1,
+        )
+        .expect_err("decryption of bivariate polynomial should fail");
 
         // Corrupted ciphertext, decryption should fail.
-        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, round);
-        ciphertext[0] = ciphertext[0].saturating_add(1);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, round)
+        let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, handoff);
+        (ciphertext[0], _) = ciphertext[0].overflowing_add(1);
+        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, handoff)
             .expect_err("decryption of bivariate polynomial should fail");
     }
 }
