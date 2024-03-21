@@ -36,7 +36,7 @@ pub fn decode_light_block(light_block: LightBlock) -> Result<LightBlockMeta> {
 }
 
 /// Encode the light block metadata to a Tendermint light block.
-pub fn encode_light_block(light_block_meta: &LightBlockMeta) -> Result<LightBlock> {
+pub fn encode_light_block(light_block_meta: LightBlockMeta) -> Result<LightBlock> {
     let height = u64::from(
         light_block_meta
             .signed_header
@@ -45,7 +45,7 @@ pub fn encode_light_block(light_block_meta: &LightBlockMeta) -> Result<LightBloc
             .header
             .height,
     );
-    let meta = LightBlockMeta::encode_vec(light_block_meta).map_err(|e| anyhow!("{}", e))?;
+    let meta = LightBlockMeta::encode_vec(light_block_meta);
 
     Ok(LightBlock { height, meta })
 }

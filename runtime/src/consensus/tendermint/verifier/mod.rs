@@ -10,10 +10,10 @@ use tendermint::merkle::HASH_SIZE;
 use tendermint_light_client::{
     builder::LightClientBuilder,
     components::{self, io::AtHeight, verifier::PredicateVerifier},
+    instance::Instance,
     light_client,
     operations::{ProdCommitValidator, ProvidedVotingPowerCalculator},
     store::LightStore,
-    supervisor::Instance,
     types::{
         Hash as TMHash, LightBlock as TMLightBlock, PeerId, Status, Time, TrustThreshold,
         TrustedBlockState,
@@ -879,7 +879,7 @@ impl Verifier {
         };
         let now = clock.now();
 
-        let verdict = verifier.verify(untrusted, trusted, &options, now);
+        let verdict = verifier.verify_update_header(untrusted, trusted, &options, now);
 
         match verdict {
             Verdict::Success => (),

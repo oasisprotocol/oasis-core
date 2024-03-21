@@ -19,7 +19,9 @@ const REQUIRED_TCB_INFO_ID: &str = "SGX";
 const REQUIRED_TCB_INFO_VERSION: u32 = 3;
 const REQUIRED_QE_ID: &str = "QE";
 const REQUIRED_QE_IDENTITY_VERSION: u32 = 2;
+
 const DEFAULT_MIN_TCB_EVALUATION_DATA_NUMBER: u32 = 12; // As of 2022-08-01.
+const DEFAULT_TCB_VALIDITY_PERIOD: Duration = Duration::try_days(30).unwrap();
 
 // Intel's PCS signing root certificate.
 const PCS_TRUST_ROOT_CERT: &str = r#"-----BEGIN CERTIFICATE-----
@@ -542,7 +544,10 @@ impl TCBInfo {
         if issue_date > ts {
             return Err(Error::TCBExpired);
         }
-        if ts - issue_date > Duration::days(policy.tcb_validity_period.into()) {
+        if ts - issue_date
+            > Duration::try_days(policy.tcb_validity_period.into())
+                .unwrap_or(DEFAULT_TCB_VALIDITY_PERIOD)
+        {
             return Err(Error::TCBExpired);
         }
 
@@ -795,7 +800,10 @@ impl QEIdentity {
         if issue_date > ts {
             return Err(Error::TCBExpired);
         }
-        if ts - issue_date > Duration::days(policy.tcb_validity_period.into()) {
+        if ts - issue_date
+            > Duration::try_days(policy.tcb_validity_period.into())
+                .unwrap_or(DEFAULT_TCB_VALIDITY_PERIOD)
+        {
             return Err(Error::TCBExpired);
         }
 
