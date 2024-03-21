@@ -14,6 +14,7 @@ import (
 	"github.com/eapache/channels"
 
 	beaconAPI "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common/cache/lru"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -26,6 +27,9 @@ import (
 )
 
 var TestSigner = memorySigner.NewTestSigner("oasis-core epochtime mock key seed")
+
+// epochCacheCapacity is the capacity of the epoch LRU cache.
+const epochCacheCapacity = 128
 
 // ServiceClient is the beacon service client interface.
 type ServiceClient interface {
@@ -47,6 +51,7 @@ type serviceClient struct {
 	epochLastNotified beaconAPI.EpochTime
 	epoch             beaconAPI.EpochTime
 	epochCurrentBlock int64
+	epochCache        *lru.Cache
 
 	vrfNotifier     *pubsub.Broker
 	vrfLastNotified hash.Hash
@@ -101,47 +106,70 @@ func (sc *serviceClient) GetFutureEpoch(ctx context.Context, height int64) (*bea
 
 func (sc *serviceClient) GetEpochBlock(ctx context.Context, epoch beaconAPI.EpochTime) (int64, error) {
 	now, currentBlk := sc.currentEpochBlock()
-	if epoch == now {
-		return currentBlk, nil
-	}
-
-	// The epoch can't be earlier than the initial starting epoch.
 	switch {
+	case epoch == now:
+		return currentBlk, nil
 	case epoch < sc.baseEpoch:
-		return -1, fmt.Errorf("epoch predates base (base: %d requested: %d)", sc.baseEpoch, epoch)
+		return 0, fmt.Errorf("epoch predates base (base: %d requested: %d)", sc.baseEpoch, epoch)
 	case epoch == sc.baseEpoch:
 		return sc.baseBlock, nil
 	}
 
-	// Find historic epoch.
-	//
-	// TODO: This is really really inefficient, and should be optimized,
-	// maybe a cache of the last few epochs, or a binary search.
-	height := consensus.HeightLatest
-	for {
+	// Try the cache first.
+	if cachedHeight, ok := sc.epochCache.Get(epoch); ok {
+		return cachedHeight.(int64), nil
+	}
+
+	lowHeight, err := sc.backend.GetLastRetainedVersion(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query last retained version: %w", err)
+	}
+
+	blk, err := sc.backend.GetCometBFTBlock(ctx, consensus.HeightLatest)
+	if err != nil {
+		return 0, err
+	}
+	hiHeight := blk.Height
+	// Start with the latest height as it is possible that currentEpochBlock is not the most up to
+	// date in cases where GetEpochBlock is called during epoch transitions.
+	height := hiHeight
+
+	// Find historic epoch with bounded bisection.
+	const maxIterations = 20 // Should be good enough for most use cases.
+	var prevEpoch beaconAPI.EpochTime
+	for range maxIterations {
 		q, err := sc.querier.QueryAt(ctx, height)
 		if err != nil {
-			return -1, fmt.Errorf("failed to query epoch: %w", err)
+			return 0, fmt.Errorf("failed to query epoch: %w", err)
 		}
 
-		var pastEpoch beaconAPI.EpochTime
-		pastEpoch, height, err = q.Epoch(ctx)
+		var (
+			curEpoch    beaconAPI.EpochTime
+			epochHeight int64
+		)
+		curEpoch, epochHeight, err = q.Epoch(ctx)
 		if err != nil {
-			return -1, fmt.Errorf("failed to query epoch: %w", err)
+			return 0, fmt.Errorf("failed to query epoch: %w", err)
+		}
+		if curEpoch == prevEpoch {
+			break
+		}
+		prevEpoch = curEpoch
+
+		switch {
+		case epoch == curEpoch:
+			_ = sc.epochCache.Put(curEpoch, epochHeight)
+			return epochHeight, nil
+		case epoch < curEpoch:
+			hiHeight = epochHeight
+		case epoch > curEpoch:
+			lowHeight = height
 		}
 
-		if epoch == pastEpoch {
-			return height, nil
-		}
-
-		height--
-
-		// The initial height can be > 1, but presumably this does not
-		// matter, since we validate that epoch > sc.baseEpoch.
-		if pastEpoch == 0 || height <= 1 {
-			return -1, fmt.Errorf("failed to find historic epoch (minimum: %d requested: %d)", pastEpoch, epoch)
-		}
+		// Determine next height as the midpoint between the two.
+		height = (lowHeight + hiHeight) / 2
 	}
+	return 0, fmt.Errorf("failed to find historic epoch")
 }
 
 func (sc *serviceClient) WaitEpoch(ctx context.Context, epoch beaconAPI.EpochTime) error {
@@ -321,6 +349,7 @@ func (sc *serviceClient) updateCachedEpoch(height int64, epoch beaconAPI.EpochTi
 
 	sc.epoch = epoch
 	sc.epochCurrentBlock = height
+	_ = sc.epochCache.Put(epoch, height)
 
 	if sc.epochLastNotified != epoch {
 		sc.logger.Debug("epoch transition",
@@ -369,12 +398,18 @@ func New(ctx context.Context, backend tmAPI.Backend) (ServiceClient, error) {
 		return nil, err
 	}
 
+	epochCache, err := lru.New(lru.Capacity(epochCacheCapacity, false))
+	if err != nil {
+		return nil, err
+	}
+
 	sc := &serviceClient{
 		logger:            logging.GetLogger("cometbft/beacon"),
 		querier:           a.QueryFactory().(*app.QueryFactory),
 		backend:           backend,
 		ctx:               ctx,
 		epochLastNotified: beaconAPI.EpochInvalid,
+		epochCache:        epochCache,
 	}
 	sc.epochNotifier = pubsub.NewBrokerEx(func(ch channels.Channel) {
 		sc.RLock()

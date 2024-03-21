@@ -31,6 +31,17 @@ func BeaconImplementationTests(t *testing.T, backend api.SetableBackend) {
 	require.NoError(err, "GetBeacon")
 	require.Len(newBeacon, api.BeaconSize, "GetBeacon - length")
 	require.NotEqual(beacon, newBeacon, "After epoch transition, new beacon should be generated.")
+
+	latestEpoch, err := backend.GetEpoch(context.Background(), consensus.HeightLatest)
+	require.NoError(err, "GetEpoch")
+
+	var lastHeight int64
+	for epoch := api.EpochTime(0); epoch <= latestEpoch; epoch++ {
+		height, err := backend.GetEpochBlock(context.Background(), epoch)
+		require.NoError(err, "GetEpochBlock")
+		require.True(height > lastHeight)
+		lastHeight = height
+	}
 }
 
 // EpochtimeSetableImplementationTest exercises the basic functionality of
