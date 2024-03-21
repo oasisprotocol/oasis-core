@@ -57,7 +57,7 @@ x509-parser = "0.15.1"
 oid-registry = "0.6.1"
 rsa = "0.9.6"
 base64-serde = "0.6.1"
-lru = "0.9.0"
+lru = "0.12.3"
 async-trait = "0.1.77"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
