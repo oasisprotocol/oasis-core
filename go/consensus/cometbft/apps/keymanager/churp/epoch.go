@@ -46,9 +46,9 @@ func (ext *churpExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime) e
 
 			// The handoff failed. Start another one in the next epoch,
 			// giving nodes one epoch time to submit applications.
-			status.Applications = nil
-			status.Checksum = nil
 			status.NextHandoff = epoch + 1
+			status.NextChecksum = nil
+			status.Applications = nil
 
 			if err := state.SetStatus(ctx, status); err != nil {
 				ctx.Logger().Error("keymanager: churp: failed to set status",

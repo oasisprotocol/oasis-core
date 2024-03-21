@@ -234,13 +234,14 @@ func (s *TxTestSuite) TestCreate() {
 		require.Equal(s.T(), s.keymanagerRuntimes[0].ID, status.RuntimeID)
 		require.Equal(s.T(), churp.EccNistP384, status.GroupID)
 		require.Equal(s.T(), uint8(1), status.Threshold)
-		require.Equal(s.T(), beacon.EpochTime(0), status.ActiveHandoff)
-		require.Equal(s.T(), churp.HandoffsDisabled, status.NextHandoff)
 		require.Equal(s.T(), beacon.EpochTime(0), status.HandoffInterval)
 		require.Equal(s.T(), policy, status.Policy)
-		require.Nil(s.T(), status.Committee)
-		require.Nil(s.T(), status.Applications)
+		require.Equal(s.T(), beacon.EpochTime(0), status.Handoff)
 		require.Nil(s.T(), status.Checksum)
+		require.Nil(s.T(), status.Committee)
+		require.Equal(s.T(), churp.HandoffsDisabled, status.NextHandoff)
+		require.Nil(s.T(), status.NextChecksum)
+		require.Nil(s.T(), status.Applications)
 	})
 
 	s.Run("happy path - handoffs enabled", func() {

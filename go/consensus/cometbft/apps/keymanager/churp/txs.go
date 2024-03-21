@@ -85,13 +85,14 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 		Identity:        req.Identity,
 		GroupID:         req.GroupID,
 		Threshold:       req.Threshold,
-		ActiveHandoff:   0,
-		NextHandoff:     nextHandoff,
 		HandoffInterval: req.HandoffInterval,
 		Policy:          req.Policy,
-		Committee:       nil,
-		Applications:    nil,
+		Handoff:         0,
 		Checksum:        nil,
+		Committee:       nil,
+		NextHandoff:     nextHandoff,
+		NextChecksum:    nil,
+		Applications:    nil,
 	}
 
 	if err := state.SetStatus(ctx, &status); err != nil {
@@ -140,8 +141,8 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 		case *req.HandoffInterval == 0:
 			// Cancel and disable handoffs.
 			status.NextHandoff = churp.HandoffsDisabled
+			status.NextChecksum = nil
 			status.Applications = nil
-			status.Checksum = nil
 		case status.HandoffInterval == 0:
 			// Schedule the next handoff.
 			status.NextHandoff, err = ext.computeNextHandoff(ctx)
