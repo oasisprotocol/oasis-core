@@ -212,7 +212,7 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 		if err != nil {
 			return err
 		}
-		tx := registry.NewRegisterNodeTx(nonce, &transaction.Fee{Gas: 11000}, sigNode)
+		tx := registry.NewRegisterNodeTx(nonce, &transaction.Fee{Gas: 50000}, sigNode)
 		sigTx, err := transaction.Sign(identity.NodeSigner, tx)
 		if err != nil {
 			return err

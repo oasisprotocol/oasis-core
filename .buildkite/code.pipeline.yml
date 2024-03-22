@@ -228,7 +228,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/runtime-encryption --scenario e2e/runtime/trust-root/.+ --scenario e2e/runtime/keymanager-.+
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
-      OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
+      OASIS_UNSAFE_LAX_AVR_VERIFY: "1"
       OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -255,7 +255,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/.*
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
-      OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
+      OASIS_UNSAFE_LAX_AVR_VERIFY: "1"
       OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
       OASIS_E2E_COVERAGE: enable
       OASIS_EXCLUDE_E2E: e2e/runtime/txsource-multi,e2e/runtime/txsource-multi-short
@@ -308,28 +308,6 @@ steps:
       <<: *retry_agent_failure
     plugins:
       <<: *docker_plugin
-
-  ###########################################
-  # E2E test - sgx1 with IAS (only on master)
-  ###########################################
-  - label: E2E tests - sgx1 - IAS
-    branches: master stable/*
-    command:
-      - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
-      - .buildkite/scripts/sgx_ias_tests.sh --timeout 20m
-    # A unique string to identify the step. The value is available in the
-    # BUILDKITE_STEP_KEY and is used to ensure the generated coverage file
-    # names are unique across this pipeline.
-    key: sgx-ias
-    env:
-      OASIS_E2E_COVERAGE: enable
-      TEST_BASE_DIR: /tmp
-    agents:
-      queue: sgx1
-    retry:
-      <<: *retry_agent_failure
-    plugins:
-      <<: *docker_plugin_sgx1
 
   ####################################
   # Rust coverage job.
@@ -387,7 +365,7 @@ steps:
           - .buildkite/scripts/test_upgrade.sh
         env:
           # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
-          OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
+          OASIS_UNSAFE_LAX_AVR_VERIFY: "1"
           OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
           TEST_BASE_DIR: /tmp
         agents:

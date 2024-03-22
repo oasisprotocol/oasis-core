@@ -27,10 +27,20 @@ const (
 	requiredQEIdentityVersion = 2
 )
 
+// If set, the TCB verification will be done in a more lax manner.
+var unsafeLaxVerify bool
+
 // TimestampFormat is the format of the TCB timestamp, suitable for use with time.Parse.
 //
 // Workaround for https://github.com/golang/go/issues/21990
 const TimestampFormat = "2006-01-02T15:04:05.999999999Z"
+
+// SetUnsafeLaxVerify enables the unsafe, more lax TCB status verification.
+//
+// OutOfDate and OutOfDateConfigurationNeeded TCB statuses will be treated as valid.
+func SetUnsafeLaxVerify() {
+	unsafeLaxVerify = true
+}
 
 // TCBBundle contains all the required components to verify a quote's TCB.
 type TCBBundle struct {
@@ -271,15 +281,21 @@ func (ti *TCBInfo) validateTCBLevel(
 	switch tcbLevel.Status {
 	case StatusUpToDate, StatusSWHardeningNeeded:
 		// These are ok.
-	default:
-		return &TCBOutOfDateError{
-			Kind:        TCBKindPlatform,
-			Status:      tcbLevel.Status,
-			AdvisoryIDs: tcbLevel.AdvisoryIDs,
+		return nil
+	case StatusOutOfDate, StatusConfigurationNeeded, StatusOutOfDateConfigurationNeeded:
+		// Ok if lax verification.
+		if unsafeLaxVerify {
+			return nil
 		}
+	default:
+		// Not ok.
 	}
 
-	return nil
+	return &TCBOutOfDateError{
+		Kind:        TCBKindPlatform,
+		Status:      tcbLevel.Status,
+		AdvisoryIDs: tcbLevel.AdvisoryIDs,
+	}
 }
 
 func (ti *TCBInfo) getTCBLevel(
