@@ -1,11 +1,8 @@
 //! CHURP dealer.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
-use group::{
-    ff::{Field, PrimeField},
-    Group, GroupEncoding,
-};
+use group::{ff::PrimeField, Group, GroupEncoding};
 use rand_core::RngCore;
 
 use crate::vss::{
@@ -13,7 +10,7 @@ use crate::vss::{
     polynomial::{BivariatePolynomial, Polynomial},
 };
 
-use super::Error;
+use super::{Error, HandoffKind};
 
 /// Shareholder identifier.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -86,12 +83,20 @@ where
         &self.vm
     }
 
-    // Returns a secret share for the given recipient.
-    pub fn share(&self, recipient: &D::PrimeField) -> Result<Polynomial<D::PrimeField>> {
-        if recipient.is_zero().into() {
-            return Err(anyhow!("zero-value recipient not allowed"));
-        }
-        Ok(self.bp.eval_x(recipient))
+    /// Returns a secret share for the given shareholder.
+    pub fn derive_bivariate_share(
+        &self,
+        id: Shareholder,
+        kind: HandoffKind,
+    ) -> Result<Polynomial<D::PrimeField>> {
+        let v = D::encode_shareholder(id)?;
+        let p = match kind {
+            HandoffKind::DealingPhase => self.bp.eval_x(&v),
+            HandoffKind::CommitteeChanged => self.bp.eval_y(&v),
+            HandoffKind::CommitteeUnchanged => self.bp.eval_x(&v),
+        };
+
+        Ok(p)
     }
 }
 
@@ -110,6 +115,7 @@ where
 pub type NistP384Dealer = Dealer<NistP384>;
 
 /// NIST P-384 dealer parameters.
+#[derive(Debug)]
 pub struct NistP384;
 
 impl DealerParams for NistP384 {
