@@ -1,12 +1,12 @@
 //! CHURP handler.
 use std::{
     any::Any,
-    num::NonZeroUsize,
-    sync::{Arc, RwLock},
+    cmp,
+    collections::HashMap,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::Result;
-use lru::LruCache;
 use p256::elliptic_curve::{group::GroupEncoding, Group};
 use rand::rngs::OsRng;
 use sp800_185::KMac;
@@ -49,8 +49,14 @@ const APPLICATION_REQUEST_SIGNATURE_CONTEXT: &[u8] =
 const CHECKSUM_VERIFICATION_MATRIX_CUSTOM: &[u8] =
     b"oasis-core/keymanager/churp: verification matrix";
 
-/// The maximum number of CHURP dealers kept in the cache.
-const DEALERS_CACHE_SIZE: usize = 10;
+/// Data associated with a handoff.
+struct HandoffData {
+    /// The epoch of the handoff.
+    epoch: EpochTime,
+
+    /// Opaque object belonging to the handoff.
+    object: Arc<dyn Any + Send + Sync>,
+}
 
 /// Key manager application that implements churn-robust proactive secret
 /// sharing scheme (CHURP).
@@ -68,7 +74,8 @@ pub struct Churp {
     churp_state: ChurpState,
     beacon_state: BeaconState,
 
-    dealers: RwLock<LruCache<(u8, u64), Arc<dyn Any + Send + Sync>>>,
+    /// Dealers of bivariate shares for the next handoff, one per scheme.
+    dealers: Mutex<HashMap<u8, HandoffData>>,
 }
 
 impl Churp {
@@ -84,9 +91,7 @@ impl Churp {
         let churp_state = ChurpState::new(consensus_verifier.clone());
         let beacon_state = BeaconState::new(consensus_verifier.clone());
 
-        let dealers = RwLock::new(LruCache::new(
-            NonZeroUsize::new(DEALERS_CACHE_SIZE).unwrap(),
-        ));
+        let dealers = Mutex::new(HashMap::new());
 
         Self {
             signer,
@@ -186,6 +191,16 @@ impl Churp {
         })
     }
 
+    /// Returns the dealer for the specified scheme and handoff epoch.
+    fn get_dealer<D>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Dealer<D>>>
+    where
+        D: DealerParams + 'static,
+    {
+        self._get_or_create_dealer(churp_id, epoch, None, None)
+    }
+
+    /// Returns the dealer for the specified scheme and handoff epoch.
+    /// If the dealer doesn't exist, a new one is created.
     fn get_or_create_dealer<D>(
         &self,
         churp_id: u8,
@@ -196,19 +211,39 @@ impl Churp {
     where
         D: DealerParams + 'static,
     {
-        // Check the memory first.
-        let key = (churp_id, epoch);
-        let mut dealers = self.dealers.write().unwrap();
+        self._get_or_create_dealer(churp_id, epoch, Some(threshold), Some(dealing_phase))
+    }
 
-        if let Some(dealer) = dealers.get(&key) {
-            // Downcasting should never fail because the consensus ensures that
-            // the group ID cannot change.
-            let dealer = dealer
-                .clone()
-                .downcast::<Dealer<D>>()
-                .or(Err(Error::DealerMismatch))?;
+    fn _get_or_create_dealer<D>(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        threshold: Option<u8>,
+        dealing_phase: Option<bool>,
+    ) -> Result<Arc<Dealer<D>>>
+    where
+        D: DealerParams + 'static,
+    {
+        // Check the memory first. Make sure to lock the dealers so that we
+        // don't create two dealers for the same handoff.
+        let mut dealers = self.dealers.lock().unwrap();
 
-            return Ok(dealer);
+        if let Some(data) = dealers.get(&churp_id) {
+            match epoch.cmp(&data.epoch) {
+                cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
+                cmp::Ordering::Equal => {
+                    // Downcasting should never fail because the consensus ensures that
+                    // the group ID cannot change.
+                    let dealer = data
+                        .object
+                        .clone()
+                        .downcast::<Dealer<D>>()
+                        .or(Err(Error::DealerMismatch))?;
+
+                    return Ok(dealer);
+                }
+                cmp::Ordering::Greater => (),
+            }
         }
 
         // Check the local storage to ensure that only one secret bivariate
@@ -216,14 +251,8 @@ impl Churp {
         // host has cleared the storage.
         let polynomial = self
             .storage
-            .load_bivariate_polynomial::<D::PrimeField>(churp_id, epoch);
-        let polynomial = match polynomial {
-            Ok(polynomial) => Ok(polynomial),
-            Err(err) => match err.downcast_ref::<Error>() {
-                Some(Error::InvalidBivariatePolynomial) => Ok(None), // Ignore previous handoffs.
-                _ => Err(err),
-            },
-        }?;
+            .load_bivariate_polynomial::<D::PrimeField>(churp_id, epoch)
+            .or_else(|err| ignore_error(err, Error::InvalidBivariatePolynomial))?; // Ignore previous dealers.
 
         let dealer = match polynomial {
             Some(bp) => {
@@ -234,6 +263,10 @@ impl Churp {
                 Dealer::from(bp)
             }
             None => {
+                // Skip dealer creation if not needed.
+                let threshold = threshold.ok_or(Error::DealerNotFound)?;
+                let dealing_phase = dealing_phase.ok_or(Error::DealerNotFound)?;
+
                 // The local storage is either empty or contains a polynomial
                 // from another handoff. It's time to prepare a new one.
                 //
@@ -252,11 +285,31 @@ impl Churp {
             }
         };
 
-        // Keep the most recent dealers in memory.
+        // Create a new dealer.
         let dealer = Arc::new(dealer);
-        dealers.put(key, dealer.clone());
+        let data = HandoffData {
+            epoch,
+            object: dealer.clone(),
+        };
+        dealers.insert(churp_id, data);
 
         Ok(dealer)
+    }
+
+    /// Removes the dealer for the specified scheme if the dealer belongs
+    /// to a handoff that happened at or before the given epoch.
+    fn remove_dealer(&self, churp_id: u8, max_epoch: EpochTime) {
+        let mut dealers = self.dealers.lock().unwrap();
+        let data = match dealers.get(&churp_id) {
+            Some(data) => data,
+            None => return,
+        };
+
+        if data.epoch > max_epoch {
+            return;
+        }
+
+        dealers.remove(&churp_id);
     }
 
     /// Computes the checksum of the verification matrix.
@@ -286,5 +339,13 @@ impl Churp {
         f.update(&epoch.to_le_bytes());
         f.finalize(&mut checksum);
         Hash(checksum)
+    }
+}
+
+/// Replaces the given error with `Ok(None)`.
+fn ignore_error<T>(err: anyhow::Error, ignore: Error) -> Result<Option<T>> {
+    match err.downcast_ref::<Error>() {
+        Some(error) if error == &ignore => Ok(None),
+        _ => Err(err),
     }
 }

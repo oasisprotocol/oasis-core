@@ -1,7 +1,7 @@
 //! CHURP errors.
 
 /// CHURP error.
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum Error {
     #[error("application submitted")]
     ApplicationsSubmitted,
@@ -11,6 +11,8 @@ pub enum Error {
     BivariatePolynomialDecodingFailed,
     #[error("dealer mismatch")]
     DealerMismatch,
+    #[error("dealer not found")]
+    DealerNotFound,
     #[error("handoffs disabled")]
     HandoffsDisabled,
     #[error("handoff mismatch")]
@@ -19,6 +21,8 @@ pub enum Error {
     InvalidBivariatePolynomial,
     #[error("invalid data")]
     InvalidData,
+    #[error("invalid handoff")]
+    InvalidHandoff,
     #[error("invalid secret share")]
     InvalidSecretShare,
     #[error("policy rollback")]
