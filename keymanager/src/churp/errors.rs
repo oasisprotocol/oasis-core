@@ -17,6 +17,8 @@ pub enum Error {
     InvalidBivariatePolynomial,
     #[error("invalid data")]
     InvalidData,
+    #[error("policy rollback")]
+    PolicyRollback,
     #[error("runtime mismatch")]
     RuntimeMismatch,
     #[error("status not published")]
