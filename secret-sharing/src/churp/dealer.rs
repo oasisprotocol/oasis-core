@@ -13,6 +13,10 @@ use crate::vss::{
     polynomial::{BivariatePolynomial, Polynomial},
 };
 
+/// Shareholder identifier.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct Shareholder(pub [u8; 32]);
+
 /// Dealer parameters.
 pub trait DealerParams {
     /// A prime field used for constructing the bivariate polynomial.
@@ -22,7 +26,7 @@ pub trait DealerParams {
     type Group: Group<Scalar = Self::PrimeField> + GroupEncoding;
 
     // Maps input data to an element of the prime field.
-    fn encode(data: [u8; 32]) -> Option<Self::PrimeField>;
+    fn encode(id: Shareholder) -> Option<Self::PrimeField>;
 }
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
@@ -94,9 +98,9 @@ impl DealerParams for NistP384 {
     type PrimeField = p384::Scalar;
     type Group = p384::ProjectivePoint;
 
-    fn encode(data: [u8; 32]) -> Option<Self::PrimeField> {
+    fn encode(id: Shareholder) -> Option<Self::PrimeField> {
         let mut bytes = [0u8; 48];
-        bytes[16..].copy_from_slice(&data);
+        bytes[16..].copy_from_slice(&id.0);
         p384::Scalar::from_slice(&bytes).ok()
     }
 }
@@ -105,7 +109,7 @@ impl DealerParams for NistP384 {
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{BivariatePolynomial, DealerParams, NistP384, NistP384Dealer};
+    use super::{BivariatePolynomial, DealerParams, NistP384, NistP384Dealer, Shareholder};
 
     #[test]
     fn test_new() {
@@ -129,13 +133,14 @@ mod tests {
 
     #[test]
     fn test_encode() {
-        let zero = NistP384::encode([0; 32]);
+        let id = [0; 32];
+        let zero = NistP384::encode(Shareholder(id));
         assert_eq!(zero, Some(p384::Scalar::ZERO));
 
-        let mut data = [0; 32];
-        data[30] = 3;
-        data[31] = 232;
-        let thousand = NistP384::encode(data);
+        let mut id = [0; 32];
+        id[30] = 3;
+        id[31] = 232;
+        let thousand = NistP384::encode(Shareholder(id));
         assert_eq!(thousand, Some(p384::Scalar::from_u64(1000)));
     }
 }
