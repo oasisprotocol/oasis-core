@@ -65,7 +65,7 @@ where
 
     /// Creates a new dealer from the given bivariate polynomial.
     pub fn from(bp: BivariatePolynomial<D::PrimeField>) -> Self {
-        let vm = VerificationMatrix::new(&bp);
+        let vm = VerificationMatrix::from(&bp);
         Self { bp, vm }
     }
 
