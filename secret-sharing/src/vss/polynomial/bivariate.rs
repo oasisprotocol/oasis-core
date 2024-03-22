@@ -98,7 +98,7 @@ where
     /// Returns true if and only if the coefficient `b_{0,0}` of the constant
     /// term is zero.
     pub fn is_zero_hole(&self) -> bool {
-        self.b[0][0] == Fp::ZERO
+        self.b[0][0].is_zero().into()
     }
 
     /// Returns the byte representation of the bivariate polynomial.
