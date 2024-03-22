@@ -11,6 +11,7 @@ anyhow = "1.0"
 group = "0.13.0"
 p384 = { version = "0.13.0" }
 rand_core = "0.6.4"
+thiserror = "1.0"
 
 # Fuzzing.
 honggfuzz = "0.5.55"
