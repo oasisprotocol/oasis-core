@@ -52,23 +52,34 @@ impl<D> Dealer<D>
 where
     D: DealerParams,
 {
+    /// Creates a new dealer.
+    pub fn new(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Self {
+        let dx = threshold.saturating_sub(1); // Handle threshold 0 as 1.
+        let dy = 2 * dx;
+
+        match dealing_phase {
+            true => Dealer::random(dx, dy, rng),
+            false => Dealer::zero_hole(dx, dy, rng),
+        }
+    }
+
     /// Creates a new dealer from the given bivariate polynomial.
-    pub fn new(bp: BivariatePolynomial<D::PrimeField>) -> Self {
+    pub fn from(bp: BivariatePolynomial<D::PrimeField>) -> Self {
         let vm = VerificationMatrix::new(&bp);
         Self { bp, vm }
     }
 
     /// Creates a new dealer with a random bivariate polynomial.
-    pub fn random(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
+    fn random(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
         let bp = BivariatePolynomial::random(dx, dy, rng);
-        Self::new(bp)
+        Self::from(bp)
     }
 
     /// Creates a new dealer with a random zero-hole bivariate polynomial.
-    pub fn zero_hole(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
+    fn zero_hole(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
         let mut bp = BivariatePolynomial::random(dx, dy, rng);
         bp.to_zero_hole();
-        Self::new(bp)
+        Self::from(bp)
     }
 
     /// Returns the secret bivariate polynomial.
@@ -121,8 +132,33 @@ mod tests {
 
     #[test]
     fn test_new() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+
+        let threshold = 3;
+        for dealing_phase in vec![true, false] {
+            let dealer = NistP384Dealer::new(threshold, dealing_phase, &mut rng);
+            assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
+            assert_eq!(dealer.bivariate_polynomial().deg_x, 2);
+            assert_eq!(dealer.bivariate_polynomial().deg_y, 4);
+            assert_eq!(dealer.verification_matrix().rows, 3);
+            assert_eq!(dealer.verification_matrix().cols, 5);
+        }
+
+        let threshold = 0;
+        for dealing_phase in vec![true, false] {
+            let dealer = NistP384Dealer::new(threshold, dealing_phase, &mut rng);
+            assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
+            assert_eq!(dealer.bivariate_polynomial().deg_x, 0);
+            assert_eq!(dealer.bivariate_polynomial().deg_y, 0);
+            assert_eq!(dealer.verification_matrix().rows, 1);
+            assert_eq!(dealer.verification_matrix().cols, 1);
+        }
+    }
+
+    #[test]
+    fn test_from() {
         let bp = BivariatePolynomial::zero(2, 3);
-        let _ = NistP384Dealer::new(bp);
+        let _ = NistP384Dealer::from(bp);
     }
 
     #[test]
