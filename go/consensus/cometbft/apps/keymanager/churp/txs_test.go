@@ -531,7 +531,7 @@ func (s *TxTestSuite) TestApply() {
 					ID:        0,
 					RuntimeID: s.keymanagerRuntimes[0].ID,
 				},
-				Handoff: 100,
+				Epoch: 100,
 			},
 		}
 		err = s.ext.apply(s.txCtx, &req)
@@ -545,7 +545,7 @@ func (s *TxTestSuite) TestApply() {
 				ID:        0,
 				RuntimeID: s.keymanagerRuntimes[0].ID,
 			},
-			Handoff:  1,
+			Epoch:    1,
 			Checksum: hash.Hash{1, 2, 3},
 		},
 		Signature: signature.RawSignature{},

@@ -392,7 +392,7 @@ func (s *submissionScheduler) trySubmitApplication(ctx context.Context, churpID 
 			ID:        churpID,
 			RuntimeID: s.kmWorker.runtimeID,
 		},
-		Handoff: handoff,
+		Epoch: handoff,
 	}
 	var rsp churp.SignedApplicationRequest
 	if err := s.kmWorker.callEnclaveLocal(ctx, churp.RPCMethodInit, req, &rsp); err != nil {

@@ -126,7 +126,7 @@ impl Churp {
         if req.runtime_id != self.runtime_id {
             return Err(Error::RuntimeMismatch.into());
         }
-        if status.next_handoff != req.handoff {
+        if status.next_handoff != req.epoch {
             return Err(Error::HandoffMismatch.into());
         }
         if status.next_handoff == HANDOFFS_DISABLED {
@@ -155,25 +155,24 @@ impl Churp {
     fn do_init<D>(
         &self,
         churp_id: u8,
-        handoff: EpochTime,
+        epoch: EpochTime,
         threshold: u8,
         dealing_phase: bool,
     ) -> Result<SignedApplicationRequest>
     where
         D: DealerParams + 'static,
     {
-        let dealer = self.get_or_create_dealer::<D>(churp_id, handoff, threshold, dealing_phase)?;
+        let dealer = self.get_or_create_dealer::<D>(churp_id, epoch, threshold, dealing_phase)?;
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
-        let checksum =
-            Self::checksum_verification_matrix(matrix, self.runtime_id, churp_id, handoff);
+        let checksum = Self::checksum_verification_matrix(matrix, self.runtime_id, churp_id, epoch);
 
         // Prepare response and sign it with RAK.
         let application = ApplicationRequest {
             id: churp_id,
             runtime_id: self.runtime_id,
-            handoff,
+            epoch,
             checksum,
         };
         let body = cbor::to_vec(application.clone());
@@ -264,7 +263,7 @@ impl Churp {
         matrix: &VerificationMatrix<G>,
         runtime_id: Namespace,
         churp_id: u8,
-        handoff: EpochTime,
+        epoch: EpochTime,
     ) -> Hash
     where
         G: Group + GroupEncoding,
@@ -273,7 +272,7 @@ impl Churp {
         let mut f = KMac::new_kmac256(&matrix.to_bytes(), CHECKSUM_VERIFICATION_MATRIX_CUSTOM);
         f.update(&runtime_id.0);
         f.update(&[churp_id]);
-        f.update(&handoff.to_le_bytes());
+        f.update(&epoch.to_le_bytes());
         f.finalize(&mut checksum);
         Hash(checksum)
     }

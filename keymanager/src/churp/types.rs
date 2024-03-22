@@ -17,7 +17,7 @@ pub struct InitRequest {
     pub runtime_id: Namespace,
 
     /// The epoch of the handoff for which the node would like to register.
-    pub handoff: u64,
+    pub epoch: EpochTime,
 }
 
 /// ApplicationRequest contains node's application to form a new committee.
@@ -30,7 +30,7 @@ pub struct ApplicationRequest {
     pub runtime_id: Namespace,
 
     /// The epoch of the handoff for which the node would like to register.
-    pub handoff: EpochTime,
+    pub epoch: EpochTime,
 
     /// Checksum is the hash of the verification matrix.
     pub checksum: Hash,

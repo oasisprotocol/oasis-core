@@ -226,8 +226,8 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 		return fmt.Errorf("keymanager: churp: submissions closed")
 	}
 
-	if status.NextHandoff != req.Application.Handoff {
-		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Application.Handoff, status.NextHandoff)
+	if status.NextHandoff != req.Application.Epoch {
+		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Application.Epoch, status.NextHandoff)
 	}
 
 	// Allow only one application per round, to ensure the node's
