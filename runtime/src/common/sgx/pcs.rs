@@ -207,8 +207,15 @@ impl QuoteBundle {
             .map_err(|err| Error::VerificationFailed(err.to_string()))?;
 
         // Validate TCB level.
+        // XXX: We reuse the IAS specific variable (OASIS_UNSAFE_LAX_AVR_VERIFY) to avoid having
+        // an additional environment variable. Rename the variable when IAS support is removed.
+        let tcb_lax_verify = option_env!("OASIS_UNSAFE_LAX_AVR_VERIFY").is_some();
         match verifier.tcb_level.ok_or(Error::TCBMismatch)?.status {
             TCBStatus::UpToDate | TCBStatus::SWHardeningNeeded => {}
+            TCBStatus::OutOfDate
+            | TCBStatus::ConfigurationNeeded
+            | TCBStatus::OutOfDateConfigurationNeeded
+                if tcb_lax_verify => {}
             _ => {
                 return Err(Error::TCBOutOfDate);
             }

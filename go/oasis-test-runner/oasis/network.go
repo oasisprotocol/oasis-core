@@ -665,6 +665,11 @@ func (net *Network) startOasisNode(
 		cfg.Consensus.UpgradeStopDelay = 10 * time.Second
 
 		extraArgs = extraArgs.debugAllowDebugEnclaves()
+		// XXX: We reuse the IAS specific variable (OASIS_UNSAFE_LAX_AVR_VERIFY) to avoid having
+		// an additional environment variable. Rename the variable when IAS support is removed.
+		if os.Getenv("OASIS_UNSAFE_LAX_AVR_VERIFY") != "" {
+			extraArgs = extraArgs.debugTCBLaxVerify()
+		}
 	} else {
 		baseArgs = append(baseArgs, "--genesis.file", net.GenesisPath())
 	}
