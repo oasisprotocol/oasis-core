@@ -13,6 +13,8 @@ use crate::vss::{
     polynomial::{BivariatePolynomial, Polynomial},
 };
 
+use super::Error;
+
 /// Shareholder identifier.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Shareholder(pub [u8; 32]);
@@ -25,8 +27,8 @@ pub trait DealerParams {
     /// A group used for constructing the verification matrix.
     type Group: Group<Scalar = Self::PrimeField> + GroupEncoding;
 
-    // Maps input data to an element of the prime field.
-    fn encode(id: Shareholder) -> Option<Self::PrimeField>;
+    /// Maps given shareholder ID to a non-zero element of the prime field.
+    fn encode(id: Shareholder) -> Result<Self::PrimeField>;
 }
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
@@ -98,10 +100,16 @@ impl DealerParams for NistP384 {
     type PrimeField = p384::Scalar;
     type Group = p384::ProjectivePoint;
 
-    fn encode(id: Shareholder) -> Option<Self::PrimeField> {
+    fn encode(id: Shareholder) -> Result<Self::PrimeField> {
         let mut bytes = [0u8; 48];
         bytes[16..].copy_from_slice(&id.0);
-        p384::Scalar::from_slice(&bytes).ok()
+
+        let s = p384::Scalar::from_slice(&bytes).or(Err(Error::ShareholderEncodingFailed))?;
+        if s.is_zero().into() {
+            return Err(Error::ZeroValueShareholder.into());
+        }
+
+        Ok(s)
     }
 }
 
@@ -109,7 +117,7 @@ impl DealerParams for NistP384 {
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{BivariatePolynomial, DealerParams, NistP384, NistP384Dealer, Shareholder};
+    use super::{BivariatePolynomial, DealerParams, Error, NistP384, NistP384Dealer, Shareholder};
 
     #[test]
     fn test_new() {
@@ -135,12 +143,17 @@ mod tests {
     fn test_encode() {
         let id = [0; 32];
         let zero = NistP384::encode(Shareholder(id));
-        assert_eq!(zero, Some(p384::Scalar::ZERO));
+        assert!(zero.is_err());
+        assert_eq!(
+            zero.unwrap_err().to_string(),
+            Error::ZeroValueShareholder.to_string()
+        );
 
         let mut id = [0; 32];
         id[30] = 3;
         id[31] = 232;
         let thousand = NistP384::encode(Shareholder(id));
-        assert_eq!(thousand, Some(p384::Scalar::from_u64(1000)));
+        assert!(thousand.is_ok());
+        assert_eq!(thousand.unwrap(), p384::Scalar::from_u64(1000));
     }
 }
