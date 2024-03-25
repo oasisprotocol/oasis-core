@@ -17,7 +17,7 @@ pub trait Dispatcher: Send + Sync {
     ///
     /// # Consensus Layer State Integrity
     ///
-    /// Before this method is invoked, consensus layer state integirty verification is performed.
+    /// Before this method is invoked, consensus layer state integrity verification is performed.
     fn execute_batch(
         &self,
         ctx: Context,
