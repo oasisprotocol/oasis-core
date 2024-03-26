@@ -19,6 +19,7 @@ func (p *ConsensusParameters) SanityCheck() error {
 		return fmt.Errorf("stake threshold must be less than or equal to 100")
 	}
 	// StakeThreshold must be greater than 66.
+	// TODO: Update to 50 after consensus240 upgrade handler is executed.
 	if int64(p.StakeThreshold) <= 66 {
 		return fmt.Errorf("stake threshold must be greater than 66")
 	}

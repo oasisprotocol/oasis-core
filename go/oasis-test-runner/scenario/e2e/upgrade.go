@@ -140,6 +140,18 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 		return fmt.Errorf("key manager CHURP consensus parameters are not default")
 	}
 
+	// Check updated governance parameters.
+	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get governance parameters: %w", err)
+	}
+	if expectedStakeThreshold := uint8(60); govParams.StakeThreshold != expectedStakeThreshold {
+		return fmt.Errorf("governance stake threshold not updated correctly (expected: %d actual: %d)",
+			expectedStakeThreshold,
+			govParams.StakeThreshold,
+		)
+	}
+
 	return nil
 }
 
