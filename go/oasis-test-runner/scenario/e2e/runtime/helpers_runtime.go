@@ -22,6 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
 )
 
@@ -34,6 +35,8 @@ var (
 	KeyManagerRuntimeBinary = "simple-keymanager"
 	// KeyManagerRuntimeUpgradeBinary is the name of the upgraded simple key manager runtime binary.
 	KeyManagerRuntimeUpgradeBinary = "simple-keymanager-upgrade"
+	// ROFLComponentBinary is the name of the ROFL runtime component binary.
+	ROFLComponentBinary = "simple-rofl"
 
 	// KeyValueRuntimeID is the ID of the simple key/value runtime.
 	KeyValueRuntimeID common.Namespace
@@ -372,8 +375,13 @@ func (sc *Scenario) UpgradeComputeRuntimeFixture(f *oasis.NetworkFixture) (int, 
 	// they will be retained.
 	f.Runtimes[idx].ExcludeFromGenesis = true
 	f.Runtimes[idx].Deployments = append(f.Runtimes[idx].Deployments, oasis.DeploymentCfg{
-		Version:  version.Version{Major: 0, Minor: 1, Patch: 0},
-		Binaries: newRuntimeBinaries,
+		Version: version.Version{Major: 0, Minor: 1, Patch: 0},
+		Components: []oasis.ComponentCfg{
+			{
+				Kind:     bundle.ComponentRONL,
+				Binaries: newRuntimeBinaries,
+			},
+		},
 	})
 
 	return idx, nil
@@ -419,8 +427,13 @@ func (sc *Scenario) UpgradeKeyManagerFixture(f *oasis.NetworkFixture) (int, erro
 	newRt.ExcludeFromGenesis = true
 	newRt.Deployments = []oasis.DeploymentCfg{
 		{
-			Version:  version.Version{Major: 0, Minor: 1, Patch: 0},
-			Binaries: newRuntimeBinaries,
+			Version: version.Version{Major: 0, Minor: 1, Patch: 0},
+			Components: []oasis.ComponentCfg{
+				{
+					Kind:     bundle.ComponentRONL,
+					Binaries: newRuntimeBinaries,
+				},
+			},
 		},
 	}
 	f.Runtimes = append(f.Runtimes, newRt)

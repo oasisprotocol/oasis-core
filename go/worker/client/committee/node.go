@@ -14,12 +14,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/transaction"
 	"github.com/oasisprotocol/oasis-core/go/runtime/txpool"
-	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 )
 
@@ -120,7 +120,7 @@ func (n *Node) CheckTx(ctx context.Context, tx []byte) (*protocol.CheckTxResult,
 	return n.commonNode.TxPool.SubmitTx(ctx, tx, &txpool.TransactionMeta{Local: true, Discard: true})
 }
 
-func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte) ([]byte, error) {
+func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte, comp *bundle.ComponentID) ([]byte, error) {
 	hrt := n.commonNode.GetHostedRuntime()
 	if hrt == nil {
 		return nil, api.ErrNoHostedRuntime
@@ -151,6 +151,23 @@ func (n *Node) Query(ctx context.Context, round uint64, method string, args []by
 		return nil, fmt.Errorf("client: failed to get epoch at height %d: %w", annBlk.Height, err)
 	}
 
+	// In case a component is specified, route to correct component.
+	switch comp {
+	case nil:
+		// Just query the runtime as usual.
+	default:
+		// Route query to appropriate component if possible.
+		cr, ok := hrt.(host.CompositeRuntime)
+		if !ok {
+			break
+		}
+		rt, ok := cr.Component(*comp)
+		if !ok {
+			break
+		}
+		hrt = host.NewRichRuntime(rt)
+	}
+
 	return hrt.Query(ctx, annBlk.Block, lb, epoch, maxMessages, method, args)
 }
 
@@ -164,14 +181,7 @@ func (n *Node) checkBlock(ctx context.Context, blk *block.Block, pending map[has
 		return nil
 	}
 
-	ioRoot := storage.Root{
-		Namespace: blk.Header.Namespace,
-		Version:   blk.Header.Round,
-		Type:      storage.RootTypeIO,
-		Hash:      blk.Header.IORoot,
-	}
-
-	tree := transaction.NewTree(n.commonNode.Runtime.Storage(), ioRoot)
+	tree := transaction.NewTree(n.commonNode.Runtime.Storage(), blk.Header.StorageRootIO())
 	defer tree.Close()
 
 	// Check if there's anything interesting in this block.

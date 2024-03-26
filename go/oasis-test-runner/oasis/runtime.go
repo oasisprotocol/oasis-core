@@ -29,10 +29,10 @@ type runtimeCfgSave struct {
 }
 
 type deploymentCfg struct {
-	version   version.Version
-	binaries  map[node.TEEHardware]string
-	mrEnclave *sgx.MrEnclave
-	bundle    *bundle.Bundle
+	version    version.Version
+	components []ComponentCfg
+	mrEnclave  *sgx.MrEnclave
+	bundle     *bundle.Bundle
 }
 
 // Runtime is an Oasis runtime.
@@ -86,9 +86,18 @@ type RuntimeCfg struct { // nolint: maligned
 
 // DeploymentCfg is a deployment configuration.
 type DeploymentCfg struct {
-	Version   version.Version             `json:"version"`
-	ValidFrom beacon.EpochTime            `json:"valid_from"`
-	Binaries  map[node.TEEHardware]string `json:"binaries"`
+	Version    version.Version  `json:"version"`
+	ValidFrom  beacon.EpochTime `json:"valid_from"`
+	Components []ComponentCfg   `json:"components"`
+
+	// DeprecatedBinaries is deprecated, use Components.Binaries instead.
+	DeprecatedBinaries map[node.TEEHardware]string `json:"binaries"`
+}
+
+// ComponentCfg is a runtime component configuration.
+type ComponentCfg struct {
+	Kind     bundle.ComponentKind        `json:"kind"`
+	Binaries map[node.TEEHardware]string `json:"binaries"`
 }
 
 // RuntimePrunerCfg is the pruner configuration for an Oasis runtime.
@@ -199,81 +208,17 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 	if deploymentIndex < 0 || deploymentIndex >= len(rt.cfgSave.deployments) {
 		return nil, fmt.Errorf("invalid deployment index")
 	}
-
 	deployCfg := rt.cfgSave.deployments[deploymentIndex]
-	fn := rt.bundlePath(deploymentIndex)
-	switch _, err := os.Stat(fn); err {
-	case nil:
-		// Skip re-serializing the bundle, and just open it.
-		// This will happen on tests where the network gets restarted.
-		if deployCfg.bundle == nil {
-			var (
-				bnd       *bundle.Bundle
-				mrEnclave *sgx.MrEnclave
-			)
-			if bnd, err = bundle.Open(fn); err != nil {
-				return nil, fmt.Errorf("oasis/runtime: failed to open existing bundle: %w", err)
-			}
-			if rt.teeHardware != node.TEEHardwareInvalid {
-				if mrEnclave, err = bnd.MrEnclave(); err != nil {
-					return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
-				}
 
-				rt.descriptor.Deployments[deploymentIndex].TEE = cbor.Marshal(node.SGXConstraints{
-					Enclaves: []sgx.EnclaveIdentity{
-						{
-							MrEnclave: *mrEnclave,
-							MrSigner:  *rt.mrSigner,
-						},
-					},
-				})
-			}
-			deployCfg.bundle = bnd
-			deployCfg.mrEnclave = mrEnclave
+	// Common function for refreshing the TEE identity of the RONL component.
+	refreshRONLIdentity := func() error {
+		if rt.teeHardware != node.TEEHardwareIntelSGX {
+			return nil
 		}
 
-		return deployCfg.bundle, nil
-	default:
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("oasis/runtime: failed to stat bundle: %w", err)
-		}
-	}
-
-	const (
-		elfBin = "runtime.elf"
-		sgxBin = "runtime.sgx"
-	)
-
-	bnd := &bundle.Bundle{
-		Manifest: &bundle.Manifest{
-			Name:       "test-runtime",
-			ID:         rt.cfgSave.id,
-			Version:    deployCfg.version,
-			Executable: elfBin,
-		},
-	}
-
-	// XXX: Figure out what to do with the binary index at some point.
-	binBuf, err := os.ReadFile(deployCfg.binaries[node.TEEHardwareInvalid])
-	if err != nil {
-		return nil, fmt.Errorf("oasis/runtime: failed to read ELF binary: %w", err)
-	}
-	_ = bnd.Add(elfBin, binBuf)
-
-	var mrEnclave *sgx.MrEnclave
-	if rt.teeHardware != node.TEEHardwareInvalid {
-		binBuf, err = os.ReadFile(deployCfg.binaries[node.TEEHardwareIntelSGX])
+		mrEnclave, err := deployCfg.bundle.MrEnclave(bundle.ComponentID_RONL)
 		if err != nil {
-			return nil, fmt.Errorf("oasis/runtime: failed to read SGX binary: %w", err)
-		}
-		bnd.Manifest.SGX = &bundle.SGXMetadata{
-			Executable: sgxBin,
-		}
-		_ = bnd.Add(sgxBin, binBuf)
-
-		mrEnclave, err = bnd.MrEnclave()
-		if err != nil {
-			return nil, fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
+			return fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 		}
 
 		rt.descriptor.Deployments[deploymentIndex].TEE = cbor.Marshal(node.SGXConstraints{
@@ -284,14 +229,80 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 				},
 			},
 		})
+		deployCfg.mrEnclave = mrEnclave
+		return nil
 	}
 
-	if err = bnd.Write(fn); err != nil {
+	fn := rt.bundlePath(deploymentIndex)
+	switch _, err := os.Stat(fn); err {
+	case nil:
+		// Skip re-serializing the bundle, and just open it.
+		// This will happen on tests where the network gets restarted.
+		if deployCfg.bundle == nil {
+			if deployCfg.bundle, err = bundle.Open(fn); err != nil {
+				return nil, fmt.Errorf("oasis/runtime: failed to open existing bundle: %w", err)
+			}
+
+			if err = refreshRONLIdentity(); err != nil {
+				return nil, err
+			}
+		}
+
+		return deployCfg.bundle, nil
+	default:
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("oasis/runtime: failed to stat bundle: %w", err)
+		}
+	}
+
+	// Prepare bundle.
+	bnd := &bundle.Bundle{
+		Manifest: &bundle.Manifest{
+			Name:    "test-runtime",
+			ID:      rt.cfgSave.id,
+			Version: deployCfg.version,
+		},
+	}
+
+	// Add components.
+	for i, compCfg := range deployCfg.components {
+		elfBin := fmt.Sprintf("component-%d-%s.elf", i, compCfg.Kind)
+		sgxBin := fmt.Sprintf("component-%d-%s.sgx", i, compCfg.Kind)
+
+		binBuf, err := os.ReadFile(compCfg.Binaries[node.TEEHardwareInvalid])
+		if err != nil {
+			return nil, fmt.Errorf("oasis/runtime: failed to read ELF binary: %w", err)
+		}
+		_ = bnd.Add(elfBin, binBuf)
+
+		comp := &bundle.Component{
+			Kind:       compCfg.Kind,
+			Executable: elfBin,
+		}
+
+		if rt.teeHardware == node.TEEHardwareIntelSGX {
+			binBuf, err = os.ReadFile(compCfg.Binaries[node.TEEHardwareIntelSGX])
+			if err != nil {
+				return nil, fmt.Errorf("oasis/runtime: failed to read SGX binary: %w", err)
+			}
+			comp.SGX = &bundle.SGXMetadata{
+				Executable: sgxBin,
+			}
+			_ = bnd.Add(sgxBin, binBuf)
+		}
+
+		bnd.Manifest.Components = append(bnd.Manifest.Components, comp)
+	}
+
+	if err := bnd.Write(fn); err != nil {
 		return nil, fmt.Errorf("oasis/runtime: failed to write bundle: %w", err)
 	}
-
 	deployCfg.bundle = bnd
-	deployCfg.mrEnclave = mrEnclave
+
+	// Update the on-chain runtime descriptor for RONL component.
+	if err := refreshRONLIdentity(); err != nil {
+		return nil, err
+	}
 
 	return bnd, nil
 }
@@ -350,9 +361,18 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 	}
 
 	for _, deployCfg := range cfg.Deployments {
+		var components []ComponentCfg
+		if len(deployCfg.DeprecatedBinaries) > 0 {
+			components = append(components, ComponentCfg{
+				Kind:     bundle.ComponentRONL,
+				Binaries: deployCfg.DeprecatedBinaries,
+			})
+		}
+		components = append(components, deployCfg.Components...)
+
 		rt.cfgSave.deployments = append(rt.cfgSave.deployments, &deploymentCfg{
-			version:  deployCfg.Version,
-			binaries: deployCfg.Binaries,
+			version:    deployCfg.Version,
+			components: components,
 		})
 		rt.descriptor.Deployments = append(rt.descriptor.Deployments, &registry.VersionInfo{
 			Version:   deployCfg.Version,

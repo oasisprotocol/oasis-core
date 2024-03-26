@@ -594,6 +594,18 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64,
 	}
 }
 
+// EndorseCapabilityTEESignatureContext is the signature context used for TEE capability endorsement.
+var EndorseCapabilityTEESignatureContext = signature.NewContext("oasis-core/node: endorse TEE capability")
+
+// EndorsedCapabilityTEE is the endorsed CapabilityTEE structure.
+type EndorsedCapabilityTEE struct {
+	// CapabilityTEE is the TEE capability structure to be endorsed.
+	CapabilityTEE CapabilityTEE `json:"capability_tee"`
+
+	// NodeEndorsement is the node endorsement signature.
+	NodeEndorsement signature.Signature `json:"node_endorsement"`
+}
+
 // String returns a string representation of itself.
 func (n *Node) String() string {
 	return "<Node id=" + n.ID.String() + ">"

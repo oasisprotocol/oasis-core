@@ -153,6 +153,14 @@ type GetKeyValueTx struct {
 	Generation uint64
 }
 
+// KeyExistsTx retrieves the value stored under the given key from the database and verifies that
+// the response (current value) is non-empty.
+type KeyExistsTx struct {
+	Key        string
+	Encrypted  bool
+	Generation uint64
+}
+
 // RemoveKeyValueTx removes the value stored under the given key from the database.
 type RemoveKeyValueTx struct {
 	Key        string

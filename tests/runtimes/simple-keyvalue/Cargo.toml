@@ -29,8 +29,4 @@ simple-keymanager = { path = "../simple-keymanager" }
 anyhow = "1.0"
 thiserror = "1.0"
 byteorder = "1.4.3"
-x25519-dalek = "2.0.1"
 tokio = { version = "1.29.1", features = ["rt"] }
-
-[build-dependencies]
-oasis-core-tools = { path = "../../../tools" }

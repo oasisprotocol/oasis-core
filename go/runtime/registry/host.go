@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -23,7 +22,9 @@ import (
 	consensusResults "github.com/oasisprotocol/oasis-core/go/consensus/api/transaction/results"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
+	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	runtimeKeymanager "github.com/oasisprotocol/oasis-core/go/runtime/keymanager/api"
@@ -81,7 +82,7 @@ func (n *RuntimeHostNode) ProvisionHostedRuntime(ctx context.Context) (host.Rich
 		rtCfg.MessageHandler = msgHandler
 
 		// Provision the runtime.
-		if rts[version], err = provisioner.NewRuntime(rtCfg); err != nil {
+		if rts[version], err = composite.New(rtCfg, provisioner); err != nil {
 			return nil, nil, fmt.Errorf("failed to provision runtime version %s: %w", version, err)
 		}
 	}
@@ -187,7 +188,7 @@ type RuntimeHostHandlerFactory interface {
 	GetRuntime() Runtime
 
 	// NewRuntimeHostHandler creates a new runtime host handler.
-	NewRuntimeHostHandler() protocol.Handler
+	NewRuntimeHostHandler() host.RuntimeHandler
 
 	// NewRuntimeHostNotifier creates a new runtime host notifier.
 	NewRuntimeHostNotifier(ctx context.Context, host host.Runtime) protocol.Notifier
@@ -200,11 +201,6 @@ func NewRuntimeHostNode(factory RuntimeHostHandlerFactory) (*RuntimeHostNode, er
 		runtimeNotify: make(chan struct{}),
 	}, nil
 }
-
-var (
-	errMethodNotSupported   = errors.New("method not supported")
-	errEndpointNotSupported = errors.New("endpoint not supported")
-)
 
 // RuntimeHostHandlerEnvironment is the host environment interface.
 type RuntimeHostHandlerEnvironment interface {
@@ -219,6 +215,9 @@ type RuntimeHostHandlerEnvironment interface {
 
 	// GetLightClient returns the consensus light client.
 	GetLightClient() (consensus.LightClient, error)
+
+	// GetRuntimeRegistry returns the runtime registry.
+	GetRuntimeRegistry() Registry
 }
 
 // RuntimeHostHandler is a runtime host handler suitable for compute runtimes. It provides the
@@ -255,7 +254,7 @@ func (h *runtimeHostHandler) handleHostRPCCall(
 			Node:     &node,
 		}, nil
 	default:
-		return nil, errEndpointNotSupported
+		return nil, fmt.Errorf("endpoint not supported")
 	}
 }
 
@@ -270,13 +269,13 @@ func (h *runtimeHostHandler) handleHostStorageSync(
 		rs = h.runtime.Storage()
 		if rs == nil {
 			// May be unsupported for unmanaged runtimes like the key manager.
-			return nil, errEndpointNotSupported
+			return nil, fmt.Errorf("endpoint not supported")
 		}
 	case protocol.HostStorageEndpointConsensus:
 		// Consensus state storage.
 		rs = h.consensus.State()
 	default:
-		return nil, errEndpointNotSupported
+		return nil, fmt.Errorf("endpoint not supported")
 	}
 
 	var rsp *storage.ProofResponse
@@ -289,7 +288,7 @@ func (h *runtimeHostHandler) handleHostStorageSync(
 	case rq.SyncIterate != nil:
 		rsp, err = rs.SyncIterate(ctx, rq.SyncIterate)
 	default:
-		return nil, errMethodNotSupported
+		return nil, fmt.Errorf("method not supported")
 	}
 	if err != nil {
 		return nil, err
@@ -378,7 +377,7 @@ func (h *runtimeHostHandler) handleHostFetchConsensusEvents(
 			evs = append(evs, &consensusResults.Event{Governance: gev})
 		}
 	default:
-		return nil, errMethodNotSupported
+		return nil, fmt.Errorf("method not supported")
 	}
 	return &protocol.HostFetchConsensusEventsResponse{Events: evs}, nil
 }
@@ -482,6 +481,21 @@ func (h *runtimeHostHandler) handleHostIdentity() (*protocol.HostIdentityRespons
 	}, nil
 }
 
+// Implements host.RuntimeHandler.
+func (h *runtimeHostHandler) NewSubHandler(cr host.CompositeRuntime, component *bundle.Component) (host.RuntimeHandler, error) {
+	switch component.Kind {
+	case bundle.ComponentROFL:
+		return newSubHandlerROFL(h, cr)
+	default:
+		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", component.Kind)
+	}
+}
+
+// Implements host.RuntimeHandler.
+func (h *runtimeHostHandler) AttachRuntime(host.Runtime) error {
+	return nil
+}
+
 // Implements protocol.Handler.
 func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*protocol.Body, error) {
 	var (
@@ -524,7 +538,7 @@ func (h *runtimeHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*pr
 		// Host identity.
 		rsp.HostIdentityResponse, err = h.handleHostIdentity()
 	default:
-		err = errMethodNotSupported
+		err = fmt.Errorf("method not supported")
 	}
 
 	if err != nil {
@@ -998,7 +1012,7 @@ func NewRuntimeHostHandler(
 	env RuntimeHostHandlerEnvironment,
 	runtime Runtime,
 	consensus consensus.Backend,
-) protocol.Handler {
+) host.RuntimeHandler {
 	return &runtimeHostHandler{
 		env:       env,
 		runtime:   runtime,

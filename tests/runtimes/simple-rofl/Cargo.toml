@@ -1,0 +1,27 @@
+[package]
+name = "simple-rofl"
+version = "0.0.0"
+authors = ["Oasis Protocol Foundation <info@oasisprotocol.org>"]
+edition = "2018"
+
+[[bin]]
+name = "simple-rofl"
+
+[package.metadata.fortanix-sgx]
+heap-size = 536870912 # 512 MiB
+stack-size = 2097152
+threads = 26
+
+[dependencies]
+cbor = { version = "0.5.1", package = "oasis-cbor" }
+oasis-core-runtime = { path = "../../../runtime" }
+oasis-core-keymanager = { path = "../../../keymanager" }
+
+anyhow = "1.0"
+async-trait = "0.1.77"
+mbedtls = { version = "0.12.3", features = ["x509"] }
+rand = "0.8.5"
+rustls = { version = "0.22.2", default-features = false }
+rustls-mbedcrypto-provider = { version = "0.0.2" }
+rustls-mbedpki-provider = { version = "0.0.2" }
+tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync"] }

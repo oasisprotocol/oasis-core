@@ -121,17 +121,27 @@ func (h *Header) EncodedHash() hash.Hash {
 // StorageRoots returns the storage roots contained in this header.
 func (h *Header) StorageRoots() []storage.Root {
 	return []storage.Root{
-		{
-			Namespace: h.Namespace,
-			Version:   h.Round,
-			Type:      storage.RootTypeIO,
-			Hash:      h.IORoot,
-		},
-		{
-			Namespace: h.Namespace,
-			Version:   h.Round,
-			Type:      storage.RootTypeState,
-			Hash:      h.StateRoot,
-		},
+		h.StorageRootIO(),
+		h.StorageRootState(),
+	}
+}
+
+// StorageRootIO returns the full IO storage root.
+func (h *Header) StorageRootIO() storage.Root {
+	return storage.Root{
+		Namespace: h.Namespace,
+		Version:   h.Round,
+		Type:      storage.RootTypeIO,
+		Hash:      h.IORoot,
+	}
+}
+
+// StorageRootState returns the full state storage root.
+func (h *Header) StorageRootState() storage.Root {
+	return storage.Root{
+		Namespace: h.Namespace,
+		Version:   h.Round,
+		Type:      storage.RootTypeState,
+		Hash:      h.StateRoot,
 	}
 }

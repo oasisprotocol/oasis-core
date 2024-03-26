@@ -9,6 +9,7 @@ members = [
     # Test runtimes.
     "tests/runtimes/simple-keyvalue",
     "tests/runtimes/simple-keymanager",
+    "tests/runtimes/simple-rofl",
 ]
 resolver = "2"
 

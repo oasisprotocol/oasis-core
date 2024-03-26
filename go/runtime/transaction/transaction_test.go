@@ -26,8 +26,8 @@ func populateTransactions(t *testing.T, tree *Tree) []Transaction {
 			BatchOrder: uint32(i + 1),
 		}
 		newTags := Tags{
-			Tag{Key: []byte("tagA"), Value: []byte("valueA")},
-			Tag{Key: []byte("tagB"), Value: []byte("valueB")},
+			&Tag{Key: []byte("tagA"), Value: []byte("valueA")},
+			&Tag{Key: []byte("tagB"), Value: []byte("valueB")},
 		}
 		err := tree.AddTransaction(context.Background(), newTx, newTags)
 		require.NoError(t, err, "AddTransaction")
@@ -58,7 +58,7 @@ func TestTransaction(t *testing.T) {
 		BatchOrder: 0,
 	}
 	tags := Tags{
-		Tag{Key: []byte("tag1"), Value: []byte("value1")},
+		&Tag{Key: []byte("tag1"), Value: []byte("value1")},
 	}
 	err = tree.AddTransaction(ctx, tx, tags)
 	require.NoError(t, err, "AddTransaction")
@@ -113,22 +113,46 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, err, "GetTransactionMultiple")
 	require.Len(t, matches, 5, "all matched transactions should be returned")
 
-	// Get tags.
-	rtags, err := tree.GetTags(ctx)
-	require.NoError(t, err, "GetTags")
-	require.Len(t, rtags, 1+len(testTxns)*2, "all emitted tags should be there")
+	// Get a single tag.
+	rtags, err := tree.GetTag(ctx, []byte("tag1"))
+	require.NoError(t, err, "GetTag")
+	require.Len(t, rtags, 1)
+	require.EqualValues(t, rtags[0].Key, []byte("tag1"))
+	require.EqualValues(t, rtags[0].Value, []byte("value1"))
+	require.EqualValues(t, rtags[0].TxHash, txHash)
+
+	// Get multiple tags.
+	rtags, err = tree.GetTagMultiple(ctx, [][]byte{[]byte("tag1"), []byte("tagAX"), []byte("tagB")})
+	require.NoError(t, err, "GetTagMultiple")
+	require.Len(t, rtags, 1+len(testTxns), "all matched tags should be returned")
 
 	tagsByTxn := make(map[hash.Hash]Tags)
 	for _, tag := range rtags {
-		txTags := tagsByTxn[tag.TxHash]
-		txTags = append(txTags, tag)
-		tagsByTxn[tag.TxHash] = txTags
+		tagsByTxn[tag.TxHash] = append(tagsByTxn[tag.TxHash], tag)
+	}
+
+	require.Contains(t, tagsByTxn, txHash, "tags should exist")
+	require.Contains(t, tagsByTxn[txHash], &Tag{Key: []byte("tag1"), Value: []byte("value1"), TxHash: txHash})
+
+	for _, checkTx := range testTxns {
+		require.Contains(t, tagsByTxn, checkTx.Hash(), "tags should exist")
+		require.Contains(t, tagsByTxn[checkTx.Hash()], &Tag{Key: []byte("tagB"), Value: []byte("valueB"), TxHash: checkTx.Hash()})
+	}
+
+	// Get all tags.
+	rtags, err = tree.GetTags(ctx)
+	require.NoError(t, err, "GetTags")
+	require.Len(t, rtags, 1+len(testTxns)*2, "all emitted tags should be there")
+
+	tagsByTxn = make(map[hash.Hash]Tags)
+	for _, tag := range rtags {
+		tagsByTxn[tag.TxHash] = append(tagsByTxn[tag.TxHash], tag)
 	}
 
 	for _, checkTx := range testTxns {
 		require.Contains(t, tagsByTxn, checkTx.Hash(), "tags should exist")
-		require.Contains(t, tagsByTxn[checkTx.Hash()], Tag{Key: []byte("tagA"), Value: []byte("valueA"), TxHash: checkTx.Hash()})
-		require.Contains(t, tagsByTxn[checkTx.Hash()], Tag{Key: []byte("tagB"), Value: []byte("valueB"), TxHash: checkTx.Hash()})
+		require.Contains(t, tagsByTxn[checkTx.Hash()], &Tag{Key: []byte("tagA"), Value: []byte("valueA"), TxHash: checkTx.Hash()})
+		require.Contains(t, tagsByTxn[checkTx.Hash()], &Tag{Key: []byte("tagB"), Value: []byte("valueB"), TxHash: checkTx.Hash()})
 	}
 
 	// Get input batch.

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 
 use oasis_core_runtime_loader::Loader;
 #[cfg(target_os = "linux")]
@@ -26,6 +26,11 @@ fn main() {
                 .long("signature")
                 .help("Signature filename"),
         )
+        .arg(
+            Arg::new("allow-network")
+                .long("allow-network")
+                .action(ArgAction::SetTrue),
+        )
         .arg(Arg::new("host-socket").long("host-socket").required(true))
         .get_matches();
 
@@ -43,6 +48,7 @@ fn main() {
     let signature = matches
         .get_one::<String>("signature")
         .map(|sig| sig.as_ref());
+    let allow_network = matches.get_one::<bool>("allow-network").copied().unwrap();
 
     // Create appropriate loader and run the runtime.
     let loader: Box<dyn Loader> = match mode.as_ref() {
@@ -53,6 +59,6 @@ fn main() {
         _ => panic!("Invalid runtime type specified"),
     };
     loader
-        .run(filename, signature, host_socket)
+        .run(filename, signature, host_socket, allow_network)
         .expect("runtime execution failed");
 }

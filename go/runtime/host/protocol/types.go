@@ -12,6 +12,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/quote"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
@@ -70,38 +71,42 @@ type Body struct {
 	Error *Error `json:",omitempty"`
 
 	// Runtime interface.
-	RuntimeInfoRequest                         *RuntimeInfoRequest                        `json:",omitempty"`
-	RuntimeInfoResponse                        *RuntimeInfoResponse                       `json:",omitempty"`
-	RuntimePingRequest                         *Empty                                     `json:",omitempty"`
-	RuntimeShutdownRequest                     *Empty                                     `json:",omitempty"`
-	RuntimeCapabilityTEERakInitRequest         *RuntimeCapabilityTEERakInitRequest        `json:",omitempty"`
-	RuntimeCapabilityTEERakInitResponse        *Empty                                     `json:",omitempty"`
-	RuntimeCapabilityTEERakReportRequest       *Empty                                     `json:",omitempty"`
-	RuntimeCapabilityTEERakReportResponse      *RuntimeCapabilityTEERakReportResponse     `json:",omitempty"`
-	RuntimeCapabilityTEERakAvrRequest          *RuntimeCapabilityTEERakAvrRequest         `json:",omitempty"`
-	RuntimeCapabilityTEERakAvrResponse         *Empty                                     `json:",omitempty"`
-	RuntimeCapabilityTEERakQuoteRequest        *RuntimeCapabilityTEERakQuoteRequest       `json:",omitempty"`
-	RuntimeCapabilityTEERakQuoteResponse       *RuntimeCapabilityTEERakQuoteResponse      `json:",omitempty"`
-	RuntimeRPCCallRequest                      *RuntimeRPCCallRequest                     `json:",omitempty"`
-	RuntimeRPCCallResponse                     *RuntimeRPCCallResponse                    `json:",omitempty"`
-	RuntimeLocalRPCCallRequest                 *RuntimeLocalRPCCallRequest                `json:",omitempty"`
-	RuntimeLocalRPCCallResponse                *RuntimeLocalRPCCallResponse               `json:",omitempty"`
-	RuntimeCheckTxBatchRequest                 *RuntimeCheckTxBatchRequest                `json:",omitempty"`
-	RuntimeCheckTxBatchResponse                *RuntimeCheckTxBatchResponse               `json:",omitempty"`
-	RuntimeExecuteTxBatchRequest               *RuntimeExecuteTxBatchRequest              `json:",omitempty"`
-	RuntimeExecuteTxBatchResponse              *RuntimeExecuteTxBatchResponse             `json:",omitempty"`
-	RuntimeAbortRequest                        *Empty                                     `json:",omitempty"`
-	RuntimeAbortResponse                       *Empty                                     `json:",omitempty"`
-	RuntimeKeyManagerStatusUpdateRequest       *RuntimeKeyManagerStatusUpdateRequest      `json:",omitempty"`
-	RuntimeKeyManagerStatusUpdateResponse      *Empty                                     `json:",omitempty"`
-	RuntimeKeyManagerPolicyUpdateRequest       *RuntimeKeyManagerPolicyUpdateRequest      `json:",omitempty"`
-	RuntimeKeyManagerPolicyUpdateResponse      *Empty                                     `json:",omitempty"`
-	RuntimeKeyManagerQuotePolicyUpdateRequest  *RuntimeKeyManagerQuotePolicyUpdateRequest `json:",omitempty"`
-	RuntimeKeyManagerQuotePolicyUpdateResponse *Empty                                     `json:",omitempty"`
-	RuntimeQueryRequest                        *RuntimeQueryRequest                       `json:",omitempty"`
-	RuntimeQueryResponse                       *RuntimeQueryResponse                      `json:",omitempty"`
-	RuntimeConsensusSyncRequest                *RuntimeConsensusSyncRequest               `json:",omitempty"`
-	RuntimeConsensusSyncResponse               *Empty                                     `json:",omitempty"`
+	RuntimeInfoRequest                            *RuntimeInfoRequest                           `json:",omitempty"`
+	RuntimeInfoResponse                           *RuntimeInfoResponse                          `json:",omitempty"`
+	RuntimePingRequest                            *Empty                                        `json:",omitempty"`
+	RuntimeShutdownRequest                        *Empty                                        `json:",omitempty"`
+	RuntimeCapabilityTEERakInitRequest            *RuntimeCapabilityTEERakInitRequest           `json:",omitempty"`
+	RuntimeCapabilityTEERakInitResponse           *Empty                                        `json:",omitempty"`
+	RuntimeCapabilityTEERakReportRequest          *Empty                                        `json:",omitempty"`
+	RuntimeCapabilityTEERakReportResponse         *RuntimeCapabilityTEERakReportResponse        `json:",omitempty"`
+	RuntimeCapabilityTEERakAvrRequest             *RuntimeCapabilityTEERakAvrRequest            `json:",omitempty"`
+	RuntimeCapabilityTEERakAvrResponse            *Empty                                        `json:",omitempty"`
+	RuntimeCapabilityTEERakQuoteRequest           *RuntimeCapabilityTEERakQuoteRequest          `json:",omitempty"`
+	RuntimeCapabilityTEERakQuoteResponse          *RuntimeCapabilityTEERakQuoteResponse         `json:",omitempty"`
+	RuntimeCapabilityTEEUpdateEndorsementRequest  *RuntimeCapabilityTEEUpdateEndorsementRequest `json:",omitempty"`
+	RuntimeCapabilityTEEUpdateEndorsementResponse *Empty                                        `json:",omitempty"`
+	RuntimeRPCCallRequest                         *RuntimeRPCCallRequest                        `json:",omitempty"`
+	RuntimeRPCCallResponse                        *RuntimeRPCCallResponse                       `json:",omitempty"`
+	RuntimeLocalRPCCallRequest                    *RuntimeLocalRPCCallRequest                   `json:",omitempty"`
+	RuntimeLocalRPCCallResponse                   *RuntimeLocalRPCCallResponse                  `json:",omitempty"`
+	RuntimeCheckTxBatchRequest                    *RuntimeCheckTxBatchRequest                   `json:",omitempty"`
+	RuntimeCheckTxBatchResponse                   *RuntimeCheckTxBatchResponse                  `json:",omitempty"`
+	RuntimeExecuteTxBatchRequest                  *RuntimeExecuteTxBatchRequest                 `json:",omitempty"`
+	RuntimeExecuteTxBatchResponse                 *RuntimeExecuteTxBatchResponse                `json:",omitempty"`
+	RuntimeAbortRequest                           *Empty                                        `json:",omitempty"`
+	RuntimeAbortResponse                          *Empty                                        `json:",omitempty"`
+	RuntimeKeyManagerStatusUpdateRequest          *RuntimeKeyManagerStatusUpdateRequest         `json:",omitempty"`
+	RuntimeKeyManagerStatusUpdateResponse         *Empty                                        `json:",omitempty"`
+	RuntimeKeyManagerPolicyUpdateRequest          *RuntimeKeyManagerPolicyUpdateRequest         `json:",omitempty"`
+	RuntimeKeyManagerPolicyUpdateResponse         *Empty                                        `json:",omitempty"`
+	RuntimeKeyManagerQuotePolicyUpdateRequest     *RuntimeKeyManagerQuotePolicyUpdateRequest    `json:",omitempty"`
+	RuntimeKeyManagerQuotePolicyUpdateResponse    *Empty                                        `json:",omitempty"`
+	RuntimeQueryRequest                           *RuntimeQueryRequest                          `json:",omitempty"`
+	RuntimeQueryResponse                          *RuntimeQueryResponse                         `json:",omitempty"`
+	RuntimeConsensusSyncRequest                   *RuntimeConsensusSyncRequest                  `json:",omitempty"`
+	RuntimeConsensusSyncResponse                  *Empty                                        `json:",omitempty"`
+	RuntimeNotifyRequest                          *RuntimeNotifyRequest                         `json:",omitempty"`
+	RuntimeNotifyResponse                         *Empty                                        `json:",omitempty"`
 
 	// Host interface.
 	HostRPCCallRequest               *HostRPCCallRequest               `json:",omitempty"`
@@ -126,6 +131,10 @@ type Body struct {
 	HostProveFreshnessResponse       *HostProveFreshnessResponse       `json:",omitempty"`
 	HostIdentityRequest              *HostIdentityRequest              `json:",omitempty"`
 	HostIdentityResponse             *HostIdentityResponse             `json:",omitempty"`
+	HostSubmitTxRequest              *HostSubmitTxRequest              `json:",omitempty"`
+	HostSubmitTxResponse             *HostSubmitTxResponse             `json:",omitempty"`
+	HostRegisterNotifyRequest        *HostRegisterNotifyRequest        `json:",omitempty"`
+	HostRegisterNotifyResponse       *Empty                            `json:",omitempty"`
 }
 
 // Type returns the message type by determining the name of the first non-nil member.
@@ -251,6 +260,13 @@ type RuntimeCapabilityTEERakQuoteResponse struct {
 
 	// Signature is the signature of the attestation by the enclave.
 	Signature signature.RawSignature `json:"signature"`
+}
+
+// RuntimeCapabilityTEEUpdateEndorsementRequest is the runtime component TEE capability endorsement
+// update message body.
+type RuntimeCapabilityTEEUpdateEndorsementRequest struct {
+	// EndorsedCapabilityTEE is an endorsed TEE capability.
+	EndorsedCapabilityTEE node.EndorsedCapabilityTEE `json:"ect"` //nolint: misspell
 }
 
 // RuntimeRPCCallRequest is a worker RPC call request message body.

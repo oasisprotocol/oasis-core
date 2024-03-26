@@ -311,6 +311,20 @@ func (r *RawSignature) UnmarshalPEM(data []byte) error {
 	return nil
 }
 
+// SignRaw generates a signature with the private key over the context and message.
+func SignRaw(signer Signer, context Context, message []byte) (*RawSignature, error) {
+	signature, err := signer.ContextSign(context, message)
+	if err != nil {
+		return nil, err
+	}
+
+	var rawSignature RawSignature
+	if err = rawSignature.UnmarshalBinary(signature); err != nil {
+		return nil, err
+	}
+	return &rawSignature, nil
+}
+
 // Signature is a signature, bundled with the signing public key.
 type Signature struct {
 	// PublicKey is the public key that produced the signature.
@@ -331,20 +345,14 @@ func (s *Signature) Equal(cmp *Signature) bool {
 	return true
 }
 
-// Sign generates a signature with the private key over the context and
-// message.
+// Sign generates a signature with the private key over the context and message.
 func Sign(signer Signer, context Context, message []byte) (*Signature, error) {
-	signature, err := signer.ContextSign(context, message)
+	rawSignature, err := SignRaw(signer, context, message)
 	if err != nil {
 		return nil, err
 	}
 
-	var rawSignature RawSignature
-	if err = rawSignature.UnmarshalBinary(signature); err != nil {
-		return nil, err
-	}
-
-	return &Signature{PublicKey: signer.Public(), Signature: rawSignature}, nil
+	return &Signature{PublicKey: signer.Public(), Signature: *rawSignature}, nil
 }
 
 // Verify returns true iff the signature is valid over the given

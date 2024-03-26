@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
-	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
@@ -54,34 +53,39 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 		return nil, err
 	}
 
-	// Remove existing compute runtimes from fixture, remember RuntimeID and
-	// binary from the first one.
-	var id common.Namespace
-	var runtimeBinaries map[node.TEEHardware]string
-	var rts []oasis.RuntimeFixture
+	// Remove existing compute runtimes from fixture, remember runtime ID and primary deployment
+	// from the first one.
+	var (
+		runtimeID         common.Namespace
+		runtimeDeployment *oasis.DeploymentCfg
+		rts               []oasis.RuntimeFixture
+	)
 	for _, rt := range f.Runtimes {
 		if rt.Kind == registry.KindCompute {
-			if runtimeBinaries == nil {
-				copy(id[:], rt.ID[:])
-				runtimeBinaries = rt.Deployments[0].Binaries
+			if len(rt.Deployments) == 0 {
+				continue
 			}
+			if runtimeDeployment != nil {
+				continue
+			}
+
+			copy(runtimeID[:], rt.ID[:])
+			runtimeDeployment = &rt.Deployments[0]
 		} else {
 			rts = append(rts, rt)
 		}
 	}
 	f.Runtimes = rts
 
-	// Avoid unexpected blocks.
-	f.Network.SetMockEpoch()
-
 	// Add some more consecutive runtime IDs with the same binary.
 	numComputeRuntimes, _ := sc.Flags.GetInt(cfgNumComputeRuntimes)
 	executorGroupSize, _ := sc.Flags.GetUint16(cfgExecutorGroupSize)
 	for i := 1; i <= numComputeRuntimes; i++ {
 		// Increase LSB by 1.
-		id[len(id)-1]++
+		runtimeID[len(runtimeID)-1]++
+
 		newRtFixture := oasis.RuntimeFixture{
-			ID:         id,
+			ID:         runtimeID,
 			Kind:       registry.KindCompute,
 			Entity:     0,
 			Keymanager: 0,
@@ -109,11 +113,7 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 				},
 			},
 			GovernanceModel: registry.GovernanceEntity,
-			Deployments: []oasis.DeploymentCfg{
-				{
-					Binaries: runtimeBinaries,
-				},
-			},
+			Deployments:     []oasis.DeploymentCfg{*runtimeDeployment}, // Copy deployment.
 		}
 
 		f.Runtimes = append(f.Runtimes, newRtFixture)
@@ -121,9 +121,10 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	var computeRuntimes []int
 	for id, rt := range f.Runtimes {
-		if rt.Kind == registry.KindCompute {
-			computeRuntimes = append(computeRuntimes, id)
+		if rt.Kind != registry.KindCompute {
+			continue
 		}
+		computeRuntimes = append(computeRuntimes, id)
 	}
 	// Use numComputeWorkers compute worker fixtures.
 	numComputeWorkers, _ := sc.Flags.GetInt(cfgNumComputeWorkers)
@@ -143,17 +144,8 @@ func (sc *multipleRuntimesImpl) Fixture() (*oasis.NetworkFixture, error) {
 }
 
 func (sc *multipleRuntimesImpl) Run(ctx context.Context, _ *env.Env) error {
-	if err := sc.Net.Start(); err != nil {
-		return err
-	}
-
-	fixture, err := sc.Fixture()
-	if err != nil {
-		return err
-	}
-
-	// Wait for the nodes.
-	if _, err = sc.initialEpochTransitions(ctx, fixture); err != nil {
+	// Start the network.
+	if err := sc.StartNetworkAndWaitForClientSync(ctx); err != nil {
 		return err
 	}
 
@@ -161,16 +153,18 @@ func (sc *multipleRuntimesImpl) Run(ctx context.Context, _ *env.Env) error {
 	numComputeRuntimeTxns, _ := sc.Flags.GetInt(cfgNumComputeRuntimeTxns)
 	for _, r := range sc.Net.Runtimes() {
 		rt := r.ToRuntimeDescriptor()
-		if rt.Kind == registry.KindCompute {
-			for i := 0; i < numComputeRuntimeTxns; i++ {
-				sc.Logger.Info("submitting transaction to runtime",
-					"seq", i,
-					"runtime_id", rt.ID,
-				)
+		if rt.Kind != registry.KindCompute {
+			continue
+		}
 
-				if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, uint64(i), "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), false, 0); err != nil {
-					return err
-				}
+		for i := 0; i < numComputeRuntimeTxns; i++ {
+			sc.Logger.Info("submitting transaction to runtime",
+				"seq", i,
+				"runtime_id", rt.ID,
+			)
+
+			if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, rt.ID, uint64(i), "hello", fmt.Sprintf("world at iteration %d from %s", i, rt.ID), false, 0); err != nil {
+				return err
 			}
 		}
 	}

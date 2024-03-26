@@ -42,6 +42,9 @@ type Config struct {
 	// SandboxBinaryPath is the path to the sandbox support binary.
 	SandboxBinaryPath string
 
+	// AllowNetwork specifies whether network access should be allowed.
+	AllowNetwork bool
+
 	extraFiles []*os.File
 }
 

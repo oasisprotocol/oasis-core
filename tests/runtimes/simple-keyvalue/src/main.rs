@@ -411,6 +411,7 @@ pub fn main_with_version(version: Version) {
 
         PostInitState {
             txn_dispatcher: Some(Box::new(dispatcher)),
+            ..Default::default()
         }
     };
 

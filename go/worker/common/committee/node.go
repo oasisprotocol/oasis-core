@@ -145,7 +145,8 @@ type Node struct {
 
 	ChainContext string
 
-	Runtime runtimeRegistry.Runtime
+	Runtime         runtimeRegistry.Runtime
+	RuntimeRegistry runtimeRegistry.Registry
 
 	HostNode control.NodeController
 
@@ -818,6 +819,7 @@ func NewNode(
 	chainContext string,
 	hostNode control.NodeController,
 	runtime runtimeRegistry.Runtime,
+	rtRegistry runtimeRegistry.Registry,
 	identity *identity.Identity,
 	keymanager keymanager.Backend,
 	consensus consensus.Backend,
@@ -841,22 +843,23 @@ func NewNode(
 	txTopic := protocol.NewTopicKindTxID(chainContext, runtime.ID())
 
 	n := &Node{
-		ChainContext: chainContext,
-		HostNode:     hostNode,
-		Runtime:      runtime,
-		Identity:     identity,
-		KeyManager:   keymanager,
-		Consensus:    consensus,
-		LightClient:  lightClient,
-		Group:        group,
-		P2P:          p2pHost,
-		txTopic:      txTopic,
-		ctx:          ctx,
-		cancelCtx:    cancel,
-		stopCh:       make(chan struct{}),
-		quitCh:       make(chan struct{}),
-		initCh:       make(chan struct{}),
-		logger:       logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
+		ChainContext:    chainContext,
+		HostNode:        hostNode,
+		Runtime:         runtime,
+		RuntimeRegistry: rtRegistry,
+		Identity:        identity,
+		KeyManager:      keymanager,
+		Consensus:       consensus,
+		LightClient:     lightClient,
+		Group:           group,
+		P2P:             p2pHost,
+		txTopic:         txTopic,
+		ctx:             ctx,
+		cancelCtx:       cancel,
+		stopCh:          make(chan struct{}),
+		quitCh:          make(chan struct{}),
+		initCh:          make(chan struct{}),
+		logger:          logging.GetLogger("worker/common/committee").With("runtime_id", runtime.ID()),
 	}
 
 	// Prepare the key manager client wrapper.
