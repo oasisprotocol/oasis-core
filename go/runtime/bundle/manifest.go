@@ -25,9 +25,11 @@ type Manifest struct {
 	Version version.Version `json:"version,omitempty"`
 
 	// Executable is the name of the runtime ELF executable file.
-	Executable string `json:"executable"`
+	// NOTE: This may go away in the future, use `Components` instead.
+	Executable string `json:"executable,omitempty"`
 
 	// SGX is the SGX specific manifest metadata if any.
+	// NOTE: This may go away in the future, use `Components` instead.
 	SGX *SGXMetadata `json:"sgx,omitempty"`
 
 	// Components are the additional runtime components.
@@ -43,8 +45,7 @@ func (m *Manifest) Validate() error {
 	byID := make(map[ComponentID]struct{})
 	for i, c := range m.Components {
 		// Ensure there are no duplicate components.
-		_, ok := byID[c.ID()]
-		if ok {
+		if _, ok := byID[c.ID()]; ok {
 			return fmt.Errorf("component %d: another component with id '%s' already exists", i, c.ID())
 		}
 		byID[c.ID()] = struct{}{}
@@ -52,6 +53,14 @@ func (m *Manifest) Validate() error {
 		// Validate each component.
 		if err := c.Validate(); err != nil {
 			return fmt.Errorf("component %d: %w", i, err)
+		}
+	}
+
+	// Validate legacy manifest.
+	if m.SGX != nil {
+		err := m.SGX.Validate()
+		if err != nil {
+			return fmt.Errorf("sgx: %w", err)
 		}
 	}
 
@@ -85,7 +94,7 @@ func (m *Manifest) GetComponentByID(id ComponentID) *Component {
 	}
 
 	// We also support legacy manifests which define the RONL component at the top-level.
-	if id == ComponentID_RONL {
+	if id == ComponentID_RONL && len(m.Executable) > 0 {
 		return &Component{
 			Kind:       ComponentRONL,
 			Executable: m.Executable,
@@ -104,12 +113,18 @@ type SGXMetadata struct {
 	Signature string `json:"signature"`
 }
 
+// Validate validates the SGX metadata structure for well-formedness.
+func (s *SGXMetadata) Validate() error {
+	if s.Executable == "" {
+		return fmt.Errorf("executable must be set")
+	}
+	return nil
+}
+
 // ComponentKind is the kind of a component.
 type ComponentKind string
 
 const (
-	// ComponentInvalid is an invalid component.
-	ComponentInvalid ComponentKind = ""
 	// ComponentRONL is the on-chain logic component.
 	ComponentRONL ComponentKind = "ronl"
 	// ComponentROFL is the off-chain logic component.
@@ -164,6 +179,16 @@ func (c *Component) Matches(id ComponentID) bool {
 
 // Validate validates the component structure for well-formedness.
 func (c *Component) Validate() error {
+	if c.Executable == "" {
+		return fmt.Errorf("executable must be set")
+	}
+	if c.SGX != nil {
+		err := c.SGX.Validate()
+		if err != nil {
+			return fmt.Errorf("sgx: %w", err)
+		}
+	}
+
 	switch c.Kind {
 	case ComponentRONL:
 		if c.Name != "" {
