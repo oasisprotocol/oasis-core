@@ -143,8 +143,8 @@ func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error)
 	if comp.SGX == nil {
 		return nil, fmt.Errorf("runtime/bundle: no SGX metadata for '%s'", id)
 	}
-	d := bnd.Data[comp.SGX.Executable]
-	if len(d) == 0 {
+	d, ok := bnd.Data[comp.SGX.Executable]
+	if !ok {
 		return nil, fmt.Errorf("runtime/bundle: no SGX executable for '%s'", id)
 	}
 
