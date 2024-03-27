@@ -162,6 +162,22 @@ where
         2 + (deg_x + 1) * (deg_y + 1) * Self::coefficient_byte_size()
     }
 
+    /// Evaluates the bivariate polynomial.
+    pub fn eval(&self, x: &Fp, y: &Fp) -> Fp {
+        let xpows = powers(x, self.deg_x); // [x^i]
+        let ypows = powers(y, self.deg_y); // [y^j]
+        let mut v = Fp::ZERO;
+        for (i, xpow) in xpows.iter().enumerate() {
+            let mut vi = Fp::ZERO;
+            for (j, ypow) in ypows.iter().enumerate() {
+                vi += self.b[i][j] * ypow //  b_{i,j} y^j
+            }
+            v += vi * xpow // \sum_{j=0}^{deg_y} b_{i,j} x^i y^j
+        }
+
+        v
+    }
+
     /// Evaluates the bivariate polynomial with respect to the indeterminate x.
     ///
     /// Returned polynomial:
@@ -356,6 +372,10 @@ mod tests {
         let b = vec![scalars(&[1])];
         let bp = BivariatePolynomial::with_coefficients(b);
 
+        let result = bp.eval(&scalar(5), &scalar(2));
+        let expected = scalar(1);
+        assert_eq!(result, expected);
+
         let result = bp.eval_x(&scalar(5));
         let expected = Polynomial::with_coefficients(scalars(&[1]));
         assert_eq!(result, expected);
@@ -370,6 +390,10 @@ mod tests {
             scalars(&[3, 4, 1, 2]),
         ];
         let bp = BivariatePolynomial::with_coefficients(b);
+
+        let result = bp.eval(&scalar(5), &scalar(2));
+        let expected = scalar(984);
+        assert_eq!(result, expected);
 
         let result = bp.eval_x(&scalar(5));
         let expected = Polynomial::with_coefficients(scalars(&[86, 117, 48, 59]));
