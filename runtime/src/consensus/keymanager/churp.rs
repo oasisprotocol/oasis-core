@@ -48,7 +48,12 @@ pub struct Status {
     /// and key derivation.
     pub group_id: GroupID,
 
-    /// The minimum number of distinct shares required to reconstruct a key.
+    /// The degree of the secret-sharing polynomial.
+    ///
+    /// In a (t,n) secret-sharing scheme, where t represents the threshold,
+    /// any combination of t+1 or more shares can reconstruct the secret,
+    /// while losing n-t or fewer shares still allows the secret to be
+    /// recovered.
     pub threshold: u8,
 
     /// The epoch of the last successfully executed handoff.
@@ -75,7 +80,7 @@ pub struct Status {
 
     /// A vector of nodes holding a share of the secret in the active handoff.
     ///
-    /// A client needs to obtain at least a threshold number of key shares
+    /// A client needs to obtain more than a threshold number of key shares
     /// from the nodes in this vector to construct the key.
     #[cbor(optional)]
     pub committee: Vec<PublicKey>,

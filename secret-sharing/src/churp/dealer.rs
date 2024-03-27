@@ -37,7 +37,7 @@ pub trait DealerParams {
 ///
 /// Shares must always be distributed over a secure channel and verified
 /// against the matrix. Reconstructing the secret bivariate polynomial
-/// requires obtaining at least a threshold number of shares from distinct
+/// requires obtaining more than a threshold number of shares from distinct
 /// participants.
 #[derive(Debug, Clone)]
 pub struct Dealer<D: DealerParams> {
@@ -54,8 +54,8 @@ where
 {
     /// Creates a new dealer.
     pub fn new(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Self {
-        let dx = threshold.saturating_sub(1); // Handle threshold 0 as 1.
-        let dy = 2 * dx;
+        let dx = threshold;
+        let dy = 2 * threshold;
 
         match dealing_phase {
             true => Dealer::random(dx, dy, rng),
@@ -139,7 +139,7 @@ mod tests {
     fn test_new() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
 
-        let threshold = 3;
+        let threshold = 2;
         for dealing_phase in vec![true, false] {
             let dealer = NistP384Dealer::new(threshold, dealing_phase, &mut rng);
             assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
