@@ -294,6 +294,7 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 	defer nodeSub.Close()
 
 	// And populate the list of observer nodes with the currently known set of them.
+	// epoCh will get the current epoch immediately, so no need to populate compute nodes specially.
 	nodes, err := w.consensus.Registry().GetNodes(ctx, consensus.HeightLatest)
 	if err != nil {
 		w.logger.Error("failed to fetch list of nodes from the registry",
@@ -313,41 +314,41 @@ func (w *rtNodeWatcher) watch(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-epoCh:
-			func() {
-				// Get executor committee members.
-				cms, err := w.consensus.Scheduler().GetCommittees(ctx, &scheduler.GetCommitteesRequest{
-					Height:    consensus.HeightLatest,
-					RuntimeID: w.runtimeID,
-				})
-				if err != nil {
-					w.logger.Error("failed to fetch runtime committee",
-						"err", err,
-					)
-					return
-				}
-				clear(computeNodes)
+			// Old members need to be cleared out of the ACL even in case of errors.
+			clear(computeNodes)
 
-				for _, cm := range cms {
-					if cm.Kind != scheduler.KindComputeExecutor {
+			// Get executor committee members.
+			cms, err := w.consensus.Scheduler().GetCommittees(ctx, &scheduler.GetCommitteesRequest{
+				Height:    consensus.HeightLatest,
+				RuntimeID: w.runtimeID,
+			})
+			if err != nil {
+				w.logger.Error("failed to fetch runtime committee",
+					"err", err,
+				)
+				break
+			}
+
+			for _, cm := range cms {
+				if cm.Kind != scheduler.KindComputeExecutor {
+					continue
+				}
+
+				for _, member := range cm.Members {
+					nd, err := w.consensus.Registry().GetNode(ctx, &registry.IDQuery{
+						ID:     member.PublicKey,
+						Height: consensus.HeightLatest,
+					})
+					if err != nil {
+						w.logger.Error("failed to fetch node descriptor for committee member",
+							"err", err,
+							"member", member.PublicKey,
+						)
 						continue
 					}
-
-					for _, member := range cm.Members {
-						nd, err := w.consensus.Registry().GetNode(ctx, &registry.IDQuery{
-							ID:     member.PublicKey,
-							Height: consensus.HeightLatest,
-						})
-						if err != nil {
-							w.logger.Error("failed to fetch node descriptor for committee member",
-								"err", err,
-								"member", member.PublicKey,
-							)
-							continue
-						}
-						computeNodes[nd.ID] = nd
-					}
+					computeNodes[nd.ID] = nd
 				}
-			}()
+			}
 		case ne := <-nodeCh:
 			switch ne.IsRegistration {
 			case true:
