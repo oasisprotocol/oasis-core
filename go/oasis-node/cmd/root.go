@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"os"
-	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -42,7 +41,7 @@ func RootCommand() *cobra.Command {
 func Execute() {
 	// Only the owner should have read/write/execute permissions for
 	// anything created by the oasis-node binary.
-	syscall.Umask(0o077)
+	cmdCommon.Umask(0o077)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
