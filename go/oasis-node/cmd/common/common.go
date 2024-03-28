@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -207,32 +206,6 @@ func initDebugTCBLaxVerify() error {
 		rootLog.Warn("`debug.tcb_lax_verify` set, TCB lax verification will be done")
 		pcs.SetUnsafeLaxVerify()
 	}
-	return nil
-}
-
-func initRlimit() error {
-	// Suppress this for tooling, as it likely does not matter.
-	if !IsNodeCmd() {
-		return nil
-	}
-
-	var rlim syscall.Rlimit
-	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
-		return fmt.Errorf("failed to query RLIMIT_NOFILE: %w", err)
-	}
-
-	desiredLimit := config.GlobalConfig.Common.Debug.Rlimit
-	if flags.DebugDontBlameOasis() && desiredLimit > 0 && desiredLimit != rlim.Cur {
-		rlim.Cur = desiredLimit
-		if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rlim); err != nil {
-			return fmt.Errorf("failed setting RLIMIT_NOFILE: %w", err)
-		}
-	}
-
-	if rlim.Cur < RequiredRlimit {
-		return fmt.Errorf("too low RLIMIT_NOFILE, current: %d required: %d", rlim.Cur, RequiredRlimit)
-	}
-
 	return nil
 }
 

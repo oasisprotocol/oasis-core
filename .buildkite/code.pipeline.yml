@@ -141,6 +141,15 @@ steps:
     plugins:
       <<: *docker_plugin
 
+  - label: Test Go build for non-Linux platforms
+    command:
+      - GOOS=windows make -C go
+      - GOOS=darwin make -C go
+    retry:
+      <<: *retry_agent_failure
+    plugins:
+      <<: *docker_plugin
+
   - label: Build Rust runtime loader
     key: build-rust-runtime-loader
     command:
