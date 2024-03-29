@@ -28,7 +28,7 @@ pub trait DealerParams {
     type Group: Group<Scalar = Self::PrimeField> + GroupEncoding;
 
     /// Maps given shareholder ID to a non-zero element of the prime field.
-    fn encode(id: Shareholder) -> Result<Self::PrimeField>;
+    fn encode_shareholder(id: Shareholder) -> Result<Self::PrimeField>;
 }
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
@@ -111,7 +111,7 @@ impl DealerParams for NistP384 {
     type PrimeField = p384::Scalar;
     type Group = p384::ProjectivePoint;
 
-    fn encode(id: Shareholder) -> Result<Self::PrimeField> {
+    fn encode_shareholder(id: Shareholder) -> Result<Self::PrimeField> {
         let mut bytes = [0u8; 48];
         bytes[16..].copy_from_slice(&id.0);
 
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn test_encode() {
         let id = [0; 32];
-        let zero = NistP384::encode(Shareholder(id));
+        let zero = NistP384::encode_shareholder(Shareholder(id));
         assert!(zero.is_err());
         assert_eq!(
             zero.unwrap_err().to_string(),
@@ -188,7 +188,7 @@ mod tests {
         let mut id = [0; 32];
         id[30] = 3;
         id[31] = 232;
-        let thousand = NistP384::encode(Shareholder(id));
+        let thousand = NistP384::encode_shareholder(Shareholder(id));
         assert!(thousand.is_ok());
         assert_eq!(thousand.unwrap(), p384::Scalar::from_u64(1000));
     }
