@@ -24,7 +24,7 @@ use crate::vss::arith::powers;
 /// the `trim` method after each operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Polynomial<Fp> {
-    a: Vec<Fp>,
+    pub(crate) a: Vec<Fp>,
 }
 
 impl<Fp> Polynomial<Fp>

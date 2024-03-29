@@ -2762,6 +2762,7 @@ dependencies = [
  "p384",
  "rand",
  "rand_core",
+ "thiserror",
 ]
 
 [[package]]

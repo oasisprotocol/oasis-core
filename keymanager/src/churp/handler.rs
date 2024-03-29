@@ -142,13 +142,15 @@ impl Churp {
             return Err(Error::ApplicationsSubmitted.into());
         }
 
+        let dealing_phase = status.committee.is_empty();
+
         // For now, support only one group.
         match status.group_id {
             GroupID::NistP384 => self.do_init::<NistP384>(
                 req.id,
-                status.active_handoff,
-                req.handoff,
+                status.next_handoff,
                 status.threshold,
+                dealing_phase,
             ),
         }
     }
@@ -156,15 +158,14 @@ impl Churp {
     fn do_init<D>(
         &self,
         churp_id: u8,
-        active_handoff: EpochTime,
         handoff: EpochTime,
         threshold: u8,
+        dealing_phase: bool,
     ) -> Result<SignedApplicationRequest>
     where
         D: DealerParams + 'static,
     {
-        let dealer =
-            self.get_or_create_dealer::<D>(churp_id, active_handoff, handoff, threshold)?;
+        let dealer = self.get_or_create_dealer::<D>(churp_id, handoff, threshold, dealing_phase)?;
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
@@ -192,15 +193,15 @@ impl Churp {
     fn get_or_create_dealer<D>(
         &self,
         churp_id: u8,
-        active_handoff: EpochTime,
-        handoff: EpochTime,
+        epoch: EpochTime,
         threshold: u8,
+        dealing_phase: bool,
     ) -> Result<Arc<Dealer<D>>>
     where
         D: DealerParams + 'static,
     {
         // Check the memory first.
-        let key = (churp_id, handoff);
+        let key = (churp_id, epoch);
         let mut dealers = self.dealers.write().unwrap();
 
         if let Some(dealer) = dealers.get(&key) {
@@ -219,7 +220,7 @@ impl Churp {
         // host has cleared the storage.
         let polynomial = self
             .storage
-            .load_bivariate_polynomial::<D::PrimeField>(churp_id, handoff);
+            .load_bivariate_polynomial::<D::PrimeField>(churp_id, epoch);
         let polynomial = match polynomial {
             Ok(polynomial) => Ok(polynomial),
             Err(err) => match err.downcast_ref::<Error>() {
@@ -234,7 +235,7 @@ impl Churp {
                 // tampering, while consensus ensures that the group ID remains
                 // unchanged and that polynomial dimensions remain consistent
                 // for any given pair of churp ID and handoff.
-                Dealer::new(bp)
+                Dealer::from(bp)
             }
             None => {
                 // The local storage is either empty or contains a polynomial
@@ -244,18 +245,12 @@ impl Churp {
                 // will detect the polynomial change because the checksum
                 // of the verification matrix in the submitted application
                 // will also change.
-                let dx = threshold.saturating_sub(1);
-                let dy = 2 * dx;
-
-                let dealer = match active_handoff {
-                    0 => Dealer::random(dx, dy, &mut OsRng),
-                    _ => Dealer::zero_hole(dx, dy, &mut OsRng),
-                };
+                let dealer = Dealer::new(threshold, dealing_phase, &mut OsRng);
 
                 // Encrypt and store the polynomial in case of a restart.
                 let polynomial = dealer.bivariate_polynomial();
                 self.storage
-                    .store_bivariate_polynomial(polynomial, churp_id, handoff)?;
+                    .store_bivariate_polynomial(polynomial, churp_id, epoch)?;
 
                 dealer
             }

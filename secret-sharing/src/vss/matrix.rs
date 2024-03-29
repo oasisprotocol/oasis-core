@@ -5,16 +5,23 @@ use group::{Group, GroupEncoding};
 use super::{
     arith::powers,
     polynomial::{BivariatePolynomial, Polynomial},
+    vector::VerificationVector,
 };
 
-/// Verification matrix over a cryptographic group.
+/// Verification matrix for a bivariate polynomial.
 ///
-/// The verification matrix is computed as the element-wise scalar product
-/// of a matrix `b` representing the coefficients of a bivariate polynomial
-/// and a group generator `G`.
+/// The verification matrix `M` is computed as the element-wise scalar product
+/// of the coefficients of a bivariate polynomial `B(x,y)` and a group
+/// generator `G`.
 ///
+/// Verification matrix:
 /// ```text
-/// M = [b_{i,j} * G]
+///     M = [b_{i,j} * G]
+/// ```
+///
+/// Bivariate polynomial:
+/// ```text
+///     B(x,y) = \sum_{i=0}^{deg_x} \sum_{j=0}^{deg_y} b_{i,j} x^i y^j
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationMatrix<G>
@@ -22,42 +29,81 @@ where
     G: Group + GroupEncoding,
 {
     /// The number of rows in the verification matrix, determined by
-    /// the degree of the bivariate polynomial in the x variable from
+    /// the degree of the bivariate polynomial in the `x` variable from
     /// which the matrix was constructed.
-    pub rows: usize,
+    pub(crate) rows: usize,
     /// The number of columns in the verification matrix, determined by
-    /// the degree of the bivariate polynomial in the y variable from
+    /// the degree of the bivariate polynomial in the `y` variable from
     /// which the matrix was constructed.
-    pub cols: usize,
+    pub(crate) cols: usize,
     /// The verification matrix elements, where `m[i][j]` represents
     /// the element `b_{i,j} * G`.
-    pub m: Vec<Vec<G>>,
+    pub(crate) m: Vec<Vec<G>>,
 }
 
 impl<G> VerificationMatrix<G>
 where
     G: Group + GroupEncoding,
 {
-    /// Constructs a new verification matrix from a given bivariate polynomial.
-    pub fn new(bp: &BivariatePolynomial<G::Scalar>) -> Self {
-        let rows = bp.deg_x + 1;
-        let cols = bp.deg_y + 1;
-        let mut m = Vec::new();
-        for bi in bp.b.iter() {
-            let mut mi = Vec::new();
-            for bij in bi.iter() {
-                mi.push(G::generator() * bij) // b_{i,j} * G
-            }
-            m.push(mi)
-        }
-
-        Self { rows, cols, m }
+    /// Returns the dimensions (number of rows and columns) of the verification
+    /// matrix.
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.rows, self.cols)
     }
 
-    /// Returns true if and only if `m_{0,0}` is the identity element
+    /// Returns true if and only if `M_{0,0}` is the identity element
     /// of the group.
     pub fn is_zero_hole(&self) -> bool {
-        self.m[0][0] == G::identity()
+        self.m[0][0].is_identity().into()
+    }
+
+    /// Verifies whether the underlying bivariate polynomial evaluates
+    /// to the given value, i.e., if it holds `B(x,y) == v`.
+    pub fn verify(&self, x: &G::Scalar, y: &G::Scalar, v: &G::Scalar) -> bool {
+        let mut diff = G::generator().neg() * v;
+        let xpows = powers(x, self.rows - 1); // [x^i]
+        let ypows = powers(y, self.cols - 1); // [y^j]
+        for (i, xpow) in xpows.into_iter().enumerate() {
+            for (j, ypow) in ypows.iter().enumerate() {
+                diff += self.m[i][j] * (xpow * ypow); // x^i * y^j * M_{i,j} = b_{i,j} x^i * y^j * G
+            }
+        }
+
+        diff.is_identity().into()
+    }
+
+    /// Returns a verification vector for the univariate polynomial resulting
+    /// from the evaluation of the underlying bivariate polynomial `B(x,y)`
+    /// at the given `y` value.
+    pub fn verification_vector_for_x(&self, y: &G::Scalar) -> VerificationVector<G> {
+        let mut v = Vec::with_capacity(self.rows);
+        let ypows = powers(y, self.cols - 1); // [y^i]
+        for i in 0..self.rows {
+            let mut vi = G::identity();
+            for (j, ypow) in ypows.iter().enumerate() {
+                vi += self.m[i][j] * ypow;
+            }
+            v.push(vi);
+        }
+
+        VerificationVector::new(v)
+    }
+
+    /// Returns a verification vector for the univariate polynomial resulting
+    /// from the evaluation of the underlying bivariate polynomial `B(x,y)`
+    /// at the given `x` value.
+    pub fn verification_vector_for_y(&self, x: &G::Scalar) -> VerificationVector<G> {
+        let mut v = Vec::with_capacity(self.cols);
+        let xpows = powers(x, self.rows - 1); // [x^i]
+        for j in 0..self.cols {
+            let mut vj = G::identity();
+            for (i, xpow) in xpows.iter().enumerate() {
+                vj += self.m[i][j] * xpow;
+            }
+            v.push(vj);
+        }
+
+        VerificationVector::new(v)
     }
 
     /// Verifies coefficients of the polynomial resulting from the evaluation
@@ -77,7 +123,7 @@ where
     /// a_j * G = \sum_{i=0}^{deg_x} b_{i,j} x^i * G
     ///         = \sum_{i=0}^{deg_x} x^i * M_{i,j}
     /// ```
-    pub fn verify_x(&self, polynomial: &Polynomial<G::Scalar>, x: &G::Scalar) -> bool {
+    pub fn verify_x(&self, x: &G::Scalar, polynomial: &Polynomial<G::Scalar>) -> bool {
         if polynomial.size() != self.cols {
             return false;
         }
@@ -118,7 +164,7 @@ where
     /// a_i * G = \sum_{j=0}^{deg_y} b_{i,j} y^j * G
     ///         = \sum_{j=0}^{deg_y} y^j * M_{i,j}
     /// ```
-    pub fn verify_y(&self, polynomial: &Polynomial<G::Scalar>, y: &G::Scalar) -> bool {
+    pub fn verify_y(&self, y: &G::Scalar, polynomial: &Polynomial<G::Scalar>) -> bool {
         if polynomial.size() != self.rows {
             return false;
         }
@@ -208,6 +254,39 @@ where
     }
 }
 
+impl<G> From<&BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Constructs a new verification matrix from the given bivariate
+    /// polynomial.
+    fn from(bp: &BivariatePolynomial<G::Scalar>) -> Self {
+        let rows = bp.deg_x + 1;
+        let cols = bp.deg_y + 1;
+        let mut m = Vec::new();
+        for bi in bp.b.iter() {
+            let mut mi = Vec::new();
+            for bij in bi.iter() {
+                mi.push(G::generator() * bij) // b_{i,j} * G
+            }
+            m.push(mi)
+        }
+
+        Self { rows, cols, m }
+    }
+}
+
+impl<G> From<BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Constructs a new verification matrix from the given bivariate
+    /// polynomial.
+    fn from(bp: BivariatePolynomial<G::Scalar>) -> Self {
+        (&bp).into()
+    }
+}
+
 impl<G> Add for VerificationMatrix<G>
 where
     G: Group + GroupEncoding,
@@ -263,6 +342,10 @@ mod tests {
 
     use super::BivariatePolynomial;
 
+    fn scalar(value: i64) -> p384::Scalar {
+        scalars(&vec![value])[0]
+    }
+
     fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
         values
             .iter()
@@ -281,7 +364,7 @@ mod tests {
         bp.set_coefficient(p384::Scalar::ONE, 0, 0);
         bp.set_coefficient(p384::Scalar::ONE.double(), 2, 2);
 
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert_eq!(vm.m.len(), 3);
         for (i, mi) in vm.m.iter().enumerate() {
             assert_eq!(mi.len(), 4);
@@ -296,54 +379,101 @@ mod tests {
 
         // Random bivariate polynomial (slow).
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(5, 10, &mut rng);
-        let _: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
+        let _ = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+    }
+
+    #[test]
+    fn test_verify() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let x2 = scalar(2);
+        let x3 = scalar(3);
+
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
+        let s = bp.eval_x(&x2).eval(&x3);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        assert!(vm.verify(&x2, &x3, &s));
+        assert!(!vm.verify(&x3, &x2, &s));
+    }
+
+    #[test]
+    fn test_verification_polynomial_for_x() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let x2 = scalar(2);
+        let x3 = scalar(3);
+
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let p = bp.eval_y(&x2);
+
+        let vv = vm.verification_vector_for_x(&x2);
+        assert!(vv.is_from(&p));
+
+        let vv = vm.verification_vector_for_x(&x3);
+        assert!(!vv.is_from(&p));
+    }
+
+    #[test]
+    fn test_verification_polynomial_for_y() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let x2 = scalar(2);
+        let x3 = scalar(3);
+
+        let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let p = bp.eval_x(&x2);
+
+        let vv = vm.verification_vector_for_y(&x2);
+        assert!(vv.is_from(&p));
+
+        let vv = vm.verification_vector_for_y(&x3);
+        assert!(!vv.is_from(&p));
     }
 
     #[test]
     fn test_verify_x() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let x2 = p384::Scalar::from_u64(2);
+        let x2 = scalar(2);
 
         // Asymmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
         let p = bp.eval_x(&x2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
-        assert!(vm.verify_x(&p, &x2));
-        assert!(!vm.verify_y(&p, &x2)); // Invalid degree.
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        assert!(vm.verify_x(&x2, &p));
+        assert!(!vm.verify_y(&x2, &p)); // Invalid degree.
 
         // Symmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 2, &mut rng);
         let p = bp.eval_x(&x2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
-        assert!(vm.verify_x(&p, &x2));
-        assert!(!vm.verify_y(&p, &x2)); // Valid degree, but verification failed.
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        assert!(vm.verify_x(&x2, &p));
+        assert!(!vm.verify_y(&x2, &p)); // Valid degree, but verification failed.
     }
 
     #[test]
     fn test_verify_y() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let y2 = p384::Scalar::from_u64(2);
+        let y2 = scalar(2);
 
         // Asymmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
         let p = bp.eval_y(&y2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
-        assert!(!vm.verify_x(&p, &y2)); // Invalid degree.
-        assert!(vm.verify_y(&p, &y2));
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        assert!(!vm.verify_x(&y2, &p)); // Invalid degree.
+        assert!(vm.verify_y(&y2, &p));
 
         // Symmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 2, &mut rng);
         let p = bp.eval_y(&y2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::new(&bp);
-        assert!(!vm.verify_x(&p, &y2)); // Valid degree, but verification failed.
-        assert!(vm.verify_y(&p, &y2));
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        assert!(!vm.verify_x(&y2, &p)); // Valid degree, but verification failed.
+        assert!(vm.verify_y(&y2, &p));
     }
 
     #[test]
     fn test_serialization() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut rng);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::new(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         let restored = VerificationMatrix::<p384::ProjectivePoint>::from_bytes(vm.to_bytes())
             .expect("deserialization should succeed");
 
@@ -368,8 +498,8 @@ mod tests {
         let c2 = vec![scalars(&[1, 2]), scalars(&[3, 4]), scalars(&[5, 6])];
         let bp1 = BivariatePolynomial::with_coefficients(c1);
         let bp2 = BivariatePolynomial::with_coefficients(c2);
-        let m1 = VerificationMatrix::<p384::ProjectivePoint>::new(&bp1);
-        let m2 = VerificationMatrix::<p384::ProjectivePoint>::new(&bp2);
+        let vm1 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp1);
+        let vm2 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp2);
 
         let c = vec![
             scalars(&[1 + 1, 2 + 2, 3, 4]),
@@ -377,16 +507,16 @@ mod tests {
             scalars(&[5, 6, 0, 0]),
         ];
         let bp = BivariatePolynomial::with_coefficients(c);
-        let m = VerificationMatrix::<p384::ProjectivePoint>::new(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
 
-        let sum = &m1 + &m2;
+        let sum = &vm1 + &vm2;
         assert_eq!(sum.rows, 3);
         assert_eq!(sum.cols, 4);
-        assert_eq!(sum, m);
+        assert_eq!(sum, vm);
 
-        let sum = m1 + m2;
+        let sum = vm1 + vm2;
         assert_eq!(sum.rows, 3);
         assert_eq!(sum.cols, 4);
-        assert_eq!(sum, m);
+        assert_eq!(sum, vm);
     }
 }
