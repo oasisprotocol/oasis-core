@@ -36,17 +36,6 @@ where
         Self { v }
     }
 
-    /// Constructs a new verification vector from the given univariate
-    /// polynomial.
-    pub fn from(p: &Polynomial<G::Scalar>) -> Self {
-        let mut v = Vec::with_capacity(p.size());
-        for ai in p.a.iter() {
-            v.push(G::generator() * ai)
-        }
-
-        Self::new(v)
-    }
-
     /// Verifies if the verification vector belongs to the given univariate
     /// polynomial.
     pub fn is_from(&self, p: &Polynomial<G::Scalar>) -> bool {
@@ -74,6 +63,33 @@ where
         }
 
         diff.is_identity().into()
+    }
+}
+
+impl<G> From<&Polynomial<G::Scalar>> for VerificationVector<G>
+where
+    G: Group,
+{
+    /// Constructs a new verification vector from the given univariate
+    /// polynomial.
+    fn from(p: &Polynomial<G::Scalar>) -> Self {
+        let mut v = Vec::with_capacity(p.size());
+        for ai in p.a.iter() {
+            v.push(G::generator() * ai)
+        }
+
+        Self::new(v)
+    }
+}
+
+impl<G> From<Polynomial<G::Scalar>> for VerificationVector<G>
+where
+    G: Group,
+{
+    /// Constructs a new verification vector from the given univariate
+    /// polynomial.
+    fn from(p: Polynomial<G::Scalar>) -> Self {
+        (&p).into()
     }
 }
 

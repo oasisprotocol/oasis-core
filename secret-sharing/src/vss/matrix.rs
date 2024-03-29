@@ -45,23 +45,6 @@ impl<G> VerificationMatrix<G>
 where
     G: Group + GroupEncoding,
 {
-    /// Constructs a new verification matrix from the given bivariate
-    /// polynomial.
-    pub fn from(bp: &BivariatePolynomial<G::Scalar>) -> Self {
-        let rows = bp.deg_x + 1;
-        let cols = bp.deg_y + 1;
-        let mut m = Vec::new();
-        for bi in bp.b.iter() {
-            let mut mi = Vec::new();
-            for bij in bi.iter() {
-                mi.push(G::generator() * bij) // b_{i,j} * G
-            }
-            m.push(mi)
-        }
-
-        Self { rows, cols, m }
-    }
-
     /// Returns the dimensions (number of rows and columns) of the verification
     /// matrix.
     pub fn dimensions(&self) -> (usize, usize) {
@@ -271,6 +254,39 @@ where
     }
 }
 
+impl<G> From<&BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Constructs a new verification matrix from the given bivariate
+    /// polynomial.
+    fn from(bp: &BivariatePolynomial<G::Scalar>) -> Self {
+        let rows = bp.deg_x + 1;
+        let cols = bp.deg_y + 1;
+        let mut m = Vec::new();
+        for bi in bp.b.iter() {
+            let mut mi = Vec::new();
+            for bij in bi.iter() {
+                mi.push(G::generator() * bij) // b_{i,j} * G
+            }
+            m.push(mi)
+        }
+
+        Self { rows, cols, m }
+    }
+}
+
+impl<G> From<BivariatePolynomial<G::Scalar>> for VerificationMatrix<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Constructs a new verification matrix from the given bivariate
+    /// polynomial.
+    fn from(bp: BivariatePolynomial<G::Scalar>) -> Self {
+        (&bp).into()
+    }
+}
+
 impl<G> Add for VerificationMatrix<G>
 where
     G: Group + GroupEncoding,
@@ -348,7 +364,7 @@ mod tests {
         bp.set_coefficient(p384::Scalar::ONE, 0, 0);
         bp.set_coefficient(p384::Scalar::ONE.double(), 2, 2);
 
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert_eq!(vm.m.len(), 3);
         for (i, mi) in vm.m.iter().enumerate() {
             assert_eq!(mi.len(), 4);
@@ -363,7 +379,7 @@ mod tests {
 
         // Random bivariate polynomial (slow).
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(5, 10, &mut rng);
-        let _: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let _ = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
     }
 
     #[test]
@@ -374,7 +390,7 @@ mod tests {
 
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
         let s = bp.eval_x(&x2).eval(&x3);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert!(vm.verify(&x2, &x3, &s));
         assert!(!vm.verify(&x3, &x2, &s));
     }
@@ -386,7 +402,7 @@ mod tests {
         let x3 = scalar(3);
 
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         let p = bp.eval_y(&x2);
 
         let vv = vm.verification_vector_for_x(&x2);
@@ -403,7 +419,7 @@ mod tests {
         let x3 = scalar(3);
 
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         let p = bp.eval_x(&x2);
 
         let vv = vm.verification_vector_for_y(&x2);
@@ -421,14 +437,14 @@ mod tests {
         // Asymmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
         let p = bp.eval_x(&x2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert!(vm.verify_x(&x2, &p));
         assert!(!vm.verify_y(&x2, &p)); // Invalid degree.
 
         // Symmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 2, &mut rng);
         let p = bp.eval_x(&x2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert!(vm.verify_x(&x2, &p));
         assert!(!vm.verify_y(&x2, &p)); // Valid degree, but verification failed.
     }
@@ -441,14 +457,14 @@ mod tests {
         // Asymmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 3, &mut rng);
         let p = bp.eval_y(&y2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert!(!vm.verify_x(&y2, &p)); // Invalid degree.
         assert!(vm.verify_y(&y2, &p));
 
         // Symmetric bivariate polynomial.
         let bp: BivariatePolynomial<p384::Scalar> = BivariatePolynomial::random(2, 2, &mut rng);
         let p = bp.eval_y(&y2);
-        let vm: VerificationMatrix<p384::ProjectivePoint> = VerificationMatrix::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert!(!vm.verify_x(&y2, &p)); // Valid degree, but verification failed.
         assert!(vm.verify_y(&y2, &p));
     }
@@ -482,8 +498,8 @@ mod tests {
         let c2 = vec![scalars(&[1, 2]), scalars(&[3, 4]), scalars(&[5, 6])];
         let bp1 = BivariatePolynomial::with_coefficients(c1);
         let bp2 = BivariatePolynomial::with_coefficients(c2);
-        let m1 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp1);
-        let m2 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp2);
+        let vm1 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp1);
+        let vm2 = VerificationMatrix::<p384::ProjectivePoint>::from(&bp2);
 
         let c = vec![
             scalars(&[1 + 1, 2 + 2, 3, 4]),
@@ -491,16 +507,16 @@ mod tests {
             scalars(&[5, 6, 0, 0]),
         ];
         let bp = BivariatePolynomial::with_coefficients(c);
-        let m = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
 
-        let sum = &m1 + &m2;
+        let sum = &vm1 + &vm2;
         assert_eq!(sum.rows, 3);
         assert_eq!(sum.cols, 4);
-        assert_eq!(sum, m);
+        assert_eq!(sum, vm);
 
-        let sum = m1 + m2;
+        let sum = vm1 + vm2;
         assert_eq!(sum.rows, 3);
         assert_eq!(sum.cols, 4);
-        assert_eq!(sum, m);
+        assert_eq!(sum, vm);
     }
 }

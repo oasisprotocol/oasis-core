@@ -63,23 +63,17 @@ where
         }
     }
 
-    /// Creates a new dealer from the given bivariate polynomial.
-    pub fn from(bp: BivariatePolynomial<D::PrimeField>) -> Self {
-        let vm = VerificationMatrix::from(&bp);
-        Self { bp, vm }
-    }
-
     /// Creates a new dealer with a random bivariate polynomial.
     fn random(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
         let bp = BivariatePolynomial::random(dx, dy, rng);
-        Self::from(bp)
+        bp.into()
     }
 
     /// Creates a new dealer with a random zero-hole bivariate polynomial.
     fn zero_hole(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
         let mut bp = BivariatePolynomial::random(dx, dy, rng);
         bp.to_zero_hole();
-        Self::from(bp)
+        bp.into()
     }
 
     /// Returns the secret bivariate polynomial.
@@ -98,6 +92,17 @@ where
             return Err(anyhow!("zero-value recipient not allowed"));
         }
         Ok(self.bp.eval_x(recipient))
+    }
+}
+
+impl<D> From<BivariatePolynomial<D::PrimeField>> for Dealer<D>
+where
+    D: DealerParams,
+{
+    /// Creates a new dealer from the given bivariate polynomial.
+    fn from(bp: BivariatePolynomial<D::PrimeField>) -> Self {
+        let vm = VerificationMatrix::from(&bp);
+        Self { bp, vm }
     }
 }
 
