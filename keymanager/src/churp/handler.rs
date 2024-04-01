@@ -34,7 +34,7 @@ use secret_sharing::{
 use crate::beacon::State as BeaconState;
 
 use super::{
-    storage::Storage, ApplicationRequest, Error, InitRequest, SignedApplicationRequest,
+    storage::Storage, ApplicationRequest, Error, HandoffRequest, SignedApplicationRequest,
     State as ChurpState,
 };
 
@@ -118,7 +118,7 @@ impl Churp {
     /// first one (dealing phase).
     ///
     /// This method must be called locally.
-    pub fn init(&self, req: &InitRequest) -> Result<SignedApplicationRequest> {
+    pub fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
         // Verify request.
         let epoch = self.beacon_state.epoch()?;
         let status = self.churp_state.status(self.runtime_id, req.id)?;

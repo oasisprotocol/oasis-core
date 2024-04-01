@@ -7,16 +7,16 @@ use oasis_core_runtime::{
     consensus::beacon::EpochTime,
 };
 
-/// Initialization request.
-#[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
-pub struct InitRequest {
+/// Handoff request.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct HandoffRequest {
     /// A unique identifier within the key manager runtime.
     pub id: u8,
 
     /// The identifier of the key manager runtime.
     pub runtime_id: Namespace,
 
-    /// The epoch of the handoff for which the node would like to register.
+    /// The epoch of the handoff.
     pub epoch: EpochTime,
 }
 

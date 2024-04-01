@@ -387,7 +387,7 @@ func (s *submissionScheduler) trySubmitApplication(ctx context.Context, churpID 
 	)
 
 	// Ask enclave to prepare a dealer and return signed verification matrix.
-	req := churp.InitRequest{
+	req := churp.HandoffRequest{
 		Identity: churp.Identity{
 			ID:        churpID,
 			RuntimeID: s.kmWorker.runtimeID,
