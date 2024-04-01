@@ -2048,6 +2048,7 @@ dependencies = [
  "async-trait",
  "base64",
  "futures 0.3.30",
+ "group",
  "lazy_static",
  "lru",
  "oasis-cbor",

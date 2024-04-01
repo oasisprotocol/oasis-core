@@ -46,3 +46,13 @@ pub struct SignedApplicationRequest {
     /// RAK signature.
     pub signature: Signature,
 }
+
+/// Encoded secret share.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct EncodedSecretShare {
+    /// Encoded polynomial.
+    pub polynomial: Vec<u8>,
+
+    /// Encoded verification matrix.
+    pub verification_matrix: Vec<u8>,
+}

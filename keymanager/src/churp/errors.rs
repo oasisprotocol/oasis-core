@@ -7,6 +7,8 @@ pub enum Error {
     ApplicationsSubmitted,
     #[error("applications closed")]
     ApplicationsClosed,
+    #[error("bivariate polynomial decoding failed")]
+    BivariatePolynomialDecodingFailed,
     #[error("dealer mismatch")]
     DealerMismatch,
     #[error("handoffs disabled")]
@@ -17,10 +19,16 @@ pub enum Error {
     InvalidBivariatePolynomial,
     #[error("invalid data")]
     InvalidData,
+    #[error("invalid secret share")]
+    InvalidSecretShare,
     #[error("policy rollback")]
     PolicyRollback,
     #[error("runtime mismatch")]
     RuntimeMismatch,
     #[error("status not published")]
     StatusNotPublished,
+    #[error("polynomial decoding failed")]
+    PolynomialDecodingFailed,
+    #[error("verification matrix decoding failed")]
+    VerificationMatrixDecodingFailed,
 }
