@@ -695,6 +695,46 @@ func (n *Node) worker() {
 	n.CrossNode.Unlock()
 
 	initialized := false
+	initialize := func() {
+		atomic.StoreUint32(&n.historyReindexingDone, 1)
+
+		close(n.initCh)
+		initialized = true
+
+		// Wait for all child workers to initialize as well.
+		n.logger.Debug("waiting for child worker initialization")
+		for _, hooks := range n.hooks {
+			select {
+			case <-hooks.Initialized():
+			case <-n.stopCh:
+				n.logger.Info("termination requested while waiting for child worker initialization")
+				return
+			}
+		}
+		n.logger.Debug("all child workers are initialized")
+		atomic.StoreUint32(&n.workersInitialized, 1)
+	}
+
+	// If we are in archive mode, we won't receive any block below, so do the initialization now.
+	if config.GlobalConfig.Mode == config.ModeArchive {
+		n.logger.Debug("archive mode, common worker is initialized")
+
+		// Update the current block info.
+		annBlk, err := n.Runtime.History().GetAnnotatedBlock(n.ctx, roothash.RoundLatest)
+		if err != nil {
+			n.logger.Error("archive mode, failed to get latest runtime block")
+			return
+		}
+		func() {
+			n.CrossNode.Lock()
+			defer n.CrossNode.Unlock()
+			n.CurrentBlock = annBlk.Block
+			n.CurrentBlockHeight = annBlk.Height
+		}()
+
+		initialize()
+	}
+
 	for {
 		select {
 		case <-n.stopCh:
@@ -705,23 +745,7 @@ func (n *Node) worker() {
 			// history reindexing has been completed.
 			if !initialized {
 				n.logger.Debug("common worker is initialized")
-				atomic.StoreUint32(&n.historyReindexingDone, 1)
-
-				close(n.initCh)
-				initialized = true
-
-				// Wait for all child workers to initialize as well.
-				n.logger.Debug("waiting for child worker initialization")
-				for _, hooks := range n.hooks {
-					select {
-					case <-hooks.Initialized():
-					case <-n.stopCh:
-						n.logger.Info("termination requested while waiting for child worker initialization")
-						return
-					}
-				}
-				n.logger.Debug("all child workers are initialized")
-				atomic.StoreUint32(&n.workersInitialized, 1)
+				initialize()
 			}
 
 			// Received a block (annotated).
