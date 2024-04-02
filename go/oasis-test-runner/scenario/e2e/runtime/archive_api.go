@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 )
 
@@ -74,12 +75,8 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 	if err != nil {
 		return err
 	}
-	switch {
-	case runtime && isReady:
-		return fmt.Errorf("runtime archive node reports ready to accept runtime work")
-	case !runtime && !isReady:
-		return fmt.Errorf("consensus archive node reports as not ready")
-	default:
+	if !isReady {
+		return fmt.Errorf("archive node reports as not ready")
 	}
 
 	sc.Logger.Info("testing GetStatus")
@@ -282,6 +279,29 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 		return fmt.Errorf("runtime WatchBlocks: %w", err)
 	}
 	defer sub.Close()
+
+	// Temporary configure the archive as the client controller.
+	clientCtrl := sc.Net.ClientController()
+	sc.Net.SetClientController(archiveCtrl)
+	defer func() {
+		sc.Net.SetClientController(clientCtrl)
+	}()
+
+	// Test runtime client query.
+	sc.Logger.Info("testing runtime client query")
+	rsp, err := sc.submitKeyValueRuntimeGetQuery(
+		ctx,
+		KeyValueRuntimeID,
+		"my_key",
+		roothash.RoundLatest,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to query runtime: %w", err)
+	}
+	if rsp != "my_value" {
+		return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, "my_value")
+	}
+
 	return nil
 }
 
