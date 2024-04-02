@@ -228,9 +228,12 @@ mod tests {
                 checkpoint_num_kept: 0,
                 checkpoint_chunk_size: 0,
             },
-            admission_policy: registry::RuntimeAdmissionPolicy::EntityWhitelist(
-                registry::EntityWhitelistRuntimeAdmissionPolicy { entities: wl },
-            ),
+            admission_policy: registry::RuntimeAdmissionPolicy {
+                entity_whitelist: Some(registry::EntityWhitelistRuntimeAdmissionPolicy {
+                    entities: wl,
+                }),
+                ..Default::default()
+            },
             constraints: {
                 let mut cs = BTreeMap::new();
                 cs.insert(scheduler::CommitteeKind::ComputeExecutor, {
@@ -299,7 +302,13 @@ mod tests {
             (
                 vec![Message::Registry(Versioned::new(
                     0,
-                    RegistryMessage::UpdateRuntime(registry::Runtime::default()),
+                    RegistryMessage::UpdateRuntime(registry::Runtime {
+                        admission_policy: registry::RuntimeAdmissionPolicy {
+                            any_node: Some(registry::AnyNodeRuntimeAdmissionPolicy {}),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }),
                 ))],
                 // FIXME: Change to e6e170fb771583147255e0c96dc88615d4fd2fd28488ae489df01da201affe72 once cbor is fixed.
                 "baf9eeaa4860e363a9c27d99555839afc535f0cd32d23dc640f0f020677460e0",

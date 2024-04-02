@@ -34,6 +34,10 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 	if err := runtimeID2.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000011"); err != nil {
 		return err
 	}
+	var runtimeID3 common.Namespace
+	if err := runtimeID3.UnmarshalHex("8000000000000000000000000000000000000000000000000000000000000012"); err != nil {
+		return err
+	}
 	// Populate nodes.
 	for _, fix := range []struct {
 		nodeSigner signature.Signer
@@ -151,6 +155,33 @@ func InitializeTestRegistryState(ctx context.Context, mkvs mkvs.Tree) error {
 				},
 			},
 			true,
+		},
+		{
+			&registry.Runtime{
+				Versioned:   cbor.NewVersioned(registry.LatestRuntimeDescriptorVersion),
+				ID:          runtimeID3,
+				EntityID:    entitySigner.Public(),
+				Kind:        registry.KindCompute,
+				TEEHardware: node.TEEHardwareIntelSGX,
+				AdmissionPolicy: registry.RuntimeAdmissionPolicy{
+					PerRole: map[node.RolesMask]registry.PerRoleAdmissionPolicy{
+						node.RoleObserver: {
+							EntityWhitelist: &registry.EntityWhitelistRoleAdmissionPolicy{
+								Entities: map[signature.PublicKey]registry.EntityWhitelistRoleConfig{},
+							},
+						},
+					},
+				},
+				Deployments: []*registry.VersionInfo{
+					{
+						Version:        version.FromU64(123),
+						ValidFrom:      42,
+						TEE:            []byte{1, 2, 3, 4, 5},
+						BundleChecksum: bytes.Repeat([]byte{0x05}, 32),
+					},
+				},
+			},
+			false,
 		},
 	} {
 		if err := state.SetRuntime(ctx, fix.rt, fix.suspended); err != nil {
