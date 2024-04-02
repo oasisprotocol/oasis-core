@@ -259,6 +259,7 @@ impl Churp {
         Ok(dealer)
     }
 
+    /// Computes the checksum of the verification matrix.
     fn checksum_verification_matrix<G>(
         matrix: &VerificationMatrix<G>,
         runtime_id: Namespace,
@@ -268,8 +269,18 @@ impl Churp {
     where
         G: Group + GroupEncoding,
     {
+        Self::checksum_verification_matrix_bytes(&matrix.to_bytes(), runtime_id, churp_id, epoch)
+    }
+
+    /// Computes the checksum of the verification matrix bytes.
+    fn checksum_verification_matrix_bytes(
+        bytes: &Vec<u8>,
+        runtime_id: Namespace,
+        churp_id: u8,
+        epoch: EpochTime,
+    ) -> Hash {
         let mut checksum = [0u8; 32];
-        let mut f = KMac::new_kmac256(&matrix.to_bytes(), CHECKSUM_VERIFICATION_MATRIX_CUSTOM);
+        let mut f = KMac::new_kmac256(bytes, CHECKSUM_VERIFICATION_MATRIX_CUSTOM);
         f.update(&runtime_id.0);
         f.update(&[churp_id]);
         f.update(&epoch.to_le_bytes());
