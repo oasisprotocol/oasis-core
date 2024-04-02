@@ -27,7 +27,7 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, DealerParams, NistP384},
+    churp::{Dealer, DealerParams, NistP384, Player},
     vss::matrix::VerificationMatrix,
 };
 
@@ -74,6 +74,9 @@ pub struct Churp {
     churp_state: ChurpState,
     beacon_state: BeaconState,
 
+    /// Players with secret shares for the last successfully completed handoff,
+    /// one per scheme.
+    players: Mutex<HashMap<u8, HandoffData>>,
     /// Dealers of bivariate shares for the next handoff, one per scheme.
     dealers: Mutex<HashMap<u8, HandoffData>>,
 }
@@ -91,6 +94,7 @@ impl Churp {
         let churp_state = ChurpState::new(consensus_verifier.clone());
         let beacon_state = BeaconState::new(consensus_verifier.clone());
 
+        let players = Mutex::new(HashMap::new());
         let dealers = Mutex::new(HashMap::new());
 
         Self {
@@ -100,6 +104,7 @@ impl Churp {
             storage,
             churp_state,
             beacon_state,
+            players,
             dealers,
         }
     }
@@ -189,6 +194,108 @@ impl Churp {
             application,
             signature,
         })
+    }
+
+    /// Returns the player for the specified scheme and handoff epoch.
+    fn get_player<D>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Player<D>>>
+    where
+        D: DealerParams + 'static,
+    {
+        // Check the memory first. Make sure to lock the new players so that we
+        // don't create two players for the same handoff.
+        let mut players = self.players.lock().unwrap();
+
+        if let Some(data) = players.get(&churp_id) {
+            match epoch.cmp(&data.epoch) {
+                cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
+                cmp::Ordering::Equal => {
+                    // Downcasting should never fail because the consensus ensures that
+                    // the group ID cannot change.
+                    let player = data
+                        .object
+                        .clone()
+                        .downcast::<Player<D>>()
+                        .or(Err(Error::PlayerMismatch))?;
+
+                    return Ok(player);
+                }
+                cmp::Ordering::Greater => (),
+            }
+        }
+
+        // Fetch player's secret share from the local storage and use it to
+        // restore the internal state upon restarts, unless a malicious
+        // host has cleared the storage.
+        let share = self
+            .storage
+            .load_secret_share::<D::Group>(churp_id, epoch)
+            .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
+
+        let share = match share {
+            Some(share) => Some(share),
+            None => {
+                // If the secret share is not available, check if the next handoff
+                // succeeded as it might have been confirmed while we were away.
+                let share = self
+                    .storage
+                    .load_next_secret_share(churp_id, epoch)
+                    .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
+
+                // If the share is valid, copy it.
+                if let Some(share) = share.as_ref() {
+                    self.storage.store_secret_share(share, churp_id, epoch)?;
+                }
+
+                share
+            }
+        };
+        let share = share.ok_or(Error::PlayerNotFound)?;
+
+        // Create a new player.
+        let player = Arc::new(Player::from(share));
+        let data = HandoffData {
+            epoch,
+            object: player.clone(),
+        };
+        players.insert(churp_id, data);
+
+        Ok(player)
+    }
+
+    /// Adds a player for the specified scheme and handoff epoch.
+    fn add_player<D>(&self, player: Arc<Player<D>>, churp_id: u8, epoch: EpochTime)
+    where
+        D: DealerParams + 'static,
+    {
+        let mut players = self.players.lock().unwrap();
+
+        if let Some(data) = players.get(&churp_id) {
+            if epoch <= data.epoch {
+                return;
+            }
+        }
+
+        let data = HandoffData {
+            epoch,
+            object: player,
+        };
+        players.insert(churp_id, data);
+    }
+
+    /// Removes player for the specified scheme if the player belongs
+    /// to a handoff that happened at or before the given epoch.
+    fn remove_player(&self, churp_id: u8, max_epoch: EpochTime) {
+        let mut players = self.players.lock().unwrap();
+        let data = match players.get(&churp_id) {
+            Some(data) => data,
+            None => return,
+        };
+
+        if data.epoch > max_epoch {
+            return;
+        }
+
+        players.remove(&churp_id);
     }
 
     /// Returns the dealer for the specified scheme and handoff epoch.

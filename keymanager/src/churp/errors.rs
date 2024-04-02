@@ -25,6 +25,10 @@ pub enum Error {
     InvalidHandoff,
     #[error("invalid secret share")]
     InvalidSecretShare,
+    #[error("player mismatch")]
+    PlayerMismatch,
+    #[error("player not found")]
+    PlayerNotFound,
     #[error("policy rollback")]
     PolicyRollback,
     #[error("runtime mismatch")]
