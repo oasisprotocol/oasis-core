@@ -15,8 +15,12 @@ pub enum Error {
     DealerNotFound,
     #[error("handoffs disabled")]
     HandoffsDisabled,
+    #[error("handoff downcast failed")]
+    HandoffDowncastFailed,
     #[error("handoff mismatch")]
     HandoffMismatch,
+    #[error("handoff not found")]
+    HandoffNotFound,
     #[error("invalid bivariate polynomial")]
     InvalidBivariatePolynomial,
     #[error("invalid data")]

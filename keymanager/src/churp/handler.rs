@@ -20,14 +20,16 @@ use oasis_core_runtime::{
         namespace::Namespace,
     },
     consensus::{
-        beacon::EpochTime, keymanager::churp::GroupID, verifier::Verifier as ConsensusVerifier,
+        beacon::EpochTime,
+        keymanager::churp::{GroupID, Status},
+        verifier::Verifier as ConsensusVerifier,
     },
     identity::Identity as EnclaveIdentity,
     storage::KeyValue,
 };
 
 use secret_sharing::{
-    churp::{Dealer, DealerParams, NistP384, Player},
+    churp::{Dealer, DealerParams, Handoff, HandoffKind, NistP384, Player, Shareholder},
     vss::matrix::VerificationMatrix,
 };
 
@@ -79,6 +81,8 @@ pub struct Churp {
     players: Mutex<HashMap<u8, HandoffData>>,
     /// Dealers of bivariate shares for the next handoff, one per scheme.
     dealers: Mutex<HashMap<u8, HandoffData>>,
+    /// Next handoffs, limited to one per scheme.
+    handoffs: Mutex<HashMap<u8, HandoffData>>,
 }
 
 impl Churp {
@@ -96,6 +100,7 @@ impl Churp {
 
         let players = Mutex::new(HashMap::new());
         let dealers = Mutex::new(HashMap::new());
+        let handoffs = Mutex::new(HashMap::new());
 
         Self {
             signer,
@@ -106,6 +111,7 @@ impl Churp {
             beacon_state,
             players,
             dealers,
+            handoffs,
         }
     }
 
@@ -419,6 +425,100 @@ impl Churp {
         dealers.remove(&churp_id);
     }
 
+    /// Returns the handoff for the specified scheme and handoff epoch.
+    fn get_handoff<D>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Handoff<D>>>
+    where
+        D: DealerParams + 'static,
+    {
+        self._get_or_create_handoff(churp_id, epoch, None)
+    }
+
+    /// Returns the handoff for the specified scheme and the next handoff epoch.
+    /// If the handoff doesn't exist, a new one is created.
+    fn get_or_create_handoff<D>(&self, status: &Status) -> Result<Arc<Handoff<D>>>
+    where
+        D: DealerParams + 'static,
+    {
+        self._get_or_create_handoff(status.id, status.next_handoff, Some(status))
+    }
+
+    fn _get_or_create_handoff<D>(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        status: Option<&Status>,
+    ) -> Result<Arc<Handoff<D>>>
+    where
+        D: DealerParams + 'static,
+    {
+        // Check the memory first. Make sure to lock the handoffs so that we
+        // don't create two handoffs for the same epoch.
+        let mut handoffs = self.handoffs.lock().unwrap();
+
+        if let Some(data) = handoffs.get(&churp_id) {
+            match epoch.cmp(&data.epoch) {
+                cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
+                cmp::Ordering::Equal => {
+                    // Downcasting should never fail because the consensus ensures that
+                    // the group ID cannot change.
+                    let handoff = data
+                        .object
+                        .clone()
+                        .downcast::<Handoff<D>>()
+                        .or(Err(Error::HandoffDowncastFailed))?;
+
+                    return Ok(handoff);
+                }
+                cmp::Ordering::Greater => (),
+            }
+        }
+
+        // Skip handoff creation if not needed.
+        let status = status.ok_or(Error::HandoffNotFound)?;
+
+        // Create a new handoff.
+        let threshold = status.threshold;
+        let me = Shareholder(self.node_id.0);
+        let shareholders = status
+            .applications
+            .keys()
+            .cloned()
+            .map(|id| Shareholder(id.0))
+            .collect();
+        let kind = Self::handoff_kind(status);
+        let handoff = Handoff::new(threshold, me, shareholders, kind)?;
+
+        if kind == HandoffKind::CommitteeUnchanged {
+            let player = self.get_player(churp_id, status.handoff)?;
+            handoff.set_player(player)?;
+        }
+
+        let handoff = Arc::new(handoff);
+        let data = HandoffData {
+            epoch,
+            object: handoff.clone(),
+        };
+        handoffs.insert(churp_id, data);
+
+        Ok(handoff)
+    }
+
+    /// Removes the dealer for the specified scheme if the dealer belongs
+    /// to a handoff that happened at or before the given epoch.
+    fn remove_handoff(&self, churp_id: u8, max_epoch: EpochTime) {
+        let mut handoffs = self.handoffs.lock().unwrap();
+        let data = match handoffs.get(&churp_id) {
+            Some(data) => data,
+            None => return,
+        };
+
+        if data.epoch > max_epoch {
+            return;
+        }
+
+        handoffs.remove(&churp_id);
+    }
+
     /// Computes the checksum of the verification matrix.
     fn checksum_verification_matrix<G>(
         matrix: &VerificationMatrix<G>,
@@ -446,6 +546,25 @@ impl Churp {
         f.update(&epoch.to_le_bytes());
         f.finalize(&mut checksum);
         Hash(checksum)
+    }
+
+    /// Returns the type of the next handoff depending on which nodes submitted
+    /// an application to form the next committee.
+    fn handoff_kind(status: &Status) -> HandoffKind {
+        if status.committee.is_empty() {
+            return HandoffKind::DealingPhase;
+        }
+        if status.committee.len() != status.applications.len() {
+            return HandoffKind::CommitteeChanged;
+        }
+        if status
+            .committee
+            .iter()
+            .all(|value| status.applications.contains_key(value))
+        {
+            return HandoffKind::CommitteeUnchanged;
+        }
+        HandoffKind::CommitteeChanged
     }
 }
 
