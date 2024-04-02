@@ -140,6 +140,7 @@ type runtimeHistory struct {
 	lastStorageSyncedRound uint64
 
 	haveLocalStorageWorker bool
+	isArchive              bool
 
 	pruner        Pruner
 	pruneInterval time.Duration
@@ -176,6 +177,11 @@ func (h *runtimeHistory) ConsensusCheckpoint(height int64) error {
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(ctx context.Context, round uint64) error {
+	if h.isArchive {
+		// If we are in archive mode, ignore storage sync checkpoints.
+		return nil
+	}
+
 	if !h.haveLocalStorageWorker {
 		panic("received storage sync checkpoint when local storage worker is disabled")
 	}
@@ -376,7 +382,7 @@ func (h *runtimeHistory) pruneWorker() {
 }
 
 // New creates a new runtime history keeper.
-func New(dataDir string, runtimeID common.Namespace, cfg *Config, haveLocalStorageWorker bool) (History, error) {
+func New(dataDir string, runtimeID common.Namespace, cfg *Config, haveLocalStorageWorker bool, isArchive bool) (History, error) {
 	db, err := newDB(filepath.Join(dataDir, DbFilename), runtimeID)
 	if err != nil {
 		return nil, err
@@ -402,6 +408,7 @@ func New(dataDir string, runtimeID common.Namespace, cfg *Config, haveLocalStora
 		cancelCtx:              cancelCtx,
 		db:                     db,
 		haveLocalStorageWorker: haveLocalStorageWorker,
+		isArchive:              isArchive,
 		blocksNotifier:         pubsub.NewBroker(true),
 		pruner:                 pruner,
 		pruneInterval:          cfg.PruneInterval,
