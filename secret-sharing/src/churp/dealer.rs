@@ -1,11 +1,8 @@
 //! CHURP dealer.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
-use group::{
-    ff::{Field, PrimeField},
-    Group, GroupEncoding,
-};
+use group::{ff::PrimeField, Group, GroupEncoding};
 use rand_core::RngCore;
 
 use crate::vss::{
@@ -13,7 +10,7 @@ use crate::vss::{
     polynomial::{BivariatePolynomial, Polynomial},
 };
 
-use super::Error;
+use super::{Error, HandoffKind};
 
 /// Shareholder identifier.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -37,9 +34,8 @@ pub trait DealerParams {
 ///
 /// Shares must always be distributed over a secure channel and verified
 /// against the matrix. Reconstructing the secret bivariate polynomial
-/// requires obtaining at least a threshold number of shares from distinct
+/// requires obtaining more than a threshold number of shares from distinct
 /// participants.
-#[derive(Debug, Clone)]
 pub struct Dealer<D: DealerParams> {
     /// Secret bivariate polynomial.
     bp: BivariatePolynomial<D::PrimeField>,
@@ -54,8 +50,8 @@ where
 {
     /// Creates a new dealer.
     pub fn new(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Self {
-        let dx = threshold.saturating_sub(1); // Handle threshold 0 as 1.
-        let dy = 2 * dx;
+        let dx = threshold;
+        let dy = 2 * threshold;
 
         match dealing_phase {
             true => Dealer::random(dx, dy, rng),
@@ -86,12 +82,20 @@ where
         &self.vm
     }
 
-    // Returns a secret share for the given recipient.
-    pub fn share(&self, recipient: &D::PrimeField) -> Result<Polynomial<D::PrimeField>> {
-        if recipient.is_zero().into() {
-            return Err(anyhow!("zero-value recipient not allowed"));
-        }
-        Ok(self.bp.eval_x(recipient))
+    /// Returns a secret share for the given shareholder.
+    pub fn derive_bivariate_share(
+        &self,
+        id: Shareholder,
+        kind: HandoffKind,
+    ) -> Result<Polynomial<D::PrimeField>> {
+        let v = D::encode_shareholder(id)?;
+        let p = match kind {
+            HandoffKind::DealingPhase => self.bp.eval_x(&v),
+            HandoffKind::CommitteeChanged => self.bp.eval_y(&v),
+            HandoffKind::CommitteeUnchanged => self.bp.eval_x(&v),
+        };
+
+        Ok(p)
     }
 }
 
@@ -110,6 +114,7 @@ where
 pub type NistP384Dealer = Dealer<NistP384>;
 
 /// NIST P-384 dealer parameters.
+#[derive(Debug)]
 pub struct NistP384;
 
 impl DealerParams for NistP384 {
@@ -139,7 +144,7 @@ mod tests {
     fn test_new() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
 
-        let threshold = 3;
+        let threshold = 2;
         for dealing_phase in vec![true, false] {
             let dealer = NistP384Dealer::new(threshold, dealing_phase, &mut rng);
             assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);

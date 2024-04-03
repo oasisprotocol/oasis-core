@@ -21,6 +21,4 @@ pub enum Error {
     RuntimeMismatch,
     #[error("status not published")]
     StatusNotPublished,
-    #[error("zero threshold")]
-    ZeroThreshold,
 }

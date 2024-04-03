@@ -40,8 +40,12 @@ type Status struct {
 	// and key derivation.
 	GroupID uint8 `json:"group_id"`
 
-	// Threshold is the minimum number of distinct shares required
-	// to reconstruct a key.
+	// Threshold represents the degree of the secret-sharing polynomial.
+	//
+	// In a (t,n) secret-sharing scheme, where t represents the threshold,
+	// any combination of t+1 or more shares can reconstruct the secret,
+	// while losing n-t or fewer shares still allows the secret to be
+	// recovered.
 	Threshold uint8 `json:"threshold"`
 
 	// ActiveHandoff is the epoch of the last successfully executed handoff.
@@ -69,7 +73,7 @@ type Status struct {
 	// Committee is a vector of nodes holding a share of the secret
 	// in the active handoff.
 	//
-	// A client needs to obtain at least a threshold number of key shares
+	// A client needs to obtain more than a threshold number of key shares
 	// from the nodes in this vector to construct the key.
 	Committee []signature.PublicKey `json:"committee,omitempty"`
 

@@ -168,18 +168,20 @@ mod tests {
             .load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff)
             .expect("bivariate polynomial should be loaded")
             .expect("bivariate polynomial should exist");
-        assert_eq!(polynomial, restored);
+        assert!(polynomial == restored);
 
         // Non-existing ID.
         let restored = storage
             .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, handoff)
             .expect("bivariate polynomial should be loaded");
-        assert_eq!(None, restored);
+        assert!(None == restored);
 
         // Invalid handoff, decryption should fail.
-        storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff + 1)
-            .expect_err("decryption of bivariate polynomial should fail");
+        let res = storage.load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff + 1);
+        assert!(
+            res.is_err(),
+            "decryption of bivariate polynomial should fail"
+        );
 
         // Manipulate local storage.
         let right_key = Storage::create_bivariate_polynomial_key(churp_id);
@@ -198,14 +200,18 @@ mod tests {
             .expect("bivariate polynomial should be stored");
 
         // Invalid ID, decryption should fail.
-        storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, handoff)
-            .expect_err("decryption of bivariate polynomial should fail");
+        let res = storage.load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, handoff);
+        assert!(
+            res.is_err(),
+            "decryption of bivariate polynomial should fail"
+        );
 
         // Corrupted ciphertext, decryption should fail.
-        storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff)
-            .expect_err("decryption of bivariate polynomial should fail");
+        let res = storage.load_bivariate_polynomial::<p384::Scalar>(churp_id, handoff);
+        assert!(
+            res.is_err(),
+            "decryption of bivariate polynomial should fail"
+        );
     }
 
     #[test]
@@ -222,26 +228,39 @@ mod tests {
 
         // Invalid ID, decryption should fail.
         let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, handoff);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
+        let res = Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
             &mut ciphertext,
             churp_id + 1,
             handoff,
-        )
-        .expect_err("decryption of bivariate polynomial should fail");
+        );
+        assert!(
+            res.is_err(),
+            "decryption of bivariate polynomial should fail"
+        );
 
         // Invalid handoff, decryption should fail.
         let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, handoff);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
+        let res = Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
             &mut ciphertext,
             churp_id,
             handoff + 1,
-        )
-        .expect_err("decryption of bivariate polynomial should fail");
+        );
+        assert!(
+            res.is_err(),
+            "decryption of bivariate polynomial should fail"
+        );
 
         // Corrupted ciphertext, decryption should fail.
         let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, handoff);
         (ciphertext[0], _) = ciphertext[0].overflowing_add(1);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, handoff)
-            .expect_err("decryption of bivariate polynomial should fail");
+        let res = Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
+            &mut ciphertext,
+            churp_id,
+            handoff,
+        );
+        assert!(
+            res.is_err(),
+            "decryption of bivariate polynomial should fail"
+        );
     }
 }

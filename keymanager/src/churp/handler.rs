@@ -129,9 +129,6 @@ impl Churp {
         if status.next_handoff != req.handoff {
             return Err(Error::HandoffMismatch.into());
         }
-        if status.threshold == 0 {
-            return Err(Error::ZeroThreshold.into());
-        }
         if status.next_handoff == HANDOFFS_DISABLED {
             return Err(Error::HandoffsDisabled.into());
         }

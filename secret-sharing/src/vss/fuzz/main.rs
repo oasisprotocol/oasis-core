@@ -29,7 +29,7 @@ fn fuzz_bivariate_polynomial_from_seed(data: &[u8]) {
     let bp = random_bivariate_polynomial(data);
     let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
         .expect("deserialization should succeed");
-    assert_eq!(bp, restored)
+    assert!(bp == restored)
 }
 
 fn fuzz_bivariate_polynomial_from_bytes(data: &[u8]) {

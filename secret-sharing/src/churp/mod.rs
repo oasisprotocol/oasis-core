@@ -2,6 +2,9 @@
 
 mod dealer;
 mod errors;
+mod handoff;
+mod player;
+mod switch;
 
 // Re-exports.
-pub use self::{dealer::*, errors::*};
+pub use self::{dealer::*, errors::*, handoff::*, player::*, switch::*};
