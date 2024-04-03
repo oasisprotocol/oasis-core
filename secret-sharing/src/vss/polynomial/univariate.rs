@@ -22,7 +22,7 @@ use crate::vss::arith::powers;
 /// degree are consistently represented by vectors of the same size, resulting
 /// in encodings of equal length. If you wish to remove them, consider using
 /// the `trim` method after each operation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Polynomial<Fp> {
     pub(crate) a: Vec<Fp>,
 }
@@ -530,12 +530,12 @@ mod tests {
         let bp = Polynomial::<p384::Scalar>::random(0, &mut rng);
         let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
-        assert_eq!(bp, restored);
+        assert!(bp == restored);
 
         let bp = Polynomial::<p384::Scalar>::random(3, &mut rng);
         let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
-        assert_eq!(bp, restored);
+        assert!(bp == restored);
     }
 
     #[test]

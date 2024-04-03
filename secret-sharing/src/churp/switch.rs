@@ -27,7 +27,6 @@ enum DimensionSwitchKind {
 }
 
 /// Dimension switch state.
-#[derive(Debug)]
 enum DimensionSwitchState<D>
 where
     D: DealerParams,
@@ -61,7 +60,6 @@ where
 }
 
 /// A dimension switch based on a share resharing technique.
-#[derive(Debug)]
 pub struct DimensionSwitch<D>
 where
     D: DealerParams,
@@ -446,7 +444,6 @@ where
 }
 
 /// An accumulator for bivariate shares.
-#[derive(Debug)]
 struct BivariateShares<D>
 where
     D: DealerParams,
@@ -715,10 +712,12 @@ mod tests {
             // Try to reconstruct the polynomial.
             let res = sp.reconstruct_player();
             assert!(res.is_err());
-            assert_eq!(
-                res.unwrap_err().to_string(),
-                Error::NotEnoughSwitchPoints.to_string()
-            );
+            unsafe {
+                assert_eq!(
+                    res.unwrap_err_unchecked().to_string(),
+                    Error::NotEnoughSwitchPoints.to_string()
+                );
+            }
 
             // Full share distribution needs 2 * threshold points.
             if kind == DimensionSwitchKind::FullShareDistribution {
@@ -798,10 +797,12 @@ mod tests {
             None,
         );
         assert!(res.is_err());
-        assert_eq!(
-            res.unwrap_err().to_string(),
-            Error::NotEnoughShareholders.to_string()
-        );
+        unsafe {
+            assert_eq!(
+                res.unwrap_err_unchecked().to_string(),
+                Error::NotEnoughShareholders.to_string()
+            );
+        }
 
         // Happy path.
         for dkind in vec![
@@ -854,10 +855,12 @@ mod tests {
             // Try to collect the polynomial and verification matrix.
             let res = bs.randomize_player();
             assert!(res.is_err());
-            assert_eq!(
-                res.unwrap_err().to_string(),
-                Error::NotEnoughBivariateShares.to_string()
-            );
+            unsafe {
+                assert_eq!(
+                    res.unwrap_err_unchecked().to_string(),
+                    Error::NotEnoughBivariateShares.to_string()
+                );
+            }
 
             // Add the last share.
             let res = add_bivariate_shares(threshold, me, sh, &mut bs, dkind, hkind);

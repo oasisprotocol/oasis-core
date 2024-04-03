@@ -36,7 +36,6 @@ pub trait DealerParams {
 /// against the matrix. Reconstructing the secret bivariate polynomial
 /// requires obtaining more than a threshold number of shares from distinct
 /// participants.
-#[derive(Debug, Clone)]
 pub struct Dealer<D: DealerParams> {
     /// Secret bivariate polynomial.
     bp: BivariatePolynomial<D::PrimeField>,

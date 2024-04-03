@@ -10,7 +10,6 @@ use super::{DealerParams, Error, Shareholder};
 /// Player is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-#[derive(Debug)]
 pub struct Player<D: DealerParams> {
     /// Secret polynomial (share of the shared secret).
     p: Polynomial<D::PrimeField>,

@@ -80,7 +80,6 @@ impl HandoffKind {
 /// Handoff proactivizes the shared secret (changes associated shares) while
 /// transferring the secret from an old committee to a new, possibly
 /// intersecting one.
-#[derive(Debug)]
 pub struct Handoff<D: DealerParams> {
     /// Handoff kind.
     kind: HandoffKind,

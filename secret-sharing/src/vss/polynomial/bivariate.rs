@@ -10,7 +10,7 @@ use super::Polynomial;
 /// ```text
 /// B(x,y) = \sum_{i=0}^{deg_x} \sum_{j=0}^{deg_y} b_{i,j} x^i y^j
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BivariatePolynomial<Fp>
 where
     Fp: PrimeField,
@@ -347,12 +347,12 @@ mod tests {
         let bp = BivariatePolynomial::<p384::Scalar>::random(0, 0, &mut rng);
         let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
-        assert_eq!(bp, restored);
+        assert!(bp == restored);
 
         let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut rng);
         let restored = BivariatePolynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
             .expect("deserialization should succeed");
-        assert_eq!(bp, restored);
+        assert!(bp == restored);
     }
 
     #[test]
@@ -378,11 +378,11 @@ mod tests {
 
         let result = bp.eval_x(&scalar(5));
         let expected = Polynomial::with_coefficients(scalars(&[1]));
-        assert_eq!(result, expected);
+        assert!(result == expected);
 
         let result = bp.eval_y(&scalar(5));
         let expected = Polynomial::with_coefficients(scalars(&[1]));
-        assert_eq!(result, expected);
+        assert!(result == expected);
 
         let b = vec![
             scalars(&[1, 2, 3, 4]),
@@ -397,10 +397,10 @@ mod tests {
 
         let result = bp.eval_x(&scalar(5));
         let expected = Polynomial::with_coefficients(scalars(&[86, 117, 48, 59]));
-        assert_eq!(result, expected);
+        assert!(result == expected);
 
         let result = bp.eval_y(&scalar(5));
         let expected = Polynomial::with_coefficients(scalars(&[586, 242, 298]));
-        assert_eq!(result, expected);
+        assert!(result == expected);
     }
 }
