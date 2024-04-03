@@ -10,6 +10,16 @@ use crate::churp::Churp;
 
 /// Name of the `init` method.
 pub const METHOD_INIT: &str = "churp/init";
+/// Name of the `share_reduction` method.
+pub const METHOD_SHARE_REDUCTION: &str = "churp/share_reduction";
+/// Name of the `share_distribution` method.
+pub const METHOD_SHARE_DISTRIBUTION: &str = "churp/share_distribution";
+/// Name of the `proactivization` method.
+pub const METHOD_PROACTIVIZATION: &str = "churp/proactivization";
+/// Name of the `confirm` method.
+pub const METHOD_CONFIRM: &str = "churp/confirm";
+/// Name of the `finalize` method.
+pub const METHOD_FINALIZE: &str = "churp/finalize";
 /// Name of the `verification_matrix` method.
 pub const METHOD_VERIFICATION_MATRIX: &str = "churp/verification_matrix";
 /// Name of the `share_reduction_point` method.
@@ -59,6 +69,41 @@ impl RpcHandler for Churp {
                     kind: RpcKind::LocalQuery,
                 },
                 move |_ctx: &_, req: &_| self.init(req),
+            ),
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_SHARE_REDUCTION.to_string(),
+                    kind: RpcKind::LocalQuery,
+                },
+                move |_ctx: &_, req: &_| self.share_reduction(req),
+            ),
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_SHARE_DISTRIBUTION.to_string(),
+                    kind: RpcKind::LocalQuery,
+                },
+                move |_ctx: &_, req: &_| self.share_distribution(req),
+            ),
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_PROACTIVIZATION.to_string(),
+                    kind: RpcKind::LocalQuery,
+                },
+                move |_ctx: &_, req: &_| self.proactivization(req),
+            ),
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_CONFIRM.to_string(),
+                    kind: RpcKind::LocalQuery,
+                },
+                move |_ctx: &_, req: &_| self.confirmation(req),
+            ),
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_FINALIZE.to_string(),
+                    kind: RpcKind::LocalQuery,
+                },
+                move |_ctx: &_, req: &_| self.finalize(req),
             ),
         ]
     }

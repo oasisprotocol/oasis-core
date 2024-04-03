@@ -3,6 +3,8 @@
 /// CHURP error.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum Error {
+    #[error("application not submitted")]
+    ApplicationNotSubmitted,
     #[error("application submitted")]
     ApplicationSubmitted,
     #[error("applications closed")]
@@ -31,6 +33,10 @@ pub enum Error {
     InvalidHandoff,
     #[error("invalid secret share")]
     InvalidSecretShare,
+    #[error("invalid shareholder")]
+    InvalidShareholder,
+    #[error("invalid verification matrix checksum")]
+    InvalidVerificationMatrixChecksum,
     #[error("not authenticated")]
     NotAuthenticated,
     #[error("not authorized")]
@@ -41,6 +47,8 @@ pub enum Error {
     PlayerMismatch,
     #[error("player not found")]
     PlayerNotFound,
+    #[error("point decoding failed")]
+    PointDecodingFailed,
     #[error("policy rollback")]
     PolicyRollback,
     #[error("polynomial decoding failed")]

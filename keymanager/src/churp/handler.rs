@@ -29,6 +29,7 @@ use oasis_core_runtime::{
         verifier::Verifier,
     },
     enclave_rpc::Context as RpcContext,
+    future::block_on,
     identity::Identity,
     protocol::ProtocolUntrustedLocalStorage,
     Protocol,
@@ -36,22 +37,35 @@ use oasis_core_runtime::{
 
 use secret_sharing::{
     churp::{Dealer, DealerParams, Handoff, HandoffKind, NistP384, Player, Shareholder},
-    vss::{matrix::VerificationMatrix, scalar::scalar_to_bytes},
+    vss::{
+        matrix::VerificationMatrix,
+        polynomial::Polynomial,
+        scalar::{scalar_from_bytes, scalar_to_bytes},
+    },
 };
 
-use crate::{beacon::State as BeaconState, registry::State as RegistryState};
+use crate::{
+    beacon::State as BeaconState,
+    client::{KeyManagerClient, RemoteClient},
+    registry::State as RegistryState,
+};
 
 use super::{
-    storage::Storage, ApplicationRequest, EncodedSecretShare, Error, HandoffRequest, QueryRequest,
-    SignedApplicationRequest, State as ChurpState, VerifiedPolicies,
+    storage::Storage, ApplicationRequest, ConfirmationRequest, EncodedSecretShare, Error,
+    FetchRequest, FetchResponse, HandoffRequest, QueryRequest, SignedApplicationRequest,
+    SignedConfirmationRequest, State as ChurpState, VerifiedPolicies,
 };
 
 /// A handoff interval that disables handoffs.
 pub const HANDOFFS_DISABLED: EpochTime = 0xffffffffffffffff;
 
-/// Signatures context for signing application requests.
+/// Signature context for signing application requests.
 const APPLICATION_REQUEST_SIGNATURE_CONTEXT: &[u8] =
     b"oasis-core/keymanager/churp: application request";
+
+/// Signature context for signing confirmation requests.
+const CONFIRMATION_REQUEST_SIGNATURE_CONTEXT: &[u8] =
+    b"oasis-core/keymanager/churp: confirmation request";
 
 /// Custom KMAC domain separation for checksums of verification matrices.
 const CHECKSUM_VERIFICATION_MATRIX_CUSTOM: &[u8] =
@@ -73,11 +87,17 @@ pub struct Churp {
     node_id: PublicKey,
     /// Key manager runtime ID.
     runtime_id: Namespace,
+    /// Runtime identity.
+    identity: Arc<Identity>,
     /// Runtime attestation key signer.
     signer: Arc<dyn Signer>,
 
     /// Storage handler.
     storage: Storage,
+    /// Consensus verifier.
+    consensus_verifier: Arc<dyn Verifier>,
+    /// Low-level access to the underlying Runtime Host Protocol.
+    protocol: Arc<Protocol>,
 
     /// Verified beacon state.
     beacon_state: BeaconState,
@@ -124,9 +144,12 @@ impl Churp {
         let policies = VerifiedPolicies::new();
 
         Self {
+            identity,
             signer,
             node_id,
             runtime_id,
+            protocol,
+            consensus_verifier,
             storage,
             beacon_state,
             players,
@@ -447,6 +470,380 @@ impl Churp {
         })
     }
 
+    /// Tries to fetch switch points for share reduction from the given nodes.
+    ///
+    /// Switch points should be obtained from (at least) t distinct nodes
+    /// belonging to the old committee, verified against verification matrix
+    /// whose checksum was published in the consensus layer, merged into
+    /// a reduced share using Lagrange interpolation and proactivized with
+    /// bivariate shares.
+    ///
+    /// Switch point:
+    /// ```text
+    ///     P_i = B(node_i, me)
+    ///```
+    /// Reduced share:
+    /// ```text
+    ///     RS(x) = B(x, me)
+    /// ````
+    /// Proactive reduced share:
+    /// ```text
+    ///     QR(x) = RS(x) + \sum Q_i(x, me)
+    /// ````
+    pub fn share_reduction(&self, req: &FetchRequest) -> Result<FetchResponse> {
+        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        match status.group_id {
+            GroupID::NistP384 => {
+                self.fetch_share_reduction_switch_points::<NistP384>(&req.node_ids, &status)
+            }
+        }
+    }
+
+    /// Tries to fetch switch points for share reduction from the given nodes.
+    pub fn fetch_share_reduction_switch_points<D>(
+        &self,
+        node_ids: &Vec<PublicKey>,
+        status: &Status,
+    ) -> Result<FetchResponse>
+    where
+        D: DealerParams + 'static,
+    {
+        let handoff = self.get_or_create_handoff::<D>(status)?;
+        let client = self.key_manager_client(status, false)?;
+        let f = |node_id| {
+            self.fetch_share_reduction_switch_point::<D>(node_id, status, &handoff, &client)
+        };
+        fetch(f, node_ids)
+    }
+
+    /// Tries to fetch switch point for share reduction from the given node.
+    pub fn fetch_share_reduction_switch_point<D>(
+        &self,
+        node_id: PublicKey,
+        status: &Status,
+        handoff: &Handoff<D>,
+        client: &RemoteClient,
+    ) -> Result<bool>
+    where
+        D: DealerParams + 'static,
+    {
+        let id = Shareholder(node_id.0);
+
+        if !handoff.needs_share_reduction_switch_point(&id)? {
+            return Err(Error::InvalidShareholder.into());
+        }
+
+        // Fetch from the host node.
+        if node_id == self.node_id {
+            let player = self.get_player::<D>(status.id, status.handoff)?;
+            let point = player.switch_point(id)?;
+
+            if handoff.needs_verification_matrix()? {
+                // Local verification matrix is trusted.
+                let vm = player.verification_matrix().clone();
+                handoff.set_verification_matrix(vm)?;
+            }
+
+            return handoff.add_share_reduction_switch_point(id, point);
+        }
+
+        // Fetch from the remote node.
+        client.set_nodes(vec![node_id]);
+
+        if handoff.needs_verification_matrix()? {
+            // The remote verification matrix needs to be verified.
+            let vm = block_on(client.verification_matrix(status.id, status.handoff))?;
+            let checksum = Self::checksum_verification_matrix_bytes(
+                &vm,
+                self.runtime_id,
+                status.id,
+                status.handoff,
+            );
+            let status_checksum = status.checksum.ok_or(Error::InvalidHandoff)?; // Should never happen.
+            if checksum != status_checksum {
+                return Err(Error::InvalidVerificationMatrixChecksum.into());
+            }
+
+            let vm = VerificationMatrix::from_bytes(vm)
+                .ok_or(Error::VerificationMatrixDecodingFailed)?;
+            handoff.set_verification_matrix(vm)?;
+        }
+
+        let point =
+            block_on(client.share_reduction_point(status.id, status.next_handoff, self.node_id))?;
+        let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
+
+        handoff.add_share_reduction_switch_point(id, point)
+    }
+
+    /// Tries to fetch switch data points for full share distribution from
+    /// the given nodes.
+    ///
+    /// Switch points should be obtained from (at least) 2t distinct nodes
+    /// belonging to the new committee, verified against the sum of the
+    /// verification matrix and the verification matrices of proactive
+    /// bivariate shares, whose checksums were published in the consensus
+    /// layer, and merged into a full share using Lagrange interpolation.
+    ///
+    /// Switch point:
+    /// ```text
+    ///     P_i = B(me, node_i) + \sum Q_i(me, node_i)
+    ///```
+    /// Full share:
+    /// ```text
+    ///     FS(x) = B(me, y) + \sum Q_i(me, y) = B'(me, y)
+    /// ````
+    pub fn share_distribution(&self, req: &FetchRequest) -> Result<FetchResponse> {
+        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        match status.group_id {
+            GroupID::NistP384 => {
+                self.fetch_share_distribution_switch_points::<NistP384>(&req.node_ids, &status)
+            }
+        }
+    }
+
+    /// Tries to fetch switch points for share distribution from the given nodes.
+    pub fn fetch_share_distribution_switch_points<D>(
+        &self,
+        node_ids: &Vec<PublicKey>,
+        status: &Status,
+    ) -> Result<FetchResponse>
+    where
+        D: DealerParams + 'static,
+    {
+        let handoff = self.get_handoff::<D>(status.id, status.next_handoff)?;
+        let client = self.key_manager_client(status, true)?;
+        let f = |node_id| {
+            self.fetch_share_distribution_switch_point::<D>(node_id, status, &handoff, &client)
+        };
+        fetch(f, node_ids)
+    }
+
+    /// Tries to fetch switch point for share reduction from the given node.
+    pub fn fetch_share_distribution_switch_point<D>(
+        &self,
+        node_id: PublicKey,
+        status: &Status,
+        handoff: &Handoff<D>,
+        client: &RemoteClient,
+    ) -> Result<bool>
+    where
+        D: DealerParams + 'static,
+    {
+        let id = Shareholder(node_id.0);
+
+        if !handoff.needs_full_share_distribution_switch_point(&id)? {
+            return Err(Error::InvalidShareholder.into());
+        }
+
+        // Fetch from the host node.
+        if node_id == self.node_id {
+            let player = handoff.get_reduced_player()?;
+            let point = player.switch_point(id)?;
+
+            return handoff.add_full_share_distribution_switch_point(id, point);
+        }
+
+        // Fetch from the remote node.
+        client.set_nodes(vec![node_id]);
+        let point = block_on(client.share_distribution_point(
+            status.id,
+            status.next_handoff,
+            self.node_id,
+        ))?;
+        let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
+
+        handoff.add_full_share_distribution_switch_point(id, point)
+    }
+
+    /// Tries to fetch proactive bivariate shares from the given nodes.
+    ///
+    /// Bivariate shares should be fetched from all candidates for the new
+    /// committee, including our own, verified against verification matrices
+    /// whose checksums were published in the consensus layer, and summed
+    /// into a bivariate polynomial.
+    ///
+    /// Bivariate polynomial share:
+    /// ```text
+    ///     S_i(y) = Q_i(me, y) (dealing phase or unchanged committee)
+    ///     S_i(x) = Q_i(x, me) (committee changes)
+    /// ```
+    pub fn proactivization(&self, req: &FetchRequest) -> Result<FetchResponse> {
+        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        match status.group_id {
+            GroupID::NistP384 => self.fetch_bivariate_shares::<NistP384>(&req.node_ids, &status),
+        }
+    }
+
+    /// Tries to fetch proactive bivariate shares from the given nodes.
+    pub fn fetch_bivariate_shares<D>(
+        &self,
+        node_ids: &Vec<PublicKey>,
+        status: &Status,
+    ) -> Result<FetchResponse>
+    where
+        D: DealerParams + 'static,
+    {
+        let handoff = self.get_or_create_handoff::<D>(status)?;
+        let client = self.key_manager_client(status, true)?;
+        let f = |node_id| self.fetch_bivariate_share::<D>(node_id, status, &handoff, &client);
+        fetch(f, node_ids)
+    }
+
+    /// Tries to fetch proactive bivariate share from the given node.
+    pub fn fetch_bivariate_share<D>(
+        &self,
+        node_id: PublicKey,
+        status: &Status,
+        handoff: &Handoff<D>,
+        client: &RemoteClient,
+    ) -> Result<bool>
+    where
+        D: DealerParams + 'static,
+    {
+        let id = Shareholder(node_id.0);
+
+        if !handoff.needs_bivariate_share(&id)? {
+            return Err(Error::InvalidShareholder.into());
+        }
+
+        // Fetch from the host node.
+        if node_id == self.node_id {
+            let kind = Self::handoff_kind(status);
+            let dealer = self.get_dealer::<D>(status.id, status.next_handoff)?;
+            let q = dealer.derive_bivariate_share(id, kind)?;
+            let vm = dealer.verification_matrix().clone();
+
+            return handoff.add_bivariate_share(id, q, vm);
+        }
+
+        // Fetch from the remote node.
+        client.set_nodes(vec![node_id]);
+        let share = block_on(client.bivariate_share(status.id, status.next_handoff, self.node_id))?;
+
+        // The remote verification matrix needs to be verified.
+        let checksum = Self::checksum_verification_matrix_bytes(
+            &share.verification_matrix,
+            self.runtime_id,
+            status.id,
+            status.next_handoff,
+        );
+        let application = status
+            .applications
+            .get(&node_id)
+            .ok_or(Error::InvalidShareholder)?; // Should never happen, as we verify if we require this share.
+
+        if checksum != application.checksum {
+            return Err(Error::InvalidVerificationMatrixChecksum.into());
+        }
+
+        let q = Polynomial::from_bytes(share.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
+        let vm = VerificationMatrix::from_bytes(share.verification_matrix)
+            .ok_or(Error::VerificationMatrixDecodingFailed)?;
+
+        handoff.add_bivariate_share(id, q, vm)
+    }
+
+    /// Returns a signed confirmation request containing the checksum
+    /// of the merged verification matrix.
+    pub fn confirmation(&self, req: &HandoffRequest) -> Result<SignedConfirmationRequest> {
+        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        if !status.applications.contains_key(&self.node_id) {
+            return Err(Error::ApplicationNotSubmitted.into());
+        }
+
+        match status.group_id {
+            GroupID::NistP384 => self.prepare_confirmation::<NistP384>(&status),
+        }
+    }
+
+    fn prepare_confirmation<D>(&self, status: &Status) -> Result<SignedConfirmationRequest>
+    where
+        D: DealerParams + 'static,
+    {
+        let handoff = self.get_handoff::<D>(status.id, status.next_handoff)?;
+        let player = handoff.get_full_player()?;
+        let share = player.secret_share();
+
+        // Before overwriting the next secret share, make sure it was copied
+        // and used to construct the last player.
+        let _ = self
+            .get_player::<D>(status.id, status.handoff)
+            .map(Some)
+            .or_else(|err| ignore_error(err, Error::PlayerNotFound))?; // Ignore if we don't have the correct share.
+
+        // Always persist the secret share before sending confirmation.
+        self.storage
+            .store_next_secret_share(share, status.id, status.next_handoff)?;
+
+        // Prepare response and sign it with RAK.
+        let vm = share.verification_matrix();
+        let checksum =
+            Self::checksum_verification_matrix(vm, self.runtime_id, status.id, status.next_handoff);
+        let confirmation = ConfirmationRequest {
+            id: status.id,
+            runtime_id: self.runtime_id,
+            epoch: status.next_handoff,
+            checksum,
+        };
+        let body = cbor::to_vec(confirmation.clone());
+        let signature = self
+            .signer
+            .sign(CONFIRMATION_REQUEST_SIGNATURE_CONTEXT, &body)?;
+
+        Ok(SignedConfirmationRequest {
+            confirmation,
+            signature,
+        })
+    }
+
+    /// Finalizes the specified scheme by cleaning up obsolete dealers,
+    /// handoffs, and players. If the handoff was just completed, the player
+    /// is made available, and its share is persisted to the local storage.
+    pub fn finalize(&self, req: &HandoffRequest) -> Result<()> {
+        let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        match status.group_id {
+            GroupID::NistP384 => self.do_finalize::<NistP384>(&status),
+        }
+    }
+
+    fn do_finalize<D>(&self, status: &Status) -> Result<()>
+    where
+        D: DealerParams + 'static,
+    {
+        // Move the player if the handoff was completed.
+        let handoff = self.get_handoff::<D>(status.id, status.handoff);
+        let handoff = match handoff {
+            Ok(handoff) => Some(handoff),
+            Err(err) => match err.downcast_ref::<Error>() {
+                Some(err) if err == &Error::HandoffNotFound => None,
+                _ => return Err(err),
+            },
+        };
+        if let Some(handoff) = handoff {
+            let player = handoff.get_full_player()?;
+            let share = player.secret_share();
+            self.storage
+                .store_secret_share(share, status.id, status.handoff)?;
+            self.add_player(player, status.id, status.handoff);
+        }
+
+        // Cleanup.
+        let max_epoch = status.handoff.saturating_sub(1);
+        self.remove_player(status.id, max_epoch);
+
+        let max_epoch = status.next_handoff.saturating_sub(1);
+        self.remove_dealer(status.id, max_epoch);
+        self.remove_handoff(status.id, max_epoch);
+
+        Ok(())
+    }
+
     /// Returns the player for the specified scheme and handoff epoch.
     fn get_player<D>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Player<D>>>
     where
@@ -479,7 +876,7 @@ impl Churp {
         // host has cleared the storage.
         let share = self
             .storage
-            .load_secret_share::<D::Group>(churp_id, epoch)
+            .load_secret_share(churp_id, epoch)
             .or_else(|err| ignore_error(err, Error::InvalidSecretShare))?; // Ignore previous shares.
 
         let share = match share {
@@ -609,7 +1006,7 @@ impl Churp {
         // host has cleared the storage.
         let polynomial = self
             .storage
-            .load_bivariate_polynomial::<D::PrimeField>(churp_id, epoch)
+            .load_bivariate_polynomial(churp_id, epoch)
             .or_else(|err| ignore_error(err, Error::InvalidBivariatePolynomial))?; // Ignore previous dealers.
 
         let dealer = match polynomial {
@@ -858,6 +1255,38 @@ impl Churp {
         option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
     }
 
+    /// Returns a key manager client that connects only to enclaves eligible
+    /// to form a new committee or to enclaves belonging the old committee.
+    fn key_manager_client(&self, _status: &Status, _new_committee: bool) -> Result<RemoteClient> {
+        #[cfg(not(target_env = "sgx"))]
+        let enclaves = None;
+        #[cfg(target_env = "sgx")]
+        let enclaves = if Self::ignore_policy() {
+            None
+        } else {
+            let policy = self.policies.verify(&_status.policy)?;
+            let enclaves = match _new_committee {
+                true => policy.may_join.clone(),
+                false => policy.may_share.clone(),
+            };
+            Some(enclaves)
+        };
+
+        let client = RemoteClient::new_runtime_with_enclaves_and_policy(
+            self.runtime_id,
+            Some(self.runtime_id),
+            enclaves,
+            self.identity.quote_policy(),
+            self.protocol.clone(),
+            self.consensus_verifier.clone(),
+            self.identity.clone(),
+            1, // Not used, doesn't matter.
+            vec![],
+        );
+
+        Ok(client)
+    }
+
     /// Computes the checksum of the verification matrix.
     fn checksum_verification_matrix<G>(
         matrix: &VerificationMatrix<G>,
@@ -913,4 +1342,37 @@ fn ignore_error<T>(err: anyhow::Error, ignore: Error) -> Result<Option<T>> {
         Some(error) if error == &ignore => Ok(None),
         _ => Err(err),
     }
+}
+
+/// Fetches data from the given nodes by calling the provided function
+/// for each node.
+fn fetch<F>(f: F, node_ids: &[PublicKey]) -> Result<FetchResponse>
+where
+    F: Fn(PublicKey) -> Result<bool>,
+{
+    let mut completed = false;
+    let mut succeeded = vec![];
+    let mut failed = vec![];
+
+    for &node_id in node_ids {
+        if completed {
+            break;
+        }
+
+        match f(node_id) {
+            Ok(done) => {
+                completed = done;
+                succeeded.push(node_id);
+            }
+            Err(_) => {
+                failed.push(node_id);
+            }
+        }
+    }
+
+    Ok(FetchResponse {
+        completed,
+        succeeded,
+        failed,
+    })
 }
