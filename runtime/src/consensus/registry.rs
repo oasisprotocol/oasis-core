@@ -458,22 +458,45 @@ pub struct EntityWhitelistConfig {
     pub max_nodes: BTreeMap<RolesMask, u16>,
 }
 
-/// Specification of which nodes are allowed to register for a runtime.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
-pub enum RuntimeAdmissionPolicy {
-    /// Allow any node to register.
-    #[cbor(rename = "any_node")]
-    AnyNode {},
-
-    /// Allow only the whitelisted entities' nodes to register.
-    #[cbor(rename = "entity_whitelist")]
-    EntityWhitelist(EntityWhitelistRuntimeAdmissionPolicy),
+/// A per-entity whitelist configuration for a given role.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct EntityWhitelistRoleConfig {
+    #[cbor(optional)]
+    pub max_nodes: u16,
 }
 
-impl Default for RuntimeAdmissionPolicy {
-    fn default() -> Self {
-        RuntimeAdmissionPolicy::AnyNode {}
-    }
+/// A per-role entity whitelist policy.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct EntityWhitelistRoleAdmissionPolicy {
+    pub entities: BTreeMap<signature::PublicKey, EntityWhitelistRoleConfig>,
+}
+
+/// A per-role admission policy.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct PerRoleAdmissionPolicy {
+    #[cbor(optional)]
+    pub entity_whitelist: Option<EntityWhitelistRoleAdmissionPolicy>,
+}
+
+/// Admission policy that allows any node to register.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct AnyNodeRuntimeAdmissionPolicy {}
+
+/// Specification of which nodes are allowed to register for a runtime.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct RuntimeAdmissionPolicy {
+    /// Allow any node to register.
+    #[cbor(optional)]
+    pub any_node: Option<AnyNodeRuntimeAdmissionPolicy>,
+
+    /// Allow only the whitelisted entities' nodes to register.
+    #[cbor(optional)]
+    pub entity_whitelist: Option<EntityWhitelistRuntimeAdmissionPolicy>,
+
+    /// A per-role admission policy that must be satisfied in addition to the global admission
+    /// policy for a specific role.
+    #[cbor(optional)]
+    pub per_role: BTreeMap<RolesMask, PerRoleAdmissionPolicy>,
 }
 
 /// Runtime governance model.
@@ -753,11 +776,21 @@ mod tests {
         // NOTE: These tests MUST be synced with go/registry/api/runtime.go.
         let tcs = vec![
             // FIXME: Change to "qmF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA==" once cbor is fixed.
-            ("q2F2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAbXR4bl9zY2hlZHVsZXKgcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA==", Runtime::default()),
+            ("q2F2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAbXR4bl9zY2hlZHVsZXKgcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA==", Runtime {
+                admission_policy: RuntimeAdmissionPolicy {
+                    any_node: Some(AnyNodeRuntimeAdmissionPolicy {}),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
             // FIXME: Change to "qmF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA==" once cbor is fixed.
             (
                 "q2F2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0b3JhZ2Wjc2NoZWNrcG9pbnRfaW50ZXJ2YWwAc2NoZWNrcG9pbnRfbnVtX2tlcHQAdWNoZWNrcG9pbnRfY2h1bmtfc2l6ZQBoZXhlY3V0b3Klamdyb3VwX3NpemUAbG1heF9tZXNzYWdlcwBtcm91bmRfdGltZW91dABxZ3JvdXBfYmFja3VwX3NpemUAcmFsbG93ZWRfc3RyYWdnbGVycwBpZW50aXR5X2lkWCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGx0ZWVfaGFyZHdhcmUAbXR4bl9zY2hlZHVsZXKgcGFkbWlzc2lvbl9wb2xpY3mhaGFueV9ub2RloHBnb3Zlcm5hbmNlX21vZGVsAA==",
                 Runtime {
+                    admission_policy: RuntimeAdmissionPolicy {
+                        any_node: Some(AnyNodeRuntimeAdmissionPolicy {}),
+                        ..Default::default()
+                    },
                     staking: RuntimeStakingParameters {
                         thresholds: BTreeMap::new(),
                         slashing: BTreeMap::new(),
@@ -772,6 +805,10 @@ mod tests {
             (
                 "rGF2AGJpZFggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABka2luZABnZ2VuZXNpc6Jlcm91bmQAanN0YXRlX3Jvb3RYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZ3N0YWtpbmehcnJld2FyZF9iYWRfcmVzdWx0cwpnc3RvcmFnZaNzY2hlY2twb2ludF9pbnRlcnZhbABzY2hlY2twb2ludF9udW1fa2VwdAB1Y2hlY2twb2ludF9jaHVua19zaXplAGhleGVjdXRvcqVqZ3JvdXBfc2l6ZQBsbWF4X21lc3NhZ2VzAG1yb3VuZF90aW1lb3V0AHFncm91cF9iYWNrdXBfc2l6ZQByYWxsb3dlZF9zdHJhZ2dsZXJzAGllbnRpdHlfaWRYIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbHRlZV9oYXJkd2FyZQBtdHhuX3NjaGVkdWxlcqBwYWRtaXNzaW9uX3BvbGljeaFoYW55X25vZGWgcGdvdmVybmFuY2VfbW9kZWwA",
                 Runtime {
+                    admission_policy: RuntimeAdmissionPolicy {
+                        any_node: Some(AnyNodeRuntimeAdmissionPolicy {}),
+                        ..Default::default()
+                    },
                     staking: RuntimeStakingParameters {
                         thresholds: BTreeMap::new(),
                         slashing: BTreeMap::new(),
@@ -834,8 +871,8 @@ mod tests {
                         checkpoint_num_kept: 6,
                         checkpoint_chunk_size: 101,
                     },
-                    admission_policy: RuntimeAdmissionPolicy::EntityWhitelist(
-                        EntityWhitelistRuntimeAdmissionPolicy {
+                    admission_policy: RuntimeAdmissionPolicy {
+                        entity_whitelist: Some(EntityWhitelistRuntimeAdmissionPolicy {
                             entities: btreemap! {
                                 signature::PublicKey::from("1234567890000000000000000000000000000000000000000000000000000000") => EntityWhitelistConfig {
                                      max_nodes: btreemap! {
@@ -844,8 +881,9 @@ mod tests {
                                     }
                                 }
                             },
-                        },
-                    ),
+                        }),
+                        ..Default::default()
+                    },
                     constraints: btreemap! {
                         scheduler::CommitteeKind::ComputeExecutor => btreemap! {
                             scheduler::Role::Worker => SchedulingConstraints{

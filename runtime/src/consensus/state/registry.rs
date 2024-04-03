@@ -100,11 +100,15 @@ impl<'a, T: ImmutableMKVS> ImmutableState<'a, T> {
 
 #[cfg(test)]
 mod test {
+    use std::collections::BTreeMap;
+
     use crate::{
         common::crypto::signature,
         consensus::registry::{
-            Capabilities, CapabilityTEE, ConsensusInfo, NodeRuntime, P2PInfo, RuntimeKind,
-            TEEHardware, TLSInfo, VRFInfo, VersionInfo,
+            AnyNodeRuntimeAdmissionPolicy, Capabilities, CapabilityTEE, ConsensusInfo,
+            EntityWhitelistRoleAdmissionPolicy, NodeRuntime, P2PInfo, PerRoleAdmissionPolicy,
+            RolesMask, RuntimeAdmissionPolicy, RuntimeKind, TEEHardware, TLSInfo, VRFInfo,
+            VersionInfo,
         },
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
@@ -128,7 +132,7 @@ mod test {
         let mock_consensus_root = Root {
             version: 1,
             root_type: RootType::State,
-            hash: Hash::from("280a0d815030421f16366da7cc57efbfc7fc87d9a7d16964216c79873ebd240a"),
+            hash: Hash::from("1c2ce324ac7d7b3a5f47cc73fed9455b96d562c2488250f28af8101fe2e32cb3"),
             ..Default::default()
         };
         let mkvs = Tree::builder()
@@ -221,6 +225,10 @@ mod test {
                 ),
                 kind: RuntimeKind::KindCompute,
                 tee_hardware: TEEHardware::TEEHardwareInvalid,
+                admission_policy: RuntimeAdmissionPolicy {
+                    any_node: Some(AnyNodeRuntimeAdmissionPolicy {}),
+                    ..Default::default()
+                },
                 deployments: vec![
                     VersionInfo {
                         version: Version::from(321),
@@ -245,6 +253,10 @@ mod test {
                 ),
                 kind: RuntimeKind::KindCompute,
                 tee_hardware: TEEHardware::TEEHardwareIntelSGX,
+                admission_policy: RuntimeAdmissionPolicy {
+                    any_node: Some(AnyNodeRuntimeAdmissionPolicy {}),
+                    ..Default::default()
+                },
                 deployments: vec![
                     VersionInfo {
                         version: Version::from(123),
@@ -259,6 +271,35 @@ mod test {
                         ..Default::default()
                     },
                 ],
+                ..Default::default()
+            },
+            Runtime {
+                v: 3,
+                id: Namespace::from(
+                    "8000000000000000000000000000000000000000000000000000000000000012",
+                ),
+                entity_id: signature::PublicKey::from(
+                    "761950dfe65936f6e9d06a0124bc930f7d5b1812ceefdfb2cae0ef5841291531",
+                ),
+                kind: RuntimeKind::KindCompute,
+                tee_hardware: TEEHardware::TEEHardwareIntelSGX,
+                admission_policy: RuntimeAdmissionPolicy {
+                    per_role: BTreeMap::from([(
+                        RolesMask::ROLE_OBSERVER,
+                        PerRoleAdmissionPolicy {
+                            entity_whitelist: Some(EntityWhitelistRoleAdmissionPolicy {
+                                entities: BTreeMap::new(),
+                            }),
+                        },
+                    )]),
+                    ..Default::default()
+                },
+                deployments: vec![VersionInfo {
+                    version: Version::from(123),
+                    valid_from: 42,
+                    tee: vec![1, 2, 3, 4, 5],
+                    bundle_checksum: vec![0x5; 32],
+                }],
                 ..Default::default()
             },
         ];
