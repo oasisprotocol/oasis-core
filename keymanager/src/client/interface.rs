@@ -3,10 +3,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use oasis_core_runtime::consensus::beacon::EpochTime;
+use oasis_core_runtime::{common::crypto::signature::PublicKey, consensus::beacon::EpochTime};
 
 use crate::{
     api::KeyManagerError,
+    churp::EncodedSecretShare,
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
 };
 
@@ -63,6 +64,39 @@ pub trait KeyManagerClient: Send + Sync {
     /// Get a copy of the ephemeral secret for replication.
     async fn replicate_ephemeral_secret(&self, epoch: EpochTime)
         -> Result<Secret, KeyManagerError>;
+
+    /// Returns the verification matrix for the given handoff.
+    async fn verification_matrix(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+    ) -> Result<Vec<u8>, KeyManagerError>;
+
+    /// Returns a switch point for the share reduction phase
+    /// of the given handoff.
+    async fn share_reduction_point(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError>;
+
+    /// Returns a switch point for the share distribution phase
+    /// of the given handoff.
+    async fn share_distribution_point(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError>;
+
+    /// Returns a bivariate share for the given handoff.
+    async fn bivariate_share(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<EncodedSecretShare, KeyManagerError>;
 }
 
 #[async_trait]
@@ -115,5 +149,40 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         epoch: EpochTime,
     ) -> Result<Secret, KeyManagerError> {
         KeyManagerClient::replicate_ephemeral_secret(&**self, epoch).await
+    }
+
+    async fn verification_matrix(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        KeyManagerClient::verification_matrix(&**self, churp_id, epoch).await
+    }
+
+    async fn share_reduction_point(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        KeyManagerClient::share_reduction_point(&**self, churp_id, epoch, node_id).await
+    }
+
+    async fn share_distribution_point(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        KeyManagerClient::share_distribution_point(&**self, churp_id, epoch, node_id).await
+    }
+
+    async fn bivariate_share(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<EncodedSecretShare, KeyManagerError> {
+        KeyManagerClient::bivariate_share(&**self, churp_id, epoch, node_id).await
     }
 }

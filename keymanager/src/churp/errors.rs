@@ -4,7 +4,7 @@
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum Error {
     #[error("application submitted")]
-    ApplicationsSubmitted,
+    ApplicationSubmitted,
     #[error("applications closed")]
     ApplicationsClosed,
     #[error("bivariate polynomial decoding failed")]
@@ -13,6 +13,8 @@ pub enum Error {
     DealerMismatch,
     #[error("dealer not found")]
     DealerNotFound,
+    #[error("handoff closed")]
+    HandoffClosed,
     #[error("handoffs disabled")]
     HandoffsDisabled,
     #[error("handoff downcast failed")]
@@ -29,18 +31,24 @@ pub enum Error {
     InvalidHandoff,
     #[error("invalid secret share")]
     InvalidSecretShare,
+    #[error("not authenticated")]
+    NotAuthenticated,
+    #[error("not authorized")]
+    NotAuthorized,
+    #[error("not in committee")]
+    NotInCommittee,
     #[error("player mismatch")]
     PlayerMismatch,
     #[error("player not found")]
     PlayerNotFound,
     #[error("policy rollback")]
     PolicyRollback,
+    #[error("polynomial decoding failed")]
+    PolynomialDecodingFailed,
     #[error("runtime mismatch")]
     RuntimeMismatch,
     #[error("status not published")]
     StatusNotPublished,
-    #[error("polynomial decoding failed")]
-    PolynomialDecodingFailed,
     #[error("verification matrix decoding failed")]
     VerificationMatrixDecodingFailed,
 }

@@ -11,6 +11,10 @@ use p256::elliptic_curve::{group::GroupEncoding, Group};
 use rand::rngs::OsRng;
 use sp800_185::KMac;
 
+#[cfg(target_env = "sgx")]
+use oasis_core_runtime::{
+    common::sgx::EnclaveIdentity, consensus::keymanager::churp::SignedPolicySGX,
+};
 use oasis_core_runtime::{
     common::{
         crypto::{
@@ -22,22 +26,24 @@ use oasis_core_runtime::{
     consensus::{
         beacon::EpochTime,
         keymanager::churp::{GroupID, Status},
-        verifier::Verifier as ConsensusVerifier,
+        verifier::Verifier,
     },
-    identity::Identity as EnclaveIdentity,
-    storage::KeyValue,
+    enclave_rpc::Context as RpcContext,
+    identity::Identity,
+    protocol::ProtocolUntrustedLocalStorage,
+    Protocol,
 };
 
 use secret_sharing::{
     churp::{Dealer, DealerParams, Handoff, HandoffKind, NistP384, Player, Shareholder},
-    vss::matrix::VerificationMatrix,
+    vss::{matrix::VerificationMatrix, scalar::scalar_to_bytes},
 };
 
-use crate::beacon::State as BeaconState;
+use crate::{beacon::State as BeaconState, registry::State as RegistryState};
 
 use super::{
-    storage::Storage, ApplicationRequest, Error, HandoffRequest, SignedApplicationRequest,
-    State as ChurpState,
+    storage::Storage, ApplicationRequest, EncodedSecretShare, Error, HandoffRequest, QueryRequest,
+    SignedApplicationRequest, State as ChurpState, VerifiedPolicies,
 };
 
 /// A handoff interval that disables handoffs.
@@ -67,14 +73,19 @@ pub struct Churp {
     node_id: PublicKey,
     /// Key manager runtime ID.
     runtime_id: Namespace,
-
     /// Runtime attestation key signer.
     signer: Arc<dyn Signer>,
+
     /// Storage handler.
     storage: Storage,
 
-    churp_state: ChurpState,
+    /// Verified beacon state.
     beacon_state: BeaconState,
+    /// Verified churp state.
+    churp_state: ChurpState,
+    /// Verified registry state.
+    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
+    registry_state: RegistryState,
 
     /// Players with secret shares for the last successfully completed handoff,
     /// one per scheme.
@@ -83,36 +94,274 @@ pub struct Churp {
     dealers: Mutex<HashMap<u8, HandoffData>>,
     /// Next handoffs, limited to one per scheme.
     handoffs: Mutex<HashMap<u8, HandoffData>>,
+
+    /// Cached verified policies.
+    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
+    policies: VerifiedPolicies,
 }
 
 impl Churp {
     pub fn new(
         node_id: PublicKey,
-        runtime_id: Namespace,
-        identity: Arc<EnclaveIdentity>,
-        consensus_verifier: Arc<dyn ConsensusVerifier>,
-        storage: Arc<dyn KeyValue>,
+        identity: Arc<Identity>,
+        protocol: Arc<Protocol>,
+        consensus_verifier: Arc<dyn Verifier>,
     ) -> Self {
-        let storage = Storage::new(storage);
+        let runtime_id = protocol.get_runtime_id();
+        let storage = Storage::new(Arc::new(ProtocolUntrustedLocalStorage::new(
+            protocol.clone(),
+        )));
         let signer: Arc<dyn Signer> = identity.clone();
-        let churp_state = ChurpState::new(consensus_verifier.clone());
+
         let beacon_state = BeaconState::new(consensus_verifier.clone());
+        let churp_state = ChurpState::new(consensus_verifier.clone());
+        let registry_state = RegistryState::new(consensus_verifier.clone());
 
         let players = Mutex::new(HashMap::new());
         let dealers = Mutex::new(HashMap::new());
         let handoffs = Mutex::new(HashMap::new());
+
+        let policies = VerifiedPolicies::new();
 
         Self {
             signer,
             node_id,
             runtime_id,
             storage,
-            churp_state,
             beacon_state,
             players,
+            churp_state,
+            registry_state,
             dealers,
             handoffs,
+            policies,
         }
+    }
+
+    /// Returns the verification matrix of the shared secret bivariate
+    /// polynomial from the last successfully completed handoff.
+    ///
+    /// The verification matrix is a matrix of dimensions t_n x t_m, where
+    /// t_n = threshold and t_m = 2 * threshold + 1. It contains encrypted
+    /// coefficients of the secret bivariate polynomial whose zero coefficient
+    /// represents the shared secret.
+    ///
+    /// Verification matrix:
+    /// ```text
+    ///     M = [b_{i,j} * G]
+    /// ```
+    /// Bivariate polynomial:
+    /// ```text
+    ///     B(x,y) = \sum_{i=0}^{t_n} \sum_{j=0}^{t_m} b_{i,j} x^i y^j
+    /// ```
+    /// Shared secret:
+    /// ```text
+    ///     Secret = B(0, 0)
+    /// ```
+    ///
+    /// This matrix is used to verify switch points derived from the bivariate
+    /// polynomial share in handoffs.
+    ///
+    /// NOTE: This method can be called over an insecure channel, as the matrix
+    /// does not contain any sensitive information. However, the checksum
+    /// of the matrix should always be verified against the consensus layer.
+    pub fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
+        let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
+        let player = match status.group_id {
+            GroupID::NistP384 => self.get_player::<NistP384>(req.id, req.epoch)?,
+        };
+        let vm = player.verification_matrix().to_bytes();
+
+        Ok(vm)
+    }
+
+    /// Returns switch point for share reduction for the calling node.
+    ///
+    /// The point is evaluation of the shared secret bivariate polynomial
+    /// at the given x (me) and y value (node ID).
+    ///
+    /// Switch point:
+    /// ```text
+    ///     Point = B(me, node_id)
+    /// ```
+    /// Bivariate polynomial:
+    /// ```text
+    ///     B(x,y) = \sum_{i=0}^{t_n} \sum_{j=0}^{t_m} b_{i,j} x^i y^j
+    /// ```
+    ///
+    /// WARNING: This method must be called over a secure channel as the point
+    /// needs to be kept secret and generated only for authorized nodes.
+    pub fn share_reduction_switch_point(
+        &self,
+        _ctx: &RpcContext,
+        req: &QueryRequest,
+    ) -> Result<Vec<u8>> {
+        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        let kind = Self::handoff_kind(&status);
+        if !matches!(kind, HandoffKind::CommitteeChanged) {
+            return Err(Error::InvalidHandoff.into());
+        }
+
+        let node_id = req.node_id.as_ref().ok_or(Error::NotAuthenticated)?;
+        if !status.applications.contains_key(node_id) {
+            return Err(Error::NotInCommittee.into());
+        }
+        #[cfg(target_env = "sgx")]
+        {
+            self.verify_node_id(_ctx, node_id)?;
+            self.verify_enclave(_ctx, &status.policy)?;
+        }
+
+        match status.group_id {
+            GroupID::NistP384 => {
+                self.derive_share_reduction_switch_point::<NistP384>(node_id, &status)
+            }
+        }
+    }
+
+    fn derive_share_reduction_switch_point<D>(
+        &self,
+        node_id: &PublicKey,
+        status: &Status,
+    ) -> Result<Vec<u8>>
+    where
+        D: DealerParams + 'static,
+    {
+        let id = Shareholder(node_id.0);
+        let player = self.get_player::<D>(status.id, status.handoff)?;
+        let point = player.switch_point(id)?;
+        let point = scalar_to_bytes(&point);
+
+        Ok(point)
+    }
+
+    /// Returns switch point for full share distribution for the calling node.
+    ///
+    /// The point is evaluation of the proactivized shared secret bivariate
+    /// polynomial at the given x (node ID) and y value (me).
+    ///
+    /// Switch point:
+    /// ```text
+    ///     Point = B(node_id, me) + \sum Q_i(node_id, me)
+    /// ```
+    /// Bivariate polynomial:
+    /// ```text
+    ///     B(x,y) = \sum_{i=0}^{t_n} \sum_{j=0}^{t_m} b_{i,j} x^i y^j
+    /// ```
+    /// Proactive bivariate polynomial:
+    /// ```text
+    ///     Q_i(x,y) = \sum_{i=0}^{t_n} \sum_{j=0}^{t_m} b_{i,j} x^i y^j
+    /// ```
+    ///
+    /// WARNING: This method must be called over a secure channel as the point
+    /// needs to be kept secret and generated only for authorized nodes.
+    pub fn share_distribution_switch_point(
+        &self,
+        _ctx: &RpcContext,
+        req: &QueryRequest,
+    ) -> Result<Vec<u8>> {
+        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        let kind = Self::handoff_kind(&status);
+        if !matches!(kind, HandoffKind::CommitteeChanged) {
+            return Err(Error::InvalidHandoff.into());
+        }
+
+        let node_id = req.node_id.as_ref().ok_or(Error::NotAuthenticated)?;
+        if !status.applications.contains_key(node_id) {
+            return Err(Error::NotInCommittee.into());
+        }
+        #[cfg(target_env = "sgx")]
+        {
+            self.verify_node_id(_ctx, node_id)?;
+            self.verify_enclave(_ctx, &status.policy)?;
+        }
+
+        match status.group_id {
+            GroupID::NistP384 => self.derive_share_distribution_point::<NistP384>(node_id, &status),
+        }
+    }
+
+    fn derive_share_distribution_point<D>(
+        &self,
+        node_id: &PublicKey,
+        status: &Status,
+    ) -> Result<Vec<u8>>
+    where
+        D: DealerParams + 'static,
+    {
+        let id = Shareholder(node_id.0);
+        let handoff = self.get_handoff::<D>(status.id, status.next_handoff)?;
+        let player = handoff.get_reduced_player()?;
+        let point = player.switch_point(id)?;
+        let point = scalar_to_bytes(&point);
+
+        Ok(point)
+    }
+
+    /// Returns proactive bivariate polynomial share for the calling node.
+    ///
+    /// A bivariate share is a partial evaluation of a randomly selected
+    /// bivariate polynomial at a specified x or y value (node ID). Each node
+    /// interested in joining the new committee selects a bivariate polynomial
+    /// before the next handoff and commits to it by submitting the checksum
+    /// of the corresponding verification matrix to the consensus layer.
+    /// The latter can be used to verify the received bivariate shares.
+    ///
+    /// Bivariate polynomial share:
+    /// ```text
+    ///     S_i(y) = Q_i(node_id, y) (dealing phase or unchanged committee)
+    ///     S_i(x) = Q_i(x, node_id) (committee changes)
+    /// ```
+    /// Proactive bivariate polynomial:
+    /// ```text
+    ///     Q_i(x,y) = \sum_{i=0}^{t_n} \sum_{j=0}^{t_m} b_{i,j} x^i y^j
+    /// ```
+    ///
+    /// WARNING: This method must be called over a secure channel as
+    /// the polynomial needs to be kept secret and generated only
+    /// for authorized nodes.
+    pub fn bivariate_share(
+        &self,
+        _ctx: &RpcContext,
+        req: &QueryRequest,
+    ) -> Result<EncodedSecretShare> {
+        let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        let node_id = req.node_id.as_ref().ok_or(Error::NotAuthenticated)?;
+        if !status.applications.contains_key(node_id) {
+            return Err(Error::NotInCommittee.into());
+        }
+        #[cfg(target_env = "sgx")]
+        {
+            self.verify_node_id(_ctx, node_id)?;
+            self.verify_enclave(_ctx, &status.policy)?;
+        }
+
+        match status.group_id {
+            GroupID::NistP384 => self.derive_bivariate_share::<NistP384>(node_id, &status),
+        }
+    }
+
+    fn derive_bivariate_share<D>(
+        &self,
+        node_id: &PublicKey,
+        status: &Status,
+    ) -> Result<EncodedSecretShare>
+    where
+        D: DealerParams + 'static,
+    {
+        let id = Shareholder(node_id.0);
+        let kind = Self::handoff_kind(status);
+        let dealer = self.get_dealer::<D>(status.id, status.next_handoff)?;
+        let polynomial = dealer.derive_bivariate_share(id, kind)?.to_bytes();
+        let verification_matrix = dealer.verification_matrix().to_bytes();
+
+        Ok(EncodedSecretShare {
+            polynomial,
+            verification_matrix,
+        })
     }
 
     /// Prepare CHURP for participation in the given handoff of the protocol.
@@ -135,36 +384,32 @@ impl Churp {
     ///
     /// This method must be called locally.
     pub fn init(&self, req: &HandoffRequest) -> Result<SignedApplicationRequest> {
-        // Verify request.
-        let epoch = self.beacon_state.epoch()?;
-        let status = self.churp_state.status(self.runtime_id, req.id)?;
-
-        if req.runtime_id != self.runtime_id {
+        if self.runtime_id != req.runtime_id {
             return Err(Error::RuntimeMismatch.into());
         }
+
+        let status = self.churp_state.status(self.runtime_id, req.id)?;
         if status.next_handoff != req.epoch {
             return Err(Error::HandoffMismatch.into());
         }
         if status.next_handoff == HANDOFFS_DISABLED {
             return Err(Error::HandoffsDisabled.into());
         }
-        if status.next_handoff != epoch + 1 {
-            return Err(Error::ApplicationsClosed.into());
-        }
         if status.applications.contains_key(&self.node_id) {
-            return Err(Error::ApplicationsSubmitted.into());
+            return Err(Error::ApplicationSubmitted.into());
+        }
+
+        let now = self.beacon_state.epoch()?;
+        if status.next_handoff != now + 1 {
+            return Err(Error::ApplicationsClosed.into());
         }
 
         let dealing_phase = status.committee.is_empty();
 
-        // For now, support only one group.
         match status.group_id {
-            GroupID::NistP384 => self.do_init::<NistP384>(
-                req.id,
-                status.next_handoff,
-                status.threshold,
-                dealing_phase,
-            ),
+            GroupID::NistP384 => {
+                self.do_init::<NistP384>(req.id, req.epoch, status.threshold, dealing_phase)
+            }
         }
     }
 
@@ -517,6 +762,100 @@ impl Churp {
         }
 
         handoffs.remove(&churp_id);
+    }
+
+    /// Verifies parameters of the last successfully completed handoff against
+    /// the latest status.
+    fn verify_last_handoff(
+        &self,
+        churp_id: u8,
+        runtime_id: Namespace,
+        epoch: EpochTime,
+    ) -> Result<Status> {
+        if self.runtime_id != runtime_id {
+            return Err(Error::RuntimeMismatch.into());
+        }
+
+        let status = self.churp_state.status(self.runtime_id, churp_id)?;
+        if status.handoff != epoch {
+            return Err(Error::HandoffMismatch.into());
+        }
+
+        Ok(status)
+    }
+
+    /// Verifies parameters of the next handoff against the latest status
+    /// and checks whether the handoff is in progress.
+    fn verify_next_handoff(
+        &self,
+        churp_id: u8,
+        runtime_id: Namespace,
+        epoch: EpochTime,
+    ) -> Result<Status> {
+        if self.runtime_id != runtime_id {
+            return Err(Error::RuntimeMismatch.into());
+        }
+
+        let status = self.churp_state.status(self.runtime_id, churp_id)?;
+        if status.next_handoff != epoch {
+            return Err(Error::HandoffMismatch.into());
+        }
+
+        let now = self.beacon_state.epoch()?;
+        if status.next_handoff != now {
+            return Err(Error::HandoffClosed.into());
+        }
+
+        Ok(status)
+    }
+
+    /// Verifies the node ID by comparing the session's runtime attestation
+    /// key (RAK) with the one published in the consensus layer.
+    #[cfg(target_env = "sgx")]
+    fn verify_node_id(&self, ctx: &RpcContext, node_id: &PublicKey) -> Result<()> {
+        let si = ctx.session_info.as_ref();
+        let si = si.ok_or(Error::NotAuthenticated)?;
+        let session_rak = si.rak_binding.rak_pub();
+
+        let rak = self
+            .registry_state
+            .rak(node_id, &self.runtime_id)?
+            .ok_or(Error::NotAuthenticated)?;
+
+        if session_rak != rak {
+            return Err(Error::NotAuthorized.into());
+        }
+
+        Ok(())
+    }
+
+    /// Authorizes the remote enclave so that secret data is never revealed
+    /// to an unauthorized enclave.
+    #[cfg(target_env = "sgx")]
+    fn verify_enclave(&self, ctx: &RpcContext, policy: &SignedPolicySGX) -> Result<()> {
+        if Self::ignore_policy() {
+            return Ok(());
+        }
+        let remote_enclave = Self::remote_enclave(ctx)?;
+        let policy = self.policies.verify(policy)?;
+        if !policy.may_join(remote_enclave) {
+            return Err(Error::NotAuthorized.into());
+        }
+        Ok(())
+    }
+
+    /// Returns the identity of the remote enclave.
+    #[cfg(target_env = "sgx")]
+    fn remote_enclave(ctx: &RpcContext) -> Result<&EnclaveIdentity> {
+        let si = ctx.session_info.as_ref();
+        let si = si.ok_or(Error::NotAuthenticated)?;
+        Ok(&si.verified_quote.identity)
+    }
+
+    /// Returns true if key manager policies should be ignored.
+    #[cfg(target_env = "sgx")]
+    fn ignore_policy() -> bool {
+        option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
     }
 
     /// Computes the checksum of the verification matrix.

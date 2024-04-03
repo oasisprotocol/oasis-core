@@ -1,7 +1,10 @@
 //! CHURP types used by the worker-host protocol.
 use oasis_core_runtime::{
     common::{
-        crypto::{hash::Hash, signature::Signature},
+        crypto::{
+            hash::Hash,
+            signature::{PublicKey, Signature},
+        },
         namespace::Namespace,
     },
     consensus::beacon::EpochTime,
@@ -18,6 +21,23 @@ pub struct HandoffRequest {
 
     /// The epoch of the handoff.
     pub epoch: EpochTime,
+}
+
+/// Handoff query.
+#[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
+pub struct QueryRequest {
+    /// A unique identifier within the key manager runtime.
+    pub id: u8,
+
+    /// The identifier of the key manager runtime.
+    pub runtime_id: Namespace,
+
+    /// The epoch of the handoff.
+    pub epoch: EpochTime,
+
+    /// The public key of the node making the query.
+    #[cbor(optional)]
+    pub node_id: Option<PublicKey>,
 }
 
 /// ApplicationRequest contains node's application to form a new committee.

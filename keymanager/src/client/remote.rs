@@ -34,6 +34,10 @@ use crate::{
         METHOD_GET_OR_CREATE_KEYS, METHOD_GET_PUBLIC_EPHEMERAL_KEY, METHOD_GET_PUBLIC_KEY,
         METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
+    churp::{
+        EncodedSecretShare, QueryRequest, METHOD_BIVARIATE_SHARE, METHOD_SHARE_DISTRIBUTION_POINT,
+        METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
+    },
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
     policy::{set_trusted_signers, verify_data_and_trusted_signers, TrustedSigners},
 };
@@ -501,5 +505,92 @@ impl KeyManagerClient for RemoteClient {
             .await
             .map_err(|err| KeyManagerError::Other(err.into()))
             .map(|rsp: ReplicateEphemeralSecretResponse| rsp.ephemeral_secret)
+    }
+
+    async fn verification_matrix(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        self.rpc_client
+            .insecure_call(
+                METHOD_VERIFICATION_MATRIX,
+                QueryRequest {
+                    id: churp_id,
+                    runtime_id: self.runtime_id,
+                    epoch,
+                    node_id: None,
+                },
+            )
+            .await
+            .into_result_with_feedback()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))
+    }
+
+    async fn share_reduction_point(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        self.rpc_client
+            .secure_call(
+                METHOD_SHARE_REDUCTION_POINT,
+                QueryRequest {
+                    id: churp_id,
+                    runtime_id: self.runtime_id,
+                    epoch,
+                    node_id: Some(node_id),
+                },
+            )
+            .await
+            .into_result_with_feedback()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))
+    }
+
+    async fn share_distribution_point(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        self.rpc_client
+            .secure_call(
+                METHOD_SHARE_DISTRIBUTION_POINT,
+                QueryRequest {
+                    id: churp_id,
+                    runtime_id: self.runtime_id,
+                    epoch,
+                    node_id: Some(node_id),
+                },
+            )
+            .await
+            .into_result_with_feedback()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))
+    }
+
+    async fn bivariate_share(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<EncodedSecretShare, KeyManagerError> {
+        self.rpc_client
+            .secure_call(
+                METHOD_BIVARIATE_SHARE,
+                QueryRequest {
+                    id: churp_id,
+                    runtime_id: self.runtime_id,
+                    epoch,
+                    node_id: Some(node_id),
+                },
+            )
+            .await
+            .into_result_with_feedback()
+            .await
+            .map_err(|err| KeyManagerError::Other(err.into()))
     }
 }
