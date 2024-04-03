@@ -594,6 +594,22 @@ func (c *CapabilityTEE) Verify(teeCfg *TEEFeatures, ts time.Time, height uint64,
 	}
 }
 
+// EndorseCapabilityTEESignatureContext is the signature context used for TEE capability endorsement.
+var EndorseCapabilityTEESignatureContext = signature.NewContext("oasis-core/node: endorse TEE capability")
+
+// EndorsedCapabilityTEE is the endorsed CapabilityTEE structure.
+//
+// Endorsement is needed for off-chain runtime components where their RAK is not published in the
+// consensus layer and verification is part of the runtime itself. Via endorsement one can enforce
+// policies like "only components executed by the current compute committee are authorized".
+type EndorsedCapabilityTEE struct {
+	// CapabilityTEE is the TEE capability structure to be endorsed.
+	CapabilityTEE CapabilityTEE `json:"capability_tee"`
+
+	// NodeEndorsement is the node endorsement signature.
+	NodeEndorsement signature.Signature `json:"node_endorsement"`
+}
+
 // String returns a string representation of itself.
 func (n *Node) String() string {
 	return "<Node id=" + n.ID.String() + ">"

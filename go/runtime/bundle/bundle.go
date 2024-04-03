@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
+	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
 
 // Bundle is a runtime bundle instance.
@@ -24,31 +25,37 @@ type Bundle struct {
 
 // Validate validates the runtime bundle for well-formedness.
 func (bnd *Bundle) Validate() error {
+	// Ensure the manifest is valid.
+	if err := bnd.Manifest.Validate(); err != nil {
+		return fmt.Errorf("runtime/bundle: malformed manifest: %w", err)
+	}
+
 	// Ensure all the files in the manifest are present.
 	type bundleFile struct {
 		descr, fn string
 		optional  bool
 	}
-	needFiles := []bundleFile{
-		{
-			descr: "ELF executable",
-			fn:    bnd.Manifest.Executable,
-		},
-	}
-	if sgx := bnd.Manifest.SGX; sgx != nil {
-		needFiles = append(needFiles,
-			[]bundleFile{
-				{
-					descr: "SGX executable",
-					fn:    sgx.Executable,
-				},
-				{
-					descr:    "SGX signature",
-					fn:       sgx.Signature,
-					optional: true,
-				},
-			}...,
-		)
+	var needFiles []bundleFile
+	for id, comp := range bnd.Manifest.GetAvailableComponents() {
+		needFiles = append(needFiles, bundleFile{
+			descr: fmt.Sprintf("%s: ELF executable", id),
+			fn:    comp.Executable,
+		})
+		if sgx := comp.SGX; sgx != nil {
+			needFiles = append(needFiles,
+				[]bundleFile{
+					{
+						descr: fmt.Sprintf("%s: SGX executable", id),
+						fn:    sgx.Executable,
+					},
+					{
+						descr:    fmt.Sprintf("%s: SGX signature", id),
+						fn:       sgx.Signature,
+						optional: true,
+					},
+				}...,
+			)
+		}
 	}
 	for _, v := range needFiles {
 		if v.fn == "" {
@@ -82,15 +89,21 @@ func (bnd *Bundle) Validate() error {
 		}
 	}
 
-	// Make sure the ELF executable actually is an ELF image.
-	f, err := elf.NewFile(bytes.NewReader(bnd.Data[bnd.Manifest.Executable]))
-	if err != nil {
-		return fmt.Errorf("runtime/bundle: ELF executable isnt: %w", err)
-	}
-	_ = f.Close()
+	for id, comp := range bnd.Manifest.GetAvailableComponents() {
+		// Make sure the ELF executable actually is an ELF image.
+		f, err := elf.NewFile(bytes.NewReader(bnd.Data[comp.Executable]))
+		if err != nil {
+			return fmt.Errorf("runtime/bundle: ELF executable for component '%s' isnt: %w", id, err)
+		}
+		_ = f.Close()
 
-	// Make sure the SGX signature is valid if it exists.
-	return bnd.verifySgxSignature()
+		// Make sure the SGX signature is valid if it exists.
+		if err = bnd.verifySgxSignature(comp); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Add adds/overwrites a file to/in the bundle.
@@ -113,39 +126,71 @@ func (bnd *Bundle) Add(fn string, b []byte) error {
 }
 
 // MrEnclave returns the MRENCLAVE of the SGX excutable.
-func (bnd *Bundle) MrEnclave() (*sgx.MrEnclave, error) {
-	if bnd.Manifest.SGX == nil {
-		return nil, fmt.Errorf("runtime/bundle: no SGX metadata")
+func (bnd *Bundle) MrEnclave(id ComponentID) (*sgx.MrEnclave, error) {
+	ei, err := bnd.EnclaveIdentity(id)
+	if err != nil {
+		return nil, err
 	}
-	d := bnd.Data[bnd.Manifest.SGX.Executable]
-	if len(d) == 0 {
-		return nil, fmt.Errorf("runtime/bundle: no SGX executable")
+	return &ei.MrEnclave, nil
+}
+
+// EnclaveIdentity returns the SGX enclave identity of the given component.
+func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error) {
+	comp := bnd.Manifest.GetComponentByID(id)
+	if comp == nil {
+		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
+	}
+	if comp.SGX == nil {
+		return nil, fmt.Errorf("runtime/bundle: no SGX metadata for '%s'", id)
+	}
+	d, ok := bnd.Data[comp.SGX.Executable]
+	if !ok {
+		return nil, fmt.Errorf("runtime/bundle: no SGX executable for '%s'", id)
 	}
 
 	var mrEnclave sgx.MrEnclave
 	if err := mrEnclave.FromSgxs(bytes.NewReader(d)); err != nil {
-		return nil, fmt.Errorf("runtime/bundle: failed to derive SGX MRENCLAVE: %w", err)
+		return nil, fmt.Errorf("runtime/bundle: failed to derive SGX MRENCLAVE for '%s': %w", id, err)
 	}
 
-	return &mrEnclave, nil
+	var mrSigner sgx.MrSigner
+	switch {
+	case comp.SGX.Signature == "" && cmdFlags.DebugDontBlameOasis():
+		// Use dummy signer (only in tests).
+		mrSigner = sgx.FortanixDummyMrSigner
+	default:
+		// Load the actual signature.
+		sigPk, _, err := sigstruct.Verify(bnd.Data[comp.SGX.Signature])
+		if err != nil {
+			return nil, err
+		}
+		if err = mrSigner.FromPublicKey(sigPk); err != nil {
+			return nil, err
+		}
+	}
+
+	return &sgx.EnclaveIdentity{
+		MrEnclave: mrEnclave,
+		MrSigner:  mrSigner,
+	}, nil
 }
 
-func (bnd *Bundle) verifySgxSignature() error {
-	if bnd.Manifest.SGX == nil || bnd.Manifest.SGX.Signature == "" {
+func (bnd *Bundle) verifySgxSignature(comp *Component) error {
+	if comp.SGX == nil || comp.SGX.Signature == "" {
 		return nil
 	}
 
-	mrEnclave, err := bnd.MrEnclave()
+	mrEnclave, err := bnd.MrEnclave(comp.ID())
 	if err != nil {
 		return err
 	}
-	_, sigStruct, err := sigstruct.Verify(bnd.Data[bnd.Manifest.SGX.Signature])
+	_, sigStruct, err := sigstruct.Verify(bnd.Data[comp.SGX.Signature])
 	if err != nil {
-		return fmt.Errorf("runtime/bundle: failed to verify sigstruct: %w", err)
+		return fmt.Errorf("runtime/bundle: failed to verify sigstruct for '%s': %w", comp.Kind, err)
 	}
 
 	if sigStruct.EnclaveHash != *mrEnclave {
-		return fmt.Errorf("runtime/bundle: sigstruct does not match SGXS (got: %s expected: %s)", sigStruct.EnclaveHash, *mrEnclave)
+		return fmt.Errorf("runtime/bundle: sigstruct for '%s' does not match SGXS (got: %s expected: %s)", comp.Kind, sigStruct.EnclaveHash, *mrEnclave)
 	}
 
 	return nil
@@ -286,9 +331,11 @@ func (bnd *Bundle) WriteExploded(dataDir string) error {
 			}
 		}
 
-		if bnd.Manifest.Executable != "" {
-			if err := os.Chmod(bnd.ExplodedPath(dataDir, bnd.Manifest.Executable), 0o700); err != nil {
-				return fmt.Errorf("runtime/bundle: failed to fixup executable permissions: %w", err)
+		for id, comp := range bnd.Manifest.GetAvailableComponents() {
+			if comp.Executable != "" {
+				if err := os.Chmod(bnd.ExplodedPath(dataDir, comp.Executable), 0o700); err != nil {
+					return fmt.Errorf("runtime/bundle: failed to fixup executable permissions for '%s': %w", id, err)
+				}
 			}
 		}
 	}

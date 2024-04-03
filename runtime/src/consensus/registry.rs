@@ -6,6 +6,7 @@
 //!
 use std::collections::BTreeMap;
 
+use anyhow::{anyhow, bail};
 use num_traits::Zero;
 use tiny_keccak::{Hasher, TupleHash};
 
@@ -32,6 +33,10 @@ pub const METHOD_PROVE_FRESHNESS: &str = "registry.ProveFreshness";
 
 /// Attestation signature context.
 pub const ATTESTATION_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/node: TEE attestation signature";
+
+/// TEE capability endorsement signature context.
+pub const ENDORSE_CAPABILITY_TEE_SIGNATURE_CONTEXT: &[u8] =
+    b"oasis-core/node: endorse TEE capability";
 
 /// Represents the address of a TCP endpoint.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
@@ -145,6 +150,86 @@ impl CapabilityTEE {
                 let attestation: SGXAttestation = self.try_decode_attestation().unwrap();
                 identity.rak_matches(&self.rak, &attestation.quote())
             }
+        }
+    }
+
+    /// Verifies the TEE capability.
+    pub fn verify(
+        &self,
+        policy: &sgx::QuotePolicy,
+        node_id: &signature::PublicKey,
+    ) -> anyhow::Result<sgx::VerifiedQuote> {
+        match self.hardware {
+            TEEHardware::TEEHardwareInvalid => bail!("invalid TEE hardware"),
+            TEEHardware::TEEHardwareIntelSGX => {
+                // Decode SGX attestation and verify it.
+                let attestation: SGXAttestation = self.try_decode_attestation()?;
+                attestation.verify(
+                    policy,
+                    node_id,
+                    &self.rak,
+                    self.rek.as_ref().ok_or(anyhow!("missing REK"))?,
+                )
+            }
+        }
+    }
+}
+
+/// An endorsed CapabilityTEE structure.
+///
+///
+/// Endorsement is needed for off-chain runtime components where their RAK is not published in the
+/// consensus layer and verification is part of the runtime itself. Via endorsement one can enforce
+/// policies like "only components executed by the current compute committee are authorized".
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+pub struct EndorsedCapabilityTEE {
+    /// TEE capability structure to be endorsed.
+    pub capability_tee: CapabilityTEE,
+
+    /// Node endorsement signature.
+    pub node_endorsement: signature::SignatureBundle,
+}
+
+impl EndorsedCapabilityTEE {
+    /// Verify endorsed TEE capability is valid.
+    pub fn verify(
+        &self,
+        policy: &sgx::QuotePolicy,
+    ) -> anyhow::Result<VerifiedEndorsedCapabilityTEE> {
+        // Verify node endorsement.
+        if !self.node_endorsement.verify(
+            ENDORSE_CAPABILITY_TEE_SIGNATURE_CONTEXT,
+            &cbor::to_vec(self.capability_tee.clone()),
+        ) {
+            bail!("invalid node endorsement signature");
+        }
+
+        // Verify TEE capability.
+        let verified_quote = self
+            .capability_tee
+            .verify(policy, &self.node_endorsement.public_key)?;
+
+        Ok(VerifiedEndorsedCapabilityTEE {
+            verified_quote,
+            node_id: Some(self.node_endorsement.public_key),
+        })
+    }
+}
+
+/// A verified endorsed CapabilityTEE structure.
+#[derive(Clone, Debug, Default)]
+pub struct VerifiedEndorsedCapabilityTEE {
+    /// Verified TEE quote.
+    pub verified_quote: sgx::VerifiedQuote,
+    /// Optional identifier of the node that endorsed the TEE capability.
+    pub node_id: Option<signature::PublicKey>,
+}
+
+impl From<sgx::VerifiedQuote> for VerifiedEndorsedCapabilityTEE {
+    fn from(verified_quote: sgx::VerifiedQuote) -> Self {
+        Self {
+            verified_quote,
+            node_id: None,
         }
     }
 }
@@ -634,9 +719,9 @@ impl SGXAttestation {
     /// Hashes the required data that needs to be signed by RAK producing the attestation signature.
     pub fn hash(
         report_data: &[u8],
-        node_id: signature::PublicKey,
+        node_id: &signature::PublicKey,
         height: u64,
-        rek: x25519::PublicKey,
+        rek: &x25519::PublicKey,
     ) -> [u8; 32] {
         let mut h = TupleHash::v256(ATTESTATION_SIGNATURE_CONTEXT);
         h.update(report_data);
@@ -646,6 +731,34 @@ impl SGXAttestation {
         let mut result = [0u8; 32];
         h.finalize(&mut result);
         result
+    }
+
+    /// Verifies the SGX attestation.
+    pub fn verify(
+        &self,
+        policy: &sgx::QuotePolicy,
+        node_id: &signature::PublicKey,
+        rak: &signature::PublicKey,
+        rek: &x25519::PublicKey,
+    ) -> anyhow::Result<sgx::VerifiedQuote> {
+        // Verify the quote.
+        let verified_quote = self.quote().verify(policy)?;
+
+        // Ensure that the report data includes the hash of the node's RAK.
+        Identity::verify_binding(&verified_quote, rak)?;
+
+        // Verify the attestation signature.
+        match self {
+            Self::V1 {
+                height, signature, ..
+            } => {
+                let h = Self::hash(&verified_quote.report_data, node_id, *height, rek);
+                signature.verify(rak, ATTESTATION_SIGNATURE_CONTEXT, &h)?;
+            }
+            _ => bail!("V0 attestation not supported"),
+        }
+
+        Ok(verified_quote)
     }
 }
 
@@ -1260,7 +1373,7 @@ mod tests {
                 .unwrap();
         let rek = x25519::PublicKey::from(rek);
 
-        let h = SGXAttestation::hash(report_data, node_id, height, rek);
+        let h = SGXAttestation::hash(report_data, &node_id, height, &rek);
         assert_eq!(
             h.to_hex::<String>(),
             "9a288bd33ba7a4c2eefdee68e4c08c1a34c369302ef8176a3bfdb4fedcec333e"

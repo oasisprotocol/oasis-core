@@ -294,7 +294,7 @@ func (s *service) Query(ctx context.Context, request *api.QueryRequest) (*api.Qu
 		return nil, api.ErrNoHostedRuntime
 	}
 
-	data, err := rt.Query(ctx, request.Round, request.Method, request.Args)
+	data, err := rt.Query(ctx, request.Round, request.Method, request.Args, request.Component)
 	if err != nil {
 		return nil, err
 	}

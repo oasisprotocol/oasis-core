@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
@@ -71,7 +72,13 @@ type RuntimeHostConfig struct {
 	Runtimes map[common.Namespace]map[version.Version]*runtimeHost.Config
 }
 
-func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus consensus.Backend, ias []ias.Endpoint) (*RuntimeConfig, error) { //nolint: gocyclo
+func newConfig( //nolint: gocyclo
+	dataDir string,
+	commonStore *persistent.CommonStore,
+	identity *identity.Identity,
+	consensus consensus.Backend,
+	ias []ias.Endpoint,
+) (*RuntimeConfig, error) {
 	var cfg RuntimeConfig
 
 	haveSetRuntimes := len(config.GlobalConfig.Runtime.Paths) > 0
@@ -190,6 +197,7 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 					IAS:                   ias,
 					PCS:                   pc,
 					Consensus:             consensus,
+					Identity:              identity,
 					SandboxBinaryPath:     sandboxBinary,
 					InsecureNoSandbox:     insecureNoSandbox,
 					RuntimeAttestInterval: attestInterval,
@@ -238,39 +246,24 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 				}
 			}
 
-			runtimeHostCfg := &runtimeHost.Config{
+			// Determine what kind of components we want.
+			wantedComponents := []bundle.ComponentID{
+				bundle.ComponentID_RONL,
+			}
+			// For compute nodes we also want to run the ROFL component.
+			if config.GlobalConfig.Mode == config.ModeCompute {
+				// TODO: Support configuring named components.
+				wantedComponents = append(wantedComponents, bundle.ComponentID{Kind: bundle.ComponentROFL})
+			}
+
+			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
 				Bundle: &runtimeHost.RuntimeBundle{
-					Bundle: bnd,
-					Path:   bnd.ExplodedPath(dataDir, bnd.Manifest.Executable),
+					Bundle:          bnd,
+					ExplodedDataDir: dataDir,
 				},
+				Components:  wantedComponents,
 				LocalConfig: localConfig,
 			}
-
-			var haveSGXSignature bool
-			if !forceNoSGX && bnd.Manifest.SGX != nil {
-				// Ensure SGX provisioner is configured.
-				if _, ok := rh.Provisioners[node.TEEHardwareIntelSGX]; !ok {
-					return nil, fmt.Errorf("SGX loader binary path is not configured")
-				}
-
-				// If this is a TEE enclave, override the executable to point
-				// at the enclave binary instead.
-				runtimeHostCfg.Bundle.Path = bnd.ExplodedPath(dataDir, bnd.Manifest.SGX.Executable)
-				if bnd.Manifest.SGX.Signature != "" {
-					haveSGXSignature = true
-					runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
-						SignaturePath: bnd.ExplodedPath(dataDir, bnd.Manifest.SGX.Signature),
-					}
-				}
-			}
-			if !haveSGXSignature {
-				// HACK HACK HACK: Allow dummy SIGSTRUCT generation.
-				runtimeHostCfg.Extra = &hostSgx.RuntimeExtra{
-					UnsafeDebugGenerateSigstruct: true,
-				}
-			}
-
-			rh.Runtimes[id][bnd.Manifest.Version] = runtimeHostCfg
 		}
 		if cmdFlags.DebugDontBlameOasis() {
 			// This is to allow the mock provisioner to function, as it does
@@ -289,6 +282,9 @@ func newConfig(dataDir string, commonStore *persistent.CommonStore, consensus co
 								ID: id,
 							},
 						},
+					},
+					Components: []bundle.ComponentID{
+						bundle.ComponentID_RONL,
 					},
 				}
 				rh.Runtimes[id] = map[version.Version]*runtimeHost.Config{

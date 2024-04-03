@@ -10,7 +10,7 @@ use slog::Logger;
 #[cfg(target_env = "sgx")]
 use crate::{
     common::{crypto::signature::Signer, sgx::Quote},
-    consensus::registry::{SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
+    consensus::registry::{EndorsedCapabilityTEE, SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
     policy::PolicyVerifier,
     types::Body,
 };
@@ -72,6 +72,9 @@ impl Handler {
                 self.set_quote(Quote::Ias(avr)).await
             }
             Body::RuntimeCapabilityTEERakQuoteRequest { quote } => self.set_quote(quote).await,
+            Body::RuntimeCapabilityTEEUpdateEndorsementRequest { ect } => {
+                self.update_endorsement(ect).await
+            }
 
             _ => bail!("unsupported attestation request"),
         }
@@ -120,16 +123,25 @@ impl Handler {
         );
 
         // Configure the quote and policy on the identity.
-        let verified_quote = self.identity.set_quote(quote)?;
+        let node_id = self.host.identity().await?;
+        let verified_quote = self.identity.set_quote(node_id, quote)?;
 
         // Sign the report data, latest verified consensus height, REK and host node ID.
         let consensus_state = self.consensus_verifier.latest_state().await?;
         let height = consensus_state.height();
-        let node_id = self.host.identity().await?;
         let rek = self.identity.public_rek();
-        let h = SGXAttestation::hash(&verified_quote.report_data, node_id, height, rek);
+        let h = SGXAttestation::hash(&verified_quote.report_data, &node_id, height, &rek);
         let signature = self.identity.sign(ATTESTATION_SIGNATURE_CONTEXT, &h)?;
 
         Ok(Body::RuntimeCapabilityTEERakQuoteResponse { height, signature })
+    }
+
+    async fn update_endorsement(&self, ect: EndorsedCapabilityTEE) -> Result<Body> {
+        info!(self.logger, "Updating endorsed TEE capability");
+
+        // Update the endorsed TEE capability. This also performs the necessary verification.
+        self.identity.set_endorsed_capability_tee(ect)?;
+
+        Ok(Body::RuntimeCapabilityTEEUpdateEndorsementResponse {})
     }
 }

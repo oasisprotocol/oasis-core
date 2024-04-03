@@ -80,7 +80,9 @@ func getRuntime(entityID signature.PublicKey, id common.Namespace, epoch beacon.
 		GovernanceModel: registry.GovernanceEntity,
 		Deployments: []*registry.VersionInfo{
 			{
-				ValidFrom: epoch + 1,
+				// Ensure registration will not expire if an epoch transition occurs while creating
+				// this descriptor (unless two epoch transitions occur).
+				ValidFrom: epoch + 2,
 			},
 		},
 	}
@@ -358,6 +360,7 @@ func (r *registration) Run( // nolint: gocyclo
 			currentOwner := rtInfo.entityIdx
 			rtInfo.desc.EntityID = entityAccs[selectedEntityIdx].signer.Public()
 			rtInfo.entityIdx = selectedEntityIdx
+
 			// Sign the transaction with current owner.
 			tx := registry.NewRegisterRuntimeTx(entityAccs[currentOwner].reckonedNonce, nil, rtInfo.desc)
 			entityAccs[currentOwner].reckonedNonce++

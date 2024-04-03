@@ -26,6 +26,9 @@ func (t *tree) PrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit ui
 
 func (t *tree) doPrefetchPrefixes(ctx context.Context, prefixes [][]byte, limit uint16) error {
 	// TODO: Can we avoid fetching items that we already have?
+	if len(prefixes) == 0 || limit == 0 {
+		return nil
+	}
 
 	return t.cache.remoteSync(
 		ctx,

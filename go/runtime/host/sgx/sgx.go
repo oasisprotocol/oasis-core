@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/cbor"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
@@ -23,6 +26,7 @@ import (
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/sandbox"
@@ -66,6 +70,8 @@ type Config struct {
 	PCS pcs.Client
 	// Consensus is the consensus layer backend.
 	Consensus consensus.Backend
+	// Identity is the node identity.
+	Identity *identity.Identity
 
 	// RuntimeAttestInterval is the interval for periodic runtime re-attestation. If not specified
 	// a default will be used.
@@ -76,16 +82,6 @@ type Config struct {
 
 	// InsecureNoSandbox disables the sandbox and runs the loader directly.
 	InsecureNoSandbox bool
-}
-
-// RuntimeExtra is the extra configuration for SGX runtimes.
-type RuntimeExtra struct {
-	// SignaturePath is the path to the runtime (enclave) SIGSTRUCT.
-	SignaturePath string
-
-	// UnsafeDebugGenerateSigstruct allows the generation of a dummy SIGSTRUCT
-	// if an actual signature is unavailable.
-	UnsafeDebugGenerateSigstruct bool
 }
 
 type teeStateImpl interface {
@@ -162,37 +158,38 @@ type sgxProvisioner struct {
 	pcs       pcs.Client
 	aesm      *aesm.Client
 	consensus consensus.Backend
+	identity  *identity.Identity
 
 	logger       *logging.Logger
 	serviceStore *persistent.ServiceStore
 }
 
-func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config) ([]byte, []byte, error) {
+func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config, comp *bundle.Component) ([]byte, []byte, error) {
+	if comp.SGX.Executable == "" {
+		return nil, nil, fmt.Errorf("SGX executable not available in bundle")
+	}
+	sgxExecutablePath := rtCfg.Bundle.ExplodedPath(rtCfg.Bundle.ExplodedDataDir, comp.SGX.Executable)
+
 	var (
 		sig, sgxs   []byte
 		enclaveHash sgx.MrEnclave
 		err         error
 	)
 
-	if sgxs, err = os.ReadFile(rtCfg.Bundle.Path); err != nil {
+	if sgxs, err = os.ReadFile(sgxExecutablePath); err != nil {
 		return nil, nil, fmt.Errorf("failed to load enclave: %w", err)
 	}
 	if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {
 		return nil, nil, fmt.Errorf("failed to derive EnclaveHash: %w", err)
 	}
 
-	// If the path to an existing SIGSTRUCT is provided, load it.
-	rtExtra, ok := rtCfg.Extra.(*RuntimeExtra)
-	if !ok {
-		return nil, nil, fmt.Errorf("sgx enclave configuration not available")
-	}
-
-	if rtExtra.SignaturePath != "" {
-		sig, err = os.ReadFile(rtExtra.SignaturePath)
+	if comp.SGX.Signature != "" {
+		sgxSignaturePath := rtCfg.Bundle.ExplodedPath(rtCfg.Bundle.ExplodedDataDir, comp.SGX.Signature)
+		sig, err = os.ReadFile(sgxSignaturePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to load SIGSTRUCT: %w", err)
 		}
-	} else if rtExtra.UnsafeDebugGenerateSigstruct && cmdFlags.DebugDontBlameOasis() {
+	} else if cmdFlags.DebugDontBlameOasis() {
 		s.logger.Warn("generating dummy enclave SIGSTRUCT",
 			"enclave_hash", enclaveHash,
 		)
@@ -232,6 +229,14 @@ func (s *sgxProvisioner) discoverSGXDevice() (string, error) {
 }
 
 func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtimeDir string) (process.Config, error) {
+	if numComps := len(rtCfg.Components); numComps != 1 {
+		return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
+	}
+	comp := rtCfg.Bundle.Manifest.GetComponentByID(rtCfg.Components[0])
+	if comp == nil {
+		return process.Config{}, fmt.Errorf("component '%s' not available", rtCfg.Components[0])
+	}
+
 	// To try to avoid bad things from happening if the signature/enclave
 	// binaries change out from under us, and because the enclave binary
 	// needs to be loaded into memory anyway, this always injects
@@ -242,7 +247,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		signaturePath = filepath.Join(runtimeDir, signaturePath)
 	}
 
-	sgxs, sig, err := s.loadEnclaveBinaries(rtCfg)
+	sgxs, sig, err := s.loadEnclaveBinaries(rtCfg, comp)
 	if err != nil {
 		return process.Config{}, fmt.Errorf("host/sgx: failed to load enclave/signature: %w", err)
 	}
@@ -257,16 +262,22 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		s.logger,
 		"runtime_id", rtCfg.Bundle.Manifest.ID,
 		"runtime_name", rtCfg.Bundle.Manifest.Name,
+		"component", comp.Kind,
 	)
+
+	args := []string{
+		"--host-socket", socketPath,
+		"--type", "sgxs",
+		"--signature", signaturePath,
+		runtimePath,
+	}
+	if comp.IsNetworkAllowed() {
+		args = append(args, "--allow-network")
+	}
 
 	return process.Config{
 		Path: s.cfg.LoaderPath,
-		Args: []string{
-			"--host-socket", socketPath,
-			"--type", "sgxs",
-			"--signature", signaturePath,
-			runtimePath,
-		},
+		Args: args,
 		BindRW: map[string]string{
 			aesmdSocketPath: "/var/run/aesmd/aesm.socket",
 		},
@@ -280,6 +291,7 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		SandboxBinaryPath: s.cfg.SandboxBinaryPath,
 		Stdout:            logWrapper,
 		Stderr:            logWrapper,
+		AllowNetwork:      comp.IsNetworkAllowed(),
 	}, nil
 }
 
@@ -377,7 +389,43 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 		Attestation: attestation,
 	}
 
+	// Endorse TEE capability to support authenticated inter-component EnclaveRPC.
+	s.endorseCapabilityTEE(ctx, capabilityTEE, conn)
+
 	return capabilityTEE, nil
+}
+
+func (s *sgxProvisioner) endorseCapabilityTEE(ctx context.Context, capabilityTEE *node.CapabilityTEE, conn protocol.Connection) {
+	// Endorse CapabilityTEE by signing it under the proper domain separation context.
+	nodeSignature, err := signature.Sign(
+		s.identity.NodeSigner,
+		node.EndorseCapabilityTEESignatureContext,
+		cbor.Marshal(capabilityTEE),
+	)
+	if err != nil {
+		s.logger.Error("failed to sign endorsement of local component",
+			"err", err,
+		)
+		return
+	}
+
+	_, err = conn.Call(ctx, &protocol.Body{
+		RuntimeCapabilityTEEUpdateEndorsementRequest: &protocol.RuntimeCapabilityTEEUpdateEndorsementRequest{
+			EndorsedCapabilityTEE: node.EndorsedCapabilityTEE{
+				CapabilityTEE:   *capabilityTEE,
+				NodeEndorsement: *nodeSignature,
+			},
+		},
+	})
+	if err != nil {
+		// Note that this may fail because the runtime does not support endorsements.
+		s.logger.Warn("failed to update endorsement of local component",
+			"err", err,
+		)
+		return
+	}
+
+	s.logger.Debug("successfully updated component's TEE capability endorsement")
 }
 
 func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitializerParams) {
@@ -448,6 +496,7 @@ func New(cfg Config) (host.Provisioner, error) {
 		pcs:          cfg.PCS,
 		aesm:         aesm.NewClient(aesmdSocketPath),
 		consensus:    cfg.Consensus,
+		identity:     cfg.Identity,
 		logger:       logging.GetLogger("runtime/host/sgx"),
 		serviceStore: cfg.CommonStore.GetServiceStore(serviceStoreName),
 	}

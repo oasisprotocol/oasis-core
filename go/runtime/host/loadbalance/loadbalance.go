@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -263,6 +264,14 @@ func (lb *lbProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	if lb.cfg.NumInstances < 2 {
 		// This should never happen as the provisioner constructor made sure, but just to be safe.
 		return nil, fmt.Errorf("host/loadbalance: number of instances must be at least two")
+	}
+
+	// The load-balancer can only be used for the RONL component. For others, do pass-through.
+	if len(cfg.Components) != 1 {
+		return nil, fmt.Errorf("host/loadbalance: must specify a single component")
+	}
+	if cfg.Components[0] != bundle.ComponentID_RONL {
+		return lb.inner.NewRuntime(cfg)
 	}
 
 	// Use the inner provisioner to provision multiple runtimes.

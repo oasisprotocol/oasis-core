@@ -170,13 +170,21 @@ func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeC
 		return fmt.Errorf("failed to fetch events: %w", err)
 	}
 
-	if len(evs) != 2 {
+	var expectedEventCount int
+	switch op {
+	case "insert":
+		expectedEventCount = 3
+	default:
+		expectedEventCount = 2
+	}
+
+	if len(evs) != expectedEventCount {
 		r.Logger.Error("unexpected number of events",
 			"events", evs,
 			"expected_op", op,
 			"expected_key", key,
 		)
-		return fmt.Errorf("unexpected number of events (expected: %d got: %d)", 2, len(evs))
+		return fmt.Errorf("unexpected number of events (expected: %d got: %d)", expectedEventCount, len(evs))
 	}
 	for _, ev := range evs {
 		switch string(ev.Key) {
@@ -187,6 +195,10 @@ func (r *runtime) validateEvents(ctx context.Context, rtc runtimeClient.RuntimeC
 		case "kv_key":
 			if string(ev.Value) != key {
 				return fmt.Errorf("unexpected kv_key event value (expected: %s got: %s)", key, string(ev.Value))
+			}
+		case "kv_insertion." + key:
+			if op != "insert" {
+				return fmt.Errorf("unexpected kv_insertion.* event for op '%s'", op)
 			}
 		default:
 			return fmt.Errorf("unexpected event type: %s", ev.Key)

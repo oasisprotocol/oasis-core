@@ -80,7 +80,7 @@ func (r *runtime) Call(ctx context.Context, body *protocol.Body) (*protocol.Body
 		rq := body.RuntimeExecuteTxBatchRequest
 
 		tags := transaction.Tags{
-			transaction.Tag{Key: []byte("txn_foo"), Value: []byte("txn_bar")},
+			&transaction.Tag{Key: []byte("txn_foo"), Value: []byte("txn_bar")},
 		}
 
 		emptyRoot := mkvsNode.Root{

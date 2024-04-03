@@ -17,11 +17,15 @@ type Config struct {
 	// Bundle is the runtime bundle.
 	Bundle *RuntimeBundle
 
+	// Components are optional component ids that should be provisioned in case the runtime has
+	// multiple components.
+	Components []bundle.ComponentID
+
 	// Extra is an optional provisioner-specific configuration.
 	Extra interface{}
 
 	// MessageHandler is the message handler for the Runtime Host Protocol messages.
-	MessageHandler protocol.Handler
+	MessageHandler RuntimeHandler
 
 	// LocalConfig is the node-local runtime configuration.
 	LocalConfig map[string]interface{}
@@ -31,8 +35,8 @@ type Config struct {
 type RuntimeBundle struct {
 	*bundle.Bundle
 
-	// Exeuctable is the path to the extracted ELF or TEE executable.
-	Path string
+	// ExplodedDataDir is the path to the data directory under which the bundle has been exploded.
+	ExplodedDataDir string
 }
 
 // Provisioner is the runtime provisioner interface.
@@ -81,6 +85,24 @@ type Runtime interface {
 
 	// Stop signals the provisioned runtime to stop.
 	Stop()
+}
+
+// CompositeRuntime is a runtime that provides multiple components which are themselves runtimes.
+type CompositeRuntime interface {
+	// Component returns the runtime component with the given unique identifier.
+	// If the component with the given identifier does not exist, nil is returned.
+	Component(id bundle.ComponentID) (Runtime, bool)
+}
+
+// RuntimeHandler is the message handler for the host side of the runtime host protocol.
+type RuntimeHandler interface {
+	protocol.Handler
+
+	// NewSubHandler creates a sub-handler specialized for the given runtime component.
+	NewSubHandler(cr CompositeRuntime, component *bundle.Component) (RuntimeHandler, error)
+
+	// AttachRuntime attaches a given hosted runtime instance to this handler.
+	AttachRuntime(host Runtime) error
 }
 
 // RuntimeEventEmitter is the interface for emitting events for a provisioned runtime.

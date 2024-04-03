@@ -21,12 +21,14 @@ use crate::Loader;
 #[derive(Debug)]
 struct HostService {
     host_socket: String,
+    allow_network: bool,
 }
 
 impl HostService {
-    fn new(host_socket: &str) -> HostService {
+    fn new(host_socket: &str, allow_network: bool) -> HostService {
         HostService {
             host_socket: host_socket.to_owned(),
+            allow_network,
         }
     }
 }
@@ -47,7 +49,14 @@ impl UsercallExtension for HostService {
                     let async_stream: Box<dyn AsyncStream> = Box::new(stream);
                     Ok(Some(async_stream))
                 }
-                _ => Err(IoError::new(IoErrorKind::Other, "invalid destination")),
+                _ if self.allow_network => {
+                    // Unknown destination and network access is allowed, pass to default handler.
+                    Ok(None)
+                }
+                _ => {
+                    // Unknown destination and network access is not allowed, reject.
+                    Err(IoError::new(IoErrorKind::Other, "invalid destination"))
+                }
             }
         }
         .boxed_local()
@@ -63,6 +72,7 @@ impl Loader for SgxsLoader {
         filename: &str,
         signature_filename: Option<&str>,
         host_socket: &str,
+        allow_network: bool,
     ) -> Result<()> {
         let sig = signature_filename.ok_or_else(|| anyhow!("signature file is required"))?;
 
@@ -73,7 +83,7 @@ impl Loader for SgxsLoader {
 
         let mut enclave_builder = EnclaveBuilder::new(filename.as_ref());
         enclave_builder.signature(sig)?;
-        enclave_builder.usercall_extension(HostService::new(host_socket));
+        enclave_builder.usercall_extension(HostService::new(host_socket, allow_network));
         let enclave = enclave_builder
             .build(&mut device)
             .map_err(|err| anyhow!("{}", err))?;

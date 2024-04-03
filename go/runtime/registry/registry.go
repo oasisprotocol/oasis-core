@@ -11,6 +11,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
+	"github.com/oasisprotocol/oasis-core/go/common/identity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
@@ -21,6 +22,7 @@ import (
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/localstorage"
@@ -55,6 +57,13 @@ type Registry interface {
 	// AddRoles adds available node roles to the runtime. Specify nil as the runtimeID
 	// to set the role for all runtimes.
 	AddRoles(roles node.RolesMask, runtimeID *common.Namespace) error
+
+	// RegisterClient registers a runtime client service. If the service has already been registered
+	// this method returns an error.
+	RegisterClient(rc runtimeClient.RuntimeClient) error
+
+	// Client returns the runtime client service if available.
+	Client() (runtimeClient.RuntimeClient, error)
 
 	// Cleanup performs post-termination cleanup.
 	Cleanup()
@@ -413,6 +422,7 @@ type runtimeRegistry struct {
 	cfg     *RuntimeConfig
 
 	consensus consensus.Backend
+	client    runtimeClient.RuntimeClient
 
 	runtimes map[common.Namespace]*runtime
 }
@@ -460,6 +470,27 @@ func (r *runtimeRegistry) AddRoles(roles node.RolesMask, runtimeID *common.Names
 		rt.AddRoles(roles)
 	}
 	return nil
+}
+
+func (r *runtimeRegistry) RegisterClient(rc runtimeClient.RuntimeClient) error {
+	r.Lock()
+	defer r.Unlock()
+
+	if r.client != nil {
+		return fmt.Errorf("runtime/registry: client already registered for runtime")
+	}
+	r.client = rc
+	return nil
+}
+
+func (r *runtimeRegistry) Client() (runtimeClient.RuntimeClient, error) {
+	r.RLock()
+	defer r.RUnlock()
+
+	if r.client == nil {
+		return nil, fmt.Errorf("runtime/registry: client not available for runtime")
+	}
+	return r.client, nil
 }
 
 func (r *runtimeRegistry) Cleanup() {
@@ -575,8 +606,15 @@ func newRuntime(
 }
 
 // New creates a new runtime registry.
-func New(ctx context.Context, dataDir string, commonStore *persistent.CommonStore, consensus consensus.Backend, ias []ias.Endpoint) (Registry, error) {
-	cfg, err := newConfig(dataDir, commonStore, consensus, ias)
+func New(
+	ctx context.Context,
+	dataDir string,
+	commonStore *persistent.CommonStore,
+	identity *identity.Identity,
+	consensus consensus.Backend,
+	ias []ias.Endpoint,
+) (Registry, error) {
+	cfg, err := newConfig(dataDir, commonStore, identity, consensus, ias)
 	if err != nil {
 		return nil, err
 	}

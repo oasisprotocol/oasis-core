@@ -219,6 +219,22 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 			return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, req.Response)
 		}
 
+	case KeyExistsTx:
+		rsp, err := cli.sc.submitKeyValueRuntimeGetTx(
+			ctx,
+			KeyValueRuntimeID,
+			rng.Uint64(),
+			req.Key,
+			req.Encrypted,
+			req.Generation,
+		)
+		if err != nil {
+			return err
+		}
+		if len(rsp) == 0 {
+			return fmt.Errorf("response does not have non-zero value")
+		}
+
 	case RemoveKeyValueTx:
 		rsp, err := cli.sc.submitKeyValueRuntimeRemoveTx(
 			ctx,

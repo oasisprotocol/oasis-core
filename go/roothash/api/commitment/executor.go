@@ -120,11 +120,7 @@ func (eh *ExecutorCommitmentHeader) Sign(signer signature.Signer, runtimeID comm
 		return nil, fmt.Errorf("signature context error: %w", err)
 	}
 
-	signature, err := signature.Sign(signer, sigCtx, cbor.Marshal(eh))
-	if err != nil {
-		return nil, err
-	}
-	return &signature.Signature, nil
+	return signature.SignRaw(signer, sigCtx, cbor.Marshal(eh))
 }
 
 // VerifyRAK verifies the RAK signature.

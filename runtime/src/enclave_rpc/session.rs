@@ -11,7 +11,11 @@ use crate::{
         namespace::Namespace,
         sgx::{ias, EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
     },
-    consensus::{state::registry::ImmutableState as RegistryState, verifier::Verifier},
+    consensus::{
+        registry::{EndorsedCapabilityTEE, VerifiedEndorsedCapabilityTEE},
+        state::registry::ImmutableState as RegistryState,
+        verifier::Verifier,
+    },
     identity::Identity,
 };
 
@@ -47,8 +51,12 @@ enum SessionError {
 
 /// Information about a session.
 pub struct SessionInfo {
+    /// RAK binding.
     pub rak_binding: RAKBinding,
+    /// Verified TEE quote.
     pub verified_quote: VerifiedQuote,
+    /// Identifier of the node that endorsed the TEE.
+    pub endorsed_by: Option<PublicKey>,
 }
 
 enum State {
@@ -68,12 +76,14 @@ pub struct Session {
     remote_node: Option<signature::PublicKey>,
     remote_runtime_id: Option<Namespace>,
     policy: Option<Arc<QuotePolicy>>,
+    use_endorsement: bool,
     info: Option<Arc<SessionInfo>>,
     state: State,
     buf: Vec<u8>,
 }
 
 impl Session {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         consensus_verifier: Option<Arc<dyn Verifier>>,
         handshake_state: snow::HandshakeState,
@@ -82,6 +92,7 @@ impl Session {
         remote_enclaves: Option<HashSet<EnclaveIdentity>>,
         remote_runtime_id: Option<Namespace>,
         policy: Option<Arc<QuotePolicy>>,
+        use_endorsement: bool,
     ) -> Self {
         Self {
             consensus_verifier,
@@ -91,6 +102,7 @@ impl Session {
             remote_node: None,
             remote_runtime_id,
             policy,
+            use_endorsement,
             info: None,
             state: State::Handshake1(handshake_state),
             buf: vec![0u8; 65535],
@@ -214,28 +226,26 @@ impl Session {
                     return vec![];
                 }
 
-                let rak_pub = identity.public_rak();
-                let quote = identity.quote().expect("quote is configured");
                 let binding = identity
                     .sign(&RAK_SESSION_BINDING_CONTEXT, &self.local_static_pub)
                     .unwrap();
 
-                // TODO: Change this once all runtimes have migrated to the new scheme.
-                let rak_binding = if let Quote::Ias(ref avr) = *quote {
-                    RAKBinding::V0 {
-                        rak_pub,
-                        binding,
-                        avr: avr.clone(),
+                if self.use_endorsement {
+                    // Use endorsed TEE capability when available.
+                    if let Some(ect) = identity.endorsed_capability_tee() {
+                        return cbor::to_vec(RAKBinding::V2 { ect, binding });
                     }
-                } else {
-                    RAKBinding::V1 {
-                        rak_pub,
-                        binding,
-                        quote: (*quote).clone(),
-                    }
-                };
+                }
 
-                cbor::to_vec(rak_binding)
+                // Use the local RAK and quote.
+                let rak_pub = identity.public_rak();
+                let quote = identity.quote().expect("quote is configured");
+
+                cbor::to_vec(RAKBinding::V1 {
+                    rak_pub,
+                    binding,
+                    quote: (*quote).clone(),
+                })
             }
             None => vec![],
         }
@@ -261,7 +271,7 @@ impl Session {
             .ok_or(SessionError::MissingQuotePolicy)?;
 
         let rak_binding: RAKBinding = cbor::from_slice(rak_binding)?;
-        let verified_quote = rak_binding.verify(remote_static, &self.remote_enclaves, policy)?;
+        let vect = rak_binding.verify(remote_static, &self.remote_enclaves, policy)?;
 
         // Verify node identity if verification is enabled.
         if self.consensus_verifier.is_some() {
@@ -271,7 +281,8 @@ impl Session {
 
         Ok(Some(Arc::new(SessionInfo {
             rak_binding,
-            verified_quote,
+            verified_quote: vect.verified_quote,
+            endorsed_by: vect.node_id,
         })))
     }
 
@@ -378,6 +389,13 @@ pub enum RAKBinding {
         binding: Signature,
         quote: Quote,
     },
+
+    /// V2 format which supports endorsed CapabilityTEE structures.
+    #[cbor(rename = 2)]
+    V2 {
+        ect: EndorsedCapabilityTEE,
+        binding: Signature,
+    },
 }
 
 impl RAKBinding {
@@ -386,14 +404,16 @@ impl RAKBinding {
         match self {
             Self::V0 { rak_pub, .. } => *rak_pub,
             Self::V1 { rak_pub, .. } => *rak_pub,
+            Self::V2 { ect, .. } => ect.capability_tee.rak,
         }
     }
 
     /// Signature from RAK, binding the session's static public key to RAK.
-    pub fn binding(&self) -> Signature {
+    fn binding(&self) -> Signature {
         match self {
             Self::V0 { binding, .. } => *binding,
             Self::V1 { binding, .. } => *binding,
+            Self::V2 { binding, .. } => *binding,
         }
     }
 
@@ -403,31 +423,34 @@ impl RAKBinding {
         remote_static: &[u8],
         remote_enclaves: &Option<HashSet<EnclaveIdentity>>,
         policy: &QuotePolicy,
-    ) -> Result<VerifiedQuote> {
-        let verified_quote = self.verify_quote(policy)?;
+    ) -> Result<VerifiedEndorsedCapabilityTEE> {
+        let vect = self.verify_inner(policy)?;
+
+        // Ensure that the report data includes the hash of the node's RAK.
+        // NOTE: For V2 this check is part of verify_inner so it is not really needed.
+        Identity::verify_binding(&vect.verified_quote, &self.rak_pub())?;
 
         // Verify MRENCLAVE/MRSIGNER.
         if let Some(ref remote_enclaves) = remote_enclaves {
-            if !remote_enclaves.contains(&verified_quote.identity) {
+            if !remote_enclaves.contains(&vect.verified_quote.identity) {
                 return Err(SessionError::MismatchedEnclaveIdentity.into());
             }
         }
-
-        // Verify RAK binding.
-        Identity::verify_binding(&verified_quote, &self.rak_pub())?;
 
         // Verify remote static key binding.
         self.binding()
             .verify(&self.rak_pub(), &RAK_SESSION_BINDING_CONTEXT, remote_static)?;
 
-        Ok(verified_quote)
+        Ok(vect)
     }
 
-    /// Verify the quote that is part of the RAK binding.
-    pub fn verify_quote(&self, policy: &QuotePolicy) -> Result<VerifiedQuote> {
+    fn verify_inner(&self, policy: &QuotePolicy) -> Result<VerifiedEndorsedCapabilityTEE> {
         match self {
-            Self::V0 { ref avr, .. } => ias::verify(avr, &policy.ias.clone().unwrap_or_default()),
-            Self::V1 { ref quote, .. } => quote.verify(policy),
+            Self::V0 { ref avr, .. } => {
+                ias::verify(avr, &policy.ias.clone().unwrap_or_default()).map(|vq| vq.into())
+            }
+            Self::V1 { ref quote, .. } => quote.verify(policy).map(|vq| vq.into()),
+            Self::V2 { ref ect, .. } => ect.verify(policy),
         }
     }
 }
@@ -439,6 +462,7 @@ pub struct Builder {
     identity: Option<Arc<Identity>>,
     remote_enclaves: Option<HashSet<EnclaveIdentity>>,
     remote_runtime_id: Option<Namespace>,
+    use_endorsement: bool,
     policy: Option<Arc<QuotePolicy>>,
 }
 
@@ -482,6 +506,12 @@ impl Builder {
         self
     }
 
+    /// Use endorsement from host node when establishing sessions.
+    pub fn use_endorsement(mut self, use_endorsement: bool) -> Self {
+        self.use_endorsement = use_endorsement;
+        self
+    }
+
     /// Return the local identity if configured in the builder.
     pub fn get_local_identity(&self) -> &Option<Arc<Identity>> {
         &self.identity
@@ -504,6 +534,7 @@ impl Builder {
         Option<Arc<Identity>>,
         Option<HashSet<EnclaveIdentity>>,
         Option<Arc<QuotePolicy>>,
+        bool,
     ) {
         let noise_builder = snow::Builder::new(NOISE_PATTERN.parse().unwrap());
         let verifier = self.consensus_verifier.take();
@@ -511,6 +542,7 @@ impl Builder {
         let remote_enclaves = self.remote_enclaves.take();
         let remote_runtime_id = self.remote_runtime_id.take();
         let quote_policy = self.policy.take();
+        let use_endorsement = self.use_endorsement;
         let keypair = noise_builder.generate_keypair().unwrap();
 
         (
@@ -521,12 +553,14 @@ impl Builder {
             identity,
             remote_enclaves,
             quote_policy,
+            use_endorsement,
         )
     }
 
     /// Build initiator session.
     pub fn build_initiator(self) -> Session {
-        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy) = self.build();
+        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy, use_endorsement) =
+            self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_initiator()
@@ -539,12 +573,14 @@ impl Builder {
             enclaves,
             runtime_id,
             policy,
+            use_endorsement,
         )
     }
 
     /// Build responder session.
     pub fn build_responder(self) -> Session {
-        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy) = self.build();
+        let (builder, keypair, runtime_id, verifier, identity, enclaves, policy, use_endorsement) =
+            self.build();
         let session = builder
             .local_private_key(&keypair.private)
             .build_responder()
@@ -557,6 +593,7 @@ impl Builder {
             enclaves,
             runtime_id,
             policy,
+            use_endorsement,
         )
     }
 }
