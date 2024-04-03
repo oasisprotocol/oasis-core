@@ -268,7 +268,7 @@ where
 
         let done = shares.add_bivariate_share(id, q, vm)?;
         if done {
-            let player = shares.randomize_player()?;
+            let player = shares.proactivize_player()?;
             let player = Arc::new(player);
             *state = DimensionSwitchState::Serving(player);
         }
@@ -377,12 +377,7 @@ where
             bijs,
         })
     }
-}
 
-impl<D> SwitchPoints<D>
-where
-    D: DealerParams,
-{
     /// Checks if a switch point is required from the given shareholder.
     fn needs_point(&self, id: &Shareholder) -> bool {
         if self.shareholders.len() >= self.n {
@@ -470,9 +465,9 @@ where
     zero_hole: bool,
 
     /// A set of shareholders providing bivariate shares.
-    committee: HashSet<Shareholder>,
-    /// A set of shareholders whose bivariate share still needs to be received.
     shareholders: HashSet<Shareholder>,
+    /// A set of shareholders whose bivariate share still needs to be received.
+    pending_shareholders: HashSet<Shareholder>,
 
     /// The sum of the received bivariate shares.
     p: Option<Polynomial<D::PrimeField>>,
@@ -512,7 +507,7 @@ where
 
         let rows = threshold as usize + 1;
         let cols = 2 * threshold as usize + 1;
-        let committee = shareholders.clone();
+        let pending_shareholders = shareholders.clone();
         let zero_hole = handoff.require_zero_hole();
 
         Ok(Self {
@@ -522,8 +517,8 @@ where
             rows,
             cols,
             zero_hole,
-            committee,
             shareholders,
+            pending_shareholders,
             p: None,
             vm: None,
             player,
@@ -532,7 +527,7 @@ where
 
     /// Checks if a bivariate share is needed from the given shareholder.
     fn needs_bivariate_share(&self, id: &Shareholder) -> bool {
-        self.shareholders.contains(id)
+        self.pending_shareholders.contains(id)
     }
 
     /// Verifies and adds the given bivariate share.
@@ -545,10 +540,10 @@ where
         q: Polynomial<D::PrimeField>,
         vm: VerificationMatrix<D::Group>,
     ) -> Result<bool> {
-        if !self.committee.contains(&id) {
+        if !self.shareholders.contains(&id) {
             return Err(Error::UnknownShareholder.into());
         }
-        if !self.shareholders.contains(&id) {
+        if !self.pending_shareholders.contains(&id) {
             return Err(Error::DuplicateShareholder.into());
         }
 
@@ -590,16 +585,16 @@ where
         };
         self.vm = Some(vm);
 
-        self.shareholders.remove(&id);
-        let done = self.shareholders.is_empty();
+        self.pending_shareholders.remove(&id);
+        let done = self.pending_shareholders.is_empty();
 
         Ok(done)
     }
 
-    /// Randomizes the player with the combined polynomial and verification
+    /// Proactivizes the player with the combined polynomial and verification
     /// matrix.
-    fn randomize_player(&mut self) -> Result<Player<D>> {
-        if !self.shareholders.is_empty() {
+    fn proactivize_player(&mut self) -> Result<Player<D>> {
+        if !self.pending_shareholders.is_empty() {
             return Err(Error::NotEnoughBivariateShares.into());
         }
 
@@ -609,7 +604,7 @@ where
         let vm = self.vm.take().unwrap();
 
         let player = match &self.player {
-            Some(player) => player.randomize(&p, &vm)?,
+            Some(player) => player.proactivize(&p, &vm)?,
             None => Player::new(p, vm),
         };
 
@@ -851,7 +846,7 @@ mod tests {
             sh += 1;
 
             // Try to collect the polynomial and verification matrix.
-            let res = bs.randomize_player();
+            let res = bs.proactivize_player();
             assert!(res.is_err());
             unsafe {
                 assert_eq!(
@@ -877,7 +872,7 @@ mod tests {
             );
 
             // Try to collect the polynomial and verification matrix again.
-            let res = bs.randomize_player();
+            let res = bs.proactivize_player();
             assert!(res.is_ok());
         }
     }

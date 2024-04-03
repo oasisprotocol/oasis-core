@@ -47,8 +47,8 @@ where
             .unwrap_or(D::Group::identity())
     }
 
-    /// Creates a new player with a randomized state.
-    pub fn randomize(
+    /// Creates a new player with a proactivized secret polynomial.
+    pub fn proactivize(
         &self,
         p: &Polynomial<D::PrimeField>,
         vm: &VerificationMatrix<D::Group>,

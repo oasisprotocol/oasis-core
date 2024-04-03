@@ -218,7 +218,7 @@ where
     }
 
     /// Adds the given switch point to share reduction.
-    pub fn adds_share_reduction_switch_point(
+    pub fn add_share_reduction_switch_point(
         &self,
         id: Shareholder,
         bij: D::PrimeField,
@@ -247,7 +247,7 @@ where
     }
 
     /// Adds the given switch point to full share distribution.
-    pub fn adds_full_share_distribution_switch_point(
+    pub fn add_full_share_distribution_switch_point(
         &self,
         id: Shareholder,
         bij: D::PrimeField,
@@ -522,7 +522,7 @@ mod tests {
                 assert!(handoff.needs_share_reduction_switch_point(bob).unwrap());
                 let bij = player.switch_point(alice.clone()).unwrap();
                 let done = handoff
-                    .adds_share_reduction_switch_point(bob.clone(), bij)
+                    .add_share_reduction_switch_point(bob.clone(), bij)
                     .unwrap();
 
                 if i + 1 < num_points {
@@ -582,7 +582,7 @@ mod tests {
                     .unwrap());
                 let bij = player.switch_point(alice.clone()).unwrap();
                 let done = handoff
-                    .adds_full_share_distribution_switch_point(bob.clone(), bij)
+                    .add_full_share_distribution_switch_point(bob.clone(), bij)
                     .unwrap();
 
                 if i + 1 < num_points {
