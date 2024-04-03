@@ -67,7 +67,7 @@ impl HandoffKind {
     ///
     /// Should return false only in the dealing phase, where the sum of the
     /// bivariate shares defines the shared secret. In other handoffs, this
-    /// should be false so that the shared secret remains unchanged.
+    /// should be true so that the shared secret remains unchanged.
     pub fn require_zero_hole(&self) -> bool {
         match &self {
             HandoffKind::DealingPhase => false,

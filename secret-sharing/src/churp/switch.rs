@@ -405,6 +405,8 @@ where
 
         // The identity of the shareholder doesn't require verification.
         // If the point is valid, it doesn't matter if it came from a stranger.
+        // However, since verification is costly, one could check if the point
+        // came from a legitimate shareholder.
         let x = D::encode_shareholder(id)?;
         if !self.vv.verify(&x, &bij) {
             return Err(Error::InvalidSwitchPoint.into());
@@ -451,24 +453,20 @@ where
     /// The degree of the secret-sharing polynomial.
     threshold: u8,
 
-    /// Dimension switch kind
+    /// Dimension switch kind.
     kind: DimensionSwitchKind,
 
     /// The encoded identity.
     me: D::PrimeField,
 
-    /// The number of rows in the verification matrix,
+    /// The number of rows in the verification matrix.
     rows: usize,
 
-    /// The number of columns in the verification matrix,
+    /// The number of columns in the verification matrix.
     cols: usize,
 
     /// Indicates whether bivariate shares should be derived from a zero-hole
     /// bivariate polynomial.
-    ///
-    /// Should be false only in the dealing phase, where the sum of the
-    /// bivariate shares defines the shared secret. In other handoffs, this
-    /// should be true so that the shared secret remains unchanged.
     zero_hole: bool,
 
     /// A set of shareholders providing bivariate shares.
