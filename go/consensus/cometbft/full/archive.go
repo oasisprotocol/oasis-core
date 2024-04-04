@@ -16,6 +16,7 @@ import (
 	cmtcore "github.com/cometbft/cometbft/rpc/core"
 	"github.com/cometbft/cometbft/state"
 	"github.com/cometbft/cometbft/store"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/spf13/viper"
 
 	"github.com/oasisprotocol/oasis-core/go/common/identity"
@@ -37,6 +38,7 @@ type archiveService struct {
 	*commonNode
 
 	abciClient abcicli.Client
+	eb         *cmttypes.EventBus
 
 	quitCh chan struct{}
 
@@ -47,6 +49,10 @@ type archiveService struct {
 func (srv *archiveService) Start() error {
 	if srv.started() {
 		return fmt.Errorf("cometbft: service already started")
+	}
+
+	if err := srv.eb.Start(); err != nil {
+		return err
 	}
 
 	if err := srv.commonNode.start(); err != nil {
@@ -69,6 +75,15 @@ func (srv *archiveService) Start() error {
 			}
 		}
 	}()
+
+	// Start command dispatchers for all the service clients.
+	srv.serviceClientsWg.Add(len(srv.serviceClients))
+	for _, svc := range srv.serviceClients {
+		go func() {
+			defer srv.serviceClientsWg.Done()
+			srv.serviceClientWorker(srv.ctx, svc)
+		}()
+	}
 
 	srv.commonNode.finishStart()
 
@@ -213,6 +228,7 @@ func NewArchive(
 		return nil, err
 	}
 
+	srv.eb = cmttypes.NewEventBus()
 	// Setup minimal CometBFT environment needed to support consensus queries.
 	cmtcore.SetEnvironment(&cmtcore.Environment{
 		ProxyAppQuery:    cmtproxy.NewAppConnQuery(srv.abciClient, nil),
@@ -224,7 +240,7 @@ func NewArchive(
 		GenDoc:           tmGenDoc,
 		Logger:           logger,
 		Config:           *cmtConfig.RPC,
-		EventBus:         nil,
+		EventBus:         srv.eb,
 		P2PPeers:         nil,
 		P2PTransport:     nil,
 		PubKey:           nil,
@@ -235,4 +251,47 @@ func NewArchive(
 	})
 
 	return srv, srv.initialize()
+}
+
+// serviceClientWorker handles command dispatching.
+func (srv *archiveService) serviceClientWorker(ctx context.Context, svc api.ServiceClient) {
+	sd := svc.ServiceDescriptor()
+	if sd == nil {
+		// Some services don't actually need a worker.
+		return
+	}
+
+	// Archive only handles commands.
+	cmdCh := sd.Commands()
+	if cmdCh == nil {
+		// Services without commands do not need a worker.
+		return
+	}
+
+	logger := srv.Logger.With("service", sd.Name())
+	logger.Info("starting command dispatcher")
+
+	// Fetch and remember the latest block. This won't change on an archive node.
+	latestBlock, err := srv.commonNode.GetBlock(ctx, consensusAPI.HeightLatest)
+	if err != nil {
+		logger.Error("failed to fetch latest block",
+			"err", err,
+		)
+		return
+	}
+
+	// Service client event loop.
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case cmd := <-cmdCh:
+			if err := svc.DeliverCommand(ctx, latestBlock.Height, cmd); err != nil {
+				logger.Error("failed to deliver command to service client",
+					"err", err,
+				)
+				continue
+			}
+		}
+	}
 }

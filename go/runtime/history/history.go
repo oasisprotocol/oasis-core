@@ -14,6 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/config"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 )
@@ -176,6 +177,11 @@ func (h *runtimeHistory) ConsensusCheckpoint(height int64) error {
 }
 
 func (h *runtimeHistory) StorageSyncCheckpoint(round uint64) error {
+	if config.GlobalConfig.Mode == config.ModeArchive {
+		// If we are in archive mode, ignore storage sync checkpoints.
+		return nil
+	}
+
 	if !h.haveLocalStorageWorker {
 		panic("received storage sync checkpoint when local storage worker is disabled")
 	}
