@@ -127,15 +127,6 @@ func (bnd *Bundle) Add(fn string, b []byte) error {
 
 // MrEnclave returns the MRENCLAVE of the SGX excutable.
 func (bnd *Bundle) MrEnclave(id ComponentID) (*sgx.MrEnclave, error) {
-	ei, err := bnd.EnclaveIdentity(id)
-	if err != nil {
-		return nil, err
-	}
-	return &ei.MrEnclave, nil
-}
-
-// EnclaveIdentity returns the SGX enclave identity of the given component.
-func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error) {
 	comp := bnd.Manifest.GetComponentByID(id)
 	if comp == nil {
 		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
@@ -151,6 +142,18 @@ func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error)
 	var mrEnclave sgx.MrEnclave
 	if err := mrEnclave.FromSgxs(bytes.NewReader(d)); err != nil {
 		return nil, fmt.Errorf("runtime/bundle: failed to derive SGX MRENCLAVE for '%s': %w", id, err)
+	}
+	return &mrEnclave, nil
+}
+
+// MrSigner returns the MRSIGNER that signed the SGX executable.
+func (bnd *Bundle) MrSigner(id ComponentID) (*sgx.MrSigner, error) {
+	comp := bnd.Manifest.GetComponentByID(id)
+	if comp == nil {
+		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
+	}
+	if comp.SGX == nil {
+		return nil, fmt.Errorf("runtime/bundle: no SGX metadata for '%s'", id)
 	}
 
 	var mrSigner sgx.MrSigner
@@ -168,10 +171,24 @@ func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error)
 			return nil, err
 		}
 	}
+	return &mrSigner, nil
+}
+
+// EnclaveIdentity returns the SGX enclave identity of the given component.
+func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error) {
+	mrEnclave, err := bnd.MrEnclave(id)
+	if err != nil {
+		return nil, err
+	}
+
+	mrSigner, err := bnd.MrSigner(id)
+	if err != nil {
+		return nil, err
+	}
 
 	return &sgx.EnclaveIdentity{
-		MrEnclave: mrEnclave,
-		MrSigner:  mrSigner,
+		MrEnclave: *mrEnclave,
+		MrSigner:  *mrSigner,
 	}, nil
 }
 
