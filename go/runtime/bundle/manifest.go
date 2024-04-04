@@ -57,6 +57,10 @@ func (m *Manifest) Validate() error {
 		}
 	}
 
+	if _, ok := byID[ComponentID_RONL]; ok && len(m.Executable) > 0 {
+		return fmt.Errorf("manifest defines both legacy and componentized RONL component")
+	}
+
 	// Validate legacy manifest.
 	if m.SGX != nil {
 		err := m.SGX.Validate()
