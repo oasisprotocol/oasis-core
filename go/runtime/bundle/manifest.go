@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -131,6 +132,8 @@ const (
 	ComponentROFL ComponentKind = "rofl"
 )
 
+const kindNameSeparator = "."
+
 // ComponentID is a unique component identifier.
 type ComponentID struct {
 	// Kind is the component kind.
@@ -146,6 +149,45 @@ func (c ComponentID) String() string {
 		return string(c.Kind)
 	}
 	return string(c.Kind) + " (" + c.Name + ")"
+}
+
+// MarshalText serializes the component identifier into text form.
+func (c ComponentID) MarshalText() ([]byte, error) {
+	if c.Name == "" {
+		return []byte(string(c.Kind)), nil
+	}
+	return []byte(string(c.Kind) + kindNameSeparator + c.Name), nil
+}
+
+// UnmarshalText deserializes the component identifier from text form.
+func (c *ComponentID) UnmarshalText(text []byte) error {
+	atoms := strings.SplitN(string(text), kindNameSeparator, 2)
+
+	if len(atoms) == 2 && atoms[1] == "" {
+		return fmt.Errorf("malformed component identifier")
+	}
+
+	var kind ComponentKind
+	switch atoms[0] {
+	case string(ComponentRONL):
+		kind = ComponentRONL
+	case string(ComponentROFL):
+		kind = ComponentROFL
+	default:
+		return fmt.Errorf("malformed component kind: %s", atoms[0])
+	}
+
+	if kind == ComponentRONL && len(atoms) > 1 && len(atoms[1]) > 0 {
+		return fmt.Errorf("RONL component must have an empty name, got: %s", atoms[1])
+	}
+
+	c.Kind = kind
+	if len(atoms) > 1 {
+		c.Name = atoms[1]
+	} else {
+		c.Name = ""
+	}
+	return nil
 }
 
 // ComponentID_RONL is the identifier of the RONL component.
