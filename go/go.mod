@@ -194,4 +194,4 @@ require (
 	lukechampine.com/blake3 v1.2.2 // indirect
 )
 
-go 1.22.1
+go 1.22.2
