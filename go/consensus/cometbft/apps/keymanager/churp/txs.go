@@ -2,8 +2,7 @@ package churp
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/maps"
+	"sort"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -15,6 +14,10 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
+
+// extraShareholders is the minimum number of shares that can be lost while
+// still allowing the secret to be recovered.
+const extraShareholders = 2
 
 func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error {
 	// Prepare state.
@@ -382,21 +385,7 @@ func (ext *churpExt) confirm(ctx *tmapi.Context, req *churp.SignedConfirmationRe
 	}
 
 	// Try to finalize the handoff.
-	handoffCompleted := true
-	for _, app := range status.Applications {
-		if !app.Reconstructed {
-			handoffCompleted = false
-			break
-		}
-	}
-	if handoffCompleted {
-		status.Handoff = status.NextHandoff
-		status.Checksum = status.NextChecksum
-		status.Committee = maps.Keys(status.Applications)
-		status.NextHandoff = status.Handoff + status.HandoffInterval
-		status.NextChecksum = nil
-		status.Applications = nil
-	}
+	_ = tryFinalizeHandoff(status, false)
 
 	if err := state.SetStatus(ctx, status); err != nil {
 		ctx.Logger().Error("keymanager: churp: failed to set status",
@@ -449,4 +438,61 @@ func runtimeAttestationKey(ctx *tmapi.Context, nodeID signature.PublicKey, now b
 	}
 
 	return rak, nil
+}
+
+func tryFinalizeHandoff(status *churp.Status, epochChange bool) bool {
+	// Prepare the new committee.
+	committee := make([]signature.PublicKey, 0, len(status.Applications))
+	for node, app := range status.Applications {
+		if app.Reconstructed {
+			committee = append(committee, node)
+		}
+	}
+
+	// Verify the size of the committee.
+	switch epochChange {
+	case true:
+		// At the end of the handoff epoch, a threshold number of applicants
+		// will suffice.
+		minCommitteeSize := status.Threshold + 1 + extraShareholders
+		for len(committee) < int(minCommitteeSize) {
+			return false
+		}
+	case false:
+		// During the handoff epoch, all applicants must send confirmation.
+		for len(committee) != len(status.Applications) {
+			return false
+		}
+	}
+
+	// Sort the committee to ensure a deterministic order.
+	sort.SliceStable(committee, func(i, j int) bool {
+		for k := 0; k < signature.PublicKeySize; k++ {
+			if committee[i][k] != committee[j][k] {
+				return committee[i][k] < committee[j][k]
+			}
+		}
+		return false
+	})
+
+	// Update fields.
+	status.Handoff = status.NextHandoff
+	status.Checksum = status.NextChecksum
+	status.Committee = committee
+	status.NextHandoff = status.Handoff + status.HandoffInterval
+	status.NextChecksum = nil
+	status.Applications = nil
+
+	// Give nodes an extra epoch for application submission.
+	if epochChange && status.HandoffInterval == 1 {
+		status.NextHandoff++
+	}
+
+	return true
+}
+
+func resetHandoff(status *churp.Status, nextHandoff beacon.EpochTime) {
+	status.NextHandoff = nextHandoff
+	status.NextChecksum = nil
+	status.Applications = nil
 }
