@@ -10,9 +10,15 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
-// ApplicationRequestSignatureContext is the signature context used to sign
-// application requests with runtime signing key (RAK).
-var ApplicationRequestSignatureContext = signature.NewContext("oasis-core/keymanager/churp: application request")
+var (
+	// ApplicationRequestSignatureContext is the signature context used to sign
+	// application requests with runtime signing key (RAK).
+	ApplicationRequestSignatureContext = signature.NewContext("oasis-core/keymanager/churp: application request")
+
+	// ConfirmationRequestSignatureContext is the signature context used to sign
+	// confirmation requests with runtime signing key (RAK).
+	ConfirmationRequestSignatureContext = signature.NewContext("oasis-core/keymanager/churp: confirmation request")
+)
 
 // CreateRequest contains the initial configuration.
 type CreateRequest struct {
@@ -109,6 +115,36 @@ type SignedApplicationRequest struct {
 // VerifyRAK verifies the runtime attestation key (RAK) signature.
 func (r *SignedApplicationRequest) VerifyRAK(rak *signature.PublicKey) error {
 	if !rak.Verify(ApplicationRequestSignatureContext, cbor.Marshal(r.Application), r.Signature[:]) {
+		return fmt.Errorf("RAK signature verification failed")
+	}
+	return nil
+}
+
+// ConfirmationRequest confirms that the node successfully completed
+// the handoff.
+type ConfirmationRequest struct {
+	Identity
+
+	// Epoch is the epoch of the handoff for which the node reconstructed
+	// the share.
+	Epoch beacon.EpochTime `json:"handoff"`
+
+	// Checksum is the hash of the verification matrix.
+	Checksum hash.Hash `json:"checksum"`
+}
+
+// SignedConfirmationRequest is a confirmation request signed by the key manager
+// enclave using its runtime attestation key (RAK).
+type SignedConfirmationRequest struct {
+	Confirmation ConfirmationRequest `json:"confirmation"`
+
+	// Signature is the RAK signature of the confirmation request.
+	Signature signature.RawSignature `json:"signature,omitempty"`
+}
+
+// VerifyRAK verifies the runtime attestation key (RAK) signature.
+func (r *SignedConfirmationRequest) VerifyRAK(rak *signature.PublicKey) error {
+	if !rak.Verify(ConfirmationRequestSignatureContext, cbor.Marshal(r.Confirmation), r.Signature[:]) {
 		return fmt.Errorf("RAK signature verification failed")
 	}
 	return nil

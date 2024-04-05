@@ -61,6 +61,13 @@ func (ext *churpExt) ExecuteTx(ctx *tmapi.Context, tx *transaction.Transaction) 
 			return api.ErrInvalidArgument
 		}
 		return ext.apply(ctx, &reg)
+	case churp.MethodConfirm:
+		var reg churp.SignedConfirmationRequest
+		if err := cbor.Unmarshal(tx.Body, &reg); err != nil {
+			return api.ErrInvalidArgument
+		}
+		return ext.confirm(ctx, &reg)
+
 	default:
 		panic(fmt.Sprintf("keymanager: churp: invalid method: %s", tx.Method))
 	}
