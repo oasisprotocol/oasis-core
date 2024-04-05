@@ -23,6 +23,20 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
 
+	// Charge gas for this operation.
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpCreate, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, req.RuntimeID)
 	if err != nil {
@@ -72,20 +86,6 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 		return nil
 	}
 
-	// Charge gas for this operation.
-	params, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, churp.GasOpCreate, params.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
-		return nil
-	}
-
 	// Create a new instance.
 	status := churp.Status{
 		Identity:        req.Identity,
@@ -118,6 +118,20 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error {
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
+
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpUpdate, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
 
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, req.RuntimeID)
@@ -170,21 +184,8 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 		status.Policy = *req.Policy
 	}
 
+	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, churp.GasOpUpdate, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
 		return nil
 	}
 
@@ -205,6 +206,20 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationRequest) error {
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
+
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpApply, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
 
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, req.Application.RuntimeID)
@@ -252,21 +267,8 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 		return fmt.Errorf("keymanager: churp: invalid signature: %w", err)
 	}
 
+	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, churp.GasOpApply, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
 		return nil
 	}
 
@@ -296,6 +298,20 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 func (ext *churpExt) confirm(ctx *tmapi.Context, req *churp.SignedConfirmationRequest) error {
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
+
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpConfirm, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
 
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, req.Confirmation.RuntimeID)
@@ -360,21 +376,8 @@ func (ext *churpExt) confirm(ctx *tmapi.Context, req *churp.SignedConfirmationRe
 		return fmt.Errorf("keymanager: churp: invalid signature: %w", err)
 	}
 
+	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, churp.GasOpConfirm, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
 		return nil
 	}
 
