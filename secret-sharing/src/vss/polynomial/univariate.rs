@@ -7,7 +7,7 @@ use std::{
 use group::ff::PrimeField;
 use rand_core::RngCore;
 
-use crate::vss::arith::powers;
+use crate::vss::{arith::powers, scalar::scalar_from_bytes};
 
 /// Univariate polynomial over a non-binary prime field.
 ///
@@ -113,17 +113,11 @@ where
         let mut bytes = &bytes[..];
         let mut a = Vec::with_capacity(deg + 1);
         for _ in 0..=deg {
-            let mut repr: Fp::Repr = Default::default();
-            let slice = &mut repr.as_mut()[..];
-            let (ai, rest) = bytes.split_at(slice.len());
-            slice.copy_from_slice(ai);
-            bytes = rest;
-
-            let ai = match Fp::from_repr(repr).into() {
-                None => return None,
+            let ai = match scalar_from_bytes(&bytes[..size]) {
                 Some(ai) => ai,
+                None => return None,
             };
-
+            bytes = &bytes[size..];
             a.push(ai);
         }
 

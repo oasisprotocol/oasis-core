@@ -48,20 +48,6 @@ type Status struct {
 	// recovered.
 	Threshold uint8 `json:"threshold"`
 
-	// ActiveHandoff is the epoch of the last successfully executed handoff.
-	//
-	// The zero value indicates that no handoffs have been completed so far.
-	// Note that the first handoff is special and is called the dealer phase,
-	// in which nodes do not reshare or randomize shares but instead construct
-	// the secret and shares.
-	ActiveHandoff beacon.EpochTime `json:"active_handoff"`
-
-	// NextHandoff defines the epoch in which the next handoff will occur.
-	//
-	// If an insufficient number of applications is received, the next handoff
-	// will be delayed by one epoch.
-	NextHandoff beacon.EpochTime `json:"next_handoff"`
-
 	// HandoffInterval is the time interval in epochs between handoffs.
 	//
 	// A zero value disables handoffs.
@@ -70,12 +56,39 @@ type Status struct {
 	// Policy is a signed SGX access control policy.
 	Policy SignedPolicySGX `json:"policy"`
 
+	// Handoff is the epoch of the last successfully completed handoff.
+	//
+	// The zero value indicates that no handoffs have been completed so far.
+	// Note that the first handoff is special and is called the dealer phase,
+	// in which nodes do not reshare or randomize shares but instead construct
+	// the secret and shares.
+	Handoff beacon.EpochTime `json:"handoff"`
+
+	// The hash of the verification matrix from the last successfully completed
+	// handoff.
+	Checksum *hash.Hash `json:"checksum,omitempty"`
+
 	// Committee is a vector of nodes holding a share of the secret
 	// in the active handoff.
 	//
 	// A client needs to obtain more than a threshold number of key shares
 	// from the nodes in this vector to construct the key.
 	Committee []signature.PublicKey `json:"committee,omitempty"`
+
+	// NextHandoff defines the epoch in which the next handoff will occur.
+	//
+	// If an insufficient number of applications is received, the next handoff
+	// will be delayed by one epoch.
+	NextHandoff beacon.EpochTime `json:"next_handoff"`
+
+	// NextChecksum is the hash of the verification matrix from the current
+	// handoff.
+	//
+	// The first candidate to confirm share reconstruction is the source
+	// of truth for the checksum. All other candidates need to confirm
+	// with the same checksum; otherwise, the applications will be annulled,
+	// and the nodes will need to apply for the new committee again.
+	NextChecksum *hash.Hash `json:"next_checksum,omitempty"`
 
 	// Applications is a map of nodes that wish to form the new committee.
 	//
@@ -85,14 +98,6 @@ type Status struct {
 	// Subsequently, upon the arrival of the handoff epoch, nodes must execute
 	// the handoff protocol and confirm the reconstruction of its share.
 	Applications map[signature.PublicKey]Application `json:"applications,omitempty"`
-
-	// Checksum is the hash of the merged verification matrix.
-	//
-	// The first candidate to confirm share reconstruction is the source
-	// of truth for the checksum. All other candidates need to confirm
-	// with the same checksum; otherwise, the applications will be annulled,
-	// and the nodes will need to apply for the new committee again.
-	Checksum *hash.Hash `json:"checksum,omitempty"`
 }
 
 // HandoffsDisabled returns true if and only if handoffs are disabled.

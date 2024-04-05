@@ -9,7 +9,7 @@ var RPCMethodInit = "churp/init"
 type InitRequest struct {
 	Identity
 
-	// Handoff is the epoch of the handoff for which the node would
+	// Epoch is the epoch of the handoff for which the node would
 	// like to register.
-	Handoff beacon.EpochTime `json:"handoff,omitempty"`
+	Epoch beacon.EpochTime `json:"epoch,omitempty"`
 }

@@ -1,7 +1,7 @@
 use group::ff::PrimeField;
 use rand_core::RngCore;
 
-use crate::vss::arith::powers;
+use crate::vss::{arith::powers, scalar::scalar_from_bytes};
 
 use super::Polynomial;
 
@@ -128,22 +128,18 @@ where
             return None;
         }
 
+        let size = Self::coefficient_byte_size();
         let mut bytes = &bytes[2..];
         let mut b = Vec::with_capacity(deg_x + 1);
+
         for _ in 0..=deg_x {
             let mut bi = Vec::with_capacity(deg_y + 1);
             for _ in 0..=deg_y {
-                let mut repr: Fp::Repr = Default::default();
-                let slice = &mut repr.as_mut()[..];
-                let (bij, rest) = bytes.split_at(slice.len());
-                slice.copy_from_slice(bij);
-                bytes = rest;
-
-                let bij = match Fp::from_repr(repr).into() {
-                    None => return None,
+                let bij = match scalar_from_bytes(&bytes[..size]) {
                     Some(bij) => bij,
+                    None => return None,
                 };
-
+                bytes = &bytes[size..];
                 bi.push(bij);
             }
             b.push(bi);

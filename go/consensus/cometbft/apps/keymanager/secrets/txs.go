@@ -21,6 +21,20 @@ func (ext *secretsExt) updatePolicy(
 	state *secretsState.MutableState,
 	sigPol *secrets.SignedPolicySGX,
 ) error {
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, secrets.GasOpUpdatePolicy, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Ensure that the runtime exists and is a key manager.
 	regState := registryState.NewMutableState(ctx.State())
 	kmRt, err := common.KeyManagerRuntime(ctx, sigPol.Policy.ID)
@@ -51,21 +65,8 @@ func (ext *secretsExt) updatePolicy(
 		return err
 	}
 
+	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, secrets.GasOpUpdatePolicy, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
 		return nil
 	}
 
@@ -132,6 +133,20 @@ func (ext *secretsExt) publishMasterSecret(
 	state *secretsState.MutableState,
 	secret *secrets.SignedEncryptedMasterSecret,
 ) error {
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, secrets.GasOpPublishMasterSecret, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, secret.Secret.ID)
 	if err != nil {
@@ -183,20 +198,6 @@ func (ext *secretsExt) publishMasterSecret(
 		return nil
 	}
 
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, secrets.GasOpPublishMasterSecret, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
-		return nil
-	}
-
 	// Ok, as far as we can tell the secret is valid, save it.
 	if err := state.SetMasterSecret(ctx, secret); err != nil {
 		ctx.Logger().Error("keymanager: failed to set key manager master secret",
@@ -230,6 +231,20 @@ func (ext *secretsExt) publishEphemeralSecret(
 	state *secretsState.MutableState,
 	secret *secrets.SignedEncryptedEphemeralSecret,
 ) error {
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, secrets.GasOpPublishEphemeralSecret, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, secret.Secret.ID)
 	if err != nil {
@@ -271,20 +286,6 @@ func (ext *secretsExt) publishEphemeralSecret(
 
 	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, secrets.GasOpPublishEphemeralSecret, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
 		return nil
 	}
 

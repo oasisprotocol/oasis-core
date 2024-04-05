@@ -138,7 +138,10 @@ impl DealerParams for NistP384 {
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{BivariatePolynomial, DealerParams, Error, NistP384, NistP384Dealer, Shareholder};
+    use super::{
+        BivariatePolynomial, DealerParams, Error, HandoffKind, NistP384, NistP384Dealer,
+        Shareholder,
+    };
 
     #[test]
     fn test_new() {
@@ -174,15 +177,15 @@ mod tests {
     #[test]
     fn test_random() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let d = NistP384Dealer::random(2, 3, &mut rng);
-        assert!(!d.verification_matrix().is_zero_hole()); // Zero-hole with negligible probability.
+        let dealer = NistP384Dealer::random(2, 3, &mut rng);
+        assert!(!dealer.verification_matrix().is_zero_hole()); // Zero-hole with negligible probability.
     }
 
     #[test]
     fn test_zero_hole() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let d = NistP384Dealer::zero_hole(2, 3, &mut rng);
-        assert!(d.verification_matrix().is_zero_hole());
+        let dealer = NistP384Dealer::zero_hole(2, 3, &mut rng);
+        assert!(dealer.verification_matrix().is_zero_hole());
     }
 
     #[test]
@@ -201,5 +204,30 @@ mod tests {
         let thousand = NistP384::encode_shareholder(Shareholder(id));
         assert!(thousand.is_ok());
         assert_eq!(thousand.unwrap(), p384::Scalar::from_u64(1000));
+    }
+
+    #[test]
+    fn test_derive_bivariate_share() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let dealer = NistP384Dealer::random(2, 3, &mut rng);
+        let id = Shareholder([1; 32]);
+
+        let p = dealer
+            .derive_bivariate_share(id.clone(), HandoffKind::DealingPhase)
+            .expect("shareholder should encode");
+        assert_eq!(p.degree(), 3);
+        assert_eq!(p.size(), 4);
+
+        let p = dealer
+            .derive_bivariate_share(id.clone(), HandoffKind::CommitteeChanged)
+            .expect("shareholder should encode");
+        assert_eq!(p.degree(), 2);
+        assert_eq!(p.size(), 3);
+
+        let p = dealer
+            .derive_bivariate_share(id, HandoffKind::CommitteeUnchanged)
+            .expect("shareholder should encode");
+        assert_eq!(p.degree(), 3);
+        assert_eq!(p.size(), 4);
     }
 }

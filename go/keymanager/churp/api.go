@@ -25,11 +25,16 @@ var (
 	// to form a new committee.
 	MethodApply = transaction.NewMethodName(ModuleName, "Apply", ApplicationRequest{})
 
+	// MethodConfirm is the method name for a node confirming completion
+	// of a handoff.
+	MethodConfirm = transaction.NewMethodName(ModuleName, "Confirm", ConfirmationRequest{})
+
 	// Methods is the list of all methods supported by the CHURP extension.
 	Methods = []transaction.MethodName{
 		MethodCreate,
 		MethodUpdate,
 		MethodApply,
+		MethodConfirm,
 	}
 )
 
@@ -40,13 +45,16 @@ const (
 	GasOpUpdate transaction.Op = "update"
 	// GasOpApply is the gas operation identifier for application costs.
 	GasOpApply transaction.Op = "apply"
+	// GasOpConfirm is the gas operation identifier for confirmation costs.
+	GasOpConfirm transaction.Op = "confirm"
 )
 
 // DefaultGasCosts are the "default" gas costs for operations.
 var DefaultGasCosts = transaction.Costs{
-	GasOpCreate: 1000,
-	GasOpUpdate: 1000,
-	GasOpApply:  1000,
+	GasOpCreate:  1000,
+	GasOpUpdate:  1000,
+	GasOpApply:   1000,
+	GasOpConfirm: 1000,
 }
 
 // DefaultConsensusParameters are the "default" consensus parameters.
@@ -67,6 +75,11 @@ func NewUpdateTx(nonce uint64, fee *transaction.Fee, req *UpdateRequest) *transa
 // NewApplyTx creates a new apply transaction.
 func NewApplyTx(nonce uint64, fee *transaction.Fee, req *SignedApplicationRequest) *transaction.Transaction {
 	return transaction.NewTransaction(nonce, fee, MethodApply, req)
+}
+
+// NewConfirmTx creates a new confirm transaction.
+func NewConfirmTx(nonce uint64, fee *transaction.Fee, req *SignedConfirmationRequest) *transaction.Transaction {
+	return transaction.NewTransaction(nonce, fee, MethodConfirm, req)
 }
 
 // StatusQuery is a status query by CHURP and runtime ID.

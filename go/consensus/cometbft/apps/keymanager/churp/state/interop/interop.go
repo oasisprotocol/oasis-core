@@ -105,13 +105,14 @@ func InitializeTestKeyManagerSecretsState(ctx context.Context, mkvs mkvs.Tree) e
 		Identity:        identity,
 		GroupID:         churp.EccNistP384,
 		Threshold:       2,
-		ActiveHandoff:   3,
-		NextHandoff:     4,
-		HandoffInterval: 5,
+		HandoffInterval: 3,
 		Policy:          sigPolicy,
-		Committee:       committee,
-		Applications:    applications,
+		Handoff:         4,
 		Checksum:        &checksum,
+		Committee:       committee,
+		NextHandoff:     5,
+		NextChecksum:    &checksum,
+		Applications:    applications,
 	}
 
 	if err := state.SetStatus(ctx, &status); err != nil {

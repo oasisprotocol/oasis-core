@@ -2,6 +2,7 @@ package churp
 
 import (
 	"fmt"
+	"sort"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -11,11 +12,30 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
+	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
+
+// extraShareholders is the minimum number of shares that can be lost while
+// still allowing the secret to be recovered.
+const extraShareholders = 2
 
 func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error {
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
+
+	// Charge gas for this operation.
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpCreate, params.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
 
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, req.RuntimeID)
@@ -66,32 +86,19 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 		return nil
 	}
 
-	// Charge gas for this operation.
-	params, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, churp.GasOpCreate, params.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
-		return nil
-	}
-
 	// Create a new instance.
 	status := churp.Status{
 		Identity:        req.Identity,
 		GroupID:         req.GroupID,
 		Threshold:       req.Threshold,
-		ActiveHandoff:   0,
-		NextHandoff:     nextHandoff,
 		HandoffInterval: req.HandoffInterval,
 		Policy:          req.Policy,
-		Committee:       nil,
-		Applications:    nil,
+		Handoff:         0,
 		Checksum:        nil,
+		Committee:       nil,
+		NextHandoff:     nextHandoff,
+		NextChecksum:    nil,
+		Applications:    nil,
 	}
 
 	if err := state.SetStatus(ctx, &status); err != nil {
@@ -111,6 +118,20 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error {
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
+
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpUpdate, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
 
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, req.RuntimeID)
@@ -140,8 +161,8 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 		case *req.HandoffInterval == 0:
 			// Cancel and disable handoffs.
 			status.NextHandoff = churp.HandoffsDisabled
+			status.NextChecksum = nil
 			status.Applications = nil
-			status.Checksum = nil
 		case status.HandoffInterval == 0:
 			// Schedule the next handoff.
 			status.NextHandoff, err = ext.computeNextHandoff(ctx)
@@ -163,21 +184,8 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 		status.Policy = *req.Policy
 	}
 
+	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, churp.GasOpUpdate, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
 		return nil
 	}
 
@@ -196,9 +204,22 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 }
 
 func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationRequest) error {
-	// Prepare states.
+	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
-	regState := registryState.NewMutableState(ctx.State())
+
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpApply, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
 
 	// Ensure that the runtime exists and is a key manager.
 	kmRt, err := common.KeyManagerRuntime(ctx, req.Application.RuntimeID)
@@ -226,8 +247,8 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 		return fmt.Errorf("keymanager: churp: submissions closed")
 	}
 
-	if status.NextHandoff != req.Application.Handoff {
-		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Application.Handoff, status.NextHandoff)
+	if status.NextHandoff != req.Application.Epoch {
+		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Application.Epoch, status.NextHandoff)
 	}
 
 	// Allow only one application per round, to ensure the node's
@@ -237,46 +258,17 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 		return fmt.Errorf("keymanager: churp: application already submitted")
 	}
 
-	// Verify the node.
-	n, err := regState.Node(ctx, nodeID)
-	if err != nil {
-		return err
-	}
-	if n.IsExpired(uint64(now)) {
-		return fmt.Errorf("keymanager: churp: node registration expired")
-	}
-	if !n.HasRoles(node.RoleKeyManager) {
-		return fmt.Errorf("keymanager: churp: node not key manager")
-	}
-
 	// Verify RAK signature.
-	nodeRt, err := common.NodeRuntime(n, kmRt.ID)
+	rak, err := runtimeAttestationKey(ctx, nodeID, now, kmRt)
 	if err != nil {
 		return err
-	}
-	rak, err := common.RuntimeAttestationKey(nodeRt, kmRt)
-	if err != nil {
-		return fmt.Errorf("keymanager: churp: failed to fetch node's rak: %w", err)
 	}
 	if err = req.VerifyRAK(rak); err != nil {
 		return fmt.Errorf("keymanager: churp: invalid signature: %w", err)
 	}
 
+	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
-		return nil
-	}
-
-	// Charge gas for this operation.
-	kmParams, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return err
-	}
-	if err = ctx.Gas().UseGas(1, churp.GasOpApply, kmParams.GasCosts); err != nil {
-		return err
-	}
-
-	// Return early if simulating since this is just estimating gas.
-	if ctx.IsSimulation() {
 		return nil
 	}
 
@@ -303,6 +295,115 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 	return nil
 }
 
+func (ext *churpExt) confirm(ctx *tmapi.Context, req *churp.SignedConfirmationRequest) error {
+	// Prepare state.
+	state := churpState.NewMutableState(ctx.State())
+
+	// Charge gas for this operation.
+	kmParams, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Gas().UseGas(1, churp.GasOpConfirm, kmParams.GasCosts); err != nil {
+		return err
+	}
+
+	// Return early if simulating since this is just estimating gas.
+	if ctx.IsSimulation() {
+		return nil
+	}
+
+	// Ensure that the runtime exists and is a key manager.
+	kmRt, err := common.KeyManagerRuntime(ctx, req.Confirmation.RuntimeID)
+	if err != nil {
+		return err
+	}
+
+	// Get the existing status.
+	status, err := state.Status(ctx, req.Confirmation.RuntimeID, req.Confirmation.ID)
+	if err != nil {
+		return fmt.Errorf("keymanager: churp: non-existing ID: %d", req.Confirmation.ID)
+	}
+
+	// Allow confirmations only during the next handoff.
+	now, err := ext.state.GetCurrentEpoch(ctx)
+	if err != nil {
+		return err
+	}
+
+	switch status.NextHandoff {
+	case churp.HandoffsDisabled:
+		return fmt.Errorf("keymanager: churp: handoffs disabled")
+	case now:
+	default:
+		return fmt.Errorf("keymanager: churp: confirmations closed")
+	}
+
+	if status.NextHandoff != req.Confirmation.Epoch {
+		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Confirmation.Epoch, status.NextHandoff)
+	}
+
+	// Check that application exists.
+	nodeID := ctx.TxSigner()
+	app, ok := status.Applications[nodeID]
+	if !ok {
+		return fmt.Errorf("keymanager: churp: application not found")
+	}
+
+	// Allow only one confirmation per handoff.
+	if app.Reconstructed {
+		return fmt.Errorf("keymanager: churp: confirmation already submitted")
+	}
+
+	// Verify checksum.
+	switch status.NextChecksum {
+	case nil:
+		// The first node to confirm is the source of truth.
+		status.NextChecksum = &req.Confirmation.Checksum
+	default:
+		// Other nodes need to confirm with the same checksum.
+		if !req.Confirmation.Checksum.Equal(status.NextChecksum) {
+			return fmt.Errorf("keymanager: churp: checksum mismatch: got %s, expected %s", req.Confirmation.Checksum, status.NextChecksum)
+		}
+	}
+
+	// Verify RAK signature.
+	rak, err := runtimeAttestationKey(ctx, nodeID, now, kmRt)
+	if err != nil {
+		return err
+	}
+	if err = req.VerifyRAK(rak); err != nil {
+		return fmt.Errorf("keymanager: churp: invalid signature: %w", err)
+	}
+
+	// Return early if this is a CheckTx context.
+	if ctx.IsCheckOnly() {
+		return nil
+	}
+
+	// Update application.
+	status.Applications[nodeID] = churp.Application{
+		Checksum:      app.Checksum,
+		Reconstructed: true,
+	}
+
+	// Try to finalize the handoff.
+	_ = tryFinalizeHandoff(status, false)
+
+	if err := state.SetStatus(ctx, status); err != nil {
+		ctx.Logger().Error("keymanager: churp: failed to set status",
+			"err", err,
+		)
+		return fmt.Errorf("keymanager: churp: failed to set status: %w", err)
+	}
+
+	ctx.EmitEvent(tmapi.NewEventBuilder(ext.appName).TypedAttribute(&churp.UpdateEvent{
+		Status: status,
+	}))
+
+	return nil
+}
+
 func (ext *churpExt) computeNextHandoff(ctx *tmapi.Context) (beacon.EpochTime, error) {
 	// The next handoff will start at the beginning of the next epoch,
 	// meaning that nodes need to send their applications until the end
@@ -312,4 +413,89 @@ func (ext *churpExt) computeNextHandoff(ctx *tmapi.Context) (beacon.EpochTime, e
 		return 0, err
 	}
 	return epoch + 1, nil
+}
+
+func runtimeAttestationKey(ctx *tmapi.Context, nodeID signature.PublicKey, now beacon.EpochTime, kmRt *api.Runtime) (*signature.PublicKey, error) {
+	regState := registryState.NewMutableState(ctx.State())
+
+	// Verify the node.
+	n, err := regState.Node(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if n.IsExpired(uint64(now)) {
+		return nil, fmt.Errorf("keymanager: churp: node registration expired")
+	}
+	if !n.HasRoles(node.RoleKeyManager) {
+		return nil, fmt.Errorf("keymanager: churp: node not key manager")
+	}
+
+	// Fetch RAK.
+	nodeRt, err := common.NodeRuntime(n, kmRt.ID)
+	if err != nil {
+		return nil, err
+	}
+	rak, err := common.RuntimeAttestationKey(nodeRt, kmRt)
+	if err != nil {
+		return nil, fmt.Errorf("keymanager: churp: failed to fetch node's rak: %w", err)
+	}
+
+	return rak, nil
+}
+
+func tryFinalizeHandoff(status *churp.Status, epochChange bool) bool {
+	// Prepare the new committee.
+	committee := make([]signature.PublicKey, 0, len(status.Applications))
+	for node, app := range status.Applications {
+		if app.Reconstructed {
+			committee = append(committee, node)
+		}
+	}
+
+	// Verify the size of the committee.
+	switch epochChange {
+	case true:
+		// At the end of the handoff epoch, a threshold number of applicants
+		// will suffice.
+		minCommitteeSize := status.Threshold + 1 + extraShareholders
+		for len(committee) < int(minCommitteeSize) {
+			return false
+		}
+	case false:
+		// During the handoff epoch, all applicants must send confirmation.
+		for len(committee) != len(status.Applications) {
+			return false
+		}
+	}
+
+	// Sort the committee to ensure a deterministic order.
+	sort.SliceStable(committee, func(i, j int) bool {
+		for k := 0; k < signature.PublicKeySize; k++ {
+			if committee[i][k] != committee[j][k] {
+				return committee[i][k] < committee[j][k]
+			}
+		}
+		return false
+	})
+
+	// Update fields.
+	status.Handoff = status.NextHandoff
+	status.Checksum = status.NextChecksum
+	status.Committee = committee
+	status.NextHandoff = status.Handoff + status.HandoffInterval
+	status.NextChecksum = nil
+	status.Applications = nil
+
+	// Give nodes an extra epoch for application submission.
+	if epochChange && status.HandoffInterval == 1 {
+		status.NextHandoff++
+	}
+
+	return true
+}
+
+func resetHandoff(status *churp.Status, nextHandoff beacon.EpochTime) {
+	status.NextHandoff = nextHandoff
+	status.NextChecksum = nil
+	status.Applications = nil
 }

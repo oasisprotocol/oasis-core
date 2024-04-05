@@ -56,20 +56,6 @@ pub struct Status {
     /// recovered.
     pub threshold: u8,
 
-    /// The epoch of the last successfully executed handoff.
-    ///
-    /// The zero value indicates that no handoffs have been completed so far.
-    /// Note that the first handoff is special and is called the dealer phase,
-    /// in which nodes do not reshare or randomize shares but instead construct
-    /// the secret and shares.
-    pub active_handoff: EpochTime,
-
-    /// The epoch in which the next handoff will occur.
-    ///
-    /// If an insufficient number of applications is received, the next handoff
-    /// will be delayed by one epoch.
-    pub next_handoff: EpochTime,
-
     /// The time interval in epochs between handoffs.
     ///
     /// A zero value disables handoffs.
@@ -78,12 +64,40 @@ pub struct Status {
     /// A signed SGX access control policy.
     pub policy: SignedPolicySGX,
 
+    /// The epoch of the last successfully completed handoff.
+    ///
+    /// The zero value indicates that no handoffs have been completed so far.
+    /// Note that the first handoff is special and is called the dealer phase,
+    /// in which nodes do not reshare or randomize shares but instead construct
+    /// the secret and shares.
+    pub handoff: EpochTime,
+
+    /// The hash of the verification matrix from the last successfully completed
+    /// handoff.
+    #[cbor(optional)]
+    pub checksum: Option<Hash>,
+
     /// A vector of nodes holding a share of the secret in the active handoff.
     ///
     /// A client needs to obtain more than a threshold number of key shares
     /// from the nodes in this vector to construct the key.
     #[cbor(optional)]
     pub committee: Vec<PublicKey>,
+
+    /// The epoch in which the next handoff will occur.
+    ///
+    /// If an insufficient number of applications is received, the next handoff
+    /// will be delayed by one epoch.
+    pub next_handoff: EpochTime,
+
+    /// The hash of the verification matrix from the current handoff.
+    ///
+    /// The first candidate to confirm share reconstruction is the source
+    /// of truth for the checksum. All other candidates need to confirm
+    /// with the same checksum; otherwise, the applications will be annulled,
+    /// and the nodes will need to apply for the new committee again.
+    #[cbor(optional)]
+    pub next_checksum: Option<Hash>,
 
     /// A map of nodes that wish to form the new committee.
     ///
@@ -94,15 +108,6 @@ pub struct Status {
     /// the handoff protocol and confirm the reconstruction of its share.
     #[cbor(optional)]
     pub applications: HashMap<PublicKey, Application>,
-
-    /// The hash of the merged verification matrix.
-    ///
-    /// The first candidate to confirm share reconstruction is the source
-    /// of truth for the checksum. All other candidates need to confirm
-    /// with the same checksum; otherwise, the applications will be annulled,
-    /// and the nodes will need to apply for the new committee again.
-    #[cbor(optional)]
-    pub checksum: Option<Hash>,
 }
 
 /// Application represents a node's application to form a new committee.
