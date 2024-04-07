@@ -43,9 +43,6 @@ type CreateRequest struct {
 
 // ValidateBasic performs basic config validity checks.
 func (c *CreateRequest) ValidateBasic() error {
-	if c.Threshold < 1 {
-		return fmt.Errorf("threshold must be at least 1, got %d", c.Threshold)
-	}
 	if c.GroupID > 0 {
 		return fmt.Errorf("unsupported group, ID %d", c.GroupID)
 	}
@@ -127,7 +124,7 @@ type ConfirmationRequest struct {
 
 	// Epoch is the epoch of the handoff for which the node reconstructed
 	// the share.
-	Epoch beacon.EpochTime `json:"handoff"`
+	Epoch beacon.EpochTime `json:"epoch"`
 
 	// Checksum is the hash of the verification matrix.
 	Checksum hash.Hash `json:"checksum"`
@@ -139,7 +136,7 @@ type SignedConfirmationRequest struct {
 	Confirmation ConfirmationRequest `json:"confirmation"`
 
 	// Signature is the RAK signature of the confirmation request.
-	Signature signature.RawSignature `json:"signature,omitempty"`
+	Signature signature.RawSignature `json:"signature"`
 }
 
 // VerifyRAK verifies the runtime attestation key (RAK) signature.

@@ -199,10 +199,10 @@ func (s *TxTestSuite) TestCreate() {
 			Identity: churp.Identity{
 				RuntimeID: s.keymanagerRuntimes[0].ID,
 			},
-			Threshold: 0,
+			GroupID: 100,
 		}
 		err := s.ext.create(s.txCtx, &req)
-		require.ErrorContains(s.T(), err, "invalid config: threshold must be at least 1, got 0")
+		require.ErrorContains(s.T(), err, "invalid config: unsupported group, ID 100")
 	})
 
 	s.Run("happy path - handoffs disabled", func() {
