@@ -183,27 +183,6 @@ func (w *churpWorker) handleStatusUpdate(status *churp.Status) {
 	w.submissions.Queue(status)
 }
 
-// submissionInfo contains details about a scheduled application submission.
-type submissionInfo struct {
-	// churpID represents the identifier of the CHURP scheme.
-	churpID uint8
-
-	// handoff is the epoch time of the handoff for which an application
-	// is scheduled to be submitted.
-	handoff beacon.EpochTime
-
-	// height denotes the minimum block height for the submission.
-	height int64
-
-	// index specifies the position in the submission queue,
-	// or -1 if not queued.
-	index int
-
-	// cancel is a function to cancel the submission if it's in progress,
-	// otherwise, it's nil.
-	cancel context.CancelCauseFunc
-}
-
 // submissionScheduler is responsible for generating and submitting
 // application requests one epoch before handoffs.
 type submissionScheduler struct {
@@ -214,15 +193,8 @@ type submissionScheduler struct {
 	// kmWorker provides access to the common key manager services.
 	kmWorker *Worker
 
-	// queue contains submissions waiting to be processed, ordered by
-	// the minimum block height required for the submission.
-	queue SubmissionQueue
-
-	// running contains submissions that are currently in progress.
-	running map[uint8]*submissionInfo
-
-	// submissions contains both queued and running submissions.
-	submissions map[uint8]*submissionInfo
+	// submissions contains scheduled application submission tasks.
+	submissions TaskQueue
 }
 
 // newSubmissionScheduler creates a new submission scheduler.
@@ -230,34 +202,21 @@ func newSubmissionScheduler(kmWorker *Worker) *submissionScheduler {
 	return &submissionScheduler{
 		logger:      logging.GetLogger("worker/keymanager/churp/submissions"),
 		kmWorker:    kmWorker,
-		queue:       make([]*submissionInfo, 0),
-		running:     make(map[uint8]*submissionInfo),
-		submissions: make(map[uint8]*submissionInfo),
+		submissions: newTaskQueue(),
 	}
 }
 
 // Queue schedules the given CHURP scheme for application submission,
 // updating or removing the scheduled submission if already present.
 func (s *submissionScheduler) Queue(status *churp.Status) {
-	removeFn := func(info *submissionInfo, cause error) {
-		if info.cancel != nil {
-			info.cancel(cause)
-			delete(s.running, status.ID)
-		}
-		if info.index != -1 {
-			heap.Remove(&s.queue, info.index)
-		}
-		delete(s.submissions, status.ID)
-	}
-
 	// Stop and remove submission for the previous handoff.
-	info, ok := s.submissions[status.ID]
-	if ok && info.handoff < status.NextHandoff {
-		removeFn(info, fmt.Errorf("new handoff"))
+	info, ok := s.submissions.Get(status.ID)
+	if ok && info.status.NextHandoff < status.NextHandoff {
+		s.submissions.Remove(info, fmt.Errorf("new handoff"))
 	}
 
 	// Schedule submission for the current handoff.
-	info, ok = s.submissions[status.ID]
+	info, ok = s.submissions.Get(status.ID)
 	if !ok {
 		epoch := status.NextHandoff - 1
 		height, err := s.kmWorker.randomBlockHeight(epoch, 50)
@@ -268,47 +227,31 @@ func (s *submissionScheduler) Queue(status *churp.Status) {
 			return
 		}
 
-		info = &submissionInfo{
-			churpID: status.ID,
-			handoff: status.NextHandoff,
-			height:  height,
-			index:   -1,
-			cancel:  nil,
-		}
-
-		s.submissions[status.ID] = info
-		heap.Push(&s.queue, info)
+		info = newTaskInfo(status, height)
+		s.submissions.Add(info)
 	}
 
 	// Stop and remove the submission if the application has already
 	// been submitted or if handoffs are disabled.
 	switch _, submitted := status.Applications[s.kmWorker.nodeID]; {
 	case submitted:
-		removeFn(info, fmt.Errorf("already submitted"))
+		s.submissions.Remove(info, fmt.Errorf("already submitted"))
 	case status.HandoffsDisabled():
-		removeFn(info, fmt.Errorf("handoffs disabled"))
+		s.submissions.Remove(info, fmt.Errorf("handoffs disabled"))
 	}
 }
 
 // Start starts all eligible queued submissions.
 func (s *submissionScheduler) Start(ctx context.Context, height int64) {
-	for {
-		if len(s.queue) == 0 {
-			return
-		}
-		info := s.queue.Peek().(*submissionInfo)
-		if info.height > height {
-			return
-		}
-		_ = heap.Pop(&s.queue)
-
+	for _, info := range s.submissions.Run(beacon.EpochMax, height) {
 		submitCtx, submitCancel := context.WithCancelCause(ctx)
-
 		info.cancel = submitCancel
-		s.running[info.churpID] = info
 
 		s.wg.Add(1)
-		go s.submitApplication(submitCtx, info.churpID, info.handoff)
+		go func() {
+			defer s.wg.Done()
+			s.submitApplication(submitCtx, info.status.ID, info.status.NextHandoff)
+		}()
 	}
 }
 
@@ -316,46 +259,26 @@ func (s *submissionScheduler) Start(ctx context.Context, height int64) {
 // to complete.
 func (s *submissionScheduler) Stop() {
 	cause := fmt.Errorf("stopped")
-	for _, info := range s.running {
-		info.cancel(cause)
-	}
-
+	s.submissions.Stop(cause)
 	s.wg.Wait()
 }
 
 // Clear removes queued submissions that didn't complete in time,
 // while retaining those that are still pending.
 func (s *submissionScheduler) Clear(epoch beacon.EpochTime) {
-	for {
-		if len(s.queue) == 0 {
-			return
-		}
-		info := s.queue.Peek().(*submissionInfo)
-		if info.handoff > epoch {
-			return
-		}
-		_ = heap.Pop(&s.queue)
-	}
+	s.submissions.Clear(epoch + 1)
 }
 
 // Cancel sends stop signal to submissions in progress which are not allowed
 // to submit applications in the given epoch.
 func (s *submissionScheduler) Cancel(epoch beacon.EpochTime) {
 	cause := fmt.Errorf("submissions closed: epoch %d", epoch)
-	for id, churp := range s.running {
-		if churp.handoff == epoch+1 {
-			continue
-		}
-		churp.cancel(cause)
-		delete(s.running, id)
-	}
+	s.submissions.Cancel(epoch+1, cause)
 }
 
 // submitApplication tries to submit an application, retrying if generation
 // or transaction fails.
 func (s *submissionScheduler) submitApplication(ctx context.Context, churpID uint8, handoff beacon.EpochTime) {
-	defer s.wg.Done()
-
 	ticker := backoff.NewTicker(cmnBackoff.NewExponentialBackOff())
 
 	for attempt := 1; attempt <= maxSubmissionAttempts; attempt++ {
@@ -417,39 +340,177 @@ func (s *submissionScheduler) trySubmitApplication(ctx context.Context, churpID 
 	return nil
 }
 
-// Ensure that the submission queue implements heap.Interface.
-var _ heap.Interface = (*SubmissionQueue)(nil)
+// TaskInfo contains details about a scheduled task.
+type TaskInfo struct {
+	// status is the consensus status of the CHURP scheme.
+	status *churp.Status
 
-// SubmissionQueue is a queue of CHURP instances ordered by the time they
-// are allowed to submit an application.
-type SubmissionQueue []*submissionInfo
+	// height denotes the minimum block height required for the task to run.
+	height int64
+
+	// index specifies the position in the task queue, or -1 if not queued.
+	index int
+
+	// cancel is a function to cancel the task if it's in progress, otherwise,
+	// it's nil.
+	cancel context.CancelCauseFunc
+}
+
+func newTaskInfo(status *churp.Status, height int64) *TaskInfo {
+	return &TaskInfo{
+		status: status,
+		height: height,
+		index:  -1,
+		cancel: nil,
+	}
+}
+
+// TaskQueue represents a queue of tasks.
+type TaskQueue struct {
+	// queue contains tasks waiting to be processed, ordered by the next handoff
+	// epoch and minimum block height required for the task to run.
+	queue taskQueue
+
+	// running contains tasks that are currently in progress.
+	running map[uint8]*TaskInfo
+
+	// tasks contains both queued and running tasks.
+	tasks map[uint8]*TaskInfo
+}
+
+func newTaskQueue() TaskQueue {
+	return TaskQueue{
+		queue:   make([]*TaskInfo, 0),
+		running: make(map[uint8]*TaskInfo),
+		tasks:   make(map[uint8]*TaskInfo),
+	}
+}
+
+// Get returns the information about a task with the given identifier.
+func (s *TaskQueue) Get(churpID uint8) (*TaskInfo, bool) {
+	info, ok := s.tasks[churpID]
+	return info, ok
+}
+
+// Add queues a task to the task queue.
+func (s *TaskQueue) Add(info *TaskInfo) {
+	s.tasks[info.status.ID] = info
+	heap.Push(&s.queue, info)
+}
+
+// Remove removes the given task from the task queue and stops it
+// if it is running.
+func (s *TaskQueue) Remove(info *TaskInfo, cause error) {
+	if info == nil {
+		return
+	}
+
+	if info.cancel != nil {
+		info.cancel(cause)
+		delete(s.running, info.status.ID)
+	}
+
+	if info.index != -1 {
+		heap.Remove(&s.queue, info.index)
+	}
+
+	delete(s.tasks, info.status.ID)
+}
+
+// Run returns all scheduled tasks with the next handoff epoch and the minimum
+// block height not exceeding the given values, and marks them as running.
+func (s *TaskQueue) Run(epoch beacon.EpochTime, height int64) []*TaskInfo {
+	var infos []*TaskInfo
+
+	for {
+		if len(s.queue) == 0 {
+			break
+		}
+		info := s.queue.Peek().(*TaskInfo)
+		if info.status.NextHandoff > epoch || info.height > height {
+			break
+		}
+		_ = heap.Pop(&s.queue)
+
+		s.running[info.status.ID] = info
+
+		infos = append(infos, info)
+	}
+
+	return infos
+}
+
+// Stop cancels and removes all running tasks.
+func (s *TaskQueue) Stop(cause error) {
+	for _, info := range s.running {
+		info.cancel(cause)
+		delete(s.tasks, info.status.ID)
+	}
+	clear(s.running)
+}
+
+// Clear removes all scheduled tasks with the next handoff epoch
+// smaller than the given value.
+func (s *TaskQueue) Clear(epoch beacon.EpochTime) {
+	for {
+		if len(s.queue) == 0 {
+			return
+		}
+		info := s.queue.Peek().(*TaskInfo)
+		if info.status.NextHandoff >= epoch {
+			return
+		}
+		_ = heap.Pop(&s.queue)
+	}
+}
+
+// Cancel cancels and removes all running tasks with the next handoff epoch
+// smaller than the given value.
+func (s *TaskQueue) Cancel(epoch beacon.EpochTime, cause error) {
+	for id, info := range s.running {
+		if info.status.NextHandoff < epoch {
+			continue
+		}
+		info.cancel(cause)
+		delete(s.running, id)
+		delete(s.tasks, info.status.ID)
+	}
+}
+
+// Ensure that the task queue implements heap.Interface.
+var _ heap.Interface = (*taskQueue)(nil)
+
+// taskQueue is a queue of tasks ordered by the time they are allowed to run.
+type taskQueue []*TaskInfo
 
 // Len implements heap.Interface.
-func (q SubmissionQueue) Len() int {
+func (q taskQueue) Len() int {
 	return len(q)
 }
 
 // Less implements heap.Interface.
-func (q SubmissionQueue) Less(i, j int) bool {
+func (q taskQueue) Less(i, j int) bool {
+	if q[i].status.NextHandoff != q[j].status.NextHandoff {
+		return q[i].status.NextHandoff < q[j].status.NextHandoff
+	}
 	return q[i].height < q[j].height
 }
 
 // Swap implements heap.Interface.
-func (q SubmissionQueue) Swap(i, j int) {
+func (q taskQueue) Swap(i, j int) {
 	q[i].index = j
 	q[j].index = i
-
 	q[i], q[j] = q[j], q[i]
 }
 
 // Push implements heap.Interface.
-func (q *SubmissionQueue) Push(x any) {
-	x.(*submissionInfo).index = len(*q)
-	*q = append(*q, x.(*submissionInfo))
+func (q *taskQueue) Push(x any) {
+	x.(*TaskInfo).index = len(*q)
+	*q = append(*q, x.(*TaskInfo))
 }
 
 // Pop implements heap.Interface.
-func (q *SubmissionQueue) Pop() any {
+func (q *taskQueue) Pop() any {
 	old := *q
 	n := len(old)
 	x := old[n-1]
@@ -460,7 +521,7 @@ func (q *SubmissionQueue) Pop() any {
 }
 
 // Peek returns the smallest element in the heap.
-func (q SubmissionQueue) Peek() any {
+func (q taskQueue) Peek() any {
 	switch l := len(q); l {
 	case 0:
 		return nil
