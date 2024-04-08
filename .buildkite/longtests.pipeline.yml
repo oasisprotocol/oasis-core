@@ -76,6 +76,7 @@ steps:
     command:
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-rofl
 
       # Upload the built artifacts.
       - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
@@ -83,11 +84,13 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue.sgxs
       - buildkite-agent artifact upload simple-keyvalue-upgrade.sgxs
       - buildkite-agent artifact upload simple-keymanager-upgrade.sgxs
+      - buildkite-agent artifact upload simple-rofl.sgxs
       - cd /var/tmp/artifacts/default/debug
       - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
       - buildkite-agent artifact upload simple-keyvalue-upgrade
       - buildkite-agent artifact upload simple-keymanager-upgrade
+      - buildkite-agent artifact upload simple-rofl
     plugins:
       <<: *docker_plugin
 
