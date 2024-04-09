@@ -13,6 +13,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
+	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 )
 
@@ -278,6 +279,29 @@ func (sc *archiveAPI) testArchiveAPI(ctx context.Context, archiveCtrl *oasis.Con
 		return fmt.Errorf("runtime WatchBlocks: %w", err)
 	}
 	defer sub.Close()
+
+	// Temporary configure the archive as the client controller.
+	clientCtrl := sc.Net.ClientController()
+	sc.Net.SetClientController(archiveCtrl)
+	defer func() {
+		sc.Net.SetClientController(clientCtrl)
+	}()
+
+	// Test runtime client query.
+	sc.Logger.Info("testing runtime client query")
+	rsp, err := sc.submitKeyValueRuntimeGetQuery(
+		ctx,
+		runtimeID,
+		"my_key",
+		roothash.RoundLatest,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to query runtime: %w", err)
+	}
+	if rsp != "my_value" {
+		return fmt.Errorf("response does not have expected value (got: '%v', expected: '%v')", rsp, "my_value")
+	}
+
 	return nil
 }
 
