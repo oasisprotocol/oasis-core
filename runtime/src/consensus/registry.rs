@@ -191,18 +191,26 @@ pub struct EndorsedCapabilityTEE {
 }
 
 impl EndorsedCapabilityTEE {
-    /// Verify endorsed TEE capability is valid.
-    pub fn verify(
-        &self,
-        policy: &sgx::QuotePolicy,
-    ) -> anyhow::Result<VerifiedEndorsedCapabilityTEE> {
-        // Verify node endorsement.
+    /// Verify the endorsement signature is valid.
+    ///
+    /// **This does not verify the TEE capability itself, use `verify` for that.**
+    pub fn verify_endorsement(&self) -> anyhow::Result<()> {
         if !self.node_endorsement.verify(
             ENDORSE_CAPABILITY_TEE_SIGNATURE_CONTEXT,
             &cbor::to_vec(self.capability_tee.clone()),
         ) {
             bail!("invalid node endorsement signature");
         }
+        Ok(())
+    }
+
+    /// Verify endorsed TEE capability is valid.
+    pub fn verify(
+        &self,
+        policy: &sgx::QuotePolicy,
+    ) -> anyhow::Result<VerifiedEndorsedCapabilityTEE> {
+        // Verify node endorsement.
+        self.verify_endorsement()?;
 
         // Verify TEE capability.
         let verified_quote = self
