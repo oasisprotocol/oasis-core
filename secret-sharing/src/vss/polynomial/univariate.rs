@@ -68,6 +68,8 @@ where
         for ai in self.a.iter().rev() {
             if ai.is_zero().into() {
                 deg = deg.saturating_sub(1);
+            } else {
+                break;
             }
         }
 
@@ -487,6 +489,10 @@ mod tests {
 
         let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
         assert_eq!(p.degree(), 2);
+        assert_eq!(p.size(), 5);
+
+        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 1, 2, 0, 3]));
+        assert_eq!(p.degree(), 4);
         assert_eq!(p.size(), 5);
     }
 

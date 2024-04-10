@@ -9,31 +9,34 @@ use std::ops::Mul;
 /// encountered along the way.
 pub struct Multiplier<T>
 where
-    T: Mul<Output = T> + Clone + Default,
+    T: Mul<Output = T> + Clone,
 {
     /// The root node of the tree.
-    root: Node<T>,
+    root: Option<Node<T>>,
 }
 
 impl<T> Multiplier<T>
 where
-    T: Mul<Output = T> + Clone + Default,
+    T: Mul<Output = T> + Clone,
 {
     /// Constructs a new multiplier using the given values.
     pub fn new(values: &[T]) -> Self {
-        let root = Self::create(values, true);
+        let root = if values.is_empty() {
+            None
+        } else {
+            Some(Self::create(values, true))
+        };
 
         Self { root }
     }
 
     /// Helper function to recursively construct the tree.
     fn create(values: &[T], root: bool) -> Node<T> {
-        match values.len() {
+        let size = values.len();
+
+        match size {
             0 => {
-                // When given an empty slice, return zero, which should be the default value.
-                return Node::Leaf(LeafNode {
-                    value: Default::default(),
-                });
+                panic!("dead code");
             }
             1 => {
                 // Store values in the leaf nodes.
@@ -44,8 +47,7 @@ where
             _ => (),
         }
 
-        let size = values.len();
-        let middle = size / 2;
+        let middle = size / 2; // size >= 2
         let left = Box::new(Self::create(&values[..middle], false));
         let right = Box::new(Self::create(&values[middle..], false));
         let value = match root {
@@ -62,8 +64,13 @@ where
     }
 
     /// Returns the product of all values except the one at the given index.
-    pub fn get_product(&self, index: usize) -> T {
-        self.root.get_product(index).unwrap_or_default()
+    ///
+    /// If there are no such values, the product is one and None is returned.
+    pub fn get_product(&self, index: usize) -> Option<T> {
+        match &self.root {
+            Some(root) => root.get_product(index),
+            None => None,
+        }
     }
 }
 
@@ -163,17 +170,21 @@ mod tests {
         let m = Multiplier::<usize>::new(&vec![]);
         for i in 0..10 {
             let product = m.get_product(i);
-            assert_eq!(product, 0);
+            assert_eq!(product, None);
         }
 
         // One value.
-        let values = vec![1];
-        let products = vec![0, 1, 1];
+        let values = vec![2];
+        let products = vec![1, 2, 2];
         let m = Multiplier::new(&values);
 
         for (i, expected) in products.into_iter().enumerate() {
             let product = m.get_product(i);
-            assert_eq!(product, expected);
+            if i == 0 {
+                assert_eq!(product, None);
+            } else {
+                assert_eq!(product, Some(expected));
+            }
         }
 
         // Many values.
@@ -184,13 +195,13 @@ mod tests {
 
         for (i, expected) in products.enumerate() {
             let product = m.get_product(i);
-            assert_eq!(product, expected);
+            assert_eq!(product, Some(expected));
         }
 
         // Index out of bounds.
         for i in 5..10 {
             let product = m.get_product(i);
-            assert_eq!(product, total);
+            assert_eq!(product, Some(total));
         }
     }
 }

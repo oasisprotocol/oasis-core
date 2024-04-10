@@ -56,6 +56,13 @@ pub struct Status {
     /// recovered.
     pub threshold: u8,
 
+    /// The minimum number of shares that can be lost to render the secret
+    /// unrecoverable.
+    ///
+    /// If t and e represent the threshold and extra shares, respectively,
+    /// then the minimum size of the committee is t+e+1.
+    pub extra_shares: u8,
+
     /// The time interval in epochs between handoffs.
     ///
     /// A zero value disables handoffs.

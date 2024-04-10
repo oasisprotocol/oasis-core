@@ -16,18 +16,20 @@ use crate::policy::verify_data_and_trusted_signers;
 
 use super::Error;
 
-/// Policy, which manages the key manager policy.
+/// A collection of cached key manager policies.
 pub struct VerifiedPolicies {
     policies: Mutex<HashMap<u8, Arc<VerifiedPolicy>>>,
 }
 
 impl VerifiedPolicies {
+    /// Creates a new collection of cached verified policies.
     pub fn new() -> Self {
         Self {
             policies: Mutex::new(HashMap::new()),
         }
     }
 
+    /// Verifies and caches the given policy.
     pub fn verify(&self, policy: &SignedPolicySGX) -> Result<Arc<VerifiedPolicy>> {
         let mut policies = self.policies.lock().unwrap();
 
