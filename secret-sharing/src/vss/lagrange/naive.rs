@@ -82,18 +82,26 @@ mod tests {
 
     #[test]
     fn test_lagrange_naive() {
-        let xs = scalars(&[1, 2, 3]);
-        let ys = scalars(&[2, 4, 8]);
-        let p = lagrange_naive(&xs, &ys);
+        // Prepare points (x, 2**x + 1).
+        let n = 10;
+        let xs: Vec<_> = (1..=n as i64).collect();
+        let ys: Vec<_> = (1..=n as u32).map(|x| 1 + 2_i64.pow(x)).collect();
 
-        // Verify zeros.
-        for (x, y) in zip(xs, ys) {
-            assert_eq!(p.eval(&x), y);
+        // Test polynomials of different degrees.
+        for size in 1..=n {
+            let xs = scalars(&xs[..size]);
+            let ys = scalars(&ys[..size]);
+            let p = lagrange_naive(&xs, &ys);
+
+            // Verify zeros.
+            for (x, y) in zip(xs, ys) {
+                assert_eq!(p.eval(&x), y);
+            }
+
+            // Verify degree.
+            assert_eq!(p.degree(), size - 1);
+            assert_eq!(p.size(), size);
         }
-
-        // Verify degree.
-        assert_eq!(p.degree(), 2);
-        assert_eq!(p.size(), 3);
     }
 
     #[test]
