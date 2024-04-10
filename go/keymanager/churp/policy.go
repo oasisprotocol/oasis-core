@@ -80,3 +80,25 @@ func (p *SignedPolicySGX) SanityCheck(prev *PolicySGX) error {
 
 	return nil
 }
+
+// Sign signs the policy with the given signer and appends the signatures.
+func (p *SignedPolicySGX) Sign(signers []signature.Signer) error {
+	if len(signers) == 0 {
+		return nil
+	}
+
+	rawPolicy := cbor.Marshal(p.Policy)
+
+	sigs := make([]signature.Signature, 0, len(signers))
+	for _, signer := range signers {
+		sig, err := signature.Sign(signer, PolicySGXSignatureContext, rawPolicy)
+		if err != nil {
+			return err
+		}
+		sigs = append(sigs, *sig)
+	}
+
+	p.Signatures = append(p.Signatures, sigs...)
+
+	return nil
+}

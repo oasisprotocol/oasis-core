@@ -338,6 +338,7 @@ func RegisterScenarios() error {
 		KeymanagerRotationFailure,
 		KeymanagerUpgrade,
 		KeymanagerChurp,
+		KeymanagerChurpMany,
 		// Dump/restore test.
 		DumpRestore,
 		DumpRestoreRuntimeRoundAdvance,
