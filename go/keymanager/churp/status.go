@@ -1,6 +1,8 @@
 package churp
 
 import (
+	"math"
+
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/hash"
@@ -17,6 +19,34 @@ const (
 	// EccNistP384 represents the NIST P-384 elliptic curve group.
 	EccNistP384 uint8 = iota
 )
+
+// HandoffKind represents the kind of a handoff.
+type HandoffKind int
+
+const (
+	// HandoffKindDealingPhase represents the initial setup phase.
+	HandoffKindDealingPhase HandoffKind = iota
+	// HandoffKindCommitteeUnchanged represents a handoff where the committee
+	// doesn't change.
+	HandoffKindCommitteeUnchanged
+	// HandoffKindCommitteeChanged represents a handoff where the committee
+	// changes.
+	HandoffKindCommitteeChanged
+)
+
+// String returns the string representation of the HandoffKind.
+func (h HandoffKind) String() string {
+	switch h {
+	case HandoffKindDealingPhase:
+		return "dealing phase"
+	case HandoffKindCommitteeUnchanged:
+		return "committee unchanged"
+	case HandoffKindCommitteeChanged:
+		return "committee changed"
+	default:
+		return "unknown"
+	}
+}
 
 // ConsensusParameters are the key manager CHURP consensus parameters.
 type ConsensusParameters struct {
@@ -105,6 +135,50 @@ type Status struct {
 	// Subsequently, upon the arrival of the handoff epoch, nodes must execute
 	// the handoff protocol and confirm the reconstruction of its share.
 	Applications map[signature.PublicKey]Application `json:"applications,omitempty"`
+}
+
+// HandoffKind returns the type of the next handoff depending on which nodes
+// submitted an application to form the next committee.
+func (s *Status) HandoffKind() HandoffKind {
+	if len(s.Committee) == 0 {
+		return HandoffKindDealingPhase
+	}
+
+	if len(s.Committee) != len(s.Applications) {
+		return HandoffKindCommitteeChanged
+	}
+
+	for _, id := range s.Committee {
+		if _, ok := s.Applications[id]; !ok {
+			return HandoffKindCommitteeChanged
+		}
+	}
+
+	return HandoffKindCommitteeUnchanged
+}
+
+// MinCommitteeSize returns the minimum number of nodes in the committee.
+func (s *Status) MinCommitteeSize() int {
+	t := int(s.Threshold)
+	e := int(s.ExtraShares)
+	return t + e + 1
+}
+
+// MinApplicants returns the minimum number of nodes that must participate
+// in a handoff.
+func (s *Status) MinApplicants() int {
+	t := int(s.Threshold)
+	e := int(s.ExtraShares)
+
+	switch s.HandoffKind() {
+	case HandoffKindDealingPhase, HandoffKindCommitteeUnchanged:
+		return t + e + 1
+	case HandoffKindCommitteeChanged:
+		return max(t+e+1, 2*t+1)
+	default:
+		// Dead code.
+		return math.MaxInt
+	}
 }
 
 // HandoffsDisabled returns true if and only if handoffs are disabled.

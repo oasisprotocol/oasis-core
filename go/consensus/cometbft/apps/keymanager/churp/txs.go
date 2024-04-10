@@ -454,20 +454,14 @@ func tryFinalizeHandoff(status *churp.Status, epochChange bool) bool {
 		}
 	}
 
-	// Verify the size of the committee.
-	switch epochChange {
-	case true:
-		// At the end of the handoff epoch, a threshold number of applicants
-		// will suffice.
-		minCommitteeSize := status.Threshold + 1 + status.ExtraShares
-		for len(committee) < int(minCommitteeSize) {
-			return false
-		}
-	case false:
-		// During the handoff epoch, all applicants must send confirmation.
-		for len(committee) != len(status.Applications) {
-			return false
-		}
+	// Verify the committee size if the number of extra shares has changed.
+	if len(committee) < status.MinCommitteeSize() {
+		return false
+	}
+
+	// During the handoff epoch, all applicants must send confirmation.
+	if !epochChange && len(committee) != len(status.Applications) {
+		return false
 	}
 
 	// Sort the committee to ensure a deterministic order.

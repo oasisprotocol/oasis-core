@@ -31,11 +31,11 @@ func (ext *churpExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime) e
 
 			switch epoch {
 			case status.NextHandoff:
-				// The epoch for the handoff just started, meaning that registrations
-				// are now closed. If not enough nodes applied for the next committee,
-				// we need to reset applications and start collecting again.
-				minCommitteeSize := int(status.Threshold)*2 + 1
-				if len(status.Applications) >= minCommitteeSize {
+				// The epoch for the handoff just started, meaning that
+				// application submissions are now closed. If not enough
+				// nodes applied for the next committee, we need to reset
+				// applications and start collecting again.
+				if len(status.Applications) >= status.MinApplicants() {
 					continue
 				}
 			case status.NextHandoff + 1:
