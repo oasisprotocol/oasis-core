@@ -893,10 +893,13 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 		}
 	}
 
-	// Record sequence number for the pending (non-finalized) root.
+	// Record sequence number for the pending (non-finalized) root. We need to commit this before
+	// storing the root to make sure we can retry in case of a crash as otherwise the root can exist
+	// but its sequence number is not known.
 	if err := ba.db.meta.setPendingRootSeqNo(root.Version, rootHash, ba.seqNo); err != nil {
 		return fmt.Errorf("mkvs/pathbadger: failed to set pending root seqno: %w", err)
 	}
+	ba.db.meta.commit(tx)
 
 	if !ba.chunk {
 		// Store updated nodes (only needed until the version is finalized).
@@ -923,7 +926,6 @@ func (ba *badgerBatch) Commit(root node.Root) error {
 	if err := ba.bat.Flush(); err != nil {
 		return fmt.Errorf("mkvs/pathbadger: failed to flush batch: %w", err)
 	}
-	ba.db.meta.commit(tx)
 
 	ba.Reset()
 	return ba.BaseBatch.Commit(root)
