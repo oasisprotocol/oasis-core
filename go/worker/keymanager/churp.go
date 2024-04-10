@@ -219,7 +219,7 @@ func (s *submissionScheduler) Queue(status *churp.Status) {
 	info, ok = s.submissions.Get(status.ID)
 	if !ok {
 		epoch := status.NextHandoff - 1
-		height, err := s.kmWorker.randomBlockHeight(epoch, 50)
+		height, err := s.kmWorker.selectBlockHeight(epoch, 10, 50)
 		if err != nil {
 			s.logger.Error("failed to select a random block height",
 				"err", err,

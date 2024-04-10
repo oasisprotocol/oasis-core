@@ -303,27 +303,37 @@ func (w *Worker) runtimeEncryptionKeys(nodes []signature.PublicKey) (map[x25519.
 	return reks, nil
 }
 
-// randomBlockHeight returns the height of a random block in the k-th percentile of the given epoch.
-func (w *Worker) randomBlockHeight(epoch beacon.EpochTime, percentile int64) (int64, error) {
-	// Get height of the first block.
-	params, err := w.commonWorker.Consensus.Beacon().ConsensusParameters(w.ctx, consensus.HeightLatest)
+// selectBlockHeight returns the height of a random block within the specified
+// percentiles of the given epoch.
+//
+// Calculation is based on the current epoch and its block interval.
+func (w *Worker) selectBlockHeight(epoch beacon.EpochTime, from uint8, to uint8) (int64, error) {
+	// Fetch the height of the first block in the current epoch.
+	now, err := w.commonWorker.Consensus.Beacon().GetEpoch(w.ctx, consensus.HeightLatest)
 	if err != nil {
-		return 0, fmt.Errorf("failed to fetch consensus parameters: %w", err)
+		return 0, fmt.Errorf("failed to fetch epoch: %w", err)
 	}
-	first, err := w.commonWorker.Consensus.Beacon().GetEpochBlock(w.ctx, epoch)
+	first, err := w.commonWorker.Consensus.Beacon().GetEpochBlock(w.ctx, now)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch epoch block height: %w", err)
 	}
 
-	// Pick a random height from the given percentile.
+	// Fetch the epoch interval for the current epoch.
+	params, err := w.commonWorker.Consensus.Beacon().ConsensusParameters(w.ctx, consensus.HeightLatest)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
 	interval := params.Interval()
-	if percentile < 100 {
-		interval = interval * percentile / 100
-	}
-	if interval <= 0 {
-		interval = 1
-	}
-	height := first + rand.Int63n(interval)
+
+	// Pick a random block from the given percentile.
+	offset := interval * int64(from) / 100
+	span := interval * int64(to-from) / 100
+	span = max(1, span)
+	height := first + offset + rand.Int63n(span)
+
+	// Estimate the block height for the given epoch.
+	diff := int64(epoch) - int64(now)
+	height = height + diff*interval
 
 	return height, nil
 }
