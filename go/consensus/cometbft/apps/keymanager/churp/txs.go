@@ -15,10 +15,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 )
 
-// extraShareholders is the minimum number of shares that can be lost while
-// still allowing the secret to be recovered.
-const extraShareholders = 2
-
 func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error {
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
@@ -91,6 +87,7 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 		Identity:        req.Identity,
 		GroupID:         req.GroupID,
 		Threshold:       req.Threshold,
+		ExtraShares:     req.ExtraShares,
 		HandoffInterval: req.HandoffInterval,
 		Policy:          req.Policy,
 		Handoff:         0,
@@ -153,6 +150,11 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 	// Verify data.
 	if err = req.ValidateBasic(); err != nil {
 		return fmt.Errorf("keymanager: churp: invalid config: %w", err)
+	}
+
+	// Handle extra shares change.
+	if req.ExtraShares != nil {
+		status.ExtraShares = *req.ExtraShares
 	}
 
 	// Handle handoff interval change.
@@ -457,7 +459,7 @@ func tryFinalizeHandoff(status *churp.Status, epochChange bool) bool {
 	case true:
 		// At the end of the handoff epoch, a threshold number of applicants
 		// will suffice.
-		minCommitteeSize := status.Threshold + 1 + extraShareholders
+		minCommitteeSize := status.Threshold + 1 + status.ExtraShares
 		for len(committee) < int(minCommitteeSize) {
 			return false
 		}

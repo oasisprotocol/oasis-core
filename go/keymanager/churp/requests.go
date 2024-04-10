@@ -32,6 +32,10 @@ type CreateRequest struct {
 	// to reconstruct a key.
 	Threshold uint8 `json:"threshold,omitempty"`
 
+	// ExtraShares represents the minimum number of shares that can be lost
+	// to render the secret unrecoverable.
+	ExtraShares uint8 `json:"extra_shares,omitempty"`
+
 	// HandoffInterval is the time interval in epochs between handoffs.
 	//
 	// A zero value disables handoffs.
@@ -60,6 +64,10 @@ func (c *CreateRequest) ValidateBasic() error {
 type UpdateRequest struct {
 	Identity
 
+	// ExtraShares represents the minimum number of shares that can be lost
+	// to render the secret unrecoverable.
+	ExtraShares *uint8 `json:"extra_shares,omitempty"`
+
 	// HandoffInterval is the time interval in epochs between handoffs.
 	//
 	// Zero value disables handoffs.
@@ -71,7 +79,7 @@ type UpdateRequest struct {
 
 // ValidateBasic performs basic config validity checks.
 func (c *UpdateRequest) ValidateBasic() error {
-	if c.HandoffInterval == nil && c.Policy == nil {
+	if c.ExtraShares == nil && c.HandoffInterval == nil && c.Policy == nil {
 		return fmt.Errorf("update config should not be empty")
 	}
 

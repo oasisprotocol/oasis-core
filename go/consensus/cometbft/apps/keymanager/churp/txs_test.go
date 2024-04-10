@@ -219,6 +219,7 @@ func (s *TxTestSuite) TestCreate() {
 			Identity:        identity,
 			GroupID:         churp.EccNistP384,
 			Threshold:       1,
+			ExtraShares:     2,
 			HandoffInterval: 0,
 			Policy:          policy,
 		}
@@ -236,6 +237,7 @@ func (s *TxTestSuite) TestCreate() {
 		require.Equal(s.T(), s.keymanagerRuntimes[0].ID, status.RuntimeID)
 		require.Equal(s.T(), churp.EccNistP384, status.GroupID)
 		require.Equal(s.T(), uint8(1), status.Threshold)
+		require.Equal(s.T(), uint8(2), status.ExtraShares)
 		require.Equal(s.T(), beacon.EpochTime(0), status.HandoffInterval)
 		require.Equal(s.T(), policy, status.Policy)
 		require.Equal(s.T(), beacon.EpochTime(0), status.Handoff)

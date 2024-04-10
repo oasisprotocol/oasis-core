@@ -48,6 +48,13 @@ type Status struct {
 	// recovered.
 	Threshold uint8 `json:"threshold"`
 
+	// ExtraShares represents the minimum number of shares that can be lost
+	// to render the secret unrecoverable.
+	//
+	// If t and e represent the threshold and extra shares, respectively,
+	// then the minimum size of the committee is t+e+1.
+	ExtraShares uint8 `json:"extra_shares"`
+
 	// HandoffInterval is the time interval in epochs between handoffs.
 	//
 	// A zero value disables handoffs.
