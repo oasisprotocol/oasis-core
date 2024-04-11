@@ -147,7 +147,10 @@ impl CapabilityTEE {
             TEEHardware::TEEHardwareInvalid => false,
             TEEHardware::TEEHardwareIntelSGX => {
                 // Decode SGX attestation and check quote equality.
-                let attestation: SGXAttestation = self.try_decode_attestation().unwrap();
+                let attestation: SGXAttestation = match self.try_decode_attestation() {
+                    Ok(a) => a,
+                    _ => return false,
+                };
                 identity.rak_matches(&self.rak, &attestation.quote())
             }
         }
