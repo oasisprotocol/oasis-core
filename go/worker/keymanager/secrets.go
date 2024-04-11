@@ -166,7 +166,7 @@ func (w *secretsWorker) Methods() []string {
 }
 
 // Connect implements RPCAccessController interface.
-func (w *secretsWorker) Connect(peerID core.PeerID) bool {
+func (w *secretsWorker) Connect(ctx context.Context, peerID core.PeerID) bool {
 	// Start accepting requests after initialization.
 	w.mu.RLock()
 	state := w.status.Worker.Status
@@ -183,7 +183,7 @@ func (w *secretsWorker) Connect(peerID core.PeerID) bool {
 	}
 
 	// Other peers must undergo the authorization process.
-	if err := w.authorizeNode(peerID, kmStatus); err == nil {
+	if err := w.authorizeNode(ctx, peerID, kmStatus); err == nil {
 		return true
 	}
 	if err := w.authorizeKeyManager(peerID); err == nil {
@@ -194,7 +194,7 @@ func (w *secretsWorker) Connect(peerID core.PeerID) bool {
 }
 
 // Authorize implements RPCAccessController interface.
-func (w *secretsWorker) Authorize(method string, kind enclaverpc.Kind, peerID core.PeerID) error {
+func (w *secretsWorker) Authorize(ctx context.Context, method string, kind enclaverpc.Kind, peerID core.PeerID) error {
 	// Start accepting requests after initialization.
 	w.mu.RLock()
 	state := w.status.Worker.Status
@@ -228,7 +228,7 @@ func (w *secretsWorker) Authorize(method string, kind enclaverpc.Kind, peerID co
 	// Other peers must undergo the authorization process.
 	switch method {
 	case secrets.RPCMethodGetOrCreateKeys, secrets.RPCMethodGetOrCreateEphemeralKeys:
-		return w.authorizeNode(peerID, kmStatus)
+		return w.authorizeNode(ctx, peerID, kmStatus)
 	case secrets.RPCMethodReplicateMasterSecret, secrets.RPCMethodReplicateEphemeralSecret:
 		return w.authorizeKeyManager(peerID)
 	default:
@@ -236,20 +236,20 @@ func (w *secretsWorker) Authorize(method string, kind enclaverpc.Kind, peerID co
 	}
 }
 
-func (w *secretsWorker) authorizeNode(peerID core.PeerID, kmStatus *secrets.Status) error {
-	capabilityTEE, err := w.kmWorker.GetHostedRuntimeCapabilityTEE()
+func (w *secretsWorker) authorizeNode(ctx context.Context, peerID core.PeerID, kmStatus *secrets.Status) error {
+	rt, err := w.kmWorker.runtime.RegistryDescriptor(ctx)
 	if err != nil {
 		return err
 	}
 
-	switch {
-	case capabilityTEE == nil:
+	switch rt.TEEHardware {
+	case node.TEEHardwareInvalid:
 		// Insecure key manager enclaves can be queried by all runtimes (used for testing).
 		if kmStatus.IsSecure {
 			return fmt.Errorf("untrusted hardware")
 		}
 		return nil
-	case capabilityTEE.Hardware == node.TEEHardwareIntelSGX:
+	case node.TEEHardwareIntelSGX:
 		// Secure key manager enclaves can be queried by runtimes specified in the policy.
 		if kmStatus.Policy == nil {
 			return fmt.Errorf("policy not set")
@@ -264,7 +264,7 @@ func (w *secretsWorker) authorizeNode(peerID core.PeerID, kmStatus *secrets.Stat
 		}
 		return fmt.Errorf("query not allowed")
 	default:
-		return fmt.Errorf("unsupported hardware: %s", capabilityTEE.Hardware)
+		return fmt.Errorf("unsupported hardware: %s", rt.TEEHardware)
 	}
 }
 

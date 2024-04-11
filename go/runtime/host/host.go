@@ -62,8 +62,10 @@ type Runtime interface {
 	// GetInfo retrieves the runtime information.
 	GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error)
 
-	// GetCapabilityTEE retrieves the CapabilityTEE of the runtime. It may be nil in case the
-	// runtime is not running inside a TEE.
+	// GetCapabilityTEE retrieves the CapabilityTEE of the runtime.
+	//
+	// It may be nil in case the CapabilityTEE is not available or if the runtime is not running
+	// inside a TEE.
 	GetCapabilityTEE() (*node.CapabilityTEE, error)
 
 	// Call sends a request message to the runtime over the Runtime Host Protocol and waits for the
