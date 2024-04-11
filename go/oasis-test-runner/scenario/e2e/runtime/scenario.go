@@ -15,7 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
@@ -177,7 +177,7 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 					{
 						Components: []oasis.ComponentCfg{
 							{
-								Kind:     bundle.ComponentRONL,
+								Kind:     component.RONL,
 								Binaries: sc.ResolveRuntimeBinaries(KeyManagerRuntimeBinary),
 							},
 						},
@@ -225,7 +225,7 @@ func (sc *Scenario) Fixture() (*oasis.NetworkFixture, error) {
 					{
 						Components: []oasis.ComponentCfg{
 							{
-								Kind:     bundle.ComponentRONL,
+								Kind:     component.RONL,
 								Binaries: sc.ResolveRuntimeBinaries(KeyValueRuntimeBinary),
 							},
 						},

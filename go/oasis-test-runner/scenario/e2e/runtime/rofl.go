@@ -3,7 +3,7 @@ package runtime
 import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 // ROFL is the runtime with a ROFL component scenario.
@@ -40,7 +40,7 @@ func (sc *roflImpl) Fixture() (*oasis.NetworkFixture, error) {
 
 	// Add ROFL component.
 	f.Runtimes[1].Deployments[0].Components = append(f.Runtimes[1].Deployments[0].Components, oasis.ComponentCfg{
-		Kind:     bundle.ComponentROFL,
+		Kind:     component.ROFL,
 		Binaries: sc.ResolveRuntimeBinaries(ROFLComponentBinary),
 	})
 

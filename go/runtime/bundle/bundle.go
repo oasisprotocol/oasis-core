@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/sigstruct"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 // Bundle is a runtime bundle instance.
@@ -126,7 +127,7 @@ func (bnd *Bundle) Add(fn string, b []byte) error {
 }
 
 // MrEnclave returns the MRENCLAVE of the SGX excutable.
-func (bnd *Bundle) MrEnclave(id ComponentID) (*sgx.MrEnclave, error) {
+func (bnd *Bundle) MrEnclave(id component.ID) (*sgx.MrEnclave, error) {
 	comp := bnd.Manifest.GetComponentByID(id)
 	if comp == nil {
 		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
@@ -147,7 +148,7 @@ func (bnd *Bundle) MrEnclave(id ComponentID) (*sgx.MrEnclave, error) {
 }
 
 // MrSigner returns the MRSIGNER that signed the SGX executable.
-func (bnd *Bundle) MrSigner(id ComponentID) (*sgx.MrSigner, error) {
+func (bnd *Bundle) MrSigner(id component.ID) (*sgx.MrSigner, error) {
 	comp := bnd.Manifest.GetComponentByID(id)
 	if comp == nil {
 		return nil, fmt.Errorf("runtime/bundle: component '%s' not available", id)
@@ -175,7 +176,7 @@ func (bnd *Bundle) MrSigner(id ComponentID) (*sgx.MrSigner, error) {
 }
 
 // EnclaveIdentity returns the SGX enclave identity of the given component.
-func (bnd *Bundle) EnclaveIdentity(id ComponentID) (*sgx.EnclaveIdentity, error) {
+func (bnd *Bundle) EnclaveIdentity(id component.ID) (*sgx.EnclaveIdentity, error) {
 	mrEnclave, err := bnd.MrEnclave(id)
 	if err != nil {
 		return nil, err

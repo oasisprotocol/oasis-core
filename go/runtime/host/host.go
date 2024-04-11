@@ -9,6 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
@@ -19,7 +20,7 @@ type Config struct {
 
 	// Components are optional component ids that should be provisioned in case the runtime has
 	// multiple components.
-	Components []bundle.ComponentID
+	Components []component.ID
 
 	// Extra is an optional provisioner-specific configuration.
 	Extra interface{}
@@ -93,7 +94,7 @@ type Runtime interface {
 type CompositeRuntime interface {
 	// Component returns the runtime component with the given unique identifier.
 	// If the component with the given identifier does not exist, nil is returned.
-	Component(id bundle.ComponentID) (Runtime, bool)
+	Component(id component.ID) (Runtime, bool)
 }
 
 // RuntimeHandler is the message handler for the host side of the runtime host protocol.

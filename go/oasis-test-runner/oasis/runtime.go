@@ -18,6 +18,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 )
 
@@ -96,7 +97,7 @@ type DeploymentCfg struct {
 
 // ComponentCfg is a runtime component configuration.
 type ComponentCfg struct {
-	Kind     bundle.ComponentKind        `json:"kind"`
+	Kind     component.Kind              `json:"kind"`
 	Binaries map[node.TEEHardware]string `json:"binaries"`
 }
 
@@ -216,7 +217,7 @@ func (rt *Runtime) toRuntimeBundle(deploymentIndex int) (*bundle.Bundle, error) 
 			return nil
 		}
 
-		mrEnclave, err := deployCfg.bundle.MrEnclave(bundle.ComponentID_RONL)
+		mrEnclave, err := deployCfg.bundle.MrEnclave(component.ID_RONL)
 		if err != nil {
 			return fmt.Errorf("oasis/runtime: failed to derive MRENCLAVE: %w", err)
 		}
@@ -364,7 +365,7 @@ func (net *Network) NewRuntime(cfg *RuntimeCfg) (*Runtime, error) {
 		var components []ComponentCfg
 		if len(deployCfg.DeprecatedBinaries) > 0 {
 			components = append(components, ComponentCfg{
-				Kind:     bundle.ComponentRONL,
+				Kind:     component.RONL,
 				Binaries: deployCfg.DeprecatedBinaries,
 			})
 		}
