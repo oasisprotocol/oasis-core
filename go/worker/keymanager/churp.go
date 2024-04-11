@@ -76,12 +76,12 @@ func (w *churpWorker) Methods() []string {
 }
 
 // Connect implements RPCAccessController interface.
-func (w *churpWorker) Connect(core.PeerID) bool {
+func (w *churpWorker) Connect(context.Context, core.PeerID) bool {
 	return false
 }
 
 // Authorize implements RPCAccessController interface.
-func (w *churpWorker) Authorize(string, enclaverpc.Kind, core.PeerID) error {
+func (w *churpWorker) Authorize(context.Context, string, enclaverpc.Kind, core.PeerID) error {
 	return nil
 }
 

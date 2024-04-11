@@ -157,7 +157,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 	case method == api.RPCMethodConnect && kind == enclaverpc.KindNoiseSession:
 		// Allow connection if at least one controller grants authorization.
 		fn := func(ctrl workerKeymanager.RPCAccessController) bool {
-			return ctrl.Connect(peerID)
+			return ctrl.Connect(ctx, peerID)
 		}
 		if !slices.ContainsFunc(w.accessControllers, fn) {
 			return nil, fmt.Errorf("not authorized to connect")
@@ -167,7 +167,7 @@ func (w *Worker) CallEnclave(ctx context.Context, data []byte, kind enclaverpc.K
 		if !ok {
 			return nil, fmt.Errorf("unsupported RPC method")
 		}
-		if err := ctrl.Authorize(method, kind, peerID); err != nil {
+		if err := ctrl.Authorize(ctx, method, kind, peerID); err != nil {
 			return nil, fmt.Errorf("not authorized: %w", err)
 		}
 	}

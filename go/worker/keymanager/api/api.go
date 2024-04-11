@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -193,8 +194,8 @@ type RPCAccessController interface {
 
 	// Connect verifies whether the peer is allowed to establish a secure Noise connection,
 	// meaning it is authorized to invoke at least one secure RPC method.
-	Connect(peerID core.PeerID) bool
+	Connect(ctx context.Context, peerID core.PeerID) bool
 
 	// Authorize verifies whether the peer is allowed to invoke the specified RPC method.
-	Authorize(method string, kind enclaverpc.Kind, peerID core.PeerID) error
+	Authorize(ctx context.Context, method string, kind enclaverpc.Kind, peerID core.PeerID) error
 }

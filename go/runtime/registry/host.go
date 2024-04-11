@@ -139,6 +139,9 @@ func (n *RuntimeHostNode) GetHostedRuntimeActiveVersion() (*version.Version, err
 }
 
 // GetHostedRuntimeCapabilityTEE returns the CapabilityTEE for the active runtime version.
+//
+// It may be nil in case the CapabilityTEE is not available or if the runtime is not running
+// inside a TEE.
 func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE() (*node.CapabilityTEE, error) {
 	n.Lock()
 	agg := n.agg
@@ -152,6 +155,9 @@ func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEE() (*node.CapabilityTEE, 
 }
 
 // GetHostedRuntimeCapabilityTEEForVersion returns the CapabilityTEE for a specific runtime version.
+//
+// It may be nil in case the CapabilityTEE is not available or if the runtime is not running
+// inside a TEE.
 func (n *RuntimeHostNode) GetHostedRuntimeCapabilityTEEForVersion(version version.Version) (*node.CapabilityTEE, error) {
 	n.Lock()
 	agg := n.agg
