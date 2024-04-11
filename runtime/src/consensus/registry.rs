@@ -266,8 +266,8 @@ pub struct NodeRuntime {
     pub extra_info: Option<Vec<u8>>,
 }
 
-/// TEE hardware implementation.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
+/// Oasis node roles bitmask.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, cbor::Encode, cbor::Decode)]
 #[cbor(transparent)]
 pub struct RolesMask(pub u32);
 
@@ -293,6 +293,33 @@ impl RolesMask {
     // Bits of the Oasis node roles bitmask that are reserved and must not be used.
     pub const ROLES_RESERVED: RolesMask =
         RolesMask(u32::MAX & !((Self::ROLE_STORAGE_RPC.0 << 1) - 1) | Self::ROLE_RESERVED_3.0);
+
+    /// Whether the roles mask contains any of the specified roles.
+    pub fn contains(&self, role: RolesMask) -> bool {
+        (self.0 & role.0) != 0
+    }
+
+    /// Whether the roles mask encodes a single valid role.
+    pub fn is_single_role(&self) -> bool {
+        // Ensures exactly one bit is set, and the set bit is a valid role.
+        self.0 != 0 && self.0 & (self.0 - 1) == 0 && self.0 & Self::ROLES_RESERVED.0 == 0
+    }
+}
+
+impl std::ops::BitAnd for RolesMask {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0.bitand(rhs.0))
+    }
+}
+
+impl std::ops::BitOr for RolesMask {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0.bitor(rhs.0))
+    }
 }
 
 impl PartialOrd for RolesMask {
@@ -352,6 +379,11 @@ pub struct Node {
 }
 
 impl Node {
+    /// Checks whether the node has any of the specified roles.
+    pub fn has_roles(&self, roles: RolesMask) -> bool {
+        self.roles.contains(roles)
+    }
+
     /// Checks whether the node has the provided TEE identity configured.
     pub fn has_tee(&self, identity: &Identity, runtime_id: &Namespace, version: &Version) -> bool {
         if let Some(rts) = &self.runtimes {
@@ -1386,5 +1418,29 @@ mod tests {
             h.to_hex::<String>(),
             "9a288bd33ba7a4c2eefdee68e4c08c1a34c369302ef8176a3bfdb4fedcec333e"
         );
+    }
+
+    #[test]
+    fn test_roles_mask() {
+        let mask = RolesMask::ROLE_OBSERVER | RolesMask::ROLE_COMPUTE_WORKER;
+        assert!(mask.contains(RolesMask::ROLE_OBSERVER));
+        assert!(mask.contains(RolesMask::ROLE_COMPUTE_WORKER));
+        assert!(!mask.contains(RolesMask::ROLE_KEY_MANAGER));
+        assert!(!mask.contains(RolesMask::ROLE_VALIDATOR));
+        assert!(!mask.contains(RolesMask::ROLE_STORAGE_RPC));
+        assert!(!mask.is_single_role());
+
+        let mask = RolesMask::ROLE_OBSERVER;
+        assert!(mask.is_single_role());
+
+        let node = Node {
+            roles: RolesMask::ROLE_COMPUTE_WORKER | RolesMask::ROLE_VALIDATOR,
+            ..Default::default()
+        };
+        assert!(node.has_roles(RolesMask::ROLE_COMPUTE_WORKER));
+        assert!(node.has_roles(RolesMask::ROLE_VALIDATOR));
+        assert!(node.has_roles(RolesMask::ROLE_COMPUTE_WORKER | RolesMask::ROLE_VALIDATOR));
+        assert!(!node.has_roles(RolesMask::ROLE_KEY_MANAGER));
+        assert!(!node.has_roles(RolesMask::ROLE_STORAGE_RPC));
     }
 }
