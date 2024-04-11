@@ -140,6 +140,10 @@ type Component struct {
 
 	// SGX is the SGX specific manifest metadata if any.
 	SGX *SGXMetadata `json:"sgx,omitempty"`
+
+	// Disabled specifies whether the component is disabled by default and needs to be explicitly
+	// enabled via node configuration to be used.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // ID returns this component's identifier.
@@ -168,6 +172,9 @@ func (c *Component) Validate() error {
 	case component.RONL:
 		if c.Name != "" {
 			return fmt.Errorf("RONL component must have an empty name")
+		}
+		if c.Disabled {
+			return fmt.Errorf("RONL component cannot be disabled")
 		}
 	case component.ROFL:
 	default:

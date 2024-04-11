@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	tpConfig "github.com/oasisprotocol/oasis-core/go/runtime/txpool/config"
 )
 
@@ -97,6 +100,44 @@ type Config struct {
 
 	// LoadBalancer is the load balancer configuration.
 	LoadBalancer LoadBalancerConfig `yaml:"load_balancer,omitempty"`
+
+	// Components is the list of components to configure.
+	Components []ComponentConfig `yaml:"components,omitempty"`
+}
+
+// GetComponent returns configuration for the given component if it exists.
+func (c *Config) GetComponent(id component.ID) (ComponentConfig, bool) {
+	for _, comp := range c.Components {
+		if comp.ID == id {
+			return comp, true
+		}
+	}
+	return ComponentConfig{}, false
+}
+
+// ComponentConfig is the component configuration.
+type ComponentConfig struct {
+	// ID is the component identifier.
+	ID component.ID `yaml:"id"`
+
+	// Disabled specifies whether the component is disabled. If a component is specified and not
+	// disabled, it is enabled.
+	Disabled bool `yaml:"disabled,omitempty"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (c *ComponentConfig) UnmarshalYAML(value *yaml.Node) error {
+	switch value.ShortTag() {
+	case "!!str":
+		// String, treat as just component identifier that enables the component.
+		*c = ComponentConfig{
+			Disabled: false,
+		}
+		return value.Decode(&c.ID)
+	default:
+		type compConfig ComponentConfig
+		return value.Decode((*compConfig)(c))
+	}
 }
 
 // PruneConfig is the history pruner configuration structure.

@@ -251,10 +251,29 @@ func newConfig( //nolint: gocyclo
 			wantedComponents := []component.ID{
 				component.ID_RONL,
 			}
-			// For compute nodes we also want to run the ROFL component.
-			if config.GlobalConfig.Mode == config.ModeCompute {
-				// TODO: Support configuring named components.
-				wantedComponents = append(wantedComponents, bundle.ComponentID{Kind: component.ROFL})
+			for _, comp := range bnd.Manifest.Components {
+				if comp.ID() == component.ID_RONL {
+					continue // Always enabled above.
+				}
+
+				// By default honor the status of the component itself.
+				enabled := !comp.Disabled
+				// On non-compute nodes, assume all components are disabled by default.
+				if config.GlobalConfig.Mode != config.ModeCompute {
+					enabled = false
+				}
+
+				// Check for any overrides in the node configuration.
+				compCfg, ok := config.GlobalConfig.Runtime.GetComponent(comp.ID())
+				if ok {
+					enabled = !compCfg.Disabled
+				}
+
+				if !enabled {
+					continue
+				}
+
+				wantedComponents = append(wantedComponents, comp.ID())
 			}
 
 			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
