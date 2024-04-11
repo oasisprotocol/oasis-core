@@ -11,7 +11,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -19,7 +19,7 @@ import (
 type composite struct {
 	id      common.Namespace
 	version version.Version
-	comps   map[bundle.ComponentID]host.Runtime
+	comps   map[component.ID]host.Runtime
 
 	stopCh chan struct{}
 
@@ -33,17 +33,17 @@ func (c *composite) ID() common.Namespace {
 
 // Implements host.Runtime.
 func (c *composite) GetActiveVersion() (*version.Version, error) {
-	return c.comps[bundle.ComponentID_RONL].GetActiveVersion()
+	return c.comps[component.ID_RONL].GetActiveVersion()
 }
 
 // Implements host.Runtime.
 func (c *composite) GetInfo(ctx context.Context) (*protocol.RuntimeInfoResponse, error) {
-	return c.comps[bundle.ComponentID_RONL].GetInfo(ctx)
+	return c.comps[component.ID_RONL].GetInfo(ctx)
 }
 
 // Implements host.Runtime.
 func (c *composite) GetCapabilityTEE() (*node.CapabilityTEE, error) {
-	return c.comps[bundle.ComponentID_RONL].GetCapabilityTEE()
+	return c.comps[component.ID_RONL].GetCapabilityTEE()
 }
 
 // shouldPropagateToComponent checks whether the given runtime request should be propagated to the
@@ -66,13 +66,13 @@ func shouldPropagateToComponent(body *protocol.Body) bool {
 
 // Implements host.Runtime.
 func (c *composite) Call(ctx context.Context, body *protocol.Body) (*protocol.Body, error) {
-	result, err := c.comps[bundle.ComponentID_RONL].Call(ctx, body)
+	result, err := c.comps[component.ID_RONL].Call(ctx, body)
 	if err != nil {
 		return nil, err
 	}
 
 	for id, comp := range c.comps {
-		if id == bundle.ComponentID_RONL {
+		if id == component.ID_RONL {
 			continue // Already handled above.
 		}
 		if !shouldPropagateToComponent(body) {
@@ -98,7 +98,7 @@ func (c *composite) UpdateCapabilityTEE() {
 
 // Implements host.Runtime.
 func (c *composite) WatchEvents() (<-chan *host.Event, pubsub.ClosableSubscription) {
-	return c.comps[bundle.ComponentID_RONL].WatchEvents()
+	return c.comps[component.ID_RONL].WatchEvents()
 }
 
 // Implements host.Runtime.
@@ -111,7 +111,7 @@ func (c *composite) Start() {
 // Implements host.Runtime.
 func (c *composite) Abort(ctx context.Context, force bool) error {
 	// Only RONL supports aborts.
-	return c.comps[bundle.ComponentID_RONL].Abort(ctx, force)
+	return c.comps[component.ID_RONL].Abort(ctx, force)
 }
 
 // Implements host.Runtime.
@@ -124,7 +124,7 @@ func (c *composite) Stop() {
 }
 
 // Implements host.CompositeRuntime.
-func (c *composite) Component(id bundle.ComponentID) (host.Runtime, bool) {
+func (c *composite) Component(id component.ID) (host.Runtime, bool) {
 	comp, ok := c.comps[id]
 	return comp, ok
 }
@@ -135,7 +135,7 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 	availableComps := cfg.Bundle.Manifest.GetAvailableComponents()
 
 	// Collect components that we want.
-	wantedComponents := make(map[bundle.ComponentID]struct{})
+	wantedComponents := make(map[component.ID]struct{})
 	for _, id := range cfg.Components {
 		wantedComponents[id] = struct{}{}
 	}
@@ -143,7 +143,7 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 	crh := &composite{
 		id:      cfg.Bundle.Manifest.ID,
 		version: cfg.Bundle.Manifest.Version,
-		comps:   make(map[bundle.ComponentID]host.Runtime),
+		comps:   make(map[component.ID]host.Runtime),
 		stopCh:  make(chan struct{}),
 		logger:  logging.GetLogger("runtime/host/composite").With("runtime_id", cfg.Bundle.Manifest.ID),
 	}
@@ -156,9 +156,9 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 		}
 
 		compCfg := cfg
-		compCfg.Components = []bundle.ComponentID{id}
+		compCfg.Components = []component.ID{id}
 		switch id.Kind {
-		case bundle.ComponentROFL:
+		case component.ROFL:
 			// Wrap message handler for ROFL component.
 			var err error
 			compCfg.MessageHandler, err = compCfg.MessageHandler.NewSubHandler(crh, c)
@@ -175,7 +175,7 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 
 		crh.comps[id] = compRt
 	}
-	if _, ronlExists := crh.comps[bundle.ComponentID_RONL]; !ronlExists {
+	if _, ronlExists := crh.comps[component.ID_RONL]; !ronlExists {
 		return nil, fmt.Errorf("host/composite: required RONL component not available")
 	}
 
@@ -186,7 +186,7 @@ func New(cfg host.Config, provisioner host.Provisioner) (host.Runtime, error) {
 	case len(crh.comps) == 1:
 		// If there is only a single component, just return the component itself as it doesn't make
 		// any sense to have another layer of indirection. This is always the RONL component.
-		return crh.comps[bundle.ComponentID_RONL], nil
+		return crh.comps[component.ID_RONL], nil
 	default:
 		// Multiple components, create a composite runtime.
 		return crh, nil

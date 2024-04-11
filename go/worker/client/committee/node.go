@@ -14,7 +14,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
 	runtime "github.com/oasisprotocol/oasis-core/go/runtime/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
@@ -120,7 +120,7 @@ func (n *Node) CheckTx(ctx context.Context, tx []byte) (*protocol.CheckTxResult,
 	return n.commonNode.TxPool.SubmitTx(ctx, tx, &txpool.TransactionMeta{Local: true, Discard: true})
 }
 
-func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte, comp *bundle.ComponentID) ([]byte, error) {
+func (n *Node) Query(ctx context.Context, round uint64, method string, args []byte, comp *component.ID) ([]byte, error) {
 	hrt := n.commonNode.GetHostedRuntime()
 	if hrt == nil {
 		return nil, api.ErrNoHostedRuntime

@@ -22,7 +22,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario/e2e"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	commonWorker "github.com/oasisprotocol/oasis-core/go/worker/common/api"
 )
 
@@ -378,7 +378,7 @@ func (sc *Scenario) UpgradeComputeRuntimeFixture(f *oasis.NetworkFixture) (int, 
 		Version: version.Version{Major: 0, Minor: 1, Patch: 0},
 		Components: []oasis.ComponentCfg{
 			{
-				Kind:     bundle.ComponentRONL,
+				Kind:     component.RONL,
 				Binaries: newRuntimeBinaries,
 			},
 		},
@@ -430,7 +430,7 @@ func (sc *Scenario) UpgradeKeyManagerFixture(f *oasis.NetworkFixture) (int, erro
 			Version: version.Version{Major: 0, Minor: 1, Patch: 0},
 			Components: []oasis.ComponentCfg{
 				{
-					Kind:     bundle.ComponentRONL,
+					Kind:     component.RONL,
 					Binaries: newRuntimeBinaries,
 				},
 			},

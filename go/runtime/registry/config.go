@@ -21,6 +21,7 @@ import (
 	ias "github.com/oasisprotocol/oasis-core/go/ias/api"
 	cmdFlags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	rtConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	"github.com/oasisprotocol/oasis-core/go/runtime/history"
 	runtimeHost "github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -247,13 +248,32 @@ func newConfig( //nolint: gocyclo
 			}
 
 			// Determine what kind of components we want.
-			wantedComponents := []bundle.ComponentID{
-				bundle.ComponentID_RONL,
+			wantedComponents := []component.ID{
+				component.ID_RONL,
 			}
-			// For compute nodes we also want to run the ROFL component.
-			if config.GlobalConfig.Mode == config.ModeCompute {
-				// TODO: Support configuring named components.
-				wantedComponents = append(wantedComponents, bundle.ComponentID{Kind: bundle.ComponentROFL})
+			for _, comp := range bnd.Manifest.Components {
+				if comp.ID() == component.ID_RONL {
+					continue // Always enabled above.
+				}
+
+				// By default honor the status of the component itself.
+				enabled := !comp.Disabled
+				// On non-compute nodes, assume all components are disabled by default.
+				if config.GlobalConfig.Mode != config.ModeCompute {
+					enabled = false
+				}
+
+				// Check for any overrides in the node configuration.
+				compCfg, ok := config.GlobalConfig.Runtime.GetComponent(comp.ID())
+				if ok {
+					enabled = !compCfg.Disabled
+				}
+
+				if !enabled {
+					continue
+				}
+
+				wantedComponents = append(wantedComponents, comp.ID())
 			}
 
 			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
@@ -283,8 +303,8 @@ func newConfig( //nolint: gocyclo
 							},
 						},
 					},
-					Components: []bundle.ComponentID{
-						bundle.ComponentID_RONL,
+					Components: []component.ID{
+						component.ID_RONL,
 					},
 				}
 				rh.Runtimes[id] = map[version.Version]*runtimeHost.Config{

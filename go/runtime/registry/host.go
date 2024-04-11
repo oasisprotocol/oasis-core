@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/composite"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/multi"
@@ -488,12 +489,12 @@ func (h *runtimeHostHandler) handleHostIdentity() (*protocol.HostIdentityRespons
 }
 
 // Implements host.RuntimeHandler.
-func (h *runtimeHostHandler) NewSubHandler(cr host.CompositeRuntime, component *bundle.Component) (host.RuntimeHandler, error) {
-	switch component.Kind {
-	case bundle.ComponentROFL:
+func (h *runtimeHostHandler) NewSubHandler(cr host.CompositeRuntime, comp *bundle.Component) (host.RuntimeHandler, error) {
+	switch comp.Kind {
+	case component.ROFL:
 		return newSubHandlerROFL(h, cr)
 	default:
-		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", component.Kind)
+		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", comp.Kind)
 	}
 }
 

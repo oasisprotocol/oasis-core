@@ -15,7 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -270,7 +270,7 @@ func (lb *lbProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	if len(cfg.Components) != 1 {
 		return nil, fmt.Errorf("host/loadbalance: must specify a single component")
 	}
-	if cfg.Components[0] != bundle.ComponentID_RONL {
+	if cfg.Components[0] != component.ID_RONL {
 		return lb.inner.NewRuntime(cfg)
 	}
 

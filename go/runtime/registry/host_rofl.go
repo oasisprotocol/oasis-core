@@ -11,6 +11,7 @@ import (
 	cmnSync "github.com/oasisprotocol/oasis-core/go/common/sync"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	enclaverpc "github.com/oasisprotocol/oasis-core/go/runtime/enclaverpc/api"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
@@ -50,7 +51,7 @@ func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime) (ho
 
 	logger := logging.GetLogger("runtime/registry/host").
 		With("runtime_id", parent.runtime.ID()).
-		With("component", bundle.ComponentROFL)
+		With("component", component.ROFL)
 
 	return &roflHostHandler{
 		parent:        parent,
@@ -114,7 +115,7 @@ func (rh *roflHostHandler) handleHostRPCCall(
 	switch rq.HostRPCCallRequest.Endpoint {
 	case rofl.EnclaveRPCEndpointRONL:
 		// Route EnclaveRPC request to RONL component.
-		compRt, ok := rh.cr.Component(bundle.ComponentID_RONL)
+		compRt, ok := rh.cr.Component(component.ID_RONL)
 		if !ok {
 			return nil, fmt.Errorf("endpoint not supported")
 		}

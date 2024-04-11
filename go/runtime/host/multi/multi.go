@@ -17,7 +17,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
@@ -281,7 +281,7 @@ func (agg *Aggregate) Stop() {
 }
 
 // Component implements host.CompositeRuntime.
-func (agg *Aggregate) Component(id bundle.ComponentID) (host.Runtime, bool) {
+func (agg *Aggregate) Component(id component.ID) (host.Runtime, bool) {
 	active, err := agg.getActiveHost()
 	if err != nil {
 		return nil, false
@@ -290,7 +290,7 @@ func (agg *Aggregate) Component(id bundle.ComponentID) (host.Runtime, bool) {
 	if cr, ok := active.host.(host.CompositeRuntime); ok {
 		return cr.Component(id)
 	}
-	if id == bundle.ComponentID_RONL {
+	if id == component.ID_RONL {
 		return active.host, true
 	}
 	return nil, false

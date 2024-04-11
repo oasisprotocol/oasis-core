@@ -9,7 +9,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	"github.com/oasisprotocol/oasis-core/go/runtime/host/protocol"
 )
 
@@ -163,8 +163,8 @@ type PlainEvent struct {
 
 // QueryRequest is a Query request.
 type QueryRequest struct {
-	RuntimeID common.Namespace    `json:"runtime_id"`
-	Component *bundle.ComponentID `json:"component,omitempty"`
+	RuntimeID common.Namespace `json:"runtime_id"`
+	Component *component.ID    `json:"component,omitempty"`
 
 	Round  uint64 `json:"round"`
 	Method string `json:"method"`

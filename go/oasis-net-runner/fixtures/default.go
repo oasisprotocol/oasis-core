@@ -20,7 +20,7 @@ import (
 	cmdCommon "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
-	"github.com/oasisprotocol/oasis-core/go/runtime/bundle"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
@@ -151,7 +151,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 					{
 						Components: []oasis.ComponentCfg{
 							{
-								Kind: bundle.ComponentRONL,
+								Kind: component.RONL,
 								Binaries: map[node.TEEHardware]string{
 									tee: viper.GetString(cfgKeymanagerBinary),
 								},
@@ -245,7 +245,7 @@ func newDefaultFixture() (*oasis.NetworkFixture, error) {
 						ValidFrom: 0,
 						Components: []oasis.ComponentCfg{
 							{
-								Kind: bundle.ComponentRONL,
+								Kind: component.RONL,
 								Binaries: map[node.TEEHardware]string{
 									tee: rt,
 								},
