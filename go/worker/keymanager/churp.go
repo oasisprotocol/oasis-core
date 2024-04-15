@@ -522,10 +522,10 @@ func (q *taskQueue) Pop() any {
 
 // Peek returns the smallest element in the heap.
 func (q taskQueue) Peek() any {
-	switch l := len(q); l {
+	switch n := len(q); n {
 	case 0:
 		return nil
 	default:
-		return q[l-1]
+		return q[0]
 	}
 }
