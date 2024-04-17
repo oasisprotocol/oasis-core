@@ -1,8 +1,7 @@
 //! Key manager client which talks to a remote key manager enclave.
-#[cfg(target_env = "sgx")]
-use std::iter::FromIterator;
 use std::{
     collections::HashSet,
+    iter::FromIterator,
     num::NonZeroUsize,
     sync::{Arc, RwLock},
 };
@@ -39,7 +38,7 @@ use crate::{
         METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
     },
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
-    policy::{set_trusted_signers, verify_data_and_trusted_signers, TrustedSigners},
+    policy::{set_trusted_signers, verify_data_and_trusted_signers, Policy, TrustedSigners},
 };
 
 use super::KeyManagerClient;
@@ -135,17 +134,11 @@ impl RemoteClient {
         signers: TrustedSigners,
         nodes: Vec<signature::PublicKey>,
     ) -> Self {
-        // Skip policy checks iff both OASIS_UNSAFE_SKIP_KM_POLICY and
-        // OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES are set. The latter is there to ensure that this is a
-        // debug build that is inherently incompatible with non-debug builds.
-        let unsafe_skip_policy_checks = option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
-            && option_env!("OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES").is_some();
-
         // When using a non-empty policy signer set we set enclaves to an empty set so until we get
         // a policy we will not accept any enclave identities (as we don't know what they should
         // be). When the policy signer set is empty or unsafe policy skip is enabled we allow any
         // enclave.
-        let enclaves = if !signers.signers.is_empty() && !unsafe_skip_policy_checks {
+        let enclaves = if !signers.signers.is_empty() && !Policy::unsafe_skip() {
             Some(HashSet::new())
         } else {
             None
@@ -190,12 +183,10 @@ impl RemoteClient {
             None => return Ok(()),
         };
 
-        #[cfg_attr(not(target_env = "sgx"), allow(unused))]
         let policy = verify_data_and_trusted_signers(&untrusted_policy)?;
 
         // Set client allowed enclaves from key manager policy.
-        #[cfg(target_env = "sgx")]
-        {
+        if !Policy::unsafe_skip() {
             let enclaves: HashSet<EnclaveIdentity> =
                 HashSet::from_iter(policy.enclaves.keys().cloned());
             self.rpc_client.update_enclaves(Some(enclaves));

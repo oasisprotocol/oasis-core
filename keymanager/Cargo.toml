@@ -28,3 +28,6 @@ zeroize = "1.6"
 async-trait = "0.1.66"
 p384 = { version = "0.13.0" }
 p256 = { version = "0.13.2" }
+
+[features]
+debug-mock-sgx = ["oasis-core-runtime/debug-mock-sgx"]

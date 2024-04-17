@@ -5,42 +5,35 @@ use std::{
 };
 
 use anyhow::Result;
-#[cfg(target_env = "sgx")]
 use rand::{rngs::OsRng, Rng};
-#[cfg(target_env = "sgx")]
-use sgx_isa::Report;
-use sgx_isa::Targetinfo;
+use sgx_isa::{Report, Targetinfo};
 use thiserror::Error;
-#[cfg(target_env = "sgx")]
 use tiny_keccak::{Hasher, TupleHash};
 
-#[cfg_attr(not(target_env = "sgx"), allow(unused))]
-use crate::common::crypto::hash::Hash;
 use crate::{
     common::{
         crypto::{
+            hash::Hash,
             mrae::deoxysii::{self, Opener},
             signature::{self, Signature, Signer},
             x25519,
         },
-        sgx::{EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
+        sgx::{self, EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
         time::insecure_posix_time,
     },
     consensus::registry::EndorsedCapabilityTEE,
 };
 
 /// Context used for computing the RAK digest.
-#[cfg_attr(not(target_env = "sgx"), allow(unused))]
 const RAK_HASH_CONTEXT: &[u8] = b"oasis-core/node: TEE RAK binding";
 /// Context used for deriving the nonce used in quotes.
-#[cfg_attr(not(target_env = "sgx"), allow(unused))]
 const QUOTE_NONCE_CONTEXT: &[u8] = b"oasis-core/node: TEE quote nonce";
 
 /// A dummy RAK seed for use in non-SGX tests where integrity is not needed.
-#[cfg(not(target_env = "sgx"))]
+#[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
 const INSECURE_RAK_SEED: &str = "ekiden test key manager RAK seed";
 /// A dummy REK seed for use in non-SGX tests where confidentiality is not needed.
-#[cfg(not(target_env = "sgx"))]
+#[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
 const INSECURE_REK_SEED: &str = "ekiden test key manager REK seed";
 
 /// Identity-related error.
@@ -53,7 +46,6 @@ enum IdentityError {
 }
 
 /// Quote-related errors.
-#[cfg(target_env = "sgx")]
 #[derive(Error, Debug)]
 enum QuoteError {
     #[error("malformed target_info")]
@@ -81,13 +73,10 @@ struct Inner {
     quote_timestamp: Option<i64>,
     quote_policy: Option<Arc<QuotePolicy>>,
     known_quotes: VecDeque<Arc<Quote>>,
-    #[allow(unused)]
     enclave_identity: Option<EnclaveIdentity>,
     node_identity: Option<signature::PublicKey>,
     endorsed_capability_tee: Option<EndorsedCapabilityTEE>,
-    #[allow(unused)]
     target_info: Option<Targetinfo>,
-    #[allow(unused)]
     nonce: Option<[u8; 32]>,
 }
 
@@ -113,14 +102,14 @@ impl Default for Identity {
 impl Identity {
     /// Create an uninitialized runtime identity.
     pub fn new() -> Self {
-        #[cfg(target_env = "sgx")]
+        #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
         let rak = signature::PrivateKey::generate();
-        #[cfg(target_env = "sgx")]
+        #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
         let rek = x25519::PrivateKey::generate();
 
-        #[cfg(not(target_env = "sgx"))]
+        #[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
         let rak = signature::PrivateKey::from_test_seed(INSECURE_RAK_SEED.to_string());
-        #[cfg(not(target_env = "sgx"))]
+        #[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
         let rek = x25519::PrivateKey::from_test_seed(INSECURE_REK_SEED.to_string());
 
         Self {
@@ -149,11 +138,9 @@ impl Identity {
     }
 
     /// Generate a random 256-bit nonce, for anti-replay.
-    #[cfg(target_env = "sgx")]
     fn generate_nonce() -> [u8; 32] {
-        let mut rng = OsRng {};
         let mut nonce_bytes = [0u8; 32];
-        rng.fill(&mut nonce_bytes);
+        OsRng.fill(&mut nonce_bytes);
 
         let mut h = TupleHash::v256(QUOTE_NONCE_CONTEXT);
         h.update(&nonce_bytes);
@@ -163,17 +150,12 @@ impl Identity {
     }
 
     /// Get the SGX target info.
-    #[cfg(target_env = "sgx")]
     fn get_sgx_target_info(&self) -> Option<Targetinfo> {
         let inner = self.inner.read().unwrap();
-        inner
-            .target_info
-            .as_ref()
-            .map(|target_info| target_info.clone())
+        inner.target_info.clone()
     }
 
     /// Initialize the SGX target info.
-    #[cfg(target_env = "sgx")]
     pub(crate) fn init_target_info(&self, target_info: Vec<u8>) -> Result<()> {
         let mut inner = self.inner.write().unwrap();
 
@@ -189,7 +171,6 @@ impl Identity {
     }
 
     /// Initialize the attestation report.
-    #[cfg(target_env = "sgx")]
     pub(crate) fn init_report(&self) -> (signature::PublicKey, x25519::PublicKey, Report, String) {
         let rak_pub = self.public_rak();
         let rek_pub = self.public_rek();
@@ -210,20 +191,19 @@ impl Identity {
         report_data[0..32].copy_from_slice(report_body.as_ref());
         report_data[32..64].copy_from_slice(nonce.as_ref());
 
-        let report = Report::for_target(&target_info, &report_data);
+        let report = sgx::report_for(&target_info, &report_data);
 
         // This used to reset the quote, but that is now done in the external
         // accessor combined with a freshness check.
 
         // Cache the nonce, the report was generated.
         let mut inner = self.inner.write().unwrap();
-        inner.nonce = Some(nonce.clone());
+        inner.nonce = Some(nonce);
 
         (rak_pub, rek_pub, report, quote_nonce)
     }
 
     /// Configure the remote attestation quote for RAK.
-    #[cfg(target_env = "sgx")]
     pub(crate) fn set_quote(
         &self,
         node_id: signature::PublicKey,
@@ -236,7 +216,7 @@ impl Identity {
         // If there is no anti-replay nonce set, we aren't in the process
         // of attesting.
         let expected_nonce = match &inner.nonce {
-            Some(nonce) => nonce.clone(),
+            Some(nonce) => *nonce,
             None => return Err(QuoteError::NonceMismatch.into()),
         };
 
@@ -304,7 +284,6 @@ impl Identity {
     }
 
     /// Configure the runtime quote policy.
-    #[cfg(target_env = "sgx")]
     pub(crate) fn set_quote_policy(&self, policy: QuotePolicy) -> Result<()> {
         let mut inner = self.inner.write().unwrap();
         if inner.quote_policy.is_some() {
@@ -316,7 +295,6 @@ impl Identity {
     }
 
     /// Configure the endorsed TEE capability.
-    #[cfg(target_env = "sgx")]
     pub(crate) fn set_endorsed_capability_tee(&self, ect: EndorsedCapabilityTEE) -> Result<()> {
         // Make sure the endorsed quote is actually ours.
         if !ect.capability_tee.matches(self) {
@@ -334,7 +312,7 @@ impl Identity {
         if ect.node_endorsement.public_key != node_id {
             return Err(QuoteError::EndorsedQuoteMismatch.into());
         }
-        ect.verify(&policy)?;
+        ect.verify(policy)?;
 
         inner.endorsed_capability_tee = Some(ect);
 

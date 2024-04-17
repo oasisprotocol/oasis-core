@@ -50,7 +50,11 @@ impl Policy {
     }
 
     pub fn unsafe_skip() -> bool {
+        // Skip policy checks iff both OASIS_UNSAFE_SKIP_KM_POLICY and
+        // OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES are set. The latter is there to ensure that this is a
+        // debug build that is inherently incompatible with non-debug builds.
         option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
+            && option_env!("OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES").is_some()
     }
 
     /// Global Policy instance.
@@ -130,7 +134,7 @@ impl Policy {
     pub fn may_replicate_secret(&self, remote_enclave: &EnclaveIdentity) -> Result<()> {
         // Always allow replication to ourselves, if it is possible to do so in
         // an authenticated manner.
-        #[cfg(target_env = "sgx")]
+        #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
         {
             let our_id = EnclaveIdentity::current().expect("failed to query MRENCLAVE/MRSIGNER");
             if our_id == *remote_enclave {
@@ -218,9 +222,6 @@ impl CachedPolicy {
         cached_policy.checksum = checksum;
 
         // Convert the policy into a cached one.
-        //
-        // TODO: Need a mock enclave identity for non-sgx builds if we want to
-        // ever test policies with such a build.
         let enclave_identity = match EnclaveIdentity::current() {
             Some(enclave_identity) => enclave_identity,
             None => return Ok(cached_policy),

@@ -10,7 +10,7 @@ all: build
 	@$(ECHO) "$(CYAN)*** Everything built successfully!$(OFF)"
 
 # Build.
-build-targets := build-tools build-runtimes build-rust build-go
+build-targets := build-tools build-rust build-runtimes build-go
 
 build-tools:
 	@$(ECHO) "$(MAGENTA)*** Building Rust tools...$(OFF)"
@@ -24,7 +24,7 @@ build-runtimes:
 		$(ECHO) "$(MAGENTA)*** Building runtime: $$e...$(OFF)"; \
 		(cd $$e && \
 			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/sgx cargo build --release --target x86_64-fortanix-unknown-sgx && \
-			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/default cargo build --release && \
+			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/default cargo build --release $(OASIS_RUNTIME_NONSGX_FLAGS) && \
 			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/sgx cargo elf2sgxs --release \
 		) || exit 1; \
 	done

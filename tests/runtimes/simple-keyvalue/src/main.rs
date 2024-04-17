@@ -397,15 +397,12 @@ pub fn main_with_version(version: Version) {
                     .expect("failed to update km client status");
             })));
 
-        #[cfg(target_env = "sgx")]
-        {
-            let key_manager = km_client.clone();
-            state
-                .rpc_dispatcher
-                .set_keymanager_quote_policy_update_handler(Some(Box::new(move |policy| {
-                    key_manager.set_quote_policy(policy);
-                })));
-        }
+        let key_manager = km_client.clone();
+        state
+            .rpc_dispatcher
+            .set_keymanager_quote_policy_update_handler(Some(Box::new(move |policy| {
+                key_manager.set_quote_policy(policy);
+            })));
 
         let dispatcher = Dispatcher::new(hi, km_client, state.consensus_verifier.clone());
 

@@ -2079,6 +2079,7 @@ dependencies = [
  "bech32",
  "bincode",
  "byteorder",
+ "cfg-if 1.0.0",
  "chrono",
  "crossbeam 0.8.4",
  "curve25519-dalek",

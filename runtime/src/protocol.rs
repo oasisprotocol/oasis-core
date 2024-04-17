@@ -90,7 +90,10 @@ pub struct Protocol {
     /// Logger.
     logger: Logger,
     /// Runtime identity.
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
+    #[cfg_attr(
+        not(any(target_env = "sgx", feature = "debug-mock-sgx")),
+        allow(unused)
+    )]
     identity: Arc<Identity>,
     /// Incoming request dispatcher.
     dispatcher: Arc<Dispatcher>,
@@ -371,7 +374,7 @@ impl Protocol {
             }
 
             // Attestation-related requests.
-            #[cfg(target_env = "sgx")]
+            #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
             Body::RuntimeCapabilityTEERakInitRequest { .. }
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }
@@ -482,7 +485,7 @@ impl Protocol {
             .as_ref()
             .ok_or(ProtocolError::HostInfoNotConfigured)?;
 
-        #[cfg(target_env = "sgx")]
+        #[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
         self.identity
             .quote()
             .ok_or(ProtocolError::AttestationRequired)?;

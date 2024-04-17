@@ -60,6 +60,7 @@ rsa = "0.9.6"
 base64-serde = "0.6.1"
 lru = "0.9.0"
 async-trait = "0.1.77"
+cfg-if = "1.0"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies.tokio]
 version = "1.36.0"
@@ -75,6 +76,8 @@ tendermint-testgen = "0.35.0"
 default = []
 # Enables debug-level logging in release builds.
 debug-logging = ["slog/max_level_debug", "slog/release_max_level_debug"]
+# Enables mock SGX in non-SGX builds.
+debug-mock-sgx = []
 
 [[bin]]
 name = "fuzz-mkvs-proof"
