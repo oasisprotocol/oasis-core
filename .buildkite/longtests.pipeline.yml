@@ -17,8 +17,8 @@ docker_plugin_default_config: &docker_plugin_default_config
     # Shared Rust SGX standard library artifacts cache.
     - /storage/buildkite/global_cache/xargo_cache:/root/.xargo
     # Per-branch shared Rust incremental compile caches.
-    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/debug:/var/tmp/artifacts/default/debug/incremental
-    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/debug_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/debug/incremental
+    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/release:/var/tmp/artifacts/default/release/incremental
+    - /storage/buildkite/branch_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BRANCH_SLUG}/cargo_ic/release_sgx:/var/tmp/artifacts/sgx/x86_64-unknown-linux-sgx/release/incremental
     # Per-build shared downloaded Buildkite artifacts.
     - /storage/buildkite/build_cache/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/artifacts:/tmp/artifacts
     # Per-build shared long tests.
@@ -67,7 +67,7 @@ steps:
       - .buildkite/rust/build_generic.sh /workdir -p oasis-core-runtime-loader
 
       # Upload the built artifacts.
-      - cd /var/tmp/artifacts/default/debug
+      - cd /var/tmp/artifacts/default/release
       - buildkite-agent artifact upload oasis-core-runtime-loader
     plugins:
       <<: *docker_plugin
@@ -79,13 +79,13 @@ steps:
       - .buildkite/rust/build_runtime.sh tests/runtimes/simple-rofl
 
       # Upload the built artifacts.
-      - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/debug
+      - cd /var/tmp/artifacts/sgx/x86_64-fortanix-unknown-sgx/release
       - buildkite-agent artifact upload simple-keymanager.sgxs
       - buildkite-agent artifact upload simple-keyvalue.sgxs
       - buildkite-agent artifact upload simple-keyvalue-upgrade.sgxs
       - buildkite-agent artifact upload simple-keymanager-upgrade.sgxs
       - buildkite-agent artifact upload simple-rofl.sgxs
-      - cd /var/tmp/artifacts/default/debug
+      - cd /var/tmp/artifacts/default/release
       - buildkite-agent artifact upload simple-keymanager
       - buildkite-agent artifact upload simple-keyvalue
       - buildkite-agent artifact upload simple-keyvalue-upgrade

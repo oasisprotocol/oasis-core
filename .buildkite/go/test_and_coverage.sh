@@ -16,9 +16,9 @@ source .buildkite/scripts/common.sh
 source .buildkite/rust/common.sh
 
 # Setup worker and test runtime which is needed to test the worker host.
-download_artifact simple-keyvalue target/debug 755
+download_artifact simple-keyvalue target/release 755
 
-export OASIS_TEST_RUNTIME_HOST_RUNTIME_PATH=$(pwd)/target/debug/simple-keyvalue
+export OASIS_TEST_RUNTIME_HOST_RUNTIME_PATH=$(pwd)/target/release/simple-keyvalue
 
 #####################
 # Test the Oasis node

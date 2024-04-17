@@ -23,15 +23,15 @@ build-runtimes:
 	@CARGO_TARGET_ROOT=$(shell pwd)/target && for e in $(RUNTIMES); do \
 		$(ECHO) "$(MAGENTA)*** Building runtime: $$e...$(OFF)"; \
 		(cd $$e && \
-			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/sgx cargo build --target x86_64-fortanix-unknown-sgx && \
-			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/default cargo build && \
-			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/sgx cargo elf2sgxs \
+			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/sgx cargo build --release --target x86_64-fortanix-unknown-sgx && \
+			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/default cargo build --release && \
+			CARGO_TARGET_DIR=$${CARGO_TARGET_ROOT}/sgx cargo elf2sgxs --release \
 		) || exit 1; \
 	done
 
 build-rust:
 	@$(ECHO) "$(MAGENTA)*** Building Rust libraries and runtime loader...$(OFF)"
-	@CARGO_TARGET_DIR=target/default cargo build
+	@CARGO_TARGET_DIR=target/default cargo build --release
 
 build-go:
 	@$(MAKE) -C go build

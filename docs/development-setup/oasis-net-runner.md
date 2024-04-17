@@ -20,9 +20,9 @@ running the `simple-keyvalue` test runtime, do:
 ```
 ./go/oasis-net-runner/oasis-net-runner \
   --fixture.default.node.binary go/oasis-node/oasis-node \
-  --fixture.default.runtime.binary target/default/debug/simple-keyvalue \
-  --fixture.default.runtime.loader target/default/debug/oasis-core-runtime-loader \
-  --fixture.default.keymanager.binary target/default/debug/simple-keymanager
+  --fixture.default.runtime.binary target/default/release/simple-keyvalue \
+  --fixture.default.runtime.loader target/default/release/oasis-core-runtime-loader \
+  --fixture.default.keymanager.binary target/default/release/simple-keymanager
 ```
 
 Wait for the network to start, there should be messages about nodes being
@@ -47,7 +47,7 @@ client as follows (substituting the socket path from your log output) in a
 different terminal:
 
 ```
-./target/default/debug/simple-keyvalue-client \
+./target/default/release/simple-keyvalue-client \
   --runtime-id 8000000000000000000000000000000000000000000000000000000000000000 \
   --node-address unix:/tmp/oasis-net-runner530668299/net-runner/network/client-0/internal.sock
 ```
@@ -73,9 +73,9 @@ To run an Oasis node under SGX follow the same steps as for non-SGX, except the
 ./go/oasis-net-runner/oasis-net-runner \
   --fixture.default.tee_hardware intel-sgx \
   --fixture.default.node.binary go/oasis-node/oasis-node \
-  --fixture.default.runtime.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keyvalue.sgxs \
-  --fixture.default.runtime.loader target/default/debug/oasis-core-runtime-loader \
-  --fixture.default.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/debug/simple-keymanager.sgxs
+  --fixture.default.runtime.binary target/sgx/x86_64-fortanix-unknown-sgx/release/simple-keyvalue.sgxs \
+  --fixture.default.runtime.loader target/default/release/oasis-core-runtime-loader \
+  --fixture.default.keymanager.binary target/sgx/x86_64-fortanix-unknown-sgx/release/simple-keymanager.sgxs
 ```
 <!-- markdownlint-enable line-length -->
 
