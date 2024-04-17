@@ -285,18 +285,12 @@ func signPolicyFromFlags() (*signature.Signature, error) {
 		return nil, err
 	}
 
-	rawSigBytes, err := signer.ContextSign(secrets.PolicySGXSignatureContext, policyBytes)
+	sig, err := signature.Sign(signer, secrets.PolicySGXSignatureContext, policyBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	rawSig := signature.RawSignature{}
-	copy(rawSig[:], rawSigBytes)
-
-	return &signature.Signature{
-		PublicKey: signer.Public(),
-		Signature: rawSig,
-	}, nil
+	return sig, nil
 }
 
 func doVerifyPolicy(*cobra.Command, []string) {
