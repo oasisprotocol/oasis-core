@@ -305,7 +305,7 @@ environment variables to simplify instructions.
 - `RUNTIME_BINARY` - Path to the runtime binary that will be run on the node. We
   will use the [simple-keyvalue] runtime. If you followed the [build
   instructions] the built binary is available at
-  `./target/default/debug/simple-keyvalue`.
+  `./target/default/release/simple-keyvalue`.
 - `SEED_NODE_ADDRESS` - Address of the seed node in the development network.
   Seed node address can be seen in the `oasis-net-runner` logs, when the network
   is initially provisioned.
@@ -313,7 +313,7 @@ environment variables to simplify instructions.
 <!-- markdownlint-disable line-length -->
 
 ```
-export RUNTIME_BINARY=/workdir/target/default/debug/simple-keyvalue
+export RUNTIME_BINARY=/workdir/target/default/release/simple-keyvalue
 export SEED_NODE_ADDRESS=<seed-node-cometbft-addr>@127.0.0.1:20000
 
 # Runtime node data dir.

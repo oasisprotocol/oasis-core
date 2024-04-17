@@ -82,6 +82,7 @@ func (b *Builder) Build(pkg string) error {
 	}
 
 	cmd.Args = append(cmd.Args, "--package", pkg)
+	cmd.Args = append(cmd.Args, "--release")
 
 	if b.teeHardware == node.TEEHardwareIntelSGX {
 		cmd.Args = append(cmd.Args, "--target", "x86_64-fortanix-unknown-sgx")
@@ -100,6 +101,9 @@ func (b *Builder) Build(pkg string) error {
 		if cmd, err = b.cargoCommand("elf2sgxs", pkg); err != nil {
 			return fmt.Errorf("failed to elf2sgxs runtime: %w", err)
 		}
+
+		cmd.Args = append(cmd.Args, "--release")
+
 		if err = cmd.Run(); err != nil {
 			return fmt.Errorf("failed to elf2sgxs runtime: %w", err)
 		}

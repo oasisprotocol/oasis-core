@@ -28,22 +28,22 @@ download_artifact oasis-test-pre-upgrade tests/upgrade/pre 755
 download_artifact oasis-test-post-upgrade tests/upgrade/post 755
 
 # Runtime loader.
-download_artifact oasis-core-runtime-loader target/default/debug 755
+download_artifact oasis-core-runtime-loader target/default/release 755
 
 # Simple Key manager runtime.
-download_artifact simple-keymanager.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact simple-keymanager target/default/debug 755
+download_artifact simple-keymanager.sgxs target/sgx/x86_64-fortanix-unknown-sgx/release 755
+download_artifact simple-keymanager target/default/release 755
 
 # Simple Key manager runtime used in keymenager upgrade test.
-download_artifact simple-keymanager-upgrade.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact simple-keymanager-upgrade target/default/debug 755
+download_artifact simple-keymanager-upgrade.sgxs target/sgx/x86_64-fortanix-unknown-sgx/release 755
+download_artifact simple-keymanager-upgrade target/default/release 755
 
 # Test simple-keyvalue runtime.
-download_artifact simple-keyvalue.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact simple-keyvalue target/default/debug 755
-download_artifact simple-keyvalue-upgrade.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact simple-keyvalue-upgrade target/default/debug 755
+download_artifact simple-keyvalue.sgxs target/sgx/x86_64-fortanix-unknown-sgx/release 755
+download_artifact simple-keyvalue target/default/release 755
+download_artifact simple-keyvalue-upgrade.sgxs target/sgx/x86_64-fortanix-unknown-sgx/release 755
+download_artifact simple-keyvalue-upgrade target/default/release 755
 
 # Test ROFL runtime.
-download_artifact simple-rofl.sgxs target/sgx/x86_64-fortanix-unknown-sgx/debug 755
-download_artifact simple-rofl target/default/debug 755
+download_artifact simple-rofl.sgxs target/sgx/x86_64-fortanix-unknown-sgx/release 755
+download_artifact simple-rofl target/default/release 755

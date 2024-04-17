@@ -104,11 +104,11 @@ ${pre_upgrade_test_runner_binary} \
     --basedir.no_cleanup \
     --basedir.no_temp_dir \
     --e2e.node.binary ${pre_upgrade_node_binary} \
-    --e2e/runtime.runtime.binary_dir.default ${pre_upgrade_datadir}/oasis-core/target/default/debug \
-    --e2e/runtime.runtime.binary_dir.intel-sgx ${pre_upgrade_datadir}/oasis-core/target/sgx/x86_64-fortanix-unknown-sgx/debug \
+    --e2e/runtime.runtime.binary_dir.default ${pre_upgrade_datadir}/oasis-core/target/default/release \
+    --e2e/runtime.runtime.binary_dir.intel-sgx ${pre_upgrade_datadir}/oasis-core/target/sgx/x86_64-fortanix-unknown-sgx/release \
     --e2e/runtime.runtime.source_dir ${pre_upgrade_datadir}/oasis-core/tests/runtimes \
     --e2e/runtime.runtime.target_dir ${pre_upgrade_datadir}/oasis-core/target \
-    --e2e/runtime.runtime.loader ${pre_upgrade_datadir}/oasis-core/target/default/debug/oasis-core-runtime-loader \
+    --e2e/runtime.runtime.loader ${pre_upgrade_datadir}/oasis-core/target/default/release/oasis-core-runtime-loader \
     --e2e/runtime.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
     --e2e/runtime.ias.mock=${ias_mock} \
     --upgrade.protocol_versions=${protocol_versions} \
@@ -128,11 +128,11 @@ ${post_upgrade_test_runner_binary} \
     --basedir.no_cleanup \
     --basedir.no_temp_dir \
     --e2e.node.binary ${post_upgrade_node_binary} \
-    --e2e/runtime.runtime.binary_dir.default ${post_upgrade_datadir}/oasis-core/target/default/debug \
-    --e2e/runtime.runtime.binary_dir.intel-sgx ${post_upgrade_datadir}/oasis-core/target/sgx/x86_64-fortanix-unknown-sgx/debug \
+    --e2e/runtime.runtime.binary_dir.default ${post_upgrade_datadir}/oasis-core/target/default/release \
+    --e2e/runtime.runtime.binary_dir.intel-sgx ${post_upgrade_datadir}/oasis-core/target/sgx/x86_64-fortanix-unknown-sgx/release \
     --e2e/runtime.runtime.source_dir ${post_upgrade_datadir}/oasis-core/tests/runtimes \
     --e2e/runtime.runtime.target_dir ${post_upgrade_datadir}/oasis-core/target \
-    --e2e/runtime.runtime.loader ${post_upgrade_datadir}/oasis-core/target/default/debug/oasis-core-runtime-loader \
+    --e2e/runtime.runtime.loader ${post_upgrade_datadir}/oasis-core/target/default/release/oasis-core-runtime-loader \
     --e2e/runtime.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
     --e2e/runtime.ias.mock=${ias_mock} \
     --scenario_timeout 1h \

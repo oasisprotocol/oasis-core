@@ -48,11 +48,11 @@ ${test_runner_binary} \
     ${BUILDKITE:+--basedir ${TEST_BASE_DIR:-$PWD}/e2e} \
     --basedir.no_cleanup \
     --e2e.node.binary ${node_binary} \
-    --e2e/runtime.runtime.binary_dir.default ${WORKDIR}/target/default/debug \
-    --e2e/runtime.runtime.binary_dir.intel-sgx ${WORKDIR}/target/sgx/x86_64-fortanix-unknown-sgx/debug \
+    --e2e/runtime.runtime.binary_dir.default ${WORKDIR}/target/default/release \
+    --e2e/runtime.runtime.binary_dir.intel-sgx ${WORKDIR}/target/sgx/x86_64-fortanix-unknown-sgx/release \
     --e2e/runtime.runtime.source_dir ${WORKDIR}/tests/runtimes \
     --e2e/runtime.runtime.target_dir ${WORKDIR}/target \
-    --e2e/runtime.runtime.loader ${WORKDIR}/target/default/debug/oasis-core-runtime-loader \
+    --e2e/runtime.runtime.loader ${WORKDIR}/target/default/release/oasis-core-runtime-loader \
     --e2e/runtime.tee_hardware ${OASIS_TEE_HARDWARE:-""} \
     --e2e/runtime.ias.mock=${ias_mock} \
     --remote-signer.binary ${WORKDIR}/go/oasis-remote-signer/oasis-remote-signer \
