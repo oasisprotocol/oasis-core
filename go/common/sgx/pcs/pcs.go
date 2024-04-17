@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	unsafeSkipVerify         bool
 	unsafeAllowDebugEnclaves bool
 
 	mrSignerBlacklist = make(map[sgx.MrSigner]bool)
@@ -55,6 +56,12 @@ func (bnd *QuoteBundle) Verify(policy *QuotePolicy, ts time.Time) (*sgx.Verified
 		return nil, err
 	}
 	return quote.Verify(policy, ts, &bnd.TCB)
+}
+
+// SetSkipVerify will disable quote signature verification for the remainder of the process'
+// lifetime.
+func SetSkipVerify() {
+	unsafeSkipVerify = true
 }
 
 // SetAllowDebugEnclaves will enable running and communicating with enclaves with debug flag enabled

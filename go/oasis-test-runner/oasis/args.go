@@ -87,6 +87,13 @@ func (args *argBuilder) debugTCBLaxVerify() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) debugSkipQuoteVerify() *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name: cmdCommon.CfgDebugSkipQuoteVerify,
+	})
+	return args
+}
+
 func (args *argBuilder) grpcServerPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   grpc.CfgServerPort,
