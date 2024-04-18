@@ -105,14 +105,14 @@ where
     }
 
     /// Attempts to create a polynomial from its byte representation.
-    pub fn from_bytes(bytes: Vec<u8>) -> Option<Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         let size = Self::coefficient_byte_size();
         if bytes.is_empty() || bytes.len() % size != 0 {
             return None;
         }
         let deg = bytes.len() / size - 1;
 
-        let mut bytes = &bytes[..];
+        let mut bytes = bytes;
         let mut a = Vec::with_capacity(deg + 1);
         for _ in 0..=deg {
             let ai = match scalar_from_bytes(&bytes[..size]) {
@@ -528,12 +528,12 @@ mod tests {
     fn test_serialization() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let bp = Polynomial::<p384::Scalar>::random(0, &mut rng);
-        let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
+        let restored = Polynomial::<p384::Scalar>::from_bytes(&bp.to_bytes())
             .expect("deserialization should succeed");
         assert!(bp == restored);
 
         let bp = Polynomial::<p384::Scalar>::random(3, &mut rng);
-        let restored = Polynomial::<p384::Scalar>::from_bytes(bp.to_bytes())
+        let restored = Polynomial::<p384::Scalar>::from_bytes(&bp.to_bytes())
             .expect("deserialization should succeed");
         assert!(bp == restored);
     }

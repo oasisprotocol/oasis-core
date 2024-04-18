@@ -240,8 +240,8 @@ impl Storage {
         let share: EncodedSecretShare =
             cbor::from_slice(&plaintext).map_err(|_| Error::InvalidSecretShare)?;
 
-        let p = Polynomial::from_bytes(share.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
-        let vm = VerificationMatrix::from_bytes(share.verification_matrix)
+        let p = Polynomial::from_bytes(&share.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
+        let vm = VerificationMatrix::from_bytes(&share.verification_matrix)
             .ok_or(Error::VerificationMatrixDecodingFailed)?;
 
         let share = SecretShare::new(p, vm);

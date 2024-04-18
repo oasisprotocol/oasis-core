@@ -59,7 +59,7 @@ fn fuzz_bivariate_polynomial_from_bytes(data: &[u8]) {
 }
 
 fn fuzz_verification_matrix_random(data: &[u8]) {
-    VerificationMatrix::<p384::ProjectivePoint>::from_bytes(data.to_vec());
+    VerificationMatrix::<p384::ProjectivePoint>::from_bytes(data);
 }
 
 fn fuzz_verification_matrix_from_seed(data: &[u8]) {
@@ -69,7 +69,7 @@ fn fuzz_verification_matrix_from_seed(data: &[u8]) {
 
     let bp = random_bivariate_polynomial(data);
     let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp); // Slow.
-    let restored = VerificationMatrix::<p384::ProjectivePoint>::from_bytes(vm.to_bytes())
+    let restored = VerificationMatrix::<p384::ProjectivePoint>::from_bytes(&vm.to_bytes())
         .expect("deserialization should succeed");
     assert_eq!(vm, restored)
 }

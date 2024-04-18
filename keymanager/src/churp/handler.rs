@@ -565,7 +565,7 @@ impl Churp {
                 return Err(Error::InvalidVerificationMatrixChecksum.into());
             }
 
-            let vm = VerificationMatrix::from_bytes(vm)
+            let vm = VerificationMatrix::from_bytes(&vm)
                 .ok_or(Error::VerificationMatrixDecodingFailed)?;
             handoff.set_verification_matrix(vm)?;
         }
@@ -740,8 +740,8 @@ impl Churp {
             return Err(Error::InvalidVerificationMatrixChecksum.into());
         }
 
-        let q = Polynomial::from_bytes(share.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
-        let vm = VerificationMatrix::from_bytes(share.verification_matrix)
+        let q = Polynomial::from_bytes(&share.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
+        let vm = VerificationMatrix::from_bytes(&share.verification_matrix)
             .ok_or(Error::VerificationMatrixDecodingFailed)?;
 
         handoff.add_bivariate_share(id, q, vm)
