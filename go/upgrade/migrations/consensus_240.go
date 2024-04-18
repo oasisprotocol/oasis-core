@@ -5,6 +5,7 @@ import (
 
 	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
@@ -68,6 +69,19 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 
 		if err = state.SetConsensusParameters(abciCtx, &churp.DefaultConsensusParameters); err != nil {
 			return fmt.Errorf("failed to set CHURP consensus parameters: %w", err)
+		}
+
+		// Governance.
+		govState := governanceState.NewMutableState(abciCtx.State())
+
+		govParams, err := govState.ConsensusParameters(abciCtx)
+		if err != nil {
+			return fmt.Errorf("failed to load governance consensus parameters: %w", err)
+		}
+		govParams.AllowVoteWithoutEntity = true
+
+		if err = govState.SetConsensusParameters(abciCtx, govParams); err != nil {
+			return fmt.Errorf("failed to update governance consensus parameters: %w", err)
 		}
 	default:
 		return fmt.Errorf("upgrade handler called in unexpected context: %s", abciCtx.Mode())

@@ -282,6 +282,7 @@ func TestCastVote(t *testing.T) {
 		UpgradeCancelMinEpochDiff: beacon.EpochTime(100),
 		UpgradeMinEpochDiff:       beacon.EpochTime(100),
 		VotingPeriod:              beacon.EpochTime(50),
+		AllowVoteWithoutEntity:    true,
 	}
 	err = state.SetConsensusParameters(ctx, params)
 	require.NoError(err, "setting governance consensus parameters should not error")
