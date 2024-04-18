@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use rand::{rngs::OsRng, Rng};
 use thiserror::Error;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use oasis_core_runtime::{
     common::{
@@ -28,14 +28,16 @@ const MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE: EpochTime = 10;
 /// The size of the key manager state checksum.
 const CHECKSUM_SIZE: usize = 32;
 
+/// The size of the key manager state encryption key.
+pub const STATE_KEY_SIZE: usize = 32;
+
 /// The size of the key manager master and ephemeral secrets.
 pub const SECRET_SIZE: usize = 32;
 
 /// A state encryption key.
-#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize, ZeroizeOnDrop)]
 #[cbor(transparent)]
-#[zeroize(drop)]
-pub struct StateKey(pub [u8; 32]);
+pub struct StateKey(pub [u8; STATE_KEY_SIZE]);
 
 impl AsRef<[u8]> for StateKey {
     fn as_ref(&self) -> &[u8] {
@@ -44,9 +46,8 @@ impl AsRef<[u8]> for StateKey {
 }
 
 /// A 256-bit secret.
-#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
+#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize, ZeroizeOnDrop)]
 #[cbor(transparent)]
-#[zeroize(drop)]
 pub struct Secret(pub [u8; SECRET_SIZE]);
 
 impl Secret {
@@ -265,7 +266,10 @@ mod test {
         consensus::beacon::EpochTime,
     };
 
-    use crate::crypto::{types::MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE, KeyPairId, SignedPublicKey};
+    use crate::crypto::{
+        types::MAX_SIGNED_EPHEMERAL_PUBLIC_KEY_AGE, KeyPairId, Secret, SignedPublicKey, StateKey,
+        SECRET_SIZE, STATE_KEY_SIZE,
+    };
 
     #[test]
     fn test_signed_public_key_with_epoch() {
@@ -437,5 +441,30 @@ mod test {
             "verification with different expiration epoch should fail"
         );
         assert_eq!(result.unwrap_err().to_string(), "invalid signature");
+    }
+
+    #[test]
+    fn test_zeroize_on_drop() {
+        // Prepare secret and state key.
+        let secret_ptr;
+        let state_key_ptr;
+        {
+            let secret = Secret([10; SECRET_SIZE]);
+            secret_ptr = secret.0.as_ptr();
+
+            let state_key = StateKey([20; STATE_KEY_SIZE]);
+            state_key_ptr = state_key.0.as_ptr();
+        }
+
+        // Access the elements of the secret and the state key using pointer
+        // arithmetic and verify that they are all zero.
+        unsafe {
+            for i in 0..SECRET_SIZE {
+                assert_eq!(*secret_ptr.add(i), 0);
+            }
+            for i in 0..STATE_KEY_SIZE {
+                assert_eq!(*state_key_ptr.add(i), 0);
+            }
+        }
     }
 }

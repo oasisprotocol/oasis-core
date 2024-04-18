@@ -1,7 +1,7 @@
 //! CBOR serializable X25519 types.
 use anyhow::Result;
 use rand::rngs::OsRng;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::hash::Hash;
 
@@ -12,8 +12,7 @@ pub const PRIVATE_KEY_LENGTH: usize = 32;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// A CBOR serializable Diffie-Hellman X25519 private key.
-#[derive(Clone, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct PrivateKey(pub x25519_dalek::StaticSecret);
 
 impl PrivateKey {
@@ -149,7 +148,7 @@ mod tests {
     use crate::common::crypto::x25519::{PrivateKey, PublicKey, PRIVATE_KEY_LENGTH};
 
     #[test]
-    fn cbor_serialization() {
+    fn test_cbor_serialization() {
         let sk = PrivateKey::from([1; PRIVATE_KEY_LENGTH]);
         let pk = PublicKey::from(&sk);
 
@@ -170,5 +169,23 @@ mod tests {
             dec.0.to_bytes(),
             "serialization should round-trip"
         );
+    }
+
+    #[test]
+    fn test_zeroize_on_drop() {
+        // Prepare private key.
+        let private_key_ptr;
+        {
+            let private_key = PrivateKey([10; 32].into());
+            private_key_ptr = private_key.0.as_bytes().as_ptr();
+        }
+
+        // Access the elements of the private key using pointer
+        // arithmetic and verify that they are all zero.
+        unsafe {
+            for i in 0..32 {
+                assert_eq!(*private_key_ptr.add(i), 0);
+            }
+        }
     }
 }
