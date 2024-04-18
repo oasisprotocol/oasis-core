@@ -100,6 +100,15 @@ func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 		return fmt.Errorf("key manager CHURP consensus parameters shouldn't be set: %w", err)
 	}
 
+	// Check governance parameters.
+	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get governance consensus parameters: %w", err)
+	}
+	if govParams.AllowVoteWithoutEntity {
+		return fmt.Errorf("voting without entity is allowed")
+	}
+
 	return nil
 }
 
@@ -138,6 +147,15 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	}
 	if !reflect.DeepEqual(*churpParams, churp.DefaultConsensusParameters) {
 		return fmt.Errorf("key manager CHURP consensus parameters are not default")
+	}
+
+	// Check updated governance parameters.
+	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get governance consensus parameters: %w", err)
+	}
+	if !govParams.AllowVoteWithoutEntity {
+		return fmt.Errorf("voting without entity is not allowed")
 	}
 
 	return nil

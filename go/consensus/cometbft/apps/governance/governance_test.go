@@ -55,33 +55,34 @@ func initValidatorsEscrowState(
 		nodeSigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus/cometbft/apps/governance: node signer: %d", i))
 		entitySigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus/cometbft/apps/governance: entity signer: %d", i))
 		signers = append(signers, entitySigner)
-
-		ent := entity.Entity{
-			Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
-			ID:        entitySigner.Public(),
-			Nodes:     []signature.PublicKey{nodeSigner.Public()},
-		}
-		sigEnt, entErr := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, &ent)
-		require.NoError(entErr, "SignEntity")
-		err = registryState.SetEntity(ctx, &ent, sigEnt)
-		require.NoError(err, "SetEntity")
 		addr := staking.NewAddress(entitySigner.Public())
 		addresses = append(addresses, addr)
-
-		nod := &node.Node{
-			Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
-			ID:        nodeSigner.Public(),
-			Consensus: node.ConsensusInfo{ID: nodeSigner.Public()},
-			EntityID:  entitySigner.Public(),
-		}
-		sigNode, nErr := node.MultiSignNode([]signature.Signer{nodeSigner}, registry.RegisterNodeSignatureContext, nod)
-		require.NoError(nErr, "MultiSignNode")
-		err = registryState.SetNode(ctx, nil, nod, sigNode)
-		require.NoError(err, "SetNode")
 
 		switch {
 		case i < numValidators:
 			// First `numValidator` nodes are validators.
+			ent := entity.Entity{
+				Versioned: cbor.NewVersioned(entity.LatestDescriptorVersion),
+				ID:        entitySigner.Public(),
+				Nodes:     []signature.PublicKey{nodeSigner.Public()},
+			}
+			sigEnt, entErr := entity.SignEntity(entitySigner, registry.RegisterEntitySignatureContext, &ent)
+			require.NoError(entErr, "SignEntity")
+
+			err = registryState.SetEntity(ctx, &ent, sigEnt)
+			require.NoError(err, "SetEntity")
+
+			nod := &node.Node{
+				Versioned: cbor.NewVersioned(node.LatestNodeDescriptorVersion),
+				ID:        nodeSigner.Public(),
+				Consensus: node.ConsensusInfo{ID: nodeSigner.Public()},
+				EntityID:  entitySigner.Public(),
+			}
+			sigNode, nErr := node.MultiSignNode([]signature.Signer{nodeSigner}, registry.RegisterNodeSignatureContext, nod)
+			require.NoError(nErr, "MultiSignNode")
+			err = registryState.SetNode(ctx, nil, nod, sigNode)
+			require.NoError(err, "SetNode")
+
 			validatorSet[nod.Consensus.ID] = &scheduler.Validator{
 				ID:          nodeSigner.Public(),
 				EntityID:    nod.EntityID,

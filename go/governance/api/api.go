@@ -376,6 +376,9 @@ type ConsensusParameters struct {
 
 	// EnableChangeParametersProposal is true iff change parameters proposals are allowed.
 	EnableChangeParametersProposal bool `json:"enable_change_parameters_proposal,omitempty"`
+
+	// AllowVoteWithoutEntity is true iff casting votes without a registered entity is allowed.
+	AllowVoteWithoutEntity bool `json:"allow_vote_without_entity,omitempty"`
 }
 
 // ConsensusParameterChanges are allowed governance consensus parameter changes.

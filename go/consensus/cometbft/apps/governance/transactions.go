@@ -245,12 +245,17 @@ func (app *governanceApplication) castVote(
 	}
 
 	// Query signer entity descriptor.
+	var submitterNodes []signature.PublicKey
 	registryState := registryState.NewMutableState(ctx.State())
 	submitterEntity, err := registryState.Entity(ctx, ctx.TxSigner())
 	switch err {
 	case nil:
+		submitterNodes = submitterEntity.Nodes
 	case registryAPI.ErrNoSuchEntity:
-		return governance.ErrNotEligible
+		if !params.AllowVoteWithoutEntity {
+			return governance.ErrNotEligible
+		}
+		// Default to an empty set of nodes so delegators without entities can vote.
 	default:
 		return fmt.Errorf("governance: failed to query entity: %w", err)
 	}
@@ -268,7 +273,7 @@ func (app *governanceApplication) castVote(
 
 	// Submitter is eligible if any of its nodes are a current validator.
 	var eligible bool
-	for _, nID := range submitterEntity.Nodes {
+	for _, nID := range submitterNodes {
 		if _, ok := currentValidatorsByNodeID[nID]; ok {
 			eligible = true
 			break
