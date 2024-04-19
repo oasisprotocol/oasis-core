@@ -68,6 +68,7 @@ type churpWorker struct {
 	mu     sync.Mutex
 	churps map[uint8]*churp.Status // Guarded by mutex.
 
+	watcher     *nodeWatcher
 	submissions *submissionScheduler
 	handoffs    *handoffExecutor
 	finisher    *handoffFinisher
@@ -87,6 +88,7 @@ func newChurpWorker(kmWorker *Worker) (*churpWorker, error) {
 		initCh:      make(chan struct{}),
 		kmWorker:    kmWorker,
 		churps:      churps,
+		watcher:     newNodeWatcher(kmWorker.peerMap),
 		submissions: newSubmissionScheduler(kmWorker),
 		handoffs:    newHandoffExecutor(kmWorker),
 		finisher:    newHandoffFinisher(kmWorker),
@@ -102,12 +104,46 @@ func (w *churpWorker) Methods() []string {
 }
 
 // Connect implements RPCAccessController interface.
-func (w *churpWorker) Connect(context.Context, core.PeerID) bool {
-	return true
+func (w *churpWorker) Connect(_ context.Context, peerID core.PeerID) (b bool) {
+	// Secure methods are accessible to peers that pass authorization.
+	if err := w.authorizeKeyManager(peerID); err == nil {
+		return true
+	}
+
+	return false
 }
 
 // Authorize implements RPCAccessController interface.
-func (w *churpWorker) Authorize(context.Context, string, enclaverpc.Kind, core.PeerID) error {
+func (w *churpWorker) Authorize(_ context.Context, method string, kind enclaverpc.Kind, peerID core.PeerID) (err error) {
+	// Check if the method is supported.
+	switch kind {
+	case enclaverpc.KindInsecureQuery:
+		if _, ok := insecureChurpRPCMethods[method]; !ok {
+			return fmt.Errorf("unsupported method: %s", method)
+		}
+	case enclaverpc.KindNoiseSession:
+		if _, ok := secureChurpRPCMethods[method]; !ok {
+			return fmt.Errorf("unsupported method: %s", method)
+		}
+	default:
+		return fmt.Errorf("unsupported kind: %s", kind)
+	}
+
+	// All peers must undergo the authorization process.
+	return w.authorizeKeyManager(peerID)
+}
+
+func (w *churpWorker) authorizeKeyManager(peerID core.PeerID) error {
+	// Allow only peers within the same key manager runtime.
+	if !w.kmWorker.accessList.Runtimes(peerID).Contains(w.kmWorker.runtimeID) {
+		return fmt.Errorf("not a key manager")
+	}
+
+	// Allow only peers that want to form a new committee.
+	if !w.watcher.HasApplied(peerID) {
+		return fmt.Errorf("not applied to form committee")
+	}
+
 	return nil
 }
 
@@ -217,6 +253,7 @@ func (w *churpWorker) handleStatusUpdate(status *churp.Status) {
 	w.churps[status.ID] = status
 
 	// Notify all workers about the new status.
+	w.watcher.Update(status)
 	w.submissions.Queue(status)
 	w.handoffs.Queue(status)
 	w.finisher.Finalize(status)
@@ -836,6 +873,76 @@ func (f *handoffFinisher) finalizeHandoff(ctx context.Context, status *churp.Sta
 			"err", err,
 		)
 	}
+}
+
+// nodeWatcher is responsible for maintaining a list of applicants.
+type nodeWatcher struct {
+	logger *logging.Logger
+
+	mu sync.RWMutex
+
+	// peerMap is used to translate key manager peer IDs to node IDs.
+	peerMap *PeerMap
+
+	// applicants tracks the number of schemes in which nodes want to form
+	// new committees.
+	applicants map[signature.PublicKey]int
+
+	// applicantsPerScheme tracks which nodes want to form a new committee
+	// in a specific scheme.
+	applicantsPerScheme map[uint8][]signature.PublicKey
+}
+
+// newNodeWatcher creates a new node watcher.
+func newNodeWatcher(peerMap *PeerMap) *nodeWatcher {
+	return &nodeWatcher{
+		logger:              logging.GetLogger("worker/keymanager/churp/watcher"),
+		peerMap:             peerMap,
+		applicants:          make(map[signature.PublicKey]int),
+		applicantsPerScheme: make(map[uint8][]signature.PublicKey),
+	}
+}
+
+// Update updates the list of applicants based on the provided status.
+func (w *nodeWatcher) Update(status *churp.Status) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Remove current nodes.
+	if nodeIDs, ok := w.applicantsPerScheme[status.ID]; ok {
+		for _, nodeID := range nodeIDs {
+			if w.applicants[nodeID] == 1 {
+				delete(w.applicants, nodeID)
+			} else {
+				w.applicants[nodeID]--
+			}
+		}
+	}
+
+	// Add new ones.
+	for nodeID := range status.Applications {
+		w.applicants[nodeID]++
+	}
+
+	// Remember which nodes were added.
+	w.applicantsPerScheme[status.ID] = maps.Keys(status.Applications)
+}
+
+// HasApplied returns true if the given peer has applied to form a committee
+// in at least one tracked scheme.
+func (w *nodeWatcher) HasApplied(peerID core.PeerID) bool {
+	nodeID, ok := w.peerMap.NodeID(peerID)
+	if !ok {
+		return false
+	}
+
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if _, ok := w.applicants[nodeID]; !ok {
+		return false
+	}
+	return true
 }
 
 // retry attempts to execute the given function until it succeeds,
