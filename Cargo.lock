@@ -2122,6 +2122,7 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 1.36.0",
+ "tokio-retry",
  "x25519-dalek",
  "x509-parser",
  "yasna 0.5.2",
@@ -3582,6 +3583,17 @@ dependencies = [
  "proc-macro2 1.0.79",
  "quote 1.0.35",
  "syn 2.0.53",
+]
+
+[[package]]
+name = "tokio-retry"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
+dependencies = [
+ "pin-project",
+ "rand",
+ "tokio 1.36.0",
 ]
 
 [[package]]
