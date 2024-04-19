@@ -151,25 +151,32 @@ func (sc *storageEarlyStateSyncImpl) Run(ctx context.Context, childEnv *env.Env)
 
 	// Start the second (non-state syncing) compute node.
 	sc.Logger.Info("starting compute node without state sync")
-	if err := sc.Net.ComputeWorkers()[1].Start(); err != nil {
-		return fmt.Errorf("can't start compute worker: %w", err)
+
+	readyCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+
+	worker := sc.Net.ComputeWorkers()[1]
+
+	if err := worker.Start(); err != nil {
+		return fmt.Errorf("can't start compute worker 1: %w", err)
+	}
+	if err := worker.WaitReady(readyCtx); err != nil {
+		return fmt.Errorf("error waiting for compute worker 1 to become ready: %w", err)
 	}
 
 	// Configure state sync for the compute node.
 	sc.Logger.Info("starting compute node with state sync")
-	worker := sc.Net.ComputeWorkers()[0]
+	worker = sc.Net.ComputeWorkers()[0]
 	worker.SetConsensusStateSync(&oasis.ConsensusStateSyncCfg{
 		TrustHeight: uint64(latest.Height),
 		TrustHash:   latest.Hash.Hex(),
 	})
 
 	if err := worker.Start(); err != nil {
-		return fmt.Errorf("can't start compute worker: %w", err)
+		return fmt.Errorf("can't start compute worker 0: %w", err)
 	}
-	readyCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
-	defer cancel()
 	if err := worker.WaitReady(readyCtx); err != nil {
-		return fmt.Errorf("error waiting for compute worker to become ready: %w", err)
+		return fmt.Errorf("error waiting for compute worker 0 to become ready: %w", err)
 	}
 
 	// Wait a bit to give the logger in the node time to sync; the message has already been
