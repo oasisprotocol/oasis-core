@@ -204,7 +204,7 @@ where
     }
 
     /// Attempts to create a verification matrix from its byte representation.
-    pub fn from_bytes(bytes: Vec<u8>) -> Option<Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < 2 {
             return None;
         }
@@ -474,7 +474,7 @@ mod tests {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let bp = BivariatePolynomial::<p384::Scalar>::random(2, 3, &mut rng);
         let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
-        let restored = VerificationMatrix::<p384::ProjectivePoint>::from_bytes(vm.to_bytes())
+        let restored = VerificationMatrix::<p384::ProjectivePoint>::from_bytes(&vm.to_bytes())
             .expect("deserialization should succeed");
 
         assert_eq!(vm, restored);

@@ -168,6 +168,7 @@ where
     pub(crate) fn needs_switch_point(&self, id: &Shareholder) -> Result<bool> {
         let state = self.state.lock().unwrap();
         let sp = match &*state {
+            DimensionSwitchState::WaitingForVerificationMatrix => return Ok(true),
             DimensionSwitchState::Accumulating(sp) => sp,
             _ => return Err(Error::InvalidState.into()),
         };

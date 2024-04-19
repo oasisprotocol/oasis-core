@@ -401,7 +401,7 @@ func (w *secretsWorker) handleNewEpoch(epoch beacon.EpochTime) {
 	// all publishing transactions simultaneously, which would result in unnecessary gas waste.
 	// Additionally, avoid selecting blocks at the end of the epoch, as secret generation,
 	// publication and replication takes some time.
-	height, err := w.kmWorker.randomBlockHeight(epoch, 50)
+	height, err := w.kmWorker.selectBlockHeight(epoch, 10, 50)
 	if err != nil {
 		// If randomization fails, the height will be set to zero meaning that
 		// the secrets will be generated immediately without a delay.

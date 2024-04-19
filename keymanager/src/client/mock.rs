@@ -3,10 +3,14 @@ use std::{collections::HashMap, sync::Mutex};
 
 use async_trait::async_trait;
 
-use oasis_core_runtime::{common::crypto::signature::Signature, consensus::beacon::EpochTime};
+use oasis_core_runtime::{
+    common::crypto::signature::{PublicKey, Signature},
+    consensus::beacon::EpochTime,
+};
 
 use crate::{
     api::KeyManagerError,
+    churp::EncodedSecretShare,
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
 };
 
@@ -102,6 +106,41 @@ impl KeyManagerClient for MockClient {
         &self,
         _epoch: EpochTime,
     ) -> Result<Secret, KeyManagerError> {
+        unimplemented!();
+    }
+
+    async fn verification_matrix(
+        &self,
+        _churp_id: u8,
+        _epoch: EpochTime,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        unimplemented!();
+    }
+
+    async fn share_reduction_point(
+        &self,
+        _churp_id: u8,
+        _epoch: EpochTime,
+        _node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        unimplemented!();
+    }
+
+    async fn share_distribution_point(
+        &self,
+        _churp_id: u8,
+        _epoch: EpochTime,
+        _node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        unimplemented!();
+    }
+
+    async fn bivariate_share(
+        &self,
+        _churp_id: u8,
+        _epoch: EpochTime,
+        _node_id: PublicKey,
+    ) -> Result<EncodedSecretShare, KeyManagerError> {
         unimplemented!();
     }
 }

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/libp2p/go-libp2p/core"
+	"golang.org/x/exp/maps"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
@@ -129,10 +130,10 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 
 	// Call only members of the key manager committee. If no nodes are given, use all members.
 	kmNodes := km.nt.Nodes(nodes)
-	peers := make([]core.PeerID, 0, len(kmNodes))
-	for p := range kmNodes {
-		peers = append(peers, p)
+	if len(kmNodes) == 0 && len(nodes) > 0 {
+		return nil, node, fmt.Errorf("nodes not in committee")
 	}
+	peers := maps.Keys(kmNodes)
 
 	req := &keymanagerP2P.CallEnclaveRequest{
 		Data: data,

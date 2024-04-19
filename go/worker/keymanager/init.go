@@ -40,6 +40,7 @@ func New(
 		quitCh:       make(chan struct{}),
 		initCh:       make(chan struct{}),
 		nodeID:       commonWorker.Identity.NodeSigner.Public(),
+		peerMap:      NewPeerMap(),
 		accessList:   NewAccessList(),
 		commonWorker: commonWorker,
 		backend:      backend,
@@ -79,7 +80,7 @@ func New(
 	}
 
 	// Prepare watchers.
-	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
+	w.kmNodeWatcher = newKmNodeWatcher(w.runtimeID, commonWorker.Consensus, w.peerMap, w.accessList, w.commonWorker.P2P.PeerManager().PeerTagger())
 	w.kmRuntimeWatcher = newKmRuntimeWatcher(w.runtimeID, commonWorker.Consensus, w.accessList)
 
 	// Prepare sub-workers.

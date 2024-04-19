@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use futures::executor::block_on;
 use oasis_core_runtime::{
     dispatcher::{Initializer, PostInitState, PreInitState},
     enclave_rpc::dispatcher::Handler,
     host::Host,
-    protocol::ProtocolUntrustedLocalStorage,
 };
 
 use crate::{
@@ -35,10 +32,9 @@ pub fn new_keymanager(signers: TrustedSigners) -> Box<dyn Initializer> {
 
         let churp = Box::leak(Box::new(Churp::new(
             node_id,
-            state.protocol.get_runtime_id(),
             state.identity.clone(),
+            state.protocol.clone(),
             state.consensus_verifier.clone(),
-            Arc::new(ProtocolUntrustedLocalStorage::new(state.protocol.clone())),
         )));
 
         state.rpc_dispatcher.add_methods(secrets.methods());

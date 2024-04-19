@@ -3,8 +3,9 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
@@ -42,16 +43,28 @@ func (sc *kmChurpImpl) Fixture() (*oasis.NetworkFixture, error) {
 	// We don't need compute workers.
 	f.ComputeWorkers = []oasis.ComputeWorkerFixture{}
 
-	// Ensure that the key manager workers participate in the CHURP scheme.
+	// We need 4 key managers.
 	f.Keymanagers[0].ChurpIDs = []uint8{0}
+	for i := 0; i < 3; i++ {
+		f.Keymanagers = append(f.Keymanagers, f.Keymanagers[0])
+	}
+	for i := 2; i < 4; i++ {
+		f.Keymanagers[i].NoAutoStart = true
+	}
 
 	// Enable CHURP extension.
 	f.Network.EnableKeyManagerCHURP = true
 
+	// Speed up the test.
+	f.Network.Beacon.VRFParameters = &beacon.VRFParameters{
+		Interval:             10,
+		ProofSubmissionDelay: 2,
+	}
+
 	return f, nil
 }
 
-func (sc *kmChurpImpl) Run(ctx context.Context, _ *env.Env) error {
+func (sc *kmChurpImpl) Run(ctx context.Context, _ *env.Env) error { //nolint: gocyclo
 	var nonce uint64
 
 	if err := sc.Net.Start(); err != nil {
@@ -68,49 +81,192 @@ func (sc *kmChurpImpl) Run(ctx context.Context, _ *env.Env) error {
 	}
 	defer stSub.Close()
 
-	// Create a new CHURP instance.
-	identity := churp.Identity{
-		ID:        0,
-		RuntimeID: KeyManagerRuntimeID,
-	}
-	req := churp.CreateRequest{
-		Identity:        identity,
-		GroupID:         churp.EccNistP384,
-		Threshold:       2,
-		HandoffInterval: 1,
-		Policy: churp.SignedPolicySGX{
-			Policy: churp.PolicySGX{
-				Identity: identity,
-			},
-		},
-	}
+	// Create scheme.
+	id := uint8(0)
+	threshold := uint8(1)
+	handoffInterval := beacon.EpochTime(2)
 
-	tx := churp.NewCreateTx(nonce, &transaction.Fee{Gas: 10000}, &req)
-	entSigner := sc.Net.Entities()[0].Signer()
-	sigTx, err := transaction.Sign(entSigner, tx)
-	if err != nil {
-		return fmt.Errorf("failed signing create churp transaction: %w", err)
+	if err = sc.createChurp(ctx, id, threshold, handoffInterval, nonce); err != nil {
+		return err
 	}
-	err = sc.Net.Controller().Consensus.SubmitTx(ctx, sigTx)
-	if err != nil {
-		return fmt.Errorf("failed submitting create churp transaction: %w", err)
-	}
+	nonce++
 
-	// Test wether the key manager node submits an application every handoff.
-	var st *churp.Status
-	for i := range 4 {
-		select {
-		case st = <-stCh:
-		case <-ctx.Done():
-			return ctx.Err()
+	// The dealing round requires threshold + 2 key manager nodes.
+	// Since only 2 are running, all handoffs should fail.
+	sc.Logger.Info("testing dealing phase (not enough nodes)")
+
+	var (
+		status     *churp.Status
+		lastStatus *churp.Status
+		failed     int
+	)
+
+	for failed < 2 {
+		status, err = sc.nextChurpStatus(ctx, stCh)
+		if err != nil {
+			return err
 		}
 
-		// New round started (no applications) or node just submitted
-		// an application (exactly one application).
-		if appSize := i % 2; len(st.Applications) != appSize {
-			return fmt.Errorf("status should have %d applications", appSize)
+		if status.Handoff != 0 || status.Committee != nil {
+			return fmt.Errorf("dealing phase should fail")
 		}
+		if lastStatus != nil && lastStatus.NextHandoff != 0 {
+			if status.NextHandoff-lastStatus.NextHandoff > 1 {
+				return fmt.Errorf("failed handoffs should be 1 epoch apart")
+			}
+			if status.NextHandoff != lastStatus.NextHandoff {
+				failed++
+			}
+		}
+
+		lastStatus = status
+	}
+
+	// The dealing phase.
+	sc.Logger.Info("testing dealing phase")
+
+	if err = sc.Net.Keymanagers()[2].Start(); err != nil {
+		return err
+	}
+
+	for status.Handoff == 0 {
+		status, err = sc.nextChurpStatus(ctx, stCh)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(status.Committee) != 3 {
+		return fmt.Errorf("committee should have 3 members")
+	}
+	if status.Checksum == nil {
+		return fmt.Errorf("checksum should be set")
+	}
+	if status.NextHandoff-status.Handoff != handoffInterval {
+		return fmt.Errorf("invalid handoff interval")
+	}
+
+	// Committee unchanged.
+	for i := 0; i < 2; i++ {
+		sc.Logger.Info("testing committee unchanged",
+			"round", i,
+		)
+
+		lastStatus = status
+		status, err = sc.waitNextHandoff(ctx, status.Handoff, stCh)
+		if err != nil {
+			return err
+		}
+
+		if len(status.Committee) != 3 {
+			return fmt.Errorf("committee should have 3 members")
+		}
+		if status.Checksum == lastStatus.Checksum {
+			return fmt.Errorf("checksum should change")
+		}
+	}
+
+	// Committee changed.
+	for i := 0; i < 2; i++ {
+		// Add node.
+		sc.Logger.Info("testing committee changed (node added)",
+			"round", i,
+		)
+
+		if err = sc.Net.Keymanagers()[3].Start(); err != nil {
+			return err
+		}
+
+		// Ignore the first handoff as the node needs time to start.
+		for j := 0; j < 2; j++ {
+			lastStatus = status
+			status, err = sc.waitNextHandoff(ctx, status.Handoff, stCh)
+			if err != nil {
+				return err
+			}
+		}
+
+		if len(status.Committee) != 4 {
+			return fmt.Errorf("committee should have 4 members")
+		}
+		if status.Checksum == lastStatus.Checksum {
+			return fmt.Errorf("checksum should change")
+		}
+
+		// Remove node.
+		sc.Logger.Info("testing committee changed (node removed)",
+			"round", i,
+		)
+
+		if err = sc.Net.Keymanagers()[3].Stop(); err != nil {
+			return err
+		}
+
+		lastStatus = status
+		status, err = sc.waitNextHandoff(ctx, status.Handoff, stCh)
+		if err != nil {
+			return err
+		}
+
+		if len(status.Committee) != 3 {
+			return fmt.Errorf("committee should have 3 members")
+		}
+		if status.Checksum == lastStatus.Checksum {
+			return fmt.Errorf("checksum should change")
+		}
+	}
+
+	// Handoffs disabled.
+	sc.Logger.Info("testing handoffs disabled")
+
+	handoffInterval = churp.HandoffsDisabled
+	if err = sc.updateChurp(ctx, id, handoffInterval, nonce); err != nil {
+		return err
+	}
+	nonce++
+
+	// After the update, there should be no status updates.
+	<-stCh
+	select {
+	case <-stCh:
+		return fmt.Errorf("handoffs should be disabled")
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(20 * time.Second):
+	}
+
+	// Handoffs enabled.
+	sc.Logger.Info("testing handoffs enabled")
+
+	handoffInterval = beacon.EpochTime(1)
+	if err = sc.updateChurp(ctx, id, handoffInterval, nonce); err != nil {
+		return err
+	}
+
+	for i := 0; i < 2; i++ {
+		lastStatus = status
+		status, err = sc.waitNextHandoff(ctx, status.Handoff, stCh)
+		if err != nil {
+			return err
+		}
+	}
+
+	if status.Handoff-lastStatus.Handoff != handoffInterval {
+		return fmt.Errorf("invalid handoff interval")
 	}
 
 	return nil
+}
+
+func (sc *kmChurpImpl) waitNextHandoff(ctx context.Context, epoch beacon.EpochTime, stCh <-chan *churp.Status) (*churp.Status, error) {
+	for {
+		status, err := sc.nextChurpStatus(ctx, stCh)
+		if err != nil {
+			return nil, err
+		}
+		if status.Handoff <= epoch {
+			continue
+		}
+		return status, nil
+	}
 }
