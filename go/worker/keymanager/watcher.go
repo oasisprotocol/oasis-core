@@ -4,6 +4,9 @@ import (
 	"context"
 	"sync"
 
+	"github.com/libp2p/go-libp2p/core"
+	"golang.org/x/exp/maps"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -22,18 +25,20 @@ type kmNodeWatcher struct {
 	runtimeID common.Namespace
 	consensus consensus.Backend
 
+	peerMap    *PeerMap
 	accessList *AccessList
 	peerTagger p2p.PeerTagger
 
 	logger *logging.Logger
 }
 
-func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Backend, accessList *AccessList, peerTagger p2p.PeerTagger) *kmNodeWatcher {
+func newKmNodeWatcher(runtimeID common.Namespace, consensus consensus.Backend, peerMap *PeerMap, accessList *AccessList, peerTagger p2p.PeerTagger) *kmNodeWatcher {
 	logger := logging.GetLogger("worker/keymanager/watcher/km")
 
 	return &kmNodeWatcher{
 		runtimeID:  runtimeID,
 		consensus:  consensus,
+		peerMap:    peerMap,
 		accessList: accessList,
 		peerTagger: peerTagger,
 		logger:     logger,
@@ -92,21 +97,29 @@ func (w *kmNodeWatcher) watch(ctx context.Context) {
 		}
 
 		// Rebuild the access policy, something has changed.
-		var nodes []*node.Node
-		peers := make(map[signature.PublicKey]struct{})
+		peerMap := make(map[core.PeerID]signature.PublicKey, len(activeNodes))
 		for id := range activeNodes {
 			n := watcher.Lookup(id)
 			if n == nil {
 				continue
 			}
-			nodes = append(nodes, n)
-			peers[n.P2P.ID] = struct{}{}
-		}
 
-		w.accessList.UpdateNodes(w.runtimeID, nodes)
-		if pids, err := p2p.PublicKeyMapToPeerIDs(peers); err == nil {
-			w.peerTagger.SetPeerImportance(p2p.ImportantNodeKeyManager, w.runtimeID, pids)
+			peerID, err := p2p.PublicKeyToPeerID(n.P2P.ID)
+			if err != nil {
+				w.logger.Warn("invalid node P2P ID",
+					"err", err,
+					"node_id", n.ID,
+				)
+				continue
+			}
+
+			peerMap[peerID] = n.ID
 		}
+		peers := maps.Keys(peerMap)
+
+		w.peerMap.Update(peerMap)
+		w.accessList.Update(w.runtimeID, peers)
+		w.peerTagger.SetPeerImportance(p2p.ImportantNodeKeyManager, w.runtimeID, peers)
 	}
 }
 

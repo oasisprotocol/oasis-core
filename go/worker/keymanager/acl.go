@@ -6,13 +6,14 @@ import (
 	"github.com/libp2p/go-libp2p/core"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	p2p "github.com/oasisprotocol/oasis-core/go/p2p/api"
 	"github.com/oasisprotocol/oasis-core/go/worker/keymanager/api"
 )
 
-// RuntimeList is a concurrent-safe collection of unique runtime IDs.
+// RuntimeList is a thread-safe collection of unique runtime IDs.
 type RuntimeList struct {
 	mu sync.RWMutex
 
@@ -75,7 +76,7 @@ func (l *RuntimeList) Empty() bool {
 	return len(l.runtimes) == 0
 }
 
-// AccessList is a concurrent-safe data structure for managing access permissions.
+// AccessList is a thread-safe data structure for managing access permissions.
 type AccessList struct {
 	mu sync.RWMutex
 
@@ -132,6 +133,11 @@ func (l *AccessList) Update(runtimeID common.Namespace, peers []core.PeerID) {
 	// To prevent race conditions when returning runtime access lists, it is essential to always
 	// replace the peers array and refrain from making any modifications.
 	l.accessListByRuntime[runtimeID] = peers
+
+	l.logger.Debug("new client runtime access policy in effect",
+		"runtime_id", runtimeID,
+		"peers", peers,
+	)
 }
 
 // UpdateNodes converts node public keys to peer IDs and updates the access list
@@ -151,11 +157,6 @@ func (l *AccessList) UpdateNodes(runtimeID common.Namespace, nodes []*node.Node)
 	}
 
 	l.Update(runtimeID, peers)
-
-	l.logger.Debug("new client runtime access policy in effect",
-		"runtime_id", runtimeID,
-		"peers", peers,
-	)
 }
 
 // RuntimeAccessLists returns a per-runtime list of allowed peers.
@@ -173,4 +174,32 @@ func (l *AccessList) RuntimeAccessLists() []api.RuntimeAccessList {
 	}
 
 	return rals
+}
+
+// PeerMap is a thread-safe data structure for translating peer IDs to node IDs.
+type PeerMap struct {
+	mu    sync.RWMutex
+	peers map[core.PeerID]signature.PublicKey // Guarded by mutex.
+}
+
+// NewPeerMap creates an empty peer map.
+func NewPeerMap() *PeerMap {
+	return &PeerMap{}
+}
+
+// Update updates the map with the provided peers.
+func (m *PeerMap) Update(peers map[core.PeerID]signature.PublicKey) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.peers = peers
+}
+
+// NodeID returns the node ID of the specified peer.
+func (m *PeerMap) NodeID(peer core.PeerID) (signature.PublicKey, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	node, ok := m.peers[peer]
+	return node, ok
 }

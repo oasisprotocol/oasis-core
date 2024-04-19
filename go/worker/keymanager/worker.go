@@ -68,6 +68,7 @@ type Worker struct { // nolint: maligned
 	accessControllers         []workerKeymanager.RPCAccessController
 	accessControllersByMethod map[string]workerKeymanager.RPCAccessController
 
+	peerMap    *PeerMap
 	accessList *AccessList
 
 	commonWorker *workerCommon.Worker
