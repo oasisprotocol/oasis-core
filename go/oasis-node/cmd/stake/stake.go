@@ -75,7 +75,7 @@ func doConnect(cmd *cobra.Command) (*grpc.ClientConn, api.Backend) {
 }
 
 func getTokenSymbol(ctx context.Context, client api.Backend) string {
-	symbol, err := client.TokenSymbol(ctx)
+	symbol, err := client.TokenSymbol(ctx, consensus.HeightLatest)
 	if err != nil {
 		logger.Error("failed to query token's symbol",
 			"err", err,
@@ -86,7 +86,7 @@ func getTokenSymbol(ctx context.Context, client api.Backend) string {
 }
 
 func getTokenValueExponent(ctx context.Context, client api.Backend) uint8 {
-	exp, err := client.TokenValueExponent(ctx)
+	exp, err := client.TokenValueExponent(ctx, consensus.HeightLatest)
 	if err != nil {
 		logger.Error("failed to query token's value exponent",
 			"err", err,

@@ -114,11 +114,11 @@ var (
 // Backend is a staking implementation.
 type Backend interface {
 	// TokenSymbol returns the token's ticker symbol.
-	TokenSymbol(ctx context.Context) (string, error)
+	TokenSymbol(ctx context.Context, height int64) (string, error)
 
 	// TokenValueExponent is the token's value base-10 exponent, i.e.
 	// 1 token = 10**TokenValueExponent base units.
-	TokenValueExponent(ctx context.Context) (uint8, error)
+	TokenValueExponent(ctx context.Context, height int64) (uint8, error)
 
 	// TotalSupply returns the total number of base units.
 	TotalSupply(ctx context.Context, height int64) (*quantity.Quantity, error)
@@ -1183,6 +1183,13 @@ type Genesis struct {
 
 // ConsensusParameters are the staking consensus parameters.
 type ConsensusParameters struct { // nolint: maligned
+	// TokenSymbol is the token's ticker symbol.
+	// Only upper case A-Z characters are allowed.
+	TokenSymbol string `json:"token_symbol,omitempty"`
+	// TokenValueExponent is the token's value base-10 exponent, i.e.
+	// 1 token = 10**TokenValueExponent base units.
+	TokenValueExponent uint8 `json:"token_value_exponent,omitempty"`
+
 	Thresholds                        map[ThresholdKind]quantity.Quantity `json:"thresholds,omitempty"`
 	DebondingInterval                 beacon.EpochTime                    `json:"debonding_interval,omitempty"`
 	RewardSchedule                    []RewardStep                        `json:"reward_schedule,omitempty"`

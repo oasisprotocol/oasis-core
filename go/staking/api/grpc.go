@@ -15,9 +15,9 @@ var (
 	serviceName = cmnGrpc.NewServiceName("Staking")
 
 	// methodTokenSymbol is the TokenSymbol method.
-	methodTokenSymbol = serviceName.NewMethod("TokenSymbol", nil)
+	methodTokenSymbol = serviceName.NewMethod("TokenSymbol", int64(0))
 	// methodTokenValueExponent is the TokenValueExponent method.
-	methodTokenValueExponent = serviceName.NewMethod("TokenValueExponent", nil)
+	methodTokenValueExponent = serviceName.NewMethod("TokenValueExponent", int64(0))
 	// methodTotalSupply is the TotalSupply method.
 	methodTotalSupply = serviceName.NewMethod("TotalSupply", int64(0))
 	// methodCommonPool is the CommonPool method.
@@ -157,39 +157,47 @@ var (
 func handlerTokenSymbol(
 	srv interface{},
 	ctx context.Context,
-	_ func(interface{}) error,
+	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
 	if interceptor == nil {
-		return srv.(Backend).TokenSymbol(ctx)
+		return srv.(Backend).TokenSymbol(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodTokenSymbol.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
-		return srv.(Backend).TokenSymbol(ctx)
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).TokenSymbol(ctx, req.(int64))
 	}
-	return interceptor(ctx, nil, info, handler)
+	return interceptor(ctx, height, info, handler)
 }
 
 func handlerTokenValueExponent(
 	srv interface{},
 	ctx context.Context,
-	_ func(interface{}) error,
+	dec func(interface{}) error,
 	interceptor grpc.UnaryServerInterceptor,
 ) (interface{}, error) {
+	var height int64
+	if err := dec(&height); err != nil {
+		return nil, err
+	}
 	if interceptor == nil {
-		return srv.(Backend).TokenValueExponent(ctx)
+		return srv.(Backend).TokenValueExponent(ctx, height)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
 		FullMethod: methodTokenValueExponent.FullName(),
 	}
-	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
-		return srv.(Backend).TokenValueExponent(ctx)
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(Backend).TokenValueExponent(ctx, req.(int64))
 	}
-	return interceptor(ctx, nil, info, handler)
+	return interceptor(ctx, height, info, handler)
 }
 
 func handlerTotalSupply(
@@ -643,17 +651,17 @@ type stakingClient struct {
 	conn *grpc.ClientConn
 }
 
-func (c *stakingClient) TokenSymbol(ctx context.Context) (string, error) {
+func (c *stakingClient) TokenSymbol(ctx context.Context, height int64) (string, error) {
 	var rsp string
-	if err := c.conn.Invoke(ctx, methodTokenSymbol.FullName(), nil, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodTokenSymbol.FullName(), height, &rsp); err != nil {
 		return "", err
 	}
 	return rsp, nil
 }
 
-func (c *stakingClient) TokenValueExponent(ctx context.Context) (uint8, error) {
+func (c *stakingClient) TokenValueExponent(ctx context.Context, height int64) (uint8, error) {
 	var rsp uint8
-	if err := c.conn.Invoke(ctx, methodTokenValueExponent.FullName(), nil, &rsp); err != nil {
+	if err := c.conn.Invoke(ctx, methodTokenValueExponent.FullName(), height, &rsp); err != nil {
 		return 0, err
 	}
 	return rsp, nil
