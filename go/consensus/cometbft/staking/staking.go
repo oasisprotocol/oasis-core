@@ -38,7 +38,17 @@ type serviceClient struct {
 	eventNotifier *pubsub.Broker
 }
 
-func (sc *serviceClient) TokenSymbol(ctx context.Context) (string, error) {
+func (sc *serviceClient) TokenSymbol(ctx context.Context, height int64) (string, error) {
+	params, err := sc.ConsensusParameters(ctx, height)
+	if err != nil {
+		return "", err
+	}
+
+	if params.TokenSymbol != "" {
+		return params.TokenSymbol, nil
+	}
+
+	// Fallback to genesis document.
 	genesis, err := sc.backend.GetGenesisDocument(ctx)
 	if err != nil {
 		return "", err
@@ -47,7 +57,17 @@ func (sc *serviceClient) TokenSymbol(ctx context.Context) (string, error) {
 	return genesis.Staking.TokenSymbol, nil
 }
 
-func (sc *serviceClient) TokenValueExponent(ctx context.Context) (uint8, error) {
+func (sc *serviceClient) TokenValueExponent(ctx context.Context, height int64) (uint8, error) {
+	params, err := sc.ConsensusParameters(ctx, height)
+	if err != nil {
+		return 0, err
+	}
+
+	if params.TokenValueExponent > 0 {
+		return params.TokenValueExponent, nil
+	}
+
+	// Fallback to genesis document.
 	genesis, err := sc.backend.GetGenesisDocument(ctx)
 	if err != nil {
 		return 0, err
@@ -207,11 +227,11 @@ func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api
 	}
 
 	// Add static values to the genesis document.
-	genesis.TokenSymbol, err = sc.TokenSymbol(ctx)
+	genesis.TokenSymbol, err = sc.TokenSymbol(ctx, height)
 	if err != nil {
 		return nil, err
 	}
-	genesis.TokenValueExponent, err = sc.TokenValueExponent(ctx)
+	genesis.TokenValueExponent, err = sc.TokenValueExponent(ctx, height)
 	if err != nil {
 		return nil, err
 	}
