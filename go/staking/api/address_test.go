@@ -72,6 +72,21 @@ func TestRuntimeAddress(t *testing.T) {
 	require.NotEqualValues(addr1, addrPk1, "runtime addresses should be separated from staking addresses")
 }
 
+func TestModuleAddress(t *testing.T) {
+	require := require.New(t)
+
+	addr1 := NewModuleAddress("test", "foo")
+	require.True(addr1.IsValid(), "module address should be valid")
+	require.EqualValues("oasis1qpgsr850rfz7v8nxpgz8urkw3xp4nnwjgux629kl", addr1.String(), "module address should be correct")
+
+	addr2 := NewModuleAddress("test", "bar")
+	require.NotEqualValues(addr1, addr2, "module addresses for different kinds should be different")
+
+	addr3 := NewModuleAddress("another", "foo")
+	require.NotEqualValues(addr1, addr3, "module addresses for different modules should be different")
+	require.NotEqualValues(addr2, addr3, "module addresses for different modules should be different")
+}
+
 func TestInternal(t *testing.T) {
 	for _, v := range []struct {
 		n       string
