@@ -229,11 +229,6 @@ func (n *Node) Start() error {
 		return fmt.Errorf("failed to start group services: %w", err)
 	}
 
-	// Start the transaction pool.
-	if err := n.TxPool.Start(); err != nil {
-		return fmt.Errorf("failed to start transaction pool: %w", err)
-	}
-
 	go n.worker()
 	if cmmetrics.Enabled() {
 		go n.metricsWorker()
@@ -615,6 +610,14 @@ func (n *Node) worker() {
 	}
 	n.logger.Info("consensus has finished initial synchronization")
 	atomic.StoreUint32(&n.consensusSynced, 1)
+
+	// Start the transaction pool after consensus is synced.
+	if err := n.TxPool.Start(); err != nil {
+		n.logger.Error("failed to start transaction pool",
+			"err", err,
+		)
+		return
+	}
 
 	// Wait for the runtime.
 	rt, err := n.Runtime.ActiveDescriptor(n.ctx)

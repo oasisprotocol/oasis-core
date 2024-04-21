@@ -28,6 +28,9 @@ const (
 	checkTxTimeout = 15 * time.Second
 	// checkTxRetryDelay is the time to wait before queuing a check tx retry.
 	checkTxRetryDelay = 1 * time.Second
+	// checkTxWaitRoundSyncedTimeout is the time to wait for block to be
+	// synced with storage at the start of check tx.
+	checkTxWaitRoundSyncedTimeout = 5 * time.Second
 	// abortTimeout is the maximum time the runtime can spend aborting.
 	abortTimeout = 5 * time.Second
 	// maxRepublishTxs is the maximum amount of transactions to republish.
@@ -460,20 +463,31 @@ func (t *txPool) checkTxBatch(ctx context.Context, rr host.RichRuntime) {
 		return
 	}
 
+	// Ensure block round is synced to storage.
+	waitSyncCtx, cancelWaitSyncCtx := context.WithTimeout(ctx, checkTxWaitRoundSyncedTimeout)
+	defer cancelWaitSyncCtx()
+
+	t.logger.Debug("ensuring block round is synced", "round", bi.RuntimeBlock.Header.Round)
+	if _, err = t.history.WaitRoundSynced(waitSyncCtx, bi.RuntimeBlock.Header.Round); err != nil {
+		// Block round isn't synced yet, so make sure the batch check is
+		// retried later to avoid aborting the runtime, as it is not its fault.
+		t.logger.Info("block round is not synced yet, retrying transaction batch check later",
+			"round", bi.RuntimeBlock.Header.Round,
+			"err", err,
+		)
+		t.checkTxCh.In() <- struct{}{}
+		return
+	}
+
+	// Pop the next batch from the queue, check it, and notify submitters.
 	batch := t.checkTxQueue.pop()
 	if len(batch) == 0 {
 		return
 	}
 
 	results, err := func() ([]protocol.CheckTxResult, error) {
-		checkCtx, cancel := context.WithTimeout(ctx, checkTxTimeout)
-		defer cancel()
-
-		// Ensure block round is synced to storage.
-		t.logger.Debug("ensuring block round is synced", "round", bi.RuntimeBlock.Header.Round)
-		if _, err = t.history.WaitRoundSynced(checkCtx, bi.RuntimeBlock.Header.Round); err != nil {
-			return nil, err
-		}
+		checkCtx, cancelCheckCtx := context.WithTimeout(ctx, checkTxTimeout)
+		defer cancelCheckCtx()
 
 		// Check batch.
 		rawTxBatch := make([][]byte, 0, len(batch))
