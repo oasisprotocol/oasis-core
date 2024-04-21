@@ -815,14 +815,6 @@ func TestGenesisSanityCheck(t *testing.T) {
 	require.Error(d.SanityCheck(), "proposal submitter reserved address")
 
 	d.Governance.Proposals = validTestProposals()
-	d.Governance.Proposals[0].Content.Upgrade = nil
-	require.Error(d.SanityCheck(), "proposal invalid content")
-
-	d.Governance.Proposals = validTestProposals()
-	d.Governance.Proposals[0].Content.Upgrade.Target = version.ProtocolVersions{}
-	require.Error(d.SanityCheck(), "proposal upgrade invalid target")
-
-	d.Governance.Proposals = validTestProposals()
 	d.Governance.Proposals[0].ClosesAt = 5
 	require.Error(d.SanityCheck(), "active proposal with past closing epoch")
 

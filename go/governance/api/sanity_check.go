@@ -57,9 +57,8 @@ func SanityCheckProposals(proposals []*Proposal, epoch beacon.EpochTime, governa
 		if !p.Submitter.IsValid() {
 			return fmt.Errorf("proposal %v: invalid proposal submitter", p.ID)
 		}
-		if err := p.Content.ValidateBasic(); err != nil {
-			return fmt.Errorf("proposal %v: basic validation failure: %w", p.ID, err)
-		}
+		// Since validation rules can change through time, we cannot run basic validation checks on
+		// past proposals based on current rules (and past rules may not be available).
 
 		// XXX: There are actually other possible error states that are not covered here.
 		// e.g. for cancel upgrade proposal a pending upgrade should exist.

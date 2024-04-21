@@ -26,8 +26,13 @@ func (app *governanceApplication) submitProposal(
 		"proposal_content", proposalContent,
 	)
 
+	params, err := state.ConsensusParameters(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch consensus parameters: %w", err)
+	}
+
 	// Validate proposal content basics.
-	if err := proposalContent.ValidateBasic(); err != nil {
+	if err = proposalContent.ValidateBasic(params); err != nil {
 		ctx.Logger().Debug("governance: malformed proposal content",
 			"content", proposalContent,
 			"err", err,
@@ -37,11 +42,6 @@ func (app *governanceApplication) submitProposal(
 
 	if ctx.IsCheckOnly() {
 		return nil, nil
-	}
-
-	params, err := state.ConsensusParameters(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch consensus parameters: %w", err)
 	}
 
 	// To not violate the consensus, change parameters proposals should be ignored when disabled.

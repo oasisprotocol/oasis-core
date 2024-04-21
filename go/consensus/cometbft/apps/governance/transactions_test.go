@@ -58,6 +58,9 @@ func TestSubmitProposal(t *testing.T) {
 		VotingPeriod:              beacon.EpochTime(50),
 	}
 
+	allowPropMetaParams := *baseConsParams
+	allowPropMetaParams.AllowProposalMetadata = true
+
 	for _, tc := range []struct {
 		msg             string
 		params          *governance.ConsensusParameters
@@ -150,6 +153,36 @@ func TestSubmitProposal(t *testing.T) {
 			baseConsParams,
 			pk1,
 			&governance.ProposalContent{
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: baseAtEpoch(200),
+				},
+			},
+			func() {},
+			nil,
+		},
+		{
+			"should fail with metadata when metadata is not allowed",
+			baseConsParams,
+			pk1,
+			&governance.ProposalContent{
+				Metadata: &governance.ProposalMetadata{
+					Title: "Proposal that should fail",
+				},
+				Upgrade: &governance.UpgradeProposal{
+					Descriptor: baseAtEpoch(200),
+				},
+			},
+			func() {},
+			governance.ErrInvalidArgument,
+		},
+		{
+			"should work with metadata when metadata is allowed",
+			&allowPropMetaParams,
+			pk1,
+			&governance.ProposalContent{
+				Metadata: &governance.ProposalMetadata{
+					Title: "Proposal that should work",
+				},
 				Upgrade: &governance.UpgradeProposal{
 					Descriptor: baseAtEpoch(200),
 				},

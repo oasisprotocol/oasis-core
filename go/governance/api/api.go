@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"reflect"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
@@ -60,19 +59,41 @@ var (
 
 // ProposalContent is a consensus layer governance proposal content.
 type ProposalContent struct {
+	// Metadata contains optional proposal metadata which is ignored during proposal execution.
+	Metadata *ProposalMetadata `json:"metadata,omitempty"`
+
 	Upgrade          *UpgradeProposal          `json:"upgrade,omitempty"`
 	CancelUpgrade    *CancelUpgradeProposal    `json:"cancel_upgrade,omitempty"`
 	ChangeParameters *ChangeParametersProposal `json:"change_parameters,omitempty"`
 }
 
 // ValidateBasic performs basic proposal content validity checks.
-func (p *ProposalContent) ValidateBasic() error {
-	numProposals := 0
-	values := reflect.ValueOf(*p)
-	for i := 0; i < values.NumField(); i++ {
-		if !values.Field(i).IsNil() {
-			numProposals++
+func (p *ProposalContent) ValidateBasic(params *ConsensusParameters) error {
+	// Validate metadata if present.
+	switch params.AllowProposalMetadata {
+	case true:
+		if p.Metadata == nil {
+			return fmt.Errorf("%w: proposal metadata required", ErrInvalidArgument)
 		}
+		if err := p.Metadata.ValidateBasic(); err != nil {
+			return err
+		}
+	case false:
+		if p.Metadata != nil {
+			return ErrInvalidArgument // Must be consistent with error during unmarshal.
+		}
+	}
+
+	// Validate content.
+	var numProposals int
+	if p.Upgrade != nil {
+		numProposals++
+	}
+	if p.CancelUpgrade != nil {
+		numProposals++
+	}
+	if p.ChangeParameters != nil {
+		numProposals++
 	}
 
 	switch {
@@ -121,6 +142,9 @@ func (p *ProposalContent) Equals(other *ProposalContent) bool {
 // PrettyPrint writes a pretty-printed representation of ProposalContent to the
 // given writer.
 func (p ProposalContent) PrettyPrint(ctx context.Context, prefix string, w io.Writer) {
+	if p.Metadata != nil {
+		p.Metadata.PrettyPrint(ctx, prefix, w)
+	}
 	if p.Upgrade != nil {
 		fmt.Fprintf(w, "%sUpgrade:\n", prefix)
 		p.Upgrade.PrettyPrint(ctx, prefix+"  ", w)
@@ -138,6 +162,48 @@ func (p ProposalContent) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 // PrettyType returns a representation of ProposalContent that can be used for
 // pretty printing.
 func (p ProposalContent) PrettyType() (interface{}, error) {
+	return p, nil
+}
+
+const (
+	// MinProposalTitleLength is the minimum length of a proposal's title.
+	MinProposalTitleLength = 3
+	// MaxProposalTitleLength is the maximum length of a proposal's title.
+	MaxProposalTitleLength = 100
+)
+
+// ProposalMetadata contains metadata about a proposal.
+type ProposalMetadata struct {
+	// Title is the human-readable proposal title.
+	Title string `json:"title"`
+	// Description is the human-readable description.
+	Description string `json:"description,omitempty"`
+}
+
+// ValidateBasic performs basic proposal metadata validity checks.
+func (p *ProposalMetadata) ValidateBasic() error {
+	if len(p.Title) < MinProposalTitleLength {
+		return fmt.Errorf("%w: proposal title too short", ErrInvalidArgument)
+	}
+	if len(p.Title) > MaxProposalTitleLength {
+		return fmt.Errorf("%w: proposal title too long", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// PrettyPrint writes a pretty-printed representation of ProposalMetadata to the given writer.
+func (p ProposalMetadata) PrettyPrint(_ context.Context, prefix string, w io.Writer) {
+	if len(p.Title) > 0 {
+		fmt.Fprintf(w, "%sTitle: %s\n", prefix, p.Title)
+	}
+	if len(p.Description) > 0 {
+		fmt.Fprintf(w, "%sDescription:\n", prefix)
+		fmt.Fprintf(w, "%s%s\n", prefix, p.Description)
+	}
+}
+
+// PrettyType returns a representation of ProposalMetadata that can be used for pretty printing.
+func (p ProposalMetadata) PrettyType() (interface{}, error) {
 	return p, nil
 }
 
@@ -379,6 +445,9 @@ type ConsensusParameters struct {
 
 	// AllowVoteWithoutEntity is true iff casting votes without a registered entity is allowed.
 	AllowVoteWithoutEntity bool `json:"allow_vote_without_entity,omitempty"`
+
+	// AllowProposalMetadata is true iff proposals are allowed to contain metadata.
+	AllowProposalMetadata bool `json:"allow_proposal_metadata,omitempty"`
 }
 
 // ConsensusParameterChanges are allowed governance consensus parameter changes.
