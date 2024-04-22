@@ -18,6 +18,7 @@ func TestValidateBasic(t *testing.T) {
 	for _, tc := range []struct {
 		msg       string
 		p         *ProposalContent
+		params    ConsensusParameters
 		shouldErr bool
 	}{
 		{
@@ -61,8 +62,27 @@ func TestValidateBasic(t *testing.T) {
 			},
 			shouldErr: false,
 		},
+		{
+			msg: "proposal with metadata should fail when metadata not enabled",
+			p: &ProposalContent{
+				Metadata:      &ProposalMetadata{},
+				CancelUpgrade: &CancelUpgradeProposal{},
+			},
+			shouldErr: true,
+		},
+		{
+			msg: "proposal with metadata should not fail when metadata is enabled",
+			p: &ProposalContent{
+				Metadata:      &ProposalMetadata{Title: "My nice proposal"},
+				CancelUpgrade: &CancelUpgradeProposal{},
+			},
+			params: ConsensusParameters{
+				AllowProposalMetadata: true,
+			},
+			shouldErr: false,
+		},
 	} {
-		err := tc.p.ValidateBasic()
+		err := tc.p.ValidateBasic(&tc.params) //nolint: gosec
 		if tc.shouldErr {
 			require.NotNil(t, err, tc.msg)
 			continue

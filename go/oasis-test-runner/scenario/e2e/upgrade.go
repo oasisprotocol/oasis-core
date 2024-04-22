@@ -108,6 +108,9 @@ func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 	if govParams.AllowVoteWithoutEntity {
 		return fmt.Errorf("voting without entity is allowed")
 	}
+	if govParams.AllowProposalMetadata {
+		return fmt.Errorf("proposal metadata is allowed")
+	}
 
 	return nil
 }
@@ -156,6 +159,9 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	}
 	if !govParams.AllowVoteWithoutEntity {
 		return fmt.Errorf("voting without entity is not allowed")
+	}
+	if !govParams.AllowProposalMetadata {
+		return fmt.Errorf("proposal metadata is not allowed")
 	}
 
 	return nil

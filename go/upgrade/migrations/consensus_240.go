@@ -79,6 +79,7 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 			return fmt.Errorf("failed to load governance consensus parameters: %w", err)
 		}
 		govParams.AllowVoteWithoutEntity = true
+		govParams.AllowProposalMetadata = true
 
 		if err = govState.SetConsensusParameters(abciCtx, govParams); err != nil {
 			return fmt.Errorf("failed to update governance consensus parameters: %w", err)
