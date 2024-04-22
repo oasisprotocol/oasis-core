@@ -152,7 +152,6 @@ struct State {
     rpc_demux: Arc<RpcDemux>,
     rpc_dispatcher: Arc<RpcDispatcher>,
     txn_dispatcher: Arc<dyn TxnDispatcher>,
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     attestation_handler: attestation::Handler,
     policy_verifier: Arc<PolicyVerifier>,
     cache_set: cache::CacheSet,
@@ -317,7 +316,6 @@ impl Dispatcher {
     async fn handle_request(self: &Arc<Self>, state: State, request: Body) -> Result<Body, Error> {
         match request {
             // Attestation-related requests.
-            #[cfg(target_env = "sgx")]
             Body::RuntimeCapabilityTEERakInitRequest { .. }
             | Body::RuntimeCapabilityTEERakReportRequest {}
             | Body::RuntimeCapabilityTEERakAvrRequest { .. }

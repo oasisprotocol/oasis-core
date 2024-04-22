@@ -41,6 +41,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/log"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
+	runtimeConfig "github.com/oasisprotocol/oasis-core/go/runtime/config"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -676,10 +677,16 @@ func (net *Network) startOasisNode(
 		cfg.Consensus.UpgradeStopDelay = 10 * time.Second
 
 		extraArgs = extraArgs.debugAllowDebugEnclaves()
-		// XXX: We reuse the IAS specific variable (OASIS_UNSAFE_LAX_AVR_VERIFY) to avoid having
-		// an additional environment variable. Rename the variable when IAS support is removed.
+		// XXX: We reuse the IAS specific variables (OASIS_UNSAFE_LAX_*_VERIFY) to avoid having
+		// additional environment variables. Rename the variables when IAS support is removed.
+		if os.Getenv("OASIS_UNSAFE_SKIP_AVR_VERIFY") != "" {
+			extraArgs = extraArgs.debugSkipQuoteVerify()
+		}
 		if os.Getenv("OASIS_UNSAFE_LAX_AVR_VERIFY") != "" {
 			extraArgs = extraArgs.debugTCBLaxVerify()
+		}
+		if os.Getenv("OASIS_UNSAFE_MOCK_SGX") != "" {
+			cfg.Runtime.Environment = runtimeConfig.RuntimeEnvironmentSGXMock
 		}
 	} else {
 		baseArgs = append(baseArgs, "--"+cmdFlags.CfgGenesisFile, net.GenesisPath())

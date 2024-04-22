@@ -38,11 +38,14 @@ const (
 	ctrlChannelBufferSize = 16
 )
 
+// GetSandboxConfigFunc is the function used to generate the sandbox configuration.
+type GetSandboxConfigFunc func(cfg host.Config, socketPath, runtimeDir string) (process.Config, error)
+
 // Config contains the sandbox provisioner configuration options.
 type Config struct {
 	// GetSandboxConfig is a function that generates the sandbox configuration. In case it is not
 	// specified a default function is used.
-	GetSandboxConfig func(cfg host.Config, socketPath, runtimeDir string) (process.Config, error)
+	GetSandboxConfig GetSandboxConfigFunc
 
 	// HostInfo provides information about the host environment.
 	HostInfo *protocol.HostInfo
@@ -613,6 +616,36 @@ func (r *sandboxedRuntime) manager() {
 	}
 }
 
+// DefaultGetSandboxConfig is the default function for generating sandbox configuration.
+func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) GetSandboxConfigFunc {
+	return func(hostCfg host.Config, socketPath, _ string) (process.Config, error) {
+		if numComps := len(hostCfg.Components); numComps != 1 {
+			return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
+		}
+		comp := hostCfg.Bundle.Manifest.GetComponentByID(hostCfg.Components[0])
+		if comp == nil {
+			return process.Config{}, fmt.Errorf("component '%s' not available", hostCfg.Components[0])
+		}
+
+		logWrapper := host.NewRuntimeLogWrapper(
+			logger,
+			"runtime_id", hostCfg.Bundle.Manifest.ID,
+			"runtime_name", hostCfg.Bundle.Manifest.Name,
+			"component", comp.Kind,
+		)
+		return process.Config{
+			Path: hostCfg.Bundle.ExplodedPath(hostCfg.Bundle.ExplodedDataDir, comp.Executable),
+			Env: map[string]string{
+				"OASIS_WORKER_HOST": socketPath,
+			},
+			SandboxBinaryPath: sandboxBinaryPath,
+			Stdout:            logWrapper,
+			Stderr:            logWrapper,
+			AllowNetwork:      comp.IsNetworkAllowed(),
+		}, nil
+	}
+}
+
 // New creates a new runtime provisioner that uses a local process sandbox.
 func New(cfg Config) (host.Provisioner, error) {
 	// Use a default Logger if none was provided.
@@ -621,32 +654,7 @@ func New(cfg Config) (host.Provisioner, error) {
 	}
 	// Use a default GetSandboxConfig if none was provided.
 	if cfg.GetSandboxConfig == nil {
-		cfg.GetSandboxConfig = func(hostCfg host.Config, socketPath, _ string) (process.Config, error) {
-			if numComps := len(hostCfg.Components); numComps != 1 {
-				return process.Config{}, fmt.Errorf("expected a single component (got %d)", numComps)
-			}
-			comp := hostCfg.Bundle.Manifest.GetComponentByID(hostCfg.Components[0])
-			if comp == nil {
-				return process.Config{}, fmt.Errorf("component '%s' not available", hostCfg.Components[0])
-			}
-
-			logWrapper := host.NewRuntimeLogWrapper(
-				cfg.Logger,
-				"runtime_id", hostCfg.Bundle.Manifest.ID,
-				"runtime_name", hostCfg.Bundle.Manifest.Name,
-				"component", comp.Kind,
-			)
-			return process.Config{
-				Path: hostCfg.Bundle.ExplodedPath(hostCfg.Bundle.ExplodedDataDir, comp.Executable),
-				Env: map[string]string{
-					"OASIS_WORKER_HOST": socketPath,
-				},
-				SandboxBinaryPath: cfg.SandboxBinaryPath,
-				Stdout:            logWrapper,
-				Stderr:            logWrapper,
-				AllowNetwork:      comp.IsNetworkAllowed(),
-			}, nil
-		}
+		cfg.GetSandboxConfig = DefaultGetSandboxConfig(cfg.Logger, cfg.SandboxBinaryPath)
 	}
 	// Make sure host environment information was provided in HostInfo.
 	if cfg.HostInfo == nil {

@@ -186,6 +186,16 @@ steps:
       - buildkite-agent artifact upload simple-keyvalue-upgrade
       - buildkite-agent artifact upload simple-keymanager-upgrade
       - buildkite-agent artifact upload simple-rofl
+
+      # Build for mock SGX.
+      - cd /workdir
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keymanager mocksgx
+      - .buildkite/rust/build_runtime.sh tests/runtimes/simple-keyvalue mocksgx
+      - cd /var/tmp/artifacts/default/release
+      - mv simple-keymanager simple-keymanager.mocksgx
+      - mv simple-keyvalue simple-keyvalue.mocksgx
+      - buildkite-agent artifact upload simple-keymanager.mocksgx
+      - buildkite-agent artifact upload simple-keyvalue.mocksgx
     retry:
       <<: *retry_agent_failure
     plugins:
@@ -245,7 +255,7 @@ steps:
         --scenario e2e/runtime/keymanager-.+
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
-      OASIS_UNSAFE_LAX_AVR_VERIFY: "1"
+      OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
       OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
@@ -272,7 +282,7 @@ steps:
       - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/.*
     env:
       # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
-      OASIS_UNSAFE_LAX_AVR_VERIFY: "1"
+      OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
       OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
       OASIS_E2E_COVERAGE: enable
       OASIS_EXCLUDE_E2E: e2e/runtime/txsource-multi,e2e/runtime/txsource-multi-short
@@ -319,6 +329,27 @@ steps:
       - .buildkite/scripts/download_e2e_test_artifacts.sh
       - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/txsource-multi-short
     env:
+      OASIS_E2E_COVERAGE: enable
+      TEST_BASE_DIR: /tmp
+    retry:
+      <<: *retry_agent_failure
+    plugins:
+      <<: *docker_plugin
+
+  # E2E test jobs (mock SGX)
+  - label: E2E tests (mock SGX)
+    depends_on:
+      - "build-go"
+      - "build-rust-runtime-loader"
+      - "build-rust-runtimes"
+    command:
+      - trap 'buildkite-agent artifact upload "coverage-merged-e2e-*.txt;/tmp/e2e/**/*.log;/tmp/e2e/**/genesis.json;/tmp/e2e/**/runtime_genesis.json"' EXIT
+      - .buildkite/scripts/download_e2e_test_artifacts_mocksgx.sh
+      - .buildkite/scripts/test_e2e.sh --timeout 20m --scenario e2e/runtime/runtime-encryption
+    env:
+      OASIS_TEE_HARDWARE: intel-sgx
+      OASIS_UNSAFE_MOCK_SGX: "1"
+      OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
       OASIS_E2E_COVERAGE: enable
       TEST_BASE_DIR: /tmp
     retry:
@@ -382,7 +413,7 @@ steps:
           - .buildkite/scripts/test_upgrade.sh
         env:
           # Unsafe flags needed as the trust-root test rebuilds the enclave with embedded trust root data.
-          OASIS_UNSAFE_LAX_AVR_VERIFY: "1"
+          OASIS_UNSAFE_SKIP_AVR_VERIFY: "1"
           OASIS_UNSAFE_ALLOW_DEBUG_ENCLAVES: "1"
           TEST_BASE_DIR: /tmp
         agents:

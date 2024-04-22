@@ -24,6 +24,11 @@ if [ ! -d $src_dir ]; then
 fi
 shift
 
+###############
+# Optional args
+###############
+mode=${1:-}
+
 source .buildkite/rust/common.sh
 
 #####################################################################
@@ -41,13 +46,22 @@ fi
 # Run the build
 ###############
 pushd $src_dir
-    # Build non-SGX runtime. Checking KM policy requires SGX, disable it.
-    CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" OASIS_UNSAFE_SKIP_KM_POLICY="1" cargo build --release --locked
+    case "${mode}" in
+        mocksgx)
+            # Mock SGX only.
+            unset OASIS_UNSAFE_SKIP_KM_POLICY
+            CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" cargo build --features debug-mock-sgx --release --locked
+            ;;
+        *)
+            # Build non-SGX runtime. Checking KM policy requires SGX, disable it.
+            CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/default" OASIS_UNSAFE_SKIP_KM_POLICY="1" cargo build --release --locked
 
-    # Build SGX runtime.
-    export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"
-    export CC_x86_64_fortanix_unknown_sgx=clang-11
-    unset OASIS_UNSAFE_SKIP_KM_POLICY
-    CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo build --release --locked --target x86_64-fortanix-unknown-sgx
-    CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo elf2sgxs --release
+            # Build SGX runtime.
+            export CFLAGS_x86_64_fortanix_unknown_sgx="-isystem/usr/include/x86_64-linux-gnu -mlvi-hardening -mllvm -x86-experimental-lvi-inline-asm-hardening"
+            export CC_x86_64_fortanix_unknown_sgx=clang-11
+            unset OASIS_UNSAFE_SKIP_KM_POLICY
+            CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo build --release --locked --target x86_64-fortanix-unknown-sgx
+            CARGO_TARGET_DIR="${CARGO_TARGET_DIR}/sgx" cargo elf2sgxs --release
+            ;;
+    esac
 popd

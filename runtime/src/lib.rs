@@ -45,6 +45,9 @@ use crate::common::version::{Version, PROTOCOL_VERSION};
 #[cfg(target_env = "sgx")]
 use self::common::sgx::{EnclaveIdentity, MrSigner};
 
+#[cfg(all(target_env = "sgx", feature = "debug-mock-sgx"))]
+compile_error!("the debug-mock-sgx feature can only be enabled on non-sgx targets");
+
 lazy_static! {
     pub static ref BUILD_INFO: BuildInfo = {
         // Non-SGX builds are insecure by definition.

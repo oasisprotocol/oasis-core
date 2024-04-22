@@ -1,40 +1,32 @@
 //! Functionality related to the enclave attestation flow.
 use std::sync::Arc;
 
-#[cfg(target_env = "sgx")]
 use anyhow::{bail, Result};
-#[cfg(target_env = "sgx")]
-use slog::info;
-use slog::Logger;
+use slog::{info, Logger};
 
-#[cfg(target_env = "sgx")]
 use crate::{
-    common::{crypto::signature::Signer, sgx::Quote},
-    consensus::registry::{EndorsedCapabilityTEE, SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
-    policy::PolicyVerifier,
-    types::Body,
-};
-use crate::{
-    common::{logger::get_logger, namespace::Namespace, version::Version},
-    consensus::verifier::Verifier,
+    common::{
+        crypto::signature::Signer, logger::get_logger, namespace::Namespace, sgx::Quote,
+        version::Version,
+    },
+    consensus::{
+        registry::{EndorsedCapabilityTEE, SGXAttestation, ATTESTATION_SIGNATURE_CONTEXT},
+        verifier::Verifier,
+    },
     host::Host,
     identity::Identity,
+    policy::PolicyVerifier,
+    types::Body,
 };
 
 /// Attestation flow handler.
 #[derive(Clone)]
 pub struct Handler {
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     identity: Arc<Identity>,
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     host: Arc<dyn Host>,
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     consensus_verifier: Arc<dyn Verifier>,
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     runtime_id: Namespace,
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     version: Version,
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     logger: Logger,
 }
 
@@ -58,7 +50,6 @@ impl Handler {
     }
 }
 
-#[cfg(target_env = "sgx")]
 impl Handler {
     /// Handle an attestation flow request.
     pub async fn handle(&self, request: Body) -> Result<Body> {

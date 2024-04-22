@@ -19,7 +19,6 @@ use crate::{
 use super::OpenCommitment;
 
 /// The signature context used to sign compute results headers with RAK.
-#[cfg_attr(not(target_env = "sgx"), allow(unused))]
 pub const COMPUTE_RESULTS_HEADER_SIGNATURE_CONTEXT: &[u8] =
     b"oasis-core/roothash: compute results header";
 

@@ -1,6 +1,4 @@
 [advisories]
 ignore = [
-    "RUSTSEC-2020-0071", # Remove once upstream dependencies are updated.
-    "RUSTSEC-2021-0124", # Remove once upstream dependencies are updated.
     "RUSTSEC-2023-0071", # Does not affect our current use of the library.
 ]

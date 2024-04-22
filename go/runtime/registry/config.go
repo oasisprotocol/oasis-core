@@ -103,7 +103,8 @@ func newConfig( //nolint: gocyclo
 	// Check if any runtimes are configured to be hosted.
 	if haveSetRuntimes || (cmdFlags.DebugDontBlameOasis() && viper.IsSet(CfgDebugMockIDs)) {
 		runtimeEnv := config.GlobalConfig.Runtime.Environment
-		forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && runtimeEnv != rtConfig.RuntimeEnvironmentSGX) ||
+		isEnvSGX := runtimeEnv == rtConfig.RuntimeEnvironmentSGX || runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
+		forceNoSGX := (config.GlobalConfig.Mode.IsClientOnly() && !isEnvSGX) ||
 			(cmdFlags.DebugDontBlameOasis() && runtimeEnv == rtConfig.RuntimeEnvironmentELF)
 
 		var rh RuntimeHostConfig
@@ -178,7 +179,7 @@ func newConfig( //nolint: gocyclo
 			case sgxLoader == "" && runtimeEnv == rtConfig.RuntimeEnvironmentSGX:
 				// SGX environment is forced, but we don't have the needed loader.
 				return nil, fmt.Errorf("SGX runtime environment requires setting the SGX loader")
-			case sgxLoader == "":
+			case sgxLoader == "" && runtimeEnv != rtConfig.RuntimeEnvironmentSGXMock:
 				// SGX may be needed, but we don't have a loader configured.
 				break
 			default:
@@ -191,6 +192,12 @@ func newConfig( //nolint: gocyclo
 					return nil, fmt.Errorf("failed to create PCS HTTP client: %w", err)
 				}
 
+				// Configure mock SGX if configured and we are in a debug mode.
+				insecureMock := runtimeEnv == rtConfig.RuntimeEnvironmentSGXMock
+				if insecureMock && !cmdFlags.DebugDontBlameOasis() {
+					return nil, fmt.Errorf("mock SGX requires use of unsafe debug flags")
+				}
+
 				rh.Provisioners[node.TEEHardwareIntelSGX], err = hostSgx.New(hostSgx.Config{
 					HostInfo:              hostInfo,
 					CommonStore:           commonStore,
@@ -201,6 +208,7 @@ func newConfig( //nolint: gocyclo
 					Identity:              identity,
 					SandboxBinaryPath:     sandboxBinary,
 					InsecureNoSandbox:     insecureNoSandbox,
+					InsecureMock:          insecureMock,
 					RuntimeAttestInterval: attestInterval,
 				})
 				if err != nil {

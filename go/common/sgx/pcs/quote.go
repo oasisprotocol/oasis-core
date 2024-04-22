@@ -142,9 +142,11 @@ func (q *Quote) Verify(policy *QuotePolicy, ts time.Time, tcb *TCBBundle) (*sgx.
 		return nil, fmt.Errorf("pcs/quote: PCS quotes are disabled by policy")
 	}
 
-	err := q.Signature.Verify(&q.Header, &q.ISVReport, ts, tcb, policy)
-	if err != nil {
-		return nil, err
+	if !unsafeSkipVerify {
+		err := q.Signature.Verify(&q.Header, &q.ISVReport, ts, tcb, policy)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &sgx.VerifiedQuote{

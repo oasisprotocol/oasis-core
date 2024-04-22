@@ -30,3 +30,10 @@ anyhow = "1.0"
 thiserror = "1.0"
 byteorder = "1.4.3"
 tokio = { version = "1.29.1", features = ["rt"] }
+
+[features]
+debug-mock-sgx = [
+	"oasis-core-runtime/debug-mock-sgx",
+	"oasis-core-keymanager/debug-mock-sgx",
+	"simple-keymanager/debug-mock-sgx",
+]

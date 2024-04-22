@@ -7,8 +7,6 @@ pub mod seal;
 
 use anyhow::Result;
 use chrono::prelude::*;
-#[cfg(target_env = "sgx")]
-use sgx_isa::Report;
 
 use crate::common::time::{insecure_posix_time, update_insecure_posix_time};
 
@@ -26,22 +24,28 @@ pub struct EnclaveIdentity {
 }
 
 impl EnclaveIdentity {
+    /// Enclave identity for the current enclave (when available).
     pub fn current() -> Option<Self> {
-        #[cfg(target_env = "sgx")]
-        {
-            let report = Report::for_self();
-            Some(EnclaveIdentity {
-                mr_enclave: MrEnclave(report.mrenclave),
-                mr_signer: MrSigner(report.mrsigner),
-            })
+        cfg_if::cfg_if! {
+            if #[cfg(target_env = "sgx")] {
+                // SGX builds, generate actual report.
+                let report = sgx_isa::Report::for_self();
+                Some(EnclaveIdentity {
+                    mr_enclave: MrEnclave(report.mrenclave),
+                    mr_signer: MrSigner(report.mrsigner),
+                })
+            } else if #[cfg(feature = "debug-mock-sgx")] {
+                // Non-SGX builds, mock SGX enabled, generate mock report. The mock MRENCLAVE is
+                // expected to be passed in by the mock SGX runner.
+                Some(Self::fortanix_test(std::env::var("OASIS_MOCK_MRENCLAVE").unwrap().parse().unwrap()))
+            } else {
+                // Non-SGX builds, mock SGX disabled, no enclave identity.
+                None
+            }
         }
-
-        // TODO: There should be a mechanism for setting mock values for
-        // the purpose of testing.
-        #[cfg(not(target_env = "sgx"))]
-        None
     }
 
+    /// Enclave identity using a test MRSIGNER from Fortanix with a well-known private key.
     pub fn fortanix_test(mr_enclave: MrEnclave) -> Self {
         Self {
             mr_enclave,
@@ -111,4 +115,31 @@ pub struct VerifiedQuote {
     pub report_data: Vec<u8>,
     pub identity: EnclaveIdentity,
     pub timestamp: i64,
+}
+
+/// Generate a report for the given target enclave.
+#[cfg(target_env = "sgx")]
+pub fn report_for(target_info: &sgx_isa::Targetinfo, report_data: &[u8; 64]) -> sgx_isa::Report {
+    sgx_isa::Report::for_target(target_info, report_data)
+}
+
+/// Generate a report for the given target enclave.
+#[cfg(not(target_env = "sgx"))]
+pub fn report_for(_target_info: &sgx_isa::Targetinfo, report_data: &[u8; 64]) -> sgx_isa::Report {
+    let ei = EnclaveIdentity::current().expect("mock enclave identity not available");
+
+    // In non-SGX mode, reports are mocked.
+    sgx_isa::Report {
+        mrenclave: ei.mr_enclave.into(),
+        mrsigner: ei.mr_signer.into(),
+        cpusvn: [8, 9, 14, 13, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        attributes: sgx_isa::Attributes {
+            flags: sgx_isa::AttributesFlags::INIT
+                | sgx_isa::AttributesFlags::DEBUG
+                | sgx_isa::AttributesFlags::MODE64BIT,
+            xfrm: 3,
+        },
+        reportdata: *report_data,
+        ..Default::default()
+    }
 }

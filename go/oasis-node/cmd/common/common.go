@@ -34,6 +34,8 @@ const (
 	CfgDebugAllowDebugEnclaves = "debug.allow_debug_enclaves"
 	// CfgDebugTCBLaxVerify is the command line flag to enable lax verification of PCS TCB statuses.
 	CfgDebugTCBLaxVerify = "debug.tcb_lax_verify"
+	// CfgDebugSkipQuoteVerify is the command line flag to skip PCS quote verification.
+	CfgDebugSkipQuoteVerify = "debug.skip_quote_verify"
 
 	// RequiredRlimit is the minimum required RLIMIT_NOFILE as too low of a
 	// limit can cause problems with BadgerDB.
@@ -108,6 +110,7 @@ func Init() error {
 		initPublicKeyBlacklist,
 		initDebugEnclaves,
 		initDebugTCBLaxVerify,
+		initDebugSkipQuoteVerify,
 		initRlimit,
 	}
 
@@ -131,9 +134,11 @@ func init() {
 	debugFlags.Bool(CfgDebugAllowTestKeys, false, "allow test keys (UNSAFE)")
 	debugFlags.Bool(CfgDebugAllowDebugEnclaves, false, "allow debug enclaves (UNSAFE)")
 	debugFlags.Bool(CfgDebugTCBLaxVerify, false, "allow lax verification of TCB statuses (UNSAFE)")
+	debugFlags.Bool(CfgDebugSkipQuoteVerify, false, "skip quote verification (UNSAFE)")
 	_ = debugFlags.MarkHidden(CfgDebugAllowTestKeys)
 	_ = debugFlags.MarkHidden(CfgDebugAllowDebugEnclaves)
 	_ = debugFlags.MarkHidden(CfgDebugTCBLaxVerify)
+	_ = debugFlags.MarkHidden(CfgDebugSkipQuoteVerify)
 	_ = viper.BindPFlags(debugFlags)
 
 	RootFlags.StringVar(&cfgFile, CfgConfigFile, "", "config file")
@@ -205,6 +210,14 @@ func initDebugTCBLaxVerify() error {
 	if flags.DebugDontBlameOasis() && viper.GetBool(CfgDebugTCBLaxVerify) {
 		rootLog.Warn("`debug.tcb_lax_verify` set, TCB lax verification will be done")
 		pcs.SetUnsafeLaxVerify()
+	}
+	return nil
+}
+
+func initDebugSkipQuoteVerify() error {
+	if flags.DebugDontBlameOasis() && viper.GetBool(CfgDebugSkipQuoteVerify) {
+		rootLog.Warn("`debug.skip_quote_verify` set, PCS quotes will NOT be verified")
+		pcs.SetSkipVerify()
 	}
 	return nil
 }

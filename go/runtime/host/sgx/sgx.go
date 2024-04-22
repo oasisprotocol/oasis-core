@@ -82,6 +82,12 @@ type Config struct {
 
 	// InsecureNoSandbox disables the sandbox and runs the loader directly.
 	InsecureNoSandbox bool
+	// InsecureMock runs non-SGX binaries but treats it as if it would be running in an enclave,
+	// using mock quotes and reports.
+	//
+	// This is useful in tests so most SGX code can be tested even on machines that lack SGX. Note
+	// that this also requires quote verification to be skipped.
+	InsecureMock bool
 }
 
 type teeStateImpl interface {
@@ -97,6 +103,8 @@ type teeState struct {
 	version      version.Version
 	eventEmitter host.RuntimeEventEmitter
 
+	insecureMock bool
+
 	impl teeStateImpl
 }
 
@@ -109,6 +117,12 @@ func (ts *teeState) init(ctx context.Context, sp *sgxProvisioner) ([]byte, error
 		targetInfo []byte
 		err        error
 	)
+
+	// When insecure mock SGX is enabled, use mock implementation.
+	if ts.insecureMock {
+		ts.impl = &teeStateMock{}
+		return ts.impl.Init(ctx, sp, ts.runtimeID, ts.version)
+	}
 
 	// Try ECDSA first. If it fails, try EPID.
 	implECDSA := &teeStateECDSA{}
@@ -252,6 +266,27 @@ func (s *sgxProvisioner) getSandboxConfig(rtCfg host.Config, socketPath, runtime
 		return process.Config{}, fmt.Errorf("host/sgx: failed to load enclave/signature: %w", err)
 	}
 
+	if s.cfg.InsecureMock {
+		// In insecure mock mode, we simply use the non-SGX binary.
+		s.logger.Warn("using mock SGX enclaves due to configuration options")
+
+		var cfg process.Config
+		gsc := sandbox.DefaultGetSandboxConfig(s.logger, s.cfg.SandboxBinaryPath)
+		cfg, err = gsc(rtCfg, socketPath, runtimeDir)
+		if err != nil {
+			return process.Config{}, err
+		}
+
+		// Add environment variable to configure the mock MRENCLAVE.
+		var enclaveHash sgx.MrEnclave
+		if err = enclaveHash.FromSgxsBytes(sgxs); err != nil {
+			return process.Config{}, err
+		}
+		cfg.Env["OASIS_MOCK_MRENCLAVE"] = enclaveHash.String()
+
+		return cfg, nil
+	}
+
 	sgxDev, err := s.discoverSGXDevice()
 	if err != nil {
 		return process.Config{}, fmt.Errorf("host/sgx: %w", err)
@@ -325,6 +360,7 @@ func (s *sgxProvisioner) initCapabilityTEE(ctx context.Context, rt host.Runtime,
 		// We know that the runtime implementation provided by sandbox runtime provisioner
 		// implements the RuntimeEventEmitter interface.
 		eventEmitter: rt.(host.RuntimeEventEmitter),
+		insecureMock: s.cfg.InsecureMock,
 	}
 
 	targetInfo, err := ts.init(ctx, s)
@@ -469,7 +505,7 @@ func (s *sgxProvisioner) attestationWorker(ts *teeState, hp *sandbox.HostInitial
 // Implements host.Provisioner.
 func (s *sgxProvisioner) NewRuntime(cfg host.Config) (host.Runtime, error) {
 	// Make sure to return an error early if the SGX runtime loader is not configured.
-	if s.cfg.LoaderPath == "" {
+	if s.cfg.LoaderPath == "" && !s.cfg.InsecureMock {
 		return nil, fmt.Errorf("SGX loader binary path is not configured")
 	}
 

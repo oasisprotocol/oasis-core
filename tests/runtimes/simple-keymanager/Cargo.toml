@@ -22,3 +22,9 @@ threads = 26
 [dependencies]
 oasis-core-runtime = { path = "../../../runtime" }
 oasis-core-keymanager = { path = "../../../keymanager" }
+
+[features]
+debug-mock-sgx = [
+	"oasis-core-runtime/debug-mock-sgx",
+	"oasis-core-keymanager/debug-mock-sgx",
+]

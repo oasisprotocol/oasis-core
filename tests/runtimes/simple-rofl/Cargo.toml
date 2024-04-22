@@ -25,3 +25,9 @@ rustls = { version = "0.22.4", default-features = false }
 rustls-mbedcrypto-provider = { version = "0.0.2" }
 rustls-mbedpki-provider = { version = "0.0.2" }
 tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync"] }
+
+[features]
+debug-mock-sgx = [
+	"oasis-core-runtime/debug-mock-sgx",
+	"oasis-core-keymanager/debug-mock-sgx",
+]

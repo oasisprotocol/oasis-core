@@ -623,17 +623,17 @@ impl Secrets {
             // Skipping version check as key managers are running exactly one version of the runtime.
             let runtime = runtimes.iter().find(|nr| nr.id == id);
 
-            // In an SGX environment we use REK key from the consensus layer.
-            #[cfg(target_env = "sgx")]
-            let rek = runtime
-                .map(|nr| nr.capabilities.tee.as_ref())
-                .unwrap_or_default()
-                .map(|c| c.rek)
-                .unwrap_or_default();
-
-            // Otherwise we use the same insecure REK key for all enclaves.
-            #[cfg(not(target_env = "sgx"))]
-            let rek = runtime.map(|_| self.identity.public_rek());
+            let rek = if cfg!(any(target_env = "sgx", feature = "debug-mock-sgx")) {
+                // In an SGX environment we use REK key from the consensus layer.
+                runtime
+                    .map(|nr| nr.capabilities.tee.as_ref())
+                    .unwrap_or_default()
+                    .map(|c| c.rek)
+                    .unwrap_or_default()
+            } else {
+                // Otherwise we use the same insecure REK key for all enclaves.
+                runtime.map(|_| self.identity.public_rek())
+            };
 
             if let Some(rek) = rek {
                 rek_map.insert(*pk, rek);

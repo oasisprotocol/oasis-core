@@ -160,6 +160,11 @@ impl QuoteBundle {
             return Err(Error::Disabled);
         }
 
+        // XXX: We reuse the IAS specific variables to avoid having additional environment
+        // variables. Rename these variables when IAS support is removed.
+        let unsafe_skip_quote_verification = option_env!("OASIS_UNSAFE_SKIP_AVR_VERIFY").is_some();
+        let unsafe_lax_quote_verification = option_env!("OASIS_UNSAFE_LAX_AVR_VERIFY").is_some();
+
         // Parse the quote.
         let quote = quote::Quote::parse(&self.quote)
             .map_err(|err| Error::QuoteParseError(err.to_string()))?;
@@ -197,25 +202,24 @@ impl QuoteBundle {
             .timestamp();
 
         // Perform quote verification.
-        let mut verifier: QeEcdsaP256Verifier = QeEcdsaP256Verifier::new(tcb_info, qe_identity);
-        let sig = quote
-            .signature::<quote::Quote3SignatureEcdsaP256>()
-            .map_err(|err| Error::QuoteParseError(err.to_string()))?;
-        sig.verify(&self.quote, &mut verifier)
-            .map_err(|err| Error::VerificationFailed(err.to_string()))?;
+        if !unsafe_skip_quote_verification {
+            let mut verifier: QeEcdsaP256Verifier = QeEcdsaP256Verifier::new(tcb_info, qe_identity);
+            let sig = quote
+                .signature::<quote::Quote3SignatureEcdsaP256>()
+                .map_err(|err| Error::QuoteParseError(err.to_string()))?;
+            sig.verify(&self.quote, &mut verifier)
+                .map_err(|err| Error::VerificationFailed(err.to_string()))?;
 
-        // Validate TCB level.
-        // XXX: We reuse the IAS specific variable (OASIS_UNSAFE_LAX_AVR_VERIFY) to avoid having
-        // an additional environment variable. Rename the variable when IAS support is removed.
-        let tcb_lax_verify = option_env!("OASIS_UNSAFE_LAX_AVR_VERIFY").is_some();
-        match verifier.tcb_level.ok_or(Error::TCBMismatch)?.status {
-            TCBStatus::UpToDate | TCBStatus::SWHardeningNeeded => {}
-            TCBStatus::OutOfDate
-            | TCBStatus::ConfigurationNeeded
-            | TCBStatus::OutOfDateConfigurationNeeded
-                if tcb_lax_verify => {}
-            _ => {
-                return Err(Error::TCBOutOfDate);
+            // Validate TCB level.
+            match verifier.tcb_level.ok_or(Error::TCBMismatch)?.status {
+                TCBStatus::UpToDate | TCBStatus::SWHardeningNeeded => {}
+                TCBStatus::OutOfDate
+                | TCBStatus::ConfigurationNeeded
+                | TCBStatus::OutOfDateConfigurationNeeded
+                    if unsafe_lax_quote_verification => {}
+                _ => {
+                    return Err(Error::TCBOutOfDate);
+                }
             }
         }
 
