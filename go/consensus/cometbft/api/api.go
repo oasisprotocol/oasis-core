@@ -374,9 +374,16 @@ func (bsc *BaseServiceClient) DeliverCommand(context.Context, int64, interface{}
 
 type messageKind uint8
 
-// MessageStateSyncCompleted is the message kind for when the node successfully performs a state
-// sync. The message itself is nil.
-var MessageStateSyncCompleted = messageKind(0)
+const (
+	// MessageStateSyncCompleted is the message kind for when the node successfully performs a state
+	// sync. The message itself is nil.
+	MessageStateSyncCompleted messageKind = 0
+
+	// MessageRequestGasPriceExemption is the message kind for gas exemption requests from the
+	// multiplexer. The message itself is nil (caller public key can be queried from context) and
+	// the handler is expected to return true if the call should be exempt.
+	MessageRequestGasPriceExemption messageKind = 1
+)
 
 // CometBFTChainID returns the CometBFT chain ID computed from chain context.
 func CometBFTChainID(chainContext string) string {

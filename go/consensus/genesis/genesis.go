@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
@@ -26,6 +27,9 @@ type Parameters struct { // nolint: maligned
 	MaxBlockSize    uint64          `json:"max_block_size"`
 	MaxBlockGas     transaction.Gas `json:"max_block_gas"`
 	MaxEvidenceSize uint64          `json:"max_evidence_size"`
+
+	// MinGasPrice is the minimum gas price.
+	MinGasPrice quantity.Quantity `json:"min_gas_price,omitempty"`
 
 	// StateCheckpointInterval is the expected state checkpoint interval (in blocks).
 	StateCheckpointInterval uint64 `json:"state_checkpoint_interval"`

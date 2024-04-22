@@ -89,6 +89,9 @@ func (app *registryApplication) ExecuteMessage(ctx *api.Context, kind, msg inter
 		// A change parameters proposal has just been accepted and closed. Validate and apply
 		// changes.
 		return app.changeParameters(ctx, msg, true)
+	case api.MessageRequestGasPriceExemption:
+		// A request to grant a gas price exemption for the caller.
+		return app.requestGasPriceExemption(ctx)
 	default:
 		return nil, registry.ErrInvalidArgument
 	}

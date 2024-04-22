@@ -52,3 +52,25 @@ func (app *registryApplication) changeParameters(ctx *api.Context, msg interface
 	// Non-nil response signals that changes are valid and were successfully applied (if required).
 	return struct{}{}, nil
 }
+
+func (app *registryApplication) requestGasPriceExemption(ctx *api.Context) (bool, error) {
+	// If a node exists and is not expired this means that it must have at least some stake so it
+	// can be exempt from minimum gas price requirements.
+	state := registryState.NewMutableState(ctx.State())
+	node, err := state.Node(ctx, ctx.TxSigner())
+	if err != nil {
+		return false, nil
+	}
+
+	currentEpoch, err := ctx.AppState().GetCurrentEpoch(ctx)
+	if err != nil {
+		return false, nil
+	}
+	if node.IsExpired(uint64(currentEpoch)) {
+		return false, nil
+	}
+
+	// Node is registered and not expired.
+
+	return true, nil
+}
