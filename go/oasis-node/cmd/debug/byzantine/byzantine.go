@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx/ias"
+	"github.com/oasisprotocol/oasis-core/go/common/sgx/pcs"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/roothash/api/block"
@@ -126,6 +127,8 @@ func activateCommonConfig(*cobra.Command, []string) {
 	// Set this so we don't reject things when we run without real IAS.
 	ias.SetSkipVerify()
 	ias.SetAllowDebugEnclaves()
+	pcs.SetSkipVerify()
+	pcs.SetAllowDebugEnclaves()
 }
 
 func doExecutorScenario(*cobra.Command, []string) { //nolint: gocyclo
