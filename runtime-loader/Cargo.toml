@@ -8,13 +8,12 @@ edition = "2018"
 clap = "4.0.22"
 anyhow = "1.0"
 futures = { version = "0.3.25", features = ["compat", "io-compat"] }
-# NOTE: The version of tokio is constrained by what the upstream enclave-runner is using.
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.37", features = ["full"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-aesm-client = { version = "0.5.4", features = ["sgxs"] }
-enclave-runner = { version = "0.5.1" }
-sgxs-loaders = { version = "0.3.3" }
+aesm-client = { version = "0.6.0", features = ["sgxs"] }
+enclave-runner = { version = "0.6.0" }
+sgxs-loaders = { version = "0.4.0" }
 
 [[bin]]
 name = "oasis-core-runtime-loader"
