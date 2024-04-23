@@ -1539,13 +1539,13 @@ func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.
 	}
 
 	// Add runtime-specific role thresholds for each registered runtime.
-	seen := make(map[common.Namespace]bool)
+	seen := make(map[common.Namespace]struct{})
 	for _, nodeRt := range n.Runtimes {
 		// A runtime can be included multiple times due to multiple deployments/versions.
-		if seen[nodeRt.ID] {
+		if _, ok := seen[nodeRt.ID]; ok {
 			continue
 		}
-		seen[nodeRt.ID] = true
+		seen[nodeRt.ID] = struct{}{}
 
 		// Grab the runtime descriptor.
 		rt, exists := runtimes[nodeRt.ID]

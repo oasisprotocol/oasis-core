@@ -11,7 +11,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
-	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -47,11 +46,11 @@ func (g *Genesis) SanityCheck(
 	now time.Time,
 	height uint64,
 	baseEpoch beacon.EpochTime,
-	stakeLedger map[staking.Address]*staking.Account,
-	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
 	publicKeyBlacklist map[signature.PublicKey]bool,
-	logger *logging.Logger,
+	escrows map[staking.Address]*staking.EscrowAccount,
 ) error {
+	logger := logging.NewNopLogger()
+
 	if err := g.Parameters.SanityCheck(); err != nil {
 		return fmt.Errorf("registry: sanity check failed: %w", err)
 	}
@@ -97,21 +96,23 @@ func (g *Genesis) SanityCheck(
 		}
 	}
 
-	if !g.Parameters.DebugBypassStake {
-		nodes, err := nodeLookup.Nodes(context.Background())
-		if err != nil {
-			return fmt.Errorf("registry: sanity check failed: could not obtain node list from nodeLookup: %w", err)
-		}
-		// Skip suspended runtimes for computing stake claims.
-		runtimes, err := runtimesLookup.Runtimes(context.Background())
-		if err != nil {
-			return fmt.Errorf("registry: sanity check failed: could not obtain runtimes from runtimesLookup: %w", err)
-		}
-		// Check stake.
-		return SanityCheckStake(entities, stakeLedger, nodes, runtimes, allRuntimes, stakeThresholds, true)
+	// Add stake claims.
+	if g.Parameters.DebugBypassStake {
+		return nil
 	}
 
-	return nil
+	nodes, err := nodeLookup.Nodes(context.Background())
+	if err != nil {
+		return fmt.Errorf("registry: sanity check failed: could not obtain node list from nodeLookup: %w", err)
+	}
+
+	// Skip suspended runtimes for computing stake claims.
+	runtimes, err := runtimesLookup.Runtimes(context.Background())
+	if err != nil {
+		return fmt.Errorf("registry: sanity check failed: could not obtain runtimes from runtimesLookup: %w", err)
+	}
+
+	return AddStakeClaims(entities, nodes, runtimes, allRuntimes, escrows)
 }
 
 // SanityCheckEntities examines the entities table.
@@ -236,85 +237,56 @@ func SanityCheckNodes(
 	return nodeLookup, nil
 }
 
-// SanityCheckStake ensures entities' stake accumulator claims are consistent
-// with general state and entities have enough stake for themselves and all
-// their registered nodes and runtimes.
-func SanityCheckStake(
+// AddStakeClaims adds stake claims for entities and all their registered nodes
+// and runtimes.
+func AddStakeClaims(
 	entities []*entity.Entity,
-	accounts map[staking.Address]*staking.Account,
 	nodes []*node.Node,
 	runtimes []*Runtime,
 	allRuntimes []*Runtime,
-	stakeThresholds map[staking.ThresholdKind]quantity.Quantity,
-	isGenesis bool,
+	escrows map[staking.Address]*staking.EscrowAccount,
 ) error {
-	// Entities' escrow accounts for checking claims and stake.
-	generatedEscrows := make(map[staking.Address]*staking.EscrowAccount)
-
-	// Generate escrow account for all entities.
 	for _, entity := range entities {
-		var escrow *staking.EscrowAccount
+		// Add entity stake claim.
 		addr := staking.NewAddress(entity.ID)
-		acct, ok := accounts[addr]
-		if ok {
-			// Generate an escrow account with the same active balance and shares number.
-			escrow = &staking.EscrowAccount{
-				Active: staking.SharePool{
-					Balance:     acct.Escrow.Active.Balance,
-					TotalShares: acct.Escrow.Active.TotalShares,
-				},
-			}
-		} else {
-			// No account is associated with this entity, generate an empty escrow account.
+		escrow, ok := escrows[addr]
+		if !ok {
 			escrow = &staking.EscrowAccount{}
+			escrows[addr] = escrow
 		}
 
-		// Add entity stake claim.
 		escrow.StakeAccumulator.AddClaimUnchecked(StakeClaimRegisterEntity, staking.GlobalStakeThresholds(staking.KindEntity))
-
-		generatedEscrows[addr] = escrow
 	}
 
-	// Also generate escrow accounts for all runtimes that are using the
-	// runtime governance model.
 	runtimeMap := make(map[common.Namespace]*Runtime)
 	for _, rt := range allRuntimes {
 		runtimeMap[rt.ID] = rt
-
-		if rt.GovernanceModel == GovernanceRuntime {
-			// Generate escrow account for the runtime.
-			var escrow *staking.EscrowAccount
-			addr := staking.NewRuntimeAddress(rt.ID)
-			acct, ok := accounts[addr]
-			if ok {
-				escrow = &staking.EscrowAccount{
-					Active: staking.SharePool{
-						Balance:     acct.Escrow.Active.Balance,
-						TotalShares: acct.Escrow.Active.TotalShares,
-					},
-				}
-			} else {
-				escrow = &staking.EscrowAccount{}
-			}
-
-			generatedEscrows[addr] = escrow
-		}
 	}
 
+	var nodeRts []*Runtime
 	for _, node := range nodes {
-		var nodeRts []*Runtime
-		rtMap := make(map[common.Namespace]bool)
+		rtMap := make(map[common.Namespace]struct{})
 		for _, rt := range node.Runtimes {
-			if rtMap[rt.ID] {
+			if _, ok := rtMap[rt.ID]; ok {
 				continue
 			}
-			rtMap[rt.ID] = true
+			rtMap[rt.ID] = struct{}{}
 
 			nodeRts = append(nodeRts, runtimeMap[rt.ID])
 		}
+
 		// Add node stake claims.
 		addr := staking.NewAddress(node.EntityID)
-		generatedEscrows[addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node, nodeRts))
+		escrow, ok := escrows[addr]
+		if !ok {
+			escrow = &staking.EscrowAccount{}
+			escrows[addr] = escrow
+		}
+
+		escrow.StakeAccumulator.AddClaimUnchecked(StakeClaimForNode(node.ID), StakeThresholdsForNode(node, nodeRts))
+
+		// Reuse slice.
+		nodeRts = nodeRts[:0]
 	}
 	for _, rt := range runtimes {
 		// Add runtime stake claims.
@@ -322,81 +294,13 @@ func SanityCheckStake(
 		if addr == nil {
 			continue
 		}
-
-		generatedEscrows[*addr].StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
-	}
-
-	// Compare entities' generated escrow accounts with actual ones.
-	for _, entity := range entities {
-		var generatedEscrow, actualEscrow *staking.EscrowAccount
-		addr := staking.NewAddress(entity.ID)
-		generatedEscrow = generatedEscrows[addr]
-		acct, ok := accounts[addr]
-		if ok {
-			actualEscrow = &acct.Escrow
-		} else {
-			// No account is associated with this entity, generate an empty escrow account.
-			actualEscrow = &staking.EscrowAccount{}
+		escrow, ok := escrows[*addr]
+		if !ok {
+			escrow = &staking.EscrowAccount{}
+			escrows[*addr] = escrow
 		}
 
-		if isGenesis {
-			// For a Genesis document, check if the entity has enough stake for all its stake claims.
-			// NOTE: We can't perform this check at an arbitrary point since the entity could
-			// reclaim its stake from the escrow but its nodes and/or runtimes will only be
-			// ineligible/suspended at the next epoch transition.
-			if err := generatedEscrow.CheckStakeClaims(stakeThresholds); err != nil {
-				expected := "unknown"
-				expectedQty, err2 := generatedEscrow.StakeAccumulator.TotalClaims(stakeThresholds, nil)
-				if err2 == nil {
-					expected = expectedQty.String()
-				}
-				return fmt.Errorf("insufficient stake for account %s (expected: %s got: %s): %w",
-					addr,
-					expected,
-					generatedEscrow.Active.Balance,
-					err,
-				)
-			}
-		} else {
-			// Otherwise, compare the expected accumulator state with the actual one.
-			// NOTE: We can't perform this check for the Genesis document since it is not allowed to
-			// have non-empty stake accumulators.
-			expectedClaims := generatedEscrows[addr].StakeAccumulator.Claims
-			actualClaims := actualEscrow.StakeAccumulator.Claims
-			if len(expectedClaims) != len(actualClaims) {
-				return fmt.Errorf("incorrect number of stake claims for account %s (expected: %d got: %d)",
-					addr,
-					len(expectedClaims),
-					len(actualClaims),
-				)
-			}
-			for claim, expectedThresholds := range expectedClaims {
-				thresholds, ok := actualClaims[claim]
-				if !ok {
-					return fmt.Errorf("missing claim %s for account %s", claim, addr)
-				}
-				if len(thresholds) != len(expectedThresholds) {
-					return fmt.Errorf("incorrect number of thresholds for claim %s for account %s (expected: %d got: %d)",
-						claim,
-						addr,
-						len(expectedThresholds),
-						len(thresholds),
-					)
-				}
-				for i, expectedThreshold := range expectedThresholds {
-					threshold := thresholds[i]
-					if !threshold.Equal(&expectedThreshold) { // nolint: gosec
-						return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
-							i,
-							claim,
-							addr,
-							expectedThreshold,
-							threshold,
-						)
-					}
-				}
-			}
-		}
+		escrow.StakeAccumulator.AddClaimUnchecked(StakeClaimForRuntime(rt.ID), StakeThresholdsForRuntime(rt))
 	}
 
 	return nil

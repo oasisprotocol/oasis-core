@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
-	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 // SanityCheck does basic sanity checking on the contents of the genesis document.
@@ -31,14 +31,14 @@ func (d *Document) SanityCheck() error {
 	}
 	epoch := d.Beacon.Base // Note: d.Height has no easy connection to the epoch.
 
+	escrows := make(map[staking.Address]*staking.EscrowAccount)
+
 	if err := d.Registry.SanityCheck(
 		d.Time,
 		uint64(d.Height),
 		epoch,
-		d.Staking.Ledger,
-		d.Staking.Parameters.Thresholds,
 		pkBlacklist,
-		logging.NewNopLogger(),
+		escrows,
 	); err != nil {
 		return err
 	}
@@ -54,5 +54,9 @@ func (d *Document) SanityCheck() error {
 	if err := d.Scheduler.SanityCheck(&d.Staking.TotalSupply, d.Scheduler.Parameters.VotingPowerDistribution); err != nil {
 		return err
 	}
-	return d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits)
+	if err := d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits); err != nil {
+		return err
+	}
+
+	return staking.SanityCheckStake(d.Staking.Ledger, escrows, d.Staking.Parameters.Thresholds, true)
 }

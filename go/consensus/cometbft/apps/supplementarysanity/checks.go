@@ -8,11 +8,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
+	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -417,5 +419,11 @@ func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 		}
 	}
 
-	return registry.SanityCheckStake(entities, accounts, nodes, runtimes, runtimes, stakingParams.Thresholds, false)
+	// Generate escrows.
+	escrows := make(map[staking.Address]*staking.EscrowAccount)
+	if err = registry.AddStakeClaims(entities, nodes, runtimes, runtimes, escrows); err != nil {
+		return err
+	}
+
+	return staking.SanityCheckStake(accounts, escrows, stakingParams.Thresholds, false)
 }
