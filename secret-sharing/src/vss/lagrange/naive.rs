@@ -62,6 +62,44 @@ where
     nom
 }
 
+/// Returns Lagrange coefficients for the given set of x values.
+///
+/// The i-th Lagrange coefficient is defined as:
+/// ```text
+///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
+/// ```
+pub fn coefficients_naive<Fp>(xs: &[Fp]) -> Vec<Fp>
+where
+    Fp: PrimeField,
+{
+    (0..xs.len()).map(|i| coefficient_naive(xs, i)).collect()
+}
+
+/// Returns i-th Lagrange coefficient for the given set of x values.
+///
+/// The i-th Lagrange coefficient is defined as:
+/// ```text
+///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
+/// ```
+fn coefficient_naive<Fp>(xs: &[Fp], i: usize) -> Fp
+where
+    Fp: PrimeField,
+{
+    let mut nom = Fp::ONE;
+    let mut denom = Fp::ONE;
+    for j in 0..xs.len() {
+        if j == i {
+            continue;
+        }
+        nom *= xs[j]; // x_j
+        denom *= xs[j] - xs[i]; // (x_j - x_i)
+    }
+    let denom_inv = denom.invert().expect("values should be unique");
+    nom *= denom_inv; // L_i(0) = nom / denom
+
+    nom
+}
+
 #[cfg(test)]
 mod tests {
     extern crate test;
@@ -73,7 +111,10 @@ mod tests {
     use group::ff::Field;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    use super::{basis_polynomial_naive, lagrange_naive};
+    use super::{
+        basis_polynomial_naive, basis_polynomials_naive, coefficient_naive, coefficients_naive,
+        lagrange_naive,
+    };
 
     fn scalar(value: i64) -> p384::Scalar {
         scalars(&vec![value])[0]
@@ -119,23 +160,47 @@ mod tests {
 
     #[test]
     fn test_basis_polynomial_naive() {
-        let xs = scalars(&[1, 2, 3]);
+        let vec = [
+            scalars(&[1]),
+            scalars(&[1, 2, 3]),
+            scalars(&(1..=50).collect::<Vec<_>>()),
+        ];
 
-        for i in 0..xs.len() {
-            let p = basis_polynomial_naive(&xs, i);
+        for xs in vec {
+            for i in 0..xs.len() {
+                let p = basis_polynomial_naive(&xs, i);
 
-            // Verify points.
-            for (j, x) in xs.iter().enumerate() {
-                if j == i {
-                    assert_eq!(p.eval(x), scalar(1)); // L_i(x_i) = 1
-                } else {
-                    assert_eq!(p.eval(x), scalar(0)); // L_i(x_j) = 0
+                // Verify points.
+                for (j, x) in xs.iter().enumerate() {
+                    if j == i {
+                        assert_eq!(p.eval(x), scalar(1)); // L_i(x_i) = 1
+                    } else {
+                        assert_eq!(p.eval(x), scalar(0)); // L_i(x_j) = 0
+                    }
                 }
-            }
 
-            // Verify degree.
-            assert_eq!(p.degree(), 2);
-            assert_eq!(p.size(), 3);
+                // Verify degree.
+                assert_eq!(p.degree(), xs.len() - 1);
+                assert_eq!(p.size(), xs.len());
+            }
+        }
+    }
+
+    #[test]
+    fn test_coefficient_naive() {
+        let vec = [
+            scalars(&[1]),
+            scalars(&[1, 2, 3]),
+            scalars(&(1..=50).collect::<Vec<_>>()),
+        ];
+
+        for xs in vec {
+            for i in 0..xs.len() {
+                let c = coefficient_naive(&xs, i);
+                let p = basis_polynomial_naive(&xs, i);
+
+                assert_eq!(c, p.eval(&scalar(0)));
+            }
         }
     }
 
@@ -149,18 +214,36 @@ mod tests {
         });
     }
 
+    fn bench_basis_polynomials_naive(b: &mut Bencher, n: usize) {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let xs = random_scalars(n, &mut rng);
+
+        b.iter(|| {
+            let _p = basis_polynomials_naive(&xs);
+        });
+    }
+
+    fn bench_coefficients_naive(b: &mut Bencher, n: usize) {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let xs = random_scalars(n, &mut rng);
+
+        b.iter(|| {
+            let _p = coefficients_naive(&xs);
+        });
+    }
+
     #[bench]
-    fn bench_lagrange_naive_1(b: &mut Bencher) {
+    fn bench_lagrange_naive_01(b: &mut Bencher) {
         bench_lagrange_naive(b, 1)
     }
 
     #[bench]
-    fn bench_lagrange_naive_2(b: &mut Bencher) {
+    fn bench_lagrange_naive_02(b: &mut Bencher) {
         bench_lagrange_naive(b, 2)
     }
 
     #[bench]
-    fn bench_lagrange_naive_5(b: &mut Bencher) {
+    fn bench_lagrange_naive_05(b: &mut Bencher) {
         bench_lagrange_naive(b, 5)
     }
 
@@ -172,5 +255,55 @@ mod tests {
     #[bench]
     fn bench_lagrange_naive_20(b: &mut Bencher) {
         bench_lagrange_naive(b, 20)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_naive_01(b: &mut Bencher) {
+        bench_basis_polynomials_naive(b, 1)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_naive_02(b: &mut Bencher) {
+        bench_basis_polynomials_naive(b, 2)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_naive_05(b: &mut Bencher) {
+        bench_basis_polynomials_naive(b, 5)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_naive_10(b: &mut Bencher) {
+        bench_basis_polynomials_naive(b, 10)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_naive_20(b: &mut Bencher) {
+        bench_basis_polynomials_naive(b, 20)
+    }
+
+    #[bench]
+    fn bench_coefficients_naive_01(b: &mut Bencher) {
+        bench_coefficients_naive(b, 1)
+    }
+
+    #[bench]
+    fn bench_coefficients_naive_02(b: &mut Bencher) {
+        bench_coefficients_naive(b, 2)
+    }
+
+    #[bench]
+    fn bench_coefficients_naive_05(b: &mut Bencher) {
+        bench_coefficients_naive(b, 5)
+    }
+
+    #[bench]
+    fn bench_coefficients_naive_10(b: &mut Bencher) {
+        bench_coefficients_naive(b, 10)
+    }
+
+    #[bench]
+    fn bench_coefficients_naive_20(b: &mut Bencher) {
+        bench_coefficients_naive(b, 20)
     }
 }
