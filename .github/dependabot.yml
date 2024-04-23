@@ -40,6 +40,21 @@ updates:
       time: "07:00"
     commit-message:
       prefix: "rust:"
+    groups:
+      # Update Tendermint dependencies together in a single PR.
+      tendermint:
+        patterns:
+          - tendermint
+          - tendermint-*
+      # Update all other dependencies in a single PR.
+      rust:
+        # Update all dependencies, unless explicitly ignored.
+        patterns:
+          - "*"
+        # Excluded dependencies are updated in separate PRs.
+        exclude-patterns: []
+    # Ignored depenednecies are ignored by dependabot.
+    ignore: []
     labels:
       - c:deps
       - rust
