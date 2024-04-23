@@ -340,7 +340,7 @@ func (s *applicationState) EpochChanged(ctx *api.Context) (bool, beacon.EpochTim
 	return true, currentEpoch
 }
 
-func (s *applicationState) MinGasPrice() *quantity.Quantity {
+func (s *applicationState) LocalMinGasPrice() *quantity.Quantity {
 	return &s.minGasPrice
 }
 

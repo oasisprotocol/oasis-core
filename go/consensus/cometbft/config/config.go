@@ -203,7 +203,7 @@ func DefaultConfig() Config {
 		MinGasPrice:             0,
 		Submission: SubmissionConfig{
 			GasPrice: 0,
-			MaxFee:   0,
+			MaxFee:   10_000_000_000,
 		},
 		HaltEpoch:        0,
 		HaltHeight:       0,

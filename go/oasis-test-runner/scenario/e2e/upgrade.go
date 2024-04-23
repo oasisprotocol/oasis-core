@@ -127,6 +127,18 @@ func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 		return fmt.Errorf("proposal metadata is allowed")
 	}
 
+	// Check root parameters.
+	rootParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get root consensus parameters: %w", err)
+	}
+	if rootParams.Parameters.MinGasPrice != 0 {
+		return fmt.Errorf("min gas price is non-zero")
+	}
+	if rootParams.Parameters.MaxBlockGas != 0 {
+		return fmt.Errorf("max block gas is non-zero")
+	}
+
 	return nil
 }
 
@@ -190,6 +202,18 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	}
 	if !govParams.AllowProposalMetadata {
 		return fmt.Errorf("proposal metadata is not allowed")
+	}
+
+	// Check updated root parameters.
+	rootParams, err := ctrl.Consensus.GetParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get root consensus parameters: %w", err)
+	}
+	if rootParams.Parameters.MinGasPrice != 0 {
+		return fmt.Errorf("min gas price is non-zero")
+	}
+	if rootParams.Parameters.MaxBlockGas != 5_000_000 {
+		return fmt.Errorf("max block gas is incorrect")
 	}
 
 	return nil

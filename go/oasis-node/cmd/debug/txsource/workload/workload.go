@@ -90,7 +90,7 @@ func (bw *BaseWorkload) Consensus() consensus.ClientBackend {
 // GasPrice returns the configured consensus gas price.
 func (bw *BaseWorkload) GasPrice() uint64 {
 	// NOTE: This cannot fail as workloads use static price discovery.
-	gasPrice, _ := bw.sm.PriceDiscovery().GasPrice(context.Background())
+	gasPrice, _ := bw.sm.PriceDiscovery().GasPrice()
 	return gasPrice.ToBigInt().Uint64()
 }
 

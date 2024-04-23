@@ -27,6 +27,9 @@ type Parameters struct { // nolint: maligned
 	MaxBlockGas     transaction.Gas `json:"max_block_gas"`
 	MaxEvidenceSize uint64          `json:"max_evidence_size"`
 
+	// MinGasPrice is the minimum gas price.
+	MinGasPrice uint64 `json:"min_gas_price,omitempty"`
+
 	// StateCheckpointInterval is the expected state checkpoint interval (in blocks).
 	StateCheckpointInterval uint64 `json:"state_checkpoint_interval"`
 	// StateCheckpointNumKept is the expected minimum number of state checkpoints to keep.
