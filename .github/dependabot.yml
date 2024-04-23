@@ -52,9 +52,11 @@ updates:
         patterns:
           - "*"
         # Excluded dependencies are updated in separate PRs.
-        exclude-patterns: []
+        # Commented out because it requires at least one entry to be valid.
+        # exclude-patterns: []
     # Ignored depenednecies are ignored by dependabot.
-    ignore: []
+    # Commented out because it requires at least one entry to be valid.
+    # ignore: []
     labels:
       - c:deps
       - rust
