@@ -44,6 +44,8 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
 	storageTests "github.com/oasisprotocol/oasis-core/go/storage/tests"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
+	vaultTests "github.com/oasisprotocol/oasis-core/go/vault/tests"
 	commonCommittee "github.com/oasisprotocol/oasis-core/go/worker/common/committee"
 	executorCommittee "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/committee"
 	executorWorkerTests "github.com/oasisprotocol/oasis-core/go/worker/compute/executor/tests"
@@ -266,6 +268,7 @@ func TestNode(t *testing.T) {
 		{"Scheduler", testScheduler},
 		{"SchedulerClient", testSchedulerClient},
 		{"RootHash", testRootHash},
+		{"Vault", testVault},
 	}
 
 	for _, tc := range testCases {
@@ -442,6 +445,25 @@ func testRuntimeClient(t *testing.T, node *testNode) {
 
 		cli := runtimeClient.NewRuntimeClient(conn)
 		clientTests.ClientImplementationTests(t, cli, node.runtimeID)
+	})
+}
+
+func testVault(t *testing.T, node *testNode) {
+	// Directly.
+	t.Run("Direct", func(t *testing.T) {
+		vaultTests.VaultImplementationTests(t, node.Consensus.Vault(), node.Consensus)
+	})
+
+	// Over gRPC.
+	t.Run("OverGrpc", func(t *testing.T) {
+		// Create a client backend connected to the local node's internal socket.
+		conn, err := cmnGrpc.Dial("unix:"+filepath.Join(node.dataDir, cmdCommon.InternalSocketName),
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
+		require.NoError(t, err, "Dial")
+		defer conn.Close()
+
+		client := vault.NewVaultClient(conn)
+		vaultTests.VaultImplementationTests(t, client, node.Consensus)
 	})
 }
 

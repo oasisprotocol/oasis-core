@@ -1,5 +1,5 @@
-// Package governance implements the CometBFT backed governance backend.
-package governance
+// Package vault implements the CometBFT backed vault backend.
+package vault
 
 import (
 	"context"
@@ -16,12 +16,11 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
 	eventsAPI "github.com/oasisprotocol/oasis-core/go/consensus/api/events"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
-	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance"
-	"github.com/oasisprotocol/oasis-core/go/governance/api"
-	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	app "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
+	"github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
-// ServiceClient is the governance service client interface.
+// ServiceClient is the vault service client interface.
 type ServiceClient interface {
 	api.Backend
 	tmapi.ServiceClient
@@ -38,49 +37,40 @@ type serviceClient struct {
 	eventNotifier *pubsub.Broker
 }
 
-func (sc *serviceClient) ActiveProposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
+func (sc *serviceClient) Vaults(ctx context.Context, height int64) ([]*api.Vault, error) {
 	q, err := sc.querier.QueryAt(ctx, height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.ActiveProposals(ctx)
+	return q.Vaults(ctx)
 }
 
-func (sc *serviceClient) Proposals(ctx context.Context, height int64) ([]*api.Proposal, error) {
-	q, err := sc.querier.QueryAt(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	return q.Proposals(ctx)
-}
-
-func (sc *serviceClient) Proposal(ctx context.Context, query *api.ProposalQuery) (*api.Proposal, error) {
+func (sc *serviceClient) Vault(ctx context.Context, query *api.VaultQuery) (*api.Vault, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.Proposal(ctx, query.ProposalID)
+	return q.Vault(ctx, query.Address)
 }
 
-func (sc *serviceClient) Votes(ctx context.Context, query *api.ProposalQuery) ([]*api.VoteEntry, error) {
+func (sc *serviceClient) AddressState(ctx context.Context, query *api.AddressQuery) (*api.AddressState, error) {
 	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.Votes(ctx, query.ProposalID)
+	return q.AddressState(ctx, query.Vault, query.Address)
 }
 
-func (sc *serviceClient) PendingUpgrades(ctx context.Context, height int64) ([]*upgrade.Descriptor, error) {
-	q, err := sc.querier.QueryAt(ctx, height)
+func (sc *serviceClient) PendingActions(ctx context.Context, query *api.VaultQuery) ([]*api.PendingAction, error) {
+	q, err := sc.querier.QueryAt(ctx, query.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.PendingUpgrades(ctx)
+	return q.PendingActions(ctx, query.Address)
 }
 
 func (sc *serviceClient) StateToGenesis(ctx context.Context, height int64) (*api.Genesis, error) {
@@ -173,7 +163,7 @@ func (sc *serviceClient) ServiceDescriptor() tmapi.ServiceDescriptor {
 func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, tx cmttypes.Tx, ev *cmtabcitypes.Event) error {
 	events, err := EventsFromCometBFT(tx, height, []cmtabcitypes.Event{*ev})
 	if err != nil {
-		return fmt.Errorf("governance: failed to process cometbft events: %w", err)
+		return fmt.Errorf("vault: failed to process cometbft events: %w", err)
 	}
 
 	// Notify subscribers of events.
@@ -184,7 +174,7 @@ func (sc *serviceClient) DeliverEvent(_ context.Context, height int64, tx cmttyp
 	return nil
 }
 
-// EventsFromCometBFT extracts governance events from CometBFT events.
+// EventsFromCometBFT extracts vault events from CometBFT events.
 func EventsFromCometBFT(
 	tx cmttypes.Tx,
 	height int64,
@@ -201,7 +191,7 @@ func EventsFromCometBFT(
 	var events []*api.Event
 	var errs error
 	for _, tmEv := range tmEvents {
-		// Ignore events that don't relate to the governance app.
+		// Ignore events that don't relate to the vault app.
 		if tmEv.GetType() != app.EventType {
 			continue
 		}
@@ -210,57 +200,75 @@ func EventsFromCometBFT(
 			key := pair.GetKey()
 			val := pair.GetValue()
 
+			evt := &api.Event{Height: height, TxHash: txHash}
 			switch {
-			case eventsAPI.IsAttributeKind(key, &api.ProposalSubmittedEvent{}):
-				// Proposal submitted event.
-				var e api.ProposalSubmittedEvent
+			case eventsAPI.IsAttributeKind(key, &api.ActionSubmittedEvent{}):
+				// Action submitted event.
+				var e api.ActionSubmittedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("governance: corrupt ProposalSubmitted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("vault: corrupt ActionSubmitted event: %w", err))
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, ProposalSubmitted: &e}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.ProposalExecutedEvent{}):
-				//  Proposal executed event.
-				var e api.ProposalExecutedEvent
+				evt.ActionSubmitted = &e
+			case eventsAPI.IsAttributeKind(key, &api.ActionCanceledEvent{}):
+				// Action canceled event.
+				var e api.ActionCanceledEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("governance: corrupt ProposalExecuted event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("vault: corrupt ActionCanceled event: %w", err))
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, ProposalExecuted: &e}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.ProposalFinalizedEvent{}):
-				// Proposal finalized event.
-				var e api.ProposalFinalizedEvent
+				evt.ActionCanceled = &e
+			case eventsAPI.IsAttributeKind(key, &api.ActionExecutedEvent{}):
+				// Action executed event.
+				var e api.ActionExecutedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("governance: corrupt ProposalFinalized event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("vault: corrupt ActionExecuted event: %w", err))
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, ProposalFinalized: &e}
-				events = append(events, evt)
-			case eventsAPI.IsAttributeKind(key, &api.VoteEvent{}):
-				// Vote event.
-				var e api.VoteEvent
+				evt.ActionExecuted = &e
+			case eventsAPI.IsAttributeKind(key, &api.StateChangedEvent{}):
+				// State changed event.
+				var e api.StateChangedEvent
 				if err := eventsAPI.DecodeValue(val, &e); err != nil {
-					errs = errors.Join(errs, fmt.Errorf("governance: corrupt Vote event: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("vault: corrupt StateChanged event: %w", err))
 					continue
 				}
 
-				evt := &api.Event{Height: height, TxHash: txHash, Vote: &e}
-				events = append(events, evt)
+				evt.StateChanged = &e
+			case eventsAPI.IsAttributeKind(key, &api.PolicyUpdatedEvent{}):
+				// Policy updated event.
+				var e api.PolicyUpdatedEvent
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
+					errs = errors.Join(errs, fmt.Errorf("vault: corrupt PolicyUpdated event: %w", err))
+					continue
+				}
+
+				evt.PolicyUpdated = &e
+			case eventsAPI.IsAttributeKind(key, &api.AuthorityUpdatedEvent{}):
+				// Action submitted event.
+				var e api.AuthorityUpdatedEvent
+				if err := eventsAPI.DecodeValue(val, &e); err != nil {
+					errs = errors.Join(errs, fmt.Errorf("vault: corrupt AuthorityUpdated event: %w", err))
+					continue
+				}
+
+				evt.AuthorityUpdated = &e
 			default:
-				errs = errors.Join(errs, fmt.Errorf("governance: unknown event type: key: %s, val: %s", key, val))
+				errs = errors.Join(errs, fmt.Errorf("vault: unknown event type: key: %s, val: %s", key, val))
+				continue
 			}
+
+			events = append(events, evt)
 		}
 	}
 
 	return events, errs
 }
 
-// New constructs a new CometBFT backed governance Backend instance.
+// New constructs a new CometBFT backed vault Backend instance.
 func New(backend tmapi.Backend) (ServiceClient, error) {
 	// Initialize and register the CometBFT service component.
 	a := app.New()
@@ -269,7 +277,7 @@ func New(backend tmapi.Backend) (ServiceClient, error) {
 	}
 
 	return &serviceClient{
-		logger:        logging.GetLogger("cometbft/staking"),
+		logger:        logging.GetLogger("cometbft/vault"),
 		backend:       backend,
 		querier:       a.QueryFactory().(*app.QueryFactory),
 		eventNotifier: pubsub.NewBroker(false),

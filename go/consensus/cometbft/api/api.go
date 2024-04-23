@@ -374,9 +374,15 @@ func (bsc *BaseServiceClient) DeliverCommand(context.Context, int64, interface{}
 
 type messageKind uint8
 
-// MessageStateSyncCompleted is the message kind for when the node successfully performs a state
-// sync. The message itself is nil.
-var MessageStateSyncCompleted = messageKind(0)
+var (
+	// MessageStateSyncCompleted is the message kind for when the node successfully performs a state
+	// sync. The message itself is nil.
+	MessageStateSyncCompleted = messageKind(0)
+
+	// MessageExecuteSubcall is the message kind for requesting subcall execution. The message is
+	// handled by the multiplexer and should be an instance of SubcallInfo.
+	MessageExecuteSubcall = messageKind(1)
+)
 
 // CometBFTChainID returns the CometBFT chain ID computed from chain context.
 func CometBFTChainID(chainContext string) string {

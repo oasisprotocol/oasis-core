@@ -27,6 +27,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	"github.com/oasisprotocol/oasis-core/go/staking/api"
 	stakingTests "github.com/oasisprotocol/oasis-core/go/staking/tests"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 var _ cmt.GenesisProvider = (*testNodeGenesisProvider)(nil)
@@ -115,6 +116,9 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 			},
 		},
 		Staking: stakingTests.GenesisState(),
+		Vault: &vault.Genesis{
+			Parameters: vault.DefaultConsensusParameters,
+		},
 	}
 
 	// Update consensus equivocation freeze period to 0, so that we can test slashing on the single validator.

@@ -23,14 +23,27 @@ func (md *messageDispatcher) Subscribe(kind interface{}, ms api.MessageSubscribe
 
 // Implements api.MessageDispatcher.
 func (md *messageDispatcher) Publish(ctx *api.Context, kind, msg interface{}) (interface{}, error) {
-	nSubs := len(md.subscriptions[kind])
-	if nSubs == 0 {
-		return nil, api.ErrNoSubscribers
-	}
-
-	var result interface{}
-	var errs error
+	var (
+		result         interface{}
+		errs           error
+		numSubscribers int
+	)
 	for _, ms := range md.subscriptions[kind] {
+		// Check whether the subscriber can be toggled.
+		if togMs, ok := ms.(api.TogglableMessageSubscriber); ok {
+			enabled, err := togMs.Enabled(ctx)
+			if err != nil {
+				errs = errors.Join(errs, err)
+				continue
+			}
+			if !enabled {
+				// If a subscriber is not enabled, skip it during dispatch.
+				continue
+			}
+		}
+		numSubscribers++
+
+		// Deliver the message.
 		if resp, err := ms.ExecuteMessage(ctx, kind, msg); err != nil {
 			errs = errors.Join(errs, err)
 		} else {
@@ -44,6 +57,9 @@ func (md *messageDispatcher) Publish(ctx *api.Context, kind, msg interface{}) (i
 			default:
 			}
 		}
+	}
+	if numSubscribers == 0 {
+		return nil, api.ErrNoSubscribers
 	}
 	if errs != nil {
 		return nil, errs

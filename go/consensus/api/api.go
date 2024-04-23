@@ -31,6 +31,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	mkvsNode "github.com/oasisprotocol/oasis-core/go/storage/mkvs/node"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 const (
@@ -202,6 +203,9 @@ type ClientBackend interface {
 
 	// RootHash returns the roothash backend.
 	RootHash() roothash.Backend
+
+	// Vault returns the vault backend.
+	Vault() vault.Backend
 }
 
 // Block is a consensus block.

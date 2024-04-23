@@ -27,6 +27,7 @@ var errTest = fmt.Errorf("error")
 
 type testSubscriber struct {
 	msgs     []int32
+	enabled  bool
 	fail     bool
 	noResult bool
 }
@@ -50,6 +51,11 @@ func (s *testSubscriber) ExecuteMessage(_ *api.Context, _, msg interface{}) (int
 	}
 }
 
+// Implements api.TogglableMessageSubscriber.
+func (s *testSubscriber) Enabled(_ *api.Context) (bool, error) {
+	return s.enabled, nil
+}
+
 func TestMessageDispatcher(t *testing.T) {
 	require := require.New(t)
 
@@ -65,9 +71,17 @@ func TestMessageDispatcher(t *testing.T) {
 	require.Equal(api.ErrNoSubscribers, err)
 	require.Nil(res, "Publish results should be empty")
 
-	// With a subscriber.
+	// With a disabled subscriber should behave same as with no subscribers.
 	var ms testSubscriber
 	md.Subscribe(testMessageA, &ms)
+	res, err = md.Publish(ctx, testMessageA, &testMessage{foo: 42})
+	require.Error(err, "Publish")
+	require.Equal(api.ErrNoSubscribers, err)
+	require.Nil(res, "Publish results should be empty")
+	require.Empty(ms.msgs, "no messages should be delivered when subscriber is disabled")
+
+	// With an enabled subscriber.
+	ms.enabled = true
 	res, err = md.Publish(ctx, testMessageA, &testMessage{foo: 42})
 	require.NoError(err, "Publish")
 	require.EqualValues(int32(42), res, "correct publish message result")
@@ -92,6 +106,7 @@ func TestMessageDispatcher(t *testing.T) {
 
 	// Multiple subscribers. Multiple subscribers returning results on the same message is an invariant violation.
 	ms2 := testSubscriber{
+		enabled:  true,
 		noResult: true,
 	}
 	md.Subscribe(testMessageA, &ms2)

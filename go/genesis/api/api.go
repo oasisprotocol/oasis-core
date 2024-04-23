@@ -17,6 +17,7 @@ import (
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 const filePerm = 0o600
@@ -43,6 +44,8 @@ type Document struct {
 	Beacon beacon.Genesis `json:"beacon"`
 	// Governance is the governance genesis state.
 	Governance governance.Genesis `json:"governance"`
+	// Vault is the optional vault genesis state.
+	Vault *vault.Genesis `json:"vault,omitempty"`
 	// Consensus is the consensus genesis state.
 	Consensus consensus.Genesis `json:"consensus"`
 	// Extra data is arbitrary extra data that is part of the

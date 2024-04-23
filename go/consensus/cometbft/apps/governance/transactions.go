@@ -60,7 +60,7 @@ func (app *governanceApplication) submitProposal(
 	}
 
 	// Load submitter account.
-	submitterAddr := stakingAPI.NewAddress(ctx.TxSigner())
+	submitterAddr := ctx.CallerAddress()
 	if !submitterAddr.IsValid() {
 		return nil, stakingAPI.ErrForbidden
 	}
@@ -239,7 +239,7 @@ func (app *governanceApplication) castVote(
 		return nil
 	}
 
-	submitterAddr := stakingAPI.NewAddress(ctx.TxSigner())
+	submitterAddr := ctx.CallerAddress()
 	if !submitterAddr.IsValid() {
 		return stakingAPI.ErrForbidden
 	}
@@ -304,7 +304,7 @@ func (app *governanceApplication) castVote(
 
 	if !eligible {
 		ctx.Logger().Debug("governance: submitter not eligible to vote",
-			"submitter", ctx.TxSigner(),
+			"submitter", ctx.CallerAddress(),
 		)
 		return governance.ErrNotEligible
 	}
