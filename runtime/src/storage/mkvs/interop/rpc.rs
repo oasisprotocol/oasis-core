@@ -1,7 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use anyhow::Result;
-use base64::STANDARD;
+use base64::engine::general_purpose::STANDARD;
 use jsonrpc::{simple_uds::UdsTransport, Client};
 use serde::{Deserialize, Serialize};
 
@@ -70,7 +70,7 @@ impl StorageClient {
         };
         match self
             .client
-            .call::<ApplyResponse>("Database.Apply", &[jsonrpc::arg(req)])
+            .call::<ApplyResponse>("Database.Apply", Some(&jsonrpc::arg(req)))
         {
             Ok(_) => Ok(()),
             Err(err) => Err(err.into()),
@@ -83,7 +83,7 @@ impl StorageClient {
         };
         match self
             .client
-            .call::<RPCResponse>("Database.SyncGet", &[jsonrpc::arg(req)])
+            .call::<RPCResponse>("Database.SyncGet", Some(&jsonrpc::arg(req)))
         {
             Ok(resp) => match cbor::from_slice::<sync::ProofResponse>(&resp.payload) {
                 Ok(proof) => Ok(proof),
@@ -102,7 +102,7 @@ impl StorageClient {
         };
         match self
             .client
-            .call::<RPCResponse>("Database.SyncGetPrefixes", &[jsonrpc::arg(req)])
+            .call::<RPCResponse>("Database.SyncGetPrefixes", Some(&jsonrpc::arg(req)))
         {
             Ok(resp) => match cbor::from_slice::<sync::ProofResponse>(&resp.payload) {
                 Ok(proof) => Ok(proof),
@@ -118,7 +118,7 @@ impl StorageClient {
         };
         match self
             .client
-            .call::<RPCResponse>("Database.SyncIterate", &[jsonrpc::arg(req)])
+            .call::<RPCResponse>("Database.SyncIterate", Some(&jsonrpc::arg(req)))
         {
             Ok(resp) => match cbor::from_slice::<sync::ProofResponse>(&resp.payload) {
                 Ok(proof) => Ok(proof),

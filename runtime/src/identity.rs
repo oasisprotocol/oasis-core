@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
+use base64::prelude::*;
 use rand::{rngs::OsRng, Rng};
 use sgx_isa::{Report, Targetinfo};
 use thiserror::Error;
@@ -183,7 +184,7 @@ impl Identity {
         // The derived nonce is only used in case IAS-based attestation is used
         // as it is included in the outer AVR envelope. But given that the body
         // also includes the nonce in our specific case, this is not relevant.
-        let quote_nonce = base64::encode(&nonce[..24]);
+        let quote_nonce = BASE64_STANDARD.encode(&nonce[..24]);
 
         // Generate report body.
         let report_body = Self::report_body_for_rak(&rak_pub);

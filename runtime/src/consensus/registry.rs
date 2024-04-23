@@ -908,6 +908,7 @@ pub struct RuntimeGenesis {
 mod tests {
     use std::{convert::TryInto, net::Ipv4Addr};
 
+    use base64::prelude::*;
     use rustc_hex::{FromHex, ToHex};
 
     use crate::common::quantity::Quantity;
@@ -1069,10 +1070,10 @@ mod tests {
             ),
         ];
         for (encoded_base64, rr) in tcs {
-            let dec: Runtime = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+            let dec: Runtime = cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
                 .expect("runtime should deserialize correctly");
             assert_eq!(dec, rr, "decoded runtime should match the expected value");
-            let ser = base64::encode(cbor::to_vec(dec));
+            let ser = BASE64_STANDARD.encode(cbor::to_vec(dec));
             assert_eq!(ser, encoded_base64, "runtime should serialize correctly");
         }
     }
@@ -1150,12 +1151,12 @@ mod tests {
         ];
         for (encoded_base64, node, round_trip) in tcs {
             println!("{:?}", node);
-            let dec: Node = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+            let dec: Node = cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
                 .expect("node should deserialize correctly");
             assert_eq!(dec, node, "decoded node should match the expected value");
 
             if round_trip {
-                let ser = base64::encode(cbor::to_vec(dec));
+                let ser = BASE64_STANDARD.encode(cbor::to_vec(dec));
                 assert_eq!(ser, encoded_base64, "node should serialize correctly");
             }
         }
@@ -1308,7 +1309,7 @@ mod tests {
         ];
         for (encoded_base64, node) in tcs {
             println!("{:?}", node);
-            let dec: Node = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+            let dec: Node = cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
                 .expect("node should deserialize correctly");
             assert_eq!(dec, node, "decoded node should match the expected value");
         }
