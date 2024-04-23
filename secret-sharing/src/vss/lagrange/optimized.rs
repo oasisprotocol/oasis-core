@@ -17,24 +17,35 @@ pub fn lagrange<Fp>(xs: &[Fp], ys: &[Fp]) -> Polynomial<Fp>
 where
     Fp: PrimeField,
 {
-    let m = multiplier(xs);
-    let ls = (0..xs.len())
-        .map(|i| basis_polynomial(i, xs, &m))
-        .collect::<Vec<_>>();
-
+    let ls = basis_polynomials(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }
 
-/// Returns i-th Lagrange basis polynomials for the given set of x values.
+/// Returns Lagrange basis polynomials for the given set of x values.
 ///
 /// The i-th Lagrange basis polynomial is defined as:
 /// ```text
-/// L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+/// ```
+/// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
+fn basis_polynomials<Fp>(xs: &[Fp]) -> Vec<Polynomial<Fp>>
+where
+    Fp: PrimeField,
+{
+    let m = multiplier_for_basis_polynomials(xs);
+    (0..xs.len()).map(|i| basis_polynomial(xs, i, &m)).collect()
+}
+
+/// Returns i-th Lagrange basis polynomial for the given set of x values.
+///
+/// The i-th Lagrange basis polynomial is defined as:
+/// ```text
+///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
 fn basis_polynomial<Fp>(
-    i: usize,
     xs: &[Fp],
+    i: usize,
     multiplier: &Multiplier<Polynomial<Fp>>,
 ) -> Polynomial<Fp>
 where
@@ -56,8 +67,54 @@ where
     nom
 }
 
+/// Returns Lagrange coefficients for the given set of x values.
+///
+/// The i-th Lagrange coefficient is defined as:
+/// ```text
+///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
+/// ```
+pub fn coefficients<Fp>(xs: &[Fp]) -> Vec<Fp>
+where
+    Fp: PrimeField,
+{
+    let m = multiplier_for_coefficients(xs);
+    (0..xs.len()).map(|i| coefficient(xs, i, &m)).collect()
+}
+
+/// Returns i-th Lagrange coefficient for the given set of x values.
+///
+/// The i-th Lagrange coefficient is defined as:
+/// ```text
+///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
+/// ```
+fn coefficient<Fp>(xs: &[Fp], i: usize, multiplier: &Multiplier<Fp>) -> Fp
+where
+    Fp: PrimeField,
+{
+    let mut nom = multiplier.get_product(i).unwrap_or(Fp::ONE);
+    let mut denom = Fp::ONE;
+    for j in 0..xs.len() {
+        if j == i {
+            continue;
+        }
+        denom *= xs[j] - xs[i]; // (x_j - x_i)
+    }
+    let denom_inv = denom.invert().expect("values should be unique");
+    nom *= denom_inv; // L_i(0) = nom / denom
+
+    nom
+}
+
+/// Creates a multiplier for the nominators in the Lagrange coefficients.
+fn multiplier_for_coefficients<Fp>(xs: &[Fp]) -> Multiplier<Fp>
+where
+    Fp: PrimeField,
+{
+    Multiplier::new(xs)
+}
+
 /// Creates a multiplier for the nominators in the Lagrange basis polynomials.
-fn multiplier<Fp>(xs: &[Fp]) -> Multiplier<Polynomial<Fp>>
+fn multiplier_for_basis_polynomials<Fp>(xs: &[Fp]) -> Multiplier<Polynomial<Fp>>
 where
     Fp: PrimeField,
 {
@@ -79,7 +136,10 @@ mod tests {
     use group::ff::Field;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    use super::{basis_polynomial, lagrange, multiplier};
+    use super::{
+        basis_polynomial, basis_polynomials, coefficient, coefficients, lagrange,
+        multiplier_for_basis_polynomials, multiplier_for_coefficients,
+    };
 
     fn scalar(value: i64) -> p384::Scalar {
         scalars(&vec![value])[0]
@@ -125,24 +185,51 @@ mod tests {
 
     #[test]
     fn test_basis_polynomial() {
-        let xs = scalars(&[1, 2, 3]);
-        let m = multiplier(&xs);
+        let vec = [
+            scalars(&[1]),
+            scalars(&[1, 2, 3]),
+            scalars(&(1..=50).collect::<Vec<_>>()),
+        ];
 
-        for i in 0..xs.len() {
-            let p = basis_polynomial(i, &xs, &m);
+        for xs in vec {
+            let m = multiplier_for_basis_polynomials(&xs);
 
-            // Verify points.
-            for (j, x) in xs.iter().enumerate() {
-                if j == i {
-                    assert_eq!(p.eval(x), scalar(1)); // L_i(x_i) = 1
-                } else {
-                    assert_eq!(p.eval(x), scalar(0)); // L_i(x_j) = 0
+            for i in 0..xs.len() {
+                let p = basis_polynomial(&xs, i, &m);
+
+                // Verify points.
+                for (j, x) in xs.iter().enumerate() {
+                    if j == i {
+                        assert_eq!(p.eval(x), scalar(1)); // L_i(x_i) = 1
+                    } else {
+                        assert_eq!(p.eval(x), scalar(0)); // L_i(x_j) = 0
+                    }
                 }
-            }
 
-            // Verify degree.
-            assert_eq!(p.degree(), 2);
-            assert_eq!(p.size(), 3);
+                // Verify degree.
+                assert_eq!(p.degree(), xs.len() - 1);
+                assert_eq!(p.size(), xs.len());
+            }
+        }
+    }
+
+    #[test]
+    fn test_coefficient() {
+        let vec = [
+            scalars(&[1]),
+            scalars(&[1, 2, 3]),
+            scalars(&(1..=50).collect::<Vec<_>>()),
+        ];
+
+        for xs in vec {
+            let sm = multiplier_for_coefficients(&xs);
+            let pm = multiplier_for_basis_polynomials(&xs);
+            for i in 0..xs.len() {
+                let c = coefficient(&xs, i, &sm);
+                let p = basis_polynomial(&xs, i, &pm);
+
+                assert_eq!(c, p.eval(&scalar(0)));
+            }
         }
     }
 
@@ -157,18 +244,36 @@ mod tests {
         });
     }
 
+    fn bench_basis_polynomials(b: &mut Bencher, n: usize) {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let xs = random_scalars(n, &mut rng);
+
+        b.iter(|| {
+            let _p = basis_polynomials(&xs);
+        });
+    }
+
+    fn bench_coefficients(b: &mut Bencher, n: usize) {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+        let xs = random_scalars(n, &mut rng);
+
+        b.iter(|| {
+            let _p = coefficients(&xs);
+        });
+    }
+
     #[bench]
-    fn bench_lagrange_1(b: &mut Bencher) {
+    fn bench_lagrange_01(b: &mut Bencher) {
         bench_lagrange(b, 1)
     }
 
     #[bench]
-    fn bench_lagrange_2(b: &mut Bencher) {
+    fn bench_lagrange_02(b: &mut Bencher) {
         bench_lagrange(b, 2)
     }
 
     #[bench]
-    fn bench_lagrange_5(b: &mut Bencher) {
+    fn bench_lagrange_05(b: &mut Bencher) {
         bench_lagrange(b, 5)
     }
 
@@ -180,5 +285,55 @@ mod tests {
     #[bench]
     fn bench_lagrange_20(b: &mut Bencher) {
         bench_lagrange(b, 20)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_01(b: &mut Bencher) {
+        bench_basis_polynomials(b, 1)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_02(b: &mut Bencher) {
+        bench_basis_polynomials(b, 2)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_05(b: &mut Bencher) {
+        bench_basis_polynomials(b, 5)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_10(b: &mut Bencher) {
+        bench_basis_polynomials(b, 10)
+    }
+
+    #[bench]
+    fn bench_basis_polynomials_20(b: &mut Bencher) {
+        bench_basis_polynomials(b, 20)
+    }
+
+    #[bench]
+    fn bench_coefficients_01(b: &mut Bencher) {
+        bench_coefficients(b, 1)
+    }
+
+    #[bench]
+    fn bench_coefficients_02(b: &mut Bencher) {
+        bench_coefficients(b, 2)
+    }
+
+    #[bench]
+    fn bench_coefficients_05(b: &mut Bencher) {
+        bench_coefficients(b, 5)
+    }
+
+    #[bench]
+    fn bench_coefficients_10(b: &mut Bencher) {
+        bench_coefficients(b, 10)
+    }
+
+    #[bench]
+    fn bench_coefficients_20(b: &mut Bencher) {
+        bench_coefficients(b, 20)
     }
 }
