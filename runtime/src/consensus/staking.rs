@@ -323,6 +323,8 @@ pub struct AllowanceChangeEvent {
 
 #[cfg(test)]
 mod tests {
+    use base64::prelude::*;
+
     use super::*;
     use crate::{
         common::crypto::signature::PublicKey,
@@ -399,7 +401,7 @@ mod tests {
         )
     ];
         for (encoded_base64, rr) in tcs {
-            let dec: Account = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+            let dec: Account = cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
                 .expect("account should deserialize correctly");
             assert_eq!(dec, rr, "decoded account should match the expected value");
         }
@@ -417,8 +419,9 @@ mod tests {
             ),
         ];
         for (encoded_base64, rr) in tcs {
-            let dec: Delegation = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("delegation should deserialize correctly");
+            let dec: Delegation =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("delegation should deserialize correctly");
             assert_eq!(dec, rr, "decoded account should match the expected value");
         }
     }
@@ -440,7 +443,7 @@ mod tests {
         ];
         for (encoded_base64, rr) in tcs {
             let dec: DebondingDelegation =
-                cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
                     .expect("debonding delegation should deserialize correctly");
             assert_eq!(dec, rr, "decoded account should match the expected value");
         }
@@ -467,8 +470,9 @@ mod tests {
             ),
         ];
         for (encoded_base64, rr) in tcs {
-            let dec: TransferResult = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("transfer result should deserialize correctly");
+            let dec: TransferResult =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("transfer result should deserialize correctly");
             assert_eq!(dec, rr, "decoded result should match the expected value");
         }
     }
@@ -495,8 +499,9 @@ mod tests {
             ),
         ];
         for (encoded_base64, rr) in tcs {
-            let dec: WithdrawResult = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("withdraw result should deserialize correctly");
+            let dec: WithdrawResult =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("withdraw result should deserialize correctly");
             assert_eq!(dec, rr, "decoded result should match the expected value");
         }
     }
@@ -523,8 +528,9 @@ mod tests {
             ),
         ];
         for (encoded_base64, rr) in tcs {
-            let dec: AddEscrowResult = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("add escrow result should deserialize correctly");
+            let dec: AddEscrowResult =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("add escrow result should deserialize correctly");
             assert_eq!(dec, rr, "decoded result should match the expected value");
         }
     }
@@ -554,7 +560,7 @@ mod tests {
         ];
         for (encoded_base64, rr) in tcs {
             let dec: ReclaimEscrowResult =
-                cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
                     .expect("reclaim escrow result should deserialize correctly");
             assert_eq!(dec, rr, "decoded result should match the expected value");
         }
@@ -712,7 +718,7 @@ mod tests {
             ),
         ];
         for (encoded_base64, ev) in tcs {
-            let dec: Event = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
+            let dec: Event = cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
                 .expect("event should deserialize correctly");
             assert_eq!(dec, ev, "decoded event should match the expected value");
         }

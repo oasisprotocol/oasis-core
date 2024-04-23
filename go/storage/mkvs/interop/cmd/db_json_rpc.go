@@ -100,22 +100,21 @@ type RPCResponse struct {
 }
 
 type (
-	// ApplyRequest and family are arrays because that's what Rust sends.
-	ApplyRequest       []RPCRequest
-	GetRequest         []RPCRequest
-	GetPrefixesRequest []RPCRequest
-	IterateRequest     []RPCRequest
+	ApplyRequest       RPCRequest
+	GetRequest         RPCRequest
+	GetPrefixesRequest RPCRequest
+	IterateRequest     RPCRequest
 )
 
 type ApplyResponse struct{}
 
-func (db *Database) Apply(request ApplyRequest, _ *ApplyResponse) error {
-	if l := len(request); l != 1 {
-		return fmt.Errorf("Apply: invalid number of requests: %d", l)
+func (db *Database) Apply(request *ApplyRequest, _ *ApplyResponse) error {
+	if request == nil {
+		return fmt.Errorf("Apply: missing apply request")
 	}
 
 	var req storage.ApplyRequest
-	if err := cbor.Unmarshal(request[0].Payload, &req); err != nil {
+	if err := cbor.Unmarshal(request.Payload, &req); err != nil {
 		return fmt.Errorf("Apply: invalid request payload: %w", err)
 	}
 
@@ -123,13 +122,13 @@ func (db *Database) Apply(request ApplyRequest, _ *ApplyResponse) error {
 	return err
 }
 
-func (db *Database) SyncGet(request GetRequest, response *RPCResponse) error {
-	if l := len(request); l != 1 {
-		return fmt.Errorf("SyncGet: invalid number of requests: %d", l)
+func (db *Database) SyncGet(request *GetRequest, response *RPCResponse) error {
+	if request == nil {
+		return fmt.Errorf("SyncGet: missing apply request")
 	}
 
 	var req storage.GetRequest
-	if err := cbor.Unmarshal(request[0].Payload, &req); err != nil {
+	if err := cbor.Unmarshal(request.Payload, &req); err != nil {
 		return fmt.Errorf("SyncGet: invalid request payload: %w", err)
 	}
 
@@ -140,13 +139,13 @@ func (db *Database) SyncGet(request GetRequest, response *RPCResponse) error {
 	return err
 }
 
-func (db *Database) SyncGetPrefixes(request GetPrefixesRequest, response *RPCResponse) error {
-	if l := len(request); l != 1 {
-		return fmt.Errorf("SyncGetPrefixes: invalid number of requests: %d", l)
+func (db *Database) SyncGetPrefixes(request *GetPrefixesRequest, response *RPCResponse) error {
+	if request == nil {
+		return fmt.Errorf("SyncGetPrefixes: missing apply request")
 	}
 
 	var req storage.GetPrefixesRequest
-	if err := cbor.Unmarshal(request[0].Payload, &req); err != nil {
+	if err := cbor.Unmarshal(request.Payload, &req); err != nil {
 		return fmt.Errorf("SyncGetPrefixes: invalid request payload: %w", err)
 	}
 
@@ -157,13 +156,13 @@ func (db *Database) SyncGetPrefixes(request GetPrefixesRequest, response *RPCRes
 	return err
 }
 
-func (db *Database) SyncIterate(request IterateRequest, response *RPCResponse) error {
-	if l := len(request); l != 1 {
-		return fmt.Errorf("SyncIterate: invalid number of requests: %d", l)
+func (db *Database) SyncIterate(request *IterateRequest, response *RPCResponse) error {
+	if request == nil {
+		return fmt.Errorf("SyncIterate: missing apply request")
 	}
 
 	var req storage.IterateRequest
-	if err := cbor.Unmarshal(request[0].Payload, &req); err != nil {
+	if err := cbor.Unmarshal(request.Payload, &req); err != nil {
 		return fmt.Errorf("SyncIterate: invalid request payload: %w", err)
 	}
 

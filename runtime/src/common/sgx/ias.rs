@@ -2,6 +2,7 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use anyhow::{anyhow, Result};
+use base64::prelude::*;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::prelude::*;
 use lazy_static::lazy_static;
@@ -290,7 +291,7 @@ pub fn verify(avr: &AVR, policy: &QuotePolicy) -> Result<VerifiedQuote> {
     };
 
     let quote_body = avr_body.isv_enclave_quote_body()?;
-    let quote_body = match base64::decode(quote_body) {
+    let quote_body = match BASE64_STANDARD.decode(quote_body) {
         Ok(quote_body) => quote_body,
         _ => return Err(AVRError::MalformedQuote.into()),
     };
@@ -474,7 +475,7 @@ fn validate_avr_signature(
     let leaf_pk = extract_certificate_rsa_public_key(&leaf)?;
     let scheme = Pkcs1v15Sign::new::<sha2::Sha256>();
     let digest = Sha256::new().chain(message).finalize();
-    let signature = base64::decode(signature)?;
+    let signature = BASE64_STANDARD.decode(signature)?;
     leaf_pk
         .verify(scheme, &digest, &signature)
         .map_err(|_| AVRError::InvalidSignature)?;
@@ -541,10 +542,10 @@ mod tests {
         assert!(result.is_err());
 
         // Bad signature.
-        let bad_sig = base64::decode(SIG).unwrap();
+        let bad_sig = BASE64_STANDARD.decode(SIG).unwrap();
         let bad_sig = &mut bad_sig.to_owned();
         bad_sig[0] ^= 0x42;
-        let bad_sig = base64::encode(bad_sig);
+        let bad_sig = BASE64_STANDARD.encode(bad_sig);
         let result = validate_avr_signature(IAS_CERT_CHAIN, MSG, bad_sig.as_bytes(), SIG_AT);
         assert!(result.is_err());
 
@@ -590,11 +591,12 @@ mod tests {
             "SW_HARDENING_NEEDED"
         );
 
-        let isv_enclave_quote_body = base64::decode(
-            avr.isv_enclave_quote_body()
-                .expect("isv enclave quote body should exist"),
-        )
-        .expect("decoding isv enclave quote body should succeed");
+        let isv_enclave_quote_body = BASE64_STANDARD
+            .decode(
+                avr.isv_enclave_quote_body()
+                    .expect("isv enclave quote body should exist"),
+            )
+            .expect("decoding isv enclave quote body should succeed");
         assert_eq!(isv_enclave_quote_body.len(), 432);
         assert!(avr.body.get("revocationReason").is_none());
         assert!(avr.body.get("pseManifestStatus").is_none());
@@ -665,11 +667,12 @@ mod tests {
             "SW_HARDENING_NEEDED"
         );
 
-        let isv_enclave_quote_body = base64::decode(
-            avr.isv_enclave_quote_body()
-                .expect("isv enclave quote body should exist"),
-        )
-        .expect("decoding isv enclave quote body should succeed");
+        let isv_enclave_quote_body = BASE64_STANDARD
+            .decode(
+                avr.isv_enclave_quote_body()
+                    .expect("isv enclave quote body should exist"),
+            )
+            .expect("decoding isv enclave quote body should succeed");
         assert_eq!(isv_enclave_quote_body.len(), 432);
         assert!(avr.body.get("revocationReason").is_none());
         assert!(avr.body.get("pseManifestStatus").is_none());

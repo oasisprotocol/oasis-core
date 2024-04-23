@@ -92,6 +92,8 @@ pub struct ConsensusParameterChanges {
 
 #[cfg(test)]
 mod tests {
+    use base64::prelude::*;
+
     use super::*;
 
     #[test]
@@ -121,14 +123,15 @@ mod tests {
             ),
         ];
         for (encoded_base64, vote) in tcs {
-            let dec: ProposalVote = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("proposal vote should deserialize correctly");
+            let dec: ProposalVote =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("proposal vote should deserialize correctly");
             assert_eq!(
                 dec, vote,
                 "decoded proposal vote should match the expected value"
             );
 
-            let ser = base64::encode(cbor::to_vec(dec));
+            let ser = BASE64_STANDARD.encode(cbor::to_vec(dec));
             assert_eq!(
                 ser, encoded_base64,
                 "proposal vote should serialize correctly"
@@ -174,14 +177,15 @@ mod tests {
             ),
         ];
         for (encoded_base64, content) in tcs {
-            let dec: ProposalContent = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("proposal content should deserialize correctly");
+            let dec: ProposalContent =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("proposal content should deserialize correctly");
             assert_eq!(
                 dec, content,
                 "decoded proposal content should match the expected value"
             );
 
-            let ser = base64::encode(cbor::to_vec(dec));
+            let ser = BASE64_STANDARD.encode(cbor::to_vec(dec));
             assert_eq!(
                 ser, encoded_base64,
                 "proposal content should serialize correctly"

@@ -138,6 +138,8 @@ pub struct RoundRoots {
 
 #[cfg(test)]
 mod tests {
+    use base64::prelude::*;
+
     use super::*;
 
     #[test]
@@ -171,8 +173,9 @@ mod tests {
                 }),
         ];
         for (encoded_base64, rr) in tcs {
-            let dec: RoundResults = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("round results should deserialize correctly");
+            let dec: RoundResults =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("round results should deserialize correctly");
             assert_eq!(dec, rr, "decoded results should match the expected value");
         }
     }
@@ -207,8 +210,9 @@ mod tests {
         ];
 
         for (encoded_base64, rr) in tcs {
-            let dec: RoundRoots = cbor::from_slice(&base64::decode(encoded_base64).unwrap())
-                .expect("round roots should deserialize correctly");
+            let dec: RoundRoots =
+                cbor::from_slice(&BASE64_STANDARD.decode(encoded_base64).unwrap())
+                    .expect("round roots should deserialize correctly");
             assert_eq!(
                 dec, rr,
                 "decoded round roots should match the expected value"
