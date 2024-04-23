@@ -25,6 +25,11 @@ var _ Handler = (*Handler240)(nil)
 // from version 23.0.x to 24.0.0.
 type Handler240 struct{}
 
+// HasStartupUpgrade implements Handler.
+func (h *Handler240) HasStartupUpgrade() bool {
+	return false
+}
+
 // StartupUpgrade implements Handler.
 func (h *Handler240) StartupUpgrade() error {
 	return nil

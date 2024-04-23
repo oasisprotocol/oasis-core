@@ -38,6 +38,10 @@ func init() {
 
 type dummyMigrationHandler struct{}
 
+func (th *dummyMigrationHandler) HasStartupUpgrade() bool {
+	return true
+}
+
 func (th *dummyMigrationHandler) StartupUpgrade() error {
 	return nil
 }

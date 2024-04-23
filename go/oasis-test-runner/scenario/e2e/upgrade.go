@@ -169,11 +169,11 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 
 var (
 	// NodeUpgradeDummy is the node upgrade dummy scenario.
-	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{})
+	NodeUpgradeDummy scenario.Scenario = newNodeUpgradeImpl(migrations.DummyUpgradeHandler, &dummyUpgradeChecker{}, true)
 	// NodeUpgradeEmpty is the empty node upgrade scenario.
-	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{})
+	NodeUpgradeEmpty scenario.Scenario = newNodeUpgradeImpl(migrations.EmptyHandler, &noOpUpgradeChecker{}, false)
 	// NodeUpgradeConsensus240 is the node upgrade scenario for migrating to consensus 24.0.
-	NodeUpgradeConsensus240 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus240, &upgrade240Checker{})
+	NodeUpgradeConsensus240 scenario.Scenario = newNodeUpgradeImpl(migrations.Consensus240, &upgrade240Checker{}, false)
 
 	malformedDescriptor = []byte(`{
 		"v": 1,
@@ -202,6 +202,7 @@ type nodeUpgradeImpl struct {
 
 	handlerName    upgrade.HandlerName
 	upgradeChecker upgradeChecker
+	needsRestart   bool
 }
 
 func (sc *nodeUpgradeImpl) writeDescriptor(name string, content []byte) (string, error) {
@@ -253,11 +254,12 @@ func (sc *nodeUpgradeImpl) restart(ctx context.Context, wait bool) error {
 	}
 }
 
-func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeChecker) scenario.Scenario {
+func newNodeUpgradeImpl(handlerName upgrade.HandlerName, upgradeChecker upgradeChecker, needsRestart bool) scenario.Scenario {
 	sc := &nodeUpgradeImpl{
 		Scenario:       *NewScenario("node-upgrade-" + string(handlerName)),
 		handlerName:    handlerName,
 		upgradeChecker: upgradeChecker,
+		needsRestart:   needsRestart,
 	}
 	return sc
 }
@@ -267,6 +269,7 @@ func (sc *nodeUpgradeImpl) Clone() scenario.Scenario {
 		Scenario:       *sc.Scenario.Clone().(*Scenario),
 		handlerName:    sc.handlerName,
 		upgradeChecker: sc.upgradeChecker,
+		needsRestart:   sc.needsRestart,
 	}
 }
 
@@ -280,7 +283,6 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 		Network: oasis.NetworkCfg{
 			NodeBinary: f.Network.NodeBinary,
 			DefaultLogWatcherHandlerFactories: []log.WatcherHandlerFactory{
-				oasis.LogAssertUpgradeStartup(),
 				oasis.LogAssertUpgradeConsensus(),
 			},
 		},
@@ -295,6 +297,12 @@ func (sc *nodeUpgradeImpl) Fixture() (*oasis.NetworkFixture, error) {
 			{Entity: 1, AllowErrorTermination: true},
 		},
 		Seeds: []oasis.SeedFixture{{}},
+	}
+
+	if sc.needsRestart {
+		ff.Network.DefaultLogWatcherHandlerFactories = append(ff.Network.DefaultLogWatcherHandlerFactories,
+			oasis.LogAssertUpgradeStartup(),
+		)
 	}
 
 	ff.Network.SetMockEpoch()
@@ -445,27 +453,29 @@ func (sc *nodeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		return err
 	}
 
-	sc.Logger.Info("restarting network")
-	errCh := make(chan error, len(sc.Net.Validators()))
-	var group sync.WaitGroup
-	for i, val := range sc.Net.Validators() {
-		group.Add(1)
-		go func(i int, val *oasis.Validator) {
-			defer group.Done()
-			sc.Logger.Debug("waiting for validator to exit", "num", i)
-			<-val.Exit()
-			sc.Logger.Debug("restarting validator", "num", i)
-			if restartError := val.Restart(ctx); err != nil {
-				errCh <- restartError
-			}
-		}(i, val)
-	}
+	if sc.needsRestart {
+		sc.Logger.Info("restarting network")
+		errCh := make(chan error, len(sc.Net.Validators()))
+		var group sync.WaitGroup
+		for i, val := range sc.Net.Validators() {
+			group.Add(1)
+			go func(i int, val *oasis.Validator) {
+				defer group.Done()
+				sc.Logger.Debug("waiting for validator to exit", "num", i)
+				<-val.Exit()
+				sc.Logger.Debug("restarting validator", "num", i)
+				if restartError := val.Restart(ctx); err != nil {
+					errCh <- restartError
+				}
+			}(i, val)
+		}
 
-	group.Wait()
-	select {
-	case err = <-errCh:
-		return fmt.Errorf("can't restart upgraded validator for upgrade test: %w", err)
-	default:
+		group.Wait()
+		select {
+		case err = <-errCh:
+			return fmt.Errorf("can't restart upgraded validator for upgrade test: %w", err)
+		default:
+		}
 	}
 
 	sc.Logger.Info("waiting for network to come back up")

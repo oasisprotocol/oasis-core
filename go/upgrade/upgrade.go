@@ -279,8 +279,30 @@ func (u *upgradeManager) ConsensusUpgrade(privateCtx interface{}, currentEpoch b
 			if err := u.flushDescriptorLocked(); err != nil {
 				return err
 			}
-			u.shouldStop = true // Ensure we really stop before proceeding.
-			return api.ErrStopForUpgrade
+			// Check if we can proceed in place (e.g. without a restart).
+			u.shouldStop = func() bool {
+				if err := pu.Descriptor.EnsureCompatible(); err != nil {
+					// Not compatible, we must stop.
+					return true
+				}
+				// Check if the migration handler has a startup stage.
+				handler, err := migrations.GetHandler(pu.Descriptor.Handler)
+				if err != nil {
+					// Handler not available, we must stop.
+					return true
+				}
+				if handler.HasStartupUpgrade() {
+					// Handler has a startup upgrade, we must stop.
+					return true
+				}
+				return false
+			}()
+			if u.shouldStop {
+				return api.ErrStopForUpgrade
+			}
+			// We can continue with the upgrade in place.
+			u.logger.Info("skipping node restart as no startup upgrade stage needed")
+			pu.PushStage(api.UpgradeStageStartup)
 		}
 
 		// If we're already past the upgrade height, then everything must be complete.
