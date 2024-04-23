@@ -17,24 +17,35 @@ pub fn lagrange<Fp>(xs: &[Fp], ys: &[Fp]) -> Polynomial<Fp>
 where
     Fp: PrimeField,
 {
-    let m = multiplier(xs);
-    let ls = (0..xs.len())
-        .map(|i| basis_polynomial(i, xs, &m))
-        .collect::<Vec<_>>();
-
+    let ls = basis_polynomials(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }
 
-/// Returns i-th Lagrange basis polynomials for the given set of x values.
+/// Returns Lagrange basis polynomials for the given set of x values.
 ///
 /// The i-th Lagrange basis polynomial is defined as:
 /// ```text
-/// L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+/// ```
+/// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
+fn basis_polynomials<Fp>(xs: &[Fp]) -> Vec<Polynomial<Fp>>
+where
+    Fp: PrimeField,
+{
+    let m = multiplier(xs);
+    (0..xs.len()).map(|i| basis_polynomial(xs, i, &m)).collect()
+}
+
+/// Returns i-th Lagrange basis polynomial for the given set of x values.
+///
+/// The i-th Lagrange basis polynomial is defined as:
+/// ```text
+///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
 fn basis_polynomial<Fp>(
-    i: usize,
     xs: &[Fp],
+    i: usize,
     multiplier: &Multiplier<Polynomial<Fp>>,
 ) -> Polynomial<Fp>
 where
@@ -129,7 +140,7 @@ mod tests {
         let m = multiplier(&xs);
 
         for i in 0..xs.len() {
-            let p = basis_polynomial(i, &xs, &m);
+            let p = basis_polynomial(&xs, i, &m);
 
             // Verify points.
             for (j, x) in xs.iter().enumerate() {

@@ -9,28 +9,41 @@ use crate::vss::polynomial::Polynomial;
 ///
 /// The Lagrange polynomial is defined as:
 /// ```text
-/// L(x) = \sum_{i=0}^n y_i * L_i(x)
+///     L(x) = \sum_{i=0}^n y_i * L_i(x)
 /// ```
 /// where `L_i(x)` represents the i-th Lagrange basis polynomial.
 pub fn lagrange_naive<Fp>(xs: &[Fp], ys: &[Fp]) -> Polynomial<Fp>
 where
     Fp: PrimeField,
 {
-    let ls = (0..xs.len())
-        .map(|i| basis_polynomial_naive(i, xs))
-        .collect::<Vec<_>>();
-
+    let ls = basis_polynomials_naive(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }
 
-/// Returns i-th Lagrange basis polynomials for the given set of x values.
+/// Returns Lagrange basis polynomials for the given set of x values.
 ///
 /// The i-th Lagrange basis polynomial is defined as:
 /// ```text
-/// L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
-fn basis_polynomial_naive<Fp>(i: usize, xs: &[Fp]) -> Polynomial<Fp>
+fn basis_polynomials_naive<Fp>(xs: &[Fp]) -> Vec<Polynomial<Fp>>
+where
+    Fp: PrimeField,
+{
+    (0..xs.len())
+        .map(|i| basis_polynomial_naive(xs, i))
+        .collect()
+}
+
+/// Returns i-th Lagrange basis polynomial for the given set of x values.
+///
+/// The i-th Lagrange basis polynomial is defined as:
+/// ```text
+///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
+/// ```
+/// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
+fn basis_polynomial_naive<Fp>(xs: &[Fp], i: usize) -> Polynomial<Fp>
 where
     Fp: PrimeField,
 {
@@ -109,7 +122,7 @@ mod tests {
         let xs = scalars(&[1, 2, 3]);
 
         for i in 0..xs.len() {
-            let p = basis_polynomial_naive(i, &xs);
+            let p = basis_polynomial_naive(&xs, i);
 
             // Verify points.
             for (j, x) in xs.iter().enumerate() {
