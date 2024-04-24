@@ -3,12 +3,15 @@ package migrations
 import (
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensusState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/abci/state"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -70,10 +73,23 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 		}
 
 		// CHURP.
-		state := churpState.NewMutableState(abciCtx.State())
+		churpState := churpState.NewMutableState(abciCtx.State())
 
-		if err = state.SetConsensusParameters(abciCtx, &churp.DefaultConsensusParameters); err != nil {
+		if err = churpState.SetConsensusParameters(abciCtx, &churp.DefaultConsensusParameters); err != nil {
 			return fmt.Errorf("failed to set CHURP consensus parameters: %w", err)
+		}
+
+		// Staking.
+		stakeState := stakingState.NewMutableState(abciCtx.State())
+
+		stakeParams, err := stakeState.ConsensusParameters(abciCtx)
+		if err != nil {
+			return fmt.Errorf("failed to load staking consensus parameters: %w", err)
+		}
+		stakeParams.Thresholds[staking.KindKeyManagerChurp] = *quantity.NewFromUint64(10_000_000_000_000)
+
+		if err = stakeState.SetConsensusParameters(abciCtx, stakeParams); err != nil {
+			return fmt.Errorf("failed to update staking consensus parameters: %w", err)
 		}
 
 		// Governance.

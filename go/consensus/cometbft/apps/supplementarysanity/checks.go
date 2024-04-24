@@ -8,11 +8,13 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	governanceState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/governance/state"
+	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	secretsState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/secrets/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	roothashState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
+	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/secrets"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	roothash "github.com/oasisprotocol/oasis-core/go/roothash/api"
@@ -374,18 +376,15 @@ func checkHalt(*abciAPI.Context, beacon.EpochTime) error {
 func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	regSt := registryState.NewMutableState(ctx.State())
 	stakingSt := stakingState.NewMutableState(ctx.State())
+	churpSt := churpState.NewMutableState(ctx.State())
 
-	regParams, err := regSt.ConsensusParameters(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get registry consensus parameters: %w", err)
-	}
-	stakingParams, err := stakingSt.ConsensusParameters(ctx)
+	params, err := stakingSt.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staking consensus parameters: %w", err)
 	}
 
 	// Skip checks if stake is being bypassed.
-	if regParams.DebugBypassStake {
+	if params.DebugBypassStake {
 		return nil
 	}
 
@@ -416,6 +415,20 @@ func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 			return fmt.Errorf("failed to get staking account %s: %w", addr, err)
 		}
 	}
+	// Get key manager churp statuses.
+	churps, err := churpSt.AllStatuses(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get churp statuses: %w", err)
+	}
 
-	return registry.SanityCheckStake(entities, accounts, nodes, runtimes, runtimes, stakingParams.Thresholds, false)
+	// Generate escrows.
+	escrows := make(map[staking.Address]*staking.EscrowAccount)
+	if err = churp.AddStakeClaims(churps, runtimes, escrows); err != nil {
+		return err
+	}
+	if err = registry.AddStakeClaims(entities, nodes, runtimes, runtimes, escrows); err != nil {
+		return err
+	}
+
+	return staking.SanityCheckStake(accounts, escrows, params.Thresholds, false)
 }

@@ -15,11 +15,14 @@ import (
 	memorySigner "github.com/oasisprotocol/oasis-core/go/common/crypto/signature/signers/memory"
 	"github.com/oasisprotocol/oasis-core/go/common/entity"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	abciAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
-	registryAPI "github.com/oasisprotocol/oasis-core/go/registry/api"
+	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -50,11 +53,13 @@ type TxTestSuite struct {
 	txCtx *abciAPI.Context
 	cfg   *abciAPI.MockApplicationStateConfig
 
-	state *churpState.MutableState
+	state      *churpState.MutableState
+	regState   *registryState.MutableState
+	stakeState *stakingState.MutableState
 
 	nodes              []*testNode
-	computeRuntimes    []*registryAPI.Runtime
-	keymanagerRuntimes []*registryAPI.Runtime
+	computeRuntimes    []*registry.Runtime
+	keymanagerRuntimes []*registry.Runtime
 	entity             *testEntity
 }
 
@@ -72,10 +77,15 @@ func (s *TxTestSuite) SetupTest() {
 
 	// Prepare states.
 	s.state = churpState.NewMutableState(s.ctx.State())
-	regState := registryState.NewMutableState(s.ctx.State())
+	s.regState = registryState.NewMutableState(s.ctx.State())
+	s.stakeState = stakingState.NewMutableState(s.ctx.State())
 
 	// Set up default consensus parameters.
 	err := s.state.SetConsensusParameters(s.ctx, &churp.DefaultConsensusParameters)
+	require.NoError(s.T(), err)
+	err = s.regState.SetConsensusParameters(s.ctx, &registry.ConsensusParameters{})
+	require.NoError(s.T(), err)
+	err = s.stakeState.SetConsensusParameters(s.ctx, &staking.ConsensusParameters{})
 	require.NoError(s.T(), err)
 
 	// Prepare nodes.
@@ -100,32 +110,32 @@ func (s *TxTestSuite) SetupTest() {
 		Nodes:     nodes,
 	}
 
-	sigEnt, err := entity.SignEntity(s.entity.signer, registryAPI.RegisterEntitySignatureContext, &ent)
+	sigEnt, err := entity.SignEntity(s.entity.signer, registry.RegisterEntitySignatureContext, &ent)
 	require.NoError(s.T(), err)
-	err = regState.SetEntity(s.ctx, &ent, sigEnt)
+	err = s.regState.SetEntity(s.ctx, &ent, sigEnt)
 	require.NoError(s.T(), err)
 
 	// Prepare and register runtimes.
 	for i := 0; i < numComputeRuntimes; i++ {
-		s.computeRuntimes = append(s.computeRuntimes, &registryAPI.Runtime{
+		s.computeRuntimes = append(s.computeRuntimes, &registry.Runtime{
 			ID:       common.NewTestNamespaceFromSeed([]byte{0, byte(i)}, common.NamespaceTest),
-			Kind:     registryAPI.KindCompute,
+			Kind:     registry.KindCompute,
 			EntityID: s.entity.signer.Public(),
 		})
 
-		err = regState.SetRuntime(s.ctx, s.computeRuntimes[i], false)
+		err = s.regState.SetRuntime(s.ctx, s.computeRuntimes[i], false)
 		require.NoError(s.T(), err)
 	}
 
 	for i := 0; i < numKeyManagerRuntimes; i++ {
-		s.keymanagerRuntimes = append(s.keymanagerRuntimes, &registryAPI.Runtime{
+		s.keymanagerRuntimes = append(s.keymanagerRuntimes, &registry.Runtime{
 			ID:          common.NewTestNamespaceFromSeed([]byte{1, byte(i)}, common.NamespaceTest),
-			Kind:        registryAPI.KindKeyManager,
+			Kind:        registry.KindKeyManager,
 			TEEHardware: node.TEEHardwareIntelSGX,
 			EntityID:    s.entity.signer.Public(),
 		})
 
-		err = regState.SetRuntime(s.ctx, s.keymanagerRuntimes[i], false)
+		err = s.regState.SetRuntime(s.ctx, s.keymanagerRuntimes[i], false)
 		require.NoError(s.T(), err)
 	}
 
@@ -154,9 +164,9 @@ func (s *TxTestSuite) SetupTest() {
 			})
 		}
 
-		sigNode, nErr := node.MultiSignNode([]signature.Signer{s.nodes[i].signer}, registryAPI.RegisterNodeSignatureContext, n)
+		sigNode, nErr := node.MultiSignNode([]signature.Signer{s.nodes[i].signer}, registry.RegisterNodeSignatureContext, n)
 		require.NoError(s.T(), nErr)
-		err = regState.SetNode(s.ctx, nil, n, sigNode)
+		err = s.regState.SetNode(s.ctx, nil, n, sigNode)
 		require.NoError(s.T(), err)
 
 	}
@@ -172,11 +182,8 @@ func (s *TxTestSuite) TearDownTest() {
 
 func (s *TxTestSuite) TestCreate() {
 	s.Run("not key manager runtime", func() {
-		req := churp.CreateRequest{
-			Identity: churp.Identity{
-				RuntimeID: s.computeRuntimes[0].ID,
-			},
-		}
+		req := s.createRequest(0)
+		req.Identity.RuntimeID = s.computeRuntimes[0].ID
 		err := s.ext.create(s.txCtx, &req)
 		require.ErrorContains(s.T(), err, "runtime is not a key manager")
 	})
@@ -185,44 +192,20 @@ func (s *TxTestSuite) TestCreate() {
 		s.txCtx.SetTxSigner(s.nodes[0].signer.Public())
 		defer s.txCtx.SetTxSigner(s.entity.signer.Public())
 
-		req := churp.CreateRequest{
-			Identity: churp.Identity{
-				RuntimeID: s.keymanagerRuntimes[0].ID,
-			},
-		}
+		req := s.createRequest(0)
 		err := s.ext.create(s.txCtx, &req)
 		require.ErrorContains(s.T(), err, "invalid signer")
 	})
 
 	s.Run("invalid config", func() {
-		req := churp.CreateRequest{
-			Identity: churp.Identity{
-				RuntimeID: s.keymanagerRuntimes[0].ID,
-			},
-			GroupID: 100,
-		}
+		req := s.createRequest(0)
+		req.GroupID = 100
 		err := s.ext.create(s.txCtx, &req)
 		require.ErrorContains(s.T(), err, "invalid config: unsupported group, ID 100")
 	})
 
 	s.Run("happy path - handoffs disabled", func() {
-		identity := churp.Identity{
-			ID:        0,
-			RuntimeID: s.keymanagerRuntimes[0].ID,
-		}
-		policy := churp.SignedPolicySGX{
-			Policy: churp.PolicySGX{
-				Identity: identity,
-			},
-		}
-		req := churp.CreateRequest{
-			Identity:        identity,
-			GroupID:         churp.EccNistP384,
-			Threshold:       1,
-			ExtraShares:     2,
-			HandoffInterval: 0,
-			Policy:          policy,
-		}
+		req := s.createRequest(0)
 		err := s.ext.create(s.txCtx, &req)
 		require.NoError(s.T(), err)
 
@@ -233,13 +216,13 @@ func (s *TxTestSuite) TestCreate() {
 		// Verify status.
 		status, err := s.state.Status(s.txCtx, s.keymanagerRuntimes[0].ID, 0)
 		require.NoError(s.T(), err)
-		require.Equal(s.T(), uint8(0), status.ID)
+		require.Equal(s.T(), req.ID, status.ID)
 		require.Equal(s.T(), s.keymanagerRuntimes[0].ID, status.RuntimeID)
 		require.Equal(s.T(), churp.EccNistP384, status.GroupID)
-		require.Equal(s.T(), uint8(1), status.Threshold)
-		require.Equal(s.T(), uint8(2), status.ExtraShares)
+		require.Equal(s.T(), req.Threshold, status.Threshold)
+		require.Equal(s.T(), req.ExtraShares, status.ExtraShares)
 		require.Equal(s.T(), beacon.EpochTime(0), status.HandoffInterval)
-		require.Equal(s.T(), policy, status.Policy)
+		require.Equal(s.T(), req.Policy, status.Policy)
 		require.Equal(s.T(), beacon.EpochTime(0), status.Handoff)
 		require.Nil(s.T(), status.Checksum)
 		require.Nil(s.T(), status.Committee)
@@ -249,22 +232,8 @@ func (s *TxTestSuite) TestCreate() {
 	})
 
 	s.Run("happy path - handoffs enabled", func() {
-		identity := churp.Identity{
-			ID:        1,
-			RuntimeID: s.keymanagerRuntimes[0].ID,
-		}
-		policy := churp.SignedPolicySGX{
-			Policy: churp.PolicySGX{
-				Identity: identity,
-			},
-		}
-		req := churp.CreateRequest{
-			Identity:        identity,
-			GroupID:         churp.EccNistP384,
-			Threshold:       1,
-			HandoffInterval: 10,
-			Policy:          policy,
-		}
+		req := s.createRequest(1)
+		req.HandoffInterval = 10
 		err := s.ext.create(s.txCtx, &req)
 		require.NoError(s.T(), err)
 
@@ -276,14 +245,53 @@ func (s *TxTestSuite) TestCreate() {
 	})
 
 	s.Run("duplicate ID", func() {
-		req := churp.CreateRequest{
-			Identity: churp.Identity{
-				ID:        0,
-				RuntimeID: s.keymanagerRuntimes[0].ID,
-			},
-		}
+		req := s.createRequest(0)
 		err := s.ext.create(s.txCtx, &req)
 		require.ErrorContains(s.T(), err, "invalid config: ID must be unique")
+	})
+
+	// Require stake for creating a new scheme.
+	err := s.stakeState.SetConsensusParameters(s.ctx, &staking.ConsensusParameters{
+		Thresholds: map[staking.ThresholdKind]quantity.Quantity{
+			staking.KindKeyManagerChurp: *quantity.NewFromUint64(100),
+		},
+	})
+	require.NoError(s.T(), err)
+
+	s.Run("not enough stake", func() {
+		req := s.createRequest(2)
+		err = s.ext.create(s.txCtx, &req)
+		require.ErrorContains(s.T(), err, "insufficient stake")
+	})
+
+	s.Run("enough stake", func() {
+		addr := staking.NewAddress(s.entity.signer.Public())
+		err := s.stakeState.SetAccount(s.ctx, addr, &staking.Account{
+			Escrow: staking.EscrowAccount{
+				Active: staking.SharePool{
+					Balance:     *quantity.NewFromUint64(100),
+					TotalShares: *quantity.NewFromUint64(0),
+				},
+			},
+		})
+		require.NoError(s.T(), err)
+
+		req := s.createRequest(2)
+		err = s.ext.create(s.txCtx, &req)
+		require.NoError(s.T(), err)
+
+		// Verify stake claims.
+		claim := churp.StakeClaim(req.RuntimeID, req.ID)
+		require.Equal(s.T(), "keymanager.churp.Scheme.800000000000000014372f88b4f86ae89a9e61eb324bd8b7086db8e256ebfb44.2", string(claim))
+
+		kind := staking.KindKeyManagerChurp
+		thresholds := churp.StakeThresholds()
+		require.Equal(s.T(), []staking.StakeThreshold{{Global: &kind}}, thresholds)
+
+		acc, err := s.stakeState.Account(s.ctx, addr)
+		require.NoError(s.T(), err)
+		require.Equal(s.T(), 1, len(acc.Escrow.StakeAccumulator.Claims))
+		require.ElementsMatch(s.T(), thresholds, acc.Escrow.StakeAccumulator.Claims[claim])
 	})
 }
 
@@ -688,5 +696,25 @@ func (s *TxTestSuite) updateRequest() churp.UpdateRequest {
 			ID:        0,
 			RuntimeID: s.keymanagerRuntimes[0].ID,
 		},
+	}
+}
+
+func (s *TxTestSuite) createRequest(id uint8) churp.CreateRequest {
+	identity := churp.Identity{
+		ID:        id,
+		RuntimeID: s.keymanagerRuntimes[0].ID,
+	}
+	policy := churp.SignedPolicySGX{
+		Policy: churp.PolicySGX{
+			Identity: identity,
+		},
+	}
+	return churp.CreateRequest{
+		Identity:        identity,
+		GroupID:         churp.EccNistP384,
+		Threshold:       1,
+		ExtraShares:     2,
+		HandoffInterval: 0,
+		Policy:          policy,
 	}
 }

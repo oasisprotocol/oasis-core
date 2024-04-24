@@ -734,6 +734,7 @@ const (
 	KindNodeKeyManager    ThresholdKind = 4
 	KindRuntimeCompute    ThresholdKind = 5
 	KindRuntimeKeyManager ThresholdKind = 6
+	KindKeyManagerChurp   ThresholdKind = 7
 
 	KindEntityName            = "entity"
 	KindNodeValidatorName     = "node-validator"
@@ -742,6 +743,7 @@ const (
 	KindNodeKeyManagerName    = "node-keymanager"
 	KindRuntimeComputeName    = "runtime-compute"
 	KindRuntimeKeyManagerName = "runtime-keymanager"
+	KindKeyManagerChurpName   = "keymanager-churp"
 )
 
 // ThresholdKinds are the valid threshold kinds.
@@ -753,6 +755,9 @@ var ThresholdKinds = []ThresholdKind{
 	KindNodeKeyManager,
 	KindRuntimeCompute,
 	KindRuntimeKeyManager,
+	// Commented out to pass sanity check of the genesis file and to avoid
+	// breaking consensus change parameters proposals for the staking module.
+	// KindKeyManagerChurp,
 }
 
 // String returns the string representation of a ThresholdKind.
@@ -772,6 +777,8 @@ func (k ThresholdKind) String() string {
 		return KindRuntimeComputeName
 	case KindRuntimeKeyManager:
 		return KindRuntimeKeyManagerName
+	case KindKeyManagerChurp:
+		return KindKeyManagerChurpName
 	default:
 		return "[unknown threshold kind]"
 	}
@@ -799,6 +806,8 @@ func (k *ThresholdKind) UnmarshalText(text []byte) error {
 		*k = KindRuntimeCompute
 	case KindRuntimeKeyManagerName:
 		*k = KindRuntimeKeyManager
+	case KindKeyManagerChurpName:
+		*k = KindKeyManagerChurp
 	default:
 		return fmt.Errorf("%w: %s", ErrInvalidThreshold, string(text))
 	}
@@ -1047,7 +1056,7 @@ func (e *EscrowAccount) CheckStakeClaims(tm map[ThresholdKind]quantity.Quantity)
 
 // AddStakeClaim attempts to add a stake claim to the given escrow account.
 //
-// In case there is insufficient stake to cover the claim or an error occurrs, no modifications are
+// In case there is insufficient stake to cover the claim or an error occurs, no modifications are
 // made to the stake accumulator.
 func (e *EscrowAccount) AddStakeClaim(tm map[ThresholdKind]quantity.Quantity, claim StakeClaim, thresholds []StakeThreshold) error {
 	// Compute total amount of claims excluding the claim that we are just adding. This is needed
@@ -1226,6 +1235,10 @@ type ConsensusParameters struct { // nolint: maligned
 	// RewardFactorBlockProposed is the factor for a reward distributed per block
 	// to the entity that proposed the block.
 	RewardFactorBlockProposed quantity.Quantity `json:"reward_factor_block_proposed"`
+
+	// DebugBypassStake is true iff all of the staking-related checks and
+	// operations should be bypassed.
+	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
 }
 
 // ConsensusParameterChanges are allowed staking consensus parameter changes.

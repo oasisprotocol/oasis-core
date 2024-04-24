@@ -5,14 +5,17 @@ import (
 	"sort"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
-	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
+	kmCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
+	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error {
@@ -34,7 +37,7 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 	}
 
 	// Ensure that the runtime exists and is a key manager.
-	kmRt, err := common.KeyManagerRuntime(ctx, req.RuntimeID)
+	kmRt, err := kmCommon.KeyManagerRuntime(ctx, req.RuntimeID)
 	if err != nil {
 		return err
 	}
@@ -75,11 +78,18 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 		}
 	}
 
-	// TODO: Add stake claim.
-
 	// Return early if this is a CheckTx context.
 	if ctx.IsCheckOnly() {
 		return nil
+	}
+
+	// Start a new transaction and rollback in case we fail.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
+	// Add stake claim to the key manager owner.
+	if err = addStakeClaim(ctx, kmRt.EntityID, req.RuntimeID, req.ID); err != nil {
+		return err
 	}
 
 	// Create a new instance.
@@ -109,6 +119,8 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 		Status: &status,
 	}))
 
+	ctx.Commit()
+
 	return nil
 }
 
@@ -131,7 +143,7 @@ func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error 
 	}
 
 	// Ensure that the runtime exists and is a key manager.
-	kmRt, err := common.KeyManagerRuntime(ctx, req.RuntimeID)
+	kmRt, err := kmCommon.KeyManagerRuntime(ctx, req.RuntimeID)
 	if err != nil {
 		return err
 	}
@@ -224,7 +236,7 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 	}
 
 	// Ensure that the runtime exists and is a key manager.
-	kmRt, err := common.KeyManagerRuntime(ctx, req.Application.RuntimeID)
+	kmRt, err := kmCommon.KeyManagerRuntime(ctx, req.Application.RuntimeID)
 	if err != nil {
 		return err
 	}
@@ -316,7 +328,7 @@ func (ext *churpExt) confirm(ctx *tmapi.Context, req *churp.SignedConfirmationRe
 	}
 
 	// Ensure that the runtime exists and is a key manager.
-	kmRt, err := common.KeyManagerRuntime(ctx, req.Confirmation.RuntimeID)
+	kmRt, err := kmCommon.KeyManagerRuntime(ctx, req.Confirmation.RuntimeID)
 	if err != nil {
 		return err
 	}
@@ -417,6 +429,39 @@ func (ext *churpExt) computeNextHandoff(ctx *tmapi.Context) (beacon.EpochTime, e
 	return epoch + 1, nil
 }
 
+func addStakeClaim(ctx *tmapi.Context, entityID signature.PublicKey, runtimeID common.Namespace, churpID uint8) error {
+	stakeState := stakingState.NewMutableState(ctx.State())
+
+	regParams, err := stakeState.ConsensusParameters(ctx)
+	if err != nil {
+		return err
+	}
+	if regParams.DebugBypassStake {
+		return nil
+	}
+
+	entityAddr := staking.NewAddress(entityID)
+	if err != nil {
+		return err
+	}
+
+	claim := churp.StakeClaim(runtimeID, churpID)
+	thresholds := churp.StakeThresholds()
+
+	if err = stakingState.AddStakeClaim(ctx, entityAddr, claim, thresholds); err != nil {
+		ctx.Logger().Debug("keymanager: churp: insufficient stake",
+			"err", err,
+			"entity", entityID,
+			"runtime", runtimeID,
+			"churp", churpID,
+			"account", entityAddr,
+		)
+		return fmt.Errorf("keymanager: churp: insufficient stake: %w", err)
+	}
+
+	return nil
+}
+
 func runtimeAttestationKey(ctx *tmapi.Context, nodeID signature.PublicKey, now beacon.EpochTime, kmRt *api.Runtime) (*signature.PublicKey, error) {
 	regState := registryState.NewMutableState(ctx.State())
 
@@ -433,11 +478,11 @@ func runtimeAttestationKey(ctx *tmapi.Context, nodeID signature.PublicKey, now b
 	}
 
 	// Fetch RAK.
-	nodeRt, err := common.NodeRuntime(n, kmRt.ID)
+	nodeRt, err := kmCommon.NodeRuntime(n, kmRt.ID)
 	if err != nil {
 		return nil, err
 	}
-	rak, err := common.RuntimeAttestationKey(nodeRt, kmRt)
+	rak, err := kmCommon.RuntimeAttestationKey(nodeRt, kmRt)
 	if err != nil {
 		return nil, fmt.Errorf("keymanager: churp: failed to fetch node's rak: %w", err)
 	}

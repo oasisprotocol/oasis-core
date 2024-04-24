@@ -33,7 +33,7 @@ func (app *registryApplication) registerEntity(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("RegisterEntity: failed to fetch consensus parameters",
+		ctx.Logger().Error("RegisterEntity: failed to fetch registry consensus parameters",
 			"err", err,
 		)
 		return err
@@ -57,7 +57,16 @@ func (app *registryApplication) registerEntity(
 		return registry.ErrIncorrectTxSigner
 	}
 
-	if !params.DebugBypassStake {
+	stakeState := stakingState.NewMutableState(ctx.State())
+	stakeParams, err := stakeState.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("RegisterEntity: failed to fetch staking consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+
+	if !stakeParams.DebugBypassStake {
 		acctAddr := staking.NewAddress(ent.ID)
 		if err = stakingState.AddStakeClaim(
 			ctx,
@@ -95,7 +104,7 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("DeregisterEntity: failed to fetch consensus parameters",
+		ctx.Logger().Error("DeregisterEntity: failed to fetch registry consensus parameters",
 			"err", err,
 		)
 		return err
@@ -149,7 +158,16 @@ func (app *registryApplication) deregisterEntity(ctx *api.Context, state *regist
 		return fmt.Errorf("DeregisterEntity: failed to remove entity: %w", err)
 	}
 
-	if !params.DebugBypassStake {
+	stakeState := stakingState.NewMutableState(ctx.State())
+	stakeParams, err := stakeState.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("DeregisterEntity: failed to fetch staking consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+
+	if !stakeParams.DebugBypassStake {
 		acctAddr := staking.NewAddress(id)
 		if err = stakingState.RemoveStakeClaim(ctx, acctAddr, registry.StakeClaimRegisterEntity); err != nil {
 			panic(fmt.Errorf("DeregisterEntity: failed to remove stake claim: %w", err))
@@ -194,7 +212,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("RegisterNode: failed to fetch consensus parameters",
+		ctx.Logger().Error("RegisterNode: failed to fetch registry consensus parameters",
 			"err", err,
 		)
 		return err
@@ -299,8 +317,17 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	defer ctx.Close()
 
 	// Check that the entity has enough stake for this node registration.
+	stakeState := stakingState.NewMutableState(ctx.State())
+	stakeParams, err := stakeState.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("RegisterNode: failed to fetch staking consensus parameters",
+			"err", err,
+		)
+		return err
+	}
+
 	var stakeAcc *stakingState.StakeAccumulatorCache
-	if !params.DebugBypassStake {
+	if !stakeParams.DebugBypassStake {
 		stakeAcc, err = stakingState.NewStakeAccumulatorCache(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create stake accumulator cache: %w", err)
@@ -400,7 +427,7 @@ func (app *registryApplication) registerNode( // nolint: gocyclo
 	for _, rt := range paidRuntimes {
 		// Only resume a runtime if the entity has enough stake to avoid having the runtime be
 		// suspended again on the next epoch transition.
-		if !params.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
+		if !stakeParams.DebugBypassStake && rt.GovernanceModel != registry.GovernanceConsensus {
 			acctAddr := rt.StakingAddress()
 			if acctAddr == nil {
 				// This should never happen.
@@ -467,7 +494,7 @@ func (app *registryApplication) unfreezeNode(
 	// Charge gas for this transaction.
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("UnfreezeNode: failed to fetch consensus parameters",
+		ctx.Logger().Error("UnfreezeNode: failed to fetch registry consensus parameters",
 			"err", err,
 		)
 		return err
@@ -537,7 +564,7 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 ) (*registry.Runtime, error) {
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("RegisterRuntime: failed to fetch consensus parameters",
+		ctx.Logger().Error("RegisterRuntime: failed to fetch registry consensus parameters",
 			"err", err,
 		)
 		return nil, err
@@ -658,7 +685,16 @@ func (app *registryApplication) registerRuntime( // nolint: gocyclo
 
 	// Make sure that the entity or runtime has enough stake.
 	// Runtimes using the consensus layer governance model do not require stake.
-	if rtAddress := rt.StakingAddress(); !params.DebugBypassStake && rtAddress != nil {
+	stakeState := stakingState.NewMutableState(ctx.State())
+	stakeParams, err := stakeState.ConsensusParameters(ctx)
+	if err != nil {
+		ctx.Logger().Error("RegisterRuntime: failed to fetch staking consensus parameters",
+			"err", err,
+		)
+		return nil, err
+	}
+
+	if rtAddress := rt.StakingAddress(); !stakeParams.DebugBypassStake && rtAddress != nil {
 		claim := registry.StakeClaimForRuntime(rt.ID)
 		thresholds := registry.StakeThresholdsForRuntime(rt)
 
@@ -730,7 +766,7 @@ func (app *registryApplication) proveFreshness(
 ) error {
 	params, err := state.ConsensusParameters(ctx)
 	if err != nil {
-		ctx.Logger().Error("ProveFreshness: failed to fetch consensus parameters",
+		ctx.Logger().Error("ProveFreshness: failed to fetch registry consensus parameters",
 			"err", err,
 		)
 		return err

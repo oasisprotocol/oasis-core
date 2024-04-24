@@ -1387,10 +1387,6 @@ type ConsensusParameters struct {
 	// be registered.
 	DebugAllowTestRuntimes bool `json:"debug_allow_test_runtimes,omitempty"`
 
-	// DebugBypassStake is true iff the registry should bypass all of the staking
-	// related checks and operations.
-	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
-
 	// DebugDeployImmediately is true iff runtime registrations should
 	// allow immediate deployment.
 	DebugDeployImmediately bool `json:"debug_deploy_immediately,omitempty"`
@@ -1539,13 +1535,13 @@ func StakeThresholdsForNode(n *node.Node, rts []*Runtime) (thresholds []staking.
 	}
 
 	// Add runtime-specific role thresholds for each registered runtime.
-	seen := make(map[common.Namespace]bool)
+	seen := make(map[common.Namespace]struct{})
 	for _, nodeRt := range n.Runtimes {
 		// A runtime can be included multiple times due to multiple deployments/versions.
-		if seen[nodeRt.ID] {
+		if _, ok := seen[nodeRt.ID]; ok {
 			continue
 		}
-		seen[nodeRt.ID] = true
+		seen[nodeRt.ID] = struct{}{}
 
 		// Grab the runtime descriptor.
 		rt, exists := runtimes[nodeRt.ID]

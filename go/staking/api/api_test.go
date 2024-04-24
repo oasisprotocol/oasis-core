@@ -29,6 +29,7 @@ func TestConsensusParameters(t *testing.T) {
 		KindNodeKeyManager:    *quantity.NewQuantity(),
 		KindRuntimeCompute:    *quantity.NewQuantity(),
 		KindRuntimeKeyManager: *quantity.NewQuantity(),
+		KindKeyManagerChurp:   *quantity.NewQuantity(),
 	}
 	validThresholdsParams := ConsensusParameters{
 		Thresholds:         validThresholds,
@@ -210,6 +211,7 @@ func TestStakeAccumulator(t *testing.T) {
 		KindNodeKeyManager:    *quantity.NewFromUint64(50_000),
 		KindRuntimeCompute:    *quantity.NewFromUint64(2_000),
 		KindRuntimeKeyManager: *quantity.NewFromUint64(1_000_000),
+		KindKeyManagerChurp:   *quantity.NewFromUint64(500_000),
 	}
 
 	// Empty escrow account tests.

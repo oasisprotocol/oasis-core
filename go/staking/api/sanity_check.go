@@ -7,11 +7,18 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
 // SanityCheck performs a sanity check on the consensus parameters.
 func (p *ConsensusParameters) SanityCheck() error {
+	if !flags.DebugDontBlameOasis() {
+		if p.DebugBypassStake {
+			return fmt.Errorf("one or more unsafe debug flags set")
+		}
+	}
+
 	// Thresholds.
 	for _, kind := range ThresholdKinds {
 		val, ok := p.Thresholds[kind]
@@ -390,6 +397,115 @@ func (g *Genesis) SanityCheck(now beacon.EpochTime) error { // nolint: gocyclo
 	for addr, acct := range g.Ledger {
 		if err := SanityCheckAccountShares(addr, acct, g.Delegations[addr], g.DebondingDelegations[addr]); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// SanityCheckStake compares generated escrow accounts with actual ones.
+func SanityCheckStake(
+	accounts map[Address]*Account,
+	escrows map[Address]*EscrowAccount,
+	thresholds map[ThresholdKind]quantity.Quantity,
+	isGenesis bool,
+) error {
+	// For a Genesis document, check if accounts have enough stake for all its stake claims.
+	// NOTE: We can't perform this check at an arbitrary point since the entity could
+	// reclaim its stake from the escrow but its nodes and/or runtimes will only be
+	// ineligible/suspended at the next epoch transition.
+	if isGenesis {
+		// Populate escrow accounts with the same active balance and shares number.
+		for addr, escrow := range escrows {
+			acct, ok := accounts[addr]
+			if !ok {
+				continue
+			}
+
+			escrow.Active.Balance = acct.Escrow.Active.Balance
+			escrow.Active.TotalShares = acct.Escrow.Active.TotalShares
+		}
+
+		for addr, escrow := range escrows {
+			if err := escrow.CheckStakeClaims(thresholds); err != nil {
+				expected := "unknown"
+				expectedQty, err2 := escrow.StakeAccumulator.TotalClaims(thresholds, nil)
+				if err2 == nil {
+					expected = expectedQty.String()
+				}
+				return fmt.Errorf("insufficient stake for account %s (expected: %s got: %s): %w",
+					addr,
+					expected,
+					escrow.Active.Balance,
+					err,
+				)
+			}
+		}
+
+		return nil
+	}
+
+	// Otherwise, compare the expected accumulator state with the actual one.
+	// NOTE: We can't perform this check for the Genesis document since it is not allowed to
+	// have non-empty stake accumulators.
+	seen := make(map[Address]struct{})
+	for addr, escrow := range escrows {
+		seen[addr] = struct{}{}
+
+		var actualEscrow EscrowAccount
+		acct, ok := accounts[addr]
+		if ok {
+			actualEscrow = acct.Escrow
+		}
+
+		expectedClaims := escrow.StakeAccumulator.Claims
+		actualClaims := actualEscrow.StakeAccumulator.Claims
+		if len(expectedClaims) != len(actualClaims) {
+			return fmt.Errorf("incorrect number of stake claims for account %s (expected: %d got: %d)",
+				addr,
+				len(expectedClaims),
+				len(actualClaims),
+			)
+		}
+		for claim, expectedThresholds := range expectedClaims {
+			thresholds, ok := actualClaims[claim]
+			if !ok {
+				return fmt.Errorf("missing claim %s for account %s", claim, addr)
+			}
+			if len(thresholds) != len(expectedThresholds) {
+				return fmt.Errorf("incorrect number of thresholds for claim %s for account %s (expected: %d got: %d)",
+					claim,
+					addr,
+					len(expectedThresholds),
+					len(thresholds),
+				)
+			}
+			for i, expectedThreshold := range expectedThresholds {
+				threshold := thresholds[i]
+				if !threshold.Equal(&expectedThreshold) { // nolint: gosec
+					return fmt.Errorf("incorrect threshold in position %d for claim %s for account %s (expected: %s got: %s)",
+						i,
+						claim,
+						addr,
+						expectedThreshold,
+						threshold,
+					)
+				}
+			}
+		}
+	}
+
+	for addr, acct := range accounts {
+		if _, ok := seen[addr]; ok {
+			continue
+		}
+
+		actualClaims := acct.Escrow.StakeAccumulator.Claims
+		if len(actualClaims) != 0 {
+			return fmt.Errorf("incorrect number of stake claims for account %s (expected: 0 got: %d)",
+				addr,
+				len(actualClaims),
+			)
 		}
 	}
 

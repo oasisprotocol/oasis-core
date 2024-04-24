@@ -355,7 +355,7 @@ func (q *queries) doSchedulerQueries(ctx context.Context, _ *rand.Rand, height i
 				"epoch", epoch,
 				"runtime_id", q.runtimeID,
 			)
-			return fmt.Errorf("missing commiteess")
+			return fmt.Errorf("missing committees")
 		}
 	}
 
@@ -505,12 +505,12 @@ func (q *queries) doStakingQueries(ctx context.Context, rng *rand.Rand, height i
 	}
 	expected := q.stakingParams.Thresholds[thKind]
 	if threshold.Cmp(&expected) != 0 {
-		q.logger.Error("invalid treshold",
+		q.logger.Error("invalid threshold",
 			"expected", expected,
 			"threshold", threshold,
 			"height", height,
 		)
-		return fmt.Errorf("invalid treshold")
+		return fmt.Errorf("invalid threshold")
 	}
 
 	addresses, err := q.staking.Addresses(ctx, height)

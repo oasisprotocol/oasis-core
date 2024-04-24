@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	// Mainnet genesis dump at height: 11645601.
-	genesisURL    = "https://oasis-artifacts.s3.eu-central-1.amazonaws.com/genesis_mainnet_dump_11645601.json"
-	genesisSHA256 = "16386902d822227d0ba1e011ab84a754a48c61457e06240986f9c00e84895459" // #nosec G101
+	// Mainnet genesis dump at height: 16817956 (Eden upgrade).
+	genesisURL    = "https://github.com/oasisprotocol/mainnet-artifacts/releases/download/2023-11-29/genesis.json"
+	genesisSHA256 = "b14e45e97da0216a16c25096fd216f591e4d526aa6abac110ac23cb327b64ba1" // #nosec G101
 
-	genesisNeedsUpgrade = true
+	genesisNeedsUpgrade = false
 	// Only relevant if genesis file doesn't need upgrade.
-	genesisDocumentHash = "b11b369e0da5bb230b220127f5e7b242d385ef8c6f54906243f30af63c815535" // #nosec G101
+	genesisDocumentHash = "bb3d748def55bdfb797a2ac53ee6ee141e54cd2ab2dc2375f4a0703a178e6e55" // #nosec G101
 )
 
 // GenesisFile is the scenario for testing the correctness of marshalled genesis

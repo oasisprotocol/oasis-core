@@ -1,9 +1,12 @@
 package churp
 
 import (
+	"fmt"
+
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 const (
@@ -60,6 +63,23 @@ var DefaultGasCosts = transaction.Costs{
 // DefaultConsensusParameters are the "default" consensus parameters.
 var DefaultConsensusParameters = ConsensusParameters{
 	GasCosts: DefaultGasCosts,
+}
+
+const (
+	// StakeClaimScheme is the stake claim template used for creating
+	// new CHURP schemes.
+	StakeClaimScheme = "keymanager.churp.Scheme.%s.%d"
+)
+
+// StakeClaim generates a new stake claim identifier for a specific
+// scheme creation.
+func StakeClaim(runtimeID common.Namespace, churpID uint8) staking.StakeClaim {
+	return staking.StakeClaim(fmt.Sprintf(StakeClaimScheme, runtimeID, churpID))
+}
+
+// StakeThresholds returns the staking thresholds.
+func StakeThresholds() []staking.StakeThreshold {
+	return staking.GlobalStakeThresholds(staking.KindKeyManagerChurp)
 }
 
 // NewCreateTx creates a new create transaction.

@@ -201,6 +201,7 @@ func testThresholds(t *testing.T, _ *stakingTestsState, backend api.Backend, _ c
 		api.KindNodeKeyManager,
 		api.KindRuntimeCompute,
 		api.KindRuntimeKeyManager,
+		api.KindKeyManagerChurp,
 	} {
 		qty, err := backend.Threshold(context.Background(), &api.ThresholdQuery{Kind: kind, Height: consensusAPI.HeightLatest})
 		require.NoError(err, "Threshold")

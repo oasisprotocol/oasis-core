@@ -33,6 +33,7 @@ func TestChangeParameters(t *testing.T) {
 			staking.KindNodeKeyManager:    *quantity.NewFromUint64(1),
 			staking.KindRuntimeCompute:    *quantity.NewFromUint64(1),
 			staking.KindRuntimeKeyManager: *quantity.NewFromUint64(1),
+			staking.KindKeyManagerChurp:   *quantity.NewFromUint64(1),
 		},
 		FeeSplitWeightVote: *quantity.NewFromUint64(1),
 	}

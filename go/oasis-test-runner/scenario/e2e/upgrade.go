@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/persistent"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
@@ -25,6 +26,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis/cli"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
+	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
 )
@@ -100,6 +102,19 @@ func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 		return fmt.Errorf("key manager CHURP consensus parameters shouldn't be set: %w", err)
 	}
 
+	// Check staking parameters.
+	stakeParams, err := ctrl.Staking.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get staking consensus parameters: %w", err)
+	}
+	q, ok := stakeParams.Thresholds[staking.KindKeyManagerChurp]
+	if !ok {
+		return fmt.Errorf("key manager churp stake is not set")
+	}
+	if !q.IsZero() {
+		return fmt.Errorf("key manager churp stake not zero (expected: 0 actual: %s)", q)
+	}
+
 	// Check governance parameters.
 	govParams, err := ctrl.Governance.ConsensusParameters(ctx, consensus.HeightLatest)
 	if err != nil {
@@ -150,6 +165,19 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	}
 	if !reflect.DeepEqual(*churpParams, churp.DefaultConsensusParameters) {
 		return fmt.Errorf("key manager CHURP consensus parameters are not default")
+	}
+
+	// Check updated staking parameters.
+	stakeParams, err := ctrl.Staking.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get staking consensus parameters: %w", err)
+	}
+	q, ok := stakeParams.Thresholds[staking.KindKeyManagerChurp]
+	if !ok {
+		return fmt.Errorf("key manager churp stake is not set")
+	}
+	if n := quantity.NewFromUint64(10_000_000_000_000); q.Cmp(n) != 0 {
+		return fmt.Errorf("key manager churp stake not updated correctly (expected: %s actual: %s)", n, q)
 	}
 
 	// Check updated governance parameters.
