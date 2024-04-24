@@ -503,6 +503,8 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 		n.logger.Error("runtime batch execution failed",
 			"err", err,
 		)
+		// Notify the round worker that the execution failed.
+		n.processedBatchCh <- nil
 		return
 	}
 
@@ -522,7 +524,7 @@ func (n *Node) startSchedulingBatch(ctx context.Context, batch []*txpool.TxQueue
 		Batch: rsp.TxHashes,
 	}
 
-	// Submit response to the executor worker.
+	// Submit response to the round worker.
 	n.processedBatchCh <- &processedBatch{
 		proposal:        &proposal,
 		rank:            n.rank,
@@ -770,6 +772,8 @@ func (n *Node) startProcessingBatch(ctx context.Context, proposal *commitment.Pr
 		n.logger.Error("runtime batch execution failed",
 			"err", err,
 		)
+		// Notify the round worker that the execution failed.
+		n.processedBatchCh <- nil
 		return
 	}
 
@@ -1216,6 +1220,13 @@ func (n *Node) handleProcessedBatch(ctx context.Context, batch *processedBatch) 
 		return
 	}
 	lastHeader := n.blockInfo.RuntimeBlock.Header
+
+	// A nil batch indicates that scheduling or processing has failed.
+	// Return to the initial state and retry.
+	if batch == nil {
+		n.transitionState(StateWaitingForBatch{})
+		return
+	}
 
 	// Check if there was an issue during batch processing.
 	if batch.computed == nil {
@@ -1691,7 +1702,7 @@ func (n *Node) roundWorker(ctx context.Context) {
 			// Process observed executor commitments.
 			n.handleObservedExecutorCommitment(ctx, ec)
 		case batch := <-n.processedBatchCh:
-			// Batch processing has finished.
+			// Batch processing has either finished or failed.
 			n.handleProcessedBatch(ctx, batch)
 		case <-schedulerRankTicker.C:
 			// Change scheduler rank and try again.
