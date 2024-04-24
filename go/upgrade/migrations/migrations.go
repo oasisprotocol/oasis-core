@@ -23,6 +23,9 @@ var (
 
 // Handler is the interface used by migration handlers.
 type Handler interface {
+	// HasStartupUpgrade returns true iff the handler requires a startup upgrade.
+	HasStartupUpgrade() bool
+
 	// StartupUpgrade is called by the upgrade manager to perform
 	// the node startup portion of the upgrade.
 	StartupUpgrade() error

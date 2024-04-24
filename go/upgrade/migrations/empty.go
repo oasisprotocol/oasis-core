@@ -10,6 +10,10 @@ var _ Handler = (*emptyHandler)(nil)
 
 type emptyHandler struct{}
 
+func (th *emptyHandler) HasStartupUpgrade() bool {
+	return false
+}
+
 func (th *emptyHandler) StartupUpgrade() error {
 	// Nothing to do.
 	return nil
