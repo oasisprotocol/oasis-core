@@ -58,5 +58,8 @@ func (d *Document) SanityCheck() error {
 		return err
 	}
 
+	if d.Staking.Parameters.DebugBypassStake {
+		return nil
+	}
 	return staking.SanityCheckStake(d.Staking.Ledger, escrows, d.Staking.Parameters.Thresholds, true)
 }

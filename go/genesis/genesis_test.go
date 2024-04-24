@@ -55,7 +55,6 @@ func testDoc() genesis.Document {
 		Registry: registry.Genesis{
 			Parameters: registry.ConsensusParameters{
 				DebugAllowUnroutableAddresses: true,
-				DebugBypassStake:              true,
 				EnableRuntimeGovernanceModels: map[registry.RuntimeGovernanceModel]bool{
 					registry.GovernanceEntity:    true,
 					registry.GovernanceRuntime:   true,
@@ -136,7 +135,7 @@ func TestGenesisChainContext(t *testing.T) {
 
 	// Having to update this every single time the genesis structure
 	// changes isn't annoying at all.
-	require.Equal(t, "a9dfaa6890772f10bde7b0c34214b1faf22fdecd334d2199f30414f3a30aa3f6", stableDoc.ChainContext())
+	require.Equal(t, "707019a3f189ebd805e8bd370d772e9b3cce7e51b2052947e9ab486f2eb77bb1", stableDoc.ChainContext())
 }
 
 func TestGenesisSanityCheck(t *testing.T) {
@@ -912,12 +911,12 @@ func TestGenesisSanityCheck(t *testing.T) {
 
 	// Sanity check entity stake claims.
 	d = testDoc()
-	// Enable stake claims check.
-	d.Registry.Parameters.DebugBypassStake = false
 	// Setup registry state.
 	d.Registry.Entities = []*entity.SignedEntity{signedEntityWithTestNode}
 	d.Registry.Runtimes = []*registry.Runtime{testKMRuntime, testRuntime}
 	d.Registry.Nodes = []*node.MultiSignedNode{signedComputeTestNode}
+	// Enable stake claims check.
+	d.Staking.Parameters.DebugBypassStake = false
 	// Setup ledger.
 	d.Staking.Ledger[testEntityAddress] = &staking.Account{
 		Escrow: staking.EscrowAccount{

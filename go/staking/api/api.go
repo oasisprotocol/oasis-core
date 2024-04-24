@@ -1235,6 +1235,10 @@ type ConsensusParameters struct { // nolint: maligned
 	// RewardFactorBlockProposed is the factor for a reward distributed per block
 	// to the entity that proposed the block.
 	RewardFactorBlockProposed quantity.Quantity `json:"reward_factor_block_proposed"`
+
+	// DebugBypassStake is true iff all of the staking-related checks and
+	// operations should be bypassed.
+	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
 }
 
 // ConsensusParameterChanges are allowed staking consensus parameter changes.

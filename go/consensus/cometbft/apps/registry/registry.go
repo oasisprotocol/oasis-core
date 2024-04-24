@@ -158,10 +158,10 @@ func (app *registryApplication) EndBlock(*api.Context) (types.ResponseEndBlock, 
 }
 
 func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registryEpoch beacon.EpochTime) (err error) {
-	state := registryState.NewMutableState(ctx.State())
+	regState := registryState.NewMutableState(ctx.State())
 	stakeState := stakingState.NewMutableState(ctx.State())
 
-	nodes, err := state.Nodes(ctx)
+	nodes, err := regState.Nodes(ctx)
 	if err != nil {
 		ctx.Logger().Error("onRegistryEpochChanged: failed to get nodes",
 			"err", err,
@@ -177,7 +177,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 		return fmt.Errorf("registry: onRegistryEpochChanged: failed to get debonding interval: %w", err)
 	}
 
-	params, err := state.ConsensusParameters(ctx)
+	params, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
 		ctx.Logger().Error("onRegistryEpochChanged: failed to fetch consensus parameters",
 			"err", err,
@@ -207,7 +207,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 		// node expiration (this is required so that we don't emit expiration
 		// events every epoch).
 		var status *registry.NodeStatus
-		status, err = state.NodeStatus(ctx, node.ID)
+		status, err = regState.NodeStatus(ctx, node.ID)
 		if err != nil {
 			return fmt.Errorf("registry: onRegistryEpochChanged: couldn't get node status: %w", err)
 		}
@@ -215,7 +215,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 		if !status.ExpirationProcessed {
 			expiredNodes = append(expiredNodes, node)
 			status.ExpirationProcessed = true
-			if err = state.SetNodeStatus(ctx, node.ID, status); err != nil {
+			if err = regState.SetNodeStatus(ctx, node.ID, status); err != nil {
 				return fmt.Errorf("registry: onRegistryEpochChanged: couldn't set node status: %w", err)
 			}
 		}
@@ -229,7 +229,7 @@ func (app *registryApplication) onRegistryEpochChanged(ctx *api.Context, registr
 			ctx.Logger().Debug("removing expired node",
 				"node_id", node.ID,
 			)
-			if err = state.RemoveNode(ctx, node); err != nil {
+			if err = regState.RemoveNode(ctx, node); err != nil {
 				return fmt.Errorf("registry: onRegistryEpochChanged: couldn't remove node: %w", err)
 			}
 

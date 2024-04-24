@@ -105,8 +105,9 @@ func (app *keymanagerApplication) EndBlock(*tmapi.Context) (types.ResponseEndBlo
 // to cover the entity and runtime deposits.
 func suspendRuntimes(ctx *tmapi.Context) error {
 	regState := registryState.NewMutableState(ctx.State())
+	stakeState := stakingState.NewMutableState(ctx.State())
 
-	params, err := regState.ConsensusParameters(ctx)
+	params, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get consensus parameters: %w", err)
 	}

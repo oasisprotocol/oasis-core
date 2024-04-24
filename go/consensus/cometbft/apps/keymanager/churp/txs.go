@@ -430,9 +430,9 @@ func (ext *churpExt) computeNextHandoff(ctx *tmapi.Context) (beacon.EpochTime, e
 }
 
 func addStakeClaim(ctx *tmapi.Context, entityID signature.PublicKey, runtimeID common.Namespace, churpID uint8) error {
-	regState := registryState.NewMutableState(ctx.State())
+	stakeState := stakingState.NewMutableState(ctx.State())
 
-	regParams, err := regState.ConsensusParameters(ctx)
+	regParams, err := stakeState.ConsensusParameters(ctx)
 	if err != nil {
 		return err
 	}

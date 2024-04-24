@@ -18,7 +18,7 @@ import (
 // SanityCheck performs a sanity check on the consensus parameters.
 func (p *ConsensusParameters) SanityCheck() error {
 	if !flags.DebugDontBlameOasis() {
-		if p.DebugAllowUnroutableAddresses || p.DebugBypassStake || p.DebugDeployImmediately {
+		if p.DebugAllowUnroutableAddresses || p.DebugDeployImmediately {
 			return fmt.Errorf("one or more unsafe debug flags set")
 		}
 		if p.MaxNodeExpiration == 0 {
@@ -97,10 +97,6 @@ func (g *Genesis) SanityCheck(
 	}
 
 	// Add stake claims.
-	if g.Parameters.DebugBypassStake {
-		return nil
-	}
-
 	nodes, err := nodeLookup.Nodes(context.Background())
 	if err != nil {
 		return fmt.Errorf("registry: sanity check failed: could not obtain node list from nodeLookup: %w", err)

@@ -1387,10 +1387,6 @@ type ConsensusParameters struct {
 	// be registered.
 	DebugAllowTestRuntimes bool `json:"debug_allow_test_runtimes,omitempty"`
 
-	// DebugBypassStake is true iff the registry should bypass all of the staking
-	// related checks and operations.
-	DebugBypassStake bool `json:"debug_bypass_stake,omitempty"`
-
 	// DebugDeployImmediately is true iff runtime registrations should
 	// allow immediate deployment.
 	DebugDeployImmediately bool `json:"debug_deploy_immediately,omitempty"`

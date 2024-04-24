@@ -59,7 +59,6 @@ const (
 	CfgRegistryDisableRuntimeRegistration             = "registry.disable_runtime_registration"
 	CfgRegistryDebugAllowUnroutableAddresses          = "registry.debug.allow_unroutable_addresses"
 	CfgRegistryDebugAllowTestRuntimes                 = "registry.debug.allow_test_runtimes"
-	cfgRegistryDebugBypassStake                       = "registry.debug.bypass_stake" // nolint: gosec
 	CfgRegistryEnableRuntimeGovernanceModels          = "registry.enable_runtime_governance_models"
 	CfgRegistryEnableKeyManagerCHURP                  = "registry.enable_key_manager_churp"
 	CfgRegistryTEEFeaturesSGXPCS                      = "registry.tee_features.sgx.pcs"
@@ -101,6 +100,7 @@ const (
 	// Staking config flags.
 	CfgStakingTokenSymbol        = "staking.token_symbol"
 	CfgStakingTokenValueExponent = "staking.token_value_exponent"
+	cfgStakingDebugBypassStake   = "staking.debug.bypass_stake" // nolint: gosec
 
 	// CometBFT config flags.
 	CfgConsensusTimeoutCommit            = "consensus.cometbft.timeout_commit"
@@ -336,7 +336,6 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 		Parameters: registry.ConsensusParameters{
 			DebugAllowUnroutableAddresses: viper.GetBool(CfgRegistryDebugAllowUnroutableAddresses),
 			DebugAllowTestRuntimes:        viper.GetBool(CfgRegistryDebugAllowTestRuntimes),
-			DebugBypassStake:              viper.GetBool(cfgRegistryDebugBypassStake),
 			GasCosts:                      registry.DefaultGasCosts, // TODO: Make these configurable.
 			MaxNodeExpiration:             viper.GetUint64(CfgRegistryMaxNodeExpiration),
 			DisableRuntimeRegistration:    viper.GetBool(CfgRegistryDisableRuntimeRegistration),
@@ -627,6 +626,8 @@ func appendStakingState(doc *genesis.Document, statePath string) error {
 		st.State.TokenValueExponent = tokenValueExponent
 	}
 
+	st.State.Parameters.DebugBypassStake = viper.GetBool(cfgStakingDebugBypassStake)
+
 	return st.AppendTo(doc)
 }
 
@@ -797,7 +798,6 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryDisableRuntimeRegistration, false, "disable non-genesis runtime registration")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowUnroutableAddresses, false, "allow unroutable addreses (UNSAFE)")
 	initGenesisFlags.Bool(CfgRegistryDebugAllowTestRuntimes, false, "enable test runtime registration")
-	initGenesisFlags.Bool(cfgRegistryDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
 	initGenesisFlags.StringSlice(CfgRegistryEnableRuntimeGovernanceModels, []string{"entity"}, "set of enabled runtime governance models")
 	initGenesisFlags.Bool(CfgRegistryEnableKeyManagerCHURP, false, "enable key manager CHURP extension")
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXPCS, true, "enable PCS support for SGX TEEs")
@@ -806,7 +806,6 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesFreshnessProofs, true, "enable freshness proofs")
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
-	_ = initGenesisFlags.MarkHidden(cfgRegistryDebugBypassStake)
 
 	// Scheduler config flags.
 	initGenesisFlags.Int(cfgSchedulerMinValidators, 1, "minimum number of validators")
@@ -848,6 +847,8 @@ func init() {
 	// Staking config flags.
 	initGenesisFlags.String(CfgStakingTokenSymbol, "", "token's ticker symbol")
 	initGenesisFlags.Uint8(CfgStakingTokenValueExponent, 0, "token value's base-10 exponent")
+	initGenesisFlags.Bool(cfgStakingDebugBypassStake, false, "bypass all stake checks and operations (UNSAFE)")
+	_ = initGenesisFlags.MarkHidden(cfgStakingDebugBypassStake)
 
 	// CometBFT config flags.
 	initGenesisFlags.Duration(CfgConsensusTimeoutCommit, 1*time.Second, "cometbft commit timeout")

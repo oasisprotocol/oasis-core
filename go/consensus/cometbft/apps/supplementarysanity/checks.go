@@ -378,17 +378,13 @@ func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 	stakingSt := stakingState.NewMutableState(ctx.State())
 	churpSt := churpState.NewMutableState(ctx.State())
 
-	regParams, err := regSt.ConsensusParameters(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get registry consensus parameters: %w", err)
-	}
-	stakingParams, err := stakingSt.ConsensusParameters(ctx)
+	params, err := stakingSt.ConsensusParameters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staking consensus parameters: %w", err)
 	}
 
 	// Skip checks if stake is being bypassed.
-	if regParams.DebugBypassStake {
+	if params.DebugBypassStake {
 		return nil
 	}
 
@@ -434,5 +430,5 @@ func checkStakeClaims(ctx *abciAPI.Context, _ beacon.EpochTime) error {
 		return err
 	}
 
-	return staking.SanityCheckStake(accounts, escrows, stakingParams.Thresholds, false)
+	return staking.SanityCheckStake(accounts, escrows, params.Thresholds, false)
 }

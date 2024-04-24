@@ -7,11 +7,18 @@ import (
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	"github.com/oasisprotocol/oasis-core/go/staking/api/token"
 )
 
 // SanityCheck performs a sanity check on the consensus parameters.
 func (p *ConsensusParameters) SanityCheck() error {
+	if !flags.DebugDontBlameOasis() {
+		if p.DebugBypassStake {
+			return fmt.Errorf("one or more unsafe debug flags set")
+		}
+	}
+
 	// Thresholds.
 	for _, kind := range ThresholdKinds {
 		val, ok := p.Thresholds[kind]

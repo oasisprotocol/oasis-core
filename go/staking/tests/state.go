@@ -54,6 +54,7 @@ func GenesisState() api.Genesis {
 			FeeSplitWeightVote:      *quantity.NewFromUint64(1),
 			RewardFactorEpochSigned: *quantity.NewFromUint64(1),
 			// Zero RewardFactorBlockProposed is normal.
+			DebugBypassStake: true,
 		},
 		TokenSymbol: "TEST",
 		TotalSupply: *quantity.NewFromUint64(math.MaxInt64),
