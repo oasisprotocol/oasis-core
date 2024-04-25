@@ -95,7 +95,7 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 	// Create a new instance.
 	status := churp.Status{
 		Identity:        req.Identity,
-		GroupID:         req.GroupID,
+		SuiteID:         req.SuiteID,
 		Threshold:       req.Threshold,
 		ExtraShares:     req.ExtraShares,
 		HandoffInterval: req.HandoffInterval,

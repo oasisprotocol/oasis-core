@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use crate::vss::{matrix::VerificationMatrix, polynomial::Polynomial};
 
-use super::{player::Player, DealerParams, DimensionSwitch, Error, Shareholder};
+use super::{player::Player, DimensionSwitch, Error, Shareholder, Suite};
 
 /// Handoff kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,20 +80,20 @@ impl HandoffKind {
 /// Handoff proactivizes the shared secret (changes associated shares) while
 /// transferring the secret from an old committee to a new, possibly
 /// intersecting one.
-pub struct Handoff<D: DealerParams> {
+pub struct Handoff<S: Suite> {
     /// Handoff kind.
     kind: HandoffKind,
 
     /// The share reduction phase of the handoff.
-    share_reduction: Option<DimensionSwitch<D>>,
+    share_reduction: Option<DimensionSwitch<S>>,
 
     /// The share distribution phase of the handoff.
-    share_distribution: Option<DimensionSwitch<D>>,
+    share_distribution: Option<DimensionSwitch<S>>,
 }
 
-impl<D> Handoff<D>
+impl<S> Handoff<S>
 where
-    D: DealerParams,
+    S: Suite,
 {
     /// Creates a new handoff using the given shareholders (new committee)
     /// to proactivize the shared secret.
@@ -166,7 +166,7 @@ where
     }
 
     /// Sets the verification matrix from the previous handoff.
-    pub fn set_verification_matrix(&self, vm: VerificationMatrix<D::Group>) -> Result<()> {
+    pub fn set_verification_matrix(&self, vm: VerificationMatrix<S::Group>) -> Result<()> {
         if self.kind != HandoffKind::CommitteeChanged {
             return Err(Error::InvalidKind.into());
         }
@@ -193,7 +193,7 @@ where
     }
 
     /// Sets the player from the previous handoff.
-    pub fn set_player(&self, player: Arc<Player<D>>) -> Result<()> {
+    pub fn set_player(&self, player: Arc<Player<S>>) -> Result<()> {
         if self.kind != HandoffKind::CommitteeUnchanged {
             return Err(Error::InvalidKind.into());
         }
@@ -221,7 +221,7 @@ where
     pub fn add_share_reduction_switch_point(
         &self,
         id: Shareholder,
-        bij: D::PrimeField,
+        bij: S::PrimeField,
     ) -> Result<bool> {
         if self.kind != HandoffKind::CommitteeChanged {
             return Err(Error::InvalidKind.into());
@@ -250,7 +250,7 @@ where
     pub fn add_full_share_distribution_switch_point(
         &self,
         id: Shareholder,
-        bij: D::PrimeField,
+        bij: S::PrimeField,
     ) -> Result<bool> {
         if self.kind != HandoffKind::CommitteeChanged {
             return Err(Error::InvalidKind.into());
@@ -279,8 +279,8 @@ where
     pub fn add_bivariate_share(
         &self,
         id: Shareholder,
-        q: Polynomial<D::PrimeField>,
-        vm: VerificationMatrix<D::Group>,
+        q: Polynomial<S::PrimeField>,
+        vm: VerificationMatrix<S::Group>,
     ) -> Result<bool> {
         let ds = match self.kind {
             HandoffKind::DealingPhase => &self.share_distribution,
@@ -313,7 +313,7 @@ where
     }
 
     /// Returns the player resulting from share reduction.
-    pub fn get_reduced_player(&self) -> Result<Arc<Player<D>>> {
+    pub fn get_reduced_player(&self) -> Result<Arc<Player<S>>> {
         if self.kind != HandoffKind::CommitteeChanged {
             return Err(Error::InvalidKind.into());
         }
@@ -325,7 +325,7 @@ where
     }
 
     /// Returns the player resulting from full share distribution.
-    pub fn get_full_player(&self) -> Result<Arc<Player<D>>> {
+    pub fn get_full_player(&self) -> Result<Arc<Player<S>>> {
         self.share_distribution
             .as_ref()
             .ok_or(Error::InvalidState)?
@@ -342,7 +342,9 @@ mod tests {
 
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    use crate::churp::{Dealer, HandoffKind, NistP384, NistP384Dealer, Player, Shareholder};
+    use crate::churp::{
+        Dealer, HandoffKind, NistP384Sha384Dealer, NistP384Sha3_384, Player, Shareholder,
+    };
 
     use super::Handoff;
 
@@ -354,7 +356,7 @@ mod tests {
         ids.into_iter().map(shareholder).collect()
     }
 
-    fn verify_players(players: &HashMap<Shareholder, Arc<Player<NistP384>>>) {
+    fn verify_players(players: &HashMap<Shareholder, Arc<Player<NistP384Sha3_384>>>) {
         // Verify that all players have the same matrix.
         let mut vms = HashSet::new();
         for player in players.values() {
@@ -372,10 +374,10 @@ mod tests {
         dealing_phase: bool,
         committee: HashSet<Shareholder>,
         rng: &mut impl RngCore,
-    ) -> HashMap<Shareholder, Dealer<NistP384>> {
+    ) -> HashMap<Shareholder, Dealer<NistP384Sha3_384>> {
         let mut dealers = HashMap::new();
         for sh in committee.iter() {
-            let d = NistP384Dealer::new(threshold, dealing_phase, rng);
+            let d = NistP384Sha384Dealer::new(threshold, dealing_phase, rng);
             dealers.insert(sh.clone(), d);
         }
         dealers
@@ -396,7 +398,7 @@ mod tests {
 
         for alice in committee.iter() {
             let handoff =
-                Handoff::<NistP384>::new(threshold, alice.clone(), committee.clone(), kind)
+                Handoff::<NistP384Sha3_384>::new(threshold, alice.clone(), committee.clone(), kind)
                     .unwrap();
 
             // Proactivization.
@@ -440,7 +442,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff = Handoff::<NistP384>::new(
+            let handoff = Handoff::<NistP384Sha3_384>::new(
                 threshold,
                 alice.clone(),
                 committee.clone(),
@@ -497,7 +499,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff = Handoff::<NistP384>::new(
+            let handoff = Handoff::<NistP384Sha3_384>::new(
                 threshold,
                 alice.clone(),
                 committee.clone(),

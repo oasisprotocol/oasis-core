@@ -25,7 +25,7 @@ use oasis_core_runtime::{
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::churp::{GroupID, Status},
+        keymanager::churp::{Status, SuiteID},
         verifier::Verifier,
     },
     enclave_rpc::Context as RpcContext,
@@ -36,7 +36,7 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, DealerParams, Handoff, HandoffKind, NistP384, Player, Shareholder},
+    churp::{Dealer, Handoff, HandoffKind, NistP384Sha3_384, Player, Shareholder, Suite},
     vss::{
         matrix::VerificationMatrix,
         polynomial::Polynomial,
@@ -190,8 +190,8 @@ impl Churp {
     /// of the matrix should always be verified against the consensus layer.
     pub fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
-        let player = match status.group_id {
-            GroupID::NistP384 => self.get_player::<NistP384>(req.id, req.epoch)?,
+        let player = match status.suite_id {
+            SuiteID::NistP384Sha3_384 => self.get_player::<NistP384Sha3_384>(req.id, req.epoch)?,
         };
         let vm = player.verification_matrix().to_bytes();
 
@@ -236,23 +236,23 @@ impl Churp {
             self.verify_enclave(_ctx, &status.policy)?;
         }
 
-        match status.group_id {
-            GroupID::NistP384 => {
-                self.derive_share_reduction_switch_point::<NistP384>(node_id, &status)
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => {
+                self.derive_share_reduction_switch_point::<NistP384Sha3_384>(node_id, &status)
             }
         }
     }
 
-    fn derive_share_reduction_switch_point<D>(
+    fn derive_share_reduction_switch_point<S>(
         &self,
         node_id: &PublicKey,
         status: &Status,
     ) -> Result<Vec<u8>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         let id = Shareholder(node_id.0);
-        let player = self.get_player::<D>(status.id, status.handoff)?;
+        let player = self.get_player::<S>(status.id, status.handoff)?;
         let point = player.switch_point(id)?;
         let point = scalar_to_bytes(&point);
 
@@ -301,21 +301,23 @@ impl Churp {
             self.verify_enclave(_ctx, &status.policy)?;
         }
 
-        match status.group_id {
-            GroupID::NistP384 => self.derive_share_distribution_point::<NistP384>(node_id, &status),
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => {
+                self.derive_share_distribution_point::<NistP384Sha3_384>(node_id, &status)
+            }
         }
     }
 
-    fn derive_share_distribution_point<D>(
+    fn derive_share_distribution_point<S>(
         &self,
         node_id: &PublicKey,
         status: &Status,
     ) -> Result<Vec<u8>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         let id = Shareholder(node_id.0);
-        let handoff = self.get_handoff::<D>(status.id, status.next_handoff)?;
+        let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let player = handoff.get_reduced_player()?;
         let point = player.switch_point(id)?;
         let point = scalar_to_bytes(&point);
@@ -362,22 +364,24 @@ impl Churp {
             self.verify_enclave(_ctx, &status.policy)?;
         }
 
-        match status.group_id {
-            GroupID::NistP384 => self.derive_bivariate_share::<NistP384>(node_id, &status),
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => {
+                self.derive_bivariate_share::<NistP384Sha3_384>(node_id, &status)
+            }
         }
     }
 
-    fn derive_bivariate_share<D>(
+    fn derive_bivariate_share<S>(
         &self,
         node_id: &PublicKey,
         status: &Status,
     ) -> Result<EncodedSecretShare>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         let id = Shareholder(node_id.0);
         let kind = Self::handoff_kind(status);
-        let dealer = self.get_dealer::<D>(status.id, status.next_handoff)?;
+        let dealer = self.get_dealer::<S>(status.id, status.next_handoff)?;
         let polynomial = dealer.derive_bivariate_share(id, kind)?.to_bytes();
         let verification_matrix = dealer.verification_matrix().to_bytes();
 
@@ -429,14 +433,14 @@ impl Churp {
 
         let dealing_phase = status.committee.is_empty();
 
-        match status.group_id {
-            GroupID::NistP384 => {
-                self.do_init::<NistP384>(req.id, req.epoch, status.threshold, dealing_phase)
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => {
+                self.do_init::<NistP384Sha3_384>(req.id, req.epoch, status.threshold, dealing_phase)
             }
         }
     }
 
-    fn do_init<D>(
+    fn do_init<S>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -444,9 +448,9 @@ impl Churp {
         dealing_phase: bool,
     ) -> Result<SignedApplicationRequest>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
-        let dealer = self.get_or_create_dealer::<D>(churp_id, epoch, threshold, dealing_phase)?;
+        let dealer = self.get_or_create_dealer::<S>(churp_id, epoch, threshold, dealing_phase)?;
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
@@ -493,40 +497,40 @@ impl Churp {
     pub fn share_reduction(&self, req: &FetchRequest) -> Result<FetchResponse> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
-        match status.group_id {
-            GroupID::NistP384 => {
-                self.fetch_share_reduction_switch_points::<NistP384>(&req.node_ids, &status)
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => {
+                self.fetch_share_reduction_switch_points::<NistP384Sha3_384>(&req.node_ids, &status)
             }
         }
     }
 
     /// Tries to fetch switch points for share reduction from the given nodes.
-    pub fn fetch_share_reduction_switch_points<D>(
+    pub fn fetch_share_reduction_switch_points<S>(
         &self,
         node_ids: &Vec<PublicKey>,
         status: &Status,
     ) -> Result<FetchResponse>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
-        let handoff = self.get_or_create_handoff::<D>(status)?;
+        let handoff = self.get_or_create_handoff::<S>(status)?;
         let client = self.key_manager_client(status, false)?;
         let f = |node_id| {
-            self.fetch_share_reduction_switch_point::<D>(node_id, status, &handoff, &client)
+            self.fetch_share_reduction_switch_point::<S>(node_id, status, &handoff, &client)
         };
         fetch(f, node_ids)
     }
 
     /// Tries to fetch switch point for share reduction from the given node.
-    pub fn fetch_share_reduction_switch_point<D>(
+    pub fn fetch_share_reduction_switch_point<S>(
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<D>,
+        handoff: &Handoff<S>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         let id = Shareholder(node_id.0);
 
@@ -536,7 +540,7 @@ impl Churp {
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let player = self.get_player::<D>(status.id, status.handoff)?;
+            let player = self.get_player::<S>(status.id, status.handoff)?;
             let point = player.switch_point(id)?;
 
             if handoff.needs_verification_matrix()? {
@@ -597,40 +601,39 @@ impl Churp {
     pub fn share_distribution(&self, req: &FetchRequest) -> Result<FetchResponse> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
-        match status.group_id {
-            GroupID::NistP384 => {
-                self.fetch_share_distribution_switch_points::<NistP384>(&req.node_ids, &status)
-            }
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => self
+                .fetch_share_distribution_switch_points::<NistP384Sha3_384>(&req.node_ids, &status),
         }
     }
 
     /// Tries to fetch switch points for share distribution from the given nodes.
-    pub fn fetch_share_distribution_switch_points<D>(
+    pub fn fetch_share_distribution_switch_points<S>(
         &self,
         node_ids: &Vec<PublicKey>,
         status: &Status,
     ) -> Result<FetchResponse>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
-        let handoff = self.get_handoff::<D>(status.id, status.next_handoff)?;
+        let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let client = self.key_manager_client(status, true)?;
         let f = |node_id| {
-            self.fetch_share_distribution_switch_point::<D>(node_id, status, &handoff, &client)
+            self.fetch_share_distribution_switch_point::<S>(node_id, status, &handoff, &client)
         };
         fetch(f, node_ids)
     }
 
     /// Tries to fetch switch point for share reduction from the given node.
-    pub fn fetch_share_distribution_switch_point<D>(
+    pub fn fetch_share_distribution_switch_point<S>(
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<D>,
+        handoff: &Handoff<S>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         let id = Shareholder(node_id.0);
 
@@ -673,36 +676,38 @@ impl Churp {
     pub fn proactivization(&self, req: &FetchRequest) -> Result<FetchResponse> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
-        match status.group_id {
-            GroupID::NistP384 => self.fetch_bivariate_shares::<NistP384>(&req.node_ids, &status),
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => {
+                self.fetch_bivariate_shares::<NistP384Sha3_384>(&req.node_ids, &status)
+            }
         }
     }
 
     /// Tries to fetch proactive bivariate shares from the given nodes.
-    pub fn fetch_bivariate_shares<D>(
+    pub fn fetch_bivariate_shares<S>(
         &self,
         node_ids: &Vec<PublicKey>,
         status: &Status,
     ) -> Result<FetchResponse>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
-        let handoff = self.get_or_create_handoff::<D>(status)?;
+        let handoff = self.get_or_create_handoff::<S>(status)?;
         let client = self.key_manager_client(status, true)?;
-        let f = |node_id| self.fetch_bivariate_share::<D>(node_id, status, &handoff, &client);
+        let f = |node_id| self.fetch_bivariate_share::<S>(node_id, status, &handoff, &client);
         fetch(f, node_ids)
     }
 
     /// Tries to fetch proactive bivariate share from the given node.
-    pub fn fetch_bivariate_share<D>(
+    pub fn fetch_bivariate_share<S>(
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<D>,
+        handoff: &Handoff<S>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         let id = Shareholder(node_id.0);
 
@@ -713,7 +718,7 @@ impl Churp {
         // Fetch from the host node.
         if node_id == self.node_id {
             let kind = Self::handoff_kind(status);
-            let dealer = self.get_dealer::<D>(status.id, status.next_handoff)?;
+            let dealer = self.get_dealer::<S>(status.id, status.next_handoff)?;
             let q = dealer.derive_bivariate_share(id, kind)?;
             let vm = dealer.verification_matrix().clone();
 
@@ -756,23 +761,23 @@ impl Churp {
             return Err(Error::ApplicationNotSubmitted.into());
         }
 
-        match status.group_id {
-            GroupID::NistP384 => self.prepare_confirmation::<NistP384>(&status),
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => self.prepare_confirmation::<NistP384Sha3_384>(&status),
         }
     }
 
-    fn prepare_confirmation<D>(&self, status: &Status) -> Result<SignedConfirmationRequest>
+    fn prepare_confirmation<S>(&self, status: &Status) -> Result<SignedConfirmationRequest>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
-        let handoff = self.get_handoff::<D>(status.id, status.next_handoff)?;
+        let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let player = handoff.get_full_player()?;
         let share = player.secret_share();
 
         // Before overwriting the next secret share, make sure it was copied
         // and used to construct the last player.
         let _ = self
-            .get_player::<D>(status.id, status.handoff)
+            .get_player::<S>(status.id, status.handoff)
             .map(Some)
             .or_else(|err| ignore_error(err, Error::PlayerNotFound))?; // Ignore if we don't have the correct share.
 
@@ -807,17 +812,17 @@ impl Churp {
     pub fn finalize(&self, req: &HandoffRequest) -> Result<()> {
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
 
-        match status.group_id {
-            GroupID::NistP384 => self.do_finalize::<NistP384>(&status),
+        match status.suite_id {
+            SuiteID::NistP384Sha3_384 => self.do_finalize::<NistP384Sha3_384>(&status),
         }
     }
 
-    fn do_finalize<D>(&self, status: &Status) -> Result<()>
+    fn do_finalize<S>(&self, status: &Status) -> Result<()>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         // Move the player if the handoff was completed.
-        let handoff = self.get_handoff::<D>(status.id, status.handoff);
+        let handoff = self.get_handoff::<S>(status.id, status.handoff);
         let handoff = match handoff {
             Ok(handoff) => Some(handoff),
             Err(err) => match err.downcast_ref::<Error>() {
@@ -845,9 +850,9 @@ impl Churp {
     }
 
     /// Returns the player for the specified scheme and handoff epoch.
-    fn get_player<D>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Player<D>>>
+    fn get_player<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Player<S>>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         // Check the memory first. Make sure to lock the new players so that we
         // don't create two players for the same handoff.
@@ -862,7 +867,7 @@ impl Churp {
                     let player = data
                         .object
                         .clone()
-                        .downcast::<Player<D>>()
+                        .downcast::<Player<S>>()
                         .or(Err(Error::PlayerMismatch))?;
 
                     return Ok(player);
@@ -911,9 +916,9 @@ impl Churp {
     }
 
     /// Adds a player for the specified scheme and handoff epoch.
-    fn add_player<D>(&self, player: Arc<Player<D>>, churp_id: u8, epoch: EpochTime)
+    fn add_player<S>(&self, player: Arc<Player<S>>, churp_id: u8, epoch: EpochTime)
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         let mut players = self.players.lock().unwrap();
 
@@ -947,37 +952,37 @@ impl Churp {
     }
 
     /// Returns the dealer for the specified scheme and handoff epoch.
-    fn get_dealer<D>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Dealer<D>>>
+    fn get_dealer<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Dealer<S>>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         self._get_or_create_dealer(churp_id, epoch, None, None)
     }
 
     /// Returns the dealer for the specified scheme and handoff epoch.
     /// If the dealer doesn't exist, a new one is created.
-    fn get_or_create_dealer<D>(
+    fn get_or_create_dealer<S>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
         threshold: u8,
         dealing_phase: bool,
-    ) -> Result<Arc<Dealer<D>>>
+    ) -> Result<Arc<Dealer<S>>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         self._get_or_create_dealer(churp_id, epoch, Some(threshold), Some(dealing_phase))
     }
 
-    fn _get_or_create_dealer<D>(
+    fn _get_or_create_dealer<S>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
         threshold: Option<u8>,
         dealing_phase: Option<bool>,
-    ) -> Result<Arc<Dealer<D>>>
+    ) -> Result<Arc<Dealer<S>>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         // Check the memory first. Make sure to lock the dealers so that we
         // don't create two dealers for the same handoff.
@@ -992,7 +997,7 @@ impl Churp {
                     let dealer = data
                         .object
                         .clone()
-                        .downcast::<Dealer<D>>()
+                        .downcast::<Dealer<S>>()
                         .or(Err(Error::DealerMismatch))?;
 
                     return Ok(dealer);
@@ -1068,30 +1073,30 @@ impl Churp {
     }
 
     /// Returns the handoff for the specified scheme and handoff epoch.
-    fn get_handoff<D>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Handoff<D>>>
+    fn get_handoff<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Handoff<S>>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         self._get_or_create_handoff(churp_id, epoch, None)
     }
 
     /// Returns the handoff for the specified scheme and the next handoff epoch.
     /// If the handoff doesn't exist, a new one is created.
-    fn get_or_create_handoff<D>(&self, status: &Status) -> Result<Arc<Handoff<D>>>
+    fn get_or_create_handoff<S>(&self, status: &Status) -> Result<Arc<Handoff<S>>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         self._get_or_create_handoff(status.id, status.next_handoff, Some(status))
     }
 
-    fn _get_or_create_handoff<D>(
+    fn _get_or_create_handoff<S>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
         status: Option<&Status>,
-    ) -> Result<Arc<Handoff<D>>>
+    ) -> Result<Arc<Handoff<S>>>
     where
-        D: DealerParams + 'static,
+        S: Suite + 'static,
     {
         // Check the memory first. Make sure to lock the handoffs so that we
         // don't create two handoffs for the same epoch.
@@ -1106,7 +1111,7 @@ impl Churp {
                     let handoff = data
                         .object
                         .clone()
-                        .downcast::<Handoff<D>>()
+                        .downcast::<Handoff<S>>()
                         .or(Err(Error::HandoffDowncastFailed))?;
 
                     return Ok(handoff);

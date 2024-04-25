@@ -26,13 +26,15 @@ pub enum Error {
     InvalidSignature,
 }
 
-/// Group.
+/// Cipher suite identifier.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
 #[repr(u8)]
-pub enum GroupID {
-    // NIST P-384 elliptic curve group.
+pub enum SuiteID {
+    /// The NIST P-384 elliptic curve group with the SHA3-384 hash function
+    /// used to encode arbitrary-length byte strings to elements of the
+    /// underlying prime field or elliptic curve points.
     #[default]
-    NistP384 = 0,
+    NistP384Sha3_384 = 0,
 }
 
 /// Status represents the current state of a CHURP instance.
@@ -44,9 +46,9 @@ pub struct Status {
     /// The identifier of the key manager runtime.
     pub runtime_id: Namespace,
 
-    /// The identifier of a group used for verifiable secret sharing
+    /// The identifier of a cipher suite used for verifiable secret sharing
     /// and key derivation.
-    pub group_id: GroupID,
+    pub suite_id: SuiteID,
 
     /// The degree of the secret-sharing polynomial.
     ///

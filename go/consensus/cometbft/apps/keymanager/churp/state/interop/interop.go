@@ -103,7 +103,7 @@ func InitializeTestKeyManagerSecretsState(ctx context.Context, mkvs mkvs.Tree) e
 	// Non-empty status.
 	status = churp.Status{
 		Identity:        identity,
-		GroupID:         churp.EccNistP384,
+		SuiteID:         churp.NistP384Sha3_384,
 		Threshold:       2,
 		ExtraShares:     1,
 		HandoffInterval: 3,

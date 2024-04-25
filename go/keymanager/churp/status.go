@@ -16,8 +16,10 @@ const (
 )
 
 const (
-	// EccNistP384 represents the NIST P-384 elliptic curve group.
-	EccNistP384 uint8 = iota
+	// NistP384Sha3_384 represents the NIST P-384 elliptic curve group with
+	// the SHA3-384 hash function used to encode arbitrary-length byte strings
+	// to elements of the underlying prime field or elliptic curve points.
+	NistP384Sha3_384 uint8 = iota
 )
 
 // HandoffKind represents the kind of a handoff.
@@ -66,9 +68,9 @@ type Identity struct {
 type Status struct {
 	Identity
 
-	// GroupID is the identifier of a group used for verifiable secret sharing
-	// and key derivation.
-	GroupID uint8 `json:"group_id"`
+	// SuiteID is the identifier of a cipher suite used for verifiable secret
+	// sharing and key derivation.
+	SuiteID uint8 `json:"suite_id"`
 
 	// Threshold represents the degree of the secret-sharing polynomial.
 	//

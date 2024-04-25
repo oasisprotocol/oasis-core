@@ -19,7 +19,7 @@ func (sc *Scenario) createChurp(ctx context.Context, id uint8, threshold uint8, 
 	}
 	req := churp.CreateRequest{
 		Identity:        identity,
-		GroupID:         churp.EccNistP384,
+		SuiteID:         churp.NistP384Sha3_384,
 		Threshold:       threshold,
 		ExtraShares:     0,
 		HandoffInterval: handoffInterval,
