@@ -5,62 +5,62 @@ use group::{Group, GroupEncoding};
 
 use crate::vss::{matrix::VerificationMatrix, polynomial::Polynomial};
 
-use super::{DealerParams, Error, Shareholder};
+use super::{Error, Shareholder, Suite};
 
 /// Player is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-pub struct Player<D: DealerParams> {
+pub struct Player<S: Suite> {
     /// Secret (full or reduced) share of the shared secret.
-    share: SecretShare<D::Group>,
+    share: SecretShare<S::Group>,
 }
 
-impl<D> Player<D>
+impl<S> Player<S>
 where
-    D: DealerParams,
+    S: Suite,
 {
     /// Creates a new player.
-    pub fn new(p: Polynomial<D::PrimeField>, vm: VerificationMatrix<D::Group>) -> Self {
+    pub fn new(p: Polynomial<S::PrimeField>, vm: VerificationMatrix<S::Group>) -> Self {
         SecretShare::new(p, vm).into()
     }
 
     /// Returns the secret share.
-    pub fn secret_share(&self) -> &SecretShare<D::Group> {
+    pub fn secret_share(&self) -> &SecretShare<S::Group> {
         &self.share
     }
 
     /// Returns the polynomial.
-    pub fn polynomial(&self) -> &Polynomial<D::PrimeField> {
+    pub fn polynomial(&self) -> &Polynomial<S::PrimeField> {
         &self.share.p
     }
 
     /// Returns the verification matrix.
-    pub fn verification_matrix(&self) -> &VerificationMatrix<D::Group> {
+    pub fn verification_matrix(&self) -> &VerificationMatrix<S::Group> {
         &self.share.vm
     }
 
     /// Computes switch point for the given shareholder.
-    pub fn switch_point(&self, id: Shareholder) -> Result<D::PrimeField> {
-        let x: <D as DealerParams>::PrimeField = D::encode_shareholder(id)?;
+    pub fn switch_point(&self, id: Shareholder) -> Result<S::PrimeField> {
+        let x: <S as Suite>::PrimeField = S::encode_shareholder(id)?;
         let point = self.share.p.eval(&x);
         Ok(point)
     }
 
     /// Computes key share from the given hash.
-    pub fn key_share(&self, hash: D::Group) -> D::Group {
+    pub fn key_share(&self, hash: S::Group) -> S::Group {
         self.share
             .p
             .coefficient(0)
             .map(|s| hash * s)
-            .unwrap_or(D::Group::identity())
+            .unwrap_or(S::Group::identity())
     }
 
     /// Creates a new player with a proactivized secret polynomial.
     pub fn proactivize(
         &self,
-        p: &Polynomial<D::PrimeField>,
-        vm: &VerificationMatrix<D::Group>,
-    ) -> Result<Player<D>> {
+        p: &Polynomial<S::PrimeField>,
+        vm: &VerificationMatrix<S::Group>,
+    ) -> Result<Player<S>> {
         if p.degree() != self.share.p.degree() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
@@ -79,11 +79,11 @@ where
     }
 }
 
-impl<D> From<SecretShare<D::Group>> for Player<D>
+impl<S> From<SecretShare<S::Group>> for Player<S>
 where
-    D: DealerParams,
+    S: Suite,
 {
-    fn from(state: SecretShare<D::Group>) -> Player<D> {
+    fn from(state: SecretShare<S::Group>) -> Player<S> {
         Player { share: state }
     }
 }

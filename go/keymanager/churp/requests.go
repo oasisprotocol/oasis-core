@@ -24,9 +24,9 @@ var (
 type CreateRequest struct {
 	Identity
 
-	// GroupID is the identifier of a group used for verifiable secret sharing
-	// and key derivation.
-	GroupID uint8 `json:"group,omitempty"`
+	// SuiteID is the identifier of a cipher suite used for verifiable secret
+	// sharing and key derivation.
+	SuiteID uint8 `json:"suite_id,omitempty"`
 
 	// Threshold is the minimum number of distinct shares required
 	// to reconstruct a key.
@@ -47,8 +47,8 @@ type CreateRequest struct {
 
 // ValidateBasic performs basic config validity checks.
 func (c *CreateRequest) ValidateBasic() error {
-	if c.GroupID > 0 {
-		return fmt.Errorf("unsupported group, ID %d", c.GroupID)
+	if c.SuiteID > 0 {
+		return fmt.Errorf("unsupported suite, ID %d", c.SuiteID)
 	}
 	if c.Policy.Policy.ID != c.ID {
 		return fmt.Errorf("policy ID mismatch: got %d, expected %d", c.Policy.Policy.ID, c.ID)

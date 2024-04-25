@@ -199,9 +199,9 @@ func (s *TxTestSuite) TestCreate() {
 
 	s.Run("invalid config", func() {
 		req := s.createRequest(0)
-		req.GroupID = 100
+		req.SuiteID = 100
 		err := s.ext.create(s.txCtx, &req)
-		require.ErrorContains(s.T(), err, "invalid config: unsupported group, ID 100")
+		require.ErrorContains(s.T(), err, "invalid config: unsupported suite, ID 100")
 	})
 
 	s.Run("happy path - handoffs disabled", func() {
@@ -218,7 +218,7 @@ func (s *TxTestSuite) TestCreate() {
 		require.NoError(s.T(), err)
 		require.Equal(s.T(), req.ID, status.ID)
 		require.Equal(s.T(), s.keymanagerRuntimes[0].ID, status.RuntimeID)
-		require.Equal(s.T(), churp.EccNistP384, status.GroupID)
+		require.Equal(s.T(), churp.NistP384Sha3_384, status.SuiteID)
 		require.Equal(s.T(), req.Threshold, status.Threshold)
 		require.Equal(s.T(), req.ExtraShares, status.ExtraShares)
 		require.Equal(s.T(), beacon.EpochTime(0), status.HandoffInterval)
@@ -616,7 +616,7 @@ func (s *TxTestSuite) create() {
 	}
 	createReq := churp.CreateRequest{
 		Identity:        identity,
-		GroupID:         churp.EccNistP384,
+		SuiteID:         churp.NistP384Sha3_384,
 		Threshold:       1,
 		HandoffInterval: 0,
 		Policy: churp.SignedPolicySGX{
@@ -711,7 +711,7 @@ func (s *TxTestSuite) createRequest(id uint8) churp.CreateRequest {
 	}
 	return churp.CreateRequest{
 		Identity:        identity,
-		GroupID:         churp.EccNistP384,
+		SuiteID:         churp.NistP384Sha3_384,
 		Threshold:       1,
 		ExtraShares:     2,
 		HandoffInterval: 0,

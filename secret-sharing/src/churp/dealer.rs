@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 
-use group::{ff::PrimeField, Group, GroupEncoding};
 use rand_core::RngCore;
 
 use crate::vss::{
@@ -10,23 +9,11 @@ use crate::vss::{
     polynomial::{BivariatePolynomial, Polynomial},
 };
 
-use super::{Error, HandoffKind};
+use super::{HandoffKind, NistP384Sha3_384, Suite};
 
 /// Shareholder identifier.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Shareholder(pub [u8; 32]);
-
-/// Dealer parameters.
-pub trait DealerParams {
-    /// A prime field used for constructing the bivariate polynomial.
-    type PrimeField: PrimeField;
-
-    /// A group used for constructing the verification matrix.
-    type Group: Group<Scalar = Self::PrimeField> + GroupEncoding;
-
-    /// Maps given shareholder ID to a non-zero element of the prime field.
-    fn encode_shareholder(id: Shareholder) -> Result<Self::PrimeField>;
-}
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
 /// computing a verification matrix, and deriving secret shares for other
@@ -36,17 +23,17 @@ pub trait DealerParams {
 /// against the matrix. Reconstructing the secret bivariate polynomial
 /// requires obtaining more than a threshold number of shares from distinct
 /// participants.
-pub struct Dealer<D: DealerParams> {
+pub struct Dealer<S: Suite> {
     /// Secret bivariate polynomial.
-    bp: BivariatePolynomial<D::PrimeField>,
+    bp: BivariatePolynomial<S::PrimeField>,
 
     /// Verification matrix.
-    vm: VerificationMatrix<D::Group>,
+    vm: VerificationMatrix<S::Group>,
 }
 
-impl<D> Dealer<D>
+impl<S> Dealer<S>
 where
-    D: DealerParams,
+    S: Suite,
 {
     /// Creates a new dealer.
     pub fn new(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Self {
@@ -73,12 +60,12 @@ where
     }
 
     /// Returns the secret bivariate polynomial.
-    pub fn bivariate_polynomial(&self) -> &BivariatePolynomial<D::PrimeField> {
+    pub fn bivariate_polynomial(&self) -> &BivariatePolynomial<S::PrimeField> {
         &self.bp
     }
 
     /// Returns the verification matrix.
-    pub fn verification_matrix(&self) -> &VerificationMatrix<D::Group> {
+    pub fn verification_matrix(&self) -> &VerificationMatrix<S::Group> {
         &self.vm
     }
 
@@ -87,8 +74,8 @@ where
         &self,
         id: Shareholder,
         kind: HandoffKind,
-    ) -> Result<Polynomial<D::PrimeField>> {
-        let v = D::encode_shareholder(id)?;
+    ) -> Result<Polynomial<S::PrimeField>> {
+        let v = S::encode_shareholder(id)?;
         let p = match kind {
             HandoffKind::DealingPhase => self.bp.eval_x(&v),
             HandoffKind::CommitteeChanged => self.bp.eval_y(&v),
@@ -99,49 +86,25 @@ where
     }
 }
 
-impl<D> From<BivariatePolynomial<D::PrimeField>> for Dealer<D>
+impl<S> From<BivariatePolynomial<S::PrimeField>> for Dealer<S>
 where
-    D: DealerParams,
+    S: Suite,
 {
     /// Creates a new dealer from the given bivariate polynomial.
-    fn from(bp: BivariatePolynomial<D::PrimeField>) -> Self {
+    fn from(bp: BivariatePolynomial<S::PrimeField>) -> Self {
         let vm = VerificationMatrix::from(&bp);
         Self { bp, vm }
     }
 }
 
-/// Dealer for NIST P-384's elliptic curve group.
-pub type NistP384Dealer = Dealer<NistP384>;
-
-/// NIST P-384 dealer parameters.
-#[derive(Debug)]
-pub struct NistP384;
-
-impl DealerParams for NistP384 {
-    type PrimeField = p384::Scalar;
-    type Group = p384::ProjectivePoint;
-
-    fn encode_shareholder(id: Shareholder) -> Result<Self::PrimeField> {
-        let mut bytes = [0u8; 48];
-        bytes[16..].copy_from_slice(&id.0);
-
-        let s = p384::Scalar::from_slice(&bytes).or(Err(Error::ShareholderEncodingFailed))?;
-        if s.is_zero().into() {
-            return Err(Error::ZeroValueShareholder.into());
-        }
-
-        Ok(s)
-    }
-}
+/// Dealer for NIST P-384's elliptic curve group with SHA3-384 hash function.
+pub type NistP384Sha384Dealer = Dealer<NistP384Sha3_384>;
 
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{
-        BivariatePolynomial, DealerParams, Error, HandoffKind, NistP384, NistP384Dealer,
-        Shareholder,
-    };
+    use super::{BivariatePolynomial, HandoffKind, NistP384Sha384Dealer, Shareholder};
 
     #[test]
     fn test_new() {
@@ -149,7 +112,7 @@ mod tests {
 
         let threshold = 2;
         for dealing_phase in vec![true, false] {
-            let dealer = NistP384Dealer::new(threshold, dealing_phase, &mut rng);
+            let dealer = NistP384Sha384Dealer::new(threshold, dealing_phase, &mut rng);
             assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
             assert_eq!(dealer.bivariate_polynomial().deg_x, 2);
             assert_eq!(dealer.bivariate_polynomial().deg_y, 4);
@@ -159,7 +122,7 @@ mod tests {
 
         let threshold = 0;
         for dealing_phase in vec![true, false] {
-            let dealer = NistP384Dealer::new(threshold, dealing_phase, &mut rng);
+            let dealer = NistP384Sha384Dealer::new(threshold, dealing_phase, &mut rng);
             assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
             assert_eq!(dealer.bivariate_polynomial().deg_x, 0);
             assert_eq!(dealer.bivariate_polynomial().deg_y, 0);
@@ -171,45 +134,27 @@ mod tests {
     #[test]
     fn test_from() {
         let bp = BivariatePolynomial::zero(2, 3);
-        let _ = NistP384Dealer::from(bp);
+        let _ = NistP384Sha384Dealer::from(bp);
     }
 
     #[test]
     fn test_random() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = NistP384Dealer::random(2, 3, &mut rng);
+        let dealer = NistP384Sha384Dealer::random(2, 3, &mut rng);
         assert!(!dealer.verification_matrix().is_zero_hole()); // Zero-hole with negligible probability.
     }
 
     #[test]
     fn test_zero_hole() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = NistP384Dealer::zero_hole(2, 3, &mut rng);
+        let dealer = NistP384Sha384Dealer::zero_hole(2, 3, &mut rng);
         assert!(dealer.verification_matrix().is_zero_hole());
-    }
-
-    #[test]
-    fn test_encode() {
-        let id = [0; 32];
-        let zero = NistP384::encode_shareholder(Shareholder(id));
-        assert!(zero.is_err());
-        assert_eq!(
-            zero.unwrap_err().to_string(),
-            Error::ZeroValueShareholder.to_string()
-        );
-
-        let mut id = [0; 32];
-        id[30] = 3;
-        id[31] = 232;
-        let thousand = NistP384::encode_shareholder(Shareholder(id));
-        assert!(thousand.is_ok());
-        assert_eq!(thousand.unwrap(), p384::Scalar::from_u64(1000));
     }
 
     #[test]
     fn test_derive_bivariate_share() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = NistP384Dealer::random(2, 3, &mut rng);
+        let dealer = NistP384Sha384Dealer::random(2, 3, &mut rng);
         let id = Shareholder([1; 32]);
 
         let p = dealer
