@@ -56,8 +56,8 @@ type ApplicationState interface {
 	// last block.  As a matter of convenience, the current epoch is returned.
 	EpochChanged(ctx *Context) (bool, beacon.EpochTime)
 
-	// MinGasPrice returns the configured minimum gas price.
-	MinGasPrice() *quantity.Quantity
+	// LocalMinGasPrice returns the configured local minimum gas price.
+	LocalMinGasPrice() *quantity.Quantity
 
 	// OwnTxSigner returns the transaction signer identity of the local node.
 	OwnTxSigner() signature.PublicKey
@@ -171,7 +171,7 @@ func (ms *mockApplicationState) EpochChanged(*Context) (bool, beacon.EpochTime) 
 	return ms.cfg.EpochChanged, ms.cfg.CurrentEpoch
 }
 
-func (ms *mockApplicationState) MinGasPrice() *quantity.Quantity {
+func (ms *mockApplicationState) LocalMinGasPrice() *quantity.Quantity {
 	return ms.cfg.MinGasPrice
 }
 

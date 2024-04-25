@@ -99,7 +99,7 @@ func AuthenticateAndPayFees(
 		//       configuration, but as long as it is only done in CheckTx, this is ok.
 		if !ctx.AppState().OwnTxSignerAddress().Equal(addr) {
 			callerGasPrice := fee.GasPrice()
-			if fee.Gas > 0 && callerGasPrice.Cmp(ctx.AppState().MinGasPrice()) < 0 {
+			if fee.Gas > 0 && callerGasPrice.Cmp(ctx.AppState().LocalMinGasPrice()) < 0 {
 				return transaction.ErrGasPriceTooLow
 			}
 		}

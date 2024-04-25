@@ -54,6 +54,7 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 		}
 		consParams.MaxTxSize = 131072     // 32 KiB -> 128 KiB
 		consParams.MaxBlockSize = 4194304 // 1 MiB  -> 4 MiB
+		consParams.MaxBlockGas = 5_000_000
 
 		if err = consState.SetConsensusParameters(abciCtx, consParams); err != nil {
 			return fmt.Errorf("failed to set consensus parameters: %w", err)

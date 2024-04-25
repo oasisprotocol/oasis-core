@@ -19,6 +19,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
+	"github.com/oasisprotocol/oasis-core/go/consensus/pricediscovery"
 	"github.com/oasisprotocol/oasis-core/go/control/api"
 	genesisFile "github.com/oasisprotocol/oasis-core/go/genesis/file"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common"
@@ -102,7 +103,7 @@ func doRun(cmd *cobra.Command, _ []string) error {
 
 	// Set up the consensus client and submission manager.
 	cnsc := consensus.NewConsensusClient(conn)
-	pd, err := consensus.NewStaticPriceDiscovery(viper.GetUint64(CfgGasPrice))
+	pd, err := pricediscovery.NewStatic(viper.GetUint64(CfgGasPrice))
 	if err != nil {
 		return fmt.Errorf("failed to create submission manager: %w", err)
 	}

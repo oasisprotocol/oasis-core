@@ -15,6 +15,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/keyformat"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
@@ -128,6 +129,9 @@ type ClientBackend interface {
 
 	// EstimateGas calculates the amount of gas required to execute the given transaction.
 	EstimateGas(ctx context.Context, req *EstimateGasRequest) (transaction.Gas, error)
+
+	// MinGasPrice returns the minimum gas price.
+	MinGasPrice(ctx context.Context) (*quantity.Quantity, error)
 
 	// GetBlock returns a consensus block at a specific height.
 	GetBlock(ctx context.Context, height int64) (*Block, error)

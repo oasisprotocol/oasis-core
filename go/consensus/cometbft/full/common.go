@@ -23,6 +23,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	cmservice "github.com/oasisprotocol/oasis-core/go/common/service"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/config"
@@ -43,6 +44,7 @@ import (
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/roothash"
 	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/scheduler"
 	tmstaking "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/staking"
+	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
 	keymanagerAPI "github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -340,6 +342,16 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 		return nil, err
 	}
 
+	// Query root consensus parameters.
+	cs, err := coreState.NewImmutableState(ctx, n.mux.State(), blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	cp, err := cs.ConsensusParameters(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Call StateToGenesis on all backends and merge the results together.
 	beaconGenesis, err := n.Beacon().StateToGenesis(ctx, blockHeight)
 	if err != nil {
@@ -387,7 +399,10 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 		Governance: *governanceGenesis,
 		KeyManager: *keymanagerGenesis,
 		Scheduler:  *schedulerGenesis,
-		Consensus:  genesisDoc.Consensus,
+		Consensus: consensusGenesis.Genesis{
+			Backend:    api.BackendName,
+			Parameters: *cp,
+		},
 	}, nil
 }
 
@@ -454,6 +469,19 @@ func (n *commonNode) TransactionAuthHandler() consensusAPI.TransactionAuthHandle
 // Implements consensusAPI.Backend.
 func (n *commonNode) EstimateGas(_ context.Context, req *consensusAPI.EstimateGasRequest) (transaction.Gas, error) {
 	return n.mux.EstimateGas(req.Signer, req.Transaction)
+}
+
+// Implements consensusAPI.Backend.
+func (n *commonNode) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
+	cs, err := coreState.NewImmutableState(ctx, n.mux.State(), consensusAPI.HeightLatest)
+	if err != nil {
+		return nil, err
+	}
+	cp, err := cs.ConsensusParameters(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return quantity.NewFromUint64(cp.MinGasPrice), nil
 }
 
 // Implements consensusAPI.Backend.

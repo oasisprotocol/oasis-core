@@ -47,6 +47,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/db"
 	lightAPI "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/light/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/metrics"
+	"github.com/oasisprotocol/oasis-core/go/consensus/pricediscovery"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	cmflags "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 	cmmetrics "github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/metrics"
@@ -943,12 +944,14 @@ func New(
 
 	t.Logger.Info("starting a full consensus node")
 
-	// Create the submission manager.
-	pd, err := consensusAPI.NewStaticPriceDiscovery(config.GlobalConfig.Consensus.Submission.GasPrice)
+	// Create price discovery mechanism and the submission manager.
+	pd, err := pricediscovery.New(ctx, t, config.GlobalConfig.Consensus.Submission.GasPrice)
 	if err != nil {
-		return nil, fmt.Errorf("cometbft: failed to create submission manager: %w", err)
+		return nil, fmt.Errorf("failed to create price discovery: %w", err)
 	}
-	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd, config.GlobalConfig.Consensus.Submission.MaxFee)
+	t.submissionMgr = consensusAPI.NewSubmissionManager(t, pd,
+		config.GlobalConfig.Consensus.Submission.MaxFee,
+	)
 
 	if err := t.lazyInit(); err != nil {
 		return nil, fmt.Errorf("lazy init: %w", err)

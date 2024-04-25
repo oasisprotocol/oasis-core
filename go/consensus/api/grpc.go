@@ -8,6 +8,7 @@ import (
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 	cmnGrpc "github.com/oasisprotocol/oasis-core/go/common/grpc"
 	"github.com/oasisprotocol/oasis-core/go/common/pubsub"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governance "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -32,6 +33,8 @@ var (
 	methodStateToGenesis = serviceName.NewMethod("StateToGenesis", int64(0))
 	// methodEstimateGas is the EstimateGas method.
 	methodEstimateGas = serviceName.NewMethod("EstimateGas", &EstimateGasRequest{})
+	// methodMinGasPrice is the MinGasPrice method.
+	methodMinGasPrice = serviceName.NewMethod("MinGasPrice", nil)
 	// methodGetSignerNonce is a GetSignerNonce method.
 	methodGetSignerNonce = serviceName.NewMethod("GetSignerNonce", &GetSignerNonceRequest{})
 	// methodGetBlock is the GetBlock method.
@@ -92,6 +95,10 @@ var (
 			{
 				MethodName: methodEstimateGas.ShortName(),
 				Handler:    handlerEstimateGas,
+			},
+			{
+				MethodName: methodMinGasPrice.ShortName(),
+				Handler:    handlerMinGasPrice,
 			},
 			{
 				MethodName: methodGetSignerNonce.ShortName(),
@@ -281,6 +288,25 @@ func handlerEstimateGas(
 		return srv.(ClientBackend).EstimateGas(ctx, req.(*EstimateGasRequest))
 	}
 	return interceptor(ctx, rq, info, handler)
+}
+
+func handlerMinGasPrice(
+	srv interface{},
+	ctx context.Context,
+	_ func(interface{}) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (interface{}, error) {
+	if interceptor == nil {
+		return srv.(ClientBackend).MinGasPrice(ctx)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: methodMinGasPrice.FullName(),
+	}
+	handler := func(ctx context.Context, _ interface{}) (interface{}, error) {
+		return srv.(ClientBackend).MinGasPrice(ctx)
+	}
+	return interceptor(ctx, nil, info, handler)
 }
 
 func handlerGetSignerNonce(
@@ -698,6 +724,14 @@ func (c *consensusClient) EstimateGas(ctx context.Context, req *EstimateGasReque
 		return transaction.Gas(0), err
 	}
 	return gas, nil
+}
+
+func (c *consensusClient) MinGasPrice(ctx context.Context) (*quantity.Quantity, error) {
+	var rsp quantity.Quantity
+	if err := c.conn.Invoke(ctx, methodMinGasPrice.FullName(), nil, &rsp); err != nil {
+		return nil, err
+	}
+	return &rsp, nil
 }
 
 func (c *consensusClient) GetSignerNonce(ctx context.Context, req *GetSignerNonceRequest) (uint64, error) {

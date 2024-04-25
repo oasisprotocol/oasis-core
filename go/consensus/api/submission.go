@@ -25,31 +25,7 @@ const (
 // PriceDiscovery is the consensus fee price discovery interface.
 type PriceDiscovery interface {
 	// GasPrice returns the current consensus gas price.
-	GasPrice(ctx context.Context) (*quantity.Quantity, error)
-}
-
-type staticPriceDiscovery struct {
-	price quantity.Quantity
-}
-
-// NewStaticPriceDiscovery creates a price discovery mechanism which always returns the same static
-// price specified at construction time.
-func NewStaticPriceDiscovery(price uint64) (PriceDiscovery, error) {
-	pd := &staticPriceDiscovery{}
-	if err := pd.price.FromUint64(price); err != nil {
-		return nil, fmt.Errorf("submission: failed to convert gas price: %w", err)
-	}
-	return pd, nil
-}
-
-func (pd *staticPriceDiscovery) GasPrice(context.Context) (*quantity.Quantity, error) {
-	return pd.price.Clone(), nil
-}
-
-type noOpPriceDiscovery struct{}
-
-func (pd *noOpPriceDiscovery) GasPrice(context.Context) (*quantity.Quantity, error) {
-	return nil, transaction.ErrMethodNotSupported
+	GasPrice() (*quantity.Quantity, error)
 }
 
 // SubmissionManager is a transaction submission manager interface.
@@ -108,7 +84,7 @@ func (m *submissionManager) EstimateGasAndSetFee(ctx context.Context, signer sig
 
 	// Fetch current consensus gas price and compute the fee.
 	var amount *quantity.Quantity
-	amount, err = m.priceDiscovery.GasPrice(ctx)
+	amount, err = m.priceDiscovery.GasPrice()
 	if err != nil {
 		return fmt.Errorf("failed to determine gas price: %w", err)
 	}
@@ -290,6 +266,12 @@ func SignAndSubmitTx(ctx context.Context, backend Backend, signer signature.Sign
 // estimation and current gas price discovery.
 func SignAndSubmitTxWithProof(ctx context.Context, backend Backend, signer signature.Signer, tx *transaction.Transaction) (*transaction.SignedTransaction, *transaction.Proof, error) {
 	return backend.SubmissionManager().SignAndSubmitTxWithProof(ctx, signer, tx)
+}
+
+type noOpPriceDiscovery struct{}
+
+func (pd *noOpPriceDiscovery) GasPrice() (*quantity.Quantity, error) {
+	return nil, transaction.ErrMethodNotSupported
 }
 
 // NoOpSubmissionManager implements a submission manager that doesn't support submitting transactions.

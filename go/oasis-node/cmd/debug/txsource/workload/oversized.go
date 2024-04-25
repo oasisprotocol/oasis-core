@@ -64,7 +64,7 @@ func (o *oversized) Run(
 		return fmt.Errorf("failed to query consensus parameters: %w", err)
 	}
 
-	gasPrice, err := sm.PriceDiscovery().GasPrice(ctx)
+	gasPrice, err := sm.PriceDiscovery().GasPrice()
 	if err != nil {
 		return fmt.Errorf("failed to get gas price: %w", err)
 	}

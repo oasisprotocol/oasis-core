@@ -7,6 +7,7 @@ import (
 
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
@@ -90,6 +91,16 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 	params := mux.state.ConsensusParameters()
 	if err := ctx.Gas().UseGas(txSize, consensusGenesis.GasOpTxByte, params.GasCosts); err != nil {
 		return err
+	}
+
+	// Ensure a minimum gas price.
+	if params.MinGasPrice > 0 && !ctx.IsSimulation() {
+		if tx.Fee == nil {
+			return transaction.ErrGasPriceTooLow
+		}
+		if tx.Fee.GasPrice().Cmp(quantity.NewFromUint64(params.MinGasPrice)) < 0 {
+			return transaction.ErrGasPriceTooLow
+		}
 	}
 
 	// Route to correct handler.
