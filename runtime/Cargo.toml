@@ -44,7 +44,7 @@ ed25519-dalek = { version = "2.0.0", features = ["rand_core", "digest"] }
 deoxysii = "0.2.4"
 tiny-keccak = { version = "2.0.2", features = ["sha3", "tuple_hash"] }
 sp800-185 = "0.2.0"
-zeroize = "1.6"
+zeroize = "1.8"
 intrusive-collections = "0.9.4"
 sha2 = { version = "0.10.7", features = ["oid"] }
 hmac = "0.12.1"
