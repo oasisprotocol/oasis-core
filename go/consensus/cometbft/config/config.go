@@ -220,7 +220,7 @@ func DefaultConfig() Config {
 		},
 		StateSync: StateSyncConfig{
 			Enabled:     false,
-			TrustPeriod: 24 * time.Hour,
+			TrustPeriod: 30 * 24 * time.Hour,
 			TrustHeight: 0,
 			TrustHash:   "",
 		},

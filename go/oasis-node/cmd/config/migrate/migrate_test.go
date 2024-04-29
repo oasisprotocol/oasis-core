@@ -629,7 +629,7 @@ func TestConfigMigrationComplex(t *testing.T) {
 	require.Equal(newConfig.Consensus.Prune.Strategy, "keep_n")
 	require.Equal(newConfig.Consensus.Prune.NumKept, uint64(86400))
 	require.Equal(newConfig.Consensus.StateSync.Enabled, false)
-	require.Equal(newConfig.Consensus.StateSync.TrustPeriod, 24*time.Hour)
+	require.Equal(newConfig.Consensus.StateSync.TrustPeriod, 30*24*time.Hour)
 	require.Equal(newConfig.Consensus.StateSync.TrustHeight, uint64(4692334))
 	require.Equal(newConfig.Consensus.StateSync.TrustHash, "2d9dd35e7254a6c5c87f49d0646ee359f06f460b72278ad3ac17130bd9a7ec19")
 	require.Equal(newConfig.Storage.Backend, "badger")
