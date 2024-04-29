@@ -45,7 +45,7 @@ func (pd *priceDiscovery) GasPrice() (*quantity.Quantity, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
-	return pd.finalGasPrice, nil
+	return pd.finalGasPrice.Clone(), nil
 }
 
 // refreshMinGasPrice refreshes minimum gas price reported by the consensus layer.
