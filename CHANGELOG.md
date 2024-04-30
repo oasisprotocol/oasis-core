@@ -12,6 +12,22 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 22.2.13 (2024-04-30)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 6.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 4.0.0     |
+
+### Bug Fixes
+
+- go/archive: Fix runtime queries on archive nodes
+  ([#5622](https://github.com/oasisprotocol/oasis-core/issues/5622))
+
+  Fix storage worker initialization on archive nodes which was causing runtime
+  queries to fail.
+
 ## 22.2.12 (2024-02-27)
 
 | Protocol          | Version   |
