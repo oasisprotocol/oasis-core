@@ -31,6 +31,23 @@ updates:
       - dependency-name: github.com/cometbft/cometbft
       - dependency-name: github.com/cometbft/cometbft-db
 
+  # Disable updates for upgrade tets.
+  # We keep these manually updated to match upgrade versions.
+  - package-ecosystem: gomod
+    directories:
+      - tests/upgrade/pre/
+      - tests/upgrade/post/
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "upgrade:"
+    labels:
+      - c:deps
+      - golang
+    ignore:
+      # Don't update any dependencies.
+      - dependency-name: "*"
+
   # Manage Rust pacakge versions.
   - package-ecosystem: cargo
     directory: /
