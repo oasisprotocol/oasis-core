@@ -2,9 +2,12 @@ use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
 
-use crate::vss::{matrix::VerificationMatrix, polynomial::Polynomial};
+use crate::{
+    suites::Suite,
+    vss::{matrix::VerificationMatrix, polynomial::Polynomial},
+};
 
-use super::{player::Player, DimensionSwitch, Error, Shareholder, Suite};
+use super::{player::Player, DimensionSwitch, Error, Shareholder};
 
 /// Handoff kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -342,11 +345,14 @@ mod tests {
 
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    use crate::churp::{
-        Dealer, HandoffKind, NistP384Sha384Dealer, NistP384Sha3_384, Player, Shareholder,
+    use crate::{
+        churp::{self, HandoffKind, Shareholder},
+        suites::p384,
     };
 
-    use super::Handoff;
+    type Dealer = churp::Dealer<p384::Sha3_384>;
+    type Handoff = churp::Handoff<p384::Sha3_384>;
+    type Player = churp::Player<p384::Sha3_384>;
 
     fn shareholder(id: u8) -> Shareholder {
         Shareholder([id; 32])
@@ -356,7 +362,7 @@ mod tests {
         ids.into_iter().map(shareholder).collect()
     }
 
-    fn verify_players(players: &HashMap<Shareholder, Arc<Player<NistP384Sha3_384>>>) {
+    fn verify_players(players: &HashMap<Shareholder, Arc<Player>>) {
         // Verify that all players have the same matrix.
         let mut vms = HashSet::new();
         for player in players.values() {
@@ -374,10 +380,10 @@ mod tests {
         dealing_phase: bool,
         committee: HashSet<Shareholder>,
         rng: &mut impl RngCore,
-    ) -> HashMap<Shareholder, Dealer<NistP384Sha3_384>> {
+    ) -> HashMap<Shareholder, Dealer> {
         let mut dealers = HashMap::new();
         for sh in committee.iter() {
-            let d = NistP384Sha384Dealer::new(threshold, dealing_phase, rng);
+            let d = Dealer::new(threshold, dealing_phase, rng);
             dealers.insert(sh.clone(), d);
         }
         dealers
@@ -397,9 +403,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff =
-                Handoff::<NistP384Sha3_384>::new(threshold, alice.clone(), committee.clone(), kind)
-                    .unwrap();
+            let handoff = Handoff::new(threshold, alice.clone(), committee.clone(), kind).unwrap();
 
             // Proactivization.
             for (i, (bob, dealer)) in dealers.iter().enumerate() {
@@ -442,7 +446,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff = Handoff::<NistP384Sha3_384>::new(
+            let handoff = Handoff::new(
                 threshold,
                 alice.clone(),
                 committee.clone(),
@@ -499,7 +503,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff = Handoff::<NistP384Sha3_384>::new(
+            let handoff = Handoff::new(
                 threshold,
                 alice.clone(),
                 committee.clone(),

@@ -3,9 +3,12 @@
 use anyhow::Result;
 use group::{Group, GroupEncoding};
 
-use crate::vss::{matrix::VerificationMatrix, polynomial::Polynomial};
+use crate::{
+    suites::Suite,
+    vss::{matrix::VerificationMatrix, polynomial::Polynomial},
+};
 
-use super::{Error, Shareholder, Suite};
+use super::{Error, Shareholder};
 
 /// Player is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying

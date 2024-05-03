@@ -5,12 +5,15 @@ use std::{
 
 use anyhow::Result;
 
-use crate::vss::{
-    lagrange::lagrange, matrix::VerificationMatrix, polynomial::Polynomial,
-    vector::VerificationVector,
+use crate::{
+    suites::Suite,
+    vss::{
+        lagrange::lagrange, matrix::VerificationMatrix, polynomial::Polynomial,
+        vector::VerificationVector,
+    },
 };
 
-use super::{Error, HandoffKind, Player, Shareholder, Suite};
+use super::{Error, HandoffKind, Player, Shareholder};
 
 /// Dimension switch kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -621,7 +624,8 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
-        churp::{HandoffKind, NistP384Sha3_384, Shareholder, Suite},
+        churp::{HandoffKind, Shareholder},
+        suites::{p384, Suite},
         vss::{matrix::VerificationMatrix, polynomial::BivariatePolynomial},
     };
 
@@ -638,14 +642,14 @@ mod tests {
     fn add_point(
         me: u8,
         sh: u8,
-        bp: &BivariatePolynomial<p384::Scalar>,
-        sp: &mut SwitchPoints<NistP384Sha3_384>,
+        bp: &BivariatePolynomial<<p384::Sha3_384 as Suite>::PrimeField>,
+        sp: &mut SwitchPoints<p384::Sha3_384>,
         kind: DimensionSwitchKind,
     ) -> Result<bool> {
         let me = shareholder(me);
         let sh = shareholder(sh);
-        let x = NistP384Sha3_384::encode_shareholder(sh).unwrap();
-        let y = NistP384Sha3_384::encode_shareholder(me).unwrap();
+        let x = p384::Sha3_384::encode_shareholder(sh).unwrap();
+        let y = p384::Sha3_384::encode_shareholder(me).unwrap();
         let bij = match kind {
             DimensionSwitchKind::ShareReduction => bp.eval(&x, &y),
             DimensionSwitchKind::FullShareDistribution => bp.eval(&y, &x),
@@ -663,14 +667,14 @@ mod tests {
         let deg_y = 2 * threshold;
         let bp = BivariatePolynomial::random(deg_x, deg_y, &mut rng);
         let vm = VerificationMatrix::from(&bp);
-        let me = NistP384Sha3_384::encode_shareholder(shareholder(1)).unwrap();
+        let me = p384::Sha3_384::encode_shareholder(shareholder(1)).unwrap();
 
         for kind in vec![
             DimensionSwitchKind::ShareReduction,
             DimensionSwitchKind::FullShareDistribution,
         ] {
             let mut sp =
-                SwitchPoints::<NistP384Sha3_384>::new(threshold, &me, vm.clone(), kind).unwrap();
+                SwitchPoints::<p384::Sha3_384>::new(threshold, &me, vm.clone(), kind).unwrap();
             let me = 1;
             let mut sh = 2;
 
@@ -751,7 +755,7 @@ mod tests {
         threshold: u8,
         me: u8,
         sh: u8,
-        bs: &mut BivariateShares<NistP384Sha3_384>,
+        bs: &mut BivariateShares<p384::Sha3_384>,
         dkind: DimensionSwitchKind,
         hkind: HandoffKind,
     ) -> Result<bool> {
@@ -765,7 +769,7 @@ mod tests {
         let vm = VerificationMatrix::from(&bp);
         let me = shareholder(me);
         let sh = shareholder(sh);
-        let x = NistP384Sha3_384::encode_shareholder(me).unwrap();
+        let x = p384::Sha3_384::encode_shareholder(me).unwrap();
         let q = match dkind {
             DimensionSwitchKind::ShareReduction => bp.eval_y(&x),
             DimensionSwitchKind::FullShareDistribution => bp.eval_x(&x),
@@ -778,12 +782,12 @@ mod tests {
         let threshold = 2;
         let hkind = HandoffKind::CommitteeChanged;
 
-        let me = NistP384Sha3_384::encode_shareholder(shareholder(1)).unwrap();
+        let me = p384::Sha3_384::encode_shareholder(shareholder(1)).unwrap();
         let shs = shareholders(vec![1, 2, 3]);
         let shareholders: HashSet<Shareholder> = shs.iter().cloned().collect();
 
         // Dealing phase requires at least threshold + 2 dealers.
-        let res = BivariateShares::<NistP384Sha3_384>::new(
+        let res = BivariateShares::<p384::Sha3_384>::new(
             threshold,
             me,
             shareholders.clone(),
@@ -804,7 +808,7 @@ mod tests {
             DimensionSwitchKind::ShareReduction,
             DimensionSwitchKind::FullShareDistribution,
         ] {
-            let mut bs = BivariateShares::<NistP384Sha3_384>::new(
+            let mut bs = BivariateShares::<p384::Sha3_384>::new(
                 threshold,
                 me,
                 shareholders.clone(),
