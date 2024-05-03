@@ -61,6 +61,21 @@ where
         Self { a }
     }
 
+    /// Sets the coefficient `a_i` that belongs to the term `x^i`.
+    ///
+    /// If the coefficient does not exist, this is a no-op.
+    pub fn set_coefficient(&mut self, ai: Fp, i: usize) {
+        if let Some(old_ai) = self.a.get_mut(i) {
+            *old_ai = ai;
+        }
+    }
+
+    /// Sets the coefficient `a_0` of the constant term to zero,
+    /// effectively creating a zero-hole univariate polynomial.
+    pub fn to_zero_hole(&mut self) {
+        self.set_coefficient(Fp::ZERO, 0);
+    }
+
     /// Returns the highest of the degrees of the polynomial's monomials with
     /// non-zero coefficients.
     pub fn degree(&self) -> usize {
@@ -431,74 +446,94 @@ where
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::Polynomial;
+    type PrimeField = p384::Scalar;
+    type Polynomial = super::Polynomial<PrimeField>;
 
-    fn scalar(value: i64) -> p384::Scalar {
+    fn scalar(value: i64) -> PrimeField {
         scalars(&vec![value])[0]
     }
 
-    fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
+    fn scalars(values: &[i64]) -> Vec<PrimeField> {
         values
             .iter()
             .map(|&w| match w.is_negative() {
-                false => p384::Scalar::from_u64(w as u64),
-                true => p384::Scalar::from_u64(-w as u64).neg(),
+                false => PrimeField::from_u64(w as u64),
+                true => PrimeField::from_u64(-w as u64).neg(),
             })
             .collect()
     }
 
     #[test]
     fn test_zero() {
-        let p = Polynomial::<p384::Scalar>::zero(0);
+        let p = Polynomial::zero(0);
         assert_eq!(p.a, scalars(&[0]));
 
-        let p = Polynomial::<p384::Scalar>::zero(2);
+        let p = Polynomial::zero(2);
         assert_eq!(p.a, scalars(&[0, 0, 0]));
     }
 
     #[test]
     fn test_with_coefficients() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(vec![]);
+        let p = Polynomial::with_coefficients(vec![]);
         assert_eq!(p.a, scalars(&[0]));
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         assert_eq!(p.a, scalars(&[1, 2, 3]));
     }
 
     #[test]
+    fn test_set_coefficients() {
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
+
+        p.set_coefficient(scalar(4), 3);
+        assert_eq!(p.a, scalars(&[1, 2, 3]));
+
+        p.set_coefficient(scalar(4), 1);
+        assert_eq!(p.a, scalars(&[1, 4, 3]));
+    }
+
+    #[test]
+    fn test_zero_hole() {
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
+
+        p.to_zero_hole();
+        assert_eq!(p.a, scalars(&[0, 2, 3]));
+    }
+
+    #[test]
     fn test_degree_and_size() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(vec![]);
+        let p = Polynomial::with_coefficients(vec![]);
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 1);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0]));
+        let p = Polynomial::with_coefficients(scalars(&[0]));
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 1);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1]));
+        let p = Polynomial::with_coefficients(scalars(&[1]));
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 1);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 0]));
+        let p = Polynomial::with_coefficients(scalars(&[0, 0]));
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 2);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         assert_eq!(p.degree(), 2);
         assert_eq!(p.size(), 3);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
         assert_eq!(p.degree(), 2);
         assert_eq!(p.size(), 5);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 1, 2, 0, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[0, 1, 2, 0, 3]));
         assert_eq!(p.degree(), 4);
         assert_eq!(p.size(), 5);
     }
 
     #[test]
     fn test_coefficient() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         assert_eq!(p.coefficient(0), Some(&scalar(1)));
         assert_eq!(p.coefficient(1), Some(&scalar(2)));
         assert_eq!(p.coefficient(2), Some(&scalar(3)));
@@ -507,19 +542,19 @@ mod tests {
 
     #[test]
     fn test_trim() {
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0]));
+        let mut p = Polynomial::with_coefficients(scalars(&[0]));
         p.trim();
         assert_eq!(p.a, scalars(&[0]));
 
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 0]));
+        let mut p = Polynomial::with_coefficients(scalars(&[0, 0]));
         p.trim();
         assert_eq!(p.a, scalars(&[0]));
 
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         p.trim();
         assert_eq!(p.a, scalars(&[1, 2, 3]));
 
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
         p.trim();
         assert_eq!(p.a, scalars(&[1, 2, 3]));
     }
@@ -527,14 +562,14 @@ mod tests {
     #[test]
     fn test_serialization() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let bp = Polynomial::<p384::Scalar>::random(0, &mut rng);
-        let restored = Polynomial::<p384::Scalar>::from_bytes(&bp.to_bytes())
-            .expect("deserialization should succeed");
+        let bp = Polynomial::random(0, &mut rng);
+        let restored =
+            Polynomial::from_bytes(&bp.to_bytes()).expect("deserialization should succeed");
         assert!(bp == restored);
 
-        let bp = Polynomial::<p384::Scalar>::random(3, &mut rng);
-        let restored = Polynomial::<p384::Scalar>::from_bytes(&bp.to_bytes())
-            .expect("deserialization should succeed");
+        let bp = Polynomial::random(3, &mut rng);
+        let restored =
+            Polynomial::from_bytes(&bp.to_bytes()).expect("deserialization should succeed");
         assert!(bp == restored);
     }
 
@@ -783,8 +818,8 @@ mod tests {
     pub fn test_sum() {
         // One.
         let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let s1 = vec![&f].into_iter().sum::<Polynomial<_>>();
-        let s2 = vec![f].into_iter().sum::<Polynomial<_>>();
+        let s1 = vec![&f].into_iter().sum::<Polynomial>();
+        let s2 = vec![f].into_iter().sum::<Polynomial>();
         for s in vec![s1, s2] {
             assert_eq!(s.a, scalars(&[1, 2, 3]));
         }
@@ -793,8 +828,8 @@ mod tests {
         let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         let g = Polynomial::with_coefficients(scalars(&[2, 4]));
         let h = Polynomial::with_coefficients(scalars(&[3]));
-        let s1 = vec![&f, &g, &h].into_iter().sum::<Polynomial<_>>();
-        let s2 = vec![f, g, h].into_iter().sum::<Polynomial<_>>();
+        let s1 = vec![&f, &g, &h].into_iter().sum::<Polynomial>();
+        let s2 = vec![f, g, h].into_iter().sum::<Polynomial>();
         for s in vec![s1, s2] {
             assert_eq!(s.a, scalars(&[6, 6, 3]));
         }
