@@ -12,11 +12,7 @@ use crate::{
     },
 };
 
-use super::HandoffKind;
-
-/// Shareholder identifier.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct Shareholder(pub [u8; 32]);
+use super::{HandoffKind, ShareholderId};
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
 /// computing a verification matrix, and deriving secret shares for other
@@ -75,10 +71,10 @@ where
     /// Returns a secret share for the given shareholder.
     pub fn derive_bivariate_share(
         &self,
-        id: Shareholder,
+        id: ShareholderId,
         kind: HandoffKind,
     ) -> Result<Polynomial<S::PrimeField>> {
-        let v = S::encode_shareholder(id)?;
+        let v = id.encode::<S>()?;
         let p = match kind {
             HandoffKind::DealingPhase => self.bp.eval_x(&v),
             HandoffKind::CommitteeChanged => self.bp.eval_y(&v),
@@ -107,7 +103,7 @@ pub type NistP384Sha384Dealer = Dealer<p384::Sha3_384>;
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{BivariatePolynomial, HandoffKind, NistP384Sha384Dealer, Shareholder};
+    use super::{BivariatePolynomial, HandoffKind, NistP384Sha384Dealer, ShareholderId};
 
     type Dealer = NistP384Sha384Dealer;
 
@@ -160,7 +156,7 @@ mod tests {
     fn test_derive_bivariate_share() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let dealer = Dealer::random(2, 3, &mut rng);
-        let id = Shareholder([1; 32]);
+        let id = ShareholderId([1; 32]);
 
         let p = dealer
             .derive_bivariate_share(id.clone(), HandoffKind::DealingPhase)

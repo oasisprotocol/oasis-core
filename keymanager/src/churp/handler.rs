@@ -36,7 +36,7 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, Handoff, HandoffKind, Player, Shareholder},
+    churp::{Dealer, Handoff, HandoffKind, Player, ShareholderId},
     suites::{p384, Suite},
     vss::{
         matrix::VerificationMatrix,
@@ -252,7 +252,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
         let player = self.get_player::<S>(status.id, status.handoff)?;
         let point = player.switch_point(id)?;
         let point = scalar_to_bytes(&point);
@@ -317,7 +317,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let player = handoff.get_reduced_player()?;
         let point = player.switch_point(id)?;
@@ -380,7 +380,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
         let kind = Self::handoff_kind(status);
         let dealer = self.get_dealer::<S>(status.id, status.next_handoff)?;
         let polynomial = dealer.derive_bivariate_share(id, kind)?.to_bytes();
@@ -533,7 +533,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
 
         if !handoff.needs_share_reduction_switch_point(&id)? {
             return Err(Error::InvalidShareholder.into());
@@ -636,7 +636,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
 
         if !handoff.needs_full_share_distribution_switch_point(&id)? {
             return Err(Error::InvalidShareholder.into());
@@ -710,7 +710,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
 
         if !handoff.needs_bivariate_share(&id)? {
             return Err(Error::InvalidShareholder.into());
@@ -1126,12 +1126,12 @@ impl Churp {
 
         // Create a new handoff.
         let threshold = status.threshold;
-        let me = Shareholder(self.node_id.0);
+        let me = ShareholderId(self.node_id.0);
         let shareholders = status
             .applications
             .keys()
             .cloned()
-            .map(|id| Shareholder(id.0))
+            .map(|id| ShareholderId(id.0))
             .collect();
         let kind = Self::handoff_kind(status);
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;

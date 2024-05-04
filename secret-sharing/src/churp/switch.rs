@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use super::{Error, HandoffKind, Player, Shareholder};
+use super::{Error, HandoffKind, Player, ShareholderId};
 
 /// Dimension switch kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,7 +81,7 @@ where
 
     /// The set of shareholders from which bivariate shares need to be fetched.
     /// If empty, proactivization is skipped.
-    shareholders: HashSet<Shareholder>,
+    shareholders: HashSet<ShareholderId>,
 
     /// Current state of the switch.
     state: Mutex<DimensionSwitchState<S>>,
@@ -94,8 +94,8 @@ where
     /// Creates a new share reduction dimension switch.
     pub(crate) fn new_share_reduction(
         threshold: u8,
-        me: Shareholder,
-        shareholders: HashSet<Shareholder>,
+        me: ShareholderId,
+        shareholders: HashSet<ShareholderId>,
         handoff: HandoffKind,
     ) -> Result<Self> {
         let kind = DimensionSwitchKind::ShareReduction;
@@ -105,8 +105,8 @@ where
     /// Creates a new full share distribution dimension switch.
     pub(crate) fn new_full_share_distribution(
         threshold: u8,
-        me: Shareholder,
-        shareholders: HashSet<Shareholder>,
+        me: ShareholderId,
+        shareholders: HashSet<ShareholderId>,
         handoff: HandoffKind,
     ) -> Result<Self> {
         let kind = DimensionSwitchKind::FullShareDistribution;
@@ -116,12 +116,12 @@ where
     /// Creates a new dimension switch.
     fn new(
         threshold: u8,
-        me: Shareholder,
-        shareholders: HashSet<Shareholder>,
+        me: ShareholderId,
+        shareholders: HashSet<ShareholderId>,
         kind: DimensionSwitchKind,
         handoff: HandoffKind,
     ) -> Result<Self> {
-        let me = S::encode_shareholder(me)?;
+        let me = me.encode::<S>()?;
         let state = Mutex::new(DimensionSwitchState::WaitingForVerificationMatrix);
 
         Ok(Self {
@@ -168,7 +168,7 @@ where
     }
 
     /// Checks if a switch point is required from the given shareholder.
-    pub(crate) fn needs_switch_point(&self, id: &Shareholder) -> Result<bool> {
+    pub(crate) fn needs_switch_point(&self, id: &ShareholderId) -> Result<bool> {
         let state = self.state.lock().unwrap();
         let sp = match &*state {
             DimensionSwitchState::WaitingForVerificationMatrix => return Ok(true),
@@ -184,7 +184,7 @@ where
     ///
     /// Returns true if enough points have been received and the switch
     /// transitioned to the next state.
-    pub(crate) fn add_switch_point(&self, id: Shareholder, bij: S::PrimeField) -> Result<bool> {
+    pub(crate) fn add_switch_point(&self, id: ShareholderId, bij: S::PrimeField) -> Result<bool> {
         let mut state = self.state.lock().unwrap();
         let sp = match &mut *state {
             DimensionSwitchState::Accumulating(sp) => sp,
@@ -243,7 +243,7 @@ where
     }
 
     /// Checks if a bivariate share is needed from the given shareholder.
-    pub(crate) fn needs_bivariate_share(&self, id: &Shareholder) -> Result<bool> {
+    pub(crate) fn needs_bivariate_share(&self, id: &ShareholderId) -> Result<bool> {
         let state = self.state.lock().unwrap();
         let bs = match &*state {
             DimensionSwitchState::Merging(bs) => bs,
@@ -260,7 +260,7 @@ where
     /// transitioned to the next state.
     pub(crate) fn add_bivariate_share(
         &self,
-        id: Shareholder,
+        id: ShareholderId,
         q: Polynomial<<S as Suite>::PrimeField>,
         vm: VerificationMatrix<<S as Suite>::Group>,
     ) -> Result<bool> {
@@ -319,7 +319,7 @@ where
     vv: VerificationVector<S::Group>,
 
     /// A set of shareholders whose points have been received.
-    shareholders: HashSet<Shareholder>,
+    shareholders: HashSet<ShareholderId>,
 
     /// A list of encoded shareholders' identities whose points have been
     /// received.
@@ -383,7 +383,7 @@ where
     }
 
     /// Checks if a switch point is required from the given shareholder.
-    fn needs_point(&self, id: &Shareholder) -> bool {
+    fn needs_point(&self, id: &ShareholderId) -> bool {
         if self.shareholders.len() >= self.n {
             return false;
         }
@@ -394,7 +394,7 @@ where
     ///
     /// Returns true if enough points have been received; otherwise,
     /// it returns false.
-    fn add_point(&mut self, id: Shareholder, bij: S::PrimeField) -> Result<bool> {
+    fn add_point(&mut self, id: ShareholderId, bij: S::PrimeField) -> Result<bool> {
         if self.shareholders.len() >= self.n {
             return Err(Error::TooManySwitchPoints.into());
         }
@@ -406,7 +406,7 @@ where
         // If the point is valid, it doesn't matter if it came from a stranger.
         // However, since verification is costly, one could check if the point
         // came from a legitimate shareholder.
-        let x = S::encode_shareholder(id)?;
+        let x = id.encode::<S>()?;
         if !self.vv.verify(&x, &bij) {
             return Err(Error::InvalidSwitchPoint.into());
         }
@@ -469,9 +469,9 @@ where
     zero_hole: bool,
 
     /// A set of shareholders providing bivariate shares.
-    shareholders: HashSet<Shareholder>,
+    shareholders: HashSet<ShareholderId>,
     /// A set of shareholders whose bivariate share still needs to be received.
-    pending_shareholders: HashSet<Shareholder>,
+    pending_shareholders: HashSet<ShareholderId>,
 
     /// The sum of the received bivariate shares.
     p: Option<Polynomial<S::PrimeField>>,
@@ -491,7 +491,7 @@ where
     fn new(
         threshold: u8,
         me: S::PrimeField,
-        shareholders: HashSet<Shareholder>,
+        shareholders: HashSet<ShareholderId>,
         kind: DimensionSwitchKind,
         handoff: HandoffKind,
         player: Option<Arc<Player<S>>>,
@@ -530,7 +530,7 @@ where
     }
 
     /// Checks if a bivariate share is needed from the given shareholder.
-    fn needs_bivariate_share(&self, id: &Shareholder) -> bool {
+    fn needs_bivariate_share(&self, id: &ShareholderId) -> bool {
         self.pending_shareholders.contains(id)
     }
 
@@ -540,7 +540,7 @@ where
     /// it returns false.
     fn add_bivariate_share(
         &mut self,
-        id: Shareholder,
+        id: ShareholderId,
         q: Polynomial<S::PrimeField>,
         vm: VerificationMatrix<S::Group>,
     ) -> Result<bool> {
@@ -624,18 +624,18 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
-        churp::{HandoffKind, Shareholder},
+        churp::{HandoffKind, ShareholderId},
         suites::{p384, Suite},
         vss::{matrix::VerificationMatrix, polynomial::BivariatePolynomial},
     };
 
     use super::{BivariateShares, DimensionSwitchKind, Error, SwitchPoints};
 
-    fn shareholder(id: u8) -> Shareholder {
-        Shareholder([id; 32])
+    fn shareholder(id: u8) -> ShareholderId {
+        ShareholderId([id; 32])
     }
 
-    fn shareholders(ids: Vec<u8>) -> Vec<Shareholder> {
+    fn shareholders(ids: Vec<u8>) -> Vec<ShareholderId> {
         ids.into_iter().map(shareholder).collect()
     }
 
@@ -648,8 +648,8 @@ mod tests {
     ) -> Result<bool> {
         let me = shareholder(me);
         let sh = shareholder(sh);
-        let x = p384::Sha3_384::encode_shareholder(sh).unwrap();
-        let y = p384::Sha3_384::encode_shareholder(me).unwrap();
+        let x = sh.encode::<p384::Sha3_384>().unwrap();
+        let y = me.encode::<p384::Sha3_384>().unwrap();
         let bij = match kind {
             DimensionSwitchKind::ShareReduction => bp.eval(&x, &y),
             DimensionSwitchKind::FullShareDistribution => bp.eval(&y, &x),
@@ -667,7 +667,7 @@ mod tests {
         let deg_y = 2 * threshold;
         let bp = BivariatePolynomial::random(deg_x, deg_y, &mut rng);
         let vm = VerificationMatrix::from(&bp);
-        let me = p384::Sha3_384::encode_shareholder(shareholder(1)).unwrap();
+        let me = shareholder(1).encode::<p384::Sha3_384>().unwrap();
 
         for kind in vec![
             DimensionSwitchKind::ShareReduction,
@@ -769,7 +769,7 @@ mod tests {
         let vm = VerificationMatrix::from(&bp);
         let me = shareholder(me);
         let sh = shareholder(sh);
-        let x = p384::Sha3_384::encode_shareholder(me).unwrap();
+        let x = me.encode::<p384::Sha3_384>().unwrap();
         let q = match dkind {
             DimensionSwitchKind::ShareReduction => bp.eval_y(&x),
             DimensionSwitchKind::FullShareDistribution => bp.eval_x(&x),
@@ -782,9 +782,9 @@ mod tests {
         let threshold = 2;
         let hkind = HandoffKind::CommitteeChanged;
 
-        let me = p384::Sha3_384::encode_shareholder(shareholder(1)).unwrap();
+        let me = shareholder(1).encode::<p384::Sha3_384>().unwrap();
         let shs = shareholders(vec![1, 2, 3]);
-        let shareholders: HashSet<Shareholder> = shs.iter().cloned().collect();
+        let shareholders: HashSet<ShareholderId> = shs.iter().cloned().collect();
 
         // Dealing phase requires at least threshold + 2 dealers.
         let res = BivariateShares::<p384::Sha3_384>::new(
