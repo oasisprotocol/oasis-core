@@ -258,7 +258,7 @@ func (c *client) worker() {
 	}
 }
 
-// GetStoredBlock implements api.Client.
+// GetStoredLightBlock implements api.Client.
 func (c *client) GetStoredLightBlock(height int64) (*consensus.LightBlock, error) {
 	clb, err := c.store.LightBlock(height)
 	if err != nil {
@@ -366,7 +366,7 @@ func (c *client) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmtt
 	return c.lc.GetVerifiedLightBlock(ctx, height)
 }
 
-// GetVerifiedLightBlock implements Client.
+// GetVerifiedParameters implements Client.
 func (c *client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
 	select {
 	case <-c.initCh:

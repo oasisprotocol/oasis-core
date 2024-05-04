@@ -165,7 +165,7 @@ func parseScenarioParams(toRun []scenario.Scenario) (map[string][]scenario.Scena
 	return scListsToRun, nil
 }
 
-// generalizedScenarioNames returns list of generalized scenario names from the
+// generalizedScenarioName returns list of generalized scenario names from the
 // original name to most general name.
 func generalizedScenarioName(name string) []string {
 	dirs := strings.Split(name, "/")
