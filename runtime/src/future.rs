@@ -2,7 +2,7 @@
 use std::future::Future;
 
 /// Create a new asynchronous Tokio runtime.
-#[cfg(target_env = "sgx")]
+#[cfg(any(target_env = "sgx", feature = "debug-mock-sgx"))]
 pub fn new_tokio_runtime() -> tokio::runtime::Runtime {
     // In SGX use a trimmed-down version of the Tokio runtime.
     //
@@ -17,7 +17,7 @@ pub fn new_tokio_runtime() -> tokio::runtime::Runtime {
 }
 
 /// Create a new asynchronous Tokio runtime.
-#[cfg(not(target_env = "sgx"))]
+#[cfg(not(any(target_env = "sgx", feature = "debug-mock-sgx")))]
 pub fn new_tokio_runtime() -> tokio::runtime::Runtime {
     // In non-SGX we use a fully-fledged Tokio runtime.
     tokio::runtime::Runtime::new().unwrap()
