@@ -12,6 +12,38 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 23.0.11 (2024-05-06)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- go: Update go to 1.21.8
+  ([#5587](https://github.com/oasisprotocol/oasis-core/issues/5587))
+
+- go: Bump github.com/quic-go/quic-go to v0.42.0
+  ([#5625](https://github.com/oasisprotocol/oasis-core/issues/5625))
+
+- go: Bump go-libp2p to v0.33.2
+  ([#5625](https://github.com/oasisprotocol/oasis-core/issues/5625))
+
+### Bug Fixes
+
+- go/worker/compute/executor/committee: Retry scheduling on failure
+  ([#5660](https://github.com/oasisprotocol/oasis-core/issues/5660))
+
+### Internal Changes
+
+- Bump Rust toolchain to 2024-01-08
+  ([#5513](https://github.com/oasisprotocol/oasis-core/issues/5513))
+
+- ci: Update SGX tests to run DCAP
+  ([#5610](https://github.com/oasisprotocol/oasis-core/issues/5610))
+
 ## 23.0.10 (2024-03-04)
 
 | Protocol          | Version   |
