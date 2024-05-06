@@ -22,7 +22,7 @@ require (
 	github.com/cosmos/gogoproto v1.4.1
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/eapache/channels v1.1.0
-	github.com/fxamacker/cbor/v2 v2.4.0
+	github.com/fxamacker/cbor/v2 v2.6.0
 	github.com/gammazero/deque v0.2.1
 	github.com/go-kit/log v0.2.1
 	github.com/goki/go-difflib v1.2.1
