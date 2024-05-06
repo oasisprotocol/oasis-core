@@ -11,5 +11,6 @@
 #![feature(test)]
 
 pub mod churp;
+pub mod kdc;
 pub mod suites;
 pub mod vss;
