@@ -432,6 +432,18 @@ func (s *sgxProvisioner) updateCapabilityTEE(ctx context.Context, ts *teeState, 
 }
 
 func (s *sgxProvisioner) endorseCapabilityTEE(ctx context.Context, capabilityTEE *node.CapabilityTEE, conn protocol.Connection) {
+	ri, err := conn.GetInfo()
+	if err != nil {
+		s.logger.Error("failed to get host information, not endorsing local component",
+			"err", err,
+		)
+		return
+	}
+	if !ri.Features.EndorsedCapabilityTEE {
+		s.logger.Debug("runtime does not support endorsed TEE capabilities, skipping endorsement")
+		return
+	}
+
 	// Endorse CapabilityTEE by signing it under the proper domain separation context.
 	nodeSignature, err := signature.Sign(
 		s.identity.NodeSigner,
@@ -454,8 +466,7 @@ func (s *sgxProvisioner) endorseCapabilityTEE(ctx context.Context, capabilityTEE
 		},
 	})
 	if err != nil {
-		// Note that this may fail because the runtime does not support endorsements.
-		s.logger.Warn("failed to update endorsement of local component",
+		s.logger.Error("failed to update endorsement of local component",
 			"err", err,
 		)
 		return

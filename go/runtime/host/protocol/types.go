@@ -201,6 +201,9 @@ type Features struct {
 	SameBlockConsensusValidation bool `json:"same_block_consensus_validation,omitempty"`
 	// RPCPeerID is a feature specifying that the runtime supports RPC peer IDs.
 	RPCPeerID bool `json:"rpc_peer_id,omitempty"`
+	// EndorsedCapabilityTEE is a feature specifying that the runtime supports endorsed TEE
+	// capabilities.
+	EndorsedCapabilityTEE bool `json:"endorsed_capability_tee,omitempty"`
 }
 
 // HasScheduleControl returns true when the runtime supports the schedule control feature.
