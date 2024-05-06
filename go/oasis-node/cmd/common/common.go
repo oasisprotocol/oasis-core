@@ -33,6 +33,8 @@ const (
 	CfgDebugAllowTestKeys = "debug.allow_test_keys"
 	// CfgDebugAllowDebugEnclaves is the command line flag to enable debug enclaves.
 	CfgDebugAllowDebugEnclaves = "debug.allow_debug_enclaves"
+	// CfgDebugTCBLaxVerify is the command line flag to enable lax verification of PCS TCB statuses.
+	CfgDebugTCBLaxVerify = "debug.tcb_lax_verify"
 
 	// RequiredRlimit is the minimum required RLIMIT_NOFILE as too low of a
 	// limit can cause problems with BadgerDB.
@@ -106,6 +108,7 @@ func Init() error {
 		initLogging,
 		initPublicKeyBlacklist,
 		initDebugEnclaves,
+		initDebugTCBLaxVerify,
 		initRlimit,
 	}
 
@@ -128,8 +131,10 @@ func Logger() *logging.Logger {
 func init() {
 	debugFlags.Bool(CfgDebugAllowTestKeys, false, "allow test keys (UNSAFE)")
 	debugFlags.Bool(CfgDebugAllowDebugEnclaves, false, "allow debug enclaves (UNSAFE)")
+	debugFlags.Bool(CfgDebugTCBLaxVerify, false, "allow lax verification of TCB statuses (UNSAFE)")
 	_ = debugFlags.MarkHidden(CfgDebugAllowTestKeys)
 	_ = debugFlags.MarkHidden(CfgDebugAllowDebugEnclaves)
+	_ = debugFlags.MarkHidden(CfgDebugTCBLaxVerify)
 	_ = viper.BindPFlags(debugFlags)
 
 	RootFlags.StringVar(&cfgFile, CfgConfigFile, "", "config file")
@@ -193,6 +198,14 @@ func initDebugEnclaves() error {
 		rootLog.Warn("`debug.allow_debug_enclaves` set, enclaves in debug mode will be allowed")
 		ias.SetAllowDebugEnclaves()
 		pcs.SetAllowDebugEnclaves()
+	}
+	return nil
+}
+
+func initDebugTCBLaxVerify() error {
+	if flags.DebugDontBlameOasis() && viper.GetBool(CfgDebugTCBLaxVerify) {
+		rootLog.Warn("`debug.tcb_lax_verify` set, TCB lax verification will be done")
+		pcs.SetUnsafeLaxVerify()
 	}
 	return nil
 }

@@ -80,6 +80,13 @@ func (args *argBuilder) debugAllowDebugEnclaves() *argBuilder {
 	return args
 }
 
+func (args *argBuilder) debugTCBLaxVerify() *argBuilder {
+	args.vec = append(args.vec, Argument{
+		Name: cmdCommon.CfgDebugTCBLaxVerify,
+	})
+	return args
+}
+
 func (args *argBuilder) grpcServerPort(port uint16) *argBuilder {
 	args.vec = append(args.vec, Argument{
 		Name:   grpc.CfgServerPort,
