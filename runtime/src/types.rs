@@ -380,6 +380,9 @@ pub struct Features {
     /// A feature specifying that the runtime supports RPC peer IDs.
     #[cbor(optional)]
     pub rpc_peer_id: bool,
+    /// A feature specifying that the runtime supports endorsed TEE capabilities.
+    #[cbor(optional)]
+    pub endorsed_capability_tee: bool,
 }
 
 impl Default for Features {
@@ -389,6 +392,7 @@ impl Default for Features {
             key_manager_quote_policy_updates: true,
             key_manager_status_updates: true,
             rpc_peer_id: true,
+            endorsed_capability_tee: true,
         }
     }
 }
