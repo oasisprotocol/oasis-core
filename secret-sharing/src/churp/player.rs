@@ -1,4 +1,4 @@
-//! CHURP player.
+//! CHURP shareholder.
 
 use anyhow::Result;
 use group::{Group, GroupEncoding};
@@ -10,19 +10,19 @@ use crate::{
 
 use super::{Error, ShareholderId};
 
-/// Player is responsible for deriving key shares and generating
+/// Shareholder is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-pub struct Player<S: Suite> {
+pub struct Shareholder<S: Suite> {
     /// Secret (full or reduced) share of the shared secret.
     share: SecretShare<S::Group>,
 }
 
-impl<S> Player<S>
+impl<S> Shareholder<S>
 where
     S: Suite,
 {
-    /// Creates a new player.
+    /// Creates a new shareholder.
     pub fn new(p: Polynomial<S::PrimeField>, vm: VerificationMatrix<S::Group>) -> Self {
         SecretShare::new(p, vm).into()
     }
@@ -58,12 +58,12 @@ where
             .unwrap_or(S::Group::identity())
     }
 
-    /// Creates a new player with a proactivized secret polynomial.
+    /// Creates a new shareholder with a proactivized secret polynomial.
     pub fn proactivize(
         &self,
         p: &Polynomial<S::PrimeField>,
         vm: &VerificationMatrix<S::Group>,
-    ) -> Result<Player<S>> {
+    ) -> Result<Shareholder<S>> {
         if p.degree() != self.share.p.degree() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
@@ -76,18 +76,18 @@ where
 
         let p = p + &self.share.p;
         let vm = vm + &self.share.vm;
-        let player = Player::new(p, vm);
+        let shareholder = Shareholder::new(p, vm);
 
-        Ok(player)
+        Ok(shareholder)
     }
 }
 
-impl<S> From<SecretShare<S::Group>> for Player<S>
+impl<S> From<SecretShare<S::Group>> for Shareholder<S>
 where
     S: Suite,
 {
-    fn from(state: SecretShare<S::Group>) -> Player<S> {
-        Player { share: state }
+    fn from(share: SecretShare<S::Group>) -> Shareholder<S> {
+        Shareholder { share }
     }
 }
 

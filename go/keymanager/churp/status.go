@@ -176,8 +176,8 @@ func (s *Status) MinApplicants() int {
 	switch s.HandoffKind() {
 	case HandoffKindDealingPhase:
 		// The number of nodes must be at least t+2, ensuring that even if
-		// t Byzantine dealers reveal their secret, an honest player cannot
-		// compute the combined bivariate polynomial.
+		// t Byzantine dealers reveal their secret, an honest shareholder
+		// cannot compute the combined bivariate polynomial.
 		return max(t+e+1, t+2)
 	case HandoffKindCommitteeUnchanged:
 		return t + e + 1
