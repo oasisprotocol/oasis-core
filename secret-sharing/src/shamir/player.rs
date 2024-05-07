@@ -3,7 +3,10 @@ use std::iter::zip;
 use anyhow::{bail, Result};
 use group::ff::PrimeField;
 
-use crate::vss::{lagrange, polynomial::Point};
+use crate::{
+    kdc::KeyReconstructor,
+    vss::{lagrange, polynomial::Point},
+};
 
 /// A constructor of the shared secret.
 pub struct Player {
@@ -48,16 +51,29 @@ impl Player {
     }
 }
 
+impl KeyReconstructor for Player {
+    fn threshold(&self) -> u8 {
+        self.threshold
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rand_core::OsRng;
 
-    use crate::shamir::Dealer;
+    use crate::{
+        kdc::{KeyReconstructor, KeySharer},
+        shamir::{Dealer, Shareholder},
+        suites::{self, p384, GroupDigest},
+    };
 
     use super::Player;
 
+    // Suite used in tests.
+    type Suite = p384::Sha3_384;
+
     // Prime field used in tests.
-    type PrimeField = p384::Scalar;
+    type PrimeField = <p384::Sha3_384 as suites::Suite>::PrimeField;
 
     #[test]
     fn test_shamir() {
@@ -98,5 +114,82 @@ mod tests {
         let shares = dealer.make_shares(xs);
         let reconstructed = player.reconstruct_secret(&shares).unwrap();
         assert_eq!(secret, reconstructed);
+    }
+
+    #[test]
+    fn test_kdc() {
+        // Prepare scheme.
+        let threshold = 2;
+        let key_id = b"key identifier";
+        let dst = b"shamir secret sharing scheme";
+        let secret = PrimeField::from_u64(100);
+        let hash = Suite::hash_to_group(key_id, dst).unwrap();
+        let key = hash * secret;
+        let dealer = Dealer::new(threshold, secret, &mut OsRng);
+        let player = Player::new(threshold);
+
+        // Not enough shares.
+        let n = threshold as u64;
+        let xs = (1..=n).map(PrimeField::from_u64).collect();
+        let shares = dealer.make_shares(xs);
+        let shareholders: Vec<_> = shares
+            .into_iter()
+            .map(|share| Shareholder::new(share))
+            .collect();
+        let key_shares: Vec<_> = shareholders
+            .iter()
+            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .collect();
+        let result = player.reconstruct_key(&key_shares);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "not enough shares");
+
+        // Duplicate shares.
+        let xs = (1..=n)
+            .flat_map(|x| std::iter::repeat(x).take(2))
+            .map(PrimeField::from_u64)
+            .collect();
+        let shares = dealer.make_shares(xs);
+        let shareholders: Vec<_> = shares
+            .into_iter()
+            .map(|share| Shareholder::new(share))
+            .collect();
+        let key_shares: Vec<_> = shareholders
+            .iter()
+            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .collect();
+        let result = player.reconstruct_key(&key_shares);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "not distinct shares");
+
+        // Exact number of shares.
+        let n = threshold as u64 + 1;
+        let xs = (1..=n).map(PrimeField::from_u64).collect();
+        let shares = dealer.make_shares(xs);
+        let shareholders: Vec<_> = shares
+            .into_iter()
+            .map(|share| Shareholder::new(share))
+            .collect();
+        let key_shares: Vec<_> = shareholders
+            .iter()
+            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .collect();
+        let reconstructed = player.reconstruct_key(&key_shares).unwrap();
+        assert_eq!(key, reconstructed);
+
+        // Too many shares.
+        let n = threshold as u64 + 10;
+        let xs = (1..=n).map(PrimeField::from_u64).collect();
+        let shares = dealer.make_shares(xs);
+        let shareholders: Vec<_> = shares
+            .into_iter()
+            .map(|share| Shareholder::new(share))
+            .collect();
+        let key_shares: Vec<_> = shareholders
+            .iter()
+            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .collect();
+        let reconstructed = player.reconstruct_key(&key_shares).unwrap();
+        assert_eq!(key, reconstructed);
     }
 }
