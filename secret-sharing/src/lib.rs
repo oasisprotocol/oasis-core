@@ -7,10 +7,12 @@
 //! ## Supported Schemes
 //!
 //! - CHURP (CHUrn-Robust Proactive secret sharing)
+//! - Shamir (Shamir secret sharing)
 
 #![feature(test)]
 
 pub mod churp;
 pub mod kdc;
+pub mod shamir;
 pub mod suites;
 pub mod vss;
