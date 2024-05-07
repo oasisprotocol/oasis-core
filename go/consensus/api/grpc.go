@@ -17,6 +17,7 @@ import (
 	scheduler "github.com/oasisprotocol/oasis-core/go/scheduler/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 var (
@@ -926,6 +927,10 @@ func (c *consensusClient) Governance() governance.Backend {
 
 func (c *consensusClient) RootHash() roothash.Backend {
 	return roothash.NewRootHashClient(c.conn)
+}
+
+func (c *consensusClient) Vault() vault.Backend {
+	return vault.NewVaultClient(c.conn)
 }
 
 // NewConsensusClient creates a new gRPC consensus client service.

@@ -29,6 +29,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade/migrations"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 type upgradeChecker interface {
@@ -139,6 +140,15 @@ func (c *upgrade240Checker) PreUpgradeFn(ctx context.Context, ctrl *oasis.Contro
 		return fmt.Errorf("max block gas is non-zero")
 	}
 
+	// Check vault parameters.
+	vaultParams, err := ctrl.Vault.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get vault consensus parameters: %w", err)
+	}
+	if vaultParams.Enabled {
+		return fmt.Errorf("vault is enabled")
+	}
+
 	return nil
 }
 
@@ -214,6 +224,15 @@ func (c *upgrade240Checker) PostUpgradeFn(ctx context.Context, ctrl *oasis.Contr
 	}
 	if rootParams.Parameters.MaxBlockGas != 5_000_000 {
 		return fmt.Errorf("max block gas is incorrect")
+	}
+
+	// Check vault parameters.
+	vaultParams, err := ctrl.Vault.ConsensusParameters(ctx, consensus.HeightLatest)
+	if err != nil {
+		return fmt.Errorf("can't get vault consensus parameters: %w", err)
+	}
+	if !reflect.DeepEqual(*vaultParams, vault.DefaultConsensusParameters) {
+		return fmt.Errorf("vault consensus parameters are not default")
 	}
 
 	return nil

@@ -25,6 +25,7 @@ import (
 	roothashApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/roothash"
 	schedulerApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/scheduler"
 	stakingApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking"
+	vaultApp "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault"
 	cmtCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/common"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesis "github.com/oasisprotocol/oasis-core/go/genesis/api"
@@ -39,6 +40,7 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 const (
@@ -237,6 +239,16 @@ func doDumpDB(cmd *cobra.Command, _ []string) {
 	}
 	doc.Consensus = *consensusSt
 
+	// Vault
+	vaultSt, err := dumpVault(ctx, qs)
+	if err != nil {
+		logger.Error("failed to dump vault state",
+			"err", err,
+		)
+		return
+	}
+	doc.Vault = vaultSt
+
 	logger.Info("writing state dump",
 		"output", viper.GetString(cfgDumpOutput),
 	)
@@ -373,6 +385,19 @@ func dumpConsensus(ctx context.Context, qs *dumpQueryState) (*consensus.Genesis,
 		Backend:    cmtAPI.BackendName,
 		Parameters: *params,
 	}, nil
+}
+
+func dumpVault(ctx context.Context, qs *dumpQueryState) (*vault.Genesis, error) {
+	qf := vaultApp.NewQueryFactory(qs)
+	q, err := qf.QueryAt(ctx, qs.BlockHeight())
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to create vault query: %w", err)
+	}
+	st, err := q.Genesis(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("dumpdb: failed to dump vault state: %w", err)
+	}
+	return st, nil
 }
 
 type dumpQueryState struct {

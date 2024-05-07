@@ -15,6 +15,7 @@ import (
 	runtimeClient "github.com/oasisprotocol/oasis-core/go/runtime/client/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 	storage "github.com/oasisprotocol/oasis-core/go/storage/api"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 	workerStorage "github.com/oasisprotocol/oasis-core/go/worker/storage/api"
 )
 
@@ -33,6 +34,7 @@ type Controller struct {
 	RuntimeClient runtimeClient.RuntimeClient
 	Storage       storage.Backend
 	Keymanager    *keymanager.KeymanagerClient
+	Vault         vault.Backend
 
 	StorageWorker workerStorage.StorageWorker
 
@@ -68,6 +70,7 @@ func NewController(socketPath string) (*Controller, error) {
 		RuntimeClient:   runtimeClient.NewRuntimeClient(conn),
 		Storage:         storage.NewStorageClient(conn),
 		Keymanager:      keymanager.NewKeymanagerClient(conn),
+		Vault:           vault.NewVaultClient(conn),
 
 		StorageWorker: workerStorage.NewStorageWorkerClient(conn),
 

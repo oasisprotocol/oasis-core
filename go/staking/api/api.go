@@ -976,12 +976,41 @@ func (sa *StakeAccumulator) TotalClaims(thresholds map[ThresholdKind]quantity.Qu
 	return &total, nil
 }
 
+// HookKind is an account hook kind.
+type HookKind uint8
+
+const (
+	// HookKindWithdraw is the hook kind invoked during withdrawals. It may either allow or reject
+	// the given withdrawal based on custom logic.
+	HookKindWithdraw HookKind = 1
+)
+
+// String returns a string representation of an account hook kind.
+func (hk HookKind) String() string {
+	switch hk {
+	case HookKindWithdraw:
+		return "withdraw"
+	default:
+		return "[invalid]"
+	}
+}
+
+// HookDestination describes a hook destination.
+type HookDestination struct {
+	// Module is the identifier of a module that should handle the hook.
+	Module string `json:"module"`
+}
+
 // GeneralAccount is a general-purpose account.
 type GeneralAccount struct {
 	Balance quantity.Quantity `json:"balance,omitempty"`
 	Nonce   uint64            `json:"nonce,omitempty"`
 
+	// Allowances is the set of per-beneficiary allowances.
 	Allowances map[Address]quantity.Quantity `json:"allowances,omitempty"`
+	// Hooks is the set of hooks that should be invoked when specific actions happen to override
+	// common behavior.
+	Hooks map[HookKind]HookDestination `json:"hooks,omitempty"`
 }
 
 // PrettyPrint writes a pretty-printed representation of GeneralAccount to the
@@ -1001,6 +1030,15 @@ func (ga GeneralAccount) PrettyPrint(ctx context.Context, prefix string, w io.Wr
 			fmt.Fprintf(w, "%s%s%s: ", prefix, prefix, beneficiary)
 			token.PrettyPrintAmount(ctx, allowance, w)
 			fmt.Fprintln(w)
+		}
+	}
+
+	fmt.Fprintf(w, "%sHooks:\n", prefix)
+	if len(ga.Hooks) == 0 {
+		fmt.Fprintf(w, "%s%snone\n", prefix, prefix)
+	} else {
+		for kind, dst := range ga.Hooks {
+			fmt.Fprintf(w, "%s%s%s: %s\n", prefix, prefix, kind, dst.Module)
 		}
 	}
 }

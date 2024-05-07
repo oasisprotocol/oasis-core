@@ -616,6 +616,20 @@ func (s *MutableState) SetAccount(ctx context.Context, addr staking.Address, acc
 	}
 }
 
+func (s *MutableState) SetAccountHook(ctx context.Context, addr staking.Address, kind staking.HookKind, dst *staking.HookDestination) error {
+	acct, err := s.Account(ctx, addr)
+	if err != nil {
+		return err
+	}
+
+	if acct.General.Hooks == nil {
+		acct.General.Hooks = make(map[staking.HookKind]staking.HookDestination)
+	}
+	acct.General.Hooks[kind] = *dst
+
+	return s.SetAccount(ctx, addr, acct)
+}
+
 func (s *MutableState) SetTotalSupply(ctx context.Context, q *quantity.Quantity) error {
 	err := s.ms.Insert(ctx, totalSupplyKeyFmt.Encode(), cbor.Marshal(q))
 	return abciAPI.UnavailableStateError(err)

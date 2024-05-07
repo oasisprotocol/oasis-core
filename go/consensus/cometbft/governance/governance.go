@@ -21,7 +21,7 @@ import (
 	upgrade "github.com/oasisprotocol/oasis-core/go/upgrade/api"
 )
 
-// ServiceClient is the registry service client interface.
+// ServiceClient is the governance service client interface.
 type ServiceClient interface {
 	api.Backend
 	tmapi.ServiceClient

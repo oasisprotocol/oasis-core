@@ -877,6 +877,30 @@ func (mux *abciMux) doRegister(app api.Application) error {
 	return nil
 }
 
+// resolveAppForMethod resolves an application that should handle the given method.
+func (mux *abciMux) resolveAppForMethod(ctx *api.Context, method transaction.MethodName) (api.Application, error) {
+	app, ok := mux.appsByMethod[method]
+	if !ok {
+		ctx.Logger().Debug("unknown method",
+			"method", method,
+		)
+		return nil, fmt.Errorf("mux: unknown method: %s", method)
+	}
+
+	// Check whether an application can be toggled.
+	if togApp, ok := app.(api.TogglableApplication); ok {
+		enabled, err := togApp.Enabled(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !enabled {
+			// If an application is not enabled, treat it as if the method does not exist.
+			return nil, fmt.Errorf("mux: unknown method: %s", method)
+		}
+	}
+	return app, nil
+}
+
 func (mux *abciMux) rebuildAppLexOrdering() {
 	numApps := len(mux.appsByName)
 	appOrder := make([]string, 0, numApps)
@@ -961,6 +985,9 @@ func newABCIMux(ctx context.Context, upgrader upgrade.Backend, cfg *ApplicationC
 		appsByName:   make(map[string]api.Application),
 		appsByMethod: make(map[transaction.MethodName]api.Application),
 	}
+
+	// Subscribe message handlers.
+	mux.md.Subscribe(api.MessageExecuteSubcall, mux)
 
 	mux.logger.Debug("ABCI multiplexer initialized",
 		"block_height", state.BlockHeight(),

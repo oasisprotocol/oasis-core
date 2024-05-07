@@ -44,6 +44,7 @@ import (
 	tmroothash "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/roothash"
 	tmscheduler "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/scheduler"
 	tmstaking "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/staking"
+	tmvault "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/vault"
 	consensusGenesis "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
 	genesisAPI "github.com/oasisprotocol/oasis-core/go/genesis/api"
 	governanceAPI "github.com/oasisprotocol/oasis-core/go/governance/api"
@@ -58,6 +59,7 @@ import (
 	stakingAPI "github.com/oasisprotocol/oasis-core/go/staking/api"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/checkpoint"
 	"github.com/oasisprotocol/oasis-core/go/storage/mkvs/syncer"
+	vaultAPI "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 // commonNode implements the common CometBFT node functionality shared between
@@ -88,6 +90,7 @@ type commonNode struct {
 	roothash   roothashAPI.Backend
 	scheduler  schedulerAPI.Backend
 	staking    stakingAPI.Backend
+	vault      vaultAPI.Backend
 
 	// These stores must be populated by the parent before the node is deemed ready.
 	blockStoreDB dbm.DB
@@ -274,6 +277,17 @@ func (n *commonNode) initialize() error {
 	n.serviceClients = append(n.serviceClients, scGovernance)
 	n.svcMgr.RegisterCleanupOnly(n.governance, "governance backend")
 
+	var scVault tmvault.ServiceClient
+	if scVault, err = tmvault.New(n.parentNode); err != nil {
+		n.Logger.Error("vault: failed to initialize vault backend",
+			"err", err,
+		)
+		return err
+	}
+	n.vault = scVault
+	n.serviceClients = append(n.serviceClients, scVault)
+	n.svcMgr.RegisterCleanupOnly(n.vault, "vault backend")
+
 	// Enable supplementary sanity checks when enabled.
 	if config.GlobalConfig.Consensus.SupplementarySanity.Enabled {
 		ssa := supplementarysanity.New(config.GlobalConfig.Consensus.SupplementarySanity.Interval)
@@ -388,6 +402,11 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 		return nil, err
 	}
 
+	vaultGenesis, err := n.Vault().StateToGenesis(ctx, blockHeight)
+	if err != nil {
+		return nil, err
+	}
+
 	return &genesisAPI.Document{
 		Height:     blockHeight,
 		ChainID:    genesisDoc.ChainID,
@@ -397,6 +416,7 @@ func (n *commonNode) StateToGenesis(ctx context.Context, blockHeight int64) (*ge
 		RootHash:   *roothashGenesis,
 		Staking:    *stakingGenesis,
 		Governance: *governanceGenesis,
+		Vault:      vaultGenesis,
 		KeyManager: *keymanagerGenesis,
 		Scheduler:  *schedulerGenesis,
 		Consensus: consensusGenesis.Genesis{
@@ -449,6 +469,11 @@ func (n *commonNode) Scheduler() schedulerAPI.Backend {
 // Implements consensusAPI.Backend.
 func (n *commonNode) Governance() governanceAPI.Backend {
 	return n.governance
+}
+
+// Implements consensusAPI.Backend.
+func (n *commonNode) Vault() vaultAPI.Backend {
+	return n.vault
 }
 
 // Implements consensusAPI.Backend.

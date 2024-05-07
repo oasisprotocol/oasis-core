@@ -10,8 +10,10 @@ import (
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	vaultState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/vault/state"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
+	vault "github.com/oasisprotocol/oasis-core/go/vault/api"
 )
 
 const (
@@ -105,6 +107,13 @@ func (h *Handler240) ConsensusUpgrade(privateCtx interface{}) error {
 
 		if err = govState.SetConsensusParameters(abciCtx, govParams); err != nil {
 			return fmt.Errorf("failed to update governance consensus parameters: %w", err)
+		}
+
+		// Vault.
+		vltState := vaultState.NewMutableState(abciCtx.State())
+
+		if err = vltState.SetConsensusParameters(abciCtx, &vault.DefaultConsensusParameters); err != nil {
+			return fmt.Errorf("failed to set vault consensus parameters: %w", err)
 		}
 	default:
 		return fmt.Errorf("upgrade handler called in unexpected context: %s", abciCtx.Mode())

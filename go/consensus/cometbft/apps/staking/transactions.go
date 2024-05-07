@@ -6,6 +6,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/errors"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
+	stakingApi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/api"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -740,27 +741,49 @@ func (app *stakingApplication) withdraw(
 		return nil, staking.ErrInvalidArgument
 	}
 
+	// Start a new transaction and rollback in case we fail.
+	ctx = ctx.NewTransaction()
+	defer ctx.Close()
+
 	from, err := state.Account(ctx, withdraw.From)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch account: %w", err)
 	}
-	var (
-		allowance quantity.Quantity
-		ok        bool
-	)
-	if allowance, ok = from.General.Allowances[toAddr]; !ok {
-		// Fail early in case there is no allowance configured.
-		return nil, staking.ErrForbidden
-	}
-	if err = allowance.Sub(&withdraw.Amount); err != nil {
-		return nil, staking.ErrForbidden
-	}
-	if allowance.IsZero() {
-		// In case the new allowance is equal to zero, remove it.
-		delete(from.General.Allowances, toAddr)
-	} else {
-		// Otherwise update the allowance.
-		from.General.Allowances[toAddr] = allowance
+
+	// Check if a withdrawal hook is configured for the source account. In this case the hook may
+	// override configured allowances.
+	var allowance quantity.Quantity
+	switch dst, ok := from.General.Hooks[staking.HookKindWithdraw]; ok {
+	case true:
+		// Withdraw hook configured for the source account, use custom authorization logic.
+		wh := &stakingApi.WithdrawHookInvocation{
+			Destination: dst,
+			From:        withdraw.From,
+			To:          toAddr,
+			Amount:      withdraw.Amount.Clone(),
+		}
+
+		_, err = app.md.Publish(ctx, stakingApi.MessageAccountHook, wh)
+		if err != nil {
+			return nil, fmt.Errorf("%w: hook invocation failed: %w", staking.ErrForbidden, err)
+		}
+	default:
+		// Fallback to ordinary allowance authorization logic.
+		var ok bool
+		if allowance, ok = from.General.Allowances[toAddr]; !ok {
+			// Fail early in case there is no allowance configured.
+			return nil, staking.ErrForbidden
+		}
+		if err = allowance.Sub(&withdraw.Amount); err != nil {
+			return nil, staking.ErrForbidden
+		}
+		if allowance.IsZero() {
+			// In case the new allowance is equal to zero, remove it.
+			delete(from.General.Allowances, toAddr)
+		} else {
+			// Otherwise update the allowance.
+			from.General.Allowances[toAddr] = allowance
+		}
 	}
 
 	// NOTE: Accounts cannot be the same as we fail above if this were the case.
@@ -811,6 +834,8 @@ func (app *stakingApplication) withdraw(
 		Negative:     true,
 		AmountChange: withdraw.Amount,
 	}))
+
+	ctx.Commit()
 
 	return &staking.WithdrawResult{
 		Owner:        withdraw.From,

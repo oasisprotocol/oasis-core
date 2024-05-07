@@ -18,6 +18,12 @@ type MessageSubscriber interface {
 	ExecuteMessage(ctx *Context, kind, msg interface{}) (interface{}, error)
 }
 
+// TogglableMessageSubscriber is a message subscriber that can be disabled.
+type TogglableMessageSubscriber interface {
+	// Enabled checks whether the message subscriber is enabled.
+	Enabled(ctx *Context) (bool, error)
+}
+
 // MessageDispatcher is a message dispatcher interface.
 type MessageDispatcher interface {
 	// Subscribe subscribes a given message subscriber to messages of a specific kind.
@@ -133,4 +139,10 @@ type Extension interface {
 	//
 	// Note: Errors are irrecoverable and will result in a panic.
 	EndBlock(*Context) error
+}
+
+// TogglableApplication is an application that can be disabled.
+type TogglableApplication interface {
+	// Enabled checks whether the application is enabled.
+	Enabled(*Context) (bool, error)
 }

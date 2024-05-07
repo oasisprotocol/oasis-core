@@ -51,6 +51,7 @@ func TestChildContext(t *testing.T) {
 
 	ctx.SetTxSigner(pk1)
 	require.Equal(addr1, ctx.CallerAddress(), "CallerAddress should correspond to TxSigner")
+	require.EqualValues(0, ctx.CallDepth(), "CallDepth should be zero for top-level context")
 
 	pk2 := signature.NewPublicKey("1234567890000000000000000000000000000000000000000000000000000000")
 	addr2 := staking.NewAddress(pk2)
@@ -64,6 +65,7 @@ func TestChildContext(t *testing.T) {
 	require.EqualValues(ctx.InitialHeight(), child.InitialHeight(), "child.InitialHeight should correspond to parent.InitialHeight")
 	require.EqualValues(ctx.BlockHeight(), child.BlockHeight(), "child.BlockHeight should correspond to parent.BlockHeight")
 	require.EqualValues(ctx.BlockContext(), child.BlockContext(), "child.BlockContext should correspond to parent.BlockContext")
+	require.EqualValues(1, child.CallDepth(), "child.CallDepth should be correct")
 
 	// Emitting an event should not propagate to the parent immediately.
 	child.EmitEvent(NewEventBuilder("test").TypedAttribute(&FooEvent{Bar: []byte("bar")}))
@@ -144,6 +146,8 @@ func TestNestedTransactionContext(t *testing.T) {
 	require := require.New(t)
 
 	doChild2 := func(ctx *Context) {
+		require.EqualValues(2, ctx.CallDepth(), "CallDepth should be correct")
+
 		tree := ctx.State()
 
 		err := tree.Insert(ctx, []byte("child2"), []byte("value2"))
@@ -163,6 +167,8 @@ func TestNestedTransactionContext(t *testing.T) {
 	}
 
 	doChild1 := func(ctx *Context) {
+		require.EqualValues(1, ctx.CallDepth(), "CallDepth should be correct")
+
 		tree := ctx.State()
 
 		err := tree.Insert(ctx, []byte("child1"), []byte("value1"))

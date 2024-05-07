@@ -23,6 +23,7 @@ var _ api.Application = (*stakingApplication)(nil)
 
 type stakingApplication struct {
 	state api.ApplicationState
+	md    api.MessageDispatcher
 }
 
 func (app *stakingApplication) Name() string {
@@ -47,6 +48,7 @@ func (app *stakingApplication) Dependencies() []string {
 
 func (app *stakingApplication) OnRegister(state api.ApplicationState, md api.MessageDispatcher) {
 	app.state = state
+	app.md = md
 
 	// Subscribe to messages emitted by other apps.
 	md.Subscribe(roothashApi.RuntimeMessageStaking, app)

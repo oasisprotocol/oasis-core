@@ -41,6 +41,7 @@ import (
 	storageAPI "github.com/oasisprotocol/oasis-core/go/storage/api"
 	"github.com/oasisprotocol/oasis-core/go/upgrade"
 	upgradeAPI "github.com/oasisprotocol/oasis-core/go/upgrade/api"
+	vaultAPI "github.com/oasisprotocol/oasis-core/go/vault/api"
 	workerBeacon "github.com/oasisprotocol/oasis-core/go/worker/beacon"
 	workerClient "github.com/oasisprotocol/oasis-core/go/worker/client"
 	workerCommon "github.com/oasisprotocol/oasis-core/go/worker/common"
@@ -168,6 +169,7 @@ func (n *Node) startRuntimeServices() error {
 	keymanagerAPI.RegisterService(grpcSrv, n.Consensus.KeyManager())
 	roothashAPI.RegisterService(grpcSrv, n.Consensus.RootHash())
 	governanceAPI.RegisterService(grpcSrv, n.Consensus.Governance())
+	vaultAPI.RegisterService(grpcSrv, n.Consensus.Vault())
 
 	// Register dump genesis halt hook.
 	n.Consensus.RegisterHaltHook(func(ctx context.Context, blockHeight int64, epoch beacon.EpochTime, _ error) {

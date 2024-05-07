@@ -57,6 +57,9 @@ func (d *Document) SanityCheck() error {
 	if err := d.Governance.SanityCheck(epoch, &d.Staking.GovernanceDeposits); err != nil {
 		return err
 	}
+	if err := d.Vault.SanityCheck(); err != nil {
+		return err
+	}
 
 	if d.Staking.Parameters.DebugBypassStake {
 		return nil

@@ -62,13 +62,9 @@ func (mux *abciMux) processTx(ctx *api.Context, tx *transaction.Transaction, txS
 	}
 
 	// Lookup method handler.
-	app := mux.appsByMethod[tx.Method]
-	if app == nil {
-		ctx.Logger().Debug("unknown method",
-			"tx", tx,
-			"method", tx.Method,
-		)
-		return fmt.Errorf("mux: unknown method: %s", tx.Method)
+	app, err := mux.resolveAppForMethod(ctx, tx.Method)
+	if err != nil {
+		return err
 	}
 
 	// Pass the transaction through the fee handler if configured.

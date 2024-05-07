@@ -1,4 +1,4 @@
-// Package tests is a collection of scheduler implementation test cases.
+// Package tests is a collection of governance implementation test cases.
 package tests
 
 import (
@@ -41,8 +41,7 @@ type governanceTestsState struct {
 	validatorAddr   staking.Address
 }
 
-// GovernanceImplementationTests exercises the basic functionality of a
-// governance backend.
+// GovernanceImplementationTests exercises the basic functionality of a governance backend.
 func GovernanceImplementationTests(
 	t *testing.T,
 	backend api.Backend,
@@ -64,7 +63,7 @@ func GovernanceImplementationTests(
 	require.NoError(err, "Account")
 	state.validatorEscrow = &validatorAcc.Escrow.Active.Balance
 
-	// Submiter is the pre-funded deubg staking account.
+	// Submiter is the pre-funded debug staking account.
 	srcAcc, err := consensus.Staking().Account(ctx, &staking.OwnerQuery{Owner: submitterAddr, Height: consensusAPI.HeightLatest})
 	require.NoError(err, "Account")
 	state.submitterBalance = &srcAcc.General.Balance

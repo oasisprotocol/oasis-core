@@ -207,6 +207,14 @@ func (c *Context) CallerAddress() staking.Address {
 	return c.callerAddress
 }
 
+// CallDepth returns the call depth.
+func (c *Context) CallDepth() int {
+	if c.parent == nil {
+		return 0
+	}
+	return c.parent.CallDepth() + 1
+}
+
 // NewChild creates a new child context that shares state with the current context.
 //
 // If you want isolated state and events use NewTransaction instad.

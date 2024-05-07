@@ -16,6 +16,8 @@ var (
 	AddressV0Context = address.NewContext("oasis-core/address: staking", 0)
 	// AddressRuntimeV0Context is the unique context for v0 runtime account addresses.
 	AddressRuntimeV0Context = address.NewContext("oasis-core/address: runtime", 0)
+	// AddressModuleV0Context is the unique context for v0 module account addresses.
+	AddressModuleV0Context = address.NewContext("oasis-core/address: module", 0)
 	// AddressBech32HRP is the unique human readable part of Bech32 encoded
 	// staking account addresses.
 	AddressBech32HRP = address.NewBech32HRP("oasis")
@@ -95,6 +97,12 @@ func NewAddress(pk signature.PublicKey) (a Address) {
 func NewRuntimeAddress(id common.Namespace) (a Address) {
 	nsData, _ := id.MarshalBinary()
 	return (Address)(address.NewAddress(AddressRuntimeV0Context, nsData))
+}
+
+// NewModuleAddress creates a new module address for the given module and address kind.
+func NewModuleAddress(module string, kind string) (a Address) {
+	data := []byte(module + "." + kind)
+	return (Address)(address.NewAddress(AddressModuleV0Context, data))
 }
 
 // NewReservedAddress creates a new reserved address from the given public key
