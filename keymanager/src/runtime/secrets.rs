@@ -534,10 +534,10 @@ impl Secrets {
     }
 
     /// Validate that the epoch used for derivation of ephemeral private keys is not
-    /// in the future or too far back in the past.
+    /// too far in the future or too far back in the past.
     fn validate_ephemeral_key_epoch(&self, epoch: EpochTime) -> Result<()> {
         let consensus_epoch = self.consensus_epoch()?;
-        if consensus_epoch < epoch || consensus_epoch > epoch + MAX_EPHEMERAL_KEY_AGE {
+        if consensus_epoch + 1 < epoch || consensus_epoch > epoch + MAX_EPHEMERAL_KEY_AGE {
             return Err(KeyManagerError::InvalidEpoch(consensus_epoch, epoch).into());
         }
         Ok(())
