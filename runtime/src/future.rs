@@ -11,6 +11,7 @@ pub fn new_tokio_runtime() -> tokio::runtime::Runtime {
         .worker_threads(6)
         .max_blocking_threads(16)
         .thread_keep_alive(std::time::Duration::MAX)
+        .enable_all()
         .build()
         .unwrap()
 }

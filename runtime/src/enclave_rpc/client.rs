@@ -23,6 +23,8 @@ use super::transport::{RuntimeTransport, Transport};
 
 /// Internal command queue backlog.
 const CMDQ_BACKLOG: usize = 32;
+/// Maximum number of retries on transport errors.
+const MAX_TRANSPORT_ERROR_RETRIES: usize = 3;
 
 /// RPC client error.
 #[derive(Error, Debug)]
@@ -52,7 +54,6 @@ enum Command {
         types::Request,
         types::Kind,
         oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
-        usize,
     ),
     PeerFeedback(u64, types::PeerFeedback),
     UpdateEnclaves(Option<HashSet<EnclaveIdentity>>),
@@ -88,8 +89,6 @@ impl MultiplexedSession {
 }
 
 struct Controller {
-    /// Maximum number of call retries.
-    max_retries: usize,
     /// Allowed nodes.
     nodes: Vec<signature::PublicKey>,
     /// Multiplexed session.
@@ -98,17 +97,13 @@ struct Controller {
     transport: Box<dyn Transport>,
     /// Internal command queue (receiver part).
     cmdq: mpsc::Receiver<Command>,
-    /// Internal command queue (sender part for retries).
-    cmdq_tx: mpsc::Sender<Command>,
 }
 
 impl Controller {
     async fn run(mut self) {
         while let Some(cmd) = self.cmdq.recv().await {
             match cmd {
-                Command::Call(request, kind, sender, retries) => {
-                    self.call(request, kind, sender, retries).await
-                }
+                Command::Call(request, kind, sender) => self.call(request, kind, sender).await,
                 Command::PeerFeedback(pfid, peer_feedback) => {
                     self.transport.set_peer_feedback(pfid, Some(peer_feedback));
                 }
@@ -159,7 +154,6 @@ impl Controller {
         request: types::Request,
         kind: types::Kind,
         sender: oneshot::Sender<Result<(u64, types::Response), RpcClientError>>,
-        retries: usize,
     ) {
         let result = async {
             match kind {
@@ -169,11 +163,11 @@ impl Controller {
                     self.connect().await?;
 
                     // Perform the call.
-                    self.secure_call_raw(request.clone()).await
+                    self.secure_call_raw(request).await
                 }
                 types::Kind::InsecureQuery => {
                     // Perform the call.
-                    self.insecure_call_raw(request.clone()).await
+                    self.insecure_call_raw(request).await
                 }
                 _ => Err(RpcClientError::UnsupportedRpcKind),
             }
@@ -191,21 +185,7 @@ impl Controller {
                 .set_peer_feedback(pfid, Some(types::PeerFeedback::Failure));
         }
 
-        match result {
-            ref r if r.is_ok() || retries >= self.max_retries => {
-                // Request was successful or number of retries has been exceeded.
-                let _ = sender.send(result.map(|rsp| (pfid, rsp)));
-            }
-
-            _ => {
-                // Attempt retry if number of retries is not exceeded. Retry is performed by
-                // queueing another request.
-                let _ = self
-                    .cmdq_tx
-                    .send(Command::Call(request, kind, sender, retries + 1))
-                    .await;
-            }
-        }
+        let _ = sender.send(result.map(|rsp| (pfid, rsp)));
     }
 
     async fn connect(&mut self) -> Result<(), RpcClientError> {
@@ -355,12 +335,10 @@ impl RpcClient {
 
         // Create the controller task and start it.
         let controller = Controller {
-            max_retries: 3,
             nodes,
             session: MultiplexedSession::new(builder),
             transport,
             cmdq: rx,
-            cmdq_tx: tx.clone(),
         };
         tokio::spawn(controller.run());
 
@@ -422,7 +400,17 @@ impl RpcClient {
             args: cbor::to_value(args),
         };
 
-        let (pfid, response) = self.execute_call(request, kind).await?;
+        // In case the `execute_call` method returns an outer error, this means that there was a
+        // problem with the transport itself and we can retry.
+        let retry_strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(2)
+            .factor(25)
+            .max_delay(std::time::Duration::from_millis(250))
+            .take(MAX_TRANSPORT_ERROR_RETRIES);
+
+        let (pfid, response) =
+            tokio_retry::Retry::spawn(retry_strategy, || self.execute_call(request.clone(), kind))
+                .await?;
+
         let result = match response.body {
             types::Body::Success(value) => cbor::from_value(value).map_err(Into::into),
             types::Body::Error(error) => Err(RpcClientError::CallFailed(error)),
@@ -445,7 +433,7 @@ impl RpcClient {
     ) -> Result<(u64, types::Response), RpcClientError> {
         let (tx, rx) = oneshot::channel();
         self.cmdq
-            .send(Command::Call(request, kind, tx, 0))
+            .send(Command::Call(request, kind, tx))
             .await
             .map_err(|_| RpcClientError::Dropped)?;
 

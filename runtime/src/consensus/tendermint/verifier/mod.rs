@@ -471,7 +471,8 @@ impl Verifier {
         // Verify our own RAK is published in registry once per epoch.
         // This ensures consensus state is recent enough.
         if cache.last_verified_epoch != epoch {
-            self.verify_freshness_with_rak(&next_state, cache)?;
+            let latest_state = self.latest_consensus_state(cache, instance)?;
+            self.verify_freshness_with_rak(&latest_state, cache)?;
         }
 
         // Cache verified state root and epoch.
