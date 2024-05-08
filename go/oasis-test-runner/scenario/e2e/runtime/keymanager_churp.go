@@ -219,14 +219,14 @@ func (sc *kmChurpImpl) Run(ctx context.Context, _ *env.Env) error { //nolint: go
 	// Handoffs disabled.
 	sc.Logger.Info("testing handoffs disabled")
 
-	handoffInterval = churp.HandoffsDisabled
+	handoffInterval = 0
 	if err = sc.updateChurp(ctx, id, handoffInterval, nonce); err != nil {
 		return err
 	}
 	nonce++
 
 	// After the update, there should be no status updates.
-	for status.HandoffInterval != churp.HandoffsDisabled {
+	for !status.HandoffsDisabled() {
 		status, err = sc.nextChurpStatus(ctx, stCh)
 		if err != nil {
 			return err

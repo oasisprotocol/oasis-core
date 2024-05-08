@@ -23,7 +23,7 @@ func (ext *churpExt) onEpochChange(ctx *tmapi.Context, epoch beacon.EpochTime) e
 		}
 
 		for _, status := range statuses {
-			if status.NextHandoff == churp.HandoffsDisabled {
+			if status.HandoffsDisabled() {
 				continue
 			}
 

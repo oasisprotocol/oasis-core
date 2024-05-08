@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	// HandoffsDisabled is a handoff interval that disables handoffs.
+	// HandoffsDisabled is the epoch of the next handoff when handoffs
+	// are disabled, i.e., when the handoff interval is set to zero.
 	HandoffsDisabled = beacon.EpochInvalid
 )
 
@@ -190,9 +191,10 @@ func (s *Status) MinApplicants() int {
 	}
 }
 
-// HandoffsDisabled returns true if and only if handoffs are disabled.
+// HandoffsDisabled returns true iff handoffs are disabled, i.e., when
+// the handoff interval is set to zero.
 func (s *Status) HandoffsDisabled() bool {
-	return s.HandoffInterval == HandoffsDisabled
+	return s.HandoffInterval == 0
 }
 
 // Application represents a node's application to form a new committee.
