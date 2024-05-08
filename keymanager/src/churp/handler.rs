@@ -36,7 +36,7 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, Handoff, HandoffKind, Player, ShareholderId},
+    churp::{Dealer, Handoff, HandoffKind, Shareholder, ShareholderId},
     suites::{p384, Suite},
     vss::{
         matrix::VerificationMatrix,
@@ -108,9 +108,9 @@ pub struct Churp {
     #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     registry_state: RegistryState,
 
-    /// Players with secret shares for the last successfully completed handoff,
-    /// one per scheme.
-    players: Mutex<HashMap<u8, HandoffData>>,
+    /// Shareholders with secret shares for the last successfully completed
+    /// handoff, one per scheme.
+    shareholders: Mutex<HashMap<u8, HandoffData>>,
     /// Dealers of bivariate shares for the next handoff, one per scheme.
     dealers: Mutex<HashMap<u8, HandoffData>>,
     /// Next handoffs, limited to one per scheme.
@@ -138,7 +138,7 @@ impl Churp {
         let churp_state = ChurpState::new(consensus_verifier.clone());
         let registry_state = RegistryState::new(consensus_verifier.clone());
 
-        let players = Mutex::new(HashMap::new());
+        let shareholders = Mutex::new(HashMap::new());
         let dealers = Mutex::new(HashMap::new());
         let handoffs = Mutex::new(HashMap::new());
 
@@ -153,7 +153,7 @@ impl Churp {
             consensus_verifier,
             storage,
             beacon_state,
-            players,
+            shareholders,
             churp_state,
             registry_state,
             dealers,
@@ -191,10 +191,12 @@ impl Churp {
     /// of the matrix should always be verified against the consensus layer.
     pub fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
-        let player = match status.suite_id {
-            SuiteId::NistP384Sha3_384 => self.get_player::<p384::Sha3_384>(req.id, req.epoch)?,
+        let shareholder = match status.suite_id {
+            SuiteId::NistP384Sha3_384 => {
+                self.get_shareholder::<p384::Sha3_384>(req.id, req.epoch)?
+            }
         };
-        let vm = player.verification_matrix().to_bytes();
+        let vm = shareholder.verification_matrix().to_bytes();
 
         Ok(vm)
     }
@@ -253,8 +255,8 @@ impl Churp {
         S: Suite + 'static,
     {
         let id = ShareholderId(node_id.0);
-        let player = self.get_player::<S>(status.id, status.handoff)?;
-        let point = player.switch_point(id)?;
+        let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
+        let point = shareholder.switch_point(id)?;
         let point = scalar_to_bytes(&point);
 
         Ok(point)
@@ -319,8 +321,8 @@ impl Churp {
     {
         let id = ShareholderId(node_id.0);
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
-        let player = handoff.get_reduced_player()?;
-        let point = player.switch_point(id)?;
+        let shareholder = handoff.get_reduced_shareholder()?;
+        let point = shareholder.switch_point(id)?;
         let point = scalar_to_bytes(&point);
 
         Ok(point)
@@ -541,12 +543,12 @@ impl Churp {
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let player = self.get_player::<S>(status.id, status.handoff)?;
-            let point = player.switch_point(id)?;
+            let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
+            let point = shareholder.switch_point(id)?;
 
             if handoff.needs_verification_matrix()? {
                 // Local verification matrix is trusted.
-                let vm = player.verification_matrix().clone();
+                let vm = shareholder.verification_matrix().clone();
                 handoff.set_verification_matrix(vm)?;
             }
 
@@ -644,8 +646,8 @@ impl Churp {
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let player = handoff.get_reduced_player()?;
-            let point = player.switch_point(id)?;
+            let shareholder = handoff.get_reduced_shareholder()?;
+            let point = shareholder.switch_point(id)?;
 
             return handoff.add_full_share_distribution_switch_point(id, point);
         }
@@ -772,15 +774,15 @@ impl Churp {
         S: Suite + 'static,
     {
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
-        let player = handoff.get_full_player()?;
-        let share = player.secret_share();
+        let shareholder = handoff.get_full_shareholder()?;
+        let share = shareholder.secret_share();
 
         // Before overwriting the next secret share, make sure it was copied
-        // and used to construct the last player.
+        // and used to construct the last shareholder.
         let _ = self
-            .get_player::<S>(status.id, status.handoff)
+            .get_shareholder::<S>(status.id, status.handoff)
             .map(Some)
-            .or_else(|err| ignore_error(err, Error::PlayerNotFound))?; // Ignore if we don't have the correct share.
+            .or_else(|err| ignore_error(err, Error::ShareholderNotFound))?; // Ignore if we don't have the correct share.
 
         // Always persist the secret share before sending confirmation.
         self.storage
@@ -808,8 +810,9 @@ impl Churp {
     }
 
     /// Finalizes the specified scheme by cleaning up obsolete dealers,
-    /// handoffs, and players. If the handoff was just completed, the player
-    /// is made available, and its share is persisted to the local storage.
+    /// handoffs, and shareholders. If the handoff was just completed,
+    /// the shareholder is made available, and its share is persisted
+    /// to the local storage.
     pub fn finalize(&self, req: &HandoffRequest) -> Result<()> {
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
 
@@ -822,7 +825,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        // Move the player if the handoff was completed.
+        // Move the shareholder if the handoff was completed.
         let handoff = self.get_handoff::<S>(status.id, status.handoff);
         let handoff = match handoff {
             Ok(handoff) => Some(handoff),
@@ -832,16 +835,16 @@ impl Churp {
             },
         };
         if let Some(handoff) = handoff {
-            let player = handoff.get_full_player()?;
-            let share = player.secret_share();
+            let shareholder = handoff.get_full_shareholder()?;
+            let share = shareholder.secret_share();
             self.storage
                 .store_secret_share(share, status.id, status.handoff)?;
-            self.add_player(player, status.id, status.handoff);
+            self.add_shareholder(shareholder, status.id, status.handoff);
         }
 
         // Cleanup.
         let max_epoch = status.handoff.saturating_sub(1);
-        self.remove_player(status.id, max_epoch);
+        self.remove_shareholder(status.id, max_epoch);
 
         let max_epoch = status.next_handoff.saturating_sub(1);
         self.remove_dealer(status.id, max_epoch);
@@ -850,35 +853,35 @@ impl Churp {
         Ok(())
     }
 
-    /// Returns the player for the specified scheme and handoff epoch.
-    fn get_player<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Player<S>>>
+    /// Returns the shareholder for the specified scheme and handoff epoch.
+    fn get_shareholder<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Shareholder<S>>>
     where
         S: Suite + 'static,
     {
-        // Check the memory first. Make sure to lock the new players so that we
-        // don't create two players for the same handoff.
-        let mut players = self.players.lock().unwrap();
+        // Check the memory first. Make sure to lock the new shareholders
+        // so that we don't create two shareholders for the same handoff.
+        let mut shareholders = self.shareholders.lock().unwrap();
 
-        if let Some(data) = players.get(&churp_id) {
+        if let Some(data) = shareholders.get(&churp_id) {
             match epoch.cmp(&data.epoch) {
                 cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
                 cmp::Ordering::Equal => {
-                    // Downcasting should never fail because the consensus ensures that
-                    // the group ID cannot change.
-                    let player = data
+                    // Downcasting should never fail because the consensus
+                    // ensures that the suite ID cannot change.
+                    let shareholder = data
                         .object
                         .clone()
-                        .downcast::<Player<S>>()
-                        .or(Err(Error::PlayerMismatch))?;
+                        .downcast::<Shareholder<S>>()
+                        .or(Err(Error::ShareholderMismatch))?;
 
-                    return Ok(player);
+                    return Ok(shareholder);
                 }
                 cmp::Ordering::Greater => (),
             }
         }
 
-        // Fetch player's secret share from the local storage and use it to
-        // restore the internal state upon restarts, unless a malicious
+        // Fetch shareholder's secret share from the local storage and use it
+        // to restore the internal state upon restarts, unless a malicious
         // host has cleared the storage.
         let share = self
             .storage
@@ -903,27 +906,27 @@ impl Churp {
                 share
             }
         };
-        let share = share.ok_or(Error::PlayerNotFound)?;
+        let share = share.ok_or(Error::ShareholderNotFound)?;
 
-        // Create a new player.
-        let player = Arc::new(Player::from(share));
+        // Create a new shareholder.
+        let shareholder = Arc::new(Shareholder::from(share));
         let data = HandoffData {
             epoch,
-            object: player.clone(),
+            object: shareholder.clone(),
         };
-        players.insert(churp_id, data);
+        shareholders.insert(churp_id, data);
 
-        Ok(player)
+        Ok(shareholder)
     }
 
-    /// Adds a player for the specified scheme and handoff epoch.
-    fn add_player<S>(&self, player: Arc<Player<S>>, churp_id: u8, epoch: EpochTime)
+    /// Adds a shareholder for the specified scheme and handoff epoch.
+    fn add_shareholder<S>(&self, shareholder: Arc<Shareholder<S>>, churp_id: u8, epoch: EpochTime)
     where
         S: Suite + 'static,
     {
-        let mut players = self.players.lock().unwrap();
+        let mut shareholders = self.shareholders.lock().unwrap();
 
-        if let Some(data) = players.get(&churp_id) {
+        if let Some(data) = shareholders.get(&churp_id) {
             if epoch <= data.epoch {
                 return;
             }
@@ -931,16 +934,16 @@ impl Churp {
 
         let data = HandoffData {
             epoch,
-            object: player,
+            object: shareholder,
         };
-        players.insert(churp_id, data);
+        shareholders.insert(churp_id, data);
     }
 
-    /// Removes player for the specified scheme if the player belongs
+    /// Removes shareholder for the specified scheme if the shareholder belongs
     /// to a handoff that happened at or before the given epoch.
-    fn remove_player(&self, churp_id: u8, max_epoch: EpochTime) {
-        let mut players = self.players.lock().unwrap();
-        let data = match players.get(&churp_id) {
+    fn remove_shareholder(&self, churp_id: u8, max_epoch: EpochTime) {
+        let mut shareholders = self.shareholders.lock().unwrap();
+        let data = match shareholders.get(&churp_id) {
             Some(data) => data,
             None => return,
         };
@@ -949,7 +952,7 @@ impl Churp {
             return;
         }
 
-        players.remove(&churp_id);
+        shareholders.remove(&churp_id);
     }
 
     /// Returns the dealer for the specified scheme and handoff epoch.
@@ -993,8 +996,8 @@ impl Churp {
             match epoch.cmp(&data.epoch) {
                 cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
                 cmp::Ordering::Equal => {
-                    // Downcasting should never fail because the consensus ensures that
-                    // the group ID cannot change.
+                    // Downcasting should never fail because the consensus
+                    // ensures that the suite ID cannot change.
                     let dealer = data
                         .object
                         .clone()
@@ -1107,8 +1110,8 @@ impl Churp {
             match epoch.cmp(&data.epoch) {
                 cmp::Ordering::Less => return Err(Error::InvalidHandoff.into()),
                 cmp::Ordering::Equal => {
-                    // Downcasting should never fail because the consensus ensures that
-                    // the group ID cannot change.
+                    // Downcasting should never fail because the consensus
+                    // ensures that the suite ID cannot change.
                     let handoff = data
                         .object
                         .clone()
@@ -1137,8 +1140,8 @@ impl Churp {
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;
 
         if kind == HandoffKind::CommitteeUnchanged {
-            let player = self.get_player(churp_id, status.handoff)?;
-            handoff.set_player(player)?;
+            let shareholder = self.get_shareholder(churp_id, status.handoff)?;
+            handoff.set_shareholder(shareholder)?;
         }
 
         let handoff = Arc::new(handoff);

@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use super::{Error, HandoffKind, Player, ShareholderId};
+use super::{Error, HandoffKind, Shareholder, ShareholderId};
 
 /// Dimension switch kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,21 +45,22 @@ where
     /// state if proactivization is required, or directly to the Serving state.
     Accumulating(SwitchPoints<S>),
 
-    /// Represents the state where the dimension switch is waiting for a player
-    /// to be proactivized with bivariate shares. The player can be constructed
-    /// from received switch points, transferred from a previous handoff, or
-    /// omitted if we want to construct a new one.
-    WaitingForPlayer,
+    /// Represents the state where the dimension switch is waiting
+    /// for a shareholder to be proactivized with bivariate shares.
+    /// The shareholder can be constructed from received switch points,
+    /// transferred from a previous handoff, or omitted if we want
+    /// to construct a new one.
+    WaitingForShareholder,
 
-    /// Represents the state where the dimension switch is merging bivariate
-    /// shares. Once enough shares are collected, the player is proactivized,
-    /// and the state transitions to the Serving state. If no player was
-    /// given, the combined shares define a new one.
+    /// Represents the state where the dimension switch is merging
+    /// bivariate shares. Once enough shares are collected, the shareholder
+    /// is proactivized, and the state transitions to the Serving state.
+    /// If no shareholder was given, the combined shares define a new one.
     Merging(BivariateShares<S>),
 
     /// Represents the state where the dimension switch is completed,
-    /// and a new player is available to serve requests.
-    Serving(Arc<Player<S>>),
+    /// and a new shareholder is available to serve requests.
+    Serving(Arc<Shareholder<S>>),
 }
 
 /// A dimension switch based on a share resharing technique.
@@ -148,7 +149,7 @@ where
             _ => return Err(Error::InvalidState.into()),
         };
 
-        *state = DimensionSwitchState::WaitingForPlayer;
+        *state = DimensionSwitchState::WaitingForShareholder;
         Ok(())
     }
 
@@ -193,11 +194,11 @@ where
 
         let done = sp.add_point(id, bij)?;
         if done {
-            let player = sp.reconstruct_player()?;
-            let player = Arc::new(player);
+            let shareholder = sp.reconstruct_shareholder()?;
+            let shareholder = Arc::new(shareholder);
 
             if self.shareholders.is_empty() {
-                *state = DimensionSwitchState::Serving(player);
+                *state = DimensionSwitchState::Serving(shareholder);
             } else {
                 let bs = BivariateShares::new(
                     self.threshold,
@@ -205,7 +206,7 @@ where
                     self.shareholders.clone(),
                     self.kind,
                     self.handoff,
-                    Some(player),
+                    Some(shareholder),
                 )?;
                 *state = DimensionSwitchState::Merging(bs);
             }
@@ -214,18 +215,18 @@ where
         Ok(done)
     }
 
-    /// Checks if the switch is waiting for a player.
-    pub(crate) fn is_waiting_for_player(&self) -> bool {
+    /// Checks if the switch is waiting for a shareholder.
+    pub(crate) fn is_waiting_for_shareholder(&self) -> bool {
         let state = self.state.lock().unwrap();
-        matches!(&*state, DimensionSwitchState::WaitingForPlayer)
+        matches!(&*state, DimensionSwitchState::WaitingForShareholder)
     }
 
     /// Starts merging bivariate shares to be used for proactivization
-    /// of the provided player.
-    pub(crate) fn start_merging(&self, player: Option<Arc<Player<S>>>) -> Result<()> {
+    /// of the provided shareholder.
+    pub(crate) fn start_merging(&self, shareholder: Option<Arc<Shareholder<S>>>) -> Result<()> {
         let mut state = self.state.lock().unwrap();
         match &*state {
-            DimensionSwitchState::WaitingForPlayer => (),
+            DimensionSwitchState::WaitingForShareholder => (),
             _ => return Err(Error::InvalidState.into()),
         };
 
@@ -235,7 +236,7 @@ where
             self.shareholders.clone(),
             self.kind,
             self.handoff,
-            player,
+            shareholder,
         )?;
         *state = DimensionSwitchState::Merging(bs);
 
@@ -272,23 +273,23 @@ where
 
         let done = shares.add_bivariate_share(id, q, vm)?;
         if done {
-            let player = shares.proactivize_player()?;
-            let player = Arc::new(player);
-            *state = DimensionSwitchState::Serving(player);
+            let shareholder = shares.proactivize_shareholder()?;
+            let shareholder = Arc::new(shareholder);
+            *state = DimensionSwitchState::Serving(shareholder);
         }
 
         Ok(done)
     }
 
-    /// Returns the player if the switch has completed.
-    pub(crate) fn get_player(&self) -> Result<Arc<Player<S>>> {
+    /// Returns the shareholder if the switch has completed.
+    pub(crate) fn get_shareholder(&self) -> Result<Arc<Shareholder<S>>> {
         let state = self.state.lock().unwrap();
-        let player = match &*state {
+        let shareholder = match &*state {
             DimensionSwitchState::Serving(p) => p.clone(),
             _ => return Err(Error::InvalidState.into()),
         };
 
-        Ok(player)
+        Ok(shareholder)
     }
 }
 
@@ -364,7 +365,7 @@ where
         };
 
         // Wrap the matrix in an option so that we can take it when creating
-        // a player.
+        // a shareholder.
         let vm = Some(vm);
 
         // We need at least n points to reconstruct the polynomial share.
@@ -420,11 +421,11 @@ where
         Ok(done)
     }
 
-    /// Reconstructs the player from the received switch points.
+    /// Reconstructs the shareholder from the received switch points.
     ///
-    /// The player can be reconstructed only once, which avoids copying
+    /// The shareholder can be reconstructed only once, which avoids copying
     /// the verification matrix.
-    fn reconstruct_player(&mut self) -> Result<Player<S>> {
+    fn reconstruct_shareholder(&mut self) -> Result<Shareholder<S>> {
         if self.shareholders.len() < self.n {
             return Err(Error::NotEnoughSwitchPoints.into());
         }
@@ -438,9 +439,9 @@ where
         }
 
         let vm = self.vm.take().ok_or(Error::VerificationMatrixRequired)?;
-        let player = Player::new(p, vm);
+        let shareholder = Shareholder::new(p, vm);
 
-        Ok(player)
+        Ok(shareholder)
     }
 }
 
@@ -479,8 +480,8 @@ where
     /// The sum of the verification matrices of the received bivariate shares.
     vm: Option<VerificationMatrix<S::Group>>,
 
-    /// The player to be proactivized with bivariate shares.
-    player: Option<Arc<Player<S>>>,
+    /// The shareholder to be proactivized with bivariate shares.
+    shareholder: Option<Arc<Shareholder<S>>>,
 }
 
 impl<S> BivariateShares<S>
@@ -494,11 +495,11 @@ where
         shareholders: HashSet<ShareholderId>,
         kind: DimensionSwitchKind,
         handoff: HandoffKind,
-        player: Option<Arc<Player<S>>>,
+        shareholder: Option<Arc<Shareholder<S>>>,
     ) -> Result<Self> {
         // During the dealing phase, the number of shares must be at least
         // threshold + 2, ensuring that even if t Byzantine dealers reveal
-        // their secret, an honest player cannot compute the combined
+        // their secret, an honest shareholder cannot compute the combined
         // bivariate polynomial.
         let min = match handoff {
             HandoffKind::DealingPhase => threshold as usize + 2,
@@ -525,7 +526,7 @@ where
             pending_shareholders,
             p: None,
             vm: None,
-            player,
+            shareholder,
         })
     }
 
@@ -595,9 +596,9 @@ where
         Ok(done)
     }
 
-    /// Proactivizes the player with the combined polynomial and verification
-    /// matrix.
-    fn proactivize_player(&mut self) -> Result<Player<S>> {
+    /// Proactivizes the shareholder with the combined polynomial
+    /// and verification matrix.
+    fn proactivize_shareholder(&mut self) -> Result<Shareholder<S>> {
         if !self.pending_shareholders.is_empty() {
             return Err(Error::NotEnoughBivariateShares.into());
         }
@@ -607,12 +608,12 @@ where
         let p = self.p.take().unwrap();
         let vm = self.vm.take().unwrap();
 
-        let player = match &self.player {
-            Some(player) => player.proactivize(&p, &vm)?,
-            None => Player::new(p, vm),
+        let shareholder = match &self.shareholder {
+            Some(shareholder) => shareholder.proactivize(&p, &vm)?,
+            None => Shareholder::new(p, vm),
         };
 
-        Ok(player)
+        Ok(shareholder)
     }
 }
 
@@ -709,7 +710,7 @@ mod tests {
             sh += 1;
 
             // Try to reconstruct the polynomial.
-            let res = sp.reconstruct_player();
+            let res = sp.reconstruct_shareholder();
             assert!(res.is_err());
             unsafe {
                 assert_eq!(
@@ -746,7 +747,7 @@ mod tests {
             );
 
             // Try to reconstruct the polynomial again.
-            let res = sp.reconstruct_player();
+            let res = sp.reconstruct_shareholder();
             assert!(res.is_ok());
         }
     }
@@ -852,7 +853,7 @@ mod tests {
             sh += 1;
 
             // Try to collect the polynomial and verification matrix.
-            let res = bs.proactivize_player();
+            let res = bs.proactivize_shareholder();
             assert!(res.is_err());
             unsafe {
                 assert_eq!(
@@ -878,7 +879,7 @@ mod tests {
             );
 
             // Try to collect the polynomial and verification matrix again.
-            let res = bs.proactivize_player();
+            let res = bs.proactivize_shareholder();
             assert!(res.is_ok());
         }
     }

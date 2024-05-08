@@ -43,10 +43,6 @@ pub enum Error {
     NotAuthorized,
     #[error("not in committee")]
     NotInCommittee,
-    #[error("player mismatch")]
-    PlayerMismatch,
-    #[error("player not found")]
-    PlayerNotFound,
     #[error("point decoding failed")]
     PointDecodingFailed,
     #[error("policy rollback")]
@@ -55,6 +51,10 @@ pub enum Error {
     PolynomialDecodingFailed,
     #[error("runtime mismatch")]
     RuntimeMismatch,
+    #[error("shareholder mismatch")]
+    ShareholderMismatch,
+    #[error("shareholder not found")]
+    ShareholderNotFound,
     #[error("status not published")]
     StatusNotPublished,
     #[error("verification matrix decoding failed")]
