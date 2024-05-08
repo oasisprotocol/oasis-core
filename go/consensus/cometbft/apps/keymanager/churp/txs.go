@@ -439,10 +439,6 @@ func addStakeClaim(ctx *tmapi.Context, entityID signature.PublicKey, runtimeID c
 	}
 
 	entityAddr := staking.NewAddress(entityID)
-	if err != nil {
-		return err
-	}
-
 	claim := churp.StakeClaim(runtimeID, churpID)
 	thresholds := churp.StakeThresholds()
 
@@ -517,18 +513,29 @@ func tryFinalizeHandoff(status *churp.Status, epochChange bool) bool {
 		return false
 	})
 
+	// Compute the next handoff epoch.
+	nextHandoff := churp.HandoffsDisabled
+	if status.Handoff < churp.HandoffsDisabled-status.HandoffInterval {
+		nextHandoff = status.NextHandoff + status.HandoffInterval
+	}
+
+	// Give nodes an extra epoch for application submission.
+	if epochChange && status.HandoffInterval == 1 && nextHandoff < churp.HandoffsDisabled {
+		nextHandoff++
+	}
+
+	// Disable handoffs when overflow happens.
+	if nextHandoff == churp.HandoffsDisabled {
+		status.HandoffInterval = 0
+	}
+
 	// Update fields.
 	status.Handoff = status.NextHandoff
 	status.Checksum = status.NextChecksum
 	status.Committee = committee
-	status.NextHandoff = status.Handoff + status.HandoffInterval
+	status.NextHandoff = nextHandoff
 	status.NextChecksum = nil
 	status.Applications = nil
-
-	// Give nodes an extra epoch for application submission.
-	if epochChange && status.HandoffInterval == 1 {
-		status.NextHandoff++
-	}
 
 	return true
 }
