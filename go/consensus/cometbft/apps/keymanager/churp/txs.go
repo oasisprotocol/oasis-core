@@ -247,20 +247,19 @@ func (ext *churpExt) apply(ctx *tmapi.Context, req *churp.SignedApplicationReque
 		return fmt.Errorf("keymanager: churp: non-existing ID: %d", req.Application.ID)
 	}
 
+	// Check if handoffs are enabled.
+	if status.HandoffsDisabled() {
+		return fmt.Errorf("keymanager: churp: handoffs disabled")
+	}
+
 	// Allow applications one epoch before the next handoff.
 	now, err := ext.state.GetCurrentEpoch(ctx)
 	if err != nil {
 		return err
 	}
-
-	switch status.NextHandoff {
-	case churp.HandoffsDisabled:
-		return fmt.Errorf("keymanager: churp: handoffs disabled")
-	case now + 1:
-	default:
+	if status.NextHandoff != now+1 {
 		return fmt.Errorf("keymanager: churp: submissions closed")
 	}
-
 	if status.NextHandoff != req.Application.Epoch {
 		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Application.Epoch, status.NextHandoff)
 	}
@@ -339,20 +338,19 @@ func (ext *churpExt) confirm(ctx *tmapi.Context, req *churp.SignedConfirmationRe
 		return fmt.Errorf("keymanager: churp: non-existing ID: %d", req.Confirmation.ID)
 	}
 
+	// Check if handoffs are enabled.
+	if status.HandoffsDisabled() {
+		return fmt.Errorf("keymanager: churp: handoffs disabled")
+	}
+
 	// Allow confirmations only during the next handoff.
 	now, err := ext.state.GetCurrentEpoch(ctx)
 	if err != nil {
 		return err
 	}
-
-	switch status.NextHandoff {
-	case churp.HandoffsDisabled:
-		return fmt.Errorf("keymanager: churp: handoffs disabled")
-	case now:
-	default:
+	if status.NextHandoff != now {
 		return fmt.Errorf("keymanager: churp: confirmations closed")
 	}
-
 	if status.NextHandoff != req.Confirmation.Epoch {
 		return fmt.Errorf("keymanager: churp: invalid handoff: got %d, expected %d", req.Confirmation.Epoch, status.NextHandoff)
 	}
