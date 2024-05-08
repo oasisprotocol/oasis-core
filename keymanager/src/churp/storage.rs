@@ -2,8 +2,7 @@
 pub use std::{convert::TryInto, sync::Arc};
 
 use anyhow::Result;
-use group::{Group, GroupEncoding};
-use p384::elliptic_curve::PrimeField;
+use group::{ff::PrimeField, Group, GroupEncoding};
 use secret_sharing::{
     churp::SecretShare,
     vss::{
@@ -50,14 +49,11 @@ impl Storage {
     }
 
     /// Loads and decrypts a bivariate polynomial.
-    pub fn load_bivariate_polynomial<Fp>(
+    pub fn load_bivariate_polynomial<F: PrimeField>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<Option<BivariatePolynomial<Fp>>>
-    where
-        Fp: PrimeField,
-    {
+    ) -> Result<Option<BivariatePolynomial<F>>> {
         let key = Self::create_bivariate_polynomial_storage_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
@@ -69,15 +65,12 @@ impl Storage {
     }
 
     /// Encrypts and stores the given bivariate polynomial.
-    pub fn store_bivariate_polynomial<Fp>(
+    pub fn store_bivariate_polynomial<F: PrimeField>(
         &self,
-        polynomial: &BivariatePolynomial<Fp>,
+        polynomial: &BivariatePolynomial<F>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<()>
-    where
-        Fp: PrimeField,
-    {
+    ) -> Result<()> {
         let key = Self::create_bivariate_polynomial_storage_key(churp_id);
         let ciphertext = Self::encrypt_bivariate_polynomial(polynomial, churp_id, epoch);
         self.storage.insert(key, ciphertext)?;
@@ -87,14 +80,11 @@ impl Storage {
 
     /// Loads and decrypts a secret share, consisting of a polynomial
     /// and its associated verification matrix.
-    pub fn load_secret_share<G>(
+    pub fn load_secret_share<G: Group + GroupEncoding>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<Option<SecretShare<G>>>
-    where
-        G: Group + GroupEncoding,
-    {
+    ) -> Result<Option<SecretShare<G>>> {
         let key = Self::create_secret_share_storage_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
@@ -107,15 +97,12 @@ impl Storage {
 
     /// Encrypts and stores the provided secret share, consisting of
     /// a polynomial and its associated verification matrix.
-    pub fn store_secret_share<G>(
+    pub fn store_secret_share<G: Group + GroupEncoding>(
         &self,
         share: &SecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<()>
-    where
-        G: Group + GroupEncoding,
-    {
+    ) -> Result<()> {
         let key = Self::create_secret_share_storage_key(churp_id);
         let ciphertext = Self::encrypt_secret_share(share, churp_id, epoch);
         self.storage.insert(key, ciphertext)?;
@@ -125,14 +112,11 @@ impl Storage {
 
     /// Loads and decrypts the next secret share, consisting of a polynomial
     /// and its associated verification matrix.
-    pub fn load_next_secret_share<G>(
+    pub fn load_next_secret_share<G: Group + GroupEncoding>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<Option<SecretShare<G>>>
-    where
-        G: Group + GroupEncoding,
-    {
+    ) -> Result<Option<SecretShare<G>>> {
         let key = Self::create_next_secret_share_storage_key(churp_id);
         let mut ciphertext = self.storage.get(key)?;
         if ciphertext.is_empty() {
@@ -145,15 +129,12 @@ impl Storage {
 
     /// Encrypts and stores the provided next secret share, consisting of
     /// a polynomial and its associated verification matrix.
-    pub fn store_next_secret_share<G>(
+    pub fn store_next_secret_share<G: Group + GroupEncoding>(
         &self,
         share: &SecretShare<G>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<()>
-    where
-        G: Group + GroupEncoding,
-    {
+    ) -> Result<()> {
         let key = Self::create_next_secret_share_storage_key(churp_id);
         let ciphertext = Self::encrypt_secret_share(share, churp_id, epoch);
         self.storage.insert(key, ciphertext)?;
@@ -163,14 +144,11 @@ impl Storage {
 
     /// Encrypts and authenticates the given bivariate polynomial
     /// using the provided ID and handoff epoch as additional data.
-    fn encrypt_bivariate_polynomial<Fp>(
-        polynomial: &BivariatePolynomial<Fp>,
+    fn encrypt_bivariate_polynomial<F: PrimeField>(
+        polynomial: &BivariatePolynomial<F>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Vec<u8>
-    where
-        Fp: PrimeField,
-    {
+    ) -> Vec<u8> {
         let nonce = Nonce::generate();
         let plaintext = polynomial.to_bytes();
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
@@ -182,14 +160,11 @@ impl Storage {
 
     /// Decrypts and authenticates encrypted bivariate polynomial
     /// using the provided ID and handoff epoch as additional data.
-    fn decrypt_bivariate_polynomial<Fp>(
+    fn decrypt_bivariate_polynomial<F: PrimeField>(
         ciphertext: &mut Vec<u8>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<BivariatePolynomial<Fp>>
-    where
-        Fp: PrimeField,
-    {
+    ) -> Result<BivariatePolynomial<F>> {
         let (ciphertext, nonce) = Self::unpack_ciphertext_with_nonce(ciphertext)?;
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, BIVARIATE_POLYNOMIAL_SEAL_CONTEXT);
@@ -203,10 +178,11 @@ impl Storage {
 
     /// Encrypts and authenticates the given polynomial and verification matrix
     /// using the provided ID and handoff as additional data.
-    fn encrypt_secret_share<G>(share: &SecretShare<G>, churp_id: u8, epoch: EpochTime) -> Vec<u8>
-    where
-        G: Group + GroupEncoding,
-    {
+    fn encrypt_secret_share<G: Group + GroupEncoding>(
+        share: &SecretShare<G>,
+        churp_id: u8,
+        epoch: EpochTime,
+    ) -> Vec<u8> {
         let share = EncodedSecretShare {
             polynomial: share.polynomial().to_bytes(),
             verification_matrix: share.verification_matrix().to_bytes(),
@@ -222,14 +198,11 @@ impl Storage {
 
     /// Decrypts and authenticates encrypted polynomial and verification matrix
     /// using the provided ID and handoff as additional data.
-    fn decrypt_secret_share<G>(
+    fn decrypt_secret_share<G: Group + GroupEncoding>(
         ciphertext: &mut Vec<u8>,
         churp_id: u8,
         epoch: EpochTime,
-    ) -> Result<SecretShare<G>>
-    where
-        G: Group + GroupEncoding,
-    {
+    ) -> Result<SecretShare<G>> {
         let (ciphertext, nonce) = Self::unpack_ciphertext_with_nonce(ciphertext)?;
         let additional_data = Self::pack_churp_id_epoch(churp_id, epoch);
         let d2 = new_deoxysii(Keypolicy::MRENCLAVE, SECRET_SHARE_SEAL_CONTEXT);
@@ -300,7 +273,7 @@ mod tests {
 
     use secret_sharing::{
         churp::SecretShare,
-        vss::{matrix::VerificationMatrix, polynomial::BivariatePolynomial},
+        vss::{matrix, polynomial},
     };
 
     use crate::churp::storage::{
@@ -310,6 +283,11 @@ mod tests {
     };
 
     use super::Storage;
+
+    type PrimeField = p384::Scalar;
+    type Group = p384::ProjectivePoint;
+    type BivariatePolynomial = polynomial::BivariatePolynomial<PrimeField>;
+    type VerificationMatrix = matrix::VerificationMatrix<Group>;
 
     #[test]
     fn test_unique_seal_contexts() {
@@ -343,7 +321,7 @@ mod tests {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let untrusted = Arc::new(UntrustedInMemoryStorage::new());
         let storage = Storage::new(untrusted.clone());
-        let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
+        let polynomial = BivariatePolynomial::random(2, 4, &mut rng);
         let churp_id = 1;
         let epoch = 10;
 
@@ -352,19 +330,19 @@ mod tests {
             .store_bivariate_polynomial(&polynomial, churp_id, epoch)
             .expect("bivariate polynomial should be stored");
         let restored = storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id, epoch)
+            .load_bivariate_polynomial::<PrimeField>(churp_id, epoch)
             .expect("bivariate polynomial should be loaded")
             .expect("bivariate polynomial should exist");
         assert!(polynomial == restored);
 
         // Non-existing ID.
         let restored = storage
-            .load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, epoch)
+            .load_bivariate_polynomial::<PrimeField>(churp_id + 1, epoch)
             .expect("bivariate polynomial should be loaded");
         assert!(None == restored);
 
         // Invalid epoch, decryption should fail.
-        let res = storage.load_bivariate_polynomial::<p384::Scalar>(churp_id, epoch + 1);
+        let res = storage.load_bivariate_polynomial::<PrimeField>(churp_id, epoch + 1);
         assert!(
             res.is_err(),
             "decryption of bivariate polynomial should fail"
@@ -387,14 +365,14 @@ mod tests {
             .expect("bivariate polynomial should be stored");
 
         // Invalid ID, decryption should fail.
-        let res = storage.load_bivariate_polynomial::<p384::Scalar>(churp_id + 1, epoch);
+        let res = storage.load_bivariate_polynomial::<PrimeField>(churp_id + 1, epoch);
         assert!(
             res.is_err(),
             "decryption of bivariate polynomial should fail"
         );
 
         // Corrupted ciphertext, decryption should fail.
-        let res = storage.load_bivariate_polynomial::<p384::Scalar>(churp_id, epoch);
+        let res = storage.load_bivariate_polynomial::<PrimeField>(churp_id, epoch);
         assert!(
             res.is_err(),
             "decryption of bivariate polynomial should fail"
@@ -406,9 +384,9 @@ mod tests {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let untrusted = Arc::new(UntrustedInMemoryStorage::new());
         let storage = Storage::new(untrusted.clone());
-        let x2 = p384::Scalar::from_u64(2);
-        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let x2 = PrimeField::from_u64(2);
+        let bp = BivariatePolynomial::random(2, 4, &mut rng);
+        let vm = VerificationMatrix::from(&bp);
         let p = bp.eval_x(&x2);
         let share = SecretShare::new(p, vm);
         let churp_id = 1;
@@ -419,7 +397,7 @@ mod tests {
             .store_secret_share(&share, churp_id, epoch)
             .expect("secret share should be stored");
         let restored = storage
-            .load_secret_share::<p384::ProjectivePoint>(churp_id, epoch)
+            .load_secret_share::<Group>(churp_id, epoch)
             .expect("secret share should be loaded")
             .expect("secret share should exist");
         assert!(share.polynomial() == restored.polynomial());
@@ -427,12 +405,12 @@ mod tests {
 
         // Non-existing ID.
         let restored = storage
-            .load_secret_share::<p384::ProjectivePoint>(churp_id + 1, epoch)
+            .load_secret_share::<Group>(churp_id + 1, epoch)
             .expect("secret share should be loaded");
         assert!(restored.is_none());
 
         // Invalid epoch, decryption should fail.
-        let res = storage.load_secret_share::<p384::ProjectivePoint>(churp_id, epoch + 1);
+        let res = storage.load_secret_share::<Group>(churp_id, epoch + 1);
         assert!(res.is_err(), "decryption of secret share should fail");
 
         // Manipulate local storage.
@@ -452,11 +430,11 @@ mod tests {
             .expect("secret share should be stored");
 
         // Invalid ID, decryption should fail.
-        let res = storage.load_secret_share::<p384::ProjectivePoint>(churp_id + 1, epoch);
+        let res = storage.load_secret_share::<Group>(churp_id + 1, epoch);
         assert!(res.is_err(), "decryption of secret share should fail");
 
         // Corrupted ciphertext, decryption should fail.
-        let res = storage.load_secret_share::<p384::ProjectivePoint>(churp_id, epoch);
+        let res = storage.load_secret_share::<Group>(churp_id, epoch);
         assert!(res.is_err(), "decryption of secret share should fail");
     }
 
@@ -465,9 +443,9 @@ mod tests {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let untrusted = Arc::new(UntrustedInMemoryStorage::new());
         let storage = Storage::new(untrusted.clone());
-        let x2 = p384::Scalar::from_u64(2);
-        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let x2 = PrimeField::from_u64(2);
+        let bp = BivariatePolynomial::random(2, 4, &mut rng);
+        let vm = VerificationMatrix::from(&bp);
         let p = bp.eval_x(&x2);
         let share = SecretShare::new(p, vm);
         let churp_id = 1;
@@ -478,7 +456,7 @@ mod tests {
             .store_next_secret_share(&share, churp_id, epoch)
             .expect("next secret share should be stored");
         let restored = storage
-            .load_next_secret_share::<p384::ProjectivePoint>(churp_id, epoch)
+            .load_next_secret_share::<Group>(churp_id, epoch)
             .expect("next secret share should be loaded")
             .expect("next secret share should exist");
         assert!(share.polynomial() == restored.polynomial());
@@ -486,12 +464,12 @@ mod tests {
 
         // Non-existing ID.
         let restored = storage
-            .load_next_secret_share::<p384::ProjectivePoint>(churp_id + 1, epoch)
+            .load_next_secret_share::<Group>(churp_id + 1, epoch)
             .expect("next secret share should be loaded");
         assert!(restored.is_none());
 
         // Invalid epoch, decryption should fail.
-        let res = storage.load_next_secret_share::<p384::ProjectivePoint>(churp_id, epoch + 1);
+        let res = storage.load_next_secret_share::<Group>(churp_id, epoch + 1);
         assert!(res.is_err(), "decryption of next secret share should fail");
 
         // Manipulate local storage.
@@ -511,28 +489,28 @@ mod tests {
             .expect("next secret share should be stored");
 
         // Invalid ID, decryption should fail.
-        let res = storage.load_next_secret_share::<p384::ProjectivePoint>(churp_id + 1, epoch);
+        let res = storage.load_next_secret_share::<Group>(churp_id + 1, epoch);
         assert!(res.is_err(), "decryption of next secret share should fail");
 
         // Corrupted ciphertext, decryption should fail.
-        let res = storage.load_next_secret_share::<p384::ProjectivePoint>(churp_id, epoch);
+        let res = storage.load_next_secret_share::<Group>(churp_id, epoch);
         assert!(res.is_err(), "decryption of next secret share should fail");
     }
 
     #[test]
     fn test_encrypt_decrypt_bivariate_polynomial() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let polynomial = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
+        let polynomial = BivariatePolynomial::random(2, 4, &mut rng);
         let churp_id = 1;
         let epoch = 10;
 
         // Happy path.
         let mut ciphertext = Storage::encrypt_bivariate_polynomial(&polynomial, churp_id, epoch);
-        Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, epoch)
+        Storage::decrypt_bivariate_polynomial::<PrimeField>(&mut ciphertext, churp_id, epoch)
             .expect("decryption of bivariate polynomial should succeed");
 
         // Invalid ID, decryption should fail.
-        let res = Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
+        let res = Storage::decrypt_bivariate_polynomial::<PrimeField>(
             &mut ciphertext,
             churp_id + 1,
             epoch,
@@ -543,7 +521,7 @@ mod tests {
         );
 
         // Invalid handoff, decryption should fail.
-        let res = Storage::decrypt_bivariate_polynomial::<p384::Scalar>(
+        let res = Storage::decrypt_bivariate_polynomial::<PrimeField>(
             &mut ciphertext,
             churp_id,
             epoch + 1,
@@ -556,7 +534,7 @@ mod tests {
         // Corrupted ciphertext, decryption should fail.
         (ciphertext[0], _) = ciphertext[0].overflowing_add(1);
         let res =
-            Storage::decrypt_bivariate_polynomial::<p384::Scalar>(&mut ciphertext, churp_id, epoch);
+            Storage::decrypt_bivariate_polynomial::<PrimeField>(&mut ciphertext, churp_id, epoch);
         assert!(
             res.is_err(),
             "decryption of bivariate polynomial should fail"
@@ -566,9 +544,9 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt_secret_share() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let x2 = p384::Scalar::from_u64(2);
-        let bp = BivariatePolynomial::<p384::Scalar>::random(2, 4, &mut rng);
-        let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
+        let x2 = PrimeField::from_u64(2);
+        let bp = BivariatePolynomial::random(2, 4, &mut rng);
+        let vm = VerificationMatrix::from(&bp);
         let p = bp.eval_x(&x2);
         let share = SecretShare::new(p, vm);
         let churp_id = 1;
@@ -576,32 +554,20 @@ mod tests {
 
         // Happy path.
         let mut ciphertext = Storage::encrypt_secret_share(&share, churp_id, epoch);
-        Storage::decrypt_secret_share::<p384::ProjectivePoint>(&mut ciphertext, churp_id, epoch)
+        Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id, epoch)
             .expect("decryption of secret share should succeed");
 
         // Invalid ID, decryption should fail.
-        let res = Storage::decrypt_secret_share::<p384::ProjectivePoint>(
-            &mut ciphertext,
-            churp_id + 1,
-            epoch,
-        );
+        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id + 1, epoch);
         assert!(res.is_err(), "decryption of secret share should fail");
 
         // Invalid epoch, decryption should fail.
-        let res = Storage::decrypt_secret_share::<p384::ProjectivePoint>(
-            &mut ciphertext,
-            churp_id,
-            epoch + 1,
-        );
+        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id, epoch + 1);
         assert!(res.is_err(), "decryption of secret share should fail");
 
         // Corrupted ciphertext, decryption should fail.
         (ciphertext[0], _) = ciphertext[0].overflowing_add(1);
-        let res = Storage::decrypt_secret_share::<p384::ProjectivePoint>(
-            &mut ciphertext,
-            churp_id,
-            epoch,
-        );
+        let res = Storage::decrypt_secret_share::<Group>(&mut ciphertext, churp_id, epoch);
         assert!(res.is_err(), "decryption of secret share should fail");
     }
 }

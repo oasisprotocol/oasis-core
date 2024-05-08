@@ -23,19 +23,19 @@ use crate::vss::{arith::powers, scalar::scalar_from_bytes};
 /// in encodings of equal length. If you wish to remove them, consider using
 /// the `trim` method after each operation.
 #[derive(Clone, PartialEq, Eq)]
-pub struct Polynomial<Fp> {
-    pub(crate) a: Vec<Fp>,
+pub struct Polynomial<F> {
+    pub(crate) a: Vec<F>,
 }
 
-impl<Fp> Polynomial<Fp>
+impl<F> Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     /// Creates a polynomial initialized to zero.
     pub fn zero(deg: u8) -> Self {
         let deg = deg as usize;
 
-        let a = vec![Fp::ZERO; deg + 1];
+        let a = vec![F::ZERO; deg + 1];
         Self { a }
     }
 
@@ -45,7 +45,7 @@ where
 
         let mut a = Vec::with_capacity(deg + 1);
         for _ in 0..a.capacity() {
-            let ai = Fp::random(&mut *rng);
+            let ai = F::random(&mut *rng);
             a.push(ai);
         }
 
@@ -53,7 +53,7 @@ where
     }
 
     /// Creates a polynomial with the given coefficients.
-    pub fn with_coefficients(a: Vec<Fp>) -> Self {
+    pub fn with_coefficients(a: Vec<F>) -> Self {
         if a.is_empty() {
             return Self::zero(0);
         }
@@ -64,7 +64,7 @@ where
     /// Sets the coefficient `a_i` that belongs to the term `x^i`.
     ///
     /// If the coefficient does not exist, this is a no-op.
-    pub fn set_coefficient(&mut self, i: usize, ai: Fp) {
+    pub fn set_coefficient(&mut self, i: usize, ai: F) {
         if let Some(old_ai) = self.a.get_mut(i) {
             *old_ai = ai;
         }
@@ -73,7 +73,7 @@ where
     /// Sets the coefficient `a_0` of the constant term to zero,
     /// effectively creating a zero-hole univariate polynomial.
     pub fn to_zero_hole(&mut self) {
-        self.set_coefficient(0, Fp::ZERO);
+        self.set_coefficient(0, F::ZERO);
     }
 
     /// Returns the highest of the degrees of the polynomial's monomials with
@@ -97,7 +97,7 @@ where
     }
 
     /// Returns the i-th coefficient of the polynomial.
-    pub fn coefficient(&self, i: usize) -> Option<&Fp> {
+    pub fn coefficient(&self, i: usize) -> Option<&F> {
         self.a.get(i)
     }
 
@@ -143,7 +143,7 @@ where
 
     /// Returns the size of the byte representation of a coefficient.
     pub fn coefficient_byte_size() -> usize {
-        Fp::NUM_BITS.saturating_add(7) as usize / 8
+        F::NUM_BITS.saturating_add(7) as usize / 8
     }
 
     /// Returns the size of the byte representation of the polynomial.
@@ -152,9 +152,9 @@ where
     }
 
     /// Evaluates the polynomial.
-    pub fn eval(&self, x: &Fp) -> Fp {
+    pub fn eval(&self, x: &F) -> F {
         let xpows = powers(x, self.a.len() - 1);
-        let mut r = Fp::ZERO;
+        let mut r = F::ZERO;
         for (i, xpow) in xpows.iter().enumerate() {
             r += self.a[i] * xpow
         }
@@ -163,18 +163,18 @@ where
     }
 }
 
-impl<Fp> Default for Polynomial<Fp>
+impl<F> Default for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn default() -> Self {
         Self::zero(0)
     }
 }
 
-impl<Fp> Add for Polynomial<Fp>
+impl<F> Add for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
@@ -183,11 +183,11 @@ where
     }
 }
 
-impl<Fp> Add for &Polynomial<Fp>
+impl<F> Add for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     fn add(self, other: Self) -> Self::Output {
         let max_len = max(self.a.len(), other.a.len());
@@ -205,18 +205,18 @@ where
     }
 }
 
-impl<Fp> AddAssign for Polynomial<Fp>
+impl<F> AddAssign for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn add_assign(&mut self, other: Self) {
         *self += &other
     }
 }
 
-impl<Fp> AddAssign<&Self> for Polynomial<Fp>
+impl<F> AddAssign<&Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn add_assign(&mut self, other: &Self) {
         let min_len = min(self.a.len(), other.a.len());
@@ -229,9 +229,9 @@ where
     }
 }
 
-impl<Fp> Sub for Polynomial<Fp>
+impl<F> Sub for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
@@ -240,11 +240,11 @@ where
     }
 }
 
-impl<Fp> Sub for &Polynomial<Fp>
+impl<F> Sub for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     fn sub(self, other: Self) -> Self::Output {
         let max_len = max(self.a.len(), other.a.len());
@@ -262,18 +262,18 @@ where
     }
 }
 
-impl<Fp> SubAssign for Polynomial<Fp>
+impl<F> SubAssign for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn sub_assign(&mut self, other: Self) {
         *self -= &other
     }
 }
 
-impl<Fp> SubAssign<&Self> for Polynomial<Fp>
+impl<F> SubAssign<&Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn sub_assign(&mut self, other: &Self) {
         let min_len = min(self.a.len(), other.a.len());
@@ -286,9 +286,9 @@ where
     }
 }
 
-impl<Fp> Mul for Polynomial<Fp>
+impl<F> Mul for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
@@ -297,11 +297,11 @@ where
     }
 }
 
-impl<Fp> Mul for &Polynomial<Fp>
+impl<F> Mul for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     fn mul(self, other: Self) -> Self::Output {
         let mut a = Vec::with_capacity(self.a.len() + other.a.len() - 1);
@@ -319,18 +319,18 @@ where
     }
 }
 
-impl<Fp> MulAssign for Polynomial<Fp>
+impl<F> MulAssign for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn mul_assign(&mut self, other: Self) {
         *self *= &other
     }
 }
 
-impl<Fp> MulAssign<&Self> for Polynomial<Fp>
+impl<F> MulAssign<&Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn mul_assign(&mut self, other: &Self) {
         let mut a = Vec::with_capacity(self.a.len() + other.a.len() - 2);
@@ -348,48 +348,48 @@ where
     }
 }
 
-impl<Fp> Mul<Fp> for Polynomial<Fp>
+impl<F> Mul<F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
     #[allow(clippy::op_ref)]
-    fn mul(self, scalar: Fp) -> Self {
+    fn mul(self, scalar: F) -> Self {
         &self * &scalar
     }
 }
 
-impl<Fp> Mul<&Fp> for Polynomial<Fp>
+impl<F> Mul<&F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
-    fn mul(self, scalar: &Fp) -> Self {
+    fn mul(self, scalar: &F) -> Self {
         &self * scalar
     }
 }
 
-impl<Fp> Mul<Fp> for &Polynomial<Fp>
+impl<F> Mul<F> for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     #[allow(clippy::op_ref)]
-    fn mul(self, scalar: Fp) -> Self::Output {
+    fn mul(self, scalar: F) -> Self::Output {
         self * &scalar
     }
 }
 
-impl<Fp> Mul<&Fp> for &Polynomial<Fp>
+impl<F> Mul<&F> for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
-    fn mul(self, scalar: &Fp) -> Self::Output {
+    fn mul(self, scalar: &F) -> Self::Output {
         let mut a = Vec::with_capacity(self.a.len());
 
         for i in 0..self.a.len() {
@@ -400,29 +400,29 @@ where
     }
 }
 
-impl<Fp> MulAssign<Fp> for Polynomial<Fp>
+impl<F> MulAssign<F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    fn mul_assign(&mut self, scalar: Fp) {
+    fn mul_assign(&mut self, scalar: F) {
         *self *= &scalar
     }
 }
 
-impl<Fp> MulAssign<&Fp> for Polynomial<Fp>
+impl<F> MulAssign<&F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    fn mul_assign(&mut self, scalar: &Fp) {
+    fn mul_assign(&mut self, scalar: &F) {
         for i in 0..self.a.len() {
             self.a[i] *= scalar
         }
     }
 }
 
-impl<Fp> Sum for Polynomial<Fp>
+impl<F> Sum for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         let mut sum = Polynomial::zero(0);
@@ -431,11 +431,11 @@ where
     }
 }
 
-impl<'a, Fp> Sum<&'a Self> for Polynomial<Fp>
+impl<'a, F> Sum<&'a Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Polynomial<Fp> {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
         iter.for_each(|p| sum += p);
         sum

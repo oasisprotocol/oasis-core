@@ -56,7 +56,7 @@ mod test {
             crypto::signature::{PublicKey, Signature, SignatureBundle},
             sgx::{EnclaveIdentity, MrEnclave, MrSigner},
         },
-        consensus::keymanager::churp::{Application, PolicySGX, SignedPolicySGX, SuiteID},
+        consensus::keymanager::churp::{Application, PolicySGX, SignedPolicySGX, SuiteId},
         storage::mkvs::{
             interop::{Fixture, ProtocolServer},
             Root, RootType, Tree,
@@ -146,7 +146,7 @@ mod test {
         let status = Status {
             id: 1,
             runtime_id,
-            suite_id: SuiteID::NistP384Sha3_384,
+            suite_id: SuiteId::NistP384Sha3_384,
             threshold: 2,
             extra_shares: 1,
             handoff_interval: 3,
