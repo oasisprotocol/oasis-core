@@ -29,7 +29,7 @@ pub enum Error {
 /// Cipher suite identifier.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Decode, cbor::Encode)]
 #[repr(u8)]
-pub enum SuiteID {
+pub enum SuiteId {
     /// The NIST P-384 elliptic curve group with the SHA3-384 hash function
     /// used to encode arbitrary-length byte strings to elements of the
     /// underlying prime field or elliptic curve points.
@@ -48,7 +48,7 @@ pub struct Status {
 
     /// The identifier of a cipher suite used for verifiable secret sharing
     /// and key derivation.
-    pub suite_id: SuiteID,
+    pub suite_id: SuiteId,
 
     /// The degree of the secret-sharing polynomial.
     ///

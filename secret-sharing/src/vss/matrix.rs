@@ -361,8 +361,8 @@ mod tests {
         // Two non-zero coefficients (fast).
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let mut bp = BivariatePolynomial::<p384::Scalar>::zero(2, 3);
-        bp.set_coefficient(p384::Scalar::ONE, 0, 0);
-        bp.set_coefficient(p384::Scalar::ONE.double(), 2, 2);
+        bp.set_coefficient(0, 0, p384::Scalar::ONE);
+        bp.set_coefficient(2, 2, p384::Scalar::ONE.double());
 
         let vm = VerificationMatrix::<p384::ProjectivePoint>::from(&bp);
         assert_eq!(vm.m.len(), 3);

@@ -3,9 +3,12 @@
 use anyhow::Result;
 use group::{Group, GroupEncoding};
 
-use crate::vss::{matrix::VerificationMatrix, polynomial::Polynomial};
+use crate::{
+    suites::Suite,
+    vss::{matrix::VerificationMatrix, polynomial::Polynomial},
+};
 
-use super::{Error, Shareholder, Suite};
+use super::{Error, ShareholderId};
 
 /// Player is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
@@ -40,8 +43,8 @@ where
     }
 
     /// Computes switch point for the given shareholder.
-    pub fn switch_point(&self, id: Shareholder) -> Result<S::PrimeField> {
-        let x: <S as Suite>::PrimeField = S::encode_shareholder(id)?;
+    pub fn switch_point(&self, id: ShareholderId) -> Result<S::PrimeField> {
+        let x = id.encode::<S>()?;
         let point = self.share.p.eval(&x);
         Ok(point)
     }

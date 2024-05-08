@@ -13,10 +13,7 @@ use super::multiplier::Multiplier;
 /// L(x) = \sum_{i=0}^n y_i * L_i(x)
 /// ```
 /// where `L_i(x)` represents the i-th Lagrange basis polynomial.
-pub fn lagrange<Fp>(xs: &[Fp], ys: &[Fp]) -> Polynomial<Fp>
-where
-    Fp: PrimeField,
-{
+pub fn lagrange<F: PrimeField>(xs: &[F], ys: &[F]) -> Polynomial<F> {
     let ls = basis_polynomials(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }
@@ -28,10 +25,7 @@ where
 ///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
-fn basis_polynomials<Fp>(xs: &[Fp]) -> Vec<Polynomial<Fp>>
-where
-    Fp: PrimeField,
-{
+fn basis_polynomials<F: PrimeField>(xs: &[F]) -> Vec<Polynomial<F>> {
     let m = multiplier_for_basis_polynomials(xs);
     (0..xs.len()).map(|i| basis_polynomial(xs, i, &m)).collect()
 }
@@ -43,18 +37,15 @@ where
 ///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
-fn basis_polynomial<Fp>(
-    xs: &[Fp],
+fn basis_polynomial<F: PrimeField>(
+    xs: &[F],
     i: usize,
-    multiplier: &Multiplier<Polynomial<Fp>>,
-) -> Polynomial<Fp>
-where
-    Fp: PrimeField,
-{
+    multiplier: &Multiplier<Polynomial<F>>,
+) -> Polynomial<F> {
     let mut nom = multiplier
         .get_product(i)
-        .unwrap_or(Polynomial::with_coefficients(vec![Fp::ONE]));
-    let mut denom = Fp::ONE;
+        .unwrap_or(Polynomial::with_coefficients(vec![F::ONE]));
+    let mut denom = F::ONE;
     for j in 0..xs.len() {
         if j == i {
             continue;
@@ -73,10 +64,7 @@ where
 /// ```text
 ///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
 /// ```
-pub fn coefficients<Fp>(xs: &[Fp]) -> Vec<Fp>
-where
-    Fp: PrimeField,
-{
+pub fn coefficients<F: PrimeField>(xs: &[F]) -> Vec<F> {
     let m = multiplier_for_coefficients(xs);
     (0..xs.len()).map(|i| coefficient(xs, i, &m)).collect()
 }
@@ -87,12 +75,9 @@ where
 /// ```text
 ///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
 /// ```
-fn coefficient<Fp>(xs: &[Fp], i: usize, multiplier: &Multiplier<Fp>) -> Fp
-where
-    Fp: PrimeField,
-{
-    let mut nom = multiplier.get_product(i).unwrap_or(Fp::ONE);
-    let mut denom = Fp::ONE;
+fn coefficient<F: PrimeField>(xs: &[F], i: usize, multiplier: &Multiplier<F>) -> F {
+    let mut nom = multiplier.get_product(i).unwrap_or(F::ONE);
+    let mut denom = F::ONE;
     for j in 0..xs.len() {
         if j == i {
             continue;
@@ -106,21 +91,15 @@ where
 }
 
 /// Creates a multiplier for the nominators in the Lagrange coefficients.
-fn multiplier_for_coefficients<Fp>(xs: &[Fp]) -> Multiplier<Fp>
-where
-    Fp: PrimeField,
-{
+fn multiplier_for_coefficients<F: PrimeField>(xs: &[F]) -> Multiplier<F> {
     Multiplier::new(xs)
 }
 
 /// Creates a multiplier for the nominators in the Lagrange basis polynomials.
-fn multiplier_for_basis_polynomials<Fp>(xs: &[Fp]) -> Multiplier<Polynomial<Fp>>
-where
-    Fp: PrimeField,
-{
+fn multiplier_for_basis_polynomials<F: PrimeField>(xs: &[F]) -> Multiplier<Polynomial<F>> {
     let basis: Vec<_> = xs
         .iter()
-        .map(|x| Polynomial::with_coefficients(vec![*x, Fp::ONE.neg()])) // (x_j - x)
+        .map(|x| Polynomial::with_coefficients(vec![*x, F::ONE.neg()])) // (x_j - x)
         .collect();
     Multiplier::new(&basis)
 }
@@ -141,22 +120,24 @@ mod tests {
         multiplier_for_basis_polynomials, multiplier_for_coefficients,
     };
 
-    fn scalar(value: i64) -> p384::Scalar {
+    type PrimeField = p384::Scalar;
+
+    fn scalar(value: i64) -> PrimeField {
         scalars(&vec![value])[0]
     }
 
-    fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
+    fn scalars(values: &[i64]) -> Vec<PrimeField> {
         values
             .iter()
             .map(|&w| match w.is_negative() {
-                false => p384::Scalar::from_u64(w as u64),
-                true => p384::Scalar::from_u64(-w as u64).neg(),
+                false => PrimeField::from_u64(w as u64),
+                true => PrimeField::from_u64(-w as u64).neg(),
             })
             .collect()
     }
 
-    fn random_scalars(n: usize, mut rng: &mut impl RngCore) -> Vec<p384::Scalar> {
-        (0..n).map(|_| p384::Scalar::random(&mut rng)).collect()
+    fn random_scalars(n: usize, mut rng: &mut impl RngCore) -> Vec<PrimeField> {
+        (0..n).map(|_| PrimeField::random(&mut rng)).collect()
     }
 
     #[test]

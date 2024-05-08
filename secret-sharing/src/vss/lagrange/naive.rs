@@ -12,10 +12,7 @@ use crate::vss::polynomial::Polynomial;
 ///     L(x) = \sum_{i=0}^n y_i * L_i(x)
 /// ```
 /// where `L_i(x)` represents the i-th Lagrange basis polynomial.
-pub fn lagrange_naive<Fp>(xs: &[Fp], ys: &[Fp]) -> Polynomial<Fp>
-where
-    Fp: PrimeField,
-{
+pub fn lagrange_naive<F: PrimeField>(xs: &[F], ys: &[F]) -> Polynomial<F> {
     let ls = basis_polynomials_naive(xs);
     zip(ls, ys).map(|(li, &yi)| li * yi).sum()
 }
@@ -27,10 +24,7 @@ where
 ///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
-fn basis_polynomials_naive<Fp>(xs: &[Fp]) -> Vec<Polynomial<Fp>>
-where
-    Fp: PrimeField,
-{
+fn basis_polynomials_naive<F: PrimeField>(xs: &[F]) -> Vec<Polynomial<F>> {
     (0..xs.len())
         .map(|i| basis_polynomial_naive(xs, i))
         .collect()
@@ -43,17 +37,14 @@ where
 ///     L_i(x) = \prod_{j=0,j≠i}^n (x - x_j) / (x_i - x_j)
 /// ```
 /// i.e. it holds `L_i(x_i)` = 1 and `L_i(x_j) = 0` for all `j ≠ i`.
-fn basis_polynomial_naive<Fp>(xs: &[Fp], i: usize) -> Polynomial<Fp>
-where
-    Fp: PrimeField,
-{
-    let mut nom = Polynomial::with_coefficients(vec![Fp::ONE]);
-    let mut denom = Fp::ONE;
+fn basis_polynomial_naive<F: PrimeField>(xs: &[F], i: usize) -> Polynomial<F> {
+    let mut nom = Polynomial::with_coefficients(vec![F::ONE]);
+    let mut denom = F::ONE;
     for j in 0..xs.len() {
         if j == i {
             continue;
         }
-        nom *= Polynomial::with_coefficients(vec![xs[j], Fp::ONE.neg()]); // (x_j - x)
+        nom *= Polynomial::with_coefficients(vec![xs[j], F::ONE.neg()]); // (x_j - x)
         denom *= xs[j] - xs[i]; // (x_j - x_i)
     }
     let denom_inv = denom.invert().expect("values should be unique");
@@ -68,10 +59,7 @@ where
 /// ```text
 ///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
 /// ```
-pub fn coefficients_naive<Fp>(xs: &[Fp]) -> Vec<Fp>
-where
-    Fp: PrimeField,
-{
+pub fn coefficients_naive<F: PrimeField>(xs: &[F]) -> Vec<F> {
     (0..xs.len()).map(|i| coefficient_naive(xs, i)).collect()
 }
 
@@ -81,12 +69,9 @@ where
 /// ```text
 ///     L_i(0) = \prod_{j=0,j≠i}^n x_j / (x_j - x_i)
 /// ```
-fn coefficient_naive<Fp>(xs: &[Fp], i: usize) -> Fp
-where
-    Fp: PrimeField,
-{
-    let mut nom = Fp::ONE;
-    let mut denom = Fp::ONE;
+fn coefficient_naive<F: PrimeField>(xs: &[F], i: usize) -> F {
+    let mut nom = F::ONE;
+    let mut denom = F::ONE;
     for j in 0..xs.len() {
         if j == i {
             continue;
@@ -116,22 +101,24 @@ mod tests {
         lagrange_naive,
     };
 
-    fn scalar(value: i64) -> p384::Scalar {
+    type PrimeField = p384::Scalar;
+
+    fn scalar(value: i64) -> PrimeField {
         scalars(&vec![value])[0]
     }
 
-    fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
+    fn scalars(values: &[i64]) -> Vec<PrimeField> {
         values
             .iter()
             .map(|&w| match w.is_negative() {
-                false => p384::Scalar::from_u64(w as u64),
-                true => p384::Scalar::from_u64(-w as u64).neg(),
+                false => PrimeField::from_u64(w as u64),
+                true => PrimeField::from_u64(-w as u64).neg(),
             })
             .collect()
     }
 
-    fn random_scalars(n: usize, mut rng: &mut impl RngCore) -> Vec<p384::Scalar> {
-        (0..n).map(|_| p384::Scalar::random(&mut rng)).collect()
+    fn random_scalars(n: usize, mut rng: &mut impl RngCore) -> Vec<PrimeField> {
+        (0..n).map(|_| PrimeField::random(&mut rng)).collect()
     }
 
     #[test]

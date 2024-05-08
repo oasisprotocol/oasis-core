@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::Result;
-use p256::elliptic_curve::{group::GroupEncoding, Group};
+use group::{Group, GroupEncoding};
 use rand::rngs::OsRng;
 use sp800_185::KMac;
 
@@ -25,7 +25,7 @@ use oasis_core_runtime::{
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::churp::{Status, SuiteID},
+        keymanager::churp::{Status, SuiteId},
         verifier::Verifier,
     },
     enclave_rpc::Context as RpcContext,
@@ -36,7 +36,8 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, Handoff, HandoffKind, NistP384Sha3_384, Player, Shareholder, Suite},
+    churp::{Dealer, Handoff, HandoffKind, Player, ShareholderId},
+    suites::{p384, Suite},
     vss::{
         matrix::VerificationMatrix,
         polynomial::Polynomial,
@@ -191,7 +192,7 @@ impl Churp {
     pub fn verification_matrix(&self, req: &QueryRequest) -> Result<Vec<u8>> {
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
         let player = match status.suite_id {
-            SuiteID::NistP384Sha3_384 => self.get_player::<NistP384Sha3_384>(req.id, req.epoch)?,
+            SuiteId::NistP384Sha3_384 => self.get_player::<p384::Sha3_384>(req.id, req.epoch)?,
         };
         let vm = player.verification_matrix().to_bytes();
 
@@ -237,8 +238,8 @@ impl Churp {
         }
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => {
-                self.derive_share_reduction_switch_point::<NistP384Sha3_384>(node_id, &status)
+            SuiteId::NistP384Sha3_384 => {
+                self.derive_share_reduction_switch_point::<p384::Sha3_384>(node_id, &status)
             }
         }
     }
@@ -251,7 +252,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
         let player = self.get_player::<S>(status.id, status.handoff)?;
         let point = player.switch_point(id)?;
         let point = scalar_to_bytes(&point);
@@ -302,8 +303,8 @@ impl Churp {
         }
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => {
-                self.derive_share_distribution_point::<NistP384Sha3_384>(node_id, &status)
+            SuiteId::NistP384Sha3_384 => {
+                self.derive_share_distribution_point::<p384::Sha3_384>(node_id, &status)
             }
         }
     }
@@ -316,7 +317,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let player = handoff.get_reduced_player()?;
         let point = player.switch_point(id)?;
@@ -365,8 +366,8 @@ impl Churp {
         }
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => {
-                self.derive_bivariate_share::<NistP384Sha3_384>(node_id, &status)
+            SuiteId::NistP384Sha3_384 => {
+                self.derive_bivariate_share::<p384::Sha3_384>(node_id, &status)
             }
         }
     }
@@ -379,7 +380,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
         let kind = Self::handoff_kind(status);
         let dealer = self.get_dealer::<S>(status.id, status.next_handoff)?;
         let polynomial = dealer.derive_bivariate_share(id, kind)?.to_bytes();
@@ -434,8 +435,8 @@ impl Churp {
         let dealing_phase = status.committee.is_empty();
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => {
-                self.do_init::<NistP384Sha3_384>(req.id, req.epoch, status.threshold, dealing_phase)
+            SuiteId::NistP384Sha3_384 => {
+                self.do_init::<p384::Sha3_384>(req.id, req.epoch, status.threshold, dealing_phase)
             }
         }
     }
@@ -498,8 +499,8 @@ impl Churp {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => {
-                self.fetch_share_reduction_switch_points::<NistP384Sha3_384>(&req.node_ids, &status)
+            SuiteId::NistP384Sha3_384 => {
+                self.fetch_share_reduction_switch_points::<p384::Sha3_384>(&req.node_ids, &status)
             }
         }
     }
@@ -532,7 +533,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
 
         if !handoff.needs_share_reduction_switch_point(&id)? {
             return Err(Error::InvalidShareholder.into());
@@ -602,8 +603,8 @@ impl Churp {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => self
-                .fetch_share_distribution_switch_points::<NistP384Sha3_384>(&req.node_ids, &status),
+            SuiteId::NistP384Sha3_384 => self
+                .fetch_share_distribution_switch_points::<p384::Sha3_384>(&req.node_ids, &status),
         }
     }
 
@@ -635,7 +636,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
 
         if !handoff.needs_full_share_distribution_switch_point(&id)? {
             return Err(Error::InvalidShareholder.into());
@@ -677,8 +678,8 @@ impl Churp {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => {
-                self.fetch_bivariate_shares::<NistP384Sha3_384>(&req.node_ids, &status)
+            SuiteId::NistP384Sha3_384 => {
+                self.fetch_bivariate_shares::<p384::Sha3_384>(&req.node_ids, &status)
             }
         }
     }
@@ -709,7 +710,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = Shareholder(node_id.0);
+        let id = ShareholderId(node_id.0);
 
         if !handoff.needs_bivariate_share(&id)? {
             return Err(Error::InvalidShareholder.into());
@@ -762,7 +763,7 @@ impl Churp {
         }
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => self.prepare_confirmation::<NistP384Sha3_384>(&status),
+            SuiteId::NistP384Sha3_384 => self.prepare_confirmation::<p384::Sha3_384>(&status),
         }
     }
 
@@ -813,7 +814,7 @@ impl Churp {
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
 
         match status.suite_id {
-            SuiteID::NistP384Sha3_384 => self.do_finalize::<NistP384Sha3_384>(&status),
+            SuiteId::NistP384Sha3_384 => self.do_finalize::<p384::Sha3_384>(&status),
         }
     }
 
@@ -1125,12 +1126,12 @@ impl Churp {
 
         // Create a new handoff.
         let threshold = status.threshold;
-        let me = Shareholder(self.node_id.0);
+        let me = ShareholderId(self.node_id.0);
         let shareholders = status
             .applications
             .keys()
             .cloned()
-            .map(|id| Shareholder(id.0))
+            .map(|id| ShareholderId(id.0))
             .collect();
         let kind = Self::handoff_kind(status);
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;

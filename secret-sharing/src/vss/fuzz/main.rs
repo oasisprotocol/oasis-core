@@ -74,10 +74,7 @@ fn fuzz_verification_matrix_from_seed(data: &[u8]) {
     assert_eq!(vm, restored)
 }
 
-fn random_bivariate_polynomial<Fp>(data: &[u8]) -> BivariatePolynomial<Fp>
-where
-    Fp: PrimeField,
-{
+fn random_bivariate_polynomial<F: PrimeField>(data: &[u8]) -> BivariatePolynomial<F> {
     let mut seed = [0; 32];
     seed.copy_from_slice(&data[..32]);
     let mut rng = StdRng::from_seed(seed);
@@ -85,5 +82,5 @@ where
     let deg_x = rng.gen_range(0..5);
     let deg_y = rng.gen_range(0..5);
 
-    BivariatePolynomial::<Fp>::random(deg_x, deg_y, &mut rng)
+    BivariatePolynomial::<F>::random(deg_x, deg_y, &mut rng)
 }

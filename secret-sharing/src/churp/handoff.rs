@@ -2,9 +2,12 @@ use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
 
-use crate::vss::{matrix::VerificationMatrix, polynomial::Polynomial};
+use crate::{
+    suites::Suite,
+    vss::{matrix::VerificationMatrix, polynomial::Polynomial},
+};
 
-use super::{player::Player, DimensionSwitch, Error, Shareholder, Suite};
+use super::{player::Player, DimensionSwitch, Error, ShareholderId};
 
 /// Handoff kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,8 +102,8 @@ where
     /// to proactivize the shared secret.
     pub fn new(
         threshold: u8,
-        me: Shareholder,
-        shareholders: HashSet<Shareholder>,
+        me: ShareholderId,
+        shareholders: HashSet<ShareholderId>,
         kind: HandoffKind,
     ) -> Result<Self> {
         let (share_reduction, share_distribution) = match kind {
@@ -206,7 +209,7 @@ where
 
     /// Checks if share reduction needs a switch point from the given
     /// shareholder.
-    pub fn needs_share_reduction_switch_point(&self, id: &Shareholder) -> Result<bool> {
+    pub fn needs_share_reduction_switch_point(&self, id: &ShareholderId) -> Result<bool> {
         if self.kind != HandoffKind::CommitteeChanged {
             return Err(Error::InvalidKind.into());
         }
@@ -220,7 +223,7 @@ where
     /// Adds the given switch point to share reduction.
     pub fn add_share_reduction_switch_point(
         &self,
-        id: Shareholder,
+        id: ShareholderId,
         bij: S::PrimeField,
     ) -> Result<bool> {
         if self.kind != HandoffKind::CommitteeChanged {
@@ -235,7 +238,7 @@ where
 
     /// Checks if full share distribution needs a switch point from the given
     /// shareholder.
-    pub fn needs_full_share_distribution_switch_point(&self, id: &Shareholder) -> Result<bool> {
+    pub fn needs_full_share_distribution_switch_point(&self, id: &ShareholderId) -> Result<bool> {
         if self.kind != HandoffKind::CommitteeChanged {
             return Err(Error::InvalidKind.into());
         }
@@ -249,7 +252,7 @@ where
     /// Adds the given switch point to full share distribution.
     pub fn add_full_share_distribution_switch_point(
         &self,
-        id: Shareholder,
+        id: ShareholderId,
         bij: S::PrimeField,
     ) -> Result<bool> {
         if self.kind != HandoffKind::CommitteeChanged {
@@ -263,7 +266,7 @@ where
     }
 
     /// Checks if bivariate share is needed from the given shareholder.
-    pub fn needs_bivariate_share(&self, id: &Shareholder) -> Result<bool> {
+    pub fn needs_bivariate_share(&self, id: &ShareholderId) -> Result<bool> {
         let ds = match self.kind {
             HandoffKind::DealingPhase => &self.share_distribution,
             HandoffKind::CommitteeUnchanged => &self.share_distribution,
@@ -278,7 +281,7 @@ where
     /// Adds the given bivariate share.
     pub fn add_bivariate_share(
         &self,
-        id: Shareholder,
+        id: ShareholderId,
         q: Polynomial<S::PrimeField>,
         vm: VerificationMatrix<S::Group>,
     ) -> Result<bool> {
@@ -342,21 +345,24 @@ mod tests {
 
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    use crate::churp::{
-        Dealer, HandoffKind, NistP384Sha384Dealer, NistP384Sha3_384, Player, Shareholder,
+    use crate::{
+        churp::{self, HandoffKind, ShareholderId},
+        suites::p384,
     };
 
-    use super::Handoff;
+    type Dealer = churp::Dealer<p384::Sha3_384>;
+    type Handoff = churp::Handoff<p384::Sha3_384>;
+    type Player = churp::Player<p384::Sha3_384>;
 
-    fn shareholder(id: u8) -> Shareholder {
-        Shareholder([id; 32])
+    fn shareholder(id: u8) -> ShareholderId {
+        ShareholderId([id; 32])
     }
 
-    fn shareholders(ids: Vec<u8>) -> Vec<Shareholder> {
+    fn shareholders(ids: Vec<u8>) -> Vec<ShareholderId> {
         ids.into_iter().map(shareholder).collect()
     }
 
-    fn verify_players(players: &HashMap<Shareholder, Arc<Player<NistP384Sha3_384>>>) {
+    fn verify_players(players: &HashMap<ShareholderId, Arc<Player>>) {
         // Verify that all players have the same matrix.
         let mut vms = HashSet::new();
         for player in players.values() {
@@ -372,12 +378,12 @@ mod tests {
     fn prepare_dealers(
         threshold: u8,
         dealing_phase: bool,
-        committee: HashSet<Shareholder>,
+        committee: HashSet<ShareholderId>,
         rng: &mut impl RngCore,
-    ) -> HashMap<Shareholder, Dealer<NistP384Sha3_384>> {
+    ) -> HashMap<ShareholderId, Dealer> {
         let mut dealers = HashMap::new();
         for sh in committee.iter() {
-            let d = NistP384Sha384Dealer::new(threshold, dealing_phase, rng);
+            let d = Dealer::new(threshold, dealing_phase, rng);
             dealers.insert(sh.clone(), d);
         }
         dealers
@@ -397,9 +403,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff =
-                Handoff::<NistP384Sha3_384>::new(threshold, alice.clone(), committee.clone(), kind)
-                    .unwrap();
+            let handoff = Handoff::new(threshold, alice.clone(), committee.clone(), kind).unwrap();
 
             // Proactivization.
             for (i, (bob, dealer)) in dealers.iter().enumerate() {
@@ -442,7 +446,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff = Handoff::<NistP384Sha3_384>::new(
+            let handoff = Handoff::new(
                 threshold,
                 alice.clone(),
                 committee.clone(),
@@ -499,7 +503,7 @@ mod tests {
         let mut handoffs = HashMap::new();
 
         for alice in committee.iter() {
-            let handoff = Handoff::<NistP384Sha3_384>::new(
+            let handoff = Handoff::new(
                 threshold,
                 alice.clone(),
                 committee.clone(),

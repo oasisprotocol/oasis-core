@@ -4,16 +4,15 @@ use anyhow::Result;
 
 use rand_core::RngCore;
 
-use crate::vss::{
-    matrix::VerificationMatrix,
-    polynomial::{BivariatePolynomial, Polynomial},
+use crate::{
+    suites::{p384, Suite},
+    vss::{
+        matrix::VerificationMatrix,
+        polynomial::{BivariatePolynomial, Polynomial},
+    },
 };
 
-use super::{HandoffKind, NistP384Sha3_384, Suite};
-
-/// Shareholder identifier.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct Shareholder(pub [u8; 32]);
+use super::{HandoffKind, ShareholderId};
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
 /// computing a verification matrix, and deriving secret shares for other
@@ -72,10 +71,10 @@ where
     /// Returns a secret share for the given shareholder.
     pub fn derive_bivariate_share(
         &self,
-        id: Shareholder,
+        id: ShareholderId,
         kind: HandoffKind,
     ) -> Result<Polynomial<S::PrimeField>> {
-        let v = S::encode_shareholder(id)?;
+        let v = id.encode::<S>()?;
         let p = match kind {
             HandoffKind::DealingPhase => self.bp.eval_x(&v),
             HandoffKind::CommitteeChanged => self.bp.eval_y(&v),
@@ -98,13 +97,15 @@ where
 }
 
 /// Dealer for NIST P-384's elliptic curve group with SHA3-384 hash function.
-pub type NistP384Sha384Dealer = Dealer<NistP384Sha3_384>;
+pub type NistP384Sha384Dealer = Dealer<p384::Sha3_384>;
 
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{BivariatePolynomial, HandoffKind, NistP384Sha384Dealer, Shareholder};
+    use super::{BivariatePolynomial, HandoffKind, NistP384Sha384Dealer, ShareholderId};
+
+    type Dealer = NistP384Sha384Dealer;
 
     #[test]
     fn test_new() {
@@ -112,7 +113,7 @@ mod tests {
 
         let threshold = 2;
         for dealing_phase in vec![true, false] {
-            let dealer = NistP384Sha384Dealer::new(threshold, dealing_phase, &mut rng);
+            let dealer = Dealer::new(threshold, dealing_phase, &mut rng);
             assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
             assert_eq!(dealer.bivariate_polynomial().deg_x, 2);
             assert_eq!(dealer.bivariate_polynomial().deg_y, 4);
@@ -122,7 +123,7 @@ mod tests {
 
         let threshold = 0;
         for dealing_phase in vec![true, false] {
-            let dealer = NistP384Sha384Dealer::new(threshold, dealing_phase, &mut rng);
+            let dealer = Dealer::new(threshold, dealing_phase, &mut rng);
             assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
             assert_eq!(dealer.bivariate_polynomial().deg_x, 0);
             assert_eq!(dealer.bivariate_polynomial().deg_y, 0);
@@ -134,28 +135,28 @@ mod tests {
     #[test]
     fn test_from() {
         let bp = BivariatePolynomial::zero(2, 3);
-        let _ = NistP384Sha384Dealer::from(bp);
+        let _ = Dealer::from(bp);
     }
 
     #[test]
     fn test_random() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = NistP384Sha384Dealer::random(2, 3, &mut rng);
+        let dealer = Dealer::random(2, 3, &mut rng);
         assert!(!dealer.verification_matrix().is_zero_hole()); // Zero-hole with negligible probability.
     }
 
     #[test]
     fn test_zero_hole() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = NistP384Sha384Dealer::zero_hole(2, 3, &mut rng);
+        let dealer = Dealer::zero_hole(2, 3, &mut rng);
         assert!(dealer.verification_matrix().is_zero_hole());
     }
 
     #[test]
     fn test_derive_bivariate_share() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = NistP384Sha384Dealer::random(2, 3, &mut rng);
-        let id = Shareholder([1; 32]);
+        let dealer = Dealer::random(2, 3, &mut rng);
+        let id = ShareholderId([1; 32]);
 
         let p = dealer
             .derive_bivariate_share(id.clone(), HandoffKind::DealingPhase)

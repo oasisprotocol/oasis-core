@@ -23,19 +23,19 @@ use crate::vss::{arith::powers, scalar::scalar_from_bytes};
 /// in encodings of equal length. If you wish to remove them, consider using
 /// the `trim` method after each operation.
 #[derive(Clone, PartialEq, Eq)]
-pub struct Polynomial<Fp> {
-    pub(crate) a: Vec<Fp>,
+pub struct Polynomial<F> {
+    pub(crate) a: Vec<F>,
 }
 
-impl<Fp> Polynomial<Fp>
+impl<F> Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     /// Creates a polynomial initialized to zero.
     pub fn zero(deg: u8) -> Self {
         let deg = deg as usize;
 
-        let a = vec![Fp::ZERO; deg + 1];
+        let a = vec![F::ZERO; deg + 1];
         Self { a }
     }
 
@@ -45,7 +45,7 @@ where
 
         let mut a = Vec::with_capacity(deg + 1);
         for _ in 0..a.capacity() {
-            let ai = Fp::random(&mut *rng);
+            let ai = F::random(&mut *rng);
             a.push(ai);
         }
 
@@ -53,12 +53,27 @@ where
     }
 
     /// Creates a polynomial with the given coefficients.
-    pub fn with_coefficients(a: Vec<Fp>) -> Self {
+    pub fn with_coefficients(a: Vec<F>) -> Self {
         if a.is_empty() {
             return Self::zero(0);
         }
 
         Self { a }
+    }
+
+    /// Sets the coefficient `a_i` that belongs to the term `x^i`.
+    ///
+    /// If the coefficient does not exist, this is a no-op.
+    pub fn set_coefficient(&mut self, i: usize, ai: F) {
+        if let Some(old_ai) = self.a.get_mut(i) {
+            *old_ai = ai;
+        }
+    }
+
+    /// Sets the coefficient `a_0` of the constant term to zero,
+    /// effectively creating a zero-hole univariate polynomial.
+    pub fn to_zero_hole(&mut self) {
+        self.set_coefficient(0, F::ZERO);
     }
 
     /// Returns the highest of the degrees of the polynomial's monomials with
@@ -82,7 +97,7 @@ where
     }
 
     /// Returns the i-th coefficient of the polynomial.
-    pub fn coefficient(&self, i: usize) -> Option<&Fp> {
+    pub fn coefficient(&self, i: usize) -> Option<&F> {
         self.a.get(i)
     }
 
@@ -128,7 +143,7 @@ where
 
     /// Returns the size of the byte representation of a coefficient.
     pub fn coefficient_byte_size() -> usize {
-        Fp::NUM_BITS.saturating_add(7) as usize / 8
+        F::NUM_BITS.saturating_add(7) as usize / 8
     }
 
     /// Returns the size of the byte representation of the polynomial.
@@ -137,9 +152,9 @@ where
     }
 
     /// Evaluates the polynomial.
-    pub fn eval(&self, x: &Fp) -> Fp {
+    pub fn eval(&self, x: &F) -> F {
         let xpows = powers(x, self.a.len() - 1);
-        let mut r = Fp::ZERO;
+        let mut r = F::ZERO;
         for (i, xpow) in xpows.iter().enumerate() {
             r += self.a[i] * xpow
         }
@@ -148,18 +163,18 @@ where
     }
 }
 
-impl<Fp> Default for Polynomial<Fp>
+impl<F> Default for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn default() -> Self {
         Self::zero(0)
     }
 }
 
-impl<Fp> Add for Polynomial<Fp>
+impl<F> Add for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
@@ -168,11 +183,11 @@ where
     }
 }
 
-impl<Fp> Add for &Polynomial<Fp>
+impl<F> Add for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     fn add(self, other: Self) -> Self::Output {
         let max_len = max(self.a.len(), other.a.len());
@@ -190,18 +205,18 @@ where
     }
 }
 
-impl<Fp> AddAssign for Polynomial<Fp>
+impl<F> AddAssign for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn add_assign(&mut self, other: Self) {
         *self += &other
     }
 }
 
-impl<Fp> AddAssign<&Self> for Polynomial<Fp>
+impl<F> AddAssign<&Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn add_assign(&mut self, other: &Self) {
         let min_len = min(self.a.len(), other.a.len());
@@ -214,9 +229,9 @@ where
     }
 }
 
-impl<Fp> Sub for Polynomial<Fp>
+impl<F> Sub for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
@@ -225,11 +240,11 @@ where
     }
 }
 
-impl<Fp> Sub for &Polynomial<Fp>
+impl<F> Sub for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     fn sub(self, other: Self) -> Self::Output {
         let max_len = max(self.a.len(), other.a.len());
@@ -247,18 +262,18 @@ where
     }
 }
 
-impl<Fp> SubAssign for Polynomial<Fp>
+impl<F> SubAssign for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn sub_assign(&mut self, other: Self) {
         *self -= &other
     }
 }
 
-impl<Fp> SubAssign<&Self> for Polynomial<Fp>
+impl<F> SubAssign<&Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn sub_assign(&mut self, other: &Self) {
         let min_len = min(self.a.len(), other.a.len());
@@ -271,9 +286,9 @@ where
     }
 }
 
-impl<Fp> Mul for Polynomial<Fp>
+impl<F> Mul for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
@@ -282,11 +297,11 @@ where
     }
 }
 
-impl<Fp> Mul for &Polynomial<Fp>
+impl<F> Mul for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     fn mul(self, other: Self) -> Self::Output {
         let mut a = Vec::with_capacity(self.a.len() + other.a.len() - 1);
@@ -304,18 +319,18 @@ where
     }
 }
 
-impl<Fp> MulAssign for Polynomial<Fp>
+impl<F> MulAssign for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn mul_assign(&mut self, other: Self) {
         *self *= &other
     }
 }
 
-impl<Fp> MulAssign<&Self> for Polynomial<Fp>
+impl<F> MulAssign<&Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn mul_assign(&mut self, other: &Self) {
         let mut a = Vec::with_capacity(self.a.len() + other.a.len() - 2);
@@ -333,48 +348,48 @@ where
     }
 }
 
-impl<Fp> Mul<Fp> for Polynomial<Fp>
+impl<F> Mul<F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
     #[allow(clippy::op_ref)]
-    fn mul(self, scalar: Fp) -> Self {
+    fn mul(self, scalar: F) -> Self {
         &self * &scalar
     }
 }
 
-impl<Fp> Mul<&Fp> for Polynomial<Fp>
+impl<F> Mul<&F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     type Output = Self;
 
-    fn mul(self, scalar: &Fp) -> Self {
+    fn mul(self, scalar: &F) -> Self {
         &self * scalar
     }
 }
 
-impl<Fp> Mul<Fp> for &Polynomial<Fp>
+impl<F> Mul<F> for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
     #[allow(clippy::op_ref)]
-    fn mul(self, scalar: Fp) -> Self::Output {
+    fn mul(self, scalar: F) -> Self::Output {
         self * &scalar
     }
 }
 
-impl<Fp> Mul<&Fp> for &Polynomial<Fp>
+impl<F> Mul<&F> for &Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    type Output = Polynomial<Fp>;
+    type Output = Polynomial<F>;
 
-    fn mul(self, scalar: &Fp) -> Self::Output {
+    fn mul(self, scalar: &F) -> Self::Output {
         let mut a = Vec::with_capacity(self.a.len());
 
         for i in 0..self.a.len() {
@@ -385,29 +400,29 @@ where
     }
 }
 
-impl<Fp> MulAssign<Fp> for Polynomial<Fp>
+impl<F> MulAssign<F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    fn mul_assign(&mut self, scalar: Fp) {
+    fn mul_assign(&mut self, scalar: F) {
         *self *= &scalar
     }
 }
 
-impl<Fp> MulAssign<&Fp> for Polynomial<Fp>
+impl<F> MulAssign<&F> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    fn mul_assign(&mut self, scalar: &Fp) {
+    fn mul_assign(&mut self, scalar: &F) {
         for i in 0..self.a.len() {
             self.a[i] *= scalar
         }
     }
 }
 
-impl<Fp> Sum for Polynomial<Fp>
+impl<F> Sum for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         let mut sum = Polynomial::zero(0);
@@ -416,11 +431,11 @@ where
     }
 }
 
-impl<'a, Fp> Sum<&'a Self> for Polynomial<Fp>
+impl<'a, F> Sum<&'a Self> for Polynomial<F>
 where
-    Fp: PrimeField,
+    F: PrimeField,
 {
-    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Polynomial<Fp> {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Polynomial<F> {
         let mut sum = Polynomial::zero(0);
         iter.for_each(|p| sum += p);
         sum
@@ -431,74 +446,94 @@ where
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::Polynomial;
+    type PrimeField = p384::Scalar;
+    type Polynomial = super::Polynomial<PrimeField>;
 
-    fn scalar(value: i64) -> p384::Scalar {
+    fn scalar(value: i64) -> PrimeField {
         scalars(&vec![value])[0]
     }
 
-    fn scalars(values: &[i64]) -> Vec<p384::Scalar> {
+    fn scalars(values: &[i64]) -> Vec<PrimeField> {
         values
             .iter()
             .map(|&w| match w.is_negative() {
-                false => p384::Scalar::from_u64(w as u64),
-                true => p384::Scalar::from_u64(-w as u64).neg(),
+                false => PrimeField::from_u64(w as u64),
+                true => PrimeField::from_u64(-w as u64).neg(),
             })
             .collect()
     }
 
     #[test]
     fn test_zero() {
-        let p = Polynomial::<p384::Scalar>::zero(0);
+        let p = Polynomial::zero(0);
         assert_eq!(p.a, scalars(&[0]));
 
-        let p = Polynomial::<p384::Scalar>::zero(2);
+        let p = Polynomial::zero(2);
         assert_eq!(p.a, scalars(&[0, 0, 0]));
     }
 
     #[test]
     fn test_with_coefficients() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(vec![]);
+        let p = Polynomial::with_coefficients(vec![]);
         assert_eq!(p.a, scalars(&[0]));
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         assert_eq!(p.a, scalars(&[1, 2, 3]));
     }
 
     #[test]
+    fn test_set_coefficients() {
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
+
+        p.set_coefficient(3, scalar(4));
+        assert_eq!(p.a, scalars(&[1, 2, 3]));
+
+        p.set_coefficient(1, scalar(4));
+        assert_eq!(p.a, scalars(&[1, 4, 3]));
+    }
+
+    #[test]
+    fn test_zero_hole() {
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
+
+        p.to_zero_hole();
+        assert_eq!(p.a, scalars(&[0, 2, 3]));
+    }
+
+    #[test]
     fn test_degree_and_size() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(vec![]);
+        let p = Polynomial::with_coefficients(vec![]);
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 1);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0]));
+        let p = Polynomial::with_coefficients(scalars(&[0]));
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 1);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1]));
+        let p = Polynomial::with_coefficients(scalars(&[1]));
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 1);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 0]));
+        let p = Polynomial::with_coefficients(scalars(&[0, 0]));
         assert_eq!(p.degree(), 0);
         assert_eq!(p.size(), 2);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         assert_eq!(p.degree(), 2);
         assert_eq!(p.size(), 3);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
         assert_eq!(p.degree(), 2);
         assert_eq!(p.size(), 5);
 
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 1, 2, 0, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[0, 1, 2, 0, 3]));
         assert_eq!(p.degree(), 4);
         assert_eq!(p.size(), 5);
     }
 
     #[test]
     fn test_coefficient() {
-        let p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         assert_eq!(p.coefficient(0), Some(&scalar(1)));
         assert_eq!(p.coefficient(1), Some(&scalar(2)));
         assert_eq!(p.coefficient(2), Some(&scalar(3)));
@@ -507,19 +542,19 @@ mod tests {
 
     #[test]
     fn test_trim() {
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0]));
+        let mut p = Polynomial::with_coefficients(scalars(&[0]));
         p.trim();
         assert_eq!(p.a, scalars(&[0]));
 
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[0, 0]));
+        let mut p = Polynomial::with_coefficients(scalars(&[0, 0]));
         p.trim();
         assert_eq!(p.a, scalars(&[0]));
 
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3]));
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         p.trim();
         assert_eq!(p.a, scalars(&[1, 2, 3]));
 
-        let mut p = Polynomial::<p384::Scalar>::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
         p.trim();
         assert_eq!(p.a, scalars(&[1, 2, 3]));
     }
@@ -527,14 +562,14 @@ mod tests {
     #[test]
     fn test_serialization() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let bp = Polynomial::<p384::Scalar>::random(0, &mut rng);
-        let restored = Polynomial::<p384::Scalar>::from_bytes(&bp.to_bytes())
-            .expect("deserialization should succeed");
+        let bp = Polynomial::random(0, &mut rng);
+        let restored =
+            Polynomial::from_bytes(&bp.to_bytes()).expect("deserialization should succeed");
         assert!(bp == restored);
 
-        let bp = Polynomial::<p384::Scalar>::random(3, &mut rng);
-        let restored = Polynomial::<p384::Scalar>::from_bytes(&bp.to_bytes())
-            .expect("deserialization should succeed");
+        let bp = Polynomial::random(3, &mut rng);
+        let restored =
+            Polynomial::from_bytes(&bp.to_bytes()).expect("deserialization should succeed");
         assert!(bp == restored);
     }
 
@@ -783,8 +818,8 @@ mod tests {
     pub fn test_sum() {
         // One.
         let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let s1 = vec![&f].into_iter().sum::<Polynomial<_>>();
-        let s2 = vec![f].into_iter().sum::<Polynomial<_>>();
+        let s1 = vec![&f].into_iter().sum::<Polynomial>();
+        let s2 = vec![f].into_iter().sum::<Polynomial>();
         for s in vec![s1, s2] {
             assert_eq!(s.a, scalars(&[1, 2, 3]));
         }
@@ -793,8 +828,8 @@ mod tests {
         let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
         let g = Polynomial::with_coefficients(scalars(&[2, 4]));
         let h = Polynomial::with_coefficients(scalars(&[3]));
-        let s1 = vec![&f, &g, &h].into_iter().sum::<Polynomial<_>>();
-        let s2 = vec![f, g, h].into_iter().sum::<Polynomial<_>>();
+        let s1 = vec![&f, &g, &h].into_iter().sum::<Polynomial>();
+        let s2 = vec![f, g, h].into_iter().sum::<Polynomial>();
         for s in vec![s1, s2] {
             assert_eq!(s.a, scalars(&[6, 6, 3]));
         }
