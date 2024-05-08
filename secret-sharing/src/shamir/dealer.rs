@@ -18,7 +18,7 @@ where
     /// Creates a new dealer with a predefined shared secret.
     pub fn new(threshold: u8, secret: F, rng: &mut impl RngCore) -> Self {
         let mut sharer = Self::random(threshold, rng);
-        sharer.poly.set_coefficient(secret, 0);
+        sharer.poly.set_coefficient(0, secret);
         sharer
     }
 

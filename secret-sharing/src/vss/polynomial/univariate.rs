@@ -64,7 +64,7 @@ where
     /// Sets the coefficient `a_i` that belongs to the term `x^i`.
     ///
     /// If the coefficient does not exist, this is a no-op.
-    pub fn set_coefficient(&mut self, ai: Fp, i: usize) {
+    pub fn set_coefficient(&mut self, i: usize, ai: Fp) {
         if let Some(old_ai) = self.a.get_mut(i) {
             *old_ai = ai;
         }
@@ -73,7 +73,7 @@ where
     /// Sets the coefficient `a_0` of the constant term to zero,
     /// effectively creating a zero-hole univariate polynomial.
     pub fn to_zero_hole(&mut self) {
-        self.set_coefficient(Fp::ZERO, 0);
+        self.set_coefficient(0, Fp::ZERO);
     }
 
     /// Returns the highest of the degrees of the polynomial's monomials with
@@ -485,10 +485,10 @@ mod tests {
     fn test_set_coefficients() {
         let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
 
-        p.set_coefficient(scalar(4), 3);
+        p.set_coefficient(3, scalar(4));
         assert_eq!(p.a, scalars(&[1, 2, 3]));
 
-        p.set_coefficient(scalar(4), 1);
+        p.set_coefficient(1, scalar(4));
         assert_eq!(p.a, scalars(&[1, 4, 3]));
     }
 
