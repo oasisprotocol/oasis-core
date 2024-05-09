@@ -196,7 +196,7 @@ where
     }
 
     /// Sets the shareholder from the previous handoff.
-    pub fn set_shareholder(&self, shareholder: Arc<Shareholder<S>>) -> Result<()> {
+    pub fn set_shareholder(&self, shareholder: Arc<Shareholder<S::Group>>) -> Result<()> {
         if self.kind != HandoffKind::CommitteeUnchanged {
             return Err(Error::InvalidKind.into());
         }
@@ -316,7 +316,7 @@ where
     }
 
     /// Returns the shareholder resulting from share reduction.
-    pub fn get_reduced_shareholder(&self) -> Result<Arc<Shareholder<S>>> {
+    pub fn get_reduced_shareholder(&self) -> Result<Arc<Shareholder<S::Group>>> {
         if self.kind != HandoffKind::CommitteeChanged {
             return Err(Error::InvalidKind.into());
         }
@@ -328,7 +328,7 @@ where
     }
 
     /// Returns the shareholder resulting from full share distribution.
-    pub fn get_full_shareholder(&self) -> Result<Arc<Shareholder<S>>> {
+    pub fn get_full_shareholder(&self) -> Result<Arc<Shareholder<S::Group>>> {
         self.share_distribution
             .as_ref()
             .ok_or(Error::InvalidState)?
@@ -347,12 +347,14 @@ mod tests {
 
     use crate::{
         churp::{self, HandoffKind, ShareholderId},
-        suites::p384,
+        suites::{self, p384},
     };
 
-    type Dealer = churp::Dealer<p384::Sha3_384>;
-    type Handoff = churp::Handoff<p384::Sha3_384>;
-    type Shareholder = churp::Shareholder<p384::Sha3_384>;
+    type Suite = p384::Sha3_384;
+    type Group = <Suite as suites::Suite>::Group;
+    type Shareholder = churp::Shareholder<Group>;
+    type Dealer = churp::Dealer<Group>;
+    type Handoff = churp::Handoff<Suite>;
 
     fn shareholder_id(id: u8) -> ShareholderId {
         ShareholderId([id; 32])
@@ -407,7 +409,8 @@ mod tests {
 
             // Proactivization.
             for (i, (bob, dealer)) in dealers.iter().enumerate() {
-                let p = dealer.derive_bivariate_share(alice.clone(), kind).unwrap();
+                let id = alice.encode::<Suite>().unwrap();
+                let p = dealer.derive_bivariate_share(&id, kind);
                 let vm = dealer.verification_matrix().clone();
 
                 assert!(handoff.needs_bivariate_share(&bob).unwrap());
@@ -461,7 +464,8 @@ mod tests {
 
             // Proactivization.
             for (i, (bob, dealer)) in dealers.iter().enumerate() {
-                let p = dealer.derive_bivariate_share(alice.clone(), kind).unwrap();
+                let id = alice.encode::<Suite>().unwrap();
+                let p = dealer.derive_bivariate_share(&id, kind);
                 let vm = dealer.verification_matrix().clone();
 
                 assert!(handoff.needs_bivariate_share(&bob).unwrap());
@@ -526,7 +530,8 @@ mod tests {
             let num_points = threshold as usize + 1;
             for (i, (bob, shareholder)) in shareholders.iter().take(num_points).enumerate() {
                 assert!(handoff.needs_share_reduction_switch_point(bob).unwrap());
-                let bij = shareholder.switch_point(alice.clone()).unwrap();
+                let id = alice.encode::<Suite>().unwrap();
+                let bij = shareholder.switch_point(&id);
                 let done = handoff
                     .add_share_reduction_switch_point(bob.clone(), bij)
                     .unwrap();
@@ -544,7 +549,8 @@ mod tests {
 
             // Proactivization.
             for (i, (bob, dealer)) in dealers.iter().enumerate() {
-                let p = dealer.derive_bivariate_share(alice.clone(), kind).unwrap();
+                let id = alice.encode::<Suite>().unwrap();
+                let p = dealer.derive_bivariate_share(&id, kind);
                 let vm = dealer.verification_matrix().clone();
 
                 assert!(handoff.needs_bivariate_share(&bob).unwrap());
@@ -586,7 +592,8 @@ mod tests {
                 assert!(handoff
                     .needs_full_share_distribution_switch_point(bob)
                     .unwrap());
-                let bij = shareholder.switch_point(alice.clone()).unwrap();
+                let id = alice.encode::<Suite>().unwrap();
+                let bij = shareholder.switch_point(&id);
                 let done = handoff
                     .add_full_share_distribution_switch_point(bob.clone(), bij)
                     .unwrap();

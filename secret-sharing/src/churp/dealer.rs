@@ -1,17 +1,15 @@
 //! CHURP dealer.
 
 use anyhow::Result;
+use group::{Group, GroupEncoding};
 use rand_core::RngCore;
 
-use crate::{
-    suites::{p384, Suite},
-    vss::{
-        matrix::VerificationMatrix,
-        polynomial::{BivariatePolynomial, Polynomial},
-    },
+use crate::vss::{
+    matrix::VerificationMatrix,
+    polynomial::{BivariatePolynomial, Polynomial},
 };
 
-use super::{Error, HandoffKind, ShareholderId};
+use super::{Error, HandoffKind};
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
 /// computing a verification matrix, and deriving secret shares for other
@@ -20,17 +18,17 @@ use super::{Error, HandoffKind, ShareholderId};
 /// Shares must always be distributed over a secure channel and verified
 /// against the matrix. Recovering the secret bivariate polynomial requires
 /// obtaining more than a threshold number of shares from distinct participants.
-pub struct Dealer<S: Suite> {
+pub struct Dealer<G: Group + GroupEncoding> {
     /// Secret bivariate polynomial.
-    bp: BivariatePolynomial<S::PrimeField>,
+    bp: BivariatePolynomial<G::Scalar>,
 
     /// Verification matrix.
-    vm: VerificationMatrix<S::Group>,
+    vm: VerificationMatrix<G>,
 }
 
-impl<S> Dealer<S>
+impl<G> Dealer<G>
 where
-    S: Suite,
+    G: Group + GroupEncoding,
 {
     /// Creates a new dealer.
     pub fn new(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Result<Self> {
@@ -59,53 +57,49 @@ where
     }
 
     /// Returns the secret bivariate polynomial.
-    pub fn bivariate_polynomial(&self) -> &BivariatePolynomial<S::PrimeField> {
+    pub fn bivariate_polynomial(&self) -> &BivariatePolynomial<G::Scalar> {
         &self.bp
     }
 
     /// Returns the verification matrix.
-    pub fn verification_matrix(&self) -> &VerificationMatrix<S::Group> {
+    pub fn verification_matrix(&self) -> &VerificationMatrix<G> {
         &self.vm
     }
 
     /// Returns a secret share for the given shareholder.
     pub fn derive_bivariate_share(
         &self,
-        id: ShareholderId,
+        id: &G::Scalar,
         kind: HandoffKind,
-    ) -> Result<Polynomial<S::PrimeField>> {
-        let v = id.encode::<S>()?;
-        let p = match kind {
-            HandoffKind::DealingPhase => self.bp.eval_x(&v),
-            HandoffKind::CommitteeChanged => self.bp.eval_y(&v),
-            HandoffKind::CommitteeUnchanged => self.bp.eval_x(&v),
-        };
-
-        Ok(p)
+    ) -> Polynomial<G::Scalar> {
+        match kind {
+            HandoffKind::DealingPhase => self.bp.eval_x(id),
+            HandoffKind::CommitteeChanged => self.bp.eval_y(id),
+            HandoffKind::CommitteeUnchanged => self.bp.eval_x(id),
+        }
     }
 }
 
-impl<S> From<BivariatePolynomial<S::PrimeField>> for Dealer<S>
+impl<G> From<BivariatePolynomial<G::Scalar>> for Dealer<G>
 where
-    S: Suite,
+    G: Group + GroupEncoding,
 {
     /// Creates a new dealer from the given bivariate polynomial.
-    fn from(bp: BivariatePolynomial<S::PrimeField>) -> Self {
+    fn from(bp: BivariatePolynomial<G::Scalar>) -> Self {
         let vm = VerificationMatrix::from(&bp);
         Self { bp, vm }
     }
 }
 
-/// Dealer for NIST P-384's elliptic curve group with SHA3-384 hash function.
-pub type NistP384Sha384Dealer = Dealer<p384::Sha3_384>;
-
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
-    use super::{BivariatePolynomial, HandoffKind, NistP384Sha384Dealer, ShareholderId};
+    use super::{BivariatePolynomial, HandoffKind};
 
-    type Dealer = NistP384Sha384Dealer;
+    type PrimeField = p384::Scalar;
+    type Group = p384::ProjectivePoint;
+    type Dealer = super::Dealer<Group>;
 
     #[test]
     fn test_new() {
@@ -156,23 +150,17 @@ mod tests {
     fn test_derive_bivariate_share() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
         let dealer = Dealer::random(2, 3, &mut rng);
-        let id = ShareholderId([1; 32]);
+        let id = PrimeField::from_u64(2);
 
-        let p = dealer
-            .derive_bivariate_share(id.clone(), HandoffKind::DealingPhase)
-            .expect("shareholder should encode");
+        let p = dealer.derive_bivariate_share(&id, HandoffKind::DealingPhase);
         assert_eq!(p.degree(), 3);
         assert_eq!(p.size(), 4);
 
-        let p = dealer
-            .derive_bivariate_share(id.clone(), HandoffKind::CommitteeChanged)
-            .expect("shareholder should encode");
+        let p = dealer.derive_bivariate_share(&id, HandoffKind::CommitteeChanged);
         assert_eq!(p.degree(), 2);
         assert_eq!(p.size(), 3);
 
-        let p = dealer
-            .derive_bivariate_share(id, HandoffKind::CommitteeUnchanged)
-            .expect("shareholder should encode");
+        let p = dealer.derive_bivariate_share(&id, HandoffKind::CommitteeUnchanged);
         assert_eq!(p.degree(), 3);
         assert_eq!(p.size(), 4);
     }

@@ -3,10 +3,7 @@
 use anyhow::Result;
 use group::{ff::Field, Group, GroupEncoding};
 
-use crate::{
-    suites::Suite,
-    vss::{matrix::VerificationMatrix, polynomial::Polynomial},
-};
+use crate::vss::{matrix::VerificationMatrix, polynomial::Polynomial};
 
 use crate::suites::FieldDigest;
 
@@ -36,57 +33,55 @@ impl ShareholderId {
 /// Shareholder is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-pub struct Shareholder<S: Suite> {
+pub struct Shareholder<G: Group + GroupEncoding> {
     /// Secret (full or reduced) share of the shared secret.
-    share: SecretShare<S::Group>,
+    share: SecretShare<G>,
 }
 
-impl<S> Shareholder<S>
+impl<G> Shareholder<G>
 where
-    S: Suite,
+    G: Group + GroupEncoding,
 {
     /// Creates a new shareholder.
-    pub fn new(p: Polynomial<S::PrimeField>, vm: VerificationMatrix<S::Group>) -> Self {
+    pub fn new(p: Polynomial<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
         SecretShare::new(p, vm).into()
     }
 
     /// Returns the secret share.
-    pub fn secret_share(&self) -> &SecretShare<S::Group> {
+    pub fn secret_share(&self) -> &SecretShare<G> {
         &self.share
     }
 
     /// Returns the polynomial.
-    pub fn polynomial(&self) -> &Polynomial<S::PrimeField> {
+    pub fn polynomial(&self) -> &Polynomial<G::Scalar> {
         &self.share.p
     }
 
     /// Returns the verification matrix.
-    pub fn verification_matrix(&self) -> &VerificationMatrix<S::Group> {
+    pub fn verification_matrix(&self) -> &VerificationMatrix<G> {
         &self.share.vm
     }
 
     /// Computes switch point for the given shareholder.
-    pub fn switch_point(&self, id: ShareholderId) -> Result<S::PrimeField> {
-        let x = id.encode::<S>()?;
-        let point = self.share.p.eval(&x);
-        Ok(point)
+    pub fn switch_point(&self, id: &G::Scalar) -> G::Scalar {
+        self.share.p.eval(id)
     }
 
     /// Computes key share from the given hash.
-    pub fn key_share(&self, hash: S::Group) -> S::Group {
+    pub fn key_share(&self, hash: G) -> G {
         self.share
             .p
             .coefficient(0)
             .map(|s| hash * s)
-            .unwrap_or(S::Group::identity())
+            .unwrap_or(G::identity())
     }
 
     /// Creates a new shareholder with a proactivized secret polynomial.
     pub fn proactivize(
         &self,
-        p: &Polynomial<S::PrimeField>,
-        vm: &VerificationMatrix<S::Group>,
-    ) -> Result<Shareholder<S>> {
+        p: &Polynomial<G::Scalar>,
+        vm: &VerificationMatrix<G>,
+    ) -> Result<Shareholder<G>> {
         if p.degree() != self.share.p.degree() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
@@ -105,11 +100,11 @@ where
     }
 }
 
-impl<S> From<SecretShare<S::Group>> for Shareholder<S>
+impl<G> From<SecretShare<G>> for Shareholder<G>
 where
-    S: Suite,
+    G: Group + GroupEncoding,
 {
-    fn from(share: SecretShare<S::Group>) -> Shareholder<S> {
+    fn from(share: SecretShare<G>) -> Shareholder<G> {
         Shareholder { share }
     }
 }

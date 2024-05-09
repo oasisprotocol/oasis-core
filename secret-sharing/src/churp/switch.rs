@@ -60,7 +60,7 @@ where
 
     /// Represents the state where the dimension switch is completed,
     /// and a new shareholder is available to serve requests.
-    Serving(Arc<Shareholder<S>>),
+    Serving(Arc<Shareholder<S::Group>>),
 }
 
 /// A dimension switch based on a share resharing technique.
@@ -223,7 +223,10 @@ where
 
     /// Starts merging bivariate shares to be used for proactivization
     /// of the provided shareholder.
-    pub(crate) fn start_merging(&self, shareholder: Option<Arc<Shareholder<S>>>) -> Result<()> {
+    pub(crate) fn start_merging(
+        &self,
+        shareholder: Option<Arc<Shareholder<S::Group>>>,
+    ) -> Result<()> {
         let mut state = self.state.lock().unwrap();
         match &*state {
             DimensionSwitchState::WaitingForShareholder => (),
@@ -282,7 +285,7 @@ where
     }
 
     /// Returns the shareholder if the switch has completed.
-    pub(crate) fn get_shareholder(&self) -> Result<Arc<Shareholder<S>>> {
+    pub(crate) fn get_shareholder(&self) -> Result<Arc<Shareholder<S::Group>>> {
         let state = self.state.lock().unwrap();
         let shareholder = match &*state {
             DimensionSwitchState::Serving(p) => p.clone(),
@@ -425,7 +428,7 @@ where
     ///
     /// The shareholder can be reconstructed only once, which avoids copying
     /// the verification matrix.
-    fn reconstruct_shareholder(&mut self) -> Result<Shareholder<S>> {
+    fn reconstruct_shareholder(&mut self) -> Result<Shareholder<S::Group>> {
         if self.shareholders.len() < self.n {
             return Err(Error::NotEnoughSwitchPoints.into());
         }
@@ -481,7 +484,7 @@ where
     vm: Option<VerificationMatrix<S::Group>>,
 
     /// The shareholder to be proactivized with bivariate shares.
-    shareholder: Option<Arc<Shareholder<S>>>,
+    shareholder: Option<Arc<Shareholder<S::Group>>>,
 }
 
 impl<S> BivariateShares<S>
@@ -495,7 +498,7 @@ where
         shareholders: HashSet<ShareholderId>,
         kind: DimensionSwitchKind,
         handoff: HandoffKind,
-        shareholder: Option<Arc<Shareholder<S>>>,
+        shareholder: Option<Arc<Shareholder<S::Group>>>,
     ) -> Result<Self> {
         // During the dealing phase, the number of shares must be at least
         // threshold + 2, ensuring that even if t Byzantine dealers reveal
@@ -598,7 +601,7 @@ where
 
     /// Proactivizes the shareholder with the combined polynomial
     /// and verification matrix.
-    fn proactivize_shareholder(&mut self) -> Result<Shareholder<S>> {
+    fn proactivize_shareholder(&mut self) -> Result<Shareholder<S::Group>> {
         if !self.pending_shareholders.is_empty() {
             return Err(Error::NotEnoughBivariateShares.into());
         }
@@ -626,11 +629,16 @@ mod tests {
 
     use crate::{
         churp::{HandoffKind, ShareholderId},
-        suites::{p384, Suite},
-        vss::{matrix::VerificationMatrix, polynomial::BivariatePolynomial},
+        suites::{self, p384},
+        vss::{matrix, polynomial},
     };
 
     use super::{BivariateShares, DimensionSwitchKind, Error, SwitchPoints};
+
+    type Suite = p384::Sha3_384;
+    type BivariatePolynomial =
+        polynomial::BivariatePolynomial<<Suite as suites::Suite>::PrimeField>;
+    type VerificationMatrix = matrix::VerificationMatrix<<Suite as suites::Suite>::Group>;
 
     fn shareholder(id: u8) -> ShareholderId {
         ShareholderId([id; 32])
@@ -643,14 +651,14 @@ mod tests {
     fn add_point(
         me: u8,
         sh: u8,
-        bp: &BivariatePolynomial<<p384::Sha3_384 as Suite>::PrimeField>,
-        sp: &mut SwitchPoints<p384::Sha3_384>,
+        bp: &BivariatePolynomial,
+        sp: &mut SwitchPoints<Suite>,
         kind: DimensionSwitchKind,
     ) -> Result<bool> {
         let me = shareholder(me);
         let sh = shareholder(sh);
-        let x = sh.encode::<p384::Sha3_384>().unwrap();
-        let y = me.encode::<p384::Sha3_384>().unwrap();
+        let x = sh.encode::<Suite>().unwrap();
+        let y = me.encode::<Suite>().unwrap();
         let bij = match kind {
             DimensionSwitchKind::ShareReduction => bp.eval(&x, &y),
             DimensionSwitchKind::FullShareDistribution => bp.eval(&y, &x),
@@ -668,7 +676,7 @@ mod tests {
         let deg_y = 2 * threshold;
         let bp = BivariatePolynomial::random(deg_x, deg_y, &mut rng);
         let vm = VerificationMatrix::from(&bp);
-        let me = shareholder(1).encode::<p384::Sha3_384>().unwrap();
+        let me = shareholder(1).encode::<Suite>().unwrap();
 
         for kind in vec![
             DimensionSwitchKind::ShareReduction,
@@ -756,7 +764,7 @@ mod tests {
         threshold: u8,
         me: u8,
         sh: u8,
-        bs: &mut BivariateShares<p384::Sha3_384>,
+        bs: &mut BivariateShares<Suite>,
         dkind: DimensionSwitchKind,
         hkind: HandoffKind,
     ) -> Result<bool> {
@@ -770,7 +778,7 @@ mod tests {
         let vm = VerificationMatrix::from(&bp);
         let me = shareholder(me);
         let sh = shareholder(sh);
-        let x = me.encode::<p384::Sha3_384>().unwrap();
+        let x = me.encode::<Suite>().unwrap();
         let q = match dkind {
             DimensionSwitchKind::ShareReduction => bp.eval_y(&x),
             DimensionSwitchKind::FullShareDistribution => bp.eval_x(&x),
@@ -783,12 +791,12 @@ mod tests {
         let threshold = 2;
         let hkind = HandoffKind::CommitteeChanged;
 
-        let me = shareholder(1).encode::<p384::Sha3_384>().unwrap();
+        let me = shareholder(1).encode::<Suite>().unwrap();
         let shs = shareholders(vec![1, 2, 3]);
         let shareholders: HashSet<ShareholderId> = shs.iter().cloned().collect();
 
         // Dealing phase requires at least threshold + 2 dealers.
-        let res = BivariateShares::<p384::Sha3_384>::new(
+        let res = BivariateShares::<Suite>::new(
             threshold,
             me,
             shareholders.clone(),
@@ -809,7 +817,7 @@ mod tests {
             DimensionSwitchKind::ShareReduction,
             DimensionSwitchKind::FullShareDistribution,
         ] {
-            let mut bs = BivariateShares::<p384::Sha3_384>::new(
+            let mut bs = BivariateShares::<Suite>::new(
                 threshold,
                 me,
                 shareholders.clone(),
