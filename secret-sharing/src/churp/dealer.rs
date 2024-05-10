@@ -30,30 +30,35 @@ impl<G> Dealer<G>
 where
     G: Group + GroupEncoding,
 {
-    /// Creates a new dealer.
-    pub fn new(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Result<Self> {
-        let dx = threshold;
-        let dy = threshold.checked_mul(2).ok_or(Error::ThresholdTooLarge)?;
+    /// Creates a new dealer based on the provided parameters.
+    ///
+    /// A dealer for the dealing phase uses a random bivariate polynomial,
+    /// otherwise, it uses a zero-holed bivariate polynomial.
+    pub fn create(threshold: u8, dealing_phase: bool, rng: &mut impl RngCore) -> Result<Self> {
+        match dealing_phase {
+            true => Self::random(threshold, rng),
+            false => Self::zero_hole(threshold, rng),
+        }
+    }
 
-        let dealer = match dealing_phase {
-            true => Dealer::random(dx, dy, rng),
-            false => Dealer::zero_hole(dx, dy, rng),
-        };
-
-        Ok(dealer)
+    /// Creates a new dealer with a predefined shared secret.
+    pub fn new(threshold: u8, secret: G::Scalar, rng: &mut impl RngCore) -> Result<Self> {
+        let mut bp = Self::random_bivariate_polynomial(threshold, rng)?;
+        bp.set_coefficient(0, 0, secret);
+        Ok(bp.into())
     }
 
     /// Creates a new dealer with a random bivariate polynomial.
-    fn random(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
-        let bp = BivariatePolynomial::random(dx, dy, rng);
-        bp.into()
+    pub fn random(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
+        let bp = Self::random_bivariate_polynomial(threshold, rng)?;
+        Ok(bp.into())
     }
 
     /// Creates a new dealer with a random zero-hole bivariate polynomial.
-    fn zero_hole(dx: u8, dy: u8, rng: &mut impl RngCore) -> Self {
-        let mut bp = BivariatePolynomial::random(dx, dy, rng);
+    pub fn zero_hole(threshold: u8, rng: &mut impl RngCore) -> Result<Self> {
+        let mut bp = Self::random_bivariate_polynomial(threshold, rng)?;
         bp.to_zero_hole();
-        bp.into()
+        Ok(bp.into())
     }
 
     /// Returns the secret bivariate polynomial.
@@ -77,6 +82,17 @@ where
             HandoffKind::CommitteeChanged => self.bp.eval_y(id),
             HandoffKind::CommitteeUnchanged => self.bp.eval_x(id),
         }
+    }
+
+    /// Returns a random bivariate polynomial.
+    fn random_bivariate_polynomial(
+        threshold: u8,
+        rng: &mut impl RngCore,
+    ) -> Result<BivariatePolynomial<G::Scalar>> {
+        let deg_x = threshold;
+        let deg_y = threshold.checked_mul(2).ok_or(Error::ThresholdTooLarge)?;
+        let bp = BivariatePolynomial::random(deg_x, deg_y, rng);
+        Ok(bp)
     }
 }
 
@@ -102,47 +118,66 @@ mod tests {
     type Dealer = super::Dealer<Group>;
 
     #[test]
-    fn test_new() {
+    fn test_create() {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
 
-        let threshold = 2;
-        for dealing_phase in vec![true, false] {
-            let dealer = Dealer::new(threshold, dealing_phase, &mut rng).unwrap();
-            assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
-            assert_eq!(dealer.bivariate_polynomial().deg_x, 2);
-            assert_eq!(dealer.bivariate_polynomial().deg_y, 4);
-            assert_eq!(dealer.verification_matrix().rows, 3);
-            assert_eq!(dealer.verification_matrix().cols, 5);
-        }
+        let test_cases = vec![
+            // Zero threshold.
+            (0, 0, 0, 1, 1),
+            // Non-zero threshold.
+            (2, 2, 4, 3, 5),
+        ];
 
-        let threshold = 0;
-        for dealing_phase in vec![true, false] {
-            let dealer = Dealer::new(threshold, dealing_phase, &mut rng).unwrap();
-            assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
-            assert_eq!(dealer.bivariate_polynomial().deg_x, 0);
-            assert_eq!(dealer.bivariate_polynomial().deg_y, 0);
-            assert_eq!(dealer.verification_matrix().rows, 1);
-            assert_eq!(dealer.verification_matrix().cols, 1);
+        for (threshold, deg_x, deg_y, rows, cols) in test_cases {
+            for dealing_phase in vec![true, false] {
+                let dealer = Dealer::create(threshold, dealing_phase, &mut rng).unwrap();
+                assert_eq!(dealer.bivariate_polynomial().deg_x, deg_x);
+                assert_eq!(dealer.bivariate_polynomial().deg_y, deg_y);
+                assert_eq!(dealer.verification_matrix().rows, rows);
+                assert_eq!(dealer.verification_matrix().cols, cols);
+                assert_eq!(dealer.verification_matrix().is_zero_hole(), !dealing_phase);
+            }
         }
     }
 
     #[test]
-    fn test_from() {
-        let bp = BivariatePolynomial::zero(2, 3);
-        let _ = Dealer::from(bp);
+    fn test_new() {
+        let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
+
+        let tcs = vec![
+            // Zero threshold.
+            (0, 0, 0, 0, 1, 1),
+            // Non-zero threshold.
+            (100, 2, 2, 4, 3, 5),
+        ];
+
+        for (secret, threshold, deg_x, deg_y, rows, cols) in tcs {
+            let secret = PrimeField::from_u64(secret);
+            let dealer = Dealer::new(threshold, secret, &mut rng).unwrap();
+            assert_eq!(dealer.bivariate_polynomial().deg_x, deg_x);
+            assert_eq!(dealer.bivariate_polynomial().deg_y, deg_y);
+            assert_eq!(dealer.verification_matrix().rows, rows);
+            assert_eq!(dealer.verification_matrix().cols, cols);
+            assert_eq!(
+                dealer.bivariate_polynomial().coefficient(0, 0),
+                Some(&secret)
+            );
+        }
     }
 
     #[test]
     fn test_random() {
+        let threshold = 2;
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = Dealer::random(2, 3, &mut rng);
+        let dealer = Dealer::random(threshold, &mut rng).unwrap();
         assert!(!dealer.verification_matrix().is_zero_hole()); // Zero-hole with negligible probability.
     }
 
     #[test]
     fn test_zero_hole() {
+        let threshold = 2;
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = Dealer::zero_hole(2, 3, &mut rng);
+        let dealer = Dealer::zero_hole(threshold, &mut rng).unwrap();
         assert!(dealer.verification_matrix().is_zero_hole());
     }
 
@@ -163,5 +198,11 @@ mod tests {
         let p = dealer.derive_bivariate_share(&id, HandoffKind::CommitteeUnchanged);
         assert_eq!(p.degree(), 3);
         assert_eq!(p.size(), 4);
+    }
+
+    #[test]
+    fn test_from() {
+        let bp = BivariatePolynomial::zero(2, 3);
+        let _ = Dealer::from(bp);
     }
 }
