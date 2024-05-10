@@ -76,6 +76,12 @@ where
         self.set_coefficient(0, F::ZERO);
     }
 
+    /// Returns true if and only if the coefficient `a_0` of the constant
+    /// term is zero.
+    pub fn is_zero_hole(&self) -> bool {
+        self.a[0].is_zero().into()
+    }
+
     /// Returns the highest of the degrees of the polynomial's monomials with
     /// non-zero coefficients.
     pub fn degree(&self) -> usize {
@@ -501,62 +507,63 @@ mod tests {
     }
 
     #[test]
+    fn test_is_zero_hole() {
+        // The constant term is 1.
+        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
+        assert!(!p.is_zero_hole());
+
+        // The constant term is 0.
+        p.to_zero_hole();
+        assert!(p.is_zero_hole());
+    }
+
+    #[test]
     fn test_degree_and_size() {
-        let p = Polynomial::with_coefficients(vec![]);
-        assert_eq!(p.degree(), 0);
-        assert_eq!(p.size(), 1);
+        let test_cases = vec![
+            (0, 1, vec![]),
+            (0, 1, vec![0]),
+            (0, 1, vec![1]),
+            (0, 2, vec![0, 0]),
+            (2, 3, vec![1, 2, 3]),
+            (2, 5, vec![1, 2, 3, 0, 0]),
+            (4, 5, vec![0, 1, 2, 0, 3]),
+        ];
 
-        let p = Polynomial::with_coefficients(scalars(&[0]));
-        assert_eq!(p.degree(), 0);
-        assert_eq!(p.size(), 1);
-
-        let p = Polynomial::with_coefficients(scalars(&[1]));
-        assert_eq!(p.degree(), 0);
-        assert_eq!(p.size(), 1);
-
-        let p = Polynomial::with_coefficients(scalars(&[0, 0]));
-        assert_eq!(p.degree(), 0);
-        assert_eq!(p.size(), 2);
-
-        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        assert_eq!(p.degree(), 2);
-        assert_eq!(p.size(), 3);
-
-        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
-        assert_eq!(p.degree(), 2);
-        assert_eq!(p.size(), 5);
-
-        let p = Polynomial::with_coefficients(scalars(&[0, 1, 2, 0, 3]));
-        assert_eq!(p.degree(), 4);
-        assert_eq!(p.size(), 5);
+        for (degree, size, coefficients) in test_cases {
+            let p = Polynomial::with_coefficients(scalars(&coefficients));
+            assert_eq!(p.degree(), degree);
+            assert_eq!(p.size(), size);
+        }
     }
 
     #[test]
     fn test_coefficient() {
-        let p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        assert_eq!(p.coefficient(0), Some(&scalar(1)));
-        assert_eq!(p.coefficient(1), Some(&scalar(2)));
-        assert_eq!(p.coefficient(2), Some(&scalar(3)));
+        let a = scalars(&[1, 2, 3]);
+        let p = Polynomial::with_coefficients(a.clone());
+
+        // Test coefficients within bounds.
+        for i in 0..a.len() {
+            assert_eq!(p.coefficient(i), Some(&a[i]));
+        }
+
+        // Test coefficients out of bounds.
         assert_eq!(p.coefficient(3), None);
     }
 
     #[test]
     fn test_trim() {
-        let mut p = Polynomial::with_coefficients(scalars(&[0]));
-        p.trim();
-        assert_eq!(p.a, scalars(&[0]));
+        let test_cases = vec![
+            (vec![0], vec![0]),
+            (vec![0, 0], vec![0]),
+            (vec![1, 2, 3], vec![1, 2, 3]),
+            (vec![1, 2, 3, 0, 0], vec![1, 2, 3]),
+        ];
 
-        let mut p = Polynomial::with_coefficients(scalars(&[0, 0]));
-        p.trim();
-        assert_eq!(p.a, scalars(&[0]));
-
-        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        p.trim();
-        assert_eq!(p.a, scalars(&[1, 2, 3]));
-
-        let mut p = Polynomial::with_coefficients(scalars(&[1, 2, 3, 0, 0]));
-        p.trim();
-        assert_eq!(p.a, scalars(&[1, 2, 3]));
+        for (before, after) in test_cases {
+            let mut p = Polynomial::with_coefficients(scalars(&before));
+            p.trim();
+            assert_eq!(p.a, scalars(&after));
+        }
     }
 
     #[test]
@@ -589,249 +596,150 @@ mod tests {
 
     #[test]
     pub fn test_add() {
-        // Equal degree.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        for h in vec![&f + &g, f + g] {
-            assert_eq!(h.a, scalars(&[3, 6, 9]));
-        }
+        let test_cases = vec![
+            // Equal degree.
+            (vec![1, 2, 3], vec![2, 4, 6], vec![3, 6, 9]),
+            // Lower degree.
+            (vec![1, 2], vec![2, 4, 6], vec![3, 6, 6]),
+            // Higher degree.
+            (vec![1, 2, 3], vec![2], vec![3, 2, 3]),
+            // Zero coefficients.
+            (vec![1, 2, -3, 4], vec![-1, 2, 3, -4], vec![0, 4, 0, 0]),
+        ];
 
-        // Lower degree.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2]));
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        for h in vec![&f + &g, f + g] {
-            assert_eq!(h.a, scalars(&[3, 6, 6]));
-        }
+        for (coefficients_f, coefficients_g, coefficients_h) in test_cases {
+            // Test add.
+            let f = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
+            for h in vec![&f + &g, f + g] {
+                assert_eq!(h.a, scalars(&coefficients_h));
+            }
 
-        // Higher degree.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let g = Polynomial::with_coefficients(scalars(&[2]));
-        for h in vec![&f + &g, f + g] {
-            assert_eq!(h.a, scalars(&[3, 2, 3]));
-        }
-
-        // Zero coefficients.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, -3, 4]));
-        let g = Polynomial::with_coefficients(scalars(&[-1, 2, 3, -4]));
-        for h in vec![&f + &g, f + g] {
-            assert_eq!(h.a, scalars(&[0, 4, 0, 0]));
-        }
-    }
-
-    #[test]
-    pub fn test_add_assign() {
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        f1 += &g;
-        f2 += g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[3, 6, 9]));
-        }
-
-        // Lower degree.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        f1 += &g;
-        f2 += g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[3, 6, 6]));
-        }
-
-        // Higher degree.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[2]));
-        f1 += &g;
-        f2 += g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[3, 2, 3]));
-        }
-
-        // Zero coefficients.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, -3, 4]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[-1, 2, 3, -4]));
-        f1 += &g;
-        f2 += g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[0, 4, 0, 0]));
+            // Test add assign.
+            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let mut f2 = f1.clone();
+            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
+            f1 += &g;
+            f2 += g;
+            for f in vec![f1, f2] {
+                assert_eq!(f.a, scalars(&coefficients_h));
+            }
         }
     }
 
     #[test]
     pub fn test_sub() {
-        // Equal degree.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        for h in vec![&f - &g, f - g] {
-            assert_eq!(h.a, scalars(&[-1, -2, -3]));
-        }
+        let test_cases = vec![
+            // Equal degree.
+            (vec![1, 2, 3], vec![2, 4, 6], vec![-1, -2, -3]),
+            // Lower degree.
+            (vec![1, 2], vec![2, 4, 6], vec![-1, -2, -6]),
+            // Higher degree.
+            (vec![1, 2, 3], vec![2], vec![-1, 2, 3]),
+            // Zero coefficients.
+            (vec![1, 2, 3, 4], vec![1, -2, 3, 4], vec![0, 4, 0, 0]),
+        ];
 
-        // Lower degree.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2]));
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        for h in vec![&f - &g, f - g] {
-            assert_eq!(h.a, scalars(&[-1, -2, -6]));
-        }
+        for (coefficients_f, coefficients_g, coefficients_h) in test_cases {
+            // Test sub.
+            let f = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
+            for h in vec![&f - &g, f - g] {
+                assert_eq!(h.a, scalars(&coefficients_h));
+            }
 
-        // Higher degree.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let g = Polynomial::with_coefficients(scalars(&[2]));
-        for h in vec![&f - &g, f - g] {
-            assert_eq!(h.a, scalars(&[-1, 2, 3]));
-        }
-
-        // Zero coefficients.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3, 4]));
-        let g = Polynomial::with_coefficients(scalars(&[1, -2, 3, 4]));
-        for h in vec![&f - &g, f - g] {
-            assert_eq!(h.a, scalars(&[0, 4, 0, 0]));
-        }
-    }
-
-    #[test]
-    pub fn test_sub_assign() {
-        // Equal degree.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        f1 -= &g;
-        f2 -= g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[-1, -2, -3]));
-        }
-
-        // Lower degree.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[2, 4, 6]));
-        f1 -= &g;
-        f2 -= g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[-1, -2, -6]));
-        }
-
-        // Higher degree.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[2]));
-        f1 -= &g;
-        f2 -= g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[-1, 2, 3]));
-        }
-
-        // Zero coefficients.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3, 4]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[1, -2, 3, 4]));
-        f1 -= &g;
-        f2 -= g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[0, 4, 0, 0]));
+            // Test sub assign.
+            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let mut f2 = f1.clone();
+            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
+            f1 -= &g;
+            f2 -= g;
+            for f in vec![f1, f2] {
+                assert_eq!(f.a, scalars(&coefficients_h));
+            }
         }
     }
 
     #[test]
     pub fn test_mul() {
-        // Non-zero.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let g = Polynomial::with_coefficients(scalars(&[2, 4]));
-        for h in vec![&f * &g, f * g] {
-            assert_eq!(h.a, scalars(&[2, 8, 14, 12]));
-        }
+        let test_cases = vec![
+            // Non-zero.
+            (vec![1, 2, 3], vec![2, 4], vec![2, 8, 14, 12]),
+            // Zero.
+            (vec![1, 2, 3], vec![0], vec![0, 0, 0]),
+        ];
 
-        // Zero.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let g = Polynomial::with_coefficients(scalars(&[0]));
-        for h in vec![&f * &g, f * g] {
-            assert_eq!(h.a, scalars(&[0, 0, 0]));
-        }
-    }
+        for (coefficients_f, coefficients_g, coefficients_h) in test_cases {
+            // Test mul.
+            let f = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
+            for h in vec![&f * &g, f * g] {
+                assert_eq!(h.a, scalars(&coefficients_h));
+            }
 
-    #[test]
-    pub fn test_mul_assign() {
-        // Non-zero.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[2, 4]));
-        f1 *= &g;
-        f2 *= g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[2, 8, 14, 12]));
-        }
-
-        // Zero.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let g = Polynomial::with_coefficients(scalars(&[0]));
-        f1 *= &g;
-        f2 *= g;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[0, 0, 0]));
+            // Test mul assign.
+            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let mut f2 = f1.clone();
+            let g = Polynomial::with_coefficients(scalars(&coefficients_g));
+            f1 *= &g;
+            f2 *= g;
+            for f in vec![f1, f2] {
+                assert_eq!(f.a, scalars(&coefficients_h));
+            }
         }
     }
 
     #[test]
     pub fn test_scalar_mul() {
-        // Non-zero.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let s = scalars(&[2])[0];
-        for g in vec![&f * &s, f.clone() * s, &f * s, f * &s] {
-            assert_eq!(g.a, scalars(&[2, 4, 6]));
-        }
+        let test_cases = vec![
+            // Non-zero.
+            (vec![1, 2, 3], 2, vec![2, 4, 6]),
+            // Zero.
+            (vec![1, 2, 3], 0, vec![0, 0, 0]),
+        ];
 
-        // Zero.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let s = scalars(&[0])[0];
-        for g in vec![&f * &s, f.clone() * s, &f * s, f * &s] {
-            assert_eq!(g.a, scalars(&[0, 0, 0]));
-        }
-    }
+        for (coefficients_f, scalar_s, coefficients_s) in test_cases {
+            // Test scalar mul.
+            let f = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let s = scalar(scalar_s);
+            for g in vec![&f * &s, f.clone() * s, &f * s, f * &s] {
+                assert_eq!(g.a, scalars(&coefficients_s));
+            }
 
-    #[test]
-    pub fn test_scalar_mul_assign() {
-        // Non-zero.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let s = scalars(&[2])[0];
-        f1 *= &s;
-        f2 *= s;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[2, 4, 6]));
-        }
-
-        // Zero.
-        let mut f1 = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let mut f2 = f1.clone();
-        let s = scalars(&[0])[0];
-        f1 *= &s;
-        f2 *= s;
-        for f in vec![f1, f2] {
-            assert_eq!(f.a, scalars(&[0, 0, 0]));
+            // Test scalar mul assign.
+            let mut f1 = Polynomial::with_coefficients(scalars(&coefficients_f));
+            let mut f2 = f1.clone();
+            let s = scalar(scalar_s);
+            f1 *= &s;
+            f2 *= s;
+            for f in vec![f1, f2] {
+                assert_eq!(f.a, scalars(&coefficients_s));
+            }
         }
     }
 
     #[test]
     pub fn test_sum() {
-        // One.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let s1 = vec![&f].into_iter().sum::<Polynomial>();
-        let s2 = vec![f].into_iter().sum::<Polynomial>();
-        for s in vec![s1, s2] {
-            assert_eq!(s.a, scalars(&[1, 2, 3]));
-        }
+        let test_cases = vec![
+            // One.
+            (vec![vec![1, 2, 3]], vec![1, 2, 3]),
+            // Many.
+            (vec![vec![1, 2, 3], vec![2, 4], vec![3]], vec![6, 6, 3]),
+        ];
 
-        // Many.
-        let f = Polynomial::with_coefficients(scalars(&[1, 2, 3]));
-        let g = Polynomial::with_coefficients(scalars(&[2, 4]));
-        let h = Polynomial::with_coefficients(scalars(&[3]));
-        let s1 = vec![&f, &g, &h].into_iter().sum::<Polynomial>();
-        let s2 = vec![f, g, h].into_iter().sum::<Polynomial>();
-        for s in vec![s1, s2] {
-            assert_eq!(s.a, scalars(&[6, 6, 3]));
+        for (coefficients_ps, coefficients_s) in test_cases {
+            let ps: Vec<_> = coefficients_ps
+                .iter()
+                .map(|s| Polynomial::with_coefficients(scalars(s)))
+                .collect();
+
+            // Sum references.
+            let s = ps.iter().sum::<Polynomial>();
+            assert_eq!(s.a, scalars(&coefficients_s));
+
+            // Sum values.
+            let s = ps.into_iter().sum::<Polynomial>();
+            assert_eq!(s.a, scalars(&coefficients_s));
         }
     }
 }

@@ -98,6 +98,11 @@ where
         self.b[0][0].is_zero().into()
     }
 
+    /// Returns the coefficient `b_{i,j}` of the bivariate polynomial.
+    pub fn coefficient(&self, i: usize, j: usize) -> Option<&F> {
+        self.b.get(i).and_then(|bi| bi.get(j))
+    }
+
     /// Returns the byte representation of the bivariate polynomial.
     pub fn to_bytes(&self) -> Vec<u8> {
         let cap = Self::byte_size(self.deg_x, self.deg_y);
@@ -331,6 +336,35 @@ mod tests {
 
         bp.to_zero_hole();
         assert_eq!(bp.b[0][0], scalar(0));
+    }
+
+    #[test]
+    fn test_is_zero_hole() {
+        // The constant term is 1.
+        let b = vec![scalars(&[1, 2, 3]), scalars(&[2, 3, 1])];
+        let mut bp = BivariatePolynomial::with_coefficients(b);
+        assert!(!bp.is_zero_hole());
+
+        // The constant term is 0.
+        bp.to_zero_hole();
+        assert!(bp.is_zero_hole());
+    }
+
+    #[test]
+    fn test_coefficient() {
+        let b = vec![scalars(&[1, 2, 3]), scalars(&[2, 3, 1])];
+        let bp = BivariatePolynomial::with_coefficients(b.clone());
+
+        // Test coefficients within bounds.
+        for i in 0..b.len() {
+            for j in 0..b[i].len() {
+                assert_eq!(bp.coefficient(i, j), Some(&b[i][j]));
+            }
+        }
+
+        // Test coefficients out of bounds.
+        assert_eq!(bp.coefficient(0, 3), None);
+        assert_eq!(bp.coefficient(2, 0), None);
     }
 
     #[test]
