@@ -22,6 +22,8 @@ pub enum Error {
     PolynomialDegreeMismatch,
     #[error("shareholder encoding failed")]
     ShareholderEncodingFailed,
+    #[error("threshold too large")]
+    ThresholdTooLarge,
     #[error("too many switch points")]
     TooManySwitchPoints,
     #[error("unknown shareholder")]
