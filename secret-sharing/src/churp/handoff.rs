@@ -383,7 +383,7 @@ mod tests {
     ) -> HashMap<ShareholderId, Dealer> {
         let mut dealers = HashMap::new();
         for sh in committee.iter() {
-            let d = Dealer::new(threshold, dealing_phase, rng);
+            let d = Dealer::new(threshold, dealing_phase, rng).unwrap();
             dealers.insert(sh.clone(), d);
         }
         dealers

@@ -1038,7 +1038,7 @@ impl Churp {
                 // will detect the polynomial change because the checksum
                 // of the verification matrix in the submitted application
                 // will also change.
-                let dealer = Dealer::new(threshold, dealing_phase, &mut OsRng);
+                let dealer = Dealer::new(threshold, dealing_phase, &mut OsRng)?;
 
                 // Encrypt and store the polynomial in case of a restart.
                 let polynomial = dealer.bivariate_polynomial();

@@ -10,6 +10,12 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 )
 
+// maxThreshold is the maximum threshold.
+//
+// Limiting the threshold ensures that the dimensions of bivariate polynomials
+// (t, 2t) never exceed the range of uint8.
+const maxThreshold = 127
+
 var (
 	// ApplicationRequestSignatureContext is the signature context used to sign
 	// application requests with runtime signing key (RAK).
@@ -49,6 +55,9 @@ type CreateRequest struct {
 func (c *CreateRequest) ValidateBasic() error {
 	if c.SuiteID > 0 {
 		return fmt.Errorf("unsupported suite, ID %d", c.SuiteID)
+	}
+	if c.Threshold > maxThreshold {
+		return fmt.Errorf("threshold too large: got %d, max %d", c.Threshold, maxThreshold)
 	}
 	if c.Policy.Policy.ID != c.ID {
 		return fmt.Errorf("policy ID mismatch: got %d, expected %d", c.Policy.Policy.ID, c.ID)
