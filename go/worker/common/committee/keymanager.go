@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"encoding/base64"
 
 	"github.com/libp2p/go-libp2p/core"
 	"golang.org/x/exp/maps"
@@ -105,6 +106,12 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 		return nil, node, fmt.Errorf("key manager not available")
 	}
 
+	km.logger.Debug("CallEnclave request",
+		"data", base64.StdEncoding.EncodeToString(data),
+		"nodes", nodes,
+		"kind", kind,
+	)
+
 	// Propagate peer feedback on the last EnclaveRPC call to guide routing decision.
 	if lastPf != nil {
 		// If no feedback has been provided by the runtime, treat previous call as success.
@@ -142,8 +149,17 @@ func (km *KeyManagerClientWrapper) CallEnclave(
 
 	rsp, nextPf, err := cli.CallEnclave(ctx, req, peers)
 	if err != nil {
+		km.logger.Debug("CallEnclave failed",
+			"err", err,
+			"kind", kind,
+		)
 		return nil, node, err
 	}
+
+	km.logger.Debug("CallEnclave response",
+		"data", base64.StdEncoding.EncodeToString(rsp.Data),
+		"kind", kind,
+	)
 
 	node, ok := kmNodes[nextPf.PeerID()]
 	if !ok {
