@@ -389,17 +389,6 @@ func (n *Node) handleSuspendLocked(int64) {
 						return
 					}
 
-					// Refresh current epoch as otherwise it could be stale which will result in the
-					// new runtime version not being activated.
-					currentEpoch, err := n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
-					switch err {
-					case nil:
-						n.CurrentEpoch = currentEpoch
-					default:
-						n.logger.Error("failed to fetch current epoch",
-							"err", err,
-						)
-					}
 					n.CurrentDescriptor = rt
 
 					n.updateHostedRuntimeVersionLocked()
@@ -418,8 +407,17 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 		return
 	}
 
+	// Always take the latest epoch to avoid reverting to stale state.
+	epoch, err := n.Consensus.Beacon().GetEpoch(n.ctx, consensus.HeightLatest)
+	if err != nil {
+		n.logger.Error("failed to fetch current epoch",
+			"err", err,
+		)
+		return
+	}
+
 	// Update the runtime version based on the currently active deployment.
-	activeDeploy := n.CurrentDescriptor.ActiveDeployment(n.CurrentEpoch)
+	activeDeploy := n.CurrentDescriptor.ActiveDeployment(epoch)
 	// NOTE: If there is no active deployment this will activate the all-zero version which may
 	//       result in the runtime stopping.
 	var activeVersion version.Version
@@ -430,10 +428,10 @@ func (n *Node) updateHostedRuntimeVersionLocked() {
 	// For compute nodes, determine if there is a next version and activate it early.
 	var nextVersion *version.Version
 	if config.GlobalConfig.Mode == config.ModeCompute {
-		nextDeploy := n.CurrentDescriptor.NextDeployment(n.CurrentEpoch)
+		nextDeploy := n.CurrentDescriptor.NextDeployment(epoch)
 		preWarmEpochs := beacon.EpochTime(config.GlobalConfig.Runtime.PreWarmEpochs)
 
-		if nextDeploy != nil && nextDeploy.ValidFrom-n.CurrentEpoch <= preWarmEpochs {
+		if nextDeploy != nil && nextDeploy.ValidFrom-epoch <= preWarmEpochs {
 			nextVersion = new(version.Version)
 			*nextVersion = nextDeploy.Version
 		}
