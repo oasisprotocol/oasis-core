@@ -25,7 +25,7 @@ pub trait PointShareholder<F: PrimeField> {
 /// A trait for shareholders capable of deriving key shares.
 pub trait KeySharer<G: Group> {
     /// Derives a key share based on the given key ID and domain separation tag.
-    fn derive_key_share<H: GroupDigest<Output = G>>(
+    fn make_key_share<H: GroupDigest<Output = G>>(
         &self,
         key_id: &[u8],
         dst: &[u8],
@@ -37,7 +37,7 @@ where
     G: Group,
     S: PointShareholder<G::Scalar>,
 {
-    fn derive_key_share<H: GroupDigest<Output = G>>(
+    fn make_key_share<H: GroupDigest<Output = G>>(
         &self,
         key_id: &[u8],
         dst: &[u8],
@@ -50,15 +50,15 @@ where
     }
 }
 
-/// A trait for reconstructing a secret key from key shares.
-pub trait KeyReconstructor {
-    /// Returns the degree of the secret-sharing polynomial.
-    fn threshold(&self) -> u8;
+/// A trait for recovering a secret key from key shares.
+pub trait KeyRecoverer {
+    /// Returns the minimum number of key shares required to recover
+    /// the secret key.
+    fn min_shares(&self) -> usize;
 
-    /// Reconstructs the secret key from the provided key shares.
-    fn reconstruct_key<G: Group>(&self, shares: &[EncryptedPoint<G>]) -> Result<G> {
-        let required_shares = self.threshold() as usize + 1;
-        if shares.len() < required_shares {
+    /// Recovers the secret key from the provided key shares.
+    fn recover_key<G: Group>(&self, shares: &[EncryptedPoint<G>]) -> Result<G> {
+        if shares.len() < self.min_shares() {
             bail!("not enough shares");
         }
         if !Self::distinct_shares(shares) {

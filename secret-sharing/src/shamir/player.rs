@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use group::ff::PrimeField;
 
 use crate::{
-    kdc::KeyReconstructor,
+    kdc::KeyRecoverer,
     vss::{lagrange, polynomial::Point},
 };
 
@@ -19,10 +19,9 @@ impl Player {
         Player { threshold }
     }
 
-    /// Reconstructs the secret from the provided shares.
-    pub fn reconstruct_secret<F: PrimeField>(&self, shares: &[Point<F>]) -> Result<F> {
-        let required_shares = self.threshold as usize + 1;
-        if shares.len() < required_shares {
+    /// Recovers the secret from the provided shares.
+    pub fn recover_secret<F: PrimeField>(&self, shares: &[Point<F>]) -> Result<F> {
+        if shares.len() < self.min_shares() {
             bail!("not enough shares");
         }
         if !Self::distinct_shares(shares) {
@@ -34,6 +33,11 @@ impl Player {
         let secret = zip(cs, ys).map(|(c, y)| y * c).sum();
 
         Ok(secret)
+    }
+
+    /// Returns the minimum number of shares required to recover the secret.
+    fn min_shares(&self) -> usize {
+        self.threshold as usize + 1
     }
 
     /// Returns true if shares are from distinct shareholders.
@@ -51,9 +55,9 @@ impl Player {
     }
 }
 
-impl KeyReconstructor for Player {
-    fn threshold(&self) -> u8 {
-        self.threshold
+impl KeyRecoverer for Player {
+    fn min_shares(&self) -> usize {
+        self.min_shares()
     }
 }
 
@@ -62,7 +66,7 @@ mod tests {
     use rand_core::OsRng;
 
     use crate::{
-        kdc::{KeyReconstructor, KeySharer},
+        kdc::{KeyRecoverer, KeySharer},
         shamir::{Dealer, Shareholder},
         suites::{self, p384, GroupDigest},
     };
@@ -82,12 +86,13 @@ mod tests {
         let secret = PrimeField::from_u64(100);
         let dealer = Dealer::new(threshold, secret, &mut OsRng);
         let player = Player::new(threshold);
+        let min_shares = player.min_shares() as u64;
 
         // Not enough shares.
-        let n = threshold as u64;
+        let n = min_shares - 1;
         let xs = (1..=n).map(PrimeField::from_u64).collect();
         let shares = dealer.make_shares(xs);
-        let result = player.reconstruct_secret(&shares);
+        let result = player.recover_secret(&shares);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "not enough shares");
 
@@ -97,23 +102,23 @@ mod tests {
             .map(PrimeField::from_u64)
             .collect();
         let shares = dealer.make_shares(xs);
-        let result = player.reconstruct_secret(&shares);
+        let result = player.recover_secret(&shares);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "not distinct shares");
 
         // Exact number of shares.
-        let n = threshold as u64 + 1;
+        let n = min_shares;
         let xs = (1..=n).map(PrimeField::from_u64).collect();
         let shares = dealer.make_shares(xs);
-        let reconstructed = player.reconstruct_secret(&shares).unwrap();
-        assert_eq!(secret, reconstructed);
+        let recovered = player.recover_secret(&shares).unwrap();
+        assert_eq!(secret, recovered);
 
         // Too many shares.
-        let n = threshold as u64 + 10;
+        let n = min_shares + 10;
         let xs = (1..=n).map(PrimeField::from_u64).collect();
         let shares = dealer.make_shares(xs);
-        let reconstructed = player.reconstruct_secret(&shares).unwrap();
-        assert_eq!(secret, reconstructed);
+        let recovered = player.recover_secret(&shares).unwrap();
+        assert_eq!(secret, recovered);
     }
 
     #[test]
@@ -127,9 +132,10 @@ mod tests {
         let key = hash * secret;
         let dealer = Dealer::new(threshold, secret, &mut OsRng);
         let player = Player::new(threshold);
+        let min_shares = player.min_shares() as u64;
 
         // Not enough shares.
-        let n = threshold as u64;
+        let n = min_shares - 1;
         let xs = (1..=n).map(PrimeField::from_u64).collect();
         let shares = dealer.make_shares(xs);
         let shareholders: Vec<_> = shares
@@ -138,9 +144,9 @@ mod tests {
             .collect();
         let key_shares: Vec<_> = shareholders
             .iter()
-            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .map(|sh| sh.make_key_share::<Suite>(key_id, dst).unwrap())
             .collect();
-        let result = player.reconstruct_key(&key_shares);
+        let result = player.recover_key(&key_shares);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "not enough shares");
 
@@ -156,14 +162,14 @@ mod tests {
             .collect();
         let key_shares: Vec<_> = shareholders
             .iter()
-            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .map(|sh| sh.make_key_share::<Suite>(key_id, dst).unwrap())
             .collect();
-        let result = player.reconstruct_key(&key_shares);
+        let result = player.recover_key(&key_shares);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "not distinct shares");
 
         // Exact number of shares.
-        let n = threshold as u64 + 1;
+        let n = min_shares;
         let xs = (1..=n).map(PrimeField::from_u64).collect();
         let shares = dealer.make_shares(xs);
         let shareholders: Vec<_> = shares
@@ -172,13 +178,13 @@ mod tests {
             .collect();
         let key_shares: Vec<_> = shareholders
             .iter()
-            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .map(|sh| sh.make_key_share::<Suite>(key_id, dst).unwrap())
             .collect();
-        let reconstructed = player.reconstruct_key(&key_shares).unwrap();
-        assert_eq!(key, reconstructed);
+        let recovered = player.recover_key(&key_shares).unwrap();
+        assert_eq!(key, recovered);
 
         // Too many shares.
-        let n = threshold as u64 + 10;
+        let n = min_shares + 10;
         let xs = (1..=n).map(PrimeField::from_u64).collect();
         let shares = dealer.make_shares(xs);
         let shareholders: Vec<_> = shares
@@ -187,9 +193,9 @@ mod tests {
             .collect();
         let key_shares: Vec<_> = shareholders
             .iter()
-            .map(|sh| sh.derive_key_share::<Suite>(key_id, dst).unwrap())
+            .map(|sh| sh.make_key_share::<Suite>(key_id, dst).unwrap())
             .collect();
-        let reconstructed = player.reconstruct_key(&key_shares).unwrap();
-        assert_eq!(key, reconstructed);
+        let recovered = player.recover_key(&key_shares).unwrap();
+        assert_eq!(key, recovered);
     }
 }

@@ -18,9 +18,8 @@ use super::{Error, HandoffKind, ShareholderId};
 /// participants.
 ///
 /// Shares must always be distributed over a secure channel and verified
-/// against the matrix. Reconstructing the secret bivariate polynomial
-/// requires obtaining more than a threshold number of shares from distinct
-/// participants.
+/// against the matrix. Recovering the secret bivariate polynomial requires
+/// obtaining more than a threshold number of shares from distinct participants.
 pub struct Dealer<S: Suite> {
     /// Secret bivariate polynomial.
     bp: BivariatePolynomial<S::PrimeField>,
