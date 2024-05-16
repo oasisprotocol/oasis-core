@@ -371,7 +371,11 @@ func (n *Node) handleSuspendLocked(int64) {
 	if n.resumeCh == nil {
 		resumeCh := make(chan struct{})
 		n.resumeCh = resumeCh
+		rt := n.CurrentDescriptor
+
 		go func() {
+			epoCh, epoSub, _ := n.Consensus.Beacon().WatchEpochs(n.ctx)
+			defer epoSub.Close()
 			ch, sub, _ := n.Runtime.WatchRegistryDescriptor()
 			defer sub.Close()
 
@@ -379,24 +383,27 @@ func (n *Node) handleSuspendLocked(int64) {
 				select {
 				case <-n.stopCh:
 					return
-				case rt := <-ch:
+				case <-epoCh:
+					// Epoch transition while suspended, maybe the version is now valid.
+				case rt = <-ch:
 					// Descriptor update while suspended.
-					n.CrossNode.Lock()
-
-					// Make sure we are still suspended.
-					if n.resumeCh == nil {
-						n.CrossNode.Unlock()
-						return
-					}
-
-					n.CurrentDescriptor = rt
-
-					n.updateHostedRuntimeVersionLocked()
-					n.CrossNode.Unlock()
 				case <-resumeCh:
 					// Runtime no longer suspended, stop.
 					return
 				}
+
+				n.CrossNode.Lock()
+
+				// Make sure we are still suspended.
+				if n.resumeCh == nil {
+					n.CrossNode.Unlock()
+					return
+				}
+
+				n.CurrentDescriptor = rt
+
+				n.updateHostedRuntimeVersionLocked()
+				n.CrossNode.Unlock()
 			}
 		}()
 	}
