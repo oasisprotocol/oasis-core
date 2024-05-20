@@ -4,12 +4,9 @@ use anyhow::Result;
 use group::{Group, GroupEncoding};
 use rand_core::RngCore;
 
-use crate::vss::{
-    matrix::VerificationMatrix,
-    polynomial::{BivariatePolynomial, Polynomial},
-};
+use crate::vss::{matrix::VerificationMatrix, polynomial::BivariatePolynomial};
 
-use super::{Error, HandoffKind};
+use super::{Error, HandoffKind, SecretShare};
 
 /// Dealer is responsible for generating a secret bivariate polynomial,
 /// computing a verification matrix, and deriving secret shares for other
@@ -71,17 +68,24 @@ where
         &self.vm
     }
 
-    /// Returns a secret share for the given shareholder.
-    pub fn derive_bivariate_share(
+    /// Generates shares of the secret for the given shareholders.
+    pub fn make_shares(
         &self,
-        id: &G::Scalar,
+        xs: Vec<G::Scalar>,
         kind: HandoffKind,
-    ) -> Polynomial<G::Scalar> {
-        match kind {
-            HandoffKind::DealingPhase => self.bp.eval_x(id),
-            HandoffKind::CommitteeChanged => self.bp.eval_y(id),
-            HandoffKind::CommitteeUnchanged => self.bp.eval_x(id),
-        }
+    ) -> Vec<SecretShare<G::Scalar>> {
+        xs.into_iter().map(|x| self.make_share(x, kind)).collect()
+    }
+
+    /// Generates a share of the secret for the given shareholder.
+    pub fn make_share(&self, x: G::Scalar, kind: HandoffKind) -> SecretShare<G::Scalar> {
+        let p = match kind {
+            HandoffKind::DealingPhase => self.bp.eval_x(&x),
+            HandoffKind::CommitteeUnchanged => self.bp.eval_x(&x),
+            HandoffKind::CommitteeChanged => self.bp.eval_y(&x),
+        };
+
+        SecretShare::new(x, p)
     }
 
     /// Returns a random bivariate polynomial.
@@ -182,22 +186,23 @@ mod tests {
     }
 
     #[test]
-    fn test_derive_bivariate_share() {
+    fn test_make_share() {
+        let threshold = 2;
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let dealer = Dealer::random(2, 3, &mut rng);
-        let id = PrimeField::from_u64(2);
+        let dealer = Dealer::random(threshold, &mut rng).unwrap();
+        let x = PrimeField::from_u64(2);
 
-        let p = dealer.derive_bivariate_share(&id, HandoffKind::DealingPhase);
-        assert_eq!(p.degree(), 3);
-        assert_eq!(p.size(), 4);
+        let test_cases = vec![
+            (HandoffKind::DealingPhase, 4, 5),
+            (HandoffKind::CommitteeUnchanged, 4, 5),
+            (HandoffKind::CommitteeChanged, 2, 3),
+        ];
 
-        let p = dealer.derive_bivariate_share(&id, HandoffKind::CommitteeChanged);
-        assert_eq!(p.degree(), 2);
-        assert_eq!(p.size(), 3);
-
-        let p = dealer.derive_bivariate_share(&id, HandoffKind::CommitteeUnchanged);
-        assert_eq!(p.degree(), 3);
-        assert_eq!(p.size(), 4);
+        for (kind, degree, size) in test_cases {
+            let share = dealer.make_share(x, kind);
+            assert_eq!(share.polynomial().degree(), degree);
+            assert_eq!(share.polynomial().size(), size);
+        }
     }
 
     #[test]

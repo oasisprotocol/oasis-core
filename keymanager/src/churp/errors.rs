@@ -25,12 +25,16 @@ pub enum Error {
     HandoffMismatch,
     #[error("handoff not found")]
     HandoffNotFound,
+    #[error("identity decoding failed")]
+    IdentityDecodingFailed,
     #[error("invalid bivariate polynomial")]
     InvalidBivariatePolynomial,
     #[error("invalid data")]
     InvalidData,
     #[error("invalid handoff")]
     InvalidHandoff,
+    #[error("invalid host")]
+    InvalidHost,
     #[error("invalid secret share")]
     InvalidSecretShare,
     #[error("invalid shareholder")]

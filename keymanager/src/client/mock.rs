@@ -10,7 +10,7 @@ use oasis_core_runtime::{
 
 use crate::{
     api::KeyManagerError,
-    churp::EncodedSecretShare,
+    churp::EncodedVerifiableSecretShare,
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
 };
 
@@ -140,7 +140,7 @@ impl KeyManagerClient for MockClient {
         _churp_id: u8,
         _epoch: EpochTime,
         _node_id: PublicKey,
-    ) -> Result<EncodedSecretShare, KeyManagerError> {
+    ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
         unimplemented!();
     }
 }
