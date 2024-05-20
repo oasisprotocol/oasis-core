@@ -7,6 +7,7 @@ use group::{
 };
 
 use crate::{
+    kdc::PointShareholder,
     suites::FieldDigest,
     vss::{matrix::VerificationMatrix, polynomial::Polynomial},
 };
@@ -93,6 +94,19 @@ where
 {
     fn from(verifiable_share: VerifiableSecretShare<G>) -> Shareholder<G> {
         Shareholder { verifiable_share }
+    }
+}
+
+impl<G> PointShareholder<G::Scalar> for Shareholder<G>
+where
+    G: Group + GroupEncoding,
+{
+    fn coordinate_x(&self) -> &G::Scalar {
+        self.verifiable_share.share.coordinate_x()
+    }
+
+    fn coordinate_y(&self) -> &G::Scalar {
+        self.verifiable_share.share.coordinate_y()
     }
 }
 
