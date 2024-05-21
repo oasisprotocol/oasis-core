@@ -2,6 +2,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use group::{ff::PrimeField, Group, GroupEncoding};
+use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
@@ -18,10 +19,12 @@ use secret_sharing::{
     churp::{SecretShare, VerifiableSecretShare},
     vss::{
         matrix::VerificationMatrix,
-        polynomial::Polynomial,
+        polynomial::{EncryptedPoint, Polynomial},
         scalar::{scalar_from_bytes, scalar_to_bytes},
     },
 };
+
+use crate::crypto::KeyPairId;
 
 use super::Error;
 
@@ -138,6 +141,22 @@ pub struct SignedConfirmationRequest {
     pub signature: Signature,
 }
 
+/// Key share request.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct KeyShareRequest {
+    /// A unique identifier within the key manager runtime.
+    pub id: u8,
+
+    /// The identifier of the key manager runtime.
+    pub runtime_id: Namespace,
+
+    /// The epoch of the handoff.
+    pub epoch: EpochTime,
+
+    /// Key ID.
+    pub key_id: KeyPairId,
+}
+
 /// Encoded verifiable secret share.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
 pub struct EncodedVerifiableSecretShare {
@@ -209,5 +228,50 @@ where
             Polynomial::from_bytes(&encoded.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
         let share = SecretShare::new(x, p);
         Ok(share)
+    }
+}
+
+/// Encoded encrypted point.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize)]
+pub struct EncodedEncryptedPoint {
+    /// Encoded x-coordinate.
+    pub x: Vec<u8>,
+
+    /// Encoded y-coordinate in encrypted form.
+    pub z: Vec<u8>,
+}
+
+impl<G> From<&EncryptedPoint<G>> for EncodedEncryptedPoint
+where
+    G: Group + GroupEncoding,
+{
+    fn from(point: &EncryptedPoint<G>) -> Self {
+        Self {
+            x: scalar_to_bytes(point.x()),
+            z: point.z().to_bytes().as_ref().to_vec(),
+        }
+    }
+}
+
+impl<G> TryFrom<EncodedEncryptedPoint> for EncryptedPoint<G>
+where
+    G: Group + GroupEncoding,
+{
+    type Error = Error;
+
+    fn try_from(encoded: EncodedEncryptedPoint) -> Result<Self, Self::Error> {
+        let x = scalar_from_bytes(&encoded.x).ok_or(Error::IdentityDecodingFailed)?;
+
+        let mut repr: G::Repr = Default::default();
+        let slice = &mut repr.as_mut()[..];
+        slice.copy_from_slice(&encoded.z);
+
+        let z = match G::from_bytes(&repr).into() {
+            None => return Err(Error::IdentityDecodingFailed),
+            Some(z) => z,
+        };
+
+        let point = EncryptedPoint::new(x, z);
+        Ok(point)
     }
 }

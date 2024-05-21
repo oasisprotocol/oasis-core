@@ -51,6 +51,7 @@ var (
 		churp.RPCMethodShareReductionPoint:    {},
 		churp.RPCMethodShareDistributionPoint: {},
 		churp.RPCMethodBivariateShare:         {},
+		churp.RPCMethodKeyShare:               {},
 	}
 )
 
@@ -104,8 +105,11 @@ func (w *churpWorker) Methods() []string {
 }
 
 // Connect implements RPCAccessController interface.
-func (w *churpWorker) Connect(_ context.Context, peerID core.PeerID) (b bool) {
+func (w *churpWorker) Connect(ctx context.Context, peerID core.PeerID) (b bool) {
 	// Secure methods are accessible to peers that pass authorization.
+	if err := w.authorizeNode(ctx, peerID); err == nil {
+		return true
+	}
 	if err := w.authorizeKeyManager(peerID); err == nil {
 		return true
 	}
@@ -114,7 +118,7 @@ func (w *churpWorker) Connect(_ context.Context, peerID core.PeerID) (b bool) {
 }
 
 // Authorize implements RPCAccessController interface.
-func (w *churpWorker) Authorize(_ context.Context, method string, kind enclaverpc.Kind, peerID core.PeerID) (err error) {
+func (w *churpWorker) Authorize(ctx context.Context, method string, kind enclaverpc.Kind, peerID core.PeerID) (err error) {
 	// Check if the method is supported.
 	switch kind {
 	case enclaverpc.KindInsecureQuery:
@@ -130,7 +134,25 @@ func (w *churpWorker) Authorize(_ context.Context, method string, kind enclaverp
 	}
 
 	// All peers must undergo the authorization process.
-	return w.authorizeKeyManager(peerID)
+	switch method {
+	case churp.RPCMethodKeyShare:
+		return w.authorizeNode(ctx, peerID)
+	case churp.RPCMethodVerificationMatrix,
+		churp.RPCMethodShareReductionPoint,
+		churp.RPCMethodShareDistributionPoint,
+		churp.RPCMethodBivariateShare:
+		return w.authorizeKeyManager(peerID)
+	default:
+		return fmt.Errorf("unsupported method: %s", method)
+	}
+}
+
+func (w *churpWorker) authorizeNode(_ context.Context, peerID core.PeerID) error {
+	// TODO: Which nodes are allowed to query key shares?
+	if w.kmWorker.accessList.Runtimes(peerID).Empty() {
+		return fmt.Errorf("request not allowed")
+	}
+	return nil
 }
 
 func (w *churpWorker) authorizeKeyManager(peerID core.PeerID) error {

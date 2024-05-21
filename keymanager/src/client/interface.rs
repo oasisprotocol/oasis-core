@@ -8,7 +8,7 @@ use oasis_core_runtime::{common::crypto::signature::PublicKey, consensus::beacon
 use crate::{
     api::KeyManagerError,
     churp::EncodedVerifiableSecretShare,
-    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
+    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, StateKey, VerifiableSecret},
 };
 
 /// Key manager client interface.
@@ -97,6 +97,10 @@ pub trait KeyManagerClient: Send + Sync {
         epoch: EpochTime,
         node_id: PublicKey,
     ) -> Result<EncodedVerifiableSecretShare, KeyManagerError>;
+
+    /// Returns state key.
+    async fn state_key(&self, churp_id: u8, key_id: KeyPairId)
+        -> Result<StateKey, KeyManagerError>;
 }
 
 #[async_trait]
@@ -184,5 +188,13 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         node_id: PublicKey,
     ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
         KeyManagerClient::bivariate_share(&**self, churp_id, epoch, node_id).await
+    }
+
+    async fn state_key(
+        &self,
+        churp_id: u8,
+        key_id: KeyPairId,
+    ) -> Result<StateKey, KeyManagerError> {
+        KeyManagerClient::state_key(&**self, churp_id, key_id).await
     }
 }

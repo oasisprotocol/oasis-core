@@ -17,8 +17,6 @@ use oasis_core_runtime::{
     impl_bytes,
 };
 
-impl_bytes!(KeyPairId, 32, "A 256-bit key pair identifier.");
-
 /// Context used for the public key signature.
 const PUBLIC_KEY_SIGNATURE_CONTEXT: &[u8] = b"oasis-core/keymanager: pk signature";
 
@@ -33,6 +31,15 @@ pub const STATE_KEY_SIZE: usize = 32;
 
 /// The size of the key manager master and ephemeral secrets.
 pub const SECRET_SIZE: usize = 32;
+
+/// The size of the key pair identifier.
+pub const KEY_PAIR_ID_SIZE: usize = 32;
+
+impl_bytes!(
+    KeyPairId,
+    KEY_PAIR_ID_SIZE,
+    "A 256-bit key pair identifier."
+);
 
 /// A state encryption key.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode, Zeroize, ZeroizeOnDrop)]
