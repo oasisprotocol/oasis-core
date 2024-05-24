@@ -73,8 +73,8 @@ const MAX_EPHEMERAL_KEY_AGE: EpochTime = 10;
 /// Maximum age of a fresh height in the number of blocks.
 ///
 /// A height is considered fresh if it is not more than specified amount
-/// of blocks lower than the height of the latest trust root.
-const MAX_FRESH_HEIGHT_AGE: u64 = 50;
+/// of blocks lower than the height of the latest verified height.
+const MAX_FRESH_HEIGHT_AGE: u64 = 600; // ~1 hr @ 6s/block
 
 /// Master and ephemeral secrets RPC handler.
 pub struct Secrets {
