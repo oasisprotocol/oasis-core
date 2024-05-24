@@ -193,7 +193,7 @@ func (ec *teeStateECDSA) Update(ctx context.Context, sp *sgxProvisioner, conn pr
 		return fresh, nil
 	}
 	var tcbBundle *pcs.TCBBundle
-	for _, update := range []pcs.UpdateType{pcs.UpdateStandard, pcs.UpdateEarly} {
+	for _, update := range []pcs.UpdateType{pcs.UpdateEarly, pcs.UpdateStandard} {
 		if tcbBundle, err = getTcbBundle(update); err == nil {
 			break
 		}
