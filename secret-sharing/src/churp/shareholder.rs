@@ -1,14 +1,16 @@
 //! CHURP shareholder.
 
 use anyhow::Result;
-use group::{ff::Field, Group, GroupEncoding};
-
-use crate::{
-    suites::Suite,
-    vss::{matrix::VerificationMatrix, polynomial::Polynomial},
+use group::{
+    ff::{Field, PrimeField},
+    Group, GroupEncoding,
 };
 
-use crate::suites::FieldDigest;
+use crate::{
+    kdc::PointShareholder,
+    suites::FieldDigest,
+    vss::{matrix::VerificationMatrix, polynomial::Polynomial},
+};
 
 use super::Error;
 
@@ -36,112 +38,201 @@ impl ShareholderId {
 /// Shareholder is responsible for deriving key shares and generating
 /// switch points during handoffs when the committee is trying
 /// to switch to the other dimension.
-pub struct Shareholder<S: Suite> {
-    /// Secret (full or reduced) share of the shared secret.
-    share: SecretShare<S::Group>,
+pub struct Shareholder<G: Group + GroupEncoding> {
+    /// Verifiable secret (full or reduced) share of the shared secret.
+    verifiable_share: VerifiableSecretShare<G>,
 }
 
-impl<S> Shareholder<S>
+impl<G> Shareholder<G>
 where
-    S: Suite,
+    G: Group + GroupEncoding,
 {
     /// Creates a new shareholder.
-    pub fn new(p: Polynomial<S::PrimeField>, vm: VerificationMatrix<S::Group>) -> Self {
-        SecretShare::new(p, vm).into()
+    pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
+        VerifiableSecretShare::new(share, vm).into()
     }
 
-    /// Returns the secret share.
-    pub fn secret_share(&self) -> &SecretShare<S::Group> {
-        &self.share
-    }
-
-    /// Returns the polynomial.
-    pub fn polynomial(&self) -> &Polynomial<S::PrimeField> {
-        &self.share.p
-    }
-
-    /// Returns the verification matrix.
-    pub fn verification_matrix(&self) -> &VerificationMatrix<S::Group> {
-        &self.share.vm
+    /// Returns the verifiable secret share.
+    pub fn verifiable_share(&self) -> &VerifiableSecretShare<G> {
+        &self.verifiable_share
     }
 
     /// Computes switch point for the given shareholder.
-    pub fn switch_point(&self, id: ShareholderId) -> Result<S::PrimeField> {
-        let x = id.encode::<S>()?;
-        let point = self.share.p.eval(&x);
-        Ok(point)
-    }
-
-    /// Computes key share from the given hash.
-    pub fn key_share(&self, hash: S::Group) -> S::Group {
-        self.share
-            .p
-            .coefficient(0)
-            .map(|s| hash * s)
-            .unwrap_or(S::Group::identity())
+    pub fn switch_point(&self, x: &G::Scalar) -> G::Scalar {
+        self.verifiable_share.share.p.eval(x)
     }
 
     /// Creates a new shareholder with a proactivized secret polynomial.
     pub fn proactivize(
         &self,
-        p: &Polynomial<S::PrimeField>,
-        vm: &VerificationMatrix<S::Group>,
-    ) -> Result<Shareholder<S>> {
-        if p.degree() != self.share.p.degree() {
+        p: &Polynomial<G::Scalar>,
+        vm: &VerificationMatrix<G>,
+    ) -> Result<Shareholder<G>> {
+        if p.degree() != self.verifiable_share.share.p.degree() {
             return Err(Error::PolynomialDegreeMismatch.into());
         }
         if !vm.is_zero_hole() {
             return Err(Error::VerificationMatrixZeroHoleMismatch.into());
         }
-        if vm.dimensions() != self.share.vm.dimensions() {
+        if vm.dimensions() != self.verifiable_share.vm.dimensions() {
             return Err(Error::VerificationMatrixDimensionMismatch.into());
         }
 
-        let p = p + &self.share.p;
-        let vm = vm + &self.share.vm;
-        let shareholder = Shareholder::new(p, vm);
+        let x = self.verifiable_share.share.x;
+        let p = p + &self.verifiable_share.share.p;
+        let vm = vm + &self.verifiable_share.vm;
+        let share = SecretShare::new(x, p);
+        let shareholder = Shareholder::new(share, vm);
 
         Ok(shareholder)
     }
 }
 
-impl<S> From<SecretShare<S::Group>> for Shareholder<S>
+impl<G> From<VerifiableSecretShare<G>> for Shareholder<G>
 where
-    S: Suite,
+    G: Group + GroupEncoding,
 {
-    fn from(share: SecretShare<S::Group>) -> Shareholder<S> {
-        Shareholder { share }
+    fn from(verifiable_share: VerifiableSecretShare<G>) -> Shareholder<G> {
+        Shareholder { verifiable_share }
+    }
+}
+
+impl<G> PointShareholder<G::Scalar> for Shareholder<G>
+where
+    G: Group + GroupEncoding,
+{
+    fn coordinate_x(&self) -> &G::Scalar {
+        self.verifiable_share.share.coordinate_x()
+    }
+
+    fn coordinate_y(&self) -> &G::Scalar {
+        self.verifiable_share.share.coordinate_y()
     }
 }
 
 /// Secret share of the shared secret.
-pub struct SecretShare<G>
-where
-    G: Group + GroupEncoding,
-{
-    /// Secret polynomial.
-    p: Polynomial<G::Scalar>,
+pub struct SecretShare<F: PrimeField> {
+    /// The encoded identity of the shareholder.
+    ///
+    /// The identity is the x-coordinate of a point on the secret-sharing
+    /// univariate polynomial B(x,0) or B(0,y).
+    pub(crate) x: F,
 
-    /// Verification matrix.
-    vm: VerificationMatrix<G>,
+    /// The secret polynomial B(id,y) or B(x,id).
+    ///
+    /// The constant term of the polynomial is the y-coordinate of a point
+    /// on the secret-sharing univariate polynomial B(x,0) or B(0,y).
+    pub(crate) p: Polynomial<F>,
 }
 
-impl<G> SecretShare<G>
+impl<F> SecretShare<F>
 where
-    G: Group + GroupEncoding,
+    F: PrimeField,
 {
     /// Creates a new secret share.
-    pub fn new(p: Polynomial<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
-        Self { p, vm }
+    pub fn new(x: F, p: Polynomial<F>) -> Self {
+        Self { x, p }
     }
 
     /// Returns the polynomial.
-    pub fn polynomial(&self) -> &Polynomial<G::Scalar> {
+    pub fn polynomial(&self) -> &Polynomial<F> {
         &self.p
+    }
+
+    /// Returns the x-coordinate of a point on the secret-sharing
+    /// univariate polynomial B(x,0) or B(0,y).
+    pub fn coordinate_x(&self) -> &F {
+        &self.x
+    }
+
+    /// Returns the y-coordinate of a point on the secret-sharing
+    /// univariate polynomial B(x,0) or B(0,y).
+    pub fn coordinate_y(&self) -> &F {
+        self.p
+            .coefficient(0)
+            .expect("polynomial has at least one term")
+    }
+}
+
+/// Verifiable secret share of the shared secret.
+pub struct VerifiableSecretShare<G: Group + GroupEncoding> {
+    /// Secret (full or reduced) share of the shared secret.
+    pub(crate) share: SecretShare<G::Scalar>,
+
+    /// Verification matrix used to verify that the polynomial in the secret
+    /// share is an evaluation B(x,id) or B(id,y) of the secret bivariate
+    /// polynomial B(x,y).
+    pub(crate) vm: VerificationMatrix<G>,
+}
+
+impl<G> VerifiableSecretShare<G>
+where
+    G: Group + GroupEncoding,
+{
+    /// Creates a new verifiable secret share.
+    pub fn new(share: SecretShare<G::Scalar>, vm: VerificationMatrix<G>) -> Self {
+        Self { share, vm }
+    }
+
+    /// Returns the secret share.
+    pub fn secret_share(&self) -> &SecretShare<G::Scalar> {
+        &self.share
     }
 
     /// Returns the verification matrix.
     pub fn verification_matrix(&self) -> &VerificationMatrix<G> {
         &self.vm
+    }
+
+    /// Verifies the secret share and the verification matrix.
+    pub fn verify(&self, threshold: u8, zero_hole: bool, full_share: bool) -> Result<()> {
+        self.verify_verification_matrix(threshold, zero_hole)?;
+        self.verify_secret_share(threshold, full_share)?;
+        Ok(())
+    }
+
+    /// Verifies the verification matrix.
+    fn verify_verification_matrix(&self, threshold: u8, zero_hole: bool) -> Result<()> {
+        let (rows, cols) = Self::calculate_dimensions(threshold);
+
+        if self.vm.dimensions() != (rows, cols) {
+            return Err(Error::VerificationMatrixDimensionMismatch.into());
+        }
+        if self.vm.is_zero_hole() != zero_hole {
+            return Err(Error::VerificationMatrixZeroHoleMismatch.into());
+        }
+
+        Ok(())
+    }
+
+    /// Verifies the secret share.
+    fn verify_secret_share(&self, threshold: u8, full_share: bool) -> Result<()> {
+        let (rows, cols) = Self::calculate_dimensions(threshold);
+
+        if full_share {
+            if self.share.p.size() != cols {
+                return Err(Error::PolynomialDegreeMismatch.into());
+            }
+            if !self.vm.verify_x(&self.share.x, &self.share.p) {
+                return Err(Error::InvalidPolynomial.into());
+            }
+        } else {
+            if self.share.p.size() != rows {
+                return Err(Error::PolynomialDegreeMismatch.into());
+            }
+            if !self.vm.verify_y(&self.share.x, &self.share.p) {
+                return Err(Error::InvalidPolynomial.into());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Calculates the number of rows and columns in the verification matrix
+    /// based on the given threshold.
+    fn calculate_dimensions(threshold: u8) -> (usize, usize) {
+        let rows: usize = threshold as usize + 1;
+        let cols = threshold as usize * 2 + 1;
+        (rows, cols)
     }
 }

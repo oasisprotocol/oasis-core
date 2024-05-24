@@ -1,8 +1,8 @@
 use group::ff::PrimeField;
 
 /// Converts an element of a non-binary prime field to bytes.
-pub fn scalar_to_bytes<F: PrimeField>(point: &F) -> Vec<u8> {
-    point.to_repr().as_ref().to_vec()
+pub fn scalar_to_bytes<F: PrimeField>(element: &F) -> Vec<u8> {
+    element.to_repr().as_ref().to_vec()
 }
 
 /// Converts bytes to an element of a non-binary prime field.

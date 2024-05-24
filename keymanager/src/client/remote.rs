@@ -34,8 +34,8 @@ use crate::{
         METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
     churp::{
-        EncodedSecretShare, QueryRequest, METHOD_BIVARIATE_SHARE, METHOD_SHARE_DISTRIBUTION_POINT,
-        METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
+        EncodedVerifiableSecretShare, QueryRequest, METHOD_BIVARIATE_SHARE,
+        METHOD_SHARE_DISTRIBUTION_POINT, METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
     },
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
     policy::{set_trusted_signers, verify_data_and_trusted_signers, Policy, TrustedSigners},
@@ -568,7 +568,7 @@ impl KeyManagerClient for RemoteClient {
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
-    ) -> Result<EncodedSecretShare, KeyManagerError> {
+    ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
         self.rpc_client
             .secure_call(
                 METHOD_BIVARIATE_SHARE,

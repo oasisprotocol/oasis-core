@@ -3,6 +3,7 @@ use std::{
     any::Any,
     cmp,
     collections::HashMap,
+    convert::TryInto,
     sync::{Arc, Mutex},
 };
 
@@ -36,11 +37,10 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, Handoff, HandoffKind, Shareholder, ShareholderId},
+    churp::{Dealer, Handoff, HandoffKind, Shareholder, ShareholderId, VerifiableSecretShare},
     suites::{p384, Suite},
     vss::{
         matrix::VerificationMatrix,
-        polynomial::Polynomial,
         scalar::{scalar_from_bytes, scalar_to_bytes},
     },
 };
@@ -52,7 +52,7 @@ use crate::{
 };
 
 use super::{
-    storage::Storage, ApplicationRequest, ConfirmationRequest, EncodedSecretShare, Error,
+    storage::Storage, ApplicationRequest, ConfirmationRequest, EncodedVerifiableSecretShare, Error,
     FetchRequest, FetchResponse, HandoffRequest, QueryRequest, SignedApplicationRequest,
     SignedConfirmationRequest, State as ChurpState, VerifiedPolicies,
 };
@@ -196,7 +196,10 @@ impl Churp {
                 self.get_shareholder::<p384::Sha3_384>(req.id, req.epoch)?
             }
         };
-        let vm = shareholder.verification_matrix().to_bytes();
+        let vm = shareholder
+            .verifiable_share()
+            .verification_matrix()
+            .to_bytes();
 
         Ok(vm)
     }
@@ -252,11 +255,11 @@ impl Churp {
         status: &Status,
     ) -> Result<Vec<u8>>
     where
-        S: Suite + 'static,
+        S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let x = ShareholderId(node_id.0).encode::<S>()?;
         let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
-        let point = shareholder.switch_point(id)?;
+        let point = shareholder.switch_point(&x);
         let point = scalar_to_bytes(&point);
 
         Ok(point)
@@ -319,10 +322,10 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let id = ShareholderId(node_id.0);
+        let x = ShareholderId(node_id.0).encode::<S>()?;
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let shareholder = handoff.get_reduced_shareholder()?;
-        let point = shareholder.switch_point(id)?;
+        let point = shareholder.switch_point(&x);
         let point = scalar_to_bytes(&point);
 
         Ok(point)
@@ -354,7 +357,7 @@ impl Churp {
         &self,
         _ctx: &RpcContext,
         req: &QueryRequest,
-    ) -> Result<EncodedSecretShare> {
+    ) -> Result<EncodedVerifiableSecretShare> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
 
         let node_id = req.node_id.as_ref().ok_or(Error::NotAuthenticated)?;
@@ -378,18 +381,19 @@ impl Churp {
         &self,
         node_id: &PublicKey,
         status: &Status,
-    ) -> Result<EncodedSecretShare>
+    ) -> Result<EncodedVerifiableSecretShare>
     where
-        S: Suite + 'static,
+        S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let x = ShareholderId(node_id.0).encode::<S>()?;
         let kind = Self::handoff_kind(status);
-        let dealer = self.get_dealer::<S>(status.id, status.next_handoff)?;
-        let polynomial = dealer.derive_bivariate_share(id, kind)?.to_bytes();
+        let dealer = self.get_dealer::<S::Group>(status.id, status.next_handoff)?;
+        let share = dealer.make_share(x, kind);
+        let share = (&share).into();
         let verification_matrix = dealer.verification_matrix().to_bytes();
 
-        Ok(EncodedSecretShare {
-            polynomial,
+        Ok(EncodedVerifiableSecretShare {
+            share,
             verification_matrix,
         })
     }
@@ -451,9 +455,10 @@ impl Churp {
         dealing_phase: bool,
     ) -> Result<SignedApplicationRequest>
     where
-        S: Suite + 'static,
+        S: Suite,
     {
-        let dealer = self.get_or_create_dealer::<S>(churp_id, epoch, threshold, dealing_phase)?;
+        let dealer =
+            self.get_or_create_dealer::<S::Group>(churp_id, epoch, threshold, dealing_phase)?;
 
         // Fetch verification matrix and compute its checksum.
         let matrix = dealer.verification_matrix();
@@ -533,7 +538,7 @@ impl Churp {
         client: &RemoteClient,
     ) -> Result<bool>
     where
-        S: Suite + 'static,
+        S: Suite,
     {
         let id = ShareholderId(node_id.0);
 
@@ -543,12 +548,13 @@ impl Churp {
 
         // Fetch from the host node.
         if node_id == self.node_id {
+            let me = id.encode::<S>()?;
             let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
-            let point = shareholder.switch_point(id)?;
+            let point = shareholder.switch_point(&me);
 
             if handoff.needs_verification_matrix()? {
                 // Local verification matrix is trusted.
-                let vm = shareholder.verification_matrix().clone();
+                let vm = shareholder.verifiable_share().verification_matrix().clone();
                 handoff.set_verification_matrix(vm)?;
             }
 
@@ -636,7 +642,7 @@ impl Churp {
         client: &RemoteClient,
     ) -> Result<bool>
     where
-        S: Suite + 'static,
+        S: Suite,
     {
         let id = ShareholderId(node_id.0);
 
@@ -646,8 +652,9 @@ impl Churp {
 
         // Fetch from the host node.
         if node_id == self.node_id {
+            let me = id.encode::<S>()?;
             let shareholder = handoff.get_reduced_shareholder()?;
-            let point = shareholder.switch_point(id)?;
+            let point = shareholder.switch_point(&me);
 
             return handoff.add_full_share_distribution_switch_point(id, point);
         }
@@ -710,7 +717,7 @@ impl Churp {
         client: &RemoteClient,
     ) -> Result<bool>
     where
-        S: Suite + 'static,
+        S: Suite,
     {
         let id = ShareholderId(node_id.0);
 
@@ -720,12 +727,14 @@ impl Churp {
 
         // Fetch from the host node.
         if node_id == self.node_id {
+            let x = id.encode::<S>()?;
             let kind = Self::handoff_kind(status);
-            let dealer = self.get_dealer::<S>(status.id, status.next_handoff)?;
-            let q = dealer.derive_bivariate_share(id, kind)?;
+            let dealer = self.get_dealer::<S::Group>(status.id, status.next_handoff)?;
+            let share = dealer.make_share(x, kind);
             let vm = dealer.verification_matrix().clone();
+            let verifiable_share = VerifiableSecretShare::new(share, vm);
 
-            return handoff.add_bivariate_share(id, q, vm);
+            return handoff.add_bivariate_share(id, verifiable_share);
         }
 
         // Fetch from the remote node.
@@ -748,11 +757,9 @@ impl Churp {
             return Err(Error::InvalidVerificationMatrixChecksum.into());
         }
 
-        let q = Polynomial::from_bytes(&share.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
-        let vm = VerificationMatrix::from_bytes(&share.verification_matrix)
-            .ok_or(Error::VerificationMatrixDecodingFailed)?;
+        let verifiable_share: VerifiableSecretShare<S::Group> = share.try_into()?;
 
-        handoff.add_bivariate_share(id, q, vm)
+        handoff.add_bivariate_share(id, verifiable_share)
     }
 
     /// Returns a signed confirmation request containing the checksum
@@ -775,7 +782,7 @@ impl Churp {
     {
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let shareholder = handoff.get_full_shareholder()?;
-        let share = shareholder.secret_share();
+        let share = shareholder.verifiable_share();
 
         // Before overwriting the next secret share, make sure it was copied
         // and used to construct the last shareholder.
@@ -836,7 +843,7 @@ impl Churp {
         };
         if let Some(handoff) = handoff {
             let shareholder = handoff.get_full_shareholder()?;
-            let share = shareholder.secret_share();
+            let share = shareholder.verifiable_share();
             self.storage
                 .store_secret_share(share, status.id, status.handoff)?;
             self.add_shareholder(shareholder, status.id, status.handoff);
@@ -854,9 +861,13 @@ impl Churp {
     }
 
     /// Returns the shareholder for the specified scheme and handoff epoch.
-    fn get_shareholder<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Shareholder<S>>>
+    fn get_shareholder<S>(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+    ) -> Result<Arc<Shareholder<S::Group>>>
     where
-        S: Suite + 'static,
+        S: Suite,
     {
         // Check the memory first. Make sure to lock the new shareholders
         // so that we don't create two shareholders for the same handoff.
@@ -871,7 +882,7 @@ impl Churp {
                     let shareholder = data
                         .object
                         .clone()
-                        .downcast::<Shareholder<S>>()
+                        .downcast::<Shareholder<S::Group>>()
                         .or(Err(Error::ShareholderMismatch))?;
 
                     return Ok(shareholder);
@@ -908,6 +919,12 @@ impl Churp {
         };
         let share = share.ok_or(Error::ShareholderNotFound)?;
 
+        // Verify that the host hasn't changed.
+        let me = ShareholderId(self.node_id.0).encode::<S>()?;
+        if share.secret_share().coordinate_x() != &me {
+            return Err(Error::InvalidHost.into());
+        }
+
         // Create a new shareholder.
         let shareholder = Arc::new(Shareholder::from(share));
         let data = HandoffData {
@@ -920,9 +937,9 @@ impl Churp {
     }
 
     /// Adds a shareholder for the specified scheme and handoff epoch.
-    fn add_shareholder<S>(&self, shareholder: Arc<Shareholder<S>>, churp_id: u8, epoch: EpochTime)
+    fn add_shareholder<G>(&self, shareholder: Arc<Shareholder<G>>, churp_id: u8, epoch: EpochTime)
     where
-        S: Suite + 'static,
+        G: Group + GroupEncoding,
     {
         let mut shareholders = self.shareholders.lock().unwrap();
 
@@ -956,37 +973,37 @@ impl Churp {
     }
 
     /// Returns the dealer for the specified scheme and handoff epoch.
-    fn get_dealer<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Dealer<S>>>
+    fn get_dealer<G>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Dealer<G>>>
     where
-        S: Suite + 'static,
+        G: Group + GroupEncoding,
     {
         self._get_or_create_dealer(churp_id, epoch, None, None)
     }
 
     /// Returns the dealer for the specified scheme and handoff epoch.
     /// If the dealer doesn't exist, a new one is created.
-    fn get_or_create_dealer<S>(
+    fn get_or_create_dealer<G>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
         threshold: u8,
         dealing_phase: bool,
-    ) -> Result<Arc<Dealer<S>>>
+    ) -> Result<Arc<Dealer<G>>>
     where
-        S: Suite + 'static,
+        G: Group + GroupEncoding,
     {
         self._get_or_create_dealer(churp_id, epoch, Some(threshold), Some(dealing_phase))
     }
 
-    fn _get_or_create_dealer<S>(
+    fn _get_or_create_dealer<G>(
         &self,
         churp_id: u8,
         epoch: EpochTime,
         threshold: Option<u8>,
         dealing_phase: Option<bool>,
-    ) -> Result<Arc<Dealer<S>>>
+    ) -> Result<Arc<Dealer<G>>>
     where
-        S: Suite + 'static,
+        G: Group + GroupEncoding,
     {
         // Check the memory first. Make sure to lock the dealers so that we
         // don't create two dealers for the same handoff.
@@ -1001,7 +1018,7 @@ impl Churp {
                     let dealer = data
                         .object
                         .clone()
-                        .downcast::<Dealer<S>>()
+                        .downcast::<Dealer<G>>()
                         .or(Err(Error::DealerMismatch))?;
 
                     return Ok(dealer);
@@ -1038,7 +1055,7 @@ impl Churp {
                 // will detect the polynomial change because the checksum
                 // of the verification matrix in the submitted application
                 // will also change.
-                let dealer = Dealer::new(threshold, dealing_phase, &mut OsRng)?;
+                let dealer = Dealer::create(threshold, dealing_phase, &mut OsRng)?;
 
                 // Encrypt and store the polynomial in case of a restart.
                 let polynomial = dealer.bivariate_polynomial();
@@ -1140,7 +1157,7 @@ impl Churp {
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;
 
         if kind == HandoffKind::CommitteeUnchanged {
-            let shareholder = self.get_shareholder(churp_id, status.handoff)?;
+            let shareholder = self.get_shareholder::<S>(churp_id, status.handoff)?;
             handoff.set_shareholder(shareholder)?;
         }
 

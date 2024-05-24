@@ -2,7 +2,7 @@
 //!
 //! This library provides functionality for secret sharing, a technique used
 //! to distribute a secret among a group of participants in such a way that
-//! only a threshold number of participants can reconstruct the secret.
+//! only a threshold number of participants can recover the secret.
 //!
 //! ## Supported Schemes
 //!

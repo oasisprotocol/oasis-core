@@ -1,4 +1,8 @@
 //! CHURP types used by the worker-host protocol.
+use std::convert::{TryFrom, TryInto};
+
+use group::{ff::PrimeField, Group, GroupEncoding};
+
 use oasis_core_runtime::{
     common::{
         crypto::{
@@ -9,6 +13,17 @@ use oasis_core_runtime::{
     },
     consensus::beacon::EpochTime,
 };
+
+use secret_sharing::{
+    churp::{SecretShare, VerifiableSecretShare},
+    vss::{
+        matrix::VerificationMatrix,
+        polynomial::Polynomial,
+        scalar::{scalar_from_bytes, scalar_to_bytes},
+    },
+};
+
+use super::Error;
 
 /// Handoff request.
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
@@ -123,12 +138,76 @@ pub struct SignedConfirmationRequest {
     pub signature: Signature,
 }
 
-/// Encoded secret share.
+/// Encoded verifiable secret share.
 #[derive(Clone, Default, cbor::Encode, cbor::Decode)]
-pub struct EncodedSecretShare {
-    /// Encoded polynomial.
-    pub polynomial: Vec<u8>,
+pub struct EncodedVerifiableSecretShare {
+    /// Encoded secret share.
+    pub share: EncodedSecretShare,
 
     /// Encoded verification matrix.
     pub verification_matrix: Vec<u8>,
+}
+
+impl<G> From<&VerifiableSecretShare<G>> for EncodedVerifiableSecretShare
+where
+    G: Group + GroupEncoding,
+{
+    fn from(verifiable_share: &VerifiableSecretShare<G>) -> Self {
+        Self {
+            share: verifiable_share.secret_share().into(),
+            verification_matrix: verifiable_share.verification_matrix().to_bytes(),
+        }
+    }
+}
+
+impl<G> TryFrom<EncodedVerifiableSecretShare> for VerifiableSecretShare<G>
+where
+    G: Group + GroupEncoding,
+{
+    type Error = Error;
+
+    fn try_from(encoded: EncodedVerifiableSecretShare) -> Result<Self, Self::Error> {
+        let share = encoded.share.try_into()?;
+        let vm = VerificationMatrix::from_bytes(&encoded.verification_matrix)
+            .ok_or(Error::VerificationMatrixDecodingFailed)?;
+        let verifiable_share = VerifiableSecretShare::new(share, vm);
+        Ok(verifiable_share)
+    }
+}
+
+/// Encoded secret share.
+#[derive(Clone, Default, cbor::Encode, cbor::Decode)]
+pub struct EncodedSecretShare {
+    /// Encoded identity.
+    pub x: Vec<u8>,
+
+    /// Encoded polynomial.
+    pub polynomial: Vec<u8>,
+}
+
+impl<F> From<&SecretShare<F>> for EncodedSecretShare
+where
+    F: PrimeField,
+{
+    fn from(share: &SecretShare<F>) -> Self {
+        Self {
+            x: scalar_to_bytes(share.coordinate_x()),
+            polynomial: share.polynomial().to_bytes(),
+        }
+    }
+}
+
+impl<F> TryFrom<EncodedSecretShare> for SecretShare<F>
+where
+    F: PrimeField,
+{
+    type Error = Error;
+
+    fn try_from(encoded: EncodedSecretShare) -> Result<Self, Self::Error> {
+        let x = scalar_from_bytes(&encoded.x).ok_or(Error::IdentityDecodingFailed)?;
+        let p =
+            Polynomial::from_bytes(&encoded.polynomial).ok_or(Error::PolynomialDecodingFailed)?;
+        let share = SecretShare::new(x, p);
+        Ok(share)
+    }
 }

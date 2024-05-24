@@ -7,7 +7,7 @@ use oasis_core_runtime::{common::crypto::signature::PublicKey, consensus::beacon
 
 use crate::{
     api::KeyManagerError,
-    churp::EncodedSecretShare,
+    churp::EncodedVerifiableSecretShare,
     crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
 };
 
@@ -96,7 +96,7 @@ pub trait KeyManagerClient: Send + Sync {
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
-    ) -> Result<EncodedSecretShare, KeyManagerError>;
+    ) -> Result<EncodedVerifiableSecretShare, KeyManagerError>;
 }
 
 #[async_trait]
@@ -182,7 +182,7 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
-    ) -> Result<EncodedSecretShare, KeyManagerError> {
+    ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
         KeyManagerClient::bivariate_share(&**self, churp_id, epoch, node_id).await
     }
 }
