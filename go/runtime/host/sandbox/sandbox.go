@@ -237,12 +237,21 @@ func (r *sandboxedRuntime) Start() {
 
 // Implements host.Runtime.
 func (r *sandboxedRuntime) Abort(ctx context.Context, force bool) error {
+	// Ignore abort requests when connection is not available.
+	r.RLock()
+	if r.conn == nil {
+		r.RUnlock()
+		return nil
+	}
+	r.RUnlock()
+
 	// Send internal request to the manager goroutine.
 	ch := make(chan error, 1)
 	select {
 	case r.ctrlCh <- &abortRequest{ch: ch, force: force}:
-	case <-ctx.Done():
-		return ctx.Err()
+	default:
+		// If the command channel is full, do not queue more abort requests.
+		return fmt.Errorf("command channel is full")
 	}
 
 	// Wait for response from the manager goroutine.
@@ -563,6 +572,24 @@ func (r *sandboxedRuntime) manager() {
 				})
 
 				continue
+			}
+
+			// Ensure the command queue is empty to avoid processing any stale requests after the
+			// runtime restarts.
+		drainLoop:
+			for {
+				select {
+				case grq := <-r.ctrlCh:
+					switch rq := grq.(type) {
+					case *abortRequest:
+						rq.ch <- fmt.Errorf("runtime restarted")
+						close(rq.ch)
+					default:
+						// Ignore unknown requests.
+					}
+				default:
+					break drainLoop
+				}
 			}
 		}
 
