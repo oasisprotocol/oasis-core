@@ -124,22 +124,24 @@ func (ep *teeStateEPID) update(
 		RuntimeID:                  ep.runtimeID,
 		Quote:                      quote,
 		Nonce:                      nonce,
+		EarlyTCBUpdate:             true,
 		MinTCBEvaluationDataNumber: quotePolicy.MinTCBEvaluationDataNumber,
 	}
 
+	// First try with early updating. If that fails, fall back to normal.
 	avrBundle, err := iasClient.VerifyEvidence(ctx, &evidence)
 	if err != nil {
-		return nil, fmt.Errorf("error while verifying attestation evidence: %w", err)
+		return nil, fmt.Errorf("error while verifying attestation evidence with early update: %w", err)
 	}
 
 	// Decode the AVR so we can do further checks.
 	avr, decErr := cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
-	if decErr == nil && avr.TCBEvaluationDataNumber < quotePolicy.MinTCBEvaluationDataNumber {
-		// Retry again with early updating.
-		evidence.EarlyTCBUpdate = true
+	if decErr == nil && avr.ISVEnclaveQuoteStatus != cmnIAS.QuoteOK && avr.ISVEnclaveQuoteStatus != cmnIAS.QuoteSwHardeningNeeded {
+		// Retry again without early updating.
+		evidence.EarlyTCBUpdate = false
 		avrBundle, err = iasClient.VerifyEvidence(ctx, &evidence)
 		if err != nil {
-			return nil, fmt.Errorf("error while verifying attestation evidence with early update: %w", err)
+			return nil, fmt.Errorf("error while verifying attestation evidence with normal update: %w", err)
 		}
 		avr, decErr = cmnIAS.UnsafeDecodeAVR(avrBundle.Body)
 	}
