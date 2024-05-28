@@ -179,7 +179,7 @@ type sgxProvisioner struct {
 }
 
 func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config, comp *bundle.Component) ([]byte, []byte, error) {
-	if comp.SGX.Executable == "" {
+	if comp.SGX == nil || comp.SGX.Executable == "" {
 		return nil, nil, fmt.Errorf("SGX executable not available in bundle")
 	}
 	sgxExecutablePath := rtCfg.Bundle.ExplodedPath(rtCfg.Bundle.ExplodedDataDir, comp.SGX.Executable)
