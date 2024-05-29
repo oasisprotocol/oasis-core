@@ -422,9 +422,12 @@ func (r *sandboxedRuntime) startProcess() (err error) {
 		return fmt.Errorf("failed to initialize connection: %w", err)
 	}
 
-	// Make sure the version matches what is configured in the bundle.
-	if bndVersion := r.rtCfg.Bundle.Manifest.Version; *rtVersion != bndVersion {
-		return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
+	if r.rtCfg.Components[0].IsRONL() {
+		// Make sure the version matches what is configured in the bundle. This check is skipped for
+		// non-RONL components to support detached bundles.
+		if bndVersion := r.rtCfg.Bundle.Manifest.Version; *rtVersion != bndVersion {
+			return fmt.Errorf("version mismatch (runtime reported: %s bundle: %s)", *rtVersion, bndVersion)
+		}
 	}
 
 	hp := &HostInitializerParams{
@@ -661,7 +664,7 @@ func DefaultGetSandboxConfig(logger *logging.Logger, sandboxBinaryPath string) G
 			"component", comp.Kind,
 		)
 		return process.Config{
-			Path: hostCfg.Bundle.ExplodedPath(hostCfg.Bundle.ExplodedDataDir, comp.Executable),
+			Path: hostCfg.Bundle.ExplodedPath(comp.ID(), comp.Executable),
 			Env: map[string]string{
 				"OASIS_WORKER_HOST": socketPath,
 			},

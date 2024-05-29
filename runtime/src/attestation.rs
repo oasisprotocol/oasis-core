@@ -26,7 +26,7 @@ pub struct Handler {
     host: Arc<dyn Host>,
     consensus_verifier: Arc<dyn Verifier>,
     runtime_id: Namespace,
-    version: Version,
+    version: Option<Version>,
     logger: Logger,
 }
 
@@ -37,7 +37,7 @@ impl Handler {
         host: Arc<dyn Host>,
         consensus_verifier: Arc<dyn Verifier>,
         runtime_id: Namespace,
-        version: Version,
+        version: Option<Version>,
     ) -> Self {
         Self {
             identity,
@@ -98,7 +98,7 @@ impl Handler {
 
             // TODO: Make async.
             let consensus_verifier = self.consensus_verifier.clone();
-            let version = Some(self.version);
+            let version = self.version;
             let runtime_id = self.runtime_id;
             let policy = tokio::task::block_in_place(move || {
                 // Obtain current quote policy from (verified) consensus state.

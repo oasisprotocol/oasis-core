@@ -226,10 +226,16 @@ func newConfig( //nolint: gocyclo
 			})
 		}
 
-		// Configure runtimes.
-		rh.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
+		// Preprocess runtimes to separate detached from non-detached.
+		type nameKey struct {
+			runtime common.Namespace
+			comp    component.ID
+		}
+
+		var regularBundles []*bundle.Bundle
+		detachedBundles := make(map[common.Namespace][]*bundle.Bundle)
+		existingNames := make(map[nameKey]struct{})
 		for _, path := range config.GlobalConfig.Runtime.Paths {
-			// Open and explode the bundle.  This will call Validate().
 			var bnd *bundle.Bundle
 			if bnd, err = bundle.Open(path); err != nil {
 				return nil, fmt.Errorf("failed to load runtime bundle '%s': %w", path, err)
@@ -237,10 +243,37 @@ func newConfig( //nolint: gocyclo
 			if err = bnd.WriteExploded(dataDir); err != nil {
 				return nil, fmt.Errorf("failed to explode runtime bundle '%s': %w", path, err)
 			}
+			// Release resources as the bundle has been exploded anyway.
+			bnd.Data = nil
 
+			switch bnd.Manifest.IsDetached() {
+			case false:
+				// A regular non-detached bundle that has the RONL component.
+				regularBundles = append(regularBundles, bnd)
+			case true:
+				// A detached bundle without the RONL component that needs to be attached.
+				detachedBundles[bnd.Manifest.ID] = append(detachedBundles[bnd.Manifest.ID], bnd)
+
+				// Ensure there are no name conflicts among the components.
+				for compID := range bnd.Manifest.GetAvailableComponents() {
+					nk := nameKey{bnd.Manifest.ID, compID}
+					if _, ok := existingNames[nk]; ok {
+						return nil, fmt.Errorf("duplicate component '%s' for runtime '%s'", compID, bnd.Manifest.ID)
+					}
+					existingNames[nk] = struct{}{}
+				}
+			}
+		}
+
+		// Configure runtimes.
+		rh.Runtimes = make(map[common.Namespace]map[version.Version]*runtimeHost.Config)
+		for _, bnd := range regularBundles {
 			id := bnd.Manifest.ID
 			if rh.Runtimes[id] == nil {
 				rh.Runtimes[id] = make(map[version.Version]*runtimeHost.Config)
+			}
+			if _, ok := rh.Runtimes[id][bnd.Manifest.Version]; ok {
+				return nil, fmt.Errorf("duplicate runtime '%s' version '%s'", id, bnd.Manifest.Version)
 			}
 
 			// Get any local runtime configuration.
@@ -255,12 +288,30 @@ func newConfig( //nolint: gocyclo
 				}
 			}
 
+			rtBnd := &runtimeHost.RuntimeBundle{
+				Bundle:          bnd,
+				ExplodedDataDir: dataDir,
+			}
+
+			// Merge in detached components.
+			for _, detachedBnd := range detachedBundles[id] {
+				for _, detachedComp := range detachedBnd.Manifest.Components {
+					// Skip components that already exist in the bundle itself.
+					if bnd.Manifest.GetComponentByID(detachedComp.ID()) != nil {
+						continue
+					}
+
+					bnd.Manifest.Components = append(bnd.Manifest.Components, detachedComp)
+					rtBnd.ExplodedDetachedDirs[detachedComp.ID()] = detachedBnd.ExplodedPath(dataDir, "")
+				}
+			}
+
 			// Determine what kind of components we want.
 			wantedComponents := []component.ID{
 				component.ID_RONL,
 			}
 			for _, comp := range bnd.Manifest.Components {
-				if comp.ID() == component.ID_RONL {
+				if comp.ID().IsRONL() {
 					continue // Always enabled above.
 				}
 
@@ -285,10 +336,7 @@ func newConfig( //nolint: gocyclo
 			}
 
 			rh.Runtimes[id][bnd.Manifest.Version] = &runtimeHost.Config{
-				Bundle: &runtimeHost.RuntimeBundle{
-					Bundle:          bnd,
-					ExplodedDataDir: dataDir,
-				},
+				Bundle:      rtBnd,
 				Components:  wantedComponents,
 				LocalConfig: localConfig,
 			}
@@ -308,6 +356,12 @@ func newConfig( //nolint: gocyclo
 						Bundle: &bundle.Bundle{
 							Manifest: &bundle.Manifest{
 								ID: id,
+								Components: []*bundle.Component{
+									{
+										Kind:       component.RONL,
+										Executable: "mock",
+									},
+								},
 							},
 						},
 					},

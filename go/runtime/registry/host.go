@@ -492,7 +492,7 @@ func (h *runtimeHostHandler) handleHostIdentity() (*protocol.HostIdentityRespons
 func (h *runtimeHostHandler) NewSubHandler(cr host.CompositeRuntime, comp *bundle.Component) (host.RuntimeHandler, error) {
 	switch comp.Kind {
 	case component.ROFL:
-		return newSubHandlerROFL(h, cr)
+		return newSubHandlerROFL(h, cr, comp)
 	default:
 		return nil, fmt.Errorf("cannot create sub-handler for component '%s'", comp.Kind)
 	}

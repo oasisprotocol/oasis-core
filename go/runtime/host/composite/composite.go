@@ -72,7 +72,7 @@ func (c *composite) Call(ctx context.Context, body *protocol.Body) (*protocol.Bo
 	}
 
 	for id, comp := range c.comps {
-		if id == component.ID_RONL {
+		if id.IsRONL() {
 			continue // Already handled above.
 		}
 		if !shouldPropagateToComponent(body) {

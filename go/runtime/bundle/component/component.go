@@ -74,5 +74,10 @@ func (c *ID) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// IsRONL returns true iff the component identifier is the special RONL component identifier.
+func (c ID) IsRONL() bool {
+	return c == ID_RONL
+}
+
 // ID_RONL is the identifier of the RONL component.
 var ID_RONL = ID{Kind: RONL, Name: ""} //nolint: revive

@@ -3,6 +3,7 @@ package host
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
@@ -38,6 +39,18 @@ type RuntimeBundle struct {
 
 	// ExplodedDataDir is the path to the data directory under which the bundle has been exploded.
 	ExplodedDataDir string
+
+	// ExplodedDetachedDirs are the paths to the data directories of detached components.
+	ExplodedDetachedDirs map[component.ID]string
+}
+
+// ExplodedPath returns the path where the given asset for the given component can be found.
+func (bnd *RuntimeBundle) ExplodedPath(comp component.ID, fn string) string {
+	if detachedDir, ok := bnd.ExplodedDetachedDirs[comp]; ok {
+		return filepath.Join(detachedDir, fn)
+	}
+	// Default to the exploded bundle.
+	return bnd.Bundle.ExplodedPath(bnd.ExplodedDataDir, fn)
 }
 
 // Provisioner is the runtime provisioner interface.

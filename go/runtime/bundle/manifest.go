@@ -41,6 +41,11 @@ type Manifest struct {
 	Digests map[string]hash.Hash `json:"digests"`
 }
 
+// Hash returns a cryptographic hash of the CBOR-serialized manifest.
+func (m *Manifest) Hash() hash.Hash {
+	return hash.NewFrom(m)
+}
+
 // Validate validates the manifest structure for well-formedness.
 func (m *Manifest) Validate() error {
 	byID := make(map[component.ID]struct{})
@@ -69,12 +74,13 @@ func (m *Manifest) Validate() error {
 		}
 	}
 
-	// Ensure the RONL component is always defined.
-	if ronl := m.GetComponentByID(component.ID_RONL); ronl == nil {
-		return fmt.Errorf("runtime must define at least the RONL component")
-	}
-
 	return nil
+}
+
+// IsDetached returns true iff the manifest does not include a RONL component. Such bundles require
+// that the RONL component is provided out-of-band (e.g. in a separate bundle).
+func (m *Manifest) IsDetached() bool {
+	return m.GetComponentByID(component.ID_RONL) == nil
 }
 
 // GetAvailableComponents collects all of the available components into a map.
@@ -83,8 +89,8 @@ func (m *Manifest) GetAvailableComponents() map[component.ID]*Component {
 	for _, comp := range m.Components {
 		availableComps[comp.ID()] = comp
 	}
-	if _, exists := availableComps[component.ID_RONL]; !exists {
-		// Needed for supporting legacy manifests -- always available, see Validate above.
+	if _, exists := availableComps[component.ID_RONL]; !exists && !m.IsDetached() {
+		// Needed for supporting legacy manifests.
 		availableComps[component.ID_RONL] = m.GetComponentByID(component.ID_RONL)
 	}
 	return availableComps
@@ -99,7 +105,7 @@ func (m *Manifest) GetComponentByID(id component.ID) *Component {
 	}
 
 	// We also support legacy manifests which define the RONL component at the top-level.
-	if id == component.ID_RONL && len(m.Executable) > 0 {
+	if id.IsRONL() && len(m.Executable) > 0 {
 		return &Component{
 			Kind:       component.RONL,
 			Executable: m.Executable,
