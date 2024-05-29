@@ -12,7 +12,6 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/env"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/oasis"
 	"github.com/oasisprotocol/oasis-core/go/oasis-test-runner/scenario"
-	"github.com/oasisprotocol/oasis-core/go/registry/api"
 	registry "github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
@@ -180,7 +179,7 @@ func (sc *kmRotationFailureImpl) extendKeymanagerRegistrations(ctx context.Conte
 		km := sc.Net.Keymanagers()[idx]
 
 		// Update expiration.
-		nodeDesc, err := sc.Net.ClientController().Registry.GetNode(ctx, &api.IDQuery{
+		nodeDesc, err := sc.Net.ClientController().Registry.GetNode(ctx, &registry.IDQuery{
 			Height: consensus.HeightLatest,
 			ID:     km.NodeID,
 		})
