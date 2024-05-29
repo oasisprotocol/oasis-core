@@ -15,7 +15,7 @@ sha3 = "0.10.8"
 thiserror = "1.0"
 
 # Fuzzing.
-honggfuzz = "0.5.55"
+honggfuzz = "0.5.56"
 rand = "0.8.5"
 
 [[bin]]
