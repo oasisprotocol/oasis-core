@@ -296,9 +296,9 @@ func (bnd *Bundle) ExplodedPath(dataDir, fn string) string {
 	var subDir string
 	switch bnd.Manifest.IsDetached() {
 	case false:
-		// DATADIR/runtimes/bundles/runtimeID-version
+		// DATADIR/runtimes/bundles/manifestHash
 		subDir = filepath.Join(ExplodedPath(dataDir),
-			fmt.Sprintf("%s-%s", bnd.Manifest.ID, bnd.Manifest.Version),
+			bnd.Manifest.Hash().String(),
 		)
 	case true:
 		// DATADIR/runtimes/bundles/detached/manifestHash
