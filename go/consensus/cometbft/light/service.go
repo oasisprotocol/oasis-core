@@ -366,7 +366,7 @@ func (c *client) GetVerifiedLightBlock(ctx context.Context, height int64) (*cmtt
 	return c.lc.GetVerifiedLightBlock(ctx, height)
 }
 
-// GetVerifiedLightBlock implements Client.
+// GetVerifiedParameters implements Client.
 func (c *client) GetVerifiedParameters(ctx context.Context, height int64) (*cmtproto.ConsensusParams, error) {
 	select {
 	case <-c.initCh:
