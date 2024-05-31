@@ -131,7 +131,7 @@ var (
 	// MethodRegisterRuntime is the method name for registering runtimes.
 	MethodRegisterRuntime = transaction.NewMethodName(ModuleName, "RegisterRuntime", Runtime{})
 	// MethodProveFreshness is the method name for freshness proofs.
-	MethodProveFreshness = transaction.NewMethodName(ModuleName, "ProveFreshness", Runtime{})
+	MethodProveFreshness = transaction.NewMethodName(ModuleName, "ProveFreshness", [32]byte{})
 
 	// Methods is the list of all methods supported by the registry backend.
 	Methods = []transaction.MethodName{
