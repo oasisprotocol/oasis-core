@@ -10,6 +10,11 @@ updates:
       time: "07:00"
     commit-message:
       prefix: "ci:"
+    groups:
+      # Update all dependencies in a single PR.
+      github-actions:
+        patterns:
+          - "*"
     labels:
       - c:deps
       - c:testing
