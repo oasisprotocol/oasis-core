@@ -21,10 +21,10 @@ anyhow = "1.0"
 async-trait = "0.1.77"
 mbedtls = { version = "0.12.3", features = ["x509"] }
 rand = "0.8.5"
-rustls = { version = "0.23.5", default-features = false }
+rustls = { version = "0.23.8", default-features = false }
 rustls-mbedcrypto-provider = { version = "0.1.0" }
 rustls-mbedpki-provider = { version = "0.1.0" }
-tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync"] }
+tokio = { version = "1.38.0", features = ["rt", "rt-multi-thread", "sync"] }
 
 [features]
 debug-mock-sgx = [
