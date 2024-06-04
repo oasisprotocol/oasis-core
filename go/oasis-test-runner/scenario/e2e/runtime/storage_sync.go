@@ -26,7 +26,7 @@ func newStorageSyncImpl() scenario.Scenario {
 	return &storageSyncImpl{
 		Scenario: *NewScenario(
 			"storage-sync",
-			NewTestClient().WithScenario(SimpleKeyValueScenario),
+			NewTestClient().WithScenario(SimpleScenario),
 		),
 	}
 }
@@ -102,7 +102,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		sc.Logger.Info("submitting transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), "checkpoint", fmt.Sprintf("my cp %d", i), false, 0); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), "checkpoint", fmt.Sprintf("my cp %d", i), 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 	}
@@ -179,7 +179,7 @@ func (sc *storageSyncImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		sc.Logger.Info("submitting large transaction to runtime",
 			"seq", i,
 		)
-		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, false, 0); err != nil {
+		if _, err = sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, drbg.Uint64(), fmt.Sprintf("%d key %d", i, i), fmt.Sprintf("my cp %d: ", i)+largeVal, 0, 0, plaintextTxKind); err != nil {
 			return err
 		}
 	}

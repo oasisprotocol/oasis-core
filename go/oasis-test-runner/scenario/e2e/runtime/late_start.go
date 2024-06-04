@@ -26,7 +26,7 @@ func newLateStartImpl(name string) scenario.Scenario {
 	return &lateStartImpl{
 		Scenario: *NewScenario(
 			name,
-			NewTestClient().WithScenario(SimpleKeyValueScenario),
+			NewTestClient().WithScenario(SimpleScenario),
 		),
 	}
 }

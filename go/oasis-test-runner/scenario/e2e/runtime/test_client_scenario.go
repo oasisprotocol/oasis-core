@@ -2,57 +2,53 @@ package runtime
 
 import (
 	"fmt"
-
-	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
 )
 
 var (
-	InsertKeyValueScenario = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key", "my_value", "", false, 0},
-		GetKeyValueTx{"my_key", "my_value", false, 0},
+	InsertScenario = NewTestClientScenario([]interface{}{
+		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, plaintextTxKind},
+		GetKeyValueTx{"my_key", "my_value", 0, 0, plaintextTxKind},
 	})
 
-	InsertKeyValueEncScenario = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key", "my_value", "", true, 0},
-		GetKeyValueTx{"my_key", "my_value", true, 0},
+	InsertEncWithSecretsScenario = NewTestClientScenario([]interface{}{
+		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, encryptedWithSecretsTxKind},
+		GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
 	})
 
-	RemoveKeyValueScenario = NewTestClientScenario([]interface{}{
-		GetKeyValueTx{"my_key", "my_value", false, 0},
+	RemoveScenario = NewTestClientScenario([]interface{}{
+		GetKeyValueTx{"my_key", "my_value", 0, 0, plaintextTxKind},
 	})
 
-	RemoveKeyValueEncScenario = NewTestClientScenario([]interface{}{
-		GetKeyValueTx{"my_key", "my_value", true, 0},
+	RemoveEncWithSecretsScenario = NewTestClientScenario([]interface{}{
+		GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
 	})
 
-	InsertTransferKeyValueScenario = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key", "my_value", "", false, 0},
-		GetKeyValueTx{"my_key", "my_value", false, 0},
+	InsertTransferScenario = NewTestClientScenario([]interface{}{
+		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, plaintextTxKind},
+		GetKeyValueTx{"my_key", "my_value", 0, 0, plaintextTxKind},
 		ConsensusTransferTx{},
 	})
 
-	InsertRemoveKeyValueEncScenario = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key", "my_value", "", true, 0},
-		GetKeyValueTx{"my_key", "my_value", true, 0},
-		RemoveKeyValueTx{"my_key", "my_value", true, 0},
-		GetKeyValueTx{"my_key", "", true, 0},
+	InsertRemoveEncWithSecretsScenario = NewTestClientScenario([]interface{}{
+		InsertKeyValueTx{"my_key", "my_value", "", 0, 0, encryptedWithSecretsTxKind},
+		GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
+		RemoveKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
+		GetKeyValueTx{"my_key", "", 0, 0, encryptedWithSecretsTxKind},
 	})
 
-	InsertRemoveKeyValueEncScenarioV2 = NewTestClientScenario([]interface{}{
-		InsertKeyValueTx{"my_key2", "my_value2", "", true, 0},
-		GetKeyValueTx{"my_key2", "my_value2", true, 0},
-		RemoveKeyValueTx{"my_key2", "my_value2", true, 0},
-		GetKeyValueTx{"my_key2", "", true, 0},
+	InsertRemoveEncWithSecretsScenarioV2 = NewTestClientScenario([]interface{}{
+		InsertKeyValueTx{"my_key2", "my_value2", "", 0, 0, encryptedWithSecretsTxKind},
+		GetKeyValueTx{"my_key2", "my_value2", 0, 0, encryptedWithSecretsTxKind},
+		RemoveKeyValueTx{"my_key2", "my_value2", 0, 0, encryptedWithSecretsTxKind},
+		GetKeyValueTx{"my_key2", "", 0, 0, encryptedWithSecretsTxKind},
 	})
 
-	SimpleKeyValueScenario = newSimpleKeyValueScenario(false, false)
-
-	SimpleKeyValueEncScenario = newSimpleKeyValueScenario(false, true)
-
-	SimpleKeyValueScenarioRepeated = newSimpleKeyValueScenario(true, false)
+	SimpleScenario               = newSimpleKeyValueScenario(false, plaintextTxKind)
+	SimpleRepeatedScenario       = newSimpleKeyValueScenario(true, plaintextTxKind)
+	SimpleEncWithSecretsScenario = newSimpleKeyValueScenario(false, encryptedWithSecretsTxKind)
 )
 
-func newSimpleKeyValueScenario(repeat bool, encrypted bool) TestClientScenario {
+func newSimpleKeyValueScenario(repeat bool, kind uint) TestClientScenario {
 	return func(submit func(req interface{}) error) error {
 		// Check whether Runtime ID is also set remotely.
 		//
@@ -73,10 +69,10 @@ func newSimpleKeyValueScenario(repeat bool, encrypted bool) TestClientScenario {
 				response = fmt.Sprintf("hello_value_from_%s:%d", KeyValueRuntimeID, iter-1)
 			}
 
-			if err := submit(InsertKeyValueTx{key, value, response, encrypted, 0}); err != nil {
+			if err := submit(InsertKeyValueTx{key, value, response, 0, 0, kind}); err != nil {
 				return err
 			}
-			if err := submit(GetKeyValueTx{key, value, encrypted, 0}); err != nil {
+			if err := submit(GetKeyValueTx{key, value, 0, 0, kind}); err != nil {
 				return err
 			}
 
@@ -88,13 +84,13 @@ func newSimpleKeyValueScenario(repeat bool, encrypted bool) TestClientScenario {
 				response = value
 			}
 
-			if err := submit(InsertKeyValueTx{key, value, response, encrypted, 0}); err != nil {
+			if err := submit(InsertKeyValueTx{key, value, response, 0, 0, kind}); err != nil {
 				return err
 			}
 			if err := submit(ConsensusTransferTx{}); err != nil {
 				return err
 			}
-			if err := submit(GetKeyValueTx{key, value, encrypted, 0}); err != nil {
+			if err := submit(GetKeyValueTx{key, value, 0, 0, kind}); err != nil {
 				return err
 			}
 
@@ -108,83 +104,15 @@ func newSimpleKeyValueScenario(repeat bool, encrypted bool) TestClientScenario {
 			inMsgKey   = "in_msg"
 			inMsgValue = "hello world from inmsg"
 		)
-		if err := submit(InsertMsg{inMsgKey, inMsgValue, encrypted, 0}); err != nil {
+		if err := submit(InsertMsg{inMsgKey, inMsgValue, 0, 0, kind}); err != nil {
 			return err
 		}
-		if err := submit(GetKeyValueTx{inMsgKey, inMsgValue, encrypted, 0}); err != nil {
+		if err := submit(GetKeyValueTx{inMsgKey, inMsgValue, 0, 0, kind}); err != nil {
 			return err
 		}
 		return submit(ConsensusAccountsTx{})
 	}
 }
-
-// KeyValueQuery queries the value stored under the given key for the specified round from
-// the database, and verifies that the response (current value) contains the expected data.
-type KeyValueQuery struct {
-	Key      string
-	Response string
-	Round    uint64
-}
-
-// EncryptDecryptTx encrypts and decrypts a message while verifying if the original message
-// matches the decrypted result.
-type EncryptDecryptTx struct {
-	Message   []byte
-	KeyPairID string
-	Epoch     beacon.EpochTime
-}
-
-// InsertKeyValueTx inserts a key/value pair to the database, and verifies that the response
-// (previous value) contains the expected data.
-type InsertKeyValueTx struct {
-	Key        string
-	Value      string
-	Response   string
-	Encrypted  bool
-	Generation uint64
-}
-
-// GetKeyValueTx retrieves the value stored under the given key from the database,
-// and verifies that the response (current value) contains the expected data.
-type GetKeyValueTx struct {
-	Key        string
-	Response   string
-	Encrypted  bool
-	Generation uint64
-}
-
-// KeyExistsTx retrieves the value stored under the given key from the database and verifies that
-// the response (current value) is non-empty.
-type KeyExistsTx struct {
-	Key        string
-	Encrypted  bool
-	Generation uint64
-}
-
-// RemoveKeyValueTx removes the value stored under the given key from the database.
-type RemoveKeyValueTx struct {
-	Key        string
-	Response   string
-	Encrypted  bool
-	Generation uint64
-}
-
-// InsertMsg inserts an incoming runtime message.
-type InsertMsg struct {
-	Key        string
-	Value      string
-	Encrypted  bool
-	Generation uint64
-}
-
-// GetRuntimeIDTx retrieves the runtime ID.
-type GetRuntimeIDTx struct{}
-
-// ConsensusTransferTx submits and empty consensus staking transfer.
-type ConsensusTransferTx struct{}
-
-// ConsensusAccountsTx tests consensus account query.
-type ConsensusAccountsTx struct{}
 
 // TestClientScenario is a test scenario for a key-value runtime test client.
 type TestClientScenario func(submit func(req interface{}) error) error

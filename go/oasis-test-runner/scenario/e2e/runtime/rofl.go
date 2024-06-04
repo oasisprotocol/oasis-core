@@ -16,12 +16,12 @@ type roflImpl struct {
 func newROFL() scenario.Scenario {
 	return &roflImpl{
 		Scenario: *NewScenario("rofl", NewTestClient().WithScenario(NewTestClientScenario([]interface{}{
-			InsertKeyValueTx{"my_key", "my_value", "", true, 0},
-			GetKeyValueTx{"my_key", "my_value", true, 0},
-			RemoveKeyValueTx{"my_key", "my_value", true, 0},
-			GetKeyValueTx{"my_key", "", true, 0},
+			InsertKeyValueTx{"my_key", "my_value", "", 0, 0, encryptedWithSecretsTxKind},
+			GetKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
+			RemoveKeyValueTx{"my_key", "my_value", 0, 0, encryptedWithSecretsTxKind},
+			GetKeyValueTx{"my_key", "", 0, 0, encryptedWithSecretsTxKind},
 			// Check that the ROFL component wrote the HTTP response into storage.
-			KeyExistsTx{"rofl_http", false, 0},
+			KeyExistsTx{"rofl_http", 0, 0, plaintextTxKind},
 		}))),
 	}
 }

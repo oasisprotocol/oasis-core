@@ -41,7 +41,7 @@ func newHaltRestoreImpl(suspended bool) scenario.Scenario {
 	return &haltRestoreImpl{
 		Scenario: *NewScenario(
 			name,
-			NewTestClient().WithScenario(InsertTransferKeyValueScenario),
+			NewTestClient().WithScenario(InsertTransferScenario),
 		),
 		haltEpoch:      beacon.EpochTime(haltEpoch),
 		suspendRuntime: suspended,
@@ -220,7 +220,7 @@ func (sc *haltRestoreImpl) Run(ctx context.Context, childEnv *env.Env) error { /
 		return err
 	}
 
-	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.StartNetworkAndWaitForClientSync(ctx); err != nil {

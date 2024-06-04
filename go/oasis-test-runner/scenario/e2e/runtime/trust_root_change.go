@@ -37,7 +37,7 @@ var (
 	// changes, e.g. on dump-restore network upgrades.
 	TrustRootChangeTest scenario.Scenario = newTrustRootChangeImpl(
 		"change",
-		NewTestClient().WithScenario(InsertKeyValueEncScenario),
+		NewTestClient().WithScenario(InsertEncWithSecretsScenario),
 		true,
 	)
 
@@ -46,7 +46,7 @@ var (
 	// consensus chain context changes.
 	TrustRootChangeFailsTest scenario.Scenario = newTrustRootChangeImpl(
 		"change-fails",
-		NewTestClient().WithScenario(SimpleKeyValueEncScenario),
+		NewTestClient().WithScenario(SimpleEncWithSecretsScenario),
 		false,
 	)
 )
@@ -344,6 +344,6 @@ func (sc *trustRootChangeImpl) dumpRestoreNetwork(childEnv *env.Env, f func(*oas
 func (sc *trustRootChangeImpl) startRestoredStateTestClient(ctx context.Context, childEnv *env.Env, round int64) error {
 	// Check that everything works with restored state.
 	seed := fmt.Sprintf("seed %d", round)
-	sc.Scenario.TestClient = NewTestClient().WithSeed(seed).WithScenario(RemoveKeyValueEncScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed(seed).WithScenario(RemoveEncWithSecretsScenario)
 	return sc.Scenario.Run(ctx, childEnv)
 }

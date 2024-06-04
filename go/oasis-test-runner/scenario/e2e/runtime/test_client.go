@@ -17,6 +17,21 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
+// Key represents data required for get or remove key-value requests.
+type Key struct {
+	Key        string `json:"key"`
+	Generation uint64 `json:"generation,omitempty"`
+	ChurpID    uint8  `json:"churp_id,omitempty"`
+}
+
+// KeyValue represents data required for insert key-value requests.
+type KeyValue struct {
+	Key        string `json:"key"`
+	Value      string `json:"value"`
+	Generation uint64 `json:"generation,omitempty"`
+	ChurpID    uint8  `json:"churp_id,omitempty"`
+}
+
 // TestClient is a client that exercises a pre-determined workload against
 // the simple key-value runtime.
 type TestClient struct {
@@ -193,8 +208,9 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 			rng.Uint64(),
 			req.Key,
 			req.Value,
-			req.Encrypted,
 			req.Generation,
+			req.ChurpID,
+			req.Kind,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert k/v pair: %w", err)
@@ -209,8 +225,9 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 			KeyValueRuntimeID,
 			rng.Uint64(),
 			req.Key,
-			req.Encrypted,
 			req.Generation,
+			req.ChurpID,
+			req.Kind,
 		)
 		if err != nil {
 			return err
@@ -225,8 +242,9 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 			KeyValueRuntimeID,
 			rng.Uint64(),
 			req.Key,
-			req.Encrypted,
 			req.Generation,
+			req.ChurpID,
+			req.Kind,
 		)
 		if err != nil {
 			return err
@@ -241,8 +259,9 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 			KeyValueRuntimeID,
 			rng.Uint64(),
 			req.Key,
-			req.Encrypted,
 			req.Generation,
+			req.ChurpID,
+			req.Kind,
 		)
 		if err != nil {
 			return err
@@ -258,8 +277,9 @@ func (cli *TestClient) submit(ctx context.Context, req interface{}, rng rand.Sou
 			rng.Uint64(),
 			req.Key,
 			req.Value,
-			req.Encrypted,
 			req.Generation,
+			req.ChurpID,
+			req.Kind,
 		)
 		if err != nil {
 			return err
@@ -404,30 +424,36 @@ func (sc *Scenario) submitKeyValueRuntimeInsertTx(
 	id common.Namespace,
 	nonce uint64,
 	key, value string,
-	encrypted bool,
 	generation uint64,
+	churpID uint8,
+	kind uint,
 ) (string, error) {
 	sc.Logger.Info("inserting k/v pair",
 		"key", key,
 		"value", value,
-		"encrypted", encrypted,
 		"generation", generation,
+		"churp_id", churpID,
+		"kind", kind,
 	)
 
-	args := struct {
-		Key        string `json:"key"`
-		Value      string `json:"value"`
-		Generation uint64 `json:"generation,omitempty"`
-	}{
+	var method string
+	switch kind {
+	case plaintextTxKind:
+		method = "insert"
+	case encryptedWithSecretsTxKind:
+		method = "enc_insert"
+	case encryptedWithChurpTxKind:
+		method = "churp_insert"
+	}
+
+	args := KeyValue{
 		Key:        key,
 		Value:      value,
 		Generation: generation,
+		ChurpID:    churpID,
 	}
 
-	if encrypted {
-		return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "enc_insert", args)
-	}
-	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "insert", args)
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, method, args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeGetTx(
@@ -435,27 +461,34 @@ func (sc *Scenario) submitKeyValueRuntimeGetTx(
 	id common.Namespace,
 	nonce uint64,
 	key string,
-	encrypted bool,
 	generation uint64,
+	churpID uint8,
+	kind uint,
 ) (string, error) {
 	sc.Logger.Info("retrieving k/v pair",
 		"key", key,
-		"encrypted", encrypted,
 		"generation", generation,
+		"churp_id", churpID,
+		"kind", kind,
 	)
 
-	args := struct {
-		Key        string `json:"key"`
-		Generation uint64 `json:"generation,omitempty"`
-	}{
-		Key:        key,
-		Generation: generation,
+	var method string
+	switch kind {
+	case plaintextTxKind:
+		method = "get"
+	case encryptedWithSecretsTxKind:
+		method = "enc_get"
+	case encryptedWithChurpTxKind:
+		method = "churp_get"
 	}
 
-	if encrypted {
-		return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "enc_get", args)
+	args := Key{
+		Key:        key,
+		Generation: generation,
+		ChurpID:    churpID,
 	}
-	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "get", args)
+
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, method, args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
@@ -463,27 +496,34 @@ func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
 	id common.Namespace,
 	nonce uint64,
 	key string,
-	encrypted bool,
 	generation uint64,
+	churpID uint8,
+	kind uint,
 ) (string, error) {
 	sc.Logger.Info("removing k/v pair",
 		"key", key,
-		"encrypted", encrypted,
 		"generation", generation,
+		"churp_id", churpID,
+		"kind", kind,
 	)
 
-	args := struct {
-		Key        string `json:"key"`
-		Generation uint64 `json:"generation,omitempty"`
-	}{
-		Key:        key,
-		Generation: generation,
+	var method string
+	switch kind {
+	case plaintextTxKind:
+		method = "remove"
+	case encryptedWithSecretsTxKind:
+		method = "enc_remove"
+	case encryptedWithChurpTxKind:
+		method = "churp_remove"
 	}
 
-	if encrypted {
-		return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "enc_remove", args)
+	args := Key{
+		Key:        key,
+		Generation: generation,
+		ChurpID:    churpID,
 	}
-	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, "remove", args)
+
+	return sc.submitRuntimeTxAndDecodeString(ctx, id, nonce, method, args)
 }
 
 func (sc *Scenario) submitKeyValueRuntimeGetRuntimeIDTx(
@@ -506,30 +546,36 @@ func (sc *Scenario) submitKeyValueRuntimeInsertMsg(
 	id common.Namespace,
 	nonce uint64,
 	key, value string,
-	encrypted bool,
 	generation uint64,
+	churpID uint8,
+	kind uint,
 ) error {
 	sc.Logger.Info("submitting incoming runtime message",
 		"key", key,
 		"value", value,
-		"encrypted", encrypted,
 		"generation", generation,
+		"churp_id", churpID,
+		"kind", kind,
 	)
 
-	args := struct {
-		Key        string `json:"key"`
-		Value      string `json:"value"`
-		Generation uint64 `json:"generation,omitempty"`
-	}{
+	var method string
+	switch kind {
+	case plaintextTxKind:
+		method = "insert"
+	case encryptedWithSecretsTxKind:
+		method = "enc_insert"
+	case encryptedWithChurpTxKind:
+		method = "churp_insert"
+	}
+
+	args := KeyValue{
 		Key:        key,
 		Value:      value,
 		Generation: generation,
+		ChurpID:    churpID,
 	}
 
-	if encrypted {
-		return sc.submitRuntimeInMsg(ctx, id, nonce, "enc_insert", args)
-	}
-	return sc.submitRuntimeInMsg(ctx, id, nonce, "insert", args)
+	return sc.submitRuntimeInMsg(ctx, id, nonce, method, args)
 }
 
 func (sc *Scenario) submitAndDecodeRuntimeQuery(

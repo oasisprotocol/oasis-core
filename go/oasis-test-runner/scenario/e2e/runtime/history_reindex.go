@@ -29,7 +29,7 @@ func newHistoryReindexImpl() scenario.Scenario {
 	return &historyReindexImpl{
 		Scenario: *NewScenario(
 			"history-reindex",
-			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}
 }

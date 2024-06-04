@@ -21,7 +21,7 @@ func newKmRestartImpl() scenario.Scenario {
 	return &kmRestartImpl{
 		Scenario: *NewScenario(
 			"keymanager-restart",
-			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}
 }
@@ -88,6 +88,6 @@ func (sc *kmRestartImpl) Run(ctx context.Context, childEnv *env.Env) error {
 	// Run the second client on a different key so that it will require
 	// a second trip to the keymanager.
 	sc.Logger.Info("starting a second client to check if key manager works")
-	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveEncWithSecretsScenarioV2)
 	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }
