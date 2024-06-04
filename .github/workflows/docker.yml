@@ -131,7 +131,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Prune old ghcr.io/oasisprotocol/oasis-core-dev images
-        uses: vlaurin/action-ghcr-prune@v0.5.0
+        uses: vlaurin/action-ghcr-prune@v0.6.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           organization: oasisprotocol
@@ -142,7 +142,7 @@ jobs:
           prune-tags-regexes: ^pr-
 
       - name: Prune old ghcr.io/oasisprotocol/oasis-core-ci images
-        uses: vlaurin/action-ghcr-prune@v0.5.0
+        uses: vlaurin/action-ghcr-prune@v0.6.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           organization: oasisprotocol
@@ -153,7 +153,7 @@ jobs:
           prune-tags-regexes: ^pr-
 
       - name: Prune old ghcr.io/oasisprotocol/aesmd-dcap images
-        uses: vlaurin/action-ghcr-prune@v0.5.0
+        uses: vlaurin/action-ghcr-prune@v0.6.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           organization: oasisprotocol
@@ -164,7 +164,7 @@ jobs:
           prune-tags-regexes: ^pr-
 
       - name: Prune old ghcr.io/oasisprotocol/aesmd-epid images
-        uses: vlaurin/action-ghcr-prune@v0.5.0
+        uses: vlaurin/action-ghcr-prune@v0.6.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           organization: oasisprotocol
