@@ -66,7 +66,7 @@ mod tests {
     use rand_core::OsRng;
 
     use crate::{
-        kdc::{KeyRecoverer, KeySharer},
+        kdc::{KeyRecoverer, KeySharer, KEY_ID_ENC_DST},
         shamir::{Dealer, Shareholder},
         suites::{self, p384, GroupDigest},
     };
@@ -128,7 +128,7 @@ mod tests {
         let key_id = b"key identifier";
         let dst = b"shamir secret sharing scheme";
         let secret = PrimeField::from_u64(100);
-        let hash = Suite::hash_to_group(key_id, dst).unwrap();
+        let hash = Suite::hash_to_group(key_id, dst, KEY_ID_ENC_DST).unwrap();
         let key = hash * secret;
         let dealer = Dealer::new(threshold, secret, &mut OsRng);
         let player = Player::new(threshold);
