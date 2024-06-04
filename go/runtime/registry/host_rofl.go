@@ -28,14 +28,15 @@ const (
 	roflAttachRuntimeTimeout = 2 * time.Second
 	// roflNotifyTimeout is the maximum amount of time runtime notification handling can take.
 	roflNotifyTimeout = 2 * time.Second
-	// roflLocalStorageKeyPrefix is the implicit local storage prefix for all ROFL keys.
-	roflLocalStorageKeyPrefix = "rofl."
+	// roflLocalStorageKeySeparator is the local storage key separator after component ID.
+	roflLocalStorageKeySeparator = ":"
 )
 
 // roflHostHandler is a host handler extended for use by ROFL components.
 type roflHostHandler struct {
 	parent *runtimeHostHandler
 	cr     host.CompositeRuntime
+	comp   *bundle.Component
 
 	client        runtimeClient.RuntimeClient
 	eventNotifier *roflEventNotifier
@@ -43,7 +44,7 @@ type roflHostHandler struct {
 	logger *logging.Logger
 }
 
-func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime) (host.RuntimeHandler, error) {
+func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime, comp *bundle.Component) (host.RuntimeHandler, error) {
 	client, err := parent.env.GetRuntimeRegistry().Client()
 	if err != nil {
 		return nil, err
@@ -56,6 +57,7 @@ func newSubHandlerROFL(parent *runtimeHostHandler, cr host.CompositeRuntime) (ho
 	return &roflHostHandler{
 		parent:        parent,
 		cr:            cr,
+		comp:          comp,
 		client:        client,
 		eventNotifier: newROFLEventNotifier(parent.runtime, client, logger),
 		logger:        logger,
@@ -72,6 +74,14 @@ func (rh *roflHostHandler) AttachRuntime(rt host.Runtime) error {
 	return rh.eventNotifier.AttachRuntime(rt)
 }
 
+// getLocalStorageKey returns a properly namespaced version of the local storage key.
+func (rh *roflHostHandler) getLocalStorageKey(key []byte) []byte {
+	result, _ := rh.comp.ID().MarshalText()
+	result = append(result, roflLocalStorageKeySeparator...)
+	result = append(result, key...)
+	return result
+}
+
 // Implements protocol.Handler.
 func (rh *roflHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*protocol.Body, error) {
 	var (
@@ -84,11 +94,11 @@ func (rh *roflHostHandler) Handle(ctx context.Context, rq *protocol.Body) (*prot
 		return rh.handleHostRPCCall(ctx, rq)
 	case rq.HostLocalStorageGetRequest != nil:
 		// Local storage get.
-		rq.HostLocalStorageGetRequest.Key = append([]byte(roflLocalStorageKeyPrefix), rq.HostLocalStorageGetRequest.Key...)
+		rq.HostLocalStorageGetRequest.Key = rh.getLocalStorageKey(rq.HostLocalStorageGetRequest.Key)
 		return rh.parent.Handle(ctx, rq)
 	case rq.HostLocalStorageSetRequest != nil:
 		// Local storage set.
-		rq.HostLocalStorageSetRequest.Key = append([]byte(roflLocalStorageKeyPrefix), rq.HostLocalStorageSetRequest.Key...)
+		rq.HostLocalStorageSetRequest.Key = rh.getLocalStorageKey(rq.HostLocalStorageSetRequest.Key)
 		return rh.parent.Handle(ctx, rq)
 	case rq.HostSubmitTxRequest != nil:
 		// Transaction submission.

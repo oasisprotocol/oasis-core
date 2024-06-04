@@ -182,7 +182,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config, comp *bundle.Com
 	if comp.SGX == nil || comp.SGX.Executable == "" {
 		return nil, nil, fmt.Errorf("SGX executable not available in bundle")
 	}
-	sgxExecutablePath := rtCfg.Bundle.ExplodedPath(rtCfg.Bundle.ExplodedDataDir, comp.SGX.Executable)
+	sgxExecutablePath := rtCfg.Bundle.ExplodedPath(comp.ID(), comp.SGX.Executable)
 
 	var (
 		sig, sgxs   []byte
@@ -198,7 +198,7 @@ func (s *sgxProvisioner) loadEnclaveBinaries(rtCfg host.Config, comp *bundle.Com
 	}
 
 	if comp.SGX.Signature != "" {
-		sgxSignaturePath := rtCfg.Bundle.ExplodedPath(rtCfg.Bundle.ExplodedDataDir, comp.SGX.Signature)
+		sgxSignaturePath := rtCfg.Bundle.ExplodedPath(comp.ID(), comp.SGX.Signature)
 		sig, err = os.ReadFile(sgxSignaturePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to load SIGSTRUCT: %w", err)

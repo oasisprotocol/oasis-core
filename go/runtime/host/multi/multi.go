@@ -290,7 +290,7 @@ func (agg *Aggregate) Component(id component.ID) (host.Runtime, bool) {
 	if cr, ok := active.host.(host.CompositeRuntime); ok {
 		return cr.Component(id)
 	}
-	if id == component.ID_RONL {
+	if id.IsRONL() {
 		return active.host, true
 	}
 	return nil, false

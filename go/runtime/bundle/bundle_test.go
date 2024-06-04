@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oasisprotocol/oasis-core/go/common"
+	"github.com/oasisprotocol/oasis-core/go/runtime/bundle/component"
 )
 
 func TestBundle(t *testing.T) {
@@ -32,14 +33,21 @@ func TestBundle(t *testing.T) {
 			}
 			return id
 		}(),
-		Executable: "runtime.bin",
-		SGX: &SGXMetadata{
-			Executable: "runtime.sgx",
+		Components: []*Component{
+			{
+				Kind:       component.RONL,
+				Executable: "runtime.bin",
+				SGX: &SGXMetadata{
+					Executable: "runtime.sgx",
+				},
+			},
 		},
 	}
 	bundle := &Bundle{
 		Manifest: manifest,
 	}
+
+	require.False(t, manifest.IsDetached(), "manifest with RONL component should not be detached")
 
 	t.Run("Add_Write", func(t *testing.T) {
 		// Generate random assets.
@@ -50,9 +58,9 @@ func TestBundle(t *testing.T) {
 			return b
 		}
 
-		err := bundle.Add(manifest.Executable, execBuf)
+		err := bundle.Add(manifest.Components[0].Executable, execBuf)
 		require.NoError(t, err, "bundle.Add(elf)")
-		err = bundle.Add(manifest.SGX.Executable, randomBuffer())
+		err = bundle.Add(manifest.Components[0].SGX.Executable, randomBuffer())
 		require.NoError(t, err, "bundle.Add(sgx)")
 
 		err = bundle.Write(bundleFn)
@@ -82,6 +90,85 @@ func TestBundle(t *testing.T) {
 
 		err = bundle2.Write(bundleFn + ".copy")
 		require.NoError(t, err, "bundle.Write")
+	})
+
+	t.Run("Explode", func(t *testing.T) {
+		err := bundle.WriteExploded(tmpDir)
+		require.NoError(t, err, "WriteExploded")
+
+		// Abuse the fact that we do an integrity check if the bundle
+		// is already exploded.
+		err = bundle.WriteExploded(tmpDir)
+		require.NoError(t, err, "WriteExploded(again)")
+	})
+}
+
+func TestDeatchedBundle(t *testing.T) {
+	execFile := os.Args[0]
+	execBuf, err := os.ReadFile(execFile)
+	if err != nil {
+		t.Fatalf("failed to read test executable %s: %v", execFile, err)
+	}
+
+	// Create a synthetic bundle.
+	//
+	// Assets will be populated during the Add/Write combined test.
+	tmpDir := t.TempDir()
+	bundleFn := filepath.Join(tmpDir, "detached-bundle.orc")
+	manifest := &Manifest{
+		Name: "test-runtime",
+		ID: func() common.Namespace {
+			var id common.Namespace
+			if err := id.UnmarshalHex("c000000000000000ffffffffffffffffffffffffffffffffffffffffffffffff"); err != nil {
+				panic("failed to unmarshal id")
+			}
+			return id
+		}(),
+		Components: []*Component{
+			// No RONL component in the manifest.
+			{
+				Kind:       component.ROFL,
+				Executable: "runtime.bin",
+				SGX: &SGXMetadata{
+					Executable: "runtime.sgx",
+				},
+			},
+		},
+	}
+	bundle := &Bundle{
+		Manifest: manifest,
+	}
+
+	require.True(t, manifest.IsDetached(), "manifest without RONL component should be detached")
+
+	t.Run("Add_Write", func(t *testing.T) {
+		// Generate random assets.
+		randomBuffer := func() []byte {
+			b := make([]byte, 1024*256)
+			_, err := rand.Read(b)
+			require.NoError(t, err, "rand.Read")
+			return b
+		}
+
+		err := bundle.Add(manifest.Components[0].Executable, execBuf)
+		require.NoError(t, err, "bundle.Add(elf)")
+		err = bundle.Add(manifest.Components[0].SGX.Executable, randomBuffer())
+		require.NoError(t, err, "bundle.Add(sgx)")
+
+		err = bundle.Write(bundleFn)
+		require.NoError(t, err, "bundle.Write")
+	})
+
+	t.Run("Open", func(t *testing.T) {
+		bundle2, err := Open(bundleFn)
+		require.NoError(t, err, "Open")
+
+		// Ignore the manifest, the bundle we used to create the file
+		// will not have it.
+		delete(bundle2.Manifest.Digests, manifestName)
+		delete(bundle2.Data, manifestName)
+
+		require.EqualValues(t, bundle, bundle2, "opened bundle mismatch")
 	})
 
 	t.Run("Explode", func(t *testing.T) {
