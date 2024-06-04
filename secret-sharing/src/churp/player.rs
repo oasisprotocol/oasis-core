@@ -74,7 +74,7 @@ mod tests {
 
     use crate::{
         churp::{self, HandoffKind, Shareholder},
-        kdc::{KeyRecoverer, KeySharer},
+        kdc::{KeyRecoverer, KeySharer, KEY_ID_ENC_DST},
         suites::{self, p384, GroupDigest},
     };
 
@@ -150,7 +150,7 @@ mod tests {
             let key_id = b"key identifier";
             let dst = b"shamir secret sharing scheme";
             let secret = PrimeField::from_u64(100);
-            let hash = Suite::hash_to_group(key_id, dst).unwrap();
+            let hash = Suite::hash_to_group(key_id, dst, KEY_ID_ENC_DST).unwrap();
             let key = hash * secret;
             let dealer = Dealer::new(threshold, secret, &mut OsRng).unwrap();
             let player = Player::new(threshold, kind);

@@ -22,7 +22,7 @@ use oasis_core_runtime::{
             hash::Hash,
             signature::{PublicKey, Signer},
         },
-        namespace::Namespace,
+        namespace::{Namespace, NAMESPACE_SIZE},
     },
     consensus::{
         beacon::EpochTime,
@@ -37,7 +37,7 @@ use oasis_core_runtime::{
 };
 
 use secret_sharing::{
-    churp::{Dealer, Handoff, HandoffKind, Shareholder, ShareholderId, VerifiableSecretShare},
+    churp::{encode_shareholder, Dealer, Handoff, HandoffKind, Shareholder, VerifiableSecretShare},
     kdc::KeySharer,
     suites::{p384, Suite},
     vss::{
@@ -259,7 +259,8 @@ impl Churp {
     where
         S: Suite,
     {
-        let x = ShareholderId(node_id.0).encode::<S>()?;
+        let dst = self.domain_separation_tag(status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
         let point = shareholder.switch_point(&x);
         let point = scalar_to_bytes(&point);
@@ -324,7 +325,8 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let x = ShareholderId(node_id.0).encode::<S>()?;
+        let dst = self.domain_separation_tag(status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let shareholder = handoff.get_reduced_shareholder()?;
         let point = shareholder.switch_point(&x);
@@ -387,7 +389,8 @@ impl Churp {
     where
         S: Suite,
     {
-        let x = ShareholderId(node_id.0).encode::<S>()?;
+        let dst = self.domain_separation_tag(status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let kind = Self::handoff_kind(status);
         let dealer = self.get_dealer::<S::Group>(status.id, status.next_handoff)?;
         let share = dealer.make_share(x, kind);
@@ -430,8 +433,9 @@ impl Churp {
     where
         S: Suite,
     {
+        let dst = self.domain_separation_tag(status.id);
         let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
-        let point = shareholder.make_key_share::<S>(key_id, &[])?; // TODO: Add domain separation.
+        let point = shareholder.make_key_share::<S>(key_id, &dst)?;
         Ok((&point).into())
     }
 
@@ -571,23 +575,23 @@ impl Churp {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S>,
+        handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
         S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let dst = self.domain_separation_tag(status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
-        if !handoff.needs_share_reduction_switch_point(&id)? {
+        if !handoff.needs_share_reduction_switch_point(&x)? {
             return Err(Error::InvalidShareholder.into());
         }
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let me = id.encode::<S>()?;
             let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
-            let point = shareholder.switch_point(&me);
+            let point = shareholder.switch_point(&x);
 
             if handoff.needs_verification_matrix()? {
                 // Local verification matrix is trusted.
@@ -595,7 +599,7 @@ impl Churp {
                 handoff.set_verification_matrix(vm)?;
             }
 
-            return handoff.add_share_reduction_switch_point(id, point);
+            return handoff.add_share_reduction_switch_point(x, point);
         }
 
         // Fetch from the remote node.
@@ -624,7 +628,7 @@ impl Churp {
             block_on(client.share_reduction_point(status.id, status.next_handoff, self.node_id))?;
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
-        handoff.add_share_reduction_switch_point(id, point)
+        handoff.add_share_reduction_switch_point(x, point)
     }
 
     /// Tries to fetch switch data points for full share distribution from
@@ -675,25 +679,25 @@ impl Churp {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S>,
+        handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
         S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let dst = self.domain_separation_tag(status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
-        if !handoff.needs_full_share_distribution_switch_point(&id)? {
+        if !handoff.needs_full_share_distribution_switch_point(&x)? {
             return Err(Error::InvalidShareholder.into());
         }
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let me = id.encode::<S>()?;
             let shareholder = handoff.get_reduced_shareholder()?;
-            let point = shareholder.switch_point(&me);
+            let point = shareholder.switch_point(&x);
 
-            return handoff.add_full_share_distribution_switch_point(id, point);
+            return handoff.add_full_share_distribution_switch_point(x, point);
         }
 
         // Fetch from the remote node.
@@ -705,7 +709,7 @@ impl Churp {
         ))?;
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
-        handoff.add_full_share_distribution_switch_point(id, point)
+        handoff.add_full_share_distribution_switch_point(x, point)
     }
 
     /// Tries to fetch proactive bivariate shares from the given nodes.
@@ -750,28 +754,28 @@ impl Churp {
         &self,
         node_id: PublicKey,
         status: &Status,
-        handoff: &Handoff<S>,
+        handoff: &Handoff<S::Group>,
         client: &RemoteClient,
     ) -> Result<bool>
     where
         S: Suite,
     {
-        let id = ShareholderId(node_id.0);
+        let dst = self.domain_separation_tag(status.id);
+        let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
-        if !handoff.needs_bivariate_share(&id)? {
+        if !handoff.needs_bivariate_share(&x)? {
             return Err(Error::InvalidShareholder.into());
         }
 
         // Fetch from the host node.
         if node_id == self.node_id {
-            let x = id.encode::<S>()?;
             let kind = Self::handoff_kind(status);
             let dealer = self.get_dealer::<S::Group>(status.id, status.next_handoff)?;
             let share = dealer.make_share(x, kind);
             let vm = dealer.verification_matrix().clone();
             let verifiable_share = VerifiableSecretShare::new(share, vm);
 
-            return handoff.add_bivariate_share(id, verifiable_share);
+            return handoff.add_bivariate_share(&x, verifiable_share);
         }
 
         // Fetch from the remote node.
@@ -796,7 +800,7 @@ impl Churp {
 
         let verifiable_share: VerifiableSecretShare<S::Group> = share.try_into()?;
 
-        handoff.add_bivariate_share(id, verifiable_share)
+        handoff.add_bivariate_share(&x, verifiable_share)
     }
 
     /// Returns a signed confirmation request containing the checksum
@@ -957,8 +961,9 @@ impl Churp {
         let share = share.ok_or(Error::ShareholderNotFound)?;
 
         // Verify that the host hasn't changed.
-        let me = ShareholderId(self.node_id.0).encode::<S>()?;
-        if share.secret_share().coordinate_x() != &me {
+        let dst = self.domain_separation_tag(churp_id);
+        let x = encode_shareholder::<S>(&self.node_id.0, &dst)?;
+        if share.secret_share().coordinate_x() != &x {
             return Err(Error::InvalidHost.into());
         }
 
@@ -1131,20 +1136,20 @@ impl Churp {
     }
 
     /// Returns the handoff for the specified scheme and handoff epoch.
-    fn get_handoff<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Handoff<S>>>
+    fn get_handoff<S>(&self, churp_id: u8, epoch: EpochTime) -> Result<Arc<Handoff<S::Group>>>
     where
         S: Suite + 'static,
     {
-        self._get_or_create_handoff(churp_id, epoch, None)
+        self._get_or_create_handoff::<S>(churp_id, epoch, None)
     }
 
     /// Returns the handoff for the specified scheme and the next handoff epoch.
     /// If the handoff doesn't exist, a new one is created.
-    fn get_or_create_handoff<S>(&self, status: &Status) -> Result<Arc<Handoff<S>>>
+    fn get_or_create_handoff<S>(&self, status: &Status) -> Result<Arc<Handoff<S::Group>>>
     where
         S: Suite + 'static,
     {
-        self._get_or_create_handoff(status.id, status.next_handoff, Some(status))
+        self._get_or_create_handoff::<S>(status.id, status.next_handoff, Some(status))
     }
 
     fn _get_or_create_handoff<S>(
@@ -1152,7 +1157,7 @@ impl Churp {
         churp_id: u8,
         epoch: EpochTime,
         status: Option<&Status>,
-    ) -> Result<Arc<Handoff<S>>>
+    ) -> Result<Arc<Handoff<S::Group>>>
     where
         S: Suite + 'static,
     {
@@ -1169,7 +1174,7 @@ impl Churp {
                     let handoff = data
                         .object
                         .clone()
-                        .downcast::<Handoff<S>>()
+                        .downcast::<Handoff<S::Group>>()
                         .or(Err(Error::HandoffDowncastFailed))?;
 
                     return Ok(handoff);
@@ -1183,13 +1188,13 @@ impl Churp {
 
         // Create a new handoff.
         let threshold = status.threshold;
-        let me = ShareholderId(self.node_id.0);
-        let shareholders = status
-            .applications
-            .keys()
-            .cloned()
-            .map(|id| ShareholderId(id.0))
-            .collect();
+        let dst = self.domain_separation_tag(status.id);
+        let me = encode_shareholder::<S>(&self.node_id.0, &dst)?;
+        let mut shareholders = Vec::with_capacity(status.applications.len());
+        for id in status.applications.keys() {
+            let x = encode_shareholder::<S>(&id.0, &dst)?;
+            shareholders.push(x);
+        }
         let kind = Self::handoff_kind(status);
         let handoff = Handoff::new(threshold, me, shareholders, kind)?;
 
@@ -1396,6 +1401,14 @@ impl Churp {
             return HandoffKind::CommitteeUnchanged;
         }
         HandoffKind::CommitteeChanged
+    }
+
+    /// Returns domain separation tag for encoding shareholder IDs.
+    fn domain_separation_tag(&self, churp_id: u8) -> [u8; NAMESPACE_SIZE + 1] {
+        let mut dst = [0; NAMESPACE_SIZE + 1];
+        dst[..NAMESPACE_SIZE].copy_from_slice(&self.runtime_id.0);
+        dst[NAMESPACE_SIZE] = churp_id;
+        dst
     }
 }
 
