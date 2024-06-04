@@ -26,7 +26,7 @@ func newStorageSyncFromRegisteredImpl() scenario.Scenario {
 	return &storageSyncFromRegisteredImpl{
 		Scenario: *NewScenario(
 			"storage-sync-registered",
-			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}
 }
@@ -182,6 +182,6 @@ func (sc *storageSyncFromRegisteredImpl) Run(ctx context.Context, childEnv *env.
 
 	// Run the client again.
 	sc.Logger.Info("starting a second client to check if runtime works with compute worker 1")
-	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveEncWithSecretsScenarioV2)
 	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

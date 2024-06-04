@@ -26,7 +26,7 @@ func newKmMasterSecretsImpl() scenario.Scenario {
 	return &kmMasterSecretsImpl{
 		Scenario: *NewScenario(
 			"keymanager-master-secrets",
-			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}
 }

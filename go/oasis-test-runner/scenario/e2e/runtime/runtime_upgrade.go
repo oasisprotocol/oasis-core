@@ -25,7 +25,7 @@ func newRuntimeUpgradeImpl() scenario.Scenario {
 	return &runtimeUpgradeImpl{
 		Scenario: *NewScenario(
 			"runtime-upgrade",
-			NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+			NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 		),
 	}
 }
@@ -67,6 +67,6 @@ func (sc *runtimeUpgradeImpl) Run(ctx context.Context, childEnv *env.Env) error 
 
 	// Run client again.
 	sc.Logger.Info("starting a second client to check if runtime works")
-	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveKeyValueEncScenarioV2)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(InsertRemoveEncWithSecretsScenarioV2)
 	return sc.RunTestClientAndCheckLogs(ctx, childEnv)
 }

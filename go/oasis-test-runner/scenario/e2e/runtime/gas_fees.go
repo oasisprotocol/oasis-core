@@ -124,7 +124,7 @@ func (sc *gasFeesRuntimesImpl) Run(ctx context.Context, _ *env.Env) error {
 
 	// Submit a runtime transaction to check whether transaction processing works.
 	sc.Logger.Info("submitting transaction to runtime")
-	if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, 0, "hello", "non-free world", false, 0); err != nil {
+	if _, err := sc.submitKeyValueRuntimeInsertTx(ctx, KeyValueRuntimeID, 0, "hello", "non-free world", 0, 0, plaintextTxKind); err != nil {
 		return err
 	}
 

@@ -33,13 +33,14 @@ pub enum CallOutput {
 pub struct Key {
     pub key: String,
     pub generation: u64,
+    pub churp_id: u8,
 }
-
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
     pub generation: u64,
+    pub churp_id: u8,
 }
 
 #[derive(Clone, Debug, Default, cbor::Encode, cbor::Decode)]

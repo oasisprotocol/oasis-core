@@ -43,7 +43,7 @@ func newSentryImpl() scenario.Scenario {
 	return &sentryImpl{
 		Scenario: *NewScenario(
 			"sentry",
-			NewTestClient().WithScenario(SimpleKeyValueScenario),
+			NewTestClient().WithScenario(SimpleScenario),
 		),
 	}
 }
