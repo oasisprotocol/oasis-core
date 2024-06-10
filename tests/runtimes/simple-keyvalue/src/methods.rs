@@ -199,7 +199,7 @@ impl Methods {
     }
 
     /// Insert a key/value pair.
-    pub fn insert(ctx: &mut TxContext, args: KeyValue) -> Result<Option<String>, String> {
+    pub fn insert(ctx: &mut TxContext, args: Insert) -> Result<Option<String>, String> {
         if args.value.as_bytes().len() > 128 {
             return Err("Value too big to be inserted.".to_string());
         }
@@ -224,7 +224,7 @@ impl Methods {
     }
 
     /// Retrieve a key/value pair.
-    pub fn get(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
+    pub fn get(ctx: &mut TxContext, args: Get) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -239,7 +239,7 @@ impl Methods {
     }
 
     /// Remove a key/value pair.
-    pub fn remove(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
+    pub fn remove(ctx: &mut TxContext, args: Remove) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -348,7 +348,7 @@ impl Methods {
     /// using master secrets.
     pub fn enc_insert_using_secrets(
         ctx: &mut TxContext,
-        args: KeyValue,
+        args: Insert,
     ) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
@@ -360,7 +360,7 @@ impl Methods {
 
     /// Retrieves and decrypts a key/value pair from the runtime state
     /// using master secrets.
-    pub fn enc_get_using_secrets(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
+    pub fn enc_get_using_secrets(ctx: &mut TxContext, args: Get) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -373,7 +373,7 @@ impl Methods {
     /// using master secrets.
     pub fn enc_remove_using_secrets(
         ctx: &mut TxContext,
-        args: Key,
+        args: Remove,
     ) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
@@ -387,7 +387,7 @@ impl Methods {
     /// using CHURP secrets.
     pub fn enc_insert_using_churp(
         ctx: &mut TxContext,
-        args: KeyValue,
+        args: Insert,
     ) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
@@ -399,7 +399,7 @@ impl Methods {
 
     /// Retrieves and decrypts a key/value from the runtime state
     /// using CHURP secrets.
-    pub fn enc_get_using_churp(ctx: &mut TxContext, args: Key) -> Result<Option<String>, String> {
+    pub fn enc_get_using_churp(ctx: &mut TxContext, args: Get) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);
         }
@@ -412,7 +412,7 @@ impl Methods {
     /// using CHURP secret.
     pub fn enc_remove_using_churp(
         ctx: &mut TxContext,
-        args: Key,
+        args: Remove,
     ) -> Result<Option<String>, String> {
         if ctx.is_check_only() {
             return Ok(None);

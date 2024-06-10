@@ -17,19 +17,45 @@ import (
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
-// Key represents data required for get or remove key-value requests.
-type Key struct {
+// GetCall represents a call to get a key-value pair.
+type GetCall struct {
 	Key        string `json:"key"`
 	Generation uint64 `json:"generation,omitempty"`
 	ChurpID    uint8  `json:"churp_id,omitempty"`
 }
 
-// KeyValue represents data required for insert key-value requests.
-type KeyValue struct {
+// RemoveCall represents a call to remove a key-value pair.
+type RemoveCall struct {
+	Key        string `json:"key"`
+	Generation uint64 `json:"generation,omitempty"`
+	ChurpID    uint8  `json:"churp_id,omitempty"`
+}
+
+// InsertCall represents a call to insert a key-value pair.
+type InsertCall struct {
 	Key        string `json:"key"`
 	Value      string `json:"value"`
 	Generation uint64 `json:"generation,omitempty"`
 	ChurpID    uint8  `json:"churp_id,omitempty"`
+}
+
+// EncryptCall represents a call to encrypt a plaintext.
+type EncryptCall struct {
+	Epoch     beacon.EpochTime `json:"epoch"`
+	KeyPairID string           `json:"key_pair_id"`
+	Plaintext []byte           `json:"plaintext"`
+}
+
+// DecryptCall represents a call to decrypt a ciphertext.
+type DecryptCall struct {
+	Epoch      beacon.EpochTime `json:"epoch"`
+	KeyPairID  string           `json:"key_pair_id"`
+	Ciphertext []byte           `json:"ciphertext"`
+}
+
+// TransferCall represents a call to transfer tokens.
+type TransferCall struct {
+	Transfer staking.Transfer `json:"transfer"`
 }
 
 // TestClient is a client that exercises a pre-determined workload against
@@ -379,11 +405,7 @@ func (sc *Scenario) submitKeyValueRuntimeEncryptTx(
 		"plaintext", plaintext,
 	)
 
-	args := struct {
-		Epoch     beacon.EpochTime `json:"epoch"`
-		KeyPairID string           `json:"key_pair_id"`
-		Plaintext []byte           `json:"plaintext"`
-	}{
+	args := EncryptCall{
 		Epoch:     epoch,
 		KeyPairID: keyPairID,
 		Plaintext: plaintext,
@@ -406,11 +428,7 @@ func (sc *Scenario) submitKeyValueRuntimeDecryptTx(
 		"ciphertext", ciphertext,
 	)
 
-	args := struct {
-		Epoch      beacon.EpochTime `json:"epoch"`
-		KeyPairID  string           `json:"key_pair_id"`
-		Ciphertext []byte           `json:"ciphertext"`
-	}{
+	args := DecryptCall{
 		Epoch:      epoch,
 		KeyPairID:  keyPairID,
 		Ciphertext: ciphertext,
@@ -446,7 +464,7 @@ func (sc *Scenario) submitKeyValueRuntimeInsertTx(
 		method = "churp_insert"
 	}
 
-	args := KeyValue{
+	args := InsertCall{
 		Key:        key,
 		Value:      value,
 		Generation: generation,
@@ -482,7 +500,7 @@ func (sc *Scenario) submitKeyValueRuntimeGetTx(
 		method = "churp_get"
 	}
 
-	args := Key{
+	args := GetCall{
 		Key:        key,
 		Generation: generation,
 		ChurpID:    churpID,
@@ -517,7 +535,7 @@ func (sc *Scenario) submitKeyValueRuntimeRemoveTx(
 		method = "churp_remove"
 	}
 
-	args := Key{
+	args := RemoveCall{
 		Key:        key,
 		Generation: generation,
 		ChurpID:    churpID,
@@ -568,7 +586,7 @@ func (sc *Scenario) submitKeyValueRuntimeInsertMsg(
 		method = "churp_insert"
 	}
 
-	args := KeyValue{
+	args := InsertCall{
 		Key:        key,
 		Value:      value,
 		Generation: generation,
@@ -609,9 +627,7 @@ func (sc *Scenario) submitKeyValueRuntimeGetQuery(
 		"round", round,
 	)
 
-	args := struct {
-		Key string `json:"key"`
-	}{
+	args := GetCall{
 		Key: key,
 	}
 
@@ -628,9 +644,7 @@ func (sc *Scenario) submitConsensusTransferTx(
 		"transfer", transfer,
 	)
 
-	_, err := sc.submitRuntimeTx(ctx, id, nonce, "consensus_transfer", struct {
-		Transfer staking.Transfer `json:"transfer"`
-	}{
+	_, err := sc.submitRuntimeTx(ctx, id, nonce, "consensus_transfer", TransferCall{
 		Transfer: transfer,
 	})
 	if err != nil {
