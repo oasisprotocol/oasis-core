@@ -607,7 +607,7 @@ impl Churp {
 
         if handoff.needs_verification_matrix()? {
             // The remote verification matrix needs to be verified.
-            let vm = block_on(client.verification_matrix(status.id, status.handoff))?;
+            let vm = block_on(client.churp_verification_matrix(status.id, status.handoff))?;
             let checksum = Self::checksum_verification_matrix_bytes(
                 &vm,
                 self.runtime_id,
@@ -624,8 +624,11 @@ impl Churp {
             handoff.set_verification_matrix(vm)?;
         }
 
-        let point =
-            block_on(client.share_reduction_point(status.id, status.next_handoff, self.node_id))?;
+        let point = block_on(client.churp_share_reduction_point(
+            status.id,
+            status.next_handoff,
+            self.node_id,
+        ))?;
         let point = scalar_from_bytes(&point).ok_or(Error::PointDecodingFailed)?;
 
         handoff.add_share_reduction_switch_point(x, point)
@@ -702,7 +705,7 @@ impl Churp {
 
         // Fetch from the remote node.
         client.set_nodes(vec![node_id]);
-        let point = block_on(client.share_distribution_point(
+        let point = block_on(client.churp_share_distribution_point(
             status.id,
             status.next_handoff,
             self.node_id,
@@ -780,7 +783,8 @@ impl Churp {
 
         // Fetch from the remote node.
         client.set_nodes(vec![node_id]);
-        let share = block_on(client.bivariate_share(status.id, status.next_handoff, self.node_id))?;
+        let share =
+            block_on(client.churp_bivariate_share(status.id, status.next_handoff, self.node_id))?;
 
         // The remote verification matrix needs to be verified.
         let checksum = Self::checksum_verification_matrix_bytes(

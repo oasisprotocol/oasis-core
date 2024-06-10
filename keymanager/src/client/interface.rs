@@ -66,7 +66,7 @@ pub trait KeyManagerClient: Send + Sync {
         -> Result<Secret, KeyManagerError>;
 
     /// Returns the verification matrix for the given handoff.
-    async fn verification_matrix(
+    async fn churp_verification_matrix(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -74,7 +74,7 @@ pub trait KeyManagerClient: Send + Sync {
 
     /// Returns a switch point for the share reduction phase
     /// of the given handoff.
-    async fn share_reduction_point(
+    async fn churp_share_reduction_point(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -83,7 +83,7 @@ pub trait KeyManagerClient: Send + Sync {
 
     /// Returns a switch point for the share distribution phase
     /// of the given handoff.
-    async fn share_distribution_point(
+    async fn churp_share_distribution_point(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -91,7 +91,7 @@ pub trait KeyManagerClient: Send + Sync {
     ) -> Result<Vec<u8>, KeyManagerError>;
 
     /// Returns a bivariate share for the given handoff.
-    async fn bivariate_share(
+    async fn churp_bivariate_share(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -99,8 +99,11 @@ pub trait KeyManagerClient: Send + Sync {
     ) -> Result<EncodedVerifiableSecretShare, KeyManagerError>;
 
     /// Returns state key.
-    async fn state_key(&self, churp_id: u8, key_id: KeyPairId)
-        -> Result<StateKey, KeyManagerError>;
+    async fn churp_state_key(
+        &self,
+        churp_id: u8,
+        key_id: KeyPairId,
+    ) -> Result<StateKey, KeyManagerError>;
 }
 
 #[async_trait]
@@ -155,46 +158,46 @@ impl<T: ?Sized + KeyManagerClient> KeyManagerClient for Arc<T> {
         KeyManagerClient::replicate_ephemeral_secret(&**self, epoch).await
     }
 
-    async fn verification_matrix(
+    async fn churp_verification_matrix(
         &self,
         churp_id: u8,
         epoch: EpochTime,
     ) -> Result<Vec<u8>, KeyManagerError> {
-        KeyManagerClient::verification_matrix(&**self, churp_id, epoch).await
+        KeyManagerClient::churp_verification_matrix(&**self, churp_id, epoch).await
     }
 
-    async fn share_reduction_point(
-        &self,
-        churp_id: u8,
-        epoch: EpochTime,
-        node_id: PublicKey,
-    ) -> Result<Vec<u8>, KeyManagerError> {
-        KeyManagerClient::share_reduction_point(&**self, churp_id, epoch, node_id).await
-    }
-
-    async fn share_distribution_point(
+    async fn churp_share_reduction_point(
         &self,
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
     ) -> Result<Vec<u8>, KeyManagerError> {
-        KeyManagerClient::share_distribution_point(&**self, churp_id, epoch, node_id).await
+        KeyManagerClient::churp_share_reduction_point(&**self, churp_id, epoch, node_id).await
     }
 
-    async fn bivariate_share(
+    async fn churp_share_distribution_point(
+        &self,
+        churp_id: u8,
+        epoch: EpochTime,
+        node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        KeyManagerClient::churp_share_distribution_point(&**self, churp_id, epoch, node_id).await
+    }
+
+    async fn churp_bivariate_share(
         &self,
         churp_id: u8,
         epoch: EpochTime,
         node_id: PublicKey,
     ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
-        KeyManagerClient::bivariate_share(&**self, churp_id, epoch, node_id).await
+        KeyManagerClient::churp_bivariate_share(&**self, churp_id, epoch, node_id).await
     }
 
-    async fn state_key(
+    async fn churp_state_key(
         &self,
         churp_id: u8,
         key_id: KeyPairId,
     ) -> Result<StateKey, KeyManagerError> {
-        KeyManagerClient::state_key(&**self, churp_id, key_id).await
+        KeyManagerClient::churp_state_key(&**self, churp_id, key_id).await
     }
 }

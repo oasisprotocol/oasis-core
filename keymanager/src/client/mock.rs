@@ -109,7 +109,7 @@ impl KeyManagerClient for MockClient {
         unimplemented!();
     }
 
-    async fn verification_matrix(
+    async fn churp_verification_matrix(
         &self,
         _churp_id: u8,
         _epoch: EpochTime,
@@ -117,16 +117,7 @@ impl KeyManagerClient for MockClient {
         unimplemented!();
     }
 
-    async fn share_reduction_point(
-        &self,
-        _churp_id: u8,
-        _epoch: EpochTime,
-        _node_id: PublicKey,
-    ) -> Result<Vec<u8>, KeyManagerError> {
-        unimplemented!();
-    }
-
-    async fn share_distribution_point(
+    async fn churp_share_reduction_point(
         &self,
         _churp_id: u8,
         _epoch: EpochTime,
@@ -135,7 +126,16 @@ impl KeyManagerClient for MockClient {
         unimplemented!();
     }
 
-    async fn bivariate_share(
+    async fn churp_share_distribution_point(
+        &self,
+        _churp_id: u8,
+        _epoch: EpochTime,
+        _node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        unimplemented!();
+    }
+
+    async fn churp_bivariate_share(
         &self,
         _churp_id: u8,
         _epoch: EpochTime,
@@ -144,7 +144,7 @@ impl KeyManagerClient for MockClient {
         unimplemented!();
     }
 
-    async fn state_key(
+    async fn churp_state_key(
         &self,
         _churp_id: u8,
         _key_id: KeyPairId,
