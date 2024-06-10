@@ -519,7 +519,7 @@ impl KeyManagerClient for RemoteClient {
             .map(|rsp: ReplicateEphemeralSecretResponse| rsp.ephemeral_secret)
     }
 
-    async fn verification_matrix(
+    async fn churp_verification_matrix(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -540,7 +540,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))
     }
 
-    async fn share_reduction_point(
+    async fn churp_share_reduction_point(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -562,7 +562,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))
     }
 
-    async fn share_distribution_point(
+    async fn churp_share_distribution_point(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -584,7 +584,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))
     }
 
-    async fn bivariate_share(
+    async fn churp_bivariate_share(
         &self,
         churp_id: u8,
         epoch: EpochTime,
@@ -606,7 +606,7 @@ impl KeyManagerClient for RemoteClient {
             .map_err(|err| KeyManagerError::Other(err.into()))
     }
 
-    async fn state_key(
+    async fn churp_state_key(
         &self,
         churp_id: u8,
         key_id: KeyPairId,

@@ -284,7 +284,7 @@ impl Methods {
         let key_id = KeyPairId::from(Hash::digest_bytes(key).as_ref());
 
         // Fetch encryption key.
-        let result = ctx.parent.key_manager.state_key(churp_id, key_id);
+        let result = ctx.parent.key_manager.churp_state_key(churp_id, key_id);
         let state_key = tokio::runtime::Handle::current()
             .block_on(result)
             .map_err(|err| err.to_string())?;
