@@ -769,8 +769,8 @@ func (w *Worker) newRoleProvider(role node.RolesMask, runtimeID *common.Namespac
 		"id", runtimeID,
 		"role", role,
 	)
-	if !role.IsSingleRole() {
-		return nil, fmt.Errorf("RegisterRole: registration role mask does not encode a single role. RoleMask: '%s'", role)
+	if !role.IsEmptyRole() && !role.IsSingleRole() {
+		return nil, fmt.Errorf("registration role mask is non-empty and does not encode a single role: '%s'", role)
 	}
 	if err := w.runtimeRegistry.AddRoles(role, runtimeID); err != nil {
 		w.logger.Info("runtime doesn't exist, roles not registered",
@@ -885,6 +885,14 @@ func (w *Worker) registerNode(epoch beacon.EpochTime, hook RegisterNodeHook) (er
 
 	if err = hook(&nodeDesc); err != nil {
 		return err
+	}
+
+	// Make sure there is at least one role to register for.
+	if nodeDesc.Roles.IsEmptyRole() {
+		w.logger.Error("not registering: no roles to register for",
+			"node_descriptor", nodeDesc,
+		)
+		return fmt.Errorf("registration: no roles to register for")
 	}
 
 	// Sanity check to prevent an invalid registration when no role provider added any runtimes but
