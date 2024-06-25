@@ -70,7 +70,10 @@ func (w *Worker) registerRuntime(commonNode *committeeCommon.Node) error {
 		"runtime_id", id,
 	)
 
-	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleComputeWorker, id)
+	// Since the storage node is always coupled with another role, make sure to not add any
+	// particular role here. Instead this only serves to prevent registration until the storage node
+	// is synced by making the role provider unavailable.
+	rp, err := w.registration.NewRuntimeRoleProvider(node.RoleEmpty, id)
 	if err != nil {
 		return fmt.Errorf("failed to create role provider: %w", err)
 	}

@@ -177,6 +177,8 @@ func (sw SoftwareVersion) ValidateBasic() error {
 type RolesMask uint32
 
 const (
+	// RoleEmpty is the roles bitmask that specifies no roles.
+	RoleEmpty RolesMask = 0
 	// RoleComputeWorker is the compute worker role.
 	RoleComputeWorker RolesMask = 1 << 0
 	// RoleObserver is the observer role.
@@ -214,6 +216,11 @@ func Roles() (roles []RolesMask) {
 		RoleValidator,
 		RoleStorageRPC,
 	}
+}
+
+// IsEmptyRole returns true if RolesMask encodes no roles (e.g. is equal to RoleEmpty).
+func (m RolesMask) IsEmptyRole() bool {
+	return m == RoleEmpty
 }
 
 // IsSingleRole returns true if RolesMask encodes a single valid role.
