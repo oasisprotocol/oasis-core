@@ -7,12 +7,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use ::p384::elliptic_curve::point::AffineCoordinates;
 use anyhow::anyhow;
 use async_trait::async_trait;
+use group::GroupEncoding;
 use lru::LruCache;
 use rand::{prelude::SliceRandom, rngs::OsRng};
-use zeroize::Zeroize;
 
 use oasis_core_runtime::{
     common::{
@@ -22,7 +21,7 @@ use oasis_core_runtime::{
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::churp::{Status as ChurpStatus, SuiteId},
+        keymanager::churp::{self, Status as ChurpStatus, SuiteId},
         state::{
             beacon::ImmutableState as BeaconState,
             keymanager::{churp::ImmutableState as ChurpState, Status as KeyManagerStatus},
@@ -38,6 +37,7 @@ use secret_sharing::{
     churp::{HandoffKind, Player},
     kdc::KeyRecoverer,
     suites::{p384, Suite},
+    vss::polynomial::EncryptedPoint,
 };
 
 use crate::{
@@ -49,8 +49,8 @@ use crate::{
         METHOD_REPLICATE_EPHEMERAL_SECRET, METHOD_REPLICATE_MASTER_SECRET,
     },
     churp::{
-        EncodedEncryptedPoint, EncodedVerifiableSecretShare, Error, Kdf, KeyShareRequest,
-        QueryRequest, METHOD_BIVARIATE_SHARE, METHOD_KEY_SHARE, METHOD_SHARE_DISTRIBUTION_POINT,
+        EncodedEncryptedPoint, EncodedVerifiableSecretShare, Kdf, KeyShareRequest, QueryRequest,
+        METHOD_BIVARIATE_SHARE, METHOD_KEY_SHARE, METHOD_SHARE_DISTRIBUTION_POINT,
         METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
     },
     crypto::{
@@ -238,6 +238,84 @@ impl RemoteClient {
 
         key.verify(self.runtime_id, key_pair_id, epoch, now, pk)
             .map_err(KeyManagerError::InvalidSignature)
+    }
+
+    async fn churp_recover_state_key<S: Suite>(
+        &self,
+        key_id: KeyPairId,
+        status: churp::Status,
+    ) -> Result<StateKey, KeyManagerError> {
+        // Fault detection and blame assignment are not supported,
+        // so the minimal number of key shares will suffice.
+        let kind = HandoffKind::CommitteeUnchanged;
+        let player = Player::new(status.threshold, kind);
+        let min_shares = player.min_shares();
+        let mut shares = Vec::with_capacity(min_shares);
+
+        // Fetch key shares in random order.
+        // TODO: Optimize by fetching key shares concurrently.
+        let mut committee = status.committee;
+        committee.shuffle(&mut OsRng);
+
+        for node_id in committee {
+            // Stop fetching when enough shares are received.
+            if shares.len() == min_shares {
+                break;
+            }
+
+            // Fetch key share from the current node.
+            self.rpc_client
+                .update_nodes_async(vec![node_id])
+                .await
+                .map_err(|err| KeyManagerError::Other(err.into()))?;
+
+            let response = self
+                .rpc_client
+                .secure_call(
+                    METHOD_KEY_SHARE,
+                    KeyShareRequest {
+                        id: status.id,
+                        runtime_id: status.runtime_id,
+                        epoch: status.handoff,
+                        key_id,
+                    },
+                )
+                .await
+                .into_result_with_feedback()
+                .await;
+
+            // Decode the response.
+            let encoded_share: EncodedEncryptedPoint = match response {
+                Ok(encoded_share) => encoded_share,
+                Err(_) => continue, // Ignore error and skip this share.
+            };
+            let share: EncryptedPoint<S::Group> = match encoded_share.try_into() {
+                Ok(share) => share,
+                Err(_) => continue, // Ignore error and skip this share.
+            };
+
+            shares.push(share);
+        }
+
+        // Abort if we don't have enough shares.
+        if shares.len() != min_shares {
+            return Err(KeyManagerError::InsufficientKeyShares);
+        }
+
+        // Prepare salt for key derivation (runtime id || churp id || key id).
+        let mut salt = [0; NAMESPACE_SIZE + 1 + KEY_PAIR_ID_SIZE];
+        salt[..NAMESPACE_SIZE].copy_from_slice(&status.runtime_id.0);
+        salt[NAMESPACE_SIZE] = status.id;
+        salt[NAMESPACE_SIZE + 1..].copy_from_slice(&key_id.0);
+
+        // Recover the secret and derive the state key from it.
+        // NOTE: Elliptic curve points in projective form are first converted
+        // to affine form, and then encoded to bytes using point compression.
+        let key = player.recover_key(&shares)?;
+        let secret = key.to_bytes();
+        let state_key = Kdf::state_key(secret.as_ref(), &salt);
+
+        Ok(state_key)
     }
 }
 
@@ -639,68 +717,10 @@ impl KeyManagerClient for RemoteClient {
             Ok(status)
         })?;
 
-        let mut committee = status.committee;
-        committee.shuffle(&mut OsRng);
-
-        let kind = HandoffKind::CommitteeUnchanged;
-        let player = Player::new(status.threshold, kind);
-        let min_shares = player.min_shares();
-        let mut encoded_shares = Vec::with_capacity(min_shares);
-
-        // TODO: Optimize by fetching key shares concurrently.
-        for node_id in committee {
-            if encoded_shares.len() == min_shares {
-                break;
-            }
-
-            self.rpc_client
-                .update_nodes_async(vec![node_id])
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
-
-            let encoded_share: EncodedEncryptedPoint = self
-                .rpc_client
-                .secure_call(
-                    METHOD_KEY_SHARE,
-                    KeyShareRequest {
-                        id: status.id,
-                        runtime_id: status.runtime_id,
-                        epoch: status.handoff,
-                        key_id,
-                    },
-                )
-                .await
-                .into_result_with_feedback()
-                .await
-                .map_err(|err| KeyManagerError::Other(err.into()))?;
-
-            encoded_shares.push(encoded_share);
-        }
-
-        let mut salt = [0; NAMESPACE_SIZE + 1 + KEY_PAIR_ID_SIZE];
-        salt[..NAMESPACE_SIZE].copy_from_slice(&status.runtime_id.0);
-        salt[NAMESPACE_SIZE] = status.id;
-        salt[NAMESPACE_SIZE + 1..].copy_from_slice(&key_id.0);
-
         let state_key = match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
-                let mut shares = Vec::with_capacity(min_shares);
-                for encoded_share in encoded_shares {
-                    let share = encoded_share
-                        .try_into()
-                        .map_err(|err: Error| KeyManagerError::Other(err.into()))?;
-                    shares.push(share);
-                }
-
-                let mut point = player.recover_key::<<p384::Sha3_384 as Suite>::Group>(&shares)?;
-                let mut affine = point.to_affine();
-                point.zeroize();
-                let mut x = affine.x();
-                affine.zeroize();
-                let state_key = Kdf::state_key(x.as_slice(), &salt);
-                x.zeroize();
-
-                state_key
+                self.churp_recover_state_key::<p384::Sha3_384>(key_id, status)
+                    .await?
             }
         };
 
