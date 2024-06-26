@@ -701,13 +701,17 @@ pub enum SGXConstraints {
 }
 
 impl SGXConstraints {
-    /// Checks whether the given enclave identity is whitelisted.
-    pub fn contains_enclave(&self, eid: &sgx::EnclaveIdentity) -> bool {
-        let enclaves = match self {
+    /// Identities of allowed enclaves.
+    pub fn enclaves(&self) -> &Vec<sgx::EnclaveIdentity> {
+        match self {
             Self::V0 { ref enclaves, .. } => enclaves,
             Self::V1 { ref enclaves, .. } => enclaves,
-        };
-        enclaves.contains(eid)
+        }
+    }
+
+    /// Checks whether the given enclave identity is whitelisted.
+    pub fn contains_enclave(&self, eid: &sgx::EnclaveIdentity) -> bool {
+        self.enclaves().contains(eid)
     }
 
     /// SGX quote policy.
