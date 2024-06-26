@@ -9,10 +9,10 @@ use crate::{
     common::{
         crypto::signature::{self, PublicKey, Signature, Signer},
         namespace::Namespace,
-        sgx::{ias, EnclaveIdentity, Quote, QuotePolicy, VerifiedQuote},
+        sgx::{ias, EnclaveIdentity, Quote, QuotePolicy},
     },
     consensus::{
-        registry::{EndorsedCapabilityTEE, VerifiedEndorsedCapabilityTEE},
+        registry::{EndorsedCapabilityTEE, VerifiedAttestation, VerifiedEndorsedCapabilityTEE},
         state::registry::ImmutableState as RegistryState,
         verifier::Verifier,
     },
@@ -53,8 +53,8 @@ enum SessionError {
 pub struct SessionInfo {
     /// RAK binding.
     pub rak_binding: RAKBinding,
-    /// Verified TEE quote.
-    pub verified_quote: VerifiedQuote,
+    /// Verified TEE remote attestation.
+    pub verified_attestation: VerifiedAttestation,
     /// Identifier of the node that endorsed the TEE.
     pub endorsed_by: Option<PublicKey>,
 }
@@ -281,7 +281,7 @@ impl Session {
 
         Ok(Some(Arc::new(SessionInfo {
             rak_binding,
-            verified_quote: vect.verified_quote,
+            verified_attestation: vect.verified_attestation,
             endorsed_by: vect.node_id,
         })))
     }
@@ -428,11 +428,11 @@ impl RAKBinding {
 
         // Ensure that the report data includes the hash of the node's RAK.
         // NOTE: For V2 this check is part of verify_inner so it is not really needed.
-        Identity::verify_binding(&vect.verified_quote, &self.rak_pub())?;
+        Identity::verify_binding(&vect.verified_attestation.quote, &self.rak_pub())?;
 
         // Verify MRENCLAVE/MRSIGNER.
         if let Some(ref remote_enclaves) = remote_enclaves {
-            if !remote_enclaves.contains(&vect.verified_quote.identity) {
+            if !remote_enclaves.contains(&vect.verified_attestation.quote.identity) {
                 return Err(SessionError::MismatchedEnclaveIdentity.into());
             }
         }

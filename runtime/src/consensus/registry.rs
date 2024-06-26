@@ -161,7 +161,7 @@ impl CapabilityTEE {
         &self,
         policy: &sgx::QuotePolicy,
         node_id: &signature::PublicKey,
-    ) -> anyhow::Result<sgx::VerifiedQuote> {
+    ) -> anyhow::Result<VerifiedAttestation> {
         match self.hardware {
             TEEHardware::TEEHardwareInvalid => bail!("invalid TEE hardware"),
             TEEHardware::TEEHardwareIntelSGX => {
@@ -216,12 +216,12 @@ impl EndorsedCapabilityTEE {
         self.verify_endorsement()?;
 
         // Verify TEE capability.
-        let verified_quote = self
+        let verified_attestation = self
             .capability_tee
             .verify(policy, &self.node_endorsement.public_key)?;
 
         Ok(VerifiedEndorsedCapabilityTEE {
-            verified_quote,
+            verified_attestation,
             node_id: Some(self.node_endorsement.public_key),
         })
     }
@@ -230,16 +230,25 @@ impl EndorsedCapabilityTEE {
 /// A verified endorsed CapabilityTEE structure.
 #[derive(Clone, Debug, Default)]
 pub struct VerifiedEndorsedCapabilityTEE {
-    /// Verified TEE quote.
-    pub verified_quote: sgx::VerifiedQuote,
+    /// Verified TEE remote attestation.
+    pub verified_attestation: VerifiedAttestation,
     /// Optional identifier of the node that endorsed the TEE capability.
     pub node_id: Option<signature::PublicKey>,
+}
+
+impl From<VerifiedAttestation> for VerifiedEndorsedCapabilityTEE {
+    fn from(verified_attestation: VerifiedAttestation) -> Self {
+        Self {
+            verified_attestation,
+            node_id: None,
+        }
+    }
 }
 
 impl From<sgx::VerifiedQuote> for VerifiedEndorsedCapabilityTEE {
     fn from(verified_quote: sgx::VerifiedQuote) -> Self {
         Self {
-            verified_quote,
+            verified_attestation: verified_quote.into(),
             node_id: None,
         }
     }
@@ -734,6 +743,24 @@ impl SGXConstraints {
     }
 }
 
+/// Verified remote attestation.
+#[derive(Clone, Debug, Default)]
+pub struct VerifiedAttestation {
+    /// Verified enclave quote.
+    pub quote: sgx::VerifiedQuote,
+    /// Enclave's view of the consensus layer height at the time of attestation.
+    pub height: Option<u64>,
+}
+
+impl From<sgx::VerifiedQuote> for VerifiedAttestation {
+    fn from(quote: sgx::VerifiedQuote) -> Self {
+        Self {
+            quote,
+            height: None,
+        }
+    }
+}
+
 /// Intel SGX remote attestation.
 #[derive(Clone, Debug, cbor::Encode, cbor::Decode)]
 #[cbor(tag = "v")]
@@ -787,7 +814,7 @@ impl SGXAttestation {
         node_id: &signature::PublicKey,
         rak: &signature::PublicKey,
         rek: &x25519::PublicKey,
-    ) -> anyhow::Result<sgx::VerifiedQuote> {
+    ) -> anyhow::Result<VerifiedAttestation> {
         // Verify the quote.
         let verified_quote = self.quote().verify(policy)?;
 
@@ -801,11 +828,14 @@ impl SGXAttestation {
             } => {
                 let h = Self::hash(&verified_quote.report_data, node_id, *height, rek);
                 signature.verify(rak, ATTESTATION_SIGNATURE_CONTEXT, &h)?;
+
+                Ok(VerifiedAttestation {
+                    quote: verified_quote,
+                    height: Some(*height),
+                })
             }
             _ => bail!("V0 attestation not supported"),
         }
-
-        Ok(verified_quote)
     }
 }
 
