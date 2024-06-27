@@ -17,6 +17,7 @@ import (
 	cmnBackoff "github.com/oasisprotocol/oasis-core/go/common/backoff"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
+	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/config"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
@@ -66,7 +67,7 @@ type churpWorker struct {
 
 	kmWorker *Worker
 
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	churps map[uint8]*churp.Status // Guarded by mutex.
 
 	watcher     *nodeWatcher
@@ -147,12 +148,40 @@ func (w *churpWorker) Authorize(ctx context.Context, method string, kind enclave
 	}
 }
 
-func (w *churpWorker) authorizeNode(_ context.Context, peerID core.PeerID) error {
-	// TODO: Which nodes are allowed to query key shares?
-	if w.kmWorker.accessList.Runtimes(peerID).Empty() {
-		return fmt.Errorf("request not allowed")
+func (w *churpWorker) authorizeNode(ctx context.Context, peerID core.PeerID) error {
+	rt, err := w.kmWorker.runtime.RegistryDescriptor(ctx)
+	if err != nil {
+		return err
 	}
-	return nil
+
+	switch rt.TEEHardware {
+	case node.TEEHardwareInvalid:
+		// Insecure key manager enclaves can be queried by all runtimes (used for testing).
+		return nil
+	case node.TEEHardwareIntelSGX:
+		// Secure key manager enclaves can be queried by runtimes specified in the policy.
+		w.mu.RLock()
+		statuses := maps.Values(w.churps)
+		w.mu.RUnlock()
+
+		// Retrieve the list of runtimes that the peer participates in.
+		rts := w.kmWorker.accessList.Runtimes(peerID)
+
+		// Grant access if the peer participates in any allowed runtime.
+		for _, status := range statuses {
+			if status == nil {
+				continue
+			}
+			for rt := range status.Policy.Policy.MayQuery {
+				if rts.Contains(rt) {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("request not allowed")
+	default:
+		return fmt.Errorf("unsupported hardware: %s", rt.TEEHardware)
+	}
 }
 
 func (w *churpWorker) authorizeKeyManager(peerID core.PeerID) error {
@@ -177,8 +206,8 @@ func (w *churpWorker) Initialized() <-chan struct{} {
 
 // GetStatus returns the worker status.
 func (w *churpWorker) GetStatus() workerKm.ChurpStatus {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 
 	status := workerKm.ChurpStatus{
 		Schemes: make(map[uint8]workerKm.ChurpSchemeStatus),
@@ -256,14 +285,16 @@ func (w *churpWorker) handleNewBlock(blk *consensus.Block) {
 
 // handleStatusUpdate is responsible for handling status update.
 func (w *churpWorker) handleStatusUpdate(status *churp.Status) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	// Skip schemes we are not involved in.
 	if status.RuntimeID != w.kmWorker.runtimeID {
 		return
 	}
-	if _, ok := w.churps[status.ID]; !ok {
+
+	w.mu.RLock()
+	_, ok := w.churps[status.ID]
+	w.mu.RUnlock()
+
+	if !ok {
 		return
 	}
 
@@ -272,7 +303,9 @@ func (w *churpWorker) handleStatusUpdate(status *churp.Status) {
 	)
 
 	// Update status.
+	w.mu.Lock()
 	w.churps[status.ID] = status
+	w.mu.Unlock()
 
 	// Notify all workers about the new status.
 	w.watcher.Update(status)

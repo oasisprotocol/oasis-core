@@ -25,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
@@ -65,6 +66,7 @@ const (
 	CfgRegistryTEEFeaturesSGXSignedAttestations       = "registry.tee_features.sgx.signed_attestations"
 	CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge = "registry.tee_features.sgx.default_max_attestation_age"
 	CfgRegistryTEEFeaturesFreshnessProofs             = "registry.tee_features.freshness_proofs"
+	CfgRegistrySoftwareVersion                        = "registry.software_version"
 
 	// Scheduler config flags.
 	cfgSchedulerMinValidators          = "scheduler.min_validators"
@@ -379,6 +381,12 @@ func AppendRegistryState(doc *genesis.Document, entities, runtimes, nodes []stri
 	if viper.GetBool(CfgRegistryEnableKeyManagerCHURP) {
 		regSt.Parameters.EnableKeyManagerCHURP = true
 	}
+
+	version, err := version.FromString(viper.GetString(CfgRegistrySoftwareVersion))
+	if err != nil {
+		return err
+	}
+	regSt.Parameters.SoftwareVersion = &version
 
 	entMap := make(map[signature.PublicKey]bool)
 	appendToEntities := func(signedEntity *entity.SignedEntity, ent *entity.Entity) error {
@@ -804,6 +812,7 @@ func init() {
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesSGXSignedAttestations, true, "enable SGX RAK-signed attestations")
 	initGenesisFlags.Uint64(CfgRegistryTEEFeaturesSGXDefaultMaxAttestationAge, 1200, "default max attestation age (SGX RAK-signed attestations must be enabled") // ~2 hours at 6 sec per block.
 	initGenesisFlags.Bool(CfgRegistryTEEFeaturesFreshnessProofs, true, "enable freshness proofs")
+	initGenesisFlags.String(CfgRegistrySoftwareVersion, "24.0", "latest consensus breaking software version")
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowUnroutableAddresses)
 	_ = initGenesisFlags.MarkHidden(CfgRegistryDebugAllowTestRuntimes)
 

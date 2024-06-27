@@ -146,12 +146,16 @@ pub struct PolicySGX {
     pub serial: u32,
 
     /// A vector of enclave identities from which a share can be obtained
-    /// during handouts.
+    /// during handoffs.
     pub may_share: Vec<EnclaveIdentity>,
 
     /// A vector of enclave identities that may form the new committee
     /// in the next handoffs.
     pub may_join: Vec<EnclaveIdentity>,
+
+    /// A map of runtime identities to the vector of enclave identities
+    /// that may query key shares.
+    pub may_query: HashMap<Namespace, Vec<EnclaveIdentity>>,
 }
 
 /// Signed key manager access control policy.

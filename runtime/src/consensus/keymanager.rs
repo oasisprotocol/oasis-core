@@ -49,7 +49,14 @@ pub struct PolicySGX {
 /// Per enclave key manager access control policy.
 #[derive(Clone, Debug, Default, PartialEq, Eq, cbor::Encode, cbor::Decode)]
 pub struct EnclavePolicySGX {
+    /// A map of runtime IDs to the vector of enclave IDs that may query
+    /// private key material.
     pub may_query: HashMap<Namespace, Vec<EnclaveIdentity>>,
+
+    /// A vector of enclave IDs that may retrieve the master secret.
+    ///
+    /// NOTE: Each enclave ID may always implicitly replicate from other
+    /// instances of itself.
     pub may_replicate: Vec<EnclaveIdentity>,
 }
 
