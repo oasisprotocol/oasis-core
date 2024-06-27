@@ -513,7 +513,7 @@ impl Secrets {
     fn authenticate(ctx: &RpcContext) -> Result<&EnclaveIdentity> {
         let si = ctx.session_info.as_ref();
         let si = si.ok_or(KeyManagerError::NotAuthenticated)?;
-        Ok(&si.verified_quote.identity)
+        Ok(&si.verified_attestation.quote.identity)
     }
 
     /// Fetch current epoch from the consensus layer.

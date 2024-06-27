@@ -1272,7 +1272,7 @@ impl Churp {
     fn remote_enclave(ctx: &RpcContext) -> Result<&EnclaveIdentity> {
         let si = ctx.session_info.as_ref();
         let si = si.ok_or(Error::NotAuthenticated)?;
-        Ok(&si.verified_quote.identity)
+        Ok(&si.verified_attestation.quote.identity)
     }
 
     /// Returns true if key manager policies should be ignored.
