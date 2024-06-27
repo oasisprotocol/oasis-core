@@ -12,10 +12,6 @@ use group::{Group, GroupEncoding};
 use rand::rngs::OsRng;
 use sp800_185::KMac;
 
-#[cfg(target_env = "sgx")]
-use oasis_core_runtime::{
-    common::sgx::EnclaveIdentity, consensus::keymanager::churp::SignedPolicySGX,
-};
 use oasis_core_runtime::{
     common::{
         crypto::{
@@ -23,10 +19,11 @@ use oasis_core_runtime::{
             signature::{PublicKey, Signer},
         },
         namespace::{Namespace, NAMESPACE_SIZE},
+        sgx::EnclaveIdentity,
     },
     consensus::{
         beacon::EpochTime,
-        keymanager::churp::{Status, SuiteId},
+        keymanager::churp::{SignedPolicySGX, Status, SuiteId},
         verifier::Verifier,
     },
     enclave_rpc::Context as RpcContext,
@@ -107,7 +104,6 @@ pub struct Churp {
     /// Verified churp state.
     churp_state: ChurpState,
     /// Verified registry state.
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     registry_state: RegistryState,
 
     /// Shareholders with secret shares for the last successfully completed
@@ -119,7 +115,6 @@ pub struct Churp {
     handoffs: Mutex<HashMap<u8, HandoffData>>,
 
     /// Cached verified policies.
-    #[cfg_attr(not(target_env = "sgx"), allow(unused))]
     policies: VerifiedPolicies,
 }
 
@@ -224,7 +219,7 @@ impl Churp {
     /// needs to be kept secret and generated only for authorized nodes.
     pub fn share_reduction_switch_point(
         &self,
-        _ctx: &RpcContext,
+        ctx: &RpcContext,
         req: &QueryRequest,
     ) -> Result<Vec<u8>> {
         let status = self.verify_next_handoff(req.id, req.runtime_id, req.epoch)?;
@@ -238,11 +233,9 @@ impl Churp {
         if !status.applications.contains_key(node_id) {
             return Err(Error::NotInCommittee.into());
         }
-        #[cfg(target_env = "sgx")]
-        {
-            self.verify_node_id(_ctx, node_id)?;
-            self.verify_enclave(_ctx, &status.policy)?;
-        }
+
+        self.verify_node_id(ctx, node_id)?;
+        self.verify_km_enclave(ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -304,11 +297,9 @@ impl Churp {
         if !status.applications.contains_key(node_id) {
             return Err(Error::NotInCommittee.into());
         }
-        #[cfg(target_env = "sgx")]
-        {
-            self.verify_node_id(_ctx, node_id)?;
-            self.verify_enclave(_ctx, &status.policy)?;
-        }
+
+        self.verify_node_id(_ctx, node_id)?;
+        self.verify_km_enclave(_ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -368,11 +359,9 @@ impl Churp {
         if !status.applications.contains_key(node_id) {
             return Err(Error::NotInCommittee.into());
         }
-        #[cfg(target_env = "sgx")]
-        {
-            self.verify_node_id(_ctx, node_id)?;
-            self.verify_enclave(_ctx, &status.policy)?;
-        }
+
+        self.verify_node_id(_ctx, node_id)?;
+        self.verify_km_enclave(_ctx, &status.policy)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -1280,28 +1269,30 @@ impl Churp {
 
     /// Verifies the node ID by comparing the session's runtime attestation
     /// key (RAK) with the one published in the consensus layer.
-    #[cfg(target_env = "sgx")]
     fn verify_node_id(&self, ctx: &RpcContext, node_id: &PublicKey) -> Result<()> {
-        let si = ctx.session_info.as_ref();
-        let si = si.ok_or(Error::NotAuthenticated)?;
-        let session_rak = si.rak_binding.rak_pub();
+        if !cfg!(any(target_env = "sgx", feature = "debug-mock-sgx")) {
+            // Skip verification in non-SGX environments because those
+            // nodes do not publish RAK in the consensus nor do they
+            // send RAK binding when establishing Noise sessions.
+            return Ok(());
+        }
 
+        let remote_rak = Self::remote_rak(ctx)?;
         let rak = self
             .registry_state
             .rak(node_id, &self.runtime_id)?
             .ok_or(Error::NotAuthenticated)?;
 
-        if session_rak != rak {
+        if remote_rak != rak {
             return Err(Error::NotAuthorized.into());
         }
 
         Ok(())
     }
 
-    /// Authorizes the remote enclave so that secret data is never revealed
-    /// to an unauthorized enclave.
-    #[cfg(target_env = "sgx")]
-    fn verify_enclave(&self, ctx: &RpcContext, policy: &SignedPolicySGX) -> Result<()> {
+    /// Authorizes the remote key manager enclave so that secret data is never
+    /// revealed to an unauthorized enclave.
+    fn verify_km_enclave(&self, ctx: &RpcContext, policy: &SignedPolicySGX) -> Result<()> {
         if Self::ignore_policy() {
             return Ok(());
         }
@@ -1313,8 +1304,14 @@ impl Churp {
         Ok(())
     }
 
+    /// Returns the session RAK of the remote enclave.
+    fn remote_rak(ctx: &RpcContext) -> Result<PublicKey> {
+        let si = ctx.session_info.as_ref();
+        let si = si.ok_or(Error::NotAuthenticated)?;
+        Ok(si.rak_binding.rak_pub())
+    }
+
     /// Returns the identity of the remote enclave.
-    #[cfg(target_env = "sgx")]
     fn remote_enclave(ctx: &RpcContext) -> Result<&EnclaveIdentity> {
         let si = ctx.session_info.as_ref();
         let si = si.ok_or(Error::NotAuthenticated)?;
@@ -1322,22 +1319,18 @@ impl Churp {
     }
 
     /// Returns true if key manager policies should be ignored.
-    #[cfg(target_env = "sgx")]
     fn ignore_policy() -> bool {
         option_env!("OASIS_UNSAFE_SKIP_KM_POLICY").is_some()
     }
 
     /// Returns a key manager client that connects only to enclaves eligible
     /// to form a new committee or to enclaves belonging the old committee.
-    fn key_manager_client(&self, _status: &Status, _new_committee: bool) -> Result<RemoteClient> {
-        #[cfg(not(target_env = "sgx"))]
-        let enclaves = None;
-        #[cfg(target_env = "sgx")]
+    fn key_manager_client(&self, status: &Status, new_committee: bool) -> Result<RemoteClient> {
         let enclaves = if Self::ignore_policy() {
             None
         } else {
-            let policy = self.policies.verify(&_status.policy)?;
-            let enclaves = match _new_committee {
+            let policy = self.policies.verify(&status.policy)?;
+            let enclaves = match new_committee {
                 true => policy.may_join.clone(),
                 false => policy.may_share.clone(),
             };
