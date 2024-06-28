@@ -12,6 +12,88 @@ The format is inspired by [Keep a Changelog].
 
 <!-- TOWNCRIER -->
 
+## 24.1 (2024-06-28)
+
+| Protocol          | Version   |
+|:------------------|:---------:|
+| Consensus         | 7.0.0     |
+| Runtime Host      | 5.1.0     |
+| Runtime Committee | 5.0.0     |
+
+### Features
+
+- secret-sharing/src/churp: Implement key derivation center
+  ([#5698](https://github.com/oasisprotocol/oasis-core/issues/5698))
+
+- keymanager/src/churp: Implement key derivation function
+  ([#5699](https://github.com/oasisprotocol/oasis-core/issues/5699))
+
+- Support detached ROFL components
+  ([#5707](https://github.com/oasisprotocol/oasis-core/issues/5707))
+
+  Previously each bundle that contained one or more ROFL components also
+  needed to contain the exact version of the RONL component it was
+  attaching to.
+
+  This is somewhat awkward to use when we assume a more decentralized
+  development and deployment of ROFL applications. This commit adds support
+  for detached ROFL components where the bundle only contains the ROFL and
+  oasis-node then automatically gets the appropriate RONL component from
+  another bundle.
+
+### Bug Fixes
+
+- go/worker/common: Always take the latest epoch for deployments
+  ([#5693](https://github.com/oasisprotocol/oasis-core/issues/5693))
+
+  Fix for an issue which could have prevented runtimes from being initialized
+  in case the runtime was suspended before the first node was started.
+
+- go/worker/common: Retry provisioning on epoch transitions when suspended
+  ([#5694](https://github.com/oasisprotocol/oasis-core/issues/5694))
+
+- go/runtime/host: Ignore stale abort requests
+  ([#5702](https://github.com/oasisprotocol/oasis-core/issues/5702))
+
+- keymanager: Increase MAX_FRESH_HEIGHT_AGE
+  ([#5703](https://github.com/oasisprotocol/oasis-core/issues/5703))
+
+  This avoids issues where key managers get out of sync during operation
+  and start rejecting otherwise valid requests. It should still be safe
+  especially since all new runtimes now perform freshness checks.
+
+- go/runtime/host/sgx: Fix SGX bundle validation
+  ([#5706](https://github.com/oasisprotocol/oasis-core/issues/5706))
+
+- go/registry/api: update ProveFreshness tx body type
+  ([#5708](https://github.com/oasisprotocol/oasis-core/issues/5708))
+
+- go/worker/storage: Do not add any particular roles
+  ([#5725](https://github.com/oasisprotocol/oasis-core/issues/5725))
+
+  Since the storage node is always coupled with another role, make sure
+  to not add any particular role as otherwise this could cause observer
+  nodes to also register as compute nodes and then misbehave.
+
+### Internal Changes
+
+- go: Reverse order of TCB update fetching
+  ([#5704](https://github.com/oasisprotocol/oasis-core/issues/5704))
+
+  Early TCB updates are now tried first when updating TCB info. If
+  validation for an early update fails, the mechanism falls back to the
+  standard update.
+
+- runtime: Add VerifiedAttestation with more metadata
+  ([#5728](https://github.com/oasisprotocol/oasis-core/issues/5728))
+
+  Since verified attestations generated from TEE capabilities can include
+  additional metadata like the enclave's view of consensus layer height at
+  time of attestation, this allows such data to be used by callers.
+
+- go: Bump CometBFT to 0.37.7-oasis1
+  ([#5730](https://github.com/oasisprotocol/oasis-core/issues/5730))
+
 ## 24.0 (2024-05-13)
 
 | Protocol          | Version   |
