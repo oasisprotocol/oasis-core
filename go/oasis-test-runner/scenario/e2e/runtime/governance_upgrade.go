@@ -61,7 +61,7 @@ func newGovernanceConsensusUpgradeImpl(correctUpgradeVersion, cancelUpgrade bool
 	sc := &governanceConsensusUpgradeImpl{
 		Scenario: *NewScenario(
 			name,
-			NewTestClient().WithScenario(InsertTransferKeyValueScenario),
+			NewTestClient().WithScenario(InsertTransferScenario),
 		),
 		correctUpgradeVersion: correctUpgradeVersion,
 		shouldCancelUpgrade:   cancelUpgrade,
@@ -465,6 +465,6 @@ func (sc *governanceConsensusUpgradeImpl) Run(ctx context.Context, childEnv *env
 	}
 
 	// Check that runtime still works after the upgrade.
-	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveScenario)
 	return sc.Scenario.Run(ctx, childEnv)
 }

@@ -28,6 +28,8 @@ pub const METHOD_SHARE_REDUCTION_POINT: &str = "churp/share_reduction_point";
 pub const METHOD_SHARE_DISTRIBUTION_POINT: &str = "churp/share_distribution_point";
 /// Name of the `bivariate_share` method.
 pub const METHOD_BIVARIATE_SHARE: &str = "churp/bivariate_share";
+/// Name of the `key_share` method.
+pub const METHOD_KEY_SHARE: &str = "churp/key_share";
 
 impl RpcHandler for Churp {
     fn methods(&'static self) -> Vec<RpcMethod> {
@@ -61,6 +63,13 @@ impl RpcHandler for Churp {
                     kind: RpcKind::NoiseSession,
                 },
                 move |ctx: &_, req: &_| self.bivariate_share(ctx, req),
+            ),
+            RpcMethod::new(
+                RpcMethodDescriptor {
+                    name: METHOD_KEY_SHARE.to_string(),
+                    kind: RpcKind::NoiseSession,
+                },
+                move |ctx: &_, req: &_| self.key_share(ctx, req),
             ),
             /* Local queries */
             RpcMethod::new(

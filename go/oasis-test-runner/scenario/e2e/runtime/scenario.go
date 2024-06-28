@@ -39,13 +39,13 @@ var (
 	// Runtime is the basic network + client test case with runtime support.
 	Runtime scenario.Scenario = NewScenario(
 		"runtime",
-		NewTestClient().WithScenario(SimpleKeyValueScenario),
+		NewTestClient().WithScenario(SimpleScenario),
 	)
 
 	// RuntimeEncryption is the basic network + client with encryption test case.
 	RuntimeEncryption scenario.Scenario = NewScenario(
 		"runtime-encryption",
-		NewTestClient().WithScenario(InsertRemoveKeyValueEncScenario),
+		NewTestClient().WithScenario(InsertRemoveEncWithSecretsScenario),
 	)
 
 	// DefaultRuntimeLogWatcherHandlerFactories is a list of default log watcher
@@ -339,6 +339,7 @@ func RegisterScenarios() error {
 		KeymanagerUpgrade,
 		KeymanagerChurp,
 		KeymanagerChurpMany,
+		KeymanagerChurpTxs,
 		// Dump/restore test.
 		DumpRestore,
 		DumpRestoreRuntimeRoundAdvance,

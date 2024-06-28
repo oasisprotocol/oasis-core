@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/api"
@@ -33,6 +34,10 @@ func (sc *Scenario) createChurp(ctx context.Context, id uint8, threshold uint8, 
 	if enclaveID := sc.Net.Runtimes()[0].GetEnclaveIdentity(0); enclaveID != nil {
 		req.Policy.Policy.MayJoin = []sgx.EnclaveIdentity{*enclaveID}
 		req.Policy.Policy.MayShare = []sgx.EnclaveIdentity{*enclaveID}
+	}
+
+	if enclaveID := sc.Net.Runtimes()[1].GetEnclaveIdentity(0); enclaveID != nil {
+		req.Policy.Policy.MayQuery = map[common.Namespace][]sgx.EnclaveIdentity{KeyValueRuntimeID: {*enclaveID}}
 	}
 
 	if err := req.Policy.Sign(api.TestSigners); err != nil {

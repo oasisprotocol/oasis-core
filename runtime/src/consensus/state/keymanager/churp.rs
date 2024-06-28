@@ -157,6 +157,7 @@ mod test {
                     serial: 6,
                     may_share: vec![enclave1],
                     may_join: vec![enclave2],
+                    may_query: HashMap::new(),
                 },
                 signatures: vec![
                     SignatureBundle {

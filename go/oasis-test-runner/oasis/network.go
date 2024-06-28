@@ -795,6 +795,7 @@ func (net *Network) MakeGenesis() error {
 		"--" + genesis.CfgRegistryEnableRuntimeGovernanceModels, "entity,runtime",
 		"--" + genesis.CfgRegistryDebugAllowUnroutableAddresses, "true",
 		"--" + genesis.CfgRegistryDebugAllowTestRuntimes, "true",
+		"--" + genesis.CfgRegistrySoftwareVersion, "24.2",
 		"--" + genesis.CfgSchedulerMaxValidatorsPerEntity, strconv.Itoa(len(net.Validators())),
 		"--" + genesis.CfgConsensusGasCostsTxByte, strconv.FormatUint(uint64(net.cfg.Consensus.Parameters.GasCosts[consensusGenesis.GasOpTxByte]), 10),
 		"--" + genesis.CfgConsensusStateCheckpointInterval, strconv.FormatUint(net.cfg.Consensus.Parameters.StateCheckpointInterval, 10),

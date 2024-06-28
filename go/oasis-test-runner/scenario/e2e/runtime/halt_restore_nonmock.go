@@ -25,7 +25,7 @@ func newHaltRestoreNonMockImpl() scenario.Scenario {
 	return &haltRestoreNonMockImpl{
 		Scenario: *NewScenario(
 			name,
-			NewTestClient().WithScenario(InsertTransferKeyValueScenario),
+			NewTestClient().WithScenario(InsertTransferScenario),
 		),
 		haltEpoch: 8,
 	}
@@ -133,7 +133,7 @@ func (sc *haltRestoreNonMockImpl) Run(ctx context.Context, childEnv *env.Env) er
 		return err
 	}
 
-	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveKeyValueScenario)
+	sc.Scenario.TestClient = NewTestClient().WithSeed("seed2").WithScenario(RemoveScenario)
 
 	// Start the new network again and run the test client.
 	if err = sc.StartNetworkAndTestClient(ctx, childEnv); err != nil {

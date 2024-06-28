@@ -31,6 +31,8 @@ pub enum KeyManagerError {
     PolicyChanged,
     #[error("policy has invalid runtime")]
     PolicyInvalidRuntime,
+    #[error("insufficient key shares")]
+    InsufficientKeyShares,
     #[error("insufficient signatures")]
     InsufficientSignatures,
     #[error("runtime signing key missing")]

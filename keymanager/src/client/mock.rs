@@ -11,7 +11,7 @@ use oasis_core_runtime::{
 use crate::{
     api::KeyManagerError,
     churp::EncodedVerifiableSecretShare,
-    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, VerifiableSecret},
+    crypto::{KeyPair, KeyPairId, Secret, SignedPublicKey, StateKey, VerifiableSecret},
 };
 
 use super::KeyManagerClient;
@@ -109,7 +109,7 @@ impl KeyManagerClient for MockClient {
         unimplemented!();
     }
 
-    async fn verification_matrix(
+    async fn churp_verification_matrix(
         &self,
         _churp_id: u8,
         _epoch: EpochTime,
@@ -117,16 +117,7 @@ impl KeyManagerClient for MockClient {
         unimplemented!();
     }
 
-    async fn share_reduction_point(
-        &self,
-        _churp_id: u8,
-        _epoch: EpochTime,
-        _node_id: PublicKey,
-    ) -> Result<Vec<u8>, KeyManagerError> {
-        unimplemented!();
-    }
-
-    async fn share_distribution_point(
+    async fn churp_share_reduction_point(
         &self,
         _churp_id: u8,
         _epoch: EpochTime,
@@ -135,12 +126,29 @@ impl KeyManagerClient for MockClient {
         unimplemented!();
     }
 
-    async fn bivariate_share(
+    async fn churp_share_distribution_point(
+        &self,
+        _churp_id: u8,
+        _epoch: EpochTime,
+        _node_id: PublicKey,
+    ) -> Result<Vec<u8>, KeyManagerError> {
+        unimplemented!();
+    }
+
+    async fn churp_bivariate_share(
         &self,
         _churp_id: u8,
         _epoch: EpochTime,
         _node_id: PublicKey,
     ) -> Result<EncodedVerifiableSecretShare, KeyManagerError> {
+        unimplemented!();
+    }
+
+    async fn churp_state_key(
+        &self,
+        _churp_id: u8,
+        _key_id: KeyPairId,
+    ) -> Result<StateKey, KeyManagerError> {
         unimplemented!();
     }
 }

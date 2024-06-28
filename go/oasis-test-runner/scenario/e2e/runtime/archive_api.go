@@ -22,7 +22,7 @@ import (
 var ArchiveAPI scenario.Scenario = &archiveAPI{
 	Scenario: *NewScenario(
 		"archive-api",
-		NewTestClient().WithScenario(InsertTransferKeyValueScenario),
+		NewTestClient().WithScenario(InsertTransferScenario),
 	),
 }
 

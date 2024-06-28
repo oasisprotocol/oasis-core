@@ -28,7 +28,7 @@ func newNodeShutdownImpl() scenario.Scenario {
 	sc := &nodeShutdownImpl{
 		Scenario: *NewScenario(
 			"node-shutdown",
-			NewTestClient().WithScenario(SimpleKeyValueScenario),
+			NewTestClient().WithScenario(SimpleScenario),
 		),
 	}
 	return sc

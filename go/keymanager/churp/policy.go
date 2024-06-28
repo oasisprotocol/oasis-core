@@ -3,6 +3,7 @@ package churp
 import (
 	"fmt"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/sgx"
@@ -12,7 +13,8 @@ import (
 var PolicySGXSignatureContext = signature.NewContext("oasis-core/keymanager/churp: policy")
 
 // PolicySGX represents an SGX access control policy used to authenticate
-// key manager enclaves during handoffs.
+// key manager enclaves during handoffs and remote client enclaves when
+// querying key shares.
 type PolicySGX struct {
 	Identity
 
@@ -20,12 +22,16 @@ type PolicySGX struct {
 	Serial uint32 `json:"serial"`
 
 	// MayShare is the vector of enclave identities from which a share can be
-	// obtained during handouts.
+	// obtained during handoffs.
 	MayShare []sgx.EnclaveIdentity `json:"may_share"`
 
 	// MayJoin is the vector of enclave identities that may form the new
 	// committee in the next handoffs.
 	MayJoin []sgx.EnclaveIdentity `json:"may_join"`
+
+	// MayQuery is the map of runtime identities to the vector of enclave
+	// identities that may query key shares.
+	MayQuery map[common.Namespace][]sgx.EnclaveIdentity `json:"may_query,omitempty"`
 }
 
 // SanityCheck verifies the validity of the policy.

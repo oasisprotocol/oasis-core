@@ -1417,6 +1417,9 @@ type ConsensusParameters struct {
 
 	// MaxRuntimeDeployments is the maximum number of runtime deployments.
 	MaxRuntimeDeployments uint8 `json:"max_runtime_deployments,omitempty"`
+
+	// SoftwareVersion represents the latest consensus breaking software version.
+	SoftwareVersion *version.Version `json:"software_version,omitempty"`
 }
 
 // ConsensusParameterChanges are allowed registry consensus parameter changes.

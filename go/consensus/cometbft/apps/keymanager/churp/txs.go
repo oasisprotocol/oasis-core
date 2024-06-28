@@ -8,6 +8,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	tmapi "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	churpState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/churp/state"
 	kmCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
@@ -19,6 +20,11 @@ import (
 )
 
 func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error {
+	// Make sure the `MayQuery` field is empty until the next breaking upgrade.
+	if err := verifyPolicy(ctx, &req.Policy); err != nil {
+		return err
+	}
+
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
 
@@ -125,6 +131,11 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 }
 
 func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error {
+	// Make sure the `MayQuery` field is empty until the next breaking upgrade.
+	if err := verifyPolicy(ctx, req.Policy); err != nil {
+		return err
+	}
+
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
 
@@ -544,4 +555,21 @@ func resetHandoff(status *churp.Status, nextHandoff beacon.EpochTime) {
 	status.NextHandoff = nextHandoff
 	status.NextChecksum = nil
 	status.Applications = nil
+}
+
+func verifyPolicy(ctx *tmapi.Context, policy *churp.SignedPolicySGX) error {
+	// Allow non-empty `MayQuery` field with the 24.2 release.
+	regState := registryState.NewMutableState(ctx.State())
+	regParams, err := regState.ConsensusParameters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load registry consensus parameters: %w", err)
+	}
+	if regParams.SoftwareVersion != nil && regParams.SoftwareVersion.ToU64() >= version.MustFromString("24.2").ToU64() {
+		return nil
+	}
+
+	if policy != nil && policy.Policy.MayQuery != nil {
+		return api.ErrInvalidArgument
+	}
+	return nil
 }

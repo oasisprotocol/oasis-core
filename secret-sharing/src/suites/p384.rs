@@ -19,9 +19,9 @@ pub struct Sha3_384;
 impl GroupDigest for Sha3_384 {
     type Output = ProjectivePoint;
 
-    fn hash_to_group(msg: &[u8], dst: &[u8]) -> Result<Self::Output> {
+    fn hash_to_group(msg: &[u8], dst: &[u8], identifier: &[u8]) -> Result<Self::Output> {
         let msgs = [msg];
-        let dsts = [NIST_P384_SHA3_384_ENC_DST, dst];
+        let dsts = [NIST_P384_SHA3_384_ENC_DST, dst, identifier];
         let p = NistP384::hash_from_bytes::<ExpandMsgXmd<sha3::Sha3_384>>(&msgs, &dsts)?;
         Ok(p)
     }
@@ -30,9 +30,9 @@ impl GroupDigest for Sha3_384 {
 impl FieldDigest for Sha3_384 {
     type Output = Scalar;
 
-    fn hash_to_field(msg: &[u8], dst: &[u8]) -> Result<Self::Output> {
+    fn hash_to_field(msg: &[u8], dst: &[u8], identifier: &[u8]) -> Result<Self::Output> {
         let msgs = [msg];
-        let dsts = [NIST_P384_SHA3_384_ENC_DST, dst];
+        let dsts = [NIST_P384_SHA3_384_ENC_DST, dst, identifier];
         let s = NistP384::hash_to_scalar::<ExpandMsgXmd<sha3::Sha3_384>>(&msgs, &dsts)?;
         Ok(s)
     }
@@ -51,22 +51,22 @@ mod tests {
     #[bench]
     fn bench_hash_to_field_p384_sha3_384(b: &mut Bencher) {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let mut data = [0; 64];
+        let mut data = [0; 96];
 
         b.iter(|| {
             rng.fill_bytes(&mut data);
-            let _ = Sha3_384::hash_to_field(&data[..32], &data[32..]).unwrap();
+            let _ = Sha3_384::hash_to_field(&data[..32], &data[32..64], &data[64..]).unwrap();
         });
     }
 
     #[bench]
     fn bench_hash_to_group_p384_sha3_384(b: &mut Bencher) {
         let mut rng: StdRng = SeedableRng::from_seed([1u8; 32]);
-        let mut data = [0; 64];
+        let mut data = [0; 96];
 
         b.iter(|| {
             rng.fill_bytes(&mut data);
-            let _ = Sha3_384::hash_to_group(&data[..32], &data[32..]).unwrap();
+            let _ = Sha3_384::hash_to_group(&data[..32], &data[32..64], &data[64..]).unwrap();
         });
     }
 }

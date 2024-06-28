@@ -262,7 +262,7 @@ func (w *secretsWorker) authorizeNode(ctx context.Context, peerID core.PeerID, k
 				}
 			}
 		}
-		return fmt.Errorf("query not allowed")
+		return fmt.Errorf("request not allowed")
 	default:
 		return fmt.Errorf("unsupported hardware: %s", rt.TEEHardware)
 	}
