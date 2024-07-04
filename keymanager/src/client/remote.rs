@@ -277,6 +277,7 @@ impl RemoteClient {
                         id: status.id,
                         runtime_id: status.runtime_id,
                         epoch: status.handoff,
+                        key_runtime_id: self.runtime_id,
                         key_id,
                     },
                 )

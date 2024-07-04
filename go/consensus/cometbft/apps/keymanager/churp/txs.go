@@ -13,12 +13,18 @@ import (
 	kmCommon "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/keymanager/common"
 	registryState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/registry/state"
 	stakingState "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/apps/staking/state"
+	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/features"
 	"github.com/oasisprotocol/oasis-core/go/keymanager/churp"
 	"github.com/oasisprotocol/oasis-core/go/registry/api"
 	staking "github.com/oasisprotocol/oasis-core/go/staking/api"
 )
 
 func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error {
+	// Make sure the `MayQuery` field is empty until the next breaking upgrade.
+	if err := verifyPolicy(ctx, &req.Policy); err != nil {
+		return err
+	}
+
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
 
@@ -125,6 +131,11 @@ func (ext *churpExt) create(ctx *tmapi.Context, req *churp.CreateRequest) error 
 }
 
 func (ext *churpExt) update(ctx *tmapi.Context, req *churp.UpdateRequest) error {
+	// Make sure the `MayQuery` field is empty until the next breaking upgrade.
+	if err := verifyPolicy(ctx, req.Policy); err != nil {
+		return err
+	}
+
 	// Prepare state.
 	state := churpState.NewMutableState(ctx.State())
 
@@ -544,4 +555,19 @@ func resetHandoff(status *churp.Status, nextHandoff beacon.EpochTime) {
 	status.NextHandoff = nextHandoff
 	status.NextChecksum = nil
 	status.Applications = nil
+}
+
+func verifyPolicy(ctx *tmapi.Context, policy *churp.SignedPolicySGX) error {
+	// Allow non-empty `MayQuery` field with the 24.2 release.
+	enabled, err := features.IsFeatureVersion(ctx, "24.2")
+	if err != nil {
+		return err
+	}
+	if enabled {
+		return nil
+	}
+	if policy != nil && policy.Policy.MayQuery != nil {
+		return api.ErrInvalidArgument
+	}
+	return nil
 }

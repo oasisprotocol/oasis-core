@@ -2,13 +2,14 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    iter::FromIterator,
     sync::{Arc, Mutex},
 };
 
 use anyhow::Result;
 
 use oasis_core_runtime::{
-    common::sgx::EnclaveIdentity,
+    common::{namespace::Namespace, sgx::EnclaveIdentity},
     consensus::keymanager::churp::{PolicySGX, SignedPolicySGX},
 };
 
@@ -69,9 +70,13 @@ pub struct VerifiedPolicy {
     /// during handouts.
     pub may_share: HashSet<EnclaveIdentity>,
 
-    /// A hash of enclave identities that may form the new committee
+    /// A set of enclave identities that may form the new committee
     /// in the next handoffs.
     pub may_join: HashSet<EnclaveIdentity>,
+
+    /// A map of runtime identities and their respective sets of enclave
+    /// identities that are allowed to query key shares.
+    pub may_query: HashMap<Namespace, HashSet<EnclaveIdentity>>,
 }
 
 impl VerifiedPolicy {
@@ -80,20 +85,17 @@ impl VerifiedPolicy {
     /// The provided policy should be valid, signed by trusted signers,
     /// and published in the consensus layer state.
     fn new(verified_policy: &PolicySGX) -> Result<Self> {
-        let mut may_share = HashSet::new();
-        for enclave_identity in &verified_policy.may_share {
-            may_share.insert(enclave_identity.clone());
-        }
-
-        let mut may_join = HashSet::new();
-        for enclave_identity in &verified_policy.may_join {
-            may_join.insert(enclave_identity.clone());
-        }
+        let may_share = HashSet::from_iter(verified_policy.may_share.iter().cloned());
+        let may_join = HashSet::from_iter(verified_policy.may_join.iter().cloned());
+        let may_query = HashMap::from_iter(verified_policy.may_query.iter().map(
+            |(runtime_id, enclaves)| (*runtime_id, HashSet::from_iter(enclaves.iter().cloned())),
+        ));
 
         Ok(Self {
             serial: verified_policy.serial,
             may_share,
             may_join,
+            may_query,
         })
     }
 
@@ -107,5 +109,14 @@ impl VerifiedPolicy {
     /// committee in the next handoffs.
     pub fn may_join(&self, remote_enclave: &EnclaveIdentity) -> bool {
         self.may_join.contains(remote_enclave)
+    }
+
+    /// Returns true iff the remote enclave is allowed to query key shares
+    /// for the given runtime.
+    pub fn may_query(&self, remote_enclave: &EnclaveIdentity, runtime_id: &Namespace) -> bool {
+        self.may_query
+            .get(runtime_id)
+            .map(|may_query_runtime| may_query_runtime.contains(remote_enclave))
+            .unwrap_or(false)
     }
 }

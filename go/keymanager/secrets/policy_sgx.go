@@ -43,8 +43,10 @@ type EnclavePolicySGX struct {
 	MayQuery map[common.Namespace][]sgx.EnclaveIdentity `json:"may_query"`
 
 	// MayReplicate is the vector of enclave IDs that may retrieve the master
-	// secret (Note: Each enclave ID may always implicitly replicate from other
-	// instances of itself).
+	// secret.
+	//
+	// NOTE: Each enclave ID may always implicitly replicate from other
+	// instances of itself.
 	MayReplicate []sgx.EnclaveIdentity `json:"may_replicate"`
 }
 

@@ -153,7 +153,10 @@ pub struct KeyShareRequest {
     /// The epoch of the handoff.
     pub epoch: EpochTime,
 
-    /// Key ID.
+    /// The identifier of the runtime for which the key share is requested.
+    pub key_runtime_id: Namespace,
+
+    /// The identifier of the key.
     pub key_id: KeyPairId,
 }
 

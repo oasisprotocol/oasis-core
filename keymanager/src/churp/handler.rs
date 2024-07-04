@@ -404,12 +404,12 @@ impl Churp {
     /// share needs to be kept secret and generated only for authorized nodes.
     pub fn key_share(
         &self,
-        _ctx: &RpcContext,
+        ctx: &RpcContext,
         req: &KeyShareRequest,
     ) -> Result<EncodedEncryptedPoint> {
-        // TODO: Add authorization.
-
         let status = self.verify_last_handoff(req.id, req.runtime_id, req.epoch)?;
+
+        self.verify_rt_enclave(ctx, &status.policy, &req.key_runtime_id)?;
 
         match status.suite_id {
             SuiteId::NistP384Sha3_384 => {
@@ -1299,6 +1299,25 @@ impl Churp {
         let remote_enclave = Self::remote_enclave(ctx)?;
         let policy = self.policies.verify(policy)?;
         if !policy.may_join(remote_enclave) {
+            return Err(Error::NotAuthorized.into());
+        }
+        Ok(())
+    }
+
+    /// Authorizes the remote runtime enclave so that secret data is never
+    /// revealed to an unauthorized enclave.
+    fn verify_rt_enclave(
+        &self,
+        ctx: &RpcContext,
+        policy: &SignedPolicySGX,
+        runtime_id: &Namespace,
+    ) -> Result<()> {
+        if Self::ignore_policy() {
+            return Ok(());
+        }
+        let remote_enclave = Self::remote_enclave(ctx)?;
+        let policy = self.policies.verify(policy)?;
+        if !policy.may_query(remote_enclave, runtime_id) {
             return Err(Error::NotAuthorized.into());
         }
         Ok(())
