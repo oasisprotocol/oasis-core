@@ -687,15 +687,8 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 
 		// Make sure that we actually have a new status.
 		if !statusUpdated && st != nil {
-			switch {
-			case ri.Features.KeyManagerStatusUpdates:
-				if err = n.updateKeyManagerStatus(ctx, st); err == nil {
-					statusUpdated = true
-				}
-			case st.Policy != nil:
-				if err = n.updateKeyManagerPolicy(ctx, st.Policy); err == nil {
-					statusUpdated = true
-				}
+			if err = n.updateKeyManagerStatus(ctx, st); err == nil {
+				statusUpdated = true
 			}
 		}
 
@@ -792,28 +785,6 @@ func (n *runtimeHostNotifier) updateKeyManagerStatus(ctx context.Context, status
 	}
 
 	n.logger.Debug("key manager status update dispatched")
-	return nil
-}
-
-func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *secrets.SignedPolicySGX) error {
-	n.logger.Debug("got key manager policy update", "policy", policy)
-
-	raw := cbor.Marshal(policy)
-	req := &protocol.Body{RuntimeKeyManagerPolicyUpdateRequest: &protocol.RuntimeKeyManagerPolicyUpdateRequest{
-		SignedPolicyRaw: raw,
-	}}
-
-	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
-	defer cancel()
-
-	if _, err := n.host.Call(ctx, req); err != nil {
-		n.logger.Error("failed dispatching key manager policy update to runtime",
-			"err", err,
-		)
-		return err
-	}
-
-	n.logger.Debug("key manager policy update dispatched")
 	return nil
 }
 
