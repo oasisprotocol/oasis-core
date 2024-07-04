@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/oasisprotocol/oasis-core/go/common"
 	"github.com/oasisprotocol/oasis-core/go/common/cbor"
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
@@ -90,8 +91,13 @@ func TestProvisioner(
 	}
 }
 
-func mockKeyManagerPolicyRequest() (*protocol.Body, error) {
-	// Generate a dummy key manager policy for tests.
+func mockRuntimeKeyManagerStatusUpdateRequest() (*protocol.Body, error) {
+	// Generate a dummy key manager status for tests.
+	var keymanagerID common.Namespace
+	if err := keymanagerID.UnmarshalHex("c000000000000000fffffffffffffffffffffffffffffffffffffffffffffffe"); err != nil {
+		return nil, err
+	}
+
 	policy := secrets.PolicySGX{
 		Serial:   1,
 		Enclaves: map[sgx.EnclaveIdentity]*secrets.EnclavePolicySGX{},
@@ -108,8 +114,20 @@ func mockKeyManagerPolicyRequest() (*protocol.Body, error) {
 		sigPolicy.Signatures = append(sigPolicy.Signatures, *sig)
 	}
 
-	return &protocol.Body{RuntimeKeyManagerPolicyUpdateRequest: &protocol.RuntimeKeyManagerPolicyUpdateRequest{
-		SignedPolicyRaw: cbor.Marshal(sigPolicy),
+	status := secrets.Status{
+		ID:            keymanagerID,
+		IsInitialized: true,
+		IsSecure:      true,
+		Generation:    1,
+		RotationEpoch: 0,
+		Checksum:      []byte{1, 2, 3},
+		Nodes:         nil,
+		Policy:        &sigPolicy,
+		RSK:           nil,
+	}
+
+	return &protocol.Body{RuntimeKeyManagerStatusUpdateRequest: &protocol.RuntimeKeyManagerStatusUpdateRequest{
+		Status: status,
 	}}, nil
 }
 
@@ -139,12 +157,12 @@ func testBasic(t *testing.T, cfg host.Config, p host.Provisioner) {
 	require.NoError(err, "Call")
 	require.NotNil(rsp.Empty, "runtime response to RuntimePingRequest should return an Empty body")
 
-	req, err := mockKeyManagerPolicyRequest()
-	require.NoError(err, "mockKeyManagerPolicyRequest")
+	req, err := mockRuntimeKeyManagerStatusUpdateRequest()
+	require.NoError(err, "mockKeyManagerStatusRequest")
 
 	rsp, err = r.Call(ctx, req)
-	require.NoError(err, "KeyManagerPolicyRequest Call")
-	require.NotNil(rsp.RuntimeKeyManagerPolicyUpdateResponse, "runtime response to KeyManagerPolicyRequest should return an RuntimeKeyManagerPolicyUpdateResponse body")
+	require.NoError(err, "KeyManagerStatusRequest Call")
+	require.NotNil(rsp.RuntimeKeyManagerStatusUpdateResponse, "runtime response to RuntimeKeyManagerStatusUpdate should return a RuntimeKeyManagerStatusUpdateResponse body")
 
 	// Request the runtime to stop.
 	r.Stop()

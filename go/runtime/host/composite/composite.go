@@ -54,8 +54,7 @@ func shouldPropagateToComponent(body *protocol.Body) bool {
 		// Consensus view of all components should be up to date as otherwise signed attestations
 		// will be stale, resulting in them being rejected.
 		return true
-	case body.RuntimeKeyManagerPolicyUpdateRequest != nil,
-		body.RuntimeKeyManagerStatusUpdateRequest != nil,
+	case body.RuntimeKeyManagerStatusUpdateRequest != nil,
 		body.RuntimeKeyManagerQuotePolicyUpdateRequest != nil:
 		// Key manager updates should be propagated.
 		return true

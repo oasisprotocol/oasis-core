@@ -97,8 +97,6 @@ type Body struct {
 	RuntimeAbortResponse                          *Empty                                        `json:",omitempty"`
 	RuntimeKeyManagerStatusUpdateRequest          *RuntimeKeyManagerStatusUpdateRequest         `json:",omitempty"`
 	RuntimeKeyManagerStatusUpdateResponse         *Empty                                        `json:",omitempty"`
-	RuntimeKeyManagerPolicyUpdateRequest          *RuntimeKeyManagerPolicyUpdateRequest         `json:",omitempty"`
-	RuntimeKeyManagerPolicyUpdateResponse         *Empty                                        `json:",omitempty"`
 	RuntimeKeyManagerQuotePolicyUpdateRequest     *RuntimeKeyManagerQuotePolicyUpdateRequest    `json:",omitempty"`
 	RuntimeKeyManagerQuotePolicyUpdateResponse    *Empty                                        `json:",omitempty"`
 	RuntimeQueryRequest                           *RuntimeQueryRequest                          `json:",omitempty"`
@@ -445,11 +443,6 @@ type RuntimeExecuteTxBatchResponse struct {
 // RuntimeKeyManagerStatusUpdateRequest is a runtime key manager status update request message body.
 type RuntimeKeyManagerStatusUpdateRequest struct {
 	Status secrets.Status `json:"status"`
-}
-
-// RuntimeKeyManagerPolicyUpdateRequest is a runtime key manager policy update request message body.
-type RuntimeKeyManagerPolicyUpdateRequest struct {
-	SignedPolicyRaw []byte `json:"signed_policy_raw"`
 }
 
 // RuntimeKeyManagerQuotePolicyUpdateRequest is a runtime key manager quote policy update request

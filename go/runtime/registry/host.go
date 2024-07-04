@@ -663,46 +663,34 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 	var (
 		statusUpdated      = true
 		quotePolicyUpdated = true
-		runtimeInfoUpdated = false
 	)
 
 	var (
 		st *secrets.Status
 		sc *node.SGXConstraints
 		vi *registry.VersionInfo
-		ri *protocol.RuntimeInfoResponse
 	)
 
 	for {
-		// Fetch runtime info so that we know which features the current runtime version supports.
-		if !runtimeInfoUpdated {
-			if ri, err = n.host.GetInfo(ctx); err != nil {
-				n.logger.Error("failed to fetch runtime info",
-					"err", err,
-				)
-				return
-			}
-			runtimeInfoUpdated = true
-		}
-
 		// Make sure that we actually have a new status.
 		if !statusUpdated && st != nil {
-			switch {
-			case ri.Features.KeyManagerStatusUpdates:
-				if err = n.updateKeyManagerStatus(ctx, st); err == nil {
-					statusUpdated = true
-				}
-			case st.Policy != nil:
-				if err = n.updateKeyManagerPolicy(ctx, st.Policy); err == nil {
-					statusUpdated = true
-				}
+			if err = n.updateKeyManagerStatus(ctx, st); err != nil {
+				n.logger.Error("failed to update key manager status",
+					"err", err,
+				)
+			} else {
+				statusUpdated = true
 			}
 		}
 
 		// Make sure that we actually have a new quote policy and that the current runtime version
 		// supports quote policy updates.
-		if !quotePolicyUpdated && sc != nil && sc.Policy != nil && ri.Features.KeyManagerQuotePolicyUpdates {
-			if err = n.updateKeyManagerQuotePolicy(ctx, sc.Policy); err == nil {
+		if !quotePolicyUpdated && sc != nil && sc.Policy != nil {
+			if err = n.updateKeyManagerQuotePolicy(ctx, sc.Policy); err != nil {
+				n.logger.Error("failed to update key manager quote policy",
+					"err", err,
+				)
+			} else {
 				quotePolicyUpdated = true
 			}
 		}
@@ -763,7 +751,6 @@ func (n *runtimeHostNotifier) watchKmPolicyUpdates(ctx context.Context, kmRtID *
 
 			statusUpdated = false
 			quotePolicyUpdated = false
-			runtimeInfoUpdated = false
 		case <-retryTicker.C:
 			// Retry updates if some of them failed. When using CometBFT as a backend service
 			// the host will see the new state one block before the consensus verifier as the former
@@ -792,28 +779,6 @@ func (n *runtimeHostNotifier) updateKeyManagerStatus(ctx context.Context, status
 	}
 
 	n.logger.Debug("key manager status update dispatched")
-	return nil
-}
-
-func (n *runtimeHostNotifier) updateKeyManagerPolicy(ctx context.Context, policy *secrets.SignedPolicySGX) error {
-	n.logger.Debug("got key manager policy update", "policy", policy)
-
-	raw := cbor.Marshal(policy)
-	req := &protocol.Body{RuntimeKeyManagerPolicyUpdateRequest: &protocol.RuntimeKeyManagerPolicyUpdateRequest{
-		SignedPolicyRaw: raw,
-	}}
-
-	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
-	defer cancel()
-
-	if _, err := n.host.Call(ctx, req); err != nil {
-		n.logger.Error("failed dispatching key manager policy update to runtime",
-			"err", err,
-		)
-		return err
-	}
-
-	n.logger.Debug("key manager policy update dispatched")
 	return nil
 }
 
