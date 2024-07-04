@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/oasis-core/go/common/crypto/signature"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	"github.com/oasisprotocol/oasis-core/go/oasis-node/cmd/common/flags"
 )
@@ -42,6 +43,25 @@ type Parameters struct { // nolint: maligned
 
 	// PublicKeyBlacklist is the network-wide public key blacklist.
 	PublicKeyBlacklist []signature.PublicKey `json:"public_key_blacklist,omitempty"`
+
+	// FeatureVersion represents the latest consensus-breaking software version
+	// that follows calendar versioning (yy.minor[.micro]).
+	FeatureVersion *version.Version `json:"feature_version,omitempty"`
+}
+
+// IsFeatureVersion returns true iff the consensus feature version is high
+// enough for the feature to be enabled.
+func (p *Parameters) IsFeatureVersion(minVersion string) (bool, error) {
+	mimFeatureVersion, err := version.FromString(minVersion)
+	if err != nil {
+		return false, err
+	}
+
+	if p.FeatureVersion == nil {
+		return false, nil
+	}
+
+	return p.FeatureVersion.ToU64() >= mimFeatureVersion.ToU64(), nil
 }
 
 const (
