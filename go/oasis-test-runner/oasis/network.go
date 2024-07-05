@@ -799,6 +799,7 @@ func (net *Network) MakeGenesis() error {
 		"--" + genesis.CfgConsensusGasCostsTxByte, strconv.FormatUint(uint64(net.cfg.Consensus.Parameters.GasCosts[consensusGenesis.GasOpTxByte]), 10),
 		"--" + genesis.CfgConsensusStateCheckpointInterval, strconv.FormatUint(net.cfg.Consensus.Parameters.StateCheckpointInterval, 10),
 		"--" + genesis.CfgConsensusStateCheckpointNumKept, strconv.FormatUint(net.cfg.Consensus.Parameters.StateCheckpointNumKept, 10),
+		"--" + genesis.CfgConsensusFeatureVersion, "100.0", // High enough to enable all features.
 		"--" + genesis.CfgStakingTokenSymbol, genesisTestHelpers.TestStakingTokenSymbol,
 		"--" + genesis.CfgStakingTokenValueExponent, strconv.FormatUint(uint64(genesisTestHelpers.TestStakingTokenValueExponent), 10),
 		"--" + genesis.CfgBeaconBackend, net.cfg.Beacon.Backend,

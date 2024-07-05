@@ -25,6 +25,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/logging"
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
+	"github.com/oasisprotocol/oasis-core/go/common/version"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
@@ -115,6 +116,7 @@ const (
 	CfgConsensusStateCheckpointChunkSize = "consensus.state_checkpoint.chunk_size"
 	CfgConsensusGasCostsTxByte           = "consensus.gas_costs.tx_byte"
 	cfgConsensusBlacklistPublicKey       = "consensus.blacklist_public_key"
+	CfgConsensusFeatureVersion           = "consensus.feature_version"
 
 	// Consensus backend config flag.
 	CfgConsensusBackend = "consensus.backend"
@@ -284,6 +286,18 @@ func doInitGenesis(*cobra.Command, []string) {
 		return
 	}
 
+	var featureVersion *version.Version
+	if s := viper.GetString(CfgConsensusFeatureVersion); s != "" {
+		version, err := version.FromString(s)
+		if err != nil {
+			logger.Error("failed to parse consensus feature version",
+				"err", err,
+			)
+			return
+		}
+		featureVersion = &version
+	}
+
 	doc.Consensus = consensusGenesis.Genesis{
 		Backend: viper.GetString(CfgConsensusBackend),
 		Parameters: consensusGenesis.Parameters{
@@ -301,6 +315,7 @@ func doInitGenesis(*cobra.Command, []string) {
 				consensusGenesis.GasOpTxByte: transaction.Gas(viper.GetUint64(CfgConsensusGasCostsTxByte)),
 			},
 			PublicKeyBlacklist: pkBlacklist,
+			FeatureVersion:     featureVersion,
 		},
 	}
 
@@ -863,6 +878,7 @@ func init() {
 	initGenesisFlags.String(CfgConsensusStateCheckpointChunkSize, "8mb", "consensus state checkpoint chunk size (in bytes)")
 	initGenesisFlags.Uint64(CfgConsensusGasCostsTxByte, 1, "consensus gas costs: each transaction byte")
 	initGenesisFlags.StringSlice(cfgConsensusBlacklistPublicKey, nil, "blacklist public key")
+	initGenesisFlags.String(CfgConsensusFeatureVersion, "", "latest consensus breaking software feature version")
 
 	// Consensus backend flag.
 	initGenesisFlags.String(CfgConsensusBackend, cmt.BackendName, "consensus backend")
