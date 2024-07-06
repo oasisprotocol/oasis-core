@@ -75,6 +75,13 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 		len(txsWithResults.Transactions),
 		"GetTransactionsWithResults.Results length mismatch",
 	)
+	for _, res := range txsWithResults.Results {
+		// Quick and dirty filter for meta transactions, which don't use any gas. Most other
+		// transactions do emit events so this should be good enough for here.
+		if len(res.Events) > 0 {
+			require.True(res.GasUsed > 0, "gas used should be greater than zero")
+		}
+	}
 
 	txsWithProofs, err := backend.GetTransactionsWithProofs(ctx, status.LatestHeight)
 	require.NoError(err, "GetTransactionsWithProofs")
@@ -151,7 +158,7 @@ func ConsensusImplementationTests(t *testing.T, backend consensus.ClientBackend)
 	err = backend.SubmitTxNoWait(ctx, &transaction.SignedTransaction{})
 	require.Error(err, "SubmitTxNoWait should fail with invalid transaction")
 
-	testTx := transaction.NewTransaction(0, nil, staking.MethodTransfer, &staking.Transfer{})
+	testTx := transaction.NewTransaction(0, &transaction.Fee{Gas: 10_000}, staking.MethodTransfer, &staking.Transfer{})
 	testSigner := memorySigner.NewTestSigner(fmt.Sprintf("consensus tests tx signer: %T", backend))
 	testSigTx, err := transaction.Sign(testSigner, testTx)
 	require.NoError(err, "transaction.Sign")

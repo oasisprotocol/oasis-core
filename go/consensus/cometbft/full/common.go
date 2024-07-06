@@ -700,6 +700,7 @@ func (n *commonNode) GetTransactionsWithResults(ctx context.Context, height int6
 				Code:    rs.GetCode(),
 				Message: rs.GetLog(),
 			},
+			GasUsed: uint64(rs.GetGasUsed()),
 		}
 
 		// Transaction staking events.

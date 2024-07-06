@@ -16,6 +16,7 @@ import (
 	"github.com/oasisprotocol/oasis-core/go/common/node"
 	"github.com/oasisprotocol/oasis-core/go/common/quantity"
 	"github.com/oasisprotocol/oasis-core/go/common/version"
+	"github.com/oasisprotocol/oasis-core/go/consensus/api/transaction"
 	cmt "github.com/oasisprotocol/oasis-core/go/consensus/cometbft/api"
 	"github.com/oasisprotocol/oasis-core/go/consensus/cometbft/crypto"
 	consensus "github.com/oasisprotocol/oasis-core/go/consensus/genesis"
@@ -113,6 +114,9 @@ func NewTestNodeGenesisProvider(identity *identity.Identity, ent *entity.Entity,
 				SkipTimeoutCommit: true,
 				MaxBlockSize:      21 * 1024 * 1024,
 				MaxEvidenceSize:   1024 * 1024,
+				GasCosts: transaction.Costs{
+					consensus.GasOpTxByte: 1,
+				},
 			},
 		},
 		Staking: stakingTests.GenesisState(),
