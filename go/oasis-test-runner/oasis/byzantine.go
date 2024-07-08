@@ -2,7 +2,6 @@ package oasis
 
 import (
 	"fmt"
-	"path/filepath"
 	"strconv"
 
 	beacon "github.com/oasisprotocol/oasis-core/go/beacon/api"
@@ -74,8 +73,8 @@ func (worker *Byzantine) ModifyConfig() error {
 	worker.AddSeedNodesToConfig()
 
 	if !worker.entity.isDebugTestEntity {
-		dir := worker.entity.dir.String()
-		worker.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+		entityID, _ := worker.entity.ID().MarshalText() // Cannot fail.
+		worker.Config.Registration.EntityID = string(entityID)
 	}
 
 	return nil
