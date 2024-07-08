@@ -14,13 +14,9 @@ use crate::{
 
 use super::Error;
 
-/// Domain separation tag for encoding shareholder identifiers.
-const SHAREHOLDER_ENC_DST: &[u8] = b"shareholder";
-
 /// Encodes the given shareholder ID to a non-zero element of the prime field.
 pub fn encode_shareholder<H: FieldDigest>(id: &[u8], dst: &[u8]) -> Result<H::Output> {
-    let s = H::hash_to_field(id, dst, SHAREHOLDER_ENC_DST)
-        .map_err(|_| Error::ShareholderEncodingFailed)?;
+    let s = H::hash_to_field(id, dst).map_err(|_| Error::ShareholderEncodingFailed)?;
 
     if s.is_zero().into() {
         return Err(Error::ZeroValueShareholder.into());

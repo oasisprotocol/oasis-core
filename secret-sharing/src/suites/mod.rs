@@ -11,7 +11,7 @@ pub trait FieldDigest {
 
     /// Hashes an arbitrary-length byte string to an element of the prime field
     /// using the given message and domain separation tag.
-    fn hash_to_field(msg: &[u8], dst: &[u8], identifier: &[u8]) -> Result<Self::Output>;
+    fn hash_to_field(msg: &[u8], dst: &[u8]) -> Result<Self::Output>;
 }
 
 /// A trait for hashing arbitrary-length byte strings to elements of a group.
@@ -21,7 +21,7 @@ pub trait GroupDigest {
 
     /// Hashes an arbitrary-length byte string to an element of the group
     /// using the given message and domain separation tag.
-    fn hash_to_group(msg: &[u8], dst: &[u8], identifier: &[u8]) -> Result<Self::Output>;
+    fn hash_to_group(msg: &[u8], dst: &[u8]) -> Result<Self::Output>;
 }
 
 /// A cipher suite containing a cryptographic group, along with matching field

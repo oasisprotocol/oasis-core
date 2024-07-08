@@ -10,9 +10,6 @@ use crate::{
     vss::{lagrange, polynomial::EncryptedPoint},
 };
 
-/// Domain separation tag for encoding key ID for key share derivation.
-pub const KEY_ID_ENC_DST: &[u8] = b"key ID";
-
 /// A trait for shareholders which hold a secret share point on a secret-sharing
 /// polynomial.
 pub trait PointShareholder<F: PrimeField> {
@@ -45,7 +42,7 @@ where
         key_id: &[u8],
         dst: &[u8],
     ) -> Result<EncryptedPoint<G>> {
-        let hash = H::hash_to_group(key_id, dst, KEY_ID_ENC_DST)?;
+        let hash = H::hash_to_group(key_id, dst)?;
         let x = self.coordinate_x();
         let y = self.coordinate_y();
         let point = EncryptedPoint { x: *x, z: hash * y };

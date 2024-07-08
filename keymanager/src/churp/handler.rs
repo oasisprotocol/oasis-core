@@ -18,7 +18,7 @@ use oasis_core_runtime::{
             hash::Hash,
             signature::{PublicKey, Signer},
         },
-        namespace::{Namespace, NAMESPACE_SIZE},
+        namespace::Namespace,
         sgx::EnclaveIdentity,
     },
     consensus::{
@@ -70,6 +70,35 @@ const CONFIRMATION_REQUEST_SIGNATURE_CONTEXT: &[u8] =
 /// Custom KMAC domain separation for checksums of verification matrices.
 const CHECKSUM_VERIFICATION_MATRIX_CUSTOM: &[u8] =
     b"oasis-core/keymanager/churp: verification matrix";
+
+/// Domain separation tag for encoding shareholder identifiers.
+const ENCODE_SHAREHOLDER_CONTEXT: &[u8] = b"oasis-core/keymanager/churp: encode shareholder";
+
+/// Domain separation tag for encoding key identifiers for key share derivation
+/// approved by an SGX policy.
+///
+/// SGX policies specify which enclave identities are authorized to access
+/// runtime key shares.
+const ENCODE_SGX_POLICY_KEY_ID_CONTEXT: &[u8] =
+    b"oasis-core/keymanager/churp: encode SGX policy key ID";
+
+/// Domain separation tag for encoding key identifiers for key share derivation
+/// approved by a custom policy.
+///
+/// Custom policies allow access to key shares only for clients that submit
+/// a proof, which can be validated against the policy. The hash of the policy
+/// is part of the key identifier and is integral to the key derivation process.
+#[allow(dead_code)]
+const ENCODE_CUSTOM_POLICY_KEY_ID_CONTEXT: &[u8] =
+    b"oasis-core/keymanager/churp: encode custom policy key ID";
+
+/// The runtime separator used to add additional domain separation based
+/// on the runtime ID.
+const RUNTIME_CONTEXT_SEPARATOR: &[u8] = b" for runtime ";
+
+/// The churp separator used to add additional domain separation based
+/// on the churp ID.
+const CHURP_CONTEXT_SEPARATOR: &[u8] = b" for churp ";
 
 /// Data associated with a handoff.
 struct HandoffData {
@@ -252,7 +281,7 @@ impl Churp {
     where
         S: Suite,
     {
-        let dst = self.domain_separation_tag(status.id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
         let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
         let point = shareholder.switch_point(&x);
@@ -316,7 +345,7 @@ impl Churp {
     where
         S: Suite + 'static,
     {
-        let dst = self.domain_separation_tag(status.id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
         let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let handoff = self.get_handoff::<S>(status.id, status.next_handoff)?;
         let shareholder = handoff.get_reduced_shareholder()?;
@@ -378,7 +407,7 @@ impl Churp {
     where
         S: Suite,
     {
-        let dst = self.domain_separation_tag(status.id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
         let x = encode_shareholder::<S>(&node_id.0, &dst)?;
         let kind = Self::handoff_kind(status);
         let dealer = self.get_dealer::<S::Group>(status.id, status.next_handoff)?;
@@ -422,8 +451,8 @@ impl Churp {
     where
         S: Suite,
     {
-        let dst = self.domain_separation_tag(status.id);
         let shareholder = self.get_shareholder::<S>(status.id, status.handoff)?;
+        let dst = self.domain_separation_tag(ENCODE_SGX_POLICY_KEY_ID_CONTEXT, status.id);
         let point = shareholder.make_key_share::<S>(key_id, &dst)?;
         Ok((&point).into())
     }
@@ -570,7 +599,7 @@ impl Churp {
     where
         S: Suite,
     {
-        let dst = self.domain_separation_tag(status.id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
         let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
         if !handoff.needs_share_reduction_switch_point(&x)? {
@@ -677,7 +706,7 @@ impl Churp {
     where
         S: Suite,
     {
-        let dst = self.domain_separation_tag(status.id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
         let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
         if !handoff.needs_full_share_distribution_switch_point(&x)? {
@@ -752,7 +781,7 @@ impl Churp {
     where
         S: Suite,
     {
-        let dst = self.domain_separation_tag(status.id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
         let x = encode_shareholder::<S>(&node_id.0, &dst)?;
 
         if !handoff.needs_bivariate_share(&x)? {
@@ -954,7 +983,7 @@ impl Churp {
         let share = share.ok_or(Error::ShareholderNotFound)?;
 
         // Verify that the host hasn't changed.
-        let dst = self.domain_separation_tag(churp_id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, churp_id);
         let x = encode_shareholder::<S>(&self.node_id.0, &dst)?;
         if share.secret_share().coordinate_x() != &x {
             return Err(Error::InvalidHost.into());
@@ -1181,7 +1210,7 @@ impl Churp {
 
         // Create a new handoff.
         let threshold = status.threshold;
-        let dst = self.domain_separation_tag(status.id);
+        let dst = self.domain_separation_tag(ENCODE_SHAREHOLDER_CONTEXT, status.id);
         let me = encode_shareholder::<S>(&self.node_id.0, &dst)?;
         let mut shareholders = Vec::with_capacity(status.applications.len());
         for id in status.applications.keys() {
@@ -1419,11 +1448,14 @@ impl Churp {
         HandoffKind::CommitteeChanged
     }
 
-    /// Returns domain separation tag for encoding shareholder IDs.
-    fn domain_separation_tag(&self, churp_id: u8) -> [u8; NAMESPACE_SIZE + 1] {
-        let mut dst = [0; NAMESPACE_SIZE + 1];
-        dst[..NAMESPACE_SIZE].copy_from_slice(&self.runtime_id.0);
-        dst[NAMESPACE_SIZE] = churp_id;
+    /// Extends the given domain separation tag with key manager runtime ID
+    /// and churp ID.
+    fn domain_separation_tag(&self, context: &[u8], churp_id: u8) -> Vec<u8> {
+        let mut dst = context.to_vec();
+        dst.extend(RUNTIME_CONTEXT_SEPARATOR);
+        dst.extend(&self.runtime_id.0);
+        dst.extend(CHURP_CONTEXT_SEPARATOR);
+        dst.extend(&[churp_id]);
         dst
     }
 }
