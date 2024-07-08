@@ -193,6 +193,7 @@ func NewBlock(blk *cmttypes.Block) *consensus.Block {
 			Type:    mkvsNode.RootTypeState,
 			Hash:    stateRoot,
 		},
+		Size: uint64(blk.Size()),
 		Meta: rawMeta,
 	}
 }

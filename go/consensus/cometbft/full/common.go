@@ -880,6 +880,7 @@ func (n *commonNode) GetStatus(ctx context.Context) (*consensusAPI.Status, error
 			status.LatestHash = latestBlk.Hash
 			status.LatestTime = latestBlk.Time
 			status.LatestStateRoot = latestBlk.StateRoot
+			status.LatestBlockSize = latestBlk.Size
 
 			var epoch beaconAPI.EpochTime
 			epoch, err = n.beacon.GetEpoch(ctx, status.LatestHeight)
