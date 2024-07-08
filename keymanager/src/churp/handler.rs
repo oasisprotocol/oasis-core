@@ -431,7 +431,7 @@ impl Churp {
     ///
     /// WARNING: This method must be called over a secure channel as the key
     /// share needs to be kept secret and generated only for authorized nodes.
-    pub fn key_share(
+    pub fn sgx_policy_key_share(
         &self,
         ctx: &RpcContext,
         req: &KeyShareRequest,

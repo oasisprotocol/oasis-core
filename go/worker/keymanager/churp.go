@@ -52,7 +52,7 @@ var (
 		churp.RPCMethodShareReductionPoint:    {},
 		churp.RPCMethodShareDistributionPoint: {},
 		churp.RPCMethodBivariateShare:         {},
-		churp.RPCMethodKeyShare:               {},
+		churp.RPCMethodSGXPolicyKeyShare:      {},
 	}
 )
 
@@ -136,7 +136,7 @@ func (w *churpWorker) Authorize(ctx context.Context, method string, kind enclave
 
 	// All peers must undergo the authorization process.
 	switch method {
-	case churp.RPCMethodKeyShare:
+	case churp.RPCMethodSGXPolicyKeyShare:
 		return w.authorizeNode(ctx, peerID)
 	case churp.RPCMethodVerificationMatrix,
 		churp.RPCMethodShareReductionPoint,

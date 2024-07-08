@@ -50,7 +50,7 @@ use crate::{
     },
     churp::{
         EncodedEncryptedPoint, EncodedVerifiableSecretShare, Kdf, KeyShareRequest, QueryRequest,
-        METHOD_BIVARIATE_SHARE, METHOD_KEY_SHARE, METHOD_SHARE_DISTRIBUTION_POINT,
+        METHOD_BIVARIATE_SHARE, METHOD_SGX_POLICY_KEY_SHARE, METHOD_SHARE_DISTRIBUTION_POINT,
         METHOD_SHARE_REDUCTION_POINT, METHOD_VERIFICATION_MATRIX,
     },
     crypto::{
@@ -272,7 +272,7 @@ impl RemoteClient {
             let response = self
                 .rpc_client
                 .secure_call(
-                    METHOD_KEY_SHARE,
+                    METHOD_SGX_POLICY_KEY_SHARE,
                     KeyShareRequest {
                         id: status.id,
                         runtime_id: status.runtime_id,
