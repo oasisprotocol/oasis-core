@@ -93,8 +93,8 @@ func (val *Validator) ModifyConfig() error {
 	val.Config.P2P.Port = val.p2pPort
 
 	if !val.entity.isDebugTestEntity {
-		dir := val.entity.dir.String()
-		val.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+		entityID, _ := val.entity.ID().MarshalText() // Cannot fail.
+		val.Config.Registration.EntityID = string(entityID)
 	}
 
 	if len(val.sentries) > 0 {

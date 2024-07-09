@@ -1025,24 +1025,34 @@ func GetRegistrationSigner(identity *identity.Identity) (signature.PublicKey, si
 		return testEntity.ID, testSigner, nil
 	}
 
-	// Load the registration entity descriptor.
-	f := config.GlobalConfig.Registration.Entity
-	if f == "" {
+	// Determine the owning entity ID.
+	cfgEntityFn := config.GlobalConfig.Registration.Entity
+	cfgEntityID := config.GlobalConfig.Registration.EntityID
+
+	switch {
+	case cfgEntityFn != "":
+		// Attempt to load the entity descriptor.
+		entity, err := entity.LoadDescriptor(cfgEntityFn)
+		if err != nil {
+			return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
+		}
+
+		return entity.ID, identity.NodeSigner, nil
+	case cfgEntityID != "":
+		// Attempt to parse the entity ID.
+		var entityID signature.PublicKey
+		if err := entityID.UnmarshalText([]byte(cfgEntityID)); err != nil {
+			return defaultPk, nil, fmt.Errorf("worker/registration: malformed entity ID: %w", err)
+		}
+
+		return entityID, identity.NodeSigner, nil
+	default:
 		// TODO: There are certain configurations (eg: the test client) that
 		// spin up workers, which require a registration worker, but don't
 		// need it, and do not have an owning entity.  The registration worker
 		// should not be initialized in this case.
 		return defaultPk, nil, nil
 	}
-
-	// Attempt to load the entity descriptor.
-	entity, err := entity.LoadDescriptor(f)
-	if err != nil {
-		return defaultPk, nil, fmt.Errorf("worker/registration: failed to load entity descriptor: %w", err)
-	}
-
-	// Registrations are always node-signed.
-	return entity.ID, identity.NodeSigner, nil
 }
 
 // New constructs a new worker node registration service.

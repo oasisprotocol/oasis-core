@@ -288,8 +288,8 @@ func (km *Keymanager) ModifyConfig() error {
 	km.Config.P2P.Port = km.p2pPort
 
 	if !km.entity.isDebugTestEntity {
-		dir := km.entity.dir.String()
-		km.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+		entityID, _ := km.entity.ID().MarshalText() // Cannot fail.
+		km.Config.Registration.EntityID = string(entityID)
 	}
 
 	km.Config.Mode = config.ModeKeyManager

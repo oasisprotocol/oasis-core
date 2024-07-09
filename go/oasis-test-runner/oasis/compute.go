@@ -159,8 +159,8 @@ func (worker *Compute) ModifyConfig() error {
 	worker.Config.P2P.Port = worker.p2pPort
 
 	if !worker.entity.isDebugTestEntity {
-		dir := worker.entity.dir.String()
-		worker.Config.Registration.Entity = filepath.Join(dir, "entity.json")
+		entityID, _ := worker.entity.ID().MarshalText() // Cannot fail.
+		worker.Config.Registration.EntityID = string(entityID)
 	}
 
 	worker.Config.Mode = config.ModeCompute
